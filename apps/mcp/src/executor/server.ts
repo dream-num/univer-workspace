@@ -39,6 +39,12 @@ export function createExecutor(
         reject(401, "workspace-executor-unauthorized");
         return;
       }
+      if (request.method === "GET" && request.url === "/metrics") {
+        response
+          .writeHead(200, { "content-type": dispatch.metrics.contentType })
+          .end(await dispatch.metrics.metrics());
+        return;
+      }
       if (draining) {
         reject(503, "workspace-executor-unavailable");
         return;

@@ -1818,3 +1818,30 @@ with `workspace-argument-invalid` while a concurrent executor inspection matches
 Both gateway durations must stay below the larger of 2 seconds and five times the warm
 baseline inspection duration. This is a rejection latency guard, not a throughput benchmark.
 Evidence uses `mm-errors-` and includes the CLI transcript, per-call events and summary JSON.
+
+**MX10. Stale worker session.** Two PATs share one user and one warm worker. Revoke A, recover B, and reject A.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
+```
+
+Pass when B succeeds with one auth rerun and A receives HTTP 401. Evidence is `resilience-auth.json`.
+
+**MX11. Concurrent revision conflict.** Resolve two writes concurrently against one Unit.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs revision
+```
+
+Pass when both writes commit on consecutive revisions, one revision rerun is logged, and inspect contains both values.
+Evidence is `resilience-revision.json`.
+
+**MX12. Two executor replicas.** Opt in at launch with `VERIFY_UVW_MCP_EXECUTORS=2`. The default run skips this journey.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs replicas
+```
+
+Pass when three calls use the same replica, stopping it moves the next call to the other replica,
+and killing a slow write returns `workspace-result-unknown` without a replay. A manual retry writes once.
+The journey restarts stopped containers. Evidence is `resilience-replicas.json`.

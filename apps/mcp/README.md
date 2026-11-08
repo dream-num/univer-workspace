@@ -266,6 +266,19 @@ violates a tool's output schema is an `internal_error`. A write whose outcome is
 `workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
 `detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts. Definite rejections pass through
 as `WORKSPACE_RUNTIME_CONFLICT`, `WORKSPACE_RUNTIME_PULL_REQUIRED`, or `WORKSPACE_RUNTIME_COMMIT_INVALID`.
+The executor reruns `content.execute` once on a pull revision mismatch before script execution,
+resolving the target again. `content.execute`, `content.inspect` and `exchange.export` also
+recover once from a worker's Workspace 401 when that worker holds a different session from
+the current call. Replacement is limited to that worker; its rejected session's verifier
+entry is evicted. Rejected current sessions return the normal authentication error.
+Commit-phase failures are never rerun. Each reason is permitted once, only with at least
+five seconds left in the original deadline. Reads never rerun revision conflicts.
+Import and diagnostics do not rerun. Import can create a Unit, and diagnostics uses the
+current session without a cached worker. Office conversion children have no Workspace credentials;
+export's auth recovery applies only to its parent-side runtime read.
+Reruns add worker time to the same usage event. Executor logs record `mcp.executor_rerun`
+with `reason`, and its internal-token-protected `/metrics` exposes
+`mcp_executor_reruns_total{reason="auth"|"revision"}`. The version 1 usage event is unchanged.
 Queued calls cancelled before acquiring a lease return `workspace-executor-timeout` with
 `detail: { retryable: true, started: false }`; they never execute later. A started write
 that exceeds its deadline still has an unknown result.
@@ -362,6 +375,8 @@ docker run --rm -p 127.0.0.1:3930:3000 \
 
 Connect your MCP client to `http://127.0.0.1:3930/mcp` with a personal access token as its bearer
 token, or with a development Workspace session when passthrough is enabled. The image runs as `node` and declares no persistent volume.
+Set `VERIFY_UVW_MCP_EXECUTORS=2` when launching verify-uvw to enable `executor-b` and
+route across both replicas. The default remains one executor, with no published executor port.
 `docker/compose.verify.yml` is reserved for the local verification bench. Its variables
 are all required, as specified in [local verification](../../docs/design/workspace-mcp/local-verification.zh-CN.md).
 

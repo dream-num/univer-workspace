@@ -249,7 +249,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 - 每次操作都会先 pull 并检查 `baseRevision === target.revision`（`content-runtime.ts:283-305`），所以任意执行层副本都能从 Workspace 重建状态。热缓存只影响速度，不影响正确性。
 - 网关按 `(用户 ID, scope, unitId)` 一致性哈希选择执行层副本。副本增减时只损失部分缓存。
 - 同一 key 的操作串行，这是现有行为（`runForRuntimeKey` 加池内 FIFO）。
-- 操作表声明重试策略；后续韧性变更由执行层重新解析目标并重试，网关不持有 revision。当前首批操作的 `rerun` 为空，原样返回 `workspace-result-mismatch`。
+- 操作表声明重试策略；执行层重新解析目标并重试，网关不持有 revision。`content.execute` 对脚本执行前的 `workspace-result-mismatch` 重试一次。`content.execute`、`content.inspect` 和 `exchange.export` 对持有不同 session 的热 worker 的 401 重建后重试一次；当前 session 自身被拒绝则返回认证错误。每种原因最多重试一次，且原 deadline 至少剩余 5 秒。commit 阶段的不确定写入不重试。重试的 worker 时间计入同一用量事件，原因记录到日志和 `mcp_executor_reruns_total{reason}`。
 - 网关使用 rendezvous hashing。只对连接拒绝、DNS 失败或明确未接收的传输拒绝切换副本；已发送写入的断连或超时返回 `workspace-result-unknown`。
 
 ### 6.4 凭据

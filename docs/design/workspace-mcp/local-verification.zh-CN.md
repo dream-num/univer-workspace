@@ -122,6 +122,11 @@ services:
 D1b 使用同一镜像增加 `executor` 服务，没有 published ports；gateway 通过
 `http://executor:3000` 调用，启动依赖 executor healthy。`up` 在本次 run 的
 `home/internal-token` 生成 0600 令牌文件，compose 两侧使用同一令牌。
+
+`VERIFY_UVW_MCP_EXECUTORS` 默认 `1`。启动时设为 `2` 会启用 compose 的 `replicas` profile，
+增加无 published port 的 `executor-b`，并将两个 URL 传给 gateway。副本数持久化在 `run.env`，
+后续 doctor 和 down 使用同一配置。MX10、MX11、MX12 分别验证热 worker 的认证恢复、修订冲突重试和双副本故障切换。
+执行层的 `/metrics` 由内部 bearer 保护，提供 `mcp_executor_reruns_total{reason}`；重试原因同时写入结构化日志。
 Dockerfile COPY 与 `MCP_BUILD_INPUTS` 路径不变，新增 executor 源文件在原输入目录内。
 
 `doctor` 验证 executor 健康、镜像身份和无发布端口；从 gateway 容器发出无 bearer

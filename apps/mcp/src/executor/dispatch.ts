@@ -1,3 +1,4 @@
+import { Counter, Registry } from "prom-client";
 import {
   WorkspaceContentSource,
   type WorkspaceContentRuntime,
@@ -17,7 +18,7 @@ import type { Handler, OpContext } from "./context.js";
 import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js";
 import { mapRuntimeError, timeoutError } from "./errors.js";
 import { handlers } from "./ops/index.js";
-import { bindRuntime } from "./runtime.js";
+import { bindRuntime, getRuntimeRerun } from "./runtime.js";
 import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
@@ -30,13 +31,17 @@ export function createDispatcher(
   const jobs = new ConversionJobQueue(config.EXECUTOR_MAX_JOBS);
   const verifyGrant = createGrantVerifier(config);
   const dispatchers: { [K in OpName]: Handler<K> } = handlers;
-  return async function dispatch<K extends OpName>(
-    name: K,
-    header: RequestHeader,
-    payload: Uint8Array,
-  ) {
+  const metrics = new Registry();
+  const reruns = new Counter({
+    name: "mcp_executor_reruns_total",
+    help: "Executor handler reruns by reason.",
+    labelNames: ["reason"],
+    registers: [metrics],
+  });
+  async function dispatch<K extends OpName>(name: K, header: RequestHeader, payload: Uint8Array) {
     const spec: OpSpec = opSpecs[name];
     const controller = new AbortController();
+    const deadlineAt = Date.now() + Math.min(header.deadlineMs, spec.limits.budgetMs);
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
     let writeStarted = name !== "exchange.import" && name !== "markdown.compile";
     let effect = spec.effect;
@@ -81,7 +86,7 @@ export function createDispatcher(
           writeStarted = true;
         },
         source: () => source,
-        runtime: bindRuntime(runtime, grant, usage, controller.signal),
+        runtime: bindRuntime(runtime, grant, usage, controller.signal, verifyGrant.invalidate),
         materializer: {
           materialize: async (input) => {
             usage.executor = "cold_start";
@@ -159,7 +164,34 @@ export function createDispatcher(
         (async () => {
           await verifyGrant(grant, header.requestId);
           controller.signal.throwIfAborted();
-          return await dispatchers[name](ctx, input, ...payloadArgs);
+          const rerun = new Set<"auth" | "revision">();
+          for (;;) {
+            controller.signal.throwIfAborted();
+            try {
+              return await dispatchers[name](ctx, input, ...payloadArgs);
+            } catch (error) {
+              const retry = getRuntimeRerun(error);
+              if (
+                !retry ||
+                !spec.rerun.includes(retry) ||
+                rerun.has(retry) ||
+                controller.signal.aborted ||
+                deadlineAt - Date.now() < 5000
+              )
+                throw error;
+              rerun.add(retry);
+              reruns.inc({ reason: retry });
+              logger.info(
+                {
+                  event: "mcp.executor_rerun",
+                  request_id: header.requestId,
+                  op: name,
+                  reason: retry,
+                },
+                "Executor operation rerun",
+              );
+            }
+          }
         })(),
         deadline,
       ]);
@@ -183,9 +215,13 @@ export function createDispatcher(
           { request_id: header.requestId, op: name, code: translated.code },
           "Executor operation failed",
         );
-      return { header: { ok: false as const, error: translated, meta: usage }, payload: undefined };
+      return {
+        header: { ok: false as const, error: translated, meta: usage },
+        payload: undefined,
+      };
     } finally {
       clearTimeout(timer);
     }
-  };
+  }
+  return Object.assign(dispatch, { metrics });
 }

@@ -27,7 +27,7 @@ export function createGrantVerifier(
   fetcher: typeof fetch = fetch,
 ) {
   const sessions = new Map<string, { expiresAt: number; user: Promise<string> }>();
-  return async (grant: ExecutorGrant, requestId: string): Promise<void> => {
+  const verify = async (grant: ExecutorGrant, requestId: string): Promise<void> => {
     const key = createHash("sha256").update(grant.session).digest("hex");
     for (const [hash, entry] of sessions) {
       if (entry.expiresAt <= Date.now()) sessions.delete(hash);
@@ -65,4 +65,9 @@ export function createGrantVerifier(
     }
     resolveGrant(grant);
   };
+  return Object.assign(verify, {
+    invalidate(grant: ExecutorGrant) {
+      sessions.delete(createHash("sha256").update(grant.session).digest("hex"));
+    },
+  });
 }

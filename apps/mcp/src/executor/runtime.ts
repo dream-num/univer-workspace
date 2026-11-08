@@ -3,6 +3,7 @@ import {
   getWorkspaceRuntimeFailurePhase,
   type WorkspaceContentRuntime,
   type WorkspaceContentRuntimeObservation,
+  type WorkspaceRuntimeCaller,
 } from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { ExecutorCallError, resultUnknown } from "../shared/errors.js";
@@ -18,6 +19,14 @@ import { grantCookie, resolveGrant } from "./credentials.js";
 import { UNIVER_LICENSE } from "./license.js";
 
 export const workerEnvironment = { NODE_ENV: "production" };
+
+const workerForCaller = new WeakMap<WorkspaceRuntimeCaller, WorkspaceRuntimeCaller>();
+const rejectedWorkers = new WeakSet<WorkspaceRuntimeCaller>();
+const runtimeReruns = new WeakMap<object, "revision" | "auth">();
+
+export function getRuntimeRerun(error: unknown) {
+  return typeof error === "object" && error !== null ? runtimeReruns.get(error) : undefined;
+}
 
 export function createExecutorRuntime(config: ExecutorConfig): WorkspaceContentRuntime {
   return createWorkspaceContentRuntime({
@@ -42,8 +51,8 @@ export function bindRuntime(
   grant: ExecutorGrant,
   usage: OpMeta,
   signal: AbortSignal,
+  invalidateGrant: (grant: ExecutorGrant) => void = () => {},
 ): BoundRuntime {
-  const caller = { userId: grant.userId, grant };
   const observe = ({ coldStart, workerMs }: WorkspaceContentRuntimeObservation) => {
     if (coldStart || usage.executor === "none") usage.executor = coldStart ? "cold_start" : "warm";
     usage.cost.worker_cpu_ms += workerMs;
@@ -60,31 +69,48 @@ export function bindRuntime(
   return {
     executeRead: async (input) => {
       bind(input.target);
-      return await runtimeCall("read", () =>
+      const caller = { userId: grant.userId, grant };
+      return await runtimeCall("read", caller, invalidateGrant, () =>
         runtime.executeRead({ ...input, caller, observe, signal }),
       );
     },
     executeAndCommit: async (input) => {
       bind(input.target);
-      return await runtimeCall("write", () =>
+      const caller = { userId: grant.userId, grant };
+      return await runtimeCall("write", caller, invalidateGrant, () =>
         runtime.executeAndCommit({ ...input, caller, observe, signal }),
       );
     },
-    exportUnitData: (input) => {
+    exportUnitData: async (input) => {
       bind(input.target);
-      return runtime.exportUnitData({ ...input, caller, observe, signal });
+      const caller = { userId: grant.userId, grant };
+      return await runtimeCall("read", caller, invalidateGrant, () =>
+        runtime.exportUnitData({ ...input, caller, observe, signal }),
+      );
     },
   };
 }
 
 export const reuseExecutorWorker: NonNullable<
   Parameters<typeof createWorkspaceContentRuntime>[0]["reuseWorker"]
-> = (created) => {
+> = (created, current) => {
   const parsed = executorGrantSchema.safeParse(created?.grant);
-  return parsed.success && parsed.data.expiresAt > Date.now() + 60_000;
+  const reuse =
+    created !== undefined &&
+    !rejectedWorkers.has(created) &&
+    parsed.success &&
+    parsed.data.expiresAt > Date.now() + 60_000;
+  if (current !== undefined && created !== undefined && reuse)
+    workerForCaller.set(current, created);
+  return reuse;
 };
 
-async function runtimeCall<T>(effect: OpEffect, operation: () => Promise<T>): Promise<T> {
+async function runtimeCall<T>(
+  effect: OpEffect,
+  caller: WorkspaceRuntimeCaller,
+  invalidateGrant: (grant: ExecutorGrant) => void,
+  operation: () => Promise<T>,
+): Promise<T> {
   try {
     return await operation();
   } catch (error) {
@@ -93,6 +119,20 @@ async function runtimeCall<T>(effect: OpEffect, operation: () => Promise<T>): Pr
         ? error.code
         : undefined;
     const phase = getWorkspaceRuntimeFailurePhase(error);
+    // shortcut: SDK 1.4 exposes ticket HTTP status only in its message; remove after structured status is exported.
+    const unauthorized =
+      code === "workspace-authentication-required" ||
+      (code === "COLLABORATION_UNAVAILABLE" &&
+        error instanceof Error &&
+        /^(?:Session ticket request failed with HTTP 401|Collaboration HTTP request failed with status 401)$/.test(
+          error.message,
+        ));
+    const created = workerForCaller.get(caller) ?? caller;
+    const createdGrant = executorGrantSchema.parse(created.grant);
+    if (unauthorized) {
+      invalidateGrant(createdGrant);
+      rejectedWorkers.add(created);
+    }
     if (
       effect === "write" &&
       phase === "commit" &&
@@ -107,6 +147,18 @@ async function runtimeCall<T>(effect: OpEffect, operation: () => Promise<T>): Pr
         resultUnknown(code ?? (timeout ? error.name : "workspace-internal-error"), timeout),
       );
     }
+    if (unauthorized) {
+      const authError = workspaceError(
+        "workspace-authentication-required",
+        "Workspace Session is missing or expired.",
+      );
+      if (grantCookie(createdGrant) !== grantCookie(executorGrantSchema.parse(caller.grant))) {
+        runtimeReruns.set(authError, "auth");
+      }
+      throw authError;
+    }
+    if (code === "workspace-result-mismatch" && phase === undefined && error instanceof Error)
+      runtimeReruns.set(error, "revision");
     if (code === undefined && phase === "script" && effect === "write") {
       throw new ExecutorCallError({
         code: "workspace-script-failed",
