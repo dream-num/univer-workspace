@@ -249,6 +249,25 @@ describe("gateway authentication", () => {
     expect(gateway.productCookies).toEqual([]);
   });
 
+  it("requires publish scope for html_view_create before contacting an executor", async () => {
+    const gateway = await start(exchangeEnv);
+    const client = await gateway.connect("uvw_pat_readonly", "?toolsets=files");
+    expect(
+      await client.callTool({
+        name: "html_view_create",
+        arguments: {
+          html: "<h1>Dashboard</h1>",
+          space: "space",
+          name: "Dashboard",
+          idempotency_key: "html-retry-key-123",
+        },
+      }),
+    ).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-scope-required", detail: { required: "publish" } },
+    });
+  });
+
   it("re-exchanges a dead downstream session and lets the client retry the same valid token", async () => {
     let now = Date.now();
     vi.spyOn(Date, "now").mockImplementation(() => now);

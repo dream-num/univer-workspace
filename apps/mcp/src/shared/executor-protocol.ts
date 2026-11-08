@@ -71,7 +71,53 @@ export const codeInput = z
   .min(1)
   .refine((code) => Buffer.byteLength(code) <= 10 * MiB, "Code exceeds 10 MiB");
 
+// Fits the gateway's 4 MiB JSON cap even when every UTF-8 byte needs JSON escaping.
+export const htmlViewMaxBytes = 512 * 1024;
+export const htmlViewInput = z
+  .string()
+  .refine(
+    (html) => Buffer.byteLength(html, "utf8") <= htmlViewMaxBytes,
+    "HTML exceeds the 512 KiB UTF-8 limit.",
+  );
+
 export const opSpecs = {
+  "htmlView.validate": defineOp({
+    name: "htmlView.validate",
+    effect: "read",
+    payload: "none",
+    rerun: [],
+    limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    input: z.object({ html: htmlViewInput }),
+    output: z.object({
+      valid: z.literal(true),
+      unitIds: z.array(z.string()),
+      bindingCount: z.int().nonnegative(),
+    }),
+    route: () => ({ scope: "htmlView.validate", unitId: null }),
+  }),
+  "htmlView.create": defineOp({
+    name: "htmlView.create",
+    effect: "write",
+    payload: "none",
+    rerun: [],
+    limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    input: z.object({
+      html: htmlViewInput,
+      spaceId: z.string().min(1),
+      name: z.string().min(1).max(255),
+      parentNodeId: z.string().min(1).optional(),
+      idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
+    }),
+    output: z
+      .object({
+        nodeId: z.string(),
+        resourceId: z.string(),
+        operationId: z.string(),
+        workspaceUrl: z.url(),
+      })
+      .catchall(z.json()),
+    route: (input) => ({ scope: "htmlView.create", unitId: input.idempotencyKey }),
+  }),
   "exchange.import": defineOp({
     name: "exchange.import",
     effect: "write",

@@ -65,6 +65,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX6 verifies a large committed result keeps commit facts and writes once.
 - MX4 captures the written values in the Browser.
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
+- MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and publish/retry/open the validated page.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -173,7 +174,7 @@ $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","import","export","api_find","api_show","skills_read"]'
-FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download"]'
+FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
@@ -183,8 +184,8 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|api_(find|show)|skills_read|blob_get|blob_download|asset_download|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
@@ -1683,6 +1684,73 @@ docker image ls "$MCP_IMAGE"
 
 Pass when `down` prints `ok    MCP resources removed`, resource listings have no entries,
 and developer PIDs are unchanged or absent both times. Evidence and logs survive.
+
+**MH1. HTML View validation parity over a populated trunk Sheet.**
+
+```bash
+$V mcp mh-repo repo_view "{\"repo\":\"$O/personal\"}"
+MH_SPACE=$(jq -r .id "$EVIDENCE/mh-repo.out")
+$V cli mh-pr pr create -R "$O/personal" -t 'HTML View source' --json
+MH_W=$(jq -r .id "$EVIDENCE/mh-pr.out")
+MH_N=$(jq -r .number "$EVIDENCE/mh-pr.out")
+$V cli mh-unit unit create --worktree "$MH_W" --space "$MH_SPACE" --type sheet --name 'HTML View data' --json
+MH_U=$(jq -r .unit.unitId "$EVIDENCE/mh-unit.out")
+$V cli mh-data execute --worktree "$MH_W" --unit "$MH_U" --json -e 'const ws = workbook.getActiveSheet(); ws.getRange("A1:B2").setValues([["Region","Total"],["North",42]]); return {sheetId:ws.getSheetId()};'
+MH_S=$(jq -r .value.sheetId "$EVIDENCE/mh-data.out")
+$V cli mh-ready pr ready "$MH_N" -R "$O/personal" --json
+$V cli mh-merge pr merge "$MH_N" -R "$O/personal" --json
+printf '<!DOCTYPE html><html><head><title>Regional totals</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>Regional totals</h1><p>North: <output data-univer-cell-text="%s:%s:B2"></output></p></body></html>\n' "$MH_U" "$MH_S" > "$EVIDENCE/mh-view.univer.html"
+$V mcp --toolsets files --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html}')"
+$V cli mh-validate-cli html-view validate --file "$EVIDENCE/mh-view.univer.html" --json
+diff <(jq -S . "$EVIDENCE/mh-validate.out") <(jq -S . "$EVIDENCE/mh-validate-cli.out")
+jq -e --arg unit "$MH_U" '.valid == true and .unitIds == [$unit] and .bindingCount == 1' "$EVIDENCE/mh-validate.out"
+```
+
+Pass when the Sheet is merged with data and MCP and CLI validation results match.
+
+**MH2. Missing HTML View source parity.**
+
+```bash
+printf '<output data-univer-cell-text="missing-html-sheet:missing:A1"></output>\n' > "$EVIDENCE/mh-missing.univer.html"
+$V mcp --toolsets files mh-missing html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html}')"
+test $? -eq 1
+$V cli mh-missing-cli html-view validate --file "$EVIDENCE/mh-missing.univer.html" --json
+test $? -eq 1
+MH_CODE=$(jq -r .code "$EVIDENCE/mh-missing.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mh-missing-cli.err" | head -n1)" = "$MH_CODE"
+jq -e --arg code "$MH_CODE" '.outcome == "tool_error" and .error_code == $code' "$EVIDENCE/mh-missing.event.json"
+```
+
+Pass when both clients preserve the same missing-source code.
+
+**MH3. Publish, retry and open the validated HTML View.**
+
+```bash
+MH_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" --arg space "$MH_SPACE" --arg key "html-view-$VERIFY_UVW_RUN-$MH_U" '{html:$html,space:$space,name:"Regional totals",idempotency_key:$key}')
+$V mcp --toolsets files --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_create "$MH_ARGS"
+$V mcp --toolsets files mh-retry html_view_create "$MH_ARGS"
+diff <(jq -S '{nodeId,resourceId,operationId,workspaceUrl}' "$EVIDENCE/mh-create.out") <(jq -S '{nodeId,resourceId,operationId,workspaceUrl}' "$EVIDENCE/mh-retry.out")
+$V cli mh-blob-get blob get "$(jq -r .resourceId "$EVIDENCE/mh-create.out")" --json
+$V cli mh-blob-download blob download "$EVIDENCE/mh-published.univer.html" --force --resource "$(jq -r .resourceId "$EVIDENCE/mh-create.out")" --json
+cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-published.univer.html"
+agent-browser open "$ORIGIN/login"
+agent-browser wait 1500
+if agent-browser get url | grep -q '/login'; then
+  agent-browser find label 'Username' fill "$O"
+  agent-browser find label 'Password' fill "$(cat "$RUN/user.pw")"
+  agent-browser click 'form button[type=submit]'
+  agent-browser wait --url '**/home'
+fi
+agent-browser open "$(jq -r .workspaceUrl "$EVIDENCE/mh-create.out")"
+agent-browser wait 3000
+agent-browser screenshot "$EVIDENCE/mh-published.png"
+agent-browser reload
+agent-browser wait 2000
+agent-browser screenshot "$EVIDENCE/mh-published-reloaded.png"
+```
+
+Pass when both calls return the same Node, downloaded bytes equal the validated source,
+and the Browser screenshots show North and 42 before and after reload.
 
 ## Gotchas
 

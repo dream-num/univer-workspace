@@ -242,3 +242,11 @@ export {
   type WorkspaceMarkdownExportResult,
 } from "./markdown-export.js";
 export { readWorkspaceMarkdownImage } from "./markdown-assets.js";
+
+export {
+  WorkspaceHtmlViewFeature,
+  normalizeHtmlViewDestination,
+  type WorkspaceHtmlViewSource,
+  type WorkspaceHtmlViewOptions,
+  type WorkspaceHtmlViewDestination,
+} from "./html-view.js";

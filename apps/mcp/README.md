@@ -23,7 +23,7 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
-`content.execute`, `content.inspect`, `exchange.import`, `exchange.export` and internal `diagnostics.probe`; all have empty
+`content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`, `htmlView.create` and internal `diagnostics.probe`; all have empty
 rerun policies. Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
 Transport rejections use non-200 statuses. The grant travels only in the frame body.
 
@@ -453,3 +453,25 @@ C7 remains pending upstream. The private directory gives exchange usage storage 
 home and state path, but is disposable and does not promise durable license quota accounting.
 `LICENSE_USAGE_STORAGE_ERROR` is preserved without an automatic retry. This process split
 is fault isolation, not a network sandbox. Stage G remains the multi-user deployment gate.
+
+## HTML Views
+
+The `files` toolset includes `html_view_validate {html}` (`read`) and
+`html_view_create {html, space, name, parent?, idempotency_key}` (`publish`).
+Both run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
+referenced trunk Sheet through the caller-bound `exportUnitData`. They validate
+declarative bindings without executing page JavaScript. The CLI retains file
+handling and calls the same feature.
+
+HTML is limited to 512 KiB of UTF-8 text at the tool and RPC input boundaries;
+the RPC frame limit is 4 MiB, including JSON escaping and credentials. Validation
+returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation immediately
+publishes a Blob without Worktree review and returns the CLI's bare upload fields
+with `workspaceUrl` using the identity origin. The executor uploads a private copy
+of the exact validated bytes, with stable original filename `view.univer.html`.
+Generate a 16 to 200 character URL-safe idempotency key before creation and reuse it
+with identical HTML and destination after `workspace-result-unknown`.
+
+Runtime exports report worker observations. Successful creation adds HTML UTF-8
+`upload_bytes` at the gateway, including when a page has no bindings and
+`executor: none`; Blob publication creates no committed Unit revisions.

@@ -7,7 +7,11 @@ import { diagnosticsProbe } from "./diagnostics-probe.js";
 import { exchangeImport } from "./exchange-import.js";
 import { exchangeExport } from "./exchange-export.js";
 
+import { htmlViewCreate, htmlViewValidate } from "./html-view.js";
+
 export const handlers = {
+  "htmlView.validate": htmlViewValidate,
+  "htmlView.create": htmlViewCreate,
   "exchange.import": exchangeImport,
   "exchange.export": exchangeExport,
   "content.execute": contentExecute,
