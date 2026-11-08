@@ -128,7 +128,11 @@ export function createAuthenticator(
     const tracked = inFlight.size < maxCacheEntries;
     const pending = exchangeToken(bearer, requestId).then(
       (entry) => {
-        if (tracked ? inFlight.get(cacheKey) === pending : !inFlight.has(cacheKey)) {
+        // An untracked exchange started with no entry for its key, so any entry present now came from a newer exchange.
+        const current = tracked
+          ? inFlight.get(cacheKey) === pending
+          : !inFlight.has(cacheKey) && !cache.has(cacheKey) && !negativeCache.has(cacheKey);
+        if (current) {
           inFlight.delete(cacheKey);
           const entries = entry.value === null ? negativeCache : cache;
           const limit = entry.value === null ? maxNegativeCacheEntries : maxCacheEntries;
