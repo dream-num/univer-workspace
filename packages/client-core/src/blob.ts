@@ -8,10 +8,12 @@ import {
 import {
   contentLength,
   inspectSource,
+  memorySource,
   openSource,
   prepareDownload,
   responseContent,
   type SourceFile,
+  type WorkspaceBlobBytes,
 } from "./files.js";
 import {
   isWorkspaceRecord,
@@ -91,6 +93,14 @@ interface ReplacementResult {
 
 const BLOB_UPLOAD_MAX_ATTEMPTS = 3;
 
+interface UploadOptions {
+  readonly declaredMediaType?: string;
+  readonly idempotencyKey?: string;
+  readonly name?: string;
+  readonly parentNodeId?: string;
+  readonly spaceId: string;
+}
+
 export class WorkspaceBlobFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
@@ -101,15 +111,23 @@ export class WorkspaceBlobFeature {
     return await getBlob(await this.authenticatedHttp(), id);
   }
 
-  public async upload(input: {
-    readonly declaredMediaType?: string;
-    readonly filePath: string;
-    readonly idempotencyKey?: string;
-    readonly name?: string;
-    readonly parentNodeId?: string;
-    readonly spaceId: string;
-  }): Promise<Record<string, unknown>> {
-    const source = await inspectSource(input.filePath);
+  public async upload(
+    input: UploadOptions & { readonly filePath: string },
+  ): Promise<Record<string, unknown>> {
+    return await this.uploadSource(await inspectSource(input.filePath), input);
+  }
+
+  /** Same upload for bytes that never touched a local disk; `fileName` replaces the source path. */
+  public async uploadBytes(
+    input: UploadOptions & WorkspaceBlobBytes,
+  ): Promise<Record<string, unknown>> {
+    return await this.uploadSource(memorySource(input), input);
+  }
+
+  private async uploadSource(
+    source: SourceFile,
+    input: UploadOptions,
+  ): Promise<Record<string, unknown>> {
     const declaredMediaType = normalizeOptionalMediaType(input.declaredMediaType);
     const intent: UploadIntent = {
       idempotencyKey: input.idempotencyKey ?? randomUUID(),
@@ -134,7 +152,7 @@ export class WorkspaceBlobFeature {
 
     for (let attempt = 0; attempt < BLOB_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
       if (envelope.upload.state === "waitingForUpload") {
-        envelope = await this.uploadBytes(http, envelope, reserved, intent, source);
+        envelope = await this.putUploadBytes(http, envelope, reserved, intent, source);
         continue;
       }
       if (envelope.upload.state === "verifying") {
@@ -170,9 +188,21 @@ export class WorkspaceBlobFeature {
 
   /** Replacements publish directly and preserve the existing Resource identity. */
   public async replace(
-    input: ReplacementIntent & {
-      readonly filePath: string;
-    },
+    input: ReplacementIntent & { readonly filePath: string },
+  ): Promise<ReplacementResult> {
+    return await this.replaceSource(input, async () => await inspectSource(input.filePath));
+  }
+
+  public async replaceBytes(
+    input: ReplacementIntent & WorkspaceBlobBytes,
+  ): Promise<ReplacementResult> {
+    const source = memorySource(input);
+    return await this.replaceSource(input, async () => source);
+  }
+
+  private async replaceSource(
+    input: ReplacementIntent,
+    readSource: () => Promise<SourceFile>,
   ): Promise<ReplacementResult> {
     const intent: ReplacementIntent = {
       resourceId: requireIdentity(input.resourceId, "Resource ID"),
@@ -185,7 +215,7 @@ export class WorkspaceBlobFeature {
         "ETag must be the exact quoted strong ETag from the downloaded Blob.",
       );
     }
-    const source = await inspectSource(input.filePath);
+    const source = await readSource();
     const http = await this.authenticatedHttp();
     const recovery = {
       ...intent,
@@ -312,7 +342,7 @@ export class WorkspaceBlobFeature {
     }
   }
 
-  private async uploadBytes(
+  private async putUploadBytes(
     http: WorkspaceHttp,
     envelope: UploadEnvelope,
     reserved: UploadEnvelope,

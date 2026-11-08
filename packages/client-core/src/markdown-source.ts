@@ -6,6 +6,12 @@ import {
   compileDocMarkdownUpdate,
   compileDocMarkdownUpdateFile,
 } from "@univer-cli/doc-markdown-facade";
+import { extname } from "node:path";
+import {
+  assertWorkspaceSourceFiles,
+  readWorkspaceSourceFile,
+  type WorkspaceSourceFiles,
+} from "./files.js";
 
 export {
   writeWorkspaceMarkdownExport,
@@ -48,4 +54,33 @@ export async function compileWorkspaceMarkdownFile(
     });
   }
   return await compileDocMarkdownFile(file, { ...options, assetRoot: sourceWorkspace });
+}
+
+const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = {
+  ".svg": "image/svg+xml",
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+};
+
+/** In-memory twin of {@link compileWorkspaceMarkdownFile}: the assets map is the source workspace. */
+export async function compileWorkspaceMarkdownSource(
+  markdown: string,
+  options: Omit<WorkspaceMarkdownOptions, "assetResolver">,
+  assets: WorkspaceSourceFiles = new Map(),
+): Promise<WorkspaceMarkdownCompilation> {
+  assertWorkspaceSourceFiles(assets);
+  const assetResolver: NonNullable<WorkspaceMarkdownOptions["assetResolver"]> = async (reference) => {
+    const mimeType = IMAGE_MIME_TYPES[extname(reference).toLowerCase()];
+    return {
+      data: readWorkspaceSourceFile(assets, reference),
+      ...(mimeType === undefined ? {} : { mimeType }),
+    };
+  };
+  if (options.update !== undefined) {
+    return await compileDocMarkdownUpdate(markdown, { ...options, ...options.update, assetResolver });
+  }
+  return await compileDocMarkdown(markdown, { ...options, assetResolver });
 }

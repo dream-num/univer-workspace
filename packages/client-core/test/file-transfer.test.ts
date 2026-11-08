@@ -66,6 +66,90 @@ describe("Workspace application feature parity", () => {
     );
   });
 
+  it("uploads in-memory bytes with the same requests as a file of the same content", async () => {
+    const directory = await temporaryDirectory();
+    const sourcePath = join(directory, "payload.bin");
+    await writeFile(sourcePath, "abc");
+    const run = async (upload: (feature: WorkspaceBlobFeature) => Promise<Record<string, unknown>>) => {
+      const requests: unknown[] = [];
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input, init) => {
+          const request = new Request(input, init);
+          const url = new URL(request.url);
+          requests.push({
+            body: request.method === "GET" ? "" : await request.text(),
+            headers: [...request.headers].sort(),
+            method: request.method,
+            path: url.pathname,
+          });
+          if (url.pathname === "/api/blob-upload-sessions" && request.method === "POST") {
+            return jsonResponse(uploadEnvelope("waitingForUpload", { uploadTarget: true }));
+          }
+          if (url.pathname.endsWith("/content")) return new Response(null, { status: 204 });
+          if (url.pathname === "/api/blob-upload-sessions/upload-1") {
+            return jsonResponse(uploadEnvelope("completed"));
+          }
+          const owningNode = node({ id: "node-1", name: "payload.bin", resource: blobResource() });
+          return jsonResponse({ node: owningNode, resource: owningNode.resource });
+        }),
+      );
+      const result = await upload(feature);
+      return { requests, result };
+    };
+    const common = { idempotencyKey: "blob-key", spaceId: "space-1" };
+    const fromFile = await run((feature) => feature.upload({ ...common, filePath: sourcePath }));
+    const fromMemory = await run((feature) =>
+      feature.uploadBytes({
+        ...common,
+        bytes: new TextEncoder().encode("abc"),
+        fileName: "payload.bin",
+      }),
+    );
+    expect(fromFile.requests).toContainEqual(expect.objectContaining({ body: "abc", method: "PUT" }));
+    expect(fromMemory).toEqual(fromFile);
+  });
+
+  it("rejects in-memory Blob input without a usable file name before authentication", async () => {
+    const provider = vi.fn<AuthenticatedWorkspaceHttp>();
+    const feature = new WorkspaceBlobFeature(provider);
+    for (const fileName of ["", "  ", ".", " .. ", "a/b.bin"]) {
+      await expect(
+        feature.uploadBytes({ bytes: new Uint8Array(1), fileName, spaceId: "space-1" }),
+      ).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+    }
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("trims the in-memory file name and copies the caller's bytes at entry", async () => {
+    const puts: { body: string; name: unknown }[] = [];
+    const feature = new WorkspaceBlobFeature(
+      authFor(async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (url.pathname === "/api/blob-upload-sessions" && request.method === "POST") {
+          const body = (await request.json()) as { originalFilename?: unknown };
+          puts.push({ body: "", name: body.originalFilename });
+          return jsonResponse(uploadEnvelope("waitingForUpload", { uploadTarget: true }));
+        }
+        if (url.pathname.endsWith("/content")) {
+          puts.push({ body: await request.text(), name: undefined });
+          return new Response(null, { status: 204 });
+        }
+        if (url.pathname === "/api/blob-upload-sessions/upload-1") {
+          return jsonResponse(uploadEnvelope("completed"));
+        }
+        const owningNode = node({ id: "node-1", name: "payload.bin", resource: blobResource() });
+        return jsonResponse({ node: owningNode, resource: owningNode.resource });
+      }),
+    );
+    const bytes = new TextEncoder().encode("abc");
+    const pending = feature.uploadBytes({ bytes, fileName: " payload.bin ", spaceId: "space-1" });
+    bytes.fill(0x7a);
+    await pending;
+    expect(puts).toContainEqual({ body: "abc", name: undefined });
+    expect(puts[0]?.name).toBe("payload.bin");
+  });
+
   it("recovers Blob PUT and completion without replaying a confirmed write", async () => {
     const directory = await temporaryDirectory();
     const sourcePath = join(directory, "payload.bin");

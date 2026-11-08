@@ -17,6 +17,12 @@ import {
   type UniverTextMetrics,
 } from "@univer-cli/univer-render-runtime";
 import type { IDocumentData } from "@univerjs/core";
+import { workspaceError } from "./errors.js";
+import {
+  assertWorkspaceSourceFiles,
+  readWorkspaceSourceFile,
+  type WorkspaceSourceFiles,
+} from "./files.js";
 import type {
   WorkspaceContentExecuteInput,
   WorkspaceContentExecuteResult,
@@ -26,11 +32,43 @@ import type {
 const ESTIMATE_LINT =
   "text boxes were sized by estimation (--estimate-text-size), not by real font metrics: text can sit off-position, especially centred or right-aligned lines; recompile without the flag (with a browser) before you ship";
 
-export interface WorkspaceCompileSvgInput {
+export type WorkspaceCompileSvgSource =
+  | { readonly file: string; readonly svg?: never; readonly assets?: never }
+  | { readonly svg: string; readonly assets?: WorkspaceSourceFiles; readonly file?: never };
+
+export type WorkspaceCompileSvgInput = WorkspaceCompileSvgSource & {
   readonly add?: boolean;
   readonly estimateTextSize?: boolean;
-  readonly file: string;
   readonly page?: number;
+};
+
+/** Read the SVG text and its asset port once; every later step is shared by both variants. */
+function readSvgSource(input: WorkspaceCompileSvgSource): {
+  readonly svg: string;
+  readonly assetResolver: NonNullable<CompileSvgOptions["assetResolver"]>;
+} {
+  if (input.file !== undefined) {
+    if (input.svg !== undefined) throw sourceChoiceError();
+    const file = input.file;
+    return {
+      svg: readFileSync(file, "utf8"),
+      assetResolver: (href) => ({ bytes: readFileSync(resolve(dirname(file), href)) }),
+    };
+  }
+  if (input.svg === undefined) throw sourceChoiceError();
+  const assets = input.assets ?? new Map();
+  assertWorkspaceSourceFiles(assets);
+  return {
+    svg: input.svg,
+    assetResolver: (href) => ({ bytes: readWorkspaceSourceFile(assets, href) }),
+  };
+}
+
+function sourceChoiceError(): Error {
+  return workspaceError(
+    "workspace-argument-invalid",
+    "Provide exactly one of an SVG file or in-memory SVG.",
+  );
 }
 
 export interface WorkspaceCompileSvgResult extends CompileSvgResult {
@@ -79,6 +117,7 @@ export class WorkspaceCompileSvgFeature {
   }
 
   public async compile(input: WorkspaceCompileSvgInput): Promise<WorkspaceCompileSvgResult> {
+    const { svg, assetResolver } = readSvgSource(input);
     let runtimePromise: Promise<UniverTextMeasureRuntime> | undefined;
     const textMeasurer: SvgTextMeasurer =
       input.estimateTextSize === true
@@ -95,12 +134,7 @@ export class WorkspaceCompileSvgFeature {
             },
           };
     try {
-      const compiled = await this.#compile(readFileSync(input.file, "utf8"), {
-        assetResolver: (href) => ({
-          bytes: readFileSync(resolve(dirname(input.file), href)),
-        }),
-        textMeasurer,
-      });
+      const compiled = await this.#compile(svg, { assetResolver, textMeasurer });
       const mode = input.add === true ? "add" : "replace";
       return {
         code:

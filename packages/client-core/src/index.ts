@@ -46,6 +46,8 @@ export {
   writeDownload,
   type DownloadTarget,
   type SourceFile,
+  type WorkspaceBlobBytes,
+  type WorkspaceSourceFiles,
 } from "./files.js";
 export {
   isWorkspaceRecord,
@@ -110,6 +112,7 @@ export {
   WorkspaceCompileTypstFeature,
   type WorkspaceCompileTypstDependencies,
   type WorkspaceCompileTypstInput,
+  type WorkspaceCompileTypstSource,
   type WorkspaceCompileTypstResult,
   type WorkspaceTypstMaterializeInput,
   type WorkspaceTypstMaterializeResult,
@@ -151,6 +154,7 @@ export {
   type WorkspaceApplySvgResult,
   type WorkspaceCompileSvgDependencies,
   type WorkspaceCompileSvgInput,
+  type WorkspaceCompileSvgSource,
   type WorkspaceCompileSvgResult,
   type WorkspaceSvgTextMeasurePort,
 } from "./svg.js";
@@ -213,10 +217,12 @@ export {
 
 export {
   compileWorkspaceMarkdownFile,
+  compileWorkspaceMarkdownSource,
   WorkspaceCompileMarkdownFeature,
   type WorkspaceMarkdownCompilation,
   type WorkspaceMarkdownOptions,
   type WorkspaceCompileMarkdownInput,
+  type WorkspaceCompileMarkdownSource,
   type WorkspaceCompileMarkdownResult,
   type WorkspaceCompileMarkdownDependencies,
 } from "./markdown.js";
