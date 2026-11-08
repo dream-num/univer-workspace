@@ -229,6 +229,13 @@ services:
 
 **`up`（阶段 F）。** 启动 MCP 时，Workspace Server 的 `OAUTH_CLIENTS_JSON` 带一个机密客户端 `univer-workspace-mcp-gateway`（`tokenExchange: true`、随机密钥、`redirectUris: ["http://127.0.0.1/unused"]`、`scopes: ["identity"]`），网关容器收到 `MCP_OAUTH_CLIENT_ID` 和 `MCP_OAUTH_CLIENT_SECRET`，同时保留 `MCP_DEV_SESSION_PASSTHROUGH=1`。
 
+**Workspace MCP OAuth 授权。** 仅在 MCP 启用时，`up` 在 Server 的 `env -i` 环境中增加
+`MCP_RESOURCE_URLS=http://127.0.0.1:<MCP_PORT>/mcp` 和
+`PUBLIC_ORIGIN=http://127.0.0.1:<WEB_PORT>`，取值随本次运行的端口变化。前者声明 MCP
+资源，后者作为 OAuth issuer 和浏览器授权地址的 origin。MO1 要求 Server 包含 PR #216 的
+MCP OAuth 授权实现；没有该实现的 Server 会忽略这两个变量，不能通过 MO1。授权服务器元数据
+通过 Vite 的 `$ORIGIN/.well-known/oauth-authorization-server` 读取。
+
 **`doctor`（阶段 F）。** 增加两项：用 PAT 经网关调用 `whoami` 返回本次运行的用户（证明 token exchange 可用）；网关日志不包含 session、PAT 和网关密钥。
 
 **`user`。** 现有行为不变。`MCP_ENABLED=1` 时再执行下列步骤，重复运行会覆盖旧的 session；PAT 已存在时不重新创建：
@@ -377,8 +384,20 @@ verify-uvw mcp-logs
 | MA3 | `$V mcp-token --scopes read` 后调用 `issue_create` | 退出码 1，`.out` 的 `code` 为 `workspace-scope-required`，事件 `error_code` 相同 |
 | MA4 | 吊销 PAT（`DELETE /api/auth/tokens/<id>`）后再调用一次 | 退出码 4，`status` 为 401（网关缓存最多 30 秒；吊销会删除下游 session，下一次工具调用得到 401 并驱逐缓存） |
 | MA5 | `--auth dev` 调用 `whoami` | 退出码 0，事件 `auth_kind` 为 `dev`，`client_id` 为 `dev` |
+| MO1 | opencode 只配置 MCP URL，通过浏览器授权后调用 `whoami` 和 `repo_list` | 未认证 POST 返回 401 和资源元数据 challenge；资源与授权服务器元数据匹配本次运行；授权页显示四个 scope；取消 `worktree:merge` 后 callback 只含 `read write publish`；opencode 输出 `Connected to ws`，run 退出码 0；两条工具事件的 `auth_kind` 为 `oauth`，`client_id` 等于 authorize URL 中动态注册的客户端，`user_id` 等于本次用户，`outcome` 为 `ok` |
 
-opencode 的 `--format json` 输出只有 `step_start`、`tool_use`、`text`、`step_finish` 四类片段，不含开发者的插件、skills 或凭据（实测），所以整份保存。opencode 把 MCP 工具包在代码模式的 `execute` 工具里调用，所以检查 `toolCalls`，不检查 `tool_use` 的工具名。这次会话会进入开发者本机 opencode 的会话历史，这是用 opencode 验证的代价，不影响结果。
+MO1 的完整 Bash 脚本位于 [MCP 旅程](../../../.agents/skills/verify-uvw/features/mcp.md)，放在
+MA5 后、M12 前。它在 `$RUN/home` 下新建临时目录，写入无 Authorization header 的 `ws`
+配置，并将 `XDG_DATA_HOME`、`XDG_CONFIG_HOME`、`XDG_STATE_HOME`、`XDG_CACHE_HOME`
+全部指向该目录。脚本选择空闲端口，通过 `opencode service set port <port>` 配置独立的托管服务，
+避免连接开发者默认的 49374 服务。`opencode mcp auth ws --print-logs < /dev/null` 在后台等待，
+agent-browser 使用本次运行的 session，以 `user.pw` 登录后打开日志中的 authorize URL。
+保存取消合并权限后的 `mcp-oauth-consent.png`、脱敏的授权与 callback URL、opencode 输出、退出码
+和 `mcp-oauth-events.json`。原始输出和 OAuth 存储只存在权限受限的临时目录；EXIT、INT、TERM
+trap 停止 auth 进程和独立服务，脱敏 code、token 和 state，再删除临时目录，失败时也执行。
+不把 MO1 的独立 XDG 配置用于 M11；M11 保留开发 session 路径。
+
+opencode 的 `--format json` 输出只有 `step_start`、`tool_use`、`text`、`step_finish` 四类片段，不含开发者的插件、skills 或凭据（实测），所以整份保存。opencode 把 MCP 工具包在代码模式的 `execute` 工具里调用，所以检查 `toolCalls`，不检查 `tool_use` 的工具名。M11 的会话会进入开发者本机 opencode 的会话历史；MO1 的会话历史保存在独立 XDG 目录，随 trap 清理。
 
 M2 到 M6 的每次工具调用都由 6.3 节的退出码 5 自动核对用量事件和凭据，成功（M2 到 M5）和失败（M6）两种结果都包括在内。M11 的事件由人工核对。所以“每次工具调用都产生一条字段齐全的事件”由这些步骤共同证明，不单列一步。M7 和 M8 不产生事件，因为请求没有到达 `tools/call`。
 

@@ -49,7 +49,9 @@ Prerequisites, checked by `up` and `doctor`, each with its fix:
 1. Starts `node --import tsx server/src/main.ts` in `apps/workspace` under `env -i` with
    `HOST=127.0.0.1 PORT=3920` and `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE`,
    `BLOB_DIRECTORY` inside `data/`. `env -i` keeps `apps/workspace/.env` and your shell's
-   OAuth/data variables out, so password auth is the only sign-in method.
+   OAuth provider/data variables out, so password auth is the only user sign-in method.
+   With MCP enabled, it also sets `MCP_RESOURCE_URLS=http://127.0.0.1:<mcp port>/mcp`
+   and `PUBLIC_ORIGIN=http://127.0.0.1:<web port>` for Workspace MCP OAuth authorization.
 2. Starts Vite on 5973 with `WORKSPACE_DEV_API_PORT=3920`; it proxies `/api` and
    `/universer-api` (including WebSockets) to the server.
 3. Waits until `GET /api/session` answers on both ports. The server creates and migrates
@@ -129,8 +131,9 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   insert SQLite rows, call internal services, or use test-only endpoints. Registration via
   the public register endpoint in `$V user` is setup, not proof of the auth feature. The
   [auth journey](features/auth.md) proves that.
-- Nothing is mocked. Collaboration, Office exchange, and the CLI daemon are all real. OAuth
-  providers are absent by design and are not verifiable here.
+- Nothing is mocked. Collaboration, Office exchange, and the CLI daemon are all real. External OAuth
+  providers are absent by design. Workspace acting as the MCP OAuth authorization server
+  is covered by MO1 in [the MCP journeys](features/mcp.md).
 - In the report, give the run id, launch HEAD (`run.env`), feature IDs, and artifact paths.
 
 ## Cleanup
@@ -189,6 +192,16 @@ object. The default protocol is 2026-07-28. Authentication defaults to `pat` whe
 to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
 `mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway logs.
 Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
+MO1 proves browser OAuth sign-in from a single MCP URL using a separate `ws` opencode
+config without an Authorization header. It needs the Workspace MCP OAuth authorization
+server (PR #216), agent-browser, and the model credentials available to the isolated
+opencode environment. It checks discovery through Vite, the four consent scopes, the
+callback without `worktree:merge`, and successful `whoami` and `repo_list` OAuth events.
+Its temporary project lives under this run's `home/`, with all four XDG directories and
+a free managed-service port set by `opencode service set port`. The trap stops that
+service and the auth process, saves the consent screenshot and redacted transcripts in
+`$EVIDENCE`, and deletes the isolated credentials on success or failure. Never record
+raw codes, tokens, or `state` values in evidence.
 
 Calls save `<label>.cmd`, `.out`, `.result.json`, `.err`, `.exit`, `.gateway.log`,
 and `.workspace.log` in `$EVIDENCE`. Tool calls also save `.event.json` and check its

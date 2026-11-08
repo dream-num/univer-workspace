@@ -248,16 +248,17 @@ cmd_up() {
   local run="$ROOT/$id"
   [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
   mkdir -p "$run"/{data,home,logs,evidence}
-  local oauth_clients=""
+  local oauth_clients="" server_oauth_env=("OAUTH_CLIENTS_JSON=")
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
     oauth_clients="$(node -e 'console.log(JSON.stringify({clients:[{clientId:"univer-workspace-mcp-gateway",clientType:"confidential",clientSecret:require("node:fs").readFileSync(process.argv[1],"utf8").trim(),tokenExchange:true,redirectUris:["http://127.0.0.1/unused"],scopes:["identity"]}]}))' "$run/home/mcp-oauth-secret")"
+    server_oauth_env=("OAUTH_CLIENTS_JSON=$oauth_clients" "MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
   fi
 
   # env -i keeps the developer's shell and apps/workspace/.env (OAuth, data paths) out of this instance.
   (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" \
     HOST=127.0.0.1 PORT="$server_port" LOG_LEVEL=info SECURE_COOKIES=false \
-    OAUTH_CLIENTS_JSON="$oauth_clients" \
+    "${server_oauth_env[@]}" \
     DATABASE_FILE="$run/data/univer-workspace.sqlite" \
     COLLABORATION_DATABASE_FILE="$run/data/univer-collaboration.sqlite" \
     BLOB_DIRECTORY="$run/data/blobs" \
