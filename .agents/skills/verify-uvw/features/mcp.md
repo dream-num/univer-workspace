@@ -70,6 +70,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX10 rejects a reused import key with a different upload.
 - MT1 compares Typst compilation with the CLI and reads back one native Doc after a same-key retry.
 - MV1 compares SVG compilation with the CLI and reads back its committed Slide.
+- MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -1755,6 +1756,32 @@ agent-browser screenshot "$EVIDENCE/mh-published-reloaded.png"
 
 Pass when both calls return the same Node, downloaded bytes equal the validated source,
 and the Browser screenshots show North and 42 before and after reload.
+
+### MR9 renderer role
+
+The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. Nothing calls it
+from a tool yet, so drive it from the executor container with `renderer-call`. Use a parallel run id when another run is active.
+
+```bash
+V=.agents/skills/verify-uvw/bin
+VERIFY_UVW_MCP=1 $V/verify-uvw doctor            # ends with the renderer checks
+node $V/renderer-proof.mjs screenshot | $V/verify-uvw renderer-call mr9-shot screenshot
+node $V/renderer-proof.mjs printPdf | $V/verify-uvw renderer-call mr9-pdf printPdf
+node $V/renderer-proof.mjs measureText | $V/verify-uvw renderer-call mr9-measure measureText
+```
+
+Pass when:
+
+- `doctor` prints every `MCP renderer` line as `ok`, including `cannot reach the Workspace server, the gateway or the internet`.
+- `$EVIDENCE/mr9-shot-view.png` shows `Hello Univer` and `你好，世界` legibly (look at it, not just its size), and
+  `$EVIDENCE/mr9-pdf.pdf` has one page with both lines. Convert it with `sips -s format png` to view it on macOS.
+- From the renderer container, `docker exec <project>-renderer-1 node -e "fetch('http://host.docker.internal:<server port>/api/session',{signal:AbortSignal.timeout(5000)}).then(r=>console.log('reached',r.status),e=>console.log('blocked'))"`
+  and the same request to a public host both print `blocked`. Docker Desktop answers the DNS lookup with `EAI_AGAIN` and a direct connect to the host gateway times out.
+- Two sequential `screenshot` calls report `runtime_cold: false` in the renderer log after the first call, and the renderer's
+  `/metrics` (Bearer `home/metrics-token`, requested from the executor container) keeps `mcp_renderer_runtime_creations_total` at 1
+  while `mcp_renderer_jobs_total{kind="screenshot",outcome="ok"}` grows.
+- Killing the renderer's Chromium makes the next call return a retryable `workspace-renderer-failed` and the one after succeeds
+  on a new runtime (`mcp_renderer_runtime_discards_total` 1).
 
 ## Gotchas
 

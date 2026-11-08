@@ -12,7 +12,8 @@ the CLI application. Workspace remains the authority for identity and permission
 ## Roles and limits
 
 One image selects its role through `MCP_ROLE`. `gateway` serves requests.
-`executor` serves internal RPC and hosts the Client Core worker pool. `renderer` remains unimplemented and exits 1.
+`executor` serves internal RPC and hosts the Client Core worker pool. `renderer` serves internal RPC for screenshots,
+PDF printing, Slide layout lint and text measurement (see [Renderer](#renderer)).
 A missing or unknown role exits 1 and lists the valid roles.
 
 The gateway imports Client Core's `/product` entry only. Headless execution and inspection
@@ -49,6 +50,35 @@ Session grants and process separation do not provide a multi-user sandbox. In pa
 a worker may read its executor's `/proc/1/environ` under the same uid, exposing the internal
 token. Stage G must address that before multi-user deployment. Production refuses this
 session-grant executor.
+
+## Renderer
+
+`MCP_ROLE=renderer` turns an already materialized Univer render unit into PNG, PDF, lint facts or text metrics.
+It holds no Workspace origin, session or grant, and the compose bench gives it only an `internal: true` network shared with
+the executors. It requires `MCP_INTERNAL_TOKEN`; `METRICS_TOKEN` protects `/metrics` (unset hides it, as on the gateway).
+
+The RPC reuses the executor's framing, bearer check and error envelope with `POST /rpc/v1/<op>`, but the request header has no
+`grant`. The shared protocol module `src/shared/renderer-protocol.ts` owns the operations and their zod schemas:
+
+| Operation | Input | Output |
+| --- | --- | --- |
+| `screenshot` | `UnitScreenshotInput` from `@univer-cli/unit-screenshot`, without `signal` | Image metadata with `offset` and `size`; the response payload is the concatenated PNG bytes |
+| `printPdf` | A Sheet, Doc, Slide or Board render unit. Base returns `workspace-render-unit-unsupported` | `pageCount` and name; the payload is the PDF |
+| `lint` | The Slide input of `@univer-cli/unit-layout-lint` | Its report |
+| `measureText` | `UniverTextMeasureInput` without `signal` | `UniverTextMetrics` |
+
+Each operation calls the upstream render package against a runtime leased from a pool of long-lived
+`createUniverRenderRuntime` instances. Runtimes are created lazily, capped by `RENDERER_MAX_RUNTIMES`, leased one per request and
+reused across requests and users. A request that waits longer than `RENDERER_QUEUE_TIMEOUT_MS` gets a retryable
+`workspace-renderer-busy`. An operation beyond `RENDERER_OPERATION_TIMEOUT_MS` (`workspace-renderer-timeout`) or a browser or
+runtime failure closes and discards that runtime. An input error (`workspace-argument-invalid`, `workspace-render-input-invalid`,
+`workspace-render-unit-unsupported`) returns it to the pool. Shutdown closes every runtime. Cross-request reuse is a temporary
+deviation from architecture 7.1, closed by Stage G. `/metrics` exposes `mcp_renderer_jobs_total{kind,outcome}`,
+`mcp_renderer_runtimes{state}` and the runtime creation and discard counters.
+
+The build copies Client Core's render page to `dist/render-runtime`, validating its asset manifest, and the renderer serves it from there.
+The image installs Debian `chromium`, `fonts-noto-cjk` and `fonts-liberation`, and sets `UNIVER_RENDER_BROWSER`. Chromium
+runs with `--no-sandbox` until Stage G.
 
 ## Authentication
 
@@ -117,7 +147,12 @@ The gateway validates configuration before listening and retains a readonly conf
 | `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
 | `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |
-| `UNIVER_LICENSE`, `UNIVER_LICENSE_KEY` | Generated development pair | Executor runtime and Office conversion overrides. Startup requires both overrides or neither; only export jobs receive the pair |
+| `MCP_RENDERER_URL` | Unset | Internal origin of the renderer. Compose gives it to the executor; no executor operation reads it yet |
+| `RENDERER_MAX_RUNTIMES` | `2` | Renderer: maximum live render runtimes, one Chromium each |
+| `RENDERER_QUEUE_TIMEOUT_MS` | `5000` | Renderer: maximum wait for a free runtime before a retryable `workspace-renderer-busy` |
+| `RENDERER_OPERATION_TIMEOUT_MS` | `25000` | Renderer: runtime launch and operation timeout. A timed-out runtime is closed and replaced |
+| `UNIVER_RENDER_BROWSER` | Image sets `/usr/bin/chromium` | Renderer: Chromium executable the render runtime launches |
+| `UNIVER_LICENSE`, `UNIVER_LICENSE_KEY` | Generated development pair | Executor runtime and Office conversion overrides. Startup requires both overrides or neither; only export jobs receive the pair. The renderer reads `UNIVER_LICENSE` only |
 | `LOG_LEVEL` | `info` | Pino level, including `debug`, `warn`, `error`, `fatal`, `trace`, and `silent` |
 
 The identity origin appears in `whoami` and repository URLs and controls repository

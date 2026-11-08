@@ -197,6 +197,9 @@ Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a J
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
 to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
 `mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
+`$V renderer-call <label> screenshot|printPdf|lint|measureText < input.json` sends one operation to the renderer from inside the
+executor container and saves `<label>.json` plus the PNG or PDF payload in `$EVIDENCE`. `bin/renderer-proof.mjs` prints a small
+Sheet or Doc with Latin and Chinese text as such an input.
 Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
 MO1 proves browser OAuth sign-in from a single MCP URL using a separate `ws` opencode
 config without an Authorization header. It needs the Workspace MCP OAuth authorization
@@ -221,10 +224,16 @@ port mapping, container configuration and Workspace access, protected metrics, a
 after `user`, MCP identity, the PAT token exchange, and session, PAT and client-secret leakage. Rebuild with `down`, then `up` when
 inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
 
-`down` saves `logs/mcp-gateway.log` and `logs/mcp-executor.log`, removes this run's compose containers, networks,
+`down` saves `logs/mcp-gateway.log`, `logs/mcp-executor.log` and `logs/mcp-renderer.log`, removes this run's compose containers, networks,
 volumes and image tag, then deletes `home/` with the other disposable data. It prints
 `ok    MCP resources removed` only after checking resource removal. Cleanup failures
 warn and continue. Run `down` after failures too. Build cache and evidence survive.
+
+The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts with every MCP run on its own compose
+network declared `internal: true`, joined only by the executor(s) and the renderer. The gateway waits for it to be healthy.
+`doctor` checks its image, that it has no published port and joins one internal network, bearer rejection, protected metrics,
+a real `measureText` call from the executor, that it cannot reach `host.docker.internal:<server port>`, the gateway or a public
+host, and that its logs hold no credential. `down` removes its container and network with the rest of the project.
 
 The executor has no published port. `doctor` verifies its image, bearer rejection, HTTP/ticket/
 collaboration WebSocket transport, log redaction and worker environment. The positive RPC check runs inside the gateway with its configured token and executor URL.

@@ -138,7 +138,8 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 
 **交付物。**
 
-- `renderer` 角色：常驻浏览器池，每个任务一个 BrowserContext。
+- `renderer` 角色：长驻的 runtime 池（每个 runtime 一个 Chromium），跨任务复用。这是对每任务一个 BrowserContext 的临时偏离（2026-11-09 产品负责人决定，阶段 G 收口，见[架构 7.1](architecture.zh-CN.md#71-渲染服务)）。
+- 真实字体的 SVG 文字测量：`compile_svg` 在不带 `estimate_text_size` 时由渲染服务量字（产品负责人决定 2026-11-09）。
 - C8：trunk 渲染的图片内联。如需 Workspace 新增按 trunk 读取 Asset 的接口，单独开 PR。
 - 工具：`screenshot`、`print_pdf`、`lint`。
 - `compose.verify.yml` 增加 renderer 服务。
