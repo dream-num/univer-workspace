@@ -22,15 +22,16 @@ while (argv[0]?.startsWith('--')) {
   else usage(`Unknown option ${flag}`);
 }
 const [label, tool, json = '{}'] = argv;
-if (!['call', 'tools', 'doctor'].includes(mode) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '') ||
+const listing = ['tools', 'resources', 'instructions'].includes(mode);
+if (!['call', 'tools', 'doctor', 'resources', 'resource', 'instructions'].includes(mode) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '') ||
     !['2026-07-28', '2025-11-25'].includes(protocol) || !['dev', 'none', 'invalid'].includes(auth) ||
-    (mode === 'tools' ? argv.length !== 1 : argv.length < 2 || argv.length > 3)) usage('Invalid command, label, protocol, or authentication mode');
+    (listing ? argv.length !== 1 : mode === 'resource' ? argv.length !== 2 : argv.length < 2 || argv.length > 3)) usage('Invalid command, label, protocol, or authentication mode');
 let args;
 try { args = JSON.parse(json); } catch { usage('Tool arguments must be a JSON object'); }
 if (args === null || typeof args !== 'object' || Array.isArray(args)) usage('Tool arguments must be a JSON object');
 
 function usage(message) {
-  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>`);
+  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] <label>`);
   process.exit(2);
 }
 const requestId = `${label}.${randomBytes(4).toString('hex')}`;
@@ -40,13 +41,13 @@ const base = join(internal.run, 'evidence', label);
 const record = mode !== 'doctor';
 const save = (suffix, value) => { if (record) writeFileSync(`${base}.${suffix}`, value); };
 const pretty = value => `${JSON.stringify(value, null, 2)}\n`;
-const command = ['verify-uvw', mode === 'tools' ? 'mcp-tools' : 'mcp', '--protocol', protocol,
-  ...(mode === 'tools' ? [] : ['--auth', auth]), ...(toolsets === undefined ? [] : ['--toolsets', toolsets]),
-  label, ...(mode === 'tools' ? [] : [tool, json])];
+const command = ['verify-uvw', mode === 'call' ? 'mcp' : `mcp-${mode}`, '--protocol', protocol,
+  ...(mode === 'call' ? ['--auth', auth] : []), ...(toolsets === undefined ? [] : ['--toolsets', toolsets]),
+  label, ...(listing ? [] : mode === 'resource' ? [tool] : [tool, json])];
 save('cmd', `${command.map(a => JSON.stringify(a)).join(' ')}\nURL=${url}\nprotocol=${protocol}\nauth=${auth}\n`);
 // A repeated label must not retain an event from an earlier call.
 save('event.json', '');
-if (record && mode === 'tools') {
+if (record && mode !== 'call') {
   const { unlinkSync } = await import('node:fs');
   unlinkSync(`${base}.event.json`);
 }
@@ -72,9 +73,20 @@ try {
   await client.connect(transport);
   negotiated = client.getNegotiatedProtocolVersion();
   if (negotiated !== protocol) throw new Error(`Expected protocol ${protocol}, negotiated ${negotiated}`);
-  result = mode === 'tools' ? await client.listTools() : await client.callTool({ name: tool, arguments: args });
-  output = mode === 'tools' ? result.tools.map(({ name, description, annotations, inputSchema, outputSchema }) =>
-    ({ name, description, annotations, inputSchema, outputSchema })) : result.structuredContent;
+  if (mode === 'instructions') {
+    result = { instructions: client.getInstructions() ?? null };
+    output = result;
+  } else if (mode === 'resources') {
+    result = await client.listResources();
+    output = result.resources;
+  } else if (mode === 'resource') {
+    result = await client.readResource({ uri: tool });
+    output = result.contents;
+  } else {
+    result = mode === 'tools' ? await client.listTools() : await client.callTool({ name: tool, arguments: args });
+    output = mode === 'tools' ? result.tools.map(({ name, description, annotations, inputSchema, outputSchema }) =>
+      ({ name, description, annotations, inputSchema, outputSchema })) : result.structuredContent;
+  }
   code = result.isError === true ? 1 : 0;
 } catch (error) {
   const http = responses.find(r => r.status === 401) ?? responses.findLast(r => r.status < 200 || r.status >= 300);

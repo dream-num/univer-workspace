@@ -2,8 +2,8 @@
 
 A private remote MCP application built on `@univerjs/univer-workspace-client-core`.
 Stage A and the Stage B slices so far expose identity, repositories, Issues, pull requests,
-search, browse, files in a pull request, repository and label administration, and merge or
-discard over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols. Results match
+search, browse, files in a pull request, repository and label administration, merge or
+discard, the Facade API reference and the Skills over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols. Results match
 the CLI `--json` output and add Browser URLs. Lists return `{ repos: [...] }` in both protocols.
 
 The gateway talks to Workspace through HTTP. It has no database and does not import
@@ -79,6 +79,9 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
+| `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
+| `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
+| `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ skills: [{ name, content, resources?, files? }] }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
 
 `files` toolset:
 
@@ -98,8 +101,33 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `pr_merge` | Required `repo`, `number` | Worktree, now `merged`. Only when the user asked |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 
+## Reference, Skills and server instructions
+
+`@univer-cli/api-reference` 1.3.1 is the same offline Facade API index the CLI uses. The CLI's `api find` and
+`api show` print text and have no `--json`, so `api_find` and `api_show` return the library's own structured
+results, wrapped as `{ results }`. The gateway reads the CLI's Skills from `dist/skill-data`, which the build
+copies from `apps/cli/skill-data`; it never imports `apps/cli`. `skills_read` returns the CLI's `skills list`,
+`skills get` and `skills read` data. Skill text is unchanged, so it still names `uvw` commands: the tool with the
+same name in snake_case does the same thing.
+
+Every Skill file is also an MCP resource, in every toolset selection: `uvw://skills/<name>/SKILL.md` and
+`uvw://skills/<name>/references/<file>` (or `templates/<file>`), as `text/markdown`.
+
+The server `instructions` carry the `core` Skill's workflow rules for clients without Skill support (ChatGPT,
+WorkBuddy): find the file, open a pull request, write, read back to verify, mark ready, hand the review link to
+the user, and leave merging to the user.
+
+Result size: a tool result whose `structuredContent` would exceed 100,000 characters is never sent whole.
+`api_show` pages a long class member by member, and `skills_read` pages a long `resource` by characters. A page
+has `truncated: true` and an opaque `cursor`; calling the same tool with the same arguments and that cursor
+returns the next page, and the last page has neither field. Each `api_show` page repeats the class header
+(declaration, lineage, documentation) with its slice of `groups`. The cursor is stateless. It encodes the offset
+and a digest of the other arguments, so reusing it with different arguments is `workspace-argument-invalid`.
+Any other tool, and `skills_read` with `full`, returns `workspace-result-too-large` when it would exceed the
+limit, telling the agent to narrow the request.
+
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `blob_get` and `label_list`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `blob_get` and `label_list`; `write` for the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. Development passthrough grants all

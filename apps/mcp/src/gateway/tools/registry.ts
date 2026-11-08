@@ -19,6 +19,9 @@ import { spaceFindTool } from "./core/space-find.js";
 import { unitListTool } from "./core/unit-list.js";
 import { unitAddTool } from "./core/unit-add.js";
 import { unitCreateTool } from "./core/unit-create.js";
+import { apiFindTool } from "./core/api-find.js";
+import { apiShowTool } from "./core/api-show.js";
+import { skillsReadTool } from "./core/skills-read.js";
 import { blobGetTool } from "./files/blob-get.js";
 import { repoCreateTool } from "./admin/repo-create.js";
 import { repoEditTool } from "./admin/repo-edit.js";
@@ -51,6 +54,9 @@ export const tools: readonly ToolDefinition[] = [
   unitListTool,
   unitAddTool,
   unitCreateTool,
+  apiFindTool,
+  apiShowTool,
+  skillsReadTool,
   blobGetTool,
   repoCreateTool,
   repoEditTool,

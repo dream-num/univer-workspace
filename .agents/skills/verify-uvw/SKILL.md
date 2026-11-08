@@ -173,12 +173,15 @@ and the metrics token stay under `home/` with credential files mode 0600.
 ```bash
 $V mcp [--protocol 2026-07-28|2025-11-25] [--auth dev|none|invalid] [--toolsets list] <label> <tool> [json]
 $V mcp-tools [--protocol version] [--toolsets list] <label>
+$V mcp-resources [--protocol version] [--toolsets list] <label>
+$V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
+$V mcp-instructions [--protocol version] [--toolsets list] <label>
 $V mcp-logs
 ```
 
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28 and default authentication is `dev`.
-`mcp-tools` saves the ordered tool definitions. `mcp-logs` prints current gateway logs.
+`mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway logs.
 Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
 
 Calls save `<label>.cmd`, `.out`, `.result.json`, `.err`, `.exit`, `.gateway.log`,

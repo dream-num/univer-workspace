@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-logs | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-logs | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -9,7 +9,7 @@ CLI_MAIN="$REPO/apps/cli/dist/main.js"
 ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
 
 MCP_CALL="$REPO/.agents/skills/verify-uvw/bin/mcp-call.mjs"
-MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core)
+MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core apps/cli/skill-data)
 
 die() { echo "verify-uvw: $*" >&2; exit 1; }
 
@@ -375,6 +375,9 @@ case "${1:-}" in
   cli) shift; cmd_cli "$@" ;;
   mcp) shift; cmd_mcp call "$@" ;;
   mcp-tools) shift; cmd_mcp tools "$@" ;;
+  mcp-resources) shift; cmd_mcp resources "$@" ;;
+  mcp-resource) shift; cmd_mcp resource "$@" ;;
+  mcp-instructions) shift; cmd_mcp instructions "$@" ;;
   mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;

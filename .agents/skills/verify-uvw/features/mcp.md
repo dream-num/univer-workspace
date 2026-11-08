@@ -1,7 +1,7 @@
 # MCP gateway
 
 An agent connects to a disposable Docker gateway with its own Workspace session, reads
-identity, repositories, Issues, pull requests, files, repository administration, labels and merges through either MCP protocol, and leaves correlated usage evidence.
+identity, repositories, Issues, pull requests, files, repository administration, labels, merges, the Facade API reference and the Skills through either MCP protocol, and leaves correlated usage evidence.
 
 ## Sub-features
 
@@ -41,6 +41,13 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MS9 creates, renames, moves and trashes Nodes against the CLI.
 - MS10 merges a ready pull request and discards another against the CLI.
 - MS11 runs the full stage B product journey and screenshots the ready pull request page.
+- MR1 lists the Skills and gets one against the CLI.
+- MR2 reads a Skill resource through `skills_read` against the CLI and checks the rewritten read instruction.
+- MR3 and MR4 search and show Facade API symbols against the CLI and the reference library.
+- MR5 lists and reads Skill files as MCP resources against the CLI.
+- MR6 checks the server instructions in the initialize result in both protocols.
+- MR7 reads a long class through `api_show` cursors and compares the pages with the reference library.
+- MR8 rejects a cursor reused with other arguments and an unknown Skill.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -146,7 +153,7 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","api_find","api_show","skills_read"]'
 FILES='["blob_get"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
@@ -157,12 +164,12 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|blob_get|label_list)$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|api_(find|show)|skills_read|blob_get|label_list)$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:21]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:24]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
@@ -171,7 +178,7 @@ jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin",
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 21 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
+first 24 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -834,6 +841,149 @@ lists the one added `Q4 Forecast` sheet, the screenshot of the pull request page
 title `Add forecast sheet (#N)`, the `Ready` state and the `Q4 Forecast` file (open the PNG and
 look; the accessibility snapshot greps are the second view), and the pull request stays `ready`: the agent
 hands the `PR_URL` to the user and does not merge.
+
+**MR1. Skills list and get.** The CLI prints `{ success, data }`; the gateway wraps the same data in `skills`.
+
+```bash
+REF='const {createRequire}=require("node:module");const r=createRequire(process.cwd()+"/apps/mcp/package.json")("@univer-cli/api-reference").createStandardApiReference();'
+$V mcp mcp-skills-list skills_read
+$V cli mcp-skills-list-cli skills list --json
+diff <(jq -S '.skills' "$EVIDENCE/mcp-skills-list.out") <(jq -S '.data' "$EVIDENCE/mcp-skills-list-cli.out")
+jq -e 'map(.name) == ["base","blob","board","core","doc","embed","cross-unit-formula","html-view","sheet","slide"]' <(jq '.skills' "$EVIDENCE/mcp-skills-list.out")
+$V mcp mcp-skills-get skills_read '{"name":"html-view"}'
+$V cli mcp-skills-get-cli skills get html-view --json
+diff <(jq -S '.skills' "$EVIDENCE/mcp-skills-get.out") \
+  <(jq -S '.data | map(if .resources then .resources |= map(.readCommand |= (capture("^uvw skills read (?<n>\\S+) (?<p>.+)$") | "Call skills_read with name \"\(.n)\" and resource \"\(.p)\".")) else . end)' "$EVIDENCE/mcp-skills-get-cli.out")
+$V mcp mcp-skills-full skills_read '{"name":"html-view","full":true}'
+$V cli mcp-skills-full-cli skills get html-view --full --json
+diff <(jq -S '.skills | map(.files)' "$EVIDENCE/mcp-skills-full.out") <(jq -S '.data | map(.files)' "$EVIDENCE/mcp-skills-full-cli.out")
+```
+
+Pass when every command exits 0, the three diffs are empty, and the list has the ten skills in the CLI order.
+
+**MR2. Skill resource and the rewritten instruction.**
+
+```bash
+$V mcp mcp-skills-read skills_read '{"name":"html-view","resource":"references/charts.md"}'
+$V cli mcp-skills-read-cli skills read html-view references/charts.md --json
+diff <(jq -S '.' "$EVIDENCE/mcp-skills-read.out") <(jq -S '.data' "$EVIDENCE/mcp-skills-read-cli.out")
+jq -e '.skills[0].resources | length > 0 and all(.[]; .readCommand | startswith("Call skills_read with name \"html-view\" and resource \"references/"))' "$EVIDENCE/mcp-skills-get.out"
+! jq -r '.skills[0].resources[].readCommand' "$EVIDENCE/mcp-skills-get.out" | grep -q 'uvw skills'
+jq -e '.tool == "skills_read" and .outcome == "ok"' "$EVIDENCE/mcp-skills-read.event.json"
+```
+
+Pass when both commands exit 0, the content equals the CLI `data`, and no `readCommand` still names `uvw skills`.
+
+**MR3. API find.** The CLI `api` commands print text and have no `--json`, so the reference library (the same package the CLI loads) is the structured oracle, and the CLI text is the cross-check.
+
+```bash
+$V mcp mcp-api-find api_find '{"terms":["setValues","conditionalformat"],"unit":"sheet"}'
+node -e "$REF"'console.log(JSON.stringify({results:r.find({terms:["setValues","conditionalformat"],unit:"sheet"})}))' > "$EVIDENCE/mcp-api-find-oracle.json"
+diff <(jq -S . "$EVIDENCE/mcp-api-find.out") <(jq -S . "$EVIDENCE/mcp-api-find-oracle.json")
+$V cli mcp-api-find-cli api find setValues --unit sheet
+grep -qF "$(jq -r '.results[0].matches[0].label | split("(")[0]' "$EVIDENCE/mcp-api-find.out")" "$EVIDENCE/mcp-api-find-cli.out"
+$V mcp mcp-api-find-bad api_find '{"terms":["x"],"unit":"nope"}'
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-api-find-bad.out"
+```
+
+Pass when the result equals the library output (wrapped in `results`), the CLI text contains the first match, and an unknown unit is `workspace-argument-invalid` with exit 1.
+
+**MR4. API show.**
+
+```bash
+$V mcp mcp-api-show api_show '{"symbols":["FRange.setValues","ICellData.v","NoSuchSymbolAnywhere"]}'
+node -e "$REF"'console.log(JSON.stringify({results:r.show(["FRange.setValues","ICellData.v","NoSuchSymbolAnywhere"])}))' > "$EVIDENCE/mcp-api-show-oracle.json"
+diff <(jq -S . "$EVIDENCE/mcp-api-show.out") <(jq -S . "$EVIDENCE/mcp-api-show-oracle.json")
+jq -e '.results[2].status == "not-found" and (.truncated | not)' "$EVIDENCE/mcp-api-show.out"
+$V cli mcp-api-show-cli api show FRange.setValues
+grep -q 'declare class FRange' "$EVIDENCE/mcp-api-show-cli.out"
+grep -q 'setValues' "$EVIDENCE/mcp-api-show-cli.out"
+$V cli mcp-api-show-missing-cli api show NoSuchSymbolAnywhere
+test $? -eq 1
+grep -q 'Unknown symbol: NoSuchSymbolAnywhere' "$EVIDENCE/mcp-api-show-missing-cli.err"
+```
+
+Pass when the result equals the library output, an unknown symbol is a `not-found` entry and not a tool error, the CLI text shows the same class and member, and the CLI exits 1 for the unknown symbol (the gateway reports it in the result instead).
+
+**MR5. Skill files as MCP resources.**
+
+```bash
+$V mcp-resources mcp-resources-list
+for n in $(jq -r '.data[].name' "$EVIDENCE/mcp-skills-list-cli.out"); do
+  $V cli "mcp-skills-get-$n-cli" skills get "$n" --json >/dev/null
+done
+{ for n in $(jq -r '.data[].name' "$EVIDENCE/mcp-skills-list-cli.out"); do
+    echo "uvw://skills/$n/SKILL.md"
+    jq -r --arg n "$n" '.data[0].resources[]? | "uvw://skills/\($n)/\(.path)"' "$EVIDENCE/mcp-skills-get-$n-cli.out"
+  done; } | sort > "$EVIDENCE/mcp-resources-expected.txt"
+diff <(jq -r '.[].uri' "$EVIDENCE/mcp-resources-list.out" | sort) "$EVIDENCE/mcp-resources-expected.txt"
+jq -e 'all(.[]; .mimeType == "text/markdown")' "$EVIDENCE/mcp-resources-list.out"
+$V mcp-resource mcp-resource-core uvw://skills/core/SKILL.md
+$V cli mcp-skills-core-cli skills get core --json
+diff <(jq -r '.[0].text' "$EVIDENCE/mcp-resource-core.out") <(jq -r '.data[0].content' "$EVIDENCE/mcp-skills-core-cli.out")
+$V mcp-resource mcp-resource-ref uvw://skills/html-view/references/charts.md
+diff <(jq -r '.[0].text' "$EVIDENCE/mcp-resource-ref.out") <(jq -r '.content' "$EVIDENCE/mcp-skills-read.out")
+$V mcp-resource --protocol 2025-11-25 mcp-resource-core-legacy uvw://skills/core/SKILL.md
+diff "$EVIDENCE/mcp-resource-core.out" "$EVIDENCE/mcp-resource-core-legacy.out"
+$V mcp-resources --toolsets admin mcp-resources-admin
+diff "$EVIDENCE/mcp-resources-list.out" "$EVIDENCE/mcp-resources-admin.out"
+$V mcp-resource mcp-resource-missing uvw://skills/core/references/missing.md
+test $? -eq 3
+```
+
+Pass when the resource URIs equal the CLI's skill files, every resource is `text/markdown`, the two read resources equal the CLI text in both protocols, the same resources are listed with `?toolsets=admin`, and an unknown resource exits 3 (protocol error). Resource calls have no event file.
+
+**MR6. Server instructions.**
+
+```bash
+$V mcp-instructions mcp-instructions
+$V mcp-instructions --protocol 2025-11-25 mcp-instructions-legacy
+diff "$EVIDENCE/mcp-instructions.out" "$EVIDENCE/mcp-instructions-legacy.out"
+jq -e '.instructions | contains("pull request") and contains("pr_create") and contains("pr_ready") and contains("api_find") and contains("skills_read") and contains("review") and contains("Leave merging")' "$EVIDENCE/mcp-instructions.out"
+```
+
+Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, hand over the review link, leave merging to the user).
+
+**MR7. Truncation with cursors.** `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` paging and `workspace-result-too-large` are covered by the gateway tests.
+
+```bash
+CURSOR=""; I=0
+while :; do
+  ARGS=$(jq -nc --arg c "$CURSOR" '{symbols:["FRange"]} + (if $c == "" then {} else {cursor:$c} end)')
+  $V mcp "mcp-frange-$I" api_show "$ARGS"
+  CURSOR=$(jq -r '.cursor // ""' "$EVIDENCE/mcp-frange-$I.out")
+  I=$((I+1))
+  [ -n "$CURSOR" ] || break
+done
+test "$I" -gt 1
+node -e "$REF"'console.log(JSON.stringify(r.show(["FRange"])[0]))' > "$EVIDENCE/mcp-frange-oracle.json"
+for f in "$EVIDENCE"/mcp-frange-[0-9]*.out; do jq -e '(tojson | length) <= 100000' "$f"; done
+jq -e '.truncated == true and (.cursor | type == "string")' "$EVIDENCE/mcp-frange-0.out"
+jq -e '(.truncated | not) and (.cursor | not)' "$EVIDENCE/mcp-frange-$((I-1)).out"
+diff <(jq -s -S '[.[].results[0].groups[].members[]]' "$EVIDENCE"/mcp-frange-[0-9]*.out) <(jq -S '[.groups[].members[]]' "$EVIDENCE/mcp-frange-oracle.json")
+diff <(jq -S '.results[0] | del(.groups)' "$EVIDENCE/mcp-frange-0.out") <(jq -S 'del(.groups)' "$EVIDENCE/mcp-frange-oracle.json")
+$V cli mcp-frange-cli api show FRange
+for name in $(jq -r '.groups[].members[].name' "$EVIDENCE/mcp-frange-oracle.json" | sort -u | head -n 40); do grep -qF "$name" "$EVIDENCE/mcp-frange-cli.out"; done
+```
+
+Pass when the pages are each within 100,000 characters, all but the last carry `truncated` and `cursor`, the members concatenated across pages equal the reference library's members in order, every page repeats the same class header, and the CLI text names the sampled members.
+
+**MR8. Cursor guard and unknown Skill.**
+
+```bash
+$V mcp mcp-frange-wrong api_show "$(jq -nc --arg c "$(jq -r '.cursor' "$EVIDENCE/mcp-frange-0.out")" '{symbols:["FWorkbook"],cursor:$c}')"
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-frange-wrong.out"
+jq -e '.error_code == "workspace-argument-invalid" and .outcome == "tool_error"' "$EVIDENCE/mcp-frange-wrong.event.json"
+$V mcp mcp-skills-unknown skills_read '{"name":"no-such-skill"}'
+test $? -eq 1
+$V cli mcp-skills-unknown-cli skills get no-such-skill --json
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
+```
+
+Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1 and a matching usage event, and the CLI also rejects the unknown Skill.
 
 **M12. Cleanup.**
 

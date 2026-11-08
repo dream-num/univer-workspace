@@ -1,9 +1,14 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { createServer } from "node:http";
+import { fileURLToPath } from "node:url";
 import {
   createMcpHandler,
   McpServer,
+  ResourceNotFoundError,
+  ResourceTemplate,
   CLIENT_INFO_META_KEY,
   TRACEPARENT_META_KEY,
 } from "@modelcontextprotocol/server";
@@ -18,6 +23,9 @@ import { pino, type Logger } from "pino";
 import { Counter, Histogram, Registry } from "prom-client";
 import { z } from "zod";
 import type { GatewayConfig } from "../shared/config.js";
+import { SERVER_INSTRUCTIONS } from "./instructions.js";
+import { RESULT_LIMIT } from "./paging.js";
+import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
 import { translateToolError } from "./tool-error.js";
 import type { ToolContext, ToolDefinition, ToolScope } from "./tools/definition.js";
 import { selectTools, toolsets } from "./tools/registry.js";
@@ -60,6 +68,8 @@ export function createGateway(
     readonly logger?: Logger;
     readonly fetcher?: typeof fetch;
     readonly scopes?: ReadonlySet<ToolScope>;
+    // The build copies apps/cli/skill-data to dist/skill-data; tests point at the source directory.
+    readonly skillDataRoot?: string;
   } = {},
 ) {
   const logger =
@@ -87,6 +97,8 @@ export function createGateway(
     registers: [registry],
     buckets: [0.01, 0.05, 0.1, 0.3, 1, 3, 10, 30],
   });
+  const skillDataRoot =
+    options.skillDataRoot ?? fileURLToPath(new URL("../skill-data", import.meta.url));
   const publicUrl = new URL(config.MCP_PUBLIC_URL);
   const challenge = `Bearer resource_metadata="${publicUrl.origin}/.well-known/oauth-protected-resource/mcp"`;
   const unauthorized = () =>
@@ -102,7 +114,39 @@ export function createGateway(
     const state = requests.getStore();
     if (!state) throw new Error("Missing authenticated request context");
     state.modern = era === "modern";
-    const server = new McpServer({ name: "univer-workspace", version: "0.0.0" });
+    const server = new McpServer(
+      { name: "univer-workspace", version: "0.0.0" },
+      { instructions: SERVER_INSTRUCTIONS },
+    );
+    server.registerResource(
+      "skills",
+      new ResourceTemplate("uvw://skills/{name}/{+path}", {
+        list: async () => ({
+          resources: (await listSkillFiles(skillDataRoot)).map(({ name, path }) => ({
+            uri: skillUri(name, path),
+            name: `${name}/${path}`,
+            mimeType: skillMimeType(path),
+          })),
+        }),
+      }),
+      { title: "Univer Workspace Skills", description: "The operational Skills that teach the Workspace workflow." },
+      async (uri, { name, path }) => {
+        const wanted = { name: String(name), path: String(path) };
+        const files = await listSkillFiles(skillDataRoot);
+        if (!files.some((file) => file.name === wanted.name && file.path === wanted.path)) {
+          throw new ResourceNotFoundError(uri.href);
+        }
+        return {
+          contents: [
+            {
+              uri: uri.href,
+              mimeType: skillMimeType(wanted.path),
+              text: await readFile(join(skillDataRoot, wanted.name, wanted.path), "utf8"),
+            },
+          ],
+        };
+      },
+    );
     for (const tool of state.selected) {
       server.registerTool(
         tool.name,
@@ -122,6 +166,12 @@ export function createGateway(
               throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
             }
             const structuredContent = json.data;
+            if (JSON.stringify(structuredContent).length > RESULT_LIMIT) {
+              throw workspaceError(
+                "workspace-result-too-large",
+                `${tool.name} would return more than ${String(RESULT_LIMIT)} characters. Narrow the request (for example a smaller limit, fewer symbols or terms, or a more specific query) and call again.`,
+              );
+            }
             state.repo = result.repo;
             state.outcome = "ok";
             return {
@@ -258,6 +308,7 @@ export function createGateway(
         user,
         requestId,
         identityOrigin: config.WORKSPACE_ORIGIN,
+        skillDataRoot,
         scopes: options.scopes ?? developmentPassthroughScopes,
       },
       selected,

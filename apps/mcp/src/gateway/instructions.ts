@@ -1,0 +1,8 @@
+// The `core` Skill's workflow rules, for clients that cannot load Skills (ChatGPT, WorkBuddy).
+export const SERVER_INSTRUCTIONS = [
+  "This server operates a Univer Workspace on behalf of the signed-in user. Every change goes through a pull request (a Worktree), never straight into the shared files.",
+  "Workflow: 1) Find the file with space_find or space_browse, or create a new one inside the pull request with unit_create. 2) Open a pull request with pr_create for each new task, and add existing files to it with unit_add; continue an existing pull request only to rework that same task. 3) Make the change inside the pull request. 4) Read the result back to verify it before you report success. 5) Mark the pull request ready with pr_ready. 6) Give the user the pull request link so they can review it. 7) Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
+  "Never mix up spaceId, nodeId, resourceId, unitId, pull request number and Worktree id; take identifiers from tool results, not from display names. Never invent the user, the repository or a confirmed revision.",
+  "Before writing Facade API code, look the APIs up with api_find and api_show. Read the matching skill first with skills_read: call it without arguments to list the skills, then with name (and full, or resource) to read one. The skills also appear as resources under uvw://skills/. Skill text names uvw commands; the tool with the same name in snake_case does the same thing (uvw pr create is pr_create).",
+  "Creating tools take an idempotency_key: generate one before the first attempt and reuse it when you retry. When a result is too large, repeat the call with the cursor it returned, or narrow the request.",
+].join("\n\n");

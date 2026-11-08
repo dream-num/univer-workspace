@@ -11,6 +11,7 @@ export interface ToolContext {
   readonly user: WorkspaceSubject;
   readonly requestId: string;
   readonly identityOrigin: string;
+  readonly skillDataRoot: string;
   readonly scopes: ReadonlySet<ToolScope>;
 }
 

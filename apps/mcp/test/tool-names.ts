@@ -20,6 +20,9 @@ export const coreNames = [
   "unit_list",
   "unit_add",
   "unit_create",
+  "api_find",
+  "api_show",
+  "skills_read",
 ];
 export const filesNames = ["blob_get"];
 export const adminNames = [
