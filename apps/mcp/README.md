@@ -22,11 +22,17 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 (`POST /api/auth/token`, RFC 8693) as the confidential client `MCP_OAUTH_CLIENT_ID`. The response
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
 that session. The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
-never beyond the session's `expires_in` minus 5 seconds), so revoking a token takes effect within that window or
-at the first downstream 401, which evicts the entry. After revocation, tools that make no Workspace
-request (`whoami`, `skills_read`, `api_*`) and resources may still answer from the cache for up to 30 seconds.
-Concurrent calls with the same bearer share one exchange. An `invalid_grant` result is cached for 5 seconds;
-the cache holds at most 10,000 entries and evicts the oldest at capacity.
+never beyond the session's `expires_in` minus 5 seconds). After revocation, `initialize`, `tools/list`,
+tools that make no Workspace request (`whoami`, `skills_read`, `api_*`), and resources may still succeed
+from cache for up to 30 seconds. Every Workspace-backed call fails immediately because revocation deletes
+the downstream session. A downstream 401 evicts the cached session and triggers one token re-exchange.
+The consumed MCP request returns HTTP 401 without replaying the tool. If the token still exchanges,
+the challenge omits `error="invalid_token"` so the client can retry with the same token. A rejected token
+gets `error="invalid_token"`; exchange faults return HTTP 500.
+Concurrent calls with the same bearer share one exchange. Positive entries and in-flight exchanges share
+a cache capped at 10,000 entries. An `invalid_grant` result is cached separately for 5 seconds, capped at
+1,000 entries. Before FIFO eviction, each cache sweeps its expired entries. In-flight exchanges are never
+evicted. If they fill the positive cache, new exchanges proceed without caching their results.
 
 | Outcome of the exchange | Gateway response |
 | --- | --- |
@@ -163,7 +169,9 @@ violates a tool's output schema is an `internal_error`. A write whose outcome is
 Authentication failures return HTTP 401 and
 `WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`,
 adding `error="invalid_token"` when a presented bearer is rejected. Both this 401 and protected-resource
-metadata carry `Access-Control-Allow-Origin: *`; the 401 exposes `WWW-Authenticate` to browser clients.
+metadata carry `Access-Control-Allow-Origin: *`; the 401 also exposes `WWW-Authenticate`.
+The CORS headers make protected-resource metadata readable from browsers. Cross-origin browser calls
+to `/mcp` remain refused by the Origin check.
 
 Requests may provide `x-request-id` matching `^[a-zA-Z0-9._-]{1,128}$`.
 The gateway generates a UUID otherwise, echoes it, and forwards it to every Workspace request.

@@ -129,11 +129,11 @@ describe("gateway authentication", () => {
       );
       return client;
     }
-    const post = (bearer: string) =>
+    const post = (bearer: string, method = "ping", params?: object) =>
       fetch(url, {
         method: "POST",
         headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params }),
       });
     const events = () =>
       logs
@@ -235,18 +235,41 @@ describe("gateway authentication", () => {
     expect(gateway.productCookies).toEqual([]);
   });
 
-  it("evicts the cached session when Workspace rejects it during a tool call", async () => {
+  it("re-exchanges a dead downstream session and lets the client retry the same valid token", async () => {
     let expired = false;
     const gateway = await start(exchangeEnv, { expireDownstream: () => expired });
     const client = await gateway.connect("uvw_pat_full");
     await client.callTool({ name: "whoami", arguments: {} });
     expired = true;
-    await expect(client.callTool({ name: "repo_list", arguments: {} })).rejects.toThrow();
+    const response = await gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBe(
+      `Bearer resource_metadata="${gateway.origin}/.well-known/oauth-protected-resource/mcp"`,
+    );
+    expect(gateway.exchanges).toHaveLength(2);
+    expect(gateway.productCookies).toEqual(["workspace_session=downstream-session-1"]);
     expect(gateway.events().at(-1)).toMatchObject({ outcome: "auth_error" });
     expired = false;
     await client.callTool({ name: "repo_list", arguments: {} });
     expect(gateway.exchanges).toHaveLength(2);
     expect(gateway.productCookies.at(-1)).toBe("workspace_session=downstream-session-2");
+  });
+
+  it("marks a token rejected during downstream recovery as invalid", async () => {
+    const behavior: { expireDownstream: () => boolean; exchangeStatus?: number; exchangeBody?: object } = {
+      expireDownstream: () => false,
+    };
+    const gateway = await start(exchangeEnv, behavior);
+    await gateway.connect("uvw_pat_full");
+    behavior.expireDownstream = () => true;
+    behavior.exchangeStatus = 400;
+    behavior.exchangeBody = { error: "invalid_grant" };
+    const response = await gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+    expect(gateway.exchanges).toHaveLength(2);
+    expect((await gateway.post("uvw_pat_full")).status).toBe(401);
+    expect(gateway.exchanges).toHaveLength(2);
   });
 
   it.each([
@@ -349,6 +372,90 @@ describe("exchange cache lifetime and capacity", () => {
     MCP_OAUTH_CLIENT_SECRET: clientSecret,
   });
 
+  function success(expiresIn = 600): Response {
+    return Response.json({
+      access_token: "downstream-session",
+      expires_in: expiresIn,
+      scope: "read",
+      subject: { kind: "pat", id: "pat-1", client_id: null },
+      user: { id: "user-1", displayName: "alice" },
+    });
+  }
+
+  it("keeps a valid cached session through 2,000 distinct invalid tokens", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) =>
+      new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_full"
+        ? success()
+        : Response.json({ error: "invalid_grant" }, { status: 400 }),
+    );
+    const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
+    const valid = await authenticate("uvw_pat_full", "test");
+    for (let i = 0; i < 2_000; i += 1) expect(await authenticate(`uvw_pat_invalid_${i}`, "test")).toBeNull();
+    expect(await authenticate("uvw_pat_full", "test")).toEqual(valid);
+    expect(fetcher).toHaveBeenCalledTimes(2_001);
+  });
+
+  it("sweeps expired positive entries before evicting a live entry at capacity", async () => {
+    let now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) =>
+      success(new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_live" ? 600 : 6),
+    );
+    const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
+    try {
+      const live = await authenticate("uvw_pat_live", "test");
+      for (let i = 0; i < 9_999; i += 1) await authenticate(`uvw_pat_short_${i}`, "test");
+      now += 1_000;
+      await authenticate("uvw_pat_new", "test");
+      expect(await authenticate("uvw_pat_live", "test")).toEqual(live);
+      expect(fetcher).toHaveBeenCalledTimes(10_001);
+      await authenticate("uvw_pat_short_9998", "test");
+      expect(fetcher).toHaveBeenCalledTimes(10_002);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("never evicts in-flight exchanges when the positive cache is full", async () => {
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      await gate;
+      return success();
+    });
+    const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
+    const pending = Array.from({ length: 10_000 }, (_, i) => authenticate(`uvw_pat_${i}`, "test"));
+    const overflow = authenticate("uvw_pat_overflow", "test");
+    const first = authenticate("uvw_pat_0", "test");
+    const last = authenticate("uvw_pat_9999", "test");
+    resume();
+    const values = await Promise.all(pending);
+    expect(await first).toEqual(values[0]);
+    expect(await last).toEqual(values[9999]);
+    await overflow;
+    expect(fetcher).toHaveBeenCalledTimes(10_001);
+    await authenticate("uvw_pat_overflow", "test");
+    expect(fetcher).toHaveBeenCalledTimes(10_002);
+  });
+
+  it("skips an older in-flight exchange when evicting a completed entry", async () => {
+    let resume!: () => void;
+    const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      if (new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_pending") await gate;
+      return success();
+    });
+    const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
+    const pending = authenticate("uvw_pat_pending", "test");
+    for (let i = 0; i < 10_000; i += 1) await authenticate(`uvw_pat_${i}`, "test");
+    const shared = authenticate("uvw_pat_pending", "test");
+    resume();
+    expect(await shared).toEqual(await pending);
+    expect(fetcher).toHaveBeenCalledTimes(10_001);
+    await authenticate("uvw_pat_0", "test");
+    expect(fetcher).toHaveBeenCalledTimes(10_002);
+  });
+
   it("retries a negative entry after five seconds and evicts the oldest entry at capacity", async () => {
     let calls = 0;
     const authenticate = createAuthenticator(config, pino({ level: "silent" }), async () => {
@@ -365,11 +472,11 @@ describe("exchange cache lifetime and capacity", () => {
       now += 1;
       expect(await authenticate("uvw_pat_first", "test")).toBeNull();
       expect(calls).toBe(2);
-      for (let i = 0; i < 10_000; i += 1) await authenticate(`uvw_pat_${i}`, "test");
-      expect(await authenticate("uvw_pat_9999", "test")).toBeNull();
-      expect(calls).toBe(10_002);
+      for (let i = 0; i < 1_000; i += 1) await authenticate(`uvw_pat_${i}`, "test");
+      expect(await authenticate("uvw_pat_999", "test")).toBeNull();
+      expect(calls).toBe(1_002);
       expect(await authenticate("uvw_pat_first", "test")).toBeNull();
-      expect(calls).toBe(10_003);
+      expect(calls).toBe(1_003);
     } finally {
       clock.mockRestore();
     }

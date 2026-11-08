@@ -27,6 +27,7 @@ const exchangeResponse = z.object({
 const maxCacheMs = 30_000;
 const negativeCacheMs = 5_000;
 const maxCacheEntries = 10_000;
+const maxNegativeCacheEntries = 1_000;
 
 export interface Authentication {
   /** Value of the downstream `workspace_session` cookie. Never the caller's bearer. */
@@ -49,6 +50,7 @@ export function createAuthenticator(
 ) {
   const { exchange, devSessionPassthrough } = config.auth;
   const cache = new Map<string, CacheEntry | Promise<Authentication | null>>();
+  const negativeCache = new Map<string, CacheEntry>();
   const key = (bearer: string) => createHash("sha256").update(bearer).digest("hex");
 
   async function exchangeToken(
@@ -101,8 +103,30 @@ export function createAuthenticator(
     return { value, expiresAt: Date.now() + ttl };
   }
 
+  function makeRoom(
+    entries: Map<string, CacheEntry | Promise<Authentication | null>>,
+    limit: number,
+  ): boolean {
+    if (entries.size < limit) return true;
+    const now = Date.now();
+    for (const [cacheKey, entry] of entries) {
+      if (!(entry instanceof Promise) && entry.expiresAt <= now) entries.delete(cacheKey);
+    }
+    if (entries.size < limit) return true;
+    for (const [cacheKey, entry] of entries) {
+      if (!(entry instanceof Promise)) {
+        entries.delete(cacheKey);
+        return true;
+      }
+    }
+    return false;
+  }
+
   function cachedExchange(bearer: string, requestId: string): Promise<Authentication | null> {
     const cacheKey = key(bearer);
+    const rejected = negativeCache.get(cacheKey);
+    if (rejected && rejected.expiresAt > Date.now()) return Promise.resolve(null);
+    negativeCache.delete(cacheKey);
     const hit = cache.get(cacheKey);
     if (hit instanceof Promise) return hit;
     if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
@@ -110,8 +134,10 @@ export function createAuthenticator(
     const pending = exchangeToken(bearer, requestId).then(
       (entry) => {
         if (cache.get(cacheKey) === pending) {
-          if (entry.expiresAt > Date.now()) cache.set(cacheKey, entry);
-          else cache.delete(cacheKey);
+          cache.delete(cacheKey);
+          const entries = entry.value === null ? negativeCache : cache;
+          const limit = entry.value === null ? maxNegativeCacheEntries : maxCacheEntries;
+          if (entry.expiresAt > Date.now() && makeRoom(entries, limit)) entries.set(cacheKey, entry);
         }
         return entry.value;
       },
@@ -120,11 +146,7 @@ export function createAuthenticator(
         throw error;
       },
     );
-    if (cache.size >= maxCacheEntries) {
-      const oldest = cache.keys().next();
-      if (!oldest.done) cache.delete(oldest.value);
-    }
-    cache.set(cacheKey, pending);
+    if (makeRoom(cache, maxCacheEntries)) cache.set(cacheKey, pending);
     return pending;
   }
 
@@ -140,6 +162,7 @@ export function createAuthenticator(
     },
     evict(bearer: string): void {
       cache.delete(key(bearer));
+      negativeCache.delete(key(bearer));
     },
   };
 }

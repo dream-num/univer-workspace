@@ -354,7 +354,8 @@ export function createGateway(
         const text = await response.text();
         if (state.outcome === "auth_error") {
           authenticator.evict(bearer);
-          return unauthorized(true);
+          const refreshed = await authenticator.authenticate(bearer, requestId);
+          return unauthorized(refreshed === null);
         }
         return new Response(text, { status: response.status, headers: response.headers });
       } finally {
