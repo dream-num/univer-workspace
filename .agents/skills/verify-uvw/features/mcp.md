@@ -1818,3 +1818,58 @@ with `workspace-argument-invalid` while a concurrent executor inspection matches
 Both gateway durations must stay below the larger of 2 seconds and five times the warm
 baseline inspection duration. This is a rejection latency guard, not a throughput benchmark.
 Evidence uses `mm-errors-` and includes the CLI transcript, per-call events and summary JSON.
+
+**MX11. Stale worker session.** Two PATs share one user and one warm worker. Revoke A, recover B, and reject A.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
+```
+
+Pass when B succeeds with one auth rerun and A receives HTTP 401. Evidence is `resilience-auth.json`.
+
+**MX12. Concurrent revision conflict.** Resolve two writes concurrently against one Unit.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs revision
+```
+
+Pass when both writes commit on consecutive revisions, at most one revision rerun is logged (the executor queues same-Unit writes, so none is normal), and inspect contains both values.
+Evidence is `resilience-revision.json`.
+
+**MX13. Two executor replicas.** Opt in at launch with `VERIFY_UVW_MCP_EXECUTORS=2`. The default run skips this journey.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs replicas
+```
+
+Pass when three calls use the same replica, stopping it moves the next call to the other replica,
+and killing a slow write returns `workspace-result-unknown` without a replay. A manual retry writes once.
+The journey restarts stopped containers. Evidence is `resilience-replicas.json`.
+
+**MX14. Stale worker session on HTML View validation.** Merge a data Sheet, validate a bound HTML View with A, revoke A,
+and validate with B. Then revoke B and call the executor with a 4-second deadline using the dev session, which leaves no time for a rerun.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs html-auth
+```
+
+Pass when B succeeds with one auth rerun, the no-rerun call returns a retryable `workspace-executor-timeout` that is not an
+`auth_error`, the next executor call succeeds on the replaced worker, and the primary bearer still works. Evidence is `resilience-html-auth.json`.
+
+**MX15. Parallel writes and reads during writes.** Five parallel `execute` calls on one Unit, then an `inspect` loop during eight sequential writes.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs burst
+```
+
+Pass when all five writes commit and no `inspect` fails. Evidence is `resilience-burst.json` with the commit count, inspect failure count and rerun reasons.
+
+For sustained contention, run eight writer loops and two inspect loops on one Unit for 30 seconds.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs harsh
+```
+
+Pass when every write commits, every committed value is read back at its written cell, and no inspect fails.
+`resilience-harsh.json` records request outcomes, read latency p50 and p95 in milliseconds, and reruns.
+Latency includes MCP connection, queue wait, the tool call, and client close on the local Docker stack.

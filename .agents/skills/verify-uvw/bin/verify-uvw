@@ -68,6 +68,12 @@ mcp_digest() {
 }
 
 mcp_compose() {
+  local executor_urls="http://executor:3000" profiles=""
+  if [[ "${MCP_EXECUTORS:-1}" == 2 ]]; then
+    executor_urls+=",http://executor-b:3000"
+    profiles=replicas
+  fi
+  COMPOSE_PROFILES="$profiles" VERIFY_UVW_EXECUTOR_URLS="$executor_urls" \
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
@@ -105,7 +111,7 @@ mcp_up() {
 }
 
 mcp_doctor() {
-  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP executor checks failed"
+  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "${MCP_EXECUTORS:-1}" || bad "MCP executor checks failed"
   if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
     ok "MCP staging directory is private and owned by the gateway uid"
   else bad "MCP staging directory is missing or unsafe"; fi
@@ -202,7 +208,7 @@ JS
 
 mcp_down() {
   mcp_compose logs --no-color --timestamps gateway >"$RUN/logs/mcp-gateway.log" 2>&1 || echo "warning: cannot save MCP logs" >&2
-  mcp_compose logs --no-color --timestamps executor >"$RUN/logs/mcp-executor.log" 2>&1 || echo "warning: cannot save executor logs" >&2
+  mcp_compose logs --no-color --timestamps executor executor-b >"$RUN/logs/mcp-executor.log" 2>&1 || echo "warning: cannot save executor logs" >&2
   mcp_compose down --volumes --remove-orphans || echo "warning: MCP compose down failed; retry down" >&2
   if docker image inspect "$MCP_IMAGE" >/dev/null 2>&1; then
     docker image rm "$MCP_IMAGE" || echo "warning: cannot remove MCP image $MCP_IMAGE" >&2
@@ -247,6 +253,7 @@ cmd_up() {
     [[ -z "$(listener_pid "$port")" ]] || die "port $port is already in use; not driving an instance this run did not start"
   done
 
+  [[ "${VERIFY_UVW_MCP_EXECUTORS:-1}" =~ ^[12]$ ]] || die "VERIFY_UVW_MCP_EXECUTORS must be 1 or 2"
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
   local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" desktop
   if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
@@ -291,7 +298,7 @@ GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
 EOF
   printf 'MCP_ENABLED=%s\n' "$mcp_enabled" >>"$run/run.env"
   if [[ "$mcp_enabled" == 1 ]]; then
-    printf 'MCP_PORT=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\n' "$mcp_port" "$id" "$id" >>"$run/run.env"
+    printf 'MCP_PORT=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
   fi
   ln -sfn "$run" "$ROOT/current"
 
@@ -441,7 +448,7 @@ case "${1:-}" in
   mcp-resource) shift; cmd_mcp resource "$@" ;;
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;
   mcp-token) shift; cmd_mcp_token "$@" ;;
-  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor ;;
+  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;
 esac

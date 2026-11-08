@@ -177,7 +177,7 @@ export const opSpecs = {
     name: "htmlView.validate",
     effect: "read",
     payload: "none",
-    rerun: [],
+    rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
     input: z.object({ html: htmlViewInput }),
     output: z.object({
@@ -191,7 +191,7 @@ export const opSpecs = {
     name: "htmlView.create",
     effect: "write",
     payload: "none",
-    rerun: [],
+    rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
     input: z.object({
       html: htmlViewInput,
@@ -228,7 +228,7 @@ export const opSpecs = {
     name: "markdown.export",
     effect: "read",
     payload: "response",
-    rerun: [],
+    rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: 64 * MiB, budgetMs: 30_000 },
     input: markdownExportInput,
     output: markdownExportOutput,
@@ -265,7 +265,7 @@ export const opSpecs = {
     name: "exchange.export",
     effect: "read",
     payload: "response",
-    rerun: [],
+    rerun: ["auth"],
     limits: { requestBytes: 64 * 1024, responseBytes: 128 * MiB, budgetMs: JOB_DEADLINE_MS },
     input: z.object({
       worktreeId: z.string().min(1),
@@ -284,7 +284,7 @@ export const opSpecs = {
     name: "content.execute",
     effect: "write",
     payload: "none",
-    rerun: [],
+    rerun: ["revision", "auth"],
     limits: { requestBytes: 12 * MiB, responseBytes: 8 * MiB, budgetMs: 30_000 },
     input: z.object({ worktreeId: z.string().min(1), unitId: z.string().min(1), code: codeInput }),
     output: z.object({
@@ -300,7 +300,7 @@ export const opSpecs = {
     name: "content.inspect",
     effect: "read",
     payload: "none",
-    rerun: [],
+    rerun: ["auth", "revision"],
     limits: { requestBytes: 256 * 1024, responseBytes: 8 * MiB, budgetMs: 30_000 },
     input: inspectionOptions.extend({ scope: runtimeScope, unitId: z.string().min(1) }),
     output: z

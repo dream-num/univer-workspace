@@ -1,5 +1,7 @@
+import { WorkspaceApplicationError } from "@univerjs/univer-workspace-client-core/product";
 import {
   ExecutorCallError,
+  jsonOrNull,
   resultUnknown,
   translateError,
   type WireError,
@@ -28,7 +30,16 @@ export function mapRuntimeError(error: unknown, effect: OpEffect): WireError {
     return {
       code: "workspace-executor-timeout",
       message: "The executor deadline elapsed before the operation started. Retry the operation.",
-      detail: { retryable: true, started: false },
+      detail: {
+        retryable: true,
+        started: false,
+        ...(error instanceof WorkspaceApplicationError &&
+        typeof error.detail === "object" &&
+        error.detail !== null &&
+        "cause" in error.detail
+          ? { cause: jsonOrNull(error.detail.cause) }
+          : {}),
+      },
       outcome: "timeout",
     };
   if (code === "workspace-submit-retry-exhausted" && effect === "write") return resultUnknown(code);

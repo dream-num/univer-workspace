@@ -23,8 +23,10 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
-`content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`, `htmlView.create`, `markdown.compile`, `markdown.export` and internal `diagnostics.probe`; all have empty
-rerun policies. Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
+`content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`,
+`htmlView.create`, `markdown.compile`, `markdown.export` and internal `diagnostics.probe`.
+The resilience table below declares each operation's rerun policy.
+Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
 Transport rejections use non-200 statuses. The grant travels only in the frame body.
 
 Gateway rendezvous hashing pins `(userId, scope, unitId)` to an executor. Only failures
@@ -41,7 +43,6 @@ Workspace `whoami` before dispatch, using the transport URL. Successful identity
 each request waits only until its own deadline, and failed checks are not cached.
 A mismatched user or 401 requires authentication.
 Workers are replaced before reuse when their creating grant expires within 60 seconds.
-401 invalidation and reruns belong to the next resilience change.
 
 Session grants and process separation do not provide a multi-user sandbox. In particular,
 a worker may read its executor's `/proc/1/environ` under the same uid, exposing the internal
@@ -266,6 +267,53 @@ violates a tool's output schema is an `internal_error`. A write whose outcome is
 `workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
 `detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts. Definite rejections pass through
 as `WORKSPACE_RUNTIME_CONFLICT`, `WORKSPACE_RUNTIME_PULL_REQUIRED`, or `WORKSPACE_RUNTIME_COMMIT_INVALID`.
+The executor reruns `content.execute` once and `content.inspect` up to three times on a pull revision mismatch
+(`workspace-result-mismatch`) or a `workspace-runtime-target-stale` Unit draft-head change. Client
+Core raises both only while a worker opens or pulls, before the script runs and before any commit, so
+a rerun cannot repeat a write. Reads are idempotent and can encounter revision races from writes
+by other users, replicas, or routes outside the queue. Each read revision rerun waits a jittered 25 to 100 ms before resolving
+the target again. Writes keep one revision rerun without backoff.
+The executor puts `content.execute` and `content.inspect` in one FIFO queue per user, scope and Unit.
+Reads wait for earlier writes, so a continuous write stream from that user cannot race an inspect's
+selected revision. Reads also take turns with other reads. Different users, Units and scopes have
+independent queues. Worktree inspect and execute share a scope; trunk inspect has its own scope.
+Queue wait counts against the original deadline. A call that times out while queued returns
+`workspace-executor-timeout` with `started: false`. Revision reruns remain a fallback for writes
+outside this queue; retries alone cannot resolve a race against continuous writes.
+`content.execute`, `content.inspect`, `exchange.export`, `markdown.export`, `htmlView.validate` and
+`htmlView.create` also recover once from a worker's Workspace 401 when that worker holds a
+different session from the current call. `htmlView.*` reads the Unit through the runtime
+before any Blob upload, so a 401 there never follows a write, and the upload is idempotent by key.
+Replacement is limited to that worker; its rejected session's verifier
+entry is evicted. A revoked session also reads as HTTP 403 from trunk collaboration endpoints, so a 403 from a
+worker made for another session is treated as stale in the same way; a 403 for the call's own session is a real
+permission error and passes through unchanged. A 401 for the call's own session returns `workspace-authentication-required`
+with the SDK cause in `detail.cause`. When the rejection came from a worker made for another session
+and no rerun happens (op without `auth`, under five seconds left, or the rerun already used),
+the call returns `workspace-executor-timeout` with `detail: { retryable: true, started: false, cause }`
+instead: the caller's own session was never tested, so the client stays signed in and retries on
+the replaced worker.
+Commit-phase failures are never rerun. Auth is permitted once for every operation that declares it.
+Revision is permitted three times for reads and once for writes that declare it. Every rerun requires
+at least five seconds left in the original deadline, checked again after read backoff. Other reads (`exchange.export`, `markdown.export`, `htmlView.*`) do not declare `revision`.
+Import and diagnostics do not rerun. Import can create a Unit, and diagnostics uses the
+current session without a cached worker. Office conversion children have no Workspace credentials;
+export's auth recovery applies only to its parent-side runtime read.
+
+| Operation | Rerun reasons | Rationale |
+| --- | --- | --- |
+| `content.execute` | `revision`, `auth` | Runtime rejection precedes script execution and commit. |
+| `content.inspect` | `auth`, `revision` | Shares the same-user Unit queue with execute. Retries revision races from other routes up to three times with jittered backoff and replaces a stale worker once. |
+| `exchange.export` | `auth` | The parent reads before credential-free conversion. |
+| `htmlView.validate`, `htmlView.create` | `auth` | Runtime reads precede Blob uploads. |
+| `markdown.compile` | None | Creation can write a Unit before a runtime rejection; block updates enter the write path before runtime execution. Do not replay the whole handler. |
+| `markdown.export` | `auth` | Native block and asset export only reads; a stale worker rejection cannot follow a write. |
+| `exchange.import` | None | Unit creation can already have started. |
+| `diagnostics.probe` | None | Uses the current session without a cached worker. |
+
+Reruns add worker time to the same usage event. Executor logs record `mcp.executor_rerun`
+with `reason`, and its internal-token-protected `/metrics` exposes
+`mcp_executor_reruns_total{reason="auth"|"revision"}`. The version 1 usage event is unchanged.
 Queued calls cancelled before acquiring a lease return `workspace-executor-timeout` with
 `detail: { retryable: true, started: false }`; they never execute later. A started write
 that exceeds its deadline still has an unknown result.
@@ -362,6 +410,8 @@ docker run --rm -p 127.0.0.1:3930:3000 \
 
 Connect your MCP client to `http://127.0.0.1:3930/mcp` with a personal access token as its bearer
 token, or with a development Workspace session when passthrough is enabled. The image runs as `node` and declares no persistent volume.
+Set `VERIFY_UVW_MCP_EXECUTORS=2` when launching verify-uvw to enable `executor-b` and
+route across both replicas. The default remains one executor, with no published executor port.
 `docker/compose.verify.yml` is reserved for the local verification bench. Its variables
 are all required, as specified in [local verification](../../docs/design/workspace-mcp/local-verification.zh-CN.md).
 

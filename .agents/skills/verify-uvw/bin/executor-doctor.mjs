@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { assertWorkerCount, assertLogsExclude } from './executor-doctor-checks.mjs';
 import { join } from 'node:path';
 
-const [repo, run, project, image, imageId, origin, serverPort, mcpPort] = process.argv.slice(2);
+const [repo, run, project, image, imageId, origin, serverPort, mcpPort, executorCount = "1"] = process.argv.slice(2);
 const secret = name => readFileSync(join(run, 'home', name), 'utf8').trim();
 const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'staging'), VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
@@ -17,13 +17,16 @@ const compose = (args, input) => docker(['compose', '-p', project, '-f', join(re
 const node = (service, code, input) => compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input);
 
 try {
-  const cid = compose(['ps', '-q', 'executor']).trim();
-  assert(cid, 'executor container exists');
-  const [container] = JSON.parse(docker(['inspect', cid]));
-  assert(container.State.Running && container.State.Health?.Status === 'healthy' && container.Image === imageId, 'executor healthy on this run image');
-  console.log('ok    MCP executor is healthy and uses this run\'s image');
-  assert(Object.values(container.NetworkSettings.Ports ?? {}).every(value => value === null), 'executor has no published ports');
-  console.log('ok    MCP executor has no published port');
+  const executors = executorCount === '2' ? ['executor', 'executor-b'] : ['executor'];
+  for (const service of executors) {
+    const cid = compose(['ps', '-q', service]).trim();
+    assert(cid, 'executor container exists');
+    const [container] = JSON.parse(docker(['inspect', cid]));
+    assert(container.State.Running && container.State.Health?.Status === 'healthy' && container.Image === imageId, 'executor healthy on this run image');
+    console.log('ok    MCP executor is healthy and uses this run\'s image');
+    assert(Object.values(container.NetworkSettings.Ports ?? {}).every(value => value === null), 'executor has no published ports');
+    console.log('ok    MCP executor has no published port');
+  }
   node('gateway', `for (const authorization of ['', 'Bearer wrong']) {
     const response = await fetch(new URL('/rpc/v1/diagnostics.probe', process.env.MCP_EXECUTOR_URLS.split(',')[0]), {method:'POST',headers:{authorization}});
     if (response.status !== 401) process.exit(1);
@@ -60,7 +63,7 @@ try {
     mcp('doctor-worker-inspect', 'inspect', { worktree: worktree.id, unit: unit.unitId, target: 'workbook' });
 
   }
-  const children = node('executor', `
+  const children = executors.reduce((total, service) => total + Number(node(service, `
     import { readFileSync, readdirSync } from 'node:fs';
     let checked = 0;
     for (const pid of readdirSync('/proc').filter(p => /^\\d+$/.test(p) && p !== '1' && p !== String(process.pid))) {
@@ -71,11 +74,11 @@ try {
       checked++;
     }
     console.log(checked);
-  `).trim();
-  assertWorkerCount(Number(children));
+  `).trim()), 0);
+  assertWorkerCount(children);
   writeFileSync(join(run, 'evidence/executor-worker-environ.txt'), `Checked ${children} worker children; no inherited secret environment variables. Same-uid workers can still read /proc/1/environ until Stage G.\n`);
   console.log(`ok    MCP executor worker environment excludes inherited secrets (${children} live children)`);
-  const logs = compose(['logs', '--no-color', '--no-log-prefix', 'gateway', 'executor']);
+  const logs = compose(['logs', '--no-color', '--no-log-prefix', 'gateway', ...executors]);
   for (const name of ['mcp-session', 'mcp-token', 'internal-token', 'metrics-token', 'mcp-oauth-secret']) {
     if (existsSync(join(run, 'home', name))) assertLogsExclude(logs, [secret(name)]);
   }

@@ -54,7 +54,11 @@ describe("executor protocol boundaries", () => {
       expect(() => decodeFrame(invalid)).toThrow();
     expect(Object.keys(handlers)).toEqual(Object.keys(opSpecs));
     for (const [name, spec] of Object.entries(opSpecs)) expect(spec.name).toBe(name);
-    expect(Object.values(opSpecs).every((op) => op.rerun.length === 0)).toBe(true);
+    expect(opSpecs["content.execute"].rerun).toEqual(["revision", "auth"]);
+    expect(opSpecs["content.inspect"].rerun).toEqual(["auth", "revision"]);
+    expect(opSpecs["exchange.import"].rerun).toEqual([]);
+    expect(opSpecs["htmlView.validate"].rerun).toEqual(["auth"]);
+    expect(opSpecs["htmlView.create"].rerun).toEqual(["auth"]);
   });
 
   it("checks bearer digests and production/configuration guards", () => {

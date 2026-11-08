@@ -1,9 +1,11 @@
+import { Counter, Registry } from "prom-client";
 import {
   WorkspaceContentSource,
   type WorkspaceContentRuntime,
 } from "@univerjs/univer-workspace-client-core";
 import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import type { Logger } from "pino";
+import { setTimeout as delay } from "node:timers/promises";
 import type { ExecutorConfig } from "../shared/config-executor.js";
 import {
   opSpecs,
@@ -17,10 +19,42 @@ import type { Handler, OpContext } from "./context.js";
 import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js";
 import { mapRuntimeError, timeoutError } from "./errors.js";
 import { handlers } from "./ops/index.js";
-import { bindRuntime } from "./runtime.js";
+import { bindRuntime, getRuntimeRerun } from "./runtime.js";
 import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
+
+// Same-user reads and writes take turns on a Unit; other routes still need revision reruns.
+function createUnitQueue() {
+  const tails = new Map<string, Promise<void>>();
+  return async (key: string, signal: AbortSignal) => {
+    const previous = tails.get(key) ?? Promise.resolve();
+    let release = () => {};
+    const turn = new Promise<void>((resolve) => (release = resolve));
+    const tail = previous.then(() => turn);
+    tails.set(key, tail);
+    void tail.then(() => {
+      if (tails.get(key) === tail) tails.delete(key);
+    });
+    let onAbort = () => {};
+    try {
+      signal.throwIfAborted();
+      await Promise.race([
+        previous,
+        new Promise<never>((_resolve, reject) => {
+          onAbort = () => reject(signal.reason);
+          signal.addEventListener("abort", onAbort, { once: true });
+        }),
+      ]);
+    } catch (error) {
+      release();
+      throw error;
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+    }
+    return release;
+  };
+}
 
 export function createDispatcher(
   config: ExecutorConfig,
@@ -30,17 +64,23 @@ export function createDispatcher(
   const jobs = new ConversionJobQueue(config.EXECUTOR_MAX_JOBS);
   const verifyGrant = createGrantVerifier(config);
   const dispatchers: { [K in OpName]: Handler<K> } = handlers;
-  return async function dispatch<K extends OpName>(
-    name: K,
-    header: RequestHeader,
-    payload: Uint8Array,
-  ) {
+  const metrics = new Registry();
+  const enterUnitQueue = createUnitQueue();
+  const reruns = new Counter({
+    name: "mcp_executor_reruns_total",
+    help: "Executor handler reruns by reason.",
+    labelNames: ["reason"],
+    registers: [metrics],
+  });
+  async function dispatch<K extends OpName>(name: K, header: RequestHeader, payload: Uint8Array) {
     const spec: OpSpec = opSpecs[name];
     const controller = new AbortController();
+    const deadlineAt = Date.now() + Math.min(header.deadlineMs, spec.limits.budgetMs);
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
     let writeStarted = name !== "exchange.import" && name !== "markdown.compile";
     let effect = spec.effect;
-    const currentTimeout = () => timeoutError(effect, "deadline", writeStarted);
+    let queued = false;
+    const currentTimeout = () => timeoutError(effect, "deadline", !queued && writeStarted);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const input = spec.input.parse(header.input) as OpInput<(typeof opSpecs)[K]>;
@@ -81,7 +121,7 @@ export function createDispatcher(
           writeStarted = true;
         },
         source: () => source,
-        runtime: bindRuntime(runtime, grant, usage, controller.signal),
+        runtime: bindRuntime(runtime, grant, usage, controller.signal, verifyGrant.invalidate),
         materializer: {
           materialize: async (input) => {
             usage.executor = "cold_start";
@@ -159,7 +199,55 @@ export function createDispatcher(
         (async () => {
           await verifyGrant(grant, header.requestId);
           controller.signal.throwIfAborted();
-          return await dispatchers[name](ctx, input, ...payloadArgs);
+          const rerun = { auth: 0, revision: 0 };
+          let release = () => {};
+          if (name === "content.execute" || name === "content.inspect") {
+            const route = spec.route(input as never);
+            queued = true;
+            release = await enterUnitQueue(
+              JSON.stringify([grant.userId, route.scope, route.unitId]),
+              controller.signal,
+            );
+            queued = false;
+          }
+          try {
+            for (;;) {
+              controller.signal.throwIfAborted();
+              try {
+                return await dispatchers[name](ctx, input, ...payloadArgs);
+              } catch (error) {
+                const retry = getRuntimeRerun(error);
+                const readRevision = effect === "read" && retry === "revision";
+                if (
+                  !retry ||
+                  !spec.rerun.includes(retry) ||
+                  rerun[retry] >= (readRevision ? 3 : 1) ||
+                  controller.signal.aborted ||
+                  deadlineAt - Date.now() < 5000
+                )
+                  throw error;
+                if (readRevision) {
+                  await delay(25 + Math.floor(Math.random() * 76), undefined, {
+                    signal: controller.signal,
+                  });
+                  if (deadlineAt - Date.now() < 5000) throw error;
+                }
+                rerun[retry]++;
+                reruns.inc({ reason: retry });
+                logger.info(
+                  {
+                    event: "mcp.executor_rerun",
+                    request_id: header.requestId,
+                    op: name,
+                    reason: retry,
+                  },
+                  "Executor operation rerun",
+                );
+              }
+            }
+          } finally {
+            release();
+          }
         })(),
         deadline,
       ]);
@@ -183,9 +271,13 @@ export function createDispatcher(
           { request_id: header.requestId, op: name, code: translated.code },
           "Executor operation failed",
         );
-      return { header: { ok: false as const, error: translated, meta: usage }, payload: undefined };
+      return {
+        header: { ok: false as const, error: translated, meta: usage },
+        payload: undefined,
+      };
     } finally {
       clearTimeout(timer);
     }
-  };
+  }
+  return Object.assign(dispatch, { metrics });
 }
