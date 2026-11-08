@@ -264,7 +264,7 @@ the actual package artifact before publication.
 
 | Resource                                                            | Scope                                                                           |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities          |
+| [Univer Web SDK documentation](https://docs.univer.ai/guides)       | Browser Runtime, presets, plugins, Facade API, and editor capabilities          |
 | [Univer Server SDK documentation](https://docs.univer.ai/server)    | Server SDK: collaboration, import and export, deployment, and license           |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                    |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                      |

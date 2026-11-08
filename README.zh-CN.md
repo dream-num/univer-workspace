@@ -236,7 +236,7 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
 | 资源                                                                | 范围                                                        |
 | ------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [Univer Runtime 文档](https://docs.univer.ai/)                      | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力    |
+| [Univer Web SDK 文档](https://docs.univer.ai/zh-CN/guides)          | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力    |
 | [Univer Server SDK 文档](https://docs.univer.ai/zh-CN/server)       | Server SDK：协同、导入导出、部署与 license                  |
 | [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                             |
 | [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同                  |
