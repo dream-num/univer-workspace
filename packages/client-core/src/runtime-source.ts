@@ -97,7 +97,7 @@ export class WorkspaceContentSource {
   public async resolveImageAsset(input: {
     readonly assetId: string;
     readonly signal?: AbortSignal;
-    readonly worktreeId: string;
+    readonly worktreeId?: string;
   }): Promise<{
     readonly bytes: Uint8Array;
     readonly contentLength?: number;

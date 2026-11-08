@@ -20,7 +20,7 @@ export interface WorkspaceRenderUnitSource {
   resolveImageAsset(input: {
     readonly assetId: string;
     readonly signal?: AbortSignal;
-    readonly worktreeId: string;
+    readonly worktreeId?: string;
   }): Promise<ScreenshotImageAsset | undefined>;
   resolveReferencedRuntimeTarget: WorkspaceContentSource["resolveReferencedRuntimeTarget"];
   resolveRuntimeTarget: WorkspaceContentSource["resolveRuntimeTarget"];
@@ -99,11 +99,13 @@ export class WorkspaceRenderUnitLoader {
       ...(formulaReferenceUnits.length === 0 ? {} : { formulaReferenceUnits }),
       ...(embeddedUnits.length === 0 ? {} : { embeddedUnits }),
     } as unknown as UniverRenderUnit;
-    if (target.scope.kind === "trunk") return renderUnit;
-    const worktreeId = target.scope.worktreeId;
+    const scope = target.scope;
     return await resolveUnitScreenshotImageAssets(renderUnit, {
       resolve: async ({ source: assetId }) =>
-        await source.resolveImageAsset({ assetId, worktreeId }),
+        await source.resolveImageAsset({
+          assetId,
+          ...(scope.kind === "worktree" ? { worktreeId: scope.worktreeId } : {}),
+        }),
     });
   }
 
