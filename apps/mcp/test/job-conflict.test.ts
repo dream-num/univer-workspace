@@ -1,19 +1,23 @@
 import { expect, it, vi } from "vitest";
 import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
+import { requestHeaderSchema } from "../src/shared/executor-protocol.js";
 import { ToolJobs } from "../src/gateway/jobs/store.js";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
 import { exportTool } from "../src/gateway/tools/core/export.js";
+import { compileTypstTool } from "../src/gateway/tools/files/compile-typst.js";
+import { jobGetTool } from "../src/gateway/tools/core/job-get.js";
+import { jobHandleSchema } from "../src/gateway/jobs/model.js";
 import { importTool } from "../src/gateway/tools/core/import.js";
 import { createExecutorLinks } from "../src/gateway/tools/executor-tool.js";
 import type { ToolContext } from "../src/gateway/tools/definition.js";
 import { UsageAccumulator, zeroCost } from "../src/shared/usage.js";
-import { encodeFrame } from "../src/shared/frame.js";
+import { decodeFrame, encodeFrame } from "../src/shared/frame.js";
 import { testStagingDirectory } from "./staging-directory.js";
 
 const user = { id: "owner", name: "Owner" };
 const xlsx = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const key = "valid-retry-key-123";
-function context(store: LocalStagingStore): ToolContext {
+function context(store: LocalStagingStore, budget = 1000): ToolContext {
   const usage = new UsageAccumulator();
   const http = new WorkspaceHttp({
     origin: "http://workspace.test",
@@ -22,7 +26,7 @@ function context(store: LocalStagingStore): ToolContext {
   });
   return {
     staging: store,
-    jobs: new ToolJobs(store, 1000),
+    jobs: new ToolJobs(store, budget),
     usage,
     http,
     user,
@@ -180,6 +184,91 @@ it("rejects a reused import key with a different upload, worktree or type and st
     expect((await importTool.run(ctx, args)).output).toEqual(first.output);
     expect(conversions).toHaveBeenCalledTimes(1);
     expect((await store.requireUpload("owner", b, "office-import")).state).toBe("ready");
+  } finally {
+    fetcher.mockRestore();
+    await store.close();
+  }
+});
+
+it.each([false, true])(
+  "returns a Typst job with apply=%s, dedups identical retries and rejects a changed bundle",
+  async (apply) => {
+    const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+    const output = {
+      committed: apply,
+      compiledTargetUnitId: "typst-target",
+      diagnostics: [],
+      previews: [],
+      ...(apply ? { unit: { unitId: "created-once" } } : { javascript: "compiled()" }),
+    };
+    let finish!: () => void;
+    const work = new Promise<void>((resolve) => { finish = resolve; });
+    const conversions = vi.fn();
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+      if (String(url).endsWith("/api/spaces/space")) return space();
+      conversions();
+      const header = requestHeaderSchema.parse(
+        decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer())).header,
+      );
+      expect(header).toMatchObject({ op: "typst.compile", deadlineMs: expect.any(Number) });
+      expect(header.deadlineMs).toBeGreaterThan(30_000);
+      await work;
+      return ok(output);
+    });
+    try {
+      const upload = async (content: string) => {
+        const { upload } = await store.createUpload("owner", {
+          purpose: "typst-bundle", file_name: "bundle.zip", media_type: "application/zip",
+        });
+        await store.handle(new Request(upload.upload_url, { method: "PUT", body: content }));
+        return upload.upload_id;
+      };
+      const [a, b] = [await upload("first"), await upload("different")];
+      const onDeferred = vi.fn();
+      const ctx = { ...context(store, 1), onDeferredJob: onDeferred };
+      const args = {
+        bundle_upload_id: a, idempotency_key: key,
+        ...(apply ? { apply: true, worktree: "wt", space: "space" } : {}),
+      };
+      const handle = jobHandleSchema.parse((await compileTypstTool.run(ctx, args)).output);
+      expect(compileTypstTool.outputSchema.safeParse(handle).success).toBe(true);
+      expect((await jobGetTool.run(ctx, handle)).output).toEqual(handle);
+      expect((await compileTypstTool.run(ctx, args)).output).toEqual(handle);
+      await expect(compileTypstTool.run(ctx, { ...args, bundle_upload_id: b })).rejects.toMatchObject({
+        code: "workspace-idempotency-conflict",
+      });
+      finish();
+      await onDeferred.mock.calls[0]?.[0];
+      expect((await jobGetTool.run(ctx, handle)).output).toEqual({
+        job_id: handle.job_id, status: "succeeded", result: output,
+      });
+      expect((await compileTypstTool.run(ctx, args)).output).toEqual(output);
+      await expect(compileTypstTool.run(ctx, { ...args, bundle_upload_id: b })).rejects.toMatchObject({
+        code: "workspace-idempotency-conflict",
+      });
+      expect(conversions).toHaveBeenCalledTimes(1);
+    } finally {
+      finish();
+      fetcher.mockRestore();
+      await store.close();
+    }
+  },
+);
+
+it("keeps the synchronous Typst result and starts each unkeyed compile independently", async () => {
+  const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+  const output = { committed: false, compiledTargetUnitId: "typst-target", diagnostics: [], previews: [], javascript: "compiled()" };
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => ok(output));
+  try {
+    const { upload } = await store.createUpload("owner", {
+      purpose: "typst-bundle", file_name: "bundle.zip", media_type: "application/zip",
+    });
+    await store.handle(new Request(upload.upload_url, { method: "PUT", body: "bundle" }));
+    const ctx = context(store);
+    const args = { bundle_upload_id: upload.upload_id };
+    expect((await compileTypstTool.run(ctx, args)).output).toEqual(output);
+    expect((await compileTypstTool.run(ctx, args)).output).toEqual(output);
+    expect(fetcher).toHaveBeenCalledTimes(2);
   } finally {
     fetcher.mockRestore();
     await store.close();

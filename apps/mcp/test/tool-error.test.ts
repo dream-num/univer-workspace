@@ -110,3 +110,18 @@ it("preserves non-system error codes beginning with E", () => {
     message: "Link expired.",
   });
 });
+
+it("preserves Typst source-relative diagnostics while hiding absolute source paths", () => {
+  expect(
+    translateToolError(
+      workspaceError("workspace-typst-invalid", "Bad source", {
+        diagnostics: [
+          { sourcePath: "page.typ", reason: "unsupported" },
+          { sourcePath: "/tmp/private/page.typ", reason: "invalid" },
+        ],
+      }),
+    ).detail,
+  ).toEqual({
+    diagnostics: [{ sourcePath: "page.typ", reason: "unsupported" }, { reason: "invalid" }],
+  });
+});

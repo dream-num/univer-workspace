@@ -139,7 +139,7 @@ if (record) {
       const jobReturned = output?.job_id && output?.status === 'running';
       const deduplicated = result._meta?.['univer.workspace.deduplicated'] === true;
       if (deduplicated) {
-        if (!['import', 'export'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
+        if (!['import', 'export', 'compile_typst'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
         if (events.length !== 0) issues.push(`Deduplicated call emitted ${events.length} conversion events`);
       } else if (jobReturned) {
         if (events.length > 1) issues.push(`Expected at most one settled job event, found ${events.length}`);
@@ -178,7 +178,7 @@ function eventIssues(event) {
   const [kind, clientId] = auth === 'pat' ? ['pat', patId] : ['dev', 'dev'];
   if (event.auth_kind !== kind || event.client_id !== clientId) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
-    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_create', 'compile_markdown'].includes(tool)) ||
+    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_create', 'compile_markdown', 'compile_typst', 'compile_svg'].includes(tool)) ||
       (key === 'export_bytes' && ['blob_download', 'asset_download', 'export', 'export_markdown'].includes(tool));
     if (typeof event.cost?.[key] !== 'number' || !Number.isFinite(event.cost[key]) || event.cost[key] < 0 || (event.executor === 'none' && !gatewayTransfer && event.cost[key] !== 0)) issues.push(`Invalid cost.${key}`);
   }
@@ -193,8 +193,13 @@ function eventIssues(event) {
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
   const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect'].includes(tool) && typeof args.worktree === 'string');
-  if ((event.executor === 'none' ? event.unit_type !== null : typeof event.unit_type !== 'string') || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect', 'compile_svg'].includes(tool) && typeof args.worktree === 'string');
+  const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true;
+  const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
+  const invalidUnitType = event.executor === 'none' || compileOnlyTypst
+    ? event.unit_type !== null
+    : typeof event.unit_type !== 'string' && !failedTypstWithoutUnit;
+  if (invalidUnitType || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error' || event.outcome === 'timeout') {
     const resultCode = result.structuredContent?.code;
     if (typeof resultCode !== 'string') issues.push('Error result has no structuredContent.code');

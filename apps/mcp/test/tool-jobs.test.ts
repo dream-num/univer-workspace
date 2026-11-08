@@ -195,7 +195,7 @@ it("hides foreign, unknown and expired jobs, sweeps sidecars and allows a new ke
   expect(execute).toHaveBeenCalledTimes(2);
 });
 
-it.each(["import", "export"] as const)(
+it.each(["import", "export", "compile_typst"] as const)(
   "recovers a stale %s record after memory loss with its timeout code",
   async (tool) => {
     const now = Date.now();
@@ -215,7 +215,7 @@ it.each(["import", "export"] as const)(
     expect(await jobs.get("alice", record.id)).toMatchObject({
       status: "failed",
       error: {
-        code: tool === "import" ? "workspace-result-unknown" : "workspace-executor-timeout",
+        code: tool !== "export" ? "workspace-result-unknown" : "workspace-executor-timeout",
       },
     });
     const execute = vi.fn(async () => result);
@@ -234,7 +234,9 @@ it("allows a long RPC deadline only for conversion operations", () => {
     grant: { kind: "session", userId: "alice", session: "secret", expiresAt: Date.now() + 600_000 },
   };
   expect(requestHeaderSchema.safeParse(header).success).toBe(true);
-  expect(requestHeaderSchema.safeParse({ ...header, op: "content.execute" }).success).toBe(false);
+  expect(requestHeaderSchema.safeParse({ ...header, op: "typst.compile" }).success).toBe(true);
+  for (const op of ["content.execute", "markdown.compile", "svg.compile"])
+    expect(requestHeaderSchema.safeParse({ ...header, op }).success).toBe(false);
   expect(requestHeaderSchema.safeParse({ ...header, deadlineMs: 600_001 }).success).toBe(false);
 });
 
@@ -358,7 +360,7 @@ it("lets a replica reuse an expired key after observing another gateway's runnin
 
 const other = { fingerprint: "b".repeat(64) };
 
-it.each(["import", "export"] as const)(
+it.each(["import", "export", "compile_typst"] as const)(
   "rejects a reused %s key with different arguments while running, after success and across replicas",
   async (tool) => {
     const first = setup();
@@ -426,7 +428,7 @@ it("reports running past deadlineAt while this replica holds the unsettled compl
   });
 });
 
-it.each(["import", "export"] as const)(
+it.each(["import", "export", "compile_typst"] as const)(
   "settles a hung %s completion at its deadline with the timeout error and releases the key",
   async (tool) => {
     const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
@@ -436,7 +438,7 @@ it.each(["import", "export"] as const)(
     const handle = jobHandleSchema.parse((await jobs.run(args)).output);
     await expect(args.onDeferred.mock.calls[0]?.[0]).rejects.toMatchObject({
       wire: {
-        code: tool === "import" ? "workspace-result-unknown" : "workspace-executor-timeout",
+        code: tool !== "export" ? "workspace-result-unknown" : "workspace-executor-timeout",
       },
     });
     expect(await jobs.get("alice", handle.job_id)).toMatchObject({ status: "failed" });

@@ -40,6 +40,8 @@ export const filesNames = [
   "html_view_create",
   "compile_markdown",
   "export_markdown",
+  "compile_typst",
+  "compile_svg",
 ];
 export const adminNames = [
   "repo_create",
@@ -54,6 +56,8 @@ export const adminNames = [
   "resources_export",
 ];
 export const writeNames = [
+  "compile_typst",
+  "compile_svg",
   "html_view_create",
   "compile_markdown",
   "blob_upload",
@@ -104,6 +108,8 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   html_view_create: "publish",
   compile_markdown: "write",
   export_markdown: "read",
+  compile_typst: "write",
+  compile_svg: "write",
   repo_create: "publish",
   repo_edit: "publish",
   label_list: "read",

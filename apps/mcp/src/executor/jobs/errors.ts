@@ -8,6 +8,8 @@ const exchangeCodes = new Set([
   "NATIVE_LOAD_FAILED",
   "CONVERSION_FAILED",
   "workspace-import-too-large",
+  "workspace-typst-invalid",
+  "workspace-typst-diagnostics",
 ]);
 
 export function conversionError(code: string, message: string) {
@@ -16,6 +18,34 @@ export function conversionError(code: string, message: string) {
       exchangeCodes.has(code) || /^LICENSE_[A-Z0-9_]+$/.test(code)
         ? code
         : "workspace-exchange-conversion-failed",
-    message: message.replace(/(?:file:\/\/)?\/[^\r\n"'<>]+|[A-Za-z]:[\\/][^\r\n"'<>]+/g, "[path]"),
+    message: scrubAbsolutePaths(message),
   };
+}
+
+function scrubAbsolutePaths(text: string): string {
+  return text.replace(
+    /(^|[\s("'=])(?:file:\/\/)?(?:\/|[A-Za-z]:[\\/])[^\r\n"'<>)]*/g,
+    "$1[path]",
+  );
+}
+
+/** All child error and diagnostic text crosses this boundary before reaching a caller. */
+export function rewriteJobPaths(value: unknown, directories: readonly string[]): unknown {
+  if (typeof value === "string") {
+    let text = value;
+    for (const directory of directories) {
+      const escaped = directory.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      text = text.replace(
+        new RegExp(`(?:file://)?${escaped}/(?:(?:workspace-typst-[^/\\s]+/)|(?:dac-typst-eval-[^/\\s]+/dac/))*`, "g"),
+        "",
+      );
+    }
+    return scrubAbsolutePaths(text);
+  }
+  if (Array.isArray(value)) return value.map((entry) => rewriteJobPaths(entry, directories));
+  if (value !== null && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, rewriteJobPaths(entry, directories)]),
+    );
+  return value;
 }

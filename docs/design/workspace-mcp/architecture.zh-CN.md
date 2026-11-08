@@ -65,7 +65,7 @@ MCP Server 不连接任何数据库（D12）。它保存的状态只有三类，
 | 纯 HTTP 命令 | 网关进程内直接调用 `client-core/product` | 与 CLI 共用同一套 feature 代码 |
 | daemon 与 unix socket | 删除 | 网关通过内部 RPC 调用执行层，执行层直接实现那三个操作 |
 | 运行时池与 worker | 执行层 | key 加入用户身份；跨 key 排队；参数可配置；见第 6 节 |
-| CLI 进程内的 Office、Markdown、Typst、SVG 处理 | 执行层的作业子进程 | 它们解析用户提供的文件，并加载原生绑定，所以不在网关里执行，也不在池的父进程里执行 |
+| CLI 进程内的 Office、Markdown、Typst、SVG 处理 | 执行层及现有作业子进程 | Office 转换、Typst 编译与文档物化加载原生绑定，在 job child 中运行。SVG 使用 estimateTextSize 时只运行 JavaScript 编译与内置量字，不启动浏览器，保留在 executor；apply 使用绑定 runtime |
 | Chromium | 渲染服务 | 常驻浏览器池，每个任务一个 BrowserContext，任务结束即销毁 |
 | session 文件 | 不存在 | 下游凭据由网关按请求换取，见第 4 节 |
 | `--file` 输入、`--out` 输出 | 暂存存储加签名 URL | 见第 5 节和[工具规格](tools.zh-CN.md) |
@@ -510,11 +510,11 @@ CLI 默认路径没有新增限制。导入请求帧为 64 MiB，导出响应帧
 
 ### D5 网关任务生命周期
 
-网关为 import/export 持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
+网关为 import/export/compile_typst 持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
 `.job.json` sidecar 同步，开始和结束均原子写入。记录包含随机 id、userId、tool、可选 key、
 createdAt、deadlineAt、expiresAt，以及仅在成功时存在的 result 或仅在失败时存在的 error。
 共享 staging 的副本可读取结果，并通过同用户、同工具、同 key 的短期 reservation lock 防止重复启动。
-转换进程、队列和 SIGKILL 仍属于 executor；只有两个 exchange 操作允许四分钟 RPC 期限。
+转换进程、队列和 SIGKILL 仍属于 executor；只有 exchange.import、exchange.export、typst.compile 允许四分钟 RPC 期限。
 同步预算默认三十秒，MCP_SYNC_BUDGET_MS 可降低；超过预算只结束同步等待，原执行继续。
 网关重启会丢失在途调用；过 deadlineAt 的记录按读超时或写结果未知回答，不重新执行。
 结果保留十五分钟，由 staging sweeper 清理。原工具事件延迟到执行结束后发出一次，

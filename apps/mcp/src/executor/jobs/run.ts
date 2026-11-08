@@ -1,11 +1,12 @@
+import type { WorkspaceCompileTypstResult } from "@univerjs/univer-workspace-client-core";
 import type { WorkspaceMaterializedDocument } from "@univerjs/univer-workspace-client-core/document-materialize";
 import { fork } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
-import { conversionError } from "./errors.js";
+import { conversionError, rewriteJobPaths } from "./errors.js";
 import type { ConversionJob, JobCredentials } from "./protocol.js";
 
 const replySchema = z.discriminatedUnion("ok", [
@@ -18,7 +19,7 @@ const replySchema = z.discriminatedUnion("ok", [
     error: z.object({
       code: z.string(),
       message: z.string(),
-      detail: z.object({ size: z.number(), maxBytes: z.number() }).optional(),
+      detail: z.json().optional(),
     }),
   }),
 ]);
@@ -27,6 +28,13 @@ export function jobEnvironment(directory: string): NodeJS.ProcessEnv {
   return { NODE_ENV: "production", HOME: directory, XDG_STATE_HOME: directory, TMPDIR: directory };
 }
 
+export function runConversionJob(
+  job: Extract<ConversionJob, { kind: "typst.compile" }>,
+  credentials: JobCredentials,
+  signal: AbortSignal,
+  entry?: URL,
+  heapMb?: number,
+): Promise<WorkspaceCompileTypstResult>;
 export function runConversionJob(
   job: Extract<ConversionJob, { kind: "markdown.materialize" }>,
   credentials: JobCredentials,
@@ -54,10 +62,16 @@ export async function runConversionJob(
   signal: AbortSignal,
   entry = new URL("./entry.js", import.meta.url),
   heapMb = 256,
-): Promise<Uint8Array | Readonly<Record<string, unknown>> | WorkspaceMaterializedDocument> {
+): Promise<
+  | Uint8Array
+  | Readonly<Record<string, unknown>>
+  | WorkspaceMaterializedDocument
+  | WorkspaceCompileTypstResult
+> {
   signal.throwIfAborted();
   const directory = await mkdtemp(join(tmpdir(), `univer-mcp-job-${process.pid}-`));
   try {
+    const directories = [...new Set([await realpath(directory), directory])];
     signal.throwIfAborted();
     return await new Promise((resolve, reject) => {
       const child = fork(entry, [], {
@@ -100,14 +114,11 @@ export async function runConversionJob(
             ),
           );
         else if (!reply.ok) {
-          const error = conversionError(reply.error.code, reply.error.message);
-          reject(
-            workspaceError(
-              error.code,
-              error.message,
-              error.code === "workspace-import-too-large" ? reply.error.detail : undefined,
-            ),
-          );
+          const sanitized = replySchema.parse(rewriteJobPaths(reply, directories));
+          if (!sanitized.ok) {
+            const error = conversionError(sanitized.error.code, sanitized.error.message);
+            reject(workspaceError(error.code, error.message, sanitized.error.detail));
+          }
         } else if ((job.kind === "export") !== reply.value instanceof Uint8Array)
           reject(
             workspaceError(
@@ -115,7 +126,28 @@ export async function runConversionJob(
               "The conversion job returned an invalid result.",
             ),
           );
-        else if (job.kind === "markdown.materialize") {
+        else if (job.kind === "typst.compile" && !(reply.value instanceof Uint8Array)) {
+          const compiled = z
+            .object({
+              committed: z.literal(false),
+              javascript: z.string(),
+              title: z.string(),
+              targetUnitId: z.string(),
+              diagnostics: z.array(
+                z.object({ sourcePath: z.string(), reason: z.string() }).loose(),
+              ),
+              previews: z.array(
+                z.object({ pageId: z.string(), path: z.string(), sourcePath: z.string() }),
+              ),
+            })
+            .safeParse({
+              ...reply.value,
+              diagnostics: rewriteJobPaths(reply.value["diagnostics"], directories),
+              previews: rewriteJobPaths(reply.value["previews"], directories),
+            });
+          if (compiled.success) resolve(compiled.data as WorkspaceCompileTypstResult);
+          else reject(workspaceError("workspace-job-crashed", "Invalid Typst compilation result."));
+        } else if (job.kind === "markdown.materialize") {
           const materialized = z
             .object({
               initialData: z.record(z.string(), z.unknown()),

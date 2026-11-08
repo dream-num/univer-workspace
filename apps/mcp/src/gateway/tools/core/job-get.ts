@@ -9,7 +9,7 @@ export const jobGetTool: ToolDefinition = {
   scope: "read",
   title: "Get a conversion job",
   description:
-    "Poll a job_id returned by import or export. Repeat while running. On succeeded, result is the original tool result, including its download link for export. On failed, error carries code, message and detail.",
+    "Poll a job_id returned by import, export or compile_typst. Repeat while running. On succeeded, result is the original tool result, including its download link for export. On failed, error carries code, message and detail.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({ job_id: z.string().min(1) }),
   outputSchema: jobViewSchema,

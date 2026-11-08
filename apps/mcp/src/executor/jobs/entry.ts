@@ -1,5 +1,4 @@
 import type { WorkspaceUnitExchangeDependencies } from "@univerjs/univer-workspace-client-core";
-import { conversionError } from "./errors.js";
 import type { JobRequest } from "./protocol.js";
 
 process.once("disconnect", () => process.exit(0));
@@ -8,11 +7,35 @@ process.once("message", (message: JobRequest) => {
   void (async () => {
     try {
       let value: unknown;
-      if (message.kind === "markdown.materialize") {
+      if (message.kind === "typst.compile") {
+        const { compilerOperation } = await import("../ops/compiler-errors.js");
+        const { validateTypstBundle } = await import("./typst-bundle.js");
+        validateTypstBundle(message.bundle);
+        const { WorkspaceCompileTypstFeature } =
+          await import("@univerjs/univer-workspace-client-core");
+        value = await new WorkspaceCompileTypstFeature({
+          materializer: {
+            materialize: async () => {
+              throw new Error("Compile-only job cannot materialize.");
+            },
+          },
+          units: {
+            create: async () => {
+              throw new Error("Compile-only job cannot create a Unit.");
+            },
+          },
+        })
+          .execute({ bundle: message.bundle })
+          .catch((error) =>
+            compilerOperation("typst", async () => {
+              throw error;
+            }),
+          );
+      } else if (message.kind === "markdown.materialize") {
         const { materializeWorkspaceDocument } =
           await import("@univerjs/univer-workspace-client-core/document-materialize");
         value = await materializeWorkspaceDocument(message, {
-          format: "Markdown",
+          format: message.format ?? "Markdown",
           license: message.license,
         });
       } else {
@@ -58,12 +81,14 @@ process.once("message", (message: JobRequest) => {
       process.send?.(
         {
           ok: false,
-          error: conversionError(
-            error instanceof Error && "code" in error && typeof error.code === "string"
-              ? error.code
-              : "workspace-exchange-conversion-failed",
-            error instanceof Error ? error.message : "Office conversion failed.",
-          ),
+          error: {
+            code:
+              error instanceof Error && "code" in error && typeof error.code === "string"
+                ? error.code
+                : "workspace-exchange-conversion-failed",
+            message: error instanceof Error ? error.message : "Office conversion failed.",
+            ...(error instanceof Error && "detail" in error ? { detail: error.detail } : {}),
+          },
         },
         () => process.disconnect(),
       );

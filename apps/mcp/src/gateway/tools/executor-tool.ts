@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { jobHandleSchema } from "../jobs/model.js";
+import { jobHandleSchema, type JobRecord } from "../jobs/model.js";
 import type { WorkspaceSubject } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import type { GatewayConfig } from "../../shared/config.js";
@@ -73,7 +73,7 @@ export function executorTool<
 >(
   definition: Omit<ToolDefinition, "run" | "inputSchema" | "outputSchema"> & {
     inputSchema: A;
-    job?: { tool: "import" | "export"; key(args: z.output<A>): string | undefined };
+    job?: { tool: JobRecord["tool"]; key(args: z.output<A>): string | undefined };
     op: OpSpec<I, O, P>;
     outputSchema?: z.ZodObject;
     response?(
