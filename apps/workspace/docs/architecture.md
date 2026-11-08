@@ -294,6 +294,13 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
 可空的 `issued_for_pat_id`、`issued_for_grant_id`；迁移只追加，不重建表。
 
+认证 Session 的协同票据在 `customData` 中携带 `sessionId` 与 epoch 毫秒的 `sessionExpiresAt`，
+不携带 Session secret。匿名票据不包含这两个字段。`integrations/realtime/session-sockets.ts`
+统一持有 Session 到协同连接、Worktree 协同连接和 change-feed 连接的索引及每条连接的到期定时器。
+连接打开时重新检查 Session 是否仍存在；关闭时移除索引并取消定时器。Identity 与 Token 服务
+通过 `app.ts` 注入的同一个删除监听器，在退出、过期清理、PAT 或 OAuth Grant 吊销时关闭对应
+Session 的连接，关闭码为 1008。同一用户其他 Session 的连接保留；匿名连接沿用 Node 权限失效机制。
+
 Identity 模块在 `identity.router.ts` 暴露 PAT 管理路由，在 `oauth-authorization-router.ts` 的 `POST /api/auth/token`
 增加 RFC 8693 `token-exchange` 分支。后者对静态机密 Client（`tokenExchange: true`）验证密钥，在一个事务内调用
 `verifySubjectToken` 与 `issueSession(user, "agent", { ttlMs, issuedFor })`，`ttlMs` 取 10 分钟、Token 剩余有效期与部署 Session 时长的最小值，错误体使用 OAuth 的 `{ error }` 形式。

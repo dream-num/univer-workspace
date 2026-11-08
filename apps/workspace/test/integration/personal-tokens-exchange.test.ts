@@ -26,6 +26,7 @@ const OAUTH_CLIENTS_JSON = JSON.stringify({
   ],
 });
 
+const sockets: WebSocket[] = [];
 let application: WorkspaceApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
@@ -33,6 +34,12 @@ let directory: string | undefined;
 afterEach(close);
 
 async function close(): Promise<void> {
+  await Promise.all(sockets.splice(0).map((socket) => {
+    if (socket.readyState === WebSocket.CLOSED) return Promise.resolve();
+    const closed = socketClosed(socket);
+    socket.close();
+    return closed;
+  }));
   if (server?.listening) await new Promise<void>((resolve) => server!.close(() => resolve()));
   await application?.close();
   if (directory) rmSync(directory, { recursive: true, force: true });
@@ -374,6 +381,113 @@ describe("token exchange", () => {
   });
 });
 
+describe("session-bound realtime sockets", () => {
+  it.each(["pat", "oauth"] as const)("closes both socket types for every session issued by a revoked %s", async (kind) => {
+    const origin = await start({ mcpOAuth: true });
+    const alice = await register(origin, "alice");
+    const control = await connectBoth(origin, alice.cookie);
+    let subjectToken: string;
+    let revoke: () => Promise<Response>;
+    if (kind === "pat") {
+      const { token, record } = await createPat(origin, alice.cookie);
+      subjectToken = token;
+      revoke = () => fetch(`${origin}/api/auth/tokens/${record.id}`, {
+        method: "DELETE", headers: { cookie: alice.cookie },
+      });
+    } else {
+      const tokens = createAccessTokenService({ database: application!.database });
+      const client = tokens.registerClient({ redirectUris: ["http://127.0.0.1/callback"] });
+      const grant = tokens.issueGrant({ userId: alice.userId, clientId: client.clientId, scopes: ["read"], resource: RESOURCE });
+      subjectToken = grant.accessToken;
+      revoke = () => fetch(`${origin}/api/auth/revoke`, {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: client.clientId, token: grant.refreshToken }),
+      });
+    }
+    const cookies = await Promise.all([0, 1].map(async () => {
+      const response = await exchange(origin, { subject_token: subjectToken, ...(kind === "oauth" ? { resource: RESOURCE } : {}) });
+      expect(response.status).toBe(200);
+      const { access_token } = await response.json() as { access_token: string };
+      return `workspace_session=${access_token}`;
+    }));
+    const affected = (await Promise.all(cookies.map((cookie) => connectBoth(origin, cookie)))).flat();
+    const staleTickets = await ticketsForBoth(origin, cookies[0]!);
+    const closed = Promise.all(affected.map((socket) => socketClosed(socket)));
+    expect((await revoke()).status).toBe(kind === "pat" ? 204 : 200);
+    expect(await closed).toEqual([1008, 1008, 1008, 1008]);
+    const staleClosed = await Promise.all(staleTickets.map((url) => socketClosed(openSocket(url))));
+    expect(staleClosed).toEqual([1008, 1008]);
+    expect(control.map((socket) => socket.readyState)).toEqual([WebSocket.OPEN, WebSocket.OPEN]);
+    expect(application!.identity.getSession(cookies[0]).authenticated).toBe(false);
+    expect(application!.identity.getSession(alice.cookie).authenticated).toBe(true);
+  });
+
+  it("closes both socket types on password logout and rejects outstanding tickets", async () => {
+    const origin = await start();
+    const alice = await register(origin, "alice");
+    const other = await application!.identity.loginWithPassword({ username: "alice", password: "correct horse battery staple" }, "browser");
+    const control = await connectBoth(origin, `workspace_session=${other.cookieValue}`);
+    const affected = await connectBoth(origin, alice.cookie);
+    const staleTickets = await ticketsForBoth(origin, alice.cookie);
+    const closed = Promise.all(affected.map((socket) => socketClosed(socket)));
+    expect((await post(origin, "/api/auth/logout", alice.cookie, {})).status).toBe(204);
+    expect(await closed).toEqual([1008, 1008]);
+    expect(await Promise.all(staleTickets.map((url) => socketClosed(openSocket(url))))).toEqual([1008, 1008]);
+    expect(control.map((socket) => socket.readyState)).toEqual([WebSocket.OPEN, WebSocket.OPEN]);
+  });
+
+  it("closes both socket types at session expiry without an HTTP request and rejects expired tickets", async () => {
+    const origin = await start();
+    const alice = await register(origin, "alice");
+    const control = await connectBoth(origin, alice.cookie);
+    const user = application!.identity.requireSession(alice.cookie).user;
+    const short = application!.identity.issueSession(user, "agent", { ttlMs: 500 });
+    const cookie = `workspace_session=${short.cookieValue}`;
+    const affected = await connectBoth(origin, cookie);
+    const staleTickets = await ticketsForBoth(origin, cookie);
+    expect(await Promise.all(affected.map((socket) => socketClosed(socket, 1500)))).toEqual([1008, 1008]);
+    expect(await Promise.all(staleTickets.map((url) => socketClosed(openSocket(url))))).toEqual([1008, 1008]);
+    expect(control.map((socket) => socket.readyState)).toEqual([WebSocket.OPEN, WebSocket.OPEN]);
+  });
+});
+
+async function ticketsForBoth(origin: string, cookie: string): Promise<string[]> {
+  return Promise.all(["/universer-api/comb/connect", "/api/worktree-events"].map(async (path) => {
+    const response = await fetch(`${origin}/universer-api/user/session-ticket`, { headers: { cookie } });
+    expect(response.status).toBe(200);
+    const { ticket } = await response.json() as { ticket: string };
+    return `${origin.replace(/^http/u, "ws")}${path}?sessionTicket=${encodeURIComponent(ticket)}`;
+  }));
+}
+
+function openSocket(url: string): WebSocket {
+  const socket = new WebSocket(url);
+  sockets.push(socket);
+  return socket;
+}
+
+async function connectBoth(origin: string, cookie: string): Promise<WebSocket[]> {
+  const urls = await ticketsForBoth(origin, cookie);
+  return Promise.all(urls.map(async (url) => {
+    const socket = openSocket(url);
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("WebSocket did not open within 1 s")), 1000);
+      socket.addEventListener("open", () => { clearTimeout(timer); resolve(); }, { once: true });
+      socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("WebSocket upgrade failed")); }, { once: true });
+    });
+    return socket;
+  }));
+}
+
+function socketClosed(socket: WebSocket, timeoutMs = 1000): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`WebSocket did not close within ${timeoutMs} ms`)), timeoutMs);
+    socket.addEventListener("close", (event) => { clearTimeout(timer); resolve(event.code); }, { once: true });
+    socket.addEventListener("error", () => { clearTimeout(timer); reject(new Error("WebSocket failed before close")); }, { once: true });
+  });
+}
+
 function contractRequired(schema: string): string[] {
   const text = readFileSync(new URL("../../contracts/http/schemas/identity.yaml", import.meta.url), "utf8");
   const block = text.split(/^(?=\S)/mu).find((candidate) => candidate.startsWith(`${schema}:\n`))!;
@@ -430,7 +544,7 @@ function fakeProvider(name: string) {
   };
 }
 
-async function start(options: { sessionTtlMs?: number } = {}): Promise<string> {
+async function start(options: { sessionTtlMs?: number; mcpOAuth?: boolean } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-pat-exchange-"));
   application = createWorkspaceApplication({
     host: "127.0.0.1",
@@ -438,6 +552,7 @@ async function start(options: { sessionTtlMs?: number } = {}): Promise<string> {
     databaseFilename: join(directory, "product.sqlite"),
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
+    ...(options.mcpOAuth ? { mcpOAuth: { issuer: "https://space.example.test", resources: [RESOURCE], maxRegisteredClients: 100 } } : {}),
     sessionTtlMs: options.sessionTtlMs ?? 24 * 60 * 60_000,
     oauthClients: JSON.parse(OAUTH_CLIENTS_JSON) as WorkspaceConfig["oauthClients"],
   }, {
@@ -447,6 +562,7 @@ async function start(options: { sessionTtlMs?: number } = {}): Promise<string> {
     oauthStateSecret: "test-oauth-state-secret-at-least-32-characters",
   });
   server = createServer(application.app);
+  application.attachWebSocket(server);
   await new Promise<void>((resolve, reject) => {
     server!.once("error", reject);
     server!.listen(0, "127.0.0.1", resolve);

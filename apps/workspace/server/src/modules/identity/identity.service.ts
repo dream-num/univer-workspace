@@ -92,6 +92,11 @@ export interface IdentityModule {
     input: PasswordChange
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): SessionView;
+  getRealtimeSession(cookieHeader: string | undefined): {
+    readonly user: User;
+    readonly sessionId: string;
+    readonly expiresAt: number;
+  } | null;
   requireSession(cookieHeader: string | undefined): Principal;
   issueSession(
     user: User,
@@ -171,6 +176,7 @@ export interface IdentityModule {
 
 export function createIdentityModule(options: {
   readonly repository: IdentityRepository;
+  readonly onSessionsDeleted?: (sessionIds: readonly string[]) => void;
   readonly sessionTtlMs: number;
   readonly now?: () => number;
   readonly githubOAuthProvider?: GitHubOAuthProvider | null;
@@ -204,7 +210,8 @@ export function createIdentityModule(options: {
   const trialDeployment = options.trialDeployment ?? false;
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
-  repository.deleteExpiredSessions(now());
+  const expiredSessionIds = repository.deleteExpiredSessions(now());
+  options.onSessionsDeleted?.(expiredSessionIds);
 
   function anonymousSession(): SessionView {
     return {
@@ -263,6 +270,7 @@ export function createIdentityModule(options: {
     if (!stored) return null;
     if (stored.expiresAt <= now()) {
       repository.deleteSession(stored.sessionId);
+      options.onSessionsDeleted?.([stored.sessionId]);
       return null;
     }
     if (!secretMatches(token.secret, stored.secretHash)) return null;
@@ -750,6 +758,20 @@ export function createIdentityModule(options: {
     },
 
     getSession,
+    getRealtimeSession(cookieHeader) {
+      const stored = storedSession(cookieHeader);
+      if (!stored) return null;
+      return {
+        user: {
+          id: stored.id,
+          username: stored.username,
+          displayName: stored.displayName,
+          avatarUrl: stored.avatarUrl,
+        },
+        sessionId: stored.sessionId,
+        expiresAt: stored.expiresAt,
+      };
+    },
     requireSession,
     issueSession,
     requireInteractiveSession,
@@ -760,6 +782,7 @@ export function createIdentityModule(options: {
       const stored = repository.findSession(token.id);
       if (stored && secretMatches(token.secret, stored.secretHash)) {
         repository.deleteSession(token.id);
+        options.onSessionsDeleted?.([token.id]);
       }
     },
 

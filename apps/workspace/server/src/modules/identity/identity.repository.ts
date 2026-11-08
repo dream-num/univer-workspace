@@ -598,10 +598,11 @@ export class IdentityRepository {
       .run(sessionId);
   }
 
-  deleteExpiredSessions(now: number): void {
-    this._database.connection
-      .prepare("DELETE FROM login_sessions WHERE expires_at <= ?")
-      .run(now);
+  deleteExpiredSessions(now: number): string[] {
+    return this._database.connection
+      .prepare("DELETE FROM login_sessions WHERE expires_at <= ? RETURNING id")
+      .all(now)
+      .map((row) => String(row.id));
   }
 }
 
