@@ -92,7 +92,7 @@ export type {
   WorkspaceUnitType,
 } from "./space-model.js";
 export { WorkspaceBlobFeature } from "./blob.js";
-export { WorkspaceUnitFeature } from "./unit.js";
+export { WorkspaceUnitFeature, worktreeUnits } from "./unit.js";
 export { issueUrl, nodeUrl, pullUrl, repoUrl } from "./urls.js";
 export { usernameKey } from "./username.js";
 export { WorkspaceWorktreeFeature } from "./worktree.js";

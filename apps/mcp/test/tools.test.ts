@@ -593,7 +593,9 @@ describe("Issue tools and gateway infrastructure", () => {
     expect(await browse({ number: "3", unit: "u1" })).toEqual({ url: `${teamUrl}?unit=u1` });
     expect(await browse({ number: "7" })).toEqual({ url: `${identityOrigin}/spaces/team-1/issues/7` });
     expect(await browse({ number: "99" })).toMatchObject({ code: "workspace-not-found" });
-    expect(events().map((event) => event["repo"])).toEqual(["team-1", "team-1", "team-1", null]);
+    expect(await browse({ number: teamUrl })).toEqual({ url: teamUrl });
+    expect(await browse({ number: "wt-3" })).toEqual({ url: teamUrl });
+    expect(events().map((event) => event["repo"])).toEqual(["team-1", "team-1", "team-1", null, "team-1", "team-1"]);
   });
 
   it("turns every invalid argument into workspace-argument-invalid with an event", async () => {

@@ -163,7 +163,7 @@ for label in core files admin core-admin all; do
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
 diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:21]' "$EVIDENCE/mcp-tools-all.out")
-jq -e 'all(.[] | select(.name | test("^(repo_edit|space_node)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
+jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
 ```

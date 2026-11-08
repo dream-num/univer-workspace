@@ -4,6 +4,7 @@ import {
   pullUrl,
   WorkspaceUnitFeature,
   type WorkspaceUnit,
+  type WorkspaceWorktree,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import type { ToolContext } from "../definition.js";
@@ -20,7 +21,8 @@ export const unitTypeInput = z
   .describe("Only with resource_kind univer.");
 export const nodeIdInput = (what: string) => z.string().describe(`Node ID of ${what}.`);
 
-export const unitFeature = (context: ToolContext) => new WorkspaceUnitFeature(async () => context.http);
+export const unitFeature = (context: ToolContext) =>
+  new WorkspaceUnitFeature(async () => context.http);
 
 export function withNodeUrl<Node extends { readonly nodeId: string }>(
   context: ToolContext,
@@ -29,16 +31,15 @@ export function withNodeUrl<Node extends { readonly nodeId: string }>(
   return { ...node, url: nodeUrl(context.identityOrigin, node.nodeId) };
 }
 
-/** Adds the pull request page `url` to Units of a Worktree, resolving the Worktree once. */
-export async function unitsWithUrl(
+/** Adds the pull request page `url` to Units of an already fetched Worktree. */
+export async function attachUnitUrls(
   context: ToolContext,
-  worktreeId: string,
+  worktree: WorkspaceWorktree,
   units: readonly WorkspaceUnit[],
 ): Promise<{
   readonly units: readonly (WorkspaceUnit & { readonly url: string })[];
   readonly spaceId: string | null;
 }> {
-  const worktree = await worktreeFeature(context).get(worktreeId);
   const spaceId = (await pullSpaceId(spaceFeature(context), worktree)) ?? null;
   return {
     spaceId,
@@ -47,4 +48,13 @@ export async function unitsWithUrl(
       url: pullUrl(context.identityOrigin, worktree, unit.unitId, spaceId ?? undefined),
     })),
   };
+}
+
+/** Adds the pull request page `url` to Units of a Worktree, resolving the Worktree once. */
+export async function unitsWithUrl(
+  context: ToolContext,
+  worktreeId: string,
+  units: readonly WorkspaceUnit[],
+) {
+  return await attachUnitUrls(context, await worktreeFeature(context).get(worktreeId), units);
 }

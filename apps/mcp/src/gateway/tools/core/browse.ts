@@ -1,4 +1,8 @@
-import { browseUrl, pullSpaceId } from "@univerjs/univer-workspace-client-core/product";
+import {
+  browseUrl,
+  parseRepoReference,
+  pullSpaceId,
+} from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 import { issueFeature, repoInput, resolveRepo } from "./issue-support.js";
@@ -28,21 +32,27 @@ export const browseTool: ToolDefinition = {
     const { repo, number, unit } = inputSchema.parse(args);
     let spaceId: string | null = null;
     const spaces = spaceFeature(context);
-    return {
-      output: await browseUrl(
-        {
-          issues: issueFeature(context),
-          origin: async () => context.identityOrigin,
-          pullSpaceId: (worktree) => pullSpaceId(spaces, worktree),
-          repo: async () => ({ spaceId: (spaceId = await resolveRepo(context, repo)) }),
-          worktrees: worktreeFeature(context),
+    const output = await browseUrl(
+      {
+        issues: issueFeature(context),
+        origin: async () => context.identityOrigin,
+        pullSpaceId: async (worktree) => {
+          const found = await pullSpaceId(spaces, worktree);
+          spaceId = found ?? spaceId;
+          return found;
         },
-        {
-          ...(number === undefined ? {} : { argument: number }),
-          ...(unit === undefined ? {} : { unit }),
-        },
-      ),
-      repo: spaceId,
-    };
+        repo: async () => ({ spaceId: (spaceId = await resolveRepo(context, repo)) }),
+        worktrees: worktreeFeature(context),
+      },
+      {
+        ...(number === undefined ? {} : { argument: number }),
+        ...(unit === undefined ? {} : { unit }),
+      },
+    );
+    if (number !== undefined && /^https?:\/\//i.test(number.trim())) {
+      const reference = parseRepoReference(number);
+      if (reference.kind === "url") spaceId = reference.spaceId;
+    }
+    return { output, repo: spaceId };
   },
 };

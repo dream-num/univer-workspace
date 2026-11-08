@@ -1,7 +1,9 @@
 import { z } from "zod";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 import { unitWithUrlSchema } from "../schemas.js";
-import { unitFeature, unitsWithUrl, worktreeInput } from "./space-support.js";
+import { worktreeUnits } from "@univerjs/univer-workspace-client-core/product";
+import { attachUnitUrls, worktreeInput } from "./space-support.js";
+import { worktreeFeature } from "./pr-support.js";
 
 const inputSchema = z.object({ worktree: worktreeInput });
 export const unitListTool: ToolDefinition = {
@@ -16,11 +18,8 @@ export const unitListTool: ToolDefinition = {
   annotations: readOnlyAnnotations,
   async run(context, args) {
     const { worktree } = inputSchema.parse(args);
-    const { units, spaceId } = await unitsWithUrl(
-      context,
-      worktree,
-      await unitFeature(context).list(worktree),
-    );
+    const fetched = await worktreeFeature(context).get(worktree);
+    const { units, spaceId } = await attachUnitUrls(context, fetched, worktreeUnits(fetched));
     return { output: { units }, repo: spaceId };
   },
 };

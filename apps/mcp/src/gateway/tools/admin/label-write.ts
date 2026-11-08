@@ -20,14 +20,16 @@ export const labelWriteTool: ToolDefinition = {
   scope: "write",
   title: "Create, edit or delete a label",
   description:
-    "Create (needs color), edit (rename, recolor or describe) or delete a repository's Issue label. Deleting removes the label from every Issue.",
+    "Takes effect immediately, without review. Create (needs color), edit (rename, recolor or describe) or delete a repository's Issue label. Delete removes the label from every Issue.",
   inputSchema,
   outputSchema: z.object({ ...issueLabelSchema.partial().shape, deleted: z.string().optional() }),
   annotations: destructiveAnnotations,
   async run(context, args) {
     const { repo, action, name, new_name, color, description } = inputSchema.parse(args);
-    if (action !== "edit" && new_name !== undefined) throw invalid("new_name applies only to action edit.");
-    if (action === "create" && color === undefined) throw invalid("color is required for action create.");
+    if (action !== "edit" && new_name !== undefined)
+      throw invalid("new_name applies only to action edit.");
+    if (action === "create" && color === undefined)
+      throw invalid("color is required for action create.");
     if (action === "delete" && (color !== undefined || description !== undefined)) {
       throw invalid("color and description do not apply to action delete.");
     }
@@ -35,7 +37,10 @@ export const labelWriteTool: ToolDefinition = {
     const feature = issueFeature(context);
     const detail = description === undefined ? {} : { description };
     if (action === "create") {
-      return { output: await feature.createLabel(spaceId, { name, color: color!, ...detail }), repo: spaceId };
+      return {
+        output: await feature.createLabel(spaceId, { name, color: color!, ...detail }),
+        repo: spaceId,
+      };
     }
     if (action === "edit") {
       return {

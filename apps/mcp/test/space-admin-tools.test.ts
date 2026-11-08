@@ -269,6 +269,8 @@ describe("space, unit, repository admin, label and merge tools", () => {
     const unitUrl = `${prUrl}?unit=u-new`;
     const listed = await client.callTool({ name: "unit_list", arguments: { worktree: "wt-3" } });
     expect(listed.structuredContent).toMatchObject({ units: [{ unitId: "u-new", url: unitUrl }] });
+    expect(requests.filter((request) => request.path === "/api/worktrees/wt-3")).toHaveLength(1);
+    requests.length = 0;
     const added = await client.callTool({ name: "unit_add", arguments: { worktree: "wt-3", resource: "r-new" } });
     expect(added.structuredContent).toMatchObject({ unit: { source: "trunk", url: unitUrl } });
     const created = await client.callTool({
@@ -276,6 +278,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       arguments: { worktree: "wt-3", space: "bob/team", type: "sheet", name: "Budget", parent: "dir", idempotency_key: "k1" },
     });
     expect(created.structuredContent).toMatchObject({ unit: { name: "Budget", type: "sheet", url: unitUrl } });
+    expect(requests.filter((request) => request.path === "/api/worktrees/wt-3")).toHaveLength(2);
     expect(requests.filter((request) => request.method === "POST")).toMatchObject([
       { path: "/api/worktrees/wt-3/units", body: { resourceId: "r-new", source: "trunk" } },
       {
@@ -419,6 +422,12 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { action: "create", name: "x" },
       { action: "rename", node: "n1" },
       { action: "trash" },
+      { action: "create", repo: "bob/team", name: "x", root: true },
+      { action: "rename", node: "n1", name: "x", repo: "bob/team" },
+      { action: "rename", node: "n1", name: "x", parent: "dir" },
+      { action: "move", node: "n1", root: true, name: "x" },
+      { action: "trash", node: "n1", name: "x" },
+      { action: "trash", node: "n1", root: false },
     ]) {
       expect(await call(bad)).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
     }
@@ -446,10 +455,11 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it("states immediate effect, the slug warning and the leave-it-to-the-user rule in the descriptions", async () => {
     const tools = (await (await connect()).listTools()).tools;
     const description = (name: string) => tools.find((tool) => tool.name === name)!.description!;
-    for (const name of ["repo_edit", "space_node"]) {
+    for (const name of ["repo_create", "repo_edit", "space_node", "label_write"]) {
       expect(description(name)).toMatch(/^Takes effect immediately, without review\./);
     }
     expect(description("repo_edit")).toContain("breaks");
+    expect(description("label_write")).toContain("removes the label from every Issue");
     for (const name of ["pr_merge", "pr_discard"]) {
       expect(description(name)).toContain("Unless the user explicitly asked");
       expect(description(name)).toContain("leave");
@@ -477,5 +487,16 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     const reads = ["space_browse", "label_list", "blob_get"] as const;
     expect(await client.callTool({ name: reads[1], arguments: { repo: "team-1" } })).not.toHaveProperty("isError", true);
+  });
+
+  it("refuses pr_merge and pr_discard without worktree:merge even with read, write and publish", async () => {
+    const client = await connect(new Set<ToolScope>(["read", "write", "publish"]));
+    for (const name of ["pr_merge", "pr_discard"]) {
+      expect(await client.callTool({ name, arguments: { repo: "team-1", number: "3" } })).toMatchObject({
+        isError: true,
+        structuredContent: { code: "workspace-scope-required", detail: { required: "worktree:merge" } },
+      });
+    }
+    expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
   });
 });

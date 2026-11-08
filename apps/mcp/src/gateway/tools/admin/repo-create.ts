@@ -16,7 +16,7 @@ export const repoCreateTool: ToolDefinition = {
   scope: "publish",
   title: "Create repository",
   description:
-    "Create a Team Space repository. Takes effect immediately, without review. Only create one when the user asks for a new repository.",
+    "Takes effect immediately, without review. Create a Team Space repository. Only create one when the user asks for a new repository.",
   inputSchema,
   outputSchema: repoSchema,
   annotations: writeAnnotations,

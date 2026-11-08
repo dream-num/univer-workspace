@@ -12,11 +12,17 @@ const inputSchema = z.object({
   node: nodeIdInput("the folder or file; rename, move and trash only").optional(),
   name: z.string().optional().describe("create: the new folder's name. rename: the new name."),
   parent: nodeIdInput("the destination folder; create and move only").optional(),
-  root: z.boolean().optional().describe("move only: move to the repository root instead of a parent."),
+  root: z
+    .boolean()
+    .optional()
+    .describe("move only: move to the repository root instead of a parent."),
 });
 function required<Value>(value: Value | undefined, field: string, action: string): Value {
   if (value === undefined) {
-    throw workspaceError("workspace-argument-invalid", `${field} is required for action ${action}.`);
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `${field} is required for action ${action}.`,
+    );
   }
   return value;
 }
@@ -36,6 +42,18 @@ export const spaceNodeTool: ToolDefinition = {
   annotations: destructiveAnnotations,
   async run(context, args) {
     const { action, repo, node, name, parent, root } = inputSchema.parse(args);
+    const only = (field: string, value: unknown, actions: readonly string[]) => {
+      if (value !== undefined && !actions.includes(action)) {
+        throw workspaceError(
+          "workspace-argument-invalid",
+          `${field} applies only to action ${actions.join(" or ")}.`,
+        );
+      }
+    };
+    only("repo", repo, ["create"]);
+    only("root", root, ["move"]);
+    only("name", name, ["create", "rename"]);
+    only("parent", parent, ["create", "move"]);
     const spaces = spaceFeature(context);
     switch (action) {
       case "create": {
