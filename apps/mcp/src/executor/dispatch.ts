@@ -24,7 +24,7 @@ export function createDispatcher(
   runtime: WorkspaceContentRuntime,
   logger: Logger,
 ) {
-  const verifyGrant = createGrantVerifier();
+  const verifyGrant = createGrantVerifier(config);
   const dispatchers: { [K in OpName]: Handler<K> } = handlers;
   return async function dispatch<K extends OpName>(
     name: K,
@@ -83,7 +83,7 @@ export function createDispatcher(
       ) as (typeof opSpecs)[K]["payload"] extends "request" ? [Uint8Array] : [];
       const result = await Promise.race([
         (async () => {
-          await verifyGrant(grant, http);
+          await verifyGrant(grant, header.requestId);
           controller.signal.throwIfAborted();
           return await dispatchers[name](ctx, input, ...payloadArgs);
         })(),
@@ -94,7 +94,10 @@ export function createDispatcher(
         payload: "bytes" in result && result.bytes instanceof Uint8Array ? result.bytes : undefined,
       };
     } catch (error) {
-      const translated = mapRuntimeError(error, spec.effect);
+      const translated =
+        controller.signal.aborted && spec.effect === "read"
+          ? timeoutError("read").wire
+          : mapRuntimeError(error, spec.effect);
       if (translated.outcome === "internal_error")
         logger.error(
           { request_id: header.requestId, op: name, code: translated.code },

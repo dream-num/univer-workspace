@@ -7,7 +7,11 @@ import {
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { ExecutorCallError, resultUnknown } from "../shared/errors.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
-import { executorGrantSchema, type ExecutorGrant } from "../shared/executor-protocol.js";
+import {
+  executorGrantSchema,
+  type ExecutorGrant,
+  type OpEffect,
+} from "../shared/executor-protocol.js";
 import type { OpMeta } from "../shared/usage.js";
 import type { BoundRuntime } from "./context.js";
 import { grantCookie, resolveGrant } from "./credentials.js";
@@ -56,11 +60,13 @@ export function bindRuntime(
   return {
     executeRead: async (input) => {
       bind(input.target);
-      return await runtimeCall(() => runtime.executeRead({ ...input, caller, observe, signal }));
+      return await runtimeCall("read", () =>
+        runtime.executeRead({ ...input, caller, observe, signal }),
+      );
     },
     executeAndCommit: async (input) => {
       bind(input.target);
-      return await runtimeCall(() =>
+      return await runtimeCall("write", () =>
         runtime.executeAndCommit({ ...input, caller, observe, signal }),
       );
     },
@@ -78,19 +84,30 @@ export const reuseExecutorWorker: NonNullable<
   return parsed.success && parsed.data.expiresAt > Date.now() + 60_000;
 };
 
-async function runtimeCall<T>(operation: () => Promise<T>): Promise<T> {
+async function runtimeCall<T>(effect: OpEffect, operation: () => Promise<T>): Promise<T> {
   try {
     return await operation();
   } catch (error) {
-    const coded = error instanceof Error && "code" in error && typeof error.code === "string";
+    const code =
+      error instanceof Error && "code" in error && typeof error.code === "string"
+        ? error.code
+        : undefined;
     const phase = getWorkspaceRuntimeFailurePhase(error);
-    if (!coded && phase === "commit") {
+    if (
+      effect === "write" &&
+      phase === "commit" &&
+      ![
+        "WORKSPACE_RUNTIME_CONFLICT",
+        "WORKSPACE_RUNTIME_PULL_REQUIRED",
+        "WORKSPACE_RUNTIME_COMMIT_INVALID",
+      ].includes(code ?? "")
+    ) {
       const timeout = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
       throw new ExecutorCallError(
-        resultUnknown(timeout ? error.name : "workspace-internal-error", timeout),
+        resultUnknown(code ?? (timeout ? error.name : "workspace-internal-error"), timeout),
       );
     }
-    if (!coded && phase === "script") {
+    if (code === undefined && phase === "script" && effect === "write") {
       throw new ExecutorCallError({
         code: "workspace-script-failed",
         message: error instanceof Error ? error.message : String(error),

@@ -161,7 +161,7 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
       return {
         session: bearer,
         obtainedAt: Date.now(),
-        expiresAt: Date.now() + 60_000,
+        expiresAt: Date.now() + 600_000,
         user: null,
         scopes: null,
         authKind: "dev",

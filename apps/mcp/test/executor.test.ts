@@ -21,7 +21,7 @@ import { zeroCost } from "../src/shared/usage.js";
 import { bindRuntime, workerEnvironment, reuseExecutorWorker } from "../src/executor/runtime.js";
 import { createGrantVerifier, grantCookie, resolveGrant } from "../src/executor/credentials.js";
 import { mapRuntimeError } from "../src/executor/errors.js";
-import { workspaceError, WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
+import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { handlers } from "../src/executor/ops/index.js";
 import { createExecutor } from "../src/executor/server.js";
 import {
@@ -343,32 +343,33 @@ describe("executor regression boundaries", () => {
           JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "Alice" } }),
         ),
     );
-    const http = new WorkspaceHttp({
-      origin: "https://identity.test",
-      transportOrigin: "https://transport.test",
-      cookie: grantCookie(grant),
-      role: "client",
-      fetcher,
-    });
-    const verify = createGrantVerifier();
-    await Promise.all([verify(grant, http), verify(grant, http)]);
+    const verify = createGrantVerifier({
+      WORKSPACE_ORIGIN: "https://identity.test",
+      WORKSPACE_TRANSPORT_URL: "https://transport.test",
+    }, fetcher);
+    await Promise.all([verify(grant, "test"), verify(grant, "test")]);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(String(fetcher.mock.calls[0]?.[0])).toBe("https://transport.test/api/session");
-    await expect(verify({ ...grant, userId: "victim" }, http)).rejects.toMatchObject({
+    await expect(verify({ ...grant, userId: "victim" }, "test")).rejects.toMatchObject({
       code: "workspace-authentication-required",
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
     const clock = vi.spyOn(Date, "now").mockReturnValue(grant.expiresAt + 1);
     try {
-      await verify({ ...grant, expiresAt: grant.expiresAt + 10000 }, http);
+      await verify({ ...grant, expiresAt: grant.expiresAt + 10000 }, "test");
     } finally {
       clock.mockRestore();
     }
     expect(fetcher).toHaveBeenCalledTimes(2);
     fetcher.mockImplementation(async () => new Response("{}", { status: 401 }));
-    await expect(verify({ ...grant, session: "revoked" }, http)).rejects.toMatchObject({
+    await expect(verify({ ...grant, session: "revoked" }, "test")).rejects.toMatchObject({
       code: "workspace-authentication-required",
     });
+    fetcher.mockImplementation(async () => Response.json({
+      authenticated: true, user: { id: "user-1", displayName: "Alice" },
+    }));
+    await verify({ ...grant, session: "revoked" }, "test");
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
   it.each([413, 426, 400, 500, 503])(
@@ -498,15 +499,14 @@ describe("script and commit failure origins through a real worker", () => {
       new AbortController().signal,
     );
     try {
-      for (const method of ["executeRead", "executeAndCommit"] as const)
-        await expect(bound[method]({ code: code!, target })).rejects.toMatchObject({
-          wire: {
-            code: "workspace-script-failed",
-            message,
-            detail: { name },
-            outcome: "tool_error",
-          },
-        });
+      await expect(bound.executeAndCommit({ code: code!, target })).rejects.toMatchObject({
+        wire: {
+          code: "workspace-script-failed",
+          message,
+          detail: { name },
+          outcome: "tool_error",
+        },
+      });
       await expect(
         bound.executeAndCommit({ code: "commit-failure", target }),
       ).rejects.toMatchObject({

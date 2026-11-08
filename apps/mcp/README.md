@@ -34,10 +34,12 @@ remain retryable. Calls have a 30-second gateway budget, with an earlier executo
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
-session grants with the exchanged session's expiry; dev sessions use a conservative 60-second
-grant expiry. The executor verifies the session's user through Workspace `whoami` before dispatch,
-using the transport URL. Successful identity checks share a SHA-256 session cache capped at
-10,000 entries and expire with the grant. A mismatched user or 401 requires authentication.
+session grants with the exchanged session's expiry; dev grants last 10 minutes, matching the
+downstream session lifetime used by token exchange. The executor verifies the session's user through
+Workspace `whoami` before dispatch, using the transport URL. Successful identity checks share a SHA-256 session cache capped at
+10,000 entries and expire with the grant. Shared checks use their own 10-second timeout;
+each request waits only until its own deadline, and failed checks are not cached.
+A mismatched user or 401 requires authentication.
 Workers are replaced before reuse when their creating grant expires within 60 seconds.
 401 invalidation and reruns belong to the next resilience change.
 
@@ -240,14 +242,17 @@ true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_disca
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
-`workspace-result-unknown`. Unconfirmed changeset submission and uncoded commit failures
-carry their cause in `detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts.
+`workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
+`detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts. Definite rejections pass through
+as `WORKSPACE_RUNTIME_CONFLICT`, `WORKSPACE_RUNTIME_PULL_REQUIRED`, or `WORKSPACE_RUNTIME_COMMIT_INVALID`.
 Queued calls cancelled before acquiring a lease return `workspace-executor-timeout` with
 `detail: { retryable: true, started: false }`; they never execute later. A started write
 that exceeds its deadline still has an unknown result.
+Read deadlines return `workspace-executor-timeout` with `detail.retryable: true`, including when
+the deadline aborts a Workspace HTTP request.
 Uncoded errors from user script execution return `workspace-script-failed`, the CLI's exact
-message, and `detail: { name }` when the error has a name. Other uncoded executor failures
-remain logged `workspace-internal-error`s. Invalid inspection output is
+message, and `detail: { name }` when the error has a name. Generated inspection script failures and other
+uncoded executor failures remain logged `workspace-internal-error`s. Invalid inspection output is
 `workspace-runtime-result-invalid` with an `internal_error` outcome.
 Oversized requests, protocol version mismatches and budgets exhausted before sending are
 actionable `tool_error`s. Only connection failures known to precede delivery and HTTP 503
