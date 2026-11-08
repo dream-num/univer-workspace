@@ -3,8 +3,13 @@ import {
   WorkspaceCompileMarkdownFeature,
   WorkspaceContentExecutionFeature,
   parseDocMarkdownSourceMap,
+  getWorktree,
 } from "@univerjs/univer-workspace-client-core";
-import { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-core/product";
+import {
+  WorkspaceUnitFeature,
+  WorkspaceSpaceFeature,
+  pullSpaceId,
+} from "@univerjs/univer-workspace-client-core/product";
 import { markdownCompileOutput } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
 import { markdownOperation } from "./markdown-errors.js";
@@ -21,6 +26,11 @@ export const markdownCompile: Handler<"markdown.compile"> = (ctx, input, bytes) 
     const execution = new WorkspaceContentExecutionFeature(ctx.source(), {
       ...ctx.runtime,
       executeAndCommit: async (request) => {
+        ctx.usage.repo =
+          (await pullSpaceId(
+            new WorkspaceSpaceFeature(async () => ctx.http()),
+            await getWorktree(ctx.http(), input.worktreeId!),
+          )) ?? null;
         ctx.signal.throwIfAborted();
         ctx.onCreateUnit?.();
         return await ctx.runtime.executeAndCommit(request);

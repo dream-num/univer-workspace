@@ -82,6 +82,7 @@ export function createDispatcher(
       "markdown.compile",
       "typst.compile",
       "svg.compile",
+      "htmlView.create",
     ].includes(name);
     let effect = spec.effect;
     let queued = false;
@@ -225,7 +226,7 @@ export function createDispatcher(
           controller.signal.throwIfAborted();
           const rerun = { auth: 0, revision: 0 };
           let release = () => {};
-          if (name === "content.execute" || name === "content.inspect") {
+          if (spec.queueFor?.(input)) {
             const route = spec.route(input as never);
             queued = true;
             release = await enterUnitQueue(
@@ -283,14 +284,20 @@ export function createDispatcher(
       const translated =
         controller.signal.aborted &&
         (effect === "read" ||
-          ["exchange.import", "markdown.compile", "typst.compile", "svg.compile"].includes(name)) &&
+          [
+            "exchange.import",
+            "markdown.compile",
+            "typst.compile",
+            "svg.compile",
+            "htmlView.create",
+          ].includes(name)) &&
         !(
           error instanceof Error &&
           "code" in error &&
           error.code === "workspace-runtime-not-started"
         )
           ? currentTimeout().wire
-          : mapRuntimeError(error, effect);
+          : mapRuntimeError(error, writeStarted ? effect : "read");
       if (translated.outcome === "internal_error")
         logger.error(
           { request_id: header.requestId, op: name, code: translated.code },

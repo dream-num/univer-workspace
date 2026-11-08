@@ -566,8 +566,11 @@ HTML is limited to 512 KiB of UTF-8 text at the tool and RPC input boundaries;
 the RPC frame limit is 4 MiB, including JSON escaping and credentials. Validation
 returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation immediately
 publishes a Blob without Worktree review and returns the CLI's bare upload fields
-with `workspaceUrl` using the identity origin. The executor uploads a private copy
-of the exact validated bytes, with stable original filename `view.univer.html`.
+with `workspaceUrl` using the identity origin. The executor uploads an in-memory copy
+of the exact validated bytes through `uploadBytes`,
+with stable original filename `view.univer.html`. It creates no temporary HTML file.
+Validation and source-read failures before upload preserve their read error semantics;
+a pre-upload deadline is retryable and never reports `workspace-result-unknown`.
 Generate a 16 to 200 character URL-safe idempotency key before creation and reuse it
 with identical HTML and destination after `workspace-result-unknown`.
 
@@ -608,7 +611,12 @@ including JavaScript and its JSON encoding. Creation must fit the 900 KiB serial
 UnitData check and Workspace's 1 MiB request limit, including document overhead.
 See [large content limits](../../docs/design/workspace-mcp/architecture.zh-CN.md#73-大文件导入的限制).
 Compiler and source-map input failures return `workspace-markdown-invalid` with the
-CLI's message and `detail.diagnostics`. Compile-only has read failure semantics while the
+CLI's message and `detail.diagnostics`.
+For export, facade diagnostic `DOC_MARKDOWN_READ_ASSET_UNAVAILABLE` instead returns
+`workspace-markdown-asset-unavailable` with `detail.retryable: true`.
+`DOC_MARKDOWN_READ_RESULT_INVALID` returns an internal `workspace-runtime-result-invalid` error.
+Successful block-update usage attributes `repo` to the Worktree's Space.
+Compile-only has read failure semantics while the
 tool retains the `write` scope. Compile-only usage reports `executor: none`, `unit_type: null`
 and `repo: null`, including when a ZIP contributes `upload_bytes`. Consumed ZIP bytes and staged asset bytes enter transfer
 usage, and confirmed creations and updates enter `committed_revisions`.
@@ -632,6 +640,8 @@ adapter, but with estimation it uses the JavaScript `builtinTextMeasurer` and ne
 browser or loads the native formula engine for compilation. Compilation stays in the executor.
 The result retains the CLI's estimation lint. `page` is 1-based; `add` requires `page`.
 Apply requires `page`, `worktree` and an existing Slide `unit`, and uses the caller-bound runtime.
+SVG apply joins the executor FIFO shared with execute and inspect for the same user, scope
+and Unit. Compile-only bypasses that queue.
 Like `execute`, SVG apply has no idempotency key. After `workspace-result-unknown`, read back
 with `inspect` before retrying. Replacement clears the page; add overlays its existing elements.
 

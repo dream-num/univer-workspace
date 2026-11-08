@@ -18,7 +18,7 @@ export interface WorkspaceHtmlViewSource {
 }
 
 export interface WorkspaceHtmlViewOptions {
-  readonly blobs: Pick<WorkspaceBlobFeature, "upload">;
+  readonly blobs: Pick<WorkspaceBlobFeature, "upload"> | Pick<WorkspaceBlobFeature, "uploadBytes">;
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
   readonly resolveTrunkRuntimeTarget: (input: {
     readonly unitId: string;
@@ -47,28 +47,48 @@ export class WorkspaceHtmlViewFeature {
     const { name, spaceId, idempotencyKey, parentNodeId } = normalizeHtmlViewDestination(input);
     const source = await this.readAndValidate(input.source);
     const origin = await this.options.configuredOrigin();
+    const upload =
+      "uploadBytes" in this.options.blobs
+        ? await this.options.blobs.uploadBytes({
+            bytes: source.bytes,
+            fileName: basename(source.filePath),
+            name,
+            spaceId,
+            idempotencyKey,
+            ...(parentNodeId === undefined ? {} : { parentNodeId }),
+          })
+        : await this.uploadFile(this.options.blobs, source, {
+            name,
+            spaceId,
+            idempotencyKey,
+            ...(parentNodeId === undefined ? {} : { parentNodeId }),
+          });
+    if (typeof upload["nodeId"] !== "string" || upload["nodeId"].length === 0) {
+      throw workspaceError(
+        "workspace-invalid-response",
+        "HTML View upload did not return a Node ID.",
+      );
+    }
+    return {
+      ...upload,
+      workspaceUrl: new URL(`/nodes/${encodeURIComponent(upload["nodeId"])}`, origin).href,
+    };
+  }
+
+  private async uploadFile(
+    blobs: Pick<WorkspaceBlobFeature, "upload">,
+    source: { readonly bytes: Uint8Array; readonly filePath: string },
+    destination: WorkspaceHtmlViewDestination,
+  ) {
     // Stage the copied bytes so caller edits during remote validation cannot change the upload.
     const directory = await mkdtemp(join(tmpdir(), "workspace-html-view-"));
     try {
       const stagedPath = join(directory, basename(source.filePath));
       await writeFile(stagedPath, source.bytes, { mode: 0o600, flag: "wx" });
-      const upload = await this.options.blobs.upload({
+      return await blobs.upload({
         filePath: stagedPath,
-        name,
-        spaceId,
-        idempotencyKey,
-        ...(parentNodeId === undefined ? {} : { parentNodeId }),
+        ...destination,
       });
-      if (typeof upload["nodeId"] !== "string" || upload["nodeId"].length === 0) {
-        throw workspaceError(
-          "workspace-invalid-response",
-          "HTML View upload did not return a Node ID.",
-        );
-      }
-      return {
-        ...upload,
-        workspaceUrl: new URL(`/nodes/${encodeURIComponent(upload["nodeId"])}`, origin).href,
-      };
     } finally {
       await rm(directory, { recursive: true, force: true });
     }
