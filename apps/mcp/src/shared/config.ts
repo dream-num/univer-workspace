@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { defaultLimits, type UploadLimits } from "../gateway/staging/model.js";
 
 export const origin = z.url().transform((value, ctx) => {
   const url = new URL(value);
@@ -35,6 +36,7 @@ const environment = z.object({
   WORKSPACE_ORIGIN: origin,
   WORKSPACE_TRANSPORT_URL: origin.optional(),
   MCP_PUBLIC_URL: publicUrl,
+  MCP_STAGING_DIRECTORY: z.string().min(1),
   METRICS_TOKEN: z.string().optional(),
   MCP_RESOURCE_CACHE_DIRECTORY: z.string().min(1).optional(),
   MCP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
@@ -53,6 +55,7 @@ export type GatewayConfig = Readonly<
     z.output<typeof environment>,
     "MCP_OAUTH_CLIENT_SECRET" | "MCP_INTERNAL_TOKEN" | "MCP_EXECUTOR_URLS"
   > & {
+    readonly uploadLimits: UploadLimits;
     readonly executor: { readonly urls: readonly string[]; readonly internalToken: string } | null;
     readonly WORKSPACE_TRANSPORT_URL: string;
     readonly auth: {
@@ -88,7 +91,19 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
       "Configure MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET, or set MCP_DEV_SESSION_PASSTHROUGH=1 for local development",
     );
   }
+  const uploadLimits = { ...defaultLimits };
+  for (const purpose of Object.keys(defaultLimits) as (keyof UploadLimits)[]) {
+    const value = env[`MCP_UPLOAD_${purpose.toUpperCase().replaceAll("-", "_")}_MAX_BYTES`];
+    if (value !== undefined)
+      uploadLimits[purpose] = z
+        .string()
+        .regex(/^\d+$/)
+        .transform(Number)
+        .pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER))
+        .parse(value);
+  }
   return Object.freeze({
+    uploadLimits: Object.freeze(uploadLimits),
     ...configWithoutSecret,
     executor:
       urls === undefined || internalToken === undefined

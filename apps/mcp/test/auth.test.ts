@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -107,7 +108,7 @@ describe("gateway authentication", () => {
       parseGatewayConfig({
         WORKSPACE_ORIGIN: identityOrigin,
         WORKSPACE_TRANSPORT_URL: transport,
-        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
         ...env,
       }),
       {
@@ -423,7 +424,7 @@ describe("gateway authentication", () => {
 });
 
 describe("authentication configuration", () => {
-  const base = { WORKSPACE_ORIGIN: identityOrigin, MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp" };
+  const base = { WORKSPACE_ORIGIN: identityOrigin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp" };
   it("requires the client id and secret together and at least one mode", () => {
     expect(() => parseGatewayConfig({ ...base, MCP_OAUTH_CLIENT_ID: "id" })).toThrow(/together/);
     expect(() => parseGatewayConfig({ ...base, MCP_OAUTH_CLIENT_SECRET: "secret" })).toThrow(/together/);
@@ -457,7 +458,7 @@ describe("authentication configuration", () => {
 describe("exchange cache lifetime and capacity", () => {
   const config = parseGatewayConfig({
     WORKSPACE_ORIGIN: identityOrigin,
-    MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp",
+    MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp",
     MCP_OAUTH_CLIENT_ID: "id",
     MCP_OAUTH_CLIENT_SECRET: clientSecret,
   });

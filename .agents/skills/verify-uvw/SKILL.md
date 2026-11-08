@@ -225,4 +225,6 @@ collaboration WebSocket transport, log redaction and worker environment. The pos
 The worker check rejects zero inspected workers. It verifies the child environment only; same-uid
 workers can still read the executor environment through `/proc/1/environ` until Stage G.
 Log checks include license and license-key values. `mcp --expect-event '<jq expression>'` adds a per-call event
-assertion. `executor: none` requires zero costs; worker calls report cold/warm and nonnegative costs.
+assertion. `executor: none` requires zero worker costs (`worker_cpu_ms`, `worker_peak_rss_mb`,
+`render_pages`, `committed_revisions`); gateway file tools may report transfer bytes.
+Worker calls report cold/warm and nonnegative costs.

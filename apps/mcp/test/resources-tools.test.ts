@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import * as fs from "node:fs/promises";
 import { once } from "node:events";
 import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
@@ -55,7 +56,7 @@ describe("SVG resource tools", () => {
       parseGatewayConfig({
         MCP_DEV_SESSION_PASSTHROUGH: "1",
         WORKSPACE_ORIGIN: "https://workspace.example",
-        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
       }),
       {
         logger: pino(

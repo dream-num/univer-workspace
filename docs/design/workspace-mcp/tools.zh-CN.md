@@ -40,7 +40,7 @@
 
 ### 1.5 幂等
 
-保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
+保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（两种 Blob 写工具均必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
 `compile_svg` 在 CLI 里没有幂等键，MCP 补上一个可选的。
 
 客户端可能因为超时而重试调用（ChatGPT 的社区报告，未核实）。创建类工具的描述里要写明“创建前生成一个幂等键，重试时复用”。
@@ -216,13 +216,13 @@ MCP 规范还没有标准的文件上传机制（SEP-2356、SEP-2631 仍是草�
 
 | `purpose` | 用于 | 上限 |
 | --- | --- | --- |
-| `office-import` | `import` | 与 Workspace 一致，首版受 7.3 节的提交上限约束 |
-| `blob` | `blob_upload`、`blob_replace` | 与 Workspace 的 `maxBlobBytes` 一致 |
-| `markdown-assets`、`svg-assets`、`typst-bundle` | 对应的编译工具 | zip，按实测设定 |
+| `office-import` | `import` | 50 MiB，仍受 Workspace 1 MiB UnitData 提交上限约束 |
+| `blob` | `blob_upload`、`blob_replace` | 默认 512 MiB，与 Workspace `maxBlobBytes` 对齐 |
+| `markdown-assets`、`svg-assets`、`typst-bundle` | 对应的编译工具 | zip，默认各 50 MiB |
 
 ### 6.2 下载
 
-导出文件、PDF、Blob、Asset 和多张截图都返回签名下载链接，15 分钟有效，只对申请它的用户有效。
+导出文件、PDF、Blob、Asset 和多张截图都返回签名下载链接，15 分钟有效。工具只为申请者生成，链接本身是 capability，任何持有者都可下载，因此必须私密保存。
 目前没有客户端会自动跟随 `resource_link` 下载（未核实），所以链接以文本形式出现在结果里，交给用户点击。
 
 ## 7. 长任务
@@ -248,3 +248,12 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
 - server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，然后标记 ready，把评审链接交给用户，合并留给用户。
   不支持 Skill 的客户端（ChatGPT、WorkBuddy）靠这段 instructions 获得规则。
 - 仓库里的发现入口 `skills/univer-workspace-cli/SKILL.md` 是面向 CLI 的安装说明，不变。MCP 的接入说明写在 `apps/mcp/README.md` 和 Workspace 的设置页里。
+
+D3 已实现 `file_upload_create`、`blob_upload`、`blob_download`、`blob_replace` 和 `asset_download`。
+`MCP_UPLOAD_BLOB_MAX_BYTES`、`MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`、
+`MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`、`MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`、
+`MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` 可配置用途上限。Blob 接受合法 MIME 类型；Office 接受
+OpenXML、legacy Office 和 `text/csv`；其余三种用途只接受 `application/zip` 或
+`application/x-zip-compressed`。上传对象一小时有效，链接十分钟有效。工具消费不删除对象，
+同一 `idempotency_key` 可重试。外用户上传统一返回 `workspace-upload-not-found`，未完成或用途不符
+分别返回 `workspace-upload-not-ready`、`workspace-upload-purpose-mismatch`。

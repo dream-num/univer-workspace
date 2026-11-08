@@ -1,3 +1,8 @@
+import { fileUploadCreateTool } from "./core/file-upload-create.js";
+import { blobUploadTool } from "./files/blob-upload.js";
+import { blobDownloadTool } from "./files/blob-download.js";
+import { blobReplaceTool } from "./files/blob-replace.js";
+import { assetDownloadTool } from "./files/asset-download.js";
 import { executeTool } from "./core/execute.js";
 import { inspectTool } from "./core/inspect.js";
 import { whoamiTool } from "./core/whoami.js";
@@ -59,12 +64,17 @@ export const tools: readonly ToolDefinition[] = [
   unitListTool,
   unitAddTool,
   unitCreateTool,
+  fileUploadCreateTool,
   executeTool,
   inspectTool,
   apiFindTool,
   apiShowTool,
   skillsReadTool,
   blobGetTool,
+  blobUploadTool,
+  blobDownloadTool,
+  blobReplaceTool,
+  assetDownloadTool,
   repoCreateTool,
   repoEditTool,
   labelListTool,

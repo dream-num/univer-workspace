@@ -71,6 +71,7 @@ mcp_compose() {
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_MCP_STAGING_DIRECTORY="$RUN/staging" \
     VERIFY_UVW_INTERNAL_TOKEN="$(cat "$RUN/home/internal-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_OAUTH_SECRET="$(cat "$RUN/home/mcp-oauth-secret" 2>/dev/null || echo removed)" \
     docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
@@ -83,6 +84,8 @@ mcp_client() {
 
 mcp_up() {
   load_run
+  mkdir -m 700 "$RUN/staging"
+  docker run --rm -v "$RUN/staging:/staging" --entrypoint sh node:24-bookworm-slim -c 'chown 1000:1000 /staging && chmod 700 /staging' >"$RUN/logs/staging-setup.log" 2>&1
   local digest
   digest="$(mcp_digest)"
   node -e 'const fs=require("node:fs"); fs.writeFileSync(process.argv[1], JSON.stringify({started_at:new Date().toISOString(),git_head:process.argv[2],source_digest:process.argv[3],image_id:null},null,2)+"\n")' \
@@ -103,6 +106,9 @@ mcp_up() {
 
 mcp_doctor() {
   node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP executor checks failed"
+  if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
+    ok "MCP staging directory is private and owned by the gateway uid"
+  else bad "MCP staging directory is missing or unsafe"; fi
   local desktop digest cid inspect mapping gateway_logs who
   if desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" && [[ "$desktop" == 'Docker Desktop' ]]; then
     ok "MCP Docker Desktop is available"
@@ -215,6 +221,8 @@ mcp_down() {
   if remaining="$(docker image ls -q "$MCP_IMAGE" 2>/dev/null)"; then
     if [[ -n "$remaining" ]]; then clean=0; echo "warning: remaining MCP image $MCP_IMAGE; remove with docker image rm $MCP_IMAGE" >&2; fi
   else clean=0; echo "warning: cannot list MCP image" >&2; fi
+  rm -rf "$RUN/staging"
+  [[ ! -e "$RUN/staging" ]] || { clean=0; echo "warning: staging directory remains" >&2; }
   [[ "$clean" != 1 ]] || echo "ok    MCP resources removed"
 }
 

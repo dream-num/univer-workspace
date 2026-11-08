@@ -26,6 +26,7 @@ import { z } from "zod";
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { createBearerCheck } from "../shared/bearer.js";
 import { credentialRedactions } from "../shared/logging.js";
+import { LocalStagingStore } from "./staging/local.js";
 import { UsageAccumulator } from "../shared/usage.js";
 import { createExecutorLinks } from "./tools/executor-tool.js";
 import type { GatewayConfig } from "../shared/config.js";
@@ -85,6 +86,10 @@ export function createGateway(
       level: config.LOG_LEVEL,
       redact: credentialRedactions,
     });
+  const staging = new LocalStagingStore(config.MCP_STAGING_DIRECTORY, config.MCP_PUBLIC_URL, {
+    limits: config.uploadLimits,
+    onError: () => logger.error("Staging cleanup failed"),
+  });
   const registry = new Registry();
   const calls = new Counter({
     name: "mcp_tool_calls_total",
@@ -305,6 +310,11 @@ export function createGateway(
         },
       });
     }
+    if (url.pathname.startsWith("/mcp/files/")) {
+      if (request.headers.get("host") !== publicUrl.host)
+        return new Response("Forbidden", { status: 403 });
+      return staging.handle(request);
+    }
     if (url.pathname !== "/mcp") return new Response("Not found", { status: 404 });
     if (
       request.headers.get("host") !== publicUrl.host ||
@@ -364,6 +374,8 @@ export function createGateway(
         identityOrigin: config.WORKSPACE_ORIGIN,
         skillDataRoot,
         resources,
+        staging,
+        usage,
         executor: executorLink(authentication, user, requestId, requestStartedAt + 30_000, usage),
         scopes: authentication.scopes ?? options.scopes ?? allScopes,
       },
@@ -446,5 +458,12 @@ export function createGateway(
       response,
     );
   });
-  return { server, registry, close: () => mcp.close() };
+  return {
+    server,
+    registry,
+    close: async () => {
+      await staging.close();
+      await mcp.close();
+    },
+  };
 }

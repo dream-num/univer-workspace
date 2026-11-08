@@ -5,11 +5,15 @@ import type {
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { z } from "zod";
 
+import type { StagingStore } from "../staging/model.js";
+import type { UsageAccumulator } from "../../shared/usage.js";
 import type { ExecutorLink } from "./executor-tool.js";
 
 export type ToolScope = "read" | "write" | "publish" | "worktree:merge";
 
 export interface ToolContext {
+  readonly staging?: StagingStore;
+  readonly usage?: UsageAccumulator;
   readonly executor?: ExecutorLink;
   readonly http: WorkspaceHttp;
   readonly user: WorkspaceSubject;

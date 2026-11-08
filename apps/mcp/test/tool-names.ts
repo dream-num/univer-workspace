@@ -20,13 +20,20 @@ export const coreNames = [
   "unit_list",
   "unit_add",
   "unit_create",
+  "file_upload_create",
   "execute",
   "inspect",
   "api_find",
   "api_show",
   "skills_read",
 ];
-export const filesNames = ["blob_get"];
+export const filesNames = [
+  "blob_get",
+  "blob_upload",
+  "blob_download",
+  "blob_replace",
+  "asset_download",
+];
 export const adminNames = [
   "repo_create",
   "repo_edit",
@@ -40,6 +47,8 @@ export const adminNames = [
   "resources_export",
 ];
 export const writeNames = [
+  "blob_upload",
+  "blob_replace",
   "issue_create",
   "issue_edit",
   "issue_comment",
@@ -49,6 +58,7 @@ export const writeNames = [
   "pr_ready",
   "unit_add",
   "unit_create",
+  "file_upload_create",
   "execute",
   "repo_create",
   "repo_edit",
@@ -58,6 +68,7 @@ export const writeNames = [
   "pr_discard",
 ];
 export const destructiveNames = [
+  "blob_replace",
   "repo_edit",
   "label_write",
   "space_node",
@@ -71,6 +82,11 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   unit_add: "write",
   unit_create: "write",
   blob_get: "read",
+  file_upload_create: "write",
+  blob_upload: "publish",
+  blob_replace: "publish",
+  blob_download: "read",
+  asset_download: "read",
   repo_create: "publish",
   repo_edit: "publish",
   label_list: "read",

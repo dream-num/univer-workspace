@@ -203,7 +203,8 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 - 一个 `StagingStore` 接口，加一个本地文件系统实现。参照 `apps/workspace/server/src/app.ts:241-245` 的 `LocalBlobStore` 用法。
 - 目录由 `MCP_STAGING_DIRECTORY` 指定。本地验证用本次运行目录下的子目录。SaaS 挂载一个所有网关副本共享的卷。
 - 每个对象带所有者（用户 ID）、用途、大小、媒体类型和过期时间。元数据以 sidecar 文件保存在同一目录，不使用数据库。
-- 后台定时清理过期对象，参照 `apps/workspace/server/src/jobs/blob-maintenance.ts`。上传对象 1 小时过期，导出结果 15 分钟过期。
+- sidecar 保存 `id`、`kind`、`owner`、`purpose`、`fileName`、`mediaType`、`size`、`sha256`、`state`、`createdAt`、`expiresAt` 和 `tokenHash`，通过临时文件加 rename 原子写入。目录必须为当前 uid 所有的 0700 私有目录，文件 0600。上传 PUT 要求 Content-Length 等于声明值，流式限制实际字节，成功后 pending 变为 ready，拒绝第二次 PUT。
+- 后台在启动和每分钟清理过期对象，参照 `apps/workspace/server/src/jobs/blob-maintenance.ts`。上传对象 1 小时过期，导出结果 15 分钟过期。
 - 执行层和渲染服务不直接访问暂存存储。网关读出文件交给它们，或从它们那里收回结果再写入。
 
 ### 5.2 网关的文件端点
@@ -215,7 +216,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 | `GET /mcp/files/downloads/{downloadId}` | 用签名 URL 下载 |
 
 这些端点与 Workspace 同域。下载一律带 `Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` 和 `Content-Security-Policy: sandbox; default-src 'none'`，
-上传页不渲染任何用户内容。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
+上传页不渲染任何用户内容。下载同时带 `Cache-Control: private, no-store`。文件端点保留 Host 检查，使用 256-bit 随机 capability token，sidecar 只存 SHA-256，常量时间比较；链接持有者可访问，无需 bearer。工具消费上传仍验证 owner、purpose 和 ready。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
 导出的 HTML、SVG、Markdown 可能包含任意内容，不能在 Workspace 的同源下以内联方式打开。
 
 ## 6. 执行层
@@ -419,3 +420,5 @@ apps/mcp/
 - 工具定义只做参数解析和结果映射，业务逻辑调用 `client-core` 已有的 feature，不复制 CLI 的实现。
 - `apps/mcp` 依赖 `@univerjs/univer-workspace-client-core`（workspace 协议）和 MCP 官方 TypeScript SDK（精确版本）。不依赖 `apps/cli`。
 - skills 内容在构建时从 `apps/cli/skill-data` 复制进 `apps/mcp` 的产物，保证与 CLI 版本一致。
+
+文件工具在 gateway 内记录 `upload_bytes`（消费上传）和 `export_bytes`（写入下载），`executor: none` 时允许这两项非零，其他成本仍为零。

@@ -3,6 +3,7 @@ services:
   gateway:
     image: ${VERIFY_UVW_MCP_IMAGE:?}
     environment:
+      MCP_STAGING_DIRECTORY: /staging
       MCP_ROLE: gateway
       NODE_ENV: development
       MCP_DEV_SESSION_PASSTHROUGH: "1"
@@ -17,6 +18,8 @@ services:
       MCP_PUBLIC_URL: http://127.0.0.1:${VERIFY_UVW_MCP_PORT:?}/mcp
       METRICS_TOKEN: ${VERIFY_UVW_METRICS_TOKEN:?}
       LOG_LEVEL: info
+    volumes:
+      - "${VERIFY_UVW_MCP_STAGING_DIRECTORY:?}:/staging"
     ports:
       - "127.0.0.1:${VERIFY_UVW_MCP_PORT:?}:3000"
     depends_on:
