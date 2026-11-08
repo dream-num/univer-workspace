@@ -15,6 +15,7 @@ import type { IUniverHistoryService } from "@univerjs-pro/collaboration-history-
 import {
   type IUnitSnapshotMaterializer,
   CollabError,
+  isCommentOnlyChangeset,
   type UniverCollabService,
 } from "@univerjs-pro/collaboration-service";
 import {
@@ -50,7 +51,6 @@ import {
   protocolUser,
 } from "./protocol-user.js";
 import { setFinalMutationSize } from "./changeset-observation.js";
-import { isCommentOnlyChangeset } from "./comment-changesets.js";
 import { createCollaborationMetricsMiddleware } from "../../middleware/metrics.js";
 import { createWorkspaceUnitComparison } from "./unit-comparison.js";
 

@@ -74,5 +74,8 @@ export async function exportWorkspaceSnapshot(
       return exportToBuffer(await inline(await transformSnapshotToBaseData(aggregate.snapshot, structuredClone(aggregate.sheetBlocks))), options);
     case UniverInstanceType.UNIVER_PDF:
       return exportToBuffer(await inline(transformSnapshotToPdfData(aggregate.snapshot)), options);
+    default:
+      // exchange-node 1.4.0 also types Board → PPTX export; Workspace has not adopted it.
+      throw new ApplicationError("INVALID_INPUT", 400, "Workspace does not export this Unit type.", "type");
   }
 }

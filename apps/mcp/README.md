@@ -138,7 +138,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 
 ## SVG resource catalog
 
-`resources_*` run `@univer-cli/resource-library` 1.3.1 with the catalog manifest of `@univerjs-pro/cli-assets` 0.1.0,
+`resources_*` run `@univer-cli/resource-library` 1.4.0 with the catalog manifest of `@univerjs-pro/cli-assets` 0.1.0,
 the same library and manifest the CLI uses; the gateway never imports `apps/cli`. Registry listings and searches read the
 manifest. `resources_export` downloads each SVG the first time it is requested, over HTTPS from the catalog hosts (the gateway
 needs outbound network access), stores it in `MCP_RESOURCE_CACHE_DIRECTORY`, and returns its text. The cache holds public
@@ -149,7 +149,7 @@ is listed in `failed` with its code, as in the CLI, and does not fail the call. 
 would exceed 100,000 characters, the page stops before the one that does not fit and carries `truncated: true` and a `cursor`.
 A single SVG larger than the limit is `workspace-result-too-large`.
 
-`@univer-cli/resource-library` 1.3.1 does not confine cache symlinks. The gateway guards its cache through the library's
+`@univer-cli/resource-library` 1.4.0 does not confine cache symlinks. The gateway guards its cache through the library's
 public `ResourceCache` interface while an upstream fix is needed. It creates the root, missing parents and registry
 directories with mode `0700`. Before each cache read or write, it recreates missing roots and gateway-created parents,
 then checks the root and gateway-created parents with `lstat` for real directories owned by the current uid without
@@ -163,7 +163,7 @@ change existing permissions or migrate the old default cache.
 
 ## Reference, Skills and server instructions
 
-`@univer-cli/api-reference` 1.3.1 is the same offline Facade API index the CLI uses. The CLI's `api find` and
+`@univer-cli/api-reference` 1.4.0 is the same offline Facade API index the CLI uses. The CLI's `api find` and
 `api show` print text and have no `--json`, so `api_find` and `api_show` return the library's own structured
 results, wrapped as `{ results }`. The gateway reads the CLI's Skills from `dist/skill-data`, which the build
 copies from `apps/cli/skill-data`; it never imports `apps/cli`. `skills_read` returns the CLI's `skills list`,

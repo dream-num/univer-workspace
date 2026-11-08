@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import {
   SQLiteDatabaseAdapter,
   migrateSQLiteCoreV1ToV2,
+  migrateSQLiteCoreV2ToV3,
 } from "@univerjs-pro/collaboration-database-sqlite";
 import {
   SQLiteWorktreeDatabaseAdapter,
@@ -17,17 +18,18 @@ import {
 } from "@univerjs-pro/collaboration-history-database-sqlite";
 import { readUnitCreationFacts } from "./unit-creation-facts.js";
 
-const TARGET = { core: 2, worktree: 3, history: 2, comment: 1 } as const;
+const TARGET = { core: 3, worktree: 3, history: 2, comment: 1 } as const;
 
 type ComponentVersions = ReadonlyMap<string, number>;
 
 /**
- * Offline startup boundary for SDK 1.0.0. Stop every writer before calling this,
- * before constructing any Service/Adapter, and after the product database is
- * on V7. The SDK owns schema migrations; we migrate a consistent copy so a
- * failure in any component leaves the original usable by the previous release.
- * Retire legacy branches after all deployments have upgraded; never invoke
- * this from a request or recovery job.
+ * Offline startup boundary for the published SDK schema migrations (Core and
+ * Worktree since SDK 1.0.0, Core v3 since SDK 1.4.0). Stop every writer before
+ * calling this, before constructing any Service/Adapter, and after the product
+ * database is on V7. The SDK owns schema migrations; we migrate a consistent
+ * copy so a failure in any component leaves the original usable by the
+ * previous release. Retire legacy branches after all deployments have
+ * upgraded; never invoke this from a request or recovery job.
  */
 export async function prepareCollaborationDatabase(
   filename: string,
@@ -144,7 +146,7 @@ async function migrateCopy(
   const creation = startupStage("collaboration.creation-facts.read", () =>
     readUnitCreationFacts(source, productDatabaseFilename, Date.now()),
   );
-  const backupFilename = `${filename}.pre-sdk-1.0.0-${Date.now()}-${randomUUID()}.bak`;
+  const backupFilename = `${filename}.pre-sdk-migration-${Date.now()}-${randomUUID()}.bak`;
   startupStage("collaboration.backup", () => source.prepare("VACUUM INTO ?").run(backupFilename));
   chmodSync(backupFilename, 0o600);
 
@@ -174,6 +176,13 @@ async function migrateCopy(
       await startupStageAsync("collaboration.history.v1-to-v2", () =>
         migrateSQLiteHistoryV1ToV2({ filename: stagedFilename }),
       );
+    // Core v3 (SDK 1.4.0) re-encodes protocol payloads as MessagePack and keeps
+    // hard-deleted Units as marker rows instead of a tombstone table. It reads
+    // no other component, so it runs after they have read the v2 Core tables.
+    if ((versions.get("core") ?? TARGET.core) < 3)
+      await startupStageAsync("collaboration.core.v2-to-v3", () =>
+        migrateSQLiteCoreV2ToV3({ filename: stagedFilename }),
+      );
 
     // Public Adapter constructors validate their own schema fingerprints. They
     // also initialize components missing from older deployments on the copy.
@@ -198,7 +207,7 @@ async function migrateCopy(
     return backupFilename;
   } catch (error) {
     throw new Error(
-      `Collaboration SDK 1.0.0 migration failed; the original database is unchanged. Consistent backup: ${backupFilename}`,
+      `Collaboration SDK migration failed; the original database is unchanged. Consistent backup: ${backupFilename}`,
       { cause: error },
     );
   } finally {

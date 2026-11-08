@@ -413,8 +413,10 @@ While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
-SDK 1.0.0 upgrades Collaboration components to `core=2`, `worktree=3`, and
-`history=2`; `comment=1` is unchanged. Product V18 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
+The Collaboration components are `core=3`, `worktree=3`, `history=2` and
+`comment=1`. SDK 1.0.0 brought `core=2`, `worktree=3` and `history=2`; SDK 1.4.0
+raises Core to v3, which stores protocol objects as MessagePack and inlines
+deletion state into `collaboration_units` instead of a tombstone table. Product V18 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
 and Issue source columns without backfilling existing rows. V15 added ordered Space
 pins and a per-user stars index. V14 added Email identities and Email login codes;
 V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
@@ -428,12 +430,12 @@ application Services, the server entry point prepares the Collaboration file:
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
-   `<collaboration-file>.pre-sdk-1.0.0-<timestamp>-<uuid>.bak` beside the database.
+   `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak` beside the database.
    If another process still has a WAL-mode file open, or holds any lock on it,
    startup fails before the backup. An idle rollback-journal connection holds no
    lock and cannot be detected, so step 1 remains required.
-3. The published SDK migrations run on a staging copy in Core → Worktree → History
-   order while the lock is held. Schema validation, `foreign_key_check`, and
+3. The published SDK migrations run on a staging copy in Core v1→v2 → Worktree →
+   History → Core v2→v3 order while the lock is held. Schema validation, `foreign_key_check`, and
    `integrity_check` must pass before the copy atomically replaces the original.
    A failed migration leaves the original database, its journal mode, and the
    backup available; startup fails before accepting traffic.

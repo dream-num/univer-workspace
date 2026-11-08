@@ -103,7 +103,6 @@ import "@univerjs-pro/docs-quote/facade";
 import "@univerjs-pro/docs-shape/facade";
 import "@univerjs-pro/docs-table/facade";
 import "@univerjs-pro/engine-chart/facade";
-import "@univerjs-pro/ink/facade";
 import "@univerjs-pro/slides/facade";
 import "@univerjs-pro/slides-chart/facade";
 import "@univerjs-pro/slides-exchange-client/facade";

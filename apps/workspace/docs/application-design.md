@@ -128,10 +128,10 @@ Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多
 
 ## Collaboration SDK 升级边界
 
-SDK 1.0.0 启动时先准备产品数据库，再运行隔离的 `prepareCollaborationDatabase`，最后构造
-应用 Service。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
+启动时先准备产品数据库，再运行隔离的 `prepareCollaborationDatabase`，最后构造应用 Service
+（自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
-Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 2、Worktree 3、History 2；
+Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 3、Worktree 3、History 2；
 Comment 1 不变。产品数据库先准备到 V18，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
@@ -268,7 +268,7 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
 - export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
   确认 Unit Type，通过 Collaboration Service 固定当前 head 并读取包含 Sheet blocks 的恢复
   材料，再由 `UnitSnapshotMaterializer` 补全 snapshot；
-- 已知限制（SDK 1.3.1）：空白新建的 PDF Unit 一经编辑器修改就无法导出，原生导出器会以
+- 已知限制（SDK 1.4.0 仍存在）：空白新建的 PDF Unit 一经编辑器修改就无法导出，原生导出器会以
   "source-less PDF cannot apply imported semantic patches" 拒绝，因为编辑器 reducer 把叠加
   对象的编辑同时镜像进了 `objectPatches`；Workspace 不做绕过，等上游版本修复（exchange 集成
   测试中对应用例暂为 skip）；
