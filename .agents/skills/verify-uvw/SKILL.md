@@ -240,4 +240,5 @@ existing synchronous Office journeys.
 A succeeded same-key import/export retry returns the original tool result directly.
 Deduplicated responses carry `_meta["univer.workspace.deduplicated"]: true`; the call helper
 requires zero additional conversion events for that marker. Failed jobs release their keys,
-so a retry runs again and emits its own settled event.
+so a retry runs again and emits its own settled event. A reused key with different arguments
+returns `workspace-idempotency-conflict` and starts nothing (MX10).

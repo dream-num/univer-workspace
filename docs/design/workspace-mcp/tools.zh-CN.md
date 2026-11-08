@@ -251,6 +251,7 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
 - `import`、`export`、`print_pdf`、`compile_typst`、多页 `screenshot` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。
 - `job_get` 返回 `job_id` 和 `status`（`running`、`succeeded`、`failed`）。成功时 `result` 为原工具的结果，失败时 `error` 带 `code`、`message`、`detail`。未知、过期、其他用户的任务均报 `workspace-job-not-found`。
 - 任务状态保存在网关内存和暂存存储的 sidecar 文件中，不使用数据库。任务结果的有效期与下载链接一致。
+- `idempotency_key` 绑定参数：同用户、同工具、同 key 但参数不同（上传、Worktree、Space、Unit、格式等）返回 `workspace-idempotency-conflict`，不启动转换。
 - 按 `idempotency_key` 去重 running 和 succeeded 任务。运行中的重试返回同一任务句柄，已成功的重试直接返回原工具结果；failed 任务释放 key，同 key 可重新执行。
 - 客户端声明支持 Tasks 扩展时，同时以 Tasks 的方式提供。这一项不在首版必做范围内。
 

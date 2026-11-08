@@ -1780,6 +1780,14 @@ node .agents/skills/verify-uvw/bin/mcp-office-retry.mjs
 
 Pass when both calls directly return the same Unit ID and the Worktree Unit list is unchanged. A successful same-key retry must return the original import result, without a job handle.
 
+**MX10. Reused import key with a different upload.** Import one upload with a key, then a different upload with the same key. Run after MX7.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-job-conflict.mjs
+```
+
+Pass when the second call fails with `workspace-idempotency-conflict`, the Worktree Unit list is unchanged,
+and repeating the first arguments returns the original Unit ID.
 
 **MM1. Markdown compile, native readback and block update.**
 

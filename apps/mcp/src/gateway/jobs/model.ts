@@ -8,6 +8,7 @@ const jobBase = z.object({
   userId: z.string().min(1),
   tool: z.enum(["import", "export"]),
   key: z.string().optional(),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   createdAt: z.number(),
   deadlineAt: z.number(),
   expiresAt: z.number(),

@@ -460,6 +460,12 @@ createdAt、deadlineAt、expiresAt，以及仅在成功时存在的 result 或�
 结果保留十五分钟，由 staging sweeper 清理。原工具事件延迟到执行结束后发出一次，
 携带实际成本；去重重试不发第二个转换事件。job_get 保持普通只读工具的零成本事件。
 
+D5 的 key 绑定参数：job 记录和 reservation 保存规范化后的工具参数 SHA-256。同 key 但上传、Worktree、Space、Unit、格式等任一参数不同，
+在任务 running 或结果未过期期间返回 `workspace-idempotency-conflict` 且不启动任何转换，与 Workspace 对复用 Idempotency-Key 的 409 一致；参数相同则沿用 join/回放。
+reservation lock 只保护毫秒级临界区，10 秒后视为过期，崩溃的持有者最多延迟重试 10 秒；上传传输锁仍按两小时清理。
+任务 deadlineAt 不晚于调用者授权过期时间减 5 秒（过短的授权仍得到同步预算，由执行层按原行为拒绝过期授权）。
+持有未完成 completion 的网关在 deadlineAt 之后仍报告 running 并保留 key；该 completion（含执行层返回后的下载或 Workspace 响应映射）受 deadline 约束，到期按失败收敛，所以不会先报 failed 再报 succeeded。
+
 D5 的 key 只去重 running 和 succeeded。failed sidecar 不再保留 key，旧版带 key 的失败记录也不参与 reservation。
 超过 deadlineAt 的 running 记录同样不阻止重试。成功重试直接返回原工具结果；外部副本重新读取 sidecar 后按实际状态回答。
 复用调用通过 MCP 响应的 _meta["univer.workspace.deduplicated"] 标记说明没有第二条转换事件，structuredContent 保持原工具结果。

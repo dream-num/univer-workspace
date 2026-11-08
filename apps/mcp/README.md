@@ -466,20 +466,28 @@ A retry of a running job after that wait returns its running handle; a retry of 
 its original tool result directly. Failed jobs release their keys in memory and in their sidecars.
 Retrying a failed or result-unknown import with the same key runs it again using the same deterministic Unit identity.
 Foreign replicas read the sidecar's actual status. Without a key each export starts a new conversion.
-A key identifies the original arguments; use a new key for a different conversion.
+A key identifies the original arguments. The job record and its reservation carry the SHA-256 of the canonicalized
+parsed tool arguments (key order and omitted optional fields do not matter). Reusing a key with a different
+upload, Worktree, Space, Unit, format or other argument while the job is running or its result is unexpired returns
+`workspace-idempotency-conflict` and starts nothing, as Workspace does for a reused `Idempotency-Key`.
+Use a new key for a different conversion.
 
 Jobs have random UUIDs and private atomic `.job.json` sidecars in `MCP_STAGING_DIRECTORY`.
 A shared-volume reservation lock prevents duplicate conversion starts across gateway replicas.
-Reservation locks use the staging lock lifecycle; a gateway crash during reservation can delay retries
-until the two-hour orphan-lock sweep. Running jobs and completed results are read from memory or their sidecar.
+Reservation locks guard a millisecond critical section and go stale after 10 seconds, so a gateway crash during
+reservation delays a retry by at most that long; upload-transfer locks keep the two-hour orphan-lock sweep. Running jobs and completed results are read from memory or their sidecar.
 A replica that did not start the conversion answers `job_get` from the shared sidecar.
 Expired, unknown and foreign jobs all return `workspace-job-not-found`.
 Import results and failed jobs expire 15 minutes after settlement. Export jobs expire with their staged download links, 15 minutes after download creation.
 Sidecars are swept at startup and each minute. Poll promptly.
 
-The conversion deadline is four minutes including queueing. Only `exchange.import` and `exchange.export`
+The conversion deadline is four minutes including queueing, and never later than the caller grant's expiry minus 5 seconds
+(a grant too short for that still gets the synchronous budget, and the executor rejects an expired grant as before). Only `exchange.import` and `exchange.export`
 permit RPC deadlines above 30 seconds. The gateway does not resume in-flight calls after restart.
-A running sidecar past its deadline reads as failed with `workspace-executor-timeout` for export or
+While the gateway that started a job still holds its unsettled completion, `job_get` reports `running` and the key stays
+reserved; that completion, including download or Workspace response mapping after the executor call, is bounded by the
+deadline and settles as failed with the codes below if it does not finish. A running sidecar past its deadline, with no
+live completion on the answering replica, reads as failed with `workspace-executor-timeout` for export or
 `workspace-result-unknown` for import, since a restarted gateway cannot confirm whether creation started.
 An ambiguous write also preserves `workspace-result-unknown` on ordinary settlement.
 New jobs report `executor: cold_start`; pool costs still describe pool work only.

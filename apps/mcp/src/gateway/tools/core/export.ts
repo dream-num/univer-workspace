@@ -16,7 +16,7 @@ export const exportTool = executorTool({
   scope: "read",
   title: "Export an Office file",
   description:
-    "Export a pull request file as xlsx, docx or pptx. Return a private download link valid for 15 minutes. After 30 seconds returns a job_id with status running; poll job_get until succeeded or failed. Reuse idempotency_key on retry to avoid a second export. The RPC result is capped at 128 MiB.",
+    "Export a pull request file as xlsx, docx or pptx. Return a private download link valid for 15 minutes. If the conversion outlasts the server's synchronous wait (30 seconds by default), returns a job_id with status running; poll job_get until succeeded or failed. Reuse idempotency_key with the same arguments on retry to avoid a second export; different arguments return workspace-idempotency-conflict. The RPC result is capped at 128 MiB.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
     worktree: z.string().min(1),

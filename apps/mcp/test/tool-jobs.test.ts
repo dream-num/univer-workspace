@@ -1,9 +1,9 @@
 import { join } from "node:path";
-import { randomUUID } from "node:crypto";
-import { readdir, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { readdir, utimes, writeFile } from "node:fs/promises";
 import { afterEach, expect, it, vi } from "vitest";
 import { ExecutorCallError } from "../src/shared/errors.js";
-import { requestHeaderSchema } from "../src/shared/executor-protocol.js";
+import { JOB_DEADLINE_MS, requestHeaderSchema } from "../src/shared/executor-protocol.js";
 import { ToolJobs } from "../src/gateway/jobs/store.js";
 import { JOB_TTL_MS, jobHandleSchema, type JobRecord } from "../src/gateway/jobs/model.js";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
@@ -45,6 +45,7 @@ const result = {
   },
   repo: "space",
 };
+const fingerprint = "a".repeat(64);
 const input = (
   execute: (deadlineAt: number) => Promise<ToolResult>,
   key: string | undefined = "key",
@@ -52,6 +53,7 @@ const input = (
   userId: "alice",
   tool: "export" as const,
   key,
+  fingerprint,
   execute,
   onDeferred: vi.fn(),
 });
@@ -203,6 +205,7 @@ it.each(["import", "export"] as const)(
       userId: "alice",
       tool,
       key: "key",
+      fingerprint,
       status: "running",
       createdAt: now - 2000,
       deadlineAt: now - 1,
@@ -268,6 +271,7 @@ it("reads a foreign reservation's settled sidecar and returns the normal result"
     userId: "alice",
     tool: "export",
     key: "key",
+    fingerprint,
     status: "running",
     createdAt: now,
     deadlineAt: now + 60_000,
@@ -293,6 +297,7 @@ it("ignores failed legacy sidecars that still contain a key", async () => {
     userId: "alice",
     tool: "export",
     key: "key",
+    fingerprint,
     status: "failed",
     error: { code: "workspace-result-unknown", message: "Retry the same key", detail: null },
     createdAt: now,
@@ -349,4 +354,174 @@ it("lets a replica reuse an expired key after observing another gateway's runnin
     code: "workspace-job-not-found",
   });
   expect(execute).toHaveBeenCalledTimes(1);
+});
+
+const other = { fingerprint: "b".repeat(64) };
+
+it.each(["import", "export"] as const)(
+  "rejects a reused %s key with different arguments while running, after success and across replicas",
+  async (tool) => {
+    const first = setup();
+    const second = setup(1000, undefined, first.directory);
+    const work = deferred();
+    const execute = vi.fn(() => work.promise);
+    const handle = jobHandleSchema.parse(
+      (await first.jobs.run({ ...input(execute), tool })).output,
+    );
+    const refuse = vi.fn(async () => result);
+    for (const jobs of [first.jobs, second.jobs]) {
+      await expect(jobs.run({ ...input(refuse), ...other, tool })).rejects.toMatchObject({
+        code: "workspace-idempotency-conflict",
+      });
+      expect((await jobs.run({ ...input(refuse), tool })).output).toEqual(handle);
+    }
+    work.resolve(result);
+    await first.jobs.get("alice", handle.job_id);
+    await args(first.jobs, execute);
+    for (const jobs of [first.jobs, second.jobs])
+      await expect(jobs.run({ ...input(refuse), ...other, tool })).rejects.toMatchObject({
+        code: "workspace-idempotency-conflict",
+      });
+    expect(refuse).not.toHaveBeenCalled();
+    expect(execute).toHaveBeenCalledTimes(1);
+
+    async function args(jobs: ToolJobs, run: typeof execute) {
+      await vi.waitFor(async () =>
+        expect((await jobs.run({ ...input(run), tool })).output).toEqual(result.output),
+      );
+    }
+  },
+);
+
+it("starts a different intent under a reused key once the first job failed", async () => {
+  const { jobs } = setup(1000);
+  await expect(
+    jobs.run(
+      input(async () => {
+        throw new Error("boom");
+      }),
+    ),
+  ).rejects.toThrow("boom");
+  const execute = vi.fn(async () => result);
+  expect((await jobs.run({ ...input(execute), ...other })).output).toEqual(result.output);
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it("reports running past deadlineAt while this replica holds the unsettled completion, then settles", async () => {
+  let now = Date.now();
+  const { jobs, store } = setup(10, () => now);
+  const work = deferred();
+  const execute = vi.fn(() => work.promise);
+  const args = input(execute);
+  const handle = jobHandleSchema.parse((await jobs.run(args)).output);
+  now = (await store.readJob(handle.job_id))!.deadlineAt + 1;
+  expect(await jobs.get("alice", handle.job_id)).toEqual(handle);
+  expect((await jobs.run(args)).output).toEqual(handle);
+  expect(execute).toHaveBeenCalledTimes(1);
+  work.resolve(result);
+  await args.onDeferred.mock.calls[0]?.[0];
+  expect(await jobs.get("alice", handle.job_id)).toMatchObject({
+    status: "succeeded",
+    result: result.output,
+  });
+});
+
+it.each(["import", "export"] as const)(
+  "settles a hung %s completion at its deadline with the timeout error and releases the key",
+  async (tool) => {
+    const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+    stores.push(store);
+    const jobs = new ToolJobs(store, 10, Date.now, 60);
+    const args = { ...input(() => new Promise<ToolResult>(() => {})), tool };
+    const handle = jobHandleSchema.parse((await jobs.run(args)).output);
+    await expect(args.onDeferred.mock.calls[0]?.[0]).rejects.toMatchObject({
+      wire: {
+        code: tool === "import" ? "workspace-result-unknown" : "workspace-executor-timeout",
+      },
+    });
+    expect(await jobs.get("alice", handle.job_id)).toMatchObject({ status: "failed" });
+    const execute = vi.fn(async () => result);
+    expect((await new ToolJobs(store, 1000).run({ ...input(execute), tool })).output).toEqual(
+      result.output,
+    );
+    expect(execute).toHaveBeenCalledTimes(1);
+  },
+);
+
+it("caps the job deadline at the grant expiry minus a margin, but never below the synchronous budget", async () => {
+  const now = Date.now();
+  const { jobs, store } = setup(1000, () => now);
+  const deadline = async (key: string, grantExpiresAt: number | undefined) => {
+    const args = {
+      ...input(async () => result, key),
+      ...(grantExpiresAt === undefined ? {} : { grantExpiresAt }),
+    };
+    await jobs.run(args);
+    const entries = (await readdir(store["root"])).filter((name) => name.endsWith(".job.json"));
+    const records = await Promise.all(entries.map((name) => store.readJob(name.slice(0, 36))));
+    return records.find((record) => record?.key === key)!.deadlineAt;
+  };
+  expect(await deadline("uncapped", undefined)).toBe(now + JOB_DEADLINE_MS);
+  expect(await deadline("capped", now + 60_000)).toBe(now + 55_000);
+  expect(await deadline("expiring", now + 1000)).toBe(now + 1000);
+});
+
+it("recovers a reservation lock left by a crashed gateway within seconds", async () => {
+  const { jobs, directory } = setup(1000);
+  const digest = createHash("sha256")
+    .update(JSON.stringify(["alice", "export", "key"]))
+    .digest("hex");
+  const lock = join(
+    directory,
+    `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}.lock`,
+  );
+  await writeFile(lock, "crashed", { mode: 0o600 });
+  const execute = vi.fn(async () => result);
+  const started = Date.now();
+  await expect(jobs.run(input(execute))).rejects.toMatchObject({ code: "workspace-upload-busy" });
+  const old = new Date(Date.now() - 11_000);
+  await utimes(lock, old, old);
+  expect((await jobs.run(input(execute))).output).toEqual(result.output);
+  expect(Date.now() - started).toBeLessThan(5000);
+  expect(execute).toHaveBeenCalledTimes(1);
+});
+
+it("does not leak an unhandled rejection when a start fails or its key is released", async () => {
+  const unhandled = vi.fn();
+  process.on("unhandledRejection", unhandled);
+  try {
+    const { jobs, store } = setup(1000);
+    vi.spyOn(store, "reserveJob").mockRejectedValueOnce(new Error("disk full"));
+    const execute = vi.fn(async () => result);
+    await expect(jobs.run(input(execute))).rejects.toThrow("disk full");
+    expect((await jobs.run(input(execute))).output).toEqual(result.output);
+    const internals = jobs as unknown as {
+      keys: Map<string, Promise<unknown>>;
+      releaseKey(entry: { record: JobRecord }): void;
+    };
+    const rejected = Promise.reject(new Error("start failed"));
+    internals.keys.set(JSON.stringify(["alice", "export", "key"]), rejected);
+    internals.releaseKey({
+      record: { ...input(execute), id: randomUUID() } as unknown as JobRecord,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await rejected.catch(() => {});
+    expect(unhandled).not.toHaveBeenCalled();
+  } finally {
+    process.off("unhandledRejection", unhandled);
+  }
+});
+
+it("settles in memory and releases its in-memory key when the failed sidecar cannot be written", async () => {
+  const { jobs, store } = setup(10);
+  const work = deferred();
+  const args = input(() => work.promise);
+  const handle = jobHandleSchema.parse((await jobs.run(args)).output);
+  vi.spyOn(store, "writeJob").mockRejectedValue(new Error("disk full"));
+  const error = new Error("conversion failed");
+  work.reject(error);
+  await expect(args.onDeferred.mock.calls[0]?.[0]).rejects.toBe(error);
+  expect(await jobs.get("alice", handle.job_id)).toMatchObject({ status: "failed" });
+  const keys = (jobs as unknown as { keys: Map<string, unknown> }).keys;
+  await vi.waitFor(() => expect(keys.size).toBe(0));
 });

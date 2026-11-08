@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { jobHandleSchema } from "../jobs/model.js";
 import type { WorkspaceSubject } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
@@ -15,6 +16,18 @@ import { callExecutor, type ExecutorConnection } from "../executor/client.js";
 import { issueGrant } from "../executor/grants.js";
 import { ExecutorRouter } from "../executor/router.js";
 import type { ToolContext, ToolDefinition } from "./definition.js";
+
+// Key order must not change the fingerprint; undefined members vanish as they do in JSON.
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([name, item]) => `${JSON.stringify(name)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
 
 const linkBrand = Symbol("ExecutorLink");
 export interface ExecutorLink {
@@ -110,6 +123,8 @@ export function executorTool<
           userId: context.user.id,
           tool: job.tool,
           key: job.key(parsed),
+          fingerprint: createHash("sha256").update(canonicalJson(parsed)).digest("hex"),
+          grantExpiresAt: link?.connection?.grant.expiresAt,
           execute,
           onDeferred: (completion) => context.onDeferredJob?.(completion),
         });
