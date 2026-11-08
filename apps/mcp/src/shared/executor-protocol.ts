@@ -85,7 +85,7 @@ export const opSpecs = {
       type: z.enum(["sheet", "base", "doc", "slide"]).optional(),
       name: z.string().optional(),
       parentNodeId: z.string().optional(),
-      idempotencyKey: z.string().min(1),
+      idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
     }),
     output: z.object({
       committed: z.literal(true),
@@ -97,7 +97,7 @@ export const opSpecs = {
       unitId: z.string(),
       worktreeId: z.string(),
     }),
-    route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: null }),
+    route: (input) => ({ scope: "exchange.import", unitId: input.idempotencyKey }),
   }),
   "exchange.export": defineOp({
     name: "exchange.export",
@@ -111,6 +111,7 @@ export const opSpecs = {
       format: z.enum(["xlsx", "docx", "pptx"]),
     }),
     output: z.object({
+      name: z.string(),
       type: z.enum(["sheet", "base", "doc", "slide"]),
       unitId: z.string(),
       worktreeId: z.string(),

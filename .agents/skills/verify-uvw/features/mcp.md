@@ -1701,3 +1701,12 @@ and developer PIDs are unchanged or absent both times. Evidence and logs survive
   `opencode serve`, or use `--auto`. This adds an entry to local opencode session history.
 - Run `down` after failed launches too. It only removes this run's project resources
   and image tag, preserves BuildKit cache, and deletes disposable credentials.
+
+
+**MX9. Office import idempotent retry.** Repeat the same upload and key after a delay and verify the Worktree still has one imported Unit.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-office-retry.mjs
+```
+
+Pass when both calls return the same Unit ID and the Worktree Unit list is unchanged.

@@ -9,6 +9,8 @@ const environment = z.object({
   WORKSPACE_TRANSPORT_URL: origin.optional(),
   MCP_INTERNAL_TOKEN: z.string().min(32),
   MCP_EXECUTOR_CREDENTIALS: z.literal("session").default("session"),
+  EXECUTOR_MAX_JOBS: positive.default(2),
+  EXECUTOR_JOB_HEAP_MB: positive.default(256),
   EXECUTOR_MAX_WORKERS: positive.default(4),
   EXECUTOR_IDLE_TTL_MS: positive.default(60_000),
   EXECUTOR_QUEUE_TIMEOUT_MS: positive.default(5_000),
@@ -21,6 +23,8 @@ export function parseExecutorConfig(env: NodeJS.ProcessEnv) {
   if (env["NODE_ENV"] === "production")
     throw new Error("NODE_ENV=production forbids executor session grants until Stage G");
   const config = environment.parse(env);
+  if ((config.UNIVER_LICENSE === undefined) !== (config.UNIVER_LICENSE_KEY === undefined))
+    throw new Error("UNIVER_LICENSE and UNIVER_LICENSE_KEY must be set together");
   return Object.freeze({
     ...config,
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,

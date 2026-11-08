@@ -108,11 +108,13 @@ The gateway validates configuration before listening and retains a readonly conf
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
 | `MCP_EXECUTOR_URLS`, `MCP_INTERNAL_TOKEN` | Unset on gateway | Comma-separated internal HTTP(S) origins and a shared token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. `NODE_ENV=production` refuses session grants |
+| `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
+| `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
 | `EXECUTOR_MAX_WORKERS` | `4` | Maximum cached Unit workers. Tune to the host's memory budget |
 | `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
 | `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |
-| `UNIVER_LICENSE`, `UNIVER_LICENSE_KEY` | Generated development pair | Executor runtime and Office conversion overrides. Set both together; only conversion jobs receive the key |
+| `UNIVER_LICENSE`, `UNIVER_LICENSE_KEY` | Generated development pair | Executor runtime and Office conversion overrides. Startup requires both overrides or neither; only export jobs receive the pair |
 | `LOG_LEVEL` | `info` | Pino level, including `debug`, `warn`, `error`, `fatal`, `trace`, and `silent` |
 
 The identity origin appears in `whoami` and repository URLs and controls repository
@@ -373,9 +375,9 @@ matching purpose. A foreign upload is reported as not found. Consumption retains
 for idempotent retries until its one-hour expiry. Workspace remains the permission authority.
 
 `blob` accepts any syntactically valid media type. `office-import` accepts the OpenXML
-Word, Excel and PowerPoint types, the legacy Office types and `text/csv`. The other three
+Word, Excel and PowerPoint types and the legacy Office types. CSV is not supported by this import workflow. The other three
 purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
-does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB before creating a Unit, with `workspace-import-too-large` and byte counts. Compile consumers remain future work.
+does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Compile consumers remain future work.
 
 Blob transfer streams between Workspace and the staging directory. Download results preserve
 Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
@@ -419,13 +421,26 @@ Aborted transfers produce one info-level failure log.
 
 Office conversion runs in a fresh forked process per operation with advanced binary IPC.
 The parent resolves Workspace targets, exports UnitData and image bytes, and creates Units
-through Client Core. The child receives only conversion data, options and the license pair.
+through Client Core. Import children receive only bytes and conversion options. Export children also receive the license pair.
 Its explicit environment contains `NODE_ENV=production`, `HOME`, `XDG_STATE_HOME` and `TMPDIR`.
 The last three point at a private per-job temporary directory that is removed after exit.
 It receives no session, grant, Workspace URL, internal token or inherited Node flags.
-The call's remaining deadline kills the child. Read timeouts return
-`workspace-executor-timeout`; write timeouts return `workspace-result-unknown`.
-Import is never automatically rerun. Retry with the same upload and idempotency key.
+The call's remaining deadline includes its wait for a conversion slot and kills the child.
+A conversion crash returns `workspace-job-crashed`, including a child killed by its heap cap.
+A deadline before Unit creation returns `workspace-executor-timeout` with
+`detail: { retryable: true, started: false }`. After creation starts, its result can be unknown.
+Import is never automatically rerun by MCP. Retry with the same upload and idempotency key,
+which must contain 16 to 200 URL-safe letters, digits, underscores or hyphens.
+MCP derives the converter's `unitId` from SHA-256 of the caller ID, key and upload SHA-256.
+The SDK's stable-identity conversion then reproduces the same initialData, including nested IDs.
+Routing uses caller ID and key so retries reach the same executor independently of request IDs.
+No conversion cache is needed. Workspace compares the full creation intent and returns the original Unit.
+Export download names use the Unit's product name.
+
+Children exit on IPC disconnect. Startup removes private job directories owned by dead executors,
+and each completed or failed job removes its own directory. The executor ignores SIGUSR1.
+Only known exchange and `LICENSE_*` errors cross the child boundary. Other codes become
+`workspace-exchange-conversion-failed`, and absolute paths are removed from error messages.
 
 `exchange.import` permits a 64 MiB request frame for the default 50 MiB Office upload,
 and a 64 KiB response. `exchange.export` permits a 64 KiB request and a 128 MiB response

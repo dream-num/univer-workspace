@@ -1,9 +1,14 @@
+import { createHash } from "node:crypto";
 import type { Handler } from "../context.js";
 import { exchangeFeature } from "./exchange.js";
 
 export const exchangeImport: Handler<"exchange.import"> = async (ctx, input, bytes) => {
   ctx.usage.repo = input.spaceId;
-  const { fileName, ...result } = await exchangeFeature(ctx).importBuffer({
+  const uploadHash = createHash("sha256").update(bytes).digest("hex");
+  const unitId = createHash("sha256")
+    .update(JSON.stringify([ctx.userId, input.idempotencyKey, uploadHash]))
+    .digest("hex");
+  const { fileName, ...result } = await exchangeFeature(ctx, unitId).importBuffer({
     bytes,
     worktreeId: input.worktreeId,
     spaceId: input.spaceId,

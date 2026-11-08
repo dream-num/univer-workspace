@@ -25,6 +25,7 @@ export interface OpContext {
     WorkspaceUnitExchangeDependencies,
     "license" | "licenseKey" | "importBuffer" | "exportToBuffer"
   >;
+  onCreateUnit?(): void;
   http(): WorkspaceHttp;
   source(): WorkspaceContentSource;
   readonly usage: OpMeta;

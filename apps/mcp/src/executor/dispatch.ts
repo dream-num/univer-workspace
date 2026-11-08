@@ -18,6 +18,7 @@ import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js
 import { mapRuntimeError, timeoutError } from "./errors.js";
 import { handlers } from "./ops/index.js";
 import { bindRuntime } from "./runtime.js";
+import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
 
@@ -26,6 +27,7 @@ export function createDispatcher(
   runtime: WorkspaceContentRuntime,
   logger: Logger,
 ) {
+  const jobs = new ConversionJobQueue(config.EXECUTOR_MAX_JOBS);
   const verifyGrant = createGrantVerifier(config);
   const dispatchers: { [K in OpName]: Handler<K> } = handlers;
   return async function dispatch<K extends OpName>(
@@ -36,6 +38,9 @@ export function createDispatcher(
     const spec: OpSpec = opSpecs[name];
     const controller = new AbortController();
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
+    let unitCreationStarted = false;
+    const currentTimeout = () =>
+      timeoutError(spec.effect, "deadline", name !== "exchange.import" || unitCreationStarted);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const input = spec.input.parse(header.input) as OpInput<(typeof opSpecs)[K]>;
@@ -71,11 +76,14 @@ export function createDispatcher(
         transportOrigin: config.WORKSPACE_TRANSPORT_URL,
         usage,
         http: () => http,
+        onCreateUnit: () => {
+          unitCreationStarted = true;
+        },
         source: () => source,
         runtime: bindRuntime(runtime, grant, usage, controller.signal),
         exchange: {
           ...credentials,
-          importBuffer: (bytes, options) => {
+          importBuffer: async (bytes, options) => {
             usage.executor = "cold_start";
             const types: Readonly<Record<number, string>> = {
               1: "doc",
@@ -84,28 +92,41 @@ export function createDispatcher(
               5: "base",
             };
             usage.unitType = types[options.type] ?? null;
-            return runConversionJob(
-              { kind: "import", bytes, options },
-              credentials,
-              controller.signal,
-            );
+            const release = await jobs.acquire(controller.signal);
+            try {
+              return await runConversionJob(
+                { kind: "import", bytes, options },
+                credentials,
+                controller.signal,
+                undefined,
+                config.EXECUTOR_JOB_HEAP_MB,
+              );
+            } finally {
+              release();
+            }
           },
           exportToBuffer: async (data, options) => {
             usage.executor = "cold_start";
-            return Buffer.from(
-              await runConversionJob(
+            const release = await jobs.acquire(controller.signal);
+            try {
+              const bytes = await runConversionJob(
                 { kind: "export", data, options },
                 credentials,
                 controller.signal,
-              ),
-            );
+                undefined,
+                config.EXECUTOR_JOB_HEAP_MB,
+              );
+              return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+            } finally {
+              release();
+            }
           },
         },
       };
       const deadline = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(
           () => {
-            const error = timeoutError(spec.effect);
+            const error = currentTimeout();
             controller.abort(error);
             setImmediate(() => reject(error));
           },
@@ -129,8 +150,8 @@ export function createDispatcher(
       };
     } catch (error) {
       const translated =
-        controller.signal.aborted && spec.effect === "read"
-          ? timeoutError("read").wire
+        controller.signal.aborted && (spec.effect === "read" || name === "exchange.import")
+          ? currentTimeout().wire
           : mapRuntimeError(error, spec.effect);
       if (translated.outcome === "internal_error")
         logger.error(

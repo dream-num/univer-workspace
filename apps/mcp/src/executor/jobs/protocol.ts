@@ -7,3 +7,7 @@ export interface JobCredentials {
   readonly license: string;
   readonly licenseKey: string;
 }
+
+export type JobRequest =
+  | Extract<ConversionJob, { kind: "import" }>
+  | (Extract<ConversionJob, { kind: "export" }> & JobCredentials);

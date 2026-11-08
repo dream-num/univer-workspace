@@ -65,7 +65,7 @@ export function createExecutor(
       const chunks: Buffer[] = [];
       let size = 0;
       for await (const chunk of request) {
-        const bytes = Buffer.from(chunk);
+        const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += bytes.length;
         if (size > limits.requestBytes) {
           reject(413, "workspace-request-too-large");

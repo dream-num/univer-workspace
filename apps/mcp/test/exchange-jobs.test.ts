@@ -63,7 +63,11 @@ it("forks with an explicit environment and advanced binary serialization, then r
     expect(result["sheetOrder"]).toHaveLength(2);
     expect(JSON.stringify(result)).toContain("=A1*2");
     expect(JSON.stringify(result)).toContain("hello");
-    expect(result["_audit"]).toMatchObject({ connections: 0 });
+    expect(result["_audit"]).toMatchObject({
+      connections: 0,
+      credentialKeys: [],
+      execArgv: ["--max-old-space-size=256"],
+    });
     const audit = z
       .object({ env: z.record(z.string(), z.string()), cwd: z.string() })
       .parse(result["_audit"]);
@@ -79,7 +83,7 @@ it("forks with an explicit environment and advanced binary serialization, then r
   }
 }, 20_000);
 
-it("maps a crashed conversion through the read/write error policy", async () => {
+it("reports a crashed conversion as a tool error before any write", async () => {
   let crashed: unknown;
   try {
     await runConversionJob(
@@ -92,12 +96,12 @@ it("maps a crashed conversion through the read/write error policy", async () => 
     crashed = error;
   }
   expect(mapRuntimeError(crashed, "write")).toMatchObject({
-    code: "workspace-result-unknown",
+    code: "workspace-job-crashed",
     outcome: "tool_error",
   });
   expect(mapRuntimeError(crashed, "read")).toMatchObject({
-    code: "workspace-executor-timeout",
-    outcome: "internal_error",
+    code: "workspace-job-crashed",
+    outcome: "tool_error",
   });
 });
 
@@ -149,6 +153,6 @@ it("round trips docx text through short-lived native conversion jobs", async () 
   );
   expect(imported).toMatchObject({
     body: { dataStream: expect.stringContaining("Office round trip hello") },
-    _audit: { connections: 0 },
+    _audit: { connections: 0, credentialKeys: [], execArgv: ["--max-old-space-size=256"] },
   });
 }, 20_000);

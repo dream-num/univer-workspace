@@ -7,11 +7,17 @@ import type { OpContext } from "../context.js";
 
 const MAX_IMPORT_UNIT_BYTES = 900 * 1024;
 
-export function exchangeFeature(ctx: OpContext) {
+export function exchangeFeature(ctx: OpContext, unitId?: string) {
   const source = ctx.source();
   return new WorkspaceUnitExchangeFeature({
     ...ctx.exchange,
     licenseMode: "per-operation",
+    ...(unitId === undefined
+      ? {}
+      : {
+          importBuffer: (bytes, options) =>
+            ctx.exchange.importBuffer!(bytes, { ...options, unitId }),
+        }),
     runtime: ctx.runtime,
     resolveRuntimeTarget: (input) => source.resolveRuntimeTarget(input),
     resolveImageAsset: (input) => source.resolveImageAsset(input),
@@ -24,6 +30,7 @@ export function exchangeFeature(ctx: OpContext) {
           { size, maxBytes: MAX_IMPORT_UNIT_BYTES },
         );
       ctx.signal.throwIfAborted();
+      ctx.onCreateUnit?.();
       return new WorkspaceUnitFeature(async () => ctx.http()).create(input);
     },
   });

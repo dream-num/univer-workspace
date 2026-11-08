@@ -34,7 +34,7 @@ export const exportTool = executorTool({
   async response({ output, bytes }, args, context) {
     const download = await stagingStore(context).createDownload({
       owner: context.user.id,
-      fileName: `${output.unitId}.${args.format}`,
+      fileName: `${output.name}.${args.format}`,
       mediaType: officeMediaTypes[args.format],
       size: bytes.length,
       content: (async function* () {

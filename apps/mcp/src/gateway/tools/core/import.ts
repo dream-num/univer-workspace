@@ -24,7 +24,7 @@ export const importTool = executorTool({
     type: op.input.shape.type,
     name: z.string().optional(),
     parent: z.string().optional(),
-    idempotency_key: z.string().min(1),
+    idempotency_key: op.input.shape.idempotencyKey,
   }),
   outputSchema: op.output.extend({ url: z.url() }),
   op,

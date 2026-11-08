@@ -82,7 +82,7 @@ it("checks upload ownership and purpose before contacting the executor", async (
           upload_id,
           worktree: "wt",
           space: "space",
-          idempotency_key: "key",
+          idempotency_key: "valid-retry-key-123",
         }),
       ).rejects.toMatchObject({ code });
     expect(fetcher).not.toHaveBeenCalled();
@@ -106,7 +106,7 @@ it("stages executor export bytes with attachment headers and records byte usage"
         encodeFrame(
           {
             ok: true,
-            output: { type: "sheet", unitId: "unit", worktreeId: "wt" },
+            output: { name: "Annual report", type: "sheet", unitId: "unit", worktreeId: "wt" },
             meta: { executor: "cold_start", cost: { ...zeroCost } },
           },
           bytes,
@@ -125,7 +125,7 @@ it("stages executor export bytes with attachment headers and records byte usage"
     expect(response.headers.get("content-type")).toBe(
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     );
-    expect(response.headers.get("content-disposition")).toContain("attachment;");
+    expect(response.headers.get("content-disposition")).toContain("Annual%20report.xlsx");
     expect(response.headers.get("content-security-policy")).toBe("sandbox; default-src 'none'");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
@@ -136,111 +136,114 @@ it("stages executor export bytes with attachment headers and records byte usage"
   }
 });
 
-it.each([undefined, 10])("imports actual binary bytes with optional size upper bound %s and returns CLI fields plus a pull URL", async (size) => {
-  const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
-  const bytes = new Uint8Array([0, 255, 128, 80, 75]);
-  const imported = {
-    committed: true,
-    name: "Imported",
-    nodeId: "node",
-    resourceId: "res",
-    sourcePath: "book.xlsx",
-    type: "sheet",
-    unitId: "unit",
-    worktreeId: "wt",
-  };
-  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
-    const path = new URL(url instanceof Request ? url.url : url.toString()).pathname;
-    if (path === "/rpc/v1/exchange.import") {
-      const frame = decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer()));
-      expect(frame.payload).toEqual(Buffer.from(bytes));
-      expect(frame.header).toMatchObject({
-        input: { idempotencyKey: "retry-key", spaceId: "space", fileName: "book.xlsx" },
+it.each([undefined, 10])(
+  "imports actual binary bytes with optional size upper bound %s and returns CLI fields plus a pull URL",
+  async (size) => {
+    const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+    const bytes = new Uint8Array([0, 255, 128, 80, 75]);
+    const imported = {
+      committed: true,
+      name: "Imported",
+      nodeId: "node",
+      resourceId: "res",
+      sourcePath: "book.xlsx",
+      type: "sheet",
+      unitId: "unit",
+      worktreeId: "wt",
+    };
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+      const path = new URL(url instanceof Request ? url.url : url.toString()).pathname;
+      if (path === "/rpc/v1/exchange.import") {
+        const frame = decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer()));
+        expect(frame.payload).toEqual(Buffer.from(bytes));
+        expect(frame.header).toMatchObject({
+          input: { idempotencyKey: "valid-retry-key-123", spaceId: "space", fileName: "book.xlsx" },
+        });
+        return new Response(
+          new Uint8Array(
+            encodeFrame({
+              ok: true,
+              output: imported,
+              meta: {
+                executor: "cold_start",
+                unitType: "sheet",
+                repo: "space",
+                cost: { ...zeroCost, committed_revisions: 1 },
+              },
+            }),
+          ),
+        );
+      }
+      if (path === "/api/spaces/space")
+        return Response.json({
+          id: "space",
+          name: "Team",
+          type: "team",
+          fullName: "owner/team",
+          slug: "team",
+          owner: { id: "owner", username: "owner" },
+          accessRole: "owner",
+          affiliation: "owner",
+          publicRead: false,
+        });
+      if (path === "/api/worktrees/wt")
+        return Response.json({
+          worktree: {
+            id: "wt",
+            name: "Import",
+            state: "draft",
+            number: 3,
+            summary: null,
+            kind: "team",
+            visibility: "private",
+            teamSpace: { id: "space", name: "Team" },
+            creator: { id: "owner", username: "owner", displayName: "Owner" },
+            createdAt: "2026-11-08T00:00:00Z",
+            updatedAt: "2026-11-08T00:00:00Z",
+            units: [],
+          },
+        });
+      throw new Error(`Unexpected ${path}`);
+    });
+    try {
+      const { upload } = await store.createUpload("owner", {
+        purpose: "office-import",
+        file_name: "book.xlsx",
+        media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ...(size === undefined ? {} : { size }),
       });
-      return new Response(
-        new Uint8Array(
-          encodeFrame({
-            ok: true,
-            output: imported,
-            meta: {
-              executor: "cold_start",
-              unitType: "sheet",
-              repo: "space",
-              cost: { ...zeroCost, committed_revisions: 1 },
-            },
-          }),
-        ),
+      expect(
+        (
+          await store.handle(
+            new Request(upload.upload_url, {
+              method: "PUT",
+              body: bytes,
+              headers: { "content-length": String(bytes.length) },
+            }),
+          )
+        ).status,
+      ).toBe(204);
+      const ctx = context(store);
+      const result = await importTool.run(ctx, {
+        upload_id: upload.upload_id,
+        space: "space",
+        worktree: "wt",
+        idempotency_key: "valid-retry-key-123",
+      });
+      expect(result.output).toEqual({
+        ...imported,
+        url: "http://workspace.test/spaces/space/pulls/3?unit=unit",
+      });
+      expect(importTool.outputSchema.safeParse(result.output).success).toBe(true);
+      expect(ctx.usage?.snapshot()).toMatchObject({
+        cost: { upload_bytes: bytes.length, committed_revisions: 1 },
+      });
+      expect((await store.requireUpload("owner", upload.upload_id, "office-import")).state).toBe(
+        "ready",
       );
+    } finally {
+      fetcher.mockRestore();
+      await store.close();
     }
-    if (path === "/api/spaces/space")
-      return Response.json({
-        id: "space",
-        name: "Team",
-        type: "team",
-        fullName: "owner/team",
-        slug: "team",
-        owner: { id: "owner", username: "owner" },
-        accessRole: "owner",
-        affiliation: "owner",
-        publicRead: false,
-      });
-    if (path === "/api/worktrees/wt")
-      return Response.json({
-        worktree: {
-          id: "wt",
-          name: "Import",
-          state: "draft",
-          number: 3,
-          summary: null,
-          kind: "team",
-          visibility: "private",
-          teamSpace: { id: "space", name: "Team" },
-          creator: { id: "owner", username: "owner", displayName: "Owner" },
-          createdAt: "2026-11-08T00:00:00Z",
-          updatedAt: "2026-11-08T00:00:00Z",
-          units: [],
-        },
-      });
-    throw new Error(`Unexpected ${path}`);
-  });
-  try {
-    const { upload } = await store.createUpload("owner", {
-      purpose: "office-import",
-      file_name: "book.xlsx",
-      media_type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      ...(size === undefined ? {} : { size }),
-    });
-    expect(
-      (
-        await store.handle(
-          new Request(upload.upload_url, {
-            method: "PUT",
-            body: bytes,
-            headers: { "content-length": String(bytes.length) },
-          }),
-        )
-      ).status,
-    ).toBe(204);
-    const ctx = context(store);
-    const result = await importTool.run(ctx, {
-      upload_id: upload.upload_id,
-      space: "space",
-      worktree: "wt",
-      idempotency_key: "retry-key",
-    });
-    expect(result.output).toEqual({
-      ...imported,
-      url: "http://workspace.test/spaces/space/pulls/3?unit=unit",
-    });
-    expect(importTool.outputSchema.safeParse(result.output).success).toBe(true);
-    expect(ctx.usage?.snapshot()).toMatchObject({
-      cost: { upload_bytes: bytes.length, committed_revisions: 1 },
-    });
-    expect((await store.requireUpload("owner", upload.upload_id, "office-import")).state).toBe(
-      "ready",
-    );
-  } finally {
-    fetcher.mockRestore();
-    await store.close();
-  }
-});
+  },
+);
