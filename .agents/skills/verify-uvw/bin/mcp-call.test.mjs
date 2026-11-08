@@ -34,9 +34,13 @@ test('invalid MCP input exits 2 before connecting or writing evidence', () => {
 const source = readFileSync(new URL('./mcp-call.mjs', import.meta.url), 'utf8');
 const validator = source.slice(source.indexOf('\nfunction eventIssues('));
 
-function validateErrorCode(outcome, code, errorCode) {
+function validateErrorCode(outcome, code, errorCode, extra = {}) {
   return runInNewContext(`${validator}\neventIssues(event)`, {
     tool: 'repo_view',
+    args: {},
+    auth: 'dev',
+    patId: null,
+    ...extra.globals,
     protocol: '2026-07-28',
     result: { isError: outcome === 'tool_error', structuredContent: { code } },
     event: {
@@ -65,4 +69,10 @@ for (const code of ['NOT_FOUND', 'workspace-not-found', 'workspace-internal-erro
 test('successful event requires a null error_code', () => {
   assert.equal(validateErrorCode('ok', undefined, null).length, 0);
   assert.ok(validateErrorCode('ok', undefined, 'NOT_FOUND').includes('Unexpected event error_code'));
+});
+
+test('event authentication must match the chosen --auth mode', () => {
+  const globals = { auth: 'pat', patId: 'pat-1' };
+  assert.ok(validateErrorCode('ok', undefined, null, { globals }).includes('Event authentication differs from --auth pat'));
+  assert.ok(validateErrorCode('ok', undefined, null).length === 0);
 });

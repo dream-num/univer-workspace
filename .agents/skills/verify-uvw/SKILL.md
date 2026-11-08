@@ -158,29 +158,35 @@ VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 VERIFY_UVW
 VERIFY_UVW_RUN=b $V doctor
 ```
 
-## MCP gateway, Stage A
+## MCP gateway
 
 On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
 `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
 port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
 
-Run `$V user` to create an independent MCP session and a fresh opencode directory.
+Run `$V user` to create an independent MCP session, a fresh opencode directory and a personal
+access token (PAT). The gateway exchanges the PAT with Workspace (confidential client
+`univer-workspace-mcp-gateway`, created by `up` with a random secret in `home/mcp-oauth-secret`) for a
+short-lived downstream session and scopes. `$V mcp-token [--scopes read,...]` creates another PAT and makes it
+the default; it prints only the PAT id.
 `$V env` exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR`, and
 `MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high`. Sessions, opencode config,
 and the metrics token stay under `home/` with credential files mode 0600.
 
 ```bash
-$V mcp [--protocol 2026-07-28|2025-11-25] [--auth dev|none|invalid] [--toolsets list] <label> <tool> [json]
+$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|dev|none|invalid] [--toolsets list] <label> <tool> [json]
 $V mcp-tools [--protocol version] [--toolsets list] <label>
 $V mcp-resources [--protocol version] [--toolsets list] <label>
 $V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
 $V mcp-instructions [--protocol version] [--toolsets list] <label>
+$V mcp-token [--scopes read,write,...] [--name name]
 $V mcp-logs
 ```
 
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
-object. The default protocol is 2026-07-28 and default authentication is `dev`.
+object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
+to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
 `mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway logs.
 Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
 
@@ -193,7 +199,7 @@ completed call with invalid evidence.
 
 `doctor` checks Docker Desktop, the source digest, container health and image identity,
 port mapping, container configuration and Workspace access, protected metrics, and,
-after `user`, MCP identity and session leakage. Rebuild with `down`, then `up` when
+after `user`, MCP identity, the PAT token exchange, and session, PAT and client-secret leakage. Rebuild with `down`, then `up` when
 inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
 
 `down` saves `logs/mcp-gateway.log`, removes this run's compose containers, networks,

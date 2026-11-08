@@ -36,13 +36,18 @@ const environment = z.object({
   WORKSPACE_TRANSPORT_URL: origin.optional(),
   MCP_PUBLIC_URL: publicUrl,
   METRICS_TOKEN: z.string().optional(),
+  MCP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
+  MCP_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
 export type GatewayConfig = Readonly<
   z.output<typeof environment> & {
     readonly WORKSPACE_TRANSPORT_URL: string;
-    readonly auth: { readonly kind: "dev-session" };
+    readonly auth: {
+      readonly exchange: { readonly clientId: string; readonly clientSecret: string } | null;
+      readonly devSessionPassthrough: boolean;
+    };
   }
 >;
 
@@ -50,15 +55,29 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
   if (env["NODE_ENV"] === "production" && env["MCP_DEV_SESSION_PASSTHROUGH"]) {
     throw new Error("NODE_ENV=production forbids non-empty MCP_DEV_SESSION_PASSTHROUGH");
   }
-  if (env["MCP_DEV_SESSION_PASSTHROUGH"] !== "1") {
-    throw new Error(
-      "Stage A requires MCP_DEV_SESSION_PASSTHROUGH=1; no other authentication mode is implemented",
-    );
+  const passthrough = env["MCP_DEV_SESSION_PASSTHROUGH"] ?? "";
+  if (passthrough !== "" && passthrough !== "1") {
+    throw new Error("MCP_DEV_SESSION_PASSTHROUGH must be 1 when set");
   }
   const config = environment.parse(env);
+  const { MCP_OAUTH_CLIENT_ID: clientId, MCP_OAUTH_CLIENT_SECRET: clientSecret } = config;
+  if ((clientId === undefined) !== (clientSecret === undefined)) {
+    throw new Error("MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET must be set together");
+  }
+  if (clientId === undefined && passthrough === "") {
+    throw new Error(
+      "Configure MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET, or set MCP_DEV_SESSION_PASSTHROUGH=1 for local development",
+    );
+  }
   return Object.freeze({
     ...config,
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,
-    auth: Object.freeze({ kind: "dev-session" }),
+    auth: Object.freeze({
+      exchange:
+        clientId === undefined || clientSecret === undefined
+          ? null
+          : Object.freeze({ clientId, clientSecret }),
+      devSessionPassthrough: passthrough === "1",
+    }),
   });
 }

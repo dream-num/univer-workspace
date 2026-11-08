@@ -432,9 +432,9 @@ describe("configuration boundary", () => {
       ).toThrow(/NODE_ENV.*MCP_DEV_SESSION_PASSTHROUGH/);
     }
   });
-  it("requires development auth, validates URLs and ports, and resolves defaults once", () => {
+  it("requires an authentication mode, validates URLs and ports, and resolves defaults once", () => {
     expect(() => parseGatewayConfig({ ...env, MCP_DEV_SESSION_PASSTHROUGH: "" })).toThrow(
-      /requires MCP_DEV_SESSION_PASSTHROUGH=1/,
+      /MCP_OAUTH_CLIENT_ID.*MCP_DEV_SESSION_PASSTHROUGH/,
     );
     for (const change of [
       { PORT: "0" },
@@ -450,7 +450,7 @@ describe("configuration boundary", () => {
       WORKSPACE_TRANSPORT_URL: identityOrigin,
       PORT: 3000,
       HOST: "127.0.0.1",
-      auth: { kind: "dev-session" },
+      auth: { exchange: null, devSessionPassthrough: true },
     });
     expect(Object.isFrozen(config)).toBe(true);
   });

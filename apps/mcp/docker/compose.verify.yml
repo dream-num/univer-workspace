@@ -6,6 +6,8 @@ services:
       MCP_ROLE: gateway
       NODE_ENV: development
       MCP_DEV_SESSION_PASSTHROUGH: "1"
+      MCP_OAUTH_CLIENT_ID: univer-workspace-mcp-gateway
+      MCP_OAUTH_CLIENT_SECRET: ${VERIFY_UVW_MCP_OAUTH_SECRET:?}
       HOST: 0.0.0.0
       PORT: "3000"
       WORKSPACE_ORIGIN: ${VERIFY_UVW_ORIGIN:?}

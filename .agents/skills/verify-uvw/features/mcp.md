@@ -1,6 +1,6 @@
 # MCP gateway
 
-An agent connects to a disposable Docker gateway with its own Workspace session, reads
+An agent connects to a disposable Docker gateway with a personal access token (PAT) that the gateway exchanges for a short-lived Workspace session, reads
 identity, repositories, Issues, pull requests, files, repository administration, labels, merges, the Facade API reference and the Skills through either MCP protocol, and leaves correlated usage evidence.
 
 ## Sub-features
@@ -48,6 +48,11 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR6 checks the server instructions in the initialize result in both protocols.
 - MR7 reads a long class through `api_show` cursors and compares the pages with the reference library.
 - MR8 rejects a cursor reused with other arguments and an unknown Skill.
+- MA1 calls the gateway with the default personal access token (PAT) and records `auth_kind: pat`.
+- MA2 reads the protected-resource metadata without credentials.
+- MA3 refuses a write tool to a read-only PAT.
+- MA4 revokes a PAT and gets HTTP 401 on the next Workspace-backed call.
+- MA5 keeps development session authentication available with `--auth dev`.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -984,6 +989,77 @@ jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-skills-unknown.out"
 ```
 
 Pass when a cursor reused with other symbols and an unknown Skill both return `workspace-argument-invalid` with exit 1 and a matching usage event, and the CLI also rejects the unknown Skill.
+**MA1. PAT call.** Needs the Team Space from M4. `user` created the default PAT, so every journey above ran with it.
+
+```bash
+$V mcp mcp-pat-whoami whoami
+PAT_ID=$(cat "$RUN/home/mcp-token-id")
+grep -q '^auth=pat$' "$EVIDENCE/mcp-pat-whoami.cmd"
+jq -e --arg id "$PAT_ID" '.auth_kind == "pat" and .client_id == $id and .outcome == "ok"' "$EVIDENCE/mcp-pat-whoami.event.json"
+jq -e '.subject.name != null' "$EVIDENCE/mcp-pat-whoami.out"
+```
+
+Pass when the call exits 0 and the event records `pat` and this PAT's id. The harness already failed
+the call (exit 5) if the gateway log contained the PAT.
+
+**MA2. Protected-resource metadata.**
+
+```bash
+for path in /.well-known/oauth-protected-resource/mcp /.well-known/oauth-protected-resource; do
+  curl -sS -D "$EVIDENCE/mcp-resource-metadata.headers" "${MCP_URL%/mcp}$path" > "$EVIDENCE/mcp-resource-metadata.out"
+  jq -e --arg url "$MCP_URL" --arg origin "$ORIGIN" '.resource == $url and .authorization_servers == [$origin] and .scopes_supported == ["read","write","publish","worktree:merge"] and .bearer_methods_supported == ["header"]' "$EVIDENCE/mcp-resource-metadata.out"
+  grep -qi '^cache-control: public, max-age=300' "$EVIDENCE/mcp-resource-metadata.headers"
+done
+```
+
+Pass when both paths answer without credentials with the document and cache header.
+
+**MA3. Read-only PAT.**
+
+```bash
+$V mcp-token --scopes read > "$EVIDENCE/mcp-token-readonly.id"
+$V mcp mcp-pat-readonly-read repo_list
+$V mcp mcp-pat-readonly-write issue_create "{\"repo\":\"$O/verify-team\",\"title\":\"Read-only PAT must not create this\"}"
+test $? -eq 1
+jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-pat-readonly-write.out"
+jq -e '.auth_kind == "pat" and .outcome == "tool_error" and .error_code == "workspace-scope-required"' "$EVIDENCE/mcp-pat-readonly-write.event.json"
+$V cli mcp-pat-readonly-issues issue list -R "$O/verify-team" -s all --json
+jq -e 'map(.title) | index("Read-only PAT must not create this") == null' "$EVIDENCE/mcp-pat-readonly-issues.out"
+```
+
+Pass when the read call exits 0, the write call exits 1 with `workspace-scope-required`, and no such Issue
+exists. The read-only PAT is now the default for later `mcp` calls; MA4 replaces it.
+
+**MA4. Revocation.**
+
+```bash
+$V mcp-token > "$EVIDENCE/mcp-token-revoke.id"
+PAT_ID=$(cat "$RUN/home/mcp-token-id")
+$V mcp mcp-pat-before-revoke repo_list
+curl -sS -o /dev/null -w '%{http_code}\n' -X DELETE -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" \
+  -H "Origin: $ORIGIN" "$ORIGIN/api/auth/tokens/$PAT_ID" > "$EVIDENCE/mcp-pat-revoke.status"
+grep -Eq '^(200|204)$' "$EVIDENCE/mcp-pat-revoke.status"
+$V mcp mcp-pat-after-revoke repo_list
+test $? -eq 4
+jq -e '.status == 401 and (.www_authenticate | contains("resource_metadata"))' "$EVIDENCE/mcp-pat-after-revoke.out"
+$V mcp mcp-pat-after-revoke-again repo_list
+test $? -eq 4
+$V mcp-token > "$EVIDENCE/mcp-token-restored.id"
+```
+
+Pass when the call before revocation exits 0, the revoke answers 200 or 204, and the first Workspace-backed
+call afterwards exits 4 with HTTP 401 (the revoked session fails downstream, which evicts the cache), as does the
+next one (the exchange now answers `invalid_grant`). Use a tool that reaches Workspace: the gateway serves
+`whoami` from its 30-second exchange cache. The last command restores a working default PAT.
+
+**MA5. Development session.**
+
+```bash
+$V mcp --auth dev mcp-dev-whoami whoami
+jq -e '.auth_kind == "dev" and .client_id == "dev" and .outcome == "ok"' "$EVIDENCE/mcp-dev-whoami.event.json"
+```
+
+Pass when the call exits 0 and the event records `dev`.
 
 **M12. Cleanup.**
 

@@ -1,0 +1,310 @@
+import { once } from "node:events";
+import { createServer, type Server } from "node:http";
+import { Writable } from "node:stream";
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { pino } from "pino";
+import { afterEach, describe, expect, it } from "vitest";
+import { createGateway } from "../src/gateway/server.js";
+import { parseGatewayConfig } from "../src/shared/config.js";
+
+const identityOrigin = "https://workspace.example";
+const clientSecret = "gateway-client-secret-do-not-log";
+const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string; clientId: string | null }> = {
+  uvw_pat_full: { scope: "read write publish worktree:merge nope", kind: "pat", id: "pat-1", clientId: null },
+  uvw_pat_readonly: { scope: "read", kind: "pat", id: "pat-2", clientId: null },
+  uvw_at_oauth: { scope: "read write", kind: "oauth", id: "grant-1", clientId: "chatgpt" },
+};
+
+async function listen(server: Server, port = 0): Promise<string> {
+  server.listen(port, "127.0.0.1");
+  await once(server, "listening");
+  const address = server.address();
+  if (address === null || typeof address === "string") throw new Error("Expected TCP server");
+  return `http://127.0.0.1:${address.port}`;
+}
+async function close(server: Server): Promise<void> {
+  server.closeAllConnections();
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+}
+
+describe("gateway authentication", () => {
+  const cleanup: (() => Promise<void>)[] = [];
+  afterEach(async () => {
+    await Promise.all(cleanup.splice(0).map((task) => task()));
+  });
+
+  async function start(
+    env: Record<string, string>,
+    behavior: { exchangeStatus?: number; exchangeBody?: object; expireDownstream?: () => boolean } = {},
+  ) {
+    const exchanges: URLSearchParams[] = [];
+    const productCookies: (string | undefined)[] = [];
+    let logs = "";
+    let issued = 0;
+    const workspace = createServer((request, response) => {
+      const path = new URL(request.url ?? "/", "http://localhost").pathname;
+      response.setHeader("Content-Type", "application/json");
+      if (path === "/api/auth/token") {
+        let body = "";
+        request.on("data", (chunk) => (body += chunk));
+        request.on("end", () => {
+          const form = new URLSearchParams(body);
+          exchanges.push(form);
+          const token = tokens[form.get("subject_token") ?? ""];
+          if (behavior.exchangeStatus !== undefined) {
+            response.writeHead(behavior.exchangeStatus).end(JSON.stringify(behavior.exchangeBody ?? {}));
+          } else if (!token) {
+            response.writeHead(400).end(JSON.stringify({ error: "invalid_grant" }));
+          } else {
+            response.end(
+              JSON.stringify({
+                access_token: `downstream-session-${++issued}`,
+                issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                token_type: "N_A",
+                expires_in: 600,
+                scope: token.scope,
+                subject: { kind: token.kind, id: token.id, client_id: token.clientId },
+                user: { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null },
+              }),
+            );
+          }
+        });
+        return;
+      }
+      productCookies.push(request.headers.cookie);
+      if (behavior.expireDownstream?.() && path !== "/api/session") {
+        response.writeHead(401).end("{}");
+      } else if (request.headers.cookie === "workspace_session=dev-session" && path === "/api/session") {
+        response.end(JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "alice" } }));
+      } else if (path === "/api/spaces") {
+        response.end(JSON.stringify({ spaces: [] }));
+      } else {
+        response.end(JSON.stringify({ authenticated: false }));
+      }
+    });
+    const transport = await listen(workspace);
+    const probe = createServer();
+    const origin = await listen(probe);
+    await close(probe);
+    const url = `${origin}/mcp`;
+    const gateway = createGateway(
+      parseGatewayConfig({
+        WORKSPACE_ORIGIN: identityOrigin,
+        WORKSPACE_TRANSPORT_URL: transport,
+        MCP_PUBLIC_URL: url,
+        ...env,
+      }),
+      {
+        logger: pino(
+          {},
+          new Writable({
+            write(chunk, _encoding, callback) {
+              logs += chunk.toString();
+              callback();
+            },
+          }),
+        ),
+      },
+    );
+    await listen(gateway.server, Number(new URL(origin).port));
+    const clients: Client[] = [];
+    cleanup.push(async () => {
+      await Promise.all(clients.map((client) => client.close()));
+      await gateway.close();
+      await close(gateway.server);
+      await close(workspace);
+      for (const secret of [...Object.keys(tokens), clientSecret]) expect(logs).not.toContain(secret);
+      expect(logs).not.toContain("downstream-session-");
+    });
+    async function connect(bearer: string, suffix = "") {
+      const client = new Client({ name: "auth-test", version: "1" }, { versionNegotiation: { mode: { pin: "2026-07-28" } } });
+      clients.push(client);
+      await client.connect(
+        new StreamableHTTPClientTransport(new URL(url + suffix), {
+          requestInit: { headers: { Authorization: `Bearer ${bearer}` } },
+        }),
+      );
+      return client;
+    }
+    const post = (bearer: string) =>
+      fetch(url, {
+        method: "POST",
+        headers: { authorization: `Bearer ${bearer}`, "content-type": "application/json", accept: "application/json, text/event-stream" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "ping" }),
+      });
+    const events = () =>
+      logs
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as Record<string, unknown>)
+        .filter((line) => line["event"] === "mcp.tool_call");
+    return { url, origin, exchanges, productCookies, connect, post, events, logs: () => logs };
+  }
+
+  const exchangeEnv = { MCP_OAUTH_CLIENT_ID: "univer-workspace-mcp-gateway", MCP_OAUTH_CLIENT_SECRET: clientSecret };
+
+  it("exchanges a PAT, sends only the downstream session to product APIs and records pat in the event", async () => {
+    const gateway = await start(exchangeEnv);
+    const client = await gateway.connect("uvw_pat_full");
+    expect((await client.callTool({ name: "whoami", arguments: {} })).structuredContent).toEqual({
+      origin: identityOrigin,
+      subject: { id: "user-1", name: "alice" },
+    });
+    await client.callTool({ name: "repo_list", arguments: {} });
+    const form = gateway.exchanges[0]!;
+    expect(Object.fromEntries(form)).toEqual({
+      grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+      subject_token: "uvw_pat_full",
+      subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+      resource: gateway.url,
+      client_id: "univer-workspace-mcp-gateway",
+      client_secret: clientSecret,
+    });
+    expect(gateway.productCookies).toEqual(["workspace_session=downstream-session-1"]);
+    expect(gateway.events()).toMatchObject([
+      { auth_kind: "pat", client_id: "pat-1", user_id: "user-1", outcome: "ok" },
+      { auth_kind: "pat", client_id: "pat-1", tool: "repo_list", outcome: "ok" },
+    ]);
+  });
+
+  it("reports the OAuth client for an access token and labels metrics by auth kind", async () => {
+    const gateway = await start({ ...exchangeEnv, METRICS_TOKEN: "metrics-secret" });
+    await (await gateway.connect("uvw_at_oauth")).callTool({ name: "whoami", arguments: {} });
+    expect(gateway.events()).toMatchObject([{ auth_kind: "oauth", client_id: "chatgpt" }]);
+    const write = await (await gateway.connect("uvw_at_oauth", "?toolsets=admin")).callTool({
+      name: "pr_merge",
+      arguments: { repo: "a/b", number: 1 },
+    });
+    expect(write.structuredContent).toMatchObject({ code: "workspace-scope-required" });
+    const metrics = await fetch(gateway.origin + "/metrics", { headers: { Authorization: "Bearer metrics-secret" } });
+    expect(await metrics.text()).toContain('mcp_tool_calls_total{tool="whoami",client="oauth",outcome="ok"} 1');
+  });
+
+  it("exchanges once for repeated calls with the same bearer", async () => {
+    const gateway = await start(exchangeEnv);
+    const client = await gateway.connect("uvw_pat_full");
+    await client.callTool({ name: "whoami", arguments: {} });
+    await client.callTool({ name: "whoami", arguments: {} });
+    expect(gateway.exchanges).toHaveLength(1);
+  });
+
+  it("answers invalid_grant with HTTP 401 and the metadata challenge", async () => {
+    const gateway = await start(exchangeEnv);
+    for (const bearer of ["uvw_pat_unknown", "uvw_at_unknown"]) {
+      const response = await gateway.post(bearer);
+      expect(response.status).toBe(401);
+      expect(response.headers.get("www-authenticate")).toBe(
+        `Bearer resource_metadata="${gateway.origin}/.well-known/oauth-protected-resource/mcp"`,
+      );
+    }
+    expect(gateway.productCookies).toEqual([]);
+  });
+
+  it("refuses a write tool for a read-only PAT", async () => {
+    const gateway = await start(exchangeEnv);
+    const result = await (await gateway.connect("uvw_pat_readonly")).callTool({
+      name: "issue_create",
+      arguments: { repo: "a/b", title: "t" },
+    });
+    expect(result).toMatchObject({ isError: true, structuredContent: { code: "workspace-scope-required" } });
+    expect(gateway.events()).toMatchObject([{ outcome: "tool_error", error_code: "workspace-scope-required" }]);
+    expect(gateway.productCookies).toEqual([]);
+  });
+
+  it("evicts the cached session when Workspace rejects it during a tool call", async () => {
+    let expired = false;
+    const gateway = await start(exchangeEnv, { expireDownstream: () => expired });
+    const client = await gateway.connect("uvw_pat_full");
+    await client.callTool({ name: "whoami", arguments: {} });
+    expired = true;
+    await expect(client.callTool({ name: "repo_list", arguments: {} })).rejects.toThrow();
+    expect(gateway.events().at(-1)).toMatchObject({ outcome: "auth_error" });
+    expired = false;
+    await client.callTool({ name: "repo_list", arguments: {} });
+    expect(gateway.exchanges).toHaveLength(2);
+    expect(gateway.productCookies.at(-1)).toBe("workspace_session=downstream-session-2");
+  });
+
+  it.each([
+    ["invalid_client", 401],
+    ["unauthorized_client", 400],
+    ["invalid_request", 400],
+  ])("answers a %s exchange failure with HTTP 500 and no credential in the log", async (error, status) => {
+    const gateway = await start(exchangeEnv, { exchangeStatus: status, exchangeBody: { error } });
+    expect((await gateway.post("uvw_pat_full")).status).toBe(500);
+    expect(gateway.logs()).toContain("Token exchange failed");
+    expect(gateway.logs()).toContain(error);
+  });
+
+  it("answers an unreachable Workspace with HTTP 500", async () => {
+    const gateway = await start({
+      ...exchangeEnv,
+      WORKSPACE_TRANSPORT_URL: "http://127.0.0.1:1",
+    });
+    expect((await gateway.post("uvw_pat_full")).status).toBe(500);
+    expect(gateway.logs()).toContain("Token exchange could not reach Workspace");
+  });
+
+  it("keeps development passthrough for non-token bearers when enabled", async () => {
+    const gateway = await start({ ...exchangeEnv, MCP_DEV_SESSION_PASSTHROUGH: "1" });
+    await (await gateway.connect("dev-session")).callTool({ name: "whoami", arguments: {} });
+    expect(gateway.events()).toMatchObject([{ auth_kind: "dev", client_id: "dev" }]);
+    expect(gateway.exchanges).toHaveLength(0);
+    await (await gateway.connect("uvw_pat_full")).callTool({ name: "whoami", arguments: {} });
+    expect(gateway.exchanges).toHaveLength(1);
+  });
+
+  it("refuses non-token bearers when passthrough is disabled", async () => {
+    const gateway = await start(exchangeEnv);
+    expect((await gateway.post("dev-session")).status).toBe(401);
+    expect(gateway.productCookies).toEqual([]);
+  });
+
+  it("never forwards a Workspace token as a session when exchange is not configured", async () => {
+    const gateway = await start({ MCP_DEV_SESSION_PASSTHROUGH: "1" });
+    expect((await gateway.post("uvw_pat_full")).status).toBe(401);
+    expect(gateway.productCookies).toEqual([]);
+  });
+
+  it("serves protected-resource metadata without authentication", async () => {
+    const gateway = await start(exchangeEnv);
+    for (const path of ["/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource"]) {
+      const response = await fetch(gateway.origin + path);
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("public, max-age=300");
+      expect(await response.json()).toEqual({
+        resource: gateway.url,
+        authorization_servers: [identityOrigin],
+        scopes_supported: ["read", "write", "publish", "worktree:merge"],
+        bearer_methods_supported: ["header"],
+      });
+    }
+  });
+});
+
+describe("authentication configuration", () => {
+  const base = { WORKSPACE_ORIGIN: identityOrigin, MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp" };
+  it("requires the client id and secret together and at least one mode", () => {
+    expect(() => parseGatewayConfig({ ...base, MCP_OAUTH_CLIENT_ID: "id" })).toThrow(/together/);
+    expect(() => parseGatewayConfig({ ...base, MCP_OAUTH_CLIENT_SECRET: "secret" })).toThrow(/together/);
+    expect(() => parseGatewayConfig(base)).toThrow(/MCP_OAUTH_CLIENT_ID.*MCP_DEV_SESSION_PASSTHROUGH/);
+    expect(() => parseGatewayConfig({ ...base, MCP_DEV_SESSION_PASSTHROUGH: "yes" })).toThrow(/must be 1/);
+  });
+  it("accepts exchange alone, passthrough alone, or both, and refuses passthrough in production", () => {
+    const exchange = { MCP_OAUTH_CLIENT_ID: "id", MCP_OAUTH_CLIENT_SECRET: "secret" };
+    expect(parseGatewayConfig({ ...base, ...exchange, NODE_ENV: "production" }).auth).toEqual({
+      exchange: { clientId: "id", clientSecret: "secret" },
+      devSessionPassthrough: false,
+    });
+    expect(parseGatewayConfig({ ...base, MCP_DEV_SESSION_PASSTHROUGH: "1" }).auth).toEqual({
+      exchange: null,
+      devSessionPassthrough: true,
+    });
+    expect(parseGatewayConfig({ ...base, ...exchange, MCP_DEV_SESSION_PASSTHROUGH: "1" }).auth.devSessionPassthrough).toBe(true);
+    expect(() =>
+      parseGatewayConfig({ ...base, ...exchange, MCP_DEV_SESSION_PASSTHROUGH: "1", NODE_ENV: "production" }),
+    ).toThrow(/NODE_ENV.*MCP_DEV_SESSION_PASSTHROUGH/);
+  });
+});

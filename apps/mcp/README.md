@@ -15,11 +15,27 @@ One image selects its role through `MCP_ROLE`. `gateway` serves requests.
 `executor` and `renderer` print that they are not implemented in Stage A and exit 1.
 A missing or unknown role exits 1 and lists the valid roles.
 
-Stage A supports development session passthrough only. The bearer value is a Workspace
-session, checked through Client Core `whoami` on every MCP request. There is no OAuth
-or PAT support yet. Production rejects any non-empty `MCP_DEV_SESSION_PASSTHROUGH`.
-Use Stage A only locally or in internal single-user environments until Stage G passes.
-Development authentication must never appear in SaaS configuration.
+## Authentication
+
+The gateway never forwards the caller's bearer to Workspace product APIs. A bearer starting with
+`uvw_pat_` (personal access token) or `uvw_at_` (MCP OAuth access token) is exchanged with Workspace
+(`POST /api/auth/token`, RFC 8693) as the confidential client `MCP_OAUTH_CLIENT_ID`. The response
+carries a short-lived downstream session, the user and the granted scopes. Product requests send only
+that session. The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
+never beyond the session's `expires_in` minus 5 seconds), so revoking a token takes effect within that window or
+at the first downstream 401, which evicts the entry.
+
+| Outcome of the exchange | Gateway response |
+| --- | --- |
+| Success | The request proceeds with the exchanged scopes. The usage event records `auth_kind` `pat` or `oauth` |
+| `invalid_grant` (unknown, expired, revoked or mismatched token) | HTTP 401 with the `WWW-Authenticate` challenge |
+| `invalid_client`, `unauthorized_client`, any other failure, or Workspace unreachable | HTTP 500 and an error log without credentials |
+
+With `MCP_DEV_SESSION_PASSTHROUGH=1`, any other bearer is treated as a Workspace session, checked through
+Client Core `whoami` on every request, with every scope (`auth_kind` `dev`). A `uvw_pat_` or `uvw_at_` bearer is
+never used as a session: without exchange configuration it gets HTTP 401. Production rejects any non-empty
+`MCP_DEV_SESSION_PASSTHROUGH`. Development authentication must never appear in SaaS configuration.
+Until Stage G passes, use the gateway only locally or in internal single-user environments.
 
 ## Configuration
 
@@ -34,7 +50,8 @@ The gateway validates configuration before listening and retains a readonly conf
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
 | `MCP_PUBLIC_URL` | Required | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
-| `MCP_DEV_SESSION_PASSTHROUGH` | Required as `1` | Enables development session authentication |
+| `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
+| `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
 | `LOG_LEVEL` | `info` | Pino level, including `debug`, `warn`, `error`, `fatal`, `trace`, and `silent` |
 
@@ -48,6 +65,7 @@ Docker Desktop without changing those identities.
 | --- | --- |
 | `GET /healthz` | Returns 200 without contacting Workspace |
 | `GET /metrics` | Prometheus text with a matching bearer token. Returns 404 when unset, or 401 with `WWW-Authenticate: Bearer` on mismatch |
+| `GET /.well-known/oauth-protected-resource` and `/mcp` suffix | RFC 9728 metadata `{ resource: MCP_PUBLIC_URL, authorization_servers: [WORKSPACE_ORIGIN], scopes_supported, bearer_methods_supported }`. No authentication, `Cache-Control: public, max-age=300` |
 | `/mcp` | MCP Streamable HTTP. Validates Host, optional Origin, bearer authentication, and toolset selection before SDK dispatch |
 | Other paths | Returns 404 |
 
@@ -130,15 +148,14 @@ Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `iss
 `search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `blob_get` and `label_list`; `write` for the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
-true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. Development passthrough grants all
-scopes; a connection without the scope gets the tool error `workspace-scope-required`.
+true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
+names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
 `workspace-result-unknown`. Tool failures preserve Client Core's
 `{ code, message, detail }` in `structuredContent` and set `isError: true`.
 Authentication failures return HTTP 401 and
 `WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`.
-The metadata endpoint itself is reserved for Stage F.
 
 Requests may provide `x-request-id` matching `^[a-zA-Z0-9._-]{1,128}$`.
 The gateway generates a UUID otherwise, echoes it, and forwards it to every Workspace request.
@@ -160,7 +177,8 @@ The version 1 event has these fields:
 | `request_id` | Non-empty correlation ID |
 | `trace_id` | Request `_meta.traceparent`, or null |
 | `user_id` | Authenticated Workspace user ID |
-| `auth_kind`, `client_id` | `"dev"` in Stage A |
+| `auth_kind` | `"pat"`, `"oauth"` or `"dev"` |
+| `client_id` | The PAT ID for `pat`, the OAuth `client_id` for `oauth`, `"dev"` for `dev` |
 | `client_name`, `client_version` | Request clientInfo in 2026-07-28. Both null in stateless 2025-11-25 |
 | `tool`, `toolset` | Tool name and group. Unknown tools use `unknown` and `core` |
 | `repo` | Resolved Space ID for repository-scoped tools, otherwise null |
@@ -175,7 +193,7 @@ Only `trace_id`, `client_name`, `client_version`, `repo`, `unit_type`, and `erro
 can be null. Requests rejected before tool dispatch do not emit a usage event.
 The gateway owns an isolated Prometheus registry with
 `mcp_tool_calls_total{tool,client,outcome}` and `mcp_tool_duration_seconds{tool}`.
-Stage A uses the bounded client label `dev` and the tool label `unknown` for unregistered names.
+The `client` label is the `auth_kind` (`pat`, `oauth` or `dev`), never an ID. Unregistered tools use the tool label `unknown`.
 
 ## Build and run locally
 
@@ -195,14 +213,15 @@ For Docker Desktop, start a development gateway against an existing Workspace se
 ```bash
 docker run --rm -p 127.0.0.1:3930:3000 \
   -e MCP_ROLE=gateway -e NODE_ENV=development -e MCP_DEV_SESSION_PASSTHROUGH=1 \
+  -e MCP_OAUTH_CLIENT_ID=univer-workspace-mcp-gateway -e MCP_OAUTH_CLIENT_SECRET=<secret> \
   -e WORKSPACE_ORIGIN=http://127.0.0.1:5973 \
   -e WORKSPACE_TRANSPORT_URL=http://host.docker.internal:3920 \
   -e MCP_PUBLIC_URL=http://127.0.0.1:3930/mcp \
   univer-workspace-mcp:local
 ```
 
-Connect your MCP client to `http://127.0.0.1:3930/mcp` with a development Workspace
-session as its bearer token. The image runs as `node` and declares no persistent volume.
+Connect your MCP client to `http://127.0.0.1:3930/mcp` with a personal access token as its bearer
+token, or with a development Workspace session when passthrough is enabled. The image runs as `node` and declares no persistent volume.
 `docker/compose.verify.yml` is reserved for the local verification bench. Its variables
 are all required, as specified in [local verification](../../docs/design/workspace-mcp/local-verification.zh-CN.md).
 
