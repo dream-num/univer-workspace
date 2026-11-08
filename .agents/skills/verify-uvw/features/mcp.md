@@ -1891,11 +1891,28 @@ unset VERIFY_UVW_RUN
 V=.agents/skills/verify-uvw/bin/verify-uvw
 VERIFY_UVW_MCP=1 $V up && $V user && $V doctor
 eval "$($V env)"
+export EVIDENCE="$VERIFY_UVW_ROOT/$VERIFY_UVW_RUN/evidence"
+mkdir -p "$EVIDENCE"
 node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help
 node .agents/skills/verify-uvw/bin/mcp-bench.mjs --self-test
 node .agents/skills/verify-uvw/bin/mcp-bench.mjs --output "$EVIDENCE/mcp-bench.json" > "$EVIDENCE/mcp-bench.stdout.json"
 node .agents/skills/verify-uvw/bin/mcp-bench.mjs --scenario profile --output "$EVIDENCE/mcp-bench-profile.json" > "$EVIDENCE/mcp-bench-profile.stdout.json"
+python3 .agents/skills/verify-uvw/bin/mcp-bench-summary.py "$EVIDENCE/mcp-bench.json" > "$EVIDENCE/mcp-bench-summary.json"
+python3 .agents/skills/verify-uvw/bin/mcp-bench-summary.py "$EVIDENCE/mcp-bench.json" --markdown > "$EVIDENCE/mcp-bench-tables.md"
 $V down
+```
+
+The Python 3 summarizer preserves the original statistics implementation. Its
+`--markdown` output reproduces the five measurement and memory-budget tables in
+[architecture sections 3.3 and 6.2](../../../../docs/design/workspace-mcp/architecture.zh-CN.md#33-mcp-会给-workspace-server-带来的压力)
+from a complete baseline JSON. Counts are pooled, rate medians and ranges use the
+five runs, p95 uses nearest rank, and display rounding happens only in Markdown.
+The memory margin, job reserve, and recommended counts are planning assumptions.
+Summarize an existing run without starting Docker or verify-uvw:
+
+```bash
+export EVIDENCE=.poteto-agent/cx-d8-measure
+python3 .agents/skills/verify-uvw/bin/mcp-bench-summary.py "$EVIDENCE/bench-repeat.json" --markdown
 ```
 
 The default run inspects ten distinct cold Units, then makes fifty warm inspections
@@ -1910,6 +1927,8 @@ The script waits up to an hour before each run if another verify stack is active
 the host's one-minute load exceeds half its logical CPU count. It records every check.
 Competing-stack waits poll every two minutes. Host-only load waits poll every ten seconds.
 It stops increasing writer concurrency on any error or a fivefold increase in p95.
+Concurrency steps run in order, not interleaved. Record the accepted preflight
+loads with any comparison; the quiet threshold does not remove background drift.
 `--scenario`, `--seconds`, `--repeats`, and `--writers` support calibration runs.
 Read the JSON's failure field and error counts before interpreting its rates.
 
