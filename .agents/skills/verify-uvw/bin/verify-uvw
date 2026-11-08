@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-logs | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-logs | renderer-call <label> <op> | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -112,6 +112,7 @@ mcp_up() {
 
 mcp_doctor() {
   node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "${MCP_EXECUTORS:-1}" || bad "MCP executor checks failed"
+  node "$REPO/.agents/skills/verify-uvw/bin/renderer-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP renderer checks failed"
   if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
     ok "MCP staging directory is private and owned by the gateway uid"
   else bad "MCP staging directory is missing or unsafe"; fi
@@ -209,6 +210,7 @@ JS
 mcp_down() {
   mcp_compose logs --no-color --timestamps gateway >"$RUN/logs/mcp-gateway.log" 2>&1 || echo "warning: cannot save MCP logs" >&2
   mcp_compose logs --no-color --timestamps executor executor-b >"$RUN/logs/mcp-executor.log" 2>&1 || echo "warning: cannot save executor logs" >&2
+  mcp_compose logs --no-color --timestamps renderer >"$RUN/logs/mcp-renderer.log" 2>&1 || echo "warning: cannot save renderer logs" >&2
   mcp_compose down --volumes --remove-orphans || echo "warning: MCP compose down failed; retry down" >&2
   if docker image inspect "$MCP_IMAGE" >/dev/null 2>&1; then
     docker image rm "$MCP_IMAGE" || echo "warning: cannot remove MCP image $MCP_IMAGE" >&2
@@ -236,6 +238,15 @@ cmd_mcp() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
   mcp_client "$@"
+}
+
+cmd_renderer_call() { # label op, with the operation input as JSON on stdin
+  [[ $# -eq 2 && "$1" =~ ^[A-Za-z0-9._-]{1,64}$ && "$2" =~ ^(screenshot|printPdf|lint|measureText)$ ]] || die "usage: verify-uvw renderer-call <label> screenshot|printPdf|lint|measureText < input.json"
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  local base="$RUN/evidence/$1" bin="$REPO/.agents/skills/verify-uvw/bin"
+  printf 'renderer-call %s\n' "$2" >"$base.cmd"
+  mcp_compose exec -T executor node --input-type=module -e "$(cat "$bin/renderer-call.mjs")" "$2" | node "$bin/renderer-save.mjs" "$base"
 }
 
 cmd_mcp_token() {
@@ -448,7 +459,8 @@ case "${1:-}" in
   mcp-resource) shift; cmd_mcp resource "$@" ;;
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;
   mcp-token) shift; cmd_mcp_token "$@" ;;
-  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b ;;
+  renderer-call) shift; cmd_renderer_call "$@" ;;
+  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b renderer ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;
 esac
