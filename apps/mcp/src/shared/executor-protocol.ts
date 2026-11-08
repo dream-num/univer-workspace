@@ -32,6 +32,7 @@ export interface OpSpec<
   effectFor?(input: z.output<I>): OpEffect;
   readonly payload: P;
   readonly rerun: readonly ("revision" | "auth")[];
+  queueFor?(input: z.output<I>): boolean;
   readonly limits: {
     readonly requestBytes: number;
     readonly responseBytes: number;
@@ -188,9 +189,7 @@ export const typstCompileInput = z
       if (input.worktreeId === undefined || input.spaceId === undefined)
         ctx.addIssue({ code: "custom", message: "apply requires worktree and space." });
     } else if (
-      [input.worktreeId, input.spaceId, input.parentNodeId].some(
-        (value) => value !== undefined,
-      )
+      [input.worktreeId, input.spaceId, input.parentNodeId].some((value) => value !== undefined)
     ) {
       ctx.addIssue({ code: "custom", message: "Workspace target options require apply: true." });
     }
@@ -323,6 +322,7 @@ export const opSpecs = {
     effectFor: (input) => (input.apply === true ? "write" : "read"),
     payload: "request",
     rerun: ["auth"],
+    queueFor: (input) => input.apply === true,
     limits: { requestBytes: 64 * MiB, responseBytes: 8 * MiB, budgetMs: 30_000 },
     input: svgCompileInput,
     output: svgCompileOutput,
@@ -378,6 +378,7 @@ export const opSpecs = {
     route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
   }),
   "content.execute": defineOp({
+    queueFor: () => true,
     name: "content.execute",
     effect: "write",
     payload: "none",
@@ -394,6 +395,7 @@ export const opSpecs = {
     route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
   }),
   "content.inspect": defineOp({
+    queueFor: () => true,
     name: "content.inspect",
     effect: "read",
     payload: "none",

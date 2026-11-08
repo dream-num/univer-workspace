@@ -21,6 +21,7 @@ export const markdownExport: Handler<"markdown.export"> = (ctx, input) =>
         throw workspaceError(
           "workspace-markdown-asset-unavailable",
           "Export contains an unresolved asset.",
+          { retryable: true },
         );
       const bytes = Buffer.from(asset.data, asset.encoding === "base64" ? "base64" : "utf8");
       if (bytes.length > 20_000_000 || offset + bytes.length > 50 * 1024 * 1024)

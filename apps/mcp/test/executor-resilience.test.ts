@@ -726,3 +726,53 @@ describe("executor reruns with a real worker", () => {
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
 });
+
+it("queues SVG apply behind execute while compile-only bypasses the Unit FIFO", async () => {
+  const instance = runtime();
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+  let release = () => {};
+  const held = new Promise<void>((resolve) => { release = resolve; });
+  let entered = () => {};
+  const started = new Promise<void>((resolve) => { entered = resolve; });
+  const order: string[] = [];
+  const write = vi.spyOn(handlers, "content.execute").mockImplementation(async () => {
+    entered(); await held; order.push("execute");
+    return { output: { committed: true, revision: 8 } };
+  });
+  const svg = vi.spyOn(handlers, "svg.compile").mockImplementation(async (_ctx, input) => {
+    order.push(input.apply ? "apply" : "compile");
+    return { output: { code: "", lints: [], warnings: [], mode: "replace", textMeasure: "estimate", viewport: { width: 10, height: 10 } } };
+  });
+  try {
+    const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+    const pending = dispatch("content.execute", header({ worktreeId: "wt", unitId: target.unitId, code: "write" }), new Uint8Array());
+    await started;
+    const input = { svg: "<svg/>", estimateTextSize: true, apply: true, page: 1, worktreeId: "wt", unitId: target.unitId };
+    const applied = dispatch("svg.compile", header(input), new Uint8Array());
+    expect((await dispatch("svg.compile", header({ svg: "<svg/>", estimateTextSize: true }), new Uint8Array())).header.ok).toBe(true);
+    expect(order).toEqual(["compile"]);
+    release();
+    expect((await pending).header.ok).toBe(true);
+    expect((await applied).header.ok).toBe(true);
+    expect(order).toEqual(["compile", "execute", "apply"]);
+  } finally {
+    release(); await instance.close(); write.mockRestore(); svg.mockRestore(); fetcher.mockRestore();
+  }
+});
+
+it("keeps a missing Sheet publish failure and pre-upload deadline out of result-unknown", async () => {
+  const instance = runtime();
+  const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => String(url).endsWith("/api/session") ? identity() : Response.json({ error: { code: "NOT_FOUND", message: "Sheet not found" } }, { status: 404 }));
+  try {
+    const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+    const input = { html: '<output data-univer-cell-text="missing:budget:B2"></output>', spaceId: "space", name: "View", idempotencyKey: "html-missing-123456" };
+    expect((await dispatch("htmlView.create", header(input), new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    const handler = vi.spyOn(handlers, "htmlView.create").mockImplementation(async (ctx) => {
+      await new Promise<never>((_resolve, reject) => ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true }));
+      throw new Error("unreachable");
+    });
+    try {
+      expect((await dispatch("htmlView.create", { ...header(input), deadlineMs: 50 }, new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "workspace-executor-timeout", detail: { retryable: true, started: false } } });
+    } finally { handler.mockRestore(); }
+  } finally { await instance.close(); fetcher.mockRestore(); }
+});

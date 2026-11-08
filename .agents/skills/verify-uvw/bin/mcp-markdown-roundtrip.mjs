@@ -78,6 +78,8 @@ for (const asset of exported.assets) {
 }
 const updated = mcp('update', 'compile_markdown', { markdown: ':::block{#heading}\n# Updated Markdown report\n:::\n', apply: true, worktree, unit: compiled.targetUnitId, source_map: exported.sourceMap, blocks: ['heading'] });
 assert.equal(updated.committed, true);
+const updateEvent = JSON.parse(readFileSync(join(evidence, `${prefix}-update.event.json`), 'utf8'));
+assert.equal(updateEvent.repo, space);
 assert(updated.execution.revision > 1);
 const after = mcp('inspect-after', 'inspect', { worktree, unit: compiled.targetUnitId, target: 'document' });
 assert.match(JSON.stringify(after), /Updated Markdown report/);

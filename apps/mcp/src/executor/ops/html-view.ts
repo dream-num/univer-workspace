@@ -5,7 +5,13 @@ import type { Handler, OpContext } from "../context.js";
 
 function htmlViewFeature(ctx: OpContext) {
   return new WorkspaceHtmlViewFeature({
-    blobs: new WorkspaceBlobFeature(async () => ctx.http()),
+    blobs: {
+      uploadBytes: async (input) => {
+        ctx.signal.throwIfAborted();
+        ctx.onCreateUnit?.();
+        return await new WorkspaceBlobFeature(async () => ctx.http()).uploadBytes(input);
+      },
+    },
     runtime: ctx.runtime,
     resolveTrunkRuntimeTarget: (input) => ctx.source().resolveTrunkRuntimeTarget(input),
     configuredOrigin: async () => ctx.http().origin,

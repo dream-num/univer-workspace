@@ -341,3 +341,18 @@ it("rewrites successful child diagnostics and previews without changing the prog
   expect(JSON.stringify({ diagnostics: result.diagnostics, previews: result.previews })).not.toContain(tmpdir());
   expect(JSON.stringify({ diagnostics: result.diagnostics, previews: result.previews })).not.toContain("univer-mcp-job-");
 });
+
+it("preserves slash-separated prose while redacting absolute job paths", async () => {
+  const { conversionError, rewriteJobPaths } = await import("../src/executor/jobs/errors.js");
+  const cases: [string, string][] = [
+    ["expected xlsx / docx", "expected xlsx / docx"],
+    ["width 1 / 2", "width 1 / 2"],
+    ["failed at /tmp/x/y", "failed at [path]"],
+    ["failed at /private/var/folders/secret/file.typ", "failed at [path]"],
+    ["failed at /tmp/private path/file.typ", "failed at [path]"],
+  ];
+  for (const [text, expected] of cases) {
+    expect(conversionError("INVALID_ARGUMENT", text).message).toBe(expected);
+    expect(rewriteJobPaths({ message: text }, [])).toEqual({ message: expected });
+  }
+});

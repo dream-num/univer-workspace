@@ -24,7 +24,7 @@ export function conversionError(code: string, message: string) {
 
 function scrubAbsolutePaths(text: string): string {
   return text.replace(
-    /(^|[\s("'=])(?:file:\/\/)?(?:\/|[A-Za-z]:[\\/])[^\r\n"'<>)]*/g,
+    /(^|[\s("'=])(?:file:\/\/)?(?:\/(?=\S)|[A-Za-z]:[\\/])[^\r\n"'<>)]*/g,
     "$1[path]",
   );
 }

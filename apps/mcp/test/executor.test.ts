@@ -653,3 +653,14 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
     fetcher.mockRestore();
   }
 });
+
+it("declares the rerun policy for every executor operation", () => {
+  expect(Object.fromEntries(Object.entries(opSpecs).map(([name, spec]) => [name, spec.rerun]))).toEqual({
+    "htmlView.validate": ["auth"], "htmlView.create": ["auth"],
+    "markdown.compile": [], "markdown.export": ["auth"],
+    "typst.compile": [], "svg.compile": ["auth"],
+    "exchange.import": [], "exchange.export": ["auth"],
+    "content.execute": ["revision", "auth"], "content.inspect": ["auth", "revision"],
+    "diagnostics.probe": [],
+  });
+});

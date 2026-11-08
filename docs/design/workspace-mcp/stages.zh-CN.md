@@ -121,14 +121,14 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 
 **验收标准。**
 
-- [ ] 跑通编辑旅程：开 PR，`unit_create` 新建表格，`execute` 写入数据，`inspect` 读回，在浏览器里打开 PR 看到数据（截图）。
-- [ ] 跑通导入导出旅程：用签名 URL 上传一个 xlsx，`import`，`export` 为 xlsx，下载并用 `uvw inspect` 或解析结果比对内容。
-- [ ] 每个本阶段工具都有对齐测试或证据。
-- [ ] 测量并写回架构文档：worker 冷启动时间、热调用耗时、单个 worker 常驻内存、单节点可承载 worker 数。
-- [ ] 压测 Workspace Server 在持续 agent 写入下的表现，记录可承受的写入速率，作为阶段 H 限流默认值的依据。
-- [ ] 超过 30 秒的导出返回 `job_id`，`job_get` 能拿到结果。用同一个 `idempotency_key` 重试不会产生第二个任务。
-- [ ] 下载端点的响应头符合架构文档 5.2 节。
-- [ ] 与 Workspace 维护者确定大文件导入的方案（架构文档 7.3 节），结论写回架构文档。方案如需 Workspace 改动，单独开 PR，不阻塞本阶段。
+- [x] 跑通编辑旅程：开 PR，`unit_create` 新建表格，`execute` 写入数据，`inspect` 读回，在浏览器里打开 PR 看到数据（截图）。 证据：PR #219–#232，`verify-uvw` MX1–MX6，含 PR 浏览器截图。
+- [x] 跑通导入导出旅程：用签名 URL 上传一个 xlsx，`import`，`export` 为 xlsx，下载并用 `uvw inspect` 或解析结果比对内容。 证据：PR #219–#232，MX7–MX9 的上传、导入、导出和内容比对。
+- [x] 每个本阶段工具都有对齐测试或证据。 证据：PR #219–#232，MH、MM、MT、MV 对齐旅程及 MX1–MX15。
+- [x] 测量并写回架构文档：worker 冷启动时间、热调用耗时、单个 worker 常驻内存、单节点可承载 worker 数。 证据：[架构 6.2](architecture.zh-CN.md#62-worker-池) 的冷、热调用和内存预算表。
+- [x] 压测 Workspace Server 在持续 agent 写入下的表现，记录可承受的写入速率，作为阶段 H 限流默认值的依据。 证据：[架构 3.3](architecture.zh-CN.md#33-mcp-会给-workspace-server-带来的压力) 的持续写入和读回结果。
+- [x] 超过 30 秒的导出返回 `job_id`，`job_get` 能拿到结果。用同一个 `idempotency_key` 重试不会产生第二个任务。 证据：PR #219–#232，MX10–MX15 的 job、幂等重试、故障恢复旅程。
+- [x] 下载端点的响应头符合架构文档 5.2 节。 证据：PR #219–#232，MX7–MX9 下载头断言及 `apps/mcp/test/staging.test.ts`。
+- [ ] 大文件导入方案延后。产品负责人决定移至后续阶段，当前保留 900 KiB 序列化 UnitData 上限。候选方案与边界见[架构 7.3](architecture.zh-CN.md#73-大文件导入的限制)。
 
 **不做。** 截图、PDF、lint；多用户环境；安全加固。
 

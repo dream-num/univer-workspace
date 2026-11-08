@@ -155,7 +155,20 @@ it("reproduces real native initialData on apply retry after a lost POST response
   expect(JSON.parse(bodies[0]!).initialData).toMatchObject({ rev: 1 });
 }, 30000);
 it("updates explicit blocks through executeAndCommit and records the confirmed revision", async () => {
-  const ctx = context();
+  const ctx = context(
+    vi.fn(async () =>
+      Response.json({
+        worktree: {
+          id: "wt",
+          name: "Draft",
+          number: 1,
+          teamSpace: { id: "space" },
+          state: "draft",
+          units: [],
+        },
+      }),
+    ),
+  );
   vi.mocked(ctx.runtime.executeAndCommit).mockResolvedValue({
     committed: true,
     revision: 2,
@@ -179,6 +192,7 @@ it("updates explicit blocks through executeAndCommit and records the confirmed r
     code: expect.stringContaining("Hello Markdown"),
   });
   expect(result.output).toMatchObject({ committed: true, sourceMap, execution: { revision: 2 } });
+  expect(ctx.usage.repo).toBe("space");
   expect(ctx.usage.cost.committed_revisions).toBe(1);
   expect(ctx.usage.unitType).toBe("doc");
 });
@@ -385,5 +399,63 @@ it.each(["update", "export"])(
     });
     expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
     expect(ctx.runtime.executeRead).not.toHaveBeenCalled();
+  },
+);
+
+it.each(["asset unavailable", "malformed read"])(
+  "classifies export diagnostics by code for %s",
+  async (scenario) => {
+    const ctx = context(vi.fn(async () => new Response(null, { status: 404 })));
+    vi.mocked(ctx.runtime.executeRead).mockResolvedValue({
+      value:
+        scenario === "malformed read"
+          ? {}
+          : {
+              formatVersion: 1,
+              unitId: "doc",
+              blockIds: ["intro"],
+              markdown: "![Image](assets/image.png)\n",
+              diagnostics: [],
+              sourceMap,
+              assets: [
+                {
+                  path: "assets/image.png",
+                  kind: "image",
+                  mimeType: "application/octet-stream",
+                  encoding: "reference",
+                  data: "12345678-1234-1234-1234-123456789abc",
+                },
+              ],
+            },
+      state: {
+        baseRevision: 7,
+        knownHeadRevision: 7,
+        connection: "online",
+        pendingMutationCount: 0,
+        bufferedChangesetCount: 0,
+        awaitingChangeset: null,
+        conflict: null,
+      },
+    });
+    const error = await markdownExport(ctx, {
+      worktreeId: "wt",
+      unitId: "doc",
+      sourceMap,
+      blockIds: ["intro"],
+    }).catch((error: unknown) => error);
+    expect(mapRuntimeError(error, "read")).toMatchObject(
+      scenario === "malformed read"
+        ? { code: "workspace-runtime-result-invalid", outcome: "internal_error" }
+        : {
+            code: "workspace-markdown-asset-unavailable",
+            outcome: "tool_error",
+            detail: {
+              retryable: true,
+              diagnostics: [
+                expect.objectContaining({ code: "DOC_MARKDOWN_READ_ASSET_UNAVAILABLE" }),
+              ],
+            },
+          },
+    );
   },
 );
