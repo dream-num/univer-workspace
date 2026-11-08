@@ -1252,12 +1252,12 @@ JS
     grep -E "checkbox.*$scope" "$oauth_dir/consent.snapshot.txt"
   done
   grep -E 'button.*Deny' "$oauth_dir/consent.snapshot.txt"
-  grep -E 'checkbox.*worktree:merge.*\[checked\]' "$oauth_dir/consent.snapshot.txt"
-  agent-browser find role checkbox --name 'worktree:merge' click
+  grep -E 'checkbox.*worktree:merge.*checked=true' "$oauth_dir/consent.snapshot.txt"
+  agent-browser find role checkbox click --name 'worktree:merge'
   agent-browser snapshot -i -c > "$oauth_dir/consent.snapshot.txt"
-  if grep -E 'checkbox.*worktree:merge.*\[checked\]' "$oauth_dir/consent.snapshot.txt"; then exit 1; fi
+  if grep -E 'checkbox.*worktree:merge.*checked=true' "$oauth_dir/consent.snapshot.txt"; then exit 1; fi
   agent-browser screenshot "$EVIDENCE/mcp-oauth-consent.png"
-  agent-browser find role button --name 'Allow' click
+  agent-browser find role button click --name 'Allow' --exact
   agent-browser wait --url 'http://127.0.0.1:*/callback?*'
   callback_url=$(agent-browser get url)
   node - "$callback_url" "$authorize_url" <<'JS'
