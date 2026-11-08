@@ -23,7 +23,7 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
-`content.execute`, `content.inspect` and internal `diagnostics.probe`; all have empty
+`content.execute`, `content.inspect`, `exchange.import`, `exchange.export` and internal `diagnostics.probe`; all have empty
 rerun policies. Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
 Transport rejections use non-200 statuses. The grant travels only in the frame body.
 
@@ -108,11 +108,13 @@ The gateway validates configuration before listening and retains a readonly conf
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
 | `MCP_EXECUTOR_URLS`, `MCP_INTERNAL_TOKEN` | Unset on gateway | Comma-separated internal HTTP(S) origins and a shared token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. `NODE_ENV=production` refuses session grants |
+| `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
+| `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
 | `EXECUTOR_MAX_WORKERS` | `4` | Maximum cached Unit workers. Tune to the host's memory budget |
 | `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
 | `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |
-| `UNIVER_LICENSE` | Generated development license | Executor runtime license override. Worker environment contains no license key |
+| `UNIVER_LICENSE`, `UNIVER_LICENSE_KEY` | Generated development pair | Executor runtime and Office conversion overrides. Startup requires both overrides or neither; only export jobs receive the pair |
 | `LOG_LEVEL` | `info` | Pino level, including `debug`, `warn`, `error`, `fatal`, `trace`, and `silent` |
 
 The identity origin appears in `whoami` and repository URLs and controls repository
@@ -160,9 +162,11 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
-| `file_upload_create` | Required `purpose`, `file_name`, `media_type`; optional `size` | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
+| `file_upload_create` | Required `purpose`, `file_name`, `media_type`; optional `size` (upper bound) | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
+| `import` | Required `upload_id`, `worktree`, `space`, `idempotency_key`; optional `type` (`sheet`, `base`, `doc`, `slide`), `name`, `parent` | Bare CLI import result plus `url`; `sourcePath` is the staged file name |
+| `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
 | `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ skills: [{ name, content, resources?, files? }] }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
@@ -172,7 +176,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
 | `blob_get` | Required `resource` | `{ node, resource }` |
-| `blob_upload` | `upload_id`, `space`, `name`, `idempotency_key`; optional `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
+| `blob_upload` | Required `upload_id`, `space`, `idempotency_key`; optional `name` (defaults to uploaded file name), `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
 | `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
 | `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key` | `{ replacement: { operationId, resourceId, etag } }`. Destructive, requires `publish` |
 | `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
@@ -371,9 +375,9 @@ matching purpose. A foreign upload is reported as not found. Consumption retains
 for idempotent retries until its one-hour expiry. Workspace remains the permission authority.
 
 `blob` accepts any syntactically valid media type. `office-import` accepts the OpenXML
-Word, Excel and PowerPoint types, the legacy Office types and `text/csv`. The other three
+Word, Excel and PowerPoint types and the legacy Office types. CSV is not supported by this import workflow. The other three
 purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
-does not lift Workspace's 1 MiB UnitData commit limit. Import/compile consumers remain future work.
+does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Compile consumers remain future work.
 
 Blob transfer streams between Workspace and the staging directory. Download results preserve
 Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
@@ -412,3 +416,40 @@ Filesystem failures and data/sidecar size mismatches are internal errors; tool d
 `application/octet-stream`. Internal failures log the error class and safe `code` and `syscall`
 fields with the request ID, without messages, stacks, paths, credentials, contents or arguments.
 Aborted transfers produce one info-level failure log.
+
+## Office conversion jobs
+
+Office conversion runs in a fresh forked process per operation with advanced binary IPC.
+The parent resolves Workspace targets, exports UnitData and image bytes, and creates Units
+through Client Core. Import children receive only bytes and conversion options. Export children also receive the license pair.
+Its explicit environment contains `NODE_ENV=production`, `HOME`, `XDG_STATE_HOME` and `TMPDIR`.
+The last three point at a private per-job temporary directory that is removed after exit.
+It receives no session, grant, Workspace URL, internal token or inherited Node flags.
+The call's remaining deadline includes its wait for a conversion slot and kills the child.
+A conversion crash returns `workspace-job-crashed`, including a child killed by its heap cap.
+A deadline before Unit creation returns `workspace-executor-timeout` with
+`detail: { retryable: true, started: false }`. After creation starts, its result can be unknown.
+Import is never automatically rerun by MCP. Retry with the same upload and idempotency key,
+which must contain 16 to 200 URL-safe letters, digits, underscores or hyphens.
+MCP derives the converter's `unitId` from SHA-256 of the caller ID, key and upload SHA-256.
+The SDK's stable-identity conversion then reproduces the same initialData, including nested IDs.
+Routing uses caller ID and key so retries reach the same executor independently of request IDs.
+No conversion cache is needed. Workspace compares the full creation intent and returns the original Unit.
+Export download names use the Unit's product name.
+
+Children exit on IPC disconnect. Startup removes private job directories owned by dead executors,
+and each completed or failed job removes its own directory. The executor ignores SIGUSR1.
+Only known exchange and `LICENSE_*` errors cross the child boundary. Other codes become
+`workspace-exchange-conversion-failed`, and absolute paths are removed from error messages.
+
+`exchange.import` permits a 64 MiB request frame for the default 50 MiB Office upload,
+and a 64 KiB response. `exchange.export` permits a 64 KiB request and a 128 MiB response
+frame, including framing overhead. Oversized exports return `workspace-result-too-large`.
+Calls stay within the existing 30-second budget; this slice adds no `job_get`.
+New jobs report `executor: cold_start`; pool costs still describe pool work only.
+Import records `upload_bytes` and one confirmed creation; export records `export_bytes`.
+
+C7 remains pending upstream. The private directory gives exchange usage storage a writable
+home and state path, but is disposable and does not promise durable license quota accounting.
+`LICENSE_USAGE_STORAGE_ERROR` is preserved without an automatic retry. This process split
+is fault isolation, not a network sandbox. Stage G remains the multi-user deployment gate.

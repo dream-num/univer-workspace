@@ -4,6 +4,8 @@ import { blobDownloadTool } from "./files/blob-download.js";
 import { blobReplaceTool } from "./files/blob-replace.js";
 import { assetDownloadTool } from "./files/asset-download.js";
 import { executeTool } from "./core/execute.js";
+import { importTool } from "./core/import.js";
+import { exportTool } from "./core/export.js";
 import { inspectTool } from "./core/inspect.js";
 import { whoamiTool } from "./core/whoami.js";
 import { repoListTool } from "./core/repo-list.js";
@@ -67,6 +69,8 @@ export const tools: readonly ToolDefinition[] = [
   fileUploadCreateTool,
   executeTool,
   inspectTool,
+  importTool,
+  exportTool,
   apiFindTool,
   apiShowTool,
   skillsReadTool,

@@ -66,7 +66,10 @@ export function executorTool<
       args: z.output<A>,
       context: ToolContext,
     ): Promise<{ output: object; repo?: string | null }> | { output: object; repo?: string | null };
-    request(args: z.output<A>): ExecutorRequest<OpSpec<I, O, P>>;
+    request(
+      args: z.output<A>,
+      context: ToolContext,
+    ): ExecutorRequest<OpSpec<I, O, P>> | Promise<ExecutorRequest<OpSpec<I, O, P>>>;
   },
 ): ToolDefinition {
   const { op, request, response, outputSchema, ...tool } = definition;
@@ -76,12 +79,14 @@ export function executorTool<
     async run(context, args) {
       const link = context.executor ? links.get(context.executor) : undefined;
       const parsed = tool.inputSchema.parse(args);
-      const result = await callExecutor(link?.connection ?? null, op, request(parsed)).catch(
-        (error) => {
-          if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
-          throw error;
-        },
-      );
+      const result = await callExecutor(
+        link?.connection ?? null,
+        op,
+        await request(parsed, context),
+      ).catch((error) => {
+        if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
+        throw error;
+      });
       link?.usage.addOp(result.meta);
       const mapped = response ? await response(result, parsed, context) : { output: result.output };
       return {

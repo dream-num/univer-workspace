@@ -19,6 +19,7 @@
     "@univer-cli/content-inspection-command": "1.4.0",
     "@univer-cli/resource-library": "1.4.0",
     "@univerjs-pro/cli-assets": "0.1.0",
+    "@univerjs-pro/exchange-node": "1.4.0",
     "@univerjs/univer-workspace-client-core": "workspace:*",
     "pino": "10.3.1",
     "prom-client": "15.1.3",

@@ -181,7 +181,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `--json [fields]` 的字段筛选 | 不提供，始终返回完整结构化结果，大结果分页 | MCP 本身就是结构化输出 |
 | `UVW_REPO` | `repo` 必填 | 没有环境变量 |
 | 退出码 | `isError` 加错误码；认证失败为 HTTP 401 | MCP 的错误语义 |
-| 大文件导入 | 与 CLI 相同的上限（转换后的 UnitData 约 1 MiB） | Workspace 路由限制，见架构文档 7.3 节 |
+| 大文件导入 | MCP 在创建 Unit 前将转换结果限制为 900 KiB，超限返回 `workspace-import-too-large` 和实际字节数 | Workspace 路由限制，见架构文档 7.3 节 |
 
 ## 5. 结果大小
 
@@ -261,3 +261,14 @@ OpenXML、legacy Office 和 `text/csv`；其余三种用途只接受 `applicatio
 `application/x-zip-compressed`。上传对象一小时有效，链接十分钟有效。工具消费不删除对象，
 同一 `idempotency_key` 可重试。外用户上传统一返回 `workspace-upload-not-found`，未完成或用途不符
 分别返回 `workspace-upload-not-ready`、`workspace-upload-purpose-mismatch`。
+
+D4 已实现同步 `import` 与 `export`。`import` 必填 `upload_id`、`worktree`、`space`、
+`idempotency_key`，可选 `type`、`name`、`parent`，仅消费当前调用者的 `office-import` 上传。
+结果沿用 CLI 裸结果，`sourcePath` 为上传文件名，并增加 PR 中 Unit 的 `url`。
+`export` 接受 `worktree`、`unit`、`format`，返回 `{download, type}`，下载保留既有 attachment、
+sandbox 和 private/no-store 头。导入记录 `upload_bytes`，导出记录 `export_bytes`。
+
+本切片不实现 ChatGPT 文件参数或 `job_get`。两种操作仍受 30 秒同步预算约束；读超时返回
+`workspace-executor-timeout`，写超时返回 `workspace-result-unknown`。import 的 rerun 为空。
+Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响应帧上限为 128 MiB，
+包含 JSON 头与长度前缀，超限返回 `workspace-result-too-large`。第 7 节的异步任务是后续目标。

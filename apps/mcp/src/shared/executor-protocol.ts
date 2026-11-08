@@ -72,6 +72,52 @@ export const codeInput = z
   .refine((code) => Buffer.byteLength(code) <= 10 * MiB, "Code exceeds 10 MiB");
 
 export const opSpecs = {
+  "exchange.import": defineOp({
+    name: "exchange.import",
+    effect: "write",
+    payload: "request",
+    rerun: [],
+    limits: { requestBytes: 64 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    input: z.object({
+      worktreeId: z.string().min(1),
+      spaceId: z.string().min(1),
+      fileName: z.string().min(1).max(255),
+      type: z.enum(["sheet", "base", "doc", "slide"]).optional(),
+      name: z.string().optional(),
+      parentNodeId: z.string().optional(),
+      idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
+    }),
+    output: z.object({
+      committed: z.literal(true),
+      name: z.string(),
+      nodeId: z.string(),
+      resourceId: z.string(),
+      sourcePath: z.string(),
+      type: z.enum(["sheet", "base", "doc", "slide"]),
+      unitId: z.string(),
+      worktreeId: z.string(),
+    }),
+    route: (input) => ({ scope: "exchange.import", unitId: input.idempotencyKey }),
+  }),
+  "exchange.export": defineOp({
+    name: "exchange.export",
+    effect: "read",
+    payload: "response",
+    rerun: [],
+    limits: { requestBytes: 64 * 1024, responseBytes: 128 * MiB, budgetMs: 30_000 },
+    input: z.object({
+      worktreeId: z.string().min(1),
+      unitId: z.string().min(1),
+      format: z.enum(["xlsx", "docx", "pptx"]),
+    }),
+    output: z.object({
+      name: z.string(),
+      type: z.enum(["sheet", "base", "doc", "slide"]),
+      unitId: z.string(),
+      worktreeId: z.string(),
+    }),
+    route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
+  }),
   "content.execute": defineOp({
     name: "content.execute",
     effect: "write",

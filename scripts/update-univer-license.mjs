@@ -15,7 +15,7 @@ export const LICENSE_TARGETS = [
   {
     path: "apps/mcp/src/executor/license.ts",
     subject: "executor runtime development license",
-    constants: { UNIVER_LICENSE: "license" },
+    constants: { UNIVER_LICENSE: "license", UNIVER_LICENSE_KEY: "licenseKey" },
   },
   {
     path: "apps/workspace/web/src/features/editor/features/license.ts",

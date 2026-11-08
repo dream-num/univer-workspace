@@ -6,6 +6,10 @@ async function main(): Promise<void> {
   if (role === "renderer") throw new Error("renderer is not implemented");
   if (role !== "gateway" && role !== "executor")
     throw new Error("MCP_ROLE must be one of gateway, executor, renderer");
+  if (role === "executor") {
+    process.on("SIGUSR1", () => {});
+    await (await import("./executor/jobs/directories.js")).sweepJobDirectories();
+  }
   const config =
     role === "gateway" ? parseGatewayConfig(process.env) : parseExecutorConfig(process.env);
   const gateway =

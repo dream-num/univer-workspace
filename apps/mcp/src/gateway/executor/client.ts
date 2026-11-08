@@ -71,7 +71,7 @@ export async function callExecutor<
           "content-type": FRAME_CONTENT_TYPE,
           "x-mcp-rpc-version": "1",
         },
-        body: new Uint8Array(body),
+        body,
         redirect: "manual",
         signal: AbortSignal.timeout(timeoutMs),
       });

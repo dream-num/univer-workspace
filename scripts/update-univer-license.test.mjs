@@ -35,7 +35,7 @@ test("renders every constant a target declares", () => {
     renderLicenseModule(target, { license, licenseKey: "c2VjcmV0" }, details),
   );
   assert.equal(rendered.length, 6);
-  assert.doesNotMatch(rendered[0], /c2VjcmV0/u);
+  assert.match(rendered[0], /"c2VjcmV0"/u);
   assert.doesNotMatch(rendered[1], /c2VjcmV0/u);
   for (const source of rendered.slice(2)) assert.match(source, /"c2VjcmV0"/u);
   for (const source of rendered) {

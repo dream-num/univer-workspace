@@ -583,3 +583,13 @@ D3 文件验证使用 `bin/mcp-file.mjs put|get <工具 .out 路径> <文件路�
 Content-Length；GET 保存字节和 `.headers.json`，并断言 attachment、nosniff、sandbox CSP
 与 private/no-store。MF1 至 MF6 覆盖 Blob 上传、下载、替换、跨用户边界、Asset 下载、上传状态与用途校验、精确长度和单次 PUT。
 所有临时 staging 数据仅在 run 子目录，证据保留在 `evidence/`。
+
+D4 的 Office 验证旅程是 MX7（xlsx）与 MX8（docx），由
+`.agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs` 驱动。它们创建独立 PR，
+用 CLI 生成真实 Office 文件，经签名 PUT 上传，再比对 MCP 与 CLI 的导入检查结果。
+xlsx 预约省略 `size`，docx 预约提供大于实际文件的大小上限，验证暂存入口不要求精确长度。
+导出下载校验 attachment、nosniff、sandbox、private/no-store 头，并通过 CLI 重新导入比较内容。
+若基线网关的上传适配器对二进制 PUT 返回 413 或造成损坏，保留 PUT 状态与 import 错误，
+记录为基线缺陷；不通过 sidecar 或内部 RPC 绕过入口。
+原生作业的环境与网络测试使用 `apps/mcp/test/fixtures/job-audit.mjs`，
+在真实转换时记录环境并统计 Socket connect 调用；测试断言没有凭据、Workspace 地址或连接尝试。

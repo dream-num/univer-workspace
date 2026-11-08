@@ -1,6 +1,9 @@
 export const FRAME_CONTENT_TYPE = "application/vnd.univer.mcp-frame+v1";
 
-export function encodeFrame(header: unknown, payload: Uint8Array = new Uint8Array()): Buffer {
+export function encodeFrame(
+  header: unknown,
+  payload: Uint8Array = new Uint8Array(),
+): Buffer<ArrayBuffer> {
   const json = Buffer.from(JSON.stringify(header));
   const length = Buffer.alloc(4);
   length.writeUInt32BE(json.length);

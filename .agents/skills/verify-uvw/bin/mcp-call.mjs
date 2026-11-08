@@ -171,8 +171,8 @@ function eventIssues(event) {
   const [kind, clientId] = auth === 'pat' ? ['pat', patId] : ['dev', 'dev'];
   if (event.auth_kind !== kind || event.client_id !== clientId) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
-    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace'].includes(tool)) ||
-      (key === 'export_bytes' && ['blob_download', 'asset_download'].includes(tool));
+    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import'].includes(tool)) ||
+      (key === 'export_bytes' && ['blob_download', 'asset_download', 'export'].includes(tool));
     if (typeof event.cost?.[key] !== 'number' || !Number.isFinite(event.cost[key]) || event.cost[key] < 0 || (event.executor === 'none' && !gatewayTransfer && event.cost[key] !== 0)) issues.push(`Invalid cost.${key}`);
   }
   for (const key of ['ts', 'request_id', 'user_id', 'tool', 'toolset']) {

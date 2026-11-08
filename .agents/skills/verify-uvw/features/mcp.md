@@ -172,7 +172,7 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","api_find","api_show","skills_read"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","import","export","api_find","api_show","skills_read"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
@@ -183,12 +183,12 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|api_(find|show)|skills_read|blob_get|blob_download|asset_download|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|execute|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|api_(find|show)|skills_read|blob_get|blob_download|asset_download|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:27]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:29]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
@@ -197,7 +197,7 @@ jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin",
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 27 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
+first 29 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -1178,7 +1178,7 @@ for (const name of ['user.pw', 'home/mcp-session', 'home/mcp-token', 'home/mcp-o
   if (secret) text = text.split(secret).join('[REDACTED]');
 }
 text = text.replace(/([?&](?:code|state|code_verifier|code_challenge|access_token|refresh_token|id_token)=)[^\s"'<>\\&#]+/gi, '$1[REDACTED]')
-  .replace(/("(?:code|state|code_verifier|code_challenge|access_token|refresh_token|id_token|client_secret)"\s*:\s*")[^"\r\n]*(")/gi, '$1[REDACTED]$2')
+  .replace(/("(?:code|state|code_verifier|code_challenge|access_token|refresh_token|id_token|client_secret)"\s*:\s*")(?:\\.|[^"\\\r\n])*(")/gi, '$1[REDACTED]$2')
   .replace(/uvw_(?:at|rt|pat)_[A-Za-z0-9._~-]+/g, '[REDACTED]')
   .replace(/(Bearer\s+)[^\s"'<>\\]+/gi, '$1[REDACTED]');
 process.stdout.write(text);
@@ -1646,6 +1646,28 @@ done
 
 Pass when both oversized requests receive HTTP 413 through the normalized MCP route.
 
+**MX7. Office xlsx round trip.**
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs xlsx
+```
+
+Pass when the fixture has two sheets, numeric cells and a formula; a signed PUT and MCP import
+succeed without reserving an exact upload size; MCP inspect matches CLI import; and downloaded MCP export matches a CLI export of the
+same Unit after parsing through CLI import and inspect. Keep the upload status and headers.
+If the base gateway upload adapter refuses or corrupts the binary PUT, record that failure and
+stop this journey. Do not bypass the upload route.
+
+**MX8. Office docx round trip.**
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs docx
+```
+
+Pass with the same upload, import, inspection and export checks for a Doc containing text,
+using a reserved size upper bound larger than the actual file.
+The same base binary-upload defect may block this journey before import.
+
 **M12. Cleanup.**
 
 ```bash
@@ -1679,3 +1701,12 @@ and developer PIDs are unchanged or absent both times. Evidence and logs survive
   `opencode serve`, or use `--auto`. This adds an entry to local opencode session history.
 - Run `down` after failed launches too. It only removes this run's project resources
   and image tag, preserves BuildKit cache, and deletes disposable credentials.
+
+
+**MX9. Office import idempotent retry.** Repeat the same upload and key after a delay and verify the Worktree still has one imported Unit.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-office-retry.mjs
+```
+
+Pass when both calls return the same Unit ID and the Worktree Unit list is unchanged.

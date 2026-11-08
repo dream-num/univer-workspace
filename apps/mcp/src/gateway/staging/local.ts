@@ -27,7 +27,6 @@ const officeTypes = new Set([
   "application/vnd.ms-excel",
   "application/msword",
   "application/vnd.ms-powerpoint",
-  "text/csv",
 ]);
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const missing = () => workspaceError("workspace-upload-not-found", "Upload not found or expired.");
