@@ -353,7 +353,8 @@ export function createGateway(
         // Consume the finite call response before logging or translating an expired downstream session to HTTP 401.
         const text = await response.text();
         if (state.outcome === "auth_error") {
-          authenticator.evict(bearer);
+          authenticator.evict(bearer, authentication);
+          if (Date.now() - authentication.obtainedAt < 5_000) return unauthorized(true);
           const refreshed = await authenticator.authenticate(bearer, requestId);
           return unauthorized(refreshed === null);
         }

@@ -25,14 +25,18 @@ that session. The gateway caches the result by the SHA-256 of the bearer for at 
 never beyond the session's `expires_in` minus 5 seconds). After revocation, `initialize`, `tools/list`,
 tools that make no Workspace request (`whoami`, `skills_read`, `api_*`), and resources may still succeed
 from cache for up to 30 seconds. Every Workspace-backed call fails immediately because revocation deletes
-the downstream session. A downstream 401 evicts the cached session and triggers one token re-exchange.
-The consumed MCP request returns HTTP 401 without replaying the tool. If the token still exchanges,
-the challenge omits `error="invalid_token"` so the client can retry with the same token. A rejected token
-gets `error="invalid_token"`; exchange faults return HTTP 500.
-Concurrent calls with the same bearer share one exchange. Positive entries and in-flight exchanges share
-a cache capped at 10,000 entries. An `invalid_grant` result is cached separately for 5 seconds, capped at
-1,000 entries. Before FIFO eviction, each cache sweeps its expired entries. In-flight exchanges are never
-evicted. If they fill the positive cache, new exchanges proceed without caching their results.
+the downstream session. A downstream 401 evicts only the exact session that failed, preserving any
+pending exchange, newer session, and negative cache entry. If that session was obtained less than
+5 seconds ago, the gateway returns HTTP 401 with `error="invalid_token"` without another exchange.
+Otherwise, it re-authenticates once through the shared cache. The consumed MCP request returns HTTP 401
+without replaying the tool. If the token still exchanges, the challenge omits `error="invalid_token"`
+so the client can retry with the same token. A rejected token gets `error="invalid_token"`;
+exchange faults return HTTP 500.
+Concurrent calls with the same bearer share one exchange. Settled sessions and in-flight exchanges use
+separate maps, each capped at 10,000 entries, so pending unknown tokens cannot evict settled sessions.
+An `invalid_grant` result is cached separately for 5 seconds, capped at 1,000 entries. Before FIFO eviction,
+each settled cache sweeps its expired entries. In-flight exchanges are never evicted. When their map is
+full, new exchanges proceed without caching either their promises or their results.
 
 | Outcome of the exchange | Gateway response |
 | --- | --- |

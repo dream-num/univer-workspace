@@ -32,6 +32,7 @@ const maxNegativeCacheEntries = 1_000;
 export interface Authentication {
   /** Value of the downstream `workspace_session` cookie. Never the caller's bearer. */
   readonly session: string;
+  readonly obtainedAt: number;
   readonly user: WorkspaceSubject | null;
   readonly scopes: ReadonlySet<ToolScope> | null;
   readonly authKind: "pat" | "oauth" | "dev";
@@ -49,7 +50,8 @@ export function createAuthenticator(
   fetcher: typeof fetch,
 ) {
   const { exchange, devSessionPassthrough } = config.auth;
-  const cache = new Map<string, CacheEntry | Promise<Authentication | null>>();
+  const cache = new Map<string, CacheEntry>();
+  const inFlight = new Map<string, Promise<Authentication | null>>();
   const negativeCache = new Map<string, CacheEntry>();
   const key = (bearer: string) => createHash("sha256").update(bearer).digest("hex");
 
@@ -94,32 +96,23 @@ export function createAuthenticator(
     const { subject, user, scope, access_token, expires_in } = parsed.data;
     const value: Authentication = {
       session: access_token,
+      obtainedAt: Date.now(),
       user: { id: user.id, name: user.displayName },
       scopes: new Set(scope.split(/\s+/).filter((name): name is ToolScope => allScopes.has(name as ToolScope))),
       authKind: subject.kind,
       clientId: subject.kind === "pat" ? subject.id : (subject.client_id ?? subject.id),
     };
     const ttl = Math.min(maxCacheMs, (expires_in - 5) * 1000);
-    return { value, expiresAt: Date.now() + ttl };
+    return { value, expiresAt: value.obtainedAt + ttl };
   }
 
-  function makeRoom(
-    entries: Map<string, CacheEntry | Promise<Authentication | null>>,
-    limit: number,
-  ): boolean {
-    if (entries.size < limit) return true;
+  function makeRoom(entries: Map<string, CacheEntry>, limit: number): void {
+    if (entries.size < limit) return;
     const now = Date.now();
     for (const [cacheKey, entry] of entries) {
-      if (!(entry instanceof Promise) && entry.expiresAt <= now) entries.delete(cacheKey);
+      if (entry.expiresAt <= now) entries.delete(cacheKey);
     }
-    if (entries.size < limit) return true;
-    for (const [cacheKey, entry] of entries) {
-      if (!(entry instanceof Promise)) {
-        entries.delete(cacheKey);
-        return true;
-      }
-    }
-    return false;
+    if (entries.size >= limit) entries.delete(entries.keys().next().value!);
   }
 
   function cachedExchange(bearer: string, requestId: string): Promise<Authentication | null> {
@@ -128,25 +121,29 @@ export function createAuthenticator(
     if (rejected && rejected.expiresAt > Date.now()) return Promise.resolve(null);
     negativeCache.delete(cacheKey);
     const hit = cache.get(cacheKey);
-    if (hit instanceof Promise) return hit;
     if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
     cache.delete(cacheKey);
+    const existing = inFlight.get(cacheKey);
+    if (existing) return existing;
     const pending = exchangeToken(bearer, requestId).then(
       (entry) => {
-        if (cache.get(cacheKey) === pending) {
-          cache.delete(cacheKey);
+        if (inFlight.get(cacheKey) === pending) {
+          inFlight.delete(cacheKey);
           const entries = entry.value === null ? negativeCache : cache;
           const limit = entry.value === null ? maxNegativeCacheEntries : maxCacheEntries;
-          if (entry.expiresAt > Date.now() && makeRoom(entries, limit)) entries.set(cacheKey, entry);
+          if (entry.expiresAt > Date.now()) {
+            makeRoom(entries, limit);
+            entries.set(cacheKey, entry);
+          }
         }
         return entry.value;
       },
       (error: unknown) => {
-        if (cache.get(cacheKey) === pending) cache.delete(cacheKey);
+        if (inFlight.get(cacheKey) === pending) inFlight.delete(cacheKey);
         throw error;
       },
     );
-    if (makeRoom(cache, maxCacheEntries)) cache.set(cacheKey, pending);
+    if (inFlight.size < maxCacheEntries) inFlight.set(cacheKey, pending);
     return pending;
   }
 
@@ -158,11 +155,11 @@ export function createAuthenticator(
         return exchange === null ? null : cachedExchange(bearer, requestId);
       }
       if (!devSessionPassthrough) return null;
-      return { session: bearer, user: null, scopes: null, authKind: "dev", clientId: "dev" };
+      return { session: bearer, obtainedAt: Date.now(), user: null, scopes: null, authKind: "dev", clientId: "dev" };
     },
-    evict(bearer: string): void {
-      cache.delete(key(bearer));
-      negativeCache.delete(key(bearer));
+    evict(bearer: string, failed: Authentication): void {
+      const cacheKey = key(bearer);
+      if (cache.get(cacheKey)?.value === failed) cache.delete(cacheKey);
     },
   };
 }

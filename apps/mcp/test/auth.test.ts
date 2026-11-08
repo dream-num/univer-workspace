@@ -16,6 +16,12 @@ const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string;
   uvw_at_oauth: { scope: "read write", kind: "oauth", id: "grant-1", clientId: "chatgpt" },
 };
 
+function deferred() {
+  let resolve!: () => void;
+  const promise = new Promise<void>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 async function listen(server: Server, port = 0): Promise<string> {
   server.listen(port, "127.0.0.1");
   await once(server, "listening");
@@ -34,25 +40,32 @@ describe("gateway authentication", () => {
   const cleanup: (() => Promise<void>)[] = [];
   afterEach(async () => {
     await Promise.all(cleanup.splice(0).map((task) => task()));
+    vi.restoreAllMocks();
   });
 
   async function start(
     env: Record<string, string>,
-    behavior: { exchangeStatus?: number; exchangeBody?: object; expireDownstream?: () => boolean } = {},
+    behavior: {
+      exchangeStatus?: number;
+      exchangeBody?: object;
+      beforeExchange?: () => Promise<void>;
+      expireDownstream?: (cookie: string | undefined) => boolean | Promise<boolean>;
+    } = {},
   ) {
     const exchanges: URLSearchParams[] = [];
     const productCookies: (string | undefined)[] = [];
     let logs = "";
     let issued = 0;
-    const workspace = createServer((request, response) => {
+    const workspace = createServer(async (request, response) => {
       const path = new URL(request.url ?? "/", "http://localhost").pathname;
       response.setHeader("Content-Type", "application/json");
       if (path === "/api/auth/token") {
         let body = "";
         request.on("data", (chunk) => (body += chunk));
-        request.on("end", () => {
+        request.on("end", async () => {
           const form = new URLSearchParams(body);
           exchanges.push(form);
+          await behavior.beforeExchange?.();
           const token = tokens[form.get("subject_token") ?? ""];
           if (behavior.exchangeStatus !== undefined) {
             response.writeHead(behavior.exchangeStatus).end(JSON.stringify(behavior.exchangeBody ?? {}));
@@ -75,7 +88,7 @@ describe("gateway authentication", () => {
         return;
       }
       productCookies.push(request.headers.cookie);
-      if (behavior.expireDownstream?.() && path !== "/api/session") {
+      if (path !== "/api/session" && await behavior.expireDownstream?.(request.headers.cookie)) {
         response.writeHead(401).end("{}");
       } else if (request.headers.cookie === "workspace_session=dev-session" && path === "/api/session") {
         response.end(JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "alice" } }));
@@ -236,11 +249,14 @@ describe("gateway authentication", () => {
   });
 
   it("re-exchanges a dead downstream session and lets the client retry the same valid token", async () => {
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     let expired = false;
     const gateway = await start(exchangeEnv, { expireDownstream: () => expired });
     const client = await gateway.connect("uvw_pat_full");
     await client.callTool({ name: "whoami", arguments: {} });
     expired = true;
+    now += 5_000;
     const response = await gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} });
     expect(response.status).toBe(401);
     expect(response.headers.get("www-authenticate")).toBe(
@@ -256,11 +272,14 @@ describe("gateway authentication", () => {
   });
 
   it("marks a token rejected during downstream recovery as invalid", async () => {
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
     const behavior: { expireDownstream: () => boolean; exchangeStatus?: number; exchangeBody?: object } = {
       expireDownstream: () => false,
     };
     const gateway = await start(exchangeEnv, behavior);
     await gateway.connect("uvw_pat_full");
+    now += 5_000;
     behavior.expireDownstream = () => true;
     behavior.exchangeStatus = 400;
     behavior.exchangeBody = { error: "invalid_grant" };
@@ -270,6 +289,77 @@ describe("gateway authentication", () => {
     expect(gateway.exchanges).toHaveLength(2);
     expect((await gateway.post("uvw_pat_full")).status).toBe(401);
     expect(gateway.exchanges).toHaveLength(2);
+  });
+
+  it.each([false, true])("shares recovery across five downstream failures (revoked=%s)", async (revoked) => {
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const failures = Array.from({ length: 5 }, deferred);
+    const allStarted = deferred();
+    const exchangeStarted = deferred();
+    const exchangeGate = deferred();
+    let arrivals = 0;
+    const behavior: Parameters<typeof start>[1] = {
+      expireDownstream: async (cookie) => {
+        if (cookie !== "workspace_session=downstream-session-1") return false;
+        const failure = failures[arrivals++]!;
+        if (arrivals === 5) allStarted.resolve();
+        await failure.promise;
+        return true;
+      },
+    };
+    const gateway = await start(exchangeEnv, behavior);
+    await gateway.post("uvw_pat_full");
+    now += 5_000;
+    behavior.beforeExchange = async () => {
+      exchangeStarted.resolve();
+      await exchangeGate.promise;
+    };
+    if (revoked) {
+      behavior.exchangeStatus = 400;
+      behavior.exchangeBody = { error: "invalid_grant" };
+    }
+    const responses = failures.map(() => gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} }));
+    try {
+      await allStarted.promise;
+      failures[0]!.resolve();
+      await exchangeStarted.promise;
+      exchangeGate.resolve();
+      await responses[0];
+      for (let i = 1; i < failures.length; i += 1) {
+        failures[i]!.resolve();
+        await responses[i];
+      }
+      for (const response of await Promise.all(responses)) {
+        expect(response.status).toBe(401);
+        expect(response.headers.get("www-authenticate")).toBe(
+          `Bearer resource_metadata="${gateway.origin}/.well-known/oauth-protected-resource/mcp"` +
+          (revoked ? ', error="invalid_token"' : ""),
+        );
+      }
+      expect(gateway.exchanges).toHaveLength(2);
+      const retry = await gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} });
+      expect(retry.status).toBe(revoked ? 401 : 200);
+      expect(gateway.exchanges).toHaveLength(2);
+      if (!revoked) expect(gateway.productCookies.at(-1)).toBe("workspace_session=downstream-session-2");
+    } finally {
+      failures.forEach((failure) => failure.resolve());
+      exchangeGate.resolve();
+      await Promise.all(responses);
+    }
+  });
+
+  it.each([0, 4_999])("marks a session rejected after %s ms invalid without re-exchanging", async (age) => {
+    let now = Date.now();
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    const gateway = await start(exchangeEnv, { expireDownstream: () => true });
+    await gateway.post("uvw_pat_full");
+    now += age;
+    const response = await gateway.post("uvw_pat_full", "tools/call", { name: "repo_list", arguments: {} });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toContain('error="invalid_token"');
+    expect(gateway.exchanges).toHaveLength(1);
+    expect(gateway.events().at(-1)).toMatchObject({ outcome: "auth_error" });
   });
 
   it.each([
@@ -393,6 +483,47 @@ describe("exchange cache lifetime and capacity", () => {
     for (let i = 0; i < 2_000; i += 1) expect(await authenticate(`uvw_pat_invalid_${i}`, "test")).toBeNull();
     expect(await authenticate("uvw_pat_full", "test")).toEqual(valid);
     expect(fetcher).toHaveBeenCalledTimes(2_001);
+  });
+
+  it("evicts only the failed object and preserves pending recovery and its fresh session", async () => {
+    const gate = deferred();
+    const fetcher = vi.fn<typeof fetch>(async () => {
+      if (fetcher.mock.calls.length > 1) await gate.promise;
+      return success();
+    });
+    const { authenticate, evict } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
+    const failed = await authenticate("uvw_pat_full", "test");
+    expect(failed).not.toBeNull();
+    evict("uvw_pat_full", failed!);
+    const recovery = authenticate("uvw_pat_full", "test");
+    evict("uvw_pat_full", failed!);
+    const shared = authenticate("uvw_pat_full", "test");
+    gate.resolve();
+    const fresh = await recovery;
+    expect(await shared).toBe(fresh);
+    evict("uvw_pat_full", failed!);
+    expect(await authenticate("uvw_pat_full", "test")).toBe(fresh);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a settled session through more than 10,000 pending unknown tokens", async () => {
+    const gate = deferred();
+    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
+      if (new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_full") return success();
+      await gate.promise;
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    });
+    const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
+    const valid = await authenticate("uvw_pat_full", "test");
+    const pending = Array.from({ length: 10_001 }, (_, i) => authenticate(`uvw_pat_invalid_${i}`, "test"));
+    try {
+      expect(await authenticate("uvw_pat_full", "test")).toBe(valid);
+      expect(fetcher).toHaveBeenCalledTimes(10_002);
+    } finally {
+      gate.resolve();
+      await Promise.all(pending);
+    }
+    expect(await authenticate("uvw_pat_full", "test")).toBe(valid);
   });
 
   it("sweeps expired positive entries before evicting a live entry at capacity", async () => {
