@@ -19,6 +19,12 @@ RUN pnpm --filter @univerjs/univer-workspace-mcp... build \
 FROM ${BASE_IMAGE} AS runtime
 ENV NODE_ENV=production
 ENV HOST=0.0.0.0
+# The renderer role launches this Chromium. The Debian package is built for amd64 and arm64.
+# The CJK and Latin fonts keep Chinese and Latin text from rendering as boxes.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium fonts-noto-cjk fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+ENV UNIVER_RENDER_BROWSER=/usr/bin/chromium
 ENV PORT=3000
 WORKDIR /app/univer-workspace-mcp
 COPY --from=build /app/deploy ./

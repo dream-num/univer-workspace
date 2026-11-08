@@ -7,7 +7,7 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-skill-data.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/copy-skill-data.mjs && node scripts/copy-render-runtime.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run"
   },
@@ -18,6 +18,10 @@
     "@univer-cli/content-inspection": "1.4.0",
     "@univer-cli/content-inspection-command": "1.4.0",
     "@univer-cli/resource-library": "1.4.0",
+    "@univer-cli/unit-layout-lint": "1.4.0",
+    "@univer-cli/unit-pdf-printer": "1.4.0",
+    "@univer-cli/unit-screenshot": "1.4.0",
+    "@univer-cli/univer-render-runtime": "1.4.0",
     "@univerjs-pro/cli-assets": "0.1.0",
     "@univerjs-pro/exchange-node": "1.4.0",
     "@univerjs/univer-workspace-client-core": "workspace:*",

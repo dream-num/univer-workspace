@@ -30,11 +30,19 @@ it("keeps native execution, RPC framing and credential access behind their owner
       }
       if (path.startsWith("executor/") && resolved.startsWith("gateway/"))
         failures.push(`${path} imports gateway`);
+      if (
+        path.startsWith("renderer/") &&
+        (resolved.startsWith("gateway/") ||
+          (resolved.startsWith("executor/") && resolved !== "executor/license.js") ||
+          specifier.startsWith("@univerjs/univer-workspace-client-core") ||
+          specifier.startsWith("@univerjs-pro/"))
+      )
+        failures.push(`${path} imports ${specifier}`);
       if (/apps\/cli|packages\/client-core\/(src|dist)/.test(specifier))
         failures.push(`${path} imports application internals`);
       if (
         resolved === "shared/frame.js" &&
-        !["gateway/executor/client.ts", "executor/server.ts"].includes(path)
+        !["gateway/executor/client.ts", "executor/server.ts", "renderer/server.ts"].includes(path)
       )
         failures.push(`${path} imports frame codec`);
       if (resolved === "gateway/executor/client.js" && path !== "gateway/tools/executor-tool.ts")
@@ -65,6 +73,8 @@ it("keeps native execution, RPC framing and credential access behind their owner
       /context\.executor/.test(source)
     )
       failures.push(`${path} opens the executor link`);
+    if (path.startsWith("renderer/") && /WorkspaceHttp|WORKSPACE_|grant|session/i.test(source))
+      failures.push(`${path} touches Workspace HTTP or credentials`);
     if (
       path.startsWith("executor/") &&
       path !== "executor/credentials.ts" &&
