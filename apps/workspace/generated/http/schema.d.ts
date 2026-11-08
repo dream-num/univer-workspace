@@ -54,7 +54,27 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Start an OAuth-style authorization for a registered client. */
+        /**
+         * Start an OAuth-style authorization for a registered client.
+         * @description Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
+         *     registered `redirect_uri`, a 32 to 256 character base64url `state`, and
+         *     a `scope` from the client's configured scopes (default `identity`).
+         *
+         *     When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
+         *     (`POST /api/auth/register`) may also authorize. They must send
+         *     `response_type=code`, `code_challenge_method=S256` and a `resource`
+         *     equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
+         *     `write`, `publish` and `worktree:merge` (default all four) and `state`
+         *     is optional, 1 to 1024 printable ASCII characters. A loopback
+         *     `redirect_uri` matches a registered one with any port (RFC 8252); every
+         *     other URI matches exactly. The user always sees a consent page that
+         *     lists the requested scopes, each of which can be unchecked; the code
+         *     carries only the checked scopes. An unknown client or unregistered
+         *     `redirect_uri` is answered here with 400; once both are verified, other
+         *     errors redirect to the client with RFC 6749 `error` (`invalid_request`,
+         *     `invalid_scope`, `invalid_target`, `unsupported_response_type` or
+         *     `access_denied`), `error_description` and `state`.
+         */
         get: operations["oauthAuthorize"];
         put?: never;
         post?: never;
@@ -74,8 +94,21 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Exchange a one-time authorization code for a registered client identity, or a personal access token or MCP access token for a downstream session.
-         * @description Two grants share this endpoint.
+         * Exchange a one-time authorization code for a registered client identity or MCP tokens, refresh MCP tokens, or exchange a personal access token or MCP access token for a downstream session.
+         * @description Three grants share this endpoint.
+         *
+         *     For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
+         *     is set), `authorization_code` and `refresh_token` take a form body with
+         *     `client_id` and no secret, and must send the `resource` the grant is
+         *     bound to. They return `McpTokenResponse` with `Cache-Control:
+         *     no-store`. A code is good for one attempt; presenting an already
+         *     redeemed code revokes the grant it produced. A refresh token rotates;
+         *     presenting a rotated one within 60 seconds fails without side effects,
+         *     later it revokes the grant. Errors use `{ "error", "error_description" }`:
+         *     `invalid_request` (400), `invalid_client` (401, `refresh_token` with an
+         *     unknown client) or `invalid_grant` (400, including a wrong client,
+         *     `redirect_uri`, `code_verifier` or `resource`). An `authorization_code`
+         *     request from an unknown client gets the static-client error below.
          *
          *     `authorization_code` (JSON or form body) behaves as described below.
          *
@@ -105,6 +138,74 @@ export interface paths {
          *     expires. Identity-only grants return an empty `access_token`.
          */
         post: operations["oauthToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * RFC 8414 authorization server metadata for MCP clients.
+         * @description Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Endpoints
+         *     are absolute URLs under `PUBLIC_ORIGIN`. Client ID Metadata Documents
+         *     are not advertised.
+         */
+        get: operations["getOAuthAuthorizationServerMetadata"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * RFC 7591 dynamic registration of a public MCP client.
+         * @description Unauthenticated. Served only while `MCP_RESOURCE_URLS` is set;
+         *     otherwise 404. Accepts a JSON body of at most 16 KiB. No client secret
+         *     is issued. Registration stops with 503 once the deployment holds
+         *     `MCP_MAX_REGISTERED_CLIENTS` clients (default 10,000).
+         */
+        post: operations["registerOAuthClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * RFC 7009 revocation of an MCP client's grant.
+         * @description Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Revokes
+         *     the grant behind a current access or refresh token, and the downstream
+         *     sessions exchanged from it, when it belongs to `client_id`. Answers 200
+         *     with an empty body whether or not the token was valid.
+         */
+        post: operations["revokeOAuthToken"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2031,6 +2132,40 @@ export interface components {
             /** @description Required for OAuth access tokens; ignored for personal access tokens. */
             resource?: string;
         };
+        /** @description Authorization code grant for a dynamically registered (public) MCP client. */
+        McpAuthorizationCodeRequest: {
+            /** @enum {string} */
+            grant_type: "authorization_code";
+            code: string;
+            client_id: string;
+            /** @description The exact redirect URI of the authorization request, including a loopback port. */
+            redirect_uri: string;
+            code_verifier: string;
+            /** @description Must equal the `resource` of the authorization request. */
+            resource: string;
+        };
+        /** @description Refresh token grant for a dynamically registered MCP client. The refresh token rotates. */
+        McpRefreshTokenRequest: {
+            /** @enum {string} */
+            grant_type: "refresh_token";
+            refresh_token: string;
+            client_id: string;
+            /** @description Must equal the resource the grant was issued for. */
+            resource: string;
+            /** @description Ignored; a refreshed grant keeps its granted scopes. */
+            scope?: string;
+        };
+        McpTokenResponse: {
+            /** @description A `uvw_at_` access token bound to the grant's resource. */
+            access_token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            expires_in: number;
+            /** @description A `uvw_rt_` refresh token. Presenting a rotated one within 60 seconds fails; later it revokes the grant. */
+            refresh_token: string;
+            /** @description Granted MCP scopes, space-separated. */
+            scope: string;
+        };
         TokenExchangeSubject: {
             /** @enum {string} */
             kind: "pat" | "oauth";
@@ -2041,9 +2176,71 @@ export interface components {
         OAuthTokenError: {
             /** @enum {string} */
             error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client";
+            /** @description Present for dynamically registered MCP clients. */
+            error_description?: string;
         };
         /** @enum {string} */
         McpScope: "read" | "write" | "publish" | "worktree:merge";
+        AuthorizationServerMetadata: {
+            /** @description The configured `PUBLIC_ORIGIN`. */
+            issuer: string;
+            authorization_endpoint: string;
+            token_endpoint: string;
+            registration_endpoint: string;
+            revocation_endpoint: string;
+            response_types_supported: "code"[];
+            grant_types_supported: ("authorization_code" | "refresh_token")[];
+            code_challenge_methods_supported: "S256"[];
+            token_endpoint_auth_methods_supported: "none"[];
+            revocation_endpoint_auth_methods_supported: "none"[];
+            scopes_supported: components["schemas"]["McpScope"][];
+        };
+        /**
+         * @description RFC 7591 metadata for a public native client. Other metadata, such as
+         *     `client_uri` or `application_type`, is accepted and ignored.
+         */
+        ClientRegistrationRequest: {
+            /**
+             * @description Each URI is a loopback `http` URL (`127.0.0.1`, `[::1]` or
+             *     `localhost`), an `https` URL, or a reverse-domain private-use scheme
+             *     such as `com.example.app:/callback`, without a fragment or
+             *     credentials.
+             */
+            redirect_uris: string[];
+            client_name?: string;
+            /** @description Must include `authorization_code`. Defaults to both supported grants. */
+            grant_types?: ("authorization_code" | "refresh_token")[];
+            response_types?: "code"[];
+            /** @enum {string} */
+            token_endpoint_auth_method?: "none";
+            /** @description A space-separated subset of the MCP scopes. */
+            scope?: string;
+        };
+        ClientRegistrationResponse: {
+            client_id: string;
+            /** @description Unix epoch seconds. */
+            client_id_issued_at: number;
+            client_name?: string;
+            redirect_uris: string[];
+            grant_types: ("authorization_code" | "refresh_token")[];
+            response_types: "code"[];
+            /** @enum {string} */
+            token_endpoint_auth_method: "none";
+            /** @description The MCP scopes the client may request. */
+            scope: string;
+        };
+        ClientRegistrationError: {
+            /** @enum {string} */
+            error: "invalid_redirect_uri" | "invalid_client_metadata" | "temporarily_unavailable";
+            error_description: string;
+        };
+        TokenRevocationRequest: {
+            /** @description A current access or refresh token of the client's grant. */
+            token: string;
+            /** @description Ignored. */
+            token_type_hint?: string;
+            client_id: string;
+        };
         PersonalAccessToken: {
             id: string;
             name: string;
@@ -2996,9 +3193,16 @@ export interface operations {
             query: {
                 client_id: string;
                 redirect_uri: string;
-                state: string;
+                /** @description Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients. */
+                state?: string;
                 code_challenge: string;
                 scope?: string;
+                /** @description Required for MCP clients. */
+                response_type?: "code";
+                /** @description Required for MCP clients. */
+                code_challenge_method?: "S256";
+                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly. */
+                resource?: string;
             };
             header?: never;
             path?: never;
@@ -3006,7 +3210,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Redirect to Workspace login or back to the registered redirect_uri with a one-time code. */
+            /** @description Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error. */
             302: {
                 headers: {
                     Location: string;
@@ -3045,17 +3249,17 @@ export interface operations {
                     redirect_uri: string;
                     code_verifier: string;
                 };
-                "application/x-www-form-urlencoded": components["schemas"]["TokenExchangeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TokenExchangeRequest"] | components["schemas"]["McpAuthorizationCodeRequest"] | components["schemas"]["McpRefreshTokenRequest"];
             };
         };
         responses: {
-            /** @description The registered client identity and, for `session` grants, a login session token. */
+            /** @description The registered client identity and, for `session` grants, a login session token; or MCP tokens. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
+                    "application/json": components["schemas"]["McpTokenResponse"] | {
                         /**
                          * @description Workspace session token for `session` grants, empty
                          *     string for identity-only grants.
@@ -3097,6 +3301,120 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
                 };
             };
+        };
+    };
+    getOAuthAuthorizationServerMetadata: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorization server metadata. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthorizationServerMetadata"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    registerOAuthClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientRegistrationRequest"];
+            };
+        };
+        responses: {
+            /** @description The registered client. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationResponse"];
+                };
+            };
+            /** @description `invalid_redirect_uri` or `invalid_client_metadata`. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationError"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            /** @description `invalid_client_metadata`: the body is larger than 16 KiB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationError"];
+                };
+            };
+            /** @description `temporarily_unavailable`: the registered-client cap is reached. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClientRegistrationError"];
+                };
+            };
+        };
+    };
+    revokeOAuthToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["TokenRevocationRequest"];
+            };
+        };
+        responses: {
+            /** @description Processed; the token is no longer valid if it was. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `invalid_request`: a JSON body or a missing token. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthTokenError"];
+                };
+            };
+            /** @description `invalid_client`: `client_id` is not a registered MCP client. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthTokenError"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     listPersonalAccessTokens: {

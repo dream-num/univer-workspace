@@ -203,6 +203,20 @@ export function createAccessTokenService(options: {
       return options.database.transaction(() => revokeGrantNow(id, userId));
     },
 
+    /** RFC 7009: revokes the grant behind a current access or refresh token, only when it belongs to `clientId`. */
+    revokeClientGrant(token: string, clientId: string): void {
+      const refresh = token.startsWith(REFRESH_PREFIX);
+      const parsed = parseToken(token, refresh ? REFRESH_PREFIX : ACCESS_PREFIX);
+      if (!parsed) return;
+      options.database.transaction(() => {
+        const row = grantRow(parsed.id);
+        if (!row || row.client_id !== clientId) return;
+        if (secretMatches(parsed.secret, String(refresh ? row.refresh_token_hash : row.access_token_hash))) {
+          revokeGrantNow(parsed.id);
+        }
+      });
+    },
+
     verifySubjectToken(token: string, check: { readonly resource: string }): SubjectToken | null {
       const at = now();
       const pat = parseToken(token, PAT_PREFIX);
@@ -248,6 +262,10 @@ export function createAccessTokenService(options: {
     },
 
     getClient,
+
+    countClients(): number {
+      return Number((db.prepare("SELECT count(*) AS n FROM oauth_clients").get() as Row).n);
+    },
   };
 
   function getClient(clientId: string): OAuthClientRecord | null {

@@ -56,12 +56,14 @@ import {
   type ResourcesModule,
 } from "./modules/resources/index.js";
 import {
+  authorizationServerMetadata,
   createAccessTokenService,
   createIdentityModule,
   createIdentityRouter,
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
   createGoogleOAuthProvider,
+  createMcpClientRegistrationHandler,
   createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
   type GoogleOAuthProvider,
@@ -341,6 +343,12 @@ export function createWorkspaceApplication(
   });
   // The operational endpoint is disabled unless a dedicated scrape token is set.
   app.get("/metrics", createMetricsHandler(config.metricsToken));
+  const mcpOAuth = config.mcpOAuth;
+  if (mcpOAuth) {
+    app.get("/.well-known/oauth-authorization-server", (_request, response) => {
+      response.json(authorizationServerMetadata(mcpOAuth));
+    });
+  }
   app.get("/openapi.yaml", (_request, response) => {
     const filename = resolve("generated/http/openapi.bundled.yaml");
     if (!existsSync(filename)) {
@@ -360,6 +368,9 @@ export function createWorkspaceApplication(
       pageTitle: "Univer Workspace API",
     })
   );
+  if (mcpOAuth) {
+    app.post("/api/auth/register", createMcpClientRegistrationHandler({ accessTokens, mcpOAuth }));
+  }
   app.use(
     "/api",
     createIdentityRouter({
@@ -382,6 +393,7 @@ export function createWorkspaceApplication(
       secureCookies: config.secureCookies,
       oauthClients,
       authorizationStore,
+      mcpOAuth: mcpOAuth ?? null,
     })
   );
   app.use("/api", createSpacesRouter({ identity, spaces }));

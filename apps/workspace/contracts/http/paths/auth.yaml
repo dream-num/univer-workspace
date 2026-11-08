@@ -19,6 +19,25 @@
     tags: [Authentication]
     operationId: oauthAuthorize
     summary: Start an OAuth-style authorization for a registered client.
+    description: |
+      Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
+      registered `redirect_uri`, a 32 to 256 character base64url `state`, and
+      a `scope` from the client's configured scopes (default `identity`).
+
+      When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
+      (`POST /api/auth/register`) may also authorize. They must send
+      `response_type=code`, `code_challenge_method=S256` and a `resource`
+      equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
+      `write`, `publish` and `worktree:merge` (default all four) and `state`
+      is optional, 1 to 1024 printable ASCII characters. A loopback
+      `redirect_uri` matches a registered one with any port (RFC 8252); every
+      other URI matches exactly. The user always sees a consent page that
+      lists the requested scopes, each of which can be unchecked; the code
+      carries only the checked scopes. An unknown client or unregistered
+      `redirect_uri` is answered here with 400; once both are verified, other
+      errors redirect to the client with RFC 6749 `error` (`invalid_request`,
+      `invalid_scope`, `invalid_target`, `unsupported_response_type` or
+      `access_denied`), `error_description` and `state`.
     security:
       - {}
       - sessionCookie: []
@@ -36,10 +55,10 @@
           type: string
       - name: state
         in: query
-        required: true
+        required: false
+        description: Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients.
         schema:
           type: string
-          pattern: ^[A-Za-z0-9_-]{32,256}$
       - name: code_challenge
         in: query
         required: true
@@ -51,9 +70,29 @@
         required: false
         schema:
           type: string
+      - name: response_type
+        in: query
+        required: false
+        description: Required for MCP clients.
+        schema:
+          type: string
+          enum: [code]
+      - name: code_challenge_method
+        in: query
+        required: false
+        description: Required for MCP clients.
+        schema:
+          type: string
+          enum: [S256]
+      - name: resource
+        in: query
+        required: false
+        description: Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly.
+        schema:
+          type: string
     responses:
       "302":
-        description: Redirect to Workspace login or back to the registered redirect_uri with a one-time code.
+        description: Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error.
         headers:
           Location:
             required: true
@@ -72,9 +111,22 @@
   post:
     tags: [Authentication]
     operationId: oauthToken
-    summary: Exchange a one-time authorization code for a registered client identity, or a personal access token or MCP access token for a downstream session.
+    summary: Exchange a one-time authorization code for a registered client identity or MCP tokens, refresh MCP tokens, or exchange a personal access token or MCP access token for a downstream session.
     description: |
-      Two grants share this endpoint.
+      Three grants share this endpoint.
+
+      For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
+      is set), `authorization_code` and `refresh_token` take a form body with
+      `client_id` and no secret, and must send the `resource` the grant is
+      bound to. They return `McpTokenResponse` with `Cache-Control:
+      no-store`. A code is good for one attempt; presenting an already
+      redeemed code revokes the grant it produced. A refresh token rotates;
+      presenting a rotated one within 60 seconds fails without side effects,
+      later it revokes the grant. Errors use `{ "error", "error_description" }`:
+      `invalid_request` (400), `invalid_client` (401, `refresh_token` with an
+      unknown client) or `invalid_grant` (400, including a wrong client,
+      `redirect_uri`, `code_verifier` or `resource`). An `authorization_code`
+      request from an unknown client gets the static-client error below.
 
       `authorization_code` (JSON or form body) behaves as described below.
 
@@ -127,38 +179,43 @@
                 type: string
         application/x-www-form-urlencoded:
           schema:
-            $ref: ../schemas/identity.yaml#/TokenExchangeRequest
+            oneOf:
+              - $ref: ../schemas/identity.yaml#/TokenExchangeRequest
+              - $ref: ../schemas/identity.yaml#/McpAuthorizationCodeRequest
+              - $ref: ../schemas/identity.yaml#/McpRefreshTokenRequest
     responses:
       "200":
-        description: The registered client identity and, for `session` grants, a login session token.
+        description: The registered client identity and, for `session` grants, a login session token; or MCP tokens.
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                access_token:
-                  type: string
-                  description: |
-                    Workspace session token for `session` grants, empty
-                    string for identity-only grants.
-                token_type:
-                  type: string
-                expires_in:
-                  type: integer
-                  description: |
-                    Seconds until the issued session expires for `session`
-                    grants and token exchange.
-                issued_token_type:
-                  type: string
-                  description: Present for token exchange only.
-                  enum: [urn:univer:params:oauth:token-type:workspace-session]
-                scope:
-                  type: string
-                  description: Present for token exchange only. Granted MCP scopes, space-separated.
-                subject:
-                  $ref: ../schemas/identity.yaml#/TokenExchangeSubject
-                user:
-                  $ref: ../schemas/identity.yaml#/User
+              anyOf:
+                - $ref: ../schemas/identity.yaml#/McpTokenResponse
+                - type: object
+                  properties:
+                    access_token:
+                      type: string
+                      description: |
+                        Workspace session token for `session` grants, empty
+                        string for identity-only grants.
+                    token_type:
+                      type: string
+                    expires_in:
+                      type: integer
+                      description: |
+                        Seconds until the issued session expires for `session`
+                        grants and token exchange.
+                    issued_token_type:
+                      type: string
+                      description: Present for token exchange only.
+                      enum: [urn:univer:params:oauth:token-type:workspace-session]
+                    scope:
+                      type: string
+                      description: Present for token exchange only. Granted MCP scopes, space-separated.
+                    subject:
+                      $ref: ../schemas/identity.yaml#/TokenExchangeSubject
+                    user:
+                      $ref: ../schemas/identity.yaml#/User
       "400":
         description: Invalid request, or an OAuth-style error for token exchange.
         content:
@@ -175,6 +232,106 @@
               oneOf:
                 - $ref: ../schemas/common.yaml#/ErrorResponse
                 - $ref: ../schemas/identity.yaml#/OAuthTokenError
+
+/.well-known/oauth-authorization-server:
+  get:
+    tags: [Authentication]
+    operationId: getOAuthAuthorizationServerMetadata
+    summary: RFC 8414 authorization server metadata for MCP clients.
+    description: |
+      Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Endpoints
+      are absolute URLs under `PUBLIC_ORIGIN`. Client ID Metadata Documents
+      are not advertised.
+    security: []
+    responses:
+      "200":
+        description: Authorization server metadata.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthorizationServerMetadata
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/auth/register:
+  post:
+    tags: [Authentication]
+    operationId: registerOAuthClient
+    summary: RFC 7591 dynamic registration of a public MCP client.
+    description: |
+      Unauthenticated. Served only while `MCP_RESOURCE_URLS` is set;
+      otherwise 404. Accepts a JSON body of at most 16 KiB. No client secret
+      is issued. Registration stops with 503 once the deployment holds
+      `MCP_MAX_REGISTERED_CLIENTS` clients (default 10,000).
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/ClientRegistrationRequest
+    responses:
+      "201":
+        description: The registered client.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationResponse
+      "400":
+        description: "`invalid_redirect_uri` or `invalid_client_metadata`."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationError
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "413":
+        description: "`invalid_client_metadata`: the body is larger than 16 KiB."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationError
+      "503":
+        description: "`temporarily_unavailable`: the registered-client cap is reached."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationError
+
+/api/auth/revoke:
+  post:
+    tags: [Authentication]
+    operationId: revokeOAuthToken
+    summary: RFC 7009 revocation of an MCP client's grant.
+    description: |
+      Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Revokes
+      the grant behind a current access or refresh token, and the downstream
+      sessions exchanged from it, when it belongs to `client_id`. Answers 200
+      with an empty body whether or not the token was valid.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            $ref: ../schemas/identity.yaml#/TokenRevocationRequest
+    responses:
+      "200":
+        description: Processed; the token is no longer valid if it was.
+      "400":
+        description: "`invalid_request`: a JSON body or a missing token."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/OAuthTokenError
+      "401":
+        description: "`invalid_client`: `client_id` is not a registered MCP client."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/OAuthTokenError
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
 
 /api/auth/tokens:
   get:

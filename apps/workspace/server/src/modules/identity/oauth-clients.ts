@@ -4,7 +4,7 @@ import type { User } from "./identity.types.js";
 
 const CODE_TTL_MS = 60_000;
 const STATE_PATTERN = /^[A-Za-z0-9_-]{32,256}$/u;
-const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
+export const PKCE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43,128}$/u;
 const DEFAULT_SCOPES = ["identity"] as const;
 
 /**
@@ -35,6 +35,8 @@ export interface IssuedAuthorization {
   readonly redirectUri: string;
   readonly clientId: string;
   readonly scope: string;
+  /** Set for dynamically registered MCP clients: the RFC 8707 resource the code is bound to. */
+  readonly resource?: string;
   readonly user: User;
   readonly expiresAt: number;
 }
@@ -148,20 +150,20 @@ export function validateRegisteredRedirectUri(
 
 export function issueOAuthAuthorizationCode(
   clientId: string,
-  state: string,
   codeChallenge: string,
   redirectUri: string,
   scope: string,
   user: User,
-  now: number = Date.now()
+  now: number = Date.now(),
+  resource?: string,
 ): IssuedAuthorization {
-  verifyState(state);
   return {
     code: randomBytes(24).toString("base64url"),
     codeChallenge,
     redirectUri,
     clientId,
     scope,
+    ...(resource === undefined ? {} : { resource }),
     user,
     expiresAt: now + CODE_TTL_MS,
   };
@@ -200,14 +202,14 @@ export function requireOAuthAuthorization(
 export function authorizeRedirectTarget(
   input: {
     readonly redirectUri: string;
-    readonly state: string;
+    readonly state: string | null;
     readonly scope: string;
   },
   code: string
 ): string {
   const target = new URL(input.redirectUri);
   target.searchParams.set("code", code);
-  target.searchParams.set("state", input.state);
+  if (input.state !== null) target.searchParams.set("state", input.state);
   target.searchParams.set("scope", input.scope);
   return target.toString();
 }
@@ -230,14 +232,4 @@ function secretsMatch(actual: string, expected: string): boolean {
 
 function sha256Base64Url(value: string): string {
   return createHash("sha256").update(value).digest("base64url");
-}
-
-function verifyState(state: string): void {
-  if (!STATE_PATTERN.test(state)) {
-    throw new ApplicationError(
-      "INVALID_INPUT",
-      400,
-      "state must be a 32 to 256 character base64url value."
-    );
-  }
 }
