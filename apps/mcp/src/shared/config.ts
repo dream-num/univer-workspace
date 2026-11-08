@@ -36,6 +36,7 @@ const environment = z.object({
   WORKSPACE_TRANSPORT_URL: origin.optional(),
   MCP_PUBLIC_URL: publicUrl,
   METRICS_TOKEN: z.string().optional(),
+  MCP_RESOURCE_CACHE_DIRECTORY: z.string().min(1).optional(),
   MCP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   MCP_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),

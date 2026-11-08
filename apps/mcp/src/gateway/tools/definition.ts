@@ -2,6 +2,7 @@ import type {
   WorkspaceHttp,
   WorkspaceSubject,
 } from "@univerjs/univer-workspace-client-core/product";
+import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { z } from "zod";
 
 export type ToolScope = "read" | "write" | "publish" | "worktree:merge";
@@ -12,6 +13,7 @@ export interface ToolContext {
   readonly requestId: string;
   readonly identityOrigin: string;
   readonly skillDataRoot: string;
+  readonly resources: () => ResourceLibrary;
   readonly scopes: ReadonlySet<ToolScope>;
 }
 

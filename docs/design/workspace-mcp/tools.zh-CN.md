@@ -161,7 +161,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 - `repo_edit` 改 `slug` 会让旧引用失效，描述里写明。
 - `label_write` 和 `space_node` 用 `action` 枚举合并低频操作，以控制工具数量。
-- `resources_export` 返回 SVG 文本，不写目录。
+- `resources_export` 返回 SVG 文本，不写目录。实测差异：库的 `read` 直接返回 SVG 文本，不必借临时目录；结果是 `{resources: [{handle, svg}], failed: [...]}`（CLI 为 `{exported: [{handle, path}], failed}`），`failed` 与 CLI 一致。`query` 和 `registry` 各取一个值（CLI 可传多个）。
 
 ## 4. 不可避免的差异
 

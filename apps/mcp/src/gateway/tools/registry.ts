@@ -30,6 +30,9 @@ import { labelWriteTool } from "./admin/label-write.js";
 import { spaceNodeTool } from "./admin/space-node.js";
 import { prMergeTool } from "./admin/pr-merge.js";
 import { prDiscardTool } from "./admin/pr-discard.js";
+import { resourcesRegistriesTool } from "./admin/resources-registries.js";
+import { resourcesFindTool } from "./admin/resources-find.js";
+import { resourcesExportTool } from "./admin/resources-export.js";
 import type { ToolDefinition } from "./definition.js";
 
 export const tools: readonly ToolDefinition[] = [
@@ -65,6 +68,9 @@ export const tools: readonly ToolDefinition[] = [
   spaceNodeTool,
   prMergeTool,
   prDiscardTool,
+  resourcesRegistriesTool,
+  resourcesFindTool,
+  resourcesExportTool,
 ];
 export const toolsets = ["core", "files", "admin", "all"] as const;
 

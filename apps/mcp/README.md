@@ -3,7 +3,7 @@
 A private remote MCP application built on `@univerjs/univer-workspace-client-core`.
 Stage A and the Stage B slices so far expose identity, repositories, Issues, pull requests,
 search, browse, files in a pull request, repository and label administration, merge or
-discard, the Facade API reference and the Skills over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols. Results match
+discard, the SVG resource catalog, the Facade API reference and the Skills over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols. Results match
 the CLI `--json` output and add Browser URLs. Lists return `{ repos: [...] }` in both protocols.
 
 The gateway talks to Workspace through HTTP. It has no database and does not import
@@ -63,6 +63,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
 | `MCP_PUBLIC_URL` | Required | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
+| `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp/resources` | Directory where the SVG resource catalog caches downloaded SVG files. Public data shared by every user |
 | `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
@@ -131,6 +132,22 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
 | `pr_merge` | Required `repo`, `number` | Worktree, now `merged`. Only when the user asked |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
+| `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
+| `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
+| `resources_export` | Required `handles` (`<registryId>/<resourceId>`); optional `cursor` | `{ resources: [{ handle, svg }], failed: [{ handle, code, message }] }`. The SVG text itself, written nowhere. A page may carry `truncated` and `cursor` |
+
+## SVG resource catalog
+
+`resources_*` run `@univer-cli/resource-library` 1.3.1 with the catalog manifest of `@univerjs-pro/cli-assets` 0.1.0,
+the same library and manifest the CLI uses; the gateway never imports `apps/cli`. Registry listings and searches read the
+manifest. `resources_export` downloads each SVG the first time it is requested, over HTTPS from the catalog hosts (the gateway
+needs outbound network access), stores it in `MCP_RESOURCE_CACHE_DIRECTORY`, and returns its text. The cache holds public
+catalog data and is shared by all users. Differences from `uvw resources`: `query` and `registry` take one value each (the CLI
+accepts several), and `resources_export` returns `{ resources, failed }` with the SVG text where the CLI returns
+`{ exported, failed }` with file paths (a single handle without `--out` prints `{ handle, svg }`). A handle the library rejects
+is listed in `failed` with its code, as in the CLI, and does not fail the call. Export pages by handle: when the SVGs
+would exceed 100,000 characters, the page stops before the one that does not fit and carries `truncated: true` and a `cursor`.
+A single SVG larger than the limit is `workspace-result-too-large`.
 
 ## Reference, Skills and server instructions
 
@@ -161,7 +178,7 @@ limit. For `skills_read` with `full`, read the skill without `full`, then each r
 following its cursor when paged. Other oversized results tell the agent to narrow the request.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `blob_get` and `label_list`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown

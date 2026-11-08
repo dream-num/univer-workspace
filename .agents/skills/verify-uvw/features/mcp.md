@@ -1,7 +1,7 @@
 # MCP gateway
 
 An agent connects to a disposable Docker gateway with a personal access token (PAT) that the gateway exchanges for a short-lived Workspace session, reads
-identity, repositories, Issues, pull requests, files, repository administration, labels, merges, the Facade API reference and the Skills through either MCP protocol, and leaves correlated usage evidence.
+identity, repositories, Issues, pull requests, files, repository administration, labels, merges, the SVG resource catalog, the Facade API reference and the Skills through either MCP protocol, and leaves correlated usage evidence.
 
 ## Sub-features
 
@@ -41,6 +41,10 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MS9 creates, renames, moves and trashes Nodes against the CLI.
 - MS10 merges a ready pull request and discards another against the CLI.
 - MS11 runs the full stage B product journey and screenshots the ready pull request page.
+- MC1 lists the SVG resource registries against the CLI.
+- MC2 finds SVG resources against the CLI.
+- MC3 exports one and two SVG resources and compares the text with the files the CLI writes.
+- MC4 preserves unknown handles in `failed` and an unknown registry error against the CLI.
 - MR1 lists the Skills and gets one against the CLI.
 - MR2 reads a Skill resource through `skills_read` against the CLI and checks the rewritten read instruction.
 - MR3 and MR4 search and show Facade API symbols against the CLI and the reference library.
@@ -160,7 +164,7 @@ $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","api_find","api_show","skills_read"]'
 FILES='["blob_get"]'
-ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard"]'
+ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
 jq -e --argjson want "$ADMIN" 'map(.name) == $want' "$EVIDENCE/mcp-tools-admin.out"
@@ -169,7 +173,7 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|api_(find|show)|skills_read|blob_get|label_list)$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|api_(find|show)|skills_read|blob_get|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
@@ -846,6 +850,82 @@ lists the one added `Q4 Forecast` sheet, the screenshot of the pull request page
 title `Add forecast sheet (#N)`, the `Ready` state and the `Q4 Forecast` file (open the PNG and
 look; the accessibility snapshot greps are the second view), and the pull request stays `ready`: the agent
 hands the `PR_URL` to the user and does not merge.
+
+**MC1. Resource registries.**
+
+```bash
+$V mcp --toolsets all mcp-res-registries resources_registries '{}'
+$V cli mcp-res-registries-cli resources registries --json
+diff <(jq -S . "$EVIDENCE/mcp-res-registries.out") <(jq -S . "$EVIDENCE/mcp-res-registries-cli.out")
+jq -e '.registries | length >= 1 and all(.[]; .resourceCount > 0)' "$EVIDENCE/mcp-res-registries.out"
+jq -e '.tool == "resources_registries" and .repo == null and .outcome == "ok"' "$EVIDENCE/mcp-res-registries.event.json"
+```
+
+Pass when both exit 0, the diff is empty and the event is `ok` without a repository. The gateway container downloads
+nothing for this call: it reads the catalog manifest from `@univerjs-pro/cli-assets`.
+
+**MC2. Resource find.**
+
+```bash
+$V mcp --toolsets all mcp-res-find resources_find '{"query":"arrow","registry":"example-openmoji-color","limit":3}'
+$V cli mcp-res-find-cli resources find arrow --registry example-openmoji-color --limit 3 --json
+diff <(jq -S . "$EVIDENCE/mcp-res-find.out") <(jq -S . "$EVIDENCE/mcp-res-find-cli.out")
+jq -e '.resources | length == 3' "$EVIDENCE/mcp-res-find.out"
+jq -e '.limit == 3 and .total >= 3 and .query == {"queries":["arrow"],"registries":["example-openmoji-color"]}' "$EVIDENCE/mcp-res-find.out"
+$V mcp --toolsets all mcp-res-find-default resources_find '{"query":"arrow"}'
+$V cli mcp-res-find-default-cli resources find arrow --json
+diff <(jq -S . "$EVIDENCE/mcp-res-find-default.out") <(jq -S . "$EVIDENCE/mcp-res-find-default-cli.out")
+jq -e '.limit == 30' "$EVIDENCE/mcp-res-find-default.out"
+```
+
+Pass when every command exits 0, both diffs are empty, the first call returns three resources of one registry, and the default limit is 30.
+
+**MC3. Resource export.**
+
+```bash
+H1=$(jq -r '.resources[0].handle' "$EVIDENCE/mcp-res-find.out")
+H2=$(jq -r '.resources[1].handle' "$EVIDENCE/mcp-res-find.out")
+OUT=$(mktemp -d)
+$V mcp --toolsets all mcp-res-export resources_export "{\"handles\":[\"$H1\",\"$H2\"]}"
+$V cli mcp-res-export-cli resources export "$H1" "$H2" --out "$OUT" --json
+jq -e --arg h1 "$H1" --arg h2 "$H2" '.failed == [] and (.resources | map(.handle)) == [$h1, $h2] and (has("truncated") | not)' "$EVIDENCE/mcp-res-export.out"
+jq -e '.failed == []' "$EVIDENCE/mcp-res-export-cli.out"
+i=0
+for h in "$H1" "$H2"; do
+  diff <(jq -j --argjson i "$i" '.resources[$i].svg' "$EVIDENCE/mcp-res-export.out") "$OUT/${h//\//--}.svg"
+  i=$((i+1))
+done
+$V mcp --toolsets all mcp-res-export-one resources_export "{\"handles\":[\"$H1\"]}"
+$V cli mcp-res-export-one-cli resources export "$H1" --json
+diff <(jq -S '.resources[0]' "$EVIDENCE/mcp-res-export-one.out") <(jq -S . "$EVIDENCE/mcp-res-export-one-cli.out")
+rm -rf "$OUT"
+```
+
+Pass when every command exits 0, the MCP text of each SVG equals the file the CLI wrote, a single handle equals the CLI's
+`{ handle, svg }` output, and nothing is truncated. The gateway writes no file except its shared catalog cache
+(`MCP_RESOURCE_CACHE_DIRECTORY`, default under the container's temporary directory); it needs network access to the catalog hosts.
+
+**MC4. Resource errors.**
+
+```bash
+$V mcp --toolsets all mcp-res-export-bad resources_export "{\"handles\":[\"bad\",\"$H1\",\"example-openmoji-color/zzzz\"]}"
+test $? -eq 0
+$V cli mcp-res-export-bad-cli resources export bad "$H1" example-openmoji-color/zzzz --out "$(mktemp -d)" --json
+test $? -eq 1
+diff <(jq -S '.failed' "$EVIDENCE/mcp-res-export-bad.out") <(jq -S '.failed' "$EVIDENCE/mcp-res-export-bad-cli.out")
+jq -e --arg h1 "$H1" '(.resources | map(.handle)) == [$h1] and (.failed | map(.code)) == ["resource-invalid-handle","resource-not-found"]' "$EVIDENCE/mcp-res-export-bad.out"
+$V mcp --toolsets all mcp-res-find-bad resources_find '{"query":"arrow","registry":"nope"}'
+test $? -eq 1
+$V cli mcp-res-find-bad-cli resources find arrow --registry nope --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-res-find-bad.out")
+test "$code" = resource-registry-not-found
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-res-find-bad-cli.err" | head -n1)" = "$code"
+jq -e '.tool == "resources_find" and .outcome == "tool_error" and .error_code == "resource-registry-not-found"' "$EVIDENCE/mcp-res-find-bad.event.json"
+```
+
+Pass when the failed handles equal the CLI's `failed` and the good handle is still returned in the MCP result, the unknown registry fails in
+MCP and CLI with the same code (`resource-registry-not-found`), and the event carries that code.
 
 **MR1. Skills list and get.** The CLI prints `{ success, data }`; the gateway wraps the same data in `skills`.
 

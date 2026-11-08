@@ -23,9 +23,11 @@ import {
 import { pino, type Logger } from "pino";
 import { Counter, Histogram, Registry } from "prom-client";
 import { z } from "zod";
+import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
+import { openResourceLibrary } from "./resources.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
 import { translateToolError } from "./tool-error.js";
@@ -67,6 +69,8 @@ export function createGateway(
     readonly scopes?: ReadonlySet<ToolScope>;
     // The build copies apps/cli/skill-data to dist/skill-data; tests point at the source directory.
     readonly skillDataRoot?: string;
+    // Tests inject a library with a fake downloader; production opens the catalog lazily on first use.
+    readonly resourceLibrary?: ResourceLibrary;
   } = {},
 ) {
   const logger =
@@ -96,6 +100,9 @@ export function createGateway(
   });
   const skillDataRoot =
     options.skillDataRoot ?? fileURLToPath(new URL("../skill-data", import.meta.url));
+  let resourceLibrary = options.resourceLibrary;
+  const resources = () =>
+    (resourceLibrary ??= openResourceLibrary(config.MCP_RESOURCE_CACHE_DIRECTORY));
   const publicUrl = new URL(config.MCP_PUBLIC_URL);
   const challenge = `Bearer resource_metadata="${publicUrl.origin}/.well-known/oauth-protected-resource/mcp"`;
   const unauthorized = (invalidToken = false) =>
@@ -335,6 +342,7 @@ export function createGateway(
         requestId,
         identityOrigin: config.WORKSPACE_ORIGIN,
         skillDataRoot,
+        resources,
         scopes: authentication.scopes ?? options.scopes ?? allScopes,
       },
       auth: authentication,

@@ -33,6 +33,9 @@ export const adminNames = [
   "space_node",
   "pr_merge",
   "pr_discard",
+  "resources_registries",
+  "resources_find",
+  "resources_export",
 ];
 export const writeNames = [
   "issue_create",
@@ -66,4 +69,7 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   space_node: "publish",
   pr_merge: "worktree:merge",
   pr_discard: "worktree:merge",
+  resources_registries: "read",
+  resources_find: "read",
+  resources_export: "read",
 };
