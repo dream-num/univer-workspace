@@ -53,6 +53,7 @@ MCP Server 不连接任何数据库（D12）。它保存的状态只有三类，
 | daemon | 长驻进程，经 unix socket 只提供三个 RPC：`runtime.execute-read`、`runtime.export-unit-data`、`runtime.execute-and-commit`。不会因空闲退出 | `apps/cli/src/runtime/daemon.ts:15-45` |
 | 运行时池 | 按 key 缓存的子进程池，每个 Unit 一个子进程。空闲 5 分钟回收，持续使用的不回收。最多 20 个。打开和操作各 30 秒超时。满了报 `COLLABORATION_POOL_CAPACITY_EXCEEDED`，跨 key 不排队 | `@univer-cli/univer-collaboration-runtime-pool`、`@univer-cli/generic-keyed-instance-pool`（默认值从发布包解码） |
 | worker 子进程 | headless Univer 加协同客户端。保持协同 WebSocket。每次操作先 pull 并检查修订号，再执行脚本，最后提交 changeset，冲突最多重试 3 次 | `packages/client-core/src/content-worker.ts`、`packages/client-core/src/content-runtime.ts:105-305` |
+| Markdown 创建 | 执行层现有作业子进程 | 标准 headless factory 导入 Rust formula engine。编译保留在 executor，创建时在 job child 中物化；块更新使用绑定的 `executeAndCommit`，回读使用 `executeRead` 和认证 Asset 请求 |
 | Chromium | 每次截图、PDF、lint 冷启动一次 | `packages/client-core/src/screenshot.ts`、`print-pdf.ts`、`layout-lint.ts`；`@univer-cli/univer-render-runtime` |
 | 本地磁盘 | session、配置、daemon socket、资源缓存、浏览器缓存、输入输出路径 | `apps/cli/src/config.ts:46-77` |
 

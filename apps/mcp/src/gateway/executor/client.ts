@@ -39,6 +39,7 @@ export async function callExecutor<
   request: ExecutorRequest<OpSpec<I, O, P>>,
 ): Promise<ExecutorResult<OpSpec<I, O, P>>> {
   const { input } = request;
+  const effect = spec.effectFor?.(input) ?? spec.effect;
   if (!connection) throw unavailable();
   const route = spec.route(input);
   const key = [connection.grant.userId, route.scope, route.unitId ?? connection.requestId].join(
@@ -80,7 +81,7 @@ export async function callExecutor<
         connection.router.notDelivered(url);
         continue;
       }
-      throw ambiguous(spec.effect, error);
+      throw ambiguous(effect, error);
     }
     if (!response.ok) {
       await response.body?.cancel();
@@ -101,7 +102,7 @@ export async function callExecutor<
         size += chunk.length;
         if (size > spec.limits.responseBytes)
           throw new ExecutorCallError(
-            spec.effect === "write"
+            effect === "write"
               ? resultUnknown("workspace-result-too-large")
               : {
                   code: "workspace-result-too-large",
@@ -114,7 +115,7 @@ export async function callExecutor<
       }
     } catch (error) {
       if (error instanceof ExecutorCallError) throw error;
-      throw ambiguous(spec.effect, error);
+      throw ambiguous(effect, error);
     }
     try {
       const frame = decodeFrame(Buffer.concat(chunks));

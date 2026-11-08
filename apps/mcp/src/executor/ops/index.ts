@@ -8,10 +8,14 @@ import { exchangeImport } from "./exchange-import.js";
 import { exchangeExport } from "./exchange-export.js";
 
 import { htmlViewCreate, htmlViewValidate } from "./html-view.js";
+import { markdownCompile } from "./markdown-compile.js";
+import { markdownExport } from "./markdown-export.js";
 
 export const handlers = {
   "htmlView.validate": htmlViewValidate,
   "htmlView.create": htmlViewCreate,
+  "markdown.compile": markdownCompile,
+  "markdown.export": markdownExport,
   "exchange.import": exchangeImport,
   "exchange.export": exchangeExport,
   "content.execute": contentExecute,

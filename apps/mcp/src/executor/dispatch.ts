@@ -38,12 +38,13 @@ export function createDispatcher(
     const spec: OpSpec = opSpecs[name];
     const controller = new AbortController();
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
-    let unitCreationStarted = false;
-    const currentTimeout = () =>
-      timeoutError(spec.effect, "deadline", name !== "exchange.import" || unitCreationStarted);
+    let writeStarted = name !== "exchange.import" && name !== "markdown.compile";
+    let effect = spec.effect;
+    const currentTimeout = () => timeoutError(effect, "deadline", writeStarted);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const input = spec.input.parse(header.input) as OpInput<(typeof opSpecs)[K]>;
+      effect = spec.effectFor?.(input) ?? spec.effect;
       const grant = resolveGrant(header.grant);
       const fetcher: typeof fetch = (url, options) => {
         const headers = new Headers(options?.headers);
@@ -77,10 +78,28 @@ export function createDispatcher(
         usage,
         http: () => http,
         onCreateUnit: () => {
-          unitCreationStarted = true;
+          writeStarted = true;
         },
         source: () => source,
         runtime: bindRuntime(runtime, grant, usage, controller.signal),
+        materializer: {
+          materialize: async (input) => {
+            usage.executor = "cold_start";
+            usage.unitType = "doc";
+            const release = await jobs.acquire(controller.signal);
+            try {
+              return await runConversionJob(
+                { kind: "markdown.materialize", ...input },
+                credentials,
+                controller.signal,
+                undefined,
+                config.EXECUTOR_JOB_HEAP_MB,
+              );
+            } finally {
+              release();
+            }
+          },
+        },
         exchange: {
           ...credentials,
           importBuffer: async (bytes, options) => {
@@ -150,9 +169,15 @@ export function createDispatcher(
       };
     } catch (error) {
       const translated =
-        controller.signal.aborted && (spec.effect === "read" || name === "exchange.import")
+        controller.signal.aborted &&
+        (effect === "read" || name === "exchange.import" || name === "markdown.compile") &&
+        !(
+          error instanceof Error &&
+          "code" in error &&
+          error.code === "workspace-runtime-not-started"
+        )
           ? currentTimeout().wire
-          : mapRuntimeError(error, spec.effect);
+          : mapRuntimeError(error, effect);
       if (translated.outcome === "internal_error")
         logger.error(
           { request_id: header.requestId, op: name, code: translated.code },

@@ -1,3 +1,5 @@
+import { compileMarkdownTool } from "./files/compile-markdown.js";
+import { exportMarkdownTool } from "./files/export-markdown.js";
 import { fileUploadCreateTool } from "./core/file-upload-create.js";
 import { blobUploadTool } from "./files/blob-upload.js";
 import { blobDownloadTool } from "./files/blob-download.js";
@@ -83,6 +85,8 @@ export const tools: readonly ToolDefinition[] = [
   assetDownloadTool,
   htmlViewValidateTool,
   htmlViewCreateTool,
+  compileMarkdownTool,
+  exportMarkdownTool,
   repoCreateTool,
   repoEditTool,
   labelListTool,

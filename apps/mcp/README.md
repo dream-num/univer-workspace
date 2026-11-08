@@ -23,7 +23,7 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
-`content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`, `htmlView.create` and internal `diagnostics.probe`; all have empty
+`content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`, `htmlView.create`, `markdown.compile`, `markdown.export` and internal `diagnostics.probe`; all have empty
 rerun policies. Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
 Transport rejections use non-200 statuses. The grant travels only in the frame body.
 
@@ -180,6 +180,8 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
 | `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key` | `{ replacement: { operationId, resourceId, etag } }`. Destructive, requires `publish` |
 | `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
+| `compile_markdown` | `markdown`; optional `assets_upload_id`, `title`; target options require `apply` | CLI compile result with `committed`, `targetUnitId`, diagnostics and materialized `sourceMap`; compile-only also returns `javascript` |
+| `export_markdown` | `worktree`, `unit`, `source_map`, `blocks` | Current Markdown, revision, source map, diagnostics and `assets: [{path, download}]` |
 
 `admin` toolset:
 
@@ -377,7 +379,7 @@ for idempotent retries until its one-hour expiry. Workspace remains the permissi
 `blob` accepts any syntactically valid media type. `office-import` accepts the OpenXML
 Word, Excel and PowerPoint types and the legacy Office types. CSV is not supported by this import workflow. The other three
 purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
-does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Compile consumers remain future work.
+does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Markdown assets are consumed by `compile_markdown`; Typst and SVG consumers remain future work.
 
 Blob transfer streams between Workspace and the staging directory. Download results preserve
 Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
@@ -475,3 +477,32 @@ with identical HTML and destination after `workspace-result-unknown`.
 Runtime exports report worker observations. Successful creation adds HTML UTF-8
 `upload_bytes` at the gateway, including when a page has no bindings and
 `executor: none`; Blob publication creates no committed Unit revisions.
+
+## Markdown tools
+
+Enable the `files` toolset for `compile_markdown` and `export_markdown`.
+Compile-only takes Markdown text and returns JavaScript, diagnostics and a source map.
+Creation requires `apply: true`, `worktree` and `space`. Generate an `idempotency_key`
+before creation and reuse it with the same inputs on retry. Keys contain 16 to 200
+URL-safe letters, digits, underscores or hyphens. The executor scopes the key to the
+caller. The Core materializer seeds native identities from the compiled program.
+Creation runs in the existing job child because the standard headless factory imports
+the Rust formula engine. The child receives the runtime license.
+
+Updates require `apply: true`, `worktree`, `unit`, `source_map` and distinct `blocks`.
+They reject creation options and use the caller-bound `executeAndCommit` runtime.
+Replacement blocks retain their explicit IDs. Save the returned materialized `sourceMap`.
+Like the CLI, export requires that map and explicit block IDs. It reads the current
+native Doc through `executeRead`, resolves images through authenticated Workspace HTTP,
+and returns Markdown, revision, diagnostics, a refreshed map and `{path, download}` assets.
+Downloads use the existing 15-minute capability links. No resource bytes are inlined.
+
+Optional `assets_upload_id` names the caller's ready `markdown-assets` ZIP.
+The shared executor ZIP reader accepts at most 256 entries, 20,000,000 uncompressed bytes
+per file, and 50 MiB in total. It checks both declared and actual sizes while streaming
+and rejects traversal, case and Unicode collisions, duplicate paths and file-directory
+collisions. Source files remain in memory. Compile requests have a 64 MiB frame limit,
+responses have an 8 MiB limit, and exports have a 64 MiB response limit. Both operations
+share the existing 30-second budget. Compile-only has read failure semantics while the
+tool retains the `write` scope. Consumed ZIP bytes and staged asset bytes enter transfer
+usage, and confirmed creations and updates enter `committed_revisions`.

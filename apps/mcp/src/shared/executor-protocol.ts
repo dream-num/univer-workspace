@@ -28,6 +28,7 @@ export interface OpSpec<
 > {
   readonly name: string;
   readonly effect: OpEffect;
+  effectFor?(input: z.output<I>): OpEffect;
   readonly payload: P;
   readonly rerun: readonly ("revision" | "auth")[];
   readonly limits: {
@@ -80,6 +81,96 @@ export const htmlViewInput = z
     "HTML exceeds the 512 KiB UTF-8 limit.",
   );
 
+// Source maps are SDK-owned JSON. The executor parses them with the SDK before use.
+export const markdownSourceMap = z.array(z.json());
+export const markdownBlocks = z
+  .array(z.string().trim().min(1))
+  .min(1)
+  .refine((ids) => new Set(ids).size === ids.length, "Block IDs must be distinct");
+export const markdownCompileInput = z
+  .object({
+    markdown: z
+      .string()
+      .refine((text) => Buffer.byteLength(text) <= 10 * MiB, "Markdown exceeds 10 MiB"),
+    title: z.string().optional(),
+    apply: z.boolean().optional(),
+    worktreeId: z.string().min(1).optional(),
+    spaceId: z.string().min(1).optional(),
+    parentNodeId: z.string().min(1).optional(),
+    unitId: z.string().min(1).optional(),
+    sourceMap: markdownSourceMap.optional(),
+    blockIds: markdownBlocks.optional(),
+    idempotencyKey: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{16,200}$/)
+      .optional(),
+  })
+  .superRefine((input, ctx) => {
+    const invalid = (message: string) => ctx.addIssue({ code: "custom", message });
+    if (input.apply !== true) {
+      if (
+        [
+          input.worktreeId,
+          input.spaceId,
+          input.parentNodeId,
+          input.unitId,
+          input.sourceMap,
+          input.blockIds,
+          input.idempotencyKey,
+        ].some((value) => value !== undefined)
+      )
+        invalid("Target options require apply: true.");
+    } else {
+      if (input.worktreeId === undefined) invalid("apply requires worktree.");
+      if (input.unitId !== undefined) {
+        if (input.sourceMap === undefined || input.blockIds === undefined)
+          invalid("Block updates require source_map and blocks.");
+        if (
+          [input.spaceId, input.parentNodeId, input.idempotencyKey].some(
+            (value) => value !== undefined,
+          )
+        )
+          invalid("Creation options cannot be used with unit.");
+      } else {
+        if (input.spaceId === undefined) invalid("Creating a Doc requires space.");
+        if (input.sourceMap !== undefined || input.blockIds !== undefined)
+          invalid("Block update options require unit.");
+      }
+    }
+  });
+export const markdownExportInput = z.object({
+  worktreeId: z.string().min(1),
+  unitId: z.string().min(1),
+  sourceMap: markdownSourceMap,
+  blockIds: markdownBlocks,
+});
+export const markdownCompileOutput = z.object({
+  committed: z.boolean(),
+  targetUnitId: z.string(),
+  diagnostics: z.array(z.json()),
+  sourceMap: markdownSourceMap,
+  javascript: z.string().optional(),
+  unit: z.json().optional(),
+  execution: z.json().optional(),
+});
+export const markdownExportOutput = z.object({
+  formatVersion: z.literal(1),
+  unitId: z.string(),
+  blockIds: z.array(z.string()),
+  revision: z.int().positive(),
+  markdown: z.string(),
+  sourceMap: markdownSourceMap,
+  diagnostics: z.array(z.json()),
+  assets: z.array(
+    z.object({
+      path: z.string(),
+      mimeType: z.string(),
+      offset: z.int().nonnegative(),
+      size: z.int().nonnegative().max(20_000_000),
+    }),
+  ),
+});
+
 export const opSpecs = {
   "htmlView.validate": defineOp({
     name: "htmlView.validate",
@@ -117,6 +208,30 @@ export const opSpecs = {
       })
       .catchall(z.json()),
     route: (input) => ({ scope: "htmlView.create", unitId: input.idempotencyKey }),
+  }),
+  "markdown.compile": defineOp({
+    name: "markdown.compile",
+    effect: "write",
+    effectFor: (input) => (input.apply === true ? "write" : "read"),
+    payload: "request",
+    rerun: [],
+    limits: { requestBytes: 64 * MiB, responseBytes: 8 * MiB, budgetMs: 30_000 },
+    input: markdownCompileInput,
+    output: markdownCompileOutput,
+    route: (input) => ({
+      scope: input.worktreeId === undefined ? "markdown.compile" : `worktree:${input.worktreeId}`,
+      unitId: input.unitId ?? input.idempotencyKey ?? null,
+    }),
+  }),
+  "markdown.export": defineOp({
+    name: "markdown.export",
+    effect: "read",
+    payload: "response",
+    rerun: [],
+    limits: { requestBytes: 4 * MiB, responseBytes: 64 * MiB, budgetMs: 30_000 },
+    input: markdownExportInput,
+    output: markdownExportOutput,
+    route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
   }),
   "exchange.import": defineOp({
     name: "exchange.import",

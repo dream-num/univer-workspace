@@ -37,6 +37,8 @@ export const filesNames = [
   "asset_download",
   "html_view_validate",
   "html_view_create",
+  "compile_markdown",
+  "export_markdown",
 ];
 export const adminNames = [
   "repo_create",
@@ -52,6 +54,7 @@ export const adminNames = [
 ];
 export const writeNames = [
   "html_view_create",
+  "compile_markdown",
   "blob_upload",
   "blob_replace",
   "issue_create",
@@ -97,6 +100,8 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   asset_download: "read",
   html_view_validate: "read",
   html_view_create: "publish",
+  compile_markdown: "write",
+  export_markdown: "read",
   repo_create: "publish",
   repo_edit: "publish",
   label_list: "read",

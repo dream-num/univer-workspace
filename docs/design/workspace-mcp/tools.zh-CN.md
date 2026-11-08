@@ -139,6 +139,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `html_view_validate` 与 `html_view_create` 接受最多 512 KiB UTF-8 HTML，超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果及 `workspaceUrl`；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 和目标重试。
 - `blob_download`、`asset_download`、`print_pdf` 返回签名下载链接。`blob_download` 同时返回 ETag，因为 `blob_replace` 需要它。
 - `compile_markdown` 的 Markdown 正文以字符串传入。正文引用的本地图片打成 zip 上传，用 `assets_upload_id` 传入，zip 内路径对应 Markdown 里的相对路径。CLI 要求资源不能超出源文件目录（`packages/client-core/src/markdown-source.ts:31-47`），MCP 同样拒绝 zip 中越界的路径。
+- `export_markdown` 与当前 CLI 一样，要求上次成功生成或回读的 `source_map` 和非空、去重的显式 `blocks`，不推断任意原生文档的整篇映射。
 - `export_markdown` 返回 `{markdown, sourceMap, assets}`。`assets` 是每个资源的下载链接，不内联字节。CLI 的 JSON 输出本来就不含资源字节（`apps/cli/src/features/markdown/export-command.ts:74`）。
 - `compile_typst` 的 bundle 目录打成 zip 上传。
 - 不带 `apply` 的编译工具返回生成的 Facade 代码和诊断，不写入 Workspace。
