@@ -526,8 +526,8 @@ instance, start one V18 instance, and wait for migration and health checks befor
 restoring service. Startup validates V17, creates a readable `.v17-backup-…sqlite`
 backup, then migrates with foreign-key and integrity checks. A failed transaction rolls
 back; successful restarts do not repeat migration or backup. To roll back, stop V18 and
-restore the V17 backup. Never run V17 and V18 writers on the same SQLite file. No HTTP
-route uses the new tables yet.
+restore the V17 backup. Never run V17 and V18 writers on the same SQLite file. The
+personal access token, MCP OAuth and token exchange routes described above use the new tables.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
