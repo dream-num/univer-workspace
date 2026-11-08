@@ -4,7 +4,7 @@
 
 **一个让人类与 AI Agent 共同创作、协作和审阅的开源 Office 工作空间。**
 
-[Univer 文档](https://docs.univer.ai/) · [Office SDK 文档](https://office.univer.ai/) · [CLI 指南](apps/cli/README.md) · [Workspace Agent](apps/agent/README.zh-CN.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer 文档](https://docs.univer.ai/) · [Server SDK 文档](https://docs.univer.ai/zh-CN/server) · [CLI 指南](apps/cli/README.md) · [Workspace Agent](apps/agent/README.zh-CN.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
@@ -236,8 +236,8 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 
 | 资源                                                                | 范围                                                        |
 | ------------------------------------------------------------------- | ----------------------------------------------------------- |
-| [Univer Runtime 文档](https://docs.univer.ai/)                      | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力    |
-| [Univer Office SDK 文档](https://office.univer.ai/)                 | Office SDK 技术栈：Runtime、Collaboration、CLI 与 Worktree  |
+| [Univer Web SDK 文档](https://docs.univer.ai/zh-CN/guides)          | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力    |
+| [Univer Server SDK 文档](https://docs.univer.ai/zh-CN/server)       | Server SDK：协同、导入导出、部署与 license                  |
 | [Workspace 应用指南](apps/workspace/README.md)                      | 配置、认证、存储、Docker 与升级                             |
 | [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同                  |
 | [Workspace Agent 指南](apps/agent/README.zh-CN.md)                  | 本地 Profile、浏览器 OAuth、会话、文件、Worktree 与身份切换 |
