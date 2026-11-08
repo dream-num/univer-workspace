@@ -4,6 +4,7 @@ import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { createAccessToken, revokeAccessToken } from "./access-tokens.commands";
 import { accessTokensQueryOptions } from "./access-tokens.queries";
+import { isAccessTokenExpired } from "./access-tokens.rules";
 
 const record = {
   id: "pat-1",
@@ -18,6 +19,15 @@ const record = {
 afterEach(() => vi.restoreAllMocks());
 
 describe("access tokens", () => {
+  it.each([
+    { expiresAt: null, expired: false },
+    { expiresAt: record.createdAt - 1, expired: true },
+    { expiresAt: record.createdAt, expired: false },
+    { expiresAt: record.createdAt + 1, expired: false },
+  ])("marks expiry $expiresAt as expired=$expired", ({ expiresAt, expired }) => {
+    expect(isAccessTokenExpired(expiresAt, record.createdAt)).toBe(expired);
+  });
+
   it("loads metadata through the account's cookie-authenticated API", async () => {
     vi.spyOn(api, "GET").mockResolvedValue({
       data: { tokens: [record] },

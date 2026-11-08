@@ -5,6 +5,7 @@ import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Alert, Button, ConfirmDialog, Dialog, Field, Input, Select } from "../../shared/ui";
 import { createAccessToken, revokeAccessToken } from "./access-tokens.commands";
 import { accessTokensQueryOptions } from "./access-tokens.queries";
+import { isAccessTokenExpired } from "./access-tokens.rules";
 
 type McpScope = components["schemas"]["McpScope"];
 type TokenView = { kind: "list" } | { kind: "new" } | { kind: "created"; token: string };
@@ -152,10 +153,22 @@ function AccessTokensDialogContent({
             {activeTokens.map((token) => (
               <li key={token.id} className="grid gap-3 rounded-lg border border-border p-4">
                 <div className="flex items-start justify-between gap-3">
-                  <span className="min-w-0 font-medium break-words">{token.name}</span>
+                  <span className="min-w-0 font-medium break-words">
+                    {token.name}
+                    {isAccessTokenExpired(token.expiresAt, Date.now()) ? (
+                      <span className="ml-2 text-sm text-muted-foreground">
+                        {" "}
+                        {t("accessTokenExpired")}
+                      </span>
+                    ) : null}
+                  </span>
                   <ConfirmDialog
                     trigger={
-                      <Button variant="secondary" size="sm">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        aria-label={t("accessTokenRevokeNamed", { name: token.name })}
+                      >
                         {t("accessTokenRevoke")}
                       </Button>
                     }
@@ -165,7 +178,10 @@ function AccessTokensDialogContent({
                     cancelText={t("cancel")}
                     danger
                     disabled={busy}
-                    onConfirm={() => revoke.mutate(token.id)}
+                    onConfirm={() => {
+                      revoke.reset();
+                      revoke.mutate(token.id);
+                    }}
                   />
                 </div>
                 <dl className="grid gap-2 text-sm sm:grid-cols-2">
@@ -214,7 +230,6 @@ function AccessTokensDialogContent({
                   type="checkbox"
                   className="mt-1 accent-primary"
                   checked={scopes.includes(scope)}
-                  aria-label={scope}
                   onChange={(event) => {
                     setScopes((previous) =>
                       event.target.checked
