@@ -80,7 +80,7 @@ export function translateError(error: unknown): WireError {
   };
 }
 
-function jsonOrNull(value: unknown): z.core.util.JSONType {
+export function jsonOrNull(value: unknown): z.core.util.JSONType {
   try {
     const clean: unknown = JSON.parse(
       JSON.stringify(value ?? null, (key, entry: unknown) =>

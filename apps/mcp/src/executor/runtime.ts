@@ -105,6 +105,20 @@ export const reuseExecutorWorker: NonNullable<
   return reuse;
 };
 
+// workaround: SDK 1.4 reports a ticket or collaboration HTTP status only in the message of a
+// COLLABORATION_UNAVAILABLE error. Affects runtime reads, executes and exports (content.execute,
+// content.inspect, exchange.export, htmlView.validate, htmlView.create). Remove once the SDK
+// exports a structured HTTP status.
+function sdkHttpStatus(error: unknown): 401 | 403 | undefined {
+  if (!(error instanceof Error && "code" in error && error.code === "COLLABORATION_UNAVAILABLE"))
+    return undefined;
+  const match =
+    /^(?:Session ticket request failed with HTTP|Collaboration HTTP request failed with status) (401|403)$/.exec(
+      error.message,
+    );
+  return match ? (Number(match[1]) as 401 | 403) : undefined;
+}
+
 async function runtimeCall<T>(
   effect: OpEffect,
   caller: WorkspaceRuntimeCaller,
@@ -119,16 +133,17 @@ async function runtimeCall<T>(
         ? error.code
         : undefined;
     const phase = getWorkspaceRuntimeFailurePhase(error);
-    // shortcut: SDK 1.4 exposes ticket HTTP status only in its message; remove after structured status is exported.
-    const unauthorized =
-      code === "workspace-authentication-required" ||
-      (code === "COLLABORATION_UNAVAILABLE" &&
-        error instanceof Error &&
-        /^(?:Session ticket request failed with HTTP 401|Collaboration HTTP request failed with status 401)$/.test(
-          error.message,
-        ));
     const created = workerForCaller.get(caller) ?? caller;
     const createdGrant = executorGrantSchema.parse(created.grant);
+    const ownSession =
+      grantCookie(createdGrant) === grantCookie(executorGrantSchema.parse(caller.grant));
+    const status = sdkHttpStatus(error);
+    // A revoked session reads as 403 on trunk collaboration endpoints. It only means "stale" for a
+    // worker made for another session; the caller's own 403 is a real permission error.
+    const unauthorized =
+      code === "workspace-authentication-required" ||
+      status === 401 ||
+      (status === 403 && !ownSession);
     if (unauthorized) {
       invalidateGrant(createdGrant);
       rejectedWorkers.add(created);
@@ -148,16 +163,30 @@ async function runtimeCall<T>(
       );
     }
     if (unauthorized) {
-      const authError = workspaceError(
-        "workspace-authentication-required",
-        "Workspace Session is missing or expired.",
+      const cause = { code: code ?? null, message: error instanceof Error ? error.message : "" };
+      if (ownSession)
+        throw workspaceError(
+          "workspace-authentication-required",
+          "Workspace Session is missing or expired.",
+          { cause },
+        );
+      // The rejected session belongs to a warm worker made for another call. The caller's own
+      // session is untested, so this must not look like an authentication failure to the client.
+      const stale = workspaceError(
+        "workspace-runtime-not-started",
+        "A cached executor worker held a revoked session and was replaced. Retry the operation.",
+        { retryable: true, started: false, cause },
       );
-      if (grantCookie(createdGrant) !== grantCookie(executorGrantSchema.parse(caller.grant))) {
-        runtimeReruns.set(authError, "auth");
-      }
-      throw authError;
+      runtimeReruns.set(stale, "auth");
+      throw stale;
     }
-    if (code === "workspace-result-mismatch" && phase === undefined && error instanceof Error)
+    // Both are raised while a worker opens or pulls, before the script runs and before any commit,
+    // so a rerun cannot repeat a write.
+    if (
+      (code === "workspace-result-mismatch" || code === "workspace-runtime-target-stale") &&
+      phase === undefined &&
+      error instanceof Error
+    )
       runtimeReruns.set(error, "revision");
     if (code === undefined && phase === "script" && effect === "write") {
       throw new ExecutorCallError({

@@ -166,7 +166,7 @@ VERIFY_UVW_RUN=b $V doctor
 On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
 `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
 port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS=2` at
-`up` to enable a second executor for MX12. The replica count is saved in the run. Without opt-in, existing commands
+`up` to enable a second executor for MX13. The replica count is saved in the run. Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
 
 Run `$V user` to create an independent MCP session, a fresh opencode directory and a personal

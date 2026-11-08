@@ -1819,7 +1819,7 @@ Both gateway durations must stay below the larger of 2 seconds and five times th
 baseline inspection duration. This is a rejection latency guard, not a throughput benchmark.
 Evidence uses `mm-errors-` and includes the CLI transcript, per-call events and summary JSON.
 
-**MX10. Stale worker session.** Two PATs share one user and one warm worker. Revoke A, recover B, and reject A.
+**MX11. Stale worker session.** Two PATs share one user and one warm worker. Revoke A, recover B, and reject A.
 
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
@@ -1827,16 +1827,34 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
 
 Pass when B succeeds with one auth rerun and A receives HTTP 401. Evidence is `resilience-auth.json`.
 
-**MX11. Concurrent revision conflict.** Resolve two writes concurrently against one Unit.
+**MX14. Stale worker session on HTML View validation.** Merge a data Sheet, validate a bound HTML View with A, revoke A,
+and validate with B. Then revoke B and call the executor with a 4-second deadline using the dev session, which leaves no time for a rerun.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs html-auth
+```
+
+Pass when B succeeds with one auth rerun, the no-rerun call returns a retryable `workspace-executor-timeout` that is not an
+`auth_error`, the next executor call succeeds on the replaced worker, and the primary bearer still works. Evidence is `resilience-html-auth.json`.
+
+**MX15. Parallel writes and reads during writes.** Five parallel `execute` calls on one Unit, then an `inspect` loop during eight sequential writes.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs burst
+```
+
+Pass when all five writes commit and no `inspect` fails. Evidence is `resilience-burst.json` with the commit count, inspect failure count and rerun reasons.
+
+**MX12. Concurrent revision conflict.** Resolve two writes concurrently against one Unit.
 
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-resilience.mjs revision
 ```
 
-Pass when both writes commit on consecutive revisions, one revision rerun is logged, and inspect contains both values.
+Pass when both writes commit on consecutive revisions, at most one revision rerun is logged (the executor queues same-Unit writes, so none is normal), and inspect contains both values.
 Evidence is `resilience-revision.json`.
 
-**MX12. Two executor replicas.** Opt in at launch with `VERIFY_UVW_MCP_EXECUTORS=2`. The default run skips this journey.
+**MX13. Two executor replicas.** Opt in at launch with `VERIFY_UVW_MCP_EXECUTORS=2`. The default run skips this journey.
 
 ```bash
 node .agents/skills/verify-uvw/bin/mcp-resilience.mjs replicas

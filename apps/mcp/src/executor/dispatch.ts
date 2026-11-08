@@ -23,6 +23,39 @@ import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
 
+// Parallel `content.execute` calls on one Unit through this executor take turns instead of racing
+// each other's revision. Calls through other replicas still conflict and use the revision rerun.
+function createUnitQueue() {
+  const tails = new Map<string, Promise<void>>();
+  return async (key: string, signal: AbortSignal) => {
+    const previous = tails.get(key) ?? Promise.resolve();
+    let release = () => {};
+    const turn = new Promise<void>((resolve) => (release = resolve));
+    const tail = previous.then(() => turn);
+    tails.set(key, tail);
+    void tail.then(() => {
+      if (tails.get(key) === tail) tails.delete(key);
+    });
+    let onAbort = () => {};
+    try {
+      signal.throwIfAborted();
+      await Promise.race([
+        previous,
+        new Promise<never>((_resolve, reject) => {
+          onAbort = () => reject(signal.reason);
+          signal.addEventListener("abort", onAbort, { once: true });
+        }),
+      ]);
+    } catch (error) {
+      release();
+      throw error;
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+    }
+    return release;
+  };
+}
+
 export function createDispatcher(
   config: ExecutorConfig,
   runtime: WorkspaceContentRuntime,
@@ -32,6 +65,7 @@ export function createDispatcher(
   const verifyGrant = createGrantVerifier(config);
   const dispatchers: { [K in OpName]: Handler<K> } = handlers;
   const metrics = new Registry();
+  const enterUnitQueue = createUnitQueue();
   const reruns = new Counter({
     name: "mcp_executor_reruns_total",
     help: "Executor handler reruns by reason.",
@@ -45,7 +79,8 @@ export function createDispatcher(
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
     let writeStarted = name !== "exchange.import" && name !== "markdown.compile";
     let effect = spec.effect;
-    const currentTimeout = () => timeoutError(effect, "deadline", writeStarted);
+    let queued = false;
+    const currentTimeout = () => timeoutError(effect, "deadline", !queued && writeStarted);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const input = spec.input.parse(header.input) as OpInput<(typeof opSpecs)[K]>;
@@ -165,32 +200,43 @@ export function createDispatcher(
           await verifyGrant(grant, header.requestId);
           controller.signal.throwIfAborted();
           const rerun = new Set<"auth" | "revision">();
-          for (;;) {
-            controller.signal.throwIfAborted();
-            try {
-              return await dispatchers[name](ctx, input, ...payloadArgs);
-            } catch (error) {
-              const retry = getRuntimeRerun(error);
-              if (
-                !retry ||
-                !spec.rerun.includes(retry) ||
-                rerun.has(retry) ||
-                controller.signal.aborted ||
-                deadlineAt - Date.now() < 5000
-              )
-                throw error;
-              rerun.add(retry);
-              reruns.inc({ reason: retry });
-              logger.info(
-                {
-                  event: "mcp.executor_rerun",
-                  request_id: header.requestId,
-                  op: name,
-                  reason: retry,
-                },
-                "Executor operation rerun",
-              );
+          let release = () => {};
+          if (name === "content.execute") {
+            const route = spec.route(input as never);
+            queued = true;
+            release = await enterUnitQueue(`${route.scope}\0${route.unitId}`, controller.signal);
+            queued = false;
+          }
+          try {
+            for (;;) {
+              controller.signal.throwIfAborted();
+              try {
+                return await dispatchers[name](ctx, input, ...payloadArgs);
+              } catch (error) {
+                const retry = getRuntimeRerun(error);
+                if (
+                  !retry ||
+                  !spec.rerun.includes(retry) ||
+                  rerun.has(retry) ||
+                  controller.signal.aborted ||
+                  deadlineAt - Date.now() < 5000
+                )
+                  throw error;
+                rerun.add(retry);
+                reruns.inc({ reason: retry });
+                logger.info(
+                  {
+                    event: "mcp.executor_rerun",
+                    request_id: header.requestId,
+                    op: name,
+                    reason: retry,
+                  },
+                  "Executor operation rerun",
+                );
+              }
             }
+          } finally {
+            release();
           }
         })(),
         deadline,

@@ -52,6 +52,7 @@ describe("executor reruns with a real worker", () => {
     [true, "stale"],
     [false, "script-stale"],
     [true, "script-stale"],
+    [false, "stale-403"],
   ] as const)(
     "reruns stale grant only, current rejected = %s, worker = %s",
     async (sameGrant, session) => {
@@ -93,7 +94,10 @@ describe("executor reruns with a real worker", () => {
         if (sameGrant) {
           expect(result.header).toMatchObject({
             ok: false,
-            error: { code: "workspace-authentication-required" },
+            error: {
+              code: "workspace-authentication-required",
+              detail: { cause: { message: expect.any(String) } },
+            },
           });
           expect(logs).not.toContain('"reason":"auth"');
           expect(handler).toHaveBeenCalledTimes(2);
@@ -120,15 +124,20 @@ describe("executor reruns with a real worker", () => {
     },
   );
 
-  it.each([false, true])(
-    "reruns pre-script revision mismatch once, repeated = %s",
-    async (repeated) => {
+  it.each([
+    [false, 6],
+    [true, 6],
+    [false, 5],
+    [true, 5],
+  ] as const)(
+    "reruns pre-script revision change once, repeated = %s, stale revision = %s",
+    async (repeated, staleRevision) => {
       const instance = runtime();
       const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
       let calls = 0;
       const handler = vi.spyOn(handlers, "content.execute").mockImplementation(async (ctx) => {
         const result = await ctx.runtime.executeAndCommit({
-          target: { ...target, revision: repeated || calls++ === 0 ? 6 : 7 },
+          target: { ...target, revision: repeated || calls++ === 0 ? staleRevision : 7 },
           code: "write",
         });
         ctx.usage.cost.committed_revisions += result.committed ? 1 : 0;
@@ -145,7 +154,12 @@ describe("executor reruns with a real worker", () => {
           repeated
             ? {
                 ok: false,
-                error: { code: "workspace-result-mismatch" },
+                error: {
+                  code:
+                    staleRevision === 5
+                      ? "workspace-runtime-target-stale"
+                      : "workspace-result-mismatch",
+                },
                 meta: { cost: { committed_revisions: 0 } },
               }
             : {
@@ -154,7 +168,8 @@ describe("executor reruns with a real worker", () => {
                 meta: { cost: { committed_revisions: 1 } },
               },
         );
-        expect(result.header.meta.cost.worker_cpu_ms).toBeGreaterThan(0);
+        if (!(repeated && staleRevision === 5))
+          expect(result.header.meta.cost.worker_cpu_ms).toBeGreaterThan(0);
       } finally {
         await instance.close();
         handler.mockRestore();
@@ -163,16 +178,12 @@ describe("executor reruns with a real worker", () => {
     },
   );
 
-  it("never reruns an ambiguous 401 commit or a read revision mismatch", async () => {
+  it("never reruns an ambiguous 401 commit", async () => {
     const instance = runtime();
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
     const write = vi.spyOn(handlers, "content.execute").mockImplementation(async (ctx) => ({
       output: await ctx.runtime.executeAndCommit({ target, code: "ambiguous-auth" }),
     }));
-    const read = vi.spyOn(handlers, "content.inspect").mockImplementation(async (ctx) => {
-      await ctx.runtime.executeRead({ target: { ...target, revision: 6 }, code: "read" });
-      return { output: { kind: "workbook", unitId: target.unitId } };
-    });
     try {
       const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
       expect(
@@ -185,23 +196,45 @@ describe("executor reruns with a real worker", () => {
         ).header,
       ).toMatchObject({ ok: false, error: { code: "workspace-result-unknown" } });
       expect(write).toHaveBeenCalledOnce();
-      expect(
-        (
-          await dispatch(
-            "content.inspect",
-            header({ scope: target.scope, unitId: target.unitId, target: "workbook" }),
-            new Uint8Array(),
-          )
-        ).header,
-      ).toMatchObject({ ok: false, error: { code: "workspace-result-mismatch" } });
-      expect(read).toHaveBeenCalledOnce();
     } finally {
       await instance.close();
       write.mockRestore();
-      read.mockRestore();
       fetcher.mockRestore();
     }
   });
+
+  it.each([
+    [false, 6],
+    [false, 5],
+    [true, 6],
+  ] as const)(
+    "reruns a read revision change once, repeated = %s, stale revision = %s",
+    async (repeated, staleRevision) => {
+      const instance = runtime();
+      const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+      let calls = 0;
+      const read = vi.spyOn(handlers, "content.inspect").mockImplementation(async (ctx) => {
+        await ctx.runtime.executeRead({
+          target: { ...target, revision: repeated || calls++ === 0 ? staleRevision : 7 },
+          code: "read",
+        });
+        return { output: { kind: "workbook", unitId: target.unitId } };
+      });
+      try {
+        const result = await createDispatcher(config, instance, pino({ level: "silent" }))(
+          "content.inspect",
+          header({ scope: target.scope, unitId: target.unitId, target: "workbook" }),
+          new Uint8Array(),
+        );
+        expect(read).toHaveBeenCalledTimes(2);
+        expect(result.header.ok).toBe(!repeated);
+      } finally {
+        await instance.close();
+        read.mockRestore();
+        fetcher.mockRestore();
+      }
+    },
+  );
 
   it.each(["budget", "script"])("does not rerun a mismatch from %s", async (scenario) => {
     const instance = runtime();
@@ -234,6 +267,245 @@ describe("executor reruns with a real worker", () => {
       fetcher.mockRestore();
     }
   });
+
+  it.each(["rerun not declared", "deadline floor", "rerun already used"] as const)(
+    "keeps a valid session signed in when a stale worker cannot rerun: %s",
+    async (scenario) => {
+      const instance = runtime();
+      const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+      const probe = scenario === "rerun not declared";
+      const name = probe ? "diagnostics.probe" : "content.inspect";
+      if (scenario === "rerun already used") {
+        const reject = async (input: { caller?: Parameters<typeof reuseExecutorWorker>[1] }) => {
+          reuseExecutorWorker(
+            { userId: grant.userId, grant: { ...grant, session: "stale" } },
+            input.caller,
+          );
+          throw Object.assign(new Error("Collaboration HTTP request failed with status 401"), {
+            code: "COLLABORATION_UNAVAILABLE",
+          });
+        };
+        vi.spyOn(instance, "executeRead")
+          .mockImplementationOnce(reject as never)
+          .mockImplementationOnce(reject as never);
+      }
+      const read = async (ctx: Parameters<(typeof handlers)["content.inspect"]>[0]) =>
+        (await ctx.runtime.executeRead({ target, code: "read" })).value;
+      const handler = vi.spyOn(handlers, name).mockImplementation((async (
+        ctx: Parameters<(typeof handlers)["content.inspect"]>[0],
+      ) => {
+        const credential = await read(ctx);
+        return {
+          output: probe
+            ? { whoami: { id: "u", name: "u" }, ticket: true, websocket: true, transport: "t" }
+            : { kind: "workbook", unitId: target.unitId, credential },
+        };
+      }) as never);
+      try {
+        const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+        const input = probe
+          ? {}
+          : { scope: target.scope, unitId: target.unitId, target: "workbook" };
+        const call = (current: ExecutorGrant, deadlineMs = 20_000) =>
+          dispatch(name, { ...header(input, current), op: name, deadlineMs }, new Uint8Array());
+        if (scenario !== "rerun already used")
+          expect((await call({ ...grant, session: "stale" })).header.ok).toBe(true);
+        const result = await call(grant, scenario === "deadline floor" ? 4900 : 20_000);
+        expect(result.header).toMatchObject({
+          ok: false,
+          error: {
+            code: "workspace-executor-timeout",
+            outcome: "timeout",
+            detail: {
+              retryable: true,
+              started: false,
+              cause: { code: "COLLABORATION_UNAVAILABLE" },
+            },
+          },
+        });
+        const metrics = await dispatch.metrics.metrics();
+        if (scenario === "rerun already used")
+          expect(metrics).toContain('mcp_executor_reruns_total{reason="auth"} 1');
+        else expect(metrics).not.toContain('reason="auth"');
+        expect((await call(grant)).header.ok).toBe(true);
+      } finally {
+        await instance.close();
+        handler.mockRestore();
+        fetcher.mockRestore();
+      }
+    },
+  );
+
+  it("passes a 403 from the caller's own session through without a rerun", async () => {
+    const instance = runtime();
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+    const handler = vi.spyOn(handlers, "content.inspect").mockImplementation(async (ctx) => ({
+      output: {
+        kind: "workbook",
+        unitId: target.unitId,
+        credential: (await ctx.runtime.executeRead({ target, code: "read" })).value,
+      },
+    }));
+    try {
+      const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+      const input = { scope: target.scope, unitId: target.unitId, target: "workbook" };
+      const own = { ...grant, session: "stale-403" };
+      const call = () =>
+        dispatch("content.inspect", header(input, own), new Uint8Array()).then((r) => r.header);
+      expect(await call()).toMatchObject({ ok: true });
+      expect(await call()).toMatchObject({
+        ok: false,
+        error: { code: "COLLABORATION_UNAVAILABLE", outcome: "tool_error" },
+      });
+      expect(handler).toHaveBeenCalledTimes(2);
+    } finally {
+      await instance.close();
+      handler.mockRestore();
+      fetcher.mockRestore();
+    }
+  });
+
+  it("serializes content.execute per Unit and reports a queued timeout as not started", async () => {
+    const instance = runtime();
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+    let running = 0;
+    let peak = 0;
+    const started: string[] = [];
+    const handler = vi.spyOn(handlers, "content.execute").mockImplementation(async (ctx) => {
+      started.push(ctx.requestId);
+      peak = Math.max(peak, ++running);
+      await new Promise((resolve) => setTimeout(resolve, ctx.requestId === "slow" ? 400 : 50));
+      running--;
+      return { output: { committed: false, value: null } };
+    });
+    try {
+      const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+      const call = (unitId: string, requestId: string, deadlineMs = 20_000) =>
+        dispatch(
+          "content.execute",
+          { ...header({ worktreeId: "wt", unitId, code: "write" }), requestId, deadlineMs },
+          new Uint8Array(),
+        ).then((r) => r.header);
+      const same = await Promise.all(["a", "b", "c"].map((id) => call("unit-1", id)));
+      expect(same.every((h) => h.ok)).toBe(true);
+      expect(peak).toBe(1);
+      expect(started).toEqual(["a", "b", "c"]);
+      peak = 0;
+      await Promise.all([call("unit-1", "x"), call("unit-2", "y")]);
+      expect(peak).toBe(2);
+      started.length = 0;
+      const [slow, queued] = await Promise.all([
+        call("unit-3", "slow"),
+        call("unit-3", "queued", 100),
+      ]);
+      expect(slow.ok).toBe(true);
+      expect(queued).toMatchObject({
+        ok: false,
+        error: { code: "workspace-executor-timeout", detail: { started: false, retryable: true } },
+      });
+      expect(started).toEqual(["slow"]);
+    } finally {
+      await instance.close();
+      handler.mockRestore();
+      fetcher.mockRestore();
+    }
+  });
+
+  it("recovers Markdown export from a stale worker without replaying Markdown creation", async () => {
+    const instance = runtime();
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+    const exported = vi.spyOn(handlers, "markdown.export").mockImplementation(async (ctx) => {
+      await ctx.runtime.executeRead({ target, code: "read" });
+      return {
+        output: {
+          formatVersion: 1,
+          unitId: target.unitId,
+          blockIds: ["intro"],
+          revision: 7,
+          markdown: "Hello",
+          sourceMap: [],
+          diagnostics: [],
+          assets: [],
+        },
+        bytes: new Uint8Array(),
+      };
+    });
+    const created = vi.spyOn(handlers, "markdown.compile").mockImplementation(async (ctx) => {
+      ctx.onCreateUnit?.();
+      await ctx.runtime.executeRead({ target, code: "read" });
+      return {
+        output: { committed: true, targetUnitId: target.unitId, sourceMap: [], diagnostics: [] },
+      };
+    });
+    try {
+      const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+      const input = { worktreeId: "wt", unitId: target.unitId, sourceMap: [], blockIds: ["intro"] };
+      const exportCall = (current: ExecutorGrant) =>
+        dispatch("markdown.export", header(input, current), new Uint8Array());
+      expect((await exportCall({ ...grant, session: "stale" })).header.ok).toBe(true);
+      const compile = await dispatch(
+        "markdown.compile",
+        header({
+          markdown: "Hello",
+          apply: true,
+          worktreeId: "wt",
+          spaceId: "space",
+        }),
+        new Uint8Array(),
+      );
+      expect(compile.header).toMatchObject({
+        ok: false,
+        error: { code: "workspace-executor-timeout" },
+      });
+      expect(created).toHaveBeenCalledOnce();
+      expect((await exportCall({ ...grant, session: "stale" })).header.ok).toBe(true);
+      expect((await exportCall(grant)).header.ok).toBe(true);
+      expect(exported).toHaveBeenCalledTimes(4);
+    } finally {
+      await instance.close();
+      exported.mockRestore();
+      created.mockRestore();
+      fetcher.mockRestore();
+    }
+  });
+
+  it.each(["compile-only", "before-write", "after-write"] as const)(
+    "preserves Markdown %s deadline classification",
+    async (scenario) => {
+      const instance = runtime();
+      const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+      const handler = vi.spyOn(handlers, "markdown.compile").mockImplementation(async (ctx) => {
+        if (scenario === "after-write") ctx.onCreateUnit?.();
+        await new Promise<never>((_resolve, reject) => {
+          ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true });
+        });
+        throw new Error("unreachable");
+      });
+      try {
+        const input =
+          scenario === "compile-only"
+            ? { markdown: "Hello" }
+            : { markdown: "Hello", apply: true, worktreeId: "wt", spaceId: "space" };
+        const result = await createDispatcher(config, instance, pino({ level: "silent" }))(
+          "markdown.compile",
+          { ...header(input), deadlineMs: 50 },
+          new Uint8Array(),
+        );
+        expect(result.header).toMatchObject({
+          ok: false,
+          error:
+            scenario === "after-write"
+              ? { code: "workspace-result-unknown" }
+              : { code: "workspace-executor-timeout", detail: { retryable: true, started: false } },
+        });
+        expect(handler).toHaveBeenCalledOnce();
+      } finally {
+        await instance.close();
+        handler.mockRestore();
+        fetcher.mockRestore();
+      }
+    },
+  );
 
   it("evicts only the verifier entry for the rejected session", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => identity());

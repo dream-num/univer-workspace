@@ -1,6 +1,8 @@
 const base = { awaitingChangeset: null, baseRevision: 7, bufferedChangesetCount: 0, conflict: null, connection: 'online', knownHeadRevision: 7, pendingMutationCount: 0 };
 export default {
   createRuntime(init) {
+    if (init.target.revision === 5)
+      throw Object.assign(new Error('Workspace runtime target revision changed before the worker started.'), { code: 'workspace-runtime-target-stale' });
     const state = { ...base };
     let pulls = 0;
     let executions = 0;
@@ -9,8 +11,8 @@ export default {
       close: async () => {}, unitId: 'unit-1', unitType: 2,
       getState: () => state,
       async pull() {
-        if (init.credential === 'workspace_session=stale' && ++pulls > 1)
-          throw Object.assign(new Error('Collaboration HTTP request failed with status 401'), { code: 'COLLABORATION_UNAVAILABLE' });
+        if (/^workspace_session=stale(-403)?$/.test(init.credential) && ++pulls > 1)
+          throw Object.assign(new Error('Collaboration HTTP request failed with status ' + (init.credential.endsWith('-403') ? 403 : 401)), { code: 'COLLABORATION_UNAVAILABLE' });
         return { state, status: 'up-to-date' };
       },
       async execute(input) {
