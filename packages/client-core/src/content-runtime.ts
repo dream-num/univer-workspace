@@ -16,6 +16,7 @@ import {
 import { workspaceError } from "./errors.js";
 import { WorkspaceHttp } from "./http.js";
 import {
+  normalizeWorkspaceRuntimeOrigin,
   serializeWorkspaceRuntimeTarget,
   workspaceRuntimeKey,
   type WorkspaceRuntimeCaller,
@@ -23,19 +24,27 @@ import {
 } from "./runtime-target.js";
 import type { WorkspaceContentWorkerInit } from "./content-worker.js";
 
+export interface WorkspaceContentRuntimeObservation {
+  readonly coldStart: boolean;
+  readonly workerMs: number;
+}
+
 export interface WorkspaceContentRuntimeOperations {
   executeAndCommit(input: {
     readonly caller?: WorkspaceRuntimeCaller;
+    readonly observe?: (observation: WorkspaceContentRuntimeObservation) => void;
     readonly code: string;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<WorkspaceContentRuntimeWriteResult>;
   executeRead(input: {
     readonly caller?: WorkspaceRuntimeCaller;
+    readonly observe?: (observation: WorkspaceContentRuntimeObservation) => void;
     readonly code: string;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<CollaborationRuntimeReadResult>;
   exportUnitData(input: {
     readonly caller?: WorkspaceRuntimeCaller;
+    readonly observe?: (observation: WorkspaceContentRuntimeObservation) => void;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<CollaborationUnitData>;
 }
@@ -62,6 +71,7 @@ export interface WorkspaceContentRuntimeOptions {
     caller?: WorkspaceRuntimeCaller,
   ) => Promise<string | undefined> | string | undefined;
   readonly workerEntry: string | URL;
+  readonly transportOrigin?: string;
   readonly pool?: WorkspaceContentRuntimePoolOptions;
 }
 
@@ -100,6 +110,8 @@ interface RuntimeSlots {
 }
 
 interface AcquiredWorkspaceRuntime {
+  readonly acquiredAt: number;
+  readonly coldStart: boolean;
   readonly init: WorkspaceContentWorkerInit;
   readonly initEntry: Promise<WorkspaceContentWorkerInit>;
   readonly key: string;
@@ -109,6 +121,9 @@ interface AcquiredWorkspaceRuntime {
 export function createWorkspaceContentRuntime(
   options: WorkspaceContentRuntimeOptions,
 ): WorkspaceContentRuntime {
+  if (options.transportOrigin !== undefined) {
+    normalizeWorkspaceRuntimeOrigin(options.transportOrigin);
+  }
   const initByKey = new Map<string, Promise<WorkspaceContentWorkerInit>>();
   const operationByKey = new Map<string, Promise<void>>();
   const poolOptions = options.pool;
@@ -167,7 +182,7 @@ export function createWorkspaceContentRuntime(
     },
     async executeRead(input) {
       return await run(input, async (deadline) => {
-        const { lease } = await acquire(
+        const acquired = await acquire(
           pool,
           initByKey,
           options,
@@ -175,11 +190,16 @@ export function createWorkspaceContentRuntime(
           input.caller,
           deadline,
         );
+        const { lease } = acquired;
         try {
           await synchronize(lease, input.target);
           return await lease.execute({ code: input.code, mode: "read" });
         } finally {
-          await lease.release();
+          try {
+            await lease.release();
+          } finally {
+            observeRuntime(acquired, input.observe);
+          }
         }
       });
     },
@@ -189,7 +209,7 @@ export function createWorkspaceContentRuntime(
       }
       const worktreeId = input.target.scope.worktreeId;
       return await run(input, async (deadline) => {
-        const { init, initEntry, key, lease } = await acquire(
+        const acquired = await acquire(
           pool,
           initByKey,
           options,
@@ -197,6 +217,7 @@ export function createWorkspaceContentRuntime(
           input.caller,
           deadline,
         );
+        const { init, initEntry, key, lease } = acquired;
         let reusable = false;
         try {
           await synchronize(lease, input.target);
@@ -217,6 +238,9 @@ export function createWorkspaceContentRuntime(
             cookie: init.credential,
             origin: input.target.origin,
             role: "client",
+            ...(init.transportOrigin === undefined
+              ? {}
+              : { transportOrigin: init.transportOrigin }),
           });
           const mutations = await externalizeEmbeddedImages({
             mutations: executed["mutations"],
@@ -234,17 +258,21 @@ export function createWorkspaceContentRuntime(
             value: executed["value"] as CollaborationRuntimeValue,
           };
         } finally {
-          if (reusable) await lease.release();
-          else {
-            if (initByKey.get(key) === initEntry) initByKey.delete(key);
-            await lease.invalidate();
+          try {
+            if (reusable) await lease.release();
+            else {
+              if (initByKey.get(key) === initEntry) initByKey.delete(key);
+              await lease.invalidate();
+            }
+          } finally {
+            observeRuntime(acquired, input.observe);
           }
         }
       });
     },
     async exportUnitData(input) {
       return await run(input, async (deadline) => {
-        const { lease } = await acquire(
+        const acquired = await acquire(
           pool,
           initByKey,
           options,
@@ -252,15 +280,31 @@ export function createWorkspaceContentRuntime(
           input.caller,
           deadline,
         );
+        const { lease } = acquired;
         try {
           await synchronize(lease, input.target);
           return await lease.exportUnitData();
         } finally {
-          await lease.release();
+          try {
+            await lease.release();
+          } finally {
+            observeRuntime(acquired, input.observe);
+          }
         }
       });
     },
   };
+}
+
+function observeRuntime(
+  acquired: AcquiredWorkspaceRuntime,
+  observe: ((observation: WorkspaceContentRuntimeObservation) => void) | undefined,
+): void {
+  try {
+    observe?.({ coldStart: acquired.coldStart, workerMs: performance.now() - acquired.acquiredAt });
+  } catch {
+    // Host telemetry must not change the operation result.
+  }
 }
 
 function createRuntimeSlots(
@@ -406,6 +450,7 @@ async function acquire(
 ): Promise<AcquiredWorkspaceRuntime> {
   const key = workspaceRuntimeKey(target, caller);
   let pending = initByKey.get(key);
+  const coldStart = pending === undefined;
   if (pending === undefined) {
     pending = resolveWorkerInit(options, target, caller);
     initByKey.set(key, pending);
@@ -415,11 +460,14 @@ async function acquire(
   }
   const init = await pending;
   try {
+    const lease = await acquireLease(pool, init, key, capacityDeadline);
     return {
+      acquiredAt: performance.now(),
+      coldStart,
       init,
       initEntry: pending,
       key,
-      lease: await acquireLease(pool, init, key, capacityDeadline),
+      lease,
     };
   } catch (error) {
     if (initByKey.get(key) === pending) initByKey.delete(key);
@@ -512,6 +560,7 @@ async function resolveWorkerInit(
     credential,
     license,
     target: serializeWorkspaceRuntimeTarget(target),
+    ...(options.transportOrigin === undefined ? {} : { transportOrigin: options.transportOrigin }),
   };
 }
 

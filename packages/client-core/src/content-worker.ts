@@ -3,6 +3,7 @@ import {
   createCollaborationServerAdapter,
   createUniverCollaborationRuntimeFactory,
   type UniverFactoryContext,
+  type CollaborationServerConfig,
 } from "@univer-cli/univer-collaboration-runtime";
 import { defineUniverCollaborationRuntimeWorker } from "@univer-cli/univer-collaboration-runtime-pool";
 import { createStandardHeadlessUniverFactory } from "@univer-cli/headless-univer";
@@ -11,13 +12,18 @@ import { workspaceError } from "./errors.js";
 import { WorkspaceHttp } from "./http.js";
 import { loadWorkspaceReferenceHostContext } from "./reference-host.js";
 import { createWorkspaceReferencedUnitProviderRegistration } from "./referenced-unit-provider.js";
-import { parseWorkspaceRuntimeTarget, type WorkspaceRuntimeTarget } from "./runtime-target.js";
+import {
+  normalizeWorkspaceRuntimeOrigin,
+  parseWorkspaceRuntimeTarget,
+  type WorkspaceRuntimeTarget,
+} from "./runtime-target.js";
 import { WorkspaceSnapshotServerAdapter } from "./snapshot-server-adapter.js";
 
 export interface WorkspaceContentWorkerInit {
   readonly credential: string;
   readonly license: string;
   readonly target: unknown;
+  readonly transportOrigin?: string;
 }
 
 registerDocMarkdownRuntime();
@@ -26,11 +32,7 @@ export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWor
   async createRuntime(value) {
     const init = parseWorkerInit(value);
     const target = parseWorkspaceRuntimeTarget(init.target);
-    const http = new WorkspaceHttp({
-      cookie: init.credential,
-      origin: target.origin,
-      role: "worker",
-    });
+    const { http, serverConfig } = createWorkspaceContentWorkerConnection(init, target);
     const hostContext = await loadWorkspaceReferenceHostContext(http, target);
     const snapshotServerService = new WorkspaceSnapshotServerAdapter({
       hostScope: target.scope,
@@ -55,18 +57,7 @@ export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWor
         license: init.license,
       })(context);
     };
-    const prefix =
-      target.scope.kind === "trunk"
-        ? "/universer-api"
-        : `/universer-api/worktrees/${encodeURIComponent(target.scope.worktreeId)}`;
-    const url = (path: string): string => new URL(`${prefix}${path}`, target.origin).href;
-    const backend = createCollaborationServerAdapter({
-      collabSubmitChangesetUrl: url("/comb"),
-      collabWebSocketUrl: url("/comb/connect"),
-      httpRequest: async (input, options) => await http.collaborationRequest(input, options),
-      snapshotServerUrl: url("/snapshot"),
-      wsSessionTicketUrl: new URL("/universer-api/user/session-ticket", target.origin).href,
-    });
+    const backend = createCollaborationServerAdapter(serverConfig);
     return await createUniverCollaborationRuntimeFactory({
       backend,
       createUniver,
@@ -77,15 +68,46 @@ export const workspaceContentRuntimeWorker = defineUniverCollaborationRuntimeWor
 
 export default workspaceContentRuntimeWorker;
 
-function parseWorkerInit(value: unknown): WorkspaceContentWorkerInit {
+export function createWorkspaceContentWorkerConnection(
+  init: WorkspaceContentWorkerInit,
+  target: WorkspaceRuntimeTarget,
+): { readonly http: WorkspaceHttp; readonly serverConfig: CollaborationServerConfig } {
+  const http = new WorkspaceHttp({
+    cookie: init.credential,
+    origin: target.origin,
+    role: "worker",
+    ...(init.transportOrigin === undefined ? {} : { transportOrigin: init.transportOrigin }),
+  });
+  const prefix =
+    target.scope.kind === "trunk"
+      ? "/universer-api"
+      : `/universer-api/worktrees/${encodeURIComponent(target.scope.worktreeId)}`;
+  const url = (path: string): string => new URL(`${prefix}${path}`, target.origin).href;
+  return {
+    http,
+    serverConfig: {
+      collabSubmitChangesetUrl: url("/comb"),
+      collabWebSocketUrl: new URL(`${prefix}/comb/connect`, init.transportOrigin ?? target.origin)
+        .href,
+      httpRequest: async (input, options) => await http.collaborationRequest(input, options),
+      snapshotServerUrl: url("/snapshot"),
+      wsSessionTicketUrl: new URL("/universer-api/user/session-ticket", target.origin).href,
+    },
+  };
+}
+
+export function parseWorkerInit(value: unknown): WorkspaceContentWorkerInit {
   if (
     !isRecord(value) ||
-    Object.keys(value).some((key) => !["credential", "license", "target"].includes(key)) ||
+    Object.keys(value).some(
+      (key) => !["credential", "license", "target", "transportOrigin"].includes(key),
+    ) ||
     typeof value["credential"] !== "string" ||
     value["credential"].length === 0 ||
     typeof value["license"] !== "string" ||
     value["license"].trim().length === 0 ||
-    value["target"] === undefined
+    value["target"] === undefined ||
+    ("transportOrigin" in value && typeof value["transportOrigin"] !== "string")
   ) {
     throw workspaceError(
       "WORKSPACE_RUNTIME_INIT_INVALID",
@@ -96,6 +118,9 @@ function parseWorkerInit(value: unknown): WorkspaceContentWorkerInit {
     credential: value["credential"],
     license: value["license"],
     target: value["target"],
+    ...(typeof value["transportOrigin"] === "string"
+      ? { transportOrigin: normalizeWorkspaceRuntimeOrigin(value["transportOrigin"]) }
+      : {}),
   };
 }
 
