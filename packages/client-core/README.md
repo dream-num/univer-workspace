@@ -17,8 +17,17 @@
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
   embedded-image externalization 与 changeset commit workflow。当前 headless factory 为五类 Unit
   注册评论 model，已有评论 anchor 在 replay 与 export 中保留；`test/comment-anchors.test.ts` 守住这一上游合同。
-  多用户宿主可为每次调用传入不透明的 `caller`：它进入 runtime key、`resolveCredential` 与 `resolveLicense`，
-  不同 caller 永不共享 worker 或凭据；可选 `pool` 选项设定 worker 上限、空闲 TTL、超时与子进程环境（`env` 为精确环境，缺省继承）。未传入时行为与 CLI 一致。
+  多用户宿主可为每次调用传入 `caller`。只有 `caller.userId` 进入 runtime key；可选 `caller.grant` 为不透明值，
+  Client Core 不读取、不序列化它，并将原 caller 传给 `resolveCredential` 与 `resolveLicense`。resolver 只在创建或重建
+  worker 时调用，热 worker 保留创建时的凭据与 license。不同 userId 不共享 worker 或凭据。
+  可选 `transportOrigin` 是不含路径、查询、片段或凭据的 HTTP(S) origin。worker HTTP、协同 WebSocket 和提交时的
+  内嵌图片上传通过它连接 Workspace；target、runtime key、HTTP adapter URL 与用户可见 URL 保留公共 identity origin，
+  HTTP origin 校验和写请求的 Origin header 也保留 identity origin。缺省时 worker init 仍只有 `credential`、`license`、`target`。
+  `executeAndCommit`、`executeRead` 和 `exportUnitData` 可逐次传入 `observe({ coldStart, workerMs })`。
+  每个取得 lease 的调用在 release 或 invalidate 完成后回调一次，操作或清理失败也回调；未取得 lease 的调用不回调。
+  `coldStart` 表示本次调用未命中 init 缓存并创建 worker；`workerMs` 是从取得 lease 到清理结束的单调时钟毫秒数，
+  不包含排队、凭据解析与 worker 启动耗时，也不表示 CPU 时间。observer 抛错不改变操作结果。
+  可选 `pool` 选项设定 worker 上限、空闲 TTL、超时与子进程环境（`env` 为精确环境，缺省继承）。未传入时行为与 CLI 一致。
   `pool.queue.timeoutMs`（须同时设定 `maxWorkers`）让新 runtime key 在 worker 满时按 FIFO 等待空位，超时以
   `workspace-runtime-busy`（`detail.retryable: true`）失败；该时限只约束等待空位，不约束操作本身。缺省时 worker
   满立即报 `COLLABORATION_POOL_CAPACITY_EXCEEDED`。

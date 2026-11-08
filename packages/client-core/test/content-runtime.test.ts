@@ -1,3 +1,5 @@
+import { once } from "node:events";
+import { createServer } from "node:http";
 import type {
   CollaborationPullResult,
   CollaborationRuntimeState,
@@ -10,6 +12,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkspaceContentRuntime,
   type WorkspaceContentRuntimeOptions,
+  type WorkspaceContentRuntimeObservation,
+  workspaceRuntimeKey,
   type WorkspaceRuntimeTarget,
 } from "../src/index.js";
 
@@ -58,7 +62,8 @@ describe("Workspace content runtime owner", () => {
     expect(resolveLicense).toHaveBeenCalledOnce();
     expect(acquire).toHaveBeenCalledTimes(2);
     expect(acquire.mock.calls[0]![0]).toEqual(acquire.mock.calls[1]![0]);
-    expect(acquire.mock.calls[0]![0]).toMatchObject({
+    expect(acquire.mock.calls[0]![0]).toEqual({
+      key: "workspace:https%3A%2F%2Fworkspace.test:worktree:wt-1:unit-1:sheet",
       init: {
         credential: "workspace_session=secret-cookie",
         license: "secret-license",
@@ -66,6 +71,188 @@ describe("Workspace content runtime owner", () => {
       },
     });
     expect(acquire.mock.calls[0]![0].key).not.toContain("secret");
+  });
+
+  it("forwards an opaque grant by identity to resolvers without keying or serializing it", async () => {
+    const grant = { token: Symbol("opaque grant") };
+    const caller = { userId: "alice", grant };
+    const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>(async () => lease());
+    const resolveCredential = vi.fn<WorkspaceContentRuntimeOptions["resolveCredential"]>(
+      async () => "cookie",
+    );
+    const resolveLicense = vi.fn<WorkspaceContentRuntimeOptions["resolveLicense"]>(
+      async () => "license",
+    );
+    const runtime = createRuntime({ acquire, resolveCredential, resolveLicense });
+
+    await runtime.executeRead({ caller, code: "return 1", target });
+    await runtime.executeRead({
+      caller: { userId: "alice", grant: "rotated" },
+      code: "return 2",
+      target,
+    });
+
+    expect(resolveCredential.mock.calls[0]).toEqual([target, caller]);
+    expect(resolveCredential).toHaveBeenCalledOnce();
+    expect(resolveLicense).toHaveBeenCalledWith(caller);
+    expect(resolveLicense).toHaveBeenCalledOnce();
+    expect(workspaceRuntimeKey(target, caller)).toBe(
+      workspaceRuntimeKey(target, { userId: "alice" }),
+    );
+    expect(acquire.mock.calls[0]![0]).toEqual(acquire.mock.calls[1]![0]);
+    expect(acquire.mock.calls[0]![0].init).toEqual({
+      credential: "cookie",
+      license: "license",
+      target,
+    });
+    expect(resolveCredential.mock.calls[0]?.[1]?.grant).toBe(grant);
+  });
+
+  it.each(["executeRead", "executeAndCommit", "exportUnitData"] as const)(
+    "observes cold and warm %s calls after cleanup, excluding acquisition time",
+    async (method) => {
+      let now = 0;
+      const clock = vi.spyOn(performance, "now").mockImplementation(() => now);
+      const current = lease();
+      current.release = vi.fn(async () => {
+        now += 7;
+      });
+      const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>(async () => {
+        now += 100;
+        return current;
+      });
+      const runtime = createRuntime({ acquire });
+      const observations: WorkspaceContentRuntimeObservation[] = [];
+      const observe = vi.fn((observation: WorkspaceContentRuntimeObservation) => {
+        expect(current.release).toHaveBeenCalledTimes(observations.length + 1);
+        observations.push(observation);
+      });
+      try {
+        await runtime[method]({ code: "return 1", target, observe });
+        await runtime[method]({ code: "return 2", target, observe });
+        expect(observe).toHaveBeenCalledTimes(2);
+        expect(observations).toEqual([
+          { coldStart: true, workerMs: 7 },
+          { coldStart: false, workerMs: 7 },
+        ]);
+      } finally {
+        clock.mockRestore();
+      }
+    },
+  );
+
+  it.each(["executeRead", "executeAndCommit", "exportUnitData"] as const)(
+    "observes a failing %s call exactly once and isolates observer errors",
+    async (method) => {
+      const error = new Error("content failed");
+      const current = lease({ executeError: error, exportError: error });
+      const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+      const observe = vi.fn(() => {
+        throw new Error("telemetry failed");
+      });
+      await expect(runtime[method]({ code: "throw", target, observe })).rejects.toBe(error);
+      expect(observe).toHaveBeenCalledOnce();
+      expect(observe).toHaveBeenCalledWith({ coldStart: true, workerMs: expect.any(Number) });
+      if (method === "executeAndCommit") expect(current.invalidate).toHaveBeenCalledOnce();
+      else expect(current.release).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("isolates a throwing observer on success and observes failed cleanup", async () => {
+    const current = lease();
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+    const observe = vi.fn(() => {
+      throw new Error("telemetry failed");
+    });
+    await expect(runtime.exportUnitData({ target, observe })).resolves.toEqual({ id: "unit-1" });
+    const error = new Error("release failed");
+    current.release = vi.fn(async () => {
+      throw error;
+    });
+    await expect(runtime.exportUnitData({ target, observe })).rejects.toBe(error);
+    expect(observe).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not observe calls that never acquire a lease", async () => {
+    const observe = vi.fn();
+    const runtime = createRuntime({
+      acquire: vi.fn(async () => {
+        throw new Error("open failed");
+      }),
+    });
+    await expect(runtime.executeRead({ code: "return 1", target, observe })).rejects.toThrow(
+      "open failed",
+    );
+    await expect(
+      runtime.executeAndCommit({
+        code: "return 1",
+        target: { ...target, scope: { kind: "trunk" } },
+        observe,
+      }),
+    ).rejects.toMatchObject({ code: "WORKSPACE_TARGET_NOT_EDITABLE" });
+    expect(observe).not.toHaveBeenCalled();
+  });
+
+  it("copies transport into worker init and uploads commit-time images there with the identity origin", async () => {
+    const requests: {
+      path: string | undefined;
+      cookie: string | undefined;
+      origin: string | undefined;
+    }[] = [];
+    const server = createServer((request, response) => {
+      requests.push({
+        path: request.url,
+        cookie: request.headers.cookie,
+        origin: request.headers.origin,
+      });
+      request.resume();
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ FileId: "file-transport" }));
+    });
+    server.listen(0, "127.0.0.1");
+    await once(server, "listening");
+    try {
+      const address = server.address();
+      if (address === null || typeof address === "string")
+        throw new Error("Missing test server address");
+      const transportOrigin = `http://127.0.0.1:${String(address.port)}`;
+      const png = `data:image/png;base64,${Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]).toString("base64")}`;
+      const current = lease({
+        commitResults: [commitResult("confirmed", 8)],
+        writeMutations: [
+          { id: "image", data: JSON.stringify({ imageSourceType: "BASE64", source: png }) },
+        ],
+      });
+      const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>(
+        async () => current,
+      );
+      const runtime = createRuntime({ acquire, transportOrigin });
+      await expect(runtime.executeAndCommit({ code: "edit", target })).resolves.toMatchObject({
+        committed: true,
+        revision: 8,
+      });
+      expect(acquire.mock.calls[0]?.[0]).toEqual({
+        init: { credential: "cookie", license: "license", target, transportOrigin },
+        key: workspaceRuntimeKey(target),
+      });
+      expect(requests).toEqual([
+        {
+          path: "/universer-api/worktrees/wt-1/stream/file/upload?assign=unit-1&size=8&source=3",
+          cookie: "cookie",
+          origin: target.origin,
+        },
+      ]);
+      expect(current.replacePendingMutations).toHaveBeenCalledWith([
+        {
+          id: "image",
+          data: JSON.stringify({ imageSourceType: "UUID", source: "file-transport" }),
+        },
+      ]);
+    } finally {
+      await new Promise<void>((resolve, reject) =>
+        server.close((error) => (error === undefined ? resolve() : reject(error))),
+      );
+    }
   });
 
   it("keys workers and credentials per caller and resolves once per caller", async () => {
@@ -657,6 +844,9 @@ function createRuntime(
   };
   return createWorkspaceContentRuntime({
     ...(overrides.pool === undefined ? {} : { pool: overrides.pool }),
+    ...(overrides.transportOrigin === undefined
+      ? {}
+      : { transportOrigin: overrides.transportOrigin }),
     resolveCredential: overrides.resolveCredential ?? (async () => "cookie"),
     resolveLicense: overrides.resolveLicense ?? (async () => "license"),
     workerEntry: overrides.workerEntry ?? new URL("file:///package/worker.js"),

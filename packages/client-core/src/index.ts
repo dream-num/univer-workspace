@@ -162,6 +162,7 @@ export {
   createWorkspaceContentRuntime,
   type WorkspaceContentRuntime,
   type WorkspaceContentRuntimeOperations,
+  type WorkspaceContentRuntimeObservation,
   type WorkspaceContentRuntimeOptions,
   type WorkspaceContentRuntimePoolOptions,
   type WorkspaceContentRuntimeWriteResult,

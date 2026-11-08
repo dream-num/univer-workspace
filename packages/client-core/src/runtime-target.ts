@@ -26,7 +26,10 @@ export function workspaceSnapshotPrefix(scope: WorkspaceRuntimeScope): string {
     : `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/snapshot`;
 }
 
-export type WorkspaceRuntimeCaller = { readonly userId: string };
+export type WorkspaceRuntimeCaller = {
+  readonly userId: string;
+  readonly grant?: unknown;
+};
 
 export function workspaceRuntimeKey(
   target: WorkspaceRuntimeTarget,
@@ -50,7 +53,7 @@ export function parseWorkspaceRuntimeTarget(value: unknown): WorkspaceRuntimeTar
   if (!isRecord(value) || typeof value["origin"] !== "string") {
     throw invalidTarget();
   }
-  const origin = normalizeOrigin(value["origin"]);
+  const origin = normalizeWorkspaceRuntimeOrigin(value["origin"]);
   if (
     typeof value["unitId"] !== "string" ||
     !isUnitType(value["unitType"]) ||
@@ -96,7 +99,7 @@ function parseScope(value: unknown): WorkspaceRuntimeScope {
   throw invalidTarget();
 }
 
-function normalizeOrigin(value: string): string {
+export function normalizeWorkspaceRuntimeOrigin(value: string): string {
   let url: URL;
   try {
     url = new URL(value);
