@@ -396,10 +396,10 @@ OAuthTokenError:
   properties:
     error:
       type: string
-      enum: [invalid_request, invalid_grant, unauthorized_client, invalid_client]
+      enum: [invalid_request, invalid_grant, unauthorized_client, invalid_client, unsupported_grant_type]
     error_description:
       type: string
-      description: Present for dynamically registered MCP clients.
+      description: Present for MCP token errors, including unknown or missing clients.
 
 McpAuthorizationCodeRequest:
   type: object

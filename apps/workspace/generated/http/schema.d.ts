@@ -104,13 +104,21 @@ export interface paths {
          *     no-store`. A code is good for one attempt; presenting an already
          *     redeemed code revokes the grant it produced. A refresh token rotates;
          *     presenting a rotated one within 60 seconds fails without side effects,
-         *     later it revokes the grant. Errors use `{ "error", "error_description" }`:
-         *     `invalid_request` (400), `invalid_client` (401, `refresh_token` with an
-         *     unknown client) or `invalid_grant` (400, including a wrong client,
-         *     `redirect_uri`, `code_verifier` or `resource`). An `authorization_code`
-         *     request from an unknown client gets the static-client error below.
+         *     later it revokes the grant. Errors use the RFC 6749 section 5.2 body
+         *     `{ "error": "<code>", "error_description": "<description>" }` with
+         *     `Cache-Control: no-store`: `invalid_request` (400, malformed request),
+         *     `invalid_client` (401, unknown or missing `client_id`),
+         *     `unsupported_grant_type` (400, a grant the client may not use or the
+         *     server does not support) or `invalid_grant` (400, a bad code or refresh
+         *     token, including a wrong client, `redirect_uri`, `code_verifier` or
+         *     `resource`). While MCP OAuth is enabled, every non-static client
+         *     request and every `refresh_token` request uses these errors, including
+         *     unknown or missing clients. Token exchange keeps the rules below.
          *
-         *     `authorization_code` (JSON or form body) behaves as described below.
+         *     Static `OAUTH_CLIENTS_JSON` clients keep their existing
+         *     `authorization_code` behavior (JSON or form body) and Workspace error
+         *     objects. When MCP OAuth is disabled, all requests keep their existing
+         *     behavior.
          *
          *     `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) accepts
          *     only an `application/x-www-form-urlencoded` body and is open only to a
@@ -2175,8 +2183,8 @@ export interface components {
         };
         OAuthTokenError: {
             /** @enum {string} */
-            error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client";
-            /** @description Present for dynamically registered MCP clients. */
+            error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client" | "unsupported_grant_type";
+            /** @description Present for MCP token errors, including unknown or missing clients. */
             error_description?: string;
         };
         /** @enum {string} */
@@ -3283,7 +3291,7 @@ export interface operations {
                     };
                 };
             };
-            /** @description Invalid request, or an OAuth-style error for token exchange. */
+            /** @description Workspace error for static clients or when MCP OAuth is disabled; otherwise `invalid_request`, `unsupported_grant_type` or `invalid_grant`. Token exchange may also return `unauthorized_client`. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3292,7 +3300,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
                 };
             };
-            /** @description Invalid client secret or PKCE verifier, or `invalid_client` for token exchange. */
+            /** @description Workspace error for an invalid static-client secret or PKCE verifier; `invalid_client` for an unknown or missing MCP client or failed token-exchange client authentication. */
             401: {
                 headers: {
                     [name: string]: unknown;

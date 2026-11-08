@@ -48,6 +48,81 @@ afterEach(async () => {
 });
 
 describe("MCP OAuth", () => {
+  it("returns OAuth token errors for unknown clients and unsupported or malformed grants", async () => {
+    const origin = await start();
+    for (const clientId of ["unknown", undefined, ""]) {
+      for (const grantType of ["authorization_code", "refresh_token", "client_credentials", undefined]) {
+        const response = await token(origin, { client_id: clientId, grant_type: grantType });
+        expect(response.status).toBe(401);
+        expect(response.headers.get("cache-control")).toBe("no-store");
+        expect(await response.json()).toEqual({
+          error: "invalid_client",
+          error_description: "client_id is not a registered MCP client.",
+        });
+      }
+      const json = await fetch(`${origin}/api/auth/token`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ client_id: clientId, grant_type: "authorization_code" }),
+      });
+      expect(json.status).toBe(401);
+      expect(json.headers.get("cache-control")).toBe("no-store");
+      expect(await json.json()).toMatchObject({ error: "invalid_client" });
+    }
+    const empty = await fetch(`${origin}/api/auth/token`, { method: "POST" });
+    expect(empty.status).toBe(401);
+    expect(empty.headers.get("cache-control")).toBe("no-store");
+    expect(await empty.json()).toMatchObject({ error: "invalid_client" });
+
+    const clientId = await registeredClientId(origin);
+    for (const grantType of ["client_credentials", "password"]) {
+      const response = await token(origin, { client_id: clientId, grant_type: grantType });
+      expect(response.status).toBe(400);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toMatchObject({ error: "unsupported_grant_type" });
+    }
+    for (const grantType of [undefined, "", "authorization_code", "refresh_token"]) {
+      const response = await token(origin, { client_id: clientId, grant_type: grantType });
+      expect(response.status).toBe(400);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+      expect(await response.json()).toMatchObject({ error: "invalid_request" });
+    }
+    const json = await fetch(`${origin}/api/auth/token`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, grant_type: "authorization_code" }),
+    });
+    expect(json.status).toBe(400);
+    expect(json.headers.get("cache-control")).toBe("no-store");
+    expect(await json.json()).toMatchObject({ error: "invalid_request" });
+  });
+
+  it.each([false, true])("preserves static and legacy token errors with MCP OAuth disabled=%s", async (disabled) => {
+    const origin = await start({ disabled });
+    const unsupported = await token(origin, { client_id: STATIC_ID, grant_type: "client_credentials" });
+    expect(unsupported.status).toBe(400);
+    expect(await unsupported.json()).toEqual({ error: { code: "INVALID_INPUT", message: "grant_type must be authorization_code." } });
+    const secret = await token(origin, { client_id: STATIC_ID, grant_type: "authorization_code", client_secret: "wrong" });
+    expect(secret.status).toBe(401);
+    expect(await secret.json()).toEqual({ error: { code: "INVALID_CLIENT_SECRET", message: "A valid client secret is required." } });
+    const invalidCode = await token(origin, {
+      client_id: STATIC_ID, grant_type: "authorization_code", client_secret: STATIC_SECRET,
+      code: "invalid", code_verifier: VERIFIER, redirect_uri: STATIC_REDIRECT,
+    });
+    expect(invalidCode.status).toBe(400);
+    expect(await invalidCode.json()).toEqual({ error: { code: "INVALID_GRANT", message: "authorization code is invalid." } });
+    if (disabled) {
+      const unknown = await token(origin, { client_id: "unknown", grant_type: "authorization_code" });
+      expect(unknown.status).toBe(400);
+      expect(await unknown.json()).toEqual({ error: {
+        code: "OAUTH_CLIENT_UNAVAILABLE", field: "client_id",
+        message: 'OAuth client "unknown" is not registered for this Workspace deployment.',
+      } });
+      const missing = await token(origin, { grant_type: "authorization_code" });
+      expect(missing.status).toBe(400);
+      expect(await missing.json()).toEqual({ error: { code: "INVALID_INPUT", message: "A required parameter is missing." } });
+    }
+  });
+
   it("runs the opencode flow: discovery, registration, scoped consent, code, exchange, refresh rotation and replay", async () => {
     // The token service reads the clock it was created with, so the fake clock is installed first.
     vi.useFakeTimers({ toFake: ["Date"] });
@@ -186,8 +261,7 @@ describe("MCP OAuth", () => {
     }
     const code = await authorizeCode(origin, alice, clientId, redirectUri);
     expect(await (await token(origin, { ...fields(code), resource: undefined })).json()).toMatchObject({ error: "invalid_request" });
-    expect(((await (await token(origin, { ...fields(code), client_id: "unknown" })).json()) as { error: { code: string } }).error.code)
-      .toBe("OAUTH_CLIENT_UNAVAILABLE");
+    expect(await (await token(origin, { ...fields(code), client_id: "unknown" })).json()).toMatchObject({ error: "invalid_client" });
     expect(await (await refresh(origin, "unknown", "uvw_rt_x.y")).json()).toEqual({
       error: "invalid_client",
       error_description: "client_id is not a registered MCP client.",

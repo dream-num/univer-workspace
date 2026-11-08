@@ -159,14 +159,14 @@ export function createOAuthAuthorizationRouter(options: {
   });
 
   router.post("/token", (request, response) => {
-    if (request.body.grant_type === TOKEN_EXCHANGE_GRANT_TYPE) {
+    if (request.body?.grant_type === TOKEN_EXCHANGE_GRANT_TYPE) {
       exchangeToken(request, response);
       return;
     }
     if (
       mcp !== null &&
-      (request.body.grant_type === "refresh_token" ||
-        (request.body.grant_type === "authorization_code" && findRegisteredClient(request.body.client_id) !== null))
+      (request.body?.grant_type === "refresh_token" ||
+        typeof request.body?.client_id !== "string" || !clients.has(request.body.client_id))
     ) {
       mcpToken(request, response);
       return;
@@ -276,14 +276,22 @@ export function createOAuthAuthorizationRouter(options: {
   function mcpToken(request: Request, response: Response): void {
     response.set({ "cache-control": "no-store", pragma: "no-cache" });
     const fail = (status: number, error: string, description: string) => oauthError(response, status, error, description);
+    const body: Record<string, unknown> = request.body ?? {};
+    const client = findRegisteredClient(body.client_id);
+    if (client === null) {
+      fail(401, "invalid_client", "client_id is not a registered MCP client.");
+      return;
+    }
     if (!request.is("application/x-www-form-urlencoded")) {
       fail(400, "invalid_request", "The token request must be a form body.");
       return;
     }
-    const body: Record<string, unknown> = request.body;
-    const client = findRegisteredClient(body.client_id);
-    if (client === null) {
-      fail(401, "invalid_client", "client_id is not a registered MCP client.");
+    if (typeof body.grant_type !== "string" || body.grant_type === "") {
+      fail(400, "invalid_request", "grant_type is required.");
+      return;
+    }
+    if (body.grant_type !== "authorization_code" && body.grant_type !== "refresh_token") {
+      fail(400, "unsupported_grant_type", "grant_type must be authorization_code or refresh_token.");
       return;
     }
     if (typeof body.resource !== "string" || body.resource === "") {
