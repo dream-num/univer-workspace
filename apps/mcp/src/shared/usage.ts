@@ -45,6 +45,10 @@ export class UsageAccumulator {
     this.unitType = meta.unitType ?? this.unitType;
   }
 
+  addTransfer(kind: "upload_bytes" | "export_bytes", bytes: number): void {
+    this.cost[kind] += bytes;
+  }
+
   snapshot(): OpMeta {
     return {
       executor: this.executor,

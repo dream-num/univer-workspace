@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -201,7 +202,7 @@ describe("Issue tools and gateway infrastructure", () => {
       parseGatewayConfig({
         MCP_DEV_SESSION_PASSTHROUGH: "1",
         WORKSPACE_ORIGIN: identityOrigin,
-        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
       }),
       { logger: pino({}, logOutput), fetcher, ...(scopes === undefined ? {} : { scopes }) },
     );

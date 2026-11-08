@@ -110,7 +110,7 @@ if (record) {
     const tokenPath = join(internal.run, 'home/metrics-token');
     gateway = execFileSync('docker', ['compose', '-p', internal.project, '-f', join(internal.repo, 'apps/mcp/docker/compose.verify.yml'),
       'logs', '--no-color', '--no-log-prefix', 'gateway', 'executor'], { encoding: 'utf8', timeout: 15000, stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, VERIFY_UVW_MCP_PROJECT: internal.project, VERIFY_UVW_MCP_IMAGE: internal.image,
+      env: { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(internal.run, 'staging'), VERIFY_UVW_MCP_PROJECT: internal.project, VERIFY_UVW_MCP_IMAGE: internal.image,
         VERIFY_UVW_ORIGIN: internal.origin, VERIFY_UVW_SERVER_PORT: internal['server-port'], VERIFY_UVW_MCP_PORT: url.port,
         VERIFY_UVW_METRICS_TOKEN: readFileSync(tokenPath, 'utf8').trim(),
         VERIFY_UVW_INTERNAL_TOKEN: readFileSync(join(internal.run, 'home/internal-token'), 'utf8').trim(),
@@ -171,7 +171,9 @@ function eventIssues(event) {
   const [kind, clientId] = auth === 'pat' ? ['pat', patId] : ['dev', 'dev'];
   if (event.auth_kind !== kind || event.client_id !== clientId) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
-    if (typeof event.cost?.[key] !== 'number' || !Number.isFinite(event.cost[key]) || event.cost[key] < 0 || (event.executor === 'none' && event.cost[key] !== 0)) issues.push(`Invalid cost.${key}`);
+    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace'].includes(tool)) ||
+      (key === 'export_bytes' && ['blob_download', 'asset_download'].includes(tool));
+    if (typeof event.cost?.[key] !== 'number' || !Number.isFinite(event.cost[key]) || event.cost[key] < 0 || (event.executor === 'none' && !gatewayTransfer && event.cost[key] !== 0)) issues.push(`Invalid cost.${key}`);
   }
   for (const key of ['ts', 'request_id', 'user_id', 'tool', 'toolset']) {
     if (typeof event[key] !== 'string' || !event[key]) issues.push(`Invalid event ${key}`);
@@ -184,7 +186,7 @@ function eventIssues(event) {
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
   const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect'].includes(tool) && typeof args.worktree === 'string');
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect'].includes(tool) && typeof args.worktree === 'string');
   if ((event.executor === 'none' ? event.unit_type !== null : typeof event.unit_type !== 'string') || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error' || event.outcome === 'timeout') {
     const resultCode = result.structuredContent?.code;

@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import * as fs from "node:fs/promises";
 import { once } from "node:events";
 import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
@@ -55,6 +56,7 @@ describe("SVG resource tools", () => {
       parseGatewayConfig({
         MCP_DEV_SESSION_PASSTHROUGH: "1",
         WORKSPACE_ORIGIN: "https://workspace.example",
+        MCP_STAGING_DIRECTORY: testStagingDirectory(),
         MCP_PUBLIC_URL: url,
       }),
       {
@@ -245,14 +247,30 @@ describe("SVG resource tools", () => {
       await start(0);
       const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
       await call("resources_export", { handles: [item!.handle] });
-      const cause = Object.assign(new Error(`${code}: cache open failed`), { code });
+      const cause = Object.assign(new Error(`${code}: /private/cache token=secret`), {
+        code,
+        syscall: "open",
+        path: "/private/cache",
+      });
       vi.mocked(fs.open).mockRejectedValueOnce(cause);
       await expect(library.read({ handle: item!.handle })).rejects.toHaveProperty("cause", cause);
       vi.mocked(fs.open).mockRejectedValueOnce(cause);
       const result = await call("resources_export", { handles: [item!.handle] });
       expect(result.isError).toBe(true);
       expect(result.structured["code"]).toBe("workspace-internal-error");
-      expect(logs).toContain(`${code}: cache open failed`);
+      const failure = logs
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line))
+        .find((entry) => entry.msg === "Tool failed internally");
+      expect(failure).toMatchObject({
+        error_name: "ResourceCacheIoError",
+        code,
+        syscall: "open",
+        request_id: expect.any(String),
+      });
+      expect(logs).not.toContain("/private/cache");
+      expect(logs).not.toContain("token=secret");
       expect(logs).toContain('"outcome":"internal_error"');
       expect(JSON.stringify(result)).not.toContain(code);
       expect(logs).not.toContain(svg(0));

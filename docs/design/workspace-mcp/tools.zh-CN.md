@@ -40,7 +40,7 @@
 
 ### 1.5 幂等
 
-保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
+保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（两种 Blob 写工具均必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
 `compile_svg` 在 CLI 里没有幂等键，MCP 补上一个可选的。
 
 客户端可能因为超时而重试调用（ChatGPT 的社区报告，未核实）。创建类工具的描述里要写明“创建前生成一个幂等键，重试时复用”。
@@ -207,22 +207,26 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 MCP 规范还没有标准的文件上传机制（SEP-2356、SEP-2631 仍是草案）。统一流程：
 
-1. agent 调用 `file_upload_create`，得到 `upload_id`、签名 PUT URL 和浏览器上传页 URL。有效期 10 分钟。
+1. agent 调用 `file_upload_create`，`size` 可省略；提供时是大小上限，不要求精确长度，浏览器上传前无需知道文件大小。得到 `upload_id`、签名 PUT URL 和浏览器上传页 URL。有效期 10 分钟。
 2. 能执行命令的客户端（Claude Code、Cursor、VS Code、WorkBuddy）直接对签名 URL 执行 PUT。不能执行命令的客户端，把上传页链接交给用户点击。
 3. agent 把 `upload_id` 交给 `import`、`blob_upload`、`compile_markdown` 等工具。
 4. ChatGPT 还可以通过 `_meta["openai/fileParams"]` 直接把用户上传的文件交给 `import`。网关从 ChatGPT 提供的临时 URL 拉取文件，不记录这个 URL。
+
+PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大小上限。实际字节流同时受声明上限与用途上限约束。成功后记录实际大小和 SHA-256。`blob_upload.name` 可省略，默认使用上传文件名。
+
+每用户上传与下载暂存字节默认合计最多 2 GiB，pending 上传默认最多 20 个，分别由 `MCP_STAGING_USER_MAX_BYTES` 与 `MCP_STAGING_USER_MAX_PENDING_UPLOADS` 配置。工具超额返回 `workspace-staging-quota-exceeded`，PUT 返回 429。
 
 `purpose` 决定大小上限和允许的媒体类型：
 
 | `purpose` | 用于 | 上限 |
 | --- | --- | --- |
-| `office-import` | `import` | 与 Workspace 一致，首版受 7.3 节的提交上限约束 |
-| `blob` | `blob_upload`、`blob_replace` | 与 Workspace 的 `maxBlobBytes` 一致 |
-| `markdown-assets`、`svg-assets`、`typst-bundle` | 对应的编译工具 | zip，按实测设定 |
+| `office-import` | `import` | 50 MiB，仍受 Workspace 1 MiB UnitData 提交上限约束 |
+| `blob` | `blob_upload`、`blob_replace` | 默认 512 MiB，与 Workspace `maxBlobBytes` 对齐 |
+| `markdown-assets`、`svg-assets`、`typst-bundle` | 对应的编译工具 | zip，默认各 50 MiB |
 
 ### 6.2 下载
 
-导出文件、PDF、Blob、Asset 和多张截图都返回签名下载链接，15 分钟有效，只对申请它的用户有效。
+导出文件、PDF、Blob、Asset 和多张截图都返回签名下载链接，15 分钟有效。工具只为申请者生成，链接本身是 capability，任何持有者都可下载，因此必须私密保存。
 目前没有客户端会自动跟随 `resource_link` 下载（未核实），所以链接以文本形式出现在结果里，交给用户点击。
 
 ## 7. 长任务
@@ -248,3 +252,12 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
 - server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，然后标记 ready，把评审链接交给用户，合并留给用户。
   不支持 Skill 的客户端（ChatGPT、WorkBuddy）靠这段 instructions 获得规则。
 - 仓库里的发现入口 `skills/univer-workspace-cli/SKILL.md` 是面向 CLI 的安装说明，不变。MCP 的接入说明写在 `apps/mcp/README.md` 和 Workspace 的设置页里。
+
+D3 已实现 `file_upload_create`、`blob_upload`、`blob_download`、`blob_replace` 和 `asset_download`。
+`MCP_UPLOAD_BLOB_MAX_BYTES`、`MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`、
+`MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`、`MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`、
+`MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` 可配置用途上限。Blob 接受合法 MIME 类型；Office 接受
+OpenXML、legacy Office 和 `text/csv`；其余三种用途只接受 `application/zip` 或
+`application/x-zip-compressed`。上传对象一小时有效，链接十分钟有效。工具消费不删除对象，
+同一 `idempotency_key` 可重试。外用户上传统一返回 `workspace-upload-not-found`，未完成或用途不符
+分别返回 `workspace-upload-not-ready`、`workspace-upload-purpose-mismatch`。

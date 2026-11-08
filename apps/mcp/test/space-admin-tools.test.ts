@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
 import { createServer } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -192,7 +193,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     await new Promise((resolve) => socket.close(resolve));
     url = `http://127.0.0.1:${String(port)}/mcp`;
     gateway = createGateway(
-      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_PUBLIC_URL: url }),
+      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url }),
       { logger: pino({ level: "silent" }), fetcher, ...(scopes === undefined ? {} : { scopes }) },
     );
     gateway.server.listen(port, "127.0.0.1");

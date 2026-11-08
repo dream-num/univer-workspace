@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
 import { Writable } from "node:stream";
 import { pino } from "pino";
@@ -72,7 +73,7 @@ describe("executor protocol boundaries", () => {
       parseGatewayConfig({
         MCP_DEV_SESSION_PASSTHROUGH: "1",
         WORKSPACE_ORIGIN: "https://workspace.test",
-        MCP_PUBLIC_URL: "https://mcp.test/mcp",
+        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "https://mcp.test/mcp",
         MCP_EXECUTOR_URLS: "http://executor:3000",
       }),
     ).toThrow(/together/);

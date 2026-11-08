@@ -1,3 +1,4 @@
+import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -79,7 +80,7 @@ const observedSchema = z
     }),
   })
   .refine(
-    (event) => event.executor !== "none" || Object.values(event.cost).every((cost) => cost === 0),
+    (event) => event.executor !== "none" || [event.cost.worker_cpu_ms, event.cost.worker_peak_rss_mb, event.cost.render_pages, event.cost.committed_revisions].every((cost) => cost === 0),
   );
 async function listen(server: Server): Promise<string> {
   server.listen(0, "127.0.0.1");
@@ -276,7 +277,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         MCP_DEV_SESSION_PASSTHROUGH: "1",
         WORKSPACE_ORIGIN: identityOrigin,
         WORKSPACE_TRANSPORT_URL: transportOrigin,
-        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
         METRICS_TOKEN: "metrics-secret",
         MCP_EXECUTOR_URLS: executorUrl,
         MCP_INTERNAL_TOKEN: internalToken,
@@ -348,6 +349,16 @@ describe("gateway over real HTTP and the MCP client", () => {
       client_name: "gateway-test",
       client_version: "1.2.3",
     });
+  });
+
+  it("accepts transfer bytes without an executor but rejects each worker cost", async () => {
+    await (await connect()).callTool({ name: "whoami", arguments: {} });
+    const event = events()[0];
+    expect(event).toBeDefined();
+    const cost = { worker_cpu_ms: 0, worker_peak_rss_mb: 0, render_pages: 0, committed_revisions: 0, upload_bytes: 3, export_bytes: 5 };
+    expect(observedSchema.safeParse({ ...event, cost }).success).toBe(true);
+    for (const key of ["worker_cpu_ms", "worker_peak_rss_mb", "render_pages", "committed_revisions"])
+      expect(observedSchema.safeParse({ ...event, cost: { ...cost, [key]: 1 } }).success).toBe(false);
   });
 
   it.each(["legacy", { pin: "2026-07-28" }] as const)(
@@ -681,7 +692,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       parseGatewayConfig({
         MCP_DEV_SESSION_PASSTHROUGH: "1",
         WORKSPACE_ORIGIN: identityOrigin,
-        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
       }),
       { logger: pino({ level: "silent" }) },
     );
@@ -710,7 +721,7 @@ describe("configuration boundary", () => {
   const env = {
     MCP_DEV_SESSION_PASSTHROUGH: "1",
     WORKSPACE_ORIGIN: identityOrigin,
-    MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp",
+    MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp",
   };
   it("rejects production passthrough before reading other configuration", () => {
     for (const value of ["1", "0", "false"]) {
@@ -728,7 +739,8 @@ describe("configuration boundary", () => {
       { PORT: "65536" },
       { LOG_LEVEL: "whatever" },
       { WORKSPACE_ORIGIN: "https://example.com/path" },
-      { MCP_PUBLIC_URL: "file:///mcp" },
+      { MCP_PUBLIC_URL: "https://example.com/nested/mcp" },
+      { MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "file:///mcp" },
     ]) {
       expect(() => parseGatewayConfig({ ...env, ...change })).toThrow();
     }

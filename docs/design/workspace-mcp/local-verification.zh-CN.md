@@ -115,7 +115,7 @@ services:
 ```
 
 - 端口只发布在 `127.0.0.1`。
-- 不挂载任何卷。阶段 D 引入暂存存储时再加，并且只挂载本次运行目录下的子目录。
+- gateway 将 `${VERIFY_UVW_MCP_STAGING_DIRECTORY}`（本次 run 的 `staging/`）挂载到 `/staging`，并设置 `MCP_STAGING_DIRECTORY=/staging`。目录 0700，归容器 node uid 1000 所有。executor 不挂载。`doctor` 在容器内检查 uid 和权限；`down` 移除目录及全部暂存字节。
 - D1b 在同一个文件里增加 `executor`，阶段 E 再增加 `renderer`。它们不发布端口，网关按服务名访问。阶段 E 的“渲染服务没有到 Workspace 的路由”用 `internal: true` 的网络实现，需要届时实测这种网络能否阻断 `host.docker.internal`。
 - 容器加固（只读根文件系统、去掉 capability 等）属于阶段 G，本文件不提前加。
 
@@ -132,7 +132,7 @@ MX1 在执行后再次运行 doctor，保留 worker 环境证据。`mcp-logs` �
 `down` 分别保存 gateway 与 executor 日志，并移除整个 compose 项目。
 
 `mcp --expect-event '<jq expression>'` 可对单次调用的事件增加断言。基础规则接受
-`cold_start|warm|none`，成本非负，`none` 时全部为 0。MX1 至 MX4 覆盖编辑、CLI 对照、
+`cold_start|warm|none`，成本非负，`none` 时 worker 成本为 0，文件工具可有 `upload_bytes` / `export_bytes`。MX1 至 MX4 覆盖编辑、CLI 对照、
 ready 错误、停机错误和 Browser 截图。
 
 ## 5. 网关为本地验证提供的行为
@@ -166,7 +166,7 @@ ready 错误、停机错误和 Browser 截图。
 ### 5.4 用量事件
 
 - 网关只在 stdout 输出日志，格式是 pino JSON。用量事件是其中 `event` 为 `mcp.tool_call` 的行，字段见 [架构](architecture.zh-CN.md) 8.1 节。
-- 只为通过认证的 `tools/call` 产生事件。开发认证的 `auth_kind` 和 `client_id` 都是 `dev`；PAT 为 `pat` 与 PAT ID，OAuth access token 为 `oauth` 与 OAuth `client_id`。非执行层工具仍为 `executor: "none"` 且六项 cost 为 0；执行层工具使用 runtime observer 的 `cold_start` 或 `warm`，记录 worker 墙钟毫秒数与提交 revision 数。`none` 必须对应全零 cost。
+- 只为通过认证的 `tools/call` 产生事件。开发认证的 `auth_kind` 和 `client_id` 都是 `dev`；PAT 为 `pat` 与 PAT ID，OAuth access token 为 `oauth` 与 OAuth `client_id`。非执行层工具为 `executor: "none"`，文件工具可以记录 `upload_bytes` 和 `export_bytes`；`worker_cpu_ms`、`worker_peak_rss_mb`、`render_pages`、`committed_revisions` 必须为 0。执行层工具使用 runtime observer 的 `cold_start` 或 `warm`，记录 worker 墙钟毫秒数与提交 revision 数。
 - 8.1 节的每个字段都必须出现在事件里。下列字段不能为 `null`：`ts`、`request_id`、`user_id`、`auth_kind`、`client_id`、`tool`、`toolset`、`outcome`、`duration_ms`、`executor`、`cost` 及其六个字段。其余字段可以为 `null`，含义如下：
 
   | 字段 | 为 `null` 的情况 |
@@ -578,3 +578,8 @@ opencode 2.0.26，模型 `console-deepseek/deepseek-flash`，对 A.3 的临时 M
 - 只在发出请求时替换地址，`whoami`、`repo_list`、`repo_view` 的结果就与 `uvw --json` 相同。
 - `node:24-bookworm-slim` 中 `deploy` 出的 Client Core 能加载原生绑定。
 - 对 Claude Code 的会话记录和 Workspace 的 `server.log` 做了检查，都没有发现 session 泄露。
+
+D3 文件验证使用 `bin/mcp-file.mjs put|get <工具 .out 路径> <文件路径>`。PUT 设置准确
+Content-Length；GET 保存字节和 `.headers.json`，并断言 attachment、nosniff、sandbox CSP
+与 private/no-store。MF1 至 MF6 覆盖 Blob 上传、下载、替换、跨用户边界、Asset 下载、上传状态与用途校验、精确长度和单次 PUT。
+所有临时 staging 数据仅在 run 子目录，证据保留在 `evidence/`。

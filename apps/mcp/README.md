@@ -96,6 +96,12 @@ The gateway validates configuration before listening and retains a readonly conf
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
 | `MCP_PUBLIC_URL` | Gateway only | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
+| `MCP_MAX_CONNECTIONS` | `1024` | Maximum simultaneous gateway TCP connections per replica |
+| `MCP_STAGING_DIRECTORY` | Required | Private 0700 directory owned by the gateway uid. Atomic JSON sidecars and byte files; startup and minute sweeps remove expired objects |
+| `MCP_STAGING_USER_MAX_BYTES` | `2147483648` (2 GiB) | Combined staged upload/download bytes per user; in-flight bytes count too. Accounting is per gateway replica, refreshed from valid sidecars on startup and each minute |
+| `MCP_STAGING_USER_MAX_PENDING_UPLOADS` | `20` | Pending upload reservations per user |
+| `MCP_UPLOAD_BLOB_MAX_BYTES` | `536870912` | Blob upload/download staging limit in bytes; align with Workspace `maxBlobBytes` |
+| `MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`, `MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`, `MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`, `MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` | `52428800` each | Per-purpose upload limits in bytes |
 | `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp-<uid>/resources` | Private directory where the SVG resource catalog caches downloaded SVG files. Public data shared by gateway users under the same uid |
 | `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
@@ -120,6 +126,9 @@ Docker Desktop without changing those identities.
 | `GET /healthz` | Returns 200 without contacting Workspace |
 | `GET /metrics` | Prometheus text with a matching bearer token. Returns 404 when unset, or 401 with `WWW-Authenticate: Bearer` on mismatch |
 | `GET /.well-known/oauth-protected-resource` and `/mcp` suffix | RFC 9728 metadata `{ resource: MCP_PUBLIC_URL, authorization_servers: [WORKSPACE_ORIGIN], scopes_supported, bearer_methods_supported }`. No authentication, `Cache-Control: public, max-age=300` |
+| `PUT /mcp/files/uploads/{id}?token=...` | Capability upload, 10-minute link; optional Content-Length, optional size upper limit, single successful PUT |
+| `GET /mcp/files/uploads/{id}/page?token=...` | Static browser upload page, same capability and expiry, strict CSP |
+| `GET /mcp/files/downloads/{id}?token=...` | 15-minute capability download, attachment and sandbox headers, private/no-store |
 | `/mcp` | MCP Streamable HTTP. Validates Host, optional Origin, bearer authentication, and toolset selection before SDK dispatch |
 | Other paths | Returns 404 |
 
@@ -151,6 +160,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
+| `file_upload_create` | Required `purpose`, `file_name`, `media_type`; optional `size` | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
@@ -162,6 +172,10 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
 | `blob_get` | Required `resource` | `{ node, resource }` |
+| `blob_upload` | `upload_id`, `space`, `name`, `idempotency_key`; optional `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
+| `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
+| `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key` | `{ replacement: { operationId, resourceId, etag } }`. Destructive, requires `publish` |
+| `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
 
 `admin` toolset:
 
@@ -296,13 +310,12 @@ The version 1 event has these fields:
 | `error_code` | For `tool_error` or `timeout`, the same code the tool result returns in `structuredContent.code`, including Workspace codes such as `NOT_FOUND`; otherwise null |
 | `duration_ms` | Non-negative total gateway duration including authentication |
 | `executor` | `cold_start` or `warm` from the runtime observer; `none` when no worker operation was reported |
-| `cost` | Object containing `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages`, `export_bytes`, `upload_bytes`, and `committed_revisions`. All six remain 0 for non-executor calls |
+| `cost` | Object containing `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages`, `export_bytes`, `upload_bytes`, and `committed_revisions`. Gateway file tools report transfer bytes; other costs remain 0 for non-executor calls |
 
 Failure envelopes also carry observed usage, including cold/warm state and Unit type.
 
 `worker_cpu_ms` records worker wall time reported by Client Core, not CPU consumption.
-`committed_revisions` counts confirmed writes. `worker_peak_rss_mb`, render and byte costs
-remain zero in this slice. `executor: "none"` implies all-zero cost.
+`committed_revisions` counts confirmed writes. `worker_peak_rss_mb` and render costs remain zero in this slice. `executor: "none"` permits `upload_bytes` and `export_bytes` for file tools; `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages` and `committed_revisions` remain zero.
 
 Only `trace_id`, `client_name`, `client_version`, `repo`, `unit_type`, and `error_code`
 can be null. Requests rejected before tool dispatch do not emit a usage event.
@@ -347,3 +360,55 @@ pnpm --filter @univerjs/univer-workspace-mcp typecheck
 pnpm --filter @univerjs/univer-workspace-mcp test
 pnpm --filter @univerjs/univer-workspace-mcp build
 ```
+
+## File staging
+
+`MCP_PUBLIC_URL` must have the pathname `/mcp`. File routes use the `/mcp/files/` prefix.
+File routes keep the public Host check and authenticate with a 256-bit capability token
+instead of the MCP bearer. Only its SHA-256 is persisted. Anyone holding a link can use it;
+keep links private. Authenticated tools can consume only the caller's ready uploads of the
+matching purpose. A foreign upload is reported as not found. Consumption retains the upload
+for idempotent retries until its one-hour expiry. Workspace remains the permission authority.
+
+`blob` accepts any syntactically valid media type. `office-import` accepts the OpenXML
+Word, Excel and PowerPoint types, the legacy Office types and `text/csv`. The other three
+purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
+does not lift Workspace's 1 MiB UnitData commit limit. Import/compile consumers remain future work.
+
+Blob transfer streams between Workspace and the staging directory. Download results preserve
+Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
+Asset downloads use Asset IDs with a media-type extension. Startup and minute sweeps remove expired files;
+failed streams never become ready. Sweeps refresh cached state, size and expiry from every valid sidecar.
+Concurrent reservations and in-flight bytes on other replicas remain approximate until the next sweep;
+strict shared-volume quotas require coordinated reservations. Corrupt sidecars and their data are removed
+once the sidecar mtime is older than the one-hour upload TTL, with one log naming the object ID.
+Unreadable sidecars are logged with their ID and isolated. Sweeps tolerate disappearing entries. They skip
+locks younger than two hours, so a consume crossing expiry keeps its bytes. Locks carry random
+ownership tokens; release preserves a successor's lock. Orphan locks, including
+zero-byte locks from a crash before token write, are swept after that bound. A crashed in-flight
+upload can retain its exclusive lock until that bound. Retry with a new upload reservation in that case. Staging roots,
+created parents and files reject symlinks and group/world permissions.
+
+Gateway file tools record `upload_bytes` for consumed uploads and `export_bytes` for staged
+downloads with `executor: none`. Worker costs remain zero without an executor.
+
+`file_upload_create.size` is optional and sets a size upper limit. Uploads accept smaller files,
+including empty files and chunked bodies without Content-Length. The effective limit is the
+minimum of the supplied size (when present) and the purpose limit; `max_bytes` reports that bound.
+Ready sidecars record actual bytes and SHA-256. File routes stream raw Node request bytes before
+MCP JSON adaptation. Node's request timeout is 30 minutes and its headers timeout is explicitly 60 seconds.
+`MCP_MAX_CONNECTIONS` defaults to 1024 per gateway replica. A file response sent before the
+request body is complete sends `Connection: close` and destroys the request after the response finishes.
+Routing uses one WHATWG-normalized pathname, including dot segments and encoded dots, before
+choosing between raw file streaming and the MCP adapter's 4 MiB JSON cap.
+The capability link must still be used within ten minutes of reservation.
+
+Staging quota failures return `workspace-staging-quota-exceeded` from tools, or HTTP 429 during PUT.
+Failed transfers release their staged-byte accounting; ready uploads remain counted until expiry.
+The byte cap covers uploads and downloads together. Pending-upload counts fall when the upload becomes ready.
+`blob_upload.name` defaults to the reserved file name. Transfer usage counts successful consumption once.
+Filesystem failures and data/sidecar size mismatches are internal errors; tool details omit
+`sourcePath` and local filesystem paths. Invalid Workspace download media types fall back to
+`application/octet-stream`. Internal failures log the error class and safe `code` and `syscall`
+fields with the request ID, without messages, stacks, paths, credentials, contents or arguments.
+Aborted transfers produce one info-level failure log.

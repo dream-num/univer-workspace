@@ -80,3 +80,33 @@ describe("translateToolError", () => {
     expect(translateToolError(workspaceError("x-code", "m", circular)).detail).toBeNull();
   });
 });
+
+it("hides filesystem diagnostics and recursively removes sourcePath from MCP details", () => {
+  const error = Object.assign(new Error("EACCES /secret/staging/file token=secret"), {
+    code: "EACCES",
+    syscall: "open",
+    path: "/secret/staging/file",
+  });
+  expect(translateToolError(error)).toEqual({
+    outcome: "internal_error",
+    code: "workspace-internal-error",
+    message: "Internal tool error.",
+    detail: null,
+  });
+  expect(
+    translateToolError(
+      workspaceError("workspace-result-unknown", "Lost", {
+        sourcePath: "/secret/staging/file",
+        request: { sourcePath: "/secret/again", id: "kept" },
+      }),
+    ).detail,
+  ).toEqual({ request: { id: "kept" } });
+});
+
+it("preserves non-system error codes beginning with E", () => {
+  expect(translateToolError(workspaceError("EXPIRED", "Link expired."))).toMatchObject({
+    outcome: "tool_error",
+    code: "EXPIRED",
+    message: "Link expired.",
+  });
+});

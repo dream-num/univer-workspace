@@ -203,7 +203,9 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 - 一个 `StagingStore` 接口，加一个本地文件系统实现。参照 `apps/workspace/server/src/app.ts:241-245` 的 `LocalBlobStore` 用法。
 - 目录由 `MCP_STAGING_DIRECTORY` 指定。本地验证用本次运行目录下的子目录。SaaS 挂载一个所有网关副本共享的卷。
 - 每个对象带所有者（用户 ID）、用途、大小、媒体类型和过期时间。元数据以 sidecar 文件保存在同一目录，不使用数据库。
-- 后台定时清理过期对象，参照 `apps/workspace/server/src/jobs/blob-maintenance.ts`。上传对象 1 小时过期，导出结果 15 分钟过期。
+- sidecar 保存 `id`、`kind`、`owner`、`purpose`、`fileName`、`mediaType`、`size`、`maxBytes`、`sha256`、`state`、`createdAt`、`expiresAt` 和 `tokenHash`，通过临时文件加 rename 原子写入。目录必须为当前 uid 所有的 0700 私有目录，文件 0600。上传声明的 `size` 可省略，表示大小上限；有效上限为声明值与用途上限的较小值。PUT 的 Content-Length 可省略（允许 chunked），提供时不得超过有效上限。流式计数同样受此上限约束，成功后 `size` 和 `sha256` 记录实际字节，pending 变为 ready，拒绝第二次 PUT。
+- 每用户暂存字节（上传、下载与进行中的流之和）默认上限 2 GiB，`MCP_STAGING_USER_MAX_BYTES` 可配置；pending 上传默认最多 20 个，`MCP_STAGING_USER_MAX_PENDING_UPLOADS` 可配置。工具超额报 `workspace-staging-quota-exceeded`，PUT 超额返回 429。计数在每个副本内维护，启动及每分钟扫描刷新每个有效 sidecar 的 state、size 与 expiry。本副本正在持锁的对象保留流中的计数；其他副本的并发 reservation 与流中字节在下次扫描前仍是近似值，共享卷上的严格总配额仍需协调。
+- 后台在启动和每分钟清理过期对象，参照 `apps/workspace/server/src/jobs/blob-maintenance.ts`。上传对象 1 小时过期，导出结果 15 分钟过期。损坏 sidecar 按 mtime 超过上传 TTL 后连同 data 删除，并只记录一次带对象 ID、无路径、无 token 的错误；不可读条目隔离并记录对象 ID，不终止启动或扫描。文件消失的竞争可忽略。清理跳过不足 2 小时的锁，避免清理跨过过期点的消费；锁写入随机 ownership token，释放只删除 token 仍匹配的锁，保留后继者的锁；超过 2 小时的孤立空锁也清理。释放已消失的锁不改变消费成功结果。
 - 执行层和渲染服务不直接访问暂存存储。网关读出文件交给它们，或从它们那里收回结果再写入。
 
 ### 5.2 网关的文件端点
@@ -214,8 +216,10 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 | `GET /mcp/files/uploads/{uploadId}/page` | 浏览器上传页，给不能自己执行 PUT 的客户端（claude.ai、ChatGPT 对话） |
 | `GET /mcp/files/downloads/{downloadId}` | 用签名 URL 下载 |
 
+先用 `new URL(request.url ?? "/", publicUrl).pathname` 统一 WHATWG 路径归一化，再选择文件端点或 MCP adapter，处理端复用同一路径。文件端点处理原始 Node 字节流，不做 UTF-8 解码；归一化后属于 MCP 的请求仍受 4 MiB JSON 上限限制。Node `requestTimeout` 为 30 分钟，显式设置 `headersTimeout` 为 60 秒。`MCP_MAX_CONNECTIONS` 配置每副本连接上限，默认 1024。文件端点提前响应未完成的请求体时发送 `Connection: close`，响应结束后销毁请求，避免慢速请求体长期占用连接。
+
 这些端点与 Workspace 同域。下载一律带 `Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` 和 `Content-Security-Policy: sandbox; default-src 'none'`，
-上传页不渲染任何用户内容。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
+上传页不渲染任何用户内容；413 明示文件太大。下载结果保留原 Node 名，attachment 文件名替换路径分隔符与控制字符，并截为 180 字符。Asset 文件名根据媒体类型添加扩展名。下载同时带 `Cache-Control: private, no-store`。文件端点保留 Host 检查，使用 256-bit 随机 capability token，sidecar 只存 SHA-256，常量时间比较；链接持有者可访问，无需 bearer。工具消费上传仍验证 owner、purpose 和 ready。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
 导出的 HTML、SVG、Markdown 可能包含任意内容，不能在 Workspace 的同源下以内联方式打开。
 
 ## 6. 执行层
@@ -419,3 +423,7 @@ apps/mcp/
 - 工具定义只做参数解析和结果映射，业务逻辑调用 `client-core` 已有的 feature，不复制 CLI 的实现。
 - `apps/mcp` 依赖 `@univerjs/univer-workspace-client-core`（workspace 协议）和 MCP 官方 TypeScript SDK（精确版本）。不依赖 `apps/cli`。
 - skills 内容在构建时从 `apps/cli/skill-data` 复制进 `apps/mcp` 的产物，保证与 CLI 版本一致。
+
+内部工具与请求失败仅记录错误类名及安全的 code、syscall 和 request ID，不记录错误消息、堆栈、路径或参数。客户端中止只记录一次 info 级失败。下载的 Workspace 媒体类型无法解析时使用 application/octet-stream；数据与 sidecar 大小不一致属于内部完整性错误。
+
+文件工具在 gateway 内记录 `upload_bytes`（消费上传）和 `export_bytes`（写入下载），`executor: none` 时允许这两项非零，其他成本仍为零。

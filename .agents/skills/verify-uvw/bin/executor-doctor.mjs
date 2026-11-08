@@ -8,7 +8,7 @@ import { join } from 'node:path';
 
 const [repo, run, project, image, imageId, origin, serverPort, mcpPort] = process.argv.slice(2);
 const secret = name => readFileSync(join(run, 'home', name), 'utf8').trim();
-const env = { ...process.env, VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
+const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'staging'), VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
   VERIFY_UVW_METRICS_TOKEN: secret('metrics-token'), VERIFY_UVW_INTERNAL_TOKEN: secret('internal-token'),
   VERIFY_UVW_MCP_OAUTH_SECRET: secret('mcp-oauth-secret') };

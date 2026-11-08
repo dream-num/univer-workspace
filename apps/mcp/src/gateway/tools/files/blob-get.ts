@@ -5,7 +5,9 @@ import { blobResourceSchema, nodeSummarySchema } from "../schemas.js";
 import { withNodeUrl } from "../core/space-support.js";
 
 const inputSchema = z.object({
-  resource: z.string().describe("Resource ID of the uploaded file, from space_browse or space_find."),
+  resource: z
+    .string()
+    .describe("Resource ID of the uploaded file, from space_browse or space_find."),
 });
 export const blobGetTool: ToolDefinition = {
   name: "blob_get",

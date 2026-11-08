@@ -78,11 +78,28 @@ test('event authentication must match the chosen --auth mode', () => {
   assert.ok(validateErrorCode('ok', undefined, null).length === 0);
 });
 
-test('executor events require nonnegative cost and none requires all-zero cost', () => {
+test('executor events require nonnegative cost and none requires zero worker cost', () => {
   const cost = { worker_cpu_ms: 3, worker_peak_rss_mb: 0, render_pages: 0, export_bytes: 0, upload_bytes: 0, committed_revisions: 1 };
   for (const executor of ['cold_start', 'warm']) {
     assert.equal(validateErrorCode('ok', undefined, null, { event: { executor, unit_type: 'sheet', cost } }).length, 0);
   }
   assert.ok(validateErrorCode('ok', undefined, null, { event: { executor: 'none', cost } }).includes('Invalid cost.worker_cpu_ms'));
   assert.ok(validateErrorCode('ok', undefined, null, { event: { executor: 'warm', unit_type: 'sheet', cost: { ...cost, worker_cpu_ms: -1 } } }).includes('Invalid cost.worker_cpu_ms'));
+});
+
+test('gateway file transfers record only the appropriate bytes with no executor', () => {
+  const zero = { worker_cpu_ms: 0, worker_peak_rss_mb: 0, render_pages: 0, export_bytes: 0, upload_bytes: 0, committed_revisions: 0 };
+  for (const tool of ['blob_download', 'asset_download', 'blob_upload', 'blob_replace']) {
+    const key = ['blob_upload', 'blob_replace'].includes(tool) ? 'upload_bytes' : 'export_bytes';
+    const cost = { ...zero, [key]: 3 };
+    const globals = { tool, args: { space: 'space' } };
+    assert.equal(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: 'space', cost } }).length, 0);
+  }
+  for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'committed_revisions']) {
+    assert.ok(validateErrorCode('ok', undefined, null, {
+      globals: { tool: 'blob_download', args: { space: 'space' } },
+      event: { tool: 'blob_download', repo: 'space', cost: { ...zero, export_bytes: 3, [key]: 1 } },
+    }).includes(`Invalid cost.${key}`));
+  }
+  assert.ok(validateErrorCode('ok', undefined, null, { event: { cost: { ...zero, export_bytes: 3 } } }).includes('Invalid cost.export_bytes'));
 });
