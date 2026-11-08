@@ -66,6 +66,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX4 captures the written values in the Browser.
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
 - MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and publish/retry/open the validated page.
+- MM1 checks Markdown apply retries, CLI parity, image downloads and explicit block updates.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -174,7 +175,7 @@ $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","import","export","api_find","api_show","skills_read"]'
-FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create"]'
+FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
@@ -184,8 +185,8 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|compile_markdown|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
@@ -1778,3 +1779,34 @@ node .agents/skills/verify-uvw/bin/mcp-office-retry.mjs
 ```
 
 Pass when both calls return the same Unit ID and the Worktree Unit list is unchanged.
+
+
+**MM1. Markdown compile, native readback and block update.**
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-markdown-roundtrip.mjs
+```
+
+Pass when an assets ZIP uploads by PUT, compile-only returns JavaScript through `mcp-call`
+with `executor: none`, null Unit/repository identities and ZIP upload bytes, and Markdown with a heading, list, table and image
+creates a Doc in a new pull request, and the same key returns the same Unit and source map.
+Compare its inspection with CLI compile-markdown. Export the same native blocks through
+MCP and CLI, compare Markdown and source maps, and download the image to compare its bytes.
+Native export generates fresh asset filenames, so compare Markdown after normalizing only
+that random filename component. Replace one explicit block and inspect the changed heading
+and preserved list. Evidence uses the `mm-markdown-` prefix and includes a summary JSON.
+
+**MM2. Markdown input errors and bounded ZIP paths.** Run after MM1.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-markdown-errors.mjs
+```
+
+Pass when inline HTML, footnotes, missing images with and without a ZIP, duplicate block IDs
+and remote, absolute, traversal and file URL image paths fail in every compile mode.
+Invalid source maps and unmapped blocks for update and export must also fail. All return `workspace-markdown-invalid` with messages and diagnostics.
+The HTML error message must match CLI stderr. A ZIP with a 2,000-directory path must fail
+with `workspace-argument-invalid` while a concurrent executor inspection matches the baseline.
+Both gateway durations must stay below the larger of 2 seconds and five times the warm
+baseline inspection duration. This is a rejection latency guard, not a throughput benchmark.
+Evidence uses `mm-errors-` and includes the CLI transcript, per-call events and summary JSON.

@@ -1,29 +1,42 @@
-import { importBuffer, exportToBuffer } from "@univerjs-pro/exchange-node";
 import type { WorkspaceUnitExchangeDependencies } from "@univerjs/univer-workspace-client-core";
 import { conversionError } from "./errors.js";
 import type { JobRequest } from "./protocol.js";
-
-const exportOfficeBuffer = exportToBuffer as unknown as NonNullable<
-  WorkspaceUnitExchangeDependencies["exportToBuffer"]
->;
 
 process.once("disconnect", () => process.exit(0));
 
 process.once("message", (message: JobRequest) => {
   void (async () => {
     try {
-      const value =
-        message.kind === "import"
-          ? await importBuffer(
-              Buffer.from(message.bytes.buffer, message.bytes.byteOffset, message.bytes.byteLength),
-              message.options,
-            )
-          : await exportOfficeBuffer(message.data, {
-              ...message.options,
-              license: message.license,
-              licenseKey: message.licenseKey,
-            });
-      if (message.kind === "import") {
+      let value: unknown;
+      if (message.kind === "markdown.materialize") {
+        const { materializeWorkspaceDocument } =
+          await import("@univerjs/univer-workspace-client-core/document-materialize");
+        value = await materializeWorkspaceDocument(message, {
+          format: "Markdown",
+          license: message.license,
+        });
+      } else {
+        const { importBuffer, exportToBuffer } = await import("@univerjs-pro/exchange-node");
+        const exportOfficeBuffer = exportToBuffer as unknown as NonNullable<
+          WorkspaceUnitExchangeDependencies["exportToBuffer"]
+        >;
+        value =
+          message.kind === "import"
+            ? await importBuffer(
+                Buffer.from(
+                  message.bytes.buffer,
+                  message.bytes.byteOffset,
+                  message.bytes.byteLength,
+                ),
+                message.options,
+              )
+            : await exportOfficeBuffer(message.data, {
+                ...message.options,
+                license: message.license,
+                licenseKey: message.licenseKey,
+              });
+      }
+      if (message.kind === "import" || message.kind === "markdown.materialize") {
         const size = Buffer.byteLength(JSON.stringify(value));
         if (size > 900 * 1024) {
           process.send?.(
@@ -31,7 +44,7 @@ process.once("message", (message: JobRequest) => {
               ok: false,
               error: {
                 code: "workspace-import-too-large",
-                message: `Converted UnitData is ${size} bytes, above the 900 KiB Workspace client limit. Reduce the Office file and upload it again.`,
+                message: `Converted UnitData is ${size} bytes, above the 900 KiB Workspace client limit. Reduce the source document and retry.`,
                 detail: { size, maxBytes: 900 * 1024 },
               },
             },

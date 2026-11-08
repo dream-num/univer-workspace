@@ -139,6 +139,10 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `html_view_validate` 与 `html_view_create` 接受最多 512 KiB UTF-8 HTML，超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果及 `workspaceUrl`；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 和目标重试。
 - `blob_download`、`asset_download`、`print_pdf` 返回签名下载链接。`blob_download` 同时返回 ETag，因为 `blob_replace` 需要它。
 - `compile_markdown` 的 Markdown 正文以字符串传入。正文引用的本地图片打成 zip 上传，用 `assets_upload_id` 传入，zip 内路径对应 Markdown 里的相对路径。CLI 要求资源不能超出源文件目录（`packages/client-core/src/markdown-source.ts:31-47`），MCP 同样拒绝 zip 中越界的路径。
+- `compile_markdown` 的 ZIP 最多 256 个 entry，单个文件解压后最多 4 MiB，总解压大小最多 8 MiB。解压前拒绝超过 1,024 UTF-8 字节或 32 段的 entry 名称。拒绝路径穿越、大小写和 Unicode 规范化碰撞，以及文件与目录冲突。
+- 图片会内联进生成程序。ZIP 上限不代表结果一定能提交。仅编译时，JavaScript 与 JSON 编码等完整响应必须小于 8 MiB。创建 Doc 时，序列化 UnitData 受 900 KiB 检查与 Workspace 1 MiB 请求上限约束，正文与文档结构也占用大小。大内容见[架构文档 7.3 节](architecture.zh-CN.md#73-大文件导入的限制)。
+- Markdown 编译和 `source_map` 输入错误返回 `workspace-markdown-invalid`，保留 CLI 错误消息与 `detail.diagnostics`。
+- `export_markdown` 与当前 CLI 一样，要求上次成功生成或回读的 `source_map` 和非空、去重的显式 `blocks`，不推断任意原生文档的整篇映射。
 - `export_markdown` 返回 `{markdown, sourceMap, assets}`。`assets` 是每个资源的下载链接，不内联字节。CLI 的 JSON 输出本来就不含资源字节（`apps/cli/src/features/markdown/export-command.ts:74`）。
 - `compile_typst` 的 bundle 目录打成 zip 上传。
 - 不带 `apply` 的编译工具返回生成的 Facade 代码和诊断，不写入 Workspace。
@@ -223,7 +227,8 @@ PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大�
 | --- | --- | --- |
 | `office-import` | `import` | 50 MiB，仍受 Workspace 1 MiB UnitData 提交上限约束 |
 | `blob` | `blob_upload`、`blob_replace` | 默认 512 MiB，与 Workspace `maxBlobBytes` 对齐 |
-| `markdown-assets`、`svg-assets`、`typst-bundle` | 对应的编译工具 | zip，默认各 50 MiB |
+| `markdown-assets` | `compile_markdown` | ZIP 上传默认 50 MiB，解压后单文件 4 MiB、合计 8 MiB；生成结果另受上述提交与响应上限约束 |
+| `svg-assets`、`typst-bundle` | 对应的编译工具 | zip，默认各 50 MiB |
 
 ### 6.2 下载
 

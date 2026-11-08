@@ -2,6 +2,7 @@ import type {
   WorkspaceContentRuntimeOperations,
   WorkspaceContentSource,
   WorkspaceUnitExchangeDependencies,
+  WorkspaceTypstMaterializer,
 } from "@univerjs/univer-workspace-client-core";
 import type { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import type { OpInput, OpName, OpOutput, opSpecs } from "../shared/executor-protocol.js";
@@ -21,6 +22,7 @@ export interface OpContext {
   readonly userId: string;
   readonly transportOrigin: string;
   readonly runtime: BoundRuntime;
+  readonly materializer?: WorkspaceTypstMaterializer;
   readonly exchange: Pick<
     WorkspaceUnitExchangeDependencies,
     "license" | "licenseKey" | "importBuffer" | "exportToBuffer"

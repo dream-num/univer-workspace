@@ -1,3 +1,4 @@
+import type { WorkspaceMaterializedDocument } from "@univerjs/univer-workspace-client-core/document-materialize";
 import { fork } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -27,6 +28,13 @@ export function jobEnvironment(directory: string): NodeJS.ProcessEnv {
 }
 
 export function runConversionJob(
+  job: Extract<ConversionJob, { kind: "markdown.materialize" }>,
+  credentials: JobCredentials,
+  signal: AbortSignal,
+  entry?: URL,
+  heapMb?: number,
+): Promise<WorkspaceMaterializedDocument>;
+export function runConversionJob(
   job: Extract<ConversionJob, { kind: "import" }>,
   credentials: JobCredentials,
   signal: AbortSignal,
@@ -46,7 +54,7 @@ export async function runConversionJob(
   signal: AbortSignal,
   entry = new URL("./entry.js", import.meta.url),
   heapMb = 256,
-): Promise<Uint8Array | Readonly<Record<string, unknown>>> {
+): Promise<Uint8Array | Readonly<Record<string, unknown>> | WorkspaceMaterializedDocument> {
   signal.throwIfAborted();
   const directory = await mkdtemp(join(tmpdir(), `univer-mcp-job-${process.pid}-`));
   try {
@@ -107,9 +115,19 @@ export async function runConversionJob(
               "The conversion job returned an invalid result.",
             ),
           );
-        else resolve(reply.value);
+        else if (job.kind === "markdown.materialize") {
+          const materialized = z
+            .object({
+              initialData: z.record(z.string(), z.unknown()),
+              name: z.string().optional(),
+              value: z.unknown().optional(),
+            })
+            .safeParse(reply.value);
+          if (materialized.success) resolve(materialized.data);
+          else reject(workspaceError("workspace-job-crashed", "Invalid materialized document."));
+        } else resolve(reply.value);
       });
-      child.send(job.kind === "export" ? { ...job, ...credentials } : job, (error) => {
+      child.send(job.kind === "import" ? job : { ...job, ...credentials }, (error) => {
         if (error) {
           failure = workspaceError(
             "workspace-job-crashed",

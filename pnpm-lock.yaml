@@ -567,6 +567,9 @@ importers:
       '@univerjs/univer-workspace-client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       pino:
         specifier: 10.3.1
         version: 10.3.1
