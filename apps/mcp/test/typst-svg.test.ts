@@ -1,5 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { zipSync } from "fflate";
+import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import { WorkspaceContentSource } from "@univerjs/univer-workspace-client-core";
@@ -139,6 +140,20 @@ it("preserves Typst translation diagnostics through the child and creates no Uni
   expect(fetcher).not.toHaveBeenCalled();
 }, 20000);
 it("materializes identical Typst create intents after a lost creation response", async () => {
+  // Compilation is covered above; retry determinism needs two fresh native materializations.
+  // Fixture is the real compiler output for bundle() with its default Hello/World source.
+  const javascript = await readFile(
+    new URL("./fixtures/typst-retry-program.txt", import.meta.url),
+    "utf8",
+  );
+  const compiled = {
+    committed: false,
+    javascript,
+    title: "Typst test",
+    targetUnitId: "typst-test",
+    diagnostics: [],
+    previews: [],
+  };
   const bodies: string[] = [];
   const keys: (string | null)[] = [];
   let confirmed = false;
@@ -169,17 +184,28 @@ it("materializes identical Typst create intents after a lost creation response",
     spaceId: "space",
     idempotencyKey: "typst-retry-12345678",
   };
-  await expect(typstCompile(context(fetcher), input, bundle())).rejects.toMatchObject({
+  const ctx = context(fetcher);
+  ctx.compileTypst = async () => compiled;
+  await expect(typstCompile(ctx, input, bundle())).rejects.toMatchObject({
     code: "workspace-result-unknown",
   });
   confirmed = true;
-  const retry = await typstCompile(context(fetcher), input, bundle());
+  const retry = await typstCompile(ctx, input, bundle());
   expect(retry.output).toMatchObject({ committed: true, unit: { unitId: "created-once" } });
   expect(new Set(bodies).size).toBe(1);
   expect(new Set(keys).size).toBe(1);
+  expect(bodies.length).toBeGreaterThan(1);
+  expect(JSON.parse(bodies[0]!).initialData).toMatchObject({ id: "typst-test", rev: 1 });
   const typstKey = keys[0];
   keys.length = 0;
-  await markdownCompile(context(fetcher), { ...input, markdown: "Hello" }, new Uint8Array());
+  // Only the key namespace matters here; Markdown has its own native retry test.
+  const markdownContext = {
+    ...context(fetcher),
+    materializer: {
+      materialize: async () => ({ initialData: { id: "markdown-test" } }),
+    },
+  };
+  await markdownCompile(markdownContext, { ...input, markdown: "Hello" }, new Uint8Array());
   expect(keys[0]).not.toBe(typstKey);
   expect(typstKey).toBe(createHash("sha256").update(JSON.stringify(["owner", "compile_typst", input.idempotencyKey])).digest("hex"));
   expect(keys[0]).toBe(createHash("sha256").update(JSON.stringify(["owner", input.idempotencyKey])).digest("hex"));
