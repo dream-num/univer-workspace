@@ -136,8 +136,15 @@ if (record) {
     if (auth === 'dev' && !workspaceLines.length) issues.push('Workspace correlation log is empty');
     if (leaked) issues.push('Gateway log contains the Bearer credential');
     if (mode === 'call') {
-      if (events.length !== 1) issues.push(`Expected one usage event, found ${events.length}`);
-      else {
+      const jobReturned = output?.job_id && output?.status === 'running';
+      const deduplicated = result._meta?.['univer.workspace.deduplicated'] === true;
+      if (deduplicated) {
+        if (!['import', 'export'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
+        if (events.length !== 0) issues.push(`Deduplicated call emitted ${events.length} conversion events`);
+      } else if (jobReturned) {
+        if (events.length > 1) issues.push(`Expected at most one settled job event, found ${events.length}`);
+      } else if (events.length !== 1) issues.push(`Expected one usage event, found ${events.length}`);
+      else if (!jobReturned && !deduplicated) {
         issues.push(...eventIssues(events[0]));
         if (expectEvent !== undefined) {
           try { execFileSync('jq', ['-e', expectEvent], { input: JSON.stringify(events[0]), stdio: ['pipe', 'ignore', 'pipe'] }); }

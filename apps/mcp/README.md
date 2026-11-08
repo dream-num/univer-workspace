@@ -30,7 +30,7 @@ Transport rejections use non-200 statuses. The grant travels only in the frame b
 Gateway rendezvous hashing pins `(userId, scope, unitId)` to an executor. Only failures
 known to precede delivery can fail over. A disconnected or timed-out write returns
 `workspace-result-unknown`; check current state before repeating it. Worker open timeouts
-remain retryable. Calls have a 30-second gateway budget, with an earlier executor deadline.
+remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export continue under a four-minute job deadline, with an earlier executor deadline.
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
@@ -96,6 +96,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
 | `MCP_PUBLIC_URL` | Gateway only | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
+| `MCP_SYNC_BUDGET_MS` | `30000` | Import/export synchronous wait in milliseconds, 1 through 30000. Test and operations knob; lower it to force job polling without a large fixture |
 | `MCP_MAX_CONNECTIONS` | `1024` | Maximum simultaneous gateway TCP connections per replica |
 | `MCP_STAGING_DIRECTORY` | Required | Private 0700 directory owned by the gateway uid. Atomic JSON sidecars and byte files; startup and minute sweeps remove expired objects |
 | `MCP_STAGING_USER_MAX_BYTES` | `2147483648` (2 GiB) | Combined staged upload/download bytes per user; in-flight bytes count too. Accounting is per gateway replica, refreshed from valid sidecars on startup and each minute |
@@ -255,7 +256,7 @@ limit. For `skills_read` with `full`, read the skill without `full`, then each r
 following its cursor when paged. Other oversized results tell the agent to narrow the request.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
@@ -291,8 +292,13 @@ The gateway generates a UUID otherwise, echoes it, and forwards it to every Work
 
 ## Usage event contract
 
-Logs use pino JSON on stdout. Each authenticated `tools/call` emits exactly one
-`mcp.tool_call` event at info level. Keep `LOG_LEVEL=info` to collect usage events.
+Logs use pino JSON on stdout. Each authenticated `tools/call` emits one
+`mcp.tool_call` event at info level, except deduplicated import/export retries.
+Import/export emit their original event once when the work settles, including its real costs and total elapsed time.
+Returning a job handle does not emit an early success event. Joined retries do not emit a second conversion event.
+Every `job_get` emits its own read event with `executor: none` and zero costs.
+Reused calls carry `_meta["univer.workspace.deduplicated"]: true` on the MCP response so evidence
+collectors can distinguish a cached normal result from a newly completed conversion without changing `structuredContent`. Keep `LOG_LEVEL=info` to collect usage events.
 Request logs include only the method, path, request ID, status, and duration.
 Header redaction protects authorization and cookie fields. Logs exclude raw tool arguments.
 
@@ -447,7 +453,43 @@ Only known exchange and `LICENSE_*` errors cross the child boundary. Other codes
 `exchange.import` permits a 64 MiB request frame for the default 50 MiB Office upload,
 and a 64 KiB response. `exchange.export` permits a 64 KiB request and a 128 MiB response
 frame, including framing overhead. Oversized exports return `workspace-result-too-large`.
-Calls stay within the existing 30-second budget; this slice adds no `job_get`.
+Import/export return their original result unchanged when they finish within `MCP_SYNC_BUDGET_MS`.
+A longer call returns `{job_id, status: "running"}`. This shape has no `download` or import result fields;
+the text explicitly asks the client to poll `job_get {job_id}`. Poll until `succeeded`, whose `result`
+is the original tool output, or `failed`, whose `error` has `code`, `message` and `detail`.
+`job_get` is read-only in `core` and requires `read` scope.
+
+Import requires an `idempotency_key`; export optionally accepts one with the same 16-to-200-character syntax.
+The tuple `(userId, tool, idempotency_key)` shares one running conversion or an unexpired successful result,
+including calls that first returned synchronously. A retry during the original synchronous wait joins it.
+A retry of a running job after that wait returns its running handle; a retry of a succeeded job returns
+its original tool result directly. Failed jobs release their keys in memory and in their sidecars.
+Retrying a failed or result-unknown import with the same key runs it again using the same deterministic Unit identity.
+Foreign replicas read the sidecar's actual status. Without a key each export starts a new conversion.
+A key identifies the original arguments. The job record and its reservation carry the SHA-256 of the canonicalized
+parsed tool arguments (key order and omitted optional fields do not matter). Reusing a key with a different
+upload, Worktree, Space, Unit, format or other argument while the job is running or its result is unexpired returns
+`workspace-idempotency-conflict` and starts nothing, as Workspace does for a reused `Idempotency-Key`.
+Use a new key for a different conversion.
+
+Jobs have random UUIDs and private atomic `.job.json` sidecars in `MCP_STAGING_DIRECTORY`.
+A shared-volume reservation lock prevents duplicate conversion starts across gateway replicas.
+Reservation locks guard a millisecond critical section and go stale after 10 seconds, so a gateway crash during
+reservation delays a retry by at most that long; upload-transfer locks keep the two-hour orphan-lock sweep. Running jobs and completed results are read from memory or their sidecar.
+A replica that did not start the conversion answers `job_get` from the shared sidecar.
+Expired, unknown and foreign jobs all return `workspace-job-not-found`.
+Import results and failed jobs expire 15 minutes after settlement. Export jobs expire with their staged download links, 15 minutes after download creation.
+Sidecars are swept at startup and each minute. Poll promptly.
+
+The conversion deadline is four minutes including queueing, and never later than the caller grant's expiry minus 5 seconds
+(a grant too short for that still gets the synchronous budget, and the executor rejects an expired grant as before). Only `exchange.import` and `exchange.export`
+permit RPC deadlines above 30 seconds. The gateway does not resume in-flight calls after restart.
+While the gateway that started a job still holds its unsettled completion, `job_get` reports `running` and the key stays
+reserved; that completion, including download or Workspace response mapping after the executor call, is bounded by the
+deadline and settles as failed with the codes below if it does not finish. A running sidecar past its deadline, with no
+live completion on the answering replica, reads as failed with `workspace-executor-timeout` for export or
+`workspace-result-unknown` for import, since a restarted gateway cannot confirm whether creation started.
+An ambiguous write also preserves `workspace-result-unknown` on ordinary settlement.
 New jobs report `executor: cold_start`; pool costs still describe pool work only.
 Import records `upload_bytes` and one confirmed creation; export records `export_bytes`.
 

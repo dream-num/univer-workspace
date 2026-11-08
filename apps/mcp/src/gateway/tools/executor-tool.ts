@@ -1,5 +1,7 @@
+import { createHash } from "node:crypto";
+import { jobHandleSchema } from "../jobs/model.js";
 import type { WorkspaceSubject } from "@univerjs/univer-workspace-client-core/product";
-import type { z } from "zod";
+import { z } from "zod";
 import type { GatewayConfig } from "../../shared/config.js";
 import type {
   ExecutorRequest,
@@ -14,6 +16,18 @@ import { callExecutor, type ExecutorConnection } from "../executor/client.js";
 import { issueGrant } from "../executor/grants.js";
 import { ExecutorRouter } from "../executor/router.js";
 import type { ToolContext, ToolDefinition } from "./definition.js";
+
+// Key order must not change the fingerprint; undefined members vanish as they do in JSON.
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(",")}]`;
+  if (value !== null && typeof value === "object")
+    return `{${Object.entries(value)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([name, item]) => `${JSON.stringify(name)}:${canonicalJson(item)}`)
+      .join(",")}}`;
+  return JSON.stringify(value) ?? "null";
+}
 
 const linkBrand = Symbol("ExecutorLink");
 export interface ExecutorLink {
@@ -59,6 +73,7 @@ export function executorTool<
 >(
   definition: Omit<ToolDefinition, "run" | "inputSchema" | "outputSchema"> & {
     inputSchema: A;
+    job?: { tool: "import" | "export"; key(args: z.output<A>): string | undefined };
     op: OpSpec<I, O, P>;
     outputSchema?: z.ZodObject;
     response?(
@@ -72,27 +87,48 @@ export function executorTool<
     ): ExecutorRequest<OpSpec<I, O, P>> | Promise<ExecutorRequest<OpSpec<I, O, P>>>;
   },
 ): ToolDefinition {
-  const { op, request, response, outputSchema, ...tool } = definition;
+  const { op, request, response, outputSchema, job, ...tool } = definition;
+  const finishedSchema = outputSchema ?? op.output;
   return {
     ...tool,
-    outputSchema: outputSchema ?? op.output,
+    outputSchema: job ? z.union([finishedSchema, jobHandleSchema]) : finishedSchema,
     async run(context, args) {
       const link = context.executor ? links.get(context.executor) : undefined;
       const parsed = tool.inputSchema.parse(args);
-      const result = await callExecutor(
-        link?.connection ?? null,
-        op,
-        await request(parsed, context),
-      ).catch((error) => {
-        if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
-        throw error;
-      });
-      link?.usage.addOp(result.meta);
-      const mapped = response ? await response(result, parsed, context) : { output: result.output };
-      return {
-        output: mapped.output,
-        repo: "repo" in mapped ? (mapped.repo ?? null) : (result.meta.repo ?? null),
+      const execute = async (deadlineAt?: number) => {
+        const connection = link?.connection;
+        const result = await callExecutor(
+          connection && deadlineAt !== undefined
+            ? { ...connection, deadlineAt }
+            : (connection ?? null),
+          op,
+          await request(parsed, context),
+        ).catch((error) => {
+          if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
+          throw error;
+        });
+        link?.usage.addOp(result.meta);
+        const mapped = response
+          ? await response(result, parsed, context)
+          : { output: result.output };
+        if (!finishedSchema.safeParse(mapped.output).success)
+          throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
+        return {
+          output: mapped.output,
+          repo: "repo" in mapped ? (mapped.repo ?? null) : (result.meta.repo ?? null),
+        };
       };
+      if (job && context.jobs)
+        return context.jobs.run({
+          userId: context.user.id,
+          tool: job.tool,
+          key: job.key(parsed),
+          fingerprint: createHash("sha256").update(canonicalJson(parsed)).digest("hex"),
+          grantExpiresAt: link?.connection?.grant.expiresAt,
+          execute,
+          onDeferred: (completion) => context.onDeferredJob?.(completion),
+        });
+      return execute();
     },
   };
 }

@@ -42,6 +42,7 @@ const environment = z.object({
   WORKSPACE_TRANSPORT_URL: origin.optional(),
   MCP_PUBLIC_URL: publicUrl,
   MCP_MAX_CONNECTIONS: quota.default(1024),
+  MCP_SYNC_BUDGET_MS: quota.pipe(z.number().max(30_000)).default(30_000),
   MCP_STAGING_DIRECTORY: z.string().min(1),
   MCP_STAGING_USER_MAX_BYTES: quota.default(2 * 1024 * 1024 * 1024),
   MCP_STAGING_USER_MAX_PENDING_UPLOADS: quota.default(20),

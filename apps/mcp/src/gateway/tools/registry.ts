@@ -9,6 +9,7 @@ import { htmlViewCreateTool } from "./files/html-view-create.js";
 import { assetDownloadTool } from "./files/asset-download.js";
 import { executeTool } from "./core/execute.js";
 import { importTool } from "./core/import.js";
+import { jobGetTool } from "./core/job-get.js";
 import { exportTool } from "./core/export.js";
 import { inspectTool } from "./core/inspect.js";
 import { whoamiTool } from "./core/whoami.js";
@@ -75,6 +76,7 @@ export const tools: readonly ToolDefinition[] = [
   inspectTool,
   importTool,
   exportTool,
+  jobGetTool,
   apiFindTool,
   apiShowTool,
   skillsReadTool,

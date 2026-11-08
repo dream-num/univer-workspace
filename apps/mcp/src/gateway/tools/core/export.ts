@@ -16,18 +16,20 @@ export const exportTool = executorTool({
   scope: "read",
   title: "Export an Office file",
   description:
-    "Export a pull request file as xlsx, docx or pptx. Return a private download link valid for 15 minutes. Conversion has a 30-second budget and the RPC result is capped at 128 MiB.",
+    "Export a pull request file as xlsx, docx or pptx. Return a private download link valid for 15 minutes. If the conversion outlasts the server's synchronous wait (30 seconds by default), returns a job_id with status running; poll job_get until succeeded or failed. Reuse idempotency_key with the same arguments on retry to avoid a second export; different arguments return workspace-idempotency-conflict. The RPC result is capped at 128 MiB.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
     worktree: z.string().min(1),
     unit: z.string().min(1),
     format: z.enum(["xlsx", "docx", "pptx"]),
+    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional(),
   }),
   outputSchema: z.object({
     download: downloadSchema,
     type: opSpecs["exchange.export"].output.shape.type,
   }),
   op: opSpecs["exchange.export"],
+  job: { tool: "export", key: (args) => args.idempotency_key },
   request: ({ worktree, unit, format }) => ({
     input: { worktreeId: worktree, unitId: unit, format },
   }),

@@ -15,7 +15,7 @@ export const importTool = executorTool({
   scope: "write",
   title: "Import an Office file",
   description:
-    "Import a ready office-import upload into a pull request. Generate an idempotency_key and reuse it with the same upload on retry. Converted UnitData must fit 900 KiB. Conversion has a 30-second budget; check state before retrying an unknown write.",
+    "Import a ready office-import upload into a pull request. Generate an idempotency_key and reuse it with the same upload on retry. Converted UnitData must fit 900 KiB. If the conversion outlasts the server's synchronous wait (30 seconds by default), returns {job_id,status: running}; poll job_get until succeeded or failed. Reusing a key with different arguments returns workspace-idempotency-conflict. Check state before retrying an unknown write.",
   annotations: writeAnnotations,
   inputSchema: z.object({
     upload_id: z.string().min(1),
@@ -28,6 +28,7 @@ export const importTool = executorTool({
   }),
   outputSchema: op.output.extend({ url: z.url() }),
   op,
+  job: { tool: "import", key: (args) => args.idempotency_key },
   async request(args, context) {
     const store = stagingStore(context);
     await store.requireUpload(context.user.id, args.upload_id, "office-import");

@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from "node:crypt
 import { constants, lstatSync, mkdirSync, realpathSync } from "node:fs";
 import { open, readdir, rename, unlink, type FileHandle } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
+import { jobRecordSchema, type JobRecord } from "../jobs/model.js";
 import { Readable } from "node:stream";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import {
@@ -17,6 +18,8 @@ import {
 
 const UPLOAD_TTL = 60 * 60_000;
 const LOCK_TTL = 2 * 60 * 60_000;
+// The reservation critical section takes milliseconds, so a crashed holder must not block a key for hours.
+const JOB_LOCK_TTL = 10_000;
 const LINK_TTL = 10 * 60_000;
 const DOWNLOAD_TTL = 15 * 60_000;
 const idPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -150,14 +153,82 @@ export class LocalStagingStore implements StagingStore {
       throw new Error("Unable to read staging metadata.", { cause: error });
     }
   }
-  private async metadata(object: StagingObject): Promise<void> {
+  async readJob(id: string): Promise<JobRecord | undefined> {
+    if (!idPattern.test(id)) return undefined;
+    try {
+      const file = await this.safeOpen(this.path(id, "job.json"));
+      try {
+        const text = await file.readFile("utf8");
+        try {
+          const job = jobRecordSchema.parse(JSON.parse(text));
+          if (job.id !== id) throw new Error("Job identity mismatch.");
+          return job;
+        } catch {
+          throw new CorruptMetadataError("Invalid job metadata.");
+        }
+      } finally {
+        await file.close();
+      }
+    } catch (error) {
+      if (hasCode(error, "ENOENT")) return undefined;
+      throw error;
+    }
+  }
+  async writeJob(job: JobRecord): Promise<void> {
+    await this.metadata(job, "job.json");
+  }
+  async reserveJob(job: JobRecord): Promise<JobRecord> {
+    await this.ready;
+    if (job.key === undefined) {
+      await this.writeJob(job);
+      return job;
+    }
+    const digest = hash(JSON.stringify([job.userId, job.tool, job.key]));
+    const lockId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await this.lock(
+          lockId,
+          async () => {
+            for (const name of await readdir(this.root)) {
+              if (!name.endsWith(".job.json")) continue;
+              let existing: JobRecord | undefined;
+              try {
+                existing = await this.readJob(name.slice(0, 36));
+              } catch (error) {
+                if (error instanceof CorruptMetadataError) continue;
+                throw error;
+              }
+              if (
+                existing &&
+                existing.status !== "failed" &&
+                (existing.status !== "running" || existing.deadlineAt > this.now()) &&
+                existing.expiresAt > this.now() &&
+                existing.userId === job.userId &&
+                existing.tool === job.tool &&
+                existing.key === job.key
+              )
+                return existing;
+            }
+            await this.writeJob(job);
+            return job;
+          },
+          JOB_LOCK_TTL,
+        );
+      } catch (error) {
+        if (!hasCode(error, "workspace-upload-busy") || attempt >= 100) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+    }
+  }
+  private async metadata(object: StagingObject | JobRecord, suffix = "json"): Promise<void> {
     const temp = this.path(object.id, `${randomUUID()}.tmp`);
     const file = await open(temp, "wx", 0o600);
     try {
       await file.writeFile(JSON.stringify(object));
       await file.sync();
       await file.close();
-      await rename(temp, this.path(object.id, "json"));
+      await rename(temp, this.path(object.id, suffix));
     } finally {
       await file.close();
       await unlink(temp).catch((error) => {
@@ -253,11 +324,22 @@ export class LocalStagingStore implements StagingStore {
       }
     });
   }
-  private async lock<T>(id: string, action: () => Promise<T>): Promise<T> {
+  private async lock<T>(id: string, action: () => Promise<T>, staleAfterMs?: number): Promise<T> {
     const path = this.path(id, "lock");
     let file: FileHandle;
     try {
-      file = await open(path, "wx", 0o600);
+      try {
+        file = await open(path, "wx", 0o600);
+      } catch (error) {
+        if (!hasCode(error, "EEXIST") || staleAfterMs === undefined) throw error;
+        const lockTime = await this.lockTime(id);
+        if (lockTime === undefined || lockTime + staleAfterMs > this.now()) throw error;
+        // ponytail: two reclaimers can both pass this check; the loser may drop the winner's fresh lock.
+        await unlink(path).catch((failure) => {
+          if (!hasCode(failure, "ENOENT")) throw failure;
+        });
+        file = await open(path, "wx", 0o600);
+      }
     } catch (error) {
       if (hasCode(error, "EEXIST"))
         throw workspaceError(
@@ -486,6 +568,17 @@ export class LocalStagingStore implements StagingStore {
       const id = name.slice(0, 36);
       if (!idPattern.test(id) || this.active.has(id)) continue;
       try {
+        if (name === `${id}.job.json`) {
+          try {
+            const job = await this.readJob(id);
+            if (job && job.expiresAt <= this.now()) await unlink(this.path(id, "job.json"));
+          } catch (error) {
+            if (lstatSync(this.path(id, "job.json")).mtimeMs + DOWNLOAD_TTL <= this.now())
+              await unlink(this.path(id, "job.json"));
+            this.onError(error, id);
+          }
+          continue;
+        }
         if (name === `${id}.json`) {
           try {
             const object = await this.read(id);

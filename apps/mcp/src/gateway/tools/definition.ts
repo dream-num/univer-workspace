@@ -5,6 +5,7 @@ import type {
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { z } from "zod";
 
+import type { ToolJobs } from "../jobs/store.js";
 import type { StagingStore } from "../staging/model.js";
 import type { UsageAccumulator } from "../../shared/usage.js";
 import type { ExecutorLink } from "./executor-tool.js";
@@ -13,6 +14,8 @@ export type ToolScope = "read" | "write" | "publish" | "worktree:merge";
 
 export interface ToolContext {
   readonly staging?: StagingStore;
+  readonly jobs?: ToolJobs;
+  readonly onDeferredJob?: (completion?: Promise<ToolResult>) => void;
   readonly usage?: UsageAccumulator;
   readonly executor?: ExecutorLink;
   readonly http: WorkspaceHttp;
@@ -31,16 +34,13 @@ export interface ToolDefinition {
   readonly title: string;
   readonly description: string;
   readonly inputSchema: z.ZodObject;
-  readonly outputSchema: z.ZodObject;
+  readonly outputSchema: z.ZodType<Record<string, unknown>>;
   readonly annotations: {
     readonly readOnlyHint: boolean;
     readonly destructiveHint: boolean;
     readonly openWorldHint: boolean;
   };
-  run(
-    context: ToolContext,
-    args: unknown,
-  ): Promise<{ readonly output: object; readonly repo: string | null }>;
+  run(context: ToolContext, args: unknown): Promise<ToolResult>;
 }
 
 export const readOnlyAnnotations = {
@@ -60,3 +60,8 @@ export const destructiveAnnotations = {
   destructiveHint: true,
   openWorldHint: false,
 } as const;
+
+export interface ToolResult {
+  readonly output: object;
+  readonly repo: string | null;
+}

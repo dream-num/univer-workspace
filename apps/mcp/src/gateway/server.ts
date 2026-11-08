@@ -28,6 +28,7 @@ import { z } from "zod";
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { createBearerCheck } from "../shared/bearer.js";
 import { credentialRedactions, safeErrorFields, isClientAbort } from "../shared/logging.js";
+import { ToolJobs } from "./jobs/store.js";
 import { LocalStagingStore } from "./staging/local.js";
 import { UsageAccumulator } from "../shared/usage.js";
 import { createExecutorLinks } from "./tools/executor-tool.js";
@@ -39,7 +40,7 @@ import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
 import { translateToolError } from "./tool-error.js";
-import type { ToolContext, ToolDefinition, ToolScope } from "./tools/definition.js";
+import type { ToolContext, ToolDefinition, ToolScope, ToolResult } from "./tools/definition.js";
 import { selectTools, toolsets } from "./tools/registry.js";
 
 const callEnvelope = z.object({
@@ -57,6 +58,7 @@ interface RequestState {
   errorCode: string | null;
   repo: string | null;
   modern: boolean;
+  jobUsage?: { completion: Promise<ToolResult> | undefined };
 }
 
 // The SDK would reject invalid arguments with plain text before the callback runs. Keep the precise schema for
@@ -95,6 +97,7 @@ export function createGateway(
     onError: (error, id) =>
       logger.error({ ...safeErrorFields(error), object_id: id }, "Staging cleanup failed"),
   });
+  const jobs = new ToolJobs(staging, config.MCP_SYNC_BUDGET_MS);
   const registry = new Registry();
   const calls = new Counter({
     name: "mcp_tool_calls_total",
@@ -221,10 +224,19 @@ export function createGateway(
                     "valueTruncated" in structuredContent &&
                     structuredContent.valueTruncated === true
                       ? "The write committed; its value was too large to return."
-                      : `${tool.name} completed.`,
+                      : typeof structuredContent === "object" &&
+                          structuredContent !== null &&
+                          "job_id" in structuredContent &&
+                          "status" in structuredContent &&
+                          structuredContent.status === "running"
+                        ? `${tool.name} is running. Poll job_get with job_id.`
+                        : `${tool.name} completed.`,
                 },
               ],
               structuredContent,
+              ...(state.jobUsage && state.jobUsage.completion === undefined
+                ? { _meta: { "univer.workspace.deduplicated": true } }
+                : {}),
             };
           } catch (error) {
             const { outcome, code, message, detail } = translateToolError(error);
@@ -245,6 +257,9 @@ export function createGateway(
               isError: true,
               content: [{ type: "text", text: message.replace(/[\r\n]+/g, " ") }],
               structuredContent: { code, message, detail },
+              ...(state.jobUsage && state.jobUsage.completion === undefined
+                ? { _meta: { "univer.workspace.deduplicated": true } }
+                : {}),
             };
           }
         },
@@ -383,6 +398,10 @@ export function createGateway(
         skillDataRoot,
         resources,
         staging,
+        jobs,
+        onDeferredJob: (completion) => {
+          state.jobUsage = { completion };
+        },
         usage,
         executor: executorLink(authentication, user, requestId, requestStartedAt + 30_000, usage),
         scopes: authentication.scopes ?? options.scopes ?? allScopes,
@@ -417,36 +436,64 @@ export function createGateway(
           const client = state.modern
             ? clientInfoSchema.safeParse(meta?.[CLIENT_INFO_META_KEY])
             : undefined;
-          const elapsed = performance.now() - started;
-          const usage = state.usage.snapshot();
-          logger.info({
-            event: "mcp.tool_call",
-            schema_version: 1,
-            ts: new Date().toISOString(),
-            request_id: requestId,
-            trace_id:
-              typeof meta?.[TRACEPARENT_META_KEY] === "string" ? meta[TRACEPARENT_META_KEY] : null,
-            user_id: user.id,
-            auth_kind: authentication.authKind,
-            client_id: authentication.clientId,
-            client_name: client?.success ? client.data.name : null,
-            client_version: client?.success ? client.data.version : null,
-            tool: tool?.name ?? "unknown",
-            toolset: tool?.toolset ?? "core",
-            repo: state.repo,
-            unit_type: usage.unitType ?? null,
-            outcome: state.outcome,
-            error_code: state.errorCode,
-            duration_ms: elapsed,
-            executor: usage.executor,
-            cost: usage.cost,
-          });
-          calls.inc({
-            tool: tool?.name ?? "unknown",
-            client: authentication.authKind,
-            outcome: state.outcome,
-          });
-          duration.observe({ tool: tool?.name ?? "unknown" }, elapsed / 1000);
+          const emitUsage = () => {
+            const elapsed = performance.now() - started;
+            const usage = state.usage.snapshot();
+            logger.info({
+              event: "mcp.tool_call",
+              schema_version: 1,
+              ts: new Date().toISOString(),
+              request_id: requestId,
+              trace_id:
+                typeof meta?.[TRACEPARENT_META_KEY] === "string"
+                  ? meta[TRACEPARENT_META_KEY]
+                  : null,
+              user_id: user.id,
+              auth_kind: authentication.authKind,
+              client_id: authentication.clientId,
+              client_name: client?.success ? client.data.name : null,
+              client_version: client?.success ? client.data.version : null,
+              tool: tool?.name ?? "unknown",
+              toolset: tool?.toolset ?? "core",
+              repo: state.repo,
+              unit_type: usage.unitType ?? null,
+              outcome: state.outcome,
+              error_code: state.errorCode,
+              duration_ms: elapsed,
+              executor: usage.executor,
+              cost: usage.cost,
+            });
+            calls.inc({
+              tool: tool?.name ?? "unknown",
+              client: authentication.authKind,
+              outcome: state.outcome,
+            });
+            duration.observe({ tool: tool?.name ?? "unknown" }, elapsed / 1000);
+          };
+          if (state.jobUsage) {
+            void state.jobUsage.completion?.then(
+              (result) => {
+                state.repo = result.repo;
+                state.outcome = "ok";
+                state.errorCode = null;
+                emitUsage();
+              },
+              (error: unknown) => {
+                const translated = translateToolError(error);
+                state.outcome = translated.outcome;
+                state.errorCode =
+                  translated.outcome === "tool_error" || translated.outcome === "timeout"
+                    ? translated.code
+                    : null;
+                if (translated.outcome === "internal_error")
+                  logger.error(
+                    { ...safeErrorFields(error), request_id: requestId, tool: tool?.name },
+                    "Background tool failed",
+                  );
+                emitUsage();
+              },
+            );
+          } else emitUsage();
         }
       }
     });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { JobRecord } from "../jobs/model.js";
 
 export const purposeSchema = z.enum([
   "office-import",
@@ -78,6 +79,9 @@ export const downloadSchema = z.object({
 });
 export interface StagingStore {
   readonly limits: UploadLimits;
+  readJob(id: string): Promise<JobRecord | undefined>;
+  writeJob(job: JobRecord): Promise<void>;
+  reserveJob(job: JobRecord): Promise<JobRecord>;
   createUpload(owner: string, input: UploadInput): Promise<z.infer<typeof uploadLinkSchema>>;
   requireUpload(owner: string, id: string, purpose: UploadPurpose): Promise<StagingObject>;
   withUpload<T>(

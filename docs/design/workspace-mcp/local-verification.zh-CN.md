@@ -166,6 +166,7 @@ ready 错误、停机错误和 Browser 截图。
 ### 5.4 用量事件
 
 - 网关只在 stdout 输出日志，格式是 pino JSON。用量事件是其中 `event` 为 `mcp.tool_call` 的行，字段见 [架构](architecture.zh-CN.md) 8.1 节。
+- import/export 返回 job 时不提前发出成功事件，只在转换结束后发出一次原工具事件和实际成本。同 key 的去重重试不发第二次转换事件。job_get 每次按普通只读工具发出零成本事件。
 - 只为通过认证的 `tools/call` 产生事件。开发认证的 `auth_kind` 和 `client_id` 都是 `dev`；PAT 为 `pat` 与 PAT ID，OAuth access token 为 `oauth` 与 OAuth `client_id`。非执行层工具为 `executor: "none"`，文件工具可以记录 `upload_bytes` 和 `export_bytes`；`worker_cpu_ms`、`worker_peak_rss_mb`、`render_pages`、`committed_revisions` 必须为 0。执行层工具使用 runtime observer 的 `cold_start` 或 `warm`，记录 worker 墙钟毫秒数与提交 revision 数。
 - 8.1 节的每个字段都必须出现在事件里。下列字段不能为 `null`：`ts`、`request_id`、`user_id`、`auth_kind`、`client_id`、`tool`、`toolset`、`outcome`、`duration_ms`、`executor`、`cost` 及其六个字段。其余字段可以为 `null`，含义如下：
 
