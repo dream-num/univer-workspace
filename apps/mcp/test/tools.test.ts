@@ -433,4 +433,15 @@ describe("Issue tools and gateway infrastructure", () => {
     expect(JSON.stringify(result)).not.toContain("leak-me");
     expect(events()[0]).toMatchObject({ outcome: "internal_error", error_code: null });
   });
+
+  it("treats output that is not JSON as an internal error, not an argument error", async () => {
+    await start();
+    vi.spyOn(whoamiTool, "run").mockResolvedValue({ output: { subject: undefined }, repo: null });
+    const result = await (await connect()).callTool({ name: "whoami", arguments: {} });
+    expect(result).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-internal-error" },
+    });
+    expect(events()[0]).toMatchObject({ outcome: "internal_error", error_code: null });
+  });
 });

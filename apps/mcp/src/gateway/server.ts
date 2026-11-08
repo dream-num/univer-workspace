@@ -117,10 +117,11 @@ export function createGateway(
               );
             }
             const result = await tool.run(state.context, tool.inputSchema.parse(args));
-            const structuredContent = z.json().parse(result.output);
-            if (!tool.outputSchema.safeParse(structuredContent).success) {
+            const json = z.json().safeParse(result.output);
+            if (!json.success || !tool.outputSchema.safeParse(json.data).success) {
               throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
             }
+            const structuredContent = json.data;
             state.repo = result.repo;
             state.outcome = "ok";
             return {
