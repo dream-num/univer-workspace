@@ -24,7 +24,8 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
 `content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`,
-`htmlView.create`, `markdown.compile`, `markdown.export` and internal `diagnostics.probe`.
+`htmlView.create`, `markdown.compile`, `markdown.export`, `typst.compile`, `svg.compile`
+and internal `diagnostics.probe`.
 The resilience table below declares each operation's rerun policy.
 Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
 Transport rejections use non-200 statuses. The grant travels only in the frame body.
@@ -32,7 +33,7 @@ Transport rejections use non-200 statuses. The grant travels only in the frame b
 Gateway rendezvous hashing pins `(userId, scope, unitId)` to an executor. Only failures
 known to precede delivery can fail over. A disconnected or timed-out write returns
 `workspace-result-unknown`; check current state before repeating it. Worker open timeouts
-remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export continue under a four-minute job deadline, with an earlier executor deadline.
+remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export and Typst compilation continue under a four-minute job deadline, with an earlier executor deadline.
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
@@ -343,7 +344,7 @@ The gateway generates a UUID otherwise, echoes it, and forwards it to every Work
 ## Usage event contract
 
 Logs use pino JSON on stdout. Each authenticated `tools/call` emits one
-`mcp.tool_call` event at info level, except deduplicated import/export retries.
+`mcp.tool_call` event at info level, except deduplicated import/export/compile_typst retries.
 Import/export emit their original event once when the work settles, including its real costs and total elapsed time.
 Returning a job handle does not emit an early success event. Joined retries do not emit a second conversion event.
 Every `job_get` emits its own read event with `executor: none` and zero costs.
@@ -477,7 +478,7 @@ Filesystem failures and data/sidecar size mismatches are internal errors; tool d
 fields with the request ID, without messages, stacks, paths, credentials, contents or arguments.
 Aborted transfers produce one info-level failure log.
 
-## Office conversion jobs
+## Conversion jobs
 
 Office conversion runs in a fresh forked process per operation with advanced binary IPC.
 The parent resolves Workspace targets, exports UnitData and image bytes, and creates Units
@@ -505,19 +506,21 @@ Only known exchange and `LICENSE_*` errors cross the child boundary. Other codes
 `exchange.import` permits a 64 MiB request frame for the default 50 MiB Office upload,
 and a 64 KiB response. `exchange.export` permits a 64 KiB request and a 128 MiB response
 frame, including framing overhead. Oversized exports return `workspace-result-too-large`.
-Import/export return their original result unchanged when they finish within `MCP_SYNC_BUDGET_MS`.
+Import, export and Typst compilation return their original result unchanged when they finish
+within `MCP_SYNC_BUDGET_MS`.
 A longer call returns `{job_id, status: "running"}`. This shape has no `download` or import result fields;
 the text explicitly asks the client to poll `job_get {job_id}`. Poll until `succeeded`, whose `result`
 is the original tool output, or `failed`, whose `error` has `code`, `message` and `detail`.
 `job_get` is read-only in `core` and requires `read` scope.
 
-Import requires an `idempotency_key`; export optionally accepts one with the same 16-to-200-character syntax.
+Import requires an `idempotency_key`; export and `compile_typst` optionally accept one
+with the same 16-to-200-character syntax.
 The tuple `(userId, tool, idempotency_key)` shares one running conversion or an unexpired successful result,
 including calls that first returned synchronously. A retry during the original synchronous wait joins it.
 A retry of a running job after that wait returns its running handle; a retry of a succeeded job returns
 its original tool result directly. Failed jobs release their keys in memory and in their sidecars.
 Retrying a failed or result-unknown import with the same key runs it again using the same deterministic Unit identity.
-Foreign replicas read the sidecar's actual status. Without a key each export starts a new conversion.
+Foreign replicas read the sidecar's actual status. Without a key each export or Typst compilation starts a new conversion.
 A key identifies the original arguments. The job record and its reservation carry the SHA-256 of the canonicalized
 parsed tool arguments (key order and omitted optional fields do not matter). Reusing a key with a different
 upload, Worktree, Space, Unit, format or other argument while the job is running or its result is unexpired returns
@@ -530,17 +533,17 @@ Reservation locks guard a millisecond critical section and go stale after 10 sec
 reservation delays a retry by at most that long; upload-transfer locks keep the two-hour orphan-lock sweep. Running jobs and completed results are read from memory or their sidecar.
 A replica that did not start the conversion answers `job_get` from the shared sidecar.
 Expired, unknown and foreign jobs all return `workspace-job-not-found`.
-Import results and failed jobs expire 15 minutes after settlement. Export jobs expire with their staged download links, 15 minutes after download creation.
+Import and Typst results and failed jobs expire 15 minutes after settlement. Export jobs expire with their staged download links, 15 minutes after download creation.
 Sidecars are swept at startup and each minute. Poll promptly.
 
 The conversion deadline is four minutes including queueing, and never later than the caller grant's expiry minus 5 seconds
-(a grant too short for that still gets the synchronous budget, and the executor rejects an expired grant as before). Only `exchange.import` and `exchange.export`
+(a grant too short for that still gets the synchronous budget, and the executor rejects an expired grant as before). Only `exchange.import`, `exchange.export` and `typst.compile`
 permit RPC deadlines above 30 seconds. The gateway does not resume in-flight calls after restart.
 While the gateway that started a job still holds its unsettled completion, `job_get` reports `running` and the key stays
 reserved; that completion, including download or Workspace response mapping after the executor call, is bounded by the
 deadline and settles as failed with the codes below if it does not finish. A running sidecar past its deadline, with no
 live completion on the answering replica, reads as failed with `workspace-executor-timeout` for export or
-`workspace-result-unknown` for import, since a restarted gateway cannot confirm whether creation started.
+`workspace-result-unknown` for import or Typst compilation, since a restarted gateway cannot confirm whether creation started.
 An ambiguous write also preserves `workspace-result-unknown` on ordinary settlement.
 New jobs report `executor: cold_start`; pool costs still describe pool work only.
 Import records `upload_bytes` and one confirmed creation; export records `export_bytes`.
@@ -635,8 +638,14 @@ with `inspect` before retrying. Replacement clears the page; add overlays its ex
 Both formats use the shared ZIP reader with 256 entries, 4 MiB per file and 8 MiB expanded total.
 The existing 1,024-byte and 32-segment path limits, traversal and collision checks apply.
 These caps bound expansion but cannot guarantee that inlined assets fit the 8 MiB RPC response
-or the 900 KiB UnitData creation check. Requests have a 64 MiB frame cap and a 30-second budget.
-Typst remains synchronous in this slice. Facade input errors preserve their messages and available
+or the 900 KiB UnitData creation check. Requests have a 64 MiB frame cap. SVG keeps its 30-second synchronous budget.
+Typst compile-only and apply use the conversion jobs above, with a four-minute deadline
+that also bounds compilation and materialization children through the dispatcher abort signal.
+An optional compile-only `idempotency_key` deduplicates identical arguments; without a key,
+each call starts a compilation. Reusing a key with a different bundle returns
+`workspace-idempotency-conflict`. Stale Typst jobs conservatively report
+`workspace-result-unknown`, since the sidecar does not retain apply arguments.
+Facade input errors preserve their messages and available
 `detail.diagnostics` as `workspace-typst-invalid` or `workspace-svg-invalid`.
 Compile-only has read failure semantics and reports no Unit/runtime usage. ZIP bytes count as
 `upload_bytes`; confirmed creations and commits count as `committed_revisions`.

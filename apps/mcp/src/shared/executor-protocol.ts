@@ -188,7 +188,7 @@ export const typstCompileInput = z
       if (input.worktreeId === undefined || input.spaceId === undefined)
         ctx.addIssue({ code: "custom", message: "apply requires worktree and space." });
     } else if (
-      [input.worktreeId, input.spaceId, input.parentNodeId, input.idempotencyKey].some(
+      [input.worktreeId, input.spaceId, input.parentNodeId].some(
         (value) => value !== undefined,
       )
     ) {
@@ -309,7 +309,7 @@ export const opSpecs = {
     effectFor: (input) => (input.apply === true ? "write" : "read"),
     payload: "request",
     rerun: [],
-    limits: { requestBytes: 64 * MiB, responseBytes: 8 * MiB, budgetMs: 30_000 },
+    limits: { requestBytes: 64 * MiB, responseBytes: 8 * MiB, budgetMs: JOB_DEADLINE_MS },
     input: typstCompileInput,
     output: typstCompileOutput,
     route: (input) => ({

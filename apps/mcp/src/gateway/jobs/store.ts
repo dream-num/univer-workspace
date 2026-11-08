@@ -11,7 +11,7 @@ import { JOB_TTL_MS, type JobRecord } from "./model.js";
 const GRANT_MARGIN_MS = 5_000;
 
 function deadlineError(tool: JobRecord["tool"]) {
-  return tool === "import"
+  return tool !== "export"
     ? resultUnknown("deadline", true)
     : {
         outcome: "timeout" as const,

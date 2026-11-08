@@ -40,7 +40,7 @@
 
 ### 1.5 幂等
 
-`export` 额外接受可选的 `idempotency_key`，用于长任务去重。格式与 `import` 相同，为 16 到 200 个 URL-safe 字母、数字、下划线或连字符。
+`export` 与仅编译的 `compile_typst` 额外接受可选的 `idempotency_key`，用于长任务去重。格式与 `import` 相同，为 16 到 200 个 URL-safe 字母、数字、下划线或连字符。
 
 保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（两种 Blob 写工具均必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
 `compile_svg` 与 `execute` 一样是内容提交，不接受幂等键。结果未知时先用 `inspect` 回读，再决定是否重试。
@@ -116,7 +116,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
 - `skills_read` 不带 `name` 时等于 `skills list`；带 `name` 不带 `resource` 时等于 `skills get`。返回内容里的 `uvw skills read …` 改写成对应的工具调用说明。
 - `screenshot` 在结果不超过约 1 MB 时直接返回图片内容，否则返回下载链接。
-- `import` 和 `export` 可能返回任务，所以 `job_get` 放在 `core`。
+- `import`、`export` 和 `compile_typst` 可能返回任务，所以 `job_get` 放在 `core`。
 
 ### 3.2 `files`
 
@@ -152,7 +152,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - 阶段 D 的 SVG 编译必须传 `estimate_text_size: true`，否则返回 `workspace-text-measure-unavailable`，提示实字体量度将在渲染服务阶段提供。估算结果保留 CLI 的 lint。
 - Typst 与 SVG facade 输入错误分别映射为 `workspace-typst-invalid` 与 `workspace-svg-invalid`，保留 facade 消息及可用的 `detail.diagnostics`。
 - Typst 编译与物化在现有 job child 中运行。SVG 估算编译使用 JavaScript 内置量字器，不创建浏览器，可在 executor 中运行；apply 使用绑定的协同 runtime。仅编译两者均报告 `executor: none`、`unit_type: null`、`repo: null`，消费的 ZIP 计入 upload_bytes，确认的创建或提交计入 committed_revisions。
-- 此切片的 Typst 仍使用 30 秒同步预算，第 7 节异步任务是后续集成。
+- Typst 的仅编译和 apply 均已接入第 7 节的长任务路径。仅编译可选幂等键；不提供时每次独立执行。SVG 保持 30 秒同步预算。
 - 不带 `apply` 的编译工具返回生成的 Facade 代码和诊断，不写入 Workspace。
 
 ### 3.3 `admin`
@@ -254,7 +254,7 @@ PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大�
 MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去掉了 SSE 断点续传。所以：
 
 - 所有工具的同步预算为 30 秒。
-- `import`、`export`、`print_pdf`、`compile_typst`、多页 `screenshot` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。
+- 当前已实现 `import`、`export`、`compile_typst` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。`print_pdf` 和多页 `screenshot` 在渲染服务阶段接入。
 - `job_get` 返回 `job_id` 和 `status`（`running`、`succeeded`、`failed`）。成功时 `result` 为原工具的结果，失败时 `error` 带 `code`、`message`、`detail`。未知、过期、其他用户的任务均报 `workspace-job-not-found`。
 - 任务状态保存在网关内存和暂存存储的 sidecar 文件中，不使用数据库。任务结果的有效期与下载链接一致。
 - `idempotency_key` 绑定参数：同用户、同工具、同 key 但参数不同（上传、Worktree、Space、Unit、格式等）返回 `workspace-idempotency-conflict`，不启动转换。
@@ -291,12 +291,13 @@ Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响�
 ### D5 长任务实现
 
 `MCP_SYNC_BUDGET_MS` 默认 30000，允许 1 到 30000，供测试与运维降低同步等待。
-只有已实现的 `import`、`export` 进入任务路径，其余工具保持既有预算。
+只有已实现的 `import`、`export`、`compile_typst` 进入任务路径，其余工具保持既有预算。
 同步完成的调用保持原结果；异步调用返回 `{job_id,status:"running"}`，由 `job_get` 取回原结果。
-任务 sidecar 在开始和结束时原子写入。导入和失败结果从完成时起保留十五分钟，导出结果与下载链接在链接生成十五分钟后一起过期。
+任务 sidecar 在开始和结束时原子写入。导入、Typst 和失败结果从完成时起保留十五分钟，导出结果与下载链接在链接生成十五分钟后一起过期。
 同用户、同工具、同 key 的并发调用共享执行，首次同步等待内的重试加入该等待。
-仍在运行的重试返回同一 job_id；成功后的重试直接返回原工具结果，不再返回 running。失败记录保留供 job_get 查询，但释放内存和共享卷上的 key；同 key 重试会重新执行，import 的确定性 unitId 保证写入恢复安全。无 key 的 export 每次独立执行。
+仍在运行的重试返回同一 job_id；成功后的重试直接返回原工具结果，不再返回 running。失败记录保留供 job_get 查询，但释放内存和共享卷上的 key；同 key 重试会重新执行，import 的确定性 unitId 保证写入恢复安全。无 key 的 export 和 compile_typst 每次独立执行。
 共享 staging 的副本用 reservation lock 避免并发重复启动。
 原工具仅在转换结束时发出一次真实用量事件，去重重试不重复计费事件；job_get 每次按非执行工具记零成本事件。
 网关重启不恢复转换。超过 deadlineAt 的 running 记录在读取时变为 failed，export 使用
-workspace-executor-timeout，import 使用 workspace-result-unknown，因为无法确认是否已开始创建 Unit。
+workspace-executor-timeout，import 和 compile_typst 使用 workspace-result-unknown，因为 sidecar 不保存 apply 参数，无法确认是否已开始创建 Unit。
+只有 exchange.import、exchange.export、typst.compile 允许超过 30 秒的 RPC deadline。Typst 编译和物化子进程共享 dispatcher 的 abort signal，受同一任务期限约束。

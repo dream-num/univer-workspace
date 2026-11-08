@@ -139,7 +139,7 @@ if (record) {
       const jobReturned = output?.job_id && output?.status === 'running';
       const deduplicated = result._meta?.['univer.workspace.deduplicated'] === true;
       if (deduplicated) {
-        if (!['import', 'export'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
+        if (!['import', 'export', 'compile_typst'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
         if (events.length !== 0) issues.push(`Deduplicated call emitted ${events.length} conversion events`);
       } else if (jobReturned) {
         if (events.length > 1) issues.push(`Expected at most one settled job event, found ${events.length}`);

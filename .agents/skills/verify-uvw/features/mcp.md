@@ -67,6 +67,9 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
 - MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and publish/retry/open the validated page.
 - MM1 checks Markdown apply retries, CLI parity, image downloads and explicit block updates.
+- MX10 rejects a reused import key with a different upload.
+- MT1 compares Typst compilation with the CLI and reads back one native Doc after a same-key retry.
+- MV1 compares SVG compilation with the CLI and reads back its committed Slide.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -1964,3 +1967,19 @@ Pass when estimated SVG compilation matches the CLI, retains its estimation lint
 missing estimation with `workspace-text-measure-unavailable`, commits page 1 of a new Slide,
 and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There is no SVG
 retry key; an unknown write outcome requires inspection before another apply.
+
+### Typst job verification
+
+After the default-budget journeys, run `down` and start a fresh stack with
+`MCP_SYNC_BUDGET_MS=1 VERIFY_UVW_MCP=1 $V up`, then `user` and `doctor`.
+Keep those commands and the journey in the same long-lived shell.
+
+```bash
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst-jobs
+```
+
+Pass when apply returns a running job, `job_get` returns the committed Doc,
+the same-key retry returns that job or its original result, and `unit_list`
+has exactly one new Unit. Inspect the native Doc to read back its text.
+Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.

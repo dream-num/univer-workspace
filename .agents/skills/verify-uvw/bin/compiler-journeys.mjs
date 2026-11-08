@@ -32,7 +32,35 @@ async function upload(label, purpose, bytes) {
   assert.equal(response.status, 204);
   return upload.upload_id;
 }
-if (process.argv[2] === 'typst') {
+if (process.argv[2] === 'typst-jobs') {
+  const manifest = { schemaVersion: 1, targetUnitId: `typst-job-${run}`, title: 'Typst job', pages: ['page.typ'] };
+  const bytes = zipSync({ 'typst.json': Buffer.from(JSON.stringify(manifest)), 'page.typ': Buffer.from('= Typst job\n\nSurvives the synchronous budget.') });
+  const id = await upload('mcp-typst-job-upload', 'typst-bundle', bytes);
+  const pr = mcp('mcp-typst-job-pr', 'pr_create', { repo, title: 'Typst job verification', idempotency_key: `typst-job-pr-${run}` });
+  const before = mcp('mcp-typst-job-before', 'unit_list', { worktree: pr.id });
+  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-job-apply-${run}` };
+  const handle = mcp('mcp-typst-job-apply', 'compile_typst', args);
+  assert.equal(handle.status, 'running'); assert.ok(handle.job_id);
+  const retry = mcp('mcp-typst-job-retry', 'compile_typst', args);
+  if (retry.job_id) assert.equal(retry.job_id, handle.job_id);
+  let settled;
+  const deadline = Date.now() + 240_000;
+  for (let i = 0; Date.now() < deadline; i++) {
+    settled = mcp(`mcp-typst-job-poll-${i}`, 'job_get', { job_id: handle.job_id });
+    if (settled.status !== 'running') break;
+    await new Promise(resolve => setTimeout(resolve, 250));
+  }
+  assert.equal(settled?.status, 'succeeded', JSON.stringify(settled));
+  assert.equal(settled.result.committed, true); assert.ok(settled.result.unit.unitId);
+  if (!retry.job_id) assert.deepEqual(retry, settled.result);
+  assert.deepEqual(mcp('mcp-typst-job-finished-retry', 'compile_typst', args), settled.result);
+  const listed = mcp('mcp-typst-job-units', 'unit_list', { worktree: pr.id });
+  assert.equal(listed.units.length, before.units.length + 1);
+  assert.equal(listed.units.filter(unit => unit.unitId === settled.result.unit.unitId).length, 1);
+  const inspected = mcp('mcp-typst-job-inspect', 'inspect', { target: 'document', unit: settled.result.unit.unitId, worktree: pr.id });
+  assert.ok(JSON.stringify(inspected).includes('Survives the synchronous budget'));
+  console.log(`PASS Typst apply job ${handle.job_id}, job_get original result, same-key retry and exactly one new Unit.`);
+} else if (process.argv[2] === 'typst') {
   const manifest = { schemaVersion: 1, targetUnitId: `typst-${run}`, title: 'MCP Typst paper', pages: ['page.typ'] };
   const text = '= MCP Typst heading\n\nA paragraph from the compiler journey.\n\n#table(columns: 2, [Name], [Value], [Alpha], [42])\n\n#image("assets/image.png", width: 20pt)\n';
   const image = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGMwSjnxHwAEiAJeVQbffQAAAABJRU5ErkJggg==', 'base64');
@@ -81,5 +109,5 @@ if (process.argv[2] === 'typst') {
   assert.equal(event.unit_type, 'slide'); assert.equal(event.cost.committed_revisions, 1);
   console.log('PASS SVG compile/CLI parity, required estimation and committed Slide readback.');
 } else {
-  throw new Error('Usage: compiler-journeys.mjs typst|svg');
+  throw new Error('Usage: compiler-journeys.mjs typst|svg|typst-jobs');
 }

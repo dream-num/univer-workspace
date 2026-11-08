@@ -73,6 +73,7 @@ function context(fetcher = vi.fn<typeof fetch>()): OpContext {
 }
 it("validates target modes, page/add and Typst retry keys", () => {
   expect(typstCompileInput.safeParse({}).success).toBe(true);
+  expect(typstCompileInput.safeParse({ idempotencyKey: "compile-only-key-123" }).success).toBe(true);
   const apply = { apply: true, worktreeId: "wt", spaceId: "space" };
   expect(typstCompileInput.safeParse(apply).success).toBe(true);
   for (const input of [
