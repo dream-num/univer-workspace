@@ -1,22 +1,19 @@
 import { once } from "node:events";
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
-import {
-  createNodeResourceLibraryFactory,
-  type ResourceLibrary,
-} from "@univer-cli/resource-library";
+import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { pino } from "pino";
 import { afterEach, describe, expect, it } from "vitest";
 import { createGateway } from "../src/gateway/server.js";
+import { openResourceLibrary } from "../src/gateway/resources.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames } from "./tool-names.js";
 
 const LIMIT = 100_000;
-const manifestPath = createRequire(import.meta.url).resolve("@univerjs-pro/cli-assets/manifest.json");
 const authFetcher: typeof fetch = async () =>
   Response.json({ authenticated: true, user: { id: "user-1", displayName: "alice" } });
 const svg = (padding: number) =>
@@ -27,20 +24,18 @@ describe("SVG resource tools", () => {
   let client: Client | undefined;
   let cacheRoot = "";
   let library: ResourceLibrary;
+  let logs = "";
+  const outsideDirectories: string[] = [];
   const downloads: string[] = [];
 
   async function start(padding: number) {
     cacheRoot = await mkdtemp(join(tmpdir(), "mcp-resources-test-"));
-    library = createNodeResourceLibraryFactory({
-      manifestPath,
-      cacheRoot,
-      downloader: {
-        fetch: async (input) => {
-          downloads.push(String(input));
-          return new Response(svg(padding), { headers: { "content-type": "image/svg+xml" } });
-        },
+    library = openResourceLibrary(cacheRoot, {
+      fetch: async (input) => {
+        downloads.push(String(input));
+        return new Response(svg(padding), { headers: { "content-type": "image/svg+xml" } });
       },
-    })();
+    });
     const socket = createServer();
     socket.listen(0, "127.0.0.1");
     await once(socket, "listening");
@@ -55,7 +50,18 @@ describe("SVG resource tools", () => {
         WORKSPACE_ORIGIN: "https://workspace.example",
         MCP_PUBLIC_URL: url,
       }),
-      { logger: pino({ level: "silent" }), fetcher: authFetcher, resourceLibrary: library },
+      {
+        logger: pino(
+          new Writable({
+            write(chunk, _encoding, callback) {
+              logs += String(chunk);
+              callback();
+            },
+          }),
+        ),
+        fetcher: authFetcher,
+        resourceLibrary: library,
+      },
     );
     gateway.server.listen(port, "127.0.0.1");
     await once(gateway.server, "listening");
@@ -80,6 +86,10 @@ describe("SVG resource tools", () => {
       gateway = undefined;
     }
     await rm(cacheRoot, { recursive: true, force: true });
+    for (const directory of outsideDirectories.splice(0)) {
+      await rm(directory, { recursive: true, force: true });
+    }
+    logs = "";
     downloads.length = 0;
   });
 
@@ -101,8 +111,16 @@ describe("SVG resource tools", () => {
     await start(0);
     const registries = await call("resources_registries", {});
     expect(registries.structured).toEqual({ registries: library.listRegistries() });
-    const found = await call("resources_find", { query: "arrow", registry: "example-openmoji-color", limit: 2 });
-    const expected = library.find({ queries: ["arrow"], registries: ["example-openmoji-color"], limit: 2 });
+    const found = await call("resources_find", {
+      query: "arrow",
+      registry: "example-openmoji-color",
+      limit: 2,
+    });
+    const expected = library.find({
+      queries: ["arrow"],
+      registries: ["example-openmoji-color"],
+      limit: 2,
+    });
     expect(found.structured).toEqual({
       query: { queries: ["arrow"], registries: ["example-openmoji-color"] },
       resources: JSON.parse(JSON.stringify(expected.resources)),
@@ -142,6 +160,64 @@ describe("SVG resource tools", () => {
     expect(await readdir(cacheRoot)).toEqual([first!.registryId]);
   });
 
+  async function expectUnsafe(handles: string[]) {
+    const result = await call("resources_export", { handles });
+    expect(result.isError).toBe(true);
+    expect(result.structured["code"]).toBe("workspace-resource-cache-unsafe");
+    expect(JSON.stringify(result)).not.toContain("private-outside-svg");
+    expect(logs).not.toContain("private-outside-svg");
+    expect(logs).toContain("Tool failed internally");
+    expect(logs).toContain('"outcome":"internal_error"');
+  }
+
+  it("refuses a cached registry replaced by a symlink without serving or logging the outside SVG", async () => {
+    await start(0);
+    const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+    await call("resources_export", { handles: [item!.handle] });
+    const outside = await mkdtemp(join(tmpdir(), "mcp-outside-"));
+    outsideDirectories.push(outside);
+    await writeFile(
+      join(outside, `${item!.id}.svg`),
+      "<svg><desc>private-outside-svg</desc></svg>",
+    );
+    const registry = join(cacheRoot, item!.registryId);
+    await rm(registry, { recursive: true });
+    await symlink(outside, registry);
+    await expectUnsafe([item!.handle]);
+  });
+
+  it("refuses a file symlink inside a registry", async () => {
+    await start(0);
+    const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+    const outside = await mkdtemp(join(tmpdir(), "mcp-outside-"));
+    outsideDirectories.push(outside);
+    const outsideSvg = join(outside, "private.svg");
+    await writeFile(outsideSvg, "<svg><desc>private-outside-svg</desc></svg>");
+    await mkdir(join(cacheRoot, item!.registryId), { mode: 0o700 });
+    await symlink(outsideSvg, join(cacheRoot, `${item!.handle}.svg`));
+    await expectUnsafe([item!.handle]);
+    expect(downloads).toEqual([]);
+  });
+
+  it("refuses a group-writable root before reading or downloading", async () => {
+    await start(0);
+    const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+    await chmod(cacheRoot, 0o770);
+    await expectUnsafe([item!.handle]);
+    expect(downloads).toEqual([]);
+  });
+
+  it("creates private registry directories and exports a normal cached SVG", async () => {
+    await start(0);
+    const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+    for (let count = 0; count < 2; count += 1) {
+      const result = await call("resources_export", { handles: [item!.handle] });
+      expect(result.structured["resources"]).toEqual([{ handle: item!.handle, svg: svg(0) }]);
+    }
+    expect(downloads).toHaveLength(1);
+    expect((await lstat(join(cacheRoot, item!.registryId))).mode & 0o777).toBe(0o700);
+  });
+
   it("pages an export that exceeds the result limit and rejects a foreign cursor", async () => {
     await start(30_000);
     const handles = library.find({ queries: ["arrow"], limit: 5 }).resources.map((r) => r.handle);
@@ -157,7 +233,10 @@ describe("SVG resource tools", () => {
       cursor = page.structured["cursor"];
     }
     expect(seen.map((r) => r.handle)).toEqual(handles);
-    const foreign = await call("resources_export", { handles: handles.slice(1), cursor: first.structured["cursor"] });
+    const foreign = await call("resources_export", {
+      handles: handles.slice(1),
+      cursor: first.structured["cursor"],
+    });
     expect(foreign.isError).toBe(true);
     expect(foreign.structured["code"]).toBe("workspace-argument-invalid");
   });

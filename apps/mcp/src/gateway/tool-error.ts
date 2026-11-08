@@ -3,6 +3,7 @@ import {
   WorkspaceApplicationError,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
+import { ResourceCacheUnsafeError } from "./resources.js";
 
 export interface TranslatedToolError {
   readonly outcome: "tool_error" | "auth_error" | "internal_error";
@@ -15,6 +16,9 @@ const RESULT_UNKNOWN_MESSAGE =
   "The Workspace operation may have completed, but its result could not be confirmed. Retry with the same idempotency_key if the tool takes one; otherwise check the current state before repeating the write.";
 
 export function translateToolError(error: unknown): TranslatedToolError {
+  if (error instanceof ResourceCacheUnsafeError) {
+    return { outcome: "internal_error", code: error.code, message: error.message, detail: null };
+  }
   if (error instanceof z.ZodError) {
     const issues = error.issues.map((issue) => ({
       path: issue.path.map(String).join("."),

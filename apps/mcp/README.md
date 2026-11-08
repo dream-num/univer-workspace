@@ -63,7 +63,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
 | `MCP_PUBLIC_URL` | Required | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
-| `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp/resources` | Directory where the SVG resource catalog caches downloaded SVG files. Public data shared by every user |
+| `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp-<uid>/resources` | Private directory where the SVG resource catalog caches downloaded SVG files. Public data shared by gateway users under the same uid |
 | `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
@@ -148,6 +148,16 @@ accepts several), and `resources_export` returns `{ resources, failed }` with th
 is listed in `failed` with its code, as in the CLI, and does not fail the call. Export pages by handle: when the SVGs
 would exceed 100,000 characters, the page stops before the one that does not fit and carries `truncated: true` and a `cursor`.
 A single SVG larger than the limit is `workspace-result-too-large`.
+
+`@univer-cli/resource-library` 1.3.1 does not confine cache symlinks. The gateway guards its cache through the library's
+public `ResourceCache` interface while an upstream fix is needed. It creates the root, missing parents and registry
+directories with mode `0700`. Before opening the library and before each registry read or write, it checks the root
+and gateway-created parents with `lstat` for real directories owned by the current uid without group or world write
+permission. Registry directories receive the same checks and must resolve inside the cache root. Exported files
+must be regular files, refuse symlinks on open, and resolve inside the root before their text is returned.
+Unsafe caches fail the whole call with `workspace-resource-cache-unsafe` and an internal-error log without file contents.
+An existing `MCP_RESOURCE_CACHE_DIRECTORY` must meet these ownership and permission requirements; the gateway does not
+change existing permissions or migrate the old default cache.
 
 ## Reference, Skills and server instructions
 
