@@ -42,7 +42,7 @@ const environment = z.object({
 });
 
 export type GatewayConfig = Readonly<
-  z.output<typeof environment> & {
+  Omit<z.output<typeof environment>, "MCP_OAUTH_CLIENT_SECRET"> & {
     readonly WORKSPACE_TRANSPORT_URL: string;
     readonly auth: {
       readonly exchange: { readonly clientId: string; readonly clientSecret: string } | null;
@@ -60,7 +60,8 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     throw new Error("MCP_DEV_SESSION_PASSTHROUGH must be 1 when set");
   }
   const config = environment.parse(env);
-  const { MCP_OAUTH_CLIENT_ID: clientId, MCP_OAUTH_CLIENT_SECRET: clientSecret } = config;
+  const { MCP_OAUTH_CLIENT_SECRET: clientSecret, ...configWithoutSecret } = config;
+  const clientId = config.MCP_OAUTH_CLIENT_ID;
   if ((clientId === undefined) !== (clientSecret === undefined)) {
     throw new Error("MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET must be set together");
   }
@@ -70,7 +71,7 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     );
   }
   return Object.freeze({
-    ...config,
+    ...configWithoutSecret,
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,
     auth: Object.freeze({
       exchange:

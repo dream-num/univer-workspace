@@ -25,6 +25,8 @@ const exchangeResponse = z.object({
   user: z.object({ id: z.string().min(1), displayName: z.string() }),
 });
 const maxCacheMs = 30_000;
+const negativeCacheMs = 5_000;
+const maxCacheEntries = 10_000;
 
 export interface Authentication {
   /** Value of the downstream `workspace_session` cookie. Never the caller's bearer. */
@@ -36,7 +38,7 @@ export interface Authentication {
 }
 
 interface CacheEntry {
-  readonly value: Authentication;
+  readonly value: Authentication | null;
   readonly expiresAt: number;
 }
 
@@ -46,18 +48,14 @@ export function createAuthenticator(
   fetcher: typeof fetch,
 ) {
   const { exchange, devSessionPassthrough } = config.auth;
-  const cache = new Map<string, CacheEntry>();
+  const cache = new Map<string, CacheEntry | Promise<Authentication | null>>();
   const key = (bearer: string) => createHash("sha256").update(bearer).digest("hex");
 
   async function exchangeToken(
     bearer: string,
     requestId: string,
-  ): Promise<Authentication | null> {
+  ): Promise<CacheEntry> {
     if (exchange === null) throw new Error("Token exchange is not configured");
-    const cacheKey = key(bearer);
-    const hit = cache.get(cacheKey);
-    if (hit && hit.expiresAt > Date.now()) return hit.value;
-    cache.delete(cacheKey);
     let response: Response;
     try {
       response = await fetcher(new URL("/api/auth/token", config.WORKSPACE_TRANSPORT_URL), {
@@ -81,7 +79,7 @@ export function createAuthenticator(
     const body: unknown = await response.json().catch(() => null);
     const error = z.object({ error: z.string() }).safeParse(body);
     if (response.status === 400 && error.success && error.data.error === "invalid_grant") {
-      return null;
+      return { value: null, expiresAt: Date.now() + negativeCacheMs };
     }
     const parsed = exchangeResponse.safeParse(body);
     if (!response.ok || !parsed.success) {
@@ -100,12 +98,34 @@ export function createAuthenticator(
       clientId: subject.kind === "pat" ? subject.id : (subject.client_id ?? subject.id),
     };
     const ttl = Math.min(maxCacheMs, (expires_in - 5) * 1000);
-    if (ttl > 0) {
-      const now = Date.now();
-      for (const [name, entry] of cache) if (entry.expiresAt <= now) cache.delete(name);
-      cache.set(cacheKey, { value, expiresAt: now + ttl });
+    return { value, expiresAt: Date.now() + ttl };
+  }
+
+  function cachedExchange(bearer: string, requestId: string): Promise<Authentication | null> {
+    const cacheKey = key(bearer);
+    const hit = cache.get(cacheKey);
+    if (hit instanceof Promise) return hit;
+    if (hit && hit.expiresAt > Date.now()) return Promise.resolve(hit.value);
+    cache.delete(cacheKey);
+    const pending = exchangeToken(bearer, requestId).then(
+      (entry) => {
+        if (cache.get(cacheKey) === pending) {
+          if (entry.expiresAt > Date.now()) cache.set(cacheKey, entry);
+          else cache.delete(cacheKey);
+        }
+        return entry.value;
+      },
+      (error: unknown) => {
+        if (cache.get(cacheKey) === pending) cache.delete(cacheKey);
+        throw error;
+      },
+    );
+    if (cache.size >= maxCacheEntries) {
+      const oldest = cache.keys().next();
+      if (!oldest.done) cache.delete(oldest.value);
     }
-    return value;
+    cache.set(cacheKey, pending);
+    return pending;
   }
 
   return {
@@ -113,7 +133,7 @@ export function createAuthenticator(
     async authenticate(bearer: string, requestId: string): Promise<Authentication | null> {
       if (/^uvw_(pat|at)_/.test(bearer)) {
         // A Workspace token must never be forwarded as a session, even in development.
-        return exchange === null ? null : exchangeToken(bearer, requestId);
+        return exchange === null ? null : cachedExchange(bearer, requestId);
       }
       if (!devSessionPassthrough) return null;
       return { session: bearer, user: null, scopes: null, authKind: "dev", clientId: "dev" };

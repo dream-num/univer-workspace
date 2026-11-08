@@ -98,10 +98,14 @@ export function createGateway(
     options.skillDataRoot ?? fileURLToPath(new URL("../skill-data", import.meta.url));
   const publicUrl = new URL(config.MCP_PUBLIC_URL);
   const challenge = `Bearer resource_metadata="${publicUrl.origin}/.well-known/oauth-protected-resource/mcp"`;
-  const unauthorized = () =>
+  const unauthorized = (invalidToken = false) =>
     new Response("Authentication required", {
       status: 401,
-      headers: { "WWW-Authenticate": challenge },
+      headers: {
+        "WWW-Authenticate": challenge + (invalidToken ? ', error="invalid_token"' : ""),
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Expose-Headers": "WWW-Authenticate",
+      },
     });
   const protectedResource = JSON.stringify({
     resource: config.MCP_PUBLIC_URL,
@@ -268,7 +272,11 @@ export function createGateway(
         url.pathname === "/.well-known/oauth-protected-resource/mcp")
     ) {
       return new Response(protectedResource, {
-        headers: { "Content-Type": "application/json", "Cache-Control": "public, max-age=300" },
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=300",
+          "Access-Control-Allow-Origin": "*",
+        },
       });
     }
     if (url.pathname !== "/mcp") return new Response("Not found", { status: 404 });
@@ -281,7 +289,7 @@ export function createGateway(
     const bearer = /^Bearer ([^\s;,]+)$/i.exec(request.headers.get("authorization") ?? "")?.[1];
     if (!bearer) return unauthorized();
     const authentication = await authenticator.authenticate(bearer, requestId);
-    if (!authentication) return unauthorized();
+    if (!authentication) return unauthorized(true);
     const fetcher: typeof fetch = (input, init) => {
       const headers = new Headers(
         init?.headers ?? (input instanceof Request ? input.headers : undefined),
@@ -304,7 +312,7 @@ export function createGateway(
         error instanceof WorkspaceApplicationError &&
         error.code === "workspace-authentication-required"
       )
-        return unauthorized();
+        return unauthorized(true);
       throw error;
     }
     const selected = selectTools(url.searchParams.get("toolsets"));
@@ -346,7 +354,7 @@ export function createGateway(
         const text = await response.text();
         if (state.outcome === "auth_error") {
           authenticator.evict(bearer);
-          return unauthorized();
+          return unauthorized(true);
         }
         return new Response(text, { status: response.status, headers: response.headers });
       } finally {

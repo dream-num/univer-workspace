@@ -3,7 +3,8 @@ import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { pino } from "pino";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAuthenticator } from "../src/gateway/auth.js";
 import { createGateway } from "../src/gateway/server.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 
@@ -169,6 +170,24 @@ describe("gateway authentication", () => {
     ]);
   });
 
+  it("shares one exchange across parallel first calls", async () => {
+    const gateway = await start(exchangeEnv);
+    const responses = await Promise.all(Array.from({ length: 20 }, () => gateway.post("uvw_pat_full")));
+    expect(responses.map((response) => response.status)).toEqual(Array(20).fill(200));
+    expect(gateway.exchanges).toHaveLength(1);
+  });
+
+  it("leaves a missing-bearer challenge free of invalid_token and exposes it to browsers", async () => {
+    const gateway = await start(exchangeEnv);
+    const response = await fetch(gateway.url, { method: "POST" });
+    expect(response.status).toBe(401);
+    expect(response.headers.get("www-authenticate")).toBe(
+      `Bearer resource_metadata="${gateway.origin}/.well-known/oauth-protected-resource/mcp"`,
+    );
+    expect(response.headers.get("access-control-allow-origin")).toBe("*");
+    expect(response.headers.get("access-control-expose-headers")).toBe("WWW-Authenticate");
+  });
+
   it("reports the OAuth client for an access token and labels metrics by auth kind", async () => {
     const gateway = await start({ ...exchangeEnv, METRICS_TOKEN: "metrics-secret" });
     await (await gateway.connect("uvw_at_oauth")).callTool({ name: "whoami", arguments: {} });
@@ -190,15 +209,18 @@ describe("gateway authentication", () => {
     expect(gateway.exchanges).toHaveLength(1);
   });
 
-  it("answers invalid_grant with HTTP 401 and the metadata challenge", async () => {
+  it("negatively caches invalid_grant and answers HTTP 401 with the invalid-token challenge", async () => {
     const gateway = await start(exchangeEnv);
-    for (const bearer of ["uvw_pat_unknown", "uvw_at_unknown"]) {
+    for (const bearer of ["uvw_pat_unknown", "uvw_pat_unknown", "uvw_at_unknown", "uvw_at_unknown"]) {
       const response = await gateway.post(bearer);
       expect(response.status).toBe(401);
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
+      expect(response.headers.get("access-control-expose-headers")).toBe("WWW-Authenticate");
       expect(response.headers.get("www-authenticate")).toBe(
-        `Bearer resource_metadata="${gateway.origin}/.well-known/oauth-protected-resource/mcp"`,
+        `Bearer resource_metadata="${gateway.origin}/.well-known/oauth-protected-resource/mcp", error="invalid_token"`,
       );
     }
+    expect(gateway.exchanges).toHaveLength(2);
     expect(gateway.productCookies).toEqual([]);
   });
 
@@ -234,6 +256,8 @@ describe("gateway authentication", () => {
   ])("answers a %s exchange failure with HTTP 500 and no credential in the log", async (error, status) => {
     const gateway = await start(exchangeEnv, { exchangeStatus: status, exchangeBody: { error } });
     expect((await gateway.post("uvw_pat_full")).status).toBe(500);
+    expect((await gateway.post("uvw_pat_full")).status).toBe(500);
+    expect(gateway.exchanges).toHaveLength(2);
     expect(gateway.logs()).toContain("Token exchange failed");
     expect(gateway.logs()).toContain(error);
   });
@@ -273,6 +297,7 @@ describe("gateway authentication", () => {
     for (const path of ["/.well-known/oauth-protected-resource/mcp", "/.well-known/oauth-protected-resource"]) {
       const response = await fetch(gateway.origin + path);
       expect(response.status).toBe(200);
+      expect(response.headers.get("access-control-allow-origin")).toBe("*");
       expect(response.headers.get("cache-control")).toBe("public, max-age=300");
       expect(await response.json()).toEqual({
         resource: gateway.url,
@@ -292,6 +317,13 @@ describe("authentication configuration", () => {
     expect(() => parseGatewayConfig(base)).toThrow(/MCP_OAUTH_CLIENT_ID.*MCP_DEV_SESSION_PASSTHROUGH/);
     expect(() => parseGatewayConfig({ ...base, MCP_DEV_SESSION_PASSTHROUGH: "yes" })).toThrow(/must be 1/);
   });
+  it("freezes a config containing the client secret exactly once", () => {
+    const config = parseGatewayConfig({ ...base, MCP_OAUTH_CLIENT_ID: "id", MCP_OAUTH_CLIENT_SECRET: clientSecret });
+    expect(Object.isFrozen(config)).toBe(true);
+    expect(Object.isFrozen(config.auth.exchange)).toBe(true);
+    expect(config).not.toHaveProperty("MCP_OAUTH_CLIENT_SECRET");
+    expect(JSON.stringify(config).split(clientSecret)).toHaveLength(2);
+  });
   it("accepts exchange alone, passthrough alone, or both, and refuses passthrough in production", () => {
     const exchange = { MCP_OAUTH_CLIENT_ID: "id", MCP_OAUTH_CLIENT_SECRET: "secret" };
     expect(parseGatewayConfig({ ...base, ...exchange, NODE_ENV: "production" }).auth).toEqual({
@@ -306,5 +338,40 @@ describe("authentication configuration", () => {
     expect(() =>
       parseGatewayConfig({ ...base, ...exchange, MCP_DEV_SESSION_PASSTHROUGH: "1", NODE_ENV: "production" }),
     ).toThrow(/NODE_ENV.*MCP_DEV_SESSION_PASSTHROUGH/);
+  });
+});
+
+describe("exchange cache lifetime and capacity", () => {
+  const config = parseGatewayConfig({
+    WORKSPACE_ORIGIN: identityOrigin,
+    MCP_PUBLIC_URL: "http://127.0.0.1:3930/mcp",
+    MCP_OAUTH_CLIENT_ID: "id",
+    MCP_OAUTH_CLIENT_SECRET: clientSecret,
+  });
+
+  it("retries a negative entry after five seconds and evicts the oldest entry at capacity", async () => {
+    let calls = 0;
+    const authenticate = createAuthenticator(config, pino({ level: "silent" }), async () => {
+      calls += 1;
+      return Response.json({ error: "invalid_grant" }, { status: 400 });
+    }).authenticate;
+    let now = Date.now();
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    try {
+      expect(await authenticate("uvw_pat_first", "test")).toBeNull();
+      now += 4999;
+      expect(await authenticate("uvw_pat_first", "test")).toBeNull();
+      expect(calls).toBe(1);
+      now += 1;
+      expect(await authenticate("uvw_pat_first", "test")).toBeNull();
+      expect(calls).toBe(2);
+      for (let i = 0; i < 10_000; i += 1) await authenticate(`uvw_pat_${i}`, "test");
+      expect(await authenticate("uvw_pat_9999", "test")).toBeNull();
+      expect(calls).toBe(10_002);
+      expect(await authenticate("uvw_pat_first", "test")).toBeNull();
+      expect(calls).toBe(10_003);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

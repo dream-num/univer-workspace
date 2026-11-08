@@ -142,6 +142,9 @@ mcp_doctor() {
         ok "MCP gateway logs contain no session, PAT or gateway client secret"
       else bad "MCP gateway leaks session credential; blocking defect"; fi
     else bad "MCP cannot check gateway logs or session; run verify-uvw user"; fi
+    if node -e 'const fs=require("node:fs");const logs=fs.readFileSync(process.argv[1],"utf8");process.exit(process.argv.slice(2).some(p=>{const secret=fs.readFileSync(p,"utf8").trim();return !secret||logs.includes(secret)})?1:0)' "$RUN/logs/server.log" "$RUN/home/mcp-token" "$RUN/home/mcp-oauth-secret"; then
+      ok "Workspace server logs contain no PAT or gateway client secret"
+    else bad "MCP cannot verify Workspace server logs are free of PAT and gateway client secret; blocking defect"; fi
   fi
 }
 

@@ -1,6 +1,6 @@
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
-import { pageText } from "../../paging.js";
+import { pageText, RESULT_LIMIT } from "../../paging.js";
 import { getSkill, listSkills, readSkillResource } from "../../skills.js";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 
@@ -75,6 +75,13 @@ export const skillsReadTool: ToolDefinition = {
       };
     }
     if (cursor !== undefined) throw invalid("cursor applies only when resource is given.");
-    return { output: { skills: [await getSkill(root, name, full === true)] }, repo: null };
+    const output = { skills: [await getSkill(root, name, full === true)] };
+    if (full === true && JSON.stringify(output).length > RESULT_LIMIT) {
+      throw workspaceError(
+        "workspace-result-too-large",
+        "Read the skill without full, then read each resource with name and resource. Long resources are paged; repeat with the returned cursor to continue.",
+      );
+    }
+    return { output, repo: null };
   },
 };

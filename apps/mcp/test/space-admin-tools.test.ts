@@ -423,6 +423,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { action: "rename", node: "n1" },
       { action: "trash" },
       { action: "create", repo: "bob/team", name: "x", root: true },
+      { action: "create", repo: "bob/team", name: "x", node: "n1" },
       { action: "rename", node: "n1", name: "x", repo: "bob/team" },
       { action: "rename", node: "n1", name: "x", parent: "dir" },
       { action: "move", node: "n1", root: true, name: "x" },

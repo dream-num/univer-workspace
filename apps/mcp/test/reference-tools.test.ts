@@ -256,7 +256,9 @@ describe("API reference, Skills, resources and server instructions", () => {
       isError: true,
       structured: { code: "workspace-result-too-large" },
     });
-    expect(tooLarge.structured["message"]).toContain("Narrow the request");
+    expect(tooLarge.structured["message"]).toContain("without full");
+    expect(tooLarge.structured["message"]).toContain("resource");
+    expect(tooLarge.structured["message"]).toContain("cursor");
   });
 
   it.each(["legacy", { pin: "2026-07-28" }] as const)(
@@ -268,6 +270,9 @@ describe("API reference, Skills, resources and server instructions", () => {
       for (const word of ["pull request", "ready", "review", "merg", "api_find", "skills_read"]) {
         expect(SERVER_INSTRUCTIONS).toContain(word);
       }
+      expect(SERVER_INSTRUCTIONS).toContain("no matching tool");
+      expect(SERVER_INSTRUCTIONS).toContain("tell the user");
+      expect(SERVER_INSTRUCTIONS).toContain("?toolsets=admin");
       const listed = (await client.listResources()).resources;
       const expected: string[] = [];
       for (const name of SKILL_NAMES) {

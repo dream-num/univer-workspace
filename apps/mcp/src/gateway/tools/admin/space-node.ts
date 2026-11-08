@@ -51,6 +51,7 @@ export const spaceNodeTool: ToolDefinition = {
       }
     };
     only("repo", repo, ["create"]);
+    only("node", node, ["rename", "move", "trash"]);
     only("root", root, ["move"]);
     only("name", name, ["create", "rename"]);
     only("parent", parent, ["create", "move"]);

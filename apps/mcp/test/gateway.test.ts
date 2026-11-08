@@ -330,7 +330,9 @@ describe("gateway over real HTTP and the MCP client", () => {
         headers: authorization === undefined ? {} : { authorization },
       });
       expect(response.status).toBe(401);
-      expect(response.headers.get("www-authenticate")).toBe(challenge);
+      expect(response.headers.get("www-authenticate")).toBe(
+        challenge + (authorization === "Bearer rejected-session" ? ', error="invalid_token"' : ""),
+      );
     }
     const auth = { authorization: `Bearer ${session}` };
     const wrongHost = await new Promise<number | undefined>((resolve, reject) => {

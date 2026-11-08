@@ -23,7 +23,10 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
 that session. The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
 never beyond the session's `expires_in` minus 5 seconds), so revoking a token takes effect within that window or
-at the first downstream 401, which evicts the entry.
+at the first downstream 401, which evicts the entry. After revocation, tools that make no Workspace
+request (`whoami`, `skills_read`, `api_*`) and resources may still answer from the cache for up to 30 seconds.
+Concurrent calls with the same bearer share one exchange. An `invalid_grant` result is cached for 5 seconds;
+the cache holds at most 10,000 entries and evicts the oldest at capacity.
 
 | Outcome of the exchange | Gateway response |
 | --- | --- |
@@ -126,7 +129,9 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 results, wrapped as `{ results }`. The gateway reads the CLI's Skills from `dist/skill-data`, which the build
 copies from `apps/cli/skill-data`; it never imports `apps/cli`. `skills_read` returns the CLI's `skills list`,
 `skills get` and `skills read` data. Skill text is unchanged, so it still names `uvw` commands: the tool with the
-same name in snake_case does the same thing.
+same name in snake_case does the same thing when it appears in the connection's tool list. If no matching
+tool exists, that step is unavailable in this connection; tell the user instead of guessing. Admin tools
+require `?toolsets=admin` (alone or with other toolsets) or `?toolsets=all`.
 
 Every Skill file is also an MCP resource, in every toolset selection: `uvw://skills/<name>/SKILL.md` and
 `uvw://skills/<name>/references/<file>` (or `templates/<file>`), as `text/markdown`.
@@ -142,7 +147,8 @@ returns the next page, and the last page has neither field. Each `api_show` page
 (declaration, lineage, documentation) with its slice of `groups`. The cursor is stateless. It encodes the offset
 and a digest of the other arguments, so reusing it with different arguments is `workspace-argument-invalid`.
 Any other tool, and `skills_read` with `full`, returns `workspace-result-too-large` when it would exceed the
-limit, telling the agent to narrow the request.
+limit. For `skills_read` with `full`, read the skill without `full`, then each resource with `resource`,
+following its cursor when paged. Other oversized results tell the agent to narrow the request.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
 `search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `blob_get` and `label_list`; `write` for the Issue tools, `pr_create`, `pr_edit`,
@@ -155,7 +161,9 @@ violates a tool's output schema is an `internal_error`. A write whose outcome is
 `workspace-result-unknown`. Tool failures preserve Client Core's
 `{ code, message, detail }` in `structuredContent` and set `isError: true`.
 Authentication failures return HTTP 401 and
-`WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`.
+`WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`,
+adding `error="invalid_token"` when a presented bearer is rejected. Both this 401 and protected-resource
+metadata carry `Access-Control-Allow-Origin: *`; the 401 exposes `WWW-Authenticate` to browser clients.
 
 Requests may provide `x-request-id` matching `^[a-zA-Z0-9._-]{1,128}$`.
 The gateway generates a UUID otherwise, echoes it, and forwards it to every Workspace request.
