@@ -427,3 +427,21 @@ apps/mcp/
 内部工具与请求失败仅记录错误类名及安全的 code、syscall 和 request ID，不记录错误消息、堆栈、路径或参数。客户端中止只记录一次 info 级失败。下载的 Workspace 媒体类型无法解析时使用 application/octet-stream；数据与 sidecar 大小不一致属于内部完整性错误。
 
 文件工具在 gateway 内记录 `upload_bytes`（消费上传）和 `export_bytes`（写入下载），`executor: none` 时允许这两项非零，其他成本仍为零。
+
+### D4 Office 作业进程
+
+`exchange.import` 和 `exchange.export` 通过相同的操作表、二进制 RPC 与 `executorTool` 分发。
+执行层父进程构造 `WorkspaceUnitExchangeFeature`，注入转换函数并使用 `licenseMode: per-operation`。
+父进程保留 HTTP、目标解析、图片解析、runtime 与创建 Unit；只有转换在 `executor/jobs/entry` 中运行。
+每次转换 fork 一个新进程，使用 advanced serialization 传递字节，并在请求剩余预算耗尽时 SIGKILL。
+子进程不接收 session、grant 或 Workspace 地址，也不继承 internal token 或 Node 启动参数。
+license 与 key 只随转换数据交给作业，不传给池 worker。
+
+子进程的 `HOME`、`XDG_STATE_HOME`、`TMPDIR` 指向私有临时目录，退出后删除。
+这提供 C7 尚未完成时的可写 usage storage 环境，不保证持久化配额统计。
+`LICENSE_USAGE_STORAGE_ERROR` 保留 SDK 的错误码与信息，不自动重试。
+此处没有网络隔离，仍仅供本地和内部单用户环境使用，Stage G 的安全门禁不变。
+
+导入创建 Unit 前计算最终 initialData 的 JSON UTF-8 字节数，超过 900 KiB 时拒绝，
+返回 `workspace-import-too-large` 以及 `size`、`maxBytes`，避免 units 路由的模糊 413。
+CLI 默认路径没有新增限制。导入请求帧为 64 MiB，导出响应帧为 128 MiB。

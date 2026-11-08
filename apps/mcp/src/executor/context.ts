@@ -1,6 +1,7 @@
 import type {
   WorkspaceContentRuntimeOperations,
   WorkspaceContentSource,
+  WorkspaceUnitExchangeDependencies,
 } from "@univerjs/univer-workspace-client-core";
 import type { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import type { OpInput, OpName, OpOutput, opSpecs } from "../shared/executor-protocol.js";
@@ -20,6 +21,10 @@ export interface OpContext {
   readonly userId: string;
   readonly transportOrigin: string;
   readonly runtime: BoundRuntime;
+  readonly exchange: Pick<
+    WorkspaceUnitExchangeDependencies,
+    "license" | "licenseKey" | "importBuffer" | "exportToBuffer"
+  >;
   http(): WorkspaceHttp;
   source(): WorkspaceContentSource;
   readonly usage: OpMeta;

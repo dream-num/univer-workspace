@@ -14,6 +14,7 @@ const environment = z.object({
   EXECUTOR_QUEUE_TIMEOUT_MS: positive.default(5_000),
   EXECUTOR_OPERATION_TIMEOUT_MS: positive.default(25_000),
   UNIVER_LICENSE: z.string().trim().min(1).optional(),
+  UNIVER_LICENSE_KEY: z.string().trim().min(1).optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 export function parseExecutorConfig(env: NodeJS.ProcessEnv) {

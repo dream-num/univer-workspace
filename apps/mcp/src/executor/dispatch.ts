@@ -18,6 +18,8 @@ import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js
 import { mapRuntimeError, timeoutError } from "./errors.js";
 import { handlers } from "./ops/index.js";
 import { bindRuntime } from "./runtime.js";
+import { runConversionJob } from "./jobs/run.js";
+import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
 
 export function createDispatcher(
   config: ExecutorConfig,
@@ -58,6 +60,10 @@ export function createDispatcher(
         fetcher,
       });
       const source = new WorkspaceContentSource(http);
+      const credentials = {
+        license: config.UNIVER_LICENSE ?? UNIVER_LICENSE,
+        licenseKey: config.UNIVER_LICENSE_KEY ?? UNIVER_LICENSE_KEY,
+      };
       const ctx: OpContext = {
         requestId: header.requestId,
         signal: controller.signal,
@@ -67,6 +73,34 @@ export function createDispatcher(
         http: () => http,
         source: () => source,
         runtime: bindRuntime(runtime, grant, usage, controller.signal),
+        exchange: {
+          ...credentials,
+          importBuffer: (bytes, options) => {
+            usage.executor = "cold_start";
+            const types: Readonly<Record<number, string>> = {
+              1: "doc",
+              2: "sheet",
+              3: "slide",
+              5: "base",
+            };
+            usage.unitType = types[options.type] ?? null;
+            return runConversionJob(
+              { kind: "import", bytes, options },
+              credentials,
+              controller.signal,
+            );
+          },
+          exportToBuffer: async (data, options) => {
+            usage.executor = "cold_start";
+            return Buffer.from(
+              await runConversionJob(
+                { kind: "export", data, options },
+                credentials,
+                controller.signal,
+              ),
+            );
+          },
+        },
       };
       const deadline = new Promise<never>((_resolve, reject) => {
         timer = setTimeout(

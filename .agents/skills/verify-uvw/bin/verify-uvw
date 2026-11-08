@@ -324,7 +324,7 @@ cmd_doctor() {
     [[ "$(listener_pid "$port")" == "$pid" ]] && ok "$name port $port is owned by this run (pid $pid)" \
       || bad "$name port $port is owned by pid '$(listener_pid "$port")', not this run's $pid"
   done
-  lsof -p "$SERVER_PID" 2>/dev/null | grep -q "$RUN/data/univer-workspace.sqlite" \
+  lsof -p "$SERVER_PID" 2>/dev/null | grep -F "$RUN/data/univer-workspace.sqlite" > /dev/null \
     && ok "server has this run's product database open" \
     || bad "server does not have $RUN/data/univer-workspace.sqlite open"
   curl -fsS -o /dev/null "$ORIGIN/api/session" && ok "$ORIGIN/api/session answers through the web proxy" \

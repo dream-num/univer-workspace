@@ -45,7 +45,7 @@ export function mapRuntimeError(error: unknown, effect: OpEffect): WireError {
   if (code === "COLLABORATION_WORKER_OPEN_TIMEOUT") return timeoutError(effect, "open").wire;
   if (code === "COLLABORATION_WORKER_OPERATION_TIMEOUT")
     return effect === "write" ? resultUnknown(code, true) : timeoutError(effect, "operation").wire;
-  if (code === "COLLABORATION_WORKER_CRASHED") {
+  if (code === "COLLABORATION_WORKER_CRASHED" || code === "workspace-job-crashed") {
     return effect === "write"
       ? resultUnknown(code)
       : { ...timeoutError(effect, "operation").wire, outcome: "internal_error" };

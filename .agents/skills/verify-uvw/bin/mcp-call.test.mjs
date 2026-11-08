@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -89,8 +89,8 @@ test('executor events require nonnegative cost and none requires zero worker cos
 
 test('gateway file transfers record only the appropriate bytes with no executor', () => {
   const zero = { worker_cpu_ms: 0, worker_peak_rss_mb: 0, render_pages: 0, export_bytes: 0, upload_bytes: 0, committed_revisions: 0 };
-  for (const tool of ['blob_download', 'asset_download', 'blob_upload', 'blob_replace']) {
-    const key = ['blob_upload', 'blob_replace'].includes(tool) ? 'upload_bytes' : 'export_bytes';
+  for (const tool of ['blob_download', 'asset_download', 'blob_upload', 'blob_replace', 'import', 'export']) {
+    const key = ['blob_upload', 'blob_replace', 'import'].includes(tool) ? 'upload_bytes' : 'export_bytes';
     const cost = { ...zero, [key]: 3 };
     const globals = { tool, args: { space: 'space' } };
     assert.equal(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: 'space', cost } }).length, 0);
@@ -102,4 +102,17 @@ test('gateway file transfers record only the appropriate bytes with no executor'
     }).includes(`Invalid cost.${key}`));
   }
   assert.ok(validateErrorCode('ok', undefined, null, { event: { cost: { ...zero, export_bytes: 3 } } }).includes('Invalid cost.export_bytes'));
+});
+
+test('OAuth transcript redaction preserves JSON strings with escaped quotes', () => {
+  const doc = readFileSync(new URL('../features/mcp.md', import.meta.url), 'utf8');
+  const code = doc.match(/mo1_redact\(\) \{[\s\S]*?<<'JS'\n([\s\S]*?)\nJS/)[1];
+  const run = mkdtempSync(join(tmpdir(), 'verify-uvw-redact-'));
+  try {
+    const path = join(run, 'transcript.jsonl');
+    writeFileSync(path, JSON.stringify({ type: 'tool_use', input: { code: 'return tools["ws"].whoami();', state: 'private-state' }, output: 'ok' }) + '\n');
+    const result = spawnSync(process.execPath, ['-', run, path], { input: code, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+    assert.deepEqual(JSON.parse(result.stdout), { type: 'tool_use', input: { code: '[REDACTED]', state: '[REDACTED]' }, output: 'ok' });
+  } finally { rmSync(run, { recursive: true, force: true }); }
 });
