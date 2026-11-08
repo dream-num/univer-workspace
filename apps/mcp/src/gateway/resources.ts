@@ -21,22 +21,22 @@ export class ResourceCacheUnsafeError extends Error {
   }
 }
 
+export class ResourceCacheIoError extends Error {
+  constructor(cause: unknown) {
+    super("The SVG resource cache could not be accessed.", { cause });
+  }
+}
+
 // resource-library 1.3.1 follows cache symlinks; remove this adapter after upstream confines them.
 class GatewayResourceCache extends FilesystemResourceCache {
   private readonly uid = userInfo().uid;
   private readonly directories = new Set<string>();
-  private readonly root: string;
+  private root: string | undefined;
 
   constructor(directory: string, privateParent: string | undefined) {
     super(directory);
-    try {
-      if (privateParent !== undefined) this.createDirectory(privateParent);
-      this.createDirectory(this.location);
-      this.root = realpathSync(this.location);
-      this.checkRoot();
-    } catch {
-      throw new ResourceCacheUnsafeError();
-    }
+    if (privateParent !== undefined) this.directories.add(privateParent);
+    this.directories.add(this.location);
   }
 
   private checkDirectory(directory: string): void {
@@ -58,12 +58,29 @@ class GatewayResourceCache extends FilesystemResourceCache {
   }
 
   private checkRoot(): void {
+    let recreated = false;
+    // Check tracked parents before recreating children so a replaced parent cannot redirect writes.
+    for (const directory of [...this.directories].sort((a, b) => a.length - b.length)) {
+      try {
+        this.checkDirectory(directory);
+      } catch (error) {
+        if (!hasCode(error, "ENOENT")) throw error;
+        this.createDirectory(directory);
+        recreated = true;
+      }
+    }
     for (const directory of this.directories) this.checkDirectory(directory);
-    if (realpathSync(this.location) !== this.root) throw new ResourceCacheUnsafeError();
+    const root = realpathSync(this.location);
+    if (this.root !== undefined && !recreated && root !== this.root) {
+      throw new ResourceCacheUnsafeError();
+    }
+    this.root = root;
   }
 
   private checkInside(path: string): void {
-    if (!realpathSync(path).startsWith(this.root + sep)) throw new ResourceCacheUnsafeError();
+    if (this.root === undefined || !realpathSync(path).startsWith(this.root + sep)) {
+      throw new ResourceCacheUnsafeError();
+    }
   }
 
   private prepareFile(handle: string): string {
@@ -81,12 +98,14 @@ class GatewayResourceCache extends FilesystemResourceCache {
     return file;
   }
 
-  private checkFile(file: string): void {
+  private checkFile(file: string) {
     this.checkRoot();
     this.checkDirectory(dirname(file));
     this.checkInside(dirname(file));
-    if (!lstatSync(file).isFile()) throw new ResourceCacheUnsafeError();
+    const stat = lstatSync(file);
+    if (!stat.isFile()) throw new ResourceCacheUnsafeError();
     this.checkInside(file);
+    return stat;
   }
 
   override async read(handle: string): Promise<string | undefined> {
@@ -98,21 +117,28 @@ class GatewayResourceCache extends FilesystemResourceCache {
         if (hasCode(error, "ENOENT")) return undefined;
         throw error;
       }
-      this.checkFile(path);
+      const before = this.checkFile(path);
       const file = await open(
         path,
         constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-      );
+      ).catch((error: unknown) => {
+        if (hasCode(error, "ELOOP")) throw new ResourceCacheUnsafeError();
+        throw error;
+      });
       try {
-        if (!(await file.stat()).isFile()) throw new ResourceCacheUnsafeError();
+        const opened = await file.stat();
+        if (!opened.isFile() || opened.dev !== before.dev || opened.ino !== before.ino) {
+          throw new ResourceCacheUnsafeError();
+        }
         const svg = await file.readFile("utf8");
         this.checkFile(path);
         return svg;
       } finally {
         await file.close();
       }
-    } catch {
-      throw new ResourceCacheUnsafeError();
+    } catch (error) {
+      if (error instanceof ResourceCacheUnsafeError) throw error;
+      throw new ResourceCacheIoError(error);
     }
   }
 
@@ -121,8 +147,9 @@ class GatewayResourceCache extends FilesystemResourceCache {
       const path = this.prepareFile(handle);
       await super.write(handle, svg);
       this.checkFile(path);
-    } catch {
-      throw new ResourceCacheUnsafeError();
+    } catch (error) {
+      if (error instanceof ResourceCacheUnsafeError) throw error;
+      throw new ResourceCacheIoError(error);
     }
   }
 
@@ -130,8 +157,9 @@ class GatewayResourceCache extends FilesystemResourceCache {
     try {
       this.checkRoot();
       return await super.clear();
-    } catch {
-      throw new ResourceCacheUnsafeError();
+    } catch (error) {
+      if (error instanceof ResourceCacheUnsafeError) throw error;
+      throw new ResourceCacheIoError(error);
     }
   }
 }

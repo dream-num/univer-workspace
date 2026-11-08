@@ -22,14 +22,19 @@ describe("resource cache directories", () => {
     return item.handle;
   }
 
-  it("rejects a symlink or group-writable root before opening the library", async () => {
+  it("rejects a symlink or group-writable root on cache access", async () => {
     const root = join(sandbox, "resources");
     await symlink(sandbox, root);
-    expect(() => openResourceLibrary(root)).toThrow(ResourceCacheUnsafeError);
+    const library = openResourceLibrary(root);
+    await expect(library.read({ handle: firstHandle(library) })).rejects.toThrow(
+      ResourceCacheUnsafeError,
+    );
     await rm(root);
     await mkdir(root, { mode: 0o700 });
     await chmod(root, 0o770);
-    expect(() => openResourceLibrary(root)).toThrow(ResourceCacheUnsafeError);
+    await expect(library.read({ handle: firstHandle(library) })).rejects.toThrow(
+      ResourceCacheUnsafeError,
+    );
   });
 
   it("creates the default per-uid root privately and rechecks its existing parent", async () => {
@@ -37,13 +42,13 @@ describe("resource cache directories", () => {
     const parent = join(sandbox, `univer-workspace-mcp-${String(userInfo().uid)}`);
     const library = openResourceLibrary(undefined, downloader);
     expect(library.cacheLocation).toBe(join(parent, "resources"));
+    await library.read({ handle: firstHandle(library) });
     for (const directory of [parent, library.cacheLocation]) {
       const stat = await lstat(directory);
       expect(stat.mode & 0o777).toBe(0o700);
       expect(stat.uid).toBe(userInfo().uid);
     }
     await chmod(parent, 0o770);
-    expect(() => openResourceLibrary(undefined)).toThrow(ResourceCacheUnsafeError);
     await expect(library.read({ handle: firstHandle(library) })).rejects.toThrow(
       ResourceCacheUnsafeError,
     );
@@ -53,7 +58,10 @@ describe("resource cache directories", () => {
     vi.stubEnv("TMPDIR", sandbox);
     const parent = join(sandbox, `univer-workspace-mcp-${String(userInfo().uid)}`);
     await symlink(sandbox, parent);
-    expect(() => openResourceLibrary(undefined)).toThrow(ResourceCacheUnsafeError);
+    const library = openResourceLibrary(undefined);
+    await expect(library.read({ handle: firstHandle(library) })).rejects.toThrow(
+      ResourceCacheUnsafeError,
+    );
     await expect(lstat(join(sandbox, "resources"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
@@ -62,6 +70,7 @@ describe("resource cache directories", () => {
     const middle = join(parent, "cache");
     const root = join(middle, "resources");
     const library = openResourceLibrary(root, downloader);
+    await library.read({ handle: firstHandle(library) });
     for (const directory of [parent, middle, root]) {
       expect((await lstat(directory)).mode & 0o777).toBe(0o700);
     }
@@ -71,10 +80,12 @@ describe("resource cache directories", () => {
     );
     await chmod(parent, 0o700);
     await rename(parent, join(sandbox, "moved"));
+    await rm(join(sandbox, "moved", "cache"), { recursive: true });
     await symlink(join(sandbox, "moved"), parent);
     await expect(library.read({ handle: firstHandle(library) })).rejects.toThrow(
       ResourceCacheUnsafeError,
     );
+    await expect(lstat(join(sandbox, "moved", "cache"))).rejects.toMatchObject({ code: "ENOENT" });
   });
 
   it("refuses an unsafe registry or a non-regular SVG", async () => {
@@ -82,11 +93,27 @@ describe("resource cache directories", () => {
     const library = openResourceLibrary(root, downloader);
     const handle = firstHandle(library);
     const registry = join(root, handle.split("/")[0]!);
-    await mkdir(registry, { mode: 0o700 });
+    await mkdir(registry, { recursive: true, mode: 0o700 });
     await chmod(registry, 0o777);
     await expect(library.read({ handle })).rejects.toThrow(ResourceCacheUnsafeError);
     await chmod(registry, 0o700);
     await mkdir(join(root, `${handle}.svg`));
     await expect(library.read({ handle })).rejects.toThrow(ResourceCacheUnsafeError);
   });
+  it.each(["root", "private parent"])(
+    "recreates the default %s between exports",
+    async (removed) => {
+      vi.stubEnv("TMPDIR", sandbox);
+      const parent = join(sandbox, `univer-workspace-mcp-${String(userInfo().uid)}`);
+      const library = openResourceLibrary(undefined, downloader);
+      const handle = firstHandle(library);
+      const input = { handles: [handle], destination: join(sandbox, "output") };
+      expect(await library.export(input)).toMatchObject({ exported: [{ handle }], failed: [] });
+      await rm(removed === "root" ? library.cacheLocation : parent, { recursive: true });
+      expect(await library.export(input)).toMatchObject({ exported: [{ handle }], failed: [] });
+      for (const directory of [parent, library.cacheLocation]) {
+        expect((await lstat(directory)).mode & 0o777).toBe(0o700);
+      }
+    },
+  );
 });

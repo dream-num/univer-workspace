@@ -151,11 +151,13 @@ A single SVG larger than the limit is `workspace-result-too-large`.
 
 `@univer-cli/resource-library` 1.3.1 does not confine cache symlinks. The gateway guards its cache through the library's
 public `ResourceCache` interface while an upstream fix is needed. It creates the root, missing parents and registry
-directories with mode `0700`. Before opening the library and before each registry read or write, it checks the root
-and gateway-created parents with `lstat` for real directories owned by the current uid without group or world write
-permission. Registry directories receive the same checks and must resolve inside the cache root. Exported files
-must be regular files, refuse symlinks on open, and resolve inside the root before their text is returned.
-Unsafe caches fail the whole call with `workspace-resource-cache-unsafe` and an internal-error log without file contents.
+directories with mode `0700`. Before each cache read or write, it recreates missing roots and gateway-created parents,
+then checks the root and gateway-created parents with `lstat` for real directories owned by the current uid without
+group or world write permission. Registry directories receive the same checks and must resolve inside the cache root. Exported files
+must be regular files, refuse symlinks on open, match the device and inode checked before opening, and resolve inside
+the root before their text is returned. Registry listing and search do not access the cache. Unsafe caches fail SVG
+exports with `workspace-resource-cache-unsafe` and an internal-error log without file contents.
+Other filesystem failures return `workspace-internal-error` and log the original cause without SVG contents.
 An existing `MCP_RESOURCE_CACHE_DIRECTORY` must meet these ownership and permission requirements; the gateway does not
 change existing permissions or migrate the old default cache.
 

@@ -27,7 +27,7 @@ import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
-import { openResourceLibrary } from "./resources.js";
+import { openResourceLibrary, ResourceCacheIoError } from "./resources.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
 import { translateToolError } from "./tool-error.js";
@@ -203,6 +203,7 @@ export function createGateway(
                   request_id: state.context.requestId,
                   tool: tool.name,
                   error: error instanceof Error ? error.message : typeof error,
+                  err: error instanceof ResourceCacheIoError ? error : undefined,
                 },
                 "Tool failed internally",
               );

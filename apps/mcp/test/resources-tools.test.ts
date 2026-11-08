@@ -1,3 +1,4 @@
+import * as fs from "node:fs/promises";
 import { once } from "node:events";
 import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -7,11 +8,16 @@ import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { pino } from "pino";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGateway } from "../src/gateway/server.js";
 import { openResourceLibrary } from "../src/gateway/resources.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames } from "./tool-names.js";
+
+vi.mock("node:fs/promises", async (importOriginal) => {
+  const original = await importOriginal<typeof import("node:fs/promises")>();
+  return { ...original, open: vi.fn(original.open) };
+});
 
 const LIMIT = 100_000;
 const authFetcher: typeof fetch = async () =>
@@ -28,8 +34,9 @@ describe("SVG resource tools", () => {
   const outsideDirectories: string[] = [];
   const downloads: string[] = [];
 
-  async function start(padding: number) {
+  async function start(padding: number, groupWritable = false) {
     cacheRoot = await mkdtemp(join(tmpdir(), "mcp-resources-test-"));
+    if (groupWritable) await chmod(cacheRoot, 0o770);
     library = openResourceLibrary(cacheRoot, {
       fetch: async (input) => {
         downloads.push(String(input));
@@ -77,6 +84,10 @@ describe("SVG resource tools", () => {
     return { ...result, structured: result.structuredContent as Record<string, any> };
   }
   afterEach(async () => {
+    vi.mocked(fs.open).mockReset();
+    vi.mocked(fs.open).mockImplementation(
+      (await vi.importActual<typeof fs>("node:fs/promises")).open,
+    );
     await client?.close();
     client = undefined;
     if (gateway) {
@@ -205,6 +216,61 @@ describe("SVG resource tools", () => {
     await chmod(cacheRoot, 0o770);
     await expectUnsafe([item!.handle]);
     expect(downloads).toEqual([]);
+  });
+
+  it("keeps listing and search available with an unsafe configured cache", async () => {
+    await start(0, true);
+    expect(
+      (await call("resources_registries", {})).structured["registries"].length,
+    ).toBeGreaterThan(0);
+    const result = await call("resources_find", { query: "arrow", limit: 1 });
+    expect(result.structured["resources"]).toHaveLength(1);
+    await expectUnsafe([result.structured["resources"][0].handle]);
+    expect(downloads).toEqual([]);
+  });
+
+  it("recreates a deleted cache root between exports", async () => {
+    await start(0);
+    const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+    await call("resources_export", { handles: [item!.handle] });
+    await rm(cacheRoot, { recursive: true });
+    const result = await call("resources_export", { handles: [item!.handle] });
+    expect(result.structured["resources"]).toEqual([{ handle: item!.handle, svg: svg(0) }]);
+    expect((await lstat(cacheRoot)).mode & 0o777).toBe(0o700);
+  });
+
+  it.each(["EACCES", "ENOSPC", "EMFILE", "EIO"])(
+    "logs %s as an internal I/O error with its cause",
+    async (code) => {
+      await start(0);
+      const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+      await call("resources_export", { handles: [item!.handle] });
+      const cause = Object.assign(new Error(`${code}: cache open failed`), { code });
+      vi.mocked(fs.open).mockRejectedValueOnce(cause);
+      await expect(library.read({ handle: item!.handle })).rejects.toHaveProperty("cause", cause);
+      vi.mocked(fs.open).mockRejectedValueOnce(cause);
+      const result = await call("resources_export", { handles: [item!.handle] });
+      expect(result.isError).toBe(true);
+      expect(result.structured["code"]).toBe("workspace-internal-error");
+      expect(logs).toContain(`${code}: cache open failed`);
+      expect(logs).toContain('"outcome":"internal_error"');
+      expect(JSON.stringify(result)).not.toContain(code);
+      expect(logs).not.toContain(svg(0));
+    },
+  );
+
+  it("refuses an inode swapped between lstat and open", async () => {
+    await start(0);
+    const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
+    await call("resources_export", { handles: [item!.handle] });
+    const original = await vi.importActual<typeof fs>("node:fs/promises");
+    vi.mocked(fs.open).mockImplementationOnce(async (path, flags, mode) => {
+      const replacement = join(cacheRoot, "replacement.svg");
+      await writeFile(replacement, "<svg><desc>private-outside-svg</desc></svg>");
+      await fs.rename(replacement, path);
+      return original.open(path, flags, mode);
+    });
+    await expectUnsafe([item!.handle]);
   });
 
   it("creates private registry directories and exports a normal cached SVG", async () => {
