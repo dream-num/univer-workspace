@@ -96,8 +96,9 @@ The gateway validates configuration before listening and retains a readonly conf
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
 | `MCP_PUBLIC_URL` | Gateway only | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
+| `MCP_MAX_CONNECTIONS` | `1024` | Maximum simultaneous gateway TCP connections per replica |
 | `MCP_STAGING_DIRECTORY` | Required | Private 0700 directory owned by the gateway uid. Atomic JSON sidecars and byte files; startup and minute sweeps remove expired objects |
-| `MCP_STAGING_USER_MAX_BYTES` | `2147483648` (2 GiB) | Combined staged upload/download bytes per user; in-flight bytes count too. Accounting is per gateway replica, initialized from valid sidecars on startup |
+| `MCP_STAGING_USER_MAX_BYTES` | `2147483648` (2 GiB) | Combined staged upload/download bytes per user; in-flight bytes count too. Accounting is per gateway replica, refreshed from valid sidecars on startup and each minute |
 | `MCP_STAGING_USER_MAX_PENDING_UPLOADS` | `20` | Pending upload reservations per user |
 | `MCP_UPLOAD_BLOB_MAX_BYTES` | `536870912` | Blob upload/download staging limit in bytes; align with Workspace `maxBlobBytes` |
 | `MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`, `MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`, `MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`, `MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` | `52428800` each | Per-purpose upload limits in bytes |
@@ -159,7 +160,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
-| `file_upload_create` | Required `purpose`, `file_name`, `size`, `media_type` | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
+| `file_upload_create` | Required `purpose`, `file_name`, `media_type`; optional `size` | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
@@ -377,8 +378,14 @@ does not lift Workspace's 1 MiB UnitData commit limit. Import/compile consumers 
 Blob transfer streams between Workspace and the staging directory. Download results preserve
 Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
 Asset downloads use Asset IDs with a media-type extension. Startup and minute sweeps remove expired files;
-failed streams never become ready. Sweeps isolate malformed or unreadable sidecars and tolerate disappearing entries. They skip
-locks younger than two hours, so a consume crossing expiry keeps its bytes. A crashed in-flight
+failed streams never become ready. Sweeps refresh cached state, size and expiry from every valid sidecar.
+Concurrent reservations and in-flight bytes on other replicas remain approximate until the next sweep;
+strict shared-volume quotas require coordinated reservations. Corrupt sidecars and their data are removed
+once the sidecar mtime is older than the one-hour upload TTL, with one log naming the object ID.
+Unreadable sidecars are logged with their ID and isolated. Sweeps tolerate disappearing entries. They skip
+locks younger than two hours, so a consume crossing expiry keeps its bytes. Locks carry random
+ownership tokens; release preserves a successor's lock. Orphan locks, including
+zero-byte locks from a crash before token write, are swept after that bound. A crashed in-flight
 upload can retain its exclusive lock until that bound. Retry with a new upload reservation in that case. Staging roots,
 created parents and files reject symlinks and group/world permissions.
 
@@ -389,11 +396,19 @@ downloads with `executor: none`. Worker costs remain zero without an executor.
 including empty files and chunked bodies without Content-Length. The effective limit is the
 minimum of the supplied size (when present) and the purpose limit; `max_bytes` reports that bound.
 Ready sidecars record actual bytes and SHA-256. File routes stream raw Node request bytes before
-MCP JSON adaptation. Node's request timeout is 30 minutes; its 60-second headers timeout is unchanged.
+MCP JSON adaptation. Node's request timeout is 30 minutes and its headers timeout is explicitly 60 seconds.
+`MCP_MAX_CONNECTIONS` defaults to 1024 per gateway replica. A file response sent before the
+request body is complete sends `Connection: close` and destroys the request after the response finishes.
+Routing uses one WHATWG-normalized pathname, including dot segments and encoded dots, before
+choosing between raw file streaming and the MCP adapter's 4 MiB JSON cap.
 The capability link must still be used within ten minutes of reservation.
 
 Staging quota failures return `workspace-staging-quota-exceeded` from tools, or HTTP 429 during PUT.
 Failed transfers release their staged-byte accounting; ready uploads remain counted until expiry.
 The byte cap covers uploads and downloads together. Pending-upload counts fall when the upload becomes ready.
 `blob_upload.name` defaults to the reserved file name. Transfer usage counts successful consumption once.
-Filesystem failures are internal errors; tool details omit `sourcePath` and local filesystem paths.
+Filesystem failures and data/sidecar size mismatches are internal errors; tool details omit
+`sourcePath` and local filesystem paths. Invalid Workspace download media types fall back to
+`application/octet-stream`. Internal failures log the error class and safe `code` and `syscall`
+fields with the request ID, without messages, stacks, paths, credentials, contents or arguments.
+Aborted transfers produce one info-level failure log.

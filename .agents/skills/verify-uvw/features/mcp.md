@@ -64,7 +64,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX5 compares uncoded script failure messages with the CLI.
 - MX6 verifies a large committed result keeps commit facts and writes once.
 - MX4 captures the written values in the Browser.
-- MF1 through MF6 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page and Worktree image Assets.
+- MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -1606,6 +1606,45 @@ agent-browser screenshot "$EVIDENCE/mf-page-too-large.png"
 ```
 
 Pass when both hashes match after PUT, publication and download, default Blob names are preserved, and the browser explains a 413 without asking for another link.
+
+**MF8. Normalized binary upload paths.** Needs the MF7 PNG and the Team Space from M4.
+
+```bash
+for MF_PATH in canonical dot; do
+  $V mcp "mf-path-$MF_PATH-reserve" file_upload_create '{"purpose":"blob","file_name":"path.png","media_type":"image/png"}'
+  MF_PATH_URL=$(jq -r '.upload.upload_url' "$EVIDENCE/mf-path-$MF_PATH-reserve.out")
+  if [ "$MF_PATH" = dot ]; then MF_PATH_URL=$(printf '%s' "$MF_PATH_URL" | sed 's@/mcp/files/@/mcp/./files/@'); fi
+  curl --fail --silent --show-error --path-as-is -X PUT --data-binary "@$EVIDENCE/mf-binary.png" "$MF_PATH_URL" > "$EVIDENCE/mf-path-$MF_PATH-put.out"
+  MF_PATH_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-path-$MF_PATH-reserve.out")
+  $V mcp --toolsets files "mf-path-$MF_PATH-publish" blob_upload "$(jq -nc --arg upload "$MF_PATH_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-path-$MF_PATH-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
+  MF_PATH_RESOURCE=$(jq -r '.upload.resourceId' "$EVIDENCE/mf-path-$MF_PATH-publish.out")
+  $V mcp --toolsets files "mf-path-$MF_PATH-download" blob_download "$(jq -nc --arg resource "$MF_PATH_RESOURCE" '{resource:$resource}')"
+  node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-path-$MF_PATH-download.out" "$EVIDENCE/mf-path-$MF_PATH.png"
+  cmp "$EVIDENCE/mf-binary.png" "$EVIDENCE/mf-path-$MF_PATH.png"
+done
+shasum -a 256 "$EVIDENCE/mf-binary.png" "$EVIDENCE/mf-path-canonical.png" "$EVIDENCE/mf-path-dot.png" > "$EVIDENCE/mf-path-sha256.txt"
+```
+
+Pass when canonical and dot-segment PUTs survive publication and download with the same SHA-256 as the original binary.
+
+**MF9. Normalized MCP body cap.** Sends more than 4 MiB without client URL normalization.
+
+```bash
+python3 - "$EVIDENCE/mf-oversized.json" <<'PY'
+import json, sys
+with open(sys.argv[1], 'w') as f:
+    json.dump(dict(jsonrpc="2.0", id=1, method="ping", params=dict(pad="x" * (5 * 1024 * 1024))), f)
+PY
+for MF_ESCAPE in '/mcp/files/../../mcp' '/mcp/files/%2e%2e/%2e%2e/mcp'; do
+  MF_CAP_LABEL=plain
+  if [ "$MF_ESCAPE" != '/mcp/files/../../mcp' ]; then MF_CAP_LABEL=encoded; fi
+  MF_CAP_STATUS=$(curl --silent --show-error --path-as-is --max-time 15 -o "$EVIDENCE/mf-cap-$MF_CAP_LABEL.body" -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data-binary "@$EVIDENCE/mf-oversized.json" "${MCP_URL%/mcp}$MF_ESCAPE")
+  printf '%s\n' "$MF_CAP_STATUS" > "$EVIDENCE/mf-cap-$MF_CAP_LABEL.status"
+  test "$MF_CAP_STATUS" = 413
+done
+```
+
+Pass when both oversized requests receive HTTP 413 through the normalized MCP route.
 
 **M12. Cleanup.**
 

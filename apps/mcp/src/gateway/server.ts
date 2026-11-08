@@ -27,14 +27,14 @@ import { Counter, Histogram, Registry } from "prom-client";
 import { z } from "zod";
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { createBearerCheck } from "../shared/bearer.js";
-import { credentialRedactions } from "../shared/logging.js";
+import { credentialRedactions, safeErrorFields, isClientAbort } from "../shared/logging.js";
 import { LocalStagingStore } from "./staging/local.js";
 import { UsageAccumulator } from "../shared/usage.js";
 import { createExecutorLinks } from "./tools/executor-tool.js";
 import type { GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
-import { openResourceLibrary, ResourceCacheIoError } from "./resources.js";
+import { openResourceLibrary } from "./resources.js";
 import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
@@ -92,7 +92,8 @@ export function createGateway(
     limits: config.uploadLimits,
     maxUserBytes: config.MCP_STAGING_USER_MAX_BYTES,
     maxPendingUploads: config.MCP_STAGING_USER_MAX_PENDING_UPLOADS,
-    onError: () => logger.error("Staging cleanup failed"),
+    onError: (error, id) =>
+      logger.error({ ...safeErrorFields(error), object_id: id }, "Staging cleanup failed"),
   });
   const registry = new Registry();
   const calls = new Counter({
@@ -233,7 +234,7 @@ export function createGateway(
                   request_id: state.context.requestId,
                   tool: tool.name,
                   error_code: code,
-                  err: error instanceof ResourceCacheIoError ? error : undefined,
+                  ...safeErrorFields(error),
                 },
                 "Tool failed internally",
               );
@@ -253,19 +254,22 @@ export function createGateway(
   });
 
   const handler = {
-    async fetch(request: Request): Promise<Response> {
+    async fetch(request: Request, url = new URL(request.url), raw = false): Promise<Response> {
       const started = performance.now();
       const incomingId = request.headers.get("x-request-id");
       const requestId =
         incomingId !== null && /^[a-zA-Z0-9._-]{1,128}$/.test(incomingId)
           ? incomingId
           : randomUUID();
-      const url = new URL(request.url);
       let response: Response;
       try {
         response = await route(request, url, requestId, started);
-      } catch {
-        logger.error({ request_id: requestId }, "Gateway request failed");
+      } catch (error) {
+        if (raw) throw error;
+        logger[isClientAbort(error) || request.signal.aborted ? "info" : "error"](
+          { request_id: requestId, ...safeErrorFields(error) },
+          "Gateway request failed",
+        );
         response = new Response("Internal server error", { status: 500 });
       }
       response.headers.set("x-request-id", requestId);
@@ -317,7 +321,7 @@ export function createGateway(
     if (url.pathname.startsWith("/mcp/files/")) {
       if (request.headers.get("host") !== publicUrl.host)
         return new Response("Forbidden", { status: 403 });
-      return staging.handle(request);
+      return staging.handle(request, url);
     }
     if (url.pathname !== "/mcp") return new Response("Not found", { status: 404 });
     if (
@@ -447,18 +451,36 @@ export function createGateway(
       }
     });
   }
-  const nodeHandler = toNodeHandler(handler, {
-    onerror: () => logger.error("MCP Node adapter failed"),
-  });
   // The SDK adapter excludes undefined optional fields under exactOptionalPropertyTypes.
   const server = createServer((request, response) => {
-    if ((request.url ?? "/").startsWith("/mcp/files/")) {
+    let url: URL;
+    try {
+      url = new URL(request.url ?? "/", publicUrl);
+    } catch {
+      response.writeHead(400, { Connection: "close" });
+      response.end(() => request.destroy());
+      return;
+    }
+    if (url.pathname.startsWith("/mcp/files/")) {
+      const incomingId = request.headers["x-request-id"];
+      const requestId =
+        typeof incomingId === "string" && /^[a-zA-Z0-9._-]{1,128}$/.test(incomingId)
+          ? incomingId
+          : randomUUID();
+      response.setHeader("x-request-id", requestId);
+      const closeUnreadBody = () => {
+        if (!request.complete) {
+          response.setHeader("Connection", "close");
+          response.once("finish", () => request.destroy());
+        }
+      };
       void (async () => {
         const headers = new Headers();
         for (const [name, value] of Object.entries(request.headers)) {
           if (Array.isArray(value)) for (const entry of value) headers.append(name, entry);
           else if (value !== undefined) headers.set(name, value);
         }
+        headers.set("x-request-id", requestId);
         const method = request.method ?? "GET";
         // File capabilities bypass the MCP adapter's UTF-8 decoding and JSON body limit.
         const init = {
@@ -468,23 +490,38 @@ export function createGateway(
             ? {}
             : { body: Readable.toWeb(request) as ReadableStream<Uint8Array>, duplex: "half" }),
         };
-        const result = await handler.fetch(
-          new Request(new URL(request.url ?? "/", publicUrl), init),
-        );
+        const result = await handler.fetch(new Request(url, init), url, true);
+        closeUnreadBody();
         response.writeHead(result.status, Object.fromEntries(result.headers));
         if (result.body) await pipeline(Readable.from(result.body), response);
         else response.end();
-      })().catch(() => {
-        logger.error("File transfer failed");
-        if (!response.headersSent) response.writeHead(500);
+      })().catch((error: unknown) => {
+        logger[request.aborted || isClientAbort(error) ? "info" : "error"](
+          { request_id: requestId, ...safeErrorFields(error) },
+          "File transfer failed",
+        );
+        if (!response.headersSent) {
+          closeUnreadBody();
+          response.writeHead(500);
+        }
         response.end();
       });
       return;
     }
+    const nodeHandler = toNodeHandler(
+      { fetch: (adapted) => handler.fetch(adapted, url) },
+      {
+        onerror: (error) =>
+          logger[request.aborted || isClientAbort(error) ? "info" : "error"](
+            safeErrorFields(error),
+            "MCP Node adapter failed",
+          ),
+      },
+    );
     void nodeHandler(
       {
         method: request.method ?? "GET",
-        url: request.url ?? "/",
+        url: url.pathname + url.search,
         headers: request.headers,
         [Symbol.asyncIterator]: () => request[Symbol.asyncIterator](),
       },
@@ -492,6 +529,8 @@ export function createGateway(
     );
   });
   server.requestTimeout = 30 * 60_000;
+  server.headersTimeout = 60_000;
+  server.maxConnections = config.MCP_MAX_CONNECTIONS;
   return {
     server,
     registry,

@@ -33,6 +33,8 @@ const hash = (token: string) => createHash("sha256").update(token).digest("hex")
 const missing = () => workspaceError("workspace-upload-not-found", "Upload not found or expired.");
 const sizeError = () =>
   workspaceError("workspace-file-size-mismatch", "File exceeds the size upper limit.");
+class CorruptMetadataError extends Error {}
+
 const headers = {
   "Cache-Control": "private, no-store",
   "X-Content-Type-Options": "nosniff",
@@ -50,7 +52,8 @@ export class LocalStagingStore implements StagingStore {
   private readonly objects = new Map<string, StagingObject>();
   private readonly maxUserBytes: number;
   private readonly maxPendingUploads: number;
-  private readonly onError: () => void;
+  private readonly onError: (error: unknown, id?: string) => void;
+  private readonly active = new Set<string>();
   private sweeping: Promise<void> | undefined;
 
   constructor(
@@ -62,7 +65,7 @@ export class LocalStagingStore implements StagingStore {
       maxPendingUploads?: number;
       now?: () => number;
       intervalMs?: number;
-      onError?: () => void;
+      onError?: (error: unknown, id?: string) => void;
     } = {},
   ) {
     this.maxUserBytes = options.maxUserBytes ?? 2 * 1024 * 1024 * 1024;
@@ -82,12 +85,12 @@ export class LocalStagingStore implements StagingStore {
     } catch {
       throw new Error("Unable to initialize private staging directory.");
     }
-    this.ready = this.sweep().catch(() => this.onError());
+    this.ready = this.sweep().catch((error: unknown) => this.onError(error));
     this.timer = setInterval(() => {
       if (this.sweeping) return;
       this.sweeping = this.ready
         .then(() => this.sweep())
-        .catch(() => this.onError())
+        .catch((error: unknown) => this.onError(error))
         .finally(() => {
           this.sweeping = undefined;
         });
@@ -131,15 +134,21 @@ export class LocalStagingStore implements StagingStore {
     try {
       const file = await this.safeOpen(this.path(id, "json"));
       try {
-        const object = objectSchema.parse(JSON.parse(await file.readFile("utf8")));
-        if (object.id !== id) throw new Error("Staging identity mismatch.");
-        return object;
+        const text = await file.readFile("utf8");
+        try {
+          const object = objectSchema.parse(JSON.parse(text));
+          if (object.id !== id) throw new Error("Staging identity mismatch.");
+          return object;
+        } catch {
+          throw new CorruptMetadataError("Invalid staging metadata.");
+        }
       } finally {
         await file.close();
       }
     } catch (error) {
       if (hasCode(error, "ENOENT")) return undefined;
-      throw new Error("Unable to read staging metadata.");
+      if (error instanceof CorruptMetadataError) throw error;
+      throw new Error("Unable to read staging metadata.", { cause: error });
     }
   }
   private async metadata(object: StagingObject): Promise<void> {
@@ -237,7 +246,8 @@ export class LocalStagingStore implements StagingStore {
       const path = this.path(id, "data");
       const file = await this.safeOpen(path);
       try {
-        if ((await file.stat()).size !== object.size) throw sizeError();
+        if ((await file.stat()).size !== object.size)
+          throw new Error("Staging data integrity mismatch.");
         return await consume(object, path);
       } finally {
         await file.close();
@@ -257,15 +267,29 @@ export class LocalStagingStore implements StagingStore {
         );
       throw error;
     }
+    const token = randomBytes(32).toString("hex");
+    this.active.add(id);
     try {
+      await file.writeFile(token);
       return await action();
     } finally {
-      await file.close().catch(() => this.onError());
-      await unlink(path).catch((error) => {
-        if (!hasCode(error, "ENOENT")) this.onError();
-      });
+      this.active.delete(id);
+      await file.close().catch((error: unknown) => this.onError(error, id));
+      try {
+        const current = await this.safeOpen(path);
+        let matches: boolean;
+        try {
+          matches = (await current.readFile("utf8")) === token;
+        } finally {
+          await current.close();
+        }
+        if (matches) await unlink(path);
+      } catch (error) {
+        if (!hasCode(error, "ENOENT")) this.onError(error, id);
+      }
     }
   }
+
   private async write(
     object: StagingObject,
     content: AsyncIterable<Uint8Array>,
@@ -304,7 +328,7 @@ export class LocalStagingStore implements StagingStore {
     } catch (error) {
       this.objects.set(object.id, object);
       await unlink(this.path(object.id, "data")).catch((cleanupError) => {
-        if (!hasCode(cleanupError, "ENOENT")) this.onError();
+        if (!hasCode(cleanupError, "ENOENT")) this.onError(cleanupError, object.id);
       });
       throw error;
     } finally {
@@ -330,7 +354,9 @@ export class LocalStagingStore implements StagingStore {
       owner: input.owner,
       purpose: "blob",
       fileName: input.fileName,
-      mediaType: input.mediaType.split(";")[0]?.trim(),
+      mediaType:
+        uploadInputSchema.shape.media_type.safeParse(input.mediaType.split(";")[0]?.trim()).data ??
+        "application/octet-stream",
       size: 0,
       state: "pending",
       createdAt,
@@ -354,9 +380,8 @@ export class LocalStagingStore implements StagingStore {
       throw error;
     }
   }
-  async handle(request: Request): Promise<Response> {
+  async handle(request: Request, url = new URL(request.url)): Promise<Response> {
     await this.ready;
-    const url = new URL(request.url);
     const match = /^\/mcp\/files\/(uploads|downloads)\/([^/]+)(\/page)?$/.exec(url.pathname);
     if (!match || !match[2] || !idPattern.test(match[2]))
       return new Response("Not found", { status: 404, headers });
@@ -383,7 +408,7 @@ export class LocalStagingStore implements StagingStore {
       const file = await this.safeOpen(this.path(object.id, "data"));
       if ((await file.stat()).size !== object.size) {
         await file.close();
-        throw sizeError();
+        throw new Error("Staging data integrity mismatch.");
       }
       return new Response(Readable.toWeb(file.createReadStream()) as ReadableStream<Uint8Array>, {
         headers: {
@@ -460,17 +485,26 @@ export class LocalStagingStore implements StagingStore {
     this.checkRoot();
     for (const name of await readdir(this.root)) {
       const id = name.slice(0, 36);
-      if (!idPattern.test(id)) continue;
+      if (!idPattern.test(id) || this.active.has(id)) continue;
       try {
         if (name === `${id}.json`) {
-          const object = await this.read(id);
-          if (object && object.expiresAt > this.now()) {
-            if (!this.objects.has(id)) this.objects.set(id, object);
-            continue;
+          try {
+            const object = await this.read(id);
+            if (object && object.expiresAt > this.now()) {
+              if (!this.active.has(id)) this.objects.set(id, object);
+              continue;
+            }
+          } catch (error) {
+            if (!(error instanceof CorruptMetadataError)) throw error;
+            if (lstatSync(this.path(id, "json")).mtimeMs + UPLOAD_TTL > this.now()) continue;
           }
         } else {
-          if (!/^[a-f0-9-]{36}\.(?:data|[a-f0-9-]{36}\.tmp)$/.test(name)) continue;
-          if (lstatSync(join(this.root, name)).mtimeMs + UPLOAD_TTL > this.now()) continue;
+          if (name === `${id}.lock`) {
+            if (lstatSync(this.path(id, "lock")).mtimeMs + LOCK_TTL > this.now()) continue;
+          } else {
+            if (!/^[a-f0-9-]{36}\.(?:data|[a-f0-9-]{36}\.tmp)$/.test(name)) continue;
+            if (lstatSync(join(this.root, name)).mtimeMs + UPLOAD_TTL > this.now()) continue;
+          }
         }
         const lockTime = await this.lockTime(id);
         if (lockTime !== undefined) {
@@ -481,19 +515,32 @@ export class LocalStagingStore implements StagingStore {
         }
         await this.lock(id, async () => {
           if (name === `${id}.json`) {
-            const object = await this.read(id);
-            if (object && object.expiresAt <= this.now()) await this.remove(id);
-            else if (object) this.objects.set(id, object);
-            else this.objects.delete(id);
+            try {
+              const object = await this.read(id);
+              if (object && object.expiresAt <= this.now()) await this.remove(id);
+              else if (object) this.objects.set(id, object);
+              else this.objects.delete(id);
+            } catch (error) {
+              if (!(error instanceof CorruptMetadataError)) throw error;
+              if (lstatSync(this.path(id, "json")).mtimeMs + UPLOAD_TTL <= this.now()) {
+                await this.remove(id);
+                this.onError(error, id);
+              }
+            }
           } else if (/^[a-f0-9-]{36}\.(?:data|[a-f0-9-]{36}\.tmp)$/.test(name)) {
             const path = join(this.root, name);
             const stat = lstatSync(path);
-            if (stat.mtimeMs + UPLOAD_TTL <= this.now() && !(await this.read(id)))
-              await unlink(path);
+            try {
+              if (stat.mtimeMs + UPLOAD_TTL <= this.now() && !(await this.read(id)))
+                await unlink(path);
+            } catch (error) {
+              if (!(error instanceof CorruptMetadataError)) throw error;
+            }
           }
         });
       } catch (error) {
-        if (!hasCode(error, "ENOENT") && !hasCode(error, "workspace-upload-busy")) this.onError();
+        if (!hasCode(error, "ENOENT") && !hasCode(error, "workspace-upload-busy"))
+          this.onError(error, id);
       }
     }
   }

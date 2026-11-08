@@ -93,7 +93,7 @@ export interface StagingStore {
     size?: number;
     content: AsyncIterable<Uint8Array>;
   }): Promise<z.infer<typeof downloadSchema>>;
-  handle(request: Request): Promise<Response>;
+  handle(request: Request, url?: URL): Promise<Response>;
   sweep(): Promise<void>;
   close(): Promise<void>;
 }

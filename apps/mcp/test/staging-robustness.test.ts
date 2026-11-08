@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import { once } from "node:events";
+import { connect } from "node:net";
 import { request } from "node:http";
 import { chmod, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -91,13 +92,14 @@ it("isolates corrupt, unreadable and vanished sidecars during startup and sweeps
   const { store } = setup({ onError, now: () => now }, directory);
   await new Promise((resolve) => setTimeout(resolve, 20));
   const { upload } = await store.createUpload("owner", input);
-  expect(onError).toHaveBeenCalledTimes(2);
+  expect(onError).toHaveBeenCalledTimes(1);
   now += 61 * 60_000;
   await store.sweep();
-  expect(onError).toHaveBeenCalledTimes(4);
+  expect(onError).toHaveBeenCalledTimes(3);
+  expect(onError).toHaveBeenCalledWith(expect.any(Error), bad.split("/").at(-1)?.slice(0, 36));
   expect(await readdir(directory)).not.toContain(`${upload.upload_id}.json`);
   // Deletion concurrent with a sweep must leave the remaining entries usable.
-  await Promise.all([store.sweep(), unlink(bad), unlink(unreadable)]);
+  await Promise.all([store.sweep(), unlink(unreadable)]);
   await expect(store.createUpload("owner", input)).resolves.toHaveProperty("upload");
 });
 
@@ -240,8 +242,12 @@ it("streams invalid UTF-8 and files over 4 MiB byte-identically through the real
   const transfer = (url: string, body?: Buffer) =>
     new Promise<{ status: number | undefined; body: Buffer }>((resolve, reject) => {
       const req = request(
-        url.replace("http://127.0.0.1", origin),
-        { method: body ? "PUT" : "GET", headers: { host: "127.0.0.1" } },
+        origin,
+        {
+          path: url.replace("http://127.0.0.1", ""),
+          method: body ? "PUT" : "GET",
+          headers: { host: "127.0.0.1" },
+        },
         (res) => {
           const chunks: Buffer[] = [];
           res.on("data", (chunk) => chunks.push(chunk));
@@ -261,30 +267,81 @@ it("streams invalid UTF-8 and files over 4 MiB byte-identically through the real
       Buffer.from([0xff, 0xf0, 0x9f, 0x98, 0, 0xfe]),
       Buffer.alloc(5 * 1024 * 1024, 0xff),
     ]) {
-      const { upload } = await store.createUpload("owner", input);
-      expect((await transfer(upload.upload_url, body)).status).toBe(204);
-      const download = await store.withUpload(
-        "owner",
-        upload.upload_id,
-        "blob",
-        async (object, path) => {
-          expect(object.sha256).toBe(createHash("sha256").update(body).digest("hex"));
-          return store.createDownload({
-            owner: "owner",
-            fileName: object.fileName,
-            mediaType: object.mediaType,
-            content: (async function* () {
-              yield await readFile(path);
-            })(),
-          });
-        },
-      );
-      const fetched = await transfer(download.url);
-      expect(fetched.status).toBe(200);
-      expect(createHash("sha256").update(fetched.body).digest("hex")).toBe(
-        createHash("sha256").update(body).digest("hex"),
-      );
+      for (const prefix of ["/mcp/files/", "/mcp/./files/", "/mcp/%2e/files/"]) {
+        const { upload } = await store.createUpload("owner", input);
+        expect(
+          (await transfer(upload.upload_url.replace("/mcp/files/", prefix), body)).status,
+        ).toBe(204);
+        const download = await store.withUpload(
+          "owner",
+          upload.upload_id,
+          "blob",
+          async (object, path) => {
+            expect(object.sha256).toBe(createHash("sha256").update(body).digest("hex"));
+            return store.createDownload({
+              owner: "owner",
+              fileName: object.fileName,
+              mediaType: object.mediaType,
+              content: (async function* () {
+                yield await readFile(path);
+              })(),
+            });
+          },
+        );
+        const fetched = await transfer(download.url);
+        expect(fetched.status).toBe(200);
+        expect(createHash("sha256").update(fetched.body).digest("hex")).toBe(
+          createHash("sha256").update(body).digest("hex"),
+        );
+      }
     }
+    for (const path of ["/mcp/files/../../mcp", "/mcp/files/%2e%2e/%2e%2e/mcp"]) {
+      const body = JSON.stringify({
+        jsonrpc: "2.0",
+        id: 1,
+        method: "ping",
+        params: { pad: "x".repeat(5 * 1024 * 1024) },
+      });
+      const status = await new Promise<number | undefined>((resolve, reject) => {
+        const req = request(
+          origin,
+          {
+            path,
+            method: "POST",
+            headers: {
+              host: "127.0.0.1",
+              authorization: "Bearer dev",
+              "content-type": "application/json",
+              accept: "application/json, text/event-stream",
+              "content-length": Buffer.byteLength(body),
+            },
+          },
+          (res) => {
+            res.resume();
+            resolve(res.statusCode);
+          },
+        );
+        req.on("error", (error: NodeJS.ErrnoException) => {
+          if (error.code === "ECONNRESET" || error.code === "EPIPE") resolve(0);
+          else reject(error);
+        });
+        req.end(body);
+      });
+      // The adapter caps before dispatch; closing with unread bytes may reset the socket.
+      expect([0, 413]).toContain(status);
+    }
+    const socket = connect(address.port, "127.0.0.1");
+    let earlyResponse = "";
+    socket.on("data", (chunk) => {
+      earlyResponse += String(chunk);
+    });
+    socket.write(
+      "PUT /mcp/files/uploads/missing HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 100000000\r\n\r\n",
+    );
+    await once(socket, "close");
+    expect(earlyResponse).toContain("404 Not Found");
+    expect(earlyResponse.toLowerCase()).toContain("connection: close");
+    expect(gateway.server.maxConnections).toBe(1024);
     const corrupt = await store.createUpload("owner", input);
     await writeFile(join(directory, `${corrupt.upload.upload_id}.json`), "private-file-contents");
     expect((await transfer(corrupt.upload.upload_url)).status).toBe(500);
@@ -323,4 +380,73 @@ it("validates quota environment values and hides startup filesystem paths", asyn
   expect(() => new LocalStagingStore(join(file, "unavailable"), "http://mcp.test/mcp")).toThrow(
     "Unable to initialize private staging directory.",
   );
+});
+
+it("refreshes ready sidecars from another replica before enforcing pending quotas", async () => {
+  const { store: a, directory } = setup({ maxPendingUploads: 1 });
+  const { upload } = await a.createUpload("owner", input);
+  const { store: b } = setup({ maxPendingUploads: 1 }, directory);
+  await expect(b.createUpload("owner", input)).rejects.toMatchObject({
+    code: "workspace-staging-quota-exceeded",
+  });
+  await a.handle(put(upload.upload_url, "abc"));
+  await b.sweep();
+  await expect(b.createUpload("owner", input)).resolves.toHaveProperty("upload");
+});
+
+it("removes expired corrupt metadata and its data once with the object ID", async () => {
+  let now = Date.now();
+  const onError = vi.fn();
+  const { store, directory } = setup({ now: () => now, onError });
+  const { upload } = await store.createUpload("owner", input);
+  await store.handle(put(upload.upload_url, "abc"));
+  await writeFile(join(directory, `${upload.upload_id}.json`), "{broken");
+  await store.sweep();
+  expect(onError).not.toHaveBeenCalled();
+  now += 61 * 60_000;
+  await store.sweep();
+  await store.sweep();
+  expect(await readdir(directory)).toEqual([]);
+  expect(onError).toHaveBeenCalledExactlyOnceWith(expect.any(Error), upload.upload_id);
+});
+
+it("keeps a successor lock and sweeps orphan zero-byte locks after the bound", async () => {
+  let now = Date.now();
+  const { store, directory } = setup({ now: () => now });
+  const { upload } = await store.createUpload("owner", input);
+  await store.handle(put(upload.upload_url, "abc"));
+  const lock = join(directory, `${upload.upload_id}.lock`);
+  await store.withUpload("owner", upload.upload_id, "blob", async () => {
+    expect(await readFile(lock, "utf8")).toMatch(/^[a-f0-9]{64}$/);
+    await unlink(lock);
+    await writeFile(lock, "successor", { mode: 0o600 });
+  });
+  expect(await readFile(lock, "utf8")).toBe("successor");
+  await unlink(lock);
+  const orphan = join(directory, `${randomUUID()}.lock`);
+  await writeFile(orphan, "", { mode: 0o600 });
+  await store.sweep();
+  expect(await readdir(directory)).toContain(orphan.split("/").at(-1));
+  now += 121 * 60_000;
+  await store.sweep();
+  expect(await readdir(directory)).toEqual([]);
+});
+
+it("falls back for invalid Workspace media types and reports integrity errors internally", async () => {
+  const { store, directory } = setup();
+  const download = await store.createDownload({
+    owner: "owner",
+    fileName: "file",
+    mediaType: "invalid",
+    content: bytes(),
+  });
+  expect(download.media_type).toBe("application/octet-stream");
+  const { upload } = await store.createUpload("owner", input);
+  await store.handle(put(upload.upload_url, "abc"));
+  await writeFile(join(directory, `${upload.upload_id}.data`), "corrupted");
+  const consume = vi.fn();
+  await expect(store.withUpload("owner", upload.upload_id, "blob", consume)).rejects.toThrow(
+    "Staging data integrity mismatch",
+  );
+  expect(consume).not.toHaveBeenCalled();
 });
