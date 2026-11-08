@@ -40,6 +40,8 @@
 
 ### 1.5 幂等
 
+`export` 额外接受可选的 `idempotency_key`，用于长任务去重。格式与 `import` 相同，为 16 到 200 个 URL-safe 字母、数字、下划线或连字符。
+
 保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（两种 Blob 写工具均必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
 `compile_svg` 在 CLI 里没有幂等键，MCP 补上一个可选的。
 
@@ -101,7 +103,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `inspect` | `inspect` | `target`（workbook、worksheet、range、document、paragraph、presentation、slide、base、board、board-element）、`selectors`、`unit`、`worksheet`、`trunk` 或 `worktree`、`cursor` | 是 | 否 | `read` |
 | `screenshot` | `screenshot` | `unit`、`trunk` 或 `worktree`、`pages`、`contact_slide`、`tile`、`sheet`、`range`、`region`、`elements`、`padding`、`scale` | 是 | 否 | `read` |
 | `import` | `import` | `upload_id` 或 `file`（ChatGPT 文件参数）、`worktree`、`space`、`type`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
-| `export` | `export` | `worktree`、`unit`、`format`（`xlsx`、`docx`、`pptx`） | 是 | 否 | `read` |
+| `export` | `export` | `worktree`、`unit`、`format`（`xlsx`、`docx`、`pptx`）、`idempotency_key` | 是 | 否 | `read` |
 | `file_upload_create` | 无 | `purpose`、`file_name`、`size`、`media_type` | 否 | 否 | `write` |
 | `job_get` | 无 | `job_id` | 是 | 否 | `read` |
 | `api_find` | `api find` | `terms`、`unit` | 是 | 否 | `read` |
@@ -247,9 +249,9 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
 
 - 所有工具的同步预算为 30 秒。
 - `import`、`export`、`print_pdf`、`compile_typst`、多页 `screenshot` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。
-- `job_get` 返回 `status`（`running`、`succeeded`、`failed`），完成时附带原工具的结果。
+- `job_get` 返回 `job_id` 和 `status`（`running`、`succeeded`、`failed`）。成功时 `result` 为原工具的结果，失败时 `error` 带 `code`、`message`、`detail`。未知、过期、其他用户的任务均报 `workspace-job-not-found`。
 - 任务状态保存在网关内存和暂存存储的 sidecar 文件中，不使用数据库。任务结果的有效期与下载链接一致。
-- 创建任务的调用按 `idempotency_key` 去重，客户端重试时返回同一个任务。
+- 按 `idempotency_key` 去重 running 和 succeeded 任务。运行中的重试返回同一任务句柄，已成功的重试直接返回原工具结果；failed 任务释放 key，同 key 可重新执行。
 - 客户端声明支持 Tasks 扩展时，同时以 Tasks 的方式提供。这一项不在首版必做范围内。
 
 ## 8. skills 与 server instructions
@@ -274,7 +276,20 @@ D4 已实现同步 `import` 与 `export`。`import` 必填 `upload_id`、`worktr
 `export` 接受 `worktree`、`unit`、`format`，返回 `{download, type}`，下载保留既有 attachment、
 sandbox 和 private/no-store 头。导入记录 `upload_bytes`，导出记录 `export_bytes`。
 
-本切片不实现 ChatGPT 文件参数或 `job_get`。两种操作仍受 30 秒同步预算约束；读超时返回
+本切片不实现 ChatGPT 文件参数。D5 已实现 `job_get`；两种操作超过同步预算后返回任务句柄，继续在四分钟期限内执行。读超时返回
 `workspace-executor-timeout`，写超时返回 `workspace-result-unknown`。import 的 rerun 为空。
 Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响应帧上限为 128 MiB，
 包含 JSON 头与长度前缀，超限返回 `workspace-result-too-large`。第 7 节的异步任务是后续目标。
+
+### D5 长任务实现
+
+`MCP_SYNC_BUDGET_MS` 默认 30000，允许 1 到 30000，供测试与运维降低同步等待。
+只有已实现的 `import`、`export` 进入任务路径，其余工具保持既有预算。
+同步完成的调用保持原结果；异步调用返回 `{job_id,status:"running"}`，由 `job_get` 取回原结果。
+任务 sidecar 在开始和结束时原子写入。导入和失败结果从完成时起保留十五分钟，导出结果与下载链接在链接生成十五分钟后一起过期。
+同用户、同工具、同 key 的并发调用共享执行，首次同步等待内的重试加入该等待。
+仍在运行的重试返回同一 job_id；成功后的重试直接返回原工具结果，不再返回 running。失败记录保留供 job_get 查询，但释放内存和共享卷上的 key；同 key 重试会重新执行，import 的确定性 unitId 保证写入恢复安全。无 key 的 export 每次独立执行。
+共享 staging 的副本用 reservation lock 避免并发重复启动。
+原工具仅在转换结束时发出一次真实用量事件，去重重试不重复计费事件；job_get 每次按非执行工具记零成本事件。
+网关重启不恢复转换。超过 deadlineAt 的 running 记录在读取时变为 failed，export 使用
+workspace-executor-timeout，import 使用 workspace-result-unknown，因为无法确认是否已开始创建 Unit。

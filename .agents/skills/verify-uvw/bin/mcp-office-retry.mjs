@@ -20,6 +20,7 @@ const args = { upload_id: reservation.upload.upload_id, worktree: previous.workt
 const before = mcp('before', 'unit_list', { worktree: previous.worktreeId });
 await new Promise(resolve => setTimeout(resolve, 1100));
 const retried = mcp('again', 'import', args);
+assert.equal(retried.job_id, undefined, 'A successful retry must return the original import result directly');
 assert.equal(retried.unitId, previous.unitId);
 const after = mcp('after', 'unit_list', { worktree: previous.worktreeId });
 assert.deepEqual(after, before);

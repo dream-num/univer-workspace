@@ -447,3 +447,19 @@ license 与 key 只随转换数据交给作业，不传给池 worker。
 导入创建 Unit 前计算最终 initialData 的 JSON UTF-8 字节数，超过 900 KiB 时拒绝，
 返回 `workspace-import-too-large` 以及 `size`、`maxBytes`，避免 units 路由的模糊 413。
 CLI 默认路径没有新增限制。导入请求帧为 64 MiB，导出响应帧为 128 MiB。
+
+### D5 网关任务生命周期
+
+网关为 import/export 持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
+`.job.json` sidecar 同步，开始和结束均原子写入。记录包含随机 id、userId、tool、可选 key、
+createdAt、deadlineAt、expiresAt，以及仅在成功时存在的 result 或仅在失败时存在的 error。
+共享 staging 的副本可读取结果，并通过同用户、同工具、同 key 的短期 reservation lock 防止重复启动。
+转换进程、队列和 SIGKILL 仍属于 executor；只有两个 exchange 操作允许四分钟 RPC 期限。
+同步预算默认三十秒，MCP_SYNC_BUDGET_MS 可降低；超过预算只结束同步等待，原执行继续。
+网关重启会丢失在途调用；过 deadlineAt 的记录按读超时或写结果未知回答，不重新执行。
+结果保留十五分钟，由 staging sweeper 清理。原工具事件延迟到执行结束后发出一次，
+携带实际成本；去重重试不发第二个转换事件。job_get 保持普通只读工具的零成本事件。
+
+D5 的 key 只去重 running 和 succeeded。failed sidecar 不再保留 key，旧版带 key 的失败记录也不参与 reservation。
+超过 deadlineAt 的 running 记录同样不阻止重试。成功重试直接返回原工具结果；外部副本重新读取 sidecar 后按实际状态回答。
+复用调用通过 MCP 响应的 _meta["univer.workspace.deduplicated"] 标记说明没有第二条转换事件，structuredContent 保持原工具结果。

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { opMetaSchema } from "./usage.js";
 
 export const PROTOCOL_VERSION = 1;
+export const JOB_DEADLINE_MS = 4 * 60_000;
 const MiB = 1024 * 1024;
 export const executorGrantSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -238,7 +239,7 @@ export const opSpecs = {
     effect: "write",
     payload: "request",
     rerun: [],
-    limits: { requestBytes: 64 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    limits: { requestBytes: 64 * MiB, responseBytes: 64 * 1024, budgetMs: JOB_DEADLINE_MS },
     input: z.object({
       worktreeId: z.string().min(1),
       spaceId: z.string().min(1),
@@ -265,7 +266,7 @@ export const opSpecs = {
     effect: "read",
     payload: "response",
     rerun: [],
-    limits: { requestBytes: 64 * 1024, responseBytes: 128 * MiB, budgetMs: 30_000 },
+    limits: { requestBytes: 64 * 1024, responseBytes: 128 * MiB, budgetMs: JOB_DEADLINE_MS },
     input: z.object({
       worktreeId: z.string().min(1),
       unitId: z.string().min(1),
@@ -355,14 +356,19 @@ export function isOpName(name: string): name is OpName {
   return Object.hasOwn(opSpecs, name);
 }
 
-export const requestHeaderSchema = z.object({
-  v: z.literal(PROTOCOL_VERSION),
-  op: z.string(),
-  requestId: z.string().regex(/^[a-zA-Z0-9._-]{1,128}$/),
-  deadlineMs: z.int().positive().max(30_000),
-  grant: executorGrantSchema,
-  input: z.unknown(),
-});
+export const requestHeaderSchema = z
+  .object({
+    v: z.literal(PROTOCOL_VERSION),
+    op: z.string(),
+    requestId: z.string().regex(/^[a-zA-Z0-9._-]{1,128}$/),
+    deadlineMs: z.int().positive().max(JOB_DEADLINE_MS),
+    grant: executorGrantSchema,
+    input: z.unknown(),
+  })
+  .refine(
+    (header) => isOpName(header.op) && header.deadlineMs <= opSpecs[header.op].limits.budgetMs,
+    "Deadline exceeds the operation budget",
+  );
 export type RequestHeader = z.infer<typeof requestHeaderSchema>;
 export const wireErrorSchema = z.object({
   code: z.string(),

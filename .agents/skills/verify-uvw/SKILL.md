@@ -228,3 +228,16 @@ Log checks include license and license-key values. `mcp --expect-event '<jq expr
 assertion. `executor: none` requires zero worker costs (`worker_cpu_ms`, `worker_peak_rss_mb`,
 `render_pages`, `committed_revisions`); gateway file tools may report transfer bytes.
 Worker calls report cold/warm and nonnegative costs.
+
+
+For long Office jobs, set `MCP_SYNC_BUDGET_MS=1` before starting the verification stack.
+The default is 30000. A job-returning call can have no usage event yet; `mcp-call` records
+that response without requiring an early event. Poll `job_get`, then inspect the original
+request ID in gateway logs to verify one settled conversion event and its real costs.
+Deduplicated retries emit no second conversion event. Start a default-budget stack for
+existing synchronous Office journeys.
+
+A succeeded same-key import/export retry returns the original tool result directly.
+Deduplicated responses carry `_meta["univer.workspace.deduplicated"]: true`; the call helper
+requires zero additional conversion events for that marker. Failed jobs release their keys,
+so a retry runs again and emits its own settled event.

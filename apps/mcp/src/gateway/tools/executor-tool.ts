@@ -1,5 +1,6 @@
+import { jobHandleSchema } from "../jobs/model.js";
 import type { WorkspaceSubject } from "@univerjs/univer-workspace-client-core/product";
-import type { z } from "zod";
+import { z } from "zod";
 import type { GatewayConfig } from "../../shared/config.js";
 import type {
   ExecutorRequest,
@@ -59,6 +60,7 @@ export function executorTool<
 >(
   definition: Omit<ToolDefinition, "run" | "inputSchema" | "outputSchema"> & {
     inputSchema: A;
+    job?: { tool: "import" | "export"; key(args: z.output<A>): string | undefined };
     op: OpSpec<I, O, P>;
     outputSchema?: z.ZodObject;
     response?(
@@ -72,27 +74,46 @@ export function executorTool<
     ): ExecutorRequest<OpSpec<I, O, P>> | Promise<ExecutorRequest<OpSpec<I, O, P>>>;
   },
 ): ToolDefinition {
-  const { op, request, response, outputSchema, ...tool } = definition;
+  const { op, request, response, outputSchema, job, ...tool } = definition;
+  const finishedSchema = outputSchema ?? op.output;
   return {
     ...tool,
-    outputSchema: outputSchema ?? op.output,
+    outputSchema: job ? z.union([finishedSchema, jobHandleSchema]) : finishedSchema,
     async run(context, args) {
       const link = context.executor ? links.get(context.executor) : undefined;
       const parsed = tool.inputSchema.parse(args);
-      const result = await callExecutor(
-        link?.connection ?? null,
-        op,
-        await request(parsed, context),
-      ).catch((error) => {
-        if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
-        throw error;
-      });
-      link?.usage.addOp(result.meta);
-      const mapped = response ? await response(result, parsed, context) : { output: result.output };
-      return {
-        output: mapped.output,
-        repo: "repo" in mapped ? (mapped.repo ?? null) : (result.meta.repo ?? null),
+      const execute = async (deadlineAt?: number) => {
+        const connection = link?.connection;
+        const result = await callExecutor(
+          connection && deadlineAt !== undefined
+            ? { ...connection, deadlineAt }
+            : (connection ?? null),
+          op,
+          await request(parsed, context),
+        ).catch((error) => {
+          if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
+          throw error;
+        });
+        link?.usage.addOp(result.meta);
+        const mapped = response
+          ? await response(result, parsed, context)
+          : { output: result.output };
+        if (!finishedSchema.safeParse(mapped.output).success)
+          throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
+        return {
+          output: mapped.output,
+          repo: "repo" in mapped ? (mapped.repo ?? null) : (result.meta.repo ?? null),
+        };
       };
+      if (job && context.jobs)
+        return context.jobs.run({
+          userId: context.user.id,
+          tool: job.tool,
+          key: job.key(parsed),
+          execute,
+          onDeferred: (completion) => context.onDeferredJob?.(completion),
+        });
+      return execute();
     },
   };
 }
