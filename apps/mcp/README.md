@@ -308,6 +308,8 @@ export's auth recovery applies only to its parent-side runtime read.
 | `htmlView.validate`, `htmlView.create` | `auth` | Runtime reads precede Blob uploads. |
 | `markdown.compile` | None | Creation can write a Unit before a runtime rejection; block updates enter the write path before runtime execution. Do not replay the whole handler. |
 | `markdown.export` | `auth` | Native block and asset export only reads; a stale worker rejection cannot follow a write. |
+| `typst.compile` | None | Creation can write a Unit before a runtime rejection. Do not replay the whole handler. |
+| `svg.compile` | `auth` | Compilation is pure and a stale-worker rejection precedes commit. This route does not yet share the per-Unit queue. |
 | `exchange.import` | None | Unit creation can already have started. |
 | `diagnostics.probe` | None | Uses the current session without a cached worker. |
 
@@ -435,7 +437,7 @@ for idempotent retries until its one-hour expiry. Workspace remains the permissi
 `blob` accepts any syntactically valid media type. `office-import` accepts the OpenXML
 Word, Excel and PowerPoint types and the legacy Office types. CSV is not supported by this import workflow. The other three
 purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
-does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Markdown assets are consumed by `compile_markdown`; Typst and SVG consumers remain future work.
+does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Markdown, Typst and SVG ZIPs are consumed by `compile_markdown`, `compile_typst` and `compile_svg` respectively.
 
 Blob transfer streams between Workspace and the staging directory. Download results preserve
 Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
@@ -607,3 +609,34 @@ CLI's message and `detail.diagnostics`. Compile-only has read failure semantics 
 tool retains the `write` scope. Compile-only usage reports `executor: none`, `unit_type: null`
 and `repo: null`, including when a ZIP contributes `upload_bytes`. Consumed ZIP bytes and staged asset bytes enter transfer
 usage, and confirmed creations and updates enter `committed_revisions`.
+
+
+## Typst and SVG tools
+
+The `files` toolset includes `compile_typst` and `compile_svg`, both requiring `write` scope.
+`compile_typst` accepts a ready `typst-bundle` ZIP with root `typst.json`. Compile-only
+returns `javascript`, `diagnostics`, `previews`, `compiledTargetUnitId` and `committed: false`.
+Creation requires `apply: true`, `worktree` and `space`; `parent` is optional.
+Generate an `idempotency_key` before creation and reuse identical inputs on retry.
+The caller-scoped key and deterministic native materialization reproduce the creation intent.
+The manifest's `targetUnitId` remains the compiled target; the returned `unit.unitId` is the
+Workspace Unit. Compilation and materialization run in bounded conversion children.
+
+`compile_svg` accepts SVG text up to 512 KiB and an optional ready `svg-assets` ZIP.
+Pass `estimate_text_size: true`. Without it, `workspace-text-measure-unavailable` explains
+that real font metrics arrive with the renderer. Core imports the SVG facade and render-runtime
+adapter, but with estimation it uses the JavaScript `builtinTextMeasurer` and never starts a
+browser or loads the native formula engine for compilation. Compilation stays in the executor.
+The result retains the CLI's estimation lint. `page` is 1-based; `add` requires `page`.
+Apply requires `page`, `worktree` and an existing Slide `unit`, and uses the caller-bound runtime.
+Like `execute`, SVG apply has no idempotency key. After `workspace-result-unknown`, read back
+with `inspect` before retrying. Replacement clears the page; add overlays its existing elements.
+
+Both formats use the shared ZIP reader with 256 entries, 4 MiB per file and 8 MiB expanded total.
+The existing 1,024-byte and 32-segment path limits, traversal and collision checks apply.
+These caps bound expansion but cannot guarantee that inlined assets fit the 8 MiB RPC response
+or the 900 KiB UnitData creation check. Requests have a 64 MiB frame cap and a 30-second budget.
+Typst remains synchronous in this slice. Facade input errors preserve their messages and available
+`detail.diagnostics` as `workspace-typst-invalid` or `workspace-svg-invalid`.
+Compile-only has read failure semantics and reports no Unit/runtime usage. ZIP bytes count as
+`upload_bytes`; confirmed creations and commits count as `committed_revisions`.

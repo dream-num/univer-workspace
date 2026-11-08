@@ -2,6 +2,12 @@ import { Unzip, UnzipInflate } from "fflate";
 import type { WorkspaceSourceFiles } from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 
+export const compilerSourceLimits = {
+  entries: 256,
+  fileBytes: 4 * 1024 * 1024,
+  totalBytes: 8 * 1024 * 1024,
+};
+
 export const sourceZipPathLimits = { bytes: 1024, segments: 32 };
 
 export interface SourceZipLimits {

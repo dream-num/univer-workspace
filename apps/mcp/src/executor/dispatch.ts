@@ -77,7 +77,12 @@ export function createDispatcher(
     const controller = new AbortController();
     const deadlineAt = Date.now() + Math.min(header.deadlineMs, spec.limits.budgetMs);
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
-    let writeStarted = name !== "exchange.import" && name !== "markdown.compile";
+    let writeStarted = ![
+      "exchange.import",
+      "markdown.compile",
+      "typst.compile",
+      "svg.compile",
+    ].includes(name);
     let effect = spec.effect;
     let queued = false;
     const currentTimeout = () => timeoutError(effect, "deadline", !queued && writeStarted);
@@ -122,6 +127,20 @@ export function createDispatcher(
         },
         source: () => source,
         runtime: bindRuntime(runtime, grant, usage, controller.signal, verifyGrant.invalidate),
+        compileTypst: async (bundle) => {
+          const release = await jobs.acquire(controller.signal);
+          try {
+            return await runConversionJob(
+              { kind: "typst.compile", bundle },
+              credentials,
+              controller.signal,
+              undefined,
+              config.EXECUTOR_JOB_HEAP_MB,
+            );
+          } finally {
+            release();
+          }
+        },
         materializer: {
           materialize: async (input) => {
             usage.executor = "cold_start";
@@ -129,7 +148,11 @@ export function createDispatcher(
             const release = await jobs.acquire(controller.signal);
             try {
               return await runConversionJob(
-                { kind: "markdown.materialize", ...input },
+                {
+                  kind: "markdown.materialize",
+                  ...input,
+                  format: name === "typst.compile" ? "Typst" : "Markdown",
+                },
                 credentials,
                 controller.signal,
                 undefined,
@@ -258,7 +281,8 @@ export function createDispatcher(
     } catch (error) {
       const translated =
         controller.signal.aborted &&
-        (effect === "read" || name === "exchange.import" || name === "markdown.compile") &&
+        (effect === "read" ||
+          ["exchange.import", "markdown.compile", "typst.compile", "svg.compile"].includes(name)) &&
         !(
           error instanceof Error &&
           "code" in error &&

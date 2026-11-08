@@ -8,13 +8,9 @@ import { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-core/pro
 import { markdownCompileOutput } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
 import { markdownOperation } from "./markdown-errors.js";
-import { readSourceZip } from "../source-zip.js";
+import { compilerSourceLimits, readSourceZip } from "../source-zip.js";
 
-export const markdownAssetLimits = {
-  entries: 256,
-  fileBytes: 4 * 1024 * 1024,
-  totalBytes: 8 * 1024 * 1024,
-};
+export const markdownAssetLimits = compilerSourceLimits;
 
 export const markdownCompile: Handler<"markdown.compile"> = (ctx, input, bytes) =>
   markdownOperation(async () => {

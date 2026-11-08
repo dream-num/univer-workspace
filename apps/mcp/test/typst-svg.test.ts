@@ -1,0 +1,249 @@
+import { expect, it, vi } from "vitest";
+import { zipSync } from "fflate";
+import { WorkspaceContentSource } from "@univerjs/univer-workspace-client-core";
+import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
+import { typstCompile } from "../src/executor/ops/typst-compile.js";
+import { svgCompile } from "../src/executor/ops/svg-compile.js";
+import { typstCompileInput, svgCompileInput, opSpecs } from "../src/shared/executor-protocol.js";
+import { zeroCost } from "../src/shared/usage.js";
+import { runConversionJob } from "../src/executor/jobs/run.js";
+import type { OpContext } from "../src/executor/context.js";
+import { compilerSourceLimits } from "../src/executor/source-zip.js";
+import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "../src/executor/license.js";
+
+const credentials = { license: UNIVER_LICENSE, licenseKey: UNIVER_LICENSE_KEY };
+const entry = new URL("./fixtures/job-entry.mjs", import.meta.url);
+const svg =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect x="10" y="10" width="80" height="40"/><text x="10" y="80">Hello</text></svg>';
+function bundle(text = "= Hello\n\nWorld") {
+  return zipSync({
+    "typst.json": Buffer.from(
+      JSON.stringify({
+        schemaVersion: 1,
+        targetUnitId: "typst-test",
+        title: "Typst test",
+        pages: ["page.typ"],
+      }),
+    ),
+    "page.typ": Buffer.from(text),
+  });
+}
+function context(fetcher = vi.fn<typeof fetch>()): OpContext {
+  const http = new WorkspaceHttp({
+    origin: "http://workspace.test",
+    cookie: "workspace_session=test",
+    role: "client",
+    fetcher,
+  });
+  const source = new WorkspaceContentSource(http);
+  vi.spyOn(source, "resolveEditableRuntimeTarget").mockResolvedValue({
+    origin: http.origin,
+    unitId: "slide",
+    unitType: "slide",
+    revision: 1,
+    scope: { kind: "worktree", worktreeId: "wt" },
+  });
+  return {
+    userId: "owner",
+    requestId: "compiler",
+    signal: AbortSignal.timeout(30000),
+    transportOrigin: http.origin,
+    http: () => http,
+    source: () => source,
+    usage: { executor: "none", cost: { ...zeroCost } },
+    runtime: { executeRead: vi.fn(), executeAndCommit: vi.fn(), exportUnitData: vi.fn() },
+    exchange: credentials,
+    compileTypst: (files) =>
+      runConversionJob(
+        { kind: "typst.compile", bundle: files },
+        credentials,
+        AbortSignal.timeout(15000),
+        entry,
+      ),
+    materializer: {
+      materialize: (input) =>
+        runConversionJob(
+          { kind: "markdown.materialize", ...input, format: "Typst" },
+          credentials,
+          AbortSignal.timeout(15000),
+          entry,
+        ),
+    },
+  };
+}
+it("validates target modes, page/add and Typst retry keys", () => {
+  expect(typstCompileInput.safeParse({}).success).toBe(true);
+  const apply = { apply: true, worktreeId: "wt", spaceId: "space" };
+  expect(typstCompileInput.safeParse(apply).success).toBe(true);
+  for (const input of [
+    { worktreeId: "wt" },
+    { parentNodeId: "parent" },
+    { ...apply, spaceId: undefined },
+    { ...apply, idempotencyKey: "short" },
+  ])
+    expect(typstCompileInput.safeParse(input).success).toBe(false);
+  expect(svgCompileInput.safeParse({ svg, page: 1, add: true }).success).toBe(true);
+  for (const input of [
+    { svg, add: true },
+    { svg, page: 0 },
+    { svg, worktreeId: "wt" },
+    { svg, apply: true, page: 1, unitId: "slide" },
+  ])
+    expect(svgCompileInput.safeParse(input).success).toBe(false);
+  expect(opSpecs["typst.compile"].effectFor?.({})).toBe("read");
+  expect(
+    opSpecs["svg.compile"].effectFor?.({
+      svg,
+      apply: true,
+      page: 1,
+      unitId: "slide",
+      worktreeId: "wt",
+    }),
+  ).toBe("write");
+});
+it("compiles Typst in a job without creating or opening a Unit", async () => {
+  const ctx = context();
+  const result = await typstCompile(ctx, {}, bundle());
+  expect(result.output).toMatchObject({
+    committed: false,
+    compiledTargetUnitId: "typst-test",
+    javascript: expect.stringContaining("Hello"),
+  });
+  expect(ctx.usage).toEqual({ executor: "none", cost: { ...zeroCost } });
+  expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
+}, 20000);
+it("reports the facade's missing root typst.json error", async () => {
+  await expect(
+    typstCompile(context(), {}, zipSync({ "page.typ": Buffer.from("Hello") })),
+  ).rejects.toMatchObject({
+    code: "workspace-typst-invalid",
+    message: expect.stringContaining("typst.json"),
+  });
+}, 20000);
+it("preserves Typst translation diagnostics through the child and creates no Unit", async () => {
+  const fetcher = vi.fn<typeof fetch>();
+  const ctx = context(fetcher);
+  await expect(
+    typstCompile(
+      ctx,
+      { apply: true, worktreeId: "wt", spaceId: "space" },
+      bundle("#circle(radius: 10pt)"),
+    ),
+  ).rejects.toMatchObject({
+    code: "workspace-typst-invalid",
+    detail: { diagnostics: expect.any(Array) },
+  });
+  expect(fetcher).not.toHaveBeenCalled();
+}, 20000);
+it("materializes identical Typst create intents after a lost creation response", async () => {
+  const bodies: string[] = [];
+  const keys: (string | null)[] = [];
+  let confirmed = false;
+  const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+    bodies.push(String(options?.body));
+    keys.push(new Headers(options?.headers).get("idempotency-key"));
+    if (!confirmed) throw new TypeError("lost response");
+    const body = JSON.parse(String(options?.body));
+    return Response.json({
+      unit: {
+        unitId: "created-once",
+        resourceId: "resource",
+        nodeId: "node",
+        name: body.name,
+        source: "worktree",
+        unitType: "doc",
+        draftHeadRevision: 1,
+        change: "added",
+        mergeResult: "pending",
+        activationState: "waitingForMerge",
+        target: { spaceId: "space", parentNodeId: null },
+      },
+    });
+  });
+  const input = {
+    apply: true,
+    worktreeId: "wt",
+    spaceId: "space",
+    idempotencyKey: "typst-retry-12345678",
+  };
+  await expect(typstCompile(context(fetcher), input, bundle())).rejects.toMatchObject({
+    code: "workspace-result-unknown",
+  });
+  confirmed = true;
+  const retry = await typstCompile(context(fetcher), input, bundle());
+  expect(retry.output).toMatchObject({ committed: true, unit: { unitId: "created-once" } });
+  expect(new Set(bodies).size).toBe(1);
+  expect(new Set(keys).size).toBe(1);
+}, 30000);
+it("reuses ZIP entry and size caps for both formats", async () => {
+  const bytes = zipSync({ "large.bin": new Uint8Array(compilerSourceLimits.fileBytes + 1) });
+  await expect(typstCompile(context(), {}, bytes)).rejects.toMatchObject({
+    code: "workspace-argument-invalid",
+  });
+  await expect(svgCompile(context(), { svg, estimateTextSize: true }, bytes)).rejects.toMatchObject(
+    { code: "workspace-argument-invalid" },
+  );
+});
+it("requires explicit text estimation and retains the CLI estimation lint", async () => {
+  await expect(svgCompile(context(), { svg }, new Uint8Array())).rejects.toMatchObject({
+    code: "workspace-text-measure-unavailable",
+    message: expect.stringContaining("estimate_text_size: true"),
+  });
+  const ctx = context();
+  const result = await svgCompile(ctx, { svg, estimateTextSize: true }, new Uint8Array());
+  expect(result.output).toMatchObject({
+    textMeasure: "builtin-estimate",
+    lints: [expect.stringContaining("estimation")],
+  });
+  expect(ctx.usage).toEqual({ executor: "none", cost: { ...zeroCost } });
+});
+it("maps SVG facade input errors without an internal error", async () => {
+  await expect(
+    svgCompile(
+      context(),
+      { svg: "<svg><foreignObject/></svg>", estimateTextSize: true },
+      new Uint8Array(),
+    ),
+  ).rejects.toMatchObject({ code: "workspace-svg-invalid" });
+});
+it.each([false, true])(
+  "applies page 1 with add=%s through the bound runtime and counts its commit",
+  async (add) => {
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        worktree: {
+          id: "wt",
+          name: "Draft",
+          description: "",
+          state: "draft",
+          createdAt: 1,
+          updatedAt: 1,
+          units: [],
+          sourceSpaceId: "space",
+        },
+      }),
+    );
+    const ctx = context(fetcher);
+    vi.mocked(ctx.runtime.executeAndCommit).mockResolvedValue({
+      committed: true,
+      revision: 2,
+      status: "committed",
+      value: null,
+    });
+    const result = await svgCompile(
+      ctx,
+      { svg, estimateTextSize: true, apply: true, page: 1, add, worktreeId: "wt", unitId: "slide" },
+      new Uint8Array(),
+    );
+    expect(result.output).toMatchObject({
+      mode: add ? "add" : "replace",
+      page: 1,
+      applied: { committed: true, revision: 2 },
+    });
+    expect(ctx.runtime.executeAndCommit).toHaveBeenCalledWith({
+      target: expect.objectContaining({ unitType: "slide" }),
+      code: expect.stringContaining("insertShape"),
+    });
+    expect(ctx.usage.cost.committed_revisions).toBe(1);
+  },
+);

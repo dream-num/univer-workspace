@@ -43,7 +43,7 @@
 `export` 额外接受可选的 `idempotency_key`，用于长任务去重。格式与 `import` 相同，为 16 到 200 个 URL-safe 字母、数字、下划线或连字符。
 
 保留 CLI 已有的 `idempotency_key`：`pr_create`、`unit_create`、`blob_upload`、`blob_replace`（两种 Blob 写工具均必填）、`html_view_create`（必填）、`import`、`compile_markdown`、`compile_typst`。
-`compile_svg` 在 CLI 里没有幂等键，MCP 补上一个可选的。
+`compile_svg` 与 `execute` 一样是内容提交，不接受幂等键。结果未知时先用 `inspect` 回读，再决定是否重试。
 
 客户端可能因为超时而重试调用（ChatGPT 的社区报告，未核实）。创建类工具的描述里要写明“创建前生成一个幂等键，重试时复用”。
 
@@ -132,7 +132,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `compile_markdown` | `compile-markdown` | `markdown`、`assets_upload_id`、`title`、`apply`、`worktree`、`space`、`parent`、`unit`、`source_map`、`blocks`、`idempotency_key` | 否 | 否 | `write` |
 | `export_markdown` | `export-markdown` | `worktree`、`unit`、`source_map`、`blocks` | 是 | 否 | `read` |
 | `compile_typst` | `compile-typst` | `bundle_upload_id`、`apply`、`worktree`、`space`、`parent`、`idempotency_key` | 否 | 否 | `write` |
-| `compile_svg` | `compile-svg` | `svg`、`assets_upload_id`、`page`、`add`、`estimate_text_size`、`apply`、`worktree`、`unit`、`idempotency_key` | 否 | 否 | `write` |
+| `compile_svg` | `compile-svg` | `svg`、`assets_upload_id`、`page`、`add`、`estimate_text_size`、`apply`、`worktree`、`unit` | 否 | 否 | `write` |
 | `print_pdf` | `print-pdf` | `unit`、`trunk` 或 `worktree` | 是 | 否 | `read` |
 | `lint` | `lint` | `unit`、`worktree`、`pages` | 是 | 否 | `read` |
 
@@ -146,7 +146,13 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - Markdown 编译和 `source_map` 输入错误返回 `workspace-markdown-invalid`，保留 CLI 错误消息与 `detail.diagnostics`。
 - `export_markdown` 与当前 CLI 一样，要求上次成功生成或回读的 `source_map` 和非空、去重的显式 `blocks`，不推断任意原生文档的整篇映射。
 - `export_markdown` 返回 `{markdown, sourceMap, assets}`。`assets` 是每个资源的下载链接，不内联字节。CLI 的 JSON 输出本来就不含资源字节（`apps/cli/src/features/markdown/export-command.ts:74`）。
-- `compile_typst` 的 bundle 目录打成 zip 上传。
+- `compile_typst` 的 bundle 目录打成 ZIP 上传，purpose 为 `typst-bundle`，根目录必须包含 `typst.json`。创建要求 `apply`、`worktree` 和 `space`。创建前生成幂等键，重试时复用相同键与内容。原生 ID 由 bundle 的固定 targetUnitId 与物化器的确定性随机种子重现，创建键按调用者隔离。
+- `compile_svg` 的本地图片可通过 `svg-assets` ZIP 提供。`add` 要求 `page`；apply 要求 `page`、`worktree` 和 `unit`。不带 apply 时拒绝 Workspace 目标参数。它不接受幂等键，未知写入结果返回 `workspace-result-unknown`，先用 `inspect` 回读再决定是否重试。
+- 两种 ZIP 共用 Markdown 的 256 entry、单文件 4 MiB、总解压 8 MiB、路径长度与碰撞限制。较大的资源也无法保证满足 900 KiB UnitData 创建上限或 8 MiB RPC 响应上限。
+- 阶段 D 的 SVG 编译必须传 `estimate_text_size: true`，否则返回 `workspace-text-measure-unavailable`，提示实字体量度将在渲染服务阶段提供。估算结果保留 CLI 的 lint。
+- Typst 与 SVG facade 输入错误分别映射为 `workspace-typst-invalid` 与 `workspace-svg-invalid`，保留 facade 消息及可用的 `detail.diagnostics`。
+- Typst 编译与物化在现有 job child 中运行。SVG 估算编译使用 JavaScript 内置量字器，不创建浏览器，可在 executor 中运行；apply 使用绑定的协同 runtime。仅编译两者均报告 `executor: none`、`unit_type: null`、`repo: null`，消费的 ZIP 计入 upload_bytes，确认的创建或提交计入 committed_revisions。
+- 此切片的 Typst 仍使用 30 秒同步预算，第 7 节异步任务是后续集成。
 - 不带 `apply` 的编译工具返回生成的 Facade 代码和诊断，不写入 Workspace。
 
 ### 3.3 `admin`

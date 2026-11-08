@@ -3,6 +3,8 @@ import type {
   WorkspaceContentSource,
   WorkspaceUnitExchangeDependencies,
   WorkspaceTypstMaterializer,
+  WorkspaceSourceFiles,
+  WorkspaceCompileTypstResult,
 } from "@univerjs/univer-workspace-client-core";
 import type { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import type { OpInput, OpName, OpOutput, opSpecs } from "../shared/executor-protocol.js";
@@ -22,6 +24,7 @@ export interface OpContext {
   readonly userId: string;
   readonly transportOrigin: string;
   readonly runtime: BoundRuntime;
+  compileTypst?(bundle: WorkspaceSourceFiles): Promise<WorkspaceCompileTypstResult>;
   readonly materializer?: WorkspaceTypstMaterializer;
   readonly exchange: Pick<
     WorkspaceUnitExchangeDependencies,

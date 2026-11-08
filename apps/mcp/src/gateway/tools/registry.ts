@@ -1,3 +1,5 @@
+import { compileTypstTool } from "./files/compile-typst.js";
+import { compileSvgTool } from "./files/compile-svg.js";
 import { compileMarkdownTool } from "./files/compile-markdown.js";
 import { exportMarkdownTool } from "./files/export-markdown.js";
 import { fileUploadCreateTool } from "./core/file-upload-create.js";
@@ -89,6 +91,8 @@ export const tools: readonly ToolDefinition[] = [
   htmlViewCreateTool,
   compileMarkdownTool,
   exportMarkdownTool,
+  compileTypstTool,
+  compileSvgTool,
   repoCreateTool,
   repoEditTool,
   labelListTool,

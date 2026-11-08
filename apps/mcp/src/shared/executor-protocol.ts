@@ -172,6 +172,75 @@ export const markdownExportOutput = z.object({
   ),
 });
 
+export const typstCompileInput = z
+  .object({
+    apply: z.boolean().optional(),
+    worktreeId: z.string().min(1).optional(),
+    spaceId: z.string().min(1).optional(),
+    parentNodeId: z.string().min(1).optional(),
+    idempotencyKey: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{16,200}$/)
+      .optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.apply === true) {
+      if (input.worktreeId === undefined || input.spaceId === undefined)
+        ctx.addIssue({ code: "custom", message: "apply requires worktree and space." });
+    } else if (
+      [input.worktreeId, input.spaceId, input.parentNodeId, input.idempotencyKey].some(
+        (value) => value !== undefined,
+      )
+    ) {
+      ctx.addIssue({ code: "custom", message: "Workspace target options require apply: true." });
+    }
+  });
+export const typstCompileOutput = z.object({
+  committed: z.boolean(),
+  compiledTargetUnitId: z.string(),
+  diagnostics: z.array(z.json()),
+  previews: z.array(z.json()),
+  javascript: z.string().optional(),
+  unit: z.json().optional(),
+});
+export const svgCompileInput = z
+  .object({
+    svg: z.string().refine((text) => Buffer.byteLength(text) <= 512 * 1024, "SVG exceeds 512 KiB"),
+    estimateTextSize: z.boolean().optional(),
+    page: z.int().positive().optional(),
+    add: z.boolean().optional(),
+    apply: z.boolean().optional(),
+    worktreeId: z.string().min(1).optional(),
+    unitId: z.string().min(1).optional(),
+  })
+  .superRefine((input, ctx) => {
+    if (input.add === true && input.page === undefined)
+      ctx.addIssue({ code: "custom", message: "add requires page." });
+    if (input.apply === true) {
+      if (input.page === undefined || input.worktreeId === undefined || input.unitId === undefined)
+        ctx.addIssue({ code: "custom", message: "apply requires page, worktree and unit." });
+    } else if (input.worktreeId !== undefined || input.unitId !== undefined) {
+      ctx.addIssue({ code: "custom", message: "worktree and unit require apply: true." });
+    }
+  });
+export const svgCompileOutput = z.object({
+  code: z.string(),
+  lints: z.array(z.string()),
+  warnings: z.array(z.string()),
+  mode: z.enum(["add", "replace"]),
+  page: z.int().positive().optional(),
+  textMeasure: z.string(),
+  viewport: z.object({ width: z.number(), height: z.number() }),
+  applied: z
+    .object({
+      committed: z.boolean(),
+      revision: z.int().positive().optional(),
+      status: z.string().optional(),
+      value: z.json().optional(),
+    })
+    .optional(),
+});
+
 export const opSpecs = {
   "htmlView.validate": defineOp({
     name: "htmlView.validate",
@@ -233,6 +302,34 @@ export const opSpecs = {
     input: markdownExportInput,
     output: markdownExportOutput,
     route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
+  }),
+  "typst.compile": defineOp({
+    name: "typst.compile",
+    effect: "write",
+    effectFor: (input) => (input.apply === true ? "write" : "read"),
+    payload: "request",
+    rerun: [],
+    limits: { requestBytes: 64 * MiB, responseBytes: 8 * MiB, budgetMs: 30_000 },
+    input: typstCompileInput,
+    output: typstCompileOutput,
+    route: (input) => ({
+      scope: input.worktreeId === undefined ? "typst.compile" : `worktree:${input.worktreeId}`,
+      unitId: input.idempotencyKey ?? null,
+    }),
+  }),
+  "svg.compile": defineOp({
+    name: "svg.compile",
+    effect: "write",
+    effectFor: (input) => (input.apply === true ? "write" : "read"),
+    payload: "request",
+    rerun: ["auth"],
+    limits: { requestBytes: 64 * MiB, responseBytes: 8 * MiB, budgetMs: 30_000 },
+    input: svgCompileInput,
+    output: svgCompileOutput,
+    route: (input) => ({
+      scope: input.worktreeId === undefined ? "svg.compile" : `worktree:${input.worktreeId}`,
+      unitId: input.unitId ?? null,
+    }),
   }),
   "exchange.import": defineOp({
     name: "exchange.import",

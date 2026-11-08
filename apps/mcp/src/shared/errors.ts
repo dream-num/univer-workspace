@@ -35,7 +35,10 @@ export function translateError(error: unknown): WireError {
       detail: null,
     };
   if (error instanceof ExecutorCallError)
-    return { ...error.wire, detail: jsonOrNull(error.wire.detail) };
+    return {
+      ...error.wire,
+      detail: jsonOrNull(error.wire.detail, error.wire.code.startsWith("workspace-typst-")),
+    };
   if (error instanceof z.ZodError) {
     const issues = error.issues.map((issue) => ({
       path: issue.path.map(String).join("."),
@@ -61,7 +64,7 @@ export function translateError(error: unknown): WireError {
       outcome: error.code === "workspace-authentication-required" ? "auth_error" : "tool_error",
       code: error.code,
       message: error.message,
-      detail: jsonOrNull(error.detail),
+      detail: jsonOrNull(error.detail, error.code.startsWith("workspace-typst-")),
     };
   }
   if (error instanceof Error && "code" in error && typeof error.code === "string") {
@@ -80,11 +83,15 @@ export function translateError(error: unknown): WireError {
   };
 }
 
-export function jsonOrNull(value: unknown): z.core.util.JSONType {
+export function jsonOrNull(value: unknown, typstDiagnostics = false): z.core.util.JSONType {
   try {
     const clean: unknown = JSON.parse(
       JSON.stringify(value ?? null, (key, entry: unknown) =>
-        key === "sourcePath" ||
+        (key === "sourcePath" &&
+          (!typstDiagnostics ||
+            typeof entry !== "string" ||
+            entry.startsWith("/") ||
+            /^[A-Za-z]:[\\/]/.test(entry))) ||
         (key === "path" &&
           typeof entry === "string" &&
           entry.startsWith("/") &&

@@ -1,3 +1,5 @@
+import { compileTypstTool } from "../src/gateway/tools/files/compile-typst.js";
+import { compileSvgTool } from "../src/gateway/tools/files/compile-svg.js";
 import { expect, it, vi } from "vitest";
 import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
@@ -210,6 +212,141 @@ it("reports compile-only connection loss as a retryable read and apply loss as u
         worktree: "wt",
         source_map: [],
         blocks: ["intro"],
+      }),
+    ).rejects.toMatchObject({ wire: { code: "workspace-result-unknown" } });
+  } finally {
+    fetcher.mockRestore();
+    await store.close();
+  }
+});
+
+it.each([
+  { name: "typst", purpose: "typst-bundle" as const, tool: compileTypstTool, args: {} },
+  {
+    name: "svg",
+    purpose: "svg-assets" as const,
+    tool: compileSvgTool,
+    args: { svg: "<svg/>", estimate_text_size: true },
+  },
+])(
+  "checks $name upload ownership/purpose and transfers ready ZIP bytes",
+  async ({ name, purpose, tool, args }) => {
+    const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+    const bytes = new Uint8Array([1, 2, 3]);
+    const withUpload = (id: string) =>
+      name === "typst" ? { ...args, bundle_upload_id: id } : { ...args, assets_upload_id: id };
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
+      const frame = decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer()));
+      expect(frame.header).toMatchObject({ op: `${name}.compile` });
+      expect(new Uint8Array(frame.payload)).toEqual(bytes);
+      return new Response(
+        new Uint8Array(
+          encodeFrame({
+            ok: true,
+            output:
+              name === "typst"
+                ? {
+                    committed: false,
+                    compiledTargetUnitId: "doc",
+                    javascript: "program",
+                    diagnostics: [],
+                    previews: [],
+                  }
+                : {
+                    code: "program",
+                    lints: [],
+                    warnings: [],
+                    mode: "replace",
+                    textMeasure: "builtin-estimate",
+                    viewport: { width: 100, height: 100 },
+                  },
+            meta: { executor: "none", cost: { ...zeroCost } },
+          }),
+        ),
+      );
+    });
+    try {
+      const foreign = await store.createUpload("foreign", {
+        purpose,
+        file_name: "bundle.zip",
+        media_type: "application/zip",
+      });
+      const wrong = await store.createUpload("owner", {
+        purpose: "markdown-assets",
+        file_name: "bundle.zip",
+        media_type: "application/zip",
+      });
+      await store.handle(new Request(wrong.upload.upload_url, { method: "PUT", body: bytes }));
+      await expect(
+        tool.run(context(store), withUpload(foreign.upload.upload_id)),
+      ).rejects.toMatchObject({ code: "workspace-upload-not-found" });
+      await expect(
+        tool.run(context(store), withUpload(wrong.upload.upload_id)),
+      ).rejects.toMatchObject({ code: "workspace-upload-purpose-mismatch" });
+      expect(fetcher).not.toHaveBeenCalled();
+      const { upload } = await store.createUpload("owner", {
+        purpose,
+        file_name: "bundle.zip",
+        media_type: "application/zip",
+      });
+      await store.handle(new Request(upload.upload_url, { method: "PUT", body: bytes }));
+      const ctx = context(store);
+      await tool.run(ctx, withUpload(upload.upload_id));
+      expect(ctx.usage?.snapshot().cost.upload_bytes).toBe(bytes.length);
+      expect((await store.requireUpload("owner", upload.upload_id, purpose)).state).toBe("ready");
+    } finally {
+      fetcher.mockRestore();
+      await store.close();
+    }
+  },
+);
+it("requires estimation before sending SVG and advertises no idempotency key", async () => {
+  const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+  const fetcher = vi.spyOn(globalThis, "fetch");
+  try {
+    await expect(compileSvgTool.run(context(store), { svg: "<svg/>" })).rejects.toMatchObject({
+      code: "workspace-text-measure-unavailable",
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(compileSvgTool.inputSchema.shape).not.toHaveProperty("idempotency_key");
+    expect(compileSvgTool.description).toContain("inspect before retrying");
+  } finally {
+    fetcher.mockRestore();
+    await store.close();
+  }
+});
+it.each([
+  { label: "Typst", tool: compileTypstTool, args: { bundle_upload_id: "missing", worktree: "wt" } },
+  {
+    label: "SVG",
+    tool: compileSvgTool,
+    args: { svg: "<svg/>", estimate_text_size: true, worktree: "wt" },
+  },
+])("rejects $label targets without apply before consuming uploads", async ({ tool, args }) => {
+  const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+  try {
+    await expect(tool.run(context(store), args)).rejects.toThrow(/require apply/);
+  } finally {
+    await store.close();
+  }
+});
+it("uses read failure semantics for SVG compilation and unknown-result semantics for SVG apply", async () => {
+  const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockRejectedValue(new TypeError("connection lost after delivery"));
+  try {
+    const args = { svg: "<svg/>", estimate_text_size: true };
+    await expect(compileSvgTool.run(context(store), args)).rejects.toMatchObject({
+      wire: { code: "workspace-executor-timeout", detail: { retryable: true } },
+    });
+    await expect(
+      compileSvgTool.run(context(store), {
+        ...args,
+        apply: true,
+        page: 1,
+        worktree: "wt",
+        unit: "slide",
       }),
     ).rejects.toMatchObject({ wire: { code: "workspace-result-unknown" } });
   } finally {

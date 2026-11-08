@@ -175,7 +175,7 @@ $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","import","export","job_get","api_find","api_show","skills_read"]'
-FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown"]'
+FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown","compile_typst","compile_svg"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
@@ -186,7 +186,7 @@ for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
     and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|job_get|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|compile_markdown|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
@@ -1942,3 +1942,25 @@ A completed benchmark requires usage events for all timed calls, a cold or warm 
 as expected for each microbenchmark call, the expected live-worker population in every
 RSS sample, and readback of every confirmed write. The JSON retains partial evidence
 and a failure message if one of those checks fails.
+
+**MT1. Typst bundle compilation and retry-safe Doc creation.**
+
+```bash
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst
+```
+
+Pass when a ZIP containing a heading, paragraph, table and image is uploaded by PUT,
+compile-only JavaScript and diagnostics match the CLI, native Doc inspection reads back
+its content, and a same-key retry returns the same single Unit. All MCP calls go through
+`mcp-call.mjs`. Evidence uses the `mcp-typst-*` prefix and `compiler-fixture/`.
+
+**MV1. SVG compilation and Slide content commit.**
+
+```bash
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg
+```
+
+Pass when estimated SVG compilation matches the CLI, retains its estimation lint, rejects
+missing estimation with `workspace-text-measure-unavailable`, commits page 1 of a new Slide,
+and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There is no SVG
+retry key; an unknown write outcome requires inspection before another apply.

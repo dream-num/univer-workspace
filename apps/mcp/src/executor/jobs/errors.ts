@@ -8,6 +8,8 @@ const exchangeCodes = new Set([
   "NATIVE_LOAD_FAILED",
   "CONVERSION_FAILED",
   "workspace-import-too-large",
+  "workspace-typst-invalid",
+  "workspace-typst-diagnostics",
 ]);
 
 export function conversionError(code: string, message: string) {
@@ -16,6 +18,8 @@ export function conversionError(code: string, message: string) {
       exchangeCodes.has(code) || /^LICENSE_[A-Z0-9_]+$/.test(code)
         ? code
         : "workspace-exchange-conversion-failed",
-    message: message.replace(/(?:file:\/\/)?\/[^\r\n"'<>]+|[A-Za-z]:[\\/][^\r\n"'<>]+/g, "[path]"),
+    message: code.startsWith("workspace-typst-")
+      ? message
+      : message.replace(/(?:file:\/\/)?\/[^\r\n"'<>]+|[A-Za-z]:[\\/][^\r\n"'<>]+/g, "[path]"),
   };
 }
