@@ -15,6 +15,8 @@ import {
 } from "./issue-model.js";
 import { usernameKey } from "./username.js";
 
+export const LABEL_COLORS = ["gray", "blue", "green", "yellow", "orange", "red", "purple", "pink"] as const;
+
 export interface WorkspaceIssueLabelUsage extends WorkspaceIssueLabel {
   readonly openIssueCount: number;
 }

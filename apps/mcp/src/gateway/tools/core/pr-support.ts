@@ -66,3 +66,15 @@ export async function prsWithUrl(
     worktrees.map(async (worktree) => prWithUrl(context, worktree, (await pullSpaceId(cached, worktree)) ?? null)),
   );
 }
+
+/** Runs a lifecycle transition on the pull request a `repo` and `number` name and returns it with its `url`. */
+export async function transitionPr(
+  context: ToolContext,
+  repo: string,
+  number: string,
+  action: "merge" | "discard",
+) {
+  const { worktree, spaceId } = await findPr(context, repo, number);
+  const updated = await worktreeFeature(context).transition(worktree.id, action);
+  return { output: prWithUrl(context, updated, spaceId), repo: spaceId };
+}

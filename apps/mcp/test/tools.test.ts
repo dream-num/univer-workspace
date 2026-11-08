@@ -9,6 +9,7 @@ import { createGateway } from "../src/gateway/server.js";
 import { whoamiTool } from "../src/gateway/tools/core/whoami.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
+import { coreNames } from "./tool-names.js";
 
 const identityOrigin = "https://workspace.example";
 const session = "test-session-secret";
@@ -242,42 +243,15 @@ describe("Issue tools and gateway infrastructure", () => {
     await new Promise((resolve) => gateway.server.close(resolve));
   });
 
-  it("lists the issue tools in registry order with scopes reflected in annotations", async () => {
+  it("lists the core tools in registry order and describes the Issue list input", async () => {
     await start();
-    const names = [
-      "whoami",
-      "repo_list",
-      "repo_view",
-      "issue_list",
-      "issue_view",
-      "issue_create",
-      "issue_edit",
-      "issue_comment",
-      "issue_set_state",
-      "pr_list",
-      "pr_view",
-      "pr_create",
-      "pr_edit",
-      "pr_ready",
-      "search",
-      "browse",
-    ];
     const core = await (await connect("?toolsets=core")).listTools();
-    expect((await (await connect("?toolsets=all")).listTools()).tools).toEqual(core.tools);
-    expect(core.tools.map((tool) => tool.name)).toEqual(names);
+    expect(core.tools.map((tool) => tool.name)).toEqual(coreNames);
     const list = core.tools.find((tool) => tool.name === "issue_list")!;
     expect(list.inputSchema).toMatchObject({
       required: ["repo"],
       properties: { state: { enum: ["open", "closed", "all"] }, limit: { minimum: 1 } },
     });
-    for (const tool of core.tools) {
-      expect(tool.outputSchema).toBeDefined();
-      expect(tool.annotations).toMatchObject({
-        readOnlyHint: !tool.name.match(/^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready))$/),
-        destructiveHint: false,
-        openWorldHint: false,
-      });
-    }
   });
 
   it("attaches url to an Issue and reports the resolved Space", async () => {

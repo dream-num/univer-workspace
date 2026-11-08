@@ -152,8 +152,10 @@ function eventIssues(event) {
     if (protocol === '2026-07-28' ? typeof event[key] !== 'string' || !event[key] : event[key] !== null) issues.push(`Invalid ${protocol} ${key}`);
   }
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
-  const repoScoped = typeof args.repo === 'string';
-  if (event.unit_type !== null || (!repoScoped && event.repo !== null) || (repoScoped && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
+  // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
+  const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
+    ['unit_list', 'unit_add', 'blob_get', 'repo_create', 'space_node'].includes(tool);
+  if (event.unit_type !== null || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error') {
     const resultCode = result.structuredContent?.code;
     if (typeof resultCode !== 'string') issues.push('Error result has no structuredContent.code');

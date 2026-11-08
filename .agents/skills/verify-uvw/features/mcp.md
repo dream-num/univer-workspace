@@ -1,7 +1,7 @@
 # MCP gateway
 
 An agent connects to a disposable Docker gateway with its own Workspace session, reads
-identity, repositories, Issues, pull requests, search and browse links through either MCP protocol, and leaves correlated usage evidence.
+identity, repositories, Issues, pull requests, files, repository administration, labels and merges through either MCP protocol, and leaves correlated usage evidence.
 
 ## Sub-features
 
@@ -9,7 +9,7 @@ identity, repositories, Issues, pull requests, search and browse links through e
 - M2 and M3 read identity over the 2026-07-28 and 2025-11-25 protocols.
 - M4 and M5 compare repository lists and details with uvw.
 - M6 preserves a missing-repository error and its usage event.
-- M7 checks toolsets, the ordered tool list, schemas, and per-tool annotations.
+- M7 checks the ordered tool list of every toolset selection, schemas, and per-tool annotations.
 - M8 rejects missing and invalid credentials in both protocols.
 - M9 rejects an untrusted Origin.
 - M10 refuses development authentication in production.
@@ -31,6 +31,16 @@ identity, repositories, Issues, pull requests, search and browse links through e
 - MP7 and MP8 search Issues and pull requests against the CLI.
 - MP9 compares browse for a repository, a pull request and an Issue with the CLI.
 - MP10 preserves a nonexistent-pull-request error and its usage event.
+- MS1 seeds a folder, an uploaded file and a merged sheet in the Team Space.
+- MS2 and MS3 browse and find files against the CLI.
+- MS4 creates, edits and renames a repository against the CLI.
+- MS5 lists, creates, edits and deletes labels against the CLI.
+- MS6 creates a sheet in a pull request and lists its Units against the CLI.
+- MS7 adds an existing file to a pull request against the CLI.
+- MS8 gets an uploaded file against the CLI.
+- MS9 creates, renames, moves and trashes Nodes against the CLI.
+- MS10 merges a ready pull request and discards another against the CLI.
+- MS11 runs the full stage B product journey and screenshots the ready pull request page.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -130,24 +140,39 @@ and the event records `tool_error` with the same code.
 
 ```bash
 $V mcp-tools mcp-tools-core
+$V mcp-tools --toolsets files mcp-tools-files
+$V mcp-tools --toolsets admin mcp-tools-admin
+$V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-for label in core all; do
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create"]'
+FILES='["blob_get"]'
+ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard"]'
+jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
+jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
+jq -e --argjson want "$ADMIN" 'map(.name) == $want' "$EVIDENCE/mcp-tools-admin.out"
+jq -e --argjson core "$CORE" --argjson admin "$ADMIN" 'map(.name) == $core + $admin' "$EVIDENCE/mcp-tools-core-admin.out"
+jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" 'map(.name) == $core + $files + $admin' "$EVIDENCE/mcp-tools-all.out"
+for label in core files admin core-admin all; do
   jq -e '
-    (map(.name) == ["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse"])
-    and all(.[]; .annotations.destructiveHint == false and .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_|issue_list|issue_view|pr_list|pr_view|search|browse)")); .annotations.readOnlyHint == true)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready))$")); .annotations.readOnlyHint == false)
+    all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|blob_get|label_list)$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S . "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:21]' "$EVIDENCE/mcp-tools-all.out")
+jq -e 'all(.[] | select(.name | test("^(repo_edit|space_node)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
+jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
 ```
 
-Pass when core and all exit 0 with the same fixed tool order, schemas and annotations
-(nine read-only tools, seven non-destructive write tools); unknown exits 3 with HTTP 400 and
-the valid toolset names. Tool lists have no event file.
+Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
+admin), schemas present, and annotations as specified (read-only, non-destructive write, and
+destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
+first 21 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
+exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
 
@@ -523,6 +548,292 @@ jq -e --arg code "$code" '.outcome == "tool_error" and .error_code == $code and 
 
 Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr prefix, and the
 event records `tool_error` with the same code.
+
+**MS1. Seed files.** A folder, an uploaded file and a merged sheet in the Team Space from M4.
+
+```bash
+$V cli mcp-ms-team repo view "$O/verify-team" --json
+T=$(jq -r '.id' "$EVIDENCE/mcp-ms-team.out")
+echo "mcp blob" > "$EVIDENCE/mcp-ms-notes.txt"
+$V cli mcp-ms-folder space node create "$O/verify-team" --name Plans --json
+FOLDER=$(jq -r '.node.nodeId' "$EVIDENCE/mcp-ms-folder.out")
+$V cli mcp-ms-upload blob upload --file "$EVIDENCE/mcp-ms-notes.txt" --space "$T" --name notes.txt --json
+BLOB=$(jq -r '.upload.resourceId' "$EVIDENCE/mcp-ms-upload.out")
+$V cli mcp-ms-seed-pr pr create -R "$O/verify-team" -t "Seed sheet" --json
+SN=$(jq -r '.number' "$EVIDENCE/mcp-ms-seed-pr.out")
+SW=$(jq -r '.id' "$EVIDENCE/mcp-ms-seed-pr.out")
+$V cli mcp-ms-seed-unit unit create --worktree "$SW" --space "$T" --type sheet --name Budget --json
+$V cli mcp-ms-seed-ready pr ready "$SN" -R "$O/verify-team" --json
+$V cli mcp-ms-seed-merge pr merge "$SN" -R "$O/verify-team" --json
+jq -e '.state == "merged"' "$EVIDENCE/mcp-ms-seed-merge.out"
+```
+
+Pass when every command exits 0 and the seed pull request is `merged`. Later MS journeys
+reuse `T`, `FOLDER`, `BLOB`, `O` and the Team Space ID.
+
+**MS2. Space browse.**
+
+```bash
+$V mcp --toolsets all mcp-space-browse space_browse "{\"repo\":\"$O/verify-team\"}"
+$V cli mcp-space-browse-cli space browse "$O/verify-team" --json
+diff <(jq -S '.nodes | map(del(.url))' "$EVIDENCE/mcp-space-browse.out") <(jq -S '.nodes' "$EVIDENCE/mcp-space-browse-cli.out")
+jq -e --arg origin "$ORIGIN" '.nodes | length >= 3 and all(.[]; .url == "\($origin)/nodes/\(.nodeId)")' "$EVIDENCE/mcp-space-browse.out"
+jq -e --arg repo "$T" '.repo == $repo and .tool == "space_browse" and .outcome == "ok"' "$EVIDENCE/mcp-space-browse.event.json"
+$V mcp --toolsets all mcp-space-browse-filter space_browse "{\"repo\":\"$T\",\"recursive\":true,\"resource_kind\":\"univer\",\"unit_type\":\"sheet\"}"
+$V cli mcp-space-browse-filter-cli space browse "$T" --recursive --resource-kind univer --unit-type sheet --json
+diff <(jq -S '.nodes | map(del(.url))' "$EVIDENCE/mcp-space-browse-filter.out") <(jq -S '.nodes' "$EVIDENCE/mcp-space-browse-filter-cli.out")
+jq -e '.nodes | length >= 1 and all(.[]; .resource.unitType == "sheet")' "$EVIDENCE/mcp-space-browse-filter.out"
+$V mcp --toolsets all mcp-space-browse-conflict space_browse "{\"repo\":\"$T\",\"resource_kind\":\"blob\",\"unit_type\":\"sheet\"}"
+test $? -eq 1
+$V cli mcp-space-browse-conflict-cli space browse "$T" --resource-kind blob --unit-type sheet --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-space-browse-conflict.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-space-browse-conflict-cli.err" | head -n1)" = "$code"
+```
+
+Pass when the three MCP results equal the CLI `nodes` without `url`, every node has its
+`/nodes/<id>` Browser URL, the event carries the Team Space ID, and the conflicting filter
+fails in both with the same code (`workspace-argument-invalid`).
+
+**MS3. Space find.**
+
+```bash
+$V mcp --toolsets all mcp-space-find space_find "{\"space\":\"$O/verify-team\",\"query\":\"budget\"}"
+$V cli mcp-space-find-cli space find budget --space "$O/verify-team" --json
+diff <(jq -S '.nodes | map(del(.url))' "$EVIDENCE/mcp-space-find.out") <(jq -S '.nodes' "$EVIDENCE/mcp-space-find-cli.out")
+jq -e '.nodes | length == 1 and .[0].name == "Budget"' "$EVIDENCE/mcp-space-find.out"
+jq -e --arg repo "$T" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-space-find.event.json"
+```
+
+Pass when both exit 0, the diff is empty, exactly the `Budget` sheet is found, and the event
+carries the Team Space ID.
+
+**MS4. Repository create, edit and rename.**
+
+```bash
+$V mcp --toolsets all mcp-repo-new repo_create '{"slug":"mcp-admin","name":"MCP Admin","description":"Created by MCP"}'
+A=$(jq -r '.id' "$EVIDENCE/mcp-repo-new.out")
+$V cli mcp-repo-new-cli repo view "$O/mcp-admin" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-repo-new.out") <(jq -S 'del(.starCount, .starred)' "$EVIDENCE/mcp-repo-new-cli.out")
+jq -e --arg origin "$ORIGIN" '.url == "\($origin)/spaces/\(.id)" and .name == "MCP Admin" and .description == "Created by MCP"' "$EVIDENCE/mcp-repo-new.out"
+jq -e --arg repo "$A" '.tool == "repo_create" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-repo-new.event.json"
+$V cli mcp-repo-default-cli repo create mcp-default --json
+jq -e '.name == "mcp-default"' "$EVIDENCE/mcp-repo-default-cli.out"
+$V mcp --toolsets all mcp-repo-default repo_create '{"slug":"mcp-default-2"}'
+jq -e '.name == "mcp-default-2"' "$EVIDENCE/mcp-repo-default.out"
+LONG=$(printf 'x%.0s' $(seq 351))
+$V mcp --toolsets all mcp-repo-long repo_create "{\"slug\":\"mcp-long\",\"description\":\"$LONG\"}"
+test $? -eq 1
+$V cli mcp-repo-long-cli repo create mcp-long --description "$LONG" --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-repo-long.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-repo-long-cli.err" | head -n1)" = "$code"
+$V mcp --toolsets all mcp-repo-edit repo_edit "{\"repo\":\"$O/mcp-admin\",\"name\":\"MCP Admin 2\",\"description\":\"Edited\",\"visibility\":\"public\"}"
+$V cli mcp-repo-edit-cli repo view "$O/mcp-admin" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-repo-edit.out") <(jq -S 'del(.starCount, .starred)' "$EVIDENCE/mcp-repo-edit-cli.out")
+jq -e '.name == "MCP Admin 2" and .description == "Edited" and .publicRead == true' "$EVIDENCE/mcp-repo-edit.out"
+$V mcp --toolsets all mcp-repo-edit-bad repo_edit "{\"repo\":\"$O/mcp-admin\"}"
+test $? -eq 1
+$V cli mcp-repo-edit-bad-cli repo edit "$O/mcp-admin" --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-repo-edit-bad.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-repo-edit-bad-cli.err" | head -n1)" = "$code"
+$V mcp --toolsets all mcp-repo-rename repo_edit "{\"repo\":\"$O/mcp-admin\",\"slug\":\"mcp-admin-2\"}"
+$V cli mcp-repo-rename-cli repo view "$O/mcp-admin-2" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-repo-rename.out") <(jq -S 'del(.starCount, .starred)' "$EVIDENCE/mcp-repo-rename-cli.out")
+$V cli mcp-repo-old-slug repo view "$O/mcp-admin" --json
+test $? -eq 1
+jq -e --arg repo "$A" '.tool == "repo_edit" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-repo-rename.event.json"
+```
+
+Pass when every expected-success command exits 0 and each diff is empty; the repository
+created without `name` takes its slug as name through both tools; the over-long description
+and the empty edit fail in MCP and CLI with the same code; the old slug no longer resolves;
+events carry the new Space ID.
+
+**MS5. Labels.**
+
+```bash
+$V mcp --toolsets all mcp-label-list label_list "{\"repo\":\"$O/verify-team\"}"
+$V cli mcp-label-list-cli label list -R "$O/verify-team" --json
+diff <(jq -S '.labels' "$EVIDENCE/mcp-label-list.out") <(jq -S '.' "$EVIDENCE/mcp-label-list-cli.out")
+jq -e --arg repo "$T" '.tool == "label_list" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-label-list.event.json"
+$V mcp --toolsets all mcp-label-new label_write "{\"repo\":\"$O/verify-team\",\"action\":\"create\",\"name\":\"ux\",\"color\":\"pink\",\"description\":\"UX work\"}"
+$V cli mcp-label-new-cli label list -R "$O/verify-team" --json
+diff <(jq -S '.' "$EVIDENCE/mcp-label-new.out") <(jq -S 'map(select(.name == "ux") | del(.openIssueCount)) | .[0]' "$EVIDENCE/mcp-label-new-cli.out")
+jq -e '.color == "pink" and .description == "UX work"' "$EVIDENCE/mcp-label-new.out"
+$V mcp --toolsets all mcp-label-edit label_write "{\"repo\":\"$O/verify-team\",\"action\":\"edit\",\"name\":\"ux\",\"new_name\":\"usability\",\"color\":\"purple\"}"
+$V cli mcp-label-edit-cli label list -R "$O/verify-team" --json
+diff <(jq -S '.' "$EVIDENCE/mcp-label-edit.out") <(jq -S 'map(select(.name == "usability") | del(.openIssueCount)) | .[0]' "$EVIDENCE/mcp-label-edit-cli.out")
+jq -e '.name == "usability" and .color == "purple" and .description == "UX work"' "$EVIDENCE/mcp-label-edit.out"
+$V mcp --toolsets all mcp-label-delete label_write "{\"repo\":\"$O/verify-team\",\"action\":\"delete\",\"name\":\"usability\"}"
+$V cli mcp-label-delete-cli label list -R "$O/verify-team" --json
+jq -e '. == {"deleted": "usability"}' "$EVIDENCE/mcp-label-delete.out"
+jq -e 'all(.[]; .name != "usability")' "$EVIDENCE/mcp-label-delete-cli.out"
+$V mcp --toolsets all mcp-label-bad label_write "{\"repo\":\"$O/verify-team\",\"action\":\"create\",\"name\":\"nocolor\"}"
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-label-bad.out"
+jq -e --arg repo "$T" '.tool == "label_write" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-label-delete.event.json"
+```
+
+Pass when the list equals the CLI list, each created or edited label equals the CLI's
+view of it, the deleted label is gone from the CLI list, `create` without `color` fails with
+`workspace-argument-invalid`, and the events carry the Team Space ID.
+
+**MS6. Unit create in a pull request, and unit list.**
+
+```bash
+$V mcp --toolsets all mcp-ms-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"MCP units\"}"
+WB=$(jq -r '.id' "$EVIDENCE/mcp-ms-pr.out")
+NB=$(jq -r '.number' "$EVIDENCE/mcp-ms-pr.out")
+UK="mcp-unit-$VERIFY_UVW_RUN"
+$V mcp --toolsets all mcp-unit-create unit_create "{\"worktree\":\"$WB\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Forecast\",\"parent\":\"$FOLDER\",\"idempotency_key\":\"$UK\"}"
+$V mcp --toolsets all mcp-unit-create-again unit_create "{\"worktree\":\"$WB\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Forecast\",\"parent\":\"$FOLDER\",\"idempotency_key\":\"$UK\"}"
+$V cli mcp-unit-create-cli unit list --worktree "$WB" --json
+diff <(jq -S '.unit | del(.url)' "$EVIDENCE/mcp-unit-create.out") <(jq -S '.units | map(select(.name == "Forecast")) | .[0]' "$EVIDENCE/mcp-unit-create-cli.out")
+diff <(jq -S '.' "$EVIDENCE/mcp-unit-create.out") <(jq -S '.' "$EVIDENCE/mcp-unit-create-again.out")
+jq -e '.units | map(select(.name == "Forecast")) | length == 1' "$EVIDENCE/mcp-unit-create-cli.out"
+jq -e --arg origin "$ORIGIN" --arg t "$T" --argjson n "$NB" '.unit.url == "\($origin)/spaces/\($t)/pulls/\($n)?unit=\(.unit.unitId)" and .unit.type == "sheet" and .unit.change == "added" and .unit.target.parentNodeId != null' "$EVIDENCE/mcp-unit-create.out"
+jq -e --arg repo "$T" '.tool == "unit_create" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-unit-create.event.json"
+$V mcp --toolsets all mcp-unit-list unit_list "{\"worktree\":\"$WB\"}"
+diff <(jq -S '.units | map(del(.url))' "$EVIDENCE/mcp-unit-list.out") <(jq -S '.units' "$EVIDENCE/mcp-unit-create-cli.out")
+jq -e '.units | length >= 1 and all(.[]; .url != null)' "$EVIDENCE/mcp-unit-list.out"
+jq -e --arg repo "$T" '.tool == "unit_list" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-unit-list.event.json"
+```
+
+Pass when every command exits 0, the created Unit equals the CLI list entry without `url`, the
+retry with the same key returns the identical Unit and creates no second one, `url` is the
+pull request page with `?unit=`, the list equals the CLI list, and the events carry the Team
+Space ID (the first from the `space` argument, the second from the Worktree).
+
+**MS7. Unit add of an existing file.**
+
+```bash
+RES=$(jq -r '.nodes[0].resource.resourceId' "$EVIDENCE/mcp-space-find.out")
+$V cli mcp-ms-add-pr pr create -R "$O/verify-team" -t "Add existing" --json
+WA=$(jq -r '.id' "$EVIDENCE/mcp-ms-add-pr.out")
+AN=$(jq -r '.number' "$EVIDENCE/mcp-ms-add-pr.out")
+$V mcp --toolsets all mcp-unit-add unit_add "{\"worktree\":\"$WA\",\"resource\":\"$RES\"}"
+$V cli mcp-unit-add-cli unit list --worktree "$WA" --json
+diff <(jq -S '.unit | del(.url)' "$EVIDENCE/mcp-unit-add.out") <(jq -S --arg r "$RES" '.units | map(select(.resourceId == $r)) | .[0]' "$EVIDENCE/mcp-unit-add-cli.out")
+jq -e '.unit.source == "trunk" and .unit.target == null and .unit.url != null' "$EVIDENCE/mcp-unit-add.out"
+jq -e --arg repo "$T" '.tool == "unit_add" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-unit-add.event.json"
+```
+
+Pass when both exit 0, the added Unit equals the CLI list entry without `url`, it has source
+`trunk` and no target, and the event carries the Team Space ID. `RES` is the `Budget` sheet's
+Resource ID from MS3, added to its own pull request `AN` (discarded in MS10).
+
+**MS8. Blob get.**
+
+```bash
+$V mcp --toolsets files mcp-blob-get blob_get "{\"resource\":\"$BLOB\"}"
+$V cli mcp-blob-get-cli blob get "$BLOB" --json
+diff <(jq -S 'del(.node.url)' "$EVIDENCE/mcp-blob-get.out") <(jq -S '.' "$EVIDENCE/mcp-blob-get-cli.out")
+jq -e --arg origin "$ORIGIN" '.node.url == "\($origin)/nodes/\(.node.nodeId)" and .resource.kind == "blob" and .resource.byteSize == 9' "$EVIDENCE/mcp-blob-get.out"
+jq -e --arg repo "$T" '.tool == "blob_get" and .toolset == "files" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-blob-get.event.json"
+```
+
+Pass when both exit 0, the results are equal without `node.url`, the Blob is 9 bytes, and the event
+records the `files` toolset and the Team Space ID.
+
+**MS9. Node create, rename, move and trash.**
+
+```bash
+$V mcp --toolsets all mcp-node-create space_node "{\"action\":\"create\",\"repo\":\"$O/verify-team\",\"name\":\"Reports\",\"parent\":\"$FOLDER\"}"
+RN=$(jq -r '.node.nodeId' "$EVIDENCE/mcp-node-create.out")
+$V cli mcp-node-create-cli space browse "$O/verify-team" --parent "$FOLDER" --json
+diff <(jq -S '.node | del(.url)' "$EVIDENCE/mcp-node-create.out") <(jq -S --arg id "$RN" '.nodes | map(select(.nodeId == $id) | del(.path)) | .[0]' "$EVIDENCE/mcp-node-create-cli.out")
+jq -e --arg repo "$T" '.tool == "space_node" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-node-create.event.json"
+$V mcp --toolsets all mcp-node-rename space_node "{\"action\":\"rename\",\"node\":\"$RN\",\"name\":\"Reports 2026\"}"
+$V cli mcp-node-rename-cli space browse "$O/verify-team" --parent "$FOLDER" --json
+diff <(jq -S '.node | del(.url)' "$EVIDENCE/mcp-node-rename.out") <(jq -S --arg id "$RN" '.nodes | map(select(.nodeId == $id) | del(.path)) | .[0]' "$EVIDENCE/mcp-node-rename-cli.out")
+jq -e --arg repo "$T" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-node-rename.event.json"
+$V mcp --toolsets all mcp-node-move space_node "{\"action\":\"move\",\"node\":\"$RN\",\"root\":true}"
+$V cli mcp-node-move-cli space browse "$O/verify-team" --json
+diff <(jq -S '.node | del(.url)' "$EVIDENCE/mcp-node-move.out") <(jq -S --arg id "$RN" '.nodes | map(select(.nodeId == $id) | del(.path)) | .[0]' "$EVIDENCE/mcp-node-move-cli.out")
+jq -e '.node.parentNodeId == null' "$EVIDENCE/mcp-node-move.out"
+$V mcp --toolsets all mcp-node-move-bad space_node "{\"action\":\"move\",\"node\":\"$RN\",\"root\":true,\"parent\":\"$FOLDER\"}"
+test $? -eq 1
+$V cli mcp-node-move-bad-cli space node move "$RN" --root --parent "$FOLDER" --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-node-move-bad.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-node-move-bad-cli.err" | head -n1)" = "$code"
+$V mcp --toolsets all mcp-node-trash space_node "{\"action\":\"trash\",\"node\":\"$RN\"}"
+$V cli mcp-node-trash-cli space browse "$O/verify-team" --json
+jq -e --arg id "$RN" '.trashBatch.root.nodeId == $id and .trashBatch.nodeCount >= 1' "$EVIDENCE/mcp-node-trash.out"
+jq -e --arg id "$RN" '.nodes | all(.[]; .nodeId != $id)' "$EVIDENCE/mcp-node-trash-cli.out"
+jq -e --arg repo "$T" '.tool == "space_node" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-node-trash.event.json"
+```
+
+Pass when every expected-success command exits 0, each Node result equals the CLI browse entry
+without `url` and `path`, giving both `root` and `parent` fails in MCP and CLI with the same
+code, the trashed Node leaves the CLI browse, and each event carries the Team Space ID.
+
+**MS10. Merge and discard.**
+
+```bash
+$V mcp --toolsets all mcp-ms-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$NB\"}"
+$V mcp --toolsets all mcp-pr-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NB\"}"
+$V cli mcp-pr-merge-cli pr view "$NB" -R "$O/verify-team" --json
+diff <(jq -S 'del(.url, .units)' "$EVIDENCE/mcp-pr-merge.out") <(jq -S 'del(.units)' "$EVIDENCE/mcp-pr-merge-cli.out")
+jq -e '.units | length >= 1 and all(.[]; .mergeResult == "merged")' "$EVIDENCE/mcp-pr-merge-cli.out"
+jq -e --arg origin "$ORIGIN" --arg t "$T" --argjson n "$NB" '.state == "merged" and .url == "\($origin)/spaces/\($t)/pulls/\($n)"' "$EVIDENCE/mcp-pr-merge.out"
+jq -e --arg repo "$T" '.tool == "pr_merge" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-merge.event.json"
+$V cli mcp-ms-forecast space find forecast --space "$O/verify-team" --json
+jq -e '.nodes | length == 1 and .[0].name == "Forecast"' "$EVIDENCE/mcp-ms-forecast.out"
+$V mcp --toolsets all mcp-pr-merge-again pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NB\"}"
+test $? -eq 1
+$V cli mcp-pr-merge-again-cli pr merge "$NB" -R "$O/verify-team" --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-pr-merge-again.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-pr-merge-again-cli.err" | head -n1)" = "$code"
+$V mcp --toolsets all mcp-pr-discard pr_discard "{\"repo\":\"$O/verify-team\",\"number\":\"$AN\"}"
+$V cli mcp-pr-discard-cli pr view "$AN" -R "$O/verify-team" --json
+diff <(jq -S 'del(.url, .units)' "$EVIDENCE/mcp-pr-discard.out") <(jq -S 'del(.units)' "$EVIDENCE/mcp-pr-discard-cli.out")
+jq -e '.state == "discarded"' "$EVIDENCE/mcp-pr-discard.out"
+jq -e --arg repo "$T" '.tool == "pr_discard" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-discard.event.json"
+```
+
+Pass when the ready pull request merges and the draft pull request `AN` from MS7 is discarded with results equal to the CLI view. Lifecycle transitions (ready, merge, discard) return the Worktree with an empty `units`, as the matching `uvw pr` commands do; the CLI view lists the Units, so `units` is compared through the view
+without `url`, the merged Unit appears in the Space as `Forecast`, merging a second time fails in
+MCP and CLI with the same code (`workspace-lifecycle-invalid`), and the events carry the Team Space ID.
+
+**MS11. Stage B product journey.** An agent files an Issue, opens a pull request, adds a sheet and hands it over.
+
+```bash
+$V mcp --toolsets all mcp-prod-issue issue_create "{\"repo\":\"$O/verify-team\",\"title\":\"Quarterly forecast\",\"body\":\"Needs a forecast sheet\"}"
+IN=$(jq -r '.number' "$EVIDENCE/mcp-prod-issue.out")
+$V mcp --toolsets all mcp-prod-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"Add forecast sheet (#$IN)\",\"body\":\"Closes the forecast request\",\"idempotency_key\":\"mcp-prod-$VERIFY_UVW_RUN\"}"
+PW=$(jq -r '.id' "$EVIDENCE/mcp-prod-pr.out")
+PRN=$(jq -r '.number' "$EVIDENCE/mcp-prod-pr.out")
+$V mcp --toolsets all mcp-prod-unit unit_create "{\"worktree\":\"$PW\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Q4 Forecast\"}"
+$V mcp --toolsets all mcp-prod-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$PRN\"}"
+$V cli mcp-prod-pr-cli pr view "$PRN" -R "$O/verify-team" --json
+$V cli mcp-prod-unit-cli unit list --worktree "$PW" --json
+diff <(jq -S 'del(.url, .units)' "$EVIDENCE/mcp-prod-ready.out") <(jq -S 'del(.units)' "$EVIDENCE/mcp-prod-pr-cli.out")
+jq -e '.state == "ready"' "$EVIDENCE/mcp-prod-ready.out"
+jq -e '.units | length == 1 and .[0].name == "Q4 Forecast" and .[0].change == "added"' "$EVIDENCE/mcp-prod-unit-cli.out"
+PR_URL=$(jq -r '.url' "$EVIDENCE/mcp-prod-ready.out")
+eval "$($V env)"
+agent-browser open "$ORIGIN/login" && agent-browser wait 1500
+agent-browser storage local set univer-workspace-language en-US && agent-browser reload && agent-browser wait 1500
+agent-browser find label "Username" fill "verify-$VERIFY_UVW_RUN"
+agent-browser find label "Password" fill "$(cat "${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/user.pw")"
+agent-browser click 'form button[type=submit]'
+agent-browser wait --url '**/home'
+agent-browser open "$PR_URL" && agent-browser wait 3000
+agent-browser screenshot "$EVIDENCE/mcp-product-pr-ready.png"
+agent-browser snapshot -c > "$EVIDENCE/mcp-product-pr-ready.snapshot.txt"
+grep -q "Ready" "$EVIDENCE/mcp-product-pr-ready.snapshot.txt"
+grep -q "Q4 Forecast" "$EVIDENCE/mcp-product-pr-ready.snapshot.txt"
+```
+
+Pass when every command exits 0, the `ready` result equals the CLI view without `url`, the CLI
+lists the one added `Q4 Forecast` sheet, the screenshot of the pull request page shows the
+title `Add forecast sheet (#N)`, the `Ready` state and the `Q4 Forecast` file (open the PNG and
+look; the accessibility snapshot greps are the second view), and the pull request stays `ready`: the agent
+hands the `PR_URL` to the user and does not merge.
 
 **M12. Cleanup.**
 

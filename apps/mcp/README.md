@@ -1,10 +1,10 @@
 # Univer Workspace MCP
 
 A private remote MCP application built on `@univerjs/univer-workspace-client-core`.
-Stage A and the first Stage B slice expose `whoami`, `repo_list`, `repo_view` and six Issue
-tools over Streamable HTTP using the
-2026-07-28 and 2025-11-25 protocols. Repository results match the CLI JSON and add
-browser URLs. Lists return `{ repos: [...] }` in both protocols.
+Stage A and the Stage B slices so far expose identity, repositories, Issues, pull requests,
+search, browse, files in a pull request, repository and label administration, and merge or
+discard over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols. Results match
+the CLI `--json` output and add Browser URLs. Lists return `{ repos: [...] }` in both protocols.
 
 The gateway talks to Workspace through HTTP. It has no database and does not import
 the CLI application. Workspace remains the authority for identity and permissions.
@@ -53,7 +53,8 @@ Docker Desktop without changing those identities.
 
 `/mcp` defaults to `core`. Use `?toolsets=core,files,admin` to select groups or
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
-Only `core` has tools so far, in this fixed order. Every object with a Browser page carries `url`.
+Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
+Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
@@ -73,10 +74,35 @@ Only `core` has tools so far, in this fixed order. Every object with a Browser p
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`). Merging stays with the user |
 | `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
+| `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |
+| `space_find` | Required `space`, `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
+| `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
+| `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
+| `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
 
-Every tool declares a scope (`read` for `whoami`, `repo_*`, `issue_list`, `issue_view`, `pr_list`, `pr_view`, `search` and `browse`; `write` for the other seven) and
-all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
-false, `openWorldHint` is false) and an output schema. Development passthrough grants all
+`files` toolset:
+
+| Tool | Arguments | Structured result |
+| --- | --- | --- |
+| `blob_get` | Required `resource` | `{ node, resource }` |
+
+`admin` toolset:
+
+| Tool | Arguments | Structured result |
+| --- | --- | --- |
+| `repo_create` | Required `slug`; optional `name` (defaults to the slug), `description` (at most 350 characters), `public` | Repository with `url`. Takes effect immediately |
+| `repo_edit` | Required `repo`; at least one of `name`, `description`, `visibility` (`public` or `private`), `slug` | Repository with `url`. Takes effect immediately; a new slug breaks old references |
+| `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
+| `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
+| `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
+| `pr_merge` | Required `repo`, `number` | Worktree, now `merged`. Only when the user asked |
+| `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
+
+Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `blob_get` and `label_list`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+`pr_ready`, `unit_add`, `unit_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
+`pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
+true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. Development passthrough grants all
 scopes; a connection without the scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns

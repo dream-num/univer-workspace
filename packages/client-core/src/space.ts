@@ -29,6 +29,96 @@ export interface BrowseSpaceInput {
   readonly unitType?: WorkspaceUnitType;
 }
 
+/** Spells a parameter in an error message: the CLI says `--unit-type`, a tool `unit_type`. */
+export type ParameterName = (parameter: string) => string;
+const plainName: ParameterName = (parameter) => parameter;
+
+const orList = (items: readonly string[]): string =>
+  items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} or ${items.at(-1)!}`;
+
+/** `resourceKind` none or blob cannot narrow by Unit type; `unitType` stays a string so callers validate it themselves. */
+export function assertSpaceFilter(
+  filter: { readonly resourceKind?: WorkspaceResourceKindFilter; readonly unitType?: string },
+  name: ParameterName = plainName,
+): void {
+  if (filter.unitType !== undefined && (filter.resourceKind === "none" || filter.resourceKind === "blob")) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `${name("unit_type")} can only be combined with ${name("resource_kind")} univer.`,
+    );
+  }
+}
+
+/** The destination parent of a Node move: a Node ID, or null for the Space root. */
+export function nodeMoveParent(
+  input: { readonly parent?: string; readonly root?: boolean },
+  name: ParameterName = plainName,
+): string | null {
+  if ((input.parent !== undefined) === (input.root === true)) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `Exactly one of ${name("parent")} <node> or ${name("root")} is required.`,
+    );
+  }
+  return input.root === true ? null : input.parent!;
+}
+
+export const REPO_DESCRIPTION_MAX = 350;
+export const REPO_EDIT_FIELDS = ["name", "description", "visibility", "slug"] as const;
+export type RepoEditField = (typeof REPO_EDIT_FIELDS)[number];
+
+/** Creates a Team Space repository: the name defaults to the slug and the description is a second call. */
+export async function createRepo(
+  spaces: Pick<WorkspaceSpaceFeature, "create" | "update">,
+  input: {
+    readonly description?: string;
+    readonly name?: string;
+    readonly public?: boolean;
+    readonly slug: string;
+  },
+  name: ParameterName = plainName,
+): Promise<WorkspaceSpace> {
+  if (input.description !== undefined && input.description.trim().length > REPO_DESCRIPTION_MAX) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `${name("description")} must contain at most ${String(REPO_DESCRIPTION_MAX)} characters.`,
+    );
+  }
+  const created = await spaces.create({
+    name: input.name ?? input.slug,
+    slug: input.slug,
+    ...(input.public === true ? { publicRead: true } : {}),
+  });
+  return input.description === undefined
+    ? created
+    : await spaces.update(created.id, { description: input.description });
+}
+
+/** The Space update for a repository edit; `accepted` names the fields the caller offers, for the empty-edit message. */
+export function repoEditPatch(
+  input: {
+    readonly description?: string;
+    readonly name?: string;
+    readonly slug?: string;
+    readonly visibility?: "public" | "private";
+  },
+  accepted: readonly RepoEditField[] = REPO_EDIT_FIELDS,
+  name: ParameterName = plainName,
+): { description?: string; name?: string; publicRead?: boolean; slug?: string } {
+  if (accepted.every((field) => input[field] === undefined)) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `Nothing to change: pass ${orList(accepted.map(name))}.`,
+    );
+  }
+  return {
+    ...(input.name === undefined ? {} : { name: input.name }),
+    ...(input.description === undefined ? {} : { description: input.description }),
+    ...(input.visibility === undefined ? {} : { publicRead: input.visibility === "public" }),
+    ...(input.slug === undefined ? {} : { slug: input.slug }),
+  };
+}
+
 export function selectRepos(
   spaces: readonly WorkspaceSpace[],
   filter: { readonly owner?: string; readonly type?: "team" | "personal"; readonly limit: number },

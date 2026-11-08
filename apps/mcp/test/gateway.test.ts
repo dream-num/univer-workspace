@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import { createGateway } from "../src/gateway/server.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
+import { adminNames, coreNames, destructiveNames, filesNames, writeNames } from "./tool-names.js";
 
 const identityOrigin = "https://workspace.example";
 const session = "test-session-secret-do-not-log";
@@ -299,49 +300,26 @@ describe("gateway over real HTTP and the MCP client", () => {
     },
   );
 
-  it("lists the ordered registry identically for core and all with complete schemas and annotations", async () => {
-    const core = await connect({ pin: "2026-07-28" }, "?toolsets=core");
-    const all = await connect({ pin: "2026-07-28" }, "?toolsets=all");
-    const coreTools = await core.listTools();
-    expect(await all.listTools()).toEqual(coreTools);
-    expect(coreTools.tools.map((tool) => tool.name)).toEqual([
-      "whoami",
-      "repo_list",
-      "repo_view",
-      "issue_list",
-      "issue_view",
-      "issue_create",
-      "issue_edit",
-      "issue_comment",
-      "issue_set_state",
-      "pr_list",
-      "pr_view",
-      "pr_create",
-      "pr_edit",
-      "pr_ready",
-      "search",
-      "browse",
-    ]);
-    const writes = [
-      "issue_create",
-      "issue_edit",
-      "issue_comment",
-      "issue_set_state",
-      "pr_create",
-      "pr_edit",
-      "pr_ready",
-    ];
-    for (const tool of coreTools.tools) {
+  it("lists the selected toolsets in the fixed registry order with complete schemas and annotations", async () => {
+    const names = async (suffix: string) =>
+      (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map((tool) => tool.name);
+    expect(await names("")).toEqual(coreNames);
+    expect(await names("?toolsets=core")).toEqual(coreNames);
+    expect(await names("?toolsets=files")).toEqual(filesNames);
+    expect(await names("?toolsets=admin")).toEqual(adminNames);
+    expect(await names("?toolsets=admin,core")).toEqual([...coreNames, ...adminNames]);
+    expect(await names("?toolsets=core,files,admin")).toEqual([...coreNames, ...filesNames, ...adminNames]);
+    expect(await names("?toolsets=all")).toEqual([...coreNames, ...filesNames, ...adminNames]);
+    const all = await (await connect({ pin: "2026-07-28" }, "?toolsets=all")).listTools();
+    for (const tool of all.tools) {
       expect(tool.outputSchema).toBeDefined();
       expect(tool.annotations).toMatchObject({
-        readOnlyHint: !writes.includes(tool.name),
-        destructiveHint: false,
+        readOnlyHint: !writeNames.includes(tool.name),
+        destructiveHint: destructiveNames.includes(tool.name),
         openWorldHint: false,
       });
     }
     expect(events()).toHaveLength(0);
-    const files = await connect({ pin: "2026-07-28" }, "?toolsets=files");
-    expect((await files.listTools()).tools).toEqual([]);
   });
 
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {

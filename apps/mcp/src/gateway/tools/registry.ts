@@ -14,6 +14,19 @@ import { prEditTool } from "./core/pr-edit.js";
 import { prReadyTool } from "./core/pr-ready.js";
 import { searchTool } from "./core/search.js";
 import { browseTool } from "./core/browse.js";
+import { spaceBrowseTool } from "./core/space-browse.js";
+import { spaceFindTool } from "./core/space-find.js";
+import { unitListTool } from "./core/unit-list.js";
+import { unitAddTool } from "./core/unit-add.js";
+import { unitCreateTool } from "./core/unit-create.js";
+import { blobGetTool } from "./files/blob-get.js";
+import { repoCreateTool } from "./admin/repo-create.js";
+import { repoEditTool } from "./admin/repo-edit.js";
+import { labelListTool } from "./admin/label-list.js";
+import { labelWriteTool } from "./admin/label-write.js";
+import { spaceNodeTool } from "./admin/space-node.js";
+import { prMergeTool } from "./admin/pr-merge.js";
+import { prDiscardTool } from "./admin/pr-discard.js";
 import type { ToolDefinition } from "./definition.js";
 
 export const tools: readonly ToolDefinition[] = [
@@ -33,6 +46,19 @@ export const tools: readonly ToolDefinition[] = [
   prReadyTool,
   searchTool,
   browseTool,
+  spaceBrowseTool,
+  spaceFindTool,
+  unitListTool,
+  unitAddTool,
+  unitCreateTool,
+  blobGetTool,
+  repoCreateTool,
+  repoEditTool,
+  labelListTool,
+  labelWriteTool,
+  spaceNodeTool,
+  prMergeTool,
+  prDiscardTool,
 ];
 export const toolsets = ["core", "files", "admin", "all"] as const;
 

@@ -30,6 +30,7 @@ export {
   type WorkspaceRequestOptions,
 } from "./http.js";
 export {
+  LABEL_COLORS,
   listIssues,
   issueApiUsername,
   WorkspaceIssueFeature,
@@ -68,19 +69,31 @@ export {
   type WorkspaceRepoReference,
 } from "./repo-ref.js";
 export {
+  assertSpaceFilter,
+  createRepo,
+  nodeMoveParent,
+  repoEditPatch,
+  REPO_DESCRIPTION_MAX,
+  REPO_EDIT_FIELDS,
   selectRepos,
   WorkspaceSpaceFeature,
   type BrowseSpaceInput,
+  type ParameterName,
+  type RepoEditField,
   type WorkspaceResourceKindFilter,
 } from "./space.js";
 export type {
   WorkspaceAccessRole,
+  WorkspaceBlobResource,
   WorkspaceNode,
   WorkspaceNodeSummary,
   WorkspaceSpace,
+  WorkspaceTrashBatch,
   WorkspaceUnitType,
 } from "./space-model.js";
-export { issueUrl, pullUrl, repoUrl } from "./urls.js";
+export { WorkspaceBlobFeature } from "./blob.js";
+export { WorkspaceUnitFeature } from "./unit.js";
+export { issueUrl, nodeUrl, pullUrl, repoUrl } from "./urls.js";
 export { usernameKey } from "./username.js";
 export { WorkspaceWorktreeFeature } from "./worktree.js";
 export type { WorkspaceUnit, WorkspaceWorktree, WorkspaceWorktreeState } from "./worktree-model.js";

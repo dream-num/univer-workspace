@@ -15,7 +15,7 @@ export const repoSchema = z.object({
 });
 
 const issueUserSchema = z.object({ displayName: z.string(), id: z.string(), username: z.string() });
-const issueLabelSchema = z.object({
+export const issueLabelSchema = z.object({
   color: z.string(),
   description: z.string(),
   id: z.string(),
@@ -88,7 +88,7 @@ export const issueTimelineItemSchema = z.union([
   }),
 ]);
 
-const worktreeUnitSchema = z.object({
+export const unitSchema = z.object({
   activationState: z.enum([
     "notApplicable",
     "waitingForMerge",
@@ -109,11 +109,12 @@ const worktreeUnitSchema = z.object({
   unitId: z.string(),
   worktreeId: z.string(),
 });
+export const unitWithUrlSchema = unitSchema.extend({ url: z.url() });
 export const worktreeSchema = z.object({
   id: z.string(),
   name: z.string(),
   state: z.enum(["draft", "ready", "merging", "merged", "discarded"]),
-  units: z.array(worktreeUnitSchema),
+  units: z.array(unitSchema),
   number: z.number().nullable().optional(),
   summary: z.string().nullable().optional(),
   spaceId: z.string().optional(),
@@ -125,3 +126,93 @@ export const worktreeSchema = z.object({
   updatedAt: z.string().optional(),
   url: z.url(),
 });
+
+const resourceCapabilitiesSchema = z.object({
+  downloadContent: z.boolean(),
+  editContent: z.boolean(),
+  openContent: z.boolean(),
+});
+export const blobResourceSchema = z.object({
+  availability: z.enum(["ready", "quarantined"]),
+  byteSize: z.number(),
+  capabilities: resourceCapabilitiesSchema,
+  kind: z.literal("blob"),
+  mediaType: z.string(),
+  resourceId: z.string(),
+});
+const nodeShape = {
+  accessRole: z.enum(["owner", "admin", "editor", "viewer"]),
+  capabilities: z.object({
+    browseChildren: z.boolean(),
+    createChildren: z.boolean(),
+    move: z.boolean(),
+    rename: z.boolean(),
+    share: z.boolean(),
+    trash: z.boolean(),
+  }),
+  hasChildren: z.boolean(),
+  name: z.string(),
+  nodeId: z.string(),
+  parentNodeId: z.string().nullable(),
+  resource: z
+    .union([
+      z.object({
+        capabilities: resourceCapabilitiesSchema,
+        kind: z.literal("univer"),
+        resourceId: z.string(),
+        unitId: z.string(),
+        unitType: z.string(),
+      }),
+      blobResourceSchema,
+    ])
+    .nullable(),
+  spaceId: z.string(),
+  updatedAt: z.string(),
+  url: z.url(),
+};
+export const nodeSummarySchema = z.object(nodeShape);
+export const nodeSchema = z.object({ ...nodeShape, path: z.string() });
+
+const trashBlockerSchema = z
+  .union([
+    z.object({
+      code: z.enum(["RESTORE_PARENT_IN_TRASH", "NESTED_TRASH_BATCH"]),
+      trashBatchId: z.string(),
+    }),
+    z.object({ code: z.literal("ACTIVE_WORKTREE_RESOURCE_REFERENCE") }),
+  ])
+  .nullable();
+export const trashBatchSchema = z.object({
+  capabilities: z.object({ removePermanently: z.boolean(), restore: z.boolean() }),
+  nodeCount: z.number(),
+  originalLocation: z.object({
+    breadcrumbs: z.array(z.object({ name: z.string(), nodeId: z.string() })),
+  }),
+  removeBlockedBy: trashBlockerSchema,
+  restoreBlockedBy: trashBlockerSchema,
+  root: z.object({
+    name: z.string(),
+    nodeId: z.string(),
+    resource: z
+      .union([
+        z.object({ kind: z.literal("univer"), resourceId: z.string(), unitType: z.string() }),
+        z.object({
+          byteSize: z.number(),
+          kind: z.literal("blob"),
+          mediaType: z.string(),
+          resourceId: z.string(),
+        }),
+      ])
+      .nullable(),
+  }),
+  spaceId: z.string(),
+  trashBatchId: z.string(),
+  trashedAt: z.string(),
+  trashedBy: z.object({
+    avatarUrl: z.string().nullable(),
+    id: z.string(),
+    name: z.string(),
+    username: z.string(),
+  }),
+});
+export const labelUsageSchema = issueLabelSchema.extend({ openIssueCount: z.number() });

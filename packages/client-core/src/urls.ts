@@ -3,6 +3,10 @@ export function repoUrl(origin: string, spaceId: string): string {
   return new URL(`/spaces/${encodeURIComponent(spaceId)}`, origin).toString();
 }
 
+export function nodeUrl(origin: string, nodeId: string): string {
+  return new URL(`/nodes/${encodeURIComponent(nodeId)}`, origin).toString();
+}
+
 export function issueUrl(origin: string, spaceId: string, number: number): string {
   return new URL(`/spaces/${encodeURIComponent(spaceId)}/issues/${String(number)}`, origin).toString();
 }
