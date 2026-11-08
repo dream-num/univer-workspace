@@ -498,11 +498,20 @@ and returns Markdown, revision, diagnostics, a refreshed map and `{path, downloa
 Downloads use the existing 15-minute capability links. No resource bytes are inlined.
 
 Optional `assets_upload_id` names the caller's ready `markdown-assets` ZIP.
-The shared executor ZIP reader accepts at most 256 entries, 20,000,000 uncompressed bytes
-per file, and 50 MiB in total. It checks both declared and actual sizes while streaming
+The shared executor ZIP reader accepts at most 256 entries. Markdown assets are limited
+to 4 MiB uncompressed per file and 8 MiB expanded in total. Each entry name, including a
+directory marker, is limited to 1,024 UTF-8 bytes and 32 path segments before inflation.
+It checks both declared and actual sizes while streaming
 and rejects traversal, case and Unicode collisions, duplicate paths and file-directory
 collisions. Source files remain in memory. Compile requests have a 64 MiB frame limit,
 responses have an 8 MiB limit, and exports have a 64 MiB response limit. Both operations
-share the existing 30-second budget. Compile-only has read failure semantics while the
-tool retains the `write` scope. Consumed ZIP bytes and staged asset bytes enter transfer
+share the existing 30-second budget. These ZIP caps do not guarantee that the compiled
+result fits. Assets are inlined into the program. Compile-only must fit the 8 MiB response
+including JavaScript and its JSON encoding. Creation must fit the 900 KiB serialized
+UnitData check and Workspace's 1 MiB request limit, including document overhead.
+See [large content limits](../../docs/design/workspace-mcp/architecture.zh-CN.md#73-大文件导入的限制).
+Compiler and source-map input failures return `workspace-markdown-invalid` with the
+CLI's message and `detail.diagnostics`. Compile-only has read failure semantics while the
+tool retains the `write` scope. Compile-only usage reports `executor: none`, `unit_type: null`
+and `repo: null`, including when a ZIP contributes `upload_bytes`. Consumed ZIP bytes and staged asset bytes enter transfer
 usage, and confirmed creations and updates enter `committed_revisions`.

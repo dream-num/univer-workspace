@@ -1,5 +1,12 @@
 import { expect, it, vi } from "vitest";
-import { WorkspaceContentSource } from "@univerjs/univer-workspace-client-core";
+import { zipSync } from "fflate";
+import { markdownOperation } from "../src/executor/ops/markdown-errors.js";
+import { mapRuntimeError } from "../src/executor/errors.js";
+import {
+  compileWorkspaceMarkdownSource,
+  parseDocMarkdownSourceMap,
+  WorkspaceContentSource,
+} from "@univerjs/univer-workspace-client-core";
 import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import { markdownCompile } from "../src/executor/ops/markdown-compile.js";
 import { markdownExport } from "../src/executor/ops/markdown-export.js";
@@ -98,6 +105,8 @@ it("compile-only returns the program without creating or opening a runtime", asy
   });
   expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
   expect(ctx.usage.cost.committed_revisions).toBe(0);
+  expect(ctx.usage.unitType).toBeUndefined();
+  expect(ctx.usage.repo).toBeUndefined();
 });
 it("reproduces real native initialData on apply retry after a lost POST response", async () => {
   const bodies: string[] = [];
@@ -138,6 +147,8 @@ it("reproduces real native initialData on apply retry after a lost POST response
   confirmed = true;
   const retry = await markdownCompile(ctx, input, new Uint8Array());
   expect(retry.output).toMatchObject({ committed: true, targetUnitId: "created-once" });
+  expect(ctx.usage.unitType).toBe("doc");
+  expect(ctx.usage.repo).toBe("space");
   expect(new Set(bodies).size).toBe(1);
   expect(new Set(keys).size).toBe(1);
   expect(bodies.length).toBeGreaterThan(1);
@@ -169,6 +180,7 @@ it("updates explicit blocks through executeAndCommit and records the confirmed r
   });
   expect(result.output).toMatchObject({ committed: true, sourceMap, execution: { revision: 2 } });
   expect(ctx.usage.cost.committed_revisions).toBe(1);
+  expect(ctx.usage.unitType).toBe("doc");
 });
 it("exports native content and resolves referenced images through authenticated Workspace HTTP", async () => {
   const imageId = "12345678-1234-1234-1234-123456789abc";
@@ -232,3 +244,146 @@ it("exports native content and resolves referenced images through authenticated 
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
 });
+
+const invalidMarkdown = [
+  { label: "inline HTML", text: "Hello <b>html</b>", code: "MARKDOWN_INLINE" },
+  { label: "footnotes", text: "a[^x]\n\n[^x]: footnote", code: "MARKDOWN_INLINE" },
+  { label: "missing ZIP image", text: "![missing](missing.png)", code: "MARKDOWN_ASSET" },
+  {
+    label: "missing image without ZIP",
+    text: "![missing](missing.png)",
+    code: "MARKDOWN_ASSET",
+    noZip: true,
+  },
+  {
+    label: "duplicate IDs",
+    text: ":::block{#a}\none\n:::\n\n:::block{#a}\ntwo\n:::",
+    code: "MARKDOWN_DUPLICATE_ID",
+  },
+  ...["https://example.test/a.png", "/a.png", "../a.png", "file:///a.png"].map((path) => ({
+    label: path,
+    text: `![image](${path})`,
+    code: "MARKDOWN_ASSET_PATH",
+  })),
+];
+it.each(
+  ["compile-only", "create", "update"].flatMap((mode) =>
+    invalidMarkdown.map((example) => ({ mode, ...example })),
+  ),
+)(
+  "returns actionable diagnostics for $label in $mode mode",
+  async ({ mode, text, code, ...example }) => {
+    const ctx = context();
+    const assets = new Map([["other.png", new Uint8Array([1])]]);
+    const expected = await compileWorkspaceMarkdownSource(
+      text,
+      { targetUnitId: "doc" },
+      assets,
+    ).catch((error: unknown) => error);
+    expect(expected).toBeInstanceOf(Error);
+    const input = markdownCompileInput.parse({
+      markdown: text,
+      ...(mode === "compile-only"
+        ? {}
+        : mode === "create"
+          ? { apply: true, worktreeId: "wt", spaceId: "space" }
+          : { apply: true, worktreeId: "wt", unitId: "doc", sourceMap, blockIds: ["intro"] }),
+    });
+    const error = await markdownCompile(
+      ctx,
+      input,
+      "noZip" in example ? new Uint8Array() : zipSync(Object.fromEntries(assets)),
+    ).catch((error: unknown) => error);
+    expect(mapRuntimeError(error, mode === "compile-only" ? "read" : "write")).toEqual({
+      outcome: "tool_error",
+      code: "workspace-markdown-invalid",
+      message: expected instanceof Error ? expected.message : "",
+      detail: {
+        diagnostics: expect.arrayContaining([
+          expect.objectContaining({ code, severity: "error", message: expect.any(String) }),
+        ]),
+      },
+    });
+    expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
+    expect(ctx.usage.unitType).toBeUndefined();
+    expect(ctx.usage.repo).toBeUndefined();
+  },
+);
+it("keeps unrelated internal errors private", async () => {
+  const error = new Error("private internal detail");
+  await expect(
+    markdownOperation(async () => {
+      throw error;
+    }),
+  ).rejects.toBe(error);
+  expect(mapRuntimeError(error, "read")).toMatchObject({
+    outcome: "internal_error",
+    code: "workspace-internal-error",
+    message: "Internal tool error.",
+  });
+});
+it.each(["update", "export"])(
+  "reports an unmapped block as an SDK input error for %s",
+  async (mode) => {
+    const ctx = context();
+    const input = {
+      markdown: ":::block{#nope}\nHello\n:::",
+      apply: true,
+      worktreeId: "wt",
+      unitId: "doc",
+      sourceMap,
+      blockIds: ["nope"],
+    };
+    const error = await (
+      mode === "update" ? markdownCompile(ctx, input, new Uint8Array()) : markdownExport(ctx, input)
+    ).catch((error: unknown) => error);
+    const code = mode === "update" ? "DOC_MARKDOWN_UPDATE_INVALID" : "DOC_MARKDOWN_READ_INVALID";
+    expect(mapRuntimeError(error, mode === "update" ? "write" : "read")).toMatchObject({
+      outcome: "tool_error",
+      code: "workspace-markdown-invalid",
+      message: expect.stringMatching(new RegExp(`^${code}: Block 'nope'`)),
+      detail: { diagnostics: [expect.objectContaining({ code })] },
+    });
+    expect(ctx.runtime.executeRead).not.toHaveBeenCalled();
+    expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
+  },
+);
+it.each(["update", "export"])(
+  "returns actionable invalid source_map diagnostics for %s",
+  async (mode) => {
+    const ctx = context();
+    const invalidMap = [{}];
+    let expected: unknown;
+    try {
+      parseDocMarkdownSourceMap(invalidMap);
+    } catch (error) {
+      expected = error;
+    }
+    const input = {
+      markdown,
+      apply: true,
+      worktreeId: "wt",
+      unitId: "doc",
+      sourceMap: invalidMap,
+      blockIds: ["intro"],
+    };
+    const error = await (
+      mode === "update" ? markdownCompile(ctx, input, new Uint8Array()) : markdownExport(ctx, input)
+    ).catch((error: unknown) => error);
+    expect(mapRuntimeError(error, mode === "update" ? "write" : "read")).toEqual({
+      outcome: "tool_error",
+      code: "workspace-markdown-invalid",
+      message: expected instanceof Error ? expected.message : "",
+      detail: {
+        diagnostics: [
+          expect.objectContaining({
+            code: "DOC_MARKDOWN_SOURCE_MAP_INVALID",
+            message: expect.any(String),
+          }),
+        ],
+      },
+    });
+    expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
+    expect(ctx.runtime.executeRead).not.toHaveBeenCalled();
+  },
+);

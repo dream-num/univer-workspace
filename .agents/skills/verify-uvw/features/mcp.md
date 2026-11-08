@@ -1787,10 +1787,26 @@ Pass when both calls return the same Unit ID and the Worktree Unit list is uncha
 node .agents/skills/verify-uvw/bin/mcp-markdown-roundtrip.mjs
 ```
 
-Pass when an assets ZIP uploads by PUT, Markdown with a heading, list, table and image
+Pass when an assets ZIP uploads by PUT, compile-only returns JavaScript through `mcp-call`
+with `executor: none`, null Unit/repository identities and ZIP upload bytes, and Markdown with a heading, list, table and image
 creates a Doc in a new pull request, and the same key returns the same Unit and source map.
 Compare its inspection with CLI compile-markdown. Export the same native blocks through
 MCP and CLI, compare Markdown and source maps, and download the image to compare its bytes.
 Native export generates fresh asset filenames, so compare Markdown after normalizing only
 that random filename component. Replace one explicit block and inspect the changed heading
 and preserved list. Evidence uses the `mm-markdown-` prefix and includes a summary JSON.
+
+**MM2. Markdown input errors and bounded ZIP paths.** Run after MM1.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-markdown-errors.mjs
+```
+
+Pass when inline HTML, footnotes, missing images with and without a ZIP, duplicate block IDs
+and remote, absolute, traversal and file URL image paths fail in every compile mode.
+Invalid source maps and unmapped blocks for update and export must also fail. All return `workspace-markdown-invalid` with messages and diagnostics.
+The HTML error message must match CLI stderr. A ZIP with a 2,000-directory path must fail
+with `workspace-argument-invalid` while a concurrent executor inspection matches the baseline.
+Both gateway durations must stay below the larger of 2 seconds and five times the warm
+baseline inspection duration. This is a rejection latency guard, not a throughput benchmark.
+Evidence uses `mm-errors-` and includes the CLI transcript, per-call events and summary JSON.

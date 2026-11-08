@@ -2,6 +2,8 @@ import { Unzip, UnzipInflate } from "fflate";
 import type { WorkspaceSourceFiles } from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 
+export const sourceZipPathLimits = { bytes: 1024, segments: 32 };
+
 export interface SourceZipLimits {
   readonly entries: number;
   readonly fileBytes: number;
@@ -12,6 +14,8 @@ export interface SourceZipLimits {
 export function readSourceZip(bytes: Uint8Array, limits: SourceZipLimits): WorkspaceSourceFiles {
   const files = new Map<string, Uint8Array>();
   const paths = new Set<string>();
+  const filePaths = new Set<string>();
+  const directories = new Set<string>();
   let entries = 0;
   let completed = 0;
   let declared = 0;
@@ -27,13 +31,34 @@ export function readSourceZip(bytes: Uint8Array, limits: SourceZipLimits): Works
   const unzip = new Unzip((file) => {
     if (failure) return;
     entries += 1;
+    if (entries > limits.entries) throw invalid("ZIP contains too many entries.");
+    // Bound path work before inflation and Core's subsequent path validation.
+    if (Buffer.byteLength(file.name, "utf8") > sourceZipPathLimits.bytes)
+      throw invalid("ZIP entry name exceeds 1024 UTF-8 bytes.");
     const directory = file.name.endsWith("/");
     const path = directory ? file.name.slice(0, -1) : file.name;
-    assertWorkspaceSourceFiles(new Map([[path, new Uint8Array()]]));
+    const parts = path.split("/");
+    if (parts.length > sourceZipPathLimits.segments)
+      throw invalid("ZIP entry name exceeds 32 path segments.");
+    if (
+      !path ||
+      /[\\\0]/.test(path) ||
+      parts.some((part) => !part || part === "." || part === "..")
+    )
+      throw invalid("ZIP paths must be relative POSIX paths without traversal.");
     const folded = path.normalize("NFC").toLowerCase();
     if (paths.has(folded)) throw invalid("ZIP paths collide.");
     paths.add(folded);
-    if (entries > limits.entries) throw invalid("ZIP contains too many entries.");
+    if (filePaths.has(folded) || (!directory && directories.has(folded)))
+      throw invalid("ZIP file and directory paths collide.");
+    // Scan each separator once instead of rebuilding every prefix from path segments.
+    for (let index = folded.indexOf("/"); index !== -1; index = folded.indexOf("/", index + 1)) {
+      const prefix = folded.slice(0, index);
+      if (filePaths.has(prefix)) throw invalid("ZIP file and directory paths collide.");
+      directories.add(prefix);
+    }
+    if (directory) directories.add(folded);
+    else filePaths.add(folded);
     if (file.originalSize !== undefined) {
       declared += file.originalSize;
       if (file.originalSize > limits.fileBytes || declared > limits.totalBytes)
@@ -41,7 +66,6 @@ export function readSourceZip(bytes: Uint8Array, limits: SourceZipLimits): Works
     }
     if (!directory) {
       files.set(path, new Uint8Array());
-      assertWorkspaceSourceFiles(files);
     }
     let size = 0;
     const chunks: Uint8Array[] = [];
@@ -83,30 +107,4 @@ export function readSourceZip(bytes: Uint8Array, limits: SourceZipLimits): Works
     throw invalid("Invalid ZIP archive.");
   }
   return files;
-}
-
-// Core validates again during compilation. Its path validator is not a public export.
-function assertWorkspaceSourceFiles(files: WorkspaceSourceFiles): void {
-  const paths = new Set<string>();
-  for (const path of files.keys()) {
-    if (
-      !path ||
-      /[\\\0]/.test(path) ||
-      path.split("/").some((part) => !part || part === "." || part === "..")
-    )
-      throw workspaceError(
-        "workspace-argument-invalid",
-        "ZIP paths must be relative POSIX paths without traversal.",
-      );
-    const folded = path.normalize("NFC").toLowerCase();
-    if (paths.has(folded)) throw workspaceError("workspace-argument-invalid", "ZIP paths collide.");
-    paths.add(folded);
-  }
-  for (const path of paths) {
-    const parts = path.split("/");
-    for (let index = 1; index < parts.length; index += 1) {
-      if (paths.has(parts.slice(0, index).join("/")))
-        throw workspaceError("workspace-argument-invalid", "ZIP file and directory paths collide.");
-    }
-  }
 }
