@@ -194,7 +194,12 @@ function eventIssues(event) {
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
   const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
     ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect', 'compile_svg'].includes(tool) && typeof args.worktree === 'string');
-  if ((event.executor === 'none' ? event.unit_type !== null : typeof event.unit_type !== 'string') || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
+  const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true;
+  const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
+  const invalidUnitType = event.executor === 'none' || compileOnlyTypst
+    ? event.unit_type !== null
+    : typeof event.unit_type !== 'string' && !failedTypstWithoutUnit;
+  if (invalidUnitType || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error' || event.outcome === 'timeout') {
     const resultCode = result.structuredContent?.code;
     if (typeof resultCode !== 'string') issues.push('Error result has no structuredContent.code');

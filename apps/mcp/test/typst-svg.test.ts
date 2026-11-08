@@ -1,9 +1,12 @@
 import { expect, it, vi } from "vitest";
 import { zipSync } from "fflate";
+import { tmpdir } from "node:os";
+import { createHash } from "node:crypto";
 import { WorkspaceContentSource } from "@univerjs/univer-workspace-client-core";
 import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import { typstCompile } from "../src/executor/ops/typst-compile.js";
 import { svgCompile } from "../src/executor/ops/svg-compile.js";
+import { markdownCompile } from "../src/executor/ops/markdown-compile.js";
 import { typstCompileInput, svgCompileInput, opSpecs } from "../src/shared/executor-protocol.js";
 import { zeroCost } from "../src/shared/usage.js";
 import { runConversionJob } from "../src/executor/jobs/run.js";
@@ -110,7 +113,6 @@ it("compiles Typst in a job without creating or opening a Unit", async () => {
     compiledTargetUnitId: "typst-test",
     javascript: expect.stringContaining("Hello"),
   });
-  expect(ctx.usage).toEqual({ executor: "none", cost: { ...zeroCost } });
   expect(ctx.runtime.executeAndCommit).not.toHaveBeenCalled();
 }, 20000);
 it("reports the facade's missing root typst.json error", async () => {
@@ -175,7 +177,55 @@ it("materializes identical Typst create intents after a lost creation response",
   expect(retry.output).toMatchObject({ committed: true, unit: { unitId: "created-once" } });
   expect(new Set(bodies).size).toBe(1);
   expect(new Set(keys).size).toBe(1);
+  const typstKey = keys[0];
+  keys.length = 0;
+  await markdownCompile(context(fetcher), { ...input, markdown: "Hello" }, new Uint8Array());
+  expect(keys[0]).not.toBe(typstKey);
+  expect(typstKey).toBe(createHash("sha256").update(JSON.stringify(["owner", "compile_typst", input.idempotencyKey])).digest("hex"));
+  expect(keys[0]).toBe(createHash("sha256").update(JSON.stringify(["owner", input.idempotencyKey])).digest("hex"));
 }, 30000);
+
+const manifest = { schemaVersion: 1, targetUnitId: "errors", pages: ["page.typ"] };
+it.each([
+  { name: "missing manifest", manifest: undefined, files: {}, path: "typst.json", problem: "not found" },
+  { name: "malformed manifest", manifest: "{", files: {}, path: "typst.json", problem: "invalid JSON" },
+  { name: "missing page", manifest: { ...manifest, pages: ["nope.typ"] }, files: {}, path: "nope.typ", problem: "not found" },
+  { name: "directory page", manifest: { ...manifest, pages: ["folder"] }, files: { "folder/child.typ": "Hello" }, path: "folder", problem: "directory" },
+  { name: "invalid page", manifest: { ...manifest, pages: [{ source: 42 }] }, files: {}, path: "typst.json", problem: "pages.0" },
+  { name: "missing prelude", manifest: { ...manifest, prelude: ["nope.typ"] }, files: { "page.typ": "Hello" }, path: "nope.typ", problem: "not found" },
+  { name: "directory prelude", manifest: { ...manifest, prelude: ["folder"] }, files: { "page.typ": "Hello", "folder/child.typ": "Hello" }, path: "folder", problem: "directory" },
+  { name: "invalid prelude", manifest: { ...manifest, prelude: [42] }, files: { "page.typ": "Hello" }, path: "typst.json", problem: "prelude.0" },
+  { name: "unsafe page", manifest: { ...manifest, pages: ["../escape.typ"] }, files: {}, path: "../escape.typ", problem: "unsafe" },
+  { name: "unsafe prelude", manifest: { ...manifest, prelude: ["../escape.typ"] }, files: { "page.typ": "Hello" }, path: "../escape.typ", problem: "unsafe" },
+])("reports actionable bundle errors for $name", async (fixture) => {
+  const files = new Map(Object.entries(fixture.files).map(([path, text]) => [path, Buffer.from(text)]));
+  if (fixture.manifest !== undefined)
+    files.set("typst.json", Buffer.from(typeof fixture.manifest === "string" ? fixture.manifest : JSON.stringify(fixture.manifest)));
+  try {
+    await runConversionJob({ kind: "typst.compile", bundle: files }, credentials, AbortSignal.timeout(15000), entry);
+    expect.fail("Invalid bundle should fail");
+  } catch (error) {
+    expect(error).toMatchObject({ code: "workspace-typst-invalid", message: expect.stringContaining(fixture.path) });
+    expect(error).toHaveProperty("message", expect.stringContaining(fixture.problem));
+    const text = `${error} ${JSON.stringify(error)}`;
+    expect(text).not.toContain(tmpdir());
+    expect(text).not.toContain("univer-mcp-job-");
+  }
+}, 20000);
+
+it.each(['#image("missing.png")', '#read("data.csv")'])("scrubs internal paths in real Typst diagnostics for %s", async (source) => {
+  try {
+    await typstCompile(context(), {}, bundle(source));
+    expect.fail("Missing input should fail");
+  } catch (error) {
+    expect(error).toMatchObject({ code: "workspace-typst-invalid", detail: { diagnostics: expect.any(Array) } });
+    const text = `${error} ${JSON.stringify(error)}`;
+    expect(text).toContain(source.includes("image") ? "missing.png" : "data.csv");
+    expect(text).not.toContain(tmpdir());
+    expect(text).not.toContain("univer-mcp-job-");
+    expect(text).not.toContain("dac-typst-eval-");
+  }
+}, 20000);
 it("reuses ZIP entry and size caps for both formats", async () => {
   const bytes = zipSync({ "large.bin": new Uint8Array(compilerSourceLimits.fileBytes + 1) });
   await expect(typstCompile(context(), {}, bytes)).rejects.toMatchObject({
@@ -248,3 +298,20 @@ it.each([false, true])(
     expect(ctx.usage.cost.committed_revisions).toBe(1);
   },
 );
+
+it("rewrites successful child diagnostics and previews without changing the program", async () => {
+  const result = await runConversionJob(
+    { kind: "typst.compile", bundle: new Map() },
+    credentials,
+    AbortSignal.timeout(5000),
+    new URL("./fixtures/job-diagnostics.mjs", import.meta.url),
+  );
+  expect(result.diagnostics).toEqual([{
+    sourcePath: "nested/page.typ",
+    reason: "file not found (searched at assets/missing.png)",
+  }]);
+  expect(result.previews).toEqual([{ pageId: "1", path: "preview.svg", sourcePath: "nested/page.typ" }]);
+  expect(result.javascript).toBe('return "/user-authored/path";');
+  expect(JSON.stringify({ diagnostics: result.diagnostics, previews: result.previews })).not.toContain(tmpdir());
+  expect(JSON.stringify({ diagnostics: result.diagnostics, previews: result.previews })).not.toContain("univer-mcp-job-");
+});

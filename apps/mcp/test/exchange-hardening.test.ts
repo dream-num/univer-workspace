@@ -308,6 +308,8 @@ it.each([
   "workspace-authentication-required",
   "workspace-result-unknown",
   "LICENSE_USAGE_STORAGE_ERROR",
+  "workspace-typst-invalid",
+  "workspace-typst-diagnostics",
 ])("filters child-provided %s errors at the parent IPC boundary", async (code) => {
   await expect(
     runConversionJob(
@@ -317,7 +319,8 @@ it.each([
       new URL("./fixtures/job-error.mjs", import.meta.url),
     ),
   ).rejects.toMatchObject({
-    code: code.startsWith("LICENSE_") ? code : "workspace-exchange-conversion-failed",
+    code: code.startsWith("LICENSE_") || code.startsWith("workspace-typst-") ? code : "workspace-exchange-conversion-failed",
     message: "failed at [path]",
+    detail: { diagnostics: [{ sourcePath: "nested/page.typ", reason: "file not found (searched at nested/missing.png)", suggestedRewrite: "check [path]" }] },
   });
 });

@@ -74,7 +74,7 @@ if (process.argv[2] === 'typst-jobs') {
   assert.equal(compiled.javascript, readFileSync(program, 'utf8'));
   assert.deepEqual(compiled.diagnostics, read('mcp-typst-cli').diagnostics);
   const event = JSON.parse(readFileSync(join(evidence, 'mcp-typst-compile.event.json'), 'utf8'));
-  assert.equal(event.executor, 'none'); assert.equal(event.unit_type, null); assert.equal(event.repo, null);
+  assert.equal(event.executor, 'cold_start'); assert.equal(event.unit_type, null); assert.equal(event.repo, null);
   assert.equal(event.cost.upload_bytes, bytes.length);
   const pr = mcp('mcp-typst-pr', 'pr_create', { repo, title: 'Typst compiler verification', idempotency_key: `typst-pr-${run}` });
   const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-apply-${run}` };

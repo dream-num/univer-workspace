@@ -1,20 +1,12 @@
 import { createHash } from "node:crypto";
 import { WorkspaceCompileTypstFeature } from "@univerjs/univer-workspace-client-core";
-import {
-  WorkspaceUnitFeature,
-  workspaceError,
-} from "@univerjs/univer-workspace-client-core/product";
+import { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-core/product";
 import { typstCompileOutput } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
 import { compilerSourceLimits, readSourceZip } from "../source-zip.js";
 
 export const typstCompile: Handler<"typst.compile"> = async (ctx, input, bytes) => {
   const bundle = readSourceZip(bytes, compilerSourceLimits);
-  if (!bundle.has("typst.json"))
-    throw workspaceError(
-      "workspace-typst-invalid",
-      "ENOENT: no such file or directory, open 'typst.json'",
-    );
   const feature = new WorkspaceCompileTypstFeature({
     // The injected compiler owns the in-memory bundle; only the job child writes source files.
     compile: async () => {
@@ -48,7 +40,7 @@ export const typstCompile: Handler<"typst.compile"> = async (ctx, input, bytes) 
               ? {}
               : {
                   idempotencyKey: createHash("sha256")
-                    .update(JSON.stringify([ctx.userId, input.idempotencyKey]))
+                    .update(JSON.stringify([ctx.userId, "compile_typst", input.idempotencyKey]))
                     .digest("hex"),
                 }),
           },

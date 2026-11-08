@@ -1,6 +1,6 @@
 import type { WorkspaceUnitExchangeDependencies } from "@univerjs/univer-workspace-client-core";
 import { compilerOperation } from "../ops/compiler-errors.js";
-import { conversionError } from "./errors.js";
+import { validateTypstBundle } from "./typst-bundle.js";
 import type { JobRequest } from "./protocol.js";
 
 process.once("disconnect", () => process.exit(0));
@@ -10,6 +10,7 @@ process.once("message", (message: JobRequest) => {
     try {
       let value: unknown;
       if (message.kind === "typst.compile") {
+        validateTypstBundle(message.bundle);
         const { WorkspaceCompileTypstFeature } =
           await import("@univerjs/univer-workspace-client-core");
         value = await new WorkspaceCompileTypstFeature({
@@ -81,12 +82,11 @@ process.once("message", (message: JobRequest) => {
         {
           ok: false,
           error: {
-            ...conversionError(
+            code:
               error instanceof Error && "code" in error && typeof error.code === "string"
                 ? error.code
                 : "workspace-exchange-conversion-failed",
-              error instanceof Error ? error.message : "Office conversion failed.",
-            ),
+            message: error instanceof Error ? error.message : "Office conversion failed.",
             ...(error instanceof Error && "detail" in error ? { detail: error.detail } : {}),
           },
         },

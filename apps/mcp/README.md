@@ -500,7 +500,7 @@ Export download names use the Unit's product name.
 
 Children exit on IPC disconnect. Startup removes private job directories owned by dead executors,
 and each completed or failed job removes its own directory. The executor ignores SIGUSR1.
-Only known exchange and `LICENSE_*` errors cross the child boundary. Other codes become
+Only known exchange, Typst and `LICENSE_*` errors cross the child boundary. Other codes become
 `workspace-exchange-conversion-failed`, and absolute paths are removed from error messages.
 
 `exchange.import` permits a 64 MiB request frame for the default 50 MiB Office upload,
@@ -645,7 +645,9 @@ An optional compile-only `idempotency_key` deduplicates identical arguments; wit
 each call starts a compilation. Reusing a key with a different bundle returns
 `workspace-idempotency-conflict`. Stale Typst jobs conservatively report
 `workspace-result-unknown`, since the sidecar does not retain apply arguments.
-Facade input errors preserve their messages and available
-`detail.diagnostics` as `workspace-typst-invalid` or `workspace-svg-invalid`.
-Compile-only has read failure semantics and reports no Unit/runtime usage. ZIP bytes count as
+Bundle input and facade errors return `workspace-typst-invalid` or `workspace-svg-invalid`
+with actionable messages and available `detail.diagnostics`. Typst bundle errors name
+the bundle-relative file. Child errors and diagnostics rewrite temporary paths to bundle-relative paths.
+Compile-only has read failure semantics. Typst reports `executor: cold_start` for its job child;
+SVG reports `executor: none`. Both report `unit_type: null`, `repo: null` and no worker costs. ZIP bytes count as
 `upload_bytes`; confirmed creations and commits count as `committed_revisions`.

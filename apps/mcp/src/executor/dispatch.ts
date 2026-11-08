@@ -128,6 +128,7 @@ export function createDispatcher(
         source: () => source,
         runtime: bindRuntime(runtime, grant, usage, controller.signal, verifyGrant.invalidate),
         compileTypst: async (bundle) => {
+          usage.executor = "cold_start";
           const release = await jobs.acquire(controller.signal);
           try {
             return await runConversionJob(
