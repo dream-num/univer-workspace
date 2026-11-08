@@ -169,6 +169,11 @@ port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS
 `up` to enable a second executor for MX13. The replica count is saved in the run. Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
 
+Set `EXECUTOR_MAX_WORKERS` and `EXECUTOR_IDLE_TTL_MS` in the launching shell before
+`up` to size an experimental executor pool. Unset values keep the existing defaults
+of 4 workers and 60000 ms. These Compose settings also apply to `executor-b`.
+Restart with `down`, then `up` after changing them. They do not change product defaults.
+
 Run `$V user` to create an independent MCP session, a fresh opencode directory and a personal
 access token (PAT). The gateway exchanges the PAT with Workspace (confidential client
 `univer-workspace-mcp-gateway`, created by `up` with a random secret in `home/mcp-oauth-secret`) for a
@@ -243,3 +248,11 @@ Deduplicated responses carry `_meta["univer.workspace.deduplicated"]: true`; the
 requires zero additional conversion events for that marker. Failed jobs release their keys,
 so a retry runs again and emits its own settled event. A reused key with different arguments
 returns `workspace-idempotency-conflict` and starts nothing (MX10).
+
+For executor sizing and sustained-write measurements, use
+`node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help` and the
+[capacity benchmark recipe](features/mcp.md#executor-capacity-benchmark).
+Run `--self-test` before a real run. The default benchmark saves JSON with sample
+counts, median, range, p95 for at least twenty observations, errors, usage events,
+readback checks, process RSS, and host counters. It waits for a quiet machine and
+never supplies production sizing numbers without a local measurement.

@@ -1873,3 +1873,53 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs harsh
 Pass when every write commits, every committed value is read back at its written cell, and no inspect fails.
 `resilience-harsh.json` records request outcomes, read latency p50 and p95 in milliseconds, and reruns.
 Latency includes MCP connection, queue wait, the tool call, and client close on the local Docker stack.
+
+## Executor capacity benchmark
+
+Use a quiet local Docker Desktop machine. This benchmark creates draft pull requests
+and Sheets in the disposable run. It verifies every reported commit through `inspect`
+and saves gateway events, executor metric deltas, host counters, and process RSS.
+It does not measure production capacity.
+
+Start in a long-lived shell. Set the pool settings before `up`.
+
+```bash
+export VERIFY_UVW_ROOT=/tmp/verify-uvw-d8
+export VERIFY_UVW_SERVER_PORT=3967 VERIFY_UVW_WEB_PORT=6011 VERIFY_UVW_MCP_PORT=3977
+export EXECUTOR_MAX_WORKERS=16 EXECUTOR_IDLE_TTL_MS=300000
+unset VERIFY_UVW_RUN
+V=.agents/skills/verify-uvw/bin/verify-uvw
+VERIFY_UVW_MCP=1 $V up && $V user && $V doctor
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help
+node .agents/skills/verify-uvw/bin/mcp-bench.mjs --self-test
+node .agents/skills/verify-uvw/bin/mcp-bench.mjs --output "$EVIDENCE/mcp-bench.json" > "$EVIDENCE/mcp-bench.stdout.json"
+node .agents/skills/verify-uvw/bin/mcp-bench.mjs --scenario profile --output "$EVIDENCE/mcp-bench-profile.json" > "$EVIDENCE/mcp-bench-profile.stdout.json"
+$V down
+```
+
+The default run inspects ten distinct cold Units, then makes fifty warm inspections
+and fifty small writes. It samples parent and worker RSS at populations of one, two,
+four, and eight workers. Five thirty-second runs at each concurrency step test distinct
+Units, followed by five runs with eight writers sharing one Unit. Write targets use
+a sparse 100000-row Sheet, expanded before timing, so the default row bound cannot
+look like a capacity failure. Executor restarts
+between populations and write runs keep earlier workers out of the sample.
+
+The script waits up to an hour before each run if another verify stack is active or
+the host's one-minute load exceeds half its logical CPU count. It records every check.
+Competing-stack waits poll every two minutes. Host-only load waits poll every ten seconds.
+It stops increasing writer concurrency on any error or a fivefold increase in p95.
+`--scenario`, `--seconds`, `--repeats`, and `--writers` support calibration runs.
+Read the JSON's failure field and error counts before interpreting its rates.
+
+End-to-end latency includes connection, tool call, and close. Gateway duration and
+worker wall time are separate fields. `worker_cpu_ms` is not CPU time. RSS comes from
+`/proc` inside the executor. Host `ps` includes CPU time for the Workspace process and
+load generator. Container counters come from `docker stats`. The separate profile
+scenario supplies system counters without treating its throughput as a reported run.
+
+A completed benchmark requires usage events for all timed calls, a cold or warm event
+as expected for each microbenchmark call, the expected live-worker population in every
+RSS sample, and readback of every confirmed write. The JSON retains partial evidence
+and a failure message if one of those checks fails.
