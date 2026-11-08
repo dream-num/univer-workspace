@@ -14,6 +14,7 @@ import { parseExecutorConfig } from "../src/shared/config-executor.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import type { ExecutorGrant, RequestHeader } from "../src/shared/executor-protocol.js";
 import { zeroCost, type OpMeta } from "../src/shared/usage.js";
+import { testStagingDirectory } from "./staging-directory.js";
 
 const config = parseExecutorConfig({
   WORKSPACE_ORIGIN: "https://workspace.test",
@@ -63,6 +64,7 @@ describe("round-4 audit outcomes", () => {
     const { authenticate } = createAuthenticator(
       parseGatewayConfig({
         WORKSPACE_ORIGIN: config.WORKSPACE_ORIGIN,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(),
         MCP_PUBLIC_URL: "https://mcp.test/mcp",
         MCP_DEV_SESSION_PASSTHROUGH: "1",
       }),
