@@ -1,13 +1,14 @@
-import { ChevronDown, Lock, LogOut, User } from "lucide-react";
+import { ChevronDown, KeyRound, Lock, LogOut, User } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../shared/i18n";
 import { Avatar, MenuContent, MenuGroup, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "../../shared/ui";
 import type { components } from "../../../../generated/http/schema.js";
 
-export function AccountMenu({ currentSession, onProfile, onPassword, extraItems, logoutPending, onLogout }: {
+export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTokens, extraItems, logoutPending, onLogout }: {
   readonly currentSession: components["schemas"]["AuthenticatedSession"];
   readonly onProfile: () => void;
   readonly onPassword: () => void;
+  readonly onAccessTokens: () => void;
   readonly extraItems: ReactNode;
   readonly logoutPending: boolean;
   readonly onLogout: () => void;
@@ -52,6 +53,10 @@ export function AccountMenu({ currentSession, onProfile, onPassword, extraItems,
               {t("changePassword")}
             </MenuItem>
           ) : null}
+          <MenuItem onClick={onAccessTokens}>
+            <KeyRound />
+            {t("accessTokens")}
+          </MenuItem>
           {extraItems}
         </MenuGroup>
         <MenuSeparator />

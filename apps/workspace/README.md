@@ -27,6 +27,8 @@ hot module replacement, and proxies product API and WebSocket requests to port
 3020. Run both commands and open port 5173 for web development. Port 3020
 alone is sufficient for backend work or viewing the latest built web application.
 
+Manage personal access tokens in the Browser account menu under **Access tokens**.
+
 API documentation is available at:
 
 - `http://127.0.0.1:3020/api-docs`
