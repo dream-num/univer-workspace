@@ -1,7 +1,7 @@
 # MCP gateway
 
 An agent connects to a disposable Docker gateway with its own Workspace session, reads
-identity, repositories and Issues through either MCP protocol, and leaves correlated usage evidence.
+identity, repositories, Issues, pull requests, search and browse links through either MCP protocol, and leaves correlated usage evidence.
 
 ## Sub-features
 
@@ -23,6 +23,14 @@ identity, repositories and Issues through either MCP protocol, and leaves correl
 - MI9 preserves a missing-Issue-number error and its usage event.
 - MI10 preserves a nonexistent-Issue error from the Workspace and its usage event.
 - MI11 returns a structured `workspace-argument-invalid` for an invalid argument and records its usage event.
+- MP1 creates a Personal Space pull request with an idempotency key, and the same key returns the same pull request.
+- MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
+- MP4 lists pull requests against the CLI.
+- MP5 edits a pull request and compares it with the CLI view.
+- MP6 marks a pull request ready and moves it back to draft with `undo`.
+- MP7 and MP8 search Issues and pull requests against the CLI.
+- MP9 compares browse for a repository, a pull request and an Issue with the CLI.
+- MP10 preserves a nonexistent-pull-request error and its usage event.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -127,10 +135,10 @@ $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 for label in core all; do
   jq -e '
-    (map(.name) == ["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state"])
+    (map(.name) == ["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse"])
     and all(.[]; .annotations.destructiveHint == false and .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_|issue_list|issue_view)")); .annotations.readOnlyHint == true)
-    and all(.[] | select(.name | test("^issue_(create|edit|comment|set_state)$")); .annotations.readOnlyHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_|issue_list|issue_view|pr_list|pr_view|search|browse)")); .annotations.readOnlyHint == true)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready))$")); .annotations.readOnlyHint == false)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
 diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S . "$EVIDENCE/mcp-tools-all.out")
@@ -138,7 +146,7 @@ jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin",
 ```
 
 Pass when core and all exit 0 with the same fixed tool order, schemas and annotations
-(six read-only tools, four non-destructive write tools); unknown exits 3 with HTTP 400 and
+(nine read-only tools, seven non-destructive write tools); unknown exits 3 with HTTP 400 and
 the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -361,6 +369,160 @@ jq -e '.outcome == "tool_error" and .error_code == "workspace-argument-invalid" 
 
 Pass when the call exits 1 with a structured `workspace-argument-invalid` result (not the
 SDK's plain validation text) and the event records `tool_error` with the same code.
+
+**MP1. Pull request create.** Personal Space, with an idempotency key.
+
+```bash
+$V cli mcp-personal-id repo view "$O/personal" --json
+P=$(jq -r '.id' "$EVIDENCE/mcp-personal-id.out")
+KEY="mcp-pr-$VERIFY_UVW_RUN"
+$V mcp mcp-pr-create pr_create "{\"repo\":\"$O/personal\",\"title\":\"Agent change\",\"body\":\"From MCP\",\"idempotency_key\":\"$KEY\"}"
+PN=$(jq -r '.number' "$EVIDENCE/mcp-pr-create.out")
+W=$(jq -r '.id' "$EVIDENCE/mcp-pr-create.out")
+$V mcp mcp-pr-create-again pr_create "{\"repo\":\"$O/personal\",\"title\":\"Agent change\",\"body\":\"From MCP\",\"idempotency_key\":\"$KEY\"}"
+$V cli mcp-pr-create-cli pr view "$PN" -R "$O/personal" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-cli.out")
+diff <(jq -S '.' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-again.out")
+jq -e --arg origin "$ORIGIN" --arg p "$P" '.url == "\($origin)/spaces/\($p)/pulls/\(.number)" and .state == "draft" and .kind == "user"' "$EVIDENCE/mcp-pr-create.out"
+jq -e --arg repo "$P" '.tool == "pr_create" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-create.event.json"
+```
+
+Pass when every command exits 0, the CLI view equals the MCP result without `url`, the retry
+with the same key returns an identical pull request (same `id` and `number`), the `url` is
+the Personal Space pull request address, and the event carries the resolved Space ID.
+
+**MP2. Pull request view by number.**
+
+```bash
+$V mcp mcp-pr-view pr_view "{\"repo\":\"$O/personal\",\"number\":\"#$PN\"}"
+$V cli mcp-pr-view-cli pr view "#$PN" -R "$O/personal" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-view.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-cli.out")
+jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-view.event.json"
+```
+
+Pass when both exit 0, the diff is empty, and the event carries the Personal Space ID.
+
+**MP3. Pull request view by URL.**
+
+```bash
+URL=$(jq -r '.url' "$EVIDENCE/mcp-pr-create.out")
+$V mcp mcp-pr-view-url pr_view "{\"repo\":\"$O/personal\",\"number\":\"$URL\"}"
+$V cli mcp-pr-view-url-cli pr view "$URL" --json
+diff <(jq -S '.' "$EVIDENCE/mcp-pr-view.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-url.out")
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-view-url.out") <(jq -S '.' "$EVIDENCE/mcp-pr-view-url-cli.out")
+jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-view-url.event.json"
+```
+
+Pass when both exit 0, the URL result equals the number result, it equals the CLI view without
+`url`, and the event carries the Personal Space ID.
+
+**MP4. Pull request list.**
+
+```bash
+$V mcp mcp-pr-list pr_list "{\"repo\":\"$O/personal\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
+$V cli mcp-pr-list-cli pr list -R "$O/personal" -s all -A @me -L 5 --json
+diff <(jq -S '.prs | map(del(.url))' "$EVIDENCE/mcp-pr-list.out") <(jq -S '.' "$EVIDENCE/mcp-pr-list-cli.out")
+jq -e --arg id "$W" '.prs | length >= 1 and all(.[]; .url != null) and any(.[]; .id == $id)' "$EVIDENCE/mcp-pr-list.out"
+jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-list.event.json"
+```
+
+Pass when both exit 0, the diff is empty, every listed pull request has a `url`, and the event
+carries the Personal Space ID.
+
+**MP5. Pull request edit.**
+
+```bash
+$V mcp mcp-pr-edit pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"title\":\"Agent change v2\",\"body\":\"Edited\"}"
+$V cli mcp-pr-edit-cli pr view "$PN" -R "$O/personal" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-edit.out") <(jq -S '.' "$EVIDENCE/mcp-pr-edit-cli.out")
+jq -e '.name == "Agent change v2" and .summary == "Edited"' "$EVIDENCE/mcp-pr-edit.out"
+jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-edit.event.json"
+$V mcp mcp-pr-edit-bad pr_edit "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid"' "$EVIDENCE/mcp-pr-edit-bad.out"
+```
+
+Pass when both exit 0, the diff is empty, title and body changed, the event carries the
+Personal Space ID, and an edit without any change fails with `workspace-argument-invalid`.
+
+**MP6. Pull request ready and undo.**
+
+```bash
+$V mcp mcp-pr-ready pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
+$V cli mcp-pr-ready-cli pr view "$PN" -R "$O/personal" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-ready.out") <(jq -S '.' "$EVIDENCE/mcp-pr-ready-cli.out")
+jq -e '.state == "ready"' "$EVIDENCE/mcp-pr-ready.out"
+$V mcp mcp-pr-undo pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$PN\",\"undo\":true}"
+$V cli mcp-pr-undo-cli pr view "$PN" -R "$O/personal" --json
+diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-undo.out") <(jq -S '.' "$EVIDENCE/mcp-pr-undo-cli.out")
+jq -e '.state == "draft"' "$EVIDENCE/mcp-pr-undo.out"
+jq -e --arg repo "$P" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-undo.event.json"
+```
+
+Pass when every command exits 0, both diffs are empty, the pull request is `ready` and then
+`draft` again, and the event carries the Personal Space ID.
+
+**MP7. Search Issues.**
+
+```bash
+$V mcp mcp-search-issues search "{\"kind\":\"issues\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
+$V cli mcp-search-issues-cli search issues -s all -A @me -L 5 --json
+diff <(jq -S '.issues | map(del(.url))' "$EVIDENCE/mcp-search-issues.out") <(jq -S '.' "$EVIDENCE/mcp-search-issues-cli.out")
+jq -e --argjson n "$N" '.issues | length >= 1 and all(.[]; .url != null) and any(.[]; .number == $n)' "$EVIDENCE/mcp-search-issues.out"
+jq -e '.repo == null and .outcome == "ok"' "$EVIDENCE/mcp-search-issues.event.json"
+```
+
+Pass when both exit 0, the diff is empty, every Issue has a `url`, and the event has a null
+`repo` because search spans repositories.
+
+**MP8. Search pull requests.**
+
+```bash
+$V mcp mcp-search-prs search "{\"kind\":\"prs\",\"state\":\"all\",\"author\":\"@me\",\"limit\":5}"
+$V cli mcp-search-prs-cli search prs -s all -A @me -L 5 --json
+diff <(jq -S '.prs | map(del(.url))' "$EVIDENCE/mcp-search-prs.out") <(jq -S '.' "$EVIDENCE/mcp-search-prs-cli.out")
+jq -e --arg id "$W" '.prs | length >= 1 and all(.[]; .url != null) and any(.[]; .id == $id)' "$EVIDENCE/mcp-search-prs.out"
+jq -e '.repo == null and .outcome == "ok"' "$EVIDENCE/mcp-search-prs.event.json"
+```
+
+Pass when both exit 0, the diff is empty, every pull request has a `url`, and the event has a
+null `repo`.
+
+**MP9. Browse.**
+
+```bash
+$V mcp mcp-browse-repo browse "{\"repo\":\"$O/personal\"}"
+$V cli mcp-browse-repo-cli browse -R "$O/personal" --json
+$V mcp mcp-browse-pr browse "{\"repo\":\"$O/personal\",\"number\":\"$PN\"}"
+$V cli mcp-browse-pr-cli browse "$PN" -R "$O/personal" --json
+$V mcp mcp-browse-issue browse "{\"repo\":\"$O/verify-team\",\"number\":\"$N\"}"
+$V cli mcp-browse-issue-cli browse "$N" -R "$O/verify-team" --json
+for part in repo pr issue; do
+  diff <(jq -S '.' "$EVIDENCE/mcp-browse-$part.out") <(jq -S '.' "$EVIDENCE/mcp-browse-$part-cli.out")
+done
+jq -e --arg origin "$ORIGIN" --arg p "$P" '.url == "\($origin)/spaces/\($p)"' "$EVIDENCE/mcp-browse-repo.out"
+jq -e --arg origin "$ORIGIN" --arg p "$P" --argjson n "$PN" '.url == "\($origin)/spaces/\($p)/pulls/\($n)"' "$EVIDENCE/mcp-browse-pr.out"
+jq -e --arg origin "$ORIGIN" --arg t "$T" --argjson n "$N" '.url == "\($origin)/spaces/\($t)/issues/\($n)"' "$EVIDENCE/mcp-browse-issue.out"
+jq -e --arg repo "$T" '.repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-browse-issue.event.json"
+```
+
+Pass when every command exits 0, each MCP `{url}` equals the CLI `--json` output, the URLs are
+the repository, pull request and Issue addresses, and each event carries its resolved Space ID.
+
+**MP10. Nonexistent pull request.**
+
+```bash
+$V mcp mcp-pr-missing pr_view "{\"repo\":\"$O/personal\",\"number\":\"99999\"}"
+test $? -eq 1
+$V cli mcp-pr-missing-cli pr view 99999 -R "$O/personal" --json
+test $? -eq 1
+code=$(jq -r '.code' "$EVIDENCE/mcp-pr-missing.out")
+test "$(cut -d: -f1 < "$EVIDENCE/mcp-pr-missing-cli.err" | head -n1)" = "$code"
+jq -e --arg code "$code" '.outcome == "tool_error" and .error_code == $code and .tool == "pr_view"' "$EVIDENCE/mcp-pr-missing.event.json"
+```
+
+Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr prefix, and the
+event records `tool_error` with the same code.
 
 **M12. Cleanup.**
 

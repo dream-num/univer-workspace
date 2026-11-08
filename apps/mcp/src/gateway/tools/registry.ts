@@ -7,6 +7,13 @@ import { issueEditTool } from "./core/issue-edit.js";
 import { issueListTool } from "./core/issue-list.js";
 import { issueSetStateTool } from "./core/issue-set-state.js";
 import { issueViewTool } from "./core/issue-view.js";
+import { prListTool } from "./core/pr-list.js";
+import { prViewTool } from "./core/pr-view.js";
+import { prCreateTool } from "./core/pr-create.js";
+import { prEditTool } from "./core/pr-edit.js";
+import { prReadyTool } from "./core/pr-ready.js";
+import { searchTool } from "./core/search.js";
+import { browseTool } from "./core/browse.js";
 import type { ToolDefinition } from "./definition.js";
 
 export const tools: readonly ToolDefinition[] = [
@@ -19,6 +26,13 @@ export const tools: readonly ToolDefinition[] = [
   issueEditTool,
   issueCommentTool,
   issueSetStateTool,
+  prListTool,
+  prViewTool,
+  prCreateTool,
+  prEditTool,
+  prReadyTool,
+  searchTool,
+  browseTool,
 ];
 export const toolsets = ["core", "files", "admin", "all"] as const;
 

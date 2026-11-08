@@ -314,8 +314,23 @@ describe("gateway over real HTTP and the MCP client", () => {
       "issue_edit",
       "issue_comment",
       "issue_set_state",
+      "pr_list",
+      "pr_view",
+      "pr_create",
+      "pr_edit",
+      "pr_ready",
+      "search",
+      "browse",
     ]);
-    const writes = ["issue_create", "issue_edit", "issue_comment", "issue_set_state"];
+    const writes = [
+      "issue_create",
+      "issue_edit",
+      "issue_comment",
+      "issue_set_state",
+      "pr_create",
+      "pr_edit",
+      "pr_ready",
+    ];
     for (const tool of coreTools.tools) {
       expect(tool.outputSchema).toBeDefined();
       expect(tool.annotations).toMatchObject({

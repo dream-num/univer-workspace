@@ -1,15 +1,15 @@
 import { Command } from "commander";
 import {
   listIssues,
+  listPullRequests,
   issueApiUsername,
+  PULL_REQUEST_STATES,
   type WorkspaceIssueFeature,
   type WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core/product";
 import { collect, emit, executeCommand, jsonFieldsOption, limitOf, oneOf, table, type JsonFieldsOption } from "../../command.js";
 import { ISSUE_LIST_JSON_FIELDS, issueRows } from "../issue/command.js";
 import { PR_JSON_FIELDS } from "../pr/command.js";
-
-const STATES = ["open", "merged", "discarded", "all"] as const;
 
 export function createSearchCommand(
   issues: WorkspaceIssueFeature,
@@ -64,18 +64,15 @@ export function createSearchCommand(
     .action(
       async (options: JsonFieldsOption & { author?: string; limit: string; search?: string; state: string }) => {
         const found = await executeCommand(searchPrs, async () => {
-          const state = oneOf(options.state, STATES, "--state");
-          return await worktrees.list({
-            view: state === "open" ? "active" : state === "all" ? "all" : "processed",
-            ...(state === "merged" || state === "discarded" ? { states: [state] } : {}),
-            limit: limitOf(options.limit),
-            ...(options.search === undefined ? {} : { search: options.search }),
-            ...(options.author === undefined
-              ? {}
-              : options.author === "@me"
-                ? { creatorId: await userId() }
-                : { creatorUsername: options.author }),
-          });
+          return await listPullRequests(
+            { userId, worktrees },
+            {
+              state: oneOf(options.state, PULL_REQUEST_STATES, "--state"),
+              limit: limitOf(options.limit),
+              ...(options.search === undefined ? {} : { search: options.search }),
+              ...(options.author === undefined ? {} : { author: options.author }),
+            },
+          );
         });
         emit(
           searchPrs,

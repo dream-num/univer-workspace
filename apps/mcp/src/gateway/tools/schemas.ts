@@ -87,3 +87,41 @@ export const issueTimelineItemSchema = z.union([
     type: z.literal("event"),
   }),
 ]);
+
+const worktreeUnitSchema = z.object({
+  activationState: z.enum([
+    "notApplicable",
+    "waitingForMerge",
+    "pending",
+    "completed",
+    "failed",
+    "discarded",
+  ]),
+  change: z.enum(["modified", "added", "deleted", "unchanged"]),
+  draftHeadRevision: z.number(),
+  mergeResult: z.enum(["pending", "merged", "unchanged", "conflict", "failed"]),
+  name: z.string(),
+  nodeId: z.string(),
+  resourceId: z.string(),
+  source: z.enum(["trunk", "worktree"]),
+  target: z.object({ parentNodeId: z.string().nullable(), spaceId: z.string() }).nullable(),
+  type: z.string(),
+  unitId: z.string(),
+  worktreeId: z.string(),
+});
+export const worktreeSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  state: z.enum(["draft", "ready", "merging", "merged", "discarded"]),
+  units: z.array(worktreeUnitSchema),
+  number: z.number().nullable().optional(),
+  summary: z.string().nullable().optional(),
+  spaceId: z.string().optional(),
+  kind: z.enum(["user", "team"]).optional(),
+  visibility: z.enum(["private", "space"]).optional(),
+  creator: z.object({ id: z.string(), username: z.string() }).optional(),
+  createdAt: z.string().optional(),
+  createdVia: z.enum(["browser", "agent", "unknown"]).optional(),
+  updatedAt: z.string().optional(),
+  url: z.url(),
+});

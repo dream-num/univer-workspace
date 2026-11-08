@@ -49,6 +49,16 @@ export type {
   WorkspaceIssueUser,
 } from "./issue-model.js";
 export {
+  browseUrl,
+  findPullRequest,
+  listPullRequests,
+  pullRequestSpace,
+  pullRequestView,
+  pullSpaceId,
+  PULL_REQUEST_STATES,
+  type PullRequestState,
+} from "./pull-request.js";
+export {
   parseItemNumber,
   parseRepoReference,
   resolveItemTarget,

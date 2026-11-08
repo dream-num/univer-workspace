@@ -1,4 +1,5 @@
 import {
+  pullSpaceId,
   resolveItemTarget,
   resolveRepoReference,
   workspaceError,
@@ -48,17 +49,8 @@ export class RepoContext {
     return await resolveItemTarget(argument, kind, this.origin, () => this.repo(repoOption));
   }
 
-  /** A User Worktree's Browser repository is its creator's Personal Space, not a Unit target. */
   public async pullSpaceId(worktree: WorkspaceWorktree, resolvedSpaceId?: string): Promise<string | undefined> {
-    if (worktree.number == null) return undefined;
-    if (worktree.spaceId !== undefined) return worktree.spaceId;
-    if (resolvedSpaceId !== undefined) return resolvedSpaceId;
-    if (worktree.kind !== "user" || worktree.creator === undefined) return undefined;
-    const space = await this.spaces.lookup(worktree.creator.username, "personal");
-    if (space.type !== "personal" || space.owner?.id !== worktree.creator.id) {
-      throw workspaceError("workspace-result-mismatch", "The Personal Space does not belong to the pull request's creator.");
-    }
-    return space.id;
+    return await pullSpaceId(this.spaces, worktree, resolvedSpaceId);
   }
 }
 

@@ -35,6 +35,33 @@ const rawIssue = (number: number, overrides: Record<string, unknown> = {}) => ({
   capabilities: { edit: true, close: true, triage: true, comment: true },
   ...overrides,
 });
+const personal = {
+  id: "personal-1",
+  name: "user-1",
+  type: "personal",
+  accessRole: "owner",
+  affiliation: "owner",
+  fullName: "user-1/personal",
+  owner: { id: "user-1", username: "user-1" },
+  slug: null,
+};
+const rawWorktree = (id: string, overrides: Record<string, unknown> = {}) => ({
+  id,
+  name: `PR ${id}`,
+  state: "draft",
+  number: 3,
+  summary: null,
+  kind: "team",
+  visibility: "private",
+  teamSpace: { id: "team-1", name: "Team" },
+  creator: user("user-1"),
+  createdAt: "2026-09-29T00:00:00.000Z",
+  updatedAt: "2026-09-29T00:00:00.000Z",
+  units: [],
+  ...overrides,
+});
+const rawUserWorktree = (id: string, number: number) =>
+  rawWorktree(id, { number, kind: "user", teamSpace: null });
 const team = {
   id: "team-1",
   name: "Team",
@@ -54,6 +81,8 @@ describe("Issue tools and gateway infrastructure", () => {
   let clients: Client[];
   let requests: { method: string; path: string; body: unknown }[];
   let failComments: boolean;
+  let wt3State: string;
+  let idempotencyKeys: (string | null)[];
   let current7: Record<string, unknown>;
   const listPages = new Map<string, unknown>();
 
@@ -66,7 +95,46 @@ describe("Issue tools and gateway infrastructure", () => {
     if (target.pathname === "/api/session") {
       return Response.json({ authenticated: true, user: user("user-1") });
     }
-    if (target.pathname === "/api/spaces/lookup") return Response.json(team);
+    if (target.pathname === "/api/spaces/lookup") {
+      return Response.json(target.searchParams.get("slug") === "personal" ? personal : team);
+    }
+    if (target.pathname === "/api/spaces/team-1" || target.pathname === "/api/spaces/personal-1") {
+      return Response.json(target.pathname.endsWith("team-1") ? team : personal);
+    }
+    if (target.pathname === "/api/worktrees" && request.method === "GET") {
+      return Response.json({
+        items: target.searchParams.get("kind") === "team" ? [rawWorktree("wt-3")] : [rawUserWorktree("wt-u2", 2)],
+        nextCursor: null,
+      });
+    }
+    if (target.pathname === "/api/worktrees" && request.method === "POST") {
+      idempotencyKeys.push(request.headers.get("idempotency-key"));
+      const kind = (JSON.parse(text) as { kind: string }).kind;
+      return Response.json(kind === "user" ? rawUserWorktree("wt-u2", 2) : rawWorktree("wt-3"), { status: 201 });
+    }
+    if (target.pathname === "/api/spaces/team-1/worktrees/3") {
+      return Response.json({ worktree: rawWorktree("wt-3") });
+    }
+    if (target.pathname === "/api/spaces/personal-1/worktrees/2") {
+      return Response.json({ worktree: rawUserWorktree("wt-u2", 2) });
+    }
+    if (target.pathname === "/api/spaces/personal-bob") {
+      return Response.json({ ...personal, id: "personal-bob", owner: { id: "u2", username: "bob" } });
+    }
+    if (target.pathname === "/api/worktrees/wt-3") {
+      return Response.json({
+        worktree: rawWorktree("wt-3", {
+          name: request.method === "PATCH" ? "Edited" : "PR wt-3",
+          state: wt3State,
+        }),
+      });
+    }
+    if (target.pathname === "/api/worktrees/wt-3/ready") {
+      return Response.json({ worktree: rawWorktree("wt-3", { state: "ready" }) });
+    }
+    if (target.pathname === "/api/worktrees/wt-3/reopen") {
+      return Response.json({ worktree: rawWorktree("wt-3", { state: "draft" }) });
+    }
     if (target.pathname === "/api/spaces/team-1/issue-labels") {
       return Response.json({
         labels: ["bug", "docs", "ux"].map((name, index) => ({
@@ -87,7 +155,7 @@ describe("Issue tools and gateway infrastructure", () => {
     if (target.pathname === "/api/spaces/team-1/issues/7" && request.method === "PATCH") {
       return Response.json(rawIssue(7));
     }
-    if (target.pathname === "/api/spaces/team-1/issues") {
+    if (target.pathname === "/api/issues" || target.pathname === "/api/spaces/team-1/issues") {
       return Response.json(listPages.get(target.searchParams.get("cursor") ?? ""));
     }
     if (target.pathname === "/api/spaces/team-1/issues/7") {
@@ -161,6 +229,8 @@ describe("Issue tools and gateway infrastructure", () => {
     logs = "";
     requests = [];
     failComments = false;
+    wt3State = "draft";
+    idempotencyKeys = [];
     current7 = rawIssue(7);
     listPages.clear();
   });
@@ -184,6 +254,13 @@ describe("Issue tools and gateway infrastructure", () => {
       "issue_edit",
       "issue_comment",
       "issue_set_state",
+      "pr_list",
+      "pr_view",
+      "pr_create",
+      "pr_edit",
+      "pr_ready",
+      "search",
+      "browse",
     ];
     const core = await (await connect("?toolsets=core")).listTools();
     expect((await (await connect("?toolsets=all")).listTools()).tools).toEqual(core.tools);
@@ -196,7 +273,7 @@ describe("Issue tools and gateway infrastructure", () => {
     for (const tool of core.tools) {
       expect(tool.outputSchema).toBeDefined();
       expect(tool.annotations).toMatchObject({
-        readOnlyHint: !tool.name.match(/^issue_(create|edit|comment|set_state)$/),
+        readOnlyHint: !tool.name.match(/^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready))$/),
         destructiveHint: false,
         openWorldHint: false,
       });
@@ -395,6 +472,154 @@ describe("Issue tools and gateway infrastructure", () => {
         body: { state: "closed", stateReason: "not_planned" },
       },
     ]);
+  });
+
+  const teamUrl = `${identityOrigin}/spaces/team-1/pulls/3`;
+  const personalUrl = `${identityOrigin}/spaces/personal-1/pulls/2`;
+  const call = async (name: string, args: Record<string, unknown>) =>
+    await (await connect()).callTool({ name, arguments: args });
+
+  it("lists Team and Personal Space pull requests with their Browser URLs", async () => {
+    await start();
+    const client = await connect();
+    const teamList = await client.callTool({
+      name: "pr_list",
+      arguments: { repo: "bob/team", state: "merged", author: "@me", search: "x", limit: 5 },
+    });
+    expect(teamList.structuredContent).toMatchObject({ prs: [{ id: "wt-3", url: teamUrl }] });
+    expect(requests.find((r) => r.path.startsWith("/api/worktrees?"))!.path).toBe(
+      "/api/worktrees?scope=processed&kind=team&teamSpaceId=team-1&state=merged&search=x&limit=100",
+    );
+    requests.length = 0;
+    const personalList = await client.callTool({ name: "pr_list", arguments: { repo: "user-1/personal" } });
+    expect(personalList.structuredContent).toMatchObject({ prs: [{ id: "wt-u2", url: personalUrl }] });
+    expect(requests.find((r) => r.path.startsWith("/api/worktrees?"))!.path).toBe(
+      "/api/worktrees?scope=active&kind=user&limit=30",
+    );
+    expect(events().map((event) => event["repo"])).toEqual(["team-1", "personal-1"]);
+  });
+
+  it("views a pull request by number, URL and Worktree ID", async () => {
+    await start();
+    const client = await connect();
+    for (const number of ["3", "#3", teamUrl, "wt-3"]) {
+      const result = await client.callTool({ name: "pr_view", arguments: { repo: "bob/team", number } });
+      expect(result.structuredContent).toMatchObject({ id: "wt-3", number: 3, url: teamUrl });
+    }
+    const own = await client.callTool({ name: "pr_view", arguments: { repo: "user-1/personal", number: "2" } });
+    expect(own.structuredContent).toMatchObject({ id: "wt-u2", url: personalUrl });
+    expect(events().map((event) => event["repo"])).toEqual([
+      "team-1",
+      "team-1",
+      "team-1",
+      "team-1",
+      "personal-1",
+    ]);
+  });
+
+  it("creates a pull request in a Personal or Team Space and passes the idempotency key through", async () => {
+    await start();
+    const personalResult = await call("pr_create", {
+      repo: "user-1/personal",
+      title: "Mine",
+      body: "B",
+      idempotency_key: "key-1",
+    });
+    expect(personalResult.structuredContent).toMatchObject({ id: "wt-u2", url: personalUrl });
+    const teamResult = await call("pr_create", { repo: "bob/team", title: "T", visibility: "space" });
+    expect(teamResult.structuredContent).toMatchObject({ id: "wt-3", url: teamUrl });
+    expect(requests.filter((r) => r.method === "POST" && r.path === "/api/worktrees").map((r) => r.body)).toEqual([
+      { kind: "user", name: "Mine", summary: "B" },
+      { kind: "team", name: "T", summary: null, teamSpaceId: "team-1", visibility: "space" },
+    ]);
+    expect(idempotencyKeys[0]).toBe("key-1");
+    expect(idempotencyKeys[1]).toEqual(expect.any(String));
+    expect(events().map((event) => event["repo"])).toEqual(["personal-1", "team-1"]);
+  });
+
+  it("refuses another user's Personal Space and an empty pr_edit", async () => {
+    await start();
+    const spaceOfBob = await call("pr_create", { repo: "personal-bob", title: "x" });
+    expect(spaceOfBob).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-argument-invalid" },
+    });
+    expect(writesOf()).toEqual([]);
+    const nothing = await call("pr_edit", { repo: "bob/team", number: "3" });
+    expect(nothing).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-argument-invalid" },
+    });
+    expect(writesOf().filter((r) => r.method === "PATCH")).toEqual([]);
+  });
+
+  it("edits the title, body and visibility and moves a pull request between draft and ready", async () => {
+    await start();
+    const edited = await call("pr_edit", {
+      repo: "bob/team",
+      number: "#3",
+      title: "Edited",
+      body: "New",
+      visibility: "space",
+    });
+    expect(edited.structuredContent).toMatchObject({ name: "Edited", url: teamUrl });
+    const ready = await call("pr_ready", { repo: "bob/team", number: "3" });
+    expect(ready.structuredContent).toMatchObject({ state: "ready", url: teamUrl });
+    expect(writesOf()).toEqual([
+      { method: "PATCH", path: "/api/worktrees/wt-3", body: { name: "Edited", summary: "New", visibility: "space" } },
+      { method: "POST", path: "/api/worktrees/wt-3/ready", body: undefined },
+    ]);
+  });
+
+  it("moves a ready pull request back to draft with undo", async () => {
+    await start();
+    wt3State = "ready";
+    const undone = await call("pr_ready", { repo: "bob/team", number: "3", undo: true });
+    expect(undone.structuredContent).toMatchObject({ state: "draft", url: teamUrl });
+    expect(writesOf().map((r) => r.path)).toEqual(["/api/worktrees/wt-3/reopen"]);
+    wt3State = "draft";
+    const draftAgain = await call("pr_ready", { repo: "bob/team", number: "3", undo: true });
+    expect(draftAgain).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-lifecycle-invalid" },
+    });
+  });
+
+  it("searches Issues and pull requests without a repository", async () => {
+    await start();
+    listPages.set("", { items: [rawIssue(1)], counts: { open: 1, closed: 0 }, nextCursor: null });
+    const issues = await call("search", { kind: "issues", assignee: "@me", labels: ["bug"] });
+    expect(issues.structuredContent).toMatchObject({
+      issues: [{ number: 1, url: `${identityOrigin}/spaces/team-1/issues/1` }],
+    });
+    const prs = await call("search", { kind: "prs", state: "all", author: "@me", limit: 2 });
+    expect(prs.structuredContent).toMatchObject({ prs: [{ id: "wt-u2", url: personalUrl }] });
+    expect(requests.find((r) => r.path.startsWith("/api/worktrees?"))!.path).toBe(
+      "/api/worktrees?scope=all&limit=100",
+    );
+    for (const bad of [
+      { kind: "issues", state: "merged" },
+      { kind: "prs", state: "closed" },
+      { kind: "prs", labels: ["bug"] },
+    ]) {
+      expect(await call("search", bad)).toMatchObject({
+        isError: true,
+        structuredContent: { code: "workspace-argument-invalid" },
+      });
+    }
+    expect(events().map((event) => event["repo"])).toEqual([null, null, null, null, null]);
+  });
+
+  it("browses a repository, a pull request and an Issue, and reports a missing item", async () => {
+    await start();
+    const client = await connect();
+    const browse = async (args: Record<string, unknown>) =>
+      (await client.callTool({ name: "browse", arguments: { repo: "bob/team", ...args } })).structuredContent;
+    expect(await browse({})).toEqual({ url: `${identityOrigin}/spaces/team-1` });
+    expect(await browse({ number: "3", unit: "u1" })).toEqual({ url: `${teamUrl}?unit=u1` });
+    expect(await browse({ number: "7" })).toEqual({ url: `${identityOrigin}/spaces/team-1/issues/7` });
+    expect(await browse({ number: "99" })).toMatchObject({ code: "workspace-not-found" });
+    expect(events().map((event) => event["repo"])).toEqual(["team-1", "team-1", "team-1", null]);
   });
 
   it("turns every invalid argument into workspace-argument-invalid with an event", async () => {

@@ -66,8 +66,15 @@ Only `core` has tools so far, in this fixed order. Every object with a Browser p
 | `issue_edit` | Required `repo`, `number`; optional `title`, `body`, `add_labels`, `remove_labels`, `add_assignees`, `remove_assignees`, `add_nodes`, `remove_nodes` | Issue |
 | `issue_comment` | Required `repo`, `number`, `body` | Comment |
 | `issue_set_state` | Required `repo`, `number`, `state` (`open` or `closed`); optional `reason` (`completed` or `not_planned`) and `comment`, only with `closed` | Issue |
+| `pr_list` | Required `repo`; optional `state` (`open` default, `merged`, `discarded`, `all`), `author`, `search`, `limit` (default 30) | `{ prs: [...] }`. A Personal Space lists only the signed-in user's own |
+| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) |
+| `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
+| `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
+| `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`). Merging stays with the user |
+| `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
+| `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 
-Every tool declares a scope (`read` for the first five tools, `write` for the other four) and
+Every tool declares a scope (`read` for `whoami`, `repo_*`, `issue_list`, `issue_view`, `pr_list`, `pr_view`, `search` and `browse`; `write` for the other seven) and
 all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 false, `openWorldHint` is false) and an output schema. Development passthrough grants all
 scopes; a connection without the scope gets the tool error `workspace-scope-required`.
