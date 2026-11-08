@@ -33,11 +33,10 @@ without replaying the tool. If the token still exchanges, the challenge omits `e
 so the client can retry with the same token. A rejected token gets `error="invalid_token"`;
 exchange faults return HTTP 500.
 Concurrent calls with the same bearer share one exchange. Settled sessions and in-flight exchanges use
-separate maps, each capped at 10,000 entries, so pending unknown tokens cannot evict settled sessions.
-An `invalid_grant` result is cached separately for 5 seconds, capped at 1,000 entries. Before FIFO eviction,
-each settled cache sweeps its expired entries. In-flight exchanges are never evicted. When their map is
-full, a new exchange proceeds without caching its promise. Its result is cached unless a newer exchange
-for the same token is pending or has already cached a result.
+separate maps, so pending unknown tokens cannot evict settled sessions. Settled sessions are capped at
+10,000 entries. An `invalid_grant` result is cached separately for 5 seconds, capped at 1,000 entries.
+Before FIFO eviction, each settled cache sweeps its expired entries. In-flight exchanges are never evicted
+or capped: each one is an outstanding request that settles within its 10-second timeout.
 
 | Outcome of the exchange | Gateway response |
 | --- | --- |

@@ -125,14 +125,9 @@ export function createAuthenticator(
     cache.delete(cacheKey);
     const existing = inFlight.get(cacheKey);
     if (existing) return existing;
-    const tracked = inFlight.size < maxCacheEntries;
     const pending = exchangeToken(bearer, requestId).then(
       (entry) => {
-        // An untracked exchange started with no entry for its key, so any entry present now came from a newer exchange.
-        const current = tracked
-          ? inFlight.get(cacheKey) === pending
-          : !inFlight.has(cacheKey) && !cache.has(cacheKey) && !negativeCache.has(cacheKey);
-        if (current) {
+        if (inFlight.get(cacheKey) === pending) {
           inFlight.delete(cacheKey);
           const entries = entry.value === null ? negativeCache : cache;
           const limit = entry.value === null ? maxNegativeCacheEntries : maxCacheEntries;
@@ -148,7 +143,9 @@ export function createAuthenticator(
         throw error;
       },
     );
-    if (tracked) inFlight.set(cacheKey, pending);
+    // Uncapped: each entry is an outstanding exchange that settles within its fetch timeout, and an untracked
+    // exchange would hold the same request and promise while losing the ordering this map provides.
+    inFlight.set(cacheKey, pending);
     return pending;
   }
 

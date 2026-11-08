@@ -547,7 +547,7 @@ describe("exchange cache lifetime and capacity", () => {
     }
   });
 
-  it("never evicts in-flight exchanges and still caches an untracked exchange", async () => {
+  it("shares and caches every exchange beyond 10,000 pending tokens", async () => {
     let resume!: () => void;
     const gate = new Promise<void>((resolve) => { resume = resolve; });
     const fetcher = vi.fn<typeof fetch>(async () => {
@@ -557,50 +557,17 @@ describe("exchange cache lifetime and capacity", () => {
     const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
     const pending = Array.from({ length: 10_000 }, (_, i) => authenticate(`uvw_pat_${i}`, "test"));
     const overflow = authenticate("uvw_pat_overflow", "test");
+    const shared = authenticate("uvw_pat_overflow", "test");
     const first = authenticate("uvw_pat_0", "test");
     const last = authenticate("uvw_pat_9999", "test");
     resume();
     const values = await Promise.all(pending);
     expect(await first).toEqual(values[0]);
     expect(await last).toEqual(values[9999]);
-    await overflow;
+    expect(await shared).toBe(await overflow);
     expect(fetcher).toHaveBeenCalledTimes(10_001);
     expect(await authenticate("uvw_pat_overflow", "test")).toBe(await overflow);
     expect(fetcher).toHaveBeenCalledTimes(10_001);
-  });
-
-  it("keeps a newer session when an older untracked exchange settles later", async () => {
-    const flood = deferred();
-    const freed = deferred();
-    const older = deferred();
-    let targetCalls = 0;
-    const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      const token = new URLSearchParams(String(init?.body)).get("subject_token");
-      if (token === "uvw_pat_target") {
-        const call = ++targetCalls;
-        if (call === 1) await older.promise;
-        return Response.json({ ...(await success().json()), access_token: `session-${call}` });
-      }
-      await (token === "uvw_pat_free" ? freed : flood).promise;
-      return Response.json({ error: "invalid_grant" }, { status: 400 });
-    });
-    const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
-    const free = authenticate("uvw_pat_free", "test");
-    const pending = Array.from({ length: 9_999 }, (_, i) => authenticate(`uvw_pat_invalid_${i}`, "test"));
-    try {
-      const untracked = authenticate("uvw_pat_target", "test");
-      freed.resolve();
-      await free;
-      expect((await authenticate("uvw_pat_target", "test"))?.session).toBe("session-2");
-      older.resolve();
-      expect((await untracked)?.session).toBe("session-1");
-      expect((await authenticate("uvw_pat_target", "test"))?.session).toBe("session-2");
-      expect(targetCalls).toBe(2);
-    } finally {
-      flood.resolve();
-      older.resolve();
-      await Promise.all(pending);
-    }
   });
 
   it("skips an older in-flight exchange when evicting a completed entry", async () => {
