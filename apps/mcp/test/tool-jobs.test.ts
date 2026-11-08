@@ -431,22 +431,43 @@ it("reports running past deadlineAt while this replica holds the unsettled compl
 it.each(["import", "export", "compile_typst"] as const)(
   "settles a hung %s completion at its deadline with the timeout error and releases the key",
   async (tool) => {
-    const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
-    stores.push(store);
-    const jobs = new ToolJobs(store, 10, Date.now, 60);
-    const args = { ...input(() => new Promise<ToolResult>(() => {})), tool };
-    const handle = jobHandleSchema.parse((await jobs.run(args)).output);
-    await expect(args.onDeferred.mock.calls[0]?.[0]).rejects.toMatchObject({
-      wire: {
-        code: tool !== "export" ? "workspace-result-unknown" : "workspace-executor-timeout",
-      },
-    });
-    expect(await jobs.get("alice", handle.job_id)).toMatchObject({ status: "failed" });
-    const execute = vi.fn(async () => result);
-    expect((await new ToolJobs(store, 1000).run({ ...input(execute), tool })).output).toEqual(
-      result.output,
-    );
-    expect(execute).toHaveBeenCalledTimes(1);
+    vi.useFakeTimers();
+    try {
+      const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
+      stores.push(store);
+      const jobs = new ToolJobs(store, 10, Date.now, 60);
+      let signalStarted!: () => void;
+      const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+      const args = {
+        ...input(() => {
+          signalStarted();
+          return new Promise<ToolResult>(() => {});
+        }),
+        tool,
+      };
+      const running = jobs.run(args);
+      await started;
+      await vi.advanceTimersByTimeAsync(10);
+      const handle = jobHandleSchema.parse((await running).output);
+      const timedOut = expect(args.onDeferred.mock.calls[0]?.[0]).rejects.toMatchObject({
+        wire: {
+          code: tool !== "export" ? "workspace-result-unknown" : "workspace-executor-timeout",
+        },
+      });
+      await vi.advanceTimersByTimeAsync(49);
+      expect(await jobs.get("alice", handle.job_id)).toEqual(handle);
+      await vi.advanceTimersByTimeAsync(1);
+      await timedOut;
+      expect(await jobs.get("alice", handle.job_id)).toMatchObject({ status: "failed" });
+      const execute = vi.fn(async () => result);
+      expect((await jobs.run({ ...input(execute), tool })).output).toEqual(result.output);
+      expect((await new ToolJobs(store, 1000).run({ ...input(execute), tool })).output).toEqual(
+        result.output,
+      );
+      expect(execute).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   },
 );
 
@@ -468,8 +489,9 @@ it("caps the job deadline at the grant expiry minus a margin, but never below th
   expect(await deadline("expiring", now + 1000)).toBe(now + 1000);
 });
 
-it("recovers a reservation lock left by a crashed gateway within seconds", async () => {
-  const { jobs, directory } = setup(1000);
+it("recovers a stale reservation lock left by a crashed gateway", async () => {
+  const now = Date.now();
+  const { jobs, directory } = setup(1000, () => now);
   const digest = createHash("sha256")
     .update(JSON.stringify(["alice", "export", "key"]))
     .digest("hex");
@@ -479,12 +501,10 @@ it("recovers a reservation lock left by a crashed gateway within seconds", async
   );
   await writeFile(lock, "crashed", { mode: 0o600 });
   const execute = vi.fn(async () => result);
-  const started = Date.now();
   await expect(jobs.run(input(execute))).rejects.toMatchObject({ code: "workspace-upload-busy" });
-  const old = new Date(Date.now() - 11_000);
+  const old = new Date(now - 11_000);
   await utimes(lock, old, old);
   expect((await jobs.run(input(execute))).output).toEqual(result.output);
-  expect(Date.now() - started).toBeLessThan(5000);
   expect(execute).toHaveBeenCalledTimes(1);
 });
 
@@ -506,7 +526,7 @@ it("does not leak an unhandled rejection when a start fails or its key is releas
     internals.releaseKey({
       record: { ...input(execute), id: randomUUID() } as unknown as JobRecord,
     });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await new Promise((resolve) => setImmediate(resolve));
     await rejected.catch(() => {});
     expect(unhandled).not.toHaveBeenCalled();
   } finally {

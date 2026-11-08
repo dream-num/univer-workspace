@@ -1,4 +1,3 @@
-import { performance } from "node:perf_hooks";
 import { Zip, ZipDeflate, zipSync } from "fflate";
 import { expect, it } from "vitest";
 import { markdownAssetLimits } from "../src/executor/ops/markdown-compile.js";
@@ -71,12 +70,13 @@ it("enforces actual per-file and total caps when streaming ZIP headers omit size
 });
 
 it.each(["a/".repeat(2000) + "image.png", "a/".repeat(32) + "image.png"])(
-  "rejects over-depth ZIP names before inflating in under 100 ms",
+  "rejects over-depth ZIP names before inflating corrupt data",
   (path) => {
     const bytes = zipSync({ [path]: new Uint8Array(1_000_000) });
-    const start = performance.now();
+    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const dataOffset = 30 + header.getUint16(26, true) + header.getUint16(28, true);
+    bytes.fill(0xff, dataOffset, dataOffset + header.getUint32(18, true));
     expect(() => readSourceZip(bytes, markdownAssetLimits)).toThrow(/entry name exceeds/);
-    expect(performance.now() - start).toBeLessThan(100);
   },
 );
 it("bounds UTF-8 name bytes including explicit directory markers", () => {

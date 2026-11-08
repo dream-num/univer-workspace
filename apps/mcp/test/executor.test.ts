@@ -539,6 +539,9 @@ describe("script and commit failure origins through a real worker", () => {
 describe("dispatcher deadline and grant enforcement", () => {
   it("returns retryable not-started timeout for a queued write and rejects forged callers before dispatch", async () => {
     const { createDispatcher } = await import("../src/executor/dispatch.js");
+    vi.useFakeTimers();
+    let signalEntered!: () => void;
+    const entered = new Promise<void>((resolve) => { signalEntered = resolve; });
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(
       async () =>
         new Response(
@@ -552,6 +555,7 @@ describe("dispatcher deadline and grant enforcement", () => {
       executeAndCommit: vi.fn<WorkspaceContentRuntime["executeAndCommit"]>(
         async (input) =>
           await new Promise<never>((_resolve, reject) => {
+            signalEntered();
             input.signal?.addEventListener(
               "abort",
               () => reject(workspaceError("workspace-runtime-not-started", "cancelled")),
@@ -585,7 +589,10 @@ describe("dispatcher deadline and grant enforcement", () => {
         grant,
         input: { worktreeId: "wt", unitId: "unit-1", code: "edit" },
       };
-      expect((await dispatch("content.execute", header, new Uint8Array())).header).toMatchObject({
+      const pending = dispatch("content.execute", header, new Uint8Array());
+      await entered;
+      await vi.advanceTimersByTimeAsync(30);
+      expect((await pending).header).toMatchObject({
         ok: false,
         error: {
           code: "workspace-executor-timeout",
@@ -608,6 +615,7 @@ describe("dispatcher deadline and grant enforcement", () => {
       });
       expect(handler).toHaveBeenCalledOnce();
     } finally {
+      vi.useRealTimers();
       fetcher.mockRestore();
       handler.mockRestore();
     }

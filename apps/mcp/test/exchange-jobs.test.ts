@@ -1,3 +1,4 @@
+import * as childProcess from "node:child_process";
 import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import { access, realpath } from "node:fs/promises";
@@ -6,6 +7,8 @@ import { expect, it, vi } from "vitest";
 import { runConversionJob, jobEnvironment } from "../src/executor/jobs/run.js";
 import { mapRuntimeError, timeoutError } from "../src/executor/errors.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "../src/executor/license.js";
+
+vi.mock("node:child_process", { spy: true });
 
 const credentials = { license: UNIVER_LICENSE, licenseKey: UNIVER_LICENSE_KEY };
 const job = {
@@ -109,7 +112,12 @@ it.each(["read", "write"] as const)(
   "kills a hung child at the remaining %s deadline",
   async (effect) => {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(timeoutError(effect)), 100);
+    const { fork } = await vi.importActual<typeof childProcess>("node:child_process");
+    const forked = vi.mocked(childProcess.fork).mockImplementation((...args) => {
+      const child = fork(...args);
+      child.once("message", () => controller.abort(timeoutError(effect)));
+      return child;
+    });
     try {
       await expect(
         runConversionJob(
@@ -124,7 +132,7 @@ it.each(["read", "write"] as const)(
         },
       });
     } finally {
-      clearTimeout(timer);
+      forked.mockRestore();
     }
   },
 );
