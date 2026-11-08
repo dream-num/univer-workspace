@@ -2,6 +2,8 @@ import { fileUploadCreateTool } from "./core/file-upload-create.js";
 import { blobUploadTool } from "./files/blob-upload.js";
 import { blobDownloadTool } from "./files/blob-download.js";
 import { blobReplaceTool } from "./files/blob-replace.js";
+import { htmlViewValidateTool } from "./files/html-view-validate.js";
+import { htmlViewCreateTool } from "./files/html-view-create.js";
 import { assetDownloadTool } from "./files/asset-download.js";
 import { executeTool } from "./core/execute.js";
 import { importTool } from "./core/import.js";
@@ -79,6 +81,8 @@ export const tools: readonly ToolDefinition[] = [
   blobDownloadTool,
   blobReplaceTool,
   assetDownloadTool,
+  htmlViewValidateTool,
+  htmlViewCreateTool,
   repoCreateTool,
   repoEditTool,
   labelListTool,

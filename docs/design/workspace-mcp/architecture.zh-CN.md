@@ -228,6 +228,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 
 - 内部 RPC 暴露命名领域操作（首批为 `content.execute`、`content.inspect`、`diagnostics.probe`），内部组合 `executeAndCommit`、`executeRead`、`exportUnitData`，复用 `packages/client-core/src/content-runtime.ts`。
 - 执行需要 headless Univer 的作业：Office 导入导出、Markdown 编译与回读、Typst 编译、SVG 编译、HTML View 校验、渲染数据组装。
+- HTML View 的 `htmlView.validate` 和 `htmlView.create` 在执行层组合 Client Core；使用绑定调用者的 runtime 导出 trunk Sheets。创建在同一写操作内上传校验时复制的字节，保证内容一致；Blob 幂等恢复由既有上传 workflow 负责。HTML 输入上限 512 KiB UTF-8，RPC frame 上限 4 MiB，预算 30 秒。成功创建的 transfer 字节在 gateway 计入，未加载 worker 时保留 `executor: none` 且 worker 成本为零。
 - 对网关暴露内部 RPC。不对外暴露端口。
 
 ### 6.2 worker 池

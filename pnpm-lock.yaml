@@ -1292,6 +1292,9 @@ importers:
       '@univer-cli/univer-render-runtime':
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
+      '@univerjs-labs/html-view':
+        specifier: 1.0.0-dev.6518eb0
+        version: 1.0.0-dev.6518eb0
       '@univerjs-pro/collaboration':
         specifier: 1.4.0
         version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)

@@ -286,7 +286,11 @@ describe("HTML View workflow", () => {
 
 describe("HTML View commands", () => {
   async function run(args: string[]) {
-    const validate = vi.fn(async () => ({ valid: true, unitIds: ["unit"], bindingCount: 1 }));
+    const validate = vi.fn(async () => ({
+      valid: true as const,
+      unitIds: ["unit"],
+      bindingCount: 1,
+    }));
     const create = vi.fn(async () => ({
       ...result,
       workspaceUrl: "https://workspace.test/nodes/node%2F1",
