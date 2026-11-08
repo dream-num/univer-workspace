@@ -158,13 +158,42 @@ paths:
                 type: string
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          description: The session was issued by token exchange; this action requires an interactive sign-in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/token:
     post:
       tags:
         - Authentication
       operationId: oauthToken
-      summary: Exchange a one-time authorization code for a registered client identity.
+      summary: Exchange a one-time authorization code for a registered client identity, or a personal access token or MCP access token for a downstream session.
       description: |
+        Two grants share this endpoint.
+
+        `authorization_code` (JSON or form body) behaves as described below.
+
+        `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) accepts
+        only an `application/x-www-form-urlencoded` body and is open only to a
+        confidential client registered with `"tokenExchange": true` that
+        authenticates with `client_secret`. The `subject_token` is a personal
+        access token or an MCP OAuth access token. An OAuth access token is
+        valid only when `resource` equals the resource its grant was issued
+        for; a personal access token ignores `resource`. The revocation check
+        and the session insert happen in one database transaction. The
+        response `access_token` is a Workspace login session, presented as the
+        `workspace_session` cookie. It lives for 10 minutes, or less when the
+        subject token expires sooner or the deployment session lifetime is
+        shorter; `expires_in` reports the actual lifetime. Such a session
+        cannot create personal access tokens, approve CLI logins, authorize
+        OAuth clients or link identities (403). Errors use the RFC 6749 body
+        `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
+        body), `invalid_grant` (400), `unauthorized_client` (400, a
+        confidential client without `tokenExchange`) or `invalid_client` (401,
+        an unknown or public client or a wrong secret).
+
         When the granted scope includes `session`, the response also carries a
         Workspace login session token in `access_token`; the client presents
         it as the `workspace_session` cookie on product and collaboration
@@ -199,6 +228,9 @@ paths:
                   type: string
                 code_verifier:
                   type: string
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenExchangeRequest'
       responses:
         '200':
           description: The registered client identity and, for `session` grants, a login session token.
@@ -218,17 +250,97 @@ paths:
                     type: integer
                     description: |
                       Seconds until the issued session expires for `session`
-                      grants.
+                      grants and token exchange.
+                  issued_token_type:
+                    type: string
+                    description: Present for token exchange only.
+                    enum:
+                      - urn:univer:params:oauth:token-type:workspace-session
+                  scope:
+                    type: string
+                    description: Present for token exchange only. Granted MCP scopes, space-separated.
+                  subject:
+                    $ref: '#/components/schemas/TokenExchangeSubject'
                   user:
                     $ref: '#/components/schemas/User'
         '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          description: Invalid client secret or PKCE verifier.
+          description: Invalid request, or an OAuth-style error for token exchange.
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/OAuthTokenError'
+        '401':
+          description: Invalid client secret or PKCE verifier, or `invalid_client` for token exchange.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+                  - $ref: '#/components/schemas/OAuthTokenError'
+  /api/auth/tokens:
+    get:
+      tags:
+        - Authentication
+      operationId: listPersonalAccessTokens
+      summary: List the current User's personal access tokens.
+      description: Token secrets and hashes are never returned.
+      responses:
+        '200':
+          description: Personal access tokens, newest first.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalAccessTokenList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      tags:
+        - Authentication
+      operationId: createPersonalAccessToken
+      summary: Create a personal access token.
+      description: |
+        The plaintext token is returned only in this response. A session that
+        was itself issued by token exchange cannot create tokens.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PersonalAccessTokenCreate'
+      responses:
+        '201':
+          description: Created token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PersonalAccessTokenCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/auth/tokens/{id}:
+    delete:
+      tags:
+        - Authentication
+      operationId: revokePersonalAccessToken
+      summary: Revoke one of the current User's personal access tokens and end its downstream sessions.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Token revoked.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/auth/logout:
     post:
       tags:
@@ -436,6 +548,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
   /api/auth/cli/authorizations:
@@ -481,6 +595,12 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The session was issued by token exchange; this action requires an interactive sign-in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
           $ref: '#/components/responses/Conflict'
         '410':
@@ -574,6 +694,12 @@ paths:
                 format: uri
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The session was issued by token exchange; this action requires an interactive sign-in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/github/callback:
     get:
       tags:
@@ -673,6 +799,12 @@ paths:
                 format: uri
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The session was issued by token exchange; this action requires an interactive sign-in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/google/callback:
     get:
       tags:
@@ -814,6 +946,12 @@ paths:
                 format: uri
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: The session was issued by token exchange; this action requires an interactive sign-in.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/discord/callback:
     get:
       tags:
@@ -3755,6 +3893,151 @@ components:
           $ref: '#/components/schemas/User'
         authenticationMethods:
           $ref: '#/components/schemas/AuthenticationMethods'
+    TokenExchangeRequest:
+      type: object
+      required:
+        - grant_type
+        - client_id
+        - client_secret
+        - subject_token
+        - subject_token_type
+      properties:
+        grant_type:
+          type: string
+          enum:
+            - urn:ietf:params:oauth:grant-type:token-exchange
+        client_id:
+          type: string
+        client_secret:
+          type: string
+        subject_token:
+          type: string
+          description: A personal access token or an MCP OAuth access token.
+        subject_token_type:
+          type: string
+          enum:
+            - urn:ietf:params:oauth:token-type:access_token
+        resource:
+          type: string
+          description: Required for OAuth access tokens; ignored for personal access tokens.
+    TokenExchangeSubject:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - id
+        - client_id
+      properties:
+        kind:
+          type: string
+          enum:
+            - pat
+            - oauth
+        id:
+          type: string
+        client_id:
+          type:
+            - string
+            - 'null'
+          description: The OAuth client the grant was issued to; null for personal access tokens.
+    OAuthTokenError:
+      type: object
+      additionalProperties: false
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          enum:
+            - invalid_request
+            - invalid_grant
+            - unauthorized_client
+            - invalid_client
+    McpScope:
+      type: string
+      enum:
+        - read
+        - write
+        - publish
+        - worktree:merge
+    PersonalAccessToken:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - scopes
+        - createdAt
+        - expiresAt
+        - lastUsedAt
+        - revokedAt
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/McpScope'
+        createdAt:
+          type: integer
+          description: Unix epoch milliseconds.
+        expiresAt:
+          type:
+            - integer
+            - 'null'
+        lastUsedAt:
+          type:
+            - integer
+            - 'null'
+        revokedAt:
+          type:
+            - integer
+            - 'null'
+    PersonalAccessTokenList:
+      type: object
+      additionalProperties: false
+      required:
+        - tokens
+      properties:
+        tokens:
+          type: array
+          items:
+            $ref: '#/components/schemas/PersonalAccessToken'
+    PersonalAccessTokenCreate:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        scopes:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/McpScope'
+          description: Defaults to all scopes.
+        expiresAt:
+          type:
+            - integer
+            - 'null'
+          description: Unix epoch milliseconds in the future. Defaults to null (no expiry).
+    PersonalAccessTokenCreated:
+      type: object
+      additionalProperties: false
+      required:
+        - token
+        - record
+      properties:
+        token:
+          type: string
+          description: Plaintext token, shown once.
+        record:
+          $ref: '#/components/schemas/PersonalAccessToken'
     PasswordRegistration:
       type: object
       additionalProperties: false

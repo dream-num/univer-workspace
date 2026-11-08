@@ -58,6 +58,7 @@ describe("personal access tokens", () => {
       id: record.id,
       userId: "u1",
       scopes: record.scopes,
+      expiresAt: null,
     });
     expect(tokens.listPersonalTokens("u1")[0]?.lastUsedAt).toBe(clock.value);
     expect(tokens.verifySubjectToken(token.slice(0, -1) + "x", { resource: RESOURCE })).toBeNull();
@@ -137,6 +138,7 @@ describe("OAuth grants", () => {
       id: issued.grant.id,
       userId: "u1",
       scopes: ["read", "write"],
+      expiresAt: issued.grant.accessExpiresAt,
       clientId: "client",
     };
     expect(tokens.verifySubjectToken(issued.accessToken, { resource: RESOURCE })).toEqual(subject);

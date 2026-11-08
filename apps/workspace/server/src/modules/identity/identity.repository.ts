@@ -13,6 +13,7 @@ export interface StoredSession extends User {
   readonly secretHash: string;
   readonly expiresAt: number;
   readonly writeSource: WriteSource | null;
+  readonly tokenIssued: boolean;
 }
 
 export interface StoredCredential extends User {
@@ -403,6 +404,8 @@ export class IdentityRepository {
            login_sessions.secret_hash,
            login_sessions.expires_at,
            login_sessions.write_source,
+           login_sessions.issued_for_pat_id IS NOT NULL
+             OR login_sessions.issued_for_grant_id IS NOT NULL AS token_issued,
            users.id,
            users.username,
            users.display_name,
@@ -419,6 +422,7 @@ export class IdentityRepository {
           secretHash: row.secret_hash,
           expiresAt: row.expires_at,
           writeSource: row.write_source,
+          tokenIssued: row.token_issued === 1,
         }
       : null;
   }
@@ -614,6 +618,7 @@ interface CredentialRow extends UserRow {
 
 interface SessionRow extends UserRow {
   readonly write_source: WriteSource | null;
+  readonly token_issued: number;
   readonly session_id: string;
   readonly secret_hash: string;
   readonly expires_at: number;

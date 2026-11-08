@@ -161,6 +161,12 @@ export interface IdentityModule {
   }>;
   unlinkDiscord(cookieHeader: string | undefined): AuthenticatedSession;
   findUsers(userIds: readonly string[]): readonly User[];
+  /**
+   * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
+   * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
+   * that token's revocation.
+   */
+  requireInteractiveSession(cookieHeader: string | undefined): Principal;
 }
 
 export function createIdentityModule(options: {
@@ -269,7 +275,22 @@ export function createIdentityModule(options: {
   }
 
   function requireSession(cookieHeader: string | undefined): Principal {
+    return principal(storedSession(cookieHeader));
+  }
+
+  function requireInteractiveSession(cookieHeader: string | undefined): Principal {
     const stored = storedSession(cookieHeader);
+    if (stored?.tokenIssued) {
+      throw new ApplicationError(
+        "FORBIDDEN",
+        403,
+        "This action requires an interactive sign-in, not a session issued for an access token."
+      );
+    }
+    return principal(stored);
+  }
+
+  function principal(stored: StoredSession | null): Principal {
     if (!stored) {
       throw new ApplicationError(
         "UNAUTHENTICATED",
@@ -638,7 +659,7 @@ export function createIdentityModule(options: {
     },
 
     approveCliAuthorization(cookieHeader, inputUserCode) {
-      const session = requireSession(cookieHeader);
+      const session = requireInteractiveSession(cookieHeader);
       const userCode = validCliUserCode(inputUserCode);
       const authorization = cliAuthorizations.get(userCode);
       if (!authorization) throw invalidCliAuthorization();
@@ -692,7 +713,7 @@ export function createIdentityModule(options: {
 
     async changePassword(cookieHeader, input) {
       requirePasswordAuth();
-      const session = requireSession(cookieHeader);
+      const session = requireInteractiveSession(cookieHeader);
       const currentPassword = validPassword(
         input.currentPassword,
         "currentPassword"
@@ -731,6 +752,7 @@ export function createIdentityModule(options: {
     getSession,
     requireSession,
     issueSession,
+    requireInteractiveSession,
 
     logout(cookieHeader) {
       const token = readSessionToken(cookieHeader);
@@ -831,7 +853,7 @@ export function createIdentityModule(options: {
     }
     const linkedUserId =
       input.intent === "link"
-        ? requireSession(input.cookieHeader).user.id
+        ? requireInteractiveSession(input.cookieHeader).user.id
         : null;
     const state = randomBytes(32).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
@@ -911,7 +933,7 @@ export function createIdentityModule(options: {
       identity.subject
     );
     if (oauth.intent === "link") {
-      const session = requireSession(input.sessionCookieHeader);
+      const session = requireInteractiveSession(input.sessionCookieHeader);
       if (
         !oauth.linkedUserId ||
         oauth.linkedUserId !== session.user.id

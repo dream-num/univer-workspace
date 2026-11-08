@@ -138,6 +138,7 @@ function oauthClientConfig(
     readonly clientType?: "confidential" | "public";
     readonly clientSecret?: string;
     readonly requiresConsent?: boolean;
+    readonly tokenExchange?: boolean;
     readonly redirectUris: readonly string[];
     readonly scopes: readonly string[];
   }[];
@@ -157,6 +158,10 @@ function oauthClientConfig(
       const clientSecret = clientType === "confidential"
         ? requireString(rawClient.clientSecret, "clientSecret")
         : undefined;
+      const tokenExchange = rawClient.tokenExchange === true;
+      if (tokenExchange && clientType !== "confidential") {
+        throw new Error("OAUTH_CLIENTS_JSON tokenExchange requires a confidential client");
+      }
       const redirectUris = convertStringArray(rawClient.redirectUris, "redirectUris");
       if (redirectUris.length === 0) {
         throw new Error("OAUTH_CLIENTS_JSON client redirectUris must be a non-empty array");
@@ -169,6 +174,7 @@ function oauthClientConfig(
         clientId,
         clientType,
         requiresConsent: rawClient.requiresConsent === true,
+        ...(tokenExchange ? { tokenExchange } : {}),
         ...(clientSecret === undefined ? {} : { clientSecret }),
         redirectUris,
         scopes,

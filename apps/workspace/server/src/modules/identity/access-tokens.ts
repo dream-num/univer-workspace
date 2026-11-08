@@ -50,8 +50,8 @@ export type RefreshFailure = "invalid" | "revoked" | "expired" | "retired" | "re
 export type RefreshResult = ({ readonly ok: true } & IssuedGrant) | { readonly ok: false; readonly reason: RefreshFailure };
 
 export type SubjectToken =
-  | { readonly kind: "pat"; readonly id: string; readonly userId: string; readonly scopes: readonly McpScope[] }
-  | { readonly kind: "oauth"; readonly id: string; readonly userId: string; readonly scopes: readonly McpScope[]; readonly clientId: string };
+  | { readonly kind: "pat"; readonly id: string; readonly userId: string; readonly scopes: readonly McpScope[]; readonly expiresAt: number | null }
+  | { readonly kind: "oauth"; readonly id: string; readonly userId: string; readonly scopes: readonly McpScope[]; readonly expiresAt: number; readonly clientId: string };
 
 export interface OAuthClientRecord {
   readonly clientId: string;
@@ -213,7 +213,10 @@ export function createAccessTokenService(options: {
           (row.expires_at !== null && Number(row.expires_at) <= at)
         ) return null;
         db.prepare("UPDATE personal_access_tokens SET last_used_at = ? WHERE id = ?").run(at, pat.id);
-        return { kind: "pat", id: pat.id, userId: String(row.user_id), scopes: toScopes(row.scopes) };
+        return {
+          kind: "pat", id: pat.id, userId: String(row.user_id), scopes: toScopes(row.scopes),
+          expiresAt: row.expires_at === null ? null : Number(row.expires_at),
+        };
       }
       const access = parseToken(token, ACCESS_PREFIX);
       if (!access) return null;
@@ -226,7 +229,7 @@ export function createAccessTokenService(options: {
       db.prepare("UPDATE oauth_grants SET last_used_at = ? WHERE id = ?").run(at, access.id);
       return {
         kind: "oauth", id: access.id, userId: String(row.user_id), scopes: toScopes(row.scopes),
-        clientId: String(row.client_id),
+        expiresAt: Number(row.access_expires_at), clientId: String(row.client_id),
       };
     },
 

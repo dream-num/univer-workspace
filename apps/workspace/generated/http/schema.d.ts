@@ -74,8 +74,31 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Exchange a one-time authorization code for a registered client identity.
-         * @description When the granted scope includes `session`, the response also carries a
+         * Exchange a one-time authorization code for a registered client identity, or a personal access token or MCP access token for a downstream session.
+         * @description Two grants share this endpoint.
+         *
+         *     `authorization_code` (JSON or form body) behaves as described below.
+         *
+         *     `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) accepts
+         *     only an `application/x-www-form-urlencoded` body and is open only to a
+         *     confidential client registered with `"tokenExchange": true` that
+         *     authenticates with `client_secret`. The `subject_token` is a personal
+         *     access token or an MCP OAuth access token. An OAuth access token is
+         *     valid only when `resource` equals the resource its grant was issued
+         *     for; a personal access token ignores `resource`. The revocation check
+         *     and the session insert happen in one database transaction. The
+         *     response `access_token` is a Workspace login session, presented as the
+         *     `workspace_session` cookie. It lives for 10 minutes, or less when the
+         *     subject token expires sooner or the deployment session lifetime is
+         *     shorter; `expires_in` reports the actual lifetime. Such a session
+         *     cannot create personal access tokens, approve CLI logins, authorize
+         *     OAuth clients or link identities (403). Errors use the RFC 6749 body
+         *     `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
+         *     body), `invalid_grant` (400), `unauthorized_client` (400, a
+         *     confidential client without `tokenExchange`) or `invalid_client` (401,
+         *     an unknown or public client or a wrong secret).
+         *
+         *     When the granted scope includes `session`, the response also carries a
          *     Workspace login session token in `access_token`; the client presents
          *     it as the `workspace_session` cookie on product and collaboration
          *     endpoints, acting with the authorizing User's permissions until it
@@ -83,6 +106,48 @@ export interface paths {
          */
         post: operations["oauthToken"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/tokens": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the current User's personal access tokens.
+         * @description Token secrets and hashes are never returned.
+         */
+        get: operations["listPersonalAccessTokens"];
+        put?: never;
+        /**
+         * Create a personal access token.
+         * @description The plaintext token is returned only in this response. A session that
+         *     was itself issued by token exchange cannot create tokens.
+         */
+        post: operations["createPersonalAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/tokens/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Revoke one of the current User's personal access tokens and end its downstream sessions. */
+        delete: operations["revokePersonalAccessToken"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1954,6 +2019,56 @@ export interface components {
             user: components["schemas"]["User"];
             authenticationMethods: components["schemas"]["AuthenticationMethods"];
         };
+        TokenExchangeRequest: {
+            /** @enum {string} */
+            grant_type: "urn:ietf:params:oauth:grant-type:token-exchange";
+            client_id: string;
+            client_secret: string;
+            /** @description A personal access token or an MCP OAuth access token. */
+            subject_token: string;
+            /** @enum {string} */
+            subject_token_type: "urn:ietf:params:oauth:token-type:access_token";
+            /** @description Required for OAuth access tokens; ignored for personal access tokens. */
+            resource?: string;
+        };
+        TokenExchangeSubject: {
+            /** @enum {string} */
+            kind: "pat" | "oauth";
+            id: string;
+            /** @description The OAuth client the grant was issued to; null for personal access tokens. */
+            client_id: string | null;
+        };
+        OAuthTokenError: {
+            /** @enum {string} */
+            error: "invalid_request" | "invalid_grant" | "unauthorized_client" | "invalid_client";
+        };
+        /** @enum {string} */
+        McpScope: "read" | "write" | "publish" | "worktree:merge";
+        PersonalAccessToken: {
+            id: string;
+            name: string;
+            scopes: components["schemas"]["McpScope"][];
+            /** @description Unix epoch milliseconds. */
+            createdAt: number;
+            expiresAt: number | null;
+            lastUsedAt: number | null;
+            revokedAt: number | null;
+        };
+        PersonalAccessTokenList: {
+            tokens: components["schemas"]["PersonalAccessToken"][];
+        };
+        PersonalAccessTokenCreate: {
+            name: string;
+            /** @description Defaults to all scopes. */
+            scopes?: components["schemas"]["McpScope"][];
+            /** @description Unix epoch milliseconds in the future. Defaults to null (no expiry). */
+            expiresAt?: number | null;
+        };
+        PersonalAccessTokenCreated: {
+            /** @description Plaintext token, shown once. */
+            token: string;
+            record: components["schemas"]["PersonalAccessToken"];
+        };
         PasswordRegistration: {
             username: string;
             displayName: string;
@@ -2900,6 +3015,15 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["BadRequest"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     oauthToken: {
@@ -2921,6 +3045,7 @@ export interface operations {
                     redirect_uri: string;
                     code_verifier: string;
                 };
+                "application/x-www-form-urlencoded": components["schemas"]["TokenExchangeRequest"];
             };
         };
         responses: {
@@ -2939,23 +3064,109 @@ export interface operations {
                         token_type?: string;
                         /**
                          * @description Seconds until the issued session expires for `session`
-                         *     grants.
+                         *     grants and token exchange.
                          */
                         expires_in?: number;
+                        /**
+                         * @description Present for token exchange only.
+                         * @enum {string}
+                         */
+                        issued_token_type?: "urn:univer:params:oauth:token-type:workspace-session";
+                        /** @description Present for token exchange only. Granted MCP scopes, space-separated. */
+                        scope?: string;
+                        subject?: components["schemas"]["TokenExchangeSubject"];
                         user?: components["schemas"]["User"];
                     };
                 };
             };
-            400: components["responses"]["BadRequest"];
-            /** @description Invalid client secret or PKCE verifier. */
+            /** @description Invalid request, or an OAuth-style error for token exchange. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
+                };
+            };
+            /** @description Invalid client secret or PKCE verifier, or `invalid_client` for token exchange. */
             401: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ErrorResponse"];
+                    "application/json": components["schemas"]["ErrorResponse"] | components["schemas"]["OAuthTokenError"];
                 };
             };
+        };
+    };
+    listPersonalAccessTokens: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Personal access tokens, newest first. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalAccessTokenList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createPersonalAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PersonalAccessTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Created token. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PersonalAccessTokenCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokePersonalAccessToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token revoked. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     logout: {
@@ -3198,6 +3409,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -3254,6 +3466,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             409: components["responses"]["Conflict"];
             /** @description The CLI authorization request expired. */
             410: {
@@ -3351,6 +3572,15 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     finishGitHubOAuth: {
@@ -3447,6 +3677,15 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     finishGoogleOAuth: {
@@ -3587,6 +3826,15 @@ export interface operations {
                 content?: never;
             };
             401: components["responses"]["Unauthorized"];
+            /** @description The session was issued by token exchange; this action requires an interactive sign-in. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     finishDiscordOAuth: {

@@ -19,6 +19,8 @@ export interface OAuthClient {
   readonly clientType?: "confidential" | "public";
   readonly clientSecret?: string;
   readonly requiresConsent?: boolean;
+  /** Confidential clients only: may call the RFC 8693 token-exchange grant. */
+  readonly tokenExchange?: boolean;
   readonly redirectUris: readonly string[];
   readonly scopes: readonly string[];
 }

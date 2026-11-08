@@ -316,6 +316,8 @@ redirect URI, the PKCE verifier, expiry, and one-time use before returning the
 Workspace identity. Registration is deployment-supplied via `OAUTH_CLIENTS_JSON`.
 External browser clients should use `clientType: "public"`, PKCE, and `requiresConsent: true`; they omit `clientSecret` and use an exact registered callback URL. The local Workspace Agent callback is `http://127.0.0.1:3101/auth/oauth/callback`. Internal service clients may remain confidential and use the existing no-consent behavior.
 
+A confidential client with `"tokenExchange": true` (for example the MCP gateway) may call the RFC 8693 grant on `POST /api/auth/token` to turn a personal access token or an MCP OAuth access token into a Workspace login session of at most 10 minutes (shorter when the token or the deployment session lifetime ends sooner); the grant takes a form body only, and the flag is rejected on public clients. Signed-in users manage personal access tokens with `GET`/`POST /api/auth/tokens` and `DELETE /api/auth/tokens/:id`; the plaintext token is returned only at creation, and a session issued by token exchange cannot create tokens, approve CLI logins, authorize OAuth clients or link identities (`403`), so no access it creates can outlive the token.
+
 The Agent client is not enabled by default: the entry in `.env.example` is only a
 commented example. For the exact active configuration and the local server, browser,
 account registration, and Agent connection steps, see

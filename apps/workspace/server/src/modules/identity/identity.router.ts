@@ -1,10 +1,12 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { json, Router, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
+import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
 import type { IdentityModule } from "./identity.service.js";
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
+  readonly accessTokens: AccessTokenService;
   readonly secureCookies: boolean;
   readonly discordBotApiKey?: string;
 }): Router {
@@ -121,6 +123,34 @@ export function createIdentityRouter(options: {
   router.post("/auth/logout", (request, response) => {
     identity.logout(request.headers.cookie);
     response.clearCookie(identity.cookieName, { path: "/" });
+    response.status(204).end();
+  });
+
+  router.get("/auth/tokens", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const { user } = identity.requireSession(request.headers.cookie);
+    response.json({ tokens: options.accessTokens.listPersonalTokens(user.id).map(toTokenView) });
+  });
+
+  router.post("/auth/tokens", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const { user } = identity.requireInteractiveSession(request.headers.cookie);
+    const { name, scopes, expiresAt } = request.body ?? {};
+    if (typeof name !== "string") {
+      throw new ApplicationError("INVALID_INPUT", 400, "name must be a string.", "name");
+    }
+    if (scopes !== undefined && !(Array.isArray(scopes) && scopes.every((scope) => typeof scope === "string"))) {
+      throw new ApplicationError("INVALID_INPUT", 400, "scopes must be an array of strings.", "scopes");
+    }
+    const created = options.accessTokens.createPersonalToken({ userId: user.id, name, scopes, expiresAt });
+    response.status(201).json({ token: created.token, record: toTokenView(created.record) });
+  });
+
+  router.delete("/auth/tokens/:id", (request, response) => {
+    const { user } = identity.requireSession(request.headers.cookie);
+    if (!options.accessTokens.revokePersonalToken(user.id, request.params.id)) {
+      throw new ApplicationError("NOT_FOUND", 404, "The token was not found.");
+    }
     response.status(204).end();
   });
 
@@ -394,4 +424,9 @@ function setSessionCookie(
     maxAge: identity.sessionTtlMs,
     path: "/",
   });
+}
+
+function toTokenView(record: PersonalTokenRecord) {
+  const { userId: _userId, ...view } = record;
+  return view;
 }

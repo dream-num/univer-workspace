@@ -294,6 +294,12 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
 可空的 `issued_for_pat_id`、`issued_for_grant_id`；迁移只追加，不重建表。
 
+Identity 模块在 `identity.router.ts` 暴露 PAT 管理路由，在 `oauth-authorization-router.ts` 的 `POST /api/auth/token`
+增加 RFC 8693 `token-exchange` 分支。后者对静态机密 Client（`tokenExchange: true`）验证密钥，在一个事务内调用
+`verifySubjectToken` 与 `issueSession(user, "agent", { ttlMs, issuedFor })`，`ttlMs` 取 10 分钟、Token 剩余有效期与部署 Session 时长的最小值，错误体使用 OAuth 的 `{ error }` 形式。
+创建 PAT、批准 CLI 登录、OAuth `authorize` 与 consent、外部身份 link 的发起与回调都经由 `identity.requireInteractiveSession`，
+拒绝 token exchange 换出的 Session（403）。
+
 V16 的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via` 是可空来源列，
 仅允许 `browser` 或 `agent`，`NULL` 表示未知。迁移不回填已有行，不新增索引。
 Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Principal { user, writeSource }`，

@@ -286,3 +286,114 @@ WriteSource:
     Entry point of the Session that made a write. `browser` = the Workspace web app's sign-in routes.
     `agent` = any non-browser entry point (uvw CLI, Workspace Agent, OAuth clients, Discord bot); it does not
     identify who was typing. `unknown` = recorded before attribution existed, or by a Session issued before it.
+
+McpScope:
+  type: string
+  enum: [read, write, publish, "worktree:merge"]
+
+PersonalAccessToken:
+  type: object
+  additionalProperties: false
+  required: [id, name, scopes, createdAt, expiresAt, lastUsedAt, revokedAt]
+  properties:
+    id:
+      type: string
+    name:
+      type: string
+    scopes:
+      type: array
+      items:
+        $ref: "#/McpScope"
+    createdAt:
+      type: integer
+      description: Unix epoch milliseconds.
+    expiresAt:
+      type: [integer, "null"]
+    lastUsedAt:
+      type: [integer, "null"]
+    revokedAt:
+      type: [integer, "null"]
+
+PersonalAccessTokenList:
+  type: object
+  additionalProperties: false
+  required: [tokens]
+  properties:
+    tokens:
+      type: array
+      items:
+        $ref: "#/PersonalAccessToken"
+
+PersonalAccessTokenCreate:
+  type: object
+  additionalProperties: false
+  required: [name]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+    scopes:
+      type: array
+      minItems: 1
+      items:
+        $ref: "#/McpScope"
+      description: Defaults to all scopes.
+    expiresAt:
+      type: [integer, "null"]
+      description: Unix epoch milliseconds in the future. Defaults to null (no expiry).
+
+PersonalAccessTokenCreated:
+  type: object
+  additionalProperties: false
+  required: [token, record]
+  properties:
+    token:
+      type: string
+      description: Plaintext token, shown once.
+    record:
+      $ref: "#/PersonalAccessToken"
+
+TokenExchangeRequest:
+  type: object
+  required: [grant_type, client_id, client_secret, subject_token, subject_token_type]
+  properties:
+    grant_type:
+      type: string
+      enum: [urn:ietf:params:oauth:grant-type:token-exchange]
+    client_id:
+      type: string
+    client_secret:
+      type: string
+    subject_token:
+      type: string
+      description: A personal access token or an MCP OAuth access token.
+    subject_token_type:
+      type: string
+      enum: [urn:ietf:params:oauth:token-type:access_token]
+    resource:
+      type: string
+      description: Required for OAuth access tokens; ignored for personal access tokens.
+
+TokenExchangeSubject:
+  type: object
+  additionalProperties: false
+  required: [kind, id, client_id]
+  properties:
+    kind:
+      type: string
+      enum: [pat, oauth]
+    id:
+      type: string
+    client_id:
+      type: [string, "null"]
+      description: The OAuth client the grant was issued to; null for personal access tokens.
+
+OAuthTokenError:
+  type: object
+  additionalProperties: false
+  required: [error]
+  properties:
+    error:
+      type: string
+      enum: [invalid_request, invalid_grant, unauthorized_client, invalid_client]

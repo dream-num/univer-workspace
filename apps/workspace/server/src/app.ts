@@ -56,6 +56,7 @@ import {
   type ResourcesModule,
 } from "./modules/resources/index.js";
 import {
+  createAccessTokenService,
   createIdentityModule,
   createIdentityRouter,
   createGitHubOAuthProvider,
@@ -176,6 +177,7 @@ export function createWorkspaceApplication(
   const emailSender =
     dependencies.emailSender ??
     (config.emailAuth ? createEmailSender(config.emailAuth) : null);
+  const accessTokens = createAccessTokenService({ database });
   const identity = createIdentityModule({
     repository: new IdentityRepository(database),
     sessionTtlMs: config.sessionTtlMs,
@@ -362,6 +364,7 @@ export function createWorkspaceApplication(
     "/api",
     createIdentityRouter({
       identity,
+      accessTokens,
       secureCookies: config.secureCookies,
       ...(config.discordBotApiKey
         ? { discordBotApiKey: config.discordBotApiKey }
@@ -374,6 +377,8 @@ export function createWorkspaceApplication(
     "/api/auth",
     createOAuthAuthorizationRouter({
       identity,
+      accessTokens,
+      database,
       secureCookies: config.secureCookies,
       oauthClients,
       authorizationStore,

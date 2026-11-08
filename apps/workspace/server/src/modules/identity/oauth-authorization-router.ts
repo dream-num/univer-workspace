@@ -1,8 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { json, Router, urlencoded } from "express"
+import { json, Router, urlencoded, type Request, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
+import type { WorkspaceDatabase } from "../../db/database.js";
+import type { AccessTokenService, SubjectToken } from "./access-tokens.js";
 import type { IdentityModule } from "./identity.service.js";
-import type { User } from "./identity.types.js";
+import type { IssuedSession, User } from "./identity.types.js";
 import {
   authorizeRedirectTarget,
   defaultOAuthScope,
@@ -11,6 +13,7 @@ import {
   requireOAuthState,
   scopeIncludesSession,
   validateOAuthClientAuthentication,
+  validateOAuthClientSecret,
   requireOAuthCodeChallenge,
   validateRegisteredRedirectUri,
   type IssuedAuthorization,
@@ -18,8 +21,15 @@ import {
   type OAuthClientConfig,
 } from "./oauth-clients.js";
 
+export const TOKEN_EXCHANGE_GRANT_TYPE = "urn:ietf:params:oauth:grant-type:token-exchange";
+export const ACCESS_TOKEN_TYPE = "urn:ietf:params:oauth:token-type:access_token";
+export const WORKSPACE_SESSION_TOKEN_TYPE = "urn:univer:params:oauth:token-type:workspace-session";
+export const DOWNSTREAM_SESSION_TTL_MS = 10 * 60 * 1000;
+
 export function createOAuthAuthorizationRouter(options: {
   readonly identity: IdentityModule;
+  readonly accessTokens: AccessTokenService;
+  readonly database: WorkspaceDatabase;
   readonly secureCookies: boolean;
   readonly oauthClients: OAuthClientConfig | null;
   readonly authorizationStore: Map<string, IssuedAuthorization>;
@@ -48,6 +58,7 @@ export function createOAuthAuthorizationRouter(options: {
       );
       return;
     }
+    options.identity.requireInteractiveSession(request.headers.cookie);
 
     if (authorizationRequest.client.requiresConsent === true) {
       response.redirect(`/api/auth/authorize/consent?${new URLSearchParams({
@@ -72,6 +83,7 @@ export function createOAuthAuthorizationRouter(options: {
       response.redirect(`/login?returnTo=${encodeURIComponent(`/api/auth/authorize/consent?${new URLSearchParams(request.query as Record<string, string>).toString()}`)}`);
       return;
     }
+    options.identity.requireInteractiveSession(request.headers.cookie);
     for (const [token, entry] of consentTokens) if (entry.expiresAt <= Date.now()) consentTokens.delete(token);
     const consentToken = randomBytes(32).toString("base64url");
     consentTokens.set(consentToken, { userId: session.user.id, request: authorizationRequest, expiresAt: Date.now() + 5 * 60_000 });
@@ -88,6 +100,7 @@ export function createOAuthAuthorizationRouter(options: {
   router.post("/authorize/consent", (request, response) => {
     const session = options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) throw new ApplicationError("UNAUTHENTICATED", 401, "Sign in is required.");
+    options.identity.requireInteractiveSession(request.headers.cookie);
     const token = request.body.consent_token;
     if (typeof token !== "string" || token === "") {
       throw new ApplicationError(
@@ -119,6 +132,10 @@ export function createOAuthAuthorizationRouter(options: {
   });
 
   router.post("/token", (request, response) => {
+    if (request.body.grant_type === TOKEN_EXCHANGE_GRANT_TYPE) {
+      exchangeToken(request, response);
+      return;
+    }
     if (request.body.grant_type !== "authorization_code") {
       throw new ApplicationError("INVALID_INPUT", 400, "grant_type must be authorization_code.");
     }
@@ -177,6 +194,77 @@ export function createOAuthAuthorizationRouter(options: {
       },
     });
   });
+
+  function exchangeToken(request: Request, response: Response): void {
+    response.set({ "cache-control": "no-store", pragma: "no-cache" });
+    const fail = (status: number, error: string) => response.status(status).json({ error });
+    if (!request.is("application/x-www-form-urlencoded")) {
+      fail(400, "invalid_request");
+      return;
+    }
+    const body: Record<string, unknown> = request.body;
+    const client = typeof body.client_id === "string" ? clients.get(body.client_id) : undefined;
+    if (client === undefined || client.clientType === "public" || client.clientSecret === undefined) {
+      fail(401, "invalid_client");
+      return;
+    }
+    try {
+      validateOAuthClientSecret(typeof body.client_secret === "string" ? body.client_secret : undefined, client.clientSecret);
+    } catch {
+      fail(401, "invalid_client");
+      return;
+    }
+    if (client.tokenExchange !== true) {
+      fail(400, "unauthorized_client");
+      return;
+    }
+    if (
+      typeof body.subject_token !== "string" || body.subject_token === "" ||
+      body.subject_token_type !== ACCESS_TOKEN_TYPE ||
+      (body.resource !== undefined && typeof body.resource !== "string")
+    ) {
+      fail(400, "invalid_request");
+      return;
+    }
+    const subjectToken = body.subject_token;
+    const resource = body.resource ?? "";
+    // One transaction: a revoke cannot land between the revocation check and the session insert.
+    const exchanged = options.database.transaction((): { subject: SubjectToken; user: User; issued: IssuedSession; ttlMs: number } | null => {
+      const subject = options.accessTokens.verifySubjectToken(subjectToken, { resource });
+      if (subject === null) return null;
+      const user = options.identity.findUsers([subject.userId])[0];
+      if (user === undefined) return null;
+      const ttlMs = Math.min(
+        DOWNSTREAM_SESSION_TTL_MS,
+        options.identity.sessionTtlMs,
+        subject.expiresAt === null ? Infinity : subject.expiresAt - Date.now(),
+      );
+      if (ttlMs < 1000) return null;
+      const issued = options.identity.issueSession(user, "agent", {
+        ttlMs,
+        issuedFor: { kind: subject.kind, id: subject.id },
+      });
+      return { subject, user, issued, ttlMs };
+    });
+    if (exchanged === null) {
+      fail(400, "invalid_grant");
+      return;
+    }
+    const { subject, user, issued, ttlMs } = exchanged;
+    response.json({
+      access_token: issued.cookieValue,
+      issued_token_type: WORKSPACE_SESSION_TOKEN_TYPE,
+      token_type: "N_A",
+      expires_in: Math.floor(ttlMs / 1000),
+      scope: subject.scopes.join(" "),
+      subject: {
+        kind: subject.kind,
+        id: subject.id,
+        client_id: subject.kind === "oauth" ? subject.clientId : null,
+      },
+      user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl },
+    });
+  }
 
   return router;
 }
