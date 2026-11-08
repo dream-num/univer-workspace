@@ -3,6 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { decode } from "@msgpack/msgpack";
 import type { prepareCollaborationDatabase } from "../../server/src/integrations/univer/migrations/prepare-collaboration-database.js";
 import type { createCollaborationRuntime } from "../../server/src/integrations/univer/unit-store.js";
 
@@ -69,6 +70,8 @@ export async function verifyCollaborationMigration(
         db.exec(
           "UPDATE collaboration_worktree_units SET draft_head_revision = 2, ready_draft_head_revision = 2, removed = 1",
         );
+        // A v2 tombstone becomes a hard-deleted marker row in Core v3.
+        db.exec("INSERT INTO collaboration_unit_tombstones VALUES ('purged-doc', 1700000002000)");
         // Units without a History creation record take product creation facts.
         db.exec(`
           INSERT INTO collaboration_units VALUES ('product-doc', 1, 1, NULL);
@@ -95,7 +98,7 @@ export async function verifyCollaborationMigration(
         );
       backup.close();
       const migrated = new DatabaseSync(filename);
-      assert.deepEqual(versions(migrated), { core: 2, worktree: 3, history: 2 });
+      assert.deepEqual(versions(migrated), { core: 3, worktree: 3, history: 2 });
       assert.deepEqual(migrated.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(migrated.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
       assert.equal(migrated.prepare("PRAGMA journal_mode").get()?.journal_mode, "wal");
@@ -129,11 +132,13 @@ export async function verifyCollaborationMigration(
           { ...worktreeUnitCreation("draft-doc") },
           { creator_id: "draft-owner", created_at_ms: 1695000000000 },
         );
+        // Core v3 stores the same protocol objects as MessagePack; v2 tagged binary fields in JSON.
         assert.deepEqual(
           migrated
-            .prepare("SELECT payload_json FROM collaboration_snapshots ORDER BY unit_id")
-            .all(),
-          before,
+            .prepare("SELECT payload FROM collaboration_snapshots ORDER BY unit_id")
+            .all()
+            .map((row) => decode(row.payload as Uint8Array)),
+          before.map((row) => decodeV2Payload(row.payload_json as string)),
         );
         assert.equal(
           migrated
@@ -157,12 +162,31 @@ export async function verifyCollaborationMigration(
             ?.created_at_ms,
           1700000001000,
         );
-        assert.ok(
+        assert.deepEqual(
+          {
+            ...migrated
+              .prepare(
+                "SELECT deleted_at_ms, deleted_status FROM collaboration_units WHERE unit_id = 'deleted-doc'",
+              )
+              .get(),
+          },
+          { deleted_at_ms: 1790218210299, deleted_status: "soft" },
+        );
+        assert.deepEqual(
+          {
+            ...migrated
+              .prepare(
+                "SELECT deleted_at_ms, deleted_status FROM collaboration_units WHERE unit_id = 'purged-doc'",
+              )
+              .get(),
+          },
+          { deleted_at_ms: 1700000002000, deleted_status: "hard" },
+        );
+        assert.equal(
           migrated
-            .prepare(
-              "SELECT soft_deleted_at_ms FROM collaboration_units WHERE unit_id = 'deleted-doc'",
-            )
-            .get()?.soft_deleted_at_ms,
+            .prepare("SELECT 1 FROM sqlite_schema WHERE name = 'collaboration_unit_tombstones'")
+            .get(),
+          undefined,
         );
         assert.equal(
           migrated.prepare("SELECT status FROM collaboration_worktrees").get()?.status,
@@ -350,4 +374,21 @@ function createProductDatabase(filename: string): string {
     db.close();
   }
   return filename;
+}
+
+// Core v2 stored binary fields inside JSON text under this tag; v3 holds them as MessagePack bin.
+function decodeV2Payload(json: string): unknown {
+  return JSON.parse(json, (_key, value: unknown) => {
+    if (
+      typeof value === "object" &&
+      value !== null &&
+      Object.keys(value).length === 1 &&
+      typeof (value as Record<string, unknown>).__univerCollaborationBinary === "string"
+    ) {
+      return Uint8Array.from(
+        Buffer.from((value as Record<string, string>).__univerCollaborationBinary!, "base64"),
+      );
+    }
+    return value;
+  });
 }

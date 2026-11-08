@@ -155,7 +155,6 @@ import "@univerjs-pro/docs-table/facade";
 import "@univerjs-pro/embed/facade";
 import "@univerjs-pro/engine-chart/facade";
 import "@univerjs-pro/engine-formula/facade";
-import "@univerjs-pro/ink/facade";
 import "@univerjs-pro/exchange-client/facade";
 import "@univerjs-pro/sheets-chart/facade";
 import "@univerjs-pro/sheets-exchange-client/facade";

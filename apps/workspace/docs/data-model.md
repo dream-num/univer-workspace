@@ -21,8 +21,10 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 Trunk、Worktree 和 Merge Preview 读写同一份 `collaboration_comments` 数据；只有 anchor 作为 Unit
 resource 随 Worktree snapshot/changeset 分支与合并（见 application-design.md "评论与 Worktree"）。
 
-SDK 1.0.0 的 Collaboration SQLite 组件版本为 `core=2`、`worktree=3`、`history=2`
-和 `comment=1`。Core 与 Worktree 保存 Unit 创建者、创建时间及 changeset 提交时间；
+当前 Collaboration SQLite 组件版本为 `core=3`、`worktree=3`、`history=2` 和 `comment=1`。
+SDK 1.0.0 把组件升到 `core=2`、`worktree=3`、`history=2`；SDK 1.4.0 把 Core 升到 v3：协议对象
+改为 MessagePack `BLOB` 保存，硬删除的 Unit 以 `deleted_status='hard'` 标记行保留在
+`collaboration_units`，不再有 tombstone 表。Core 与 Worktree 保存 Unit 创建者、创建时间及 changeset 提交时间；
 History 只保存 `collaboration_history_records` 分段索引，从 Core 权威事实与 changeset
 构造列表。SDK 自动订阅创建/编辑事件，并在 History 读取时追赶索引；Workspace 不再维护
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；

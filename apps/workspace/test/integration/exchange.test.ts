@@ -280,11 +280,12 @@ describe("Universer Exchange protocol", () => {
     );
   });
 
-  // SDK 1.3.1: the PDF editor reducer (`updateObjectPatch`) mirrors every overlay-object
-  // edit into `editState.objectPatches` and keeps entries of removed objects; the native
-  // exporter reads that map as patches to imported source objects and fails a Unit without a
-  // source PDF with "source-less PDF cannot apply imported semantic patches". Workspace
-  // keeps the SDK behavior; enable this case with the SDK release that fixes it.
+  // SDK 1.4.0 (unchanged since 1.3.1): the PDF editor reducer (`updateObjectPatch`) mirrors
+  // every overlay-object edit into `editState.objectPatches` and keeps entries of removed
+  // objects; the native exporter reads that map as patches to imported source objects and
+  // fails a Unit without a source PDF with "source-less PDF cannot apply imported semantic
+  // patches". Workspace keeps the SDK behavior; enable this case with the SDK release that
+  // fixes it.
   it.skip("exports a blank PDF Unit after editor edits", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "pdf-editor-owner");

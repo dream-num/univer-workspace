@@ -1,9 +1,9 @@
 import {
   UniverProFormulaEnginePlugin,
 } from "@univerjs-pro/engine-formula";
-import { UniverRemoteBasesPlugin } from "@univerjs-pro/bases";
+import { UniverRemoteBasesPlugin } from "@univerjs-pro/bases/worker";
 import { LocaleType, Univer } from "@univerjs/core";
-import { UniverRPCWorkerThreadPlugin } from "@univerjs/rpc";
+import { UniverRPCWorkerThreadPlugin } from "@univerjs/rpc/worker";
 
 const univer = new Univer({
   locale: LocaleType.EN_US,
