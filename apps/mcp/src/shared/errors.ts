@@ -1,3 +1,4 @@
+import { getSystemErrorMap } from "node:util";
 import {
   isWorkspaceResultUnknown,
   WorkspaceApplicationError,
@@ -12,11 +13,29 @@ export interface WireError {
   readonly detail: z.core.util.JSONType;
 }
 
+const systemErrorCodes = new Set([...getSystemErrorMap().values()].map(([code]) => code));
+
 const RESULT_UNKNOWN_MESSAGE =
   "The Workspace operation may have completed, but its result could not be confirmed. Retry with the same idempotency_key if the tool takes one; otherwise check the current state before repeating the write.";
 
 export function translateError(error: unknown): WireError {
-  if (error instanceof ExecutorCallError) return error.wire;
+  if (
+    error instanceof Error &&
+    ("syscall" in error ||
+      "path" in error ||
+      ("code" in error &&
+        typeof error.code === "string" &&
+        (systemErrorCodes.has(error.code) ||
+          /^workspace-(blob|asset)-(source|output)-/.test(error.code))))
+  )
+    return {
+      outcome: "internal_error",
+      code: "workspace-internal-error",
+      message: "Internal tool error.",
+      detail: null,
+    };
+  if (error instanceof ExecutorCallError)
+    return { ...error.wire, detail: jsonOrNull(error.wire.detail) };
   if (error instanceof z.ZodError) {
     const issues = error.issues.map((issue) => ({
       path: issue.path.map(String).join("."),
@@ -63,7 +82,19 @@ export function translateError(error: unknown): WireError {
 
 function jsonOrNull(value: unknown): z.core.util.JSONType {
   try {
-    const parsed = z.json().safeParse(value ?? null);
+    const clean: unknown = JSON.parse(
+      JSON.stringify(value ?? null, (key, entry: unknown) =>
+        key === "sourcePath" ||
+        (key === "path" &&
+          typeof entry === "string" &&
+          entry.startsWith("/") &&
+          !entry.startsWith("/api/") &&
+          !entry.startsWith("/universer-api/"))
+          ? undefined
+          : entry,
+      ),
+    );
+    const parsed = z.json().safeParse(clean);
     return parsed.success ? parsed.data : null;
   } catch {
     // A circular detail overflows the parser's stack.

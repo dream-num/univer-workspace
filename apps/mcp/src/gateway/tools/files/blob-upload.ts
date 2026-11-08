@@ -8,7 +8,7 @@ const inputSchema = z.object({
   upload_id: z.string(),
   space: repoInput,
   parent: z.string().optional(),
-  name: z.string(),
+  name: z.string().optional(),
   media_type: z.string().optional(),
   idempotency_key: z.string().min(1),
 });
@@ -48,16 +48,17 @@ export const blobUploadTool: ToolDefinition = {
       input.upload_id,
       "blob",
       async (object, path) => {
-        context.usage?.addTransfer("upload_bytes", object.size);
-        return new WorkspaceBlobFeature(async () => context.http).upload({
+        const result = await new WorkspaceBlobFeature(async () => context.http).upload({
           filePath: path,
           fileName: object.fileName,
           spaceId,
-          name: input.name,
+          name: input.name ?? object.fileName,
           declaredMediaType: input.media_type ?? object.mediaType,
           idempotencyKey: input.idempotency_key,
           ...(input.parent === undefined ? {} : { parentNodeId: input.parent }),
         });
+        context.usage?.addTransfer("upload_bytes", object.size);
+        return result;
       },
     );
     const node = nodeSummarySchema.omit({ url: true }).parse(upload["node"]);

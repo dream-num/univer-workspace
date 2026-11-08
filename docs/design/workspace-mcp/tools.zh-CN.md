@@ -207,10 +207,14 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 MCP 规范还没有标准的文件上传机制（SEP-2356、SEP-2631 仍是草案）。统一流程：
 
-1. agent 调用 `file_upload_create`，得到 `upload_id`、签名 PUT URL 和浏览器上传页 URL。有效期 10 分钟。
+1. agent 调用 `file_upload_create`，`size` 可省略；提供时是大小上限，不要求精确长度，浏览器上传前无需知道文件大小。得到 `upload_id`、签名 PUT URL 和浏览器上传页 URL。有效期 10 分钟。
 2. 能执行命令的客户端（Claude Code、Cursor、VS Code、WorkBuddy）直接对签名 URL 执行 PUT。不能执行命令的客户端，把上传页链接交给用户点击。
 3. agent 把 `upload_id` 交给 `import`、`blob_upload`、`compile_markdown` 等工具。
 4. ChatGPT 还可以通过 `_meta["openai/fileParams"]` 直接把用户上传的文件交给 `import`。网关从 ChatGPT 提供的临时 URL 拉取文件，不记录这个 URL。
+
+PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大小上限。实际字节流同时受声明上限与用途上限约束。成功后记录实际大小和 SHA-256。`blob_upload.name` 可省略，默认使用上传文件名。
+
+每用户上传与下载暂存字节默认合计最多 2 GiB，pending 上传默认最多 20 个，分别由 `MCP_STAGING_USER_MAX_BYTES` 与 `MCP_STAGING_USER_MAX_PENDING_UPLOADS` 配置。工具超额返回 `workspace-staging-quota-exceeded`，PUT 返回 429。
 
 `purpose` 决定大小上限和允许的媒体类型：
 

@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createServer } from "node:http";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { fileURLToPath } from "node:url";
 import {
   createMcpHandler,
@@ -88,6 +90,8 @@ export function createGateway(
     });
   const staging = new LocalStagingStore(config.MCP_STAGING_DIRECTORY, config.MCP_PUBLIC_URL, {
     limits: config.uploadLimits,
+    maxUserBytes: config.MCP_STAGING_USER_MAX_BYTES,
+    maxPendingUploads: config.MCP_STAGING_USER_MAX_PENDING_UPLOADS,
     onError: () => logger.error("Staging cleanup failed"),
   });
   const registry = new Registry();
@@ -228,7 +232,7 @@ export function createGateway(
                 {
                   request_id: state.context.requestId,
                   tool: tool.name,
-                  error: error instanceof Error ? error.message : typeof error,
+                  error_code: code,
                   err: error instanceof ResourceCacheIoError ? error : undefined,
                 },
                 "Tool failed internally",
@@ -448,6 +452,35 @@ export function createGateway(
   });
   // The SDK adapter excludes undefined optional fields under exactOptionalPropertyTypes.
   const server = createServer((request, response) => {
+    if ((request.url ?? "/").startsWith("/mcp/files/")) {
+      void (async () => {
+        const headers = new Headers();
+        for (const [name, value] of Object.entries(request.headers)) {
+          if (Array.isArray(value)) for (const entry of value) headers.append(name, entry);
+          else if (value !== undefined) headers.set(name, value);
+        }
+        const method = request.method ?? "GET";
+        // File capabilities bypass the MCP adapter's UTF-8 decoding and JSON body limit.
+        const init = {
+          method,
+          headers,
+          ...(method === "GET" || method === "HEAD"
+            ? {}
+            : { body: Readable.toWeb(request) as ReadableStream<Uint8Array>, duplex: "half" }),
+        };
+        const result = await handler.fetch(
+          new Request(new URL(request.url ?? "/", publicUrl), init),
+        );
+        response.writeHead(result.status, Object.fromEntries(result.headers));
+        if (result.body) await pipeline(Readable.from(result.body), response);
+        else response.end();
+      })().catch(() => {
+        logger.error("File transfer failed");
+        if (!response.headersSent) response.writeHead(500);
+        response.end();
+      });
+      return;
+    }
     void nodeHandler(
       {
         method: request.method ?? "GET",
@@ -458,6 +491,7 @@ export function createGateway(
       response,
     );
   });
+  server.requestTimeout = 30 * 60_000;
   return {
     server,
     registry,

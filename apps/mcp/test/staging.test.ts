@@ -104,20 +104,16 @@ describe("filesystem staging", () => {
       code: "workspace-upload-not-found",
     });
   });
-  it("refuses mismatching lengths, over-limit chunks and incomplete streams without publishing bytes", async () => {
+  it("refuses bytes and Content-Length over the upper limit without publishing bytes", async () => {
     const { store, directory } = setup({ limits: { ...defaultLimits, blob: 3 } });
-    await expect(store.createUpload("owner", { ...input, size: 4 })).rejects.toMatchObject({
-      code: "workspace-file-size-mismatch",
-    });
+    const capped = await store.createUpload("owner", { ...input, size: 4 });
+    expect(capped.upload.max_bytes).toBe(3);
     const { upload } = await store.createUpload("owner", input);
-    for (const request of [
-      put(upload.upload_url, "abc", 2),
-      put(upload.upload_url, "abcd", 3),
-      put(upload.upload_url, "ab", 3),
-      new Request(upload.upload_url, { method: "PUT", body: "abc" }),
-    ]) {
+    for (const request of [put(upload.upload_url, "abcd", 3), put(upload.upload_url, "abc", 4)]) {
       expect((await store.handle(request)).status).toBe(413);
-      expect(await readdir(directory)).toEqual([`${upload.upload_id}.json`]);
+      expect((await readdir(directory)).sort()).toEqual(
+        [`${upload.upload_id}.json`, `${capped.upload.upload_id}.json`].sort(),
+      );
     }
     expect((await store.handle(put(upload.upload_url))).status).toBe(204);
     await expect(

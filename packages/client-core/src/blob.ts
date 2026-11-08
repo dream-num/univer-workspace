@@ -286,7 +286,8 @@ export class WorkspaceBlobFeature {
       ...(input.force === true ? { force: true } : {}),
     });
     try {
-      const stream = await this.openDownload(view);
+      // The file writer owns CLI size errors, including the destination path.
+      const stream = await this.openDownload(view, false);
       const written = await target.writeAndCommit(stream.content, stream.byteSize);
       return {
         resourceId: stream.resourceId,
@@ -308,7 +309,7 @@ export class WorkspaceBlobFeature {
     return this.openDownload(view);
   }
 
-  private async openDownload(view: Awaited<ReturnType<typeof getBlob>>) {
+  private async openDownload(view: Awaited<ReturnType<typeof getBlob>>, checkSize = true) {
     const response = await (
       await this.authenticatedHttp()
     ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`, {
@@ -335,7 +336,9 @@ export class WorkspaceBlobFeature {
           },
         );
       }
-      const content = checkedBlobContent(response, view.resource.byteSize);
+      const content = checkSize
+        ? checkedBlobContent(response, view.resource.byteSize)
+        : responseContent(response);
       return {
         content,
         resourceId: view.resource.resourceId,

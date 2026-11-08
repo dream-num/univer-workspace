@@ -7,7 +7,7 @@ export const fileUploadCreateTool: ToolDefinition = {
   scope: "write",
   title: "Prepare a file upload",
   description:
-    "Reserve an upload. PUT the file bytes to upload_url with Content-Length, or give page_url to the user to upload in a browser. Both capability links expire in 10 minutes. Then pass upload_id to a tool for the same purpose within one hour. Keep the links private.",
+    "Reserve an upload. Optional size is an upper limit, not an exact length. PUT the file bytes to upload_url (Content-Length optional), or give page_url to the user to upload in a browser. Both capability links expire in 10 minutes. Then pass upload_id to a tool for the same purpose within one hour. Keep the links private.",
   inputSchema: uploadInputSchema,
   outputSchema: uploadLinkSchema,
   annotations: writeAnnotations,

@@ -19,7 +19,13 @@ export const uploadInputSchema = z.object({
       (value) => value !== "." && value !== ".." && !/[\\/\x00-\x1f\x7f]/.test(value),
       "Expected a plain file name",
     ),
-  size: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  size: z
+    .number()
+    .int()
+    .nonnegative()
+    .max(Number.MAX_SAFE_INTEGER)
+    .optional()
+    .describe("Optional size upper limit in bytes; smaller files are accepted."),
   media_type: z
     .string()
     .max(255)
@@ -32,9 +38,10 @@ export const objectSchema = z.object({
   kind: z.enum(["upload", "download"]),
   owner: z.string().min(1),
   purpose: purposeSchema,
-  fileName: uploadInputSchema.shape.file_name,
+  fileName: z.string().min(1),
   mediaType: uploadInputSchema.shape.media_type,
-  size: uploadInputSchema.shape.size,
+  size: uploadInputSchema.shape.size.unwrap(),
+  maxBytes: uploadInputSchema.shape.size,
   sha256: z
     .string()
     .regex(/^[a-f0-9]{64}$/)

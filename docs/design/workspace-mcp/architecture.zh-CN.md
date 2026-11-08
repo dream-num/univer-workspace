@@ -203,8 +203,9 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 - 一个 `StagingStore` 接口，加一个本地文件系统实现。参照 `apps/workspace/server/src/app.ts:241-245` 的 `LocalBlobStore` 用法。
 - 目录由 `MCP_STAGING_DIRECTORY` 指定。本地验证用本次运行目录下的子目录。SaaS 挂载一个所有网关副本共享的卷。
 - 每个对象带所有者（用户 ID）、用途、大小、媒体类型和过期时间。元数据以 sidecar 文件保存在同一目录，不使用数据库。
-- sidecar 保存 `id`、`kind`、`owner`、`purpose`、`fileName`、`mediaType`、`size`、`sha256`、`state`、`createdAt`、`expiresAt` 和 `tokenHash`，通过临时文件加 rename 原子写入。目录必须为当前 uid 所有的 0700 私有目录，文件 0600。上传 PUT 要求 Content-Length 等于声明值，流式限制实际字节，成功后 pending 变为 ready，拒绝第二次 PUT。
-- 后台在启动和每分钟清理过期对象，参照 `apps/workspace/server/src/jobs/blob-maintenance.ts`。上传对象 1 小时过期，导出结果 15 分钟过期。
+- sidecar 保存 `id`、`kind`、`owner`、`purpose`、`fileName`、`mediaType`、`size`、`maxBytes`、`sha256`、`state`、`createdAt`、`expiresAt` 和 `tokenHash`，通过临时文件加 rename 原子写入。目录必须为当前 uid 所有的 0700 私有目录，文件 0600。上传声明的 `size` 可省略，表示大小上限；有效上限为声明值与用途上限的较小值。PUT 的 Content-Length 可省略（允许 chunked），提供时不得超过有效上限。流式计数同样受此上限约束，成功后 `size` 和 `sha256` 记录实际字节，pending 变为 ready，拒绝第二次 PUT。
+- 每用户暂存字节（上传、下载与进行中的流之和）默认上限 2 GiB，`MCP_STAGING_USER_MAX_BYTES` 可配置；pending 上传默认最多 20 个，`MCP_STAGING_USER_MAX_PENDING_UPLOADS` 可配置。工具超额报 `workspace-staging-quota-exceeded`，PUT 超额返回 429。计数在每个副本内维护，启动时从有效 sidecar 恢复；共享卷上并发副本的总配额仍需后续协调。
+- 后台在启动和每分钟清理过期对象，参照 `apps/workspace/server/src/jobs/blob-maintenance.ts`。上传对象 1 小时过期，导出结果 15 分钟过期。每个损坏或不可读条目单独记录无路径、无 token 的错误，不终止启动或扫描；文件消失的竞争可忽略。清理跳过不足 2 小时的锁，避免清理跨过过期点的消费；释放已消失的锁不改变消费成功结果。
 - 执行层和渲染服务不直接访问暂存存储。网关读出文件交给它们，或从它们那里收回结果再写入。
 
 ### 5.2 网关的文件端点
@@ -215,8 +216,10 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 | `GET /mcp/files/uploads/{uploadId}/page` | 浏览器上传页，给不能自己执行 PUT 的客户端（claude.ai、ChatGPT 对话） |
 | `GET /mcp/files/downloads/{downloadId}` | 用签名 URL 下载 |
 
+文件端点在 MCP Node adapter 前处理原始 Node 字节流，不做 UTF-8 解码，不受 MCP JSON 请求的 4 MiB 上限限制。Node `requestTimeout` 为 30 分钟，`headersTimeout` 保留 60 秒。
+
 这些端点与 Workspace 同域。下载一律带 `Content-Disposition: attachment`、`X-Content-Type-Options: nosniff` 和 `Content-Security-Policy: sandbox; default-src 'none'`，
-上传页不渲染任何用户内容。下载同时带 `Cache-Control: private, no-store`。文件端点保留 Host 检查，使用 256-bit 随机 capability token，sidecar 只存 SHA-256，常量时间比较；链接持有者可访问，无需 bearer。工具消费上传仍验证 owner、purpose 和 ready。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
+上传页不渲染任何用户内容；413 明示文件太大。下载结果保留原 Node 名，attachment 文件名替换路径分隔符与控制字符，并截为 180 字符。Asset 文件名根据媒体类型添加扩展名。下载同时带 `Cache-Control: private, no-store`。文件端点保留 Host 检查，使用 256-bit 随机 capability token，sidecar 只存 SHA-256，常量时间比较；链接持有者可访问，无需 bearer。工具消费上传仍验证 owner、purpose 和 ready。做法参照 `apps/workspace/server/src/modules/univer-assets/univer-assets.router.ts:147-152`。
 导出的 HTML、SVG、Markdown 可能包含任意内容，不能在 Workspace 的同源下以内联方式打开。
 
 ## 6. 执行层

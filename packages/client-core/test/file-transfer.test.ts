@@ -552,6 +552,36 @@ describe("Workspace application feature parity", () => {
     }
   });
 
+  it.each(["ab", "abcd"])(
+    "preserves the CLI Blob mismatch detail including path (%s)",
+    async (content) => {
+      const directory = await temporaryDirectory();
+      const outputPath = join(directory, "cli.bin");
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input) => {
+          if (
+            new URL(input instanceof Request ? input.url : input.toString()).pathname.startsWith(
+              "/api/resources/",
+            )
+          ) {
+            const owningNode = node({ resource: blobResource() });
+            return jsonResponse({ node: owningNode, resource: owningNode.resource });
+          }
+          return new Response(content, {
+            headers: { "content-type": "application/octet-stream", etag: '\"v1\"' },
+          });
+        }),
+      );
+      await expect(feature.download({ outputPath, resourceId: "resource-1" })).rejects.toEqual(
+        expect.objectContaining({
+          code: "workspace-blob-size-mismatch",
+          detail: { actualByteSize: content.length, expectedByteSize: 3, path: outputPath },
+        }),
+      );
+      expect(await readdir(directory)).toEqual([]);
+    },
+  );
+
   it.each(["abc", "ab", "abcd"])(
     "checks streamed Blob byte counts without an output file (%s)",
     async (content) => {

@@ -25,7 +25,7 @@ export const assetDownloadTool: ToolDefinition = {
     try {
       const download = await store.createDownload({
         owner: context.user.id,
-        fileName: stream.fileName,
+        fileName: stream.fileName + assetExtension(stream.mediaType),
         mediaType: stream.mediaType,
         ...(stream.size === undefined ? {} : { size: stream.size }),
         content: stream.content,
@@ -37,3 +37,30 @@ export const assetDownloadTool: ToolDefinition = {
     }
   },
 };
+
+function assetExtension(mediaType: string): string {
+  switch (mediaType.split(";")[0]?.trim().toLowerCase()) {
+    case "image/png":
+      return ".png";
+    case "image/jpeg":
+      return ".jpg";
+    case "image/gif":
+      return ".gif";
+    case "image/webp":
+      return ".webp";
+    case "image/svg+xml":
+      return ".svg";
+    case "image/bmp":
+      return ".bmp";
+    case "image/avif":
+      return ".avif";
+    case "image/tiff":
+      return ".tiff";
+    case "image/x-icon":
+      return ".ico";
+    case "application/pdf":
+      return ".pdf";
+    default:
+      return ".bin";
+  }
+}

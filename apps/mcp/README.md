@@ -97,6 +97,8 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_PUBLIC_URL` | Gateway only | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
 | `MCP_STAGING_DIRECTORY` | Required | Private 0700 directory owned by the gateway uid. Atomic JSON sidecars and byte files; startup and minute sweeps remove expired objects |
+| `MCP_STAGING_USER_MAX_BYTES` | `2147483648` (2 GiB) | Combined staged upload/download bytes per user; in-flight bytes count too. Accounting is per gateway replica, initialized from valid sidecars on startup |
+| `MCP_STAGING_USER_MAX_PENDING_UPLOADS` | `20` | Pending upload reservations per user |
 | `MCP_UPLOAD_BLOB_MAX_BYTES` | `536870912` | Blob upload/download staging limit in bytes; align with Workspace `maxBlobBytes` |
 | `MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`, `MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`, `MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`, `MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` | `52428800` each | Per-purpose upload limits in bytes |
 | `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp-<uid>/resources` | Private directory where the SVG resource catalog caches downloaded SVG files. Public data shared by gateway users under the same uid |
@@ -123,7 +125,7 @@ Docker Desktop without changing those identities.
 | `GET /healthz` | Returns 200 without contacting Workspace |
 | `GET /metrics` | Prometheus text with a matching bearer token. Returns 404 when unset, or 401 with `WWW-Authenticate: Bearer` on mismatch |
 | `GET /.well-known/oauth-protected-resource` and `/mcp` suffix | RFC 9728 metadata `{ resource: MCP_PUBLIC_URL, authorization_servers: [WORKSPACE_ORIGIN], scopes_supported, bearer_methods_supported }`. No authentication, `Cache-Control: public, max-age=300` |
-| `PUT /mcp/files/uploads/{id}?token=...` | Capability upload, 10-minute link; exact Content-Length required, single successful PUT |
+| `PUT /mcp/files/uploads/{id}?token=...` | Capability upload, 10-minute link; optional Content-Length, optional size upper limit, single successful PUT |
 | `GET /mcp/files/uploads/{id}/page?token=...` | Static browser upload page, same capability and expiry, strict CSP |
 | `GET /mcp/files/downloads/{id}?token=...` | 15-minute capability download, attachment and sandbox headers, private/no-store |
 | `/mcp` | MCP Streamable HTTP. Validates Host, optional Origin, bearer authentication, and toolset selection before SDK dispatch |
@@ -372,11 +374,26 @@ Word, Excel and PowerPoint types, the legacy Office types and `text/csv`. The ot
 purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
 does not lift Workspace's 1 MiB UnitData commit limit. Import/compile consumers remain future work.
 
-Blob transfer streams between Workspace and the staging directory. Download filenames use
-Node names; Asset downloads use Asset IDs. Startup and minute sweeps remove expired files;
-failed streams never become ready. A crashed in-flight upload can retain its exclusive lock
-until the object expires. Retry with a new upload reservation in that case. Staging roots,
+Blob transfer streams between Workspace and the staging directory. Download results preserve
+Node names; attachment headers replace separators and control characters and cap the name at 180 characters.
+Asset downloads use Asset IDs with a media-type extension. Startup and minute sweeps remove expired files;
+failed streams never become ready. Sweeps isolate malformed or unreadable sidecars and tolerate disappearing entries. They skip
+locks younger than two hours, so a consume crossing expiry keeps its bytes. A crashed in-flight
+upload can retain its exclusive lock until that bound. Retry with a new upload reservation in that case. Staging roots,
 created parents and files reject symlinks and group/world permissions.
 
 Gateway file tools record `upload_bytes` for consumed uploads and `export_bytes` for staged
 downloads with `executor: none`. Worker costs remain zero without an executor.
+
+`file_upload_create.size` is optional and sets a size upper limit. Uploads accept smaller files,
+including empty files and chunked bodies without Content-Length. The effective limit is the
+minimum of the supplied size (when present) and the purpose limit; `max_bytes` reports that bound.
+Ready sidecars record actual bytes and SHA-256. File routes stream raw Node request bytes before
+MCP JSON adaptation. Node's request timeout is 30 minutes; its 60-second headers timeout is unchanged.
+The capability link must still be used within ten minutes of reservation.
+
+Staging quota failures return `workspace-staging-quota-exceeded` from tools, or HTTP 429 during PUT.
+Failed transfers release their staged-byte accounting; ready uploads remain counted until expiry.
+The byte cap covers uploads and downloads together. Pending-upload counts fall when the upload becomes ready.
+`blob_upload.name` defaults to the reserved file name. Transfer usage counts successful consumption once.
+Filesystem failures are internal errors; tool details omit `sourcePath` and local filesystem paths.

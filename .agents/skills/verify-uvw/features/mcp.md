@@ -1467,7 +1467,7 @@ Pass when replacement retains identity, retries return the same result, the link
 **MF3. Capability and owner boundaries, browser upload.**
 
 ```bash
-$V mcp mf-page-reserve file_upload_create '{"purpose":"blob","file_name":"never-render-this-name.txt","size":15,"media_type":"text/plain"}'
+$V mcp mf-page-reserve file_upload_create '{"purpose":"blob","file_name":"never-render-this-name.txt","media_type":"text/plain"}'
 MF_PAGE=$(jq -r '.upload.page_url' "$EVIDENCE/mf-page-reserve.out")
 curl -fsS -D "$EVIDENCE/mf-page.headers" "$MF_PAGE" > "$EVIDENCE/mf-page.html"
 grep -q "default-src 'none'; script-src 'nonce-" "$EVIDENCE/mf-page.headers"
@@ -1482,6 +1482,11 @@ agent-browser upload 'input[type=file]' "$EVIDENCE/mf-original.txt"
 agent-browser click 'button'
 agent-browser wait --text 'Upload complete'
 agent-browser screenshot "$EVIDENCE/mf-upload-complete.png"
+MF_PAGE_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-page-reserve.out")
+$V mcp --toolsets files mf-page-publish blob_upload "$(jq -nc --arg upload "$MF_PAGE_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-page-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
+$V mcp --toolsets files mf-page-download blob_download "$(jq -nc --arg resource "$(jq -r '.upload.resourceId' "$EVIDENCE/mf-page-publish.out")" '{resource:$resource}')"
+node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-page-download.out" "$EVIDENCE/mf-page-downloaded.txt"
+cmp "$EVIDENCE/mf-original.txt" "$EVIDENCE/mf-page-downloaded.txt"
 node --input-type=module - "$PWD" "$ORIGIN" "$MCP_URL" "$MF_UPLOAD" "$MF_SPACE" "$EVIDENCE/mf-foreign.json" <<'JS'
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
@@ -1551,7 +1556,7 @@ jq -e '.code == "workspace-upload-media-type-invalid"' "$EVIDENCE/mf-invalid-pur
 
 Pass when a reservation cannot be published before bytes arrive and Office-purpose validation refuses plain text.
 
-**MF6. Exact upload length, single PUT and download capability.**
+**MF6. Upload upper limit, single PUT and download capability.**
 
 ```bash
 node --input-type=module - "$EVIDENCE" <<'JS'
@@ -1560,9 +1565,9 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const evidence = process.argv[2];
 const { upload } = JSON.parse(readFileSync(evidence + '/mf-pending-reserve.out', 'utf8'));
 const statuses = {};
-statuses.short = (await fetch(upload.upload_url, { method: 'PUT', body: 'ab' })).status;
-assert.equal(statuses.short, 413);
-statuses.ready = (await fetch(upload.upload_url, { method: 'PUT', body: 'abc' })).status;
+statuses.large = (await fetch(upload.upload_url, { method: 'PUT', body: 'abcd' })).status;
+assert.equal(statuses.large, 413);
+statuses.ready = (await fetch(upload.upload_url, { method: 'PUT', body: 'ab' })).status;
 assert.equal(statuses.ready, 204);
 statuses.repeat = (await fetch(upload.upload_url, { method: 'PUT', body: 'xyz' })).status;
 assert.equal(statuses.repeat, 409);
@@ -1574,7 +1579,33 @@ writeFileSync(evidence + '/mf-capability-statuses.json', JSON.stringify(statuses
 JS
 ```
 
-Pass when invalid lengths leave an upload retryable, a second successful PUT cannot overwrite bytes, and an unsigned download is refused.
+Pass when over-limit files leave an upload retryable, smaller files are accepted, a second successful PUT cannot overwrite bytes, and an unsigned download is refused.
+
+**MF7. Binary XLSX and PNG round trips.** Generates a valid 50,000-row OpenXML workbook larger than 4 MiB and a PNG. Python 3 is needed for standard-library fixture generation.
+
+```bash
+python3 .agents/skills/verify-uvw/bin/file-fixtures.py "$EVIDENCE" > "$EVIDENCE/mf-binary-fixtures.tsv"
+for MF_EXT in xlsx png; do
+  if [ "$MF_EXT" = xlsx ]; then MF_TYPE=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; else MF_TYPE=image/png; fi
+  $V mcp "mf-binary-$MF_EXT-reserve" file_upload_create "$(jq -nc --arg name "mf-binary.$MF_EXT" --arg type "$MF_TYPE" '{purpose:"blob",file_name:$name,media_type:$type}')"
+  MF_BINARY_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-binary-$MF_EXT-reserve.out")
+  node .agents/skills/verify-uvw/bin/mcp-file.mjs put "$EVIDENCE/mf-binary-$MF_EXT-reserve.out" "$EVIDENCE/mf-binary.$MF_EXT"
+  $V mcp --toolsets files "mf-binary-$MF_EXT-publish" blob_upload "$(jq -nc --arg upload "$MF_BINARY_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-binary-$MF_EXT-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
+  MF_BINARY_RESOURCE=$(jq -r '.upload.resourceId' "$EVIDENCE/mf-binary-$MF_EXT-publish.out")
+  $V mcp --toolsets files "mf-binary-$MF_EXT-download" blob_download "$(jq -nc --arg resource "$MF_BINARY_RESOURCE" '{resource:$resource}')"
+  node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-binary-$MF_EXT-download.out" "$EVIDENCE/mf-binary-downloaded.$MF_EXT"
+  cmp "$EVIDENCE/mf-binary.$MF_EXT" "$EVIDENCE/mf-binary-downloaded.$MF_EXT"
+  shasum -a 256 "$EVIDENCE/mf-binary.$MF_EXT" "$EVIDENCE/mf-binary-downloaded.$MF_EXT" > "$EVIDENCE/mf-binary-$MF_EXT-sha256.txt"
+done
+$V mcp mf-small-page-reserve file_upload_create '{"purpose":"blob","file_name":"small.png","size":1,"media_type":"image/png"}'
+agent-browser open "$(jq -r '.upload.page_url' "$EVIDENCE/mf-small-page-reserve.out")"
+agent-browser upload 'input[type=file]' "$EVIDENCE/mf-binary.png"
+agent-browser find role button click --name 'Upload'
+agent-browser wait --text 'File is too large'
+agent-browser screenshot "$EVIDENCE/mf-page-too-large.png"
+```
+
+Pass when both hashes match after PUT, publication and download, default Blob names are preserved, and the browser explains a 413 without asking for another link.
 
 **M12. Cleanup.**
 

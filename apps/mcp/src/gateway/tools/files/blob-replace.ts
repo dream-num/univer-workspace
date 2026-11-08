@@ -31,13 +31,14 @@ export const blobReplaceTool: ToolDefinition = {
       input.upload_id,
       "blob",
       async (object, path) => {
-        context.usage?.addTransfer("upload_bytes", object.size);
-        return feature.replace({
+        const result = await feature.replace({
           resourceId: input.resource,
           filePath: path,
           etag: input.etag,
           idempotencyKey: input.idempotency_key,
         });
+        context.usage?.addTransfer("upload_bytes", object.size);
+        return result;
       },
     );
     return { output: { replacement }, repo: view.node.spaceId };

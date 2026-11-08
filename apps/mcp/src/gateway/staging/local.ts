@@ -16,6 +16,7 @@ import {
 } from "./model.js";
 
 const UPLOAD_TTL = 60 * 60_000;
+const LOCK_TTL = 2 * 60 * 60_000;
 const LINK_TTL = 10 * 60_000;
 const DOWNLOAD_TTL = 15 * 60_000;
 const idPattern = /^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/;
@@ -31,10 +32,7 @@ const officeTypes = new Set([
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
 const missing = () => workspaceError("workspace-upload-not-found", "Upload not found or expired.");
 const sizeError = () =>
-  workspaceError(
-    "workspace-file-size-mismatch",
-    "File size differs from the declared size or exceeds the purpose limit.",
-  );
+  workspaceError("workspace-file-size-mismatch", "File exceeds the size upper limit.");
 const headers = {
   "Cache-Control": "private, no-store",
   "X-Content-Type-Options": "nosniff",
@@ -48,6 +46,11 @@ export class LocalStagingStore implements StagingStore {
   private readonly canonical: string;
   private readonly ready: Promise<void>;
   private readonly timer: ReturnType<typeof setInterval>;
+  // shortcut: quota accounting is per replica, coordinate reservations before multi-replica quota enforcement.
+  private readonly objects = new Map<string, StagingObject>();
+  private readonly maxUserBytes: number;
+  private readonly maxPendingUploads: number;
+  private readonly onError: () => void;
   private sweeping: Promise<void> | undefined;
 
   constructor(
@@ -55,27 +58,36 @@ export class LocalStagingStore implements StagingStore {
     private readonly publicUrl: string,
     options: {
       limits?: UploadLimits;
+      maxUserBytes?: number;
+      maxPendingUploads?: number;
       now?: () => number;
       intervalMs?: number;
       onError?: () => void;
     } = {},
   ) {
+    this.maxUserBytes = options.maxUserBytes ?? 2 * 1024 * 1024 * 1024;
+    this.maxPendingUploads = options.maxPendingUploads ?? 20;
+    this.onError = options.onError ?? (() => {});
     this.limits = options.limits ?? defaultLimits;
     this.now = options.now ?? Date.now;
     this.root = resolve(directory);
-    const first = mkdirSync(this.root, { recursive: true, mode: 0o700 });
-    this.directories.add(this.root);
-    if (first !== undefined)
-      for (let current = this.root; current !== first; current = dirname(current))
-        this.directories.add(dirname(current));
-    this.canonical = realpathSync(this.root);
-    this.checkRoot();
-    this.ready = this.sweep();
+    try {
+      const first = mkdirSync(this.root, { recursive: true, mode: 0o700 });
+      this.directories.add(this.root);
+      if (first !== undefined)
+        for (let current = this.root; current !== first; current = dirname(current))
+          this.directories.add(dirname(current));
+      this.canonical = realpathSync(this.root);
+      this.checkRoot();
+    } catch {
+      throw new Error("Unable to initialize private staging directory.");
+    }
+    this.ready = this.sweep().catch(() => this.onError());
     this.timer = setInterval(() => {
       if (this.sweeping) return;
       this.sweeping = this.ready
         .then(() => this.sweep())
-        .catch(() => options.onError?.())
+        .catch(() => this.onError())
         .finally(() => {
           this.sweeping = undefined;
         });
@@ -115,6 +127,7 @@ export class LocalStagingStore implements StagingStore {
     }
   }
   private async read(id: string): Promise<StagingObject | undefined> {
+    if (!idPattern.test(id)) throw missing();
     try {
       const file = await this.safeOpen(this.path(id, "json"));
       try {
@@ -126,7 +139,7 @@ export class LocalStagingStore implements StagingStore {
       }
     } catch (error) {
       if (hasCode(error, "ENOENT")) return undefined;
-      throw error;
+      throw new Error("Unable to read staging metadata.");
     }
   }
   private async metadata(object: StagingObject): Promise<void> {
@@ -153,7 +166,6 @@ export class LocalStagingStore implements StagingStore {
   async createUpload(owner: string, value: UploadInput) {
     await this.ready;
     const input = uploadInputSchema.parse(value);
-    if (input.size > this.limits[input.purpose]) throw sizeError();
     if (
       (input.purpose === "office-import" && !officeTypes.has(input.media_type)) ||
       (!["office-import", "blob"].includes(input.purpose) &&
@@ -173,20 +185,27 @@ export class LocalStagingStore implements StagingStore {
       purpose: input.purpose,
       fileName: input.file_name,
       mediaType: input.media_type,
-      size: input.size,
+      size: 0,
+      maxBytes: Math.min(input.size ?? this.limits[input.purpose], this.limits[input.purpose]),
       state: "pending",
       createdAt,
       expiresAt: createdAt + UPLOAD_TTL,
       tokenHash: hash(token),
     };
-    await this.metadata(object);
+    this.account(object);
+    try {
+      await this.metadata(object);
+    } catch (error) {
+      this.objects.delete(object.id);
+      throw error;
+    }
     return {
       upload: {
         upload_id: object.id,
         upload_url: this.link(object, token),
         page_url: this.link(object, token, true),
         expires_at: new Date(createdAt + LINK_TTL).toISOString(),
-        max_bytes: this.limits[input.purpose],
+        max_bytes: Math.min(input.size ?? this.limits[input.purpose], this.limits[input.purpose]),
       },
     };
   }
@@ -241,14 +260,16 @@ export class LocalStagingStore implements StagingStore {
     try {
       return await action();
     } finally {
-      await file.close();
-      await unlink(path);
+      await file.close().catch(() => this.onError());
+      await unlink(path).catch((error) => {
+        if (!hasCode(error, "ENOENT")) this.onError();
+      });
     }
   }
   private async write(
     object: StagingObject,
     content: AsyncIterable<Uint8Array>,
-    expectedSize?: number,
+    maxBytes = this.limits[object.purpose],
   ): Promise<StagingObject> {
     const temp = this.path(object.id, `${randomUUID()}.tmp`);
     const file = await open(temp, "wx", 0o600);
@@ -257,11 +278,8 @@ export class LocalStagingStore implements StagingStore {
     try {
       for await (const chunk of content) {
         size += chunk.byteLength;
-        if (
-          size > this.limits[object.purpose] ||
-          (expectedSize !== undefined && size > expectedSize)
-        )
-          throw sizeError();
+        if (size > Math.min(maxBytes, this.limits[object.purpose])) throw sizeError();
+        this.account({ ...object, size });
         digest.update(chunk);
         let offset = 0;
         while (offset < chunk.byteLength) {
@@ -270,8 +288,7 @@ export class LocalStagingStore implements StagingStore {
           offset += bytesWritten;
         }
       }
-      if ((expectedSize !== undefined && size !== expectedSize) || object.expiresAt <= this.now())
-        throw sizeError();
+      if (object.expiresAt <= this.now()) throw sizeError();
       await file.sync();
       await file.close();
       await rename(temp, this.path(object.id, "data"));
@@ -282,7 +299,14 @@ export class LocalStagingStore implements StagingStore {
         sha256: digest.digest("hex"),
       };
       await this.metadata(ready);
+      this.objects.set(object.id, ready);
       return ready;
+    } catch (error) {
+      this.objects.set(object.id, object);
+      await unlink(this.path(object.id, "data")).catch((cleanupError) => {
+        if (!hasCode(cleanupError, "ENOENT")) this.onError();
+      });
+      throw error;
     } finally {
       await file.close();
       await unlink(temp).catch((error) => {
@@ -307,16 +331,17 @@ export class LocalStagingStore implements StagingStore {
       purpose: "blob",
       fileName: input.fileName,
       mediaType: input.mediaType.split(";")[0]?.trim(),
-      size: input.size ?? 0,
+      size: 0,
       state: "pending",
       createdAt,
       expiresAt: createdAt + DOWNLOAD_TTL,
       tokenHash: hash(token),
     });
     if (input.size !== undefined && input.size > this.limits.blob) throw sizeError();
-    await this.metadata(object);
+    this.account(object);
     try {
-      const ready = await this.write(object, input.content, input.size);
+      await this.metadata(object);
+      const ready = await this.lock(object.id, () => this.write(object, input.content, input.size));
       return {
         url: this.link(ready, token),
         expires_at: new Date(ready.expiresAt).toISOString(),
@@ -347,6 +372,8 @@ export class LocalStagingStore implements StagingStore {
     )
       return new Response("Not found", { status: 404, headers });
     if (object.kind === "upload" && request.method === "GET" && match[3]) return uploadPage();
+    if (object.kind === "download" && object.state === "pending")
+      return new Response("Not found", { status: 404, headers });
     if (
       object.kind === "download" &&
       request.method === "GET" &&
@@ -363,7 +390,7 @@ export class LocalStagingStore implements StagingStore {
           ...headers,
           "Content-Type": object.mediaType,
           "Content-Length": String(object.size),
-          "Content-Disposition": `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(object.fileName).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16)}`)}`,
+          "Content-Disposition": `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(safeDownloadName(object.fileName)).replace(/['()*]/g, (char) => `%${char.charCodeAt(0).toString(16)}`)}`,
           "Content-Security-Policy": "sandbox; default-src 'none'",
         },
       });
@@ -378,17 +405,15 @@ export class LocalStagingStore implements StagingStore {
               "Upload has already been received.",
             );
           const length = request.headers.get("content-length");
-          if (
-            length === null ||
-            !/^\d+$/.test(length) ||
-            Number(length) !== latest.size ||
-            latest.size > this.limits[latest.purpose]
-          )
+          const bound = Math.min(latest.maxBytes ?? latest.size, this.limits[latest.purpose]);
+          if (length !== null && (!/^\d+$/.test(length) || Number(length) > bound))
             throw sizeError();
-          await this.write(latest, request.body ?? empty(), latest.size);
+          await this.write(latest, request.body ?? empty(), bound);
         });
         return new Response(null, { status: 204, headers });
       } catch (error) {
+        if (hasCode(error, "workspace-staging-quota-exceeded"))
+          return new Response("Staging quota exceeded", { status: 429, headers });
         if (hasCode(error, "workspace-file-size-mismatch"))
           return new Response("File size mismatch", { status: 413, headers });
         if (
@@ -401,32 +426,75 @@ export class LocalStagingStore implements StagingStore {
     }
     return new Response("Method not allowed", { status: 405, headers });
   }
+  private account(object: StagingObject): void {
+    let bytes = object.size;
+    let pending = object.kind === "upload" && object.state === "pending" ? 1 : 0;
+    for (const other of this.objects.values()) {
+      if (other.id === object.id || other.owner !== object.owner) continue;
+      bytes += other.size;
+      if (other.kind === "upload" && other.state === "pending") pending++;
+    }
+    if (bytes > this.maxUserBytes || pending > this.maxPendingUploads)
+      throw workspaceError(
+        "workspace-staging-quota-exceeded",
+        "Staging quota exceeded. Wait for staged files to expire and retry.",
+      );
+    this.objects.set(object.id, object);
+  }
   private async remove(id: string): Promise<void> {
     for (const suffix of ["json", "data"])
       await unlink(this.path(id, suffix)).catch((error) => {
         if (!hasCode(error, "ENOENT")) throw error;
       });
+    this.objects.delete(id);
+  }
+  private async lockTime(id: string): Promise<number | undefined> {
+    try {
+      return lstatSync(this.path(id, "lock")).mtimeMs;
+    } catch (error) {
+      if (hasCode(error, "ENOENT")) return undefined;
+      throw error;
+    }
   }
   async sweep(): Promise<void> {
     this.checkRoot();
     for (const name of await readdir(this.root)) {
-      if (!name.endsWith(".json")) continue;
-      const id = name.slice(0, -5);
+      const id = name.slice(0, 36);
       if (!idPattern.test(id)) continue;
-      const object = await this.read(id);
-      if (object && object.expiresAt <= this.now()) {
-        await this.remove(id);
-        await unlink(this.path(id, "lock")).catch((error) => {
-          if (!hasCode(error, "ENOENT")) throw error;
+      try {
+        if (name === `${id}.json`) {
+          const object = await this.read(id);
+          if (object && object.expiresAt > this.now()) {
+            if (!this.objects.has(id)) this.objects.set(id, object);
+            continue;
+          }
+        } else {
+          if (!/^[a-f0-9-]{36}\.(?:data|[a-f0-9-]{36}\.tmp)$/.test(name)) continue;
+          if (lstatSync(join(this.root, name)).mtimeMs + UPLOAD_TTL > this.now()) continue;
+        }
+        const lockTime = await this.lockTime(id);
+        if (lockTime !== undefined) {
+          if (lockTime + LOCK_TTL > this.now()) continue;
+          await unlink(this.path(id, "lock")).catch((error) => {
+            if (!hasCode(error, "ENOENT")) throw error;
+          });
+        }
+        await this.lock(id, async () => {
+          if (name === `${id}.json`) {
+            const object = await this.read(id);
+            if (object && object.expiresAt <= this.now()) await this.remove(id);
+            else if (object) this.objects.set(id, object);
+            else this.objects.delete(id);
+          } else if (/^[a-f0-9-]{36}\.(?:data|[a-f0-9-]{36}\.tmp)$/.test(name)) {
+            const path = join(this.root, name);
+            const stat = lstatSync(path);
+            if (stat.mtimeMs + UPLOAD_TTL <= this.now() && !(await this.read(id)))
+              await unlink(path);
+          }
         });
+      } catch (error) {
+        if (!hasCode(error, "ENOENT") && !hasCode(error, "workspace-upload-busy")) this.onError();
       }
-    }
-    for (const name of await readdir(this.root)) {
-      if (!/^[a-f0-9-]{36}\.(?:data|[a-f0-9-]{36}\.tmp)$/.test(name)) continue;
-      const path = join(this.root, name);
-      const stat = lstatSync(path);
-      if (stat.mtimeMs + UPLOAD_TTL <= this.now() && !(await this.read(name.slice(0, 36))))
-        await unlink(path);
     }
   }
   async close(): Promise<void> {
@@ -442,7 +510,7 @@ async function* empty(): AsyncIterable<Uint8Array> {}
 function uploadPage(): Response {
   const nonce = randomBytes(24).toString("base64");
   return new Response(
-    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Upload a file</title><h1>Upload a file</h1><form><label>Choose file <input type="file" required></label><button>Upload</button></form><p role="status"></p><script nonce="${nonce}">document.querySelector('form').addEventListener('submit',async event=>{event.preventDefault();const status=document.querySelector('[role=status]');const file=document.querySelector('input').files[0];if(!file)return;status.textContent='Uploading…';try{const url=new URL(location.href);url.pathname=url.pathname.replace(/\\/page$/,'');const response=await fetch(url,{method:'PUT',body:file,credentials:'omit'});status.textContent=response.ok?'Upload complete. Return to your assistant.':'Upload failed. Ask your assistant for a new link.';}catch{status.textContent='Upload failed. Try again.';}});</script></html>`,
+    `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Upload a file</title><h1>Upload a file</h1><form><label>Choose file <input type="file" required></label><button>Upload</button></form><p role="status"></p><script nonce="${nonce}">document.querySelector('form').addEventListener('submit',async event=>{event.preventDefault();const status=document.querySelector('[role=status]');const file=document.querySelector('input').files[0];if(!file)return;status.textContent='Uploading…';try{const url=new URL(location.href);url.pathname=url.pathname.replace(/\\/page$/,'');const response=await fetch(url,{method:'PUT',body:file,credentials:'omit'});status.textContent=response.ok?'Upload complete. Return to your assistant.':response.status===413?'File is too large. Choose a smaller file.':response.status===429?'Staging quota exceeded. Try again later.':'Upload failed. Ask your assistant for a new link.';}catch{status.textContent='Upload failed. Try again.';}});</script></html>`,
     {
       headers: {
         ...headers,
@@ -450,5 +518,17 @@ function uploadPage(): Response {
         "Content-Security-Policy": `default-src 'none'; script-src 'nonce-${nonce}'; connect-src 'self'; form-action 'none'; base-uri 'none'; frame-ancestors 'none'`,
       },
     },
+  );
+}
+
+function safeDownloadName(name: string): string {
+  return (
+    Array.from(
+      Buffer.from(name)
+        .toString("utf8")
+        .replace(/[\\/\p{Cc}]/gu, "_"),
+    )
+      .slice(0, 180)
+      .join("") || "download"
   );
 }
