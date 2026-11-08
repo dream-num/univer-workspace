@@ -5,6 +5,12 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
+import { createExecutor } from "../src/executor/server.js";
+import { parseExecutorConfig } from "../src/shared/config-executor.js";
+import {
+  workspaceRuntimeKey,
+  type WorkspaceContentRuntime,
+} from "@univerjs/univer-workspace-client-core";
 import { createGateway } from "../src/gateway/server.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames, coreNames, destructiveNames, filesNames, writeNames } from "./tool-names.js";
@@ -36,34 +42,45 @@ const spaces = [
     slug: "team",
   },
 ];
-const observedSchema = z.object({
-  event: z.literal("mcp.tool_call"),
-  schema_version: z.literal(1),
-  ts: z.iso.datetime(),
-  request_id: z.string().min(1),
-  trace_id: z.string().nullable(),
-  user_id: z.string().min(1),
-  auth_kind: z.literal("dev"),
-  client_id: z.literal("dev"),
-  client_name: z.string().nullable(),
-  client_version: z.string().nullable(),
-  tool: z.string().min(1),
-  toolset: z.enum(["core", "files", "admin"]),
-  repo: z.string().nullable(),
-  unit_type: z.null(),
-  outcome: z.enum(["ok", "tool_error", "auth_error", "rate_limited", "timeout", "internal_error"]),
-  error_code: z.string().nullable(),
-  duration_ms: z.number().nonnegative(),
-  executor: z.literal("none"),
-  cost: z.object({
-    worker_cpu_ms: z.literal(0),
-    worker_peak_rss_mb: z.literal(0),
-    render_pages: z.literal(0),
-    export_bytes: z.literal(0),
-    upload_bytes: z.literal(0),
-    committed_revisions: z.literal(0),
-  }),
-});
+const observedSchema = z
+  .object({
+    event: z.literal("mcp.tool_call"),
+    schema_version: z.literal(1),
+    ts: z.iso.datetime(),
+    request_id: z.string().min(1),
+    trace_id: z.string().nullable(),
+    user_id: z.string().min(1),
+    auth_kind: z.literal("dev"),
+    client_id: z.literal("dev"),
+    client_name: z.string().nullable(),
+    client_version: z.string().nullable(),
+    tool: z.string().min(1),
+    toolset: z.enum(["core", "files", "admin"]),
+    repo: z.string().nullable(),
+    unit_type: z.string().nullable(),
+    outcome: z.enum([
+      "ok",
+      "tool_error",
+      "auth_error",
+      "rate_limited",
+      "timeout",
+      "internal_error",
+    ]),
+    error_code: z.string().nullable(),
+    duration_ms: z.number().nonnegative(),
+    executor: z.enum(["cold_start", "warm", "none"]),
+    cost: z.object({
+      worker_cpu_ms: z.number().nonnegative(),
+      worker_peak_rss_mb: z.number().nonnegative(),
+      render_pages: z.number().nonnegative(),
+      export_bytes: z.number().nonnegative(),
+      upload_bytes: z.number().nonnegative(),
+      committed_revisions: z.number().nonnegative(),
+    }),
+  })
+  .refine(
+    (event) => event.executor !== "none" || Object.values(event.cost).every((cost) => cost === 0),
+  );
 async function listen(server: Server): Promise<string> {
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -80,6 +97,30 @@ async function close(server: Server): Promise<void> {
 
 describe("gateway over real HTTP and the MCP client", () => {
   let workspace: Server;
+  let executor: ReturnType<typeof createExecutor>;
+  let ready: boolean;
+  let observedKeys: string[];
+  const internalToken = "executor-internal-test-token-123456789";
+  const rangeResult = {
+    kind: "worksheet-range",
+    unitId: "unit-1",
+    ranges: [
+      {
+        worksheet: { id: "sheet-1", index: 0, name: "Sheet1" },
+        requestedRange: "A1:B2",
+        resolvedRange: "A1:B2",
+        clipped: false,
+        displayValues: [
+          ["Name", "Count"],
+          ["Apples", "2"],
+        ],
+        cellData: [
+          [{ v: "Name" }, { v: "Count" }],
+          [{ v: "Apples" }, { v: 2 }],
+        ],
+      },
+    ],
+  };
   let gateway: ReturnType<typeof createGateway>;
   let url: string;
   let logs: string;
@@ -93,6 +134,8 @@ describe("gateway over real HTTP and the MCP client", () => {
   let missingRepoCode: string;
   beforeEach(async () => {
     clients = [];
+    ready = false;
+    observedKeys = [];
     logs = "";
     expireDuringTool = false;
     missingRepoCode = "workspace-not-found";
@@ -116,6 +159,34 @@ describe("gateway over real HTTP and the MCP client", () => {
         );
       } else if (expireDuringTool) {
         response.writeHead(401).end("{}");
+      } else if (path.pathname === "/api/worktrees/wt-1") {
+        response.end(
+          JSON.stringify({
+            worktree: {
+              id: "wt-1",
+              name: "Test",
+              number: 1,
+              kind: "team",
+              state: ready ? "ready" : "draft",
+              teamSpace: { id: "team-1" },
+              units: [
+                {
+                  unitId: "unit-1",
+                  unitType: "sheet",
+                  resourceId: "resource-1",
+                  nodeId: "node-1",
+                  name: "Sheet1",
+                  source: "worktree",
+                  target: { spaceId: "team-1", parentNodeId: null },
+                  draftHeadRevision: 1,
+                  change: "added",
+                  mergeResult: "pending",
+                  activationState: "waitingForMerge",
+                },
+              ],
+            },
+          }),
+        );
       } else if (path.pathname === "/api/spaces") {
         response.end(JSON.stringify({ spaces }));
       } else if (path.pathname === "/api/spaces/lookup") {
@@ -144,6 +215,44 @@ describe("gateway over real HTTP and the MCP client", () => {
       }
     });
     const transportOrigin = await listen(workspace);
+    const runtime: WorkspaceContentRuntime = {
+      executeAndCommit: async (input) => {
+        expect(input.caller?.userId).toBe(subject.id);
+        observedKeys.push(workspaceRuntimeKey(input.target, input.caller));
+        input.observe?.({ coldStart: observedKeys.length === 1, workerMs: 12 });
+        return { committed: true, revision: 2, status: "committed", value: "written" };
+      },
+      executeRead: async (input) => {
+        expect(input.caller?.userId).toBe(subject.id);
+        observedKeys.push(workspaceRuntimeKey(input.target, input.caller));
+        input.observe?.({ coldStart: observedKeys.length === 1, workerMs: 4 });
+        return {
+          value: { ok: true, value: rangeResult },
+          state: {
+            connection: "online" as const,
+            baseRevision: 1,
+            knownHeadRevision: 1,
+            pendingMutationCount: 0,
+            bufferedChangesetCount: 0,
+            awaitingChangeset: null,
+            conflict: null,
+          },
+        };
+      },
+      exportUnitData: async () => {
+        throw new Error("unused");
+      },
+      close: async () => {},
+    };
+    executor = createExecutor(
+      parseExecutorConfig({
+        WORKSPACE_ORIGIN: identityOrigin,
+        WORKSPACE_TRANSPORT_URL: transportOrigin,
+        MCP_INTERNAL_TOKEN: internalToken,
+      }),
+      { runtime, logger: pino({ level: "silent" }) },
+    );
+    const executorUrl = await listen(executor.server);
     const logOutput = new Writable({
       write(chunk, _encoding, callback) {
         logs += chunk.toString();
@@ -162,6 +271,8 @@ describe("gateway over real HTTP and the MCP client", () => {
         WORKSPACE_TRANSPORT_URL: transportOrigin,
         MCP_PUBLIC_URL: url,
         METRICS_TOKEN: "metrics-secret",
+        MCP_EXECUTOR_URLS: executorUrl,
+        MCP_INTERNAL_TOKEN: internalToken,
       }),
       { logger: pino({}, logOutput) },
     );
@@ -174,6 +285,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     await gateway.close();
     await close(gateway.server);
     await close(workspace);
+    await executor.close();
     expect(logs).not.toContain(session);
     expect(logs).not.toContain("metrics-secret");
   });
@@ -228,6 +340,86 @@ describe("gateway over real HTTP and the MCP client", () => {
       outcome: "ok",
       client_name: "gateway-test",
       client_version: "1.2.3",
+    });
+  });
+
+  it.each(["legacy", { pin: "2026-07-28" }] as const)(
+    "executes and inspects through RPC with %j",
+    async (mode) => {
+      const client = await connect(mode);
+      expect(
+        (
+          await client.callTool({
+            name: "execute",
+            arguments: { worktree: "wt-1", unit: "unit-1", code: 'return "written"' },
+          })
+        ).structuredContent,
+      ).toEqual({ committed: true, revision: 2, status: "committed", value: "written" });
+      expect(
+        (
+          await client.callTool({
+            name: "inspect",
+            arguments: {
+              worktree: "wt-1",
+              unit: "unit-1",
+              target: "range",
+              selectors: ["A1:B2"],
+              worksheet: "index:1",
+            },
+          })
+        ).structuredContent,
+      ).toEqual(rangeResult);
+      expect(events()).toMatchObject([
+        {
+          executor: "cold_start",
+          unit_type: "sheet",
+          repo: "team-1",
+          cost: { committed_revisions: 1, worker_cpu_ms: 12 },
+        },
+        {
+          executor: "warm",
+          unit_type: "sheet",
+          repo: "team-1",
+          cost: { committed_revisions: 0, worker_cpu_ms: 4 },
+        },
+      ]);
+      expect(new Set(observedKeys).size).toBe(1);
+      expect(observedKeys[0]).toContain(":caller:user-1");
+      expect(logs).not.toContain(internalToken);
+      expect(logs).not.toContain("Apples");
+    },
+  );
+
+  it("preserves ready Worktree error detail over RPC", async () => {
+    ready = true;
+    const result = await (
+      await connect()
+    ).callTool({
+      name: "execute",
+      arguments: { worktree: "wt-1", unit: "unit-1", code: "return 1" },
+    });
+    expect(result).toMatchObject({
+      isError: true,
+      structuredContent: {
+        code: "workspace-worktree-not-editable",
+        detail: { state: "ready", worktreeId: "wt-1" },
+      },
+    });
+    expect(observedKeys).toEqual([]);
+  });
+
+  it("keeps executor tools listed while an executor is stopped", async () => {
+    await executor.close();
+    const client = await connect();
+    expect((await client.listTools()).tools.map((tool) => tool.name)).toContain("execute");
+    expect(
+      await client.callTool({
+        name: "inspect",
+        arguments: { target: "workbook", unit: "unit-1", trunk: true },
+      }),
+    ).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-executor-unavailable" },
     });
   });
 
@@ -302,13 +494,19 @@ describe("gateway over real HTTP and the MCP client", () => {
 
   it("lists the selected toolsets in the fixed registry order with complete schemas and annotations", async () => {
     const names = async (suffix: string) =>
-      (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map((tool) => tool.name);
+      (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map(
+        (tool) => tool.name,
+      );
     expect(await names("")).toEqual(coreNames);
     expect(await names("?toolsets=core")).toEqual(coreNames);
     expect(await names("?toolsets=files")).toEqual(filesNames);
     expect(await names("?toolsets=admin")).toEqual(adminNames);
     expect(await names("?toolsets=admin,core")).toEqual([...coreNames, ...adminNames]);
-    expect(await names("?toolsets=core,files,admin")).toEqual([...coreNames, ...filesNames, ...adminNames]);
+    expect(await names("?toolsets=core,files,admin")).toEqual([
+      ...coreNames,
+      ...filesNames,
+      ...adminNames,
+    ]);
     expect(await names("?toolsets=all")).toEqual([...coreNames, ...filesNames, ...adminNames]);
     const all = await (await connect({ pin: "2026-07-28" }, "?toolsets=all")).listTools();
     for (const tool of all.tools) {

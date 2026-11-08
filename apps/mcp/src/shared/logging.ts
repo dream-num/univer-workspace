@@ -1,0 +1,18 @@
+export const credentialRedactions = [
+  "req.headers.authorization",
+  "req.headers.cookie",
+  "headers.authorization",
+  "headers.cookie",
+  "internalToken",
+  "*.internalToken",
+  "grant",
+  "*.grant",
+  "session",
+  "*.session",
+  "MCP_INTERNAL_TOKEN",
+  "*.MCP_INTERNAL_TOKEN",
+  "UNIVER_LICENSE",
+  "UNIVER_LICENSE_KEY",
+  "METRICS_TOKEN",
+  "MCP_OAUTH_CLIENT_SECRET",
+];

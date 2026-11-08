@@ -1,5 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
-import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createServer } from "node:http";
@@ -24,6 +24,10 @@ import { pino, type Logger } from "pino";
 import { Counter, Histogram, Registry } from "prom-client";
 import { z } from "zod";
 import type { ResourceLibrary } from "@univer-cli/resource-library";
+import { createBearerCheck } from "../shared/bearer.js";
+import { credentialRedactions } from "../shared/logging.js";
+import { UsageAccumulator } from "../shared/usage.js";
+import { createExecutorLinks } from "./tools/executor-tool.js";
 import type { GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
@@ -43,6 +47,7 @@ type Outcome = "ok" | "tool_error" | "auth_error" | "rate_limited" | "timeout" |
 interface RequestState {
   readonly context: ToolContext;
   readonly auth: Authentication;
+  readonly usage: UsageAccumulator;
   readonly selected: readonly ToolDefinition[];
   outcome: Outcome;
   errorCode: string | null;
@@ -77,12 +82,7 @@ export function createGateway(
     options.logger ??
     pino({
       level: config.LOG_LEVEL,
-      redact: [
-        "req.headers.authorization",
-        "req.headers.cookie",
-        "headers.authorization",
-        "headers.cookie",
-      ],
+      redact: credentialRedactions,
     });
   const registry = new Registry();
   const calls = new Counter({
@@ -121,8 +121,9 @@ export function createGateway(
     bearer_methods_supported: ["header"],
   });
   const expectedMetricsToken = config.METRICS_TOKEN
-    ? createHash("sha256").update(`Bearer ${config.METRICS_TOKEN}`).digest()
+    ? createBearerCheck(config.METRICS_TOKEN)
     : null;
+  const executorLink = createExecutorLinks(config.executor);
   const upstream = (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
     (options.fetcher ?? fetch)(input, init);
   const authenticator = createAuthenticator(config, logger, upstream);
@@ -146,7 +147,10 @@ export function createGateway(
           })),
         }),
       }),
-      { title: "Univer Workspace Skills", description: "The operational Skills that teach the Workspace workflow." },
+      {
+        title: "Univer Workspace Skills",
+        description: "The operational Skills that teach the Workspace workflow.",
+      },
       async (uri, { name, path }) => {
         const wanted = { name: String(name), path: String(path) };
         const files = await listSkillFiles(skillDataRoot);
@@ -209,7 +213,7 @@ export function createGateway(
               );
             }
             state.outcome = outcome;
-            state.errorCode = outcome === "tool_error" ? code : null;
+            state.errorCode = outcome === "tool_error" || outcome === "timeout" ? code : null;
             return {
               isError: true,
               content: [{ type: "text", text: message.replace(/[\r\n]+/g, " ") }],
@@ -261,10 +265,7 @@ export function createGateway(
     if (request.method === "GET" && url.pathname === "/metrics") {
       const headers = { "Cache-Control": "no-store" };
       if (!expectedMetricsToken) return new Response("Not found", { status: 404, headers });
-      const actual = createHash("sha256")
-        .update(request.headers.get("authorization") ?? "")
-        .digest();
-      if (!timingSafeEqual(actual, expectedMetricsToken)) {
+      if (!expectedMetricsToken(request.headers.get("authorization"))) {
         return new Response("Unauthorized", {
           status: 401,
           headers: { ...headers, "WWW-Authenticate": "Bearer" },
@@ -336,7 +337,9 @@ export function createGateway(
       }
     }
     const call = callEnvelope.safeParse(body);
+    const usage = new UsageAccumulator();
     const state: RequestState = {
+      usage,
       context: {
         http,
         user,
@@ -344,6 +347,7 @@ export function createGateway(
         identityOrigin: config.WORKSPACE_ORIGIN,
         skillDataRoot,
         resources,
+        executor: executorLink(authentication, user, requestId, requestStartedAt + 30_000, usage),
         scopes: authentication.scopes ?? options.scopes ?? allScopes,
       },
       auth: authentication,
@@ -377,6 +381,7 @@ export function createGateway(
             ? clientInfoSchema.safeParse(meta?.[CLIENT_INFO_META_KEY])
             : undefined;
           const elapsed = performance.now() - started;
+          const usage = state.usage.snapshot();
           logger.info({
             event: "mcp.tool_call",
             schema_version: 1,
@@ -392,21 +397,18 @@ export function createGateway(
             tool: tool?.name ?? "unknown",
             toolset: tool?.toolset ?? "core",
             repo: state.repo,
-            unit_type: null,
+            unit_type: usage.unitType ?? null,
             outcome: state.outcome,
             error_code: state.errorCode,
             duration_ms: elapsed,
-            executor: "none",
-            cost: {
-              worker_cpu_ms: 0,
-              worker_peak_rss_mb: 0,
-              render_pages: 0,
-              export_bytes: 0,
-              upload_bytes: 0,
-              committed_revisions: 0,
-            },
+            executor: usage.executor,
+            cost: usage.cost,
           });
-          calls.inc({ tool: tool?.name ?? "unknown", client: authentication.authKind, outcome: state.outcome });
+          calls.inc({
+            tool: tool?.name ?? "unknown",
+            client: authentication.authKind,
+            outcome: state.outcome,
+          });
           duration.observe({ tool: tool?.name ?? "unknown" }, elapsed / 1000);
         }
       }

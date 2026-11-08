@@ -190,7 +190,7 @@ $V mcp-logs
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
 to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
-`mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway logs.
+`mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
 Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
 MO1 proves browser OAuth sign-in from a single MCP URL using a separate `ws` opencode
 config without an Authorization header. It needs the Workspace MCP OAuth authorization
@@ -215,7 +215,12 @@ port mapping, container configuration and Workspace access, protected metrics, a
 after `user`, MCP identity, the PAT token exchange, and session, PAT and client-secret leakage. Rebuild with `down`, then `up` when
 inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
 
-`down` saves `logs/mcp-gateway.log`, removes this run's compose containers, networks,
+`down` saves `logs/mcp-gateway.log` and `logs/mcp-executor.log`, removes this run's compose containers, networks,
 volumes and image tag, then deletes `home/` with the other disposable data. It prints
 `ok    MCP resources removed` only after checking resource removal. Cleanup failures
 warn and continue. Run `down` after failures too. Build cache and evidence survive.
+
+The executor has no published port. `doctor` verifies its image, bearer rejection, HTTP/ticket/
+collaboration WebSocket transport, log redaction and worker environment. Run doctor after MX1
+as well to check a live worker. `mcp --expect-event '<jq expression>'` adds a per-call event
+assertion. `executor: none` requires zero costs; worker calls report cold/warm and nonnegative costs.

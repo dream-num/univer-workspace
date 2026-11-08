@@ -222,7 +222,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 
 ### 6.1 职责
 
-- 实现 `executeAndCommit`、`executeRead`、`exportUnitData` 三个操作，复用 `packages/client-core/src/content-runtime.ts`。
+- 内部 RPC 暴露命名领域操作（首批为 `content.execute`、`content.inspect`、`diagnostics.probe`），内部组合 `executeAndCommit`、`executeRead`、`exportUnitData`，复用 `packages/client-core/src/content-runtime.ts`。
 - 执行需要 headless Univer 的作业：Office 导入导出、Markdown 编译与回读、Typst 编译、SVG 编译、HTML View 校验、渲染数据组装。
 - 对网关暴露内部 RPC。不对外暴露端口。
 
@@ -230,12 +230,12 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 
 | 参数 | CLI 默认 | 执行层 | 说明 |
 | --- | --- | --- | --- |
-| key | `workspace:<origin>:<scope>:<unitId>:<unitType>` | 加入用户 ID | 现有 key 不含用户（`packages/client-core/src/runtime-target.ts:21-33`），两个用户访问同一 Unit 会共用 worker，必须修复，见 9.1 节 |
-| 最大 worker 数 | 20 | `EXECUTOR_MAX_WORKERS`，按节点内存设定 | 阶段 D 实测单个 worker 的内存后确定 |
+| key | `workspace:<origin>:<scope>:<unitId>:<unitType>` | 通过必填 `caller.userId` 加入用户 ID | Client Core 已支持调用者隔离；executor 在一次请求的全部 runtime 调用中绑定同一调用者 |
+| 最大 worker 数 | 20 | `EXECUTOR_MAX_WORKERS`，默认 4 | 暂用保守值，尚未实测容量；部署时按节点内存设定 |
 | 空闲回收 | 5 分钟 | `EXECUTOR_IDLE_TTL_MS`，默认 60 秒 | 空闲 worker 仍保持协同连接，应尽快释放 |
-| 跨 key 排队 | 没有，直接报错 | 排队，`EXECUTOR_QUEUE_TIMEOUT_MS` 后返回可重试错误 | |
+| 跨 key 排队 | 没有，直接报错 | 排队，`EXECUTOR_QUEUE_TIMEOUT_MS` 后返回可重试错误 | 默认 5 秒 |
 | 打开与操作超时 | 30 秒 | `EXECUTOR_OPERATION_TIMEOUT_MS`，默认 25 秒 | 留出余量，保证网关能在 30 秒同步预算内返回 |
-| 子进程环境变量 | 继承父进程 | 显式传入最小集合 | 池已支持 `env` 选项，`content-runtime.ts:71` 目前没有传 |
+| 子进程环境变量 | 继承父进程 | 显式传入 `{ NODE_ENV: "production" }` | Client Core 转交 `pool.env`；executor 不让子进程继承内部 token、OAuth secret 或 license key |
 
 ### 6.3 路由与状态
 
@@ -243,11 +243,13 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 - 每次操作都会先 pull 并检查 `baseRevision === target.revision`（`content-runtime.ts:283-305`），所以任意执行层副本都能从 Workspace 重建状态。热缓存只影响速度，不影响正确性。
 - 网关按 `(用户 ID, scope, unitId)` 一致性哈希选择执行层副本。副本增减时只损失部分缓存。
 - 同一 key 的操作串行，这是现有行为（`runForRuntimeKey` 加池内 FIFO）。
-- 遇到 `workspace-result-mismatch`（有人推进了修订号），网关重新解析目标并重试一次。
+- 操作表声明重试策略；后续韧性变更由执行层重新解析目标并重试，网关不持有 revision。当前首批操作的 `rerun` 为空，原样返回 `workspace-result-mismatch`。
+- 网关使用 rendezvous hashing。只对连接拒绝、DNS 失败或明确未接收的传输拒绝切换副本；已发送写入的断连或超时返回 `workspace-result-unknown`。
 
 ### 6.4 凭据
 
 阶段 D 沿用 `client-core` 现有的方式：网关把下游凭据随请求交给执行层，执行层在创建 worker 时传入。这个方式只适用于本地原型和内部单用户环境。
+首批 grant 为 `{kind:"session",userId,session,expiresAt}`，只放在 RPC frame body。执行层的一个 resolver 读取凭据，并通过 `caller.grant` 传给 Client Core；所有 worker 调用绑定必填 userId。生产拒绝 session grants。显式 worker env 阻止环境变量继承，但同 uid 子进程仍可能读取父进程 `/proc/<pid>/environ`，阶段 G 必须解决。
 多用户环境下执行层如何持有凭据，由阶段 G 的安全设计决定。阶段 D 的实现要把凭据的获取集中在一个接口后面，方便阶段 G 替换。
 
 ## 7. 渲染服务与大文件
@@ -300,7 +302,7 @@ MCP 不连数据库（D12），所以第一版的“统计接口”由两部分�
 | `executor` | `cold_start`、`warm`、`none` |
 | `cost` | 成本单位：`worker_cpu_ms`、`worker_peak_rss_mb`、`render_pages`、`export_bytes`、`upload_bytes`、`committed_revisions` |
 
-事件不包含工具参数原文、文档内容或任何凭据。
+事件不包含工具参数原文、文档内容或任何凭据。首批执行工具的 `worker_cpu_ms` 是 Client Core observe 报告的 worker 墙钟耗时，不是 CPU 测量；`worker_peak_rss_mb` 暂为 0。非执行工具保持原事件格式与零成本。
 
 ### 8.2 指标
 
@@ -382,7 +384,7 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `METRICS_TOKEN` | 全部 | 指标端点令牌 |
 | `LOG_LEVEL` | 全部 | 日志级别，日志格式与 Workspace 一致（pino JSON） |
 
-每个角色提供 `GET /healthz`。网关的就绪检查包括 Workspace 版本检查和执行层可达性。
+每个已实现角色提供 `GET /healthz`。当前 healthz 仅检查进程存活，执行层可达性由 verify-uvw doctor 验证；Workspace 版本与 readiness 检查尚未实现。
 
 ## 12. `apps/mcp` 的代码组织建议
 

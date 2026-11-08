@@ -13,6 +13,11 @@ const LICENSE_KEY_PATTERN = /^[A-Za-z0-9+/=]+$/u;
 // SDKs also verify it with the license key.
 export const LICENSE_TARGETS = [
   {
+    path: "apps/mcp/src/executor/license.ts",
+    subject: "executor runtime development license",
+    constants: { UNIVER_LICENSE: "license" },
+  },
+  {
     path: "apps/workspace/web/src/features/editor/features/license.ts",
     subject: "browser runtime development license",
     constants: { UNIVER_LICENSE: "license" },
