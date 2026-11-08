@@ -24,8 +24,7 @@ import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
 
-// Parallel `content.execute` calls on one Unit through this executor take turns instead of racing
-// each other's revision. Calls through other replicas still conflict and use the revision rerun.
+// Same-user reads and writes take turns on a Unit; other routes still need revision reruns.
 function createUnitQueue() {
   const tails = new Map<string, Promise<void>>();
   return async (key: string, signal: AbortSignal) => {
@@ -202,10 +201,13 @@ export function createDispatcher(
           controller.signal.throwIfAborted();
           const rerun = { auth: 0, revision: 0 };
           let release = () => {};
-          if (name === "content.execute") {
+          if (name === "content.execute" || name === "content.inspect") {
             const route = spec.route(input as never);
             queued = true;
-            release = await enterUnitQueue(`${route.scope}\0${route.unitId}`, controller.signal);
+            release = await enterUnitQueue(
+              JSON.stringify([grant.userId, route.scope, route.unitId]),
+              controller.signal,
+            );
             queued = false;
           }
           try {

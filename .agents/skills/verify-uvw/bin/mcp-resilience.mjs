@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const mode = process.argv[2];
-assert(['auth', 'html-auth', 'revision', 'burst', 'replicas'].includes(mode), 'Choose auth, html-auth, revision, burst or replicas');
+assert(['auth', 'html-auth', 'revision', 'burst', 'harsh', 'replicas'].includes(mode), 'Choose auth, html-auth, revision, burst, harsh or replicas');
 const root = process.cwd();
 const evidence = process.env.EVIDENCE;
 assert(evidence && process.env.VERIFY_UVW_RUN, 'Load verify-uvw env first');
@@ -26,13 +26,14 @@ const prefix = `resilience-${mode}-${randomUUID().slice(0, 8)}`;
 const proof = { mode, requests: [] };
 const save = () => writeFileSync(join(evidence, `resilience-${mode}.json`), JSON.stringify(proof, null, 2) + '\n');
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const docker = args => execFileSync('docker', args, { encoding: 'utf8', timeout: 30_000 });
+const docker = args => execFileSync('docker', args, { encoding: 'utf8', timeout: 30_000, maxBuffer: 1 << 28 });
 const services = () => docker(['ps', '-a', '--filter', `label=com.docker.compose.project=${settings.MCP_PROJECT}`, '--format', '{{.ID}} {{.Label "com.docker.compose.service"}}']).trim().split('\n').map(line => line.split(' '));
 const containers = () => services().filter(([, service]) => service === 'executor' || service === 'executor-b');
 const logs = () => services().flatMap(([id, service]) => docker(['logs', id]).split('\n').flatMap(line => {
   try { const value = JSON.parse(line); return value.request_id?.startsWith(prefix) ? [{ service, ...value }] : []; } catch { return []; }
 }));
 async function call(label, tool, args, bearer = secret('mcp-token')) {
+  const started = performance.now();
   const requestId = `${prefix}-${label}`;
   const client = new Client({ name: 'verify-uvw-resilience', version: '1.0.0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
   let status;
@@ -47,13 +48,15 @@ async function call(label, tool, args, bearer = secret('mcp-token')) {
     await client.connect(transport);
     result = await client.callTool({ name: tool, arguments: args });
   } catch (error) {
-    if (status !== 401) throw error;
-    result = { isError: true, structuredContent: { status } };
+    if (status === 401) result = { isError: true, structuredContent: { status } };
+    else if (mode === 'harsh') result = { isError: true, structuredContent: { code: 'transport', message: String(error) } };
+    else throw error;
   } finally { await client.close(); }
   const output = result.structuredContent;
-  proof.requests.push({ requestId, tool, status, isError: !!result.isError, output });
-  save();
-  return { requestId, output, isError: !!result.isError, status };
+  const recorded = { requestId, tool, status, isError: !!result.isError, output, latencyMs: performance.now() - started };
+  proof.requests.push(recorded);
+  if (mode !== 'harsh') save();
+  return recorded;
 }
 async function ok(label, tool, args, bearer) {
   const result = await call(label, tool, args, bearer);
@@ -174,6 +177,55 @@ try {
     console.log(JSON.stringify({ burst: proof.burst, inspectLoop: proof.inspectLoop, reruns: proof.reruns }));
     assert.equal(committed, 5, 'all five parallel writes commit');
     assert.equal(failed.length, 0, 'inspect never fails during sequential writes');
+  } else if (mode === 'harsh') {
+    await ok('warm', 'inspect', inspect(target));
+    const durationMs = 30_000;
+    const started = performance.now();
+    const end = started + durationMs;
+    const reads = [];
+    let writing = true;
+    const writers = Array.from({ length: 8 }, (_, writer) => (async () => {
+      const writes = [];
+      for (let i = 0; performance.now() < end; i++) {
+        const cell = String.fromCharCode(65 + writer) + (i + 1);
+        const value = `w${writer}-${i}`;
+        const result = await call(`w${writer}-${i}`, 'execute', { ...target, code: write(cell, value) });
+        writes.push({ cell, value, writer, row: i, ...result });
+      }
+      return writes;
+    })());
+    const readers = Array.from({ length: 2 }, (_, reader) => (async () => {
+      for (let i = 0; writing; i++) reads.push(await call(`r${reader}-${i}`, 'inspect', {
+        ...target, target: 'range', selectors: ['A1:H100'], worksheet: 'index:1',
+      }));
+    })());
+    const writes = (await Promise.all(writers)).flat();
+    writing = false;
+    await Promise.all(readers);
+    const elapsedMs = performance.now() - started;
+    const rows = Math.max(...writes.map(result => result.row)) + 1;
+    const final = await ok('readback', 'inspect', {
+      ...target, target: 'range', selectors: [`A1:H${rows}`], worksheet: 'index:1',
+    });
+    const committed = writes.filter(result => !result.isError && result.output?.committed);
+    const missing = committed.filter(result => final.output.ranges[0].displayValues[result.row]?.[result.writer] !== result.value);
+    const latencies = reads.map(result => result.latencyMs).sort((a, b) => a - b);
+    const percentile = fraction => latencies[Math.ceil(latencies.length * fraction) - 1];
+    proof.logs = logs();
+    proof.harsh = {
+      durationMs, elapsedMs, writers: 8, readers: 2,
+      writes: writes.length, committed: committed.length,
+      writeFailures: writes.length - committed.length, missingCommitted: missing.length,
+      reads: reads.length, readFailures: reads.filter(result => result.isError).length,
+      readLatencyMs: { p50: percentile(0.5), p95: percentile(0.95) },
+      reruns: proof.logs.filter(log => log.event === 'mcp.executor_rerun').map(log => ({ op: log.op, reason: log.reason })),
+    };
+    save();
+    console.log(JSON.stringify(proof.harsh));
+    assert(writes.length >= 8 && reads.length >= 2, 'writers and readers reached the server');
+    assert.equal(committed.length, writes.length, 'all writes committed');
+    assert.equal(missing.length, 0, 'every committed value is visible at its written cell');
+    assert.equal(proof.harsh.readFailures, 0, 'no inspect failures during sustained writes');
   } else if (mode === 'revision') {
     const first = ok('parallel-a', 'execute', { ...target, code: 'await new Promise(resolve => setTimeout(resolve, 1000)); ' + write('A1', 'first') });
     await sleep(100);

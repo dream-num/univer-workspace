@@ -1863,3 +1863,13 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs burst
 ```
 
 Pass when all five writes commit and no `inspect` fails. Evidence is `resilience-burst.json` with the commit count, inspect failure count and rerun reasons.
+
+For sustained contention, run eight writer loops and two inspect loops on one Unit for 30 seconds.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs harsh
+```
+
+Pass when every write commits, every committed value is read back at its written cell, and no inspect fails.
+`resilience-harsh.json` records request outcomes, read latency p50 and p95 in milliseconds, and reruns.
+Latency includes MCP connection, queue wait, the tool call, and client close on the local Docker stack.

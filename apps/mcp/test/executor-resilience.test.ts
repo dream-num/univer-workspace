@@ -430,6 +430,133 @@ describe("executor reruns with a real worker", () => {
     }
   });
 
+  it.each(["same Unit", "different Unit", "different scope", "different user"] as const)(
+    "queues inspect behind execute only for the same user, scope and Unit: %s",
+    async (scenario) => {
+      const instance = runtime();
+      const fetcher = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async (_url, options) =>
+          new Headers(options?.headers).get("cookie") === "workspace_session=other-user"
+            ? Response.json({ authenticated: true, user: { id: "user-2", displayName: "Bob" } })
+            : identity(),
+        );
+      let release = () => {};
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let markEntered = () => {};
+      const entered = new Promise<void>((resolve) => (markEntered = resolve));
+      let committed = false;
+      const write = vi.spyOn(handlers, "content.execute").mockImplementation(async () => {
+        markEntered();
+        await held;
+        committed = true;
+        return { output: { committed: true, revision: 8 } };
+      });
+      const read = vi
+        .spyOn(handlers, "content.inspect")
+        .mockImplementation(async (_ctx, input) => ({
+          output: { kind: "workbook", unitId: input.unitId, committed },
+        }));
+      try {
+        const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+        const pending = dispatch(
+          "content.execute",
+          header({ worktreeId: "wt", unitId: target.unitId, code: "write" }),
+          new Uint8Array(),
+        );
+        await entered;
+        const inspected = dispatch(
+          "content.inspect",
+          header(
+            {
+              scope: scenario === "different scope" ? { kind: "trunk" } : target.scope,
+              unitId: scenario === "different Unit" ? "unit-2" : target.unitId,
+              target: "workbook",
+            },
+            scenario === "different user"
+              ? { ...grant, userId: "user-2", session: "other-user" }
+              : grant,
+          ),
+          new Uint8Array(),
+        );
+        if (scenario === "same Unit") {
+          await new Promise((resolve) => setImmediate(resolve));
+          expect(read).not.toHaveBeenCalled();
+        } else {
+          expect((await inspected).header).toMatchObject({
+            ok: true,
+            output: { committed: false },
+          });
+        }
+        release();
+        expect((await pending).header.ok).toBe(true);
+        expect((await inspected).header).toMatchObject({
+          ok: true,
+          output: { committed: scenario === "same Unit" },
+        });
+        expect(read).toHaveBeenCalledOnce();
+      } finally {
+        release();
+        await instance.close();
+        write.mockRestore();
+        read.mockRestore();
+        fetcher.mockRestore();
+      }
+    },
+  );
+
+  it("times out a queued inspect without starting it and lets the next read proceed", async () => {
+    const instance = runtime();
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let markEntered = () => {};
+    const entered = new Promise<void>((resolve) => (markEntered = resolve));
+    const write = vi.spyOn(handlers, "content.execute").mockImplementation(async () => {
+      markEntered();
+      await held;
+      return { output: { committed: true, revision: 8 } };
+    });
+    const read = vi.spyOn(handlers, "content.inspect").mockImplementation(async () => ({
+      output: { kind: "workbook", unitId: target.unitId },
+    }));
+    try {
+      const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
+      const pending = dispatch(
+        "content.execute",
+        header({ worktreeId: "wt", unitId: target.unitId, code: "write" }),
+        new Uint8Array(),
+      );
+      await entered;
+      const inspectHeader = header({
+        scope: target.scope,
+        unitId: target.unitId,
+        target: "workbook",
+      });
+      const timedOut = await dispatch(
+        "content.inspect",
+        { ...inspectHeader, deadlineMs: 50 },
+        new Uint8Array(),
+      );
+      expect(timedOut.header).toMatchObject({
+        ok: false,
+        error: { code: "workspace-executor-timeout", detail: { started: false, retryable: true } },
+      });
+      expect(read).not.toHaveBeenCalled();
+      const next = dispatch("content.inspect", inspectHeader, new Uint8Array());
+      release();
+      expect((await pending).header.ok).toBe(true);
+      expect((await next).header.ok).toBe(true);
+      expect(read).toHaveBeenCalledOnce();
+    } finally {
+      release();
+      await instance.close();
+      write.mockRestore();
+      read.mockRestore();
+      fetcher.mockRestore();
+    }
+  });
+
   it("reports an execute deadline after leaving the Unit queue as an unknown result", async () => {
     const instance = runtime();
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
@@ -453,7 +580,8 @@ describe("executor reruns with a real worker", () => {
         ok: false,
         error: { code: "workspace-result-unknown", outcome: "timeout" },
       });
-      if (!result.header.ok) expect(result.header.error.detail).not.toHaveProperty("started", false);
+      if (!result.header.ok)
+        expect(result.header.error.detail).not.toHaveProperty("started", false);
     } finally {
       await instance.close();
       handler.mockRestore();
