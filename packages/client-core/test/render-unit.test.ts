@@ -322,10 +322,10 @@ describe("Workspace render Unit loader", () => {
     expect({ childData, formulaData, hostData }).toEqual(before);
   });
 
-  it("does not resolve or rewrite Assets for a Trunk Host", async () => {
+  it("inlines Assets for a Trunk Host through the Trunk Asset scope", async () => {
     const host = target("host", "sheet", { kind: "trunk" });
     const hostData = { id: host.unitId, drawing: image("asset-1") };
-    const resolveImageAsset = vi.fn();
+    const resolveImageAsset = vi.fn(async ({ assetId }: { assetId: string }) => asset(assetId));
     const loader = loaderWith({
       exportUnitData: async () => hostData,
       source: sourceWith(host, { resolveImageAsset }),
@@ -333,9 +333,11 @@ describe("Workspace render Unit loader", () => {
 
     const loaded = await loader.loadUnit({ scope: host.scope, unitId: host.unitId });
 
-    expect(resolveImageAsset).not.toHaveBeenCalled();
-    expect(loaded.unitData).toBe(hostData);
-    expect(loaded.unitData).toEqual({ id: "host", drawing: image("asset-1") });
+    expect(resolveImageAsset.mock.calls.map(([input]) => input)).toEqual([{ assetId: "asset-1" }]);
+    expect(loaded.unitData).toMatchObject({
+      drawing: { imageSourceType: "BASE64", source: expect.stringMatching(/^data:image\/png;base64,/) },
+    });
+    expect(hostData).toEqual({ id: "host", drawing: image("asset-1") });
   });
 });
 
