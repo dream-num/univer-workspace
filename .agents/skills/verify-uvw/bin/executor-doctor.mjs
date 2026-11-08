@@ -2,6 +2,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { assertWorkerCount, assertLogsExclude } from './executor-doctor-checks.mjs';
 import { join } from 'node:path';
 
 const [repo, run, project, image, imageId, origin, serverPort, mcpPort] = process.argv.slice(2);
@@ -23,7 +25,7 @@ try {
   assert(Object.values(container.NetworkSettings.Ports ?? {}).every(value => value === null), 'executor has no published ports');
   console.log('ok    MCP executor has no published port');
   node('gateway', `for (const authorization of ['', 'Bearer wrong']) {
-    const response = await fetch('http://executor:3000/rpc/v1/diagnostics.probe', {method:'POST',headers:{authorization}});
+    const response = await fetch(new URL('/rpc/v1/diagnostics.probe', process.env.MCP_EXECUTOR_URLS.split(',')[0]), {method:'POST',headers:{authorization}});
     if (response.status !== 401) process.exit(1);
   }`);
   console.log('ok    MCP executor RPC rejects missing and wrong bearer from gateway');
@@ -31,11 +33,11 @@ try {
     const session = secret('mcp-session');
     const identity = await (await fetch(origin + '/api/session', { headers: { cookie: 'workspace_session=' + session } })).json();
     assert(identity.authenticated && identity.user?.id, 'disposable session authenticates');
-    const result = JSON.parse(node('executor', `
+    const result = JSON.parse(node('gateway', `
       import { readFileSync } from 'node:fs';
       import { encodeFrame, decodeFrame, FRAME_CONTENT_TYPE } from './dist/shared/frame.js';
       const grant = JSON.parse(readFileSync(0,'utf8'));
-      const response = await fetch('http://127.0.0.1:3000/rpc/v1/diagnostics.probe', {
+      const response = await fetch(new URL('/rpc/v1/diagnostics.probe', process.env.MCP_EXECUTOR_URLS.split(',')[0]), {
         method:'POST', headers:{authorization:'Bearer '+process.env.MCP_INTERNAL_TOKEN,'content-type':FRAME_CONTENT_TYPE,'x-mcp-rpc-version':'1'},
         body:encodeFrame({v:1,op:'diagnostics.probe',requestId:'doctor-probe',deadlineMs:8000,grant,input:{}}), signal:AbortSignal.timeout(10000)
       });
@@ -46,6 +48,17 @@ try {
     assert(result.ok && result.output.whoami.id === identity.user.id && result.output.ticket && result.output.websocket, 'executor probe authenticates HTTP, ticket and collaboration WebSocket');
     assert.equal(result.output.transport, 'http://host.docker.internal:' + serverPort);
     console.log('ok    MCP executor reaches Workspace HTTP and collaboration WebSocket through transport');
+    const mcp = (label, tool, args) => {
+      execFileSync(join(repo, '.agents/skills/verify-uvw/bin/verify-uvw'),
+        ['mcp', '--auth', 'dev', label, tool, JSON.stringify(args)], { env, cwd: repo, encoding: 'utf8', timeout: 40_000, stdio: ['pipe', 'pipe', 'pipe'] });
+      return JSON.parse(readFileSync(join(run, 'evidence', label + '.out'), 'utf8'));
+    };
+    const space = mcp('doctor-worker-repo', 'repo_list', { type: 'personal' }).repos[0];
+    assert(space, 'disposable user has a personal repository');
+    const worktree = mcp('doctor-worker-pr', 'pr_create', { repo: space.id, title: 'Executor doctor', idempotency_key: 'executor-doctor-pr' });
+    const { unit } = mcp('doctor-worker-unit', 'unit_create', { worktree: worktree.id, space: space.id, type: 'sheet', name: 'Doctor', idempotency_key: 'executor-doctor-unit' });
+    mcp('doctor-worker-inspect', 'inspect', { worktree: worktree.id, unit: unit.unitId, target: 'workbook' });
+
   }
   const children = node('executor', `
     import { readFileSync, readdirSync } from 'node:fs';
@@ -59,13 +72,17 @@ try {
     }
     console.log(checked);
   `).trim();
-  writeFileSync(join(run, 'evidence/executor-worker-environ.txt'), `Checked ${children} worker children; no secret environment variables.\n`);
-  console.log(`ok    MCP executor worker environment excludes secrets (${children} live children)`);
-  const logs = compose(['logs', '--no-color', '--no-log-prefix', 'executor']);
+  assertWorkerCount(Number(children));
+  writeFileSync(join(run, 'evidence/executor-worker-environ.txt'), `Checked ${children} worker children; no inherited secret environment variables. Same-uid workers can still read /proc/1/environ until Stage G.\n`);
+  console.log(`ok    MCP executor worker environment excludes inherited secrets (${children} live children)`);
+  const logs = compose(['logs', '--no-color', '--no-log-prefix', 'gateway', 'executor']);
   for (const name of ['mcp-session', 'mcp-token', 'internal-token', 'metrics-token', 'mcp-oauth-secret']) {
-    if (existsSync(join(run, 'home', name))) assert(!logs.includes(secret(name)), 'executor logs exclude credentials');
+    if (existsSync(join(run, 'home', name))) assertLogsExclude(logs, [secret(name)]);
   }
-  console.log('ok    MCP executor logs contain no session, PAT, internal token or client secret');
+  const licenses = await import(pathToFileURL(join(repo, 'apps/cli/dist/license.js')).href);
+  const configured = JSON.parse(node('executor', `console.log(JSON.stringify([process.env.UNIVER_LICENSE, process.env.UNIVER_LICENSE_KEY].filter(Boolean)))`));
+  assertLogsExclude(logs, [...Object.values(licenses), ...configured]);
+  console.log('ok    MCP gateway and executor logs contain no session, PAT, internal token, client secret or license values');
 } catch (error) {
   console.error('FAIL  MCP executor verification: ' + (error instanceof assert.AssertionError ? error.message : 'check failed; inspect the run evidence and container state'));
   process.exitCode = 1;

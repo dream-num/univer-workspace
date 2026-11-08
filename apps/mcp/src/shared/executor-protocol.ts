@@ -83,7 +83,8 @@ export const opSpecs = {
       committed: z.boolean(),
       revision: z.int().positive().optional(),
       status: z.string().optional(),
-      value: z.json(),
+      value: z.json().optional(),
+      valueTruncated: z.literal(true).optional(),
     }),
     route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
   }),
@@ -164,5 +165,5 @@ export const wireErrorSchema = z.object({
 });
 export const responseHeaderSchema = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), output: z.unknown(), meta: opMetaSchema }),
-  z.object({ ok: z.literal(false), error: wireErrorSchema }),
+  z.object({ ok: z.literal(false), error: wireErrorSchema, meta: opMetaSchema }),
 ]);

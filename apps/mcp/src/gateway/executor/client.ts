@@ -1,4 +1,4 @@
-import { ExecutorCallError } from "../../shared/errors.js";
+import { ExecutorCallError, resultUnknown } from "../../shared/errors.js";
 import {
   PROTOCOL_VERSION,
   responseHeaderSchema,
@@ -20,9 +20,9 @@ export interface ExecutorConnection {
   readonly deadlineAt: number;
 }
 
-function unavailable(code = "workspace-executor-unavailable"): ExecutorCallError {
+function unavailable(): ExecutorCallError {
   return new ExecutorCallError({
-    code,
+    code: "workspace-executor-unavailable",
     message: "The Workspace executor is unavailable.",
     detail: null,
     outcome: "internal_error",
@@ -49,7 +49,7 @@ export async function callExecutor<
     const timeoutMs = Math.floor(
       Math.min(spec.limits.budgetMs, connection.deadlineAt - Date.now() - 500),
     );
-    if (timeoutMs <= 1500) throw lastError;
+    if (timeoutMs <= 1500) throw requestError("workspace-executor-timeout");
     const body = encodeFrame(
       {
         v: PROTOCOL_VERSION,
@@ -61,7 +61,7 @@ export async function callExecutor<
       },
       "bytes" in request && request.bytes instanceof Uint8Array ? request.bytes : undefined,
     );
-    if (body.length > spec.limits.requestBytes) throw unavailable("workspace-request-too-large");
+    if (body.length > spec.limits.requestBytes) throw requestError("workspace-request-too-large");
     let response: Response;
     try {
       response = await fetch(new URL(`/rpc/v1/${spec.name}`, url), {
@@ -80,18 +80,14 @@ export async function callExecutor<
         connection.router.notDelivered(url);
         continue;
       }
-      throw ambiguous(spec.effect);
+      throw ambiguous(spec.effect, error);
     }
     if (!response.ok) {
       await response.body?.cancel();
-      const code =
-        response.status === 426
-          ? "workspace-executor-version-mismatch"
-          : response.status === 413
-            ? "workspace-request-too-large"
-            : "workspace-executor-unavailable";
-      lastError = unavailable(code);
-      if ([503, 426, 413].includes(response.status)) {
+      if (response.status === 413) throw requestError("workspace-request-too-large");
+      if (response.status === 426) throw requestError("workspace-executor-version-mismatch");
+      lastError = unavailable();
+      if (response.status === 503) {
         connection.router.notDelivered(url);
         continue;
       }
@@ -104,24 +100,28 @@ export async function callExecutor<
       for await (const chunk of response.body) {
         size += chunk.length;
         if (size > spec.limits.responseBytes)
-          throw new ExecutorCallError({
-            code: "workspace-result-too-large",
-            message: "Narrow the request; the executor result exceeds its byte limit.",
-            detail: null,
-            outcome: "tool_error",
-          });
+          throw new ExecutorCallError(
+            spec.effect === "write"
+              ? resultUnknown("workspace-result-too-large")
+              : {
+                  code: "workspace-result-too-large",
+                  message: "Narrow the request; the executor result exceeds its byte limit.",
+                  detail: null,
+                  outcome: "tool_error",
+                },
+          );
         chunks.push(chunk);
       }
     } catch (error) {
       if (error instanceof ExecutorCallError) throw error;
-      throw ambiguous(spec.effect);
+      throw ambiguous(spec.effect, error);
     }
     try {
       const frame = decodeFrame(Buffer.concat(chunks));
       if (spec.payload !== "response" && frame.payload.length !== 0)
         throw new Error("Unexpected response payload");
       const header = responseHeaderSchema.parse(frame.header);
-      if (!header.ok) throw new ExecutorCallError(header.error);
+      if (!header.ok) throw new ExecutorCallError(header.error, header.meta);
       return {
         output: spec.output.parse(header.output),
         meta: header.meta,
@@ -140,14 +140,50 @@ export async function callExecutor<
   throw lastError;
 }
 
-function ambiguous(effect: "read" | "write"): ExecutorCallError {
+function ambiguous(effect: "read" | "write", error: unknown): ExecutorCallError {
+  const cause = error instanceof Error && error.cause instanceof Error ? error.cause : error;
+  const code =
+    cause instanceof Error && "code" in cause && typeof cause.code === "string"
+      ? cause.code
+      : cause instanceof Error
+        ? cause.name
+        : "workspace-internal-error";
+  const timeout = [
+    "TimeoutError",
+    "AbortError",
+    "UND_ERR_HEADERS_TIMEOUT",
+    "UND_ERR_BODY_TIMEOUT",
+  ].includes(code);
+  return new ExecutorCallError(
+    effect === "write"
+      ? resultUnknown(code, timeout)
+      : {
+          code: "workspace-executor-timeout",
+          message: "The executor connection failed or timed out. Retry the read.",
+          detail: { retryable: true, cause: code },
+          outcome: "timeout",
+        },
+  );
+}
+
+function requestError(
+  code:
+    | "workspace-request-too-large"
+    | "workspace-executor-version-mismatch"
+    | "workspace-executor-timeout",
+): ExecutorCallError {
+  const messages = {
+    "workspace-request-too-large":
+      "The executor request is too large. Reduce the code or payload size.",
+    "workspace-executor-version-mismatch":
+      "The gateway and executor protocol versions differ. Update them to matching versions.",
+    "workspace-executor-timeout":
+      "The request budget expired before sending to the executor. Retry the operation.",
+  };
   return new ExecutorCallError({
-    code: effect === "write" ? "workspace-result-unknown" : "workspace-executor-timeout",
-    message:
-      effect === "write"
-        ? "The write may have completed. Check the current state before repeating it."
-        : "The executor connection failed or timed out. Retry the read.",
-    detail: { retryable: effect === "read" },
-    outcome: "timeout",
+    code,
+    message: messages[code],
+    detail: code === "workspace-executor-timeout" ? { retryable: true, started: false } : null,
+    outcome: "tool_error",
   });
 }

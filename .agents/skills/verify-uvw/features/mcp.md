@@ -61,6 +61,8 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
 - MX3 verifies executor unavailability.
+- MX5 compares uncoded script failure messages with the CLI.
+- MX6 verifies a large committed result keeps commit facts and writes once.
 - MX4 captures the written values in the Browser.
 - M12 removes this run's resources and preserves developer processes.
 
@@ -1386,6 +1388,35 @@ agent-browser screenshot "$EVIDENCE/mx-pull-request.png"
 ```
 
 Pass when the screenshot shows Region, Total, North and 42 in the pull request's Sheet.
+
+**MX5. Script errors match CLI text.**
+
+```bash
+$V mcp mx-script-draft pr_ready "$(jq -nc --arg repo "$O/personal" --arg number "$MX_W" '{repo:$repo,number:$number,undo:true}')"
+MX_FAILURE='throw new Error("Executor script failure")'
+$V cli mx-script-cli execute --worktree "$MX_W" --unit "$MX_U" --json -e "$MX_FAILURE"
+test $? -eq 1
+$V mcp --expect-event '.outcome == "tool_error" and .error_code == "workspace-script-failed" and .executor == "cold_start" and .cost.worker_cpu_ms > 0 and .unit_type == "sheet"' mx-script-mcp execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_FAILURE" '{worktree:$worktree,unit:$unit,code:$code}')"
+test $? -eq 1
+jq -e '.code == "workspace-script-failed" and .detail.name == "Error"' "$EVIDENCE/mx-script-mcp.out"
+diff <(jq -r .message "$EVIDENCE/mx-script-mcp.out") "$EVIDENCE/mx-script-cli.err"
+```
+
+Pass when MCP returns the explicit script code and the CLI's exact bare message.
+
+**MX6. Large committed values do not repeat writes.**
+
+```bash
+MX_LARGE='const cell = workbook.getActiveSheet().getRange("D1"); const n = Number(cell.getValue() || 0); cell.setValue(n + 1); return "x".repeat(150000);'
+$V mcp mx-large-before execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,code:"return Number(workbook.getActiveSheet().getRange(\"D1\").getValue() || 0);"}')"
+$V mcp --expect-event '.outcome == "ok" and .cost.committed_revisions == 1' mx-large execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_LARGE" '{worktree:$worktree,unit:$unit,code:$code}')"
+jq -e '.committed == true and .valueTruncated == true and .status == "committed" and (.revision > 0) and (has("value") | not)' "$EVIDENCE/mx-large.out"
+$V cli mx-large-cli execute --worktree "$MX_W" --unit "$MX_U" --json -e 'return Number(workbook.getActiveSheet().getRange("D1").getValue() || 0);'
+jq -en --slurpfile before "$EVIDENCE/mx-large-before.out" --slurpfile after "$EVIDENCE/mx-large-cli.out" '$after[0].value == ($before[0].value + 1)'
+```
+
+Pass when the Sheet counter advances exactly once and the committed result has no retry hint.
+Credential replacement near expiry is covered by automated Client Core and MCP worker tests.
 
 **M12. Cleanup.**
 

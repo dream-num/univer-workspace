@@ -35,11 +35,14 @@ remain retryable. Calls have a 30-second gateway budget, with an earlier executo
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
 session grants with the exchanged session's expiry; dev sessions use a conservative 60-second
-grant expiry. Hot workers retain their original session until eviction. Credential refresh,
+grant expiry. The executor verifies the session's user through Workspace `whoami` before dispatch,
+using the transport URL. Successful identity checks share a SHA-256 session cache capped at
+10,000 entries and expire with the grant. A mismatched user or 401 requires authentication.
+Workers are replaced before reuse when their creating grant expires within 60 seconds.
 401 invalidation and reruns belong to the next resilience change.
 
 Session grants and process separation do not provide a multi-user sandbox. In particular,
-a worker may read its parent's `/proc/<pid>/environ` under the same uid, exposing the internal
+a worker may read its executor's `/proc/1/environ` under the same uid, exposing the internal
 token. Stage G must address that before multi-user deployment. Production refuses this
 session-grant executor.
 
@@ -146,7 +149,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
-| `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value, revision?, status? }` |
+| `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
@@ -222,7 +225,10 @@ has `truncated: true` and an opaque `cursor`; calling the same tool with the sam
 returns the next page, and the last page has neither field. Each `api_show` page repeats the class header
 (declaration, lineage, documentation) with its slice of `groups`. The cursor is stateless. It encodes the offset
 and a digest of the other arguments, so reusing it with different arguments is `workspace-argument-invalid`.
-Any other tool, and `skills_read` with `full`, returns `workspace-result-too-large` when it would exceed the
+A committed `execute` keeps `committed`, `revision` and `status` when its value exceeds either
+this limit or the executor response byte limit. It omits `value`, sets `valueTruncated: true`,
+and confirms the write in the text summary. Do not repeat that write to recover its value.
+Other tools, uncommitted `execute`, and `skills_read` with `full` return `workspace-result-too-large` when it would exceed the
 limit. For `skills_read` with `full`, read the skill without `full`, then each resource with `resource`,
 following its cursor when paged. Other oversized results tell the agent to narrow the request.
 
@@ -234,7 +240,19 @@ true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_disca
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
-`workspace-result-unknown`. Tool failures preserve Client Core's
+`workspace-result-unknown`. Unconfirmed changeset submission and uncoded commit failures
+carry their cause in `detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts.
+Queued calls cancelled before acquiring a lease return `workspace-executor-timeout` with
+`detail: { retryable: true, started: false }`; they never execute later. A started write
+that exceeds its deadline still has an unknown result.
+Uncoded errors from user script execution return `workspace-script-failed`, the CLI's exact
+message, and `detail: { name }` when the error has a name. Other uncoded executor failures
+remain logged `workspace-internal-error`s. Invalid inspection output is
+`workspace-runtime-result-invalid` with an `internal_error` outcome.
+Oversized requests, protocol version mismatches and budgets exhausted before sending are
+actionable `tool_error`s. Only connection failures known to precede delivery and HTTP 503
+mark a replica down and permit failover; HTTP 413 and 426 do neither.
+Tool failures preserve Client Core's
 `{ code, message, detail }` in `structuredContent` and set `isError: true`.
 Authentication failures return HTTP 401 and
 `WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`,
@@ -274,6 +292,8 @@ The version 1 event has these fields:
 | `duration_ms` | Non-negative total gateway duration including authentication |
 | `executor` | `cold_start` or `warm` from the runtime observer; `none` when no worker operation was reported |
 | `cost` | Object containing `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages`, `export_bytes`, `upload_bytes`, and `committed_revisions`. All six remain 0 for non-executor calls |
+
+Failure envelopes also carry observed usage, including cold/warm state and Unit type.
 
 `worker_cpu_ms` records worker wall time reported by Client Core, not CPU consumption.
 `committed_revisions` counts confirmed writes. `worker_peak_rss_mb`, render and byte costs

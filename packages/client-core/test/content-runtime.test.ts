@@ -11,6 +11,7 @@ import { UniverCollaborationRuntimePoolError } from "@univer-cli/univer-collabor
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkspaceContentRuntime,
+  getWorkspaceRuntimeFailurePhase,
   type WorkspaceContentRuntimeOptions,
   type WorkspaceContentRuntimeObservation,
   workspaceRuntimeKey,
@@ -42,6 +43,121 @@ describe("Workspace content runtime owner", () => {
   beforeEach(() => {
     poolMock.options = undefined;
     poolMock.pool = undefined;
+  });
+
+  it("replaces a rejected cached init with the current caller under the same-key lock", async () => {
+    const old = lease();
+    const fresh = lease();
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockResolvedValueOnce(old)
+      .mockResolvedValueOnce(old)
+      .mockResolvedValue(fresh);
+    const reuseWorker = vi.fn(() => false);
+    const resolveCredential = vi.fn((_target, caller) => String(caller?.grant));
+    const runtime = createRuntime({ acquire, resolveCredential, reuseWorker });
+    const first = { userId: "alice", grant: "old" };
+    const second = { userId: "alice", grant: "new" };
+    await runtime.executeRead({ caller: first, code: "1", target });
+    await runtime.executeRead({ caller: second, code: "2", target });
+    expect(reuseWorker).toHaveBeenCalledWith(first, second);
+    expect(old.invalidate).toHaveBeenCalledOnce();
+    expect(acquire.mock.calls.at(-1)?.[0].init).toMatchObject({ credential: "new" });
+    expect(resolveCredential).toHaveBeenCalledTimes(2);
+  });
+
+  it("drops an init that rejects after its credential waiter was cancelled", async () => {
+    let rejectCredential!: (error: Error) => void;
+    const resolveCredential = vi
+      .fn<WorkspaceContentRuntimeOptions["resolveCredential"]>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_resolve, reject) => {
+            rejectCredential = reject;
+          }),
+      )
+      .mockReturnValue("fresh-cookie");
+    const acquire = vi.fn(async () => lease());
+    const runtime = createRuntime({ acquire, resolveCredential, reuseWorker: () => false });
+    const controller = new AbortController();
+    const call = runtime.executeRead({ code: "1", target, signal: controller.signal });
+    await vi.waitFor(() => expect(resolveCredential).toHaveBeenCalledOnce());
+    const rejected = expect(call).rejects.toMatchObject({ code: "workspace-runtime-not-started" });
+    controller.abort();
+    await rejected;
+    rejectCredential(new Error("credential expired"));
+    await new Promise((resolve) => setImmediate(resolve));
+    await expect(runtime.executeRead({ code: "2", target })).resolves.toBeDefined();
+    expect(resolveCredential).toHaveBeenCalledTimes(2);
+    expect(acquire).toHaveBeenCalledOnce();
+  });
+
+  it.each([false, true])(
+    "aborts queued calls without acquiring a lease (capacity queue %s)",
+    async (capacity) => {
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const current = lease({ executeGate: gate });
+      const acquire = vi.fn(async () => current);
+      const runtime = createRuntime({
+        acquire,
+        ...(capacity ? { pool: { maxWorkers: 1, queue: { timeoutMs: 5000 } } } : {}),
+      });
+      const controller = new AbortController();
+      const active = runtime.executeRead({ code: "held", target });
+      await vi.waitFor(() => expect(current.execute).toHaveBeenCalledOnce());
+      const waiting = runtime.executeAndCommit({
+        code: "must not write",
+        target: capacity ? { ...target, unitId: "other" } : target,
+        signal: controller.signal,
+      });
+      const rejected = expect(waiting).rejects.toMatchObject({
+        code: "workspace-runtime-not-started",
+        detail: { started: false, retryable: true },
+      });
+      controller.abort();
+      await rejected;
+      const after = runtime.executeRead({ code: "next", target });
+      expect(acquire).toHaveBeenCalledOnce();
+      release();
+      await Promise.all([active, after]);
+      expect(acquire).toHaveBeenCalledTimes(2);
+      expect(current.execute).not.toHaveBeenCalledWith(
+        expect.objectContaining({ code: "must not write" }),
+      );
+    },
+  );
+
+  it("finishes an acquired write despite cancellation and marks only script/commit error boundaries", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const current = lease({
+      executeGate: gate,
+      writeMutations: [{ id: "edit", data: "{}" }],
+      commitResults: [commitResult("confirmed", 8)],
+    });
+    const runtime = createRuntime({ acquire: vi.fn(async () => current) });
+    const controller = new AbortController();
+    const active = runtime.executeAndCommit({ code: "edit", target, signal: controller.signal });
+    await vi.waitFor(() => expect(current.execute).toHaveBeenCalledOnce());
+    controller.abort();
+    release();
+    await expect(active).resolves.toMatchObject({ committed: true });
+    const failure = new TypeError("exact CLI text");
+    current.execute = vi.fn().mockRejectedValue(failure);
+    await expect(runtime.executeRead({ code: "throw", target })).rejects.toBe(failure);
+    expect(getWorkspaceRuntimeFailurePhase(failure)).toBe("script");
+    const commitFailure = new Error("commit disconnected");
+    const writing = lease({ writeMutations: [{ id: "edit", data: "{}" }] });
+    writing.commit = vi.fn().mockRejectedValue(commitFailure);
+    const other = createRuntime({ acquire: vi.fn(async () => writing) });
+    await expect(other.executeAndCommit({ code: "edit", target })).rejects.toBe(commitFailure);
+    expect(getWorkspaceRuntimeFailurePhase(commitFailure)).toBe("commit");
+    expect(getWorkspaceRuntimeFailurePhase(new Error("elsewhere"))).toBeUndefined();
   });
 
   it("resolves worker init once while reusing a revision-independent runtime key", async () => {
@@ -847,6 +963,7 @@ function createRuntime(
     ...(overrides.transportOrigin === undefined
       ? {}
       : { transportOrigin: overrides.transportOrigin }),
+    ...(overrides.reuseWorker === undefined ? {} : { reuseWorker: overrides.reuseWorker }),
     resolveCredential: overrides.resolveCredential ?? (async () => "cookie"),
     resolveLicense: overrides.resolveLicense ?? (async () => "license"),
     workerEntry: overrides.workerEntry ?? new URL("file:///package/worker.js"),

@@ -3,6 +3,7 @@ import {
   WorkspaceApplicationError,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
+import type { OpMeta } from "./usage.js";
 
 export interface WireError {
   readonly outcome: "tool_error" | "auth_error" | "internal_error" | "timeout";
@@ -49,9 +50,7 @@ export function translateError(error: unknown): WireError {
       outcome: "tool_error",
       code: error.code,
       message: error.message,
-      detail: jsonOrNull(
-        "detail" in error ? error.detail : "details" in error ? error.details : null,
-      ),
+      detail: null,
     };
   }
   return {
@@ -73,7 +72,19 @@ function jsonOrNull(value: unknown): z.core.util.JSONType {
 }
 
 export class ExecutorCallError extends Error {
-  constructor(readonly wire: WireError) {
+  constructor(
+    readonly wire: WireError,
+    readonly meta?: OpMeta,
+  ) {
     super(wire.message);
   }
+}
+
+export function resultUnknown(cause: string, timeout = false): WireError {
+  return {
+    code: "workspace-result-unknown",
+    message: RESULT_UNKNOWN_MESSAGE,
+    detail: { cause, retryable: false },
+    outcome: timeout ? "timeout" : "tool_error",
+  };
 }

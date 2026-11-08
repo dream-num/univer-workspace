@@ -10,6 +10,7 @@ import {
   type OpSpec,
 } from "../shared/executor-protocol.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../shared/frame.js";
+import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { credentialRedactions } from "../shared/logging.js";
 import { createDispatcher } from "./dispatch.js";
 import { createExecutorRuntime } from "./runtime.js";
@@ -96,16 +97,26 @@ export function createExecutor(
       }
       const result = await dispatch(name, header, payload);
       let frame = encodeFrame(result.header, result.payload);
-      if (frame.length > limits.responseBytes)
-        frame = encodeFrame({
-          ok: false,
-          error: {
-            code: "workspace-result-too-large",
-            message: "Narrow the request; the executor result exceeds its byte limit.",
-            detail: null,
-            outcome: "tool_error",
-          },
-        });
+      if (frame.length > limits.responseBytes) {
+        const output =
+          name === "content.execute" && result.header.ok
+            ? truncateCommittedExecute(result.header.output)
+            : undefined;
+        frame = encodeFrame(
+          output
+            ? { ok: true, output, meta: result.header.meta }
+            : {
+                ok: false,
+                meta: result.header.meta,
+                error: {
+                  code: "workspace-result-too-large",
+                  message: "Narrow the request; the executor result exceeds its byte limit.",
+                  detail: null,
+                  outcome: "tool_error",
+                },
+              },
+        );
+      }
       response.writeHead(200, { "content-type": FRAME_CONTENT_TYPE }).end(frame);
       logger.info({ request_id: header.requestId, op: name }, "Executor request completed");
     })().catch(() => {

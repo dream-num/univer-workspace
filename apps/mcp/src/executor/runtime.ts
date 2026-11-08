@@ -1,10 +1,13 @@
 import {
   createWorkspaceContentRuntime,
+  getWorkspaceRuntimeFailurePhase,
   type WorkspaceContentRuntime,
   type WorkspaceContentRuntimeObservation,
 } from "@univerjs/univer-workspace-client-core";
+import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import { ExecutorCallError, resultUnknown } from "../shared/errors.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
-import type { ExecutorGrant } from "../shared/executor-protocol.js";
+import { executorGrantSchema, type ExecutorGrant } from "../shared/executor-protocol.js";
 import type { OpMeta } from "../shared/usage.js";
 import type { BoundRuntime } from "./context.js";
 import { grantCookie, resolveGrant } from "./credentials.js";
@@ -15,6 +18,7 @@ export const workerEnvironment = { NODE_ENV: "production" };
 export function createExecutorRuntime(config: ExecutorConfig): WorkspaceContentRuntime {
   return createWorkspaceContentRuntime({
     resolveCredential: (_target, caller) => grantCookie(resolveGrant(caller?.grant)),
+    reuseWorker: reuseExecutorWorker,
     resolveLicense: () => config.UNIVER_LICENSE ?? UNIVER_LICENSE,
     workerEntry: new URL("./worker.js", import.meta.url),
     transportOrigin: config.WORKSPACE_TRANSPORT_URL,
@@ -41,21 +45,59 @@ export function bindRuntime(
     usage.cost.worker_cpu_ms += workerMs;
   };
   const bind = (target: Parameters<BoundRuntime["executeRead"]>[0]["target"]) => {
-    signal.throwIfAborted();
+    if (signal.aborted)
+      throw workspaceError(
+        "workspace-runtime-not-started",
+        "The runtime call was aborted before it started.",
+        { retryable: true, started: false },
+      );
     usage.unitType = target.unitType;
   };
   return {
-    executeRead: (input) => {
+    executeRead: async (input) => {
       bind(input.target);
-      return runtime.executeRead({ ...input, caller, observe });
+      return await runtimeCall(() => runtime.executeRead({ ...input, caller, observe, signal }));
     },
-    executeAndCommit: (input) => {
+    executeAndCommit: async (input) => {
       bind(input.target);
-      return runtime.executeAndCommit({ ...input, caller, observe });
+      return await runtimeCall(() =>
+        runtime.executeAndCommit({ ...input, caller, observe, signal }),
+      );
     },
     exportUnitData: (input) => {
       bind(input.target);
-      return runtime.exportUnitData({ ...input, caller, observe });
+      return runtime.exportUnitData({ ...input, caller, observe, signal });
     },
   };
+}
+
+export const reuseExecutorWorker: NonNullable<
+  Parameters<typeof createWorkspaceContentRuntime>[0]["reuseWorker"]
+> = (created) => {
+  const parsed = executorGrantSchema.safeParse(created?.grant);
+  return parsed.success && parsed.data.expiresAt > Date.now() + 60_000;
+};
+
+async function runtimeCall<T>(operation: () => Promise<T>): Promise<T> {
+  try {
+    return await operation();
+  } catch (error) {
+    const coded = error instanceof Error && "code" in error && typeof error.code === "string";
+    const phase = getWorkspaceRuntimeFailurePhase(error);
+    if (!coded && phase === "commit") {
+      const timeout = error instanceof Error && ["TimeoutError", "AbortError"].includes(error.name);
+      throw new ExecutorCallError(
+        resultUnknown(timeout ? error.name : "workspace-internal-error", timeout),
+      );
+    }
+    if (!coded && phase === "script") {
+      throw new ExecutorCallError({
+        code: "workspace-script-failed",
+        message: error instanceof Error ? error.message : String(error),
+        detail: error instanceof Error && error.name ? { name: error.name } : {},
+        outcome: "tool_error",
+      });
+    }
+    throw error;
+  }
 }

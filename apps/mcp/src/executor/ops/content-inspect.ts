@@ -42,10 +42,20 @@ export const contentInspect: Handler<"content.inspect"> = async (ctx, input) => 
       unitId: target.unitId,
       unitType: target.unitType,
       execute: async ({ code }) => ({
-        value: z.json().parse((await ctx.runtime.executeRead({ code, target })).value),
+        value: runtimeResult(z.json(), (await ctx.runtime.executeRead({ code, target })).value),
       }),
     },
     query,
   );
-  return { output: opSpecs["content.inspect"].output.parse(result) };
+  return { output: runtimeResult(opSpecs["content.inspect"].output, result) };
 };
+
+function runtimeResult<T>(schema: z.ZodType<T>, value: unknown): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success)
+    throw workspaceError(
+      "workspace-runtime-result-invalid",
+      "The runtime returned an invalid inspection result.",
+    );
+  return parsed.data;
+}

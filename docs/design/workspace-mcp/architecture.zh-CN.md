@@ -249,8 +249,19 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 ### 6.4 凭据
 
 阶段 D 沿用 `client-core` 现有的方式：网关把下游凭据随请求交给执行层，执行层在创建 worker 时传入。这个方式只适用于本地原型和内部单用户环境。
-首批 grant 为 `{kind:"session",userId,session,expiresAt}`，只放在 RPC frame body。执行层的一个 resolver 读取凭据，并通过 `caller.grant` 传给 Client Core；所有 worker 调用绑定必填 userId。生产拒绝 session grants。显式 worker env 阻止环境变量继承，但同 uid 子进程仍可能读取父进程 `/proc/<pid>/environ`，阶段 G 必须解决。
+首批 grant 为 `{kind:"session",userId,session,expiresAt}`，只放在 RPC frame body。执行层的一个 resolver 读取凭据，并通过 `caller.grant` 传给 Client Core；所有 worker 调用绑定必填 userId。生产拒绝 session grants。执行层先通过 transport URL 的 whoami 验证 session 所属 userId，以 session 的 SHA-256 缓存到 grant.expiresAt，最多 10,000 条；不匹配或 401 拒绝认证。每次复用前检查创建 worker 的 grant，距过期不超过 60 秒时销毁并用当前 grant 重建。显式 worker env 阻止环境变量继承，但同 uid 子进程仍可能读取执行层 `/proc/1/environ`，阶段 G 必须解决。
 多用户环境下执行层如何持有凭据，由阶段 G 的安全设计决定。阶段 D 的实现要把凭据的获取集中在一个接口后面，方便阶段 G 替换。
+
+
+### 6.5 错误与结果边界
+
+已提交的 execute 超过 100,000 字符或 RPC 响应字节上限时保留 committed、revision、status，省略 value 并返回
+valueTruncated: true；文本确认已提交，不提示重试写入。未提交结果仍返回 workspace-result-too-large。
+排队时取消不会取得 lease，返回 workspace-executor-timeout，detail.started 为 false、retryable 为 true；
+取得 lease 后继续运行，超时写入仍为 workspace-result-unknown。未确认 submit 和无 code 的 commit 错误同样
+返回 result-unknown，detail.cause 保留原因；除 timeout 外 outcome 为 tool_error。
+用户脚本的无 code 错误在 runtime 边界标记，由执行层返回 workspace-script-failed、CLI 原始 message 和 name。
+其他无 code 错误保持 internal_error。失败 envelope 也携带 meta，用于记录 worker 用量。
 
 ## 7. 渲染服务与大文件
 

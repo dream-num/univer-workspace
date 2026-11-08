@@ -7,6 +7,7 @@ import type {
   OpSpec,
   PayloadDirection,
 } from "../../shared/executor-protocol.js";
+import { ExecutorCallError } from "../../shared/errors.js";
 import type { UsageAccumulator } from "../../shared/usage.js";
 import type { Authentication } from "../auth.js";
 import { callExecutor, type ExecutorConnection } from "../executor/client.js";
@@ -75,7 +76,12 @@ export function executorTool<
     async run(context, args) {
       const link = context.executor ? links.get(context.executor) : undefined;
       const parsed = tool.inputSchema.parse(args);
-      const result = await callExecutor(link?.connection ?? null, op, request(parsed));
+      const result = await callExecutor(link?.connection ?? null, op, request(parsed)).catch(
+        (error) => {
+          if (error instanceof ExecutorCallError && error.meta) link?.usage.addOp(error.meta);
+          throw error;
+        },
+      );
       link?.usage.addOp(result.meta);
       const mapped = response ? await response(result, parsed, context) : { output: result.output };
       return {

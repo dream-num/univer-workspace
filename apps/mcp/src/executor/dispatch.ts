@@ -14,7 +14,7 @@ import {
 } from "../shared/executor-protocol.js";
 import { zeroCost, type OpMeta } from "../shared/usage.js";
 import type { Handler, OpContext } from "./context.js";
-import { grantCookie, resolveGrant } from "./credentials.js";
+import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js";
 import { mapRuntimeError, timeoutError } from "./errors.js";
 import { handlers } from "./ops/index.js";
 import { bindRuntime } from "./runtime.js";
@@ -24,6 +24,7 @@ export function createDispatcher(
   runtime: WorkspaceContentRuntime,
   logger: Logger,
 ) {
+  const verifyGrant = createGrantVerifier();
   const dispatchers: { [K in OpName]: Handler<K> } = handlers;
   return async function dispatch<K extends OpName>(
     name: K,
@@ -32,11 +33,11 @@ export function createDispatcher(
   ) {
     const spec: OpSpec = opSpecs[name];
     const controller = new AbortController();
+    const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const input = spec.input.parse(header.input) as OpInput<(typeof opSpecs)[K]>;
       const grant = resolveGrant(header.grant);
-      const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
       const fetcher: typeof fetch = (url, options) => {
         const headers = new Headers(options?.headers);
         headers.set("x-request-id", header.requestId);
@@ -72,7 +73,7 @@ export function createDispatcher(
           () => {
             const error = timeoutError(spec.effect);
             controller.abort(error);
-            reject(error);
+            setImmediate(() => reject(error));
           },
           Math.min(header.deadlineMs, spec.limits.budgetMs),
         );
@@ -80,7 +81,14 @@ export function createDispatcher(
       const payloadArgs = (
         spec.payload === "request" ? [payload] : []
       ) as (typeof opSpecs)[K]["payload"] extends "request" ? [Uint8Array] : [];
-      const result = await Promise.race([dispatchers[name](ctx, input, ...payloadArgs), deadline]);
+      const result = await Promise.race([
+        (async () => {
+          await verifyGrant(grant, http);
+          controller.signal.throwIfAborted();
+          return await dispatchers[name](ctx, input, ...payloadArgs);
+        })(),
+        deadline,
+      ]);
       return {
         header: { ok: true as const, output: result.output, meta: usage },
         payload: "bytes" in result && result.bytes instanceof Uint8Array ? result.bytes : undefined,
@@ -92,7 +100,7 @@ export function createDispatcher(
           { request_id: header.requestId, op: name, code: translated.code },
           "Executor operation failed",
         );
-      return { header: { ok: false as const, error: translated }, payload: undefined };
+      return { header: { ok: false as const, error: translated, meta: usage }, payload: undefined };
     } finally {
       clearTimeout(timer);
     }

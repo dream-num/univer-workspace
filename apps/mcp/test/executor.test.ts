@@ -4,6 +4,7 @@ import { pino } from "pino";
 import { describe, expect, it, vi } from "vitest";
 import {
   workspaceRuntimeKey,
+  createWorkspaceContentRuntime,
   type WorkspaceContentRuntime,
 } from "@univerjs/univer-workspace-client-core";
 import { createBearerCheck } from "../src/shared/bearer.js";
@@ -17,9 +18,10 @@ import {
 } from "../src/shared/executor-protocol.js";
 import { credentialRedactions } from "../src/shared/logging.js";
 import { zeroCost } from "../src/shared/usage.js";
-import { bindRuntime, workerEnvironment } from "../src/executor/runtime.js";
-import { resolveGrant } from "../src/executor/credentials.js";
+import { bindRuntime, workerEnvironment, reuseExecutorWorker } from "../src/executor/runtime.js";
+import { createGrantVerifier, grantCookie, resolveGrant } from "../src/executor/credentials.js";
 import { mapRuntimeError } from "../src/executor/errors.js";
+import { workspaceError, WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import { handlers } from "../src/executor/ops/index.js";
 import { createExecutor } from "../src/executor/server.js";
 import {
@@ -160,10 +162,7 @@ describe("executor protocol boundaries", () => {
       );
     expect(
       mapRuntimeError(
-        Object.assign(new Error("Ready"), {
-          code: "workspace-worktree-not-editable",
-          detail: { state: "ready" },
-        }),
+        workspaceError("workspace-worktree-not-editable", "Ready", { state: "ready" }),
         "write",
       ),
     ).toMatchObject({ detail: { state: "ready" } });
@@ -296,4 +295,348 @@ describe("executor protocol boundaries", () => {
       await executor.close();
     }
   });
+});
+
+describe("executor regression boundaries", () => {
+  it("replaces a near-expiry worker credential with the next grant's session", async () => {
+    const runtime = createWorkspaceContentRuntime({
+      resolveCredential: (_target, caller) => grantCookie(resolveGrant(caller?.grant)),
+      resolveLicense: () => "license",
+      reuseWorker: reuseExecutorWorker,
+      workerEntry: new URL("./fixtures/credential-worker.mjs", import.meta.url),
+      pool: { env: workerEnvironment, maxWorkers: 1, queue: { timeoutMs: 1000 } },
+    });
+    const target = {
+      origin: "http://127.0.0.1:1",
+      revision: 7,
+      scope: { kind: "trunk" as const },
+      unitId: "unit-1",
+      unitType: "sheet" as const,
+    };
+    const call = (session: string, expiresAt: number) =>
+      bindRuntime(
+        runtime,
+        { ...grant, session, expiresAt },
+        { executor: "none", cost: { ...zeroCost } },
+        new AbortController().signal,
+      ).executeRead({ code: "credential", target });
+    try {
+      expect((await call("old", Date.now() + 60_000)).value).toBe("workspace_session=old");
+      expect((await call("fresh", Date.now() + 600_000)).value).toBe("workspace_session=fresh");
+      expect((await call("rotated", Date.now() + 600_000)).value).toBe("workspace_session=fresh");
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it("checks session ownership once per session, expiry, and 401", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "Alice" } }),
+        ),
+      );
+    fetcher.mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "Alice" } }),
+        ),
+    );
+    const http = new WorkspaceHttp({
+      origin: "https://identity.test",
+      transportOrigin: "https://transport.test",
+      cookie: grantCookie(grant),
+      role: "client",
+      fetcher,
+    });
+    const verify = createGrantVerifier();
+    await Promise.all([verify(grant, http), verify(grant, http)]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]?.[0])).toBe("https://transport.test/api/session");
+    await expect(verify({ ...grant, userId: "victim" }, http)).rejects.toMatchObject({
+      code: "workspace-authentication-required",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    const clock = vi.spyOn(Date, "now").mockReturnValue(grant.expiresAt + 1);
+    try {
+      await verify({ ...grant, expiresAt: grant.expiresAt + 10000 }, http);
+    } finally {
+      clock.mockRestore();
+    }
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    fetcher.mockImplementation(async () => new Response("{}", { status: 401 }));
+    await expect(verify({ ...grant, session: "revoked" }, http)).rejects.toMatchObject({
+      code: "workspace-authentication-required",
+    });
+  });
+
+  it.each([413, 426, 400, 500, 503])(
+    "classifies HTTP %s without failover except 503",
+    async (status) => {
+      const fetcher = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async () => new Response("{}", { status }));
+      const router = new ExecutorRouter(["http://one.test", "http://two.test"]);
+      const down = vi.spyOn(router, "notDelivered");
+      try {
+        await expect(
+          callExecutor(
+            {
+              router,
+              internalToken: token,
+              grant,
+              requestId: "request",
+              deadlineAt: Date.now() + 30_000,
+            },
+            opSpecs["content.execute"],
+            { input: { worktreeId: "wt", unitId: "unit", code: "1" } },
+          ),
+        ).rejects.toMatchObject({
+          wire: {
+            code:
+              status === 413
+                ? "workspace-request-too-large"
+                : status === 426
+                  ? "workspace-executor-version-mismatch"
+                  : "workspace-executor-unavailable",
+            outcome: status === 413 || status === 426 ? "tool_error" : "internal_error",
+          },
+        });
+        expect(fetcher).toHaveBeenCalledTimes(status === 503 ? 2 : 1);
+        expect(down).toHaveBeenCalledTimes(status === 503 ? 2 : 0);
+      } finally {
+        fetcher.mockRestore();
+      }
+    },
+  );
+
+  it("rejects oversized requests and expired budgets before delivery", async () => {
+    const fetcher = vi.spyOn(globalThis, "fetch");
+    const connection = {
+      router: new ExecutorRouter(["http://one.test"]),
+      internalToken: token,
+      grant,
+      requestId: "request",
+      deadlineAt: Date.now() + 30_000,
+    };
+    try {
+      await expect(
+        callExecutor(
+          connection,
+          {
+            ...opSpecs["content.execute"],
+            limits: { ...opSpecs["content.execute"].limits, requestBytes: 1 },
+          },
+          { input: { worktreeId: "wt", unitId: "unit", code: "1" } },
+        ),
+      ).rejects.toMatchObject({
+        wire: { code: "workspace-request-too-large", outcome: "tool_error" },
+      });
+      await expect(
+        callExecutor({ ...connection, deadlineAt: 1 }, opSpecs["content.execute"], {
+          input: { worktreeId: "wt", unitId: "unit", code: "1" },
+        }),
+      ).rejects.toMatchObject({
+        wire: {
+          code: "workspace-executor-timeout",
+          outcome: "tool_error",
+          detail: { started: false },
+        },
+      });
+      expect(fetcher).not.toHaveBeenCalled();
+    } finally {
+      fetcher.mockRestore();
+    }
+  });
+
+  it("keeps ambiguous commit errors distinct from not-started deadlines", () => {
+    expect(
+      mapRuntimeError(workspaceError("workspace-submit-retry-exhausted", "unconfirmed"), "write"),
+    ).toMatchObject({
+      code: "workspace-result-unknown",
+      outcome: "tool_error",
+      detail: { cause: "workspace-submit-retry-exhausted" },
+    });
+    expect(
+      mapRuntimeError(workspaceError("workspace-runtime-not-started", "cancelled"), "write"),
+    ).toMatchObject({
+      code: "workspace-executor-timeout",
+      outcome: "timeout",
+      detail: { retryable: true, started: false },
+    });
+    expect(mapRuntimeError(new Error("private detail"), "write")).toMatchObject({
+      code: "workspace-internal-error",
+      outcome: "internal_error",
+    });
+  });
+});
+
+describe("script and commit failure origins through a real worker", () => {
+  it.each([
+    ['throw new Error("x")', "x", "Error"],
+    ["const = ;", "Unexpected token '='", "SyntaxError"],
+    ["workbook.noSuchMethod()", "workbook.noSuchMethod is not a function", "TypeError"],
+    ["const x = null; return x.foo", "Cannot read properties of null (reading 'foo')", "TypeError"],
+  ])("returns the CLI message for %s", async (code, message, name) => {
+    const runtime = createWorkspaceContentRuntime({
+      resolveCredential: () => "cookie",
+      resolveLicense: () => "license",
+      workerEntry: new URL("./fixtures/script-worker.mjs", import.meta.url),
+    });
+    const target = {
+      origin: "http://127.0.0.1:1",
+      revision: 7,
+      scope: { kind: "worktree" as const, worktreeId: "wt" },
+      unitId: "unit-1",
+      unitType: "sheet" as const,
+    };
+    const bound = bindRuntime(
+      runtime,
+      grant,
+      { executor: "none", cost: { ...zeroCost } },
+      new AbortController().signal,
+    );
+    try {
+      for (const method of ["executeRead", "executeAndCommit"] as const)
+        await expect(bound[method]({ code: code!, target })).rejects.toMatchObject({
+          wire: {
+            code: "workspace-script-failed",
+            message,
+            detail: { name },
+            outcome: "tool_error",
+          },
+        });
+      await expect(
+        bound.executeAndCommit({ code: "commit-failure", target }),
+      ).rejects.toMatchObject({
+        wire: {
+          code: "workspace-result-unknown",
+          detail: { cause: "workspace-internal-error" },
+          outcome: "tool_error",
+        },
+      });
+      await expect(
+        bound.executeAndCommit({ code: "commit-timeout", target }),
+      ).rejects.toMatchObject({
+        wire: {
+          code: "workspace-result-unknown",
+          outcome: "timeout",
+          detail: { cause: "TimeoutError" },
+        },
+      });
+    } finally {
+      await runtime.close();
+    }
+  });
+});
+
+describe("dispatcher deadline and grant enforcement", () => {
+  it("returns retryable not-started timeout for a queued write and rejects forged callers before dispatch", async () => {
+    const { createDispatcher } = await import("../src/executor/dispatch.js");
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () =>
+        new Response(
+          JSON.stringify({
+            authenticated: true,
+            user: { id: grant.userId, displayName: "Alice" },
+          }),
+        ),
+    );
+    const runtime: WorkspaceContentRuntime = {
+      executeAndCommit: vi.fn<WorkspaceContentRuntime["executeAndCommit"]>(
+        async (input) =>
+          await new Promise<never>((_resolve, reject) => {
+            input.signal?.addEventListener(
+              "abort",
+              () => reject(workspaceError("workspace-runtime-not-started", "cancelled")),
+              { once: true },
+            );
+          }),
+      ),
+      executeRead: vi.fn(),
+      exportUnitData: vi.fn(),
+      close: async () => {},
+    };
+    const handler = vi.spyOn(handlers, "content.execute").mockImplementation(async (ctx) => ({
+      output: await ctx.runtime.executeAndCommit({
+        code: "edit",
+        target: {
+          origin: "https://workspace.test",
+          revision: 7,
+          scope: { kind: "worktree", worktreeId: "wt" },
+          unitId: "unit-1",
+          unitType: "sheet",
+        },
+      }),
+    }));
+    try {
+      const dispatch = createDispatcher(config(), runtime, pino({ level: "silent" }));
+      const header = {
+        v: 1 as const,
+        op: "content.execute",
+        requestId: "deadline",
+        deadlineMs: 30,
+        grant,
+        input: { worktreeId: "wt", unitId: "unit-1", code: "edit" },
+      };
+      expect((await dispatch("content.execute", header, new Uint8Array())).header).toMatchObject({
+        ok: false,
+        error: {
+          code: "workspace-executor-timeout",
+          outcome: "timeout",
+          detail: { retryable: true, started: false },
+        },
+        meta: { executor: "none" },
+      });
+      expect(
+        (
+          await dispatch(
+            "content.execute",
+            { ...header, grant: { ...grant, userId: "victim" } },
+            new Uint8Array(),
+          )
+        ).header,
+      ).toMatchObject({
+        ok: false,
+        error: { code: "workspace-authentication-required", outcome: "auth_error" },
+      });
+      expect(handler).toHaveBeenCalledOnce();
+    } finally {
+      fetcher.mockRestore();
+      handler.mockRestore();
+    }
+  });
+});
+
+it("never suggests repeating a write when an oversized RPC response cannot be decoded", async () => {
+  const fetcher = vi
+    .spyOn(globalThis, "fetch")
+    .mockImplementation(async () => new Response("x".repeat(100)));
+  try {
+    await expect(
+      callExecutor(
+        {
+          router: new ExecutorRouter(["http://one.test"]),
+          internalToken: token,
+          grant,
+          requestId: "large-wire",
+          deadlineAt: Date.now() + 30_000,
+        },
+        {
+          ...opSpecs["content.execute"],
+          limits: { ...opSpecs["content.execute"].limits, responseBytes: 1 },
+        },
+        { input: { worktreeId: "wt", unitId: "unit", code: "edit" } },
+      ),
+    ).rejects.toMatchObject({
+      wire: {
+        code: "workspace-result-unknown",
+        outcome: "tool_error",
+        detail: { cause: "workspace-result-too-large", retryable: false },
+      },
+    });
+  } finally {
+    fetcher.mockRestore();
+  }
 });

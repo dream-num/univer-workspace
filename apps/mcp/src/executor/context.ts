@@ -8,7 +8,10 @@ import type { OpMeta } from "../shared/usage.js";
 
 export type BoundRuntime = {
   [K in keyof WorkspaceContentRuntimeOperations]: (
-    input: Omit<Parameters<WorkspaceContentRuntimeOperations[K]>[0], "caller" | "observe">,
+    input: Omit<
+      Parameters<WorkspaceContentRuntimeOperations[K]>[0],
+      "caller" | "observe" | "signal"
+    >,
   ) => ReturnType<WorkspaceContentRuntimeOperations[K]>;
 };
 export interface OpContext {

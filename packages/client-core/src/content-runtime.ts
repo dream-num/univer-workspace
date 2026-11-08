@@ -32,18 +32,21 @@ export interface WorkspaceContentRuntimeObservation {
 export interface WorkspaceContentRuntimeOperations {
   executeAndCommit(input: {
     readonly caller?: WorkspaceRuntimeCaller;
+    readonly signal?: AbortSignal;
     readonly observe?: (observation: WorkspaceContentRuntimeObservation) => void;
     readonly code: string;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<WorkspaceContentRuntimeWriteResult>;
   executeRead(input: {
     readonly caller?: WorkspaceRuntimeCaller;
+    readonly signal?: AbortSignal;
     readonly observe?: (observation: WorkspaceContentRuntimeObservation) => void;
     readonly code: string;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<CollaborationRuntimeReadResult>;
   exportUnitData(input: {
     readonly caller?: WorkspaceRuntimeCaller;
+    readonly signal?: AbortSignal;
     readonly observe?: (observation: WorkspaceContentRuntimeObservation) => void;
     readonly target: WorkspaceRuntimeTarget;
   }): Promise<CollaborationUnitData>;
@@ -70,6 +73,10 @@ export interface WorkspaceContentRuntimeOptions {
   readonly resolveLicense: (
     caller?: WorkspaceRuntimeCaller,
   ) => Promise<string | undefined> | string | undefined;
+  readonly reuseWorker?: (
+    created: WorkspaceRuntimeCaller | undefined,
+    current: WorkspaceRuntimeCaller | undefined,
+  ) => boolean;
   readonly workerEntry: string | URL;
   readonly transportOrigin?: string;
   readonly pool?: WorkspaceContentRuntimePoolOptions;
@@ -109,11 +116,16 @@ interface RuntimeSlots {
   readonly waiting: Map<string, RuntimeSlotWaiter[]>;
 }
 
+interface WorkerInit {
+  readonly caller: WorkspaceRuntimeCaller | undefined;
+  readonly pending: Promise<WorkspaceContentWorkerInit>;
+}
+
 interface AcquiredWorkspaceRuntime {
   readonly acquiredAt: number;
   readonly coldStart: boolean;
   readonly init: WorkspaceContentWorkerInit;
-  readonly initEntry: Promise<WorkspaceContentWorkerInit>;
+  readonly initEntry: WorkerInit;
   readonly key: string;
   readonly lease: UniverCollaborationRuntimeLease;
 }
@@ -124,7 +136,7 @@ export function createWorkspaceContentRuntime(
   if (options.transportOrigin !== undefined) {
     normalizeWorkspaceRuntimeOrigin(options.transportOrigin);
   }
-  const initByKey = new Map<string, Promise<WorkspaceContentWorkerInit>>();
+  const initByKey = new Map<string, WorkerInit>();
   const operationByKey = new Map<string, Promise<void>>();
   const poolOptions = options.pool;
   const slots = createRuntimeSlots(poolOptions);
@@ -150,21 +162,29 @@ export function createWorkspaceContentRuntime(
   });
 
   async function run<T>(
-    input: { readonly caller?: WorkspaceRuntimeCaller; readonly target: WorkspaceRuntimeTarget },
+    input: {
+      readonly caller?: WorkspaceRuntimeCaller;
+      readonly target: WorkspaceRuntimeTarget;
+      readonly signal?: AbortSignal;
+    },
     operation: (deadline: number | undefined) => Promise<T>,
   ): Promise<T> {
+    throwIfNotStartedAborted(input.signal);
     const key = workspaceRuntimeKey(input.target, input.caller);
     if (slots === undefined) {
-      return await runForRuntimeKey(operationByKey, key, () => operation(undefined));
+      return await runForRuntimeKey(operationByKey, key, () => operation(undefined), input.signal);
     }
     const started = performance.now();
-    await enterRuntimeSlot(slots, key, started + slots.timeoutMs);
+    await enterRuntimeSlot(slots, key, started + slots.timeoutMs, input.signal);
     // The capacity retry gets the slot budget left over, counted from when the operation leaves
     // the same-key chain, so waiting behind same-key operations is not charged as capacity wait.
     const remainingMs = slots.timeoutMs - (performance.now() - started);
     try {
-      return await runForRuntimeKey(operationByKey, key, () =>
-        operation(performance.now() + remainingMs),
+      return await runForRuntimeKey(
+        operationByKey,
+        key,
+        () => operation(performance.now() + remainingMs),
+        input.signal,
       );
     } finally {
       leaveRuntimeSlot(slots, key);
@@ -189,11 +209,14 @@ export function createWorkspaceContentRuntime(
           input.target,
           input.caller,
           deadline,
+          input.signal,
         );
         const { lease } = acquired;
         try {
           await synchronize(lease, input.target);
-          return await lease.execute({ code: input.code, mode: "read" });
+          return await inRuntimePhase("script", () =>
+            lease.execute({ code: input.code, mode: "read" }),
+          );
         } finally {
           try {
             await lease.release();
@@ -216,12 +239,15 @@ export function createWorkspaceContentRuntime(
           input.target,
           input.caller,
           deadline,
+          input.signal,
         );
         const { init, initEntry, key, lease } = acquired;
         let reusable = false;
         try {
           await synchronize(lease, input.target);
-          const executed: unknown = await lease.execute({ code: input.code, mode: "write" });
+          const executed: unknown = await inRuntimePhase("script", () =>
+            lease.execute({ code: input.code, mode: "write" }),
+          );
           if (
             !isRecord(executed) ||
             !isMutationArray(executed["mutations"]) ||
@@ -249,7 +275,7 @@ export function createWorkspaceContentRuntime(
             worktreeId,
           });
           await lease.replacePendingMutations(mutations);
-          const committed = await commitStableChangeset(lease);
+          const committed = await inRuntimePhase("commit", () => commitStableChangeset(lease));
           reusable = true;
           return {
             committed: true,
@@ -279,6 +305,7 @@ export function createWorkspaceContentRuntime(
           input.target,
           input.caller,
           deadline,
+          input.signal,
         );
         const { lease } = acquired;
         try {
@@ -340,7 +367,13 @@ function createRuntimeSlots(
 const MAX_TIMER_MS = 2_147_483_647;
 
 /** `deadline` is a `performance.now()` reading, immune to wall-clock steps. */
-function enterRuntimeSlot(slots: RuntimeSlots, key: string, deadline: number): Promise<void> {
+function enterRuntimeSlot(
+  slots: RuntimeSlots,
+  key: string,
+  deadline: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  throwIfNotStartedAborted(signal);
   if (slots.closed) return Promise.reject(runtimeClosedError());
   const count = slots.held.get(key);
   if (count !== undefined) {
@@ -355,22 +388,29 @@ function enterRuntimeSlot(slots: RuntimeSlots, key: string, deadline: number): P
     const waiter: RuntimeSlotWaiter = {
       admit() {
         clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
         resolve();
       },
       reject(error) {
         clearTimeout(timer);
+        signal?.removeEventListener("abort", abort);
         reject(error);
       },
     };
+    const remove = (error: Error) => {
+      const waiters = slots.waiting.get(key) ?? [];
+      const index = waiters.indexOf(waiter);
+      if (index < 0) return;
+      waiters.splice(index, 1);
+      if (waiters.length === 0) slots.waiting.delete(key);
+      waiter.reject(error);
+    };
+    const abort = () => remove(runtimeNotStartedError());
     const timer = setTimeout(
-      () => {
-        const waiters = slots.waiting.get(key) ?? [];
-        waiters.splice(waiters.indexOf(waiter), 1);
-        if (waiters.length === 0) slots.waiting.delete(key);
-        reject(runtimeBusyError());
-      },
+      () => remove(runtimeBusyError()),
       Math.max(0, deadline - performance.now()),
     );
+    signal?.addEventListener("abort", abort, { once: true });
     const waiters = slots.waiting.get(key);
     if (waiters === undefined) slots.waiting.set(key, [waiter]);
     else waiters.push(waiter);
@@ -424,6 +464,7 @@ async function runForRuntimeKey<T>(
   operationByKey: Map<string, Promise<void>>,
   key: string,
   operation: () => Promise<T>,
+  signal?: AbortSignal,
 ): Promise<T> {
   const previous = operationByKey.get(key);
   let finish!: () => void;
@@ -431,46 +472,65 @@ async function runForRuntimeKey<T>(
     finish = resolve;
   });
   operationByKey.set(key, current);
-  if (previous !== undefined) await previous;
   try {
+    if (previous !== undefined) await waitBeforeStart(previous, signal);
+    throwIfNotStartedAborted(signal);
     return await operation();
   } finally {
-    finish();
-    if (operationByKey.get(key) === current) operationByKey.delete(key);
+    // An aborted waiter must not let the next call overtake the active operation.
+    void (previous ?? Promise.resolve()).then(() => {
+      finish();
+      if (operationByKey.get(key) === current) operationByKey.delete(key);
+    });
   }
 }
 
 async function acquire(
   pool: UniverCollaborationRuntimePool<WorkspaceContentWorkerInit>,
-  initByKey: Map<string, Promise<WorkspaceContentWorkerInit>>,
+  initByKey: Map<string, WorkerInit>,
   options: WorkspaceContentRuntimeOptions,
   target: WorkspaceRuntimeTarget,
   caller: WorkspaceRuntimeCaller | undefined,
   capacityDeadline: number | undefined,
+  signal?: AbortSignal,
 ): Promise<AcquiredWorkspaceRuntime> {
   const key = workspaceRuntimeKey(target, caller);
-  let pending = initByKey.get(key);
-  const coldStart = pending === undefined;
-  if (pending === undefined) {
-    pending = resolveWorkerInit(options, target, caller);
-    initByKey.set(key, pending);
-    void pending.catch(() => {
-      if (initByKey.get(key) === pending) initByKey.delete(key);
+  let entry = initByKey.get(key);
+  if (entry !== undefined && options.reuseWorker?.(entry.caller, caller) === false) {
+    const old = await waitBeforeStart(entry.pending, signal);
+    const stale = await acquireLease(pool, old, key, capacityDeadline, signal);
+    initByKey.delete(key);
+    await stale.invalidate();
+    entry = undefined;
+  }
+  throwIfNotStartedAborted(signal);
+  const coldStart = entry === undefined;
+  if (entry === undefined) {
+    entry = { caller, pending: resolveWorkerInit(options, target, caller) };
+    initByKey.set(key, entry);
+    const created = entry;
+    void entry.pending.catch(() => {
+      if (initByKey.get(key) === created) initByKey.delete(key);
     });
   }
-  const init = await pending;
   try {
-    const lease = await acquireLease(pool, init, key, capacityDeadline);
-    return {
-      acquiredAt: performance.now(),
-      coldStart,
-      init,
-      initEntry: pending,
-      key,
-      lease,
-    };
+    const init = await waitBeforeStart(entry.pending, signal);
+    const lease = await acquireLease(pool, init, key, capacityDeadline, signal);
+    if (signal?.aborted) {
+      await lease.release();
+      throw runtimeNotStartedError();
+    }
+    return { acquiredAt: performance.now(), coldStart, init, initEntry: entry, key, lease };
   } catch (error) {
-    if (initByKey.get(key) === pending) initByKey.delete(key);
+    if (
+      !(
+        error instanceof Error &&
+        "code" in error &&
+        error.code === "workspace-runtime-not-started"
+      ) &&
+      initByKey.get(key) === entry
+    )
+      initByKey.delete(key);
     throw error;
   }
 }
@@ -484,15 +544,20 @@ async function acquireLease(
   init: WorkspaceContentWorkerInit,
   key: string,
   capacityDeadline: number | undefined,
+  signal?: AbortSignal,
 ): Promise<UniverCollaborationRuntimeLease> {
   for (let delayMs = 10; ; delayMs = Math.min(delayMs * 2, 200)) {
     try {
+      throwIfNotStartedAborted(signal);
       return await pool.acquire({ init, key });
     } catch (error) {
       if (capacityDeadline === undefined || !isPoolCapacityError(error)) throw error;
       const remainingMs = capacityDeadline - performance.now();
       if (remainingMs <= 0) throw runtimeBusyError();
-      await new Promise((resolve) => setTimeout(resolve, Math.min(delayMs, remainingMs)));
+      await waitBeforeStart(
+        new Promise((resolve) => setTimeout(resolve, Math.min(delayMs, remainingMs))),
+        signal,
+      );
     }
   }
 }
@@ -602,4 +667,49 @@ function isMutationArray(value: unknown): value is readonly IMutation[] {
         typeof mutation["data"] === "string",
     )
   );
+}
+
+function runtimeNotStartedError() {
+  return workspaceError(
+    "workspace-runtime-not-started",
+    "The runtime call was aborted before it started.",
+    {
+      retryable: true,
+      started: false,
+    },
+  );
+}
+
+function throwIfNotStartedAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw runtimeNotStartedError();
+}
+
+function waitBeforeStart<T>(pending: Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (signal === undefined) return pending;
+  throwIfNotStartedAborted(signal);
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(runtimeNotStartedError());
+    signal.addEventListener("abort", abort, { once: true });
+    void pending.then(resolve, reject).finally(() => signal.removeEventListener("abort", abort));
+  });
+}
+
+const runtimeFailurePhases = new WeakMap<object, "script" | "commit">();
+
+/** Identifies the failing runtime boundary without changing the CLI's original error. */
+export function getWorkspaceRuntimeFailurePhase(error: unknown): "script" | "commit" | undefined {
+  return typeof error === "object" && error !== null ? runtimeFailurePhases.get(error) : undefined;
+}
+
+async function inRuntimePhase<T>(
+  phase: "script" | "commit",
+  operation: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await operation();
+  } catch (cause) {
+    const error = typeof cause === "object" && cause !== null ? cause : new Error(String(cause));
+    runtimeFailurePhases.set(error, phase);
+    throw error;
+  }
 }

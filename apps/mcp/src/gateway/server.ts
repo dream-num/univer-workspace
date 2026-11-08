@@ -32,6 +32,7 @@ import type { GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { SERVER_INSTRUCTIONS } from "./instructions.js";
 import { openResourceLibrary, ResourceCacheIoError } from "./resources.js";
+import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
 import { translateToolError } from "./tool-error.js";
@@ -186,17 +187,33 @@ export function createGateway(
             if (!json.success || !tool.outputSchema.safeParse(json.data).success) {
               throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
             }
-            const structuredContent = json.data;
+            let structuredContent = json.data;
             if (JSON.stringify(structuredContent).length > RESULT_LIMIT) {
-              throw workspaceError(
-                "workspace-result-too-large",
-                `${tool.name} would return more than ${String(RESULT_LIMIT)} characters. Narrow the request (for example a smaller limit, fewer symbols or terms, or a more specific query) and call again.`,
-              );
+              const truncated =
+                tool.name === "execute" ? truncateCommittedExecute(structuredContent) : undefined;
+              if (truncated) structuredContent = truncated;
+              else
+                throw workspaceError(
+                  "workspace-result-too-large",
+                  `${tool.name} would return more than ${String(RESULT_LIMIT)} characters. Narrow the request (for example a smaller limit, fewer symbols or terms, or a more specific query) and call again.`,
+                );
             }
             state.repo = result.repo;
             state.outcome = "ok";
             return {
-              content: [{ type: "text", text: `${tool.name} completed.` }],
+              content: [
+                {
+                  type: "text",
+                  text:
+                    tool.name === "execute" &&
+                    typeof structuredContent === "object" &&
+                    structuredContent !== null &&
+                    "valueTruncated" in structuredContent &&
+                    structuredContent.valueTruncated === true
+                      ? "The write committed; its value was too large to return."
+                      : `${tool.name} completed.`,
+                },
+              ],
               structuredContent,
             };
           } catch (error) {

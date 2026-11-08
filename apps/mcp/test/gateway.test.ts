@@ -99,6 +99,9 @@ describe("gateway over real HTTP and the MCP client", () => {
   let workspace: Server;
   let executor: ReturnType<typeof createExecutor>;
   let ready: boolean;
+  let executeValue: string;
+  let runtimeError: Error | undefined;
+  let inspectValue: unknown;
   let observedKeys: string[];
   const internalToken = "executor-internal-test-token-123456789";
   const rangeResult = {
@@ -135,6 +138,9 @@ describe("gateway over real HTTP and the MCP client", () => {
   beforeEach(async () => {
     clients = [];
     ready = false;
+    executeValue = "written";
+    runtimeError = undefined;
+    inspectValue = { ok: true, value: rangeResult };
     observedKeys = [];
     logs = "";
     expireDuringTool = false;
@@ -220,14 +226,15 @@ describe("gateway over real HTTP and the MCP client", () => {
         expect(input.caller?.userId).toBe(subject.id);
         observedKeys.push(workspaceRuntimeKey(input.target, input.caller));
         input.observe?.({ coldStart: observedKeys.length === 1, workerMs: 12 });
-        return { committed: true, revision: 2, status: "committed", value: "written" };
+        if (runtimeError) throw runtimeError;
+        return { committed: true, revision: 2, status: "committed", value: executeValue };
       },
       executeRead: async (input) => {
         expect(input.caller?.userId).toBe(subject.id);
         observedKeys.push(workspaceRuntimeKey(input.target, input.caller));
         input.observe?.({ coldStart: observedKeys.length === 1, workerMs: 4 });
         return {
-          value: { ok: true, value: rangeResult },
+          value: inspectValue as never,
           state: {
             connection: "online" as const,
             baseRevision: 1,
@@ -387,6 +394,86 @@ describe("gateway over real HTTP and the MCP client", () => {
       expect(observedKeys[0]).toContain(":caller:user-1");
       expect(logs).not.toContain(internalToken);
       expect(logs).not.toContain("Apples");
+    },
+  );
+
+  it.each([150_000, 9 * 1024 * 1024])(
+    "preserves one committed write when its value has %s characters",
+    async (size) => {
+      executeValue = "r".repeat(size);
+      const result = await (
+        await connect()
+      ).callTool({
+        name: "execute",
+        arguments: { worktree: "wt-1", unit: "unit-1", code: "write once" },
+      });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toEqual({
+        committed: true,
+        revision: 2,
+        status: "committed",
+        valueTruncated: true,
+      });
+      expect(result.content).toEqual([
+        { type: "text", text: "The write committed; its value was too large to return." },
+      ]);
+      expect(observedKeys).toHaveLength(1);
+      expect(events()).toMatchObject([{ outcome: "ok", cost: { committed_revisions: 1 } }]);
+    },
+  );
+
+  it("reports worker usage on failed cold and warm calls", async () => {
+    runtimeError = Object.assign(new Error("unconfirmed"), {
+      code: "workspace-submit-retry-exhausted",
+    });
+    const client = await connect();
+    for (let i = 0; i < 2; i++) {
+      const result = await client.callTool({
+        name: "execute",
+        arguments: { worktree: "wt-1", unit: "unit-1", code: "edit" },
+      });
+      expect(result).toMatchObject({
+        isError: true,
+        structuredContent: {
+          code: "workspace-result-unknown",
+          detail: { cause: "workspace-submit-retry-exhausted" },
+        },
+      });
+    }
+    expect(events()).toMatchObject([
+      {
+        outcome: "tool_error",
+        executor: "cold_start",
+        unit_type: "sheet",
+        cost: { worker_cpu_ms: 12 },
+      },
+      { outcome: "tool_error", executor: "warm", unit_type: "sheet", cost: { worker_cpu_ms: 12 } },
+    ]);
+  });
+
+  it.each([undefined, { ok: true, value: { kind: "wrong", unitId: "unit-1" } }])(
+    "classifies invalid inspection results as internal errors",
+    async (value) => {
+      inspectValue = value;
+      const result = await (
+        await connect()
+      ).callTool({
+        name: "inspect",
+        arguments: {
+          worktree: "wt-1",
+          unit: "unit-1",
+          target: "range",
+          selectors: ["A1:B2"],
+          worksheet: "index:1",
+        },
+      });
+      expect(result).toMatchObject({
+        isError: true,
+        structuredContent: { code: "workspace-runtime-result-invalid" },
+      });
+      expect(events()).toMatchObject([
+        { outcome: "internal_error", executor: "cold_start", unit_type: "sheet" },
+      ]);
     },
   );
 

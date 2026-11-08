@@ -20,6 +20,12 @@
   多用户宿主可为每次调用传入 `caller`。只有 `caller.userId` 进入 runtime key；可选 `caller.grant` 为不透明值，
   Client Core 不读取、不序列化它，并将原 caller 传给 `resolveCredential` 与 `resolveLicense`。resolver 只在创建或重建
   worker 时调用，热 worker 保留创建时的凭据与 license。不同 userId 不共享 worker 或凭据。
+  可选 `reuseWorker(created, current)` 在命中 init 缓存时检查创建 caller 与当前 caller；返回 false 时，在同一 key
+  的串行操作内使旧 worker 失效，再用当前 caller 重新解析凭据。未设置时保留原来的复用行为。
+  三个 runtime operation 可传入 `signal`；等待容量或同 key 前序操作时取消会立即返回
+  `workspace-runtime-not-started`（`retryable: true, started: false`），之后不会取得 lease 或执行代码。
+  取得 lease 后继续执行到结束。`getWorkspaceRuntimeFailurePhase(error)` 区分 script 与 commit 边界，
+  保留原 Error 对象、message、name 和 code，让宿主决定展示方式；CLI 的错误展示不变。
   可选 `transportOrigin` 是不含路径、查询、片段或凭据的 HTTP(S) origin。worker HTTP、协同 WebSocket 和提交时的
   内嵌图片上传通过它连接 Workspace；target、runtime key、HTTP adapter URL 与用户可见 URL 保留公共 identity origin，
   HTTP origin 校验和写请求的 Origin header 也保留 identity origin。缺省时 worker init 仍只有 `credential`、`license`、`target`。
