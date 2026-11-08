@@ -547,7 +547,7 @@ describe("exchange cache lifetime and capacity", () => {
     }
   });
 
-  it("never evicts in-flight exchanges when the positive cache is full", async () => {
+  it("never evicts in-flight exchanges and still caches an untracked exchange", async () => {
     let resume!: () => void;
     const gate = new Promise<void>((resolve) => { resume = resolve; });
     const fetcher = vi.fn<typeof fetch>(async () => {
@@ -565,8 +565,8 @@ describe("exchange cache lifetime and capacity", () => {
     expect(await last).toEqual(values[9999]);
     await overflow;
     expect(fetcher).toHaveBeenCalledTimes(10_001);
-    await authenticate("uvw_pat_overflow", "test");
-    expect(fetcher).toHaveBeenCalledTimes(10_002);
+    expect(await authenticate("uvw_pat_overflow", "test")).toBe(await overflow);
+    expect(fetcher).toHaveBeenCalledTimes(10_001);
   });
 
   it("skips an older in-flight exchange when evicting a completed entry", async () => {

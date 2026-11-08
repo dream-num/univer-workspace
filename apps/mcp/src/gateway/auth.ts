@@ -125,9 +125,10 @@ export function createAuthenticator(
     cache.delete(cacheKey);
     const existing = inFlight.get(cacheKey);
     if (existing) return existing;
+    const tracked = inFlight.size < maxCacheEntries;
     const pending = exchangeToken(bearer, requestId).then(
       (entry) => {
-        if (inFlight.get(cacheKey) === pending) {
+        if (tracked ? inFlight.get(cacheKey) === pending : !inFlight.has(cacheKey)) {
           inFlight.delete(cacheKey);
           const entries = entry.value === null ? negativeCache : cache;
           const limit = entry.value === null ? maxNegativeCacheEntries : maxCacheEntries;
@@ -143,7 +144,7 @@ export function createAuthenticator(
         throw error;
       },
     );
-    if (inFlight.size < maxCacheEntries) inFlight.set(cacheKey, pending);
+    if (tracked) inFlight.set(cacheKey, pending);
     return pending;
   }
 

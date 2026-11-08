@@ -288,6 +288,7 @@ export function createGateway(
     }
     const bearer = /^Bearer ([^\s;,]+)$/i.exec(request.headers.get("authorization") ?? "")?.[1];
     if (!bearer) return unauthorized();
+    const requestStartedAt = Date.now();
     const authentication = await authenticator.authenticate(bearer, requestId);
     if (!authentication) return unauthorized(true);
     const fetcher: typeof fetch = (input, init) => {
@@ -354,7 +355,7 @@ export function createGateway(
         const text = await response.text();
         if (state.outcome === "auth_error") {
           authenticator.evict(bearer, authentication);
-          if (Date.now() - authentication.obtainedAt < 5_000) return unauthorized(true);
+          if (requestStartedAt - authentication.obtainedAt < 5_000) return unauthorized(true);
           const refreshed = await authenticator.authenticate(bearer, requestId);
           return unauthorized(refreshed === null);
         }
