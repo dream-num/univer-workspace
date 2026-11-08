@@ -1,6 +1,6 @@
 import {
   repoUrl,
-  usernameKey,
+  selectRepos,
   WorkspaceSpaceFeature,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
@@ -15,26 +15,20 @@ const inputSchema = z.object({
 export const repoListTool: ToolDefinition = {
   name: "repo_list",
   toolset: "core",
+  scope: "read",
   title: "List repositories",
   description: "List repositories you own or have joined, in Workspace order.",
   inputSchema,
   outputSchema: z.object({ repos: z.array(repoSchema) }),
   annotations: readOnlyAnnotations,
   async run(context, args) {
-    const { owner: rawOwner, type, limit } = inputSchema.parse(args);
-    const owner = rawOwner === undefined ? undefined : usernameKey(rawOwner);
+    const { owner, type, limit } = inputSchema.parse(args);
     const spaces = new WorkspaceSpaceFeature(async () => context.http);
-    const repos = (await spaces.list())
-      .filter((space) => type === undefined || space.type === type)
-      .filter(
-        (space) =>
-          owner === undefined ||
-          (owner === "@me"
-            ? (space.affiliation ?? space.accessRole) === "owner"
-            : space.owner !== undefined && usernameKey(space.owner.username) === owner),
-      )
-      .slice(0, limit)
-      .map((space) => ({ ...space, url: repoUrl(context.identityOrigin, space.id) }));
+    const repos = selectRepos(await spaces.list(), {
+      limit,
+      ...(owner === undefined ? {} : { owner }),
+      ...(type === undefined ? {} : { type }),
+    }).map((space) => ({ ...space, url: repoUrl(context.identityOrigin, space.id) }));
     return { output: { repos }, repo: null };
   },
 };

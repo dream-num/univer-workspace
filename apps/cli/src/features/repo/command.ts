@@ -1,10 +1,11 @@
 import { Command } from "commander";
 import {
-  usernameKey,
+  createRepo,
+  repoEditPatch,
+  selectRepos,
   type WorkspaceSpace,
   type WorkspaceSpaceFeature,
 } from "@univerjs/univer-workspace-client-core/product";
-import { workspaceError } from "../../errors.js";
 import {
   emit,
   executeCommand,
@@ -19,6 +20,8 @@ import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 export const REPO_JSON_FIELDS = [
   "id", "name", "type", "accessRole", "affiliation", "description", "fullName", "owner", "publicRead", "slug",
 ] as const satisfies readonly (keyof WorkspaceSpace)[];
+
+const flag = (parameter: string) => `--${parameter}`;
 
 export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoContext): Command {
   const root = new Command("repo").description(
@@ -37,17 +40,11 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
           const type =
             options.type === undefined ? undefined : oneOf(options.type, ["team", "personal"], "--type");
           const limit = limitOf(options.limit);
-          const owner = options.owner === undefined ? undefined : usernameKey(options.owner);
-          return (await spaces.list())
-            .filter((space) => type === undefined || space.type === type)
-            .filter(
-              (space) =>
-                owner === undefined ||
-                (owner === "@me"
-                  ? (space.affiliation ?? space.accessRole) === "owner"
-                  : space.owner !== undefined && usernameKey(space.owner.username) === owner),
-            )
-            .slice(0, limit);
+          return selectRepos(await spaces.list(), {
+            limit,
+            ...(options.owner === undefined ? {} : { owner: options.owner }),
+            ...(type === undefined ? {} : { type }),
+          });
         });
         emit(
           list,
@@ -93,20 +90,16 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
         options: JsonFieldsOption & { description?: string; name?: string; public?: boolean },
       ) => {
         const space = await executeCommand(create, async () => {
-          if (options.description !== undefined && options.description.trim().length > 350) {
-            throw workspaceError(
-              "workspace-argument-invalid",
-              "--description must contain at most 350 characters.",
-            );
-          }
-          const created = await spaces.create({
-            name: options.name ?? slug,
-            slug,
-            ...(options.public === true ? { publicRead: true } : {}),
-          });
-          return options.description === undefined
-            ? created
-            : await spaces.update(created.id, { description: options.description });
+          return await createRepo(
+            spaces,
+            {
+              slug,
+              ...(options.description === undefined ? {} : { description: options.description }),
+              ...(options.name === undefined ? {} : { name: options.name }),
+              ...(options.public === true ? { public: true } : {}),
+            },
+            flag,
+          );
         });
         emit(create, options, space, nameOf(space));
       },
@@ -125,24 +118,19 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
         options: JsonFieldsOption & { description?: string; name?: string; visibility?: string },
       ) => {
         const space = await executeCommand(edit, async () => {
-          if (
-            options.name === undefined &&
-            options.description === undefined &&
-            options.visibility === undefined
-          ) {
-            throw workspaceError(
-              "workspace-argument-invalid",
-              "Nothing to change: pass --name, --description or --visibility.",
-            );
-          }
+          const patch = repoEditPatch(
+            {
+              ...(options.name === undefined ? {} : { name: options.name }),
+              ...(options.description === undefined ? {} : { description: options.description }),
+              ...(options.visibility === undefined
+                ? {}
+                : { visibility: oneOf(options.visibility, ["public", "private"], "--visibility") }),
+            },
+            ["name", "description", "visibility"],
+            flag,
+          );
           const { spaceId } = await context.repo(ref);
-          return await spaces.update(spaceId, {
-            ...(options.name === undefined ? {} : { name: options.name }),
-            ...(options.description === undefined ? {} : { description: options.description }),
-            ...(options.visibility === undefined
-              ? {}
-              : { publicRead: oneOf(options.visibility, ["public", "private"], "--visibility") === "public" }),
-          });
+          return await spaces.update(spaceId, patch);
         });
         emit(edit, options, space, nameOf(space));
       },

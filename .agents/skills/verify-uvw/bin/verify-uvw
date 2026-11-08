@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-logs | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-logs | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -9,7 +9,7 @@ CLI_MAIN="$REPO/apps/cli/dist/main.js"
 ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
 
 MCP_CALL="$REPO/.agents/skills/verify-uvw/bin/mcp-call.mjs"
-MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core)
+MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core apps/cli/skill-data)
 
 die() { echo "verify-uvw: $*" >&2; exit 1; }
 
@@ -71,6 +71,7 @@ mcp_compose() {
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_MCP_OAUTH_SECRET="$(cat "$RUN/home/mcp-oauth-secret" 2>/dev/null || echo removed)" \
     docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
 }
 
@@ -129,14 +130,23 @@ mcp_doctor() {
     ok "MCP metrics reject missing token and accept this run's token"
   else bad "MCP metrics token protection failed"; fi
   if [[ -f "$RUN/user.env" ]]; then
-    if who="$(mcp_client doctor doctor-whoami whoami)" && node -e 'const v=JSON.parse(process.argv[1]);process.exit(v.subject?.name===process.argv[2]&&v.origin===process.argv[3]?0:1)' "$who" "Verify $RUN_ID" "$ORIGIN"; then
+    if who="$(mcp_client doctor --auth dev doctor-whoami whoami)" && node -e 'const v=JSON.parse(process.argv[1]);process.exit(v.subject?.name===process.argv[2]&&v.origin===process.argv[3]?0:1)' "$who" "Verify $RUN_ID" "$ORIGIN"; then
       ok "MCP whoami returns this run's user"
     else bad "MCP whoami failed: run verify-uvw user"; fi
+    if [[ -s "$RUN/home/mcp-token" ]] && who="$(mcp_client doctor --auth pat doctor-pat-whoami whoami)" \
+      && node -e 'const v=JSON.parse(process.argv[1]);process.exit(v.subject?.name===process.argv[2]?0:1)' "$who" "Verify $RUN_ID"; then
+      ok "MCP gateway exchanged this run's PAT for a downstream session"
+    else bad "MCP PAT exchange failed: run verify-uvw mcp-token, and check the gateway client in OAUTH_CLIENTS_JSON"; fi
     if gateway_logs="$(mcp_compose logs --no-color --no-log-prefix gateway 2>/dev/null)" && [[ -s "$RUN/home/mcp-session" ]]; then
-      if printf '%s' "$gateway_logs" | node -e 'const fs=require("node:fs"),s=fs.readFileSync(process.argv[1],"utf8").trim();process.exit(fs.readFileSync(0,"utf8").includes(s)?1:0)' "$RUN/home/mcp-session"; then
-        ok "MCP gateway logs contain no session credential"
+      if printf '%s' "$gateway_logs" | node -e 'const fs=require("node:fs");const logs=fs.readFileSync(0,"utf8");process.exit(process.argv.slice(1).filter(p=>fs.existsSync(p)).some(p=>logs.includes(fs.readFileSync(p,"utf8").trim()))?1:0)' "$RUN/home/mcp-session" "$RUN/home/mcp-token" "$RUN/home/mcp-oauth-secret"; then
+        ok "MCP gateway logs contain no session, PAT or gateway client secret"
       else bad "MCP gateway leaks session credential; blocking defect"; fi
     else bad "MCP cannot check gateway logs or session; run verify-uvw user"; fi
+    if [[ ! -s "$RUN/home/mcp-token" ]]; then
+      bad "MCP cannot verify Workspace server logs: run verify-uvw mcp-token"
+    elif node -e 'const fs=require("node:fs");const logs=fs.readFileSync(process.argv[1],"utf8");process.exit(process.argv.slice(2).some(p=>{const secret=fs.readFileSync(p,"utf8").trim();return !secret||logs.includes(secret)})?1:0)' "$RUN/logs/server.log" "$RUN/home/mcp-token" "$RUN/home/mcp-oauth-secret"; then
+      ok "Workspace server logs contain no PAT or gateway client secret"
+    else bad "MCP cannot verify Workspace server logs are free of PAT and gateway client secret; blocking defect"; fi
   fi
 }
 
@@ -154,6 +164,30 @@ const dir=run+'/home/opencode-'+randomBytes(4).toString('hex');
 mkdirSync(dir,{mode:0o700});
 writeFileSync(dir+'/opencode.json',JSON.stringify({$schema:'https://opencode.ai/config.json',mcp:{'verify-uvw':{type:'remote',url:`http://127.0.0.1:${port}/mcp`,enabled:true,headers:{Authorization:'Bearer '+session}}},permission:{edit:'deny',bash:'deny',webfetch:'deny'}},null,2)+'\n',{mode:0o600});
 writeFileSync(run+'/home/opencode-dir',dir+'\n',{mode:0o600});
+JS
+}
+
+mcp_token() { # [--scopes read,write,...] [--name name]
+  [[ -s "$RUN/home/mcp-session" ]] || die "no MCP session; run: verify-uvw user"
+  node --input-type=module - "$RUN" "$ORIGIN" "$RUN_ID" "$@" <<'JS'
+import {readFileSync,writeFileSync} from 'node:fs';
+const [run,origin,runId,...args]=process.argv.slice(2);
+let name=`verify-uvw-${runId}`, scopes;
+while (args.length) {
+  const flag=args.shift(), value=args.shift();
+  if (value===undefined) throw new Error(`Missing value for ${flag}`);
+  if (flag==='--scopes') scopes=value.split(',').filter(Boolean);
+  else if (flag==='--name') name=value;
+  else throw new Error(`Unknown option ${flag}`);
+}
+const session=readFileSync(run+'/home/mcp-session','utf8').trim();
+const response=await fetch(origin+'/api/auth/tokens', {method:'POST',headers:{'content-type':'application/json',cookie:'workspace_session='+session,origin},body:JSON.stringify({name,...(scopes?{scopes}:{})})});
+if (response.status!==201) throw new Error('PAT creation returned '+response.status);
+const {token,record}=await response.json();
+if (typeof token!=='string' || typeof record?.id!=='string') throw new Error('PAT creation returned no token');
+writeFileSync(run+'/home/mcp-token',token,{mode:0o600});
+writeFileSync(run+'/home/mcp-token-id',record.id,{mode:0o600});
+console.log(record.id);
 JS
 }
 
@@ -186,6 +220,12 @@ cmd_mcp() {
   mcp_client "$@"
 }
 
+cmd_mcp_token() {
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  mcp_token "$@"
+}
+
 cmd_up() {
   deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
   cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
@@ -208,10 +248,17 @@ cmd_up() {
   local run="$ROOT/$id"
   [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
   mkdir -p "$run"/{data,home,logs,evidence}
+  local oauth_clients="" server_oauth_env=("OAUTH_CLIENTS_JSON=")
+  if [[ "$mcp_enabled" == 1 ]]; then
+    (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
+    oauth_clients="$(node -e 'console.log(JSON.stringify({clients:[{clientId:"univer-workspace-mcp-gateway",clientType:"confidential",clientSecret:require("node:fs").readFileSync(process.argv[1],"utf8").trim(),tokenExchange:true,redirectUris:["http://127.0.0.1/unused"],scopes:["identity"]}]}))' "$run/home/mcp-oauth-secret")"
+    server_oauth_env=("OAUTH_CLIENTS_JSON=$oauth_clients" "MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
+  fi
 
   # env -i keeps the developer's shell and apps/workspace/.env (OAuth, data paths) out of this instance.
   (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" \
     HOST=127.0.0.1 PORT="$server_port" LOG_LEVEL=info SECURE_COOKIES=false \
+    "${server_oauth_env[@]}" \
     DATABASE_FILE="$run/data/univer-workspace.sqlite" \
     COLLABORATION_DATABASE_FILE="$run/data/univer-collaboration.sqlite" \
     BLOB_DIRECTORY="$run/data/blobs" \
@@ -303,7 +350,10 @@ cmd_user() {
   source "$RUN/user.env"
   uvw_raw config set workspace.origin "$ORIGIN" >/dev/null
   uvw_raw auth login --username "$USERNAME" --password-stdin --json <"$RUN/user.pw"
-  [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_user
+  if [[ "${MCP_ENABLED:-0}" == 1 ]]; then
+    mcp_user
+    [[ -s "$RUN/home/mcp-token" ]] || mcp_token >/dev/null
+  fi
   echo "username: $USERNAME"
   echo "password: $RUN/user.pw"
 }
@@ -375,6 +425,10 @@ case "${1:-}" in
   cli) shift; cmd_cli "$@" ;;
   mcp) shift; cmd_mcp call "$@" ;;
   mcp-tools) shift; cmd_mcp tools "$@" ;;
+  mcp-resources) shift; cmd_mcp resources "$@" ;;
+  mcp-resource) shift; cmd_mcp resource "$@" ;;
+  mcp-instructions) shift; cmd_mcp instructions "$@" ;;
+  mcp-token) shift; cmd_mcp_token "$@" ;;
   mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;

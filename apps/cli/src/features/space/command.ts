@@ -1,12 +1,15 @@
 import { Command } from "commander";
 import {
-  workspaceError,
+  assertSpaceFilter,
+  nodeMoveParent,
   type WorkspaceResourceKindFilter,
   type WorkspaceSpaceFeature,
   type WorkspaceUnitType,
-} from "@univerjs/univer-workspace-client-core";
+} from "@univerjs/univer-workspace-client-core/product";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
 import type { RepoContext } from "../../repo-context.js";
+
+const flag = (parameter: string) => `--${parameter.replaceAll("_", "-")}`;
 
 interface BrowseOptions extends JsonOption {
   readonly parent?: string;
@@ -114,16 +117,9 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
       ) => {
         const value = {
           node: await executeCommand(move, async () => {
-            const hasParent = options.parent !== undefined;
-            if (hasParent === (options.root === true)) {
-              throw workspaceError(
-                "workspace-argument-invalid",
-                "Exactly one of --parent <node> or --root is required.",
-              );
-            }
             return await feature.moveNode({
               nodeId,
-              parentNodeId: options.root === true ? null : options.parent!,
+              parentNodeId: nodeMoveParent(options, flag),
             });
           }),
         };
@@ -153,12 +149,13 @@ function filters(options: BrowseOptions): {
     options.resourceKind === undefined
       ? undefined
       : oneOf(options.resourceKind, ["none", "univer", "blob"], "--resource-kind");
-  if (options.unitType !== undefined && (resourceKind === "none" || resourceKind === "blob")) {
-    throw Object.assign(
-      new Error("--unit-type can only be combined with --resource-kind univer."),
-      { code: "workspace-argument-invalid" },
-    );
-  }
+  assertSpaceFilter(
+    {
+      ...(resourceKind === undefined ? {} : { resourceKind }),
+      ...(options.unitType === undefined ? {} : { unitType: options.unitType }),
+    },
+    flag,
+  );
   return {
     ...(resourceKind === undefined ? {} : { resourceKind }),
     ...(options.unitType === undefined

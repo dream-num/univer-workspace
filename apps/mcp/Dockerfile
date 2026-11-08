@@ -12,6 +12,7 @@ RUN pnpm install --frozen-lockfile --filter @univerjs/univer-workspace-mcp...
 COPY tsconfig*.json ./
 COPY apps/mcp ./apps/mcp
 COPY packages/client-core ./packages/client-core
+COPY apps/cli/skill-data ./apps/cli/skill-data
 RUN pnpm --filter @univerjs/univer-workspace-mcp... build \
     && pnpm --filter @univerjs/univer-workspace-mcp deploy --legacy --prod --config.allow-unused-patches=true /app/deploy
 

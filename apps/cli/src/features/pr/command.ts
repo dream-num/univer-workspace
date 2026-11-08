@@ -1,11 +1,14 @@
 import { Command } from "commander";
 import {
+  findPullRequest,
+  listPullRequests,
+  PULL_REQUEST_STATES,
+  pullRequestSpace,
   pullUrl,
   workspaceError,
   type WorkspaceSpaceFeature,
   type WorkspaceWorktree,
   type WorkspaceWorktreeFeature,
-  type WorkspaceWorktreeState,
 } from "@univerjs/univer-workspace-client-core/product";
 import {
   emit,
@@ -48,8 +51,6 @@ interface Names {
 const PR_NAMES: Names = { create: "create", edit: "edit", get: "view" };
 const WORKTREE_NAMES: Names = { create: "create", edit: "update", get: "get", reopen: "reopen" };
 
-const STATES = ["open", "merged", "discarded", "all"] as const;
-
 /**
  * `pr` is the gh-style name; `worktree` is the same command group under the product's own name.
  * Both are built from the handlers below, so options, addressing and output cannot drift apart.
@@ -83,26 +84,11 @@ function build(
   const { context, origin, spaces, userId, worktrees } = deps;
   const root = new Command(name).description(description);
 
-  const repoSpace = async (repo: string | undefined) => {
-    const { spaceId } = await context.repo(repo);
-    const space = await spaces.get(spaceId);
-    if (space.type === "personal" && space.owner?.id !== await userId()) {
-      throw workspaceError(
-        "workspace-argument-invalid",
-        "Personal Space pull requests must target the signed-in user's own Space.",
-      );
-    }
-    return space;
-  };
+  const repoSpace = async (repo: string | undefined) =>
+    await pullRequestSpace(spaces, userId, (await context.repo(repo)).spaceId);
 
-  /** A `<n|url|id>` argument becomes the Worktree it names. */
-  const find = async (argument: string, repo: string | undefined) => {
-    const target = await context.item(argument, repo, "pr");
-    const worktree = target.kind === "id"
-      ? await worktrees.get(target.id)
-      : await worktrees.getByNumber(target.spaceId, target.number);
-    return { worktree, spaceId: target.kind === "number" ? target.spaceId : undefined };
-  };
+  const find = async (argument: string, repo: string | undefined) =>
+    await findPullRequest(worktrees, argument, origin, () => context.repo(repo));
   const urlOf = async ({ worktree, spaceId }: Awaited<ReturnType<typeof find>>) =>
     pullUrl(await origin(), worktree, undefined, await context.pullSpaceId(worktree, spaceId));
   /** Resolve text links before writing; JSON only needs an ID and keeps the no-read fast path. */
@@ -134,20 +120,19 @@ function build(
           RepoOption & { author?: string; limit: string; search?: string; state: string },
       ) => {
         const items = await executeCommand(list, async () => {
-          const state = oneOf(options.state, STATES, "--state");
+          const state = oneOf(options.state, PULL_REQUEST_STATES, "--state");
           const limit = limitOf(options.limit);
           const space = await repoSpace(options.repo);
-          return await worktrees.list({
-            ...(space.type === "personal" ? { scope: "user" as const } : { scope: "space" as const, spaceId: space.id }),
-            ...viewOf(state),
-            limit,
-            ...(options.search === undefined ? {} : { search: options.search }),
-            ...(options.author === undefined
-              ? {}
-              : options.author === "@me"
-                ? { creatorId: await userId() }
-                : { creatorUsername: options.author }),
-          });
+          return await listPullRequests(
+            { userId, worktrees },
+            {
+              space,
+              state,
+              limit,
+              ...(options.search === undefined ? {} : { search: options.search }),
+              ...(options.author === undefined ? {} : { author: options.author }),
+            },
+          );
         });
         emit(
           list,
@@ -329,19 +314,4 @@ function build(
 
 function label(worktree: WorkspaceWorktree): string {
   return worktree.number == null ? worktree.id.slice(0, 8) : `#${String(worktree.number)}`;
-}
-
-function viewOf(
-  state: (typeof STATES)[number],
-): { readonly view: "active" | "processed" | "all"; readonly states?: readonly WorkspaceWorktreeState[] } {
-  switch (state) {
-    case "open":
-      return { view: "active" };
-    case "merged":
-      return { view: "processed", states: ["merged"] };
-    case "discarded":
-      return { view: "processed", states: ["discarded"] };
-    case "all":
-      return { view: "all" };
-  }
 }

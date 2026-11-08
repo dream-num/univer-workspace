@@ -1,9 +1,8 @@
 import { Command } from "commander";
-import type { WorkspaceIssueFeature, WorkspaceIssueLabel } from "@univerjs/univer-workspace-client-core/product";
+import { LABEL_COLORS, type WorkspaceIssueFeature, type WorkspaceIssueLabel } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, oneOf, table, type JsonFieldsOption } from "../../command.js";
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
-const LABEL_COLORS = ["gray", "blue", "green", "yellow", "orange", "red", "purple", "pink"] as const;
 export const LABEL_JSON_FIELDS = ["color", "description", "id", "name"] as const satisfies
   readonly (keyof WorkspaceIssueLabel)[];
 

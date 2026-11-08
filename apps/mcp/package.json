@@ -7,13 +7,16 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/copy-skill-data.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "2.1.2",
     "@modelcontextprotocol/server": "2.4.0",
+    "@univer-cli/api-reference": "1.3.1",
+    "@univer-cli/resource-library": "1.3.1",
+    "@univerjs-pro/cli-assets": "0.1.0",
     "@univerjs/univer-workspace-client-core": "workspace:*",
     "pino": "10.3.1",
     "prom-client": "15.1.3",

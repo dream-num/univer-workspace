@@ -10,7 +10,8 @@ The [local verification specification](../../docs/design/workspace-mcp/local-ver
 - Keep identity origin separate from transport origin. Display and resolve references against the identity origin.
 - Keep the Dockerfile COPY inputs and the verify-uvw build-input list in specification section 3.1 synchronized.
   The inputs are root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `patches/`, `tsconfig*.json`,
-  and all non-ignored files under `apps/mcp/` and `packages/client-core/`, including `render-runtime/`.
+  all non-ignored files under `apps/mcp/` and `packages/client-core/`, including `render-runtime/`, and `apps/cli/skill-data/`
+  (the build copies it to `dist/skill-data`; the gateway never reads `apps/cli` at runtime).
 - Development session passthrough must never reach SaaS. Production refuses any non-empty `MCP_DEV_SESSION_PASSTHROUGH`.
 - Until Stage G passes, use this application only locally or in internal single-user environments.
 - Treat the `mcp.tool_call` event in `README.md` as a stable versioned contract. Do not log credentials, document contents, or raw tool arguments.

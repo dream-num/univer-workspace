@@ -75,7 +75,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 - [ ] 跑通一次完整的产品旅程：创建 Issue、开 PR、加 Unit、ready、在浏览器里看到 PR 处于 ready 状态（截图）。
 - [ ] `tools/list` 在 `core`、`files`、`admin`、`all` 四种组合下返回正确的工具集，顺序固定。
 - [ ] 每个工具都有 `outputSchema` 和三个注解。
-- [ ] 在 opencode（模型 `console-deepseek/deepseek-flash#high`）里用自然语言完成一次“找到我的 Personal Space，新建一个 Issue”的任务。
+- [ ] 在 opencode（模型 `console-deepseek/deepseek-flash#high`）里用自然语言完成一次“找到我的 Team Space，新建一个 Issue”的任务。Issue 只存在于 Team Space，Personal Space 会返回 `CONFLICT`。
 
 **不做。** `execute`、`inspect`、导入导出、渲染。
 

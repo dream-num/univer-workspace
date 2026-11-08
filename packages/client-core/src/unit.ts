@@ -3,20 +3,24 @@ import { executeWithStableIdentity, workspaceError } from "./errors.js";
 import { isWorkspaceRecord, type AuthenticatedWorkspaceHttp } from "./http.js";
 import type { WorkspaceUnitType } from "./space-model.js";
 import { getWorktree, stableKey } from "./worktree.js";
-import { parseUnit, type WorkspaceUnit } from "./worktree-model.js";
+import { parseUnit, type WorkspaceUnit, type WorkspaceWorktree } from "./worktree-model.js";
+
+/** The Units of a fetched Worktree, refusing a Unit that belongs to a different Worktree. */
+export function worktreeUnits(worktree: WorkspaceWorktree): readonly WorkspaceUnit[] {
+  if (worktree.units.some((unit) => unit.worktreeId !== worktree.id)) {
+    throw workspaceError(
+      "workspace-result-mismatch",
+      "Workspace Unit list contains a Unit from a different Worktree.",
+    );
+  }
+  return worktree.units;
+}
 
 export class WorkspaceUnitFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
   public async list(worktreeId: string): Promise<readonly WorkspaceUnit[]> {
-    const worktree = await getWorktree(await this.authenticatedHttp(), worktreeId);
-    if (worktree.units.some((unit) => unit.worktreeId !== worktreeId)) {
-      throw workspaceError(
-        "workspace-result-mismatch",
-        "Workspace Unit list contains a Unit from a different Worktree.",
-      );
-    }
-    return worktree.units;
+    return worktreeUnits(await getWorktree(await this.authenticatedHttp(), worktreeId));
   }
 
   public async add(worktreeId: string, resourceId: string): Promise<WorkspaceUnit> {

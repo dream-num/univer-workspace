@@ -375,8 +375,8 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `MCP_EXECUTOR_URLS`、`MCP_RENDERER_URL` | 网关、执行层 | 内部服务地址 |
 | `MCP_INTERNAL_TOKEN` | 全部 | 内部 RPC 的共享令牌 |
 | `MCP_STAGING_DIRECTORY` | 网关 | 暂存存储目录 |
-| `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端（阶段 F） |
-| `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节） |
+| `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端，两者同时设置或同时不设。启用 PAT 与 OAuth access token 认证 |
+| `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节）。与上一行至少设置一项，本地验证两者同时设置 |
 | `UNIVER_LICENSE`、`UNIVER_LICENSE_KEY` | 执行层、渲染服务 | license 注入 |
 | `EXECUTOR_*` | 执行层 | 见 6.2 节 |
 | `METRICS_TOKEN` | 全部 | 指标端点令牌 |

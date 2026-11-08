@@ -11,6 +11,7 @@ const inputSchema = z.object({ repo: z.string() });
 export const repoViewTool: ToolDefinition = {
   name: "repo_view",
   toolset: "core",
+  scope: "read",
   title: "View repository",
   description: "Show a repository by owner/slug, owner/personal, Space ID, or Workspace URL.",
   inputSchema,
