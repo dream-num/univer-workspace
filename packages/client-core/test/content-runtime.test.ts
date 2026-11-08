@@ -5,7 +5,8 @@ import type {
   UniverCollaborationRuntimePool,
   UniverCollaborationRuntimePoolOptions,
 } from "@univer-cli/univer-collaboration-runtime-pool";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { UniverCollaborationRuntimePoolError } from "@univer-cli/univer-collaboration-runtime-pool";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createWorkspaceContentRuntime,
   type WorkspaceContentRuntimeOptions,
@@ -65,6 +66,33 @@ describe("Workspace content runtime owner", () => {
       },
     });
     expect(acquire.mock.calls[0]![0].key).not.toContain("secret");
+  });
+
+  it("keys workers and credentials per caller and resolves once per caller", async () => {
+    const acquire = vi.fn<UniverCollaborationRuntimePool<unknown>["acquire"]>(async () => lease());
+    const resolveCredential = vi.fn(
+      async (_target: WorkspaceRuntimeTarget, caller?: { readonly userId: string }) =>
+        `cookie-of-${caller?.userId ?? "none"}`,
+    );
+    const resolveLicense = vi.fn(async () => "license");
+    const runtime = createRuntime({ acquire, resolveCredential, resolveLicense });
+    const alice = { userId: "alice" };
+    const bob = { userId: "bob" };
+
+    await runtime.executeRead({ caller: alice, code: "return 1", target });
+    await runtime.executeRead({ caller: bob, code: "return 1", target });
+    await runtime.executeRead({ caller: alice, code: "return 2", target });
+
+    expect(resolveCredential.mock.calls).toEqual([
+      [target, alice],
+      [target, bob],
+    ]);
+    expect(resolveLicense.mock.calls).toEqual([[alice], [bob]]);
+    const inputs = acquire.mock.calls.map(([input]) => input);
+    expect(inputs[0]!.key).not.toBe(inputs[1]!.key);
+    expect(inputs[2]).toEqual(inputs[0]);
+    expect(inputs[0]).toMatchObject({ init: { credential: "cookie-of-alice" } });
+    expect(inputs[1]).toMatchObject({ init: { credential: "cookie-of-bob" } });
   });
 
   it("re-resolves dependencies after worker creation fails before a lease forms", async () => {
@@ -628,6 +656,7 @@ function createRuntime(
     close: overrides.close ?? vi.fn(async () => undefined),
   };
   return createWorkspaceContentRuntime({
+    ...(overrides.pool === undefined ? {} : { pool: overrides.pool }),
     resolveCredential: overrides.resolveCredential ?? (async () => "cookie"),
     resolveLicense: overrides.resolveLicense ?? (async () => "license"),
     workerEntry: overrides.workerEntry ?? new URL("file:///package/worker.js"),
@@ -639,6 +668,7 @@ function lease(
     readonly baseRevision?: number;
     readonly commitResults?: readonly unknown[];
     readonly executeError?: Error;
+    readonly executeGate?: Promise<void>;
     readonly executeValue?: unknown;
     readonly exportError?: Error;
     readonly malformedWriteResult?: boolean;
@@ -679,6 +709,7 @@ function lease(
   return {
     commit: vi.fn(async () => commits.shift()),
     execute: vi.fn(async (input: { readonly mode: "read" | "write" }) => {
+      await options.executeGate;
       if (options.executeError !== undefined) throw options.executeError;
       if (input.mode === "write") {
         if (options.malformedWriteResult === true) return { value: null };
@@ -760,3 +791,160 @@ function commitResult(status: string, baseRevision: number): unknown {
   }
   return { state, status };
 }
+
+describe("Workspace content runtime slot queue with a fake pool", () => {
+  const alice = { userId: "alice" };
+  const bob = { userId: "bob" };
+  const carol = { userId: "carol" };
+  const busy = { code: "workspace-runtime-busy", detail: { retryable: true } };
+  const queued = (timeoutMs: number) => ({ maxWorkers: 1, queue: { timeoutMs } });
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function gatedLease(options: Parameters<typeof lease>[0] = {}) {
+    let open!: () => void;
+    const executeGate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    return { lease: lease({ ...options, executeGate }), open };
+  }
+
+  function capacityError() {
+    return new UniverCollaborationRuntimePoolError(
+      "COLLABORATION_POOL_CAPACITY_EXCEEDED",
+      "capacity exceeded",
+    );
+  }
+
+  it("releases the slot of a failing operation and admits the waiting key", async () => {
+    const failing = gatedLease({ malformedWriteResult: true });
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockResolvedValueOnce(failing.lease)
+      .mockResolvedValue(lease());
+    const runtime = createRuntime({ acquire, pool: queued(60_000) });
+
+    const failed = runtime.executeAndCommit({ caller: alice, code: "x", target });
+    const failedSettled = expect(failed).rejects.toMatchObject({
+      code: "WORKSPACE_RUNTIME_RESULT_INVALID",
+    });
+    await vi.advanceTimersByTimeAsync(0);
+    const waiting = runtime.exportUnitData({ caller: bob, target });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(acquire).toHaveBeenCalledOnce();
+
+    failing.open();
+    await failedSettled;
+    await expect(waiting).resolves.toEqual({ id: "unit-1" });
+    expect(failing.lease.invalidate).toHaveBeenCalledOnce();
+  });
+
+  it("times out one same-key waiter without disturbing a later waiter of that key", async () => {
+    const holder = gatedLease();
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockResolvedValueOnce(holder.lease)
+      .mockResolvedValue(lease());
+    const runtime = createRuntime({ acquire, pool: queued(300) });
+
+    const held = runtime.executeRead({ caller: alice, code: "x", target });
+    await vi.advanceTimersByTimeAsync(0);
+    const first = runtime.exportUnitData({ caller: bob, target });
+    const firstSettled = expect(first).rejects.toMatchObject(busy);
+    await vi.advanceTimersByTimeAsync(150);
+    const second = runtime.exportUnitData({ caller: bob, target });
+
+    await vi.advanceTimersByTimeAsync(160);
+    await firstSettled;
+    holder.open();
+    await held;
+
+    await expect(second).resolves.toEqual({ id: "unit-1" });
+  });
+
+  it("rejects queued and later operations on close and leaves no timer behind", async () => {
+    const holder = gatedLease();
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockResolvedValueOnce(holder.lease)
+      .mockResolvedValue(lease());
+    const runtime = createRuntime({ acquire, pool: queued(60_000) });
+
+    const held = runtime.executeRead({ caller: alice, code: "x", target });
+    await vi.advanceTimersByTimeAsync(0);
+    const closed = { code: "workspace-runtime-closed" };
+    const waiters = [bob, carol, bob].map((caller) =>
+      expect(runtime.exportUnitData({ caller, target })).rejects.toMatchObject(closed),
+    );
+    await vi.advanceTimersByTimeAsync(10);
+
+    await runtime.close();
+    await Promise.all(waiters);
+    expect(vi.getTimerCount()).toBe(0);
+    await expect(runtime.exportUnitData({ caller: carol, target })).rejects.toMatchObject(closed);
+    await expect(runtime.exportUnitData({ caller: alice, target })).rejects.toMatchObject(closed);
+    holder.open();
+    await held;
+    expect(acquire).toHaveBeenCalledOnce();
+  });
+
+  it("retries the pool capacity error after admission, then succeeds", async () => {
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockRejectedValueOnce(capacityError())
+      .mockRejectedValueOnce(capacityError())
+      .mockRejectedValueOnce(capacityError())
+      .mockResolvedValue(lease());
+    const runtime = createRuntime({ acquire, pool: queued(1000) });
+
+    const result = runtime.exportUnitData({ caller: alice, target });
+    await vi.advanceTimersByTimeAsync(500);
+
+    await expect(result).resolves.toEqual({ id: "unit-1" });
+    expect(acquire).toHaveBeenCalledTimes(4);
+  });
+
+  it("fails with the busy error once the capacity retry passes the deadline, freeing the slot", async () => {
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockRejectedValue(capacityError());
+    const runtime = createRuntime({ acquire, pool: queued(100) });
+
+    const result = runtime.exportUnitData({ caller: alice, target });
+    const settled = expect(result).rejects.toMatchObject(busy);
+    await vi.advanceTimersByTimeAsync(500);
+    await settled;
+    expect(acquire.mock.calls.length).toBeGreaterThan(1);
+
+    acquire.mockReset();
+    acquire.mockResolvedValue(lease());
+    await expect(runtime.exportUnitData({ caller: bob, target })).resolves.toEqual({
+      id: "unit-1",
+    });
+  });
+
+  it.each([
+    ["maxWorkers 0", { maxWorkers: 0, queue: { timeoutMs: 1000 } }],
+    ["fractional maxWorkers", { maxWorkers: 1.5, queue: { timeoutMs: 1000 } }],
+    ["negative timeoutMs", { maxWorkers: 1, queue: { timeoutMs: -1 } }],
+    ["fractional timeoutMs", { maxWorkers: 1, queue: { timeoutMs: 1.5 } }],
+    ["NaN timeoutMs", { maxWorkers: 1, queue: { timeoutMs: Number.NaN } }],
+    ["Infinity timeoutMs", { maxWorkers: 1, queue: { timeoutMs: Number.POSITIVE_INFINITY } }],
+    ["timeoutMs beyond the timer limit", { maxWorkers: 1, queue: { timeoutMs: 2_147_483_648 } }],
+    ["missing maxWorkers", { queue: { timeoutMs: 1000 } }],
+  ])("rejects %s at construction", (_name, pool) => {
+    expect(() => createRuntime({ pool })).toThrow(
+      expect.objectContaining({ code: "workspace-argument-invalid" }),
+    );
+  });
+
+  it("accepts the timer limit and a zero timeout", () => {
+    expect(() => createRuntime({ pool: queued(2_147_483_647) })).not.toThrow();
+    expect(() => createRuntime({ pool: queued(0) })).not.toThrow();
+  });
+});

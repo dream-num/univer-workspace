@@ -103,8 +103,28 @@ describe("Workspace runtime target", () => {
       { ...worktree, scope: { kind: "worktree" as const, worktreeId: "wt:/百分比%:" } },
       { ...worktree, unitId: "unit-1:" },
       { ...worktree, unitType: "sheet" as const },
-    ].map(workspaceRuntimeKey);
+    ].map((target) => workspaceRuntimeKey(target));
     expect(new Set(keys)).toHaveLength(keys.length);
+  });
+
+  it("pins the exact caller-less keys and appends the encoded caller", () => {
+    const trunk: WorkspaceRuntimeTarget = { ...base, scope: { kind: "trunk" } };
+    const worktree: WorkspaceRuntimeTarget = {
+      ...base,
+      scope: { kind: "worktree", worktreeId: "wt-1" },
+    };
+    expect(workspaceRuntimeKey(trunk)).toBe(
+      "workspace:https%3A%2F%2Fworkspace.test:trunk:unit-1:doc",
+    );
+    expect(workspaceRuntimeKey(worktree)).toBe(
+      "workspace:https%3A%2F%2Fworkspace.test:worktree:wt-1:unit-1:doc",
+    );
+    expect(workspaceRuntimeKey(trunk, { userId: "u:1/ü" })).toBe(
+      "workspace:https%3A%2F%2Fworkspace.test:trunk:unit-1:doc:caller:u%3A1%2F%C3%BC",
+    );
+    expect(workspaceRuntimeKey(trunk, { userId: "a" })).not.toBe(
+      workspaceRuntimeKey(trunk, { userId: "b" }),
+    );
   });
 
   it("builds exact encoded trunk and Worktree Snapshot prefixes", () => {

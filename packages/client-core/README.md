@@ -17,6 +17,14 @@
 - 提供 Shell-neutral worker composition、content runtime pool、同步读取、UnitData export、Facade execution、
   embedded-image externalization 与 changeset commit workflow。当前 headless factory 为五类 Unit
   注册评论 model，已有评论 anchor 在 replay 与 export 中保留；`test/comment-anchors.test.ts` 守住这一上游合同。
+  多用户宿主可为每次调用传入不透明的 `caller`：它进入 runtime key、`resolveCredential` 与 `resolveLicense`，
+  不同 caller 永不共享 worker 或凭据；可选 `pool` 选项设定 worker 上限、空闲 TTL、超时与子进程环境（`env` 为精确环境，缺省继承）。未传入时行为与 CLI 一致。
+  `pool.queue.timeoutMs`（须同时设定 `maxWorkers`）让新 runtime key 在 worker 满时按 FIFO 等待空位，超时以
+  `workspace-runtime-busy`（`detail.retryable: true`）失败；该时限只约束等待空位，不约束操作本身。缺省时 worker
+  满立即报 `COLLABORATION_POOL_CAPACITY_EXCEEDED`。
+  `timeoutMs` 为 0 到 2147483647 的整数，`maxWorkers` 为正整数；排队宿主 `close()` 之后，等待中和之后到达的操作
+  都以不可重试的 `workspace-runtime-closed` 失败。加入已持有或正在等待空位的 key 的操作共用该空位（一个 key 永不占第二个 worker），因此
+  持续繁忙的 key 可能让其他 key 一直等到各自时限。这是有意的取舍。
 - 提供 Node-hosted Office import/export、格式与 Unit 类型校验、Worktree Unit/runtime 集成和默认 exchange adapter。
   导出通过当前 Worktree 的已认证 Asset 读取解析图片 ID，仅在导出副本中恢复内嵌图片；
   缺失、无权限或无效图片使导出失败，不静默丢图，也不写回 Unit 或产生新 revision。
