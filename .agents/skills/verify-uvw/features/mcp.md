@@ -1827,24 +1827,6 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs auth
 
 Pass when B succeeds with one auth rerun and A receives HTTP 401. Evidence is `resilience-auth.json`.
 
-**MX14. Stale worker session on HTML View validation.** Merge a data Sheet, validate a bound HTML View with A, revoke A,
-and validate with B. Then revoke B and call the executor with a 4-second deadline using the dev session, which leaves no time for a rerun.
-
-```bash
-node .agents/skills/verify-uvw/bin/mcp-resilience.mjs html-auth
-```
-
-Pass when B succeeds with one auth rerun, the no-rerun call returns a retryable `workspace-executor-timeout` that is not an
-`auth_error`, the next executor call succeeds on the replaced worker, and the primary bearer still works. Evidence is `resilience-html-auth.json`.
-
-**MX15. Parallel writes and reads during writes.** Five parallel `execute` calls on one Unit, then an `inspect` loop during eight sequential writes.
-
-```bash
-node .agents/skills/verify-uvw/bin/mcp-resilience.mjs burst
-```
-
-Pass when all five writes commit and no `inspect` fails. Evidence is `resilience-burst.json` with the commit count, inspect failure count and rerun reasons.
-
 **MX12. Concurrent revision conflict.** Resolve two writes concurrently against one Unit.
 
 ```bash
@@ -1863,3 +1845,21 @@ node .agents/skills/verify-uvw/bin/mcp-resilience.mjs replicas
 Pass when three calls use the same replica, stopping it moves the next call to the other replica,
 and killing a slow write returns `workspace-result-unknown` without a replay. A manual retry writes once.
 The journey restarts stopped containers. Evidence is `resilience-replicas.json`.
+
+**MX14. Stale worker session on HTML View validation.** Merge a data Sheet, validate a bound HTML View with A, revoke A,
+and validate with B. Then revoke B and call the executor with a 4-second deadline using the dev session, which leaves no time for a rerun.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs html-auth
+```
+
+Pass when B succeeds with one auth rerun, the no-rerun call returns a retryable `workspace-executor-timeout` that is not an
+`auth_error`, the next executor call succeeds on the replaced worker, and the primary bearer still works. Evidence is `resilience-html-auth.json`.
+
+**MX15. Parallel writes and reads during writes.** Five parallel `execute` calls on one Unit, then an `inspect` loop during eight sequential writes.
+
+```bash
+node .agents/skills/verify-uvw/bin/mcp-resilience.mjs burst
+```
+
+Pass when all five writes commit and no `inspect` fails. Evidence is `resilience-burst.json` with the commit count, inspect failure count and rerun reasons.

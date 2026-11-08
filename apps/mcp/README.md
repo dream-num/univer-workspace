@@ -267,10 +267,12 @@ violates a tool's output schema is an `internal_error`. A write whose outcome is
 `workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
 `detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts. Definite rejections pass through
 as `WORKSPACE_RUNTIME_CONFLICT`, `WORKSPACE_RUNTIME_PULL_REQUIRED`, or `WORKSPACE_RUNTIME_COMMIT_INVALID`.
-The executor reruns `content.execute` and `content.inspect` once on a pull revision mismatch
+The executor reruns `content.execute` once and `content.inspect` up to three times on a pull revision mismatch
 (`workspace-result-mismatch`) or a `workspace-runtime-target-stale` Unit draft-head change. Client
 Core raises both only while a worker opens or pulls, before the script runs and before any commit, so
-a rerun cannot repeat a write; reads are idempotent. The rerun resolves the target again.
+a rerun cannot repeat a write. Reads are idempotent and can encounter another revision race
+while writes continue. Each read revision rerun waits a jittered 25 to 100 ms before resolving
+the target again. Writes keep one revision rerun without backoff.
 The executor also queues `content.execute` calls per Unit, so parallel writes through one executor
 take turns instead of racing each other's revision (replicas stay independent and fall back to the
 revision rerun). A call that waits past its deadline returns `workspace-executor-timeout` with
@@ -288,8 +290,9 @@ and no rerun happens (op without `auth`, under five seconds left, or the rerun a
 the call returns `workspace-executor-timeout` with `detail: { retryable: true, started: false, cause }`
 instead: the caller's own session was never tested, so the client stays signed in and retries on
 the replaced worker.
-Commit-phase failures are never rerun. Each reason is permitted once, only with at least
-five seconds left in the original deadline. Other reads (`exchange.export`, `markdown.export`, `htmlView.*`) do not declare `revision`.
+Commit-phase failures are never rerun. Auth is permitted once for every operation that declares it.
+Revision is permitted three times for reads and once for writes that declare it. Every rerun requires
+at least five seconds left in the original deadline, checked again after read backoff. Other reads (`exchange.export`, `markdown.export`, `htmlView.*`) do not declare `revision`.
 Import and diagnostics do not rerun. Import can create a Unit, and diagnostics uses the
 current session without a cached worker. Office conversion children have no Workspace credentials;
 export's auth recovery applies only to its parent-side runtime read.
@@ -297,7 +300,7 @@ export's auth recovery applies only to its parent-side runtime read.
 | Operation | Rerun reasons | Rationale |
 | --- | --- | --- |
 | `content.execute` | `revision`, `auth` | Runtime rejection precedes script execution and commit. |
-| `content.inspect` | `auth`, `revision` | Reads can resolve a changed target and replace a stale worker. |
+| `content.inspect` | `auth`, `revision` | Idempotent reads retry revision races up to three times with jittered backoff and replace a stale worker once. |
 | `exchange.export` | `auth` | The parent reads before credential-free conversion. |
 | `htmlView.validate`, `htmlView.create` | `auth` | Runtime reads precede Blob uploads. |
 | `markdown.compile` | None | Creation can write a Unit before a runtime rejection; block updates enter the write path before runtime execution. Do not replay the whole handler. |

@@ -5,6 +5,7 @@ import {
 } from "@univerjs/univer-workspace-client-core";
 import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import type { Logger } from "pino";
+import { setTimeout as delay } from "node:timers/promises";
 import type { ExecutorConfig } from "../shared/config-executor.js";
 import {
   opSpecs,
@@ -199,7 +200,7 @@ export function createDispatcher(
         (async () => {
           await verifyGrant(grant, header.requestId);
           controller.signal.throwIfAborted();
-          const rerun = new Set<"auth" | "revision">();
+          const rerun = { auth: 0, revision: 0 };
           let release = () => {};
           if (name === "content.execute") {
             const route = spec.route(input as never);
@@ -214,15 +215,22 @@ export function createDispatcher(
                 return await dispatchers[name](ctx, input, ...payloadArgs);
               } catch (error) {
                 const retry = getRuntimeRerun(error);
+                const readRevision = effect === "read" && retry === "revision";
                 if (
                   !retry ||
                   !spec.rerun.includes(retry) ||
-                  rerun.has(retry) ||
+                  rerun[retry] >= (readRevision ? 3 : 1) ||
                   controller.signal.aborted ||
                   deadlineAt - Date.now() < 5000
                 )
                   throw error;
-                rerun.add(retry);
+                if (readRevision) {
+                  await delay(25 + Math.floor(Math.random() * 76), undefined, {
+                    signal: controller.signal,
+                  });
+                  if (deadlineAt - Date.now() < 5000) throw error;
+                }
+                rerun[retry]++;
                 reruns.inc({ reason: retry });
                 logger.info(
                   {
