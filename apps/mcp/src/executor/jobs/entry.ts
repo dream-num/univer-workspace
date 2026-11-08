@@ -1,6 +1,4 @@
 import type { WorkspaceUnitExchangeDependencies } from "@univerjs/univer-workspace-client-core";
-import { compilerOperation } from "../ops/compiler-errors.js";
-import { validateTypstBundle } from "./typst-bundle.js";
 import type { JobRequest } from "./protocol.js";
 
 process.once("disconnect", () => process.exit(0));
@@ -10,6 +8,8 @@ process.once("message", (message: JobRequest) => {
     try {
       let value: unknown;
       if (message.kind === "typst.compile") {
+        const { compilerOperation } = await import("../ops/compiler-errors.js");
+        const { validateTypstBundle } = await import("./typst-bundle.js");
         validateTypstBundle(message.bundle);
         const { WorkspaceCompileTypstFeature } =
           await import("@univerjs/univer-workspace-client-core");
