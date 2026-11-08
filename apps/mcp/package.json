@@ -15,6 +15,8 @@
     "@modelcontextprotocol/node": "2.1.2",
     "@modelcontextprotocol/server": "2.4.0",
     "@univer-cli/api-reference": "1.4.0",
+    "@univer-cli/content-inspection": "1.4.0",
+    "@univer-cli/content-inspection-command": "1.4.0",
     "@univer-cli/resource-library": "1.4.0",
     "@univerjs-pro/cli-assets": "0.1.0",
     "@univerjs/univer-workspace-client-core": "workspace:*",

@@ -33,6 +33,7 @@ export interface Authentication {
   /** Value of the downstream `workspace_session` cookie. Never the caller's bearer. */
   readonly session: string;
   readonly obtainedAt: number;
+  readonly expiresAt: number;
   readonly user: WorkspaceSubject | null;
   readonly scopes: ReadonlySet<ToolScope> | null;
   readonly authKind: "pat" | "oauth" | "dev";
@@ -44,21 +45,14 @@ interface CacheEntry {
   readonly expiresAt: number;
 }
 
-export function createAuthenticator(
-  config: GatewayConfig,
-  logger: Logger,
-  fetcher: typeof fetch,
-) {
+export function createAuthenticator(config: GatewayConfig, logger: Logger, fetcher: typeof fetch) {
   const { exchange, devSessionPassthrough } = config.auth;
   const cache = new Map<string, CacheEntry>();
   const inFlight = new Map<string, Promise<Authentication | null>>();
   const negativeCache = new Map<string, CacheEntry>();
   const key = (bearer: string) => createHash("sha256").update(bearer).digest("hex");
 
-  async function exchangeToken(
-    bearer: string,
-    requestId: string,
-  ): Promise<CacheEntry> {
+  async function exchangeToken(bearer: string, requestId: string): Promise<CacheEntry> {
     if (exchange === null) throw new Error("Token exchange is not configured");
     let response: Response;
     try {
@@ -88,7 +82,11 @@ export function createAuthenticator(
     const parsed = exchangeResponse.safeParse(body);
     if (!response.ok || !parsed.success) {
       logger.error(
-        { request_id: requestId, status: response.status, error: error.success ? error.data.error : null },
+        {
+          request_id: requestId,
+          status: response.status,
+          error: error.success ? error.data.error : null,
+        },
         "Token exchange failed",
       );
       throw new Error("Token exchange failed");
@@ -97,8 +95,11 @@ export function createAuthenticator(
     const value: Authentication = {
       session: access_token,
       obtainedAt: Date.now(),
+      expiresAt: Date.now() + expires_in * 1000,
       user: { id: user.id, name: user.displayName },
-      scopes: new Set(scope.split(/\s+/).filter((name): name is ToolScope => allScopes.has(name as ToolScope))),
+      scopes: new Set(
+        scope.split(/\s+/).filter((name): name is ToolScope => allScopes.has(name as ToolScope)),
+      ),
       authKind: subject.kind,
       clientId: subject.kind === "pat" ? subject.id : (subject.client_id ?? subject.id),
     };
@@ -157,7 +158,15 @@ export function createAuthenticator(
         return exchange === null ? null : cachedExchange(bearer, requestId);
       }
       if (!devSessionPassthrough) return null;
-      return { session: bearer, obtainedAt: Date.now(), user: null, scopes: null, authKind: "dev", clientId: "dev" };
+      return {
+        session: bearer,
+        obtainedAt: Date.now(),
+        expiresAt: Date.now() + 600_000,
+        user: null,
+        scopes: null,
+        authKind: "dev",
+        clientId: "dev",
+      };
     },
     evict(bearer: string, failed: Authentication): void {
       const cacheKey = key(bearer);

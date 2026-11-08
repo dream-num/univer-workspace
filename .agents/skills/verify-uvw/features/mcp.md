@@ -58,6 +58,12 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA4 revokes a PAT and gets HTTP 401 on the next Workspace-backed call.
 - MA5 keeps development session authentication available with `--auth dev`.
 - MO1 signs opencode in through browser OAuth with one MCP URL and checks scoped consent and OAuth usage events.
+- MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
+- MX2 preserves a ready Worktree error with detail.
+- MX3 verifies executor unavailability.
+- MX5 compares uncoded script failure messages with the CLI.
+- MX6 verifies a large committed result keeps commit facts and writes once.
+- MX4 captures the written values in the Browser.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -165,7 +171,7 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","api_find","api_show","skills_read"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","execute","inspect","api_find","api_show","skills_read"]'
 FILES='["blob_get"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
@@ -176,12 +182,12 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|api_(find|show)|skills_read|blob_get|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|api_(find|show)|skills_read|blob_get|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|execute|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:24]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:26]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
@@ -190,7 +196,7 @@ jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin",
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 24 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
+first 26 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -1312,6 +1318,105 @@ callback grants exactly `read write publish`, auth prints `Connected to ws`, and
 registered OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 `mcp-oauth-*` evidence. The trap stops only the isolated service and auth process, then
 removes its temporary project and credentials even if an assertion fails.
+
+**MX1. Executor write and readback.**
+
+```bash
+$V mcp mx-repo repo_view "{\"repo\":\"$O/personal\"}"
+MX_SPACE=$(jq -r .id "$EVIDENCE/mx-repo.out")
+$V mcp mx-pr pr_create "{\"repo\":\"$O/personal\",\"title\":\"Executor readback\",\"idempotency_key\":\"mx-pr-$VERIFY_UVW_RUN\"}"
+MX_W=$(jq -r .id "$EVIDENCE/mx-pr.out")
+$V mcp mx-unit unit_create "{\"worktree\":\"$MX_W\",\"space\":\"$MX_SPACE\",\"type\":\"sheet\",\"name\":\"Executor sheet\",\"idempotency_key\":\"mx-unit-$VERIFY_UVW_RUN\"}"
+MX_U=$(jq -r .unit.unitId "$EVIDENCE/mx-unit.out")
+MX_CODE='const ws = workbook.getActiveSheet(); ws.getRange("A1:B2").setValues([["Region","Total"],["North",42]]); return ws.getRange("A1:B2").getValues();'
+$V mcp --expect-event '.executor == "cold_start" and .cost.committed_revisions == 1 and .cost.worker_cpu_ms > 0 and .unit_type == "sheet"' mx-execute execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_CODE" '{worktree:$worktree,unit:$unit,code:$code}')"
+$V mcp --expect-event '.executor == "warm" and .cost.committed_revisions == 0 and .unit_type == "sheet"' mx-inspect inspect "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,target:"range",selectors:["A1:B2"],worksheet:"index:1"}')"
+$V cli mx-inspect-cli inspect range A1:B2 --worktree "$MX_W" --unit "$MX_U" --worksheet index:1 --json
+diff <(jq -S . "$EVIDENCE/mx-inspect.out") <(jq -S . "$EVIDENCE/mx-inspect-cli.out")
+jq -e '.ranges[0].displayValues == [["Region","Total"],["North","42"]]' "$EVIDENCE/mx-inspect.out"
+$V cli mx-execute-cli execute --worktree "$MX_W" --unit "$MX_U" --json -e "$MX_CODE"
+diff <(jq -S 'keys' "$EVIDENCE/mx-execute.out") <(jq -S 'keys' "$EVIDENCE/mx-execute-cli.out")
+diff <(jq -S '.value' "$EVIDENCE/mx-execute.out") <(jq -S '.value' "$EVIDENCE/mx-execute-cli.out")
+$V doctor > "$EVIDENCE/mx-doctor.txt"
+```
+
+Pass when MCP and CLI readbacks match, both execute results have the same bare shape and value,
+and the cold/warm events identify a Sheet and one committed revision.
+
+**MX2. Ready Worktree error.**
+
+```bash
+$V mcp mx-ready pr_ready "{\"repo\":\"$O/personal\",\"number\":\"$MX_W\"}"
+$V mcp mx-ready-execute execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,code:"return 1"}')"
+test $? -eq 1
+jq -e '.code == "workspace-worktree-not-editable" and .detail.state == "ready"' "$EVIDENCE/mx-ready-execute.out"
+```
+
+Pass when the error preserves `detail.state` and does not execute code.
+
+**MX3. Stopped executor.**
+
+```bash
+MX_CONTAINER=$(docker ps -q --filter "label=com.docker.compose.project=$MCP_PROJECT" --filter label=com.docker.compose.service=executor)
+trap 'docker start "$MX_CONTAINER" >/dev/null' EXIT
+docker stop "$MX_CONTAINER"
+$V mcp mx-executor-stopped inspect "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,target:"workbook"}')"
+test $? -eq 1
+jq -e '.code == "workspace-executor-unavailable"' "$EVIDENCE/mx-executor-stopped.out"
+docker start "$MX_CONTAINER"
+trap - EXIT
+```
+
+Pass when the gateway returns `workspace-executor-unavailable` and the executor restarts.
+
+**MX4. Browser proof.**
+
+```bash
+agent-browser open "$ORIGIN/login"
+agent-browser storage local set univer-workspace-language en-US
+agent-browser reload
+agent-browser wait 1500
+if agent-browser get url | grep -q '/login'; then
+  agent-browser find label "Username" fill "$O"
+  agent-browser find label "Password" fill "$(cat "$RUN/user.pw")"
+  agent-browser click 'form button[type=submit]'
+  agent-browser wait --url '**/home'
+fi
+agent-browser open "$(jq -r '.unit.url' "$EVIDENCE/mx-unit.out")"
+agent-browser wait 3000
+agent-browser screenshot "$EVIDENCE/mx-pull-request.png"
+```
+
+Pass when the screenshot shows Region, Total, North and 42 in the pull request's Sheet.
+
+**MX5. Script errors match CLI text.**
+
+```bash
+$V mcp mx-script-draft pr_ready "$(jq -nc --arg repo "$O/personal" --arg number "$MX_W" '{repo:$repo,number:$number,undo:true}')"
+MX_FAILURE='throw new Error("Executor script failure")'
+$V cli mx-script-cli execute --worktree "$MX_W" --unit "$MX_U" --json -e "$MX_FAILURE"
+test $? -eq 1
+$V mcp --expect-event '.outcome == "tool_error" and .error_code == "workspace-script-failed" and .executor == "cold_start" and .cost.worker_cpu_ms > 0 and .unit_type == "sheet"' mx-script-mcp execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_FAILURE" '{worktree:$worktree,unit:$unit,code:$code}')"
+test $? -eq 1
+jq -e '.code == "workspace-script-failed" and .detail.name == "Error"' "$EVIDENCE/mx-script-mcp.out"
+diff <(jq -r .message "$EVIDENCE/mx-script-mcp.out") "$EVIDENCE/mx-script-cli.err"
+```
+
+Pass when MCP returns the explicit script code and the CLI's exact bare message.
+
+**MX6. Large committed values do not repeat writes.**
+
+```bash
+MX_LARGE='const cell = workbook.getActiveSheet().getRange("D1"); const n = Number(cell.getValue() || 0); cell.setValue(n + 1); return "x".repeat(150000);'
+$V mcp mx-large-before execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" '{worktree:$worktree,unit:$unit,code:"return Number(workbook.getActiveSheet().getRange(\"D1\").getValue() || 0);"}')"
+$V mcp --expect-event '.outcome == "ok" and .cost.committed_revisions == 1' mx-large execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_LARGE" '{worktree:$worktree,unit:$unit,code:$code}')"
+jq -e '.committed == true and .valueTruncated == true and .status == "committed" and (.revision > 0) and (has("value") | not)' "$EVIDENCE/mx-large.out"
+$V cli mx-large-cli execute --worktree "$MX_W" --unit "$MX_U" --json -e 'return Number(workbook.getActiveSheet().getRange("D1").getValue() || 0);'
+jq -en --slurpfile before "$EVIDENCE/mx-large-before.out" --slurpfile after "$EVIDENCE/mx-large-cli.out" '$after[0].value == ($before[0].value + 1)'
+```
+
+Pass when the Sheet counter advances exactly once and the committed result has no retry hint.
+Credential replacement near expiry is covered by automated Client Core and MCP worker tests.
 
 **M12. Cleanup.**
 

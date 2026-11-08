@@ -51,6 +51,7 @@ function validateErrorCode(outcome, code, errorCode, extra = {}) {
       unit_type: null, error_code: errorCode,
       cost: { worker_cpu_ms: 0, worker_peak_rss_mb: 0, render_pages: 0,
         export_bytes: 0, upload_bytes: 0, committed_revisions: 0 },
+      ...extra.event,
     },
   });
 }
@@ -75,4 +76,13 @@ test('event authentication must match the chosen --auth mode', () => {
   const globals = { auth: 'pat', patId: 'pat-1' };
   assert.ok(validateErrorCode('ok', undefined, null, { globals }).includes('Event authentication differs from --auth pat'));
   assert.ok(validateErrorCode('ok', undefined, null).length === 0);
+});
+
+test('executor events require nonnegative cost and none requires all-zero cost', () => {
+  const cost = { worker_cpu_ms: 3, worker_peak_rss_mb: 0, render_pages: 0, export_bytes: 0, upload_bytes: 0, committed_revisions: 1 };
+  for (const executor of ['cold_start', 'warm']) {
+    assert.equal(validateErrorCode('ok', undefined, null, { event: { executor, unit_type: 'sheet', cost } }).length, 0);
+  }
+  assert.ok(validateErrorCode('ok', undefined, null, { event: { executor: 'none', cost } }).includes('Invalid cost.worker_cpu_ms'));
+  assert.ok(validateErrorCode('ok', undefined, null, { event: { executor: 'warm', unit_type: 'sheet', cost: { ...cost, worker_cpu_ms: -1 } } }).includes('Invalid cost.worker_cpu_ms'));
 });

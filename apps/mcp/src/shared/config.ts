@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const origin = z.url().transform((value, ctx) => {
+export const origin = z.url().transform((value, ctx) => {
   const url = new URL(value);
   if (
     !["http:", "https:"].includes(url.protocol) ||
@@ -39,11 +39,21 @@ const environment = z.object({
   MCP_RESOURCE_CACHE_DIRECTORY: z.string().min(1).optional(),
   MCP_OAUTH_CLIENT_ID: z.string().min(1).optional(),
   MCP_OAUTH_CLIENT_SECRET: z.string().min(1).optional(),
+  MCP_EXECUTOR_URLS: z
+    .string()
+    .transform((value) => value.split(",").map((url) => url.trim()))
+    .pipe(z.array(origin).min(1))
+    .optional(),
+  MCP_INTERNAL_TOKEN: z.string().min(32).optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
 export type GatewayConfig = Readonly<
-  Omit<z.output<typeof environment>, "MCP_OAUTH_CLIENT_SECRET"> & {
+  Omit<
+    z.output<typeof environment>,
+    "MCP_OAUTH_CLIENT_SECRET" | "MCP_INTERNAL_TOKEN" | "MCP_EXECUTOR_URLS"
+  > & {
+    readonly executor: { readonly urls: readonly string[]; readonly internalToken: string } | null;
     readonly WORKSPACE_TRANSPORT_URL: string;
     readonly auth: {
       readonly exchange: { readonly clientId: string; readonly clientSecret: string } | null;
@@ -61,7 +71,14 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     throw new Error("MCP_DEV_SESSION_PASSTHROUGH must be 1 when set");
   }
   const config = environment.parse(env);
-  const { MCP_OAUTH_CLIENT_SECRET: clientSecret, ...configWithoutSecret } = config;
+  const {
+    MCP_OAUTH_CLIENT_SECRET: clientSecret,
+    MCP_EXECUTOR_URLS: urls,
+    MCP_INTERNAL_TOKEN: internalToken,
+    ...configWithoutSecret
+  } = config;
+  if ((urls === undefined) !== (internalToken === undefined))
+    throw new Error("MCP_EXECUTOR_URLS and MCP_INTERNAL_TOKEN must be set together");
   const clientId = config.MCP_OAUTH_CLIENT_ID;
   if ((clientId === undefined) !== (clientSecret === undefined)) {
     throw new Error("MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET must be set together");
@@ -73,6 +90,10 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
   }
   return Object.freeze({
     ...configWithoutSecret,
+    executor:
+      urls === undefined || internalToken === undefined
+        ? null
+        : { urls: [...new Set(urls)], internalToken },
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,
     auth: Object.freeze({
       exchange:

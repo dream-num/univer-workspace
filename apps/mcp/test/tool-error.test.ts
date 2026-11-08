@@ -25,7 +25,11 @@ describe("translateToolError", () => {
   });
 
   it("accepts any Error with a string code", () => {
-    const error = Object.assign(new Error("boom"), { code: "custom-code" });
+    const error = Object.assign(new Error("boom"), {
+      code: "custom-code",
+      detail: { secret: "ignored" },
+      details: { secret: "ignored" },
+    });
     expect(translateToolError(error)).toEqual({
       outcome: "tool_error",
       code: "custom-code",

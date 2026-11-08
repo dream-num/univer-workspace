@@ -1,13 +1,17 @@
+import { parseExecutorConfig } from "./shared/config-executor.js";
 import { parseGatewayConfig } from "./shared/config.js";
 
 async function main(): Promise<void> {
   const role = process.env["MCP_ROLE"];
-  if (role === "executor" || role === "renderer")
-    throw new Error(`${role} is not implemented in stage A`);
-  if (role !== "gateway") throw new Error("MCP_ROLE must be one of gateway, executor, renderer");
-  const config = parseGatewayConfig(process.env);
-  const { createGateway } = await import("./gateway/server.js");
-  const gateway = createGateway(config);
+  if (role === "renderer") throw new Error("renderer is not implemented");
+  if (role !== "gateway" && role !== "executor")
+    throw new Error("MCP_ROLE must be one of gateway, executor, renderer");
+  const config =
+    role === "gateway" ? parseGatewayConfig(process.env) : parseExecutorConfig(process.env);
+  const gateway =
+    "auth" in config
+      ? (await import("./gateway/server.js")).createGateway(config)
+      : (await import("./executor/server.js")).createExecutor(config);
   gateway.server.listen(config.PORT, config.HOST);
   gateway.server.on("error", (error) => {
     process.stderr.write(`${error.message}\n`);

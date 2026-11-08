@@ -59,7 +59,7 @@ Server 只监听 `127.0.0.1` 是有意保留的。改成 `0.0.0.0` 会把带一�
 
 C1 的要求：`WorkspaceHttp` 内部继续以身份 origin 构造和校验所有 URL，包括 Server 返回的 Asset 签名 URL，只在发出请求的那一刻把 origin 换成传输地址。不传传输地址时，请求与现在逐字节相同。
 
-阶段 A 只验证 `WorkspaceHttp` 的请求路径。评审者的原型证实，对 `whoami`、`repo_list`、`repo_view` 只在发出请求时替换地址就足够，结果与 `uvw --json` 逐字段相同（附录 C）。协同 WebSocket 由协同 SDK 直接连接（`packages/client-core/src/content-worker.ts:62-68`），不经过 `WorkspaceHttp`，需要阶段 D 在 `WorkspaceRuntimeTarget` 上补传输地址。经 `host.docker.internal` 向宿主 `127.0.0.1` 发起的 WebSocket 升级已在玩具服务上实测成功。真实协同连接需要票据，留给阶段 D 的 `doctor` 检查。
+阶段 A 验证 `WorkspaceHttp` 的请求路径，`whoami`、`repo_list`、`repo_view` 与 `uvw --json` 逐字段相同（附录 C）。D1b 通过 Client Core 的 `transportOrigin` 宿主选项把 HTTP 与协同 WebSocket 都指向容器可达的地址，保留原 Workspace origin 作为产品身份。`doctor` 使用真实会话获取票据并打开协同 WebSocket，见下文。
 
 ## 3. 镜像
 
@@ -116,8 +116,24 @@ services:
 
 - 端口只发布在 `127.0.0.1`。
 - 不挂载任何卷。阶段 D 引入暂存存储时再加，并且只挂载本次运行目录下的子目录。
-- 阶段 D、E 在同一个文件里增加 `executor` 和 `renderer` 服务。它们不发布端口，网关按服务名访问。阶段 E 的“渲染服务没有到 Workspace 的路由”用 `internal: true` 的网络实现，需要届时实测这种网络能否阻断 `host.docker.internal`。
+- D1b 在同一个文件里增加 `executor`，阶段 E 再增加 `renderer`。它们不发布端口，网关按服务名访问。阶段 E 的“渲染服务没有到 Workspace 的路由”用 `internal: true` 的网络实现，需要届时实测这种网络能否阻断 `host.docker.internal`。
 - 容器加固（只读根文件系统、去掉 capability 等）属于阶段 G，本文件不提前加。
+
+D1b 使用同一镜像增加 `executor` 服务，没有 published ports；gateway 通过
+`http://executor:3000` 调用，启动依赖 executor healthy。`up` 在本次 run 的
+`home/internal-token` 生成 0600 令牌文件，compose 两侧使用同一令牌。
+Dockerfile COPY 与 `MCP_BUILD_INPUTS` 路径不变，新增 executor 源文件在原输入目录内。
+
+`doctor` 验证 executor 健康、镜像身份和无发布端口；从 gateway 容器发出无 bearer
+和错误 bearer 的 RPC，均应为 401。注册用户后，`diagnostics.probe` 经 transport URL
+执行 whoami、获取 session ticket 并打开真实协同 WebSocket。doctor 检查 executor
+日志无凭据以及 worker 子进程环境无内部令牌、metrics 令牌、license 和 license key。
+MX1 在执行后再次运行 doctor，保留 worker 环境证据。`mcp-logs` 包含两种角色，
+`down` 分别保存 gateway 与 executor 日志，并移除整个 compose 项目。
+
+`mcp --expect-event '<jq expression>'` 可对单次调用的事件增加断言。基础规则接受
+`cold_start|warm|none`，成本非负，`none` 时全部为 0。MX1 至 MX4 覆盖编辑、CLI 对照、
+ready 错误、停机错误和 Browser 截图。
 
 ## 5. 网关为本地验证提供的行为
 
@@ -150,7 +166,7 @@ services:
 ### 5.4 用量事件
 
 - 网关只在 stdout 输出日志，格式是 pino JSON。用量事件是其中 `event` 为 `mcp.tool_call` 的行，字段见 [架构](architecture.zh-CN.md) 8.1 节。
-- 阶段 A 只为通过认证的 `tools/call` 产生事件。开发认证的 `auth_kind` 和 `client_id` 都是 `dev`；阶段 F 起 PAT 为 `pat` 与 PAT ID，OAuth access token 为 `oauth` 与 OAuth `client_id`。`executor` 为 `none`，`cost` 的六个字段都是 0。
+- 只为通过认证的 `tools/call` 产生事件。开发认证的 `auth_kind` 和 `client_id` 都是 `dev`；PAT 为 `pat` 与 PAT ID，OAuth access token 为 `oauth` 与 OAuth `client_id`。非执行层工具仍为 `executor: "none"` 且六项 cost 为 0；执行层工具使用 runtime observer 的 `cold_start` 或 `warm`，记录 worker 墙钟毫秒数与提交 revision 数。`none` 必须对应全零 cost。
 - 8.1 节的每个字段都必须出现在事件里。下列字段不能为 `null`：`ts`、`request_id`、`user_id`、`auth_kind`、`client_id`、`tool`、`toolset`、`outcome`、`duration_ms`、`executor`、`cost` 及其六个字段。其余字段可以为 `null`，含义如下：
 
   | 字段 | 为 `null` 的情况 |
@@ -430,7 +446,7 @@ M2 到 M6 的每次工具调用都由 6.3 节的退出码 5 自动核对用量�
 
 | 事项 | 阶段 |
 | --- | --- |
-| compose 增加 `executor`、暂存目录挂载；`doctor` 检查容器内的协同 WebSocket | D |
+| 暂存目录挂载（executor 与容器内 HTTP / 协同 WebSocket doctor 已在 D1b 实现） | D |
 | compose 增加 `renderer`；实测 `internal: true` 网络能否阻断 `host.docker.internal` | E |
 | `verify-uvw mcp-token` 生成 PAT，`mcp --auth pat`；认证失败事件的验收；本地验证默认改用 PAT | F |
 | 容器加固与沙箱运行时 | G |

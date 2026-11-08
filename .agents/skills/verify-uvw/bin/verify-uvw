@@ -71,6 +71,7 @@ mcp_compose() {
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_INTERNAL_TOKEN="$(cat "$RUN/home/internal-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_OAUTH_SECRET="$(cat "$RUN/home/mcp-oauth-secret" 2>/dev/null || echo removed)" \
     docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
 }
@@ -94,12 +95,14 @@ mcp_up() {
   printf 'MCP_IMAGE_ID=%s\n' "$MCP_IMAGE_ID" >>"$RUN/run.env"
   node -e 'const fs=require("node:fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.image_id=process.argv[2];fs.writeFileSync(p,JSON.stringify(v,null,2)+"\n")' "$RUN/mcp-build.json" "$MCP_IMAGE_ID"
   (umask 077 && openssl rand -hex 24 >"$RUN/home/metrics-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/internal-token")
   mcp_compose up -d --wait --wait-timeout 60 \
     || die "MCP gateway not ready; see compose logs and run: verify-uvw down"
   wait_http "http://127.0.0.1:$MCP_PORT/healthz" 60 || die "MCP healthz failed; run: verify-uvw down"
 }
 
 mcp_doctor() {
+  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP executor checks failed"
   local desktop digest cid inspect mapping gateway_logs who
   if desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" && [[ "$desktop" == 'Docker Desktop' ]]; then
     ok "MCP Docker Desktop is available"
@@ -192,7 +195,8 @@ JS
 }
 
 mcp_down() {
-  mcp_compose logs --no-color --timestamps >"$RUN/logs/mcp-gateway.log" 2>&1 || echo "warning: cannot save MCP logs" >&2
+  mcp_compose logs --no-color --timestamps gateway >"$RUN/logs/mcp-gateway.log" 2>&1 || echo "warning: cannot save MCP logs" >&2
+  mcp_compose logs --no-color --timestamps executor >"$RUN/logs/mcp-executor.log" 2>&1 || echo "warning: cannot save executor logs" >&2
   mcp_compose down --volumes --remove-orphans || echo "warning: MCP compose down failed; retry down" >&2
   if docker image inspect "$MCP_IMAGE" >/dev/null 2>&1; then
     docker image rm "$MCP_IMAGE" || echo "warning: cannot remove MCP image $MCP_IMAGE" >&2
@@ -429,7 +433,7 @@ case "${1:-}" in
   mcp-resource) shift; cmd_mcp resource "$@" ;;
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;
   mcp-token) shift; cmd_mcp_token "$@" ;;
-  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway ;;
+  mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;
 esac

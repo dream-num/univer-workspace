@@ -20,6 +20,8 @@ export const coreNames = [
   "unit_list",
   "unit_add",
   "unit_create",
+  "execute",
+  "inspect",
   "api_find",
   "api_show",
   "skills_read",
@@ -47,6 +49,7 @@ export const writeNames = [
   "pr_ready",
   "unit_add",
   "unit_create",
+  "execute",
   "repo_create",
   "repo_edit",
   "label_write",
@@ -54,7 +57,13 @@ export const writeNames = [
   "pr_merge",
   "pr_discard",
 ];
-export const destructiveNames = ["repo_edit", "label_write", "space_node", "pr_merge", "pr_discard"];
+export const destructiveNames = [
+  "repo_edit",
+  "label_write",
+  "space_node",
+  "pr_merge",
+  "pr_discard",
+];
 export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree:merge"> = {
   space_browse: "read",
   space_find: "read",

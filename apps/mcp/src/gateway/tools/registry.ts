@@ -1,3 +1,5 @@
+import { executeTool } from "./core/execute.js";
+import { inspectTool } from "./core/inspect.js";
 import { whoamiTool } from "./core/whoami.js";
 import { repoListTool } from "./core/repo-list.js";
 import { repoViewTool } from "./core/repo-view.js";
@@ -57,6 +59,8 @@ export const tools: readonly ToolDefinition[] = [
   unitListTool,
   unitAddTool,
   unitCreateTool,
+  executeTool,
+  inspectTool,
   apiFindTool,
   apiShowTool,
   skillsReadTool,

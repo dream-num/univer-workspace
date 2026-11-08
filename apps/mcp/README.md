@@ -12,8 +12,41 @@ the CLI application. Workspace remains the authority for identity and permission
 ## Roles and limits
 
 One image selects its role through `MCP_ROLE`. `gateway` serves requests.
-`executor` and `renderer` print that they are not implemented in Stage A and exit 1.
+`executor` serves internal RPC and hosts the Client Core worker pool. `renderer` remains unimplemented and exits 1.
 A missing or unknown role exits 1 and lists the valid roles.
+
+The gateway imports Client Core's `/product` entry only. Headless execution and inspection
+run in the executor. Tools remain listed without an executor configuration and return
+`workspace-executor-unavailable`. `execute` requires `write`; `inspect` requires `read`.
+
+The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
+`x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
+the UTF-8 header, then optional payload bytes. The operation table owns schemas,
+effect, limits, routing keys, budget and rerun policy. The initial operations are
+`content.execute`, `content.inspect` and internal `diagnostics.probe`; all have empty
+rerun policies. Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
+Transport rejections use non-200 statuses. The grant travels only in the frame body.
+
+Gateway rendezvous hashing pins `(userId, scope, unitId)` to an executor. Only failures
+known to precede delivery can fail over. A disconnected or timed-out write returns
+`workspace-result-unknown`; check current state before repeating it. Worker open timeouts
+remain retryable. Calls have a 30-second gateway budget, with an earlier executor deadline.
+
+Each call binds its required user ID into the Client Core runtime key. Worker children
+receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
+session grants with the exchanged session's expiry; dev grants last 10 minutes, matching the
+downstream session lifetime used by token exchange. The executor verifies the session's user through
+Workspace `whoami` before dispatch, using the transport URL. Successful identity checks share a SHA-256 session cache capped at
+10,000 entries and expire with the grant. Shared checks use their own 10-second timeout;
+each request waits only until its own deadline, and failed checks are not cached.
+A mismatched user or 401 requires authentication.
+Workers are replaced before reuse when their creating grant expires within 60 seconds.
+401 invalidation and reruns belong to the next resilience change.
+
+Session grants and process separation do not provide a multi-user sandbox. In particular,
+a worker may read its executor's `/proc/1/environ` under the same uid, exposing the internal
+token. Stage G must address that before multi-user deployment. Production refuses this
+session-grant executor.
 
 ## Authentication
 
@@ -61,12 +94,19 @@ The gateway validates configuration before listening and retains a readonly conf
 | `PORT` | `3000` | TCP port, from 1 through 65535 |
 | `WORKSPACE_ORIGIN` | Required | HTTP(S) identity origin without a path or credentials |
 | `WORKSPACE_TRANSPORT_URL` | `WORKSPACE_ORIGIN` | HTTP(S) transport origin. Used only to send requests |
-| `MCP_PUBLIC_URL` | Required | HTTP(S) endpoint URL ending in `/mcp` |
+| `MCP_PUBLIC_URL` | Gateway only | HTTP(S) endpoint URL ending in `/mcp` |
 | `METRICS_TOKEN` | Unset | Bearer token for `/metrics`. Unset or empty hides the endpoint |
 | `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp-<uid>/resources` | Private directory where the SVG resource catalog caches downloaded SVG files. Public data shared by gateway users under the same uid |
 | `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
+| `MCP_EXECUTOR_URLS`, `MCP_INTERNAL_TOKEN` | Unset on gateway | Comma-separated internal HTTP(S) origins and a shared token of at least 32 characters. Set both or neither. The executor requires the token |
+| `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. `NODE_ENV=production` refuses session grants |
+| `EXECUTOR_MAX_WORKERS` | `4` | Maximum cached Unit workers. Tune to the host's memory budget |
+| `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
+| `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
+| `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |
+| `UNIVER_LICENSE` | Generated development license | Executor runtime license override. Worker environment contains no license key |
 | `LOG_LEVEL` | `info` | Pino level, including `debug`, `warn`, `error`, `fatal`, `trace`, and `silent` |
 
 The identity origin appears in `whoami` and repository URLs and controls repository
@@ -111,6 +151,8 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
+| `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
+| `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
 | `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ skills: [{ name, content, resources?, files? }] }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
@@ -185,7 +227,10 @@ has `truncated: true` and an opaque `cursor`; calling the same tool with the sam
 returns the next page, and the last page has neither field. Each `api_show` page repeats the class header
 (declaration, lineage, documentation) with its slice of `groups`. The cursor is stateless. It encodes the offset
 and a digest of the other arguments, so reusing it with different arguments is `workspace-argument-invalid`.
-Any other tool, and `skills_read` with `full`, returns `workspace-result-too-large` when it would exceed the
+A committed `execute` keeps `committed`, `revision` and `status` when its value exceeds either
+this limit or the executor response byte limit. It omits `value`, sets `valueTruncated: true`,
+and confirms the write in the text summary. Do not repeat that write to recover its value.
+Other tools, uncommitted `execute`, and `skills_read` with `full` return `workspace-result-too-large` when it would exceed the
 limit. For `skills_read` with `full`, read the skill without `full`, then each resource with `resource`,
 following its cursor when paged. Other oversized results tell the agent to narrow the request.
 
@@ -197,7 +242,22 @@ true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_disca
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.
 Invalid arguments return `workspace-argument-invalid` with the validation issues in `detail`; a result that
 violates a tool's output schema is an `internal_error`. A write whose outcome is unknown returns
-`workspace-result-unknown`. Tool failures preserve Client Core's
+`workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
+`detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts. Definite rejections pass through
+as `WORKSPACE_RUNTIME_CONFLICT`, `WORKSPACE_RUNTIME_PULL_REQUIRED`, or `WORKSPACE_RUNTIME_COMMIT_INVALID`.
+Queued calls cancelled before acquiring a lease return `workspace-executor-timeout` with
+`detail: { retryable: true, started: false }`; they never execute later. A started write
+that exceeds its deadline still has an unknown result.
+Read deadlines return `workspace-executor-timeout` with `detail.retryable: true`, including when
+the deadline aborts a Workspace HTTP request.
+Uncoded errors from user script execution return `workspace-script-failed`, the CLI's exact
+message, and `detail: { name }` when the error has a name. Generated inspection script failures and other
+uncoded executor failures remain logged `workspace-internal-error`s. Invalid inspection output is
+`workspace-runtime-result-invalid` with an `internal_error` outcome.
+Oversized requests, protocol version mismatches and budgets exhausted before sending are
+actionable `tool_error`s. Only connection failures known to precede delivery and HTTP 503
+mark a replica down and permit failover; HTTP 413 and 426 do neither.
+Tool failures preserve Client Core's
 `{ code, message, detail }` in `structuredContent` and set `isError: true`.
 Authentication failures return HTTP 401 and
 `WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`,
@@ -231,12 +291,18 @@ The version 1 event has these fields:
 | `client_name`, `client_version` | Request clientInfo in 2026-07-28. Both null in stateless 2025-11-25 |
 | `tool`, `toolset` | Tool name and group. Unknown tools use `unknown` and `core` |
 | `repo` | Resolved Space ID for repository-scoped tools, otherwise null |
-| `unit_type` | Null in Stage A |
+| `unit_type` | Runtime Unit type for executor tools, otherwise null |
 | `outcome` | `ok`, `tool_error`, `auth_error`, `rate_limited`, `timeout`, or `internal_error` |
-| `error_code` | For `tool_error`, the same code the tool result returns in `structuredContent.code`, including Workspace codes such as `NOT_FOUND`; otherwise null |
+| `error_code` | For `tool_error` or `timeout`, the same code the tool result returns in `structuredContent.code`, including Workspace codes such as `NOT_FOUND`; otherwise null |
 | `duration_ms` | Non-negative total gateway duration including authentication |
-| `executor` | `"none"` in Stage A |
-| `cost` | Object containing `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages`, `export_bytes`, `upload_bytes`, and `committed_revisions`. All six are 0 in Stage A |
+| `executor` | `cold_start` or `warm` from the runtime observer; `none` when no worker operation was reported |
+| `cost` | Object containing `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages`, `export_bytes`, `upload_bytes`, and `committed_revisions`. All six remain 0 for non-executor calls |
+
+Failure envelopes also carry observed usage, including cold/warm state and Unit type.
+
+`worker_cpu_ms` records worker wall time reported by Client Core, not CPU consumption.
+`committed_revisions` counts confirmed writes. `worker_peak_rss_mb`, render and byte costs
+remain zero in this slice. `executor: "none"` implies all-zero cost.
 
 Only `trace_id`, `client_name`, `client_version`, `repo`, `unit_type`, and `error_code`
 can be null. Requests rejected before tool dispatch do not emit a usage event.

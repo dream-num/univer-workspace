@@ -18,3 +18,10 @@ The [local verification specification](../../docs/design/workspace-mcp/local-ver
 
 Run `pnpm --filter @univerjs/univer-workspace-mcp typecheck`, `test`, and `build` for gateway changes.
 Validate Docker changes against the built image and `docker compose config`.
+
+- Executor-backed tools use `executorTool`; only that helper opens `ToolContext.executor`.
+- `shared/executor-protocol.ts` owns the operation list. Executor handlers satisfy its mapped type.
+- Gateway/shared code must not load headless or native packages. The import-boundary test enforces the role split.
+- Session grants remain internal single-user development only. Required caller IDs enter every worker key;
+  production refuses session grants. Grant secrets are read only by `executor/credentials.ts`.
+- Worker environments are explicit and exclude internal/metrics tokens, license keys and OAuth secrets.

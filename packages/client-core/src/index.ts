@@ -160,6 +160,7 @@ export {
 } from "./svg.js";
 export {
   createWorkspaceContentRuntime,
+  getWorkspaceRuntimeFailurePhase,
   type WorkspaceContentRuntime,
   type WorkspaceContentRuntimeOperations,
   type WorkspaceContentRuntimeObservation,
