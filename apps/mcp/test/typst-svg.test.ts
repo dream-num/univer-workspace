@@ -61,7 +61,7 @@ function context(fetcher = vi.fn<typeof fetch>()): OpContext {
       runConversionJob(
         { kind: "typst.compile", bundle: files },
         credentials,
-        AbortSignal.timeout(15000),
+        new AbortController().signal,
         entry,
       ),
     materializer: {

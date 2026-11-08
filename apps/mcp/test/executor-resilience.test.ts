@@ -385,6 +385,7 @@ describe("executor reruns with a real worker", () => {
   });
 
   it("serializes content.execute per Unit and reports a queued timeout as not started", async () => {
+    vi.useFakeTimers();
     const instance = runtime();
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
     let running = 0;
@@ -405,18 +406,24 @@ describe("executor reruns with a real worker", () => {
           { ...header({ worktreeId: "wt", unitId, code: "write" }), requestId, deadlineMs },
           new Uint8Array(),
         ).then((r) => r.header);
-      const same = await Promise.all(["a", "b", "c"].map((id) => call("unit-1", id)));
+      const serial = Promise.all(["a", "b", "c"].map((id) => call("unit-1", id)));
+      await vi.advanceTimersByTimeAsync(150);
+      const same = await serial;
       expect(same.every((h) => h.ok)).toBe(true);
       expect(peak).toBe(1);
       expect(started).toEqual(["a", "b", "c"]);
       peak = 0;
-      await Promise.all([call("unit-1", "x"), call("unit-2", "y")]);
+      const parallel = Promise.all([call("unit-1", "x"), call("unit-2", "y")]);
+      await vi.advanceTimersByTimeAsync(50);
+      await parallel;
       expect(peak).toBe(2);
       started.length = 0;
-      const [slow, queued] = await Promise.all([
+      const waiting = Promise.all([
         call("unit-3", "slow"),
         call("unit-3", "queued", 100),
       ]);
+      await vi.advanceTimersByTimeAsync(400);
+      const [slow, queued] = await waiting;
       expect(slow.ok).toBe(true);
       expect(queued).toMatchObject({
         ok: false,
@@ -424,6 +431,7 @@ describe("executor reruns with a real worker", () => {
       });
       expect(started).toEqual(["slow"]);
     } finally {
+      vi.useRealTimers();
       await instance.close();
       handler.mockRestore();
       fetcher.mockRestore();
@@ -506,6 +514,7 @@ describe("executor reruns with a real worker", () => {
   );
 
   it("times out a queued inspect without starting it and lets the next read proceed", async () => {
+    vi.useFakeTimers();
     const instance = runtime();
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
     let release = () => {};
@@ -533,11 +542,13 @@ describe("executor reruns with a real worker", () => {
         unitId: target.unitId,
         target: "workbook",
       });
-      const timedOut = await dispatch(
+      const timingOut = dispatch(
         "content.inspect",
         { ...inspectHeader, deadlineMs: 50 },
         new Uint8Array(),
       );
+      await vi.advanceTimersByTimeAsync(50);
+      const timedOut = await timingOut;
       expect(timedOut.header).toMatchObject({
         ok: false,
         error: { code: "workspace-executor-timeout", detail: { started: false, retryable: true } },
@@ -550,6 +561,7 @@ describe("executor reruns with a real worker", () => {
       expect(read).toHaveBeenCalledOnce();
     } finally {
       release();
+      vi.useRealTimers();
       await instance.close();
       write.mockRestore();
       read.mockRestore();
@@ -558,16 +570,20 @@ describe("executor reruns with a real worker", () => {
   });
 
   it("reports an execute deadline after leaving the Unit queue as an unknown result", async () => {
+    vi.useFakeTimers();
+    let signalEntered!: () => void;
+    const entered = new Promise<void>((resolve) => { signalEntered = resolve; });
     const instance = runtime();
     const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
     const handler = vi.spyOn(handlers, "content.execute").mockImplementation(async (ctx) => {
+      signalEntered();
       await new Promise<never>((_resolve, reject) => {
         ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true });
       });
       return { output: { committed: false } };
     });
     try {
-      const result = await createDispatcher(config, instance, pino({ level: "silent" }))(
+      const pending = createDispatcher(config, instance, pino({ level: "silent" }))(
         "content.execute",
         {
           ...header({ worktreeId: "wt", unitId: target.unitId, code: "write" }),
@@ -575,6 +591,9 @@ describe("executor reruns with a real worker", () => {
         },
         new Uint8Array(),
       );
+      await entered;
+      await vi.advanceTimersByTimeAsync(100);
+      const result = await pending;
       expect(handler).toHaveBeenCalledOnce();
       expect(result.header).toMatchObject({
         ok: false,
@@ -583,6 +602,7 @@ describe("executor reruns with a real worker", () => {
       if (!result.header.ok)
         expect(result.header.error.detail).not.toHaveProperty("started", false);
     } finally {
+      vi.useRealTimers();
       await instance.close();
       handler.mockRestore();
       fetcher.mockRestore();
@@ -650,10 +670,14 @@ describe("executor reruns with a real worker", () => {
   it.each(["compile-only", "before-write", "after-write"] as const)(
     "preserves Markdown %s deadline classification",
     async (scenario) => {
+      vi.useFakeTimers();
+      let signalEntered!: () => void;
+      const entered = new Promise<void>((resolve) => { signalEntered = resolve; });
       const instance = runtime();
       const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async () => identity());
       const handler = vi.spyOn(handlers, "markdown.compile").mockImplementation(async (ctx) => {
         if (scenario === "after-write") ctx.onCreateUnit?.();
+        signalEntered();
         await new Promise<never>((_resolve, reject) => {
           ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true });
         });
@@ -664,11 +688,14 @@ describe("executor reruns with a real worker", () => {
           scenario === "compile-only"
             ? { markdown: "Hello" }
             : { markdown: "Hello", apply: true, worktreeId: "wt", spaceId: "space" };
-        const result = await createDispatcher(config, instance, pino({ level: "silent" }))(
+        const pending = createDispatcher(config, instance, pino({ level: "silent" }))(
           "markdown.compile",
           { ...header(input), deadlineMs: 50 },
           new Uint8Array(),
         );
+        await entered;
+        await vi.advanceTimersByTimeAsync(50);
+        const result = await pending;
         expect(result.header).toMatchObject({
           ok: false,
           error:
@@ -678,6 +705,7 @@ describe("executor reruns with a real worker", () => {
         });
         expect(handler).toHaveBeenCalledOnce();
       } finally {
+        vi.useRealTimers();
         await instance.close();
         handler.mockRestore();
         fetcher.mockRestore();

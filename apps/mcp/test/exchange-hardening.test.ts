@@ -165,6 +165,9 @@ it("replays identical native conversion after the units POST times out without c
 it.each([false, true])(
   "distinguishes deadlines before and after createUnit starts (%s)",
   async (started) => {
+    vi.useFakeTimers();
+    let signalEntered!: () => void;
+    const entered = new Promise<void>((resolve) => { signalEntered = resolve; });
     const fetcher = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(
@@ -172,17 +175,21 @@ it.each([false, true])(
       );
     const handler = vi.spyOn(handlers, "exchange.import").mockImplementation(async (ctx) => {
       if (started) ctx.onCreateUnit?.();
+      signalEntered();
       await new Promise((_resolve, reject) =>
         ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true }),
       );
       throw new Error("unreachable");
     });
     try {
-      const result = await createDispatcher(config, runtime, pino({ level: "silent" }))(
+      const pending = createDispatcher(config, runtime, pino({ level: "silent" }))(
         "exchange.import",
         { ...header, deadlineMs: 25 },
         new Uint8Array(),
       );
+      await entered;
+      await vi.advanceTimersByTimeAsync(25);
+      const result = await pending;
       expect(result.header).toMatchObject({
         ok: false,
         error: {
@@ -192,6 +199,7 @@ it.each([false, true])(
         },
       });
     } finally {
+      vi.useRealTimers();
       handler.mockRestore();
       fetcher.mockRestore();
     }
@@ -264,7 +272,7 @@ it("reports a child killed by the configured heap cap as a conversion crash", as
     runConversionJob(
       { kind: "import", bytes: new Uint8Array(), options: { fileName: "x.xlsx", type: 2 } },
       credentials,
-      AbortSignal.timeout(5000),
+      new AbortController().signal,
       new URL("./fixtures/job-heap.mjs", import.meta.url),
       16,
     ),

@@ -483,13 +483,15 @@ describe("exchange cache lifetime and capacity", () => {
   });
 
   function success(expiresIn = 600): Response {
-    return Response.json({
+    const body = {
       access_token: "downstream-session",
       expires_in: expiresIn,
       scope: "read",
       subject: { kind: "pat", id: "pat-1", client_id: null },
       user: { id: "user-1", displayName: "alice" },
-    });
+    };
+    // Capacity tests reuse parsed replies instead of creating thousands of HTTP body streams.
+    return Object.assign(new Response(), { json: async () => body });
   }
 
   it("keeps a valid cached session through 2,000 distinct invalid tokens", async () => {
@@ -528,8 +530,9 @@ describe("exchange cache lifetime and capacity", () => {
 
   it("keeps a settled session through more than 10,000 pending unknown tokens", async () => {
     const gate = deferred();
+    const response = success();
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
-      if (new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_full") return success();
+      if (new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_full") return response;
       await gate.promise;
       return Response.json({ error: "invalid_grant" }, { status: 400 });
     });
@@ -549,8 +552,12 @@ describe("exchange cache lifetime and capacity", () => {
   it("sweeps expired positive entries before evicting a live entry at capacity", async () => {
     let now = Date.now();
     const clock = vi.spyOn(Date, "now").mockImplementation(() => now);
+    const liveResponse = success();
+    const shortResponse = success(6);
     const fetcher = vi.fn<typeof fetch>(async (_input, init) =>
-      success(new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_live" ? 600 : 6),
+      new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_live"
+        ? liveResponse
+        : shortResponse,
     );
     const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
     try {
@@ -570,9 +577,10 @@ describe("exchange cache lifetime and capacity", () => {
   it("shares and caches every exchange beyond 10,000 pending tokens", async () => {
     let resume!: () => void;
     const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const response = success();
     const fetcher = vi.fn<typeof fetch>(async () => {
       await gate;
-      return success();
+      return response;
     });
     const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
     const pending = Array.from({ length: 10_000 }, (_, i) => authenticate(`uvw_pat_${i}`, "test"));
@@ -593,9 +601,10 @@ describe("exchange cache lifetime and capacity", () => {
   it("skips an older in-flight exchange when evicting a completed entry", async () => {
     let resume!: () => void;
     const gate = new Promise<void>((resolve) => { resume = resolve; });
+    const response = success();
     const fetcher = vi.fn<typeof fetch>(async (_input, init) => {
       if (new URLSearchParams(String(init?.body)).get("subject_token") === "uvw_pat_pending") await gate;
-      return success();
+      return response;
     });
     const { authenticate } = createAuthenticator(config, pino({ level: "silent" }), fetcher);
     const pending = authenticate("uvw_pat_pending", "test");
