@@ -202,7 +202,7 @@ describe("screenshot tool", () => {
     const response = await fetch(images[0]!.download.url);
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
-    expect(Buffer.from(await response.arrayBuffer())).toEqual(big);
+    expect(Buffer.from(await response.arrayBuffer()).equals(big)).toBe(true);
     expect(t.requests[0]?.header).toMatchObject({ input: { scope: { kind: "trunk" } } });
     await vi.waitFor(() =>
       expect(t.events()).toMatchObject([
