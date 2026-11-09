@@ -524,7 +524,7 @@ describe("Universer Exchange protocol", () => {
     expect(bytes.subarray(0, 2).toString()).toBe("PK");
   }, 60_000);
 
-  it("converts a stored attachment into an online document next to its host and exports either version", async () => {
+  it("converts a stored attachment into an online document next to its host and embeds it on export", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "ole-convert-owner");
     const viewer = await register(application, "ole-convert-viewer");
@@ -577,25 +577,26 @@ describe("Universer Exchange protocol", () => {
     });
     const linkedUnitId = (linkedDeck.body.node.resource as { readonly unitId: string }).unitId;
 
-    // Online versions are only embedded in exports that take files.
+    // Exports that take files embed the online version by default; the others cannot ask for it.
     application.permissions.upsertNodeGrant(owner.userId, hostNode.id, viewer.userId, { role: "viewer" });
     application.permissions.upsertNodeGrant(owner.userId, linkedDeck.body.node.id, viewer.userId, { role: "viewer" });
     const exportPath = `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`;
-    const online = { unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX, options: { oleAttachmentSource: "online" } };
+    const byDefault = { unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX };
     await expectTaskStart(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SHEET}/export`, {
       unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SHEET, format: ExchangeFormat.CSV, options: { oleAttachmentSource: "online", sheet: { csv: { sheetId: "x" } } },
     }, 400);
-    await expectTaskStart(origin, owner.cookie, exportPath, { ...online, options: { oleAttachmentSource: "latest" } }, 400);
+    await expectTaskStart(origin, owner.cookie, exportPath, { ...byDefault, options: { oleAttachmentSource: "latest" } }, 400);
 
-    // A reader of the host who cannot open the converted document gets no online export, but the original still works.
-    const viewerOnline = await waitForTask(origin, viewer.cookie, await startTask(origin, viewer.cookie, exportPath, online));
-    expect(viewerOnline).toMatchObject({ status: "failed" });
-    const viewerOriginal = await waitForTask(origin, viewer.cookie, await startTask(origin, viewer.cookie, exportPath, { ...online, options: {} }));
+    // A reader of the host who cannot open the converted document cannot export the host either,
+    // unless the request asks for the original attachment files.
+    const viewerDefault = await waitForTask(origin, viewer.cookie, await startTask(origin, viewer.cookie, exportPath, byDefault));
+    expect(viewerDefault).toMatchObject({ status: "failed" });
+    const viewerOriginal = await waitForTask(origin, viewer.cookie, await startTask(origin, viewer.cookie, exportPath, { ...byDefault, options: { oleAttachmentSource: "original" } }));
     expect(viewerOriginal, JSON.stringify(viewerOriginal)).toMatchObject({ status: "done" });
 
-    const ownerOnline = await waitForTask(origin, owner.cookie, await startTask(origin, owner.cookie, exportPath, online));
-    expect(ownerOnline, JSON.stringify(ownerOnline)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
-    const bytes = await downloadArtifact(origin, owner.cookie, ownerOnline.export!.fileID);
+    const ownerDefault = await waitForTask(origin, owner.cookie, await startTask(origin, owner.cookie, exportPath, byDefault));
+    expect(ownerDefault, JSON.stringify(ownerDefault)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const bytes = await downloadArtifact(origin, owner.cookie, ownerDefault.export!.fileID);
     expect(bytes.subarray(0, 2).toString()).toBe("PK");
   }, 90_000);
 

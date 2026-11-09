@@ -100,11 +100,11 @@ Unit keeps only Asset IDs. An embedded attachment can be converted into its own
 online document from the attachment toolbar: the server checks that the caller
 can open the host Unit and that the attachment belongs to it, creates the new
 Unit in the host's folder when the caller may create there (otherwise in the
-Personal Space root), and keeps the attachment on the host. When a Unit holds
-converted attachments, the export dialog offers to embed the current online
-version instead of the original file; that choice reads every converted document
-with the requesting user's permissions and fails the export if one is not
-readable. It applies to XLSX, DOCX, PPTX and PDF exports only.
+Personal Space root), and keeps the attachment on the host. XLSX, DOCX, PPTX
+and PDF exports embed the current online version of every converted attachment:
+each converted document is read with the requesting user's permissions, and the
+export fails if one is not readable. API callers can pass
+`options.oleAttachmentSource: "original"` to embed the original files instead.
 
 Office export resolves managed Asset IDs through the requesting user's existing
 Trunk permissions before conversion, including images in master pages and

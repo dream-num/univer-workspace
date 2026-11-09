@@ -713,18 +713,19 @@ function validExportRequest(
     );
   }
   const format = validExportFormat(record.format, unitType);
-  const attachmentSource = optionalRecord(record.options)?.oleAttachmentSource ?? "original";
+  // exchange-node embeds online attachment versions only in exports that take files. Those
+  // exports embed the current online document of every converted attachment unless the request
+  // asks for the original files; the others only ever carry the original attachment bytes.
+  const loadsFiles = exportLoadsFiles({ type: instanceTypeOf(unitType), format });
+  const attachmentSource =
+    optionalRecord(record.options)?.oleAttachmentSource ?? (loadsFiles ? "online" : "original");
   if (attachmentSource !== "original" && attachmentSource !== "online") {
     throw invalidInput(
       "oleAttachmentSource must be original or online.",
       "oleAttachmentSource"
     );
   }
-  // exchange-node embeds online attachment versions only in exports that take files.
-  if (
-    attachmentSource === "online" &&
-    !exportLoadsFiles({ type: instanceTypeOf(unitType), format })
-  ) {
+  if (attachmentSource === "online" && !loadsFiles) {
     throw invalidInput(
       "Online attachment versions are only available for XLSX, DOCX, PPTX and PDF exports.",
       "oleAttachmentSource"

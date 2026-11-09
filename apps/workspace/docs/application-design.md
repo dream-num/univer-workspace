@@ -282,13 +282,13 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
   材料，再由 `UnitSnapshotMaterializer` 补全 snapshot；
 - 导出时 Asset 引用由 exchange-node 的 `files.load` 回读：每个引用经 Univer Asset Module 以
   Asset 所属 Unit 重新解析权限（与引用所在 snapshot 无关），任何一处不可读即导出失败，不回退占位；
-  URL 图片不是 Workspace Asset，导出为透明占位图。请求
-  `options.oleAttachmentSource: 'online'` 时，已转换附件改为嵌入在线文档的当前确认版本：服务端以
-  调用者身份逐个解析子 Unit（类型须匹配、须有打开权限）并 materialize snapshot，任一子 Unit 不可读
-  则整个任务失败。该选项只对 XLSX、DOCX、PPTX 与 PDF 导出有效，CSV/TSV/Base 返回 400；
+  URL 图片不是 Workspace Asset，导出为透明占位图。XLSX、DOCX、PPTX 与 PDF 导出默认把已转换附件
+  嵌入为在线文档的当前确认版本：服务端以调用者身份逐个解析子 Unit（类型须匹配、须有打开权限）并
+  materialize snapshot，任一子 Unit 不可读则整个任务失败，不回退到原始附件；请求
+  `options.oleAttachmentSource: 'original'` 可改为嵌入原始附件文件。CSV/TSV/Base 只带原始附件，
+  显式请求 `'online'` 返回 400。Browser 导出不提供这个选择；
 - Browser 侧由 `WorkspaceOleLinkPlugin` 提供 `drawing.config.ole.getLink`（指向 `/preview/{unitId}`），
-  附件工具栏因此出现"转为在线文档"和"打开"；导出对话框只在当前 Unit 含已转换附件时提供
-  "嵌入在线版本"的选择；
+  附件工具栏因此出现"转为在线文档"和"打开"；
 - 已知限制（SDK 1.4.0 仍存在）：空白新建的 PDF Unit 一经编辑器修改就无法导出，原生导出器会以
   "source-less PDF cannot apply imported semantic patches" 拒绝，因为编辑器 reducer 把叠加
   对象的编辑同时镜像进了 `objectPatches`；Workspace 不做绕过，等上游版本修复（exchange 集成

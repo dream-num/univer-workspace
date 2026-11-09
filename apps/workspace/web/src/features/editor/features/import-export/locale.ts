@@ -37,7 +37,6 @@ const enUS = {
     file: "File",
     upload: "Open(File)",
     download: "Save As",
-    exportOnlineAttachments: "Embed the current online version of converted attachments",
   },
 };
 
@@ -71,7 +70,6 @@ const zhCN: typeof enUS = {
     file: "文件",
     upload: "打开（文件）",
     download: "另存为",
-    exportOnlineAttachments: "嵌入已转换附件的在线文档当前版本",
   },
 };
 
