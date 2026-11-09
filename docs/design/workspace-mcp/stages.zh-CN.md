@@ -269,12 +269,22 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
 
 **验收标准。**
 
-- [ ] 网关和执行层在 `NODE_ENV=production`、OAuth 和白名单配置下正常启动，不部署渲染服务，`/readyz` 返回就绪。去掉白名单时，网关和执行层都拒绝启动；加上 `MCP_DEV_SESSION_PASSTHROUGH=1` 时网关拒绝启动。
-- [ ] 在上述生产配置下，opencode（模型 `console-deepseek/deepseek-flash#high`）用 OAuth 登录，以自然语言完成“找到表格、开 PR、写入数据、读回、ready”，在浏览器里看到 PR 中的数据（截图）。
-- [ ] MB 旅程通过。
-- [ ] 不启动渲染服务时，阶段 A、B、D、F 的旅程通过：M、MI、MP、MS、MR1–MR8、MX、MH、MM、MT、MV（估算量字部分）、MA、MO 各组。
-- [ ] 启动渲染服务时，`tools/list` 与改动前完全相同，B 的 toolset 验收原样通过。
-- [ ] CLI 的测试与打包验证通过（如果改动涉及 `packages/client-core`）。
+- [x] 网关和执行层在 `NODE_ENV=production`、OAuth 和白名单配置下正常启动，不部署渲染服务，`/readyz` 返回就绪。去掉白名单时，网关和执行层都拒绝启动；加上 `MCP_DEV_SESSION_PASSTHROUGH=1` 时网关拒绝启动。 证据：PR #271、#274、#276、#277，run g0acc2：`doctor` 无 FAIL，两个容器都是 `NODE_ENV=production`、没有开发认证、没有渲染服务容器；用本次镜像 `docker run` 的三种错误配置都以非零退出并指出对应变量；以真实 Workspace 为后端，正确的网关客户端密钥下 `/readyz` 为 200，错误密钥为 503 并指出 `token_exchange`。
+- [x] 在上述生产配置下，opencode（模型 `console-deepseek/deepseek-flash#high`）用 OAuth 登录，以自然语言完成“找到表格、开 PR、写入数据、读回、ready”，在浏览器里看到 PR 中的数据（截图）。 证据：run g0cli（`782a4024`）：同意页上 `worktree:merge` 默认不勾选，一次中文请求依次调用 `space_find`、`pr_create`、`unit_add`、`execute`、`inspect`、`pr_ready`、`browse`，11 条用量事件都是 `auth_kind: oauth`、`outcome: ok`；`uvw` 读回 PR #3 为 ready，A1:B4 为表头加 华北 42、华东 57、华南 31；`oauth-pr-ready-rows-full.png` 显示 Ready 标记和这三行。此后的改动只涉及 `/readyz` 与 verify-uvw，不在这条路径上。
+- [x] MB 旅程通过。 证据：run g0acc2 的 MB1–MB5：七种组合的工具列表与脚本中逐项写出的预期一致；instructions 不含被隐藏的工具名；不在白名单内的第二个用户得到 40 个工具，`execute` 与未知工具一样失败，instructions 说明不能修改文档内容；MX1–MX3 通过；执行层停止时重建网关，`/readyz` 从 200 变为 503 并指出 `executor`，执行层恢复后回到 200。
+- [x] 不启动渲染服务时，阶段 A、B、D、F 的旅程通过：M、MI、MP、MS、MR1–MR8、MX、MH、MM、MT、MV（估算量字部分）、MA、MO 各组。 证据：run g0acc2 在同一个栈上连续执行，87 条中 81 条按原文通过，包括 MA8 的 Workspace Agent 登录；5 条按 skill 的说明不适用：M7（需要渲染服务，由 MB1 覆盖）、MA5 与 MX14（需要开发认证）、MX13（需要两个执行层副本）、MV2（真实字体量字）。MO3 的原文会关闭并重建专用的 `cimd` 运行，与连续执行冲突，它的启用与禁用检查用文档中的脚本分别在 g0acc2 和 g0job 上通过。Typst 任务旅程在 `MCP_SYNC_BUDGET_MS=1` 的 g0job 上通过，`user` 重建网关后预算仍为 1。
+- [x] 启动渲染服务时，`tools/list` 与改动前完全相同，B 的 toolset 验收原样通过。 证据：PR #271 的独立验证（`6bc05b34`）：七种组合的工具名称与顺序与 `origin/main` 一致，除 `compile_svg` 外 53 个工具的 schema 与注解逐字节一致；run g0def（`782a4024`）：默认栈 `all` 为 54 个工具、顺序与注册表一致，MR10、MV2 通过。
+- [x] CLI 的测试与打包验证通过（如果改动涉及 `packages/client-core`）。 不适用：第一步没有修改 `packages/client-core`。
+
+**验收记录（2026-11-10，`verify-uvw` run g0acc2、g0job、g0cli、g0def，HEAD `62d237df`，g0cli 与 g0def 为 `782a4024`）。** 第一步的验收全部满足。验收中发现并已修复：
+
+- `/readyz` 原先在授权服务器元数据里找 token exchange，但 Workspace 的元数据只列出 `authorization_code` 和 `refresh_token`，所以每个真实部署都不就绪。现在改为用网关的客户端凭据、不带 subject token 调用 token 端点，得到 `invalid_request` 才算通过，密钥配错时网关也不就绪（PR #276）。
+- verify-uvw 读容器日志时使用 1 MiB 的默认缓冲区，长时间运行后每次记录调用都失败；现在所有同步的 `docker` 调用都设置 `maxBuffer`，并有测试防止回归。另修正了三个过短的 Typst 幂等键、`user` 重建网关时丢失 `MCP_SYNC_BUDGET_MS`、MS11 截图视口过小（PR #277）。
+
+仍然存在、但不阻塞第一步的事项：
+
+- MO3 的原文要求专用运行，不能与其他旅程连续执行；
+- 执行层没有多租户隔离，白名单只能加入互相信任的用户；对公众开放执行层仍然需要阶段 G。
 
 ### 第二步：执行后端协议
 

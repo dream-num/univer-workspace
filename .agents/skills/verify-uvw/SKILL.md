@@ -178,6 +178,16 @@ so save the relevant redacted facts before restarting. Run `user` again after ea
 Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
 
+Two independent flags at `up` select the deployment shape and are saved in `run.env`:
+
+- `VERIFY_UVW_MCP_RENDERER=0` omits the renderer container and `MCP_RENDERER_URL` from the executor(s). Doctor verifies that no renderer exists and skips renderer probes. `renderer-call` and `renderer-restart` refuse this mode.
+- `VERIFY_UVW_MCP_PRODUCTION=1` sets `NODE_ENV=production` and omits `MCP_DEV_SESSION_PASSTHROUGH`. Gateway and executor start with the non-user placeholder `verify-uvw-pending-user` in their allowlists. The first `user` replaces that placeholder with the registered Workspace user ID and recreates only gateway and executor(s). Product startup validation stays intact.
+
+With neither flag, MCP still starts three containers in development mode, allows dev passthrough, and leaves the executor unrestricted. Both flags require `VERIFY_UVW_MCP=1`.
+`$V mcp-allow-users <user-id>...` replaces the entire allowlist in either mode, including both replicas when enabled. Supply one or more explicit Workspace user IDs as separate arguments, not usernames or a comma-separated string. It saves `executor-allowed-user-ids` beside `run.env`, waits for recreated executor(s), then recreates the gateway so capability discovery sees the ready executors, without rebuilding or restarting Workspace, Vite or the renderer. Retry the same command after a failed recreation. Repeated `user` preserves an explicitly chosen allowlist.
+
+Run the [MB journey](features/mcp.md#mb-deployment-and-per-account-tools) with both flags to verify the G0 gateway and allowlisted executor without a renderer. Journeys using `--auth dev` need the default mode. MA5 (`--auth dev`) and MF4's session-based second-user client need development mode. M2/M3 and M11 use the run's PAT after `user` and also work in production; M9 rejects the Origin before authentication. PAT and OAuth journeys work in production. M7, renderer journeys MR9 onward, screenshot checks and the renderer benchmark need the renderer enabled.
+
 Set `EXECUTOR_MAX_WORKERS` and `EXECUTOR_IDLE_TTL_MS` in the launching shell before
 `up` to size an experimental executor pool. Unset values keep the existing defaults
 of 4 workers and 60000 ms. These Compose settings also apply to `executor-b`.
@@ -202,6 +212,8 @@ $V mcp-token [--scopes read,write,...] [--name name]
 $V mcp-oauth login <label> [--scopes read,write,...] [--client-id <https-url>]
 $V mcp-oauth refresh|reuse|revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
+$V mcp-allow-users <user-id>... # replace the executor allowlist; recreate executor(s), then gateway
+$V mcp-gateway-restart       # recreate only gateway, including when executor is stopped
 $V mcp-logs
 ```
 
@@ -227,7 +239,7 @@ onboarding service URL is `$ORIGIN` before signing in. No model credentials are 
 as well and deletes the installation, runtime data and private logs with `home/`.
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
-to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
+to `dev` otherwise. Development session passthrough is available only in the default development mode; production requires PAT or OAuth.
 `mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
 `$V renderer-call <label> screenshot|printPdf|lint|measureText < input.json` sends one operation to the renderer from inside the
 executor container and saves `<label>.json` plus the PNG or PDF payload in `$EVIDENCE`. `bin/renderer-proof.mjs` prints a small
@@ -262,7 +274,7 @@ volumes and image tag, then deletes `home/` with the other disposable data. It p
 `ok    MCP resources removed` only after checking resource removal. Cleanup failures
 warn and continue. Run `down` after failures too. Build cache and evidence survive.
 
-The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts with every MCP run on its own compose
+The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts by default with MCP on its own compose
 network declared `internal: true`, joined only by the executor(s) and the renderer. The gateway waits for it to be healthy.
 `doctor` checks its image, that it has no published port and joins one internal network, bearer rejection, protected metrics,
 a real `measureText` call from the executor, that it cannot reach `host.docker.internal:<server port>`, the gateway or a public

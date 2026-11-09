@@ -36,9 +36,9 @@ if (process.argv[2] === 'typst-jobs') {
   const manifest = { schemaVersion: 1, targetUnitId: `typst-job-${run}`, title: 'Typst job', pages: ['page.typ'] };
   const bytes = zipSync({ 'typst.json': Buffer.from(JSON.stringify(manifest)), 'page.typ': Buffer.from('= Typst job\n\nSurvives the synchronous budget.') });
   const id = await upload('mcp-typst-job-upload', 'typst-bundle', bytes);
-  const pr = mcp('mcp-typst-job-pr', 'pr_create', { repo, title: 'Typst job verification', idempotency_key: `typst-job-pr-${run}` });
+  const pr = mcp('mcp-typst-job-pr', 'pr_create', { repo, title: 'Typst job verification', idempotency_key: `typst-job-pr-${run}-verify` });
   const before = mcp('mcp-typst-job-before', 'unit_list', { worktree: pr.id });
-  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-job-apply-${run}` };
+  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-job-apply-${run}-verify` };
   const handle = mcp('mcp-typst-job-apply', 'compile_typst', args);
   assert.equal(handle.status, 'running'); assert.ok(handle.job_id);
   const retry = mcp('mcp-typst-job-retry', 'compile_typst', args);
@@ -76,8 +76,8 @@ if (process.argv[2] === 'typst-jobs') {
   const event = JSON.parse(readFileSync(join(evidence, 'mcp-typst-compile.event.json'), 'utf8'));
   assert.equal(event.executor, 'cold_start'); assert.equal(event.unit_type, null); assert.equal(event.repo, null);
   assert.equal(event.cost.upload_bytes, bytes.length);
-  const pr = mcp('mcp-typst-pr', 'pr_create', { repo, title: 'Typst compiler verification', idempotency_key: `typst-pr-${run}` });
-  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-apply-${run}` };
+  const pr = mcp('mcp-typst-pr', 'pr_create', { repo, title: 'Typst compiler verification', idempotency_key: `typst-pr-${run}-verify` });
+  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-apply-${run}-verify` };
   const applied = mcp('mcp-typst-apply', 'compile_typst', args);
   const retry = mcp('mcp-typst-retry', 'compile_typst', args);
   assert.equal(retry.unit.unitId, applied.unit.unitId);
