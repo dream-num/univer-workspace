@@ -25,30 +25,30 @@
 
 严重度按用户能否完成任务来分。“高”表示任务失败，“中”表示多花调用或绕路，“低”表示体验瑕疵。
 
-### P1（高）默认连接做不出 PDF，模型也不知道还有别的工具集
+### P1（高）默认连接做不出 PDF，模型也不知道还有别的工具集（#257）
 
 - **现象。** 场景 6 要求导出 PDF。`print_pdf` 和 `compile_markdown` 属于 `files` 工具集，`core,admin` 连接里没有。模型试了 `export(format: "pdf")`，被参数校验拒绝，最后建议用户去跑 `uvw print-pdf`，而用户未必装了 CLI。改成 `?toolsets=all` 后，同一请求 2 次调用完成。
 - **原因（已核对）。** server instructions 只提到 `?toolsets=admin`，没有提 `files`。instructions 要求模型在“skill 提到的命令没有对应工具时告诉用户”，模型照做了，但它给不出正确的解决办法。
 - **方向。** instructions 列出当前连接没有加载的工具集及其中的工具名，并说明加哪个 `toolsets` 参数。也可以考虑把 `print_pdf` 放进 `core`，或者在 `export` 的格式错误里提示 `print_pdf`。
 
-### P2（中）`export` 不能导出正式版
+### P2（中）`export` 不能导出正式版（#258）
 
 - **现象。** 场景 5 要导出合入后的正式版。`export` 必须带 `worktree`，没有 trunk 选项，而 `inspect` 和 `screenshot` 都支持 `trunk: true`。模型只好从已合入的 PR 的 Worktree 导出，再额外调用 3 次 `inspect` 和 `screenshot`，确认 trunk 和 Worktree 一致。
 - **影响（推断）。** 想导出一个不在任何 PR 里的现有文件时，用户必须先开 PR、`unit_add`，才能导出。
 - **方向。** 给 `export` 加 trunk 范围，与 `inspect`、`screenshot` 保持一致。如果这是有意的限制，在工具描述里写明原因和替代步骤。
 
-### P3（中）通过 MCP 提供的 skills 是 CLI 版本，读起来费劲
+### P3（中）通过 MCP 提供的 skills 是 CLI 版本，读起来费劲（#259）
 
 - **现象。** 场景 3 中，模型用了 7 次调用才读到需要的 skill 内容。它先猜错 `skills_read` 的返回结构（实际是 `{ skills: [{ name, content }] }`），然后因为 `core` skill 有约 22 KB，只能分段切片读取。skill 正文写的是 `uvw` 命令和 `--worktree` 这类 CLI 参数，模型要按 instructions 自行换算成工具名。
 - **方向。** 给 MCP 渲染一份工具名版本的 skill，或者在 `skills_read` 的结果里直接给出命令到工具的映射。把 `core` 拆小，或者按需返回章节。
 
-### P4（中）合入记录显示“未知用户”
+### P4（中）合入记录显示“未知用户”（#260）
 
 - **现象。** 在浏览器里由 Verify demo 合入 PR #2 后，空间首页“最近活动”和文件列表显示“未知用户 合入了 Pull request #2”。
 - **原因（已核对）。** `apps/workspace/server/src/modules/activity/activity.service.ts:118` 对所有 `pull-merged` 事件写死 `actor: null`。这是 Workspace 产品问题，与 MCP 无关，但每次 Agent 加人工评审的演示都会碰到。
 - **方向。** 记录并返回合入人。
 
-### P5（中）ready 和 draft 之间来回切换
+### P5（中）ready 和 draft 之间来回切换（#261）
 
 - **现象。** server instructions 第 5 步要求每个任务结束时 `pr_ready`。用户在同一个 PR 上追加修改时，`execute` 只能用于 draft（`packages/client-core/src/runtime-source.ts:47`），所以模型先 `pr_ready(undo: true)`，改完再 `pr_ready`。场景 4 出现了这个往返。场景 3 中，用户没有要求 ready，模型也按 instructions 标记了 ready，这才使场景 4 需要先 undo。
 - **方向。** 二选一：允许在 ready 的 PR 上继续写入并自动回到 draft，或者在 `execute` 的描述里写明“ready 状态要先 undo”。也可以让 instructions 只在用户表示完成时才 ready。这一项需要产品负责人决定。
@@ -63,17 +63,17 @@
 - **现象。** 场景 4 中，`api_find({ terms: ["freeze rows"] })` 没有结果，换成 `setFrozenRows` 才命中。模型第一次还把参数名猜成 `queries`。校验错误写得很清楚，模型下一次就改对了。
 - **方向。** 支持按 summary 文本或分词匹配，或者在零结果时返回相近的符号。
 
-### P8（低）输入和输出的字段名不一致
+### P8（低）输入和输出的字段名不一致（#262）
 
 - **现象。** `pr_create` 接收 `title` 和 `body`，`pr_view` 返回 `name` 和 `summary`。场景 3 中，模型专门调用一次 `pr_view` 去看有哪些 key。
 - **方向。** 输出补上与输入同名的字段，或者在 outputSchema 的描述里写明对应关系。
 
-### P9（低）错误信息里出现 CLI 参数写法
+### P9（低）错误信息里出现 CLI 参数写法（#263）
 
 - **现象。** 场景 5 中，`inspect` 返回 `--worksheet is only valid for range, not worksheet`。MCP 的参数名是 `worksheet`，不是 `--worksheet`。
 - **方向。** 网关把 client-core 的错误文案换成 MCP 参数名。工具规格 1.3 节已经要求错误映射，这一条属于遗漏。
 
-### P10（低）`print_pdf` 的文件名是 unit ID
+### P10（低）`print_pdf` 的文件名是 unit ID（#264）
 
 - **现象。** 场景 7 的 PDF 名为 `27e0774e-e424-4ec3-a73a-6e225022f196.pdf`，而 `export` 的 xlsx 用文档名 `Q3 区域销售.xlsx`。
 - **方向。** `print_pdf` 和 `export` 使用同一套命名规则。
@@ -83,7 +83,7 @@
 - **现象。** 场景 6 中，Doc 截图里每个标题前有折叠箭头（▾），这是编辑器的界面元素。同一文档的 `print_pdf` 结果没有箭头。
 - **方向。** 截图时隐藏标题折叠控件。需要先判断归属在本仓库的渲染装配还是上游 Univer SDK。
 
-### P12（低）PR 和 Issue 之间没有结构化关联
+### P12（低）PR 和 Issue 之间没有结构化关联（#265）
 
 - **现象。** 模型在 PR 描述里写了“关联 Issue #1”，但网页上它只是普通文字，不能点击。Issue 页显示“没有关联文件”。PR 合入后，Issue 仍然打开，场景 5 由模型手动关闭。
 - **方向。** 支持 `#1` 自动链接，以及 PR 关闭 Issue 的约定（例如 `Closes #1`）。
