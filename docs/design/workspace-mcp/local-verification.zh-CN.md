@@ -264,15 +264,14 @@ MCP OAuth 授权实现；没有该实现的 Server 会忽略这两个变量，�
 **`user`。** 现有行为不变。`MCP_ENABLED=1` 时再执行下列步骤，重复运行会覆盖旧的 session；PAT 已存在时不重新创建：
 
 1. 用本次运行的用户名和 `user.pw` 调用 `POST $ORIGIN/api/auth/cli/password/login`，从 `Set-Cookie` 里取出 `workspace_session` 的值，写入 `home/mcp-session`。
-2. 新建目录 `home/opencode-<8 位十六进制随机数>`，写入下面的 `opencode.json`，再把目录路径写入 `home/opencode-dir`：
+2. `home/mcp-token` 不存在时执行一次 `mcp-token`。
+3. 新建目录 `home/opencode-<8 位十六进制随机数>`，用 `home/mcp-token` 的 PAT 值写入下面的 `opencode.json`，再把目录路径写入 `home/opencode-dir`：
 
 ```json
 {"$schema":"https://opencode.ai/config.json",
- "mcp":{"verify-uvw":{"type":"remote","url":"http://127.0.0.1:3930/mcp","enabled":true,"headers":{"Authorization":"Bearer <home/mcp-session 的值>"}}},
+ "mcp":{"verify-uvw":{"type":"remote","url":"http://127.0.0.1:3930/mcp","enabled":true,"headers":{"Authorization":"Bearer <home/mcp-token 的值>"}}},
  "permission":{"edit":"deny","bash":"deny","webfetch":"deny"}}
 ```
-
-3. `home/mcp-token` 不存在时执行一次 `mcp-token`。
 
 每次换新目录，是因为 opencode 的后台服务按目录缓存配置。同一个目录里改写 `opencode.json` 后，后台服务仍然使用旧配置（实测）。`permission` 禁止编辑文件、执行命令和抓取网页，模型只能调用 MCP 工具。不使用 `--auto`，因为它会自动批准模型的全部操作。
 
