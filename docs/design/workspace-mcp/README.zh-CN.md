@@ -36,6 +36,7 @@ Univer Workspace 现在有两个 agent 入口，门槛都偏高：
 | D12 | MCP Server 是执行层，不连接任何数据库，包括 Workspace 的数据库和它自己的数据库。它只通过 Workspace 的 HTTP API 和协同协议工作 | 第三轮讨论 |
 | D13 | 原型阶段用本机 Docker 服务模拟远程 MCP Server，并扩展 `verify-uvw` skill，让它在启动验证实例时一起启动 MCP Server | 第三轮讨论 |
 | D14 | 本地测试 MCP 功能一律用本机 opencode，模型 `console-deepseek/deepseek-flash#high`（DeepSeek V4.1 Flash 1017，provider “Personal / DeepSeek”，reasoning effort 为 high。这个模型能理解图片），不用 Claude Code。阶段 H 在各真实客户端里的验收不受影响 | 2026-11-07 评审 `local-verification.zh-CN.md` |
+| D15 | 首次开放只对白名单内的受信用户，包含网关和执行层，执行层沿用共享常驻实现，渲染服务可以晚些加入。执行后端经一份与部署形态无关的协议接入，前期实现常驻型，serverless 型只保留思路。原阶段 G 的多租户隔离设计（#267）搁置，对公众开放执行层仍然需要隔离 | 2026-11-09 产品负责人决定 |
 
 后续讨论如果推翻其中任何一条，在这张表里追加新行并注明日期，不要直接改旧行。
 
@@ -102,17 +103,18 @@ Univer Workspace 现在有两个 agent 入口，门槛都偏高：
 ```text
 A 骨架与本地验证环境 ──▶ B 产品工具（纯 HTTP）──────────────┐
         │                                                 │
-        ├──▶ C client-core 多租户改造 ──▶ D 执行层 ──▶ E 渲染服务 │
-        │                                    │            │
-        └──▶ F Workspace 认证 ────────────────┼────────────┤
-                                             ▼            ▼
-                                   G 执行层安全设计与评审（门禁）
+        ├──▶ C client-core 多租户改造 ──▶ D 执行层 ──▶ E 渲染服务 ┤
+        │                                                 │
+        └──▶ F Workspace 认证 ─────────────────────────────┤
+                                                          ▼
+                                 G0 受信用户先行开放与执行后端协议
                                              │
-                                             ▼
-                                   H SaaS 部署与开放
-                                             │
-                                             ▼
-                                   I 来源归因（可选）
+                          ┌──────────────────┴──────────────┐
+                          ▼                                 ▼
+                   H SaaS 部署与开放              G 执行层多租户隔离（已搁置）
+                          │
+                          ▼
+                   I 来源归因（可选）
 ```
 
 | 阶段 | 目标 | 依赖 | 主要改动位置 |
@@ -123,11 +125,12 @@ A 骨架与本地验证环境 ──▶ B 产品工具（纯 HTTP）────
 | D | 执行层上线：`execute`、`inspect`、导入导出、Markdown、Typst、SVG、HTML View | B、C | `apps/mcp`、`packages/client-core` |
 | E | 渲染服务：`screenshot`、`print_pdf`、`lint` | D | `apps/mcp`、`packages/client-core` |
 | F | Workspace 支持 MCP 标准的 OAuth 和 PAT；MCP 去掉开发用认证 | A | `apps/workspace`、`apps/mcp` |
-| G | 执行层多租户安全设计、实现与独立评审 | D、E、F | `apps/mcp`，可能涉及上游 Univer CLI SDK |
-| H | SaaS 部署、限流、设置页、真实客户端验收 | G | Helm 私有仓库、`apps/workspace/web`、`apps/mcp` |
+| G0 | 网关加执行层对白名单用户开放，渲染服务可选；网关与执行后端之间的协议，常驻型实现，serverless 型只留思路 | B、D、F（第一步），E（第二步） | `apps/mcp`、`.agents/skills/verify-uvw` |
+| G | 执行层多租户隔离。已搁置，以后基于 G0 的协议重新设计 | G0 | `apps/mcp` |
+| H | SaaS 部署、限流、设置页、真实客户端验收。首次开放只对白名单用户 | G0 | Helm 私有仓库、`apps/workspace/web`、`apps/mcp` |
 | I | Workspace 活动统计区分 MCP 与 CLI | H | `apps/workspace` |
 
-B、C、F 可以在 A 之后并行推进。G 是对外开放前的硬门禁：G 没有通过，MCP 只能在本地原型和内部单用户环境运行。
+B、C、F 可以在 A 之后并行推进。首次开放只对白名单内的受信用户（G0）。执行层和渲染服务在 G 通过之前不对公众开放。
 
 ## 6. 文档索引
 
