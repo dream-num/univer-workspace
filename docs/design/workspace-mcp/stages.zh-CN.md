@@ -178,24 +178,28 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 
 **验收标准。**
 
-- [x] opencode 对本地 MCP 走完整的 OAuth 流程：发现元数据，CIMD 或 DCR，浏览器同意，拿到 token，调用工具成功。 证据：PR #214、#216，`verify-uvw` MO1：未认证的 POST 返回带 `resource_metadata` 的 401，两份发现文档与本次运行一致；opencode 经 DCR 注册，同意页列出四个 scope 并取消 `worktree:merge`（`mcp-oauth-consent.png`），回调只授予 `read write publish`；`whoami`、`repo_list` 各一条 `auth_kind: oauth`、`outcome: ok` 的用量事件，`client_id` 是注册得到的客户端。走的是 DCR，CIMD 没有实现，见下文。
-- [x] 取消 `worktree:merge` 后，`pr_merge` 返回 `workspace-scope-required`。 证据：MO2（同意页取消 `worktree:merge` 得到的 OAuth token 能 `pr_create`、`unit_create`、`pr_ready`，`pr_merge` 和 `pr_discard` 返回 `workspace-scope-required`，用量事件记录同一错误码，CLI 看到 PR 仍是 `ready`，随后全 scope 的 PAT 合入成功）；MA7 对不含 `worktree:merge` 的 PAT 得到同样结果。
-- [ ] refresh token 能续期；吊销后，网关在下一次调用时返回 401。 续期满足：MO2 的 refresh 返回新的一对 token，scope 不变，`expires_in` 为 3600，新 access token 可用；超过 60 秒宽限期重放旧 refresh token 会吊销整个授权。吊销后访问 Workspace 的下一次调用返回 401（带 `resource_metadata`），refresh token 也失效。**差距：** 吊销后紧接着的 `whoami`、`api_find` 仍然成功，因为网关最多 30 秒内直接用交换缓存回答不访问 Workspace 的调用（`apps/mcp/src/gateway/auth.ts` 的 `maxCacheMs`）。见验收记录。
-- [ ] PAT 能调用工具；吊销后立即失效；默认全部 scope、不过期（D9）。 调用与默认值满足：MA1；MA6 中 API 列出的默认 PAT 有四个 scope、`expiresAt` 为 `null`，Browser 的新建表单默认勾选四个 scope、过期时间为“Never”（`mcp-pat-browser-form.png`），在 Browser 创建的 PAT 能经网关调用工具。吊销后访问 Workspace 的下一次调用返回 401（MA4、MA6）。**差距：** 与上一条相同，吊销后的 `whoami`、`api_find` 在缓存期内仍然成功。
-- [ ] 现有客户端不受影响：`apps/agent` 的 OAuth 登录、`uvw auth login`、浏览器登录都照常工作。 Browser 注册与登录、`uvw auth login --password-stdin`、Browser 批准的 `uvw auth login` 在开启 MCP OAuth 的运行中都通过（MA8 与 [auth 旅程](../../../.agents/skills/verify-uvw/features/auth.md)）。**差距：** `apps/agent` 的 OAuth 登录无法验证。按 README 本地安装时，干净检出上插件构建先于 Client Core 构建而失败（PR #248 修复，已验证，待合入），profile 安装从 npm 拉取私有包失败（PR #245 已修复），绕过这两处后 Agent 在进入 OAuth 之前启动失败（issue #246）。三个问题都发生在 OAuth 之前，与阶段 F 的认证改动无关；前两个来自 #170。
-- [x] `api:verify` 通过；`verify-db-migration` 的完整矩阵通过。 证据：在 `72e6d781` 上 `api:verify` 退出 0 且工作区无改动；源码与 `--dist` 的 schema parity 对 12 个历史 schema 全部 `ok`；V17→V18 矩阵覆盖 skill 第 3 步的全部七项（`apps/workspace/test/support/v17-migration-checks.ts`），集成用例与 `test:production-import` 通过；`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。审计中发现的 data-model 表数笔误由 PR #244 修正。
-- [x] 本地验证默认改用 PAT，开发认证模式只在显式指定时使用。 证据：PR #247；`user` 默认创建 PAT，`verify-uvw mcp` 不带 `--auth` 时用 PAT（MA1 的 `auth=pat`），只有 `--auth dev` 才走开发认证（MA5）；opencode 配置原先带的是开发 session，#247 改为 PAT 后，run f5 中 M11 的事件是 `auth_kind: pat`。
-- [x] token 不透传，下游凭据短时效（交付物之一，不在原验收清单内）。 证据：MO2 的 `direct` 把 OAuth access token 直接作为 Bearer 和 cookie 发给 Workspace，`/api/session` 都是未登录；token exchange 返回的下游 session 不超过 600 秒，scope 与 token 一致（MO2、MA6）；生产环境拒绝开发认证（M10）。
-- [ ] Client ID Metadata Documents（F2，交付物之一，不在原验收清单内）。 未实现：PR #216 推迟，原因是需要防 SSRF 的抓取器；授权服务器元数据不声明 `client_id_metadata_document_supported`，依赖 CIMD 的客户端只能退回 DCR。同时推迟的还有不带点的私有 scheme 回调（例如 `cursor://`），等待策略决定。
+- [x] opencode 对本地 MCP 走完整的 OAuth 流程：发现元数据，CIMD 或 DCR，浏览器同意，拿到 token，调用工具成功。 证据：PR #214、#216、#253，run f6 的 MO1：当前 opencode 发现授权服务器支持 CIMD 后，以 `https://opencode.ai/oauth/opencode/client.json` 为 `client_id` 登录，同意页显示 `opencode (opencode.ai)` 并取消 `worktree:merge`，回调只授予 `read write publish`，`whoami`、`repo_list` 各一条 `auth_kind: oauth`、`outcome: ok` 的用量事件，`client_id` 是该 URL。DCR 由 MO2、MO4 证明（run f5 的 MO1 也走 DCR）。
+- [x] 取消 `worktree:merge` 后，`pr_merge` 返回 `workspace-scope-required`。 证据：run f6 的 MO2（OAuth token 能 `pr_create`、`unit_create`、`pr_ready`，`pr_merge` 和 `pr_discard` 返回 `workspace-scope-required`，用量事件记录同一错误码，CLI 看到 PR 仍是 `ready`，随后全 scope 的 PAT 合入成功）；MA7 对不含 `worktree:merge` 的 PAT 得到同样结果。
+- [x] refresh token 能续期；吊销后，访问 Workspace 的下一次调用返回 401，不访问 Workspace 的调用最多 30 秒内仍由网关缓存回答（措辞于 2026-11-09 由产品负责人改定，见架构 4.2 节）。 证据：run f6 的 MO2：refresh 返回新的一对 token，scope 不变，`expires_in` 为 3600，新 access token 可用；吊销后紧接着的 `whoami`、`api_find` 退出码为 0（缓存窗口内，`mcp-oauth2-revoked-*.exit-observed`），第一次访问 Workspace 的 `repo_list` 返回 401 并带 `resource_metadata`，随后 `whoami` 也是 401，refresh token 返回 `invalid_grant`；超过 60 秒宽限期重放旧 refresh token 会吊销整个授权。MO3 对 CIMD 客户端（Claude Code）得到同样的续期与吊销结果。
+- [x] PAT 能调用工具；吊销后访问 Workspace 的调用立即失效，不访问 Workspace 的调用最多 30 秒内仍由网关缓存回答（措辞同上）；默认全部 scope、不过期（D9）。 证据：run f6 的 MA1（默认用 PAT，`auth_kind: pat`）；MA6 中 API 列出的默认 PAT 有四个 scope、`expiresAt` 为 `null`，Browser 新建表单默认勾选四个 scope、过期时间为 Never，在 Browser 创建的 PAT 能经网关调用工具，吊销后紧接着的 `whoami` 退出码为 0（缓存窗口内），随后访问 Workspace 的调用返回 401；MA4 吊销后连续两次访问 Workspace 的调用都是 401；PAT 换取的下游 session 保留四个 scope，`expires_in` 为 600。
+- [x] 现有客户端不受影响：`apps/agent` 的 OAuth 登录、`uvw auth login`、浏览器登录都照常工作。 证据：PR #252 修复 Agent 启动失败（#246，缺陷在上游 DSH 0.1.5-rc.1：自定义 profile 默认的 live patch 监听在 HMR 服务注册前就开始；本仓库的 profile 改为启动时应用 patch，与 Desktop 一致）。run f6-ma8 的 MA8：`agent-up` 按 README 的构建步骤安装并启动 Agent，Agent 的 Workspace 登录进入 `univer-workspace-harness` 的同意页，批准后显示 `Connected: Verify f6-ma8`、服务地址为本次运行的 Workspace，并能列出该用户的 Personal Space；同一次运行里 Browser 注册与登录、`uvw auth login --password-stdin`、Browser 批准的 `uvw auth login`、错误密码用例都通过。
+- [x] `api:verify` 通过；`verify-db-migration` 的完整矩阵通过。 证据：在 `72e6d781` 上 `api:verify` 退出 0 且工作区无改动；源码与 `--dist` 的 schema parity 对 12 个历史 schema 全部 `ok`；V17→V18 矩阵覆盖 skill 第 3 步的全部七项（`apps/workspace/test/support/v17-migration-checks.ts`），集成用例与 `test:production-import` 通过；`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。审计中发现的 data-model 表数笔误由 PR #244 修正。此后的 #251、#253 不改 schema，各自的 `api:verify` 退出 0，#253 的 `test:production-import` 通过。
+- [x] 本地验证默认改用 PAT，开发认证模式只在显式指定时使用。 证据：PR #247；`user` 默认创建 PAT，`verify-uvw mcp` 不带 `--auth` 时用 PAT（MA1 的 `auth=pat`），只有 `--auth dev` 才走开发认证（MA5）；run f6 中 M11 的 opencode 事件是 `auth_kind: pat`。
+- [x] token 不透传，下游凭据短时效（交付物之一，不在原验收清单内）。 证据：run f6 的 MO2 `direct` 把 OAuth access token 直接作为 Bearer 和 cookie 发给 Workspace，`/api/session` 都是未登录；token exchange 返回的下游 session 为 600 秒，scope 与 token 一致（MO2、MA6）；生产环境拒绝开发认证（M10）。
+- [x] Client ID Metadata Documents（F2，交付物之一，不在原验收清单内）。 证据：PR #253，设计与两轮对抗评审见 [cimd.zh-CN.md](cimd.zh-CN.md)。run f6 的 MO3：授权服务器元数据声明 `client_id_metadata_document_supported` 与 `authorization_response_iss_parameter_supported`；以 Claude Code 的真实文档登录，同意页显示 `Claude Code (claude.ai)`，回调带 `iss`，token、refresh、吊销都符合预期；VS Code 的真实文档进入同意页，多出的 `device_code` 被忽略；IPv4 与 IPv6 loopback 字面量、解析到 loopback 的域名、带 query 的 URL、`client_id` 与文档不符（主机名大写）都在 Workspace 上返回 400，不重定向；未登录访问不触发抓取；`MCP_CIMD_ENABLED=0` 时不声明支持且不抓取。本机 DNS 是 fake-IP，运行只为 Workspace Server 豁免 `198.18.0.0/15`。
+- [x] 不带点的私有 scheme 回调（交付物之一，不在原验收清单内）。 产品负责人 2026-11-09 决定只放行白名单里的 scheme，目前只有 Cursor 用的 `cursor`。证据：PR #251，run f6 的 MO4：Cursor 原样的三个回调注册返回 201，`myapp://callback` 返回 400，`cursor://` 回调的同意页 CSP 含 `form-action 'self' cursor:`，拒绝与批准都重定向到该回调并带 `iss`，授权码兑换得到一小时的 access token 和 refresh token。
 
-**验收记录（2026-11-09，`verify-uvw` run f5，产品代码为 `main` `d8178a12`，工作区另带本次新增的验证工具与旅程）。** M4、M10、M11、MA1–MA5、MO1 按文档原样通过；MA6、MA7、MO2、MA8 新增为可重复旅程，在同一次运行中通过，结束时 `doctor` 无 `FAIL`，`down` 清理完毕，证据中没有 token 或密钥。未满足项与原因：
+**验收记录（2026-11-09，`verify-uvw` run f6 与 f6-ma8，`main` `2ec43c08`）。** M4、M10、M11、MA1–MA8、MO1–MO4 全部通过，每次运行的 `doctor` 无 `FAIL`，`down` 清理完毕，证据中没有 token、授权码或 cookie。按文档原样执行时发现三处旅程文档缺陷，都不是产品问题，已在本次变更中修正：MO3 用 `--reuse` 重启后需要重新导出环境变量，否则其后的 M11 用到已删除的 opencode 目录；MA8 添加 Space 后导航会多次重新挂载，`Files` 标签页的点击改为重试；auth.md 仍写着 Browser 批准的登录不在范围内。
 
-- 吊销与缓存：OAuth token 或 PAT 吊销后，网关在最多 30 秒内仍用交换缓存回答不访问 Workspace 的调用（实测 `whoami` 与 `api_find` 都返回成功，见 MO2、MA6 的 `*.observed` 证据）。访问 Workspace 的调用立即返回 401 并清除缓存，此后所有调用都是 401。架构 4.2 节写明网关缓存下游凭据，与验收里的“下一次调用”“立即失效”冲突，需要产品负责人二选一：接受这个窗口并改写验收条目，或者要求网关在每次调用前确认 token 仍有效；
-- `apps/agent` 的 OAuth 登录：见上文，安装问题由 PR #245、#248 处理，启动失败由 issue #246 跟踪，修复后在 MA8 中补上 Agent 登录再验；
-- CIMD 与私有 scheme 回调：见上文；
-- 用户看不到、也不能吊销已授权的 AI 助手，只有客户端自己能调用吊销端点。管理入口属于 F11（“连接到 AI 助手”，阶段 H）。
+仍然存在、但不阻塞阶段 F 的事项：
 
-按本文开头的规则，前两项（对应三条未勾选的验收）解决之前阶段 F 不算完成，依赖它的阶段 G 不应开始。
+- 吊销后最多 30 秒的缓存窗口是接受的取舍，见架构 4.2 节；
+- 用户看不到、也不能吊销已授权的 AI 助手，只有客户端自己能调用吊销端点。管理入口属于 F11（“连接到 AI 助手”，阶段 H）；
+- CIMD 不在 refresh 时重新抓取文档，文档撤下后已签发的 refresh token 最长仍可续期 30 天（[cimd.zh-CN.md](cimd.zh-CN.md) 第 7 节）；
+- 上游 DSH 的 HMR 竞态与 `cordis-plugin-hmr` 版本错配仍在，本仓库已不依赖它们；`packages/dsh-runtime` 的 README 说 `pnpm deploy --legacy` 遵守 committed lockfile，实测不遵守；
+- `apps/mcp` 的 `exchange-hardening` 测试有两个偶发超时（#250、#254），与阶段 F 的改动无关。
+
+阶段 F 的验收全部满足，依赖它的阶段 G 可以开始。
 
 **不做。** 产品 API 逐路由识别 scope（scope 由网关执行，架构文档 4.2 节）；来源归因（阶段 I）。
 

@@ -56,4 +56,4 @@ Preconditions:
 - `auth status` reports the display name (`Verify <run-id>`), not the username.
 - Registration from curl without `Accept-Language` still names the space
   `<display name> 的个人空间`; the name is fixed server-side, not a locale bug in the run.
-- Browser-approved `uvw auth login` (no `--username`) waits for a human. It is out of scope.
+- Browser-approved `uvw auth login` (no `--username`) waits for a human approval in the Browser. MA8 in [the MCP journeys](mcp.md) drives that approval with agent-browser.
