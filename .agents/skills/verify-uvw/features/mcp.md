@@ -71,6 +71,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MT1 compares Typst compilation with the CLI and reads back one native Doc after a same-key retry.
 - MV1 compares SVG compilation with the CLI and reads back its committed Slide.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
+- MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -178,7 +179,7 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","import","export","job_get","api_find","api_show","skills_read"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","screenshot","import","export","job_get","api_find","api_show","skills_read"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown","compile_typst","compile_svg"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
@@ -189,12 +190,12 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|export|job_get|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|screenshot|export|job_get|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:30]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:31]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
@@ -1759,8 +1760,8 @@ and the Browser screenshots show North and 42 before and after reload.
 
 ### MR9 renderer role
 
-The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. Nothing calls it
-from a tool yet, so drive it from the executor container with `renderer-call`. Use a parallel run id when another run is active.
+The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. Only `screenshot`
+(MR10) calls it from a tool so far, so drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
 
 ```bash
 V=.agents/skills/verify-uvw/bin
@@ -1782,6 +1783,84 @@ Pass when:
   while `mcp_renderer_jobs_total{kind="screenshot",outcome="ok"}` grows.
 - Killing the renderer's Chromium makes the next call return a retryable `workspace-renderer-failed` and the one after succeeds
   on a new runtime (`mcp_renderer_runtime_discards_total` 1).
+
+### MR10 screenshot tool
+
+The `screenshot` tool loads the Unit in the executor, which inlines every image Asset, and sends only the unit to the renderer. A
+Worktree Unit proves the Worktree Asset read and a trunk Unit proves the trunk Asset read. Run it after MR9's `doctor` passes and
+use a parallel run id when another run is active. The fixtures come from `bin/png-fixture.mjs`: a four-colour block image, and a noise image
+that PNG cannot compress so that a slide page exceeds the 1 MiB inline limit.
+
+```bash
+B=.agents/skills/verify-uvw/bin
+FIX="$EVIDENCE/mr10"; mkdir -p "$FIX/deck/materials"
+node $B/png-fixture.mjs "$FIX/blocks.png" 240 160 blocks
+node $B/png-fixture.mjs "$FIX/deck/materials/noise1.png" 700 400 noise
+node $B/png-fixture.mjs "$FIX/deck/materials/noise2.png" 700 400 noise
+for n in 1 2; do printf '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#ffffff"/><text x="40" y="70" font-size="40" font-family="Arial" fill="#111111">Deck page %s</text><image x="130" y="110" width="700" height="400" href="./materials/noise%s.png"/></svg>\n' $n $n > "$FIX/deck/page$n.svg"; done
+O=verify-$VERIFY_UVW_RUN
+$V cli mr10-repo repo view "$O/personal" --json
+MR10_SPACE=$(jq -r .id "$EVIDENCE/mr10-repo.out")
+$V cli mr10-pr pr create -R "$O/personal" -t 'Screenshot sheet' --json
+MR10_W=$(jq -r .id "$EVIDENCE/mr10-pr.out"); MR10_N=$(jq -r .number "$EVIDENCE/mr10-pr.out")
+$V cli mr10-unit unit create --worktree "$MR10_W" --space "$MR10_SPACE" --type sheet --name 'Shot sheet' --json
+MR10_U=$(jq -r .unit.unitId "$EVIDENCE/mr10-unit.out")
+node -e 'const fs=require("fs");const [d,o]=process.argv.slice(1);fs.writeFileSync(o,`const sheet = workbook.getActiveSheet();
+sheet.getRange("A1:B3").setValues([["Region","Total"],["North",42],["South",17]]);
+const image = await sheet.newOverGridImage().setSource(${JSON.stringify("data:image/png;base64,"+fs.readFileSync(d).toString("base64"))}, api.Enum.ImageSourceType.BASE64).setColumn(3).setRow(1).setWidth(240).setHeight(160).buildAsync();
+sheet.insertImages([image]);
+return { images: sheet.getImages().length };
+`)' "$FIX/blocks.png" "$FIX/sheet-script.js"
+$V cli mr10-write execute --worktree "$MR10_W" --unit "$MR10_U" --script "$FIX/sheet-script.js" --json
+jq -e '.committed == true and .value.images == 1' "$EVIDENCE/mr10-write.out"
+
+# Worktree scope: an image content block and the CLI's own capture
+$V mcp --expect-event '.tool == "screenshot" and .cost.render_pages == 1 and .executor != "none"' mr10-wt screenshot "$(jq -nc --arg u "$MR10_U" --arg w "$MR10_W" '{unit:$u,worktree:$w,range:"A1:J12"}')"
+jq -e '[.content[].type] == ["text","image"]' "$EVIDENCE/mr10-wt.result.json"
+$V cli mr10-wt-cli screenshot --worktree "$MR10_W" --unit "$MR10_U" --range A1:J12 --out "$FIX/cli-wt" --json
+magick "$FIX/cli-wt/A1-J12.png" -resize 50% "$FIX/a.png"; magick "$EVIDENCE/mr10-wt.image-1.png" -resize 50% "$FIX/b.png"
+magick "$FIX/a.png" "$FIX/b.png" -background white -splice 0x6 -append "$EVIDENCE/mr10-side-by-side-worktree.png"
+
+# Trunk scope: the same Unit after merge
+$V cli mr10-ready pr ready "$MR10_N" -R "$O/personal" --json
+$V cli mr10-merge pr merge "$MR10_N" -R "$O/personal" --json
+$V mcp mr10-trunk screenshot "$(jq -nc --arg u "$MR10_U" '{unit:$u,trunk:true,range:"A1:J12"}')"
+$V cli mr10-trunk-cli screenshot --trunk --unit "$MR10_U" --range A1:J12 --out "$FIX/cli-trunk" --json
+magick "$FIX/cli-trunk/A1-J12.png" -resize 50% "$FIX/a.png"; magick "$EVIDENCE/mr10-trunk.image-1.png" -resize 50% "$FIX/b.png"
+magick "$FIX/a.png" "$FIX/b.png" -background white -splice 0x6 -append "$EVIDENCE/mr10-side-by-side-trunk.png"
+
+# A deck above 1 MiB: download links, no image blocks
+$V cli mr10-pr2 pr create -R "$O/personal" -t 'Screenshot deck' --json
+MR10_W2=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
+$V cli mr10-deck unit create --worktree "$MR10_W2" --space "$MR10_SPACE" --type slide --name 'Shot deck' --json
+MR10_D=$(jq -r .unit.unitId "$EVIDENCE/mr10-deck.out")
+for n in 1 2; do (cd "$FIX/deck" && $V cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json); done
+$V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
+jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck.result.json"
+jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck.out"
+curl -fsS -D "$EVIDENCE/mr10-deck-download.headers" -o "$EVIDENCE/mr10-deck-page-01.png" "$(jq -r '.images[0].download.url' "$EVIDENCE/mr10-deck.out")"
+grep -i '^content-type: image/png' "$EVIDENCE/mr10-deck-download.headers"
+magick "$EVIDENCE/mr10-deck-page-01.png" -resize 40% "$EVIDENCE/mr10-deck-page-01-small.png"
+
+# Invalid options come back readable, with the CLI's message
+$V mcp mr10-badrange screenshot "$(jq -nc --arg u "$MR10_U" '{unit:$u,trunk:true,range:"ZZZ99:A1"}')"
+test $? -eq 1
+$V cli mr10-badrange-cli screenshot --trunk --unit "$MR10_U" --range ZZZ99:A1 --out "$FIX/cli-bad" --json
+test "$(jq -r .message "$EVIDENCE/mr10-badrange.out")" = "$(sed 's/^INVALID_INPUT: //' "$EVIDENCE/mr10-badrange-cli.err" | head -n1)"
+$V mcp mr10-baddeck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w,range:"A1"}')"
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid" and .message == "--range is not supported for Slide"' "$EVIDENCE/mr10-baddeck.out"
+```
+
+Pass when:
+
+- `mr10-wt.image-1.png` is saved from an MCP `image` block and, next to the CLI capture in `mr10-side-by-side-worktree.png` (CLI on top), shows the same
+  text (`Region`, `Total`, `North`, `42`, `South`, `17`) and the same four-colour image. Look at it. The two PNGs are not byte-identical because the
+  renderer runs Linux Chromium and the CLI runs the host browser.
+- `mr10-side-by-side-trunk.png` shows the image again after merge, so the executor's trunk Asset reads work.
+- The deck result has two download links, no `image` block, and the downloaded `mr10-deck-page-01.png` is a 1920x1080 PNG showing `Deck page 1` over noise.
+  The usage event records `render_pages` 2 and `export_bytes` above 1 MiB.
+- Both rejections exit 1 with their message and a `tool_error` event.
 
 ## Gotchas
 

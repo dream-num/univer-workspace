@@ -115,7 +115,9 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `execute` 只接受 `code` 字符串，没有 `--script`。CLI 对代码长度的上限（10 MiB）保持不变。
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
 - `skills_read` 不带 `name` 时等于 `skills list`；带 `name` 不带 `resource` 时等于 `skills get`。返回内容里的 `uvw skills read …` 改写成对应的工具调用说明。
-- `screenshot` 在结果不超过约 1 MB 时直接返回图片内容，否则返回下载链接。
+- `screenshot` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-screenshot-scope-required`，两者同时给出报 `workspace-argument-invalid`）。`pages`、`tile`、`region`、`elements` 沿用 `uvw screenshot` 的字符串写法，`contact_slide` 是布尔值，`padding`、`scale` 是数字。executor 加载 Unit 后用 `uvw screenshot` 自己的命令解析这些选项，所以按 Unit 类型的取舍和错误信息与 CLI 一致（例如 `--range is not supported for Slide`），渲染服务拒绝的输入（如无效 A1 范围）以 `workspace-render-input-invalid` 返回。
+- `screenshot` 的 `structuredContent` 列出 `unitId`、`unitType` 和每张图的 `name`、`width`、`height`、`size`，以及有则带上的 `page`、`pageId`、`range`、`sheetName`、`role`、`tiles` 等元数据。调用在同步预算内完成且所有图合计不超过 1 MiB 时，结果在文本行之后为每张 PNG 附一个 MCP `image` 内容块，条目不带下载链接；否则每个条目带 `download` 链接，没有图片内容块。超过同步预算返回任务，用 `job_get` 取结果，经 `job_get` 取到的结果一律是下载链接。`idempotency_key` 的规则与 `export` 相同。
+- `screenshot` 把每张图都写入暂存（计入 `export_bytes` 与每用户暂存配额），因为落入任务的结果必须能给出链接；同步返回图片内容的调用不暴露这些链接。渲染页数记入 `render_pages`。
 - `import`、`export` 和 `compile_typst` 可能返回任务，所以 `job_get` 放在 `core`。
 
 ### 3.2 `files`
@@ -209,7 +211,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 规则：
 
 - `structuredContent` 超过 10 万字符时截断，返回 `truncated: true` 和 `cursor`，再次调用同一工具并带上 `cursor` 继续读取。
-- 二进制内容只有单张截图在约 1 MB 以内时以图片内容返回，其余一律返回下载链接。
+- 二进制内容只有 `screenshot` 在同步预算内完成、且所有图合计不超过 1 MiB 时以图片内容返回，其余一律返回下载链接。
 - `execute` 的返回值同样遵守截断规则。
 
 上限是否合适，在阶段 B 和 H 用真实客户端复测。
@@ -240,7 +242,7 @@ PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大�
 
 ### 6.2 下载
 
-导出文件、PDF、Blob、Asset 和多张截图都返回签名下载链接，15 分钟有效。工具只为申请者生成，链接本身是 capability，任何持有者都可下载，因此必须私密保存。
+导出文件、PDF、Blob、Asset 和合计超过 1 MiB 的截图都返回签名下载链接，15 分钟有效。工具只为申请者生成，链接本身是 capability，任何持有者都可下载，因此必须私密保存。
 目前没有客户端会自动跟随 `resource_link` 下载（未核实），所以链接以文本形式出现在结果里，交给用户点击。
 
 ## 7. 长任务
@@ -254,7 +256,7 @@ PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大�
 MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去掉了 SSE 断点续传。所以：
 
 - 所有工具的同步预算为 30 秒。
-- 当前已实现 `import`、`export`、`compile_typst` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。`print_pdf` 和多页 `screenshot` 在渲染服务阶段接入。
+- 当前已实现 `import`、`export`、`screenshot`、`compile_typst` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。`print_pdf` 在渲染服务阶段接入。
 - `job_get` 返回 `job_id` 和 `status`（`running`、`succeeded`、`failed`）。成功时 `result` 为原工具的结果，失败时 `error` 带 `code`、`message`、`detail`。未知、过期、其他用户的任务均报 `workspace-job-not-found`。
 - 任务状态保存在网关内存和暂存存储的 sidecar 文件中，不使用数据库。任务结果的有效期与下载链接一致。
 - `idempotency_key` 绑定参数：同用户、同工具、同 key 但参数不同（上传、Worktree、Space、Unit、格式等）返回 `workspace-idempotency-conflict`，不启动转换。
