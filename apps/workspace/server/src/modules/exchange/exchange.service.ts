@@ -643,19 +643,19 @@ interface ImportSource {
 }
 
 /**
- * exchange-node splits images and attachments out of Sheet, Doc and Slide imports, and the
- * decoded images, fonts and source streams out of PDF imports. A PDF Unit draws an image or
- * font only through the `resourceBindings` that `files.store` produces: without the hook the
- * bytes stay inline in `document.assets` and the editor draws no images at all.
+ * exchange-node splits images and attachments out of imports through `files.store` and rejects
+ * the hook only for Base. The check names that rejection rather than the accepted types: a type
+ * exchange-node starts to accept then stores its files without a change here, and a rejected one
+ * fails with INVALID_ARGUMENT. A list of accepted types dropped PDF files silently: the import
+ * succeeded and the editor drew no images, since a PDF Unit draws an image only through the
+ * `resourceBindings` that `files.store` produces.
  */
 function withImportedFiles(
   importOptions: BufferImportOptions,
   unitType: ExchangeUnitType,
   store: (file: IImportedFile) => IImportFileResult
 ): BufferImportOptions {
-  if (unitType !== "sheet" && unitType !== "doc" && unitType !== "slide" && unitType !== "pdf") {
-    return importOptions;
-  }
+  if (unitType === "base") return importOptions;
   return {
     ...importOptions,
     files: { store: (file: IImportedFile) => Promise.resolve(store(file)) },
