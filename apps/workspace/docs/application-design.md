@@ -265,9 +265,30 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
   Office 格式与 PDF（`isImportableDocument`），并在当前 Space 与目录创建正式
   Resource，Editor Ribbon 导入则默认创建在当前 User 的 Personal Space 根目录。两种入口都
   必须通过 Resource Module，不能直接写入一个没有产品归属的 Collaboration Unit；
+- Sheet、Doc、Slide 导入通过 exchange-node 的 `files.store` 把图片和内嵌 Office 附件拆成
+  Trunk Univer Asset。Schema 触发器要求 Trunk Asset 的 Unit 已存在，所以导入先预留 Unit ID，
+  转换时只把服务端选定的 Asset ID 写进 Unit 数据并暂留字节，Resource 创建成功后再把每个文件按
+  Asset 上传生命周期（`reserveUpload` → BlobStore → `publishStored`）写入；Resource 创建失败不留
+  任何文件。超过 Asset 上限（20 MB）的文件保持内联。JSON 输出（`outputType: 2`）没有归属 Unit，
+  图片与附件保持内联。Unit 已创建而 Asset 尚未写完的窗口只在导入任务内部，任务结果在两者都完成后
+  才返回；写入失败时 Unit 保留、对应引用无法解析，任务报错；
+- 附件转在线文档：`POST /universer-api/exchange/{type}/import` 带 `sourceUnitID` 时，
+  `fileID` 是该 Unit 的 Trunk Asset 而不是上传。调用者必须能打开宿主 Unit，Asset 必须属于
+  `sourceUnitID`，否则 404。新 Unit 默认创建在宿主 Node 的目录（调用者在那里有创建权限时），
+  否则落到 Personal Space 根目录；请求显式给出 `spaceId` 时以请求为准。附件本身留在宿主 Unit，
+  宿主 drawing 只记录 `oleOnlineUnit`；
 - export task 只接受服务端 `AccessResolver` 能解析且允许打开的 Trunk Unit，服务端自行
   确认 Unit Type，通过 Collaboration Service 固定当前 head 并读取包含 Sheet blocks 的恢复
   材料，再由 `UnitSnapshotMaterializer` 补全 snapshot；
+- 导出时 Asset 引用由 exchange-node 的 `files.load` 回读：每个引用经 Univer Asset Module 以
+  Asset 所属 Unit 重新解析权限（与引用所在 snapshot 无关），任何一处不可读即导出失败，不回退占位；
+  URL 图片不是 Workspace Asset，导出为透明占位图。请求
+  `options.oleAttachmentSource: 'online'` 时，已转换附件改为嵌入在线文档的当前确认版本：服务端以
+  调用者身份逐个解析子 Unit（类型须匹配、须有打开权限）并 materialize snapshot，任一子 Unit 不可读
+  则整个任务失败。该选项只对 XLSX、DOCX、PPTX 与 PDF 导出有效，CSV/TSV/Base 返回 400；
+- Browser 侧由 `WorkspaceOleLinkPlugin` 提供 `drawing.config.ole.getLink`（指向 `/preview/{unitId}`），
+  附件工具栏因此出现"转为在线文档"和"打开"；导出对话框只在当前 Unit 含已转换附件时提供
+  "嵌入在线版本"的选择；
 - 已知限制（SDK 1.4.0 仍存在）：空白新建的 PDF Unit 一经编辑器修改就无法导出，原生导出器会以
   "source-less PDF cannot apply imported semantic patches" 拒绝，因为编辑器 reducer 把叠加
   对象的编辑同时镜像进了 `objectPatches`；Workspace 不做绕过，等上游版本修复（exchange 集成

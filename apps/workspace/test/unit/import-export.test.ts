@@ -156,6 +156,18 @@ describe("Workspace import/export service", () => {
     ]);
   });
 
+  it("passes the attachment version choice through to the exchange client", async () => {
+    const { service, dependencies } = setup();
+
+    await expect(
+      service.exportUnit(ExchangeFormat.XLSX, undefined, { oleAttachmentSource: "online" })
+    ).resolves.toBe(true);
+
+    expect(dependencies.exchange.exportByUnitId).toHaveBeenCalledWith("unit-1", ExchangeFormat.XLSX, undefined, {
+      oleAttachmentSource: "online",
+    });
+  });
+
   it("ignores the SDK's misparsed Content-Disposition filename", async () => {
     // A slide snapshot has no title, and SDK 1.3.1 names the File from the
     // whole header tail after `filename=`.

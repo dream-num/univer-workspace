@@ -1,5 +1,6 @@
 import { BASE_TOOLBAR_EXTRA_ACTIONS } from "@univerjs-pro/bases-ui";
 import { ExchangeFormat, IExchangeService } from "@univerjs-pro/exchange-client";
+import { IDrawingManagerService } from "@univerjs/drawing";
 import {
   CommandType,
   DependentOn,
@@ -27,7 +28,7 @@ import {
   RibbonStartGroup,
   type MenuSchemaType,
 } from "@univerjs/ui";
-import { exchangeIds, type WorkspaceExchangeDefinition } from "./definitions";
+import { exchangeIds, type WorkspaceExchangeDefinition, type WorkspaceExportOptions } from "./definitions";
 import { WorkspaceImportExportService } from "./import-export-service";
 import { IMPORT_EXPORT_LOCALES, importExportKey } from "./locale";
 import { BaseExchangeToolbarActions, ExportFormatDialog, UploadNotification } from "./views";
@@ -156,9 +157,13 @@ export function createWorkspaceImportExportPlugin(definition: WorkspaceExchangeD
         id: ids.exportUnit,
         type: CommandType.OPERATION,
         handler: async () => {
-          if (!multipleFormats) return service.exportUnit(definition.exportFormats[0]!);
-          const targets = definition.bind(injector).exportTargets?.();
-          if (!targets) return false;
+          const unit = definition.bind(injector).currentUnit();
+          const onlineAttachments = unit ? hasOnlineAttachments(injector, unit.unitId) : false;
+          // A single format exports at once unless converted attachments make the version a choice.
+          if (!multipleFormats && !onlineAttachments) {
+            return service.exportUnit(definition.exportFormats[0]!);
+          }
+          const targets = definition.bind(injector).exportTargets?.() ?? { items: [], selectedId: "" };
           const localeService = injector.get(LocaleService);
           let dialog: IDisposable | null = null;
           const close = () => {
@@ -179,9 +184,18 @@ export function createWorkspaceImportExportPlugin(definition: WorkspaceExchangeD
                   ...targets,
                   formats: definition.exportFormats,
                   mobile: this.config.mobile,
+                  onlineAttachments,
                   onCancel: close,
-                  onConfirm: async (format: ExchangeFormat, targetId: string) => {
-                    await service.exportUnit(format, format === ExchangeFormat.XLSX ? undefined : targetId);
+                  onConfirm: async (
+                    format: ExchangeFormat,
+                    targetId: string,
+                    options: WorkspaceExportOptions
+                  ) => {
+                    await service.exportUnit(
+                      format,
+                      format === ExchangeFormat.XLSX || !targetId ? undefined : targetId,
+                      options.oleAttachmentSource ? options : undefined
+                    );
                     close();
                   },
                 },
@@ -236,4 +250,15 @@ export function createWorkspaceImportExportPlugin(definition: WorkspaceExchangeD
   setDependencies(WorkspaceImportExportPlugin, [Injector, LocaleService], 1);
   DependentOn(definition.headlessPlugin)(WorkspaceImportExportPlugin);
   return WorkspaceImportExportPlugin;
+}
+
+/** Whether any drawing of the Unit is an Office attachment converted to an online document. */
+function hasOnlineAttachments(injector: Injector, unitId: string): boolean {
+  if (!injector.has(IDrawingManagerService)) return false;
+  const drawings = injector.get(IDrawingManagerService).getDrawingDataForUnit(unitId) as
+    | Record<string, { readonly data?: Record<string, { readonly oleOnlineUnit?: unknown }> }>
+    | undefined;
+  return Object.values(drawings ?? {}).some((subUnit) =>
+    Object.values(subUnit?.data ?? {}).some((drawing) => Boolean(drawing?.oleOnlineUnit))
+  );
 }

@@ -6,6 +6,7 @@ import { BehaviorSubject, type Observable } from "rxjs";
 import type {
   WorkspaceExchangeDefinition,
   WorkspaceExchangeUnitType,
+  WorkspaceExportOptions,
   WorkspaceUnitExchange,
 } from "./definitions";
 import { importExportKey, type ImportExportLocaleKey } from "./locale";
@@ -149,12 +150,18 @@ export class WorkspaceImportExportService extends Disposable {
    * filename does, so `file.name` (the Content-Disposition name the SDK parses)
    * is not used.
    */
-  async exportUnit(format: ExchangeFormat, targetId?: string): Promise<boolean> {
+  async exportUnit(
+    format: ExchangeFormat,
+    targetId?: string,
+    options?: WorkspaceExportOptions
+  ): Promise<boolean> {
     const unit = this.dependencies.exchange.currentUnit();
     if (!unit) return false;
     this.showMessage(MessageType.Info, "downloading");
     const [file, nodeName] = await Promise.all([
-      this.dependencies.exchange.exportByUnitId(unit.unitId, format, targetId),
+      options
+        ? this.dependencies.exchange.exportByUnitId(unit.unitId, format, targetId, options)
+        : this.dependencies.exchange.exportByUnitId(unit.unitId, format, targetId),
       this.dependencies.resolveUnitName(unit.unitId).catch(() => undefined),
     ]);
     if (!file) return false;

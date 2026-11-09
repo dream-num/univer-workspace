@@ -2,6 +2,7 @@ import { ExchangeFormat } from "@univerjs-pro/exchange-client";
 import { LocaleService } from "@univerjs/core";
 import {
   Button,
+  Checkbox,
   DropdownMenu,
   MobileActionRowGroup,
   MobileSelect,
@@ -28,7 +29,7 @@ import {
 } from "@univerjs/icons";
 import { useDependency, useObservable } from "@univerjs/ui";
 import { useRef, useState, type ReactNode } from "react";
-import type { ExportTargets, WorkspaceExchangeUnitType } from "./definitions";
+import type { ExportTargets, WorkspaceExchangeUnitType, WorkspaceExportOptions } from "./definitions";
 import {
   UploadNotificationState,
   type WorkspaceImportExportService,
@@ -167,8 +168,19 @@ export function UploadNotification({
 export interface ExportFormatDialogProps extends ExportTargets {
   readonly formats: readonly ExchangeFormat[];
   readonly mobile: boolean;
+  /** The Unit holds Office attachments converted to online documents, so their version is a choice. */
+  readonly onlineAttachments?: boolean;
   readonly onCancel: () => void;
-  readonly onConfirm: (format: ExchangeFormat, targetId: string) => Promise<void>;
+  readonly onConfirm: (
+    format: ExchangeFormat,
+    targetId: string,
+    options: WorkspaceExportOptions
+  ) => Promise<void>;
+}
+
+/** Formats that embed files can carry the online version of converted attachments. */
+function formatEmbedsAttachments(format: ExchangeFormat): boolean {
+  return format !== ExchangeFormat.CSV && format !== ExchangeFormat.TSV;
 }
 
 /** XLSX exports the whole Unit; CSV and TSV export one sheet or table. */
@@ -177,22 +189,31 @@ export function ExportFormatDialog({
   items,
   selectedId: initialSelectedId,
   mobile,
+  onlineAttachments = false,
   onCancel,
   onConfirm,
 }: ExportFormatDialogProps) {
   const t = useTranslate();
   const [format, setFormat] = useState(formats[0]);
   const [selectedId, setSelectedId] = useState(initialSelectedId);
+  const [embedOnline, setEmbedOnline] = useState(false);
   const [exporting, setExporting] = useState(false);
   const exportingRef = useRef(false);
   const options = items.map((item) => ({ ...item }));
+  // Only sheet and table formats pick a target; DOCX, PPTX and PDF export the whole Unit.
+  const needsTarget = (item: ExchangeFormat) => item !== ExchangeFormat.XLSX && items.length > 0;
+  const attachmentChoice = onlineAttachments && format !== undefined && formatEmbedsAttachments(format);
 
   async function confirm() {
     if (exportingRef.current || !format) return;
     exportingRef.current = true;
     setExporting(true);
     try {
-      await onConfirm(format, selectedId);
+      await onConfirm(
+        format,
+        selectedId,
+        attachmentChoice && embedOnline ? { oleAttachmentSource: "online" } : {}
+      );
     } finally {
       exportingRef.current = false;
       setExporting(false);
@@ -208,7 +229,7 @@ export function ExportFormatDialog({
         type="button"
         variant="primary"
         aria-busy={exporting}
-        disabled={exporting || !format || (format !== ExchangeFormat.XLSX && !selectedId)}
+        disabled={exporting || !format || (needsTarget(format) && !selectedId)}
         onClick={() => void confirm()}
       >
         {exporting && <LoadingMultiIcon className="animate-spin" />}
@@ -228,7 +249,7 @@ export function ExportFormatDialog({
             <Radio value={item} checked={format === item} onChange={(value) => setFormat(value as ExchangeFormat)}>
               <span className="w-10">{item.toUpperCase()}</span>
             </Radio>
-            {item !== ExchangeFormat.XLSX &&
+            {needsTarget(item) &&
               (mobile ? (
                 format === item && (
                   <MobileSelect
@@ -248,6 +269,11 @@ export function ExportFormatDialog({
               ))}
           </div>
         ))}
+        {attachmentChoice && (
+          <Checkbox checked={embedOnline} onChange={(value) => setEmbedOnline(Boolean(value))}>
+            {t("exportOnlineAttachments")}
+          </Checkbox>
+        )}
       </div>
       {mobile ? (
         <MobileActionRowGroup className="sticky bottom-0 bg-background py-3">{actions}</MobileActionRowGroup>

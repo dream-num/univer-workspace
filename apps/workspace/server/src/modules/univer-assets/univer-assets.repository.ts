@@ -46,9 +46,11 @@ export class UniverAssetsRepository {
     readonly expectedSize: number;
     readonly createdAt: number;
     readonly expiresAt: number;
+    /** An Asset ID the caller already wrote into the Unit (an Office import's references). */
+    readonly assetId?: string;
   }): UniverAssetUploadRow {
     const uploadId = randomUUID();
-    const assetId = randomUUID();
+    const assetId = input.assetId ?? randomUUID();
     const objectKey = randomUUID();
     this._database.connection.prepare(
       `INSERT INTO univer_asset_uploads

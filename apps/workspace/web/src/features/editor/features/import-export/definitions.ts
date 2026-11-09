@@ -50,13 +50,19 @@ export interface ExportTargets {
  * headless exchange client is configured with, so the server keeps owning the
  * license, the Personal Space import target and export authorization.
  */
+/** Which version of converted Office attachments an export embeds (SDK 1.4 `oleAttachmentSource`). */
+export interface WorkspaceExportOptions {
+  readonly oleAttachmentSource?: "original" | "online";
+}
+
 export interface WorkspaceUnitExchange {
   currentUnit(): { readonly unitId: string; readonly name: string } | undefined;
   importToUnit(file: File): Promise<string | undefined>;
   exportByUnitId(
     unitId: string,
     format: ExchangeFormat,
-    targetId?: string
+    targetId?: string,
+    options?: WorkspaceExportOptions
   ): Promise<File | undefined>;
   /** Worksheets or tables that CSV/TSV can export one at a time. */
   exportTargets?(): ExportTargets | undefined;
@@ -132,8 +138,8 @@ export const SHEET_EXCHANGE: WorkspaceExchangeDefinition = {
           unit.getSnapshot().name
         ),
       importToUnit: (file) => service().importSheetToUnitId(file),
-      exportByUnitId: (unitId, format, sheetId) =>
-        service().exportSheetByUnitId(unitId, format, sheetId),
+      exportByUnitId: (unitId, format, sheetId, options) =>
+        service().exportSheetByUnitId(unitId, format, sheetId, options),
       exportTargets() {
         const unit = workbook();
         if (!unit) return undefined;
@@ -185,7 +191,8 @@ export const DOC_EXCHANGE: WorkspaceExchangeDefinition = {
           docType === undefined ? undefined : { docType }
         );
       },
-      exportByUnitId: (unitId) => service().exportDocByUnitId(unitId),
+      exportByUnitId: (unitId, _format, _targetId, options) =>
+        service().exportDocByUnitId(unitId, options),
     };
   },
 };
@@ -208,7 +215,8 @@ export const SLIDE_EXCHANGE: WorkspaceExchangeDefinition = {
           (unit) => unit.getSnapshot().title
         ),
       importToUnit: (file) => service().importSlideToUnitId(file),
-      exportByUnitId: (unitId) => service().exportSlideByUnitId(unitId),
+      exportByUnitId: (unitId, _format, _targetId, options) =>
+        service().exportSlideByUnitId(unitId, options),
     };
   },
 };

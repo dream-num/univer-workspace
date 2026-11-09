@@ -15,6 +15,8 @@ import {
   importBufferToSnapshot,
   type BufferImportOptions,
   type ExportOptions,
+  type IImportedFile,
+  type IImportFileResult,
   type ISnapshotWithBlocks,
 } from "@univerjs-pro/exchange-node";
 // Registers the PDF conversion adapter (backed by @univerjs-pro/exchange-pdf-node-binding).
@@ -34,11 +36,19 @@ import {
   type UniverLicenseCredentials,
 } from "../../integrations/univer/univer-license.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver, UnitType } from "../access/index.js";
+import type { AccessResolver, NodeAccess, UnitType } from "../access/index.js";
 import type { ResourcesModule } from "../resources/index.js";
 import type { SpacesModule } from "../spaces/index.js";
-import type { UniverAssetsModule } from "../univer-assets/index.js";
-import { exportWorkspaceSnapshot } from "./export-images.js";
+import {
+  MAX_UNIVER_ASSET_BYTES,
+  type ImportedUniverAsset,
+  type UniverAssetsModule,
+} from "../univer-assets/index.js";
+import {
+  exportLoadsFiles,
+  exportWorkspaceSnapshot,
+  type OleAttachmentSource,
+} from "./export-files.js";
 
 export const MAX_EXCHANGE_FILE_BYTES = 50 * 1024 * 1024;
 const ARTIFACT_TTL_MS = 2 * 60 * 60 * 1000;
@@ -133,7 +143,7 @@ export interface ExchangeModule {
 }
 
 export function createExchangeModule(options: {
-  readonly assets: Pick<UniverAssetsModule, "openContent">;
+  readonly assets: Pick<UniverAssetsModule, "openContent" | "storeImported">;
   readonly access: AccessResolver;
   readonly resources: ResourcesModule;
   readonly spaces: SpacesModule;
@@ -241,6 +251,80 @@ export function createExchangeModule(options: {
     return id;
   }
 
+  function uploadSource(userId: string, fileID: string): ImportSource {
+    const artifact = requireArtifact(artifacts, userId, fileID);
+    return {
+      filename: artifact.filename,
+      read: () => readArtifact(options.store, artifact, maxFileBytes),
+    };
+  }
+
+  // Converts a stored Office attachment of `sourceUnitID` into an independent Unit. The caller
+  // must be able to open the host Unit, and the Asset must belong to that Unit; the new Unit
+  // lands next to the host when the caller may create there, otherwise in the Personal Space.
+  async function attachmentSource(
+    userId: string,
+    fileID: string,
+    sourceUnitID: string
+  ): Promise<ImportSource> {
+    const access = options.access.resolveUnit(userId, sourceUnitID);
+    if (!access || access.kind !== "univer" || !access.capabilities.openContent) {
+      throw notFound();
+    }
+    const asset = await openAttachment(userId, fileID, sourceUnitID, (opened) => {
+      opened.stream.destroy();
+      return opened.asset;
+    });
+    const target = hostTarget(userId, access.node);
+    return {
+      filename: asset.original_filename,
+      read: () =>
+        openAttachment(userId, fileID, sourceUnitID, (opened) =>
+          readStream(opened.stream, maxFileBytes)
+        ),
+      ...(target ? { target } : {}),
+    };
+  }
+
+  async function openAttachment<T>(
+    userId: string,
+    fileID: string,
+    sourceUnitID: string,
+    use: (opened: Awaited<ReturnType<UniverAssetsModule["openContent"]>>) => Promise<T> | T
+  ): Promise<T> {
+    let opened: Awaited<ReturnType<UniverAssetsModule["openContent"]>>;
+    try {
+      opened = await options.assets.openContent(userId, { kind: "trunk" }, fileID, undefined);
+    } catch {
+      throw notFound();
+    }
+    if (opened.asset.unit_id !== sourceUnitID) {
+      opened.stream.destroy();
+      throw notFound();
+    }
+    if (opened.totalByteSize > maxFileBytes) {
+      opened.stream.destroy();
+      throw payloadTooLarge(maxFileBytes);
+    }
+    return use(opened);
+  }
+
+  function hostTarget(
+    userId: string,
+    node: NodeAccess
+  ): { readonly spaceId: string; readonly parentNodeId: string | null } | undefined {
+    if (node.parentNodeId) {
+      const parent = options.access.resolveNode(userId, node.parentNodeId);
+      return parent?.capabilities.createChildren
+        ? { spaceId: node.spaceId, parentNodeId: node.parentNodeId }
+        : undefined;
+    }
+    const space = options.access.resolveSpace(userId, node.spaceId);
+    return space?.capabilities.createAtRoot
+      ? { spaceId: node.spaceId, parentNodeId: null }
+      : undefined;
+  }
+
   return {
     acceptsUpload(source) {
       return Number(source) === FileSource.HttpImport;
@@ -265,19 +349,23 @@ export function createExchangeModule(options: {
     async importFile(userId, typeValue, inputValue) {
       await removeExpired();
       const input = validImportRequest(inputValue);
-      const artifact = requireArtifact(artifacts, userId, input.fileID);
+      // A stored attachment of a Unit the caller can open, or the caller's own upload.
+      const source = input.sourceUnitID
+        ? await attachmentSource(userId, input.fileID, input.sourceUnitID)
+        : uploadSource(userId, input.fileID);
       const unitType =
         typeValue === "auto"
-          ? unitTypeFromFilename(artifact.filename)
+          ? unitTypeFromFilename(source.filename)
           : unitTypeFromProtocol(typeValue);
       const taskID = startTask(userId, "import", async () => {
-        const buffer = await readArtifact(options.store, artifact, maxFileBytes);
+        const buffer = await source.read();
         const importOptions = exchangeImportOptions(
           unitType,
-          artifact.filename,
+          source.filename,
           input.options
         );
         if (input.outputType === 2) {
+          // JSON output keeps images and attachments inline: there is no Unit to own them.
           const converted = await importBufferToSnapshot(
             buffer,
             importOptions
@@ -287,7 +375,7 @@ export function createExchangeModule(options: {
           );
           const output = await saveArtifact({
             ownerUserId: userId,
-            filename: `${stripExtension(artifact.filename)}.json`,
+            filename: `${stripExtension(source.filename)}.json`,
             mediaType: "application/json",
             body: Readable.from(json),
             byteSize: json.byteLength,
@@ -299,20 +387,44 @@ export function createExchangeModule(options: {
           };
         }
 
-        const data = await importUnitData(buffer, importOptions);
-        const target = importTarget(options.spaces, userId, input);
-        const name = importedName(data, artifact.filename);
-        const created = await options.resources.create(userId, randomUUID(), {
-          kind: "univer",
-          spaceId: target.spaceId,
-          parentNodeId: target.parentNodeId,
-          name,
-          unitType,
-          initialData: data,
-        });
+        // Images and embedded attachments become Trunk Assets of the Unit this import creates.
+        // The schema requires an Asset's Unit to exist, so the Unit ID is reserved first, the
+        // Unit keeps only Asset IDs chosen while exchange-node converts, and the bytes are
+        // written through the Asset upload lifecycle once the Resource exists. A failed
+        // Resource creation therefore leaves no file behind.
+        const unitId = randomUUID();
+        const files: ImportedUniverAsset[] = [];
+        const data = await importUnitData(
+          buffer,
+          withImportedFiles(importOptions, unitType, (file) => {
+            if (file.size > MAX_UNIVER_ASSET_BYTES) return { mode: "inline" };
+            const assetId = randomUUID();
+            files.push({ assetId, filename: file.name, mediaType: file.mimeType, bytes: file.bytes });
+            return { mode: "reference", source: assetId };
+          })
+        );
+        const target =
+          !input.spaceId && source.target
+            ? source.target
+            : importTarget(options.spaces, userId, input);
+        const name = importedName(data, source.filename);
+        const created = await options.resources.create(
+          userId,
+          randomUUID(),
+          {
+            kind: "univer",
+            spaceId: target.spaceId,
+            parentNodeId: target.parentNodeId,
+            name,
+            unitType,
+            initialData: data,
+          },
+          { unitId }
+        );
         if (created.status === 202) {
           throw new Error("The imported Resource could not be published.");
         }
+        await options.assets.storeImported({ actorUserId: userId, unitId, files });
         const resource = created.body.node.resource;
         if (!resource || resource.kind !== "univer") {
           throw new Error("The imported Resource mapping is missing.");
@@ -384,8 +496,13 @@ export function createExchangeModule(options: {
         const output = await exportWorkspaceSnapshot(
           aggregate,
           exchangeExportOptions(unitType, input.format, input.options),
-          options.assets,
-          userId
+          {
+            userId,
+            assets: options.assets,
+            access: options.access,
+            snapshots: options.snapshots,
+            attachmentSource: input.attachmentSource,
+          }
         );
         const artifact = await saveArtifact({
           ownerUserId: userId,
@@ -488,6 +605,8 @@ function validImportRequest(value: unknown): {
   readonly options: unknown;
   readonly spaceId: string | null;
   readonly parentNodeId: string | null;
+  /** The Unit whose stored attachment `fileID` is converted into an online Unit. */
+  readonly sourceUnitID: string | null;
 } {
   const record = requireRecord(value);
   if (typeof record.fileID !== "string" || !record.fileID) {
@@ -496,13 +615,54 @@ function validImportRequest(value: unknown): {
   if (record.outputType !== 1 && record.outputType !== 2) {
     throw invalidInput("outputType must be UNIT (1) or JSON (2).", "outputType");
   }
+  const sourceUnitID = optionalId(record.sourceUnitID, "sourceUnitID");
+  if (sourceUnitID && record.outputType !== 1) {
+    throw invalidInput("sourceUnitID requires outputType UNIT (1).", "sourceUnitID");
+  }
   return {
     fileID: record.fileID,
     outputType: record.outputType,
     options: record.options,
     spaceId: optionalId(record.spaceId, "spaceId"),
     parentNodeId: optionalId(record.parentNodeId, "parentNodeId"),
+    sourceUnitID,
   };
+}
+
+interface ImportSource {
+  readonly filename: string;
+  read(): Promise<Buffer>;
+  /** Where the imported Unit lands when the request names no Space; the host Unit's folder. */
+  readonly target?: { readonly spaceId: string; readonly parentNodeId: string | null };
+}
+
+/** exchange-node splits images and attachments out of Sheet, Doc and Slide imports only. */
+function withImportedFiles(
+  importOptions: BufferImportOptions,
+  unitType: ExchangeUnitType,
+  store: (file: IImportedFile) => IImportFileResult
+): BufferImportOptions {
+  if (unitType !== "sheet" && unitType !== "doc" && unitType !== "slide") return importOptions;
+  return {
+    ...importOptions,
+    files: { store: (file: IImportedFile) => Promise.resolve(store(file)) },
+  } as BufferImportOptions;
+}
+
+async function readStream(stream: Readable, maxBytes: number): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  let length = 0;
+  try {
+    for await (const chunk of stream) {
+      const bytes = Buffer.from(chunk);
+      length += bytes.length;
+      if (length > maxBytes) throw payloadTooLarge(maxBytes);
+      chunks.push(bytes);
+    }
+  } finally {
+    stream.destroy();
+  }
+  return Buffer.concat(chunks);
 }
 
 function importTarget(
@@ -541,6 +701,7 @@ function validExportRequest(
   readonly jsonID: string | null;
   readonly format: ExchangeFormat;
   readonly options: unknown;
+  readonly attachmentSource: OleAttachmentSource;
 } {
   const record = requireRecord(value);
   const unitID = optionalId(record.unitID, "unitID");
@@ -552,7 +713,39 @@ function validExportRequest(
     );
   }
   const format = validExportFormat(record.format, unitType);
-  return { unitID, jsonID, format, options: record.options };
+  const attachmentSource = optionalRecord(record.options)?.oleAttachmentSource ?? "original";
+  if (attachmentSource !== "original" && attachmentSource !== "online") {
+    throw invalidInput(
+      "oleAttachmentSource must be original or online.",
+      "oleAttachmentSource"
+    );
+  }
+  // exchange-node embeds online attachment versions only in exports that take files.
+  if (
+    attachmentSource === "online" &&
+    !exportLoadsFiles({ type: instanceTypeOf(unitType), format })
+  ) {
+    throw invalidInput(
+      "Online attachment versions are only available for XLSX, DOCX, PPTX and PDF exports.",
+      "oleAttachmentSource"
+    );
+  }
+  return { unitID, jsonID, format, options: record.options, attachmentSource };
+}
+
+function instanceTypeOf(unitType: ExchangeUnitType): UniverInstanceType {
+  switch (unitType) {
+    case "sheet":
+      return UniverInstanceType.UNIVER_SHEET;
+    case "doc":
+      return UniverInstanceType.UNIVER_DOC;
+    case "slide":
+      return UniverInstanceType.UNIVER_SLIDE;
+    case "base":
+      return UniverInstanceType.UNIVER_BASE;
+    case "pdf":
+      return UniverInstanceType.UNIVER_PDF;
+  }
 }
 
 function exchangeImportOptions(
