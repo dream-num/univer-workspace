@@ -3,11 +3,12 @@ import type { Face } from '../client.js';
 import type { OpenFile } from '../model.js';
 import type { Proposal } from '../model.js';
 import { Viewer } from '../viewer.js';
+import type { EditorLanguageSource } from '../editor-language.js';
 import type { ComparisonInput } from '../viewer-data.js';
 import { button, iconButton, Icon } from './primitives.js';
 
-/** Review remains in the current document. The Server returns the saved shared
- * side and exact merge candidate together with its version-bound review token. */
+/** Review stays in the current document using the existing comparison read.
+ * Apply follows the Workspace merge workflow and may observe later edits. */
 export function AIChanges({
   face,
   file,
@@ -61,7 +62,6 @@ export function AIChanges({
         sessionId,
         nodeId: file.nodeId,
         proposalId: proposal.id,
-        reviewToken: review?.reviewToken,
       });
       if (action === 'review') {
         const unit = value.comparisons?.find(
@@ -72,7 +72,7 @@ export function AIChanges({
         if (!unit || value.comparisons.length !== 1)
           throw new Error('变更范围与当前文档不一致。');
         setLoaded({});
-        setReview({ ...unit.comparison, reviewToken: value.reviewToken });
+        setReview({ ...unit.comparison, previewId: crypto.randomUUID() });
       } else {
         setProposal(value);
         setReview(null);
@@ -194,9 +194,10 @@ export function AIChanges({
                 </div>
                 {review[side]?.unitData ? (
                   <ReviewSide
+                    language={face.editorLanguage}
                     file={{
                       ...file,
-                      sha256: review.reviewToken + side,
+                      sha256: review.previewId + side,
                       data: review[side].unitData,
                     }}
                     onReady={() =>
@@ -246,7 +247,7 @@ function SheetChangeDetails({ result }: { result: any }) {
     </details>
   );
 }
-function ReviewSide({ file, onReady }: { file: ComparisonInput; onReady(): void }) {
+function ReviewSide({ file, onReady, language }: { file: ComparisonInput; onReady(): void; language: EditorLanguageSource }) {
   useEffect(() => {
     const element = document.querySelector(
       `[data-review-side="${file.sha256}"]`,
@@ -262,7 +263,7 @@ function ReviewSide({ file, onReady }: { file: ComparisonInput; onReady(): void 
   }, [file.sha256]);
   return (
     <div className="sp-ai-review-content" data-review-side={file.sha256}>
-      <Viewer file={file} />
+      <Viewer file={file} language={language} />
     </div>
   );
 }

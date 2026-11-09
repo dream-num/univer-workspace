@@ -147,27 +147,23 @@ export class WorkspaceWorktreeFeature {
   public async transition(
     worktreeId: string,
     action: "ready" | "reopen" | "merge" | "discard",
-    reviewToken?: string,
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const http = await this.authenticatedHttp();
     const current = await getWorktree(http, id);
     assertTransition(current, action);
-    if (action === "merge" && !reviewToken) throw workspaceError("workspace-review-required", "Render the Server Worktree review and provide its reviewToken before merging.");
     const expected: Record<typeof action, WorkspaceWorktreeState> = {
       discard: "discarded",
       merge: "merged",
       ready: "ready",
       reopen: "draft",
     };
-    const operationKey = action === "merge" ? stableKey(action, id, reviewToken!) : stableKey(action, id);
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
         ...(action === "merge" || action === "discard"
-          ? { idempotencyKey: operationKey }
+          ? { idempotencyKey: stableKey(action, id) }
           : {}),
         method: "POST",
-        ...(action === "merge" ? { body: { reviewToken } } : {}),
       });
       const result = parseWorktree(body["worktree"], id);
       if (result.state !== expected[action]) {
@@ -183,18 +179,6 @@ export class WorkspaceWorktreeFeature {
       return result;
     } catch (error) {
       if (!isWorkspaceResultUnknown(error)) throw error;
-      if (action === "merge") {
-        // A current merged state cannot prove which reviewed request committed.
-        // Confirm this review-bound durable Operation before reading its result.
-        let confirmed = false;
-        try {
-          const operation = await http.json(`/api/operations/${encodeURIComponent(operationKey)}`);
-          const result = operation["result"];
-          confirmed = operation["id"] === operationKey && operation["kind"] === "mergeWorktree" && operation["state"] === "completed" &&
-            typeof result === "object" && result !== null && "worktreeId" in result && result.worktreeId === id && "state" in result && result.state === "merged";
-        } catch { /* An unconfirmed operation stays unknown; never choose latest. */ }
-        if (!confirmed) throw workspaceError("workspace-result-unknown", "The reviewed merge operation could not be confirmed.", { operationId: operationKey, expectedState: "merged", worktreeId: id });
-      }
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}`);
       const confirmed = parseWorktree(body["worktree"]);
       if (confirmed.id === id && confirmed.state === expected[action]) return confirmed;

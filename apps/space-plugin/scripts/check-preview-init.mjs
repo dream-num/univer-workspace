@@ -24,9 +24,12 @@ import {getDocsEmptySnapshot, LocaleType, DocumentFlavor} from '@univerjs/core';
 import {Viewer} from './src/viewer.tsx';
 import './src/collaborative-editor.tsx';
 window.permissionErrors=[];
+let localeSnapshot={active:'en'};const languageListeners=new Set();
+const language={getSnapshot:()=>localeSnapshot,subscribe:listener=>{languageListeners.add(listener);return()=>languageListeners.delete(listener);}};
+window.changePreviewLanguage=active=>{localeSnapshot={active};for(const listener of languageListeners)listener();};
 const data=getDocsEmptySnapshot('preview-regression',LocaleType.ZH_CN,'Review',DocumentFlavor.MODERN);
 const file={nodeId:'preview-node',unitId:data.id,type:'doc',name:'Review',sha256:'fixture',data};
-createRoot(document.getElementById('app')).render(React.createElement('div',{style:{display:'flex',height:'100%'}},React.createElement(Viewer,{file}),React.createElement(Viewer,{file})));`;
+createRoot(document.getElementById('app')).render(React.createElement('div',{style:{display:'flex',height:'100%'}},React.createElement(Viewer,{file,language}),React.createElement(Viewer,{file,language})));`;
 const bundle = await build({ stdin: { contents, resolveDir: process.cwd(), loader: 'jsx' },
   bundle: true, platform: 'browser', format: 'esm', write: false, target: 'es2022',
   loader: { '.css': 'text' }, plugins: [{ name: 'observe-preview-errors', setup(build) {
@@ -47,6 +50,15 @@ try {
   assert.deepEqual(initialized.editable, [false, false]);
   if (baseline) assert.ok(initialized.errors.includes('PERMISSION_DENIED'));
   else assert.deepEqual(initialized.errors, []);
+  const localeSwitch = baseline ? null : await page.evaluate(() => {
+    const apis=window.previewAPIs,units=apis.map(api=>api.getActiveDocument().getDocumentDataModel());
+    const before=units.map(unit=>JSON.stringify(unit.getSnapshot()));
+    const initial=apis.map(api=>api.getCurrentLocale());
+    window.changePreviewLanguage('zh');const chinese=apis.map(api=>api.getCurrentLocale());
+    window.changePreviewLanguage('en');const english=apis.map(api=>api.getCurrentLocale());
+    return {initial,chinese,english,sameModels:apis.every((api,i)=>api.getActiveDocument().getDocumentDataModel()===units[i]),unchanged:units.every((unit,i)=>JSON.stringify(unit.getSnapshot())===before[i])};
+  });
+  if (!baseline) assert.deepEqual(localeSwitch,{initial:['enUS','enUS'],chinese:['zhCN','zhCN'],english:['enUS','enUS'],sameModels:true,unchanged:true});
   const realDenial = await page.evaluate(async () => {
     const api = window.previewAPIs[0], document = api.getActiveDocument();
     const before = JSON.stringify(document.getDocumentDataModel().getSnapshot());
@@ -54,6 +66,6 @@ try {
     return { denied: window.permissionErrors.includes('PERMISSION_DENIED'), unchanged: before === JSON.stringify(document.getDocumentDataModel().getSnapshot()) };
   });
   assert.deepEqual(realDenial, { denied: true, unchanged: true });
-  await writeEvidence(`preview-init-${baseline ? 'baseline' : 'final'}.json`, { carrier: 'isolated real SDK regression, not product/Desktop acceptance', initialized, realDenial });
+  await writeEvidence(`preview-init-${baseline ? 'baseline' : 'final'}.json`, { carrier: 'isolated real SDK regression, not product/Desktop acceptance', initialized, localeSwitch, realDenial });
   console.log('PASS preview initialization and real read-only denial', { baseline });
 } finally { await browser.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }

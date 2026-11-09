@@ -150,7 +150,7 @@ export function apply(ctx: Context) {
           value = await editing.status(string('sessionId'), string('nodeId'));
           break;
         case 'editing-action':
-          value = await editing.action(string('sessionId'), string('nodeId'), string('action'), string('proposalId'), string('reviewToken', true));
+          value = await editing.action(string('sessionId'), string('nodeId'), string('action'), string('proposalId'));
           break;
         case 'status':
           value = { ...(await auth.status()), contentVersion: workspace.contentVersion };

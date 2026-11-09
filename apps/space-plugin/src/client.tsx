@@ -25,6 +25,7 @@ import hiddenEditorInputCss from './workarounds/hidden-editor-input.css';
 import { configureLicense } from './license.js';
 import { Settings } from './components/settings.js';
 import type { DocFocus } from './doc-focus.js';
+import type { EditorLanguageSource } from './editor-language.js';
 import { EditorResources, type EditorBinding, type EditorResource } from './editor-lifecycle.js';
 
 declare const __SPACE_MARKDOWN_CSS__: string;
@@ -42,6 +43,7 @@ export const inject = [
   'conversation',
   'uiConversation',
   'connection',
+  'locale',
 ];
 const PANEL = 'space-plugin';
 
@@ -554,12 +556,13 @@ export function apply(ctx: any) {
     }, current);
   }
   const face = {
+    editorLanguage: ctx.locale,
     selectionProposal: (input: import('./selection-editing.js').SelectionProposalInput, signal: AbortSignal) => api<{ text: string }>('selection-proposal', input, signal),
     editingStatus: (sessionId: string, nodeId: string) => api('editing-status', { sessionId, nodeId }),
-    editingAction: async (input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }) => {
+    editingAction: async (input: { sessionId: string; nodeId: string; action: string; proposalId: string }) => {
       if (input.action === 'review' || input.action === 'apply') {
-        // UX preflight only; the Server still verifies the review and ACL
-        // atomically at merge. Avoid flushing an editor after access revocation.
+        // UX preflight only; the Server checks current permissions
+        // again at merge. Avoid flushing an editor after access revocation.
         try {
           const { node } = await api<{ node: Node }>('metadata', { node: input.nodeId });
           if (!node.resource?.capabilities.editContent) throw Object.assign(new Error('Access denied'), { code: '403' });
@@ -1094,9 +1097,10 @@ export function apply(ctx: any) {
   });
 }
 export type Face = {
+  editorLanguage: EditorLanguageSource;
   selectionProposal(input: import('./selection-editing.js').SelectionProposalInput, signal: AbortSignal): Promise<{ text: string }>;
   editingStatus(sessionId: string, nodeId: string): Promise<import('./model.js').Proposal | null>;
-  editingAction(input: { sessionId: string; nodeId: string; action: string; proposalId: string; reviewToken?: string }): Promise<any>;
+  editingAction(input: { sessionId: string; nodeId: string; action: string; proposalId: string }): Promise<any>;
 
   metadata(node: string): Promise<{ node: import('./model.js').Node }>;
   sharing(input: import('./sharing.js').SharingInput): Promise<any>;

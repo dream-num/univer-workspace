@@ -141,7 +141,7 @@ async function retryWorktreeOperation(
       });
       return;
     case "merge_worktree":
-      await worktrees.merge(userId, worktreeId, row.id, { reviewToken: payload.reviewToken });
+      await worktrees.merge(userId, worktreeId, row.id);
       return;
     case "discard_worktree":
       await worktrees.discard(userId, worktreeId, row.id);

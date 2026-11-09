@@ -168,7 +168,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `label_list` | `label list` | `repo` | 是 | 否 | `read` |
 | `label_write` | `label create`、`label edit`、`label delete` | `repo`、`action`、`name`、`new_name`、`color`、`description` | 否 | 是 | `write` |
 | `space_node` | `space node create`、`rename`、`move`、`trash` | `action`、`repo`、`node`、`name`、`parent`、`root` | 否 | 是 | `publish` |
-| `pr_merge` | `pr merge` | `repo`、`number`、用户已审查的精确 Server preview 的 `review_token`（缺失则拒绝；不自动代审） | 否 | 是 | `worktree:merge` |
+| `pr_merge` | `pr merge` | `repo`、`number` | 否 | 是 | `worktree:merge` |
 | `pr_discard` | `pr discard` | `repo`、`number` | 否 | 是 | `worktree:merge` |
 | `resources_registries` | `resources registries` | 无 | 是 | 否 | `read` |
 | `resources_find` | `resources find` | `query`、`registry`、`limit` | 是 | 否 | `read` |

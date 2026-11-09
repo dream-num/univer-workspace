@@ -1,24 +1,19 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   createUniver,
-  LocaleType,
   LifecycleStages,
-  mergeLocales,
 } from '@univerjs/presets';
 import {
   UniverDocsCorePreset,
   UniverDocsUIPlugin,
 } from '@univerjs/preset-docs-core';
 import { UniverSheetsCorePreset } from '@univerjs/preset-sheets-core';
-import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
-import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
 import { Univer } from '@univerjs/core';
 import { FUniver } from '@univerjs/core/facade';
 import { CollaborationController } from '@univerjs-pro/collaboration-client';
 import { EMPTY } from 'rxjs';
 import {
   officePreset,
-  officeLocales,
   SetSlideZoomRatioOperation,
 } from './office-presets.js';
 import { viewerData, type ComparisonInput } from './viewer-data.js';
@@ -26,12 +21,14 @@ import { UniverLicensePlugin } from '@univerjs-pro/license';
 import { workspaceLicense } from './license.js';
 import { contentType } from './content-types.js';
 import { disposeEditorResources } from './editor-lifecycle.js';
+import { bindEditorLanguage, editorLocale, type EditorLanguageSource } from './editor-language.js';
+import { editorLocales } from './editor-locales.js';
 
 /** One disposable, disconnected SDK viewer. No collaboration/write transport. */
-export function Viewer({ file }: { file: ComparisonInput }) {
-  return <OfficeViewer file={file} />;
+export function Viewer({ file, language }: { file: ComparisonInput; language: EditorLanguageSource }) {
+  return <OfficeViewer file={file} language={language} />;
 }
-function OfficeViewer({ file }: { file: ComparisonInput }) {
+function OfficeViewer({ file, language }: { file: ComparisonInput; language: EditorLanguageSource }) {
   const container = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState('loading');
   const [error, setError] = useState('');
@@ -39,6 +36,7 @@ function OfficeViewer({ file }: { file: ComparisonInput }) {
     const element = container.current!;
     let canceled = false;
     let runtime: ReturnType<typeof createUniver> | undefined;
+    let releaseLanguage = () => {};
     let fitObserver: ResizeObserver | undefined;
     let fitFrame = 0;
     let lifecycle: { dispose(): void } | undefined;
@@ -58,14 +56,8 @@ function OfficeViewer({ file }: { file: ComparisonInput }) {
         disableAutoFocus: true,
       } as const;
       runtime = createPreview({
-        locale: LocaleType.ZH_CN,
-        locales: {
-          [LocaleType.ZH_CN]: mergeLocales(
-            docsLocale,
-            sheetsLocale,
-            ...officeLocales,
-          ),
-        },
+        locale: editorLocale(language.getSnapshot()),
+        locales: editorLocales(file.type),
         presets: [
           { plugins: [[UniverLicensePlugin, { license: workspaceLicense }]] },
           file.type === 'doc'
@@ -107,6 +99,7 @@ function OfficeViewer({ file }: { file: ComparisonInput }) {
             : []),
         ],
       });
+      releaseLanguage = bindEditorLanguage(runtime.univerAPI, language);
       const api = runtime.univerAPI;
       const data = viewerData(file);
       // Node name is the authoritative product title; snapshot owns rich content.
@@ -221,6 +214,7 @@ function OfficeViewer({ file }: { file: ComparisonInput }) {
       canceled = true;
       disposeEditorResources([
         () => clearTimeout(timer),
+        () => releaseLanguage(),
         () => lifecycle?.dispose(),
         () => steadyLifecycle?.dispose(),
         () => fitObserver?.disconnect(),

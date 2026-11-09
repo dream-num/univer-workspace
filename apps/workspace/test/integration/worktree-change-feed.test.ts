@@ -1,4 +1,3 @@
-import { captureReviewToken } from "./review-token.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -157,8 +156,7 @@ describe("worktree change feed", () => {
         await application.worktrees.merge(
           creator.view.user.id,
           created.body.id,
-          "worktree-feed-merge-operation-0001",
-          { reviewToken: await captureReviewToken(origin, `${application.identity.cookieName}=${creator.cookieValue}`, created.body.id) }
+          "worktree-feed-merge-operation-0001"
         );
       });
       await expect(
@@ -223,8 +221,7 @@ describe("worktree change feed", () => {
       await shutdownServer(server, { dispose: async () => {} }, application);
       rmSync(directory, { recursive: true, force: true });
     }
-  // Includes real SDK Review/Apply and two websocket shutdowns, exceeding Vitest's 5s default.
-  }, 20_000);
+  });
 
   it("notifies both the previous and next audience when Team visibility changes", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-worktree-feed-"));

@@ -2218,7 +2218,7 @@ importers:
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.4.0
-        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
+        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)

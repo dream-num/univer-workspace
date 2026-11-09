@@ -437,7 +437,6 @@ export class AgentEditing {
     node: string,
     action: string,
     proposalId?: string,
-    reviewToken?: string,
   ) {
     const identity = this.workspace.identitySignal;
     const scope = await this.bindings.scope(session);
@@ -477,24 +476,25 @@ export class AgentEditing {
     if (action === 'review') {
       if (p.phase === 'uncertain')
         throw new SpaceError(409, 'Confirm the previous Apply result before reviewing again.');
-      const review = await this.post(
-        `/universer-api/worktrees/${p.worktreeId}/review`,
-        { unitId: p.file.unitId },
-        undefined,
-        identity,
+      // Review is a document-local UI step over the existing comparison read.
+      // It does not bind the later merge to these versions.
+      const comparison = await this.workspace.json(
+        `/universer-api/worktrees/${p.worktreeId}/units/${encodeURIComponent(p.file.unitId!)}/comparison?view=preview`,
+        { signal: identity },
       );
+      const review = { comparisons: [{ unitId: p.file.unitId, resourceId: p.file.resourceId, comparison }] };
       checkIdentity();
       p.review = review;
       return p.review;
     }
     if (action === 'apply') {
-      if (!p.review || p.review.reviewToken !== reviewToken)
+      if (!p.review)
         throw new SpaceError(409, 'Review these changes before applying.');
       p.phase = 'applying';
       try {
         const result = await this.post(
           `/api/worktrees/${p.worktreeId}/merge`,
-          { reviewToken },
+          undefined,
           p.applyKey,
           identity,
         );
@@ -506,9 +506,9 @@ export class AgentEditing {
       } catch (error) {
         if (error instanceof SpaceError && error.status >= 500) {
           // The Server may have committed before the response was lost. Keep
-          // the exact approved token and operation key for safe recovery.
+          // the same operation key for the existing idempotent retry.
           p.phase = 'uncertain';
-          p.message = 'Apply result not confirmed. Retry the same approved changes to check recovery.';
+          p.message = 'Apply result not confirmed. Retry the same operation to check its result.';
           throw new SpaceError(502, p.message);
         }
         p.phase = 'conflict';

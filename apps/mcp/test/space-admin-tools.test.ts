@@ -436,25 +436,20 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(writesOf()).toEqual([]);
   });
 
-  it("requires a reviewed token to merge, forwards it exactly, discards a draft and refuses an invalid transition", async () => {
+  it("merges a ready pull request, discards a draft one and refuses an invalid transition", async () => {
     const client = await connect();
-    const call = async (name: string, number = "3", reviewToken?: string) =>
-      await client.callTool({ name, arguments: { repo: "bob/team", number, ...(reviewToken === undefined ? {} : { review_token: reviewToken }) } });
+    const call = async (name: string, number = "3") =>
+      await client.callTool({ name, arguments: { repo: "bob/team", number } });
     prState = "ready";
-    expect(await call("pr_merge")).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-review-required" },
-    });
-    expect(writesOf()).toEqual([]);
-    expect((await call("pr_merge", "3", "review-token-3")).structuredContent).toMatchObject({ id: "wt-3", state: "merged", url: prUrl });
+    expect((await call("pr_merge")).structuredContent).toMatchObject({ id: "wt-3", state: "merged", url: prUrl });
     prState = "draft";
     expect((await call("pr_discard", "#3")).structuredContent).toMatchObject({ state: "discarded", url: prUrl });
-    expect(await call("pr_merge", "3", "review-token-3")).toMatchObject({
+    expect(await call("pr_merge")).toMatchObject({
       isError: true,
       structuredContent: { code: "workspace-lifecycle-invalid" },
     });
     expect(writesOf()).toEqual([
-      { method: "POST", path: "/api/worktrees/wt-3/merge", body: { reviewToken: "review-token-3" } },
+      { method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined },
       { method: "POST", path: "/api/worktrees/wt-3/discard", body: undefined },
     ]);
   });

@@ -1,4 +1,3 @@
-import { captureReviewToken } from "./review-token.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,7 +14,6 @@ import type {
   WorktreeBackend,
 } from "../../server/src/modules/worktrees/index.js";
 
-import type { ReviewedMergeJournal } from "../../server/src/modules/worktrees/worktrees.types.js";
 import { expectSessionSource } from "../fixtures/session-source.js";
 
 const applications: WorkspaceApplication[] = [];
@@ -333,9 +331,8 @@ describe("Worktrees", () => {
         })),
       };
     });
-    await expect(application.worktrees.merge(user.id, id, "partial-removal-merge-0001"))
-      .rejects.toMatchObject({ code: "CONFLICT" });
-    expect(application.operations.get(user.id, "partial-removal-merge-0001").state).toBe("failed");
+    const partial = await application.worktrees.merge(user.id, id, "partial-removal-merge-0001");
+    expect(partial.worktree.state).toBe("ready");
     expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
     expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
     await expect(
@@ -371,7 +368,7 @@ describe("Worktrees", () => {
       BEGIN SELECT RAISE(ABORT, 'Stop before product deletion'); END;
     `);
     const operationId = "restart-removal-merge-0001";
-    await expect(mergeReviewed(application, user, id, operationId)).rejects.toThrow(
+    await expect(application.worktrees.merge(user.id, id, operationId)).rejects.toThrow(
       "Stop before product deletion",
     );
     expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
@@ -441,7 +438,7 @@ describe("Worktrees", () => {
       BEGIN SELECT RAISE(ABORT, 'Injected finalization failure'); END;
     `);
     const operationId = "real-removal-merge-0001";
-    await expect(mergeReviewed(application, user, worktreeId, operationId)).rejects.toThrow(
+    await expect(application.worktrees.merge(user.id, worktreeId, operationId)).rejects.toThrow(
       "Injected finalization failure",
     );
     const batches = application.trash.list(user.id, space.id, {}).items;
@@ -479,7 +476,7 @@ describe("Worktrees", () => {
       state: "completed",
     });
     await expect(
-      mergeReviewed(application, user, worktreeId, operationId),
+      application.worktrees.merge(user.id, worktreeId, operationId),
     ).resolves.toMatchObject({ operation: { state: "completed" } });
     expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
     expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
@@ -498,7 +495,7 @@ describe("Worktrees", () => {
       mergeResult: "removed",
     });
     await expect(
-      mergeReviewed(application, user, worktreeId, operationId),
+      application.worktrees.merge(user.id, worktreeId, operationId),
     ).resolves.toMatchObject({ operation: { state: "completed" } });
   });
 
@@ -541,7 +538,7 @@ describe("Worktrees", () => {
     application.trash.trashNode(user.id, folder.id);
     await application.worktrees.markReady(user.id, id);
     await expect(
-      mergeReviewed(application, user, id, "cancel-target-merge-0001"),
+      application.worktrees.merge(user.id, id, "cancel-target-merge-0001"),
     ).resolves.toMatchObject({ operation: { state: "completed" } });
     expect((await application.worktrees.get(user.id, id)).worktree.units[0]).toMatchObject({
       mergeResult: "removed",
@@ -983,7 +980,9 @@ describe("Worktrees", () => {
     ).toHaveLength(1);
 
     await application.worktrees.markReady(user.id, created.body.id);
-    const merged = await mergeReviewed(application, user, created.body.id,
+    const merged = await application.worktrees.merge(
+      user.id,
+      created.body.id,
       "merge-real-import-worktree-0001"
     );
     expect(merged.operation.state).toBe("completed");
@@ -1087,8 +1086,7 @@ class MemoryWorktreeBackend implements WorktreeBackend {
     return this._transition(worktreeId, "draft");
   }
 
-  async merge(worktreeId: string, _userId?: string, _reviewToken?: string, journal?: ReviewedMergeJournal): Promise<WorktreeData> {
-    journal?.validated({ format: 1, units: [] });
+  async merge(worktreeId: string): Promise<WorktreeData> {
     const current = this._require(worktreeId);
     return this._set(worktreeId, {
       ...current,
@@ -1229,7 +1227,7 @@ async function register(
     displayName: username,
     password: "correct horse battery staple",
   });
-  return { ...issued.view.user, cookie: `${application.identity.cookieName}=${issued.cookieValue}` };
+  return issued.view.user;
 }
 
 async function createResource(
@@ -1252,15 +1250,4 @@ async function createResource(
   const resource = result.body.node.resource;
   if (!resource) throw new Error("Created Resource is missing");
   return { id: resource.id, node: result.body.node };
-}
-
-async function mergeReviewed(application: WorkspaceApplication, user: { id: string; cookie: string }, id: string, operation: string) {
-  if ((await application.worktrees.get(user.id, id)).worktree.state === "merged") return application.worktrees.merge(user.id, id, operation);
-  const server = createServer(application.app);
-  await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve));
-  try {
-    const address = server.address(); if (!address || typeof address === "string") throw new Error("No address");
-    const reviewToken = await captureReviewToken(`http://127.0.0.1:${address.port}`, user.cookie, id);
-    return await application.worktrees.merge(user.id, id, operation, { reviewToken });
-  } finally { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); }
 }

@@ -1,6 +1,6 @@
 import { WorkspaceCollaborationSocketService } from './collaboration-socket.js';
 import React, { useEffect, useRef, useState } from 'react';
-import { createUniver, LocaleType, mergeLocales, type IPreset, type IPresetPlugin } from '@univerjs/presets';
+import { createUniver, type IPreset, type IPresetPlugin } from '@univerjs/presets';
 import { IRenderManagerService } from '@univerjs/engine-render';
 import { DocSelectionRenderService } from '@univerjs/docs-ui';
 import { UniverUIPlugin, ISidebarService } from '@univerjs/ui';
@@ -9,50 +9,39 @@ import { ToggleSheetCommentPanelOperation } from '@univerjs/preset-sheets-thread
 import { UserManagerService, LifecycleStages, type UniverInstanceType } from '@univerjs/core';
 import { DocStateChangeManagerService, DocSelectionManagerService } from '@univerjs/docs';
 import { CommandType } from '@univerjs/core';
-import docsDrawingLocale from '@univerjs/preset-docs-drawing/locales/zh-CN';
-import sheetsDrawingLocale from '@univerjs/preset-sheets-drawing/locales/zh-CN';
-import docCommentLocale from '@univerjs/preset-docs-thread-comment/locales/zh-CN';
-import sheetCommentLocale from '@univerjs/preset-sheets-thread-comment/locales/zh-CN';
 import { UniverThreadCommentDataSourcePlugin } from '@univerjs-pro/thread-comment-datasource';
 import { ThreadCommentPanelService } from '@univerjs/thread-comment-ui';
 import { getDocThreadCommentCollaborationPlugins } from './workarounds/doc-thread-comment-delete.js';
-import { createSheetEditorPresets, sheetEditorLocales } from '@univerjs/univer-workspace-editor-presets/sheets';
-import { createDocEditorPresets, docEditorLocales } from '@univerjs/univer-workspace-editor-presets/docs';
+import { createSheetEditorPresets } from '@univerjs/univer-workspace-editor-presets/sheets';
+import { createDocEditorPresets } from '@univerjs/univer-workspace-editor-presets/docs';
 import { UniverDocsHistoryUIPlugin } from '@univerjs-pro/docs-history-ui';
-import docHistoryLocale from '@univerjs-pro/docs-history-ui/locale/zh-CN';
 import { UniverDocsExchangeClientPlugin } from '@univerjs-pro/docs-exchange-client';
 import { UniverDocsPrintPlugin } from '@univerjs-pro/docs-print';
 
-import { createSlideEditorPresets, slideEditorLocales } from '@univerjs/univer-workspace-editor-presets/slides';
-import { createBoardEditorPresets, boardEditorLocales } from '@univerjs/univer-workspace-editor-presets/boards';
-import { createBaseEditorPresets, baseEditorLocales } from '@univerjs/univer-workspace-editor-presets/bases';
+import { createSlideEditorPresets } from '@univerjs/univer-workspace-editor-presets/slides';
+import { createBoardEditorPresets } from '@univerjs/univer-workspace-editor-presets/boards';
+import { createBaseEditorPresets } from '@univerjs/univer-workspace-editor-presets/bases';
 import { UniverBasesThreadCommentUIPlugin } from '@univerjs-pro/bases-thread-comment-ui';
 import { UniverBasesHistoryUIPlugin } from '@univerjs-pro/bases-history-ui';
-import baseHistoryLocale from '@univerjs-pro/bases-history-ui/locale/zh-CN';
 import { UniverBasesExchangeClientPlugin } from '@univerjs-pro/bases-exchange-client';
 import { defaultTheme, greenTheme, yellowTheme } from '@univerjs/themes';
 
 import { UniverBoardsThreadCommentUIPlugin, OpenBoardCommentPanelOperation } from '@univerjs-pro/boards-thread-comment-ui';
 import { UniverBoardsHistoryUIPlugin } from '@univerjs-pro/boards-history-ui';
-import boardHistoryLocale from '@univerjs-pro/boards-history-ui/locale/zh-CN';
 import { UniverBoardsPrintPlugin } from '@univerjs-pro/boards-print';
 import { redTheme } from '@univerjs/themes';
 
 import { UniverSlidesThreadCommentUIPlugin, OpenSlideCommentPanelOperation } from '@univerjs-pro/slides-thread-comment-ui';
 import { UniverSlidesHistoryUIPlugin } from '@univerjs-pro/slides-history-ui';
-import slideHistoryLocale from '@univerjs-pro/slides-history-ui/locale/zh-CN';
 import { UniverSlidesExchangeClientPlugin } from '@univerjs-pro/slides-exchange-client';
 import { UniverSlidesPrintPlugin } from '@univerjs-pro/slides-print';
 import { UniverExchangeClientPlugin } from '@univerjs-pro/exchange-client';
 import { purpleTheme } from '@univerjs/themes';
 
 import { UniverSheetsHistoryUIPlugin } from '@univerjs-pro/sheets-history-ui';
-import docsLocale from '@univerjs/preset-docs-core/locales/zh-CN';
-import sheetsLocale from '@univerjs/preset-sheets-core/locales/zh-CN';
 import { SnapshotService, UniverCollaborationPlugin } from '@univerjs-pro/collaboration';
 import { UniverEmbedPlugin } from '@univerjs-pro/embed';
 import { UniverEmbedUIPlugin } from '@univerjs-pro/embed-ui';
-import embedLocale from '@univerjs-pro/embed-ui/locale/zh-CN';
 import { UniverChartEmbedPlugin } from '@univerjs-pro/chart-embed';
 import { createWorkspaceReferencedUnitProviderRegistration, withLiveSheetReferences } from '@univerjs/univer-workspace-reference-provider';
 import { createEmbedProductRuntime } from '@univerjs/univer-workspace-editor-presets/embed-product-runtime';
@@ -72,8 +61,6 @@ import {
 import {
   UniverCollaborationClientUIPlugin,
 } from '@univerjs-pro/collaboration-client-ui';
-import collabLocale from '@univerjs-pro/collaboration-client/locale/zh-CN';
-import collabUILocale from '@univerjs-pro/collaboration-client-ui/locale/zh-CN';
 import {
   UniverNetworkPlugin,
   IHTTPImplementation,
@@ -93,6 +80,8 @@ import { SelectionEditing } from './selection-editing.js';
 import { SelectionEditingNotice } from './components/selection-editing.js';
 import { disposeEditorResources } from './editor-lifecycle.js';
 import { EditorInputGate } from './editor-input-gate.js';
+import { editorLocale, bindEditorLanguage } from './editor-language.js';
+import { editorLocales } from './editor-locales.js';
 
 let closingEditor: Promise<void> = Promise.resolve();
 
@@ -121,6 +110,7 @@ export function CollaborativeEditor({
   useEffect(() => {
     const inputGate = new EditorInputGate(container.current!);
     let releaseEditor = () => {};
+    let releaseLanguage = () => {};
     let canceled = false;
     let initialized = false;
     let cancelingLoad = false;
@@ -350,28 +340,14 @@ export function CollaborativeEditor({
         ...presets,
       ];
       runtime = createUniver({
-        locale: LocaleType.ZH_CN,
+        locale: editorLocale(face.editorLanguage.getSnapshot()),
         collaboration: true,
         theme: file.type === 'sheet' ? greenTheme : file.type === 'slide' ? purpleTheme : file.type === 'board' ? redTheme : file.type === 'base' ? yellowTheme : defaultTheme,
-        locales: {
-          [LocaleType.ZH_CN]: mergeLocales(
-            docsLocale,
-            ...(file.type === 'doc' ? [docEditorLocales['zh-CN'], docHistoryLocale] : []),
-            sheetsLocale,
-            sheetEditorLocales['zh-CN'],
-            ...(file.type === 'slide' ? [slideEditorLocales['zh-CN'], slideHistoryLocale] : file.type === 'board' ? [boardEditorLocales['zh-CN'], boardHistoryLocale] : file.type === 'base' ? [baseEditorLocales['zh-CN'], baseHistoryLocale] : []),
-            collabLocale,
-            collabUILocale,
-            embedLocale,
-            docCommentLocale,
-            docsDrawingLocale,
-            sheetsDrawingLocale,
-            sheetCommentLocale,
-          ),
-        },
+        locales: editorLocales(file.type),
         presets: runtimePresets,
         plugins: [...collaborationPlugins, ...embedPlugins],
       });
+      releaseLanguage = bindEditorLanguage(runtime.univerAPI, face.editorLanguage);
       const { univer, univerAPI: api } = runtime;
       focusChannel = crypto.randomUUID();
       const selectionService = file.type === 'doc'
@@ -689,6 +665,7 @@ export function CollaborativeEditor({
       canceled = true;
       disposeEditorResources([
         () => selectionEditingBinding?.dispose(),
+        () => releaseLanguage(),
         () => setSelectionEditing(null),
         () => face.updateDocFocus(null, focusChannel),
         () => publishComments(null),

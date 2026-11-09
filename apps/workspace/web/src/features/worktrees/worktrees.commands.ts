@@ -22,7 +22,7 @@ export function useToggleUnitRemoval(worktreeId: string) {
   });
 }
 
-export function useWorktreeLifecycle(worktreeId: string, reviewToken?: string) {
+export function useWorktreeLifecycle(worktreeId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (value: ReviewAction) => {
@@ -33,7 +33,6 @@ export function useWorktreeLifecycle(worktreeId: string, reviewToken?: string) {
             })
           : value === "merge"
             ? await api.POST("/api/worktrees/{worktreeId}/merge", {
-                body: { reviewToken: reviewToken ?? "" },
                 params: {
                   path: { worktreeId },
                   header: {

@@ -14,7 +14,7 @@ function cleanupBody(path) {
 }
 const body = cleanupBody('../src/collaborative-editor.tsx');
 
-for (const failure of [undefined, 'selection', 'disposable', 'subscription', 'runtime', 'worker', 'abort', 'flush']) {
+for (const failure of [undefined, 'selection', 'language', 'disposable', 'subscription', 'runtime', 'worker', 'abort', 'flush']) {
   test(`editor unmount preserves flush order and completes cleanup: ${failure ?? 'normal'}`, async t => {
     const calls = [], errors = [];
     t.mock.method(console, 'error', (...args) => errors.push(args));
@@ -22,7 +22,7 @@ for (const failure of [undefined, 'selection', 'disposable', 'subscription', 'ru
     const resources = new EditorResources();
     const env = {
       canceled: false, cancelingLoad: false, startup: Promise.resolve(), closingEditor: undefined,
-      selectionEditingBinding: { dispose: action('selection') }, setSelectionEditing: action('state'),
+      selectionEditingBinding: { dispose: action('selection') }, releaseLanguage: action('language'), setSelectionEditing: action('state'),
       face: { updateDocFocus: action('focus'), update: action('cache-notice') }, focusChannel: 'channel',
       publishComments: action('comments'), publishMembers: action('members'),
       releaseEditor: resources.bind('node', { flush: async () => {}, isSaved: () => true }),
@@ -43,7 +43,7 @@ for (const failure of [undefined, 'selection', 'disposable', 'subscription', 'ru
     cleanup();
     assert.equal(env.closingEditor, barrier);
     await barrier;
-    assert.deepEqual(calls, ['selection', 'state', 'focus', 'comments', 'members', 'writes', 'doc-flush', 'flush',
+    assert.deepEqual(calls, ['selection', 'language', 'state', 'focus', 'comments', 'members', 'writes', 'doc-flush', 'flush',
       ...(failure === 'flush' ? ['cache', 'cache-notice'] : []), 'disposable', 'unit', 'abort', 'drain',
       'beforeunload', 'subscription', 'embed', 'runtime', 'worker']);
     assert.equal(errors.length, failure && failure !== 'flush' ? 1 : 0);
@@ -57,6 +57,7 @@ test('detached Viewer releases observers, frame and runtime after a lifecycle di
   t.mock.method(console, 'error', (...args) => errors.push(args));
   const body = cleanupBody('../src/viewer.tsx');
   const env = { canceled: false, timer: 1, fitFrame: 2,
+    releaseLanguage: () => calls.push('language'),
     clearTimeout: () => calls.push('timer'), cancelAnimationFrame: () => calls.push('frame'),
     lifecycle: { dispose() { calls.push('lifecycle'); throw new Error('injected lifecycle'); } },
     steadyLifecycle: { dispose: () => calls.push('steady') }, fitObserver: { disconnect: () => calls.push('observer') },
@@ -64,6 +65,6 @@ test('detached Viewer releases observers, frame and runtime after a lifecycle di
   };
   const cleanup = new Function('env', `with (env) { return () => {${body}\n}; }`)(env);
   cleanup(); cleanup(); await Promise.resolve();
-  assert.deepEqual(calls, ['timer', 'lifecycle', 'steady', 'observer', 'frame', 'runtime']);
+  assert.deepEqual(calls, ['timer', 'language', 'lifecycle', 'steady', 'observer', 'frame', 'runtime']);
   assert.equal(errors.length, 1);
 });

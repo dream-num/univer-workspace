@@ -46,7 +46,7 @@ function setup() {
         };
       }
       if (path === '/api/worktrees') return { id: 'draft' };
-      if (path.endsWith('/review')) return { reviewToken: 'review-token' };
+      if (path.includes('/comparison?')) return { result: { summary: { total: 1 } } };
       if (path.endsWith('/merge') && failNextMerge) {
         failNextMerge = false;
         throw new SpaceError(502, 'Response lost');
@@ -201,7 +201,7 @@ test('Agent merge and unreviewed UI Apply fail closed', async () => {
   );
   const p = await f.editing.status('s', 'one');
   await assert.rejects(
-    f.editing.action('s', 'one', 'apply', p.id, 'unreviewed'),
+    f.editing.action('s', 'one', 'apply', p.id),
     /Review/,
   );
   assert.equal(f.calls.filter((x) => x.path.endsWith('/merge')).length, 0);
@@ -216,7 +216,7 @@ test('account changes during Apply cannot issue the approved merge with another 
   const proposal = await f.editing.status('s', 'one');
   await f.editing.action('s', 'one', 'review', proposal.id);
   const gate = f.deferMetadata();
-  const applying = f.editing.action('s', 'one', 'apply', proposal.id, 'review-token');
+  const applying = f.editing.action('s', 'one', 'apply', proposal.id);
   await gate.entered;
   f.user('b');
   gate.release();
@@ -233,15 +233,17 @@ test('an uncertain Apply can retry the same approved operation without a new rev
   const proposal = await f.editing.status('s', 'one');
   await f.editing.action('s', 'one', 'review', proposal.id);
   f.loseNextMergeResponse();
-  await assert.rejects(f.editing.action('s', 'one', 'apply', proposal.id, 'review-token'), /not confirmed/i);
+  await assert.rejects(f.editing.action('s', 'one', 'apply', proposal.id), /not confirmed/i);
   assert.equal((await f.editing.status('s', 'one')).phase, 'uncertain');
   await assert.rejects(f.editing.action('s', 'one', 'reject', proposal.id), /must be confirmed/i);
-  const result = await f.editing.action('s', 'one', 'apply', proposal.id, 'review-token');
+  const result = await f.editing.action('s', 'one', 'apply', proposal.id);
   assert.equal(result.phase, 'applied');
   const merges = f.calls.filter((call) => call.path.endsWith('/merge'));
   assert.equal(merges.length, 2);
   assert.equal(merges[0].headers['Idempotency-Key'], merges[1].headers['Idempotency-Key']);
-  assert.equal(merges[0].body, merges[1].body);
+  assert.equal(merges[0].body, undefined);
+  assert.equal(merges[1].body, undefined);
+  assert.equal(f.calls.some(call => call.path.endsWith('/review')), false);
 });
 
 test('new Worktree Tool output is lossless JSON before a first content revision exists', async () => {

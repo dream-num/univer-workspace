@@ -88,16 +88,35 @@ try {
    await requestEdit(a,node,node.type==='doc'?`请通过 Workspace Tools 在当前文档末尾追加“REJECT-DOC-${tag}”，生成实际隔离草稿并标记 ready，等待我审阅，不要合并。`:`请通过 Workspace Tools 把当前表格 E2 改为“REJECT-SHEET-${tag}”，生成实际隔离草稿并标记 ready，等待我审阅，不要合并。`,node.type+' reject');
    await review(a,node.type+'-reject');await a.getByRole('button',{name:'Reject changes',exact:true}).click();await a.locator('[data-ai-phase="rejected"]').waitFor();assert.equal((await shared(node)).sha256,before.sha256);await a.screenshot({path:resolve(out,node.type+'-rejected.png')});record(node.type+' Reject leaves shared revision/hash unchanged',{nodeId:node.id,revision:before.revision});
  }
- // Human edits during Agent execution and again after review invalidate the old acceptance.
+ // Review is a comparison snapshot. Apply follows the SDK merge result;
+ // a later shared edit is not by itself a version-token rejection.
  stage='doc concurrent edits';await open(a,doc);await open(b,doc);
  const aiMarker='CONFLICT-AI-'+tag, during='HUMAN-DURING-'+tag, after='HUMAN-AFTER-REVIEW-'+tag;
  await requestEdit(a,doc,`请读取当前文档，用 Workspace Tools 追加“${aiMarker}”并标记 ready。本次用于验证并发编辑，请在实际 univer_edit 的 Facade 程序中先等待 8 秒，再追加段落；不要合并。`, 'doc concurrent', {onWrite:async()=>{await appendHuman(b,during);record('Human edits trunk while the native Agent write is running',{nodeId:doc.id});}});
  const humanOnly=await shared(doc);assert.ok(humanOnly.content.text.includes(during));assert.ok(!humanOnly.content.text.includes(aiMarker));await review(a,'doc-concurrent');await appendHuman(b,after);const beforeApply=await shared(doc);
- await a.getByRole('button',{name:'Apply changes',exact:true}).click();await a.locator('[data-ai-phase="conflict"]').waitFor();assert.equal((await shared(doc)).sha256,beforeApply.sha256);await a.screenshot({path:resolve(out,'doc-conflict.png')});record('Doc old review is refused after a human shared edit',{nodeId:doc.id,revision:beforeApply.revision});
- await review(a,'doc-conflict-refreshed');await a.getByRole('button',{name:'Reject changes',exact:true}).click();await a.locator('[data-ai-phase="rejected"]').waitFor();assert.equal((await shared(doc)).sha256,beforeApply.sha256);
+ await a.getByRole('button',{name:'Apply changes',exact:true}).click();await a.locator('[data-ai-phase="applied"], [data-ai-phase="conflict"]').waitFor();
+ const docPhase=await a.locator('[data-ai-phase]').getAttribute('data-ai-phase'),docAfterApply=await shared(doc);
+ if(docPhase==='applied') {
+   assert.ok(docAfterApply.content.text.includes(aiMarker));
+   assert.ok(docAfterApply.content.text.includes(during));
+   assert.ok(docAfterApply.content.text.includes(after));
+ } else {
+   assert.equal(docAfterApply.sha256,beforeApply.sha256);
+   await review(a,'doc-conflict-refreshed');await a.getByRole('button',{name:'Reject changes',exact:true}).click();await a.locator('[data-ai-phase="rejected"]').waitFor();
+ }
+ await a.screenshot({path:resolve(out,'doc-concurrent-result.png')});record('Doc follows the SDK merge result after concurrent shared edits',{nodeId:doc.id,phase:docPhase,revision:docAfterApply.revision});
  stage='sheet conflict';await open(a,sheet);await open(b,sheet);
  await requestEdit(a,sheet,`请用 Workspace Tools 把当前表格 E4 改为“CONFLICT-SHEET-${tag}”，生成实际草稿并标记 ready，等待用户审阅，不要合并。`,'sheet conflict');await review(a,'sheet-before-conflict');await writeCell(b,'F4','HUMAN-SHEET-'+tag);const sheetBefore=await shared(sheet);
- await a.getByRole('button',{name:'Apply changes',exact:true}).click();await a.locator('[data-ai-phase="conflict"]').waitFor();assert.equal((await shared(sheet)).sha256,sheetBefore.sha256);await a.screenshot({path:resolve(out,'sheet-conflict.png')});record('Sheet old review is refused and preserves the human cell',{nodeId:sheet.id,revision:sheetBefore.revision});await a.getByRole('button',{name:'Reject',exact:true}).click();await a.locator('[data-ai-phase="rejected"]').waitFor();
+ await a.getByRole('button',{name:'Apply changes',exact:true}).click();await a.locator('[data-ai-phase="applied"], [data-ai-phase="conflict"]').waitFor();
+ const sheetPhase=await a.locator('[data-ai-phase]').getAttribute('data-ai-phase'),sheetAfterApply=await shared(sheet);
+ if(sheetPhase==='applied') {
+   assert.ok(JSON.stringify(sheetAfterApply).includes('CONFLICT-SHEET-'+tag));
+   assert.ok(JSON.stringify(sheetAfterApply).includes('HUMAN-SHEET-'+tag));
+ } else {
+   assert.equal(sheetAfterApply.sha256,sheetBefore.sha256);
+   await review(a,'sheet-conflict-refreshed');await a.getByRole('button',{name:'Reject changes',exact:true}).click();await a.locator('[data-ai-phase="rejected"]').waitFor();
+ }
+ await a.screenshot({path:resolve(out,'sheet-concurrent-result.png')});record('Sheet follows the SDK merge result and retains the concurrent human cell',{nodeId:sheet.id,phase:sheetPhase,revision:sheetAfterApply.revision});
  // Real in-flight cancellation plus rapid Page switches; request target stays fixed.
  stage='cancel and switch';await open(a,doc);const docBeforeCancel=await shared(doc),sheetBeforeCancel=await shared(sheet);
  const canceledTools=await requestEdit(a,doc,`请用 Workspace Tools 修改当前文档：在 univer_edit 的实际 Facade 程序中先 await 一个 15 秒计时器，然后追加“CANCEL-ME-${tag}”，再标记 ready。此请求用于测试执行中的取消，不要合并。`,'cancel and switch',{expectWrite:false,onWrite:async()=>{

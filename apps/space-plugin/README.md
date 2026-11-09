@@ -174,7 +174,7 @@ All source, asset and output paths stay inside the native Session workspace.
 These tools preserve the compiler's draft contract; ordinary edits of existing
 files still use trunk. Inspection reads current Server
 content, returns revision/hash and bounded text/cell/structured-Unit/HTML-source lines, and exposes
-`nextOffset` for paging. The discovery/read operations remain bounded and Session-scoped; draft inspection uses the existing headless inspection runtime. They do not yet provide the complete old plugin interface. Ordinary `univer_edit` calls select the document admitted with the native request, or an explicitly identified authorized Unit, and commit Facade mutations to trunk through the original collaboration runtime. An explicitly created Worktree retains the existing Docs/Sheets draft and Review workflow. Apply requires the displayed Server review token and rechecks revisions/ACL atomically; Reject/Cancel discard the draft. Removing the current-document association does not erase a durable message or
+`nextOffset` for paging. The discovery/read operations remain bounded and Session-scoped; draft inspection uses the existing headless inspection runtime. They do not yet provide the complete old plugin interface. Ordinary `univer_edit` calls select the document admitted with the native request, or an explicitly identified authorized Unit, and commit Facade mutations to trunk through the original collaboration runtime. An explicitly created Worktree retains the existing Docs/Sheets draft and Review workflow. Review reads the current comparison; Apply uses the existing Workspace merge workflow with current Server permissions. Reject/Cancel discard the draft. The preview is not version-bound to Apply: concurrent edits can change the merge result or cause a conflict. Removing the current-document association does not erase a durable message or
 revoke historical read grants; change identity/disconnect to clear grants.
 
 DSH Tools is a type-only development dependency. Four public JSON Schema
@@ -229,7 +229,7 @@ The formal HTML Viewer is a build-time `file:` dependency on the Fork's existing
 `packages/workspace-html-viewer`; `.npmrc` materializes its sources with isolated
 consumer peers, rather than linking a second SDK/React graph. Browser JSX uses
 automatic transformation for that shared component. All coupled SDKs stay at
-1.3.1. Desktop packaging carries the Fork's existing development license through
+1.4.0. Desktop packaging carries the Fork's existing development license through
 the Host-only runtime configuration. A nonempty UNIVER_LICENSE overrides it;
 an ordinary Desktop launch needs no environment-variable setup. The license's
 existing scope and expiry still apply; the SDK remains responsible for validation.
@@ -261,13 +261,13 @@ the packaged value. The existing authenticated owner-only runtime config route
 supplies it to the official LicensePlugin; it is not saved in client preferences
 or included in Agent context. Packaging does not extend its scope or expiry.
 
-The Server must run the matching release commit (including the Review/Apply fixes), as one writer process against persistent product SQLite, collaboration SQLite and Blob storage. Back up those stores together. Stop the old writer before upgrading; never reset the database. Remote services require HTTPS/WSS, the registered public OAuth client `univer-workspace-harness` with consent and `identity session` scopes, and reverse-proxy support for /api, /universer-api and collaboration WebSocket upgrade. The plugin expects a service origin, not an API path. Outstanding Review tokens expire after 30 minutes and require fresh Review after a Server restart. Multi-Unit SDK merges are per-Unit, not a cross-Unit transaction; Space's current-document Agent edit targets one Doc or Sheet.
+The Server must run the matching release commit (including the Review/Apply fixes), as one writer process against persistent product SQLite, collaboration SQLite and Blob storage. Back up those stores together. Stop the old writer before upgrading; never reset the database. Remote services require HTTPS/WSS, the registered public OAuth client `univer-workspace-harness` with consent and `identity session` scopes, and reverse-proxy support for /api, /universer-api and collaboration WebSocket upgrade. The plugin expects a service origin, not an API path. Multi-Unit SDK merges are per-Unit, not a cross-Unit transaction; Space's current-document Agent edit targets one Doc or Sheet.
 
 First use: select Space and choose Sign in to Univer. Sign in and authorize in the system browser; successful authorization loads Space Home. DSH Settings → Workspace manages the current account and server, Switch Account, Sign Out and Custom Workspace URL. Session reuse uses the official Host credential provider's isolated `dsh-space-plugin/workspace` grant record. Only that record is changed; DSH model credentials and native Sessions remain owned by DSH. A denied, cancelled or expired request can be retried. Switching accounts uses the browser's Workspace account; sign out or choose the desired account there before authorizing.
 
 The existing cloud registration accepts the exact loopback return `http://127.0.0.1:3101/auth/oauth/callback`. The plugin binds only IPv4 loopback for the pending authorization and closes it on completion, cancellation or timeout. Keep that port free; a conflicting listener produces a retryable sign-in error, never a fallback credential form. Custom Server administrators must register the same exact callback. The authenticated public DSH Connection starts/cancels requests; the loopback listener accepts only bounded, state-matched OAuth callbacks. Official Desktop 0.2.1-rc.3 forwards external HTTP(S) window opens to the system browser; its installed `dsh://open` handler focuses the app without carrying any credential. An OS/browser confirmation may appear for the return link. No `univer-workspace://` scheme or DSH account grant is used.
 
-Reproduce the demo with a disposable Team Space and two accounts: create a Folder and all six content types; rename/move/trash/restore a file; edit Docs/Sheets from both clients; share with the second account and add a comment. Associate a Doc with the native conversation, ask the Agent to append a unique paragraph to a private Worktree and mark it ready, inspect Review, explicitly Apply, and verify the already-open second client and a reopen. Repeat with a Sheet formula, then with Reject and a shared edit after Review (the old Apply must conflict). Viewer / removed-member writes must fail. No test fixture, model credential or private Session archive is included.
+Reproduce the demo with a disposable Team Space and two accounts: create a Folder and all six content types; rename/move/trash/restore a file; edit Docs/Sheets from both clients; share with the second account and add a comment. Associate a Doc with the native conversation, ask the Agent to append a unique paragraph to a private Worktree and mark it ready, inspect Review, explicitly Apply, and verify the already-open second client and a reopen. Repeat with a Sheet formula, Reject, and a shared edit after Review; verify the SDK merge/conflict behavior and persisted result. Viewer / removed-member writes must fail. No test fixture, model credential or private Session archive is included.
 
 The release script stages only runtime files, a production-only manifest, notices and npm-shrinkwrap.json. npm consumers honor that lock; DSH's pnpm manager owns its profile lock and needs registry access. Preserve the profile lock for exact reinstall. Run the release scan and actual clean-profile install before distributing a new artifact.
 
@@ -303,3 +303,7 @@ continues to use the shell boundary; hidden-reference detection uses the
 reference's clipping ancestors. A partly clipped trigger keeps its menu; a fully
 clipped trigger dismisses it. The check also verifies multiline Create labels in
 a 190px shell without fixed-height text overflow.
+
+## Editor language
+
+The five collaborative Univer editors and AI Changes previews follow the current DSH interface language (English or Simplified Chinese). Language switches update the SDK locale in place; they do not recreate the Unit or add a separate preference. Other Host locales use their declared fallback chain, then English.

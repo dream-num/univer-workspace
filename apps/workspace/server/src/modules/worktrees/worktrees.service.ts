@@ -31,7 +31,6 @@ import type {
   WorktreeSummary,
   WorktreeUnit,
   WorktreeVisibility,
-  ReviewedMergeProof,
 } from "./worktrees.types.js";
 
 interface WorktreeContext {
@@ -53,7 +52,6 @@ export function createWorktreesModule(options: {
   ) => void;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
-  readonly runMerge?: (<T>(action: () => Promise<T>) => Promise<T>) | undefined;
 }): WorktreesModule {
   const now = options.now ?? Date.now;
 
@@ -73,9 +71,9 @@ export function createWorktreesModule(options: {
     }
   }
 
-  async function context(userId: string, worktreeId: string, recovery = false): Promise<WorktreeContext> {
+  async function context(userId: string, worktreeId: string): Promise<WorktreeContext> {
     const row = options.repository.get(worktreeId, userId);
-    if (!row || (!recovery && !isDiscoverable(userId, row))) throw notFound();
+    if (!row || !isDiscoverable(userId, row)) throw notFound();
     const data = await backendCall(() =>
       options.backend.getWorktree(worktreeId, userId)
     );
@@ -110,23 +108,7 @@ export function createWorktreesModule(options: {
     }
   }
 
-  async function publishKnownUnits(userId: string, worktreeId: string, operationId: string): Promise<void> {
-    const row = options.repository.get(worktreeId, userId);
-    if (!row || !canMergeAsActor(userId, row)) return;
-    const receipt = options.repository.getOperation(operationId);
-    if (!receipt) return;
-    const { reviewProof } = operationPayload<{ reviewProof?: ReviewedMergeProof }>(receipt, "merge_worktree", userId);
-    if (!reviewProof) return;
-    const data = await options.backend.getWorktree(worktreeId, userId);
-    const units = options.repository.units(worktreeId);
-    const proven = new Set(await options.backend.committedUnitsForProof?.(worktreeId, userId, reviewProof,
-      mapUnits(units, data.units, userId, options.access)) ?? []);
-    const authorized = units.filter(unit => proven.has(unit.unit_id) && canEditUnit(userId, row, unit, options.access));
-    const ids = activateSuccessfulUnits(row, authorized, data.units, options.repository, now());
-    options.publishMergedAssets(worktreeId, ids);
-  }
-
-  const module: WorktreesModule = {
+  return {
     async setUnitRemoved(userId, worktreeId, unitId, inputValue) {
       const input = requiredRecord(inputValue);
       if (typeof input.removed !== "boolean") {
@@ -708,63 +690,30 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async merge(userId, worktreeId, operationIdValue, inputValue) {
-      const rawReview = (inputValue as { reviewToken?: unknown } | undefined)?.reviewToken;
-      let reviewToken = typeof rawReview === "string" ? rawReview : undefined;
-      if (rawReview !== undefined && !reviewToken)
-        throw conflict("Review these changes before applying.");
+    async merge(userId, worktreeId, operationIdValue) {
       const operationId = validOperationId(operationIdValue);
+      const value = await context(userId, worktreeId);
       const existing = options.repository.getOperation(operationId);
-      if (existing) operationPayload(existing, "merge_worktree", userId);
-      const recoverable = existing?.step === "review_validated";
-      if (existing?.step === "review_aborted" || existing?.step === "superseded") {
-        const input = operationPayload<{ worktreeId: string; reviewToken?: string }>(existing, "merge_worktree", userId);
-        if (input.worktreeId !== worktreeId || input.reviewToken !== reviewToken) throw idempotencyConflict();
-        // A terminated multi-Unit intent can still have known committed Units.
-        // Reconcile their product metadata under current permissions, never
-        // submit content or turn this failed intent into a completed one.
-        await publishKnownUnits(userId, worktreeId, operationId);
-        throw conflict("This merge intent was terminated. Review again and use a new Operation.");
-      }
-      // An exact durable intent may enter internal recovery after revocation.
-      // The journal rechecks authorization before any further content write.
-      const value = await context(userId, worktreeId, recoverable);
       if (existing) {
-        const input = operationPayload<{
-          readonly worktreeId: string;
-          readonly reviewToken?: string;
-        }>(existing, "merge_worktree", userId);
+        const input = operationPayload<{ readonly worktreeId: string }>(
+          existing,
+          "merge_worktree",
+          userId,
+        );
         if (input.worktreeId !== worktreeId) throw idempotencyConflict();
-        // An already merged operation may finish/replay product finalization
-        // after restart. It does not submit additional Collaboration content.
-        if (reviewToken === undefined && value.state === "merged") reviewToken = input.reviewToken;
       }
       const resumeMerged = existing !== null && value.state === "merged";
       const resumeMerging = existing !== null && value.state === "merging";
       if (
-        (resumeMerged || resumeMerging) &&
-        existing.state !== "completed" &&
-        existing.step !== "review_validated"
-      ) {
-        throw conflict(
-          "This Operation has no validated merge receipt. Its result cannot be inferred from another merge.",
-        );
-      }
-      if (
-        (!recoverable || resumeMerged) &&
         !value.capabilities.merge &&
         !((resumeMerged || resumeMerging) && canMergeAsActor(userId, value.row))
       ) {
         throw forbidden();
       }
-      if (
-        (!recoverable || resumeMerged) &&
-        existing?.state !== "completed" &&
-        value.row.processed_at === null
-      ) {
+      if (existing?.state !== "completed" && value.row.processed_at === null) {
         validateAllTargets(userId, value.row, value.units, options);
       }
-      const payload = { worktreeId, reviewToken };
+      const payload = { worktreeId };
       const reserved = options.repository.reserveOperation({
         id: operationId,
         kind: "merge_worktree",
@@ -772,9 +721,12 @@ export function createWorktreesModule(options: {
         payload,
         createdAt: now(),
       });
-      const stable = operationPayload<typeof payload>(reserved.row, "merge_worktree", userId);
-      if (stable.worktreeId !== worktreeId || stable.reviewToken !== reviewToken)
-        throw idempotencyConflict();
+      const stable = operationPayload<typeof payload>(
+        reserved.row,
+        "merge_worktree",
+        userId
+      );
+      if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
       let operation = reserved.row;
       if (operation.state !== "completed") {
         operation = await executeReserved(operationId, async () => {
@@ -788,64 +740,16 @@ export function createWorktreesModule(options: {
           const data = await backendCall(() =>
             resumeMerged
               ? options.backend.getWorktree(worktreeId, userId)
-              : options.backend.merge(worktreeId, userId, reviewToken, {
-                  load() {
-                    const current = options.repository.getOperation(operationId);
-                    return current?.step === "review_validated"
-                      ? operationPayload<{ reviewProof?: ReviewedMergeProof }>(
-                          current,
-                          "merge_worktree",
-                          userId,
-                        ).reviewProof
-                      : undefined;
-                  },
-                  legacy() {
-                    const current = options.repository.getOperation(operationId);
-                    return current?.step === "review_validated" &&
-                      operationPayload<{ reviewProof?: ReviewedMergeProof }>(current, "merge_worktree", userId).reviewProof === undefined;
-                  },
-                  validated: (proof) =>
-                    options.repository.markReviewValidated(operationId, worktreeId, proof),
-                  async authorize() {
-                    const current = await context(userId, worktreeId);
-                    if (!canMergeAsActor(userId, current.row)) throw forbidden();
-                    validateAllTargets(userId, current.row, current.units, options);
-                  },
-                  aborted: () => {
-                    options.repository.abortReview(operationId, now());
-                    notifyChanged("stateChanged", worktreeId);
-                  },
-                }),
-          ).catch(async error => {
-            if (options.repository.getOperation(operationId)?.step === "review_aborted")
-              await publishKnownUnits(userId, worktreeId, operationId);
-            throw error;
-          });
-          const authorized = await context(userId, worktreeId);
-          if (!canMergeAsActor(userId, authorized.row)) throw forbidden();
-          validateAllTargets(userId, authorized.row, authorized.units, options);
-          try {
-            await options.backend.validateFinalization?.(worktreeId, userId,
-              operationPayload<{ reviewProof?: ReviewedMergeProof }>(options.repository.getOperation(operationId)!, "merge_worktree", userId).reviewProof);
-          } catch (error) {
-            options.repository.abortReview(operationId, now());
-            await publishKnownUnits(userId, worktreeId, operationId);
-            throw error;
-          }
+              : options.backend.merge(worktreeId, userId),
+          );
           const mergedUnitIds = activateSuccessfulUnits(
             value.row,
             options.repository.units(worktreeId),
             data.units,
             options.repository,
-            now(),
+            now()
           );
           options.publishMergedAssets(worktreeId, mergedUnitIds);
-          if (data.status !== "merged") {
-            options.repository.abortReview(operationId, now());
-            throw conflict(
-              "Merge did not complete. Review the per-Unit results before applying again.",
-            );
-          }
           if (data.status === "merged") {
             for (const unit of data.units) {
               if (unit.mergeResult?.status !== "removed") continue;
@@ -866,7 +770,7 @@ export function createWorktreesModule(options: {
           return options.repository.completeOperation(
             operationId,
             { worktreeId, state: data.status },
-            now(),
+            now()
           );
         });
       }
@@ -874,7 +778,11 @@ export function createWorktreesModule(options: {
       notifyChanged("merged", worktreeId);
       return {
         operation: operationView(operation),
-        worktree: summaryView(current.row, current.state, current.capabilities),
+        worktree: summaryView(
+          current.row,
+          current.state,
+          current.capabilities
+        ),
       };
     },
 
@@ -942,12 +850,6 @@ export function createWorktreesModule(options: {
         return false;
       }
     },
-  };
-
-  return {
-    ...module,
-    merge: (...args) =>
-      options.runMerge ? options.runMerge(() => module.merge(...args)) : module.merge(...args),
   };
 
   async function contextFromData(
@@ -1838,7 +1740,10 @@ function canonicalJson(value: unknown): string {
     const record = value as Readonly<Record<string, unknown>>;
     return `{${Object.keys(record)
       .sort()
-      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`)
+      .map(
+        (key) =>
+          `${JSON.stringify(key)}:${canonicalJson(record[key])}`
+      )
       .join(",")}}`;
   }
   return JSON.stringify(value);
@@ -1906,7 +1811,6 @@ async function backendCall<T>(operation: () => Promise<T>): Promise<T> {
     ) {
       throw notFound();
     }
-    if (code === "PERMISSION_DENIED") throw new ApplicationError("FORBIDDEN", 403, message);
     throw new ApplicationError("CONFLICT", 409, message);
   }
 }
