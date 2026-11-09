@@ -419,3 +419,19 @@ test('instruction popup replaces formatting without clearing its target or suppr
   assert.deepEqual(calls, ['hide-format', 'attach-instruction', 'dispose-instruction']);
   assert.equal(editor.popup, undefined);
 });
+
+test('an unverified model response leaves an initial instruction editable and cannot be accepted', async () => {
+  const f = fixture({ selectionProposal: async () => { throw new Error('The model did not verify this selection replacement. Original text is unchanged.'); } });
+  try {
+    f.editor.undo();
+    f.select(0, 5);
+    f.editor.begin();
+    const before = f.doc.getDocumentDataModel().getBody().dataStream;
+    await f.editor.submit('Replace only the selection');
+    assert.equal(f.editor.getSnapshot().phase, 'instruction');
+    assert.equal(f.editor.getSnapshot().candidate, undefined);
+    assert.match(f.editor.getSnapshot().error, /did not verify/);
+    await f.editor.accept();
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, before);
+  } finally { f.dispose(); }
+});
