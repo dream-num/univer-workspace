@@ -312,7 +312,7 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 - 每次操作都会先 pull 并检查 `baseRevision === target.revision`（`packages/client-core/src/content-runtime.ts` 的 `synchronize`），所以任意执行层副本都能从 Workspace 重建状态。热缓存只影响速度，不影响正确性。
 - 网关按 `(用户 ID, scope, unitId)` 一致性哈希选择执行层副本。副本增减时只损失部分缓存。
 - 同一 key 的操作串行，这是现有行为（`runForRuntimeKey` 加池内 FIFO）。
-- 操作表声明重试策略；执行层重新解析目标并重试，网关不持有 revision。`content.execute` 对脚本执行前（worker 打开或 pull 阶段，不可能发生在提交之后）的 `workspace-result-mismatch` 与 `workspace-runtime-target-stale` 重试一次；幂等的 `content.inspect` 最多重试三次，每次等待 25 到 100 ms 随机退避。`content.execute`、`content.inspect`、`exchange.export`、`htmlView.validate` 和 `htmlView.create` 对持有不同 session 的热 worker 的 401 重建后重试一次（htmlView 的 401 只可能来自上传前的校验读取）；当前 session 自身被拒绝则返回认证错误（被撤销的 session 在 trunk 协同端点上表现为 403，持有不同 session 的 worker 的 403 同样按 stale 处理）。`content.execute` 与 `content.inspect` 在执行层共用按 user、scope、Unit 分组的 FIFO 队列，读写和纯读取都依次执行，避免同一用户的持续写入与读取争抢 revision。worktree inspect 和 execute 的 route 相同，trunk inspect 使用独立 scope。排队时间计入原 deadline，排队超时返回 `workspace-executor-timeout`（`started: false`）。其他用户、副本或未进入该队列的写入仍可能造成 revision 冲突，由读重试兜底；单靠重试无法保证持续写入下的读取成功。无法重试时（操作未声明 auth、剩余不足 5 秒或已重试过）返回可重试的 `workspace-executor-timeout`（`started: false`），不返回认证错误，客户端保持登录。auth 最多重试一次，revision 读最多三次、写最多一次，且原 deadline 至少剩余 5 秒，读退避后再次检查。commit 阶段的不确定写入不重试。重试的 worker 时间计入同一用量事件，原因记录到日志和 `mcp_executor_reruns_total{reason}`。
+- 操作表声明重试策略；执行层重新解析目标并重试，网关不持有 revision。下文列出阶段 D 的首批操作；完整的重跑原因和排队范围以操作目录为准，见 [执行后端协议 2.1](backend-protocol.zh-CN.md#21-执行层操作)。`content.execute` 对脚本执行前（worker 打开或 pull 阶段，不可能发生在提交之后）的 `workspace-result-mismatch` 与 `workspace-runtime-target-stale` 重试一次；幂等的 `content.inspect` 最多重试三次，每次等待 25 到 100 ms 随机退避。`content.execute`、`content.inspect`、`exchange.export`、`htmlView.validate` 和 `htmlView.create` 对持有不同 session 的热 worker 的 401 重建后重试一次（htmlView 的 401 只可能来自上传前的校验读取）；当前 session 自身被拒绝则返回认证错误（被撤销的 session 在 trunk 协同端点上表现为 403，持有不同 session 的 worker 的 403 同样按 stale 处理）。`content.execute` 与 `content.inspect` 在执行层共用按 user、scope、Unit 分组的 FIFO 队列，读写和纯读取都依次执行，避免同一用户的持续写入与读取争抢 revision。worktree inspect 和 execute 的 route 相同，trunk inspect 使用独立 scope。排队时间计入原 deadline，排队超时返回 `workspace-executor-timeout`（`started: false`）。其他用户、副本或未进入该队列的写入仍可能造成 revision 冲突，由读重试兜底；单靠重试无法保证持续写入下的读取成功。无法重试时（操作未声明 auth、剩余不足 5 秒或已重试过）返回可重试的 `workspace-executor-timeout`（`started: false`），不返回认证错误，客户端保持登录。auth 最多重试一次，revision 读最多三次、写最多一次，且原 deadline 至少剩余 5 秒，读退避后再次检查。commit 阶段的不确定写入不重试。重试的 worker 时间计入同一用量事件，原因记录到日志和 `mcp_executor_reruns_total{reason}`。
 - 网关使用 rendezvous hashing。只对连接拒绝、DNS 失败或明确未接收的传输拒绝切换副本；已发送写入的断连或超时返回 `workspace-result-unknown`。
 
 ### 6.4 凭据
@@ -623,7 +623,7 @@ CLI 默认路径没有新增限制。导入请求帧为 64 MiB，导出响应帧
 
 ### D5 网关任务生命周期
 
-网关为 import/export/compile_typst 持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
+网关为 import、export、compile_typst、screenshot、print_pdf（后两者由阶段 E 加入）持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
 `.job.json` sidecar 同步，开始和结束均原子写入。记录包含随机 id、userId、tool、可选 key、
 createdAt、deadlineAt、expiresAt，以及仅在成功时存在的 result 或仅在失败时存在的 error。
 共享 staging 的副本可读取结果，并通过同用户、同工具、同 key 的短期 reservation lock 防止重复启动。
