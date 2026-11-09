@@ -65,6 +65,10 @@ jobs:
         working-directory: apps/space-plugin
         run: npm run build
 
+      - name: Run Space Plugin unit tests
+        working-directory: apps/space-plugin
+        run: npm test
+
       - name: Package and verify the release artifact
         id: package
         working-directory: apps/space-plugin
