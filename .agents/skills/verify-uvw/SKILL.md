@@ -199,7 +199,8 @@ to `dev` otherwise; the development session passthrough stays enabled for `--aut
 `mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
 `$V renderer-call <label> screenshot|printPdf|lint|measureText < input.json` sends one operation to the renderer from inside the
 executor container and saves `<label>.json` plus the PNG or PDF payload in `$EVIDENCE`. `bin/renderer-proof.mjs` prints a small
-Sheet or Doc with Latin and Chinese text as such an input.
+Sheet or Doc with Latin and Chinese text as such an input. `$V renderer-restart [max-runtimes]` recreates only this run's renderer with
+`RENDERER_MAX_RUNTIMES` set to that value (default 2) and returns once its startup runtime is warm.
 Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
 MO1 proves browser OAuth sign-in from a single MCP URL using a separate `ws` opencode
 config without an Authorization header. It needs the Workspace MCP OAuth authorization
@@ -265,3 +266,8 @@ Run `--self-test` before a real run. The default benchmark saves JSON with sampl
 counts, median, range, p95 for at least twenty observations, errors, usage events,
 readback checks, process RSS, and host counters. It waits for a quiet machine and
 never supplies production sizing numbers without a local measurement.
+
+For renderer sizing (latency per operation, throughput against `RENDERER_MAX_RUNTIMES`, memory per runtime, memory growth across reused
+renders), use `node .agents/skills/verify-uvw/bin/renderer-bench.mjs --help` and the
+[renderer benchmark recipe](features/mcp.md#renderer-capacity-benchmark). It recreates the renderer many times, so run it on a stack
+nothing else is using. `bin/renderer-bench-summary.py` renders its JSON as the tables in the architecture document.
