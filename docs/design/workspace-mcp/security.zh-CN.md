@@ -1,7 +1,7 @@
 # 执行层与渲染服务的多租户安全设计（阶段 G）
 
-> 状态：设计稿，已按第一轮对抗评审修订（2026-11-09），待签字。本文是[阶段计划](stages.zh-CN.md)阶段 G 交付物 1，说明如何满足[架构](architecture.zh-CN.md#10-执行层安全门禁要求)第 10 节的七条要求。
-> 文中“当前”指 `main` `26c1b69d` 的代码事实，附路径；“设计”“将”指尚未实现的行为。沙箱原型的实测数据见附录 A，评审后的补充实验见附录 C，两者的脚本都是一次性的，没有提交。评审发现与处理见 14.1 节。
+> 状态：设计稿，已按第一轮对抗评审修订，并已按用户 2026-11-09 的决定修订（14.3 节），待签字。本文是[阶段计划](stages.zh-CN.md)阶段 G 交付物 1，说明如何满足[架构](architecture.zh-CN.md#10-执行层安全门禁要求)第 10 节的七条要求。
+> 文中“当前”指 `main` `26c1b69d` 的代码事实，附路径；“设计”“将”指尚未实现的行为。沙箱原型的实测数据见附录 A，评审后的补充实验见附录 C，两者的脚本都是一次性的，没有提交。评审发现与处理见 14.1 节，用户的决定见 14.3 节。附录 C 的 E2 记录一个已被放弃的做法（每个 worker 一个 uid），保留它是因为它的对照组测的就是现在的设计。
 > 决策编号 D1 到 D14 见 [README](README.zh-CN.md)。
 
 ## 1. 要解决的问题
@@ -14,7 +14,7 @@ D4 接受在服务端执行模型生成的代码。阶段 D、E 的执行方式�
 | 2 | worker 能访问执行层能访问的任何网络目标，包括 Workspace 的全部路由 | worker 直接连接 `WORKSPACE_TRANSPORT_URL`，没有网络隔离 | 2、5 |
 | 3 | 同一 uid 的 worker 能读执行层的 `/proc/1/environ`，其中有内部令牌和 license key | [架构 6.4](architecture.zh-CN.md#64-凭据) 已记录；`apps/mcp/src/shared/config-executor.ts` 从环境变量读取全部密钥 | 1 |
 | 4 | worker 按用户复用，不区分 scope、客户端和授权 | `packages/client-core/src/runtime-target.ts` 的 `workspaceRuntimeKey` 只追加 `caller.userId`；`reuseExecutorWorker` 只检查 grant 是否临近过期 | 2 |
-| 5 | worker 之间、worker 与父进程之间共享文件系统、`/tmp`、进程视图和内核 uid；worker 能创建子进程和线程 | worker 由上游池直接 `fork`，没有命名空间，与父进程同为 uid 1000 | 1、3、6 |
+| 5 | worker 之间、worker 与父进程之间共享文件系统、`/tmp` 和进程视图；worker 能创建子进程和线程 | worker 由上游池直接 `fork`，没有命名空间，与父进程同为 uid 1000 | 1、3、6 |
 | 6 | 单个 worker 没有内存和 CPU 上限；一个用户可以占满池 | 池只有 `EXECUTOR_MAX_WORKERS` 和操作超时；跨 key 排队是全局 FIFO（`packages/client-core/src/content-runtime.ts`） | 3、4 |
 | 7 | Office、Typst 作业子进程解析不可信字节，但没有网络隔离 | [架构 D4 节](architecture.zh-CN.md#d4-office-作业进程)；`apps/mcp/src/executor/jobs/run.ts` | 1、5 |
 | 8 | 执行层父进程会无凭据地访问 Workspace 返回的任意跨域 URL | `packages/client-core/src/http.ts` 的 `content()` 对非同源 URL 直接 `fetch` | 5 |
@@ -52,7 +52,7 @@ D4 接受在服务端执行模型生成的代码。阶段 D、E 的执行方式�
   ▼
 gVisor 沙箱（B6）
   执行层父进程（可信，持有在途调用的 session）
-    凭据与出网代理 ◀── B2 Unix socket + capability ── worker（不可信，独立 uid、命名空间、Node 权限模型）
+    凭据与出网代理 ◀── B2 Unix socket + capability ── worker（不可信，命名空间、Node 权限模型）
     │                                                作业子进程（不可信输入，同样的隔离，B3）
     │ B4 内部 RPC：执行层→渲染服务令牌，只传渲染数据
     ▼
@@ -72,13 +72,13 @@ Workspace Server 是身份、ACL、协同与存储的唯一权威，不在本文
 
 ## 3. 已定的决策
 
-2026-11-09 在原型实测后确定，本文在此基础上设计，不重新讨论。G3、G4、G7 按第一轮对抗评审修订（14.1 节），修订依据是附录 C 的实验。
+2026-11-09 在原型实测后确定，本文在此基础上设计，不重新讨论。G3、G4、G7 按第一轮对抗评审修订（14.1 节），修订依据是附录 C 的实验。G3 另按用户 2026-11-09 的决定修订（14.3 节第 2 项）：不给 worker 分配独立 uid。
 
 | # | 决策 | 依据 |
 | --- | --- | --- |
 | G1 | 执行层和渲染服务的容器运行在 gVisor `runsc` 下，使用默认参数 | 附录 A 的 Q2、Q3：全部原生路径与 Chromium 在 runsc 下可用；runsc 下 Chromium 自带沙箱可用，runc 需要放宽 seccomp |
 | G2 | worker 按敌对进程对待。真实的 Workspace 凭据不进入 worker。执行层父进程运行凭据与出网代理，worker 只持有一个每 worker 的 capability | 第 1 节缺口 1、2 |
-| G3 | 每个 worker 和作业子进程运行在包装器里：独立的内核 uid（每个进程树一个，`RLIMIT_NPROC` 按它计数），命名空间（user、pid、net、mount、ipc），逐个挂载点只读重挂，所有可写挂载都是 `noexec` 的私有 tmpfs，prlimit 限制 AS、CPU、NPROC、FSIZE，node 以 Node 权限模型运行（不授予子进程、worker 线程、WASI 与 inspector 权限），线程池固定大小。包装器通过 `process.execPath` 接入，因为上游池不提供 spawn 选项。这是一个隔离的、有删除条件的 workaround | 附录 A 的 Q3、Q4；附录 C 的 E1、E2 |
+| G3 | 每个 worker 和作业子进程运行在包装器里：命名空间（user、pid、net、mount、ipc），逐个挂载点只读重挂，所有可写挂载都是 `noexec` 的私有 tmpfs，密钥目录与用量目录挂空 tmpfs 遮盖，prlimit 限制 AS、CPU、FSIZE 和一个容器共享的 NPROC 上限，node 以 Node 权限模型运行（不授予子进程、worker 线程、WASI 与 inspector 权限），线程池固定大小。执行层以非 root 运行，与所有 worker 同一个内核 uid，不为 worker 分配独立 uid（14.3 节第 2 项），资源按进程树记账（4.7 节）。包装器通过 `process.execPath` 接入，因为上游池不提供 spawn 选项。这是一个隔离的、有删除条件的 workaround | 附录 A 的 Q3、Q4；附录 C 的 E1（以 uid 1000 运行）；E2 的对照组（被放弃做法的对照，现在用来测量剩余风险） |
 | G4 | 墙钟上限由执行层以 SIGKILL 杀死 worker 进程树来执行，不依赖 SIGTERM。执行层容器的 1 号进程是 `tini`，负责回收被杀包装器留下的僵尸进程 | 附录 A：包装器内 node 是 pid 命名空间的 1 号进程，忽略 SIGTERM；附录 C 的 E2：node 作 1 号进程时每次 SIGKILL 留下一个僵尸，`--init` 时为 0 |
 | G5 | 密钥不进入任何进程环境变量。worker 环境里没有密钥；执行层和渲染服务启动时从文件读取 | 第 1 节缺口 3 |
 | G6 | 渲染服务在 runsc 下开启 Chromium 沙箱（去掉 `--no-sandbox`），并恢复每任务隔离 | 第 1 节缺口 9 |
@@ -91,37 +91,45 @@ Workspace Server 是身份、ACL、协同与存储的唯一权威，不在本文
 ### 4.1 进程与隔离层次
 
 ```text
-executor 容器（runsc，容器级 --memory、--cpus；只保留 SETUID、SETGID、SETPCAP、KILL 四个 capability）
+executor 容器（runsc，容器级 --memory、--cpus；非 root，丢弃全部 capability）
 └─ tini（1 号进程，回收僵尸）
-   └─ 执行层父进程 node（容器内 root，gVisor 之内）
+   └─ 执行层父进程 node（镜像用户 node，uid 1000，gVisor 之内）
       ├─ 内部 RPC 服务（只接受网关→执行层令牌）
       ├─ 凭据与出网代理：/run/univer-mcp/proxy.sock（新）
-      ├─ 资源采样器：每 500 ms 按 uid 汇总 CPU 与 RSS（新，4.7 节）
+      ├─ 资源采样器：每 500 ms 按 worker 的进程树汇总 CPU、RSS 与任务数（新，4.7 节）
       ├─ worker 池（上游 @univer-cli/univer-collaboration-runtime-pool）
       │   └─ fork → process.execPath = ns-worker 包装器（新）
-      │        └─ setpriv 换成 uid 100000+包装器 pid，prlimit（NPROC、AS、CPU、FSIZE）
-      │             └─ unshare user+pid+net+mount+ipc，逐个挂载点只读，noexec 私有 tmpfs
+      │        └─ prlimit（NPROC、AS、CPU、FSIZE）
+      │             └─ unshare user+pid+net+mount+ipc，逐个挂载点只读，noexec 私有 tmpfs，空 tmpfs 遮盖密钥目录与用量目录
       │                  └─ node --permission worker（pid 命名空间 1 号进程，只有 lo）
       │                       └─ 127.0.0.1:<端口> 转发到 proxy.sock
       └─ 作业子进程：fork 时显式 execPath = ns-job 包装器（新）
-           └─ 同样的 uid 规则、rlimit、命名空间与权限模型，没有代理 socket，没有网络
+           └─ 同样的 rlimit、命名空间与权限模型，没有代理 socket，没有网络
 ```
 
-执行层父进程以容器内 root 运行，是为了能把每个 worker 换到自己的 uid（`setpriv` 需要 `CAP_SETUID`、`CAP_SETGID`，清空 bounding set 需要 `CAP_SETPCAP`）并向不同 uid 的进程发 SIGKILL（`CAP_KILL`）。它仍在 gVisor 之内，容器只保留这四个 capability。附录 C 的 E2 在这组 capability 下跑通了全部步骤。
+执行层父进程以非 root 运行（镜像用户 `node`，uid 1000），不持有任何 capability（14.3 节第 2 项）。父进程、包装器和 node 因此是同一个内核 uid；包装器里的 `unshare --user` 只改变进程在命名空间内看到的 uid，不改变内核 uid。需要权限的几件事都不需要 capability：
+
+- 命名空间与挂载：非 root 的 uid 1000 在 runsc 下能 `unshare` user、pid、net、mount，并在新的 user 命名空间里挂 tmpfs、只读重挂（附录 A 的 Q3；附录 C 的 E1 以 uid 1000 跑通了全部探针）。
+- 杀死：父进程向同一内核 uid 的进程发 SIGKILL 不需要 `CAP_KILL`。附录 A 的 Q4 实测 SIGKILL 包装器的 pid 杀死整棵树，Q3 的原型以镜像用户 uid 1000 运行；SIGKILL 本身在 uid 1000 下的权限没有单独测，推断成立（同一内核 uid），由 MG6 验证。
+- 回收僵尸：由 `tini` 完成，不需要 capability。E2 的僵尸测量以 root 运行；非 root 下的结果推断相同，由 MG6 验证。
+
+没有测过的是：容器按 Kubernetes Pod Security restricted 的方式配置（`capabilities.drop: [ALL]`、`allowPrivilegeEscalation: false`）时，上面这些在 runsc 下是否仍然成立。附录 C 的 E1 使用 Docker 的默认 capability 集。PR G5 在 `cap_drop: ALL` 与 `no-new-privileges` 下验证包装器；不成立则回到 14.3 节第 2 项重新决定。
+
+同一个内核 uid 的代价：内核的用户隔离不再区分 worker。worker 之间、worker 与父进程之间的隔离全部来自命名空间（pid、mount、ipc、net）、遮盖密钥目录的空 tmpfs 和 Node 权限模型。`RLIMIT_NPROC` 按内核 uid 计数，所有进程共用一个配额（4.7 节）。命名空间被绕过时同一 uid 的后果见第 10 节。
 
 ### 4.2 worker 包装器
 
-包装器是镜像内的一个 shell 脚本（设计为 `apps/mcp/docker/ns-worker.sh`，新），参考实现见附录 C.6，它在 runsc 下以上述 capability 跑通了真实上游池、headless Univer 与 Rust 公式。执行层在创建 worker 池之前设置 `process.execPath` 指向它，上游池 fork worker 时于是先执行包装器。设计要点：
+包装器是镜像内的一个 shell 脚本（设计为 `apps/mcp/docker/ns-worker.sh`，新），参考形状见附录 C.6，它在 runsc 下跑通了真实上游池、headless Univer 与 Rust 公式；C.6 是已被取代的 root 版本，非 root 版本的差异写在该节。执行层在创建 worker 池之前设置 `process.execPath` 指向它，上游池 fork worker 时于是先执行包装器。设计要点：
 
-- **独立 uid。** 包装器先用 `setpriv --reuid=U --regid=U --clear-groups --inh-caps=-all --bounding-set=-all` 换到 `U = 100000 + 包装器自己的 pid`。包装器存活期间它的 pid 唯一；包装器被 SIGKILL 时，`--kill-child` 同时杀死命名空间内的整棵树，孤儿由 tini 回收，之后 pid 才可能复用，所以不需要分配表。uid 让三件事不再依赖挂载命名空间：`RLIMIT_NPROC` 按 uid 计数，一个 worker 的 fork 或线程洪水只耗尽自己的配额；worker 读不到父进程（root）的 0600 文件；worker 不能向其他 worker 或父进程发信号。附录 C 的 E2 实测：两个 worker 各自 uid、`RLIMIT_NPROC=64` 时，A 洪水到 57 个进程被 EAGAIN 拒绝，B 仍能创建 10 个子进程和一个 worker 线程，父进程正常 fork；同一 uid 的对照组中 B 一个也创建不了。
-- **命名空间。** 换 uid 之后，`unshare --user --map-root-user --net --pid --fork --kill-child --mount --mount-proc --ipc`，再以 `unshare --user --map-user=5000 --map-group=5000` 降到非 root。`--ipc` 避免 worker 之间经 System V 共享内存通信，由 MG5 验证。bwrap 的 `--unshare-net` 在 runsc 下失败（RTM_NEWADDR），所以不用 bwrap（附录 A）。
-- **文件系统。** 先 `mount --make-rprivate /`，再对 `/proc/self/mountinfo` 中除 `/proc`、`/sys`、`/dev` 以外的每个挂载点执行 `mount -o remount,bind,ro`，任何一个失败即退出。不用 `mount --rbind / /`：runsc 下它之后的嵌套 `unshare --user` 返回 EPERM（14.1 节 S7a）。然后在 `/tmp`、`/var/tmp`、`/dev/shm`、`/home/node` 上挂空 tmpfs，选项 `nosuid,nodev,noexec`、64 MiB。密钥目录（4.10 节）与 license 用量目录（第 6 节）不再需要遮盖：它们属于其他 uid，权限是 0700 或 0400。代理 socket 所在的 `/run/univer-mcp` 保持可见。
+- **同一内核 uid。** 包装器不换 uid，worker 的内核 uid 与执行层父进程相同（4.1 节）。几件事因此靠命名空间与挂载，而不是靠 uid：worker 看不到其他进程（pid 命名空间，`--mount-proc` 使 `/proc` 只列自己的进程），所以不能向它们发信号，也读不到父进程的 environ；worker 读不到父进程的文件（下面“文件系统”一条的遮盖）；`RLIMIT_NPROC` 不再按 worker 区分（4.7 节，剩余风险见第 10 节）。包装器被 SIGKILL 时，`--kill-child` 同时杀死命名空间内的整棵树，孤儿由 tini 回收。pid 命名空间的 1 号进程终止时，内核杀死该命名空间内的全部进程，包括用 `setsid` 或双重 fork 脱离了进程组与会话的进程；这一点是推断（依据内核的 pid 命名空间语义）：附录 A 与 C.6 实测的是正常进程树整体退出，没有单独测 `setsid`，由 MG3 的进程树层验证。
+- **命名空间。** 先 `unshare --user --map-root-user --net --pid --fork --kill-child --mount --mount-proc --ipc`，再以 `unshare --user --map-user=5000 --map-group=5000` 降到命名空间内的非 root，内核 uid 不变。`--ipc` 避免 worker 之间经 System V 共享内存通信，由 MG5 验证。bwrap 的 `--unshare-net` 在 runsc 下失败（RTM_NEWADDR），所以不用 bwrap（附录 A）。
+- **文件系统。** 先 `mount --make-rprivate /`，再对 `/proc/self/mountinfo` 中除 `/proc`、`/sys`、`/dev` 以外的每个挂载点执行 `mount -o remount,bind,ro`，任何一个失败即退出。不用 `mount --rbind / /`：runsc 下它之后的嵌套 `unshare --user` 返回 EPERM（14.1 节 S7a）。然后在 `/tmp`、`/var/tmp`、`/dev/shm`、`/home/node` 上挂空 tmpfs，选项 `nosuid,nodev,noexec`、64 MiB。密钥目录（4.10 节）与 license 用量目录（第 6 节）也要遮盖：它们属于执行层的 uid，也就是 worker 的内核 uid，文件权限挡不住 worker，所以包装器在 `/run/secrets/univer-mcp` 与用量目录上各挂一个空的只读 tmpfs（导出作业例外，用量目录可写，4.9 节）。评审确认 gVisor 下 uid 5000 不能卸载遮盖用的 tmpfs（14.1 节末段）。代理 socket 所在的 `/run/univer-mcp` 保持可见。
 - **noexec 是权限模型的前提。** Node 权限模型下 worker 必须有 `--allow-addons`（Rust 公式引擎与 exchange-node 是原生扩展，不授予时公式计算失败，附录 C 的 E1）。`--allow-addons` 允许 `process.dlopen` 加载任何路径的 `.node` 文件，不检查文件读权限：在可执行的挂载上，worker 把一个原生扩展复制进自己的可写目录后能加载它（E1，macOS 与 runsc 下都成功）。可写目录在 `noexec` 挂载上时加载失败（E1，runsc 下 `ERR_DLOPEN_FAILED`）。所以每个可写挂载都必须是 `noexec`，自检逐个验证。
-- **Node 权限模型。** node 参数为 `--permission --allow-fs-read=<应用目录>/ --allow-fs-read=/tmp/ --allow-fs-write=/tmp/ --allow-addons`，不授予 `--allow-child-process`、`--allow-worker`、`--allow-wasi`、`--allow-inspector`。附录 C 的 E1 在 runsc 下实测：headless Univer、Facade 脚本、Rust 公式、exchange-node 往返与 Typst 编译全部通过，不需要 worker 线程或 WASI；`child_process.spawn`、`execSync`、`fork`、`process.binding('spawn_sync')`、`new Worker`、WASI、`inspector.open` 和读 `/etc/passwd` 都返回 `ERR_ACCESS_DENIED`。效果是一个 worker 就是一个进程，每进程的 rlimit 因此成为每个 worker 的上限。Node 文档说明权限模型不是对抗恶意代码的边界，所以本文把它当作第一层：它的漏洞、或原生扩展中可由脚本触发的内存错误，会让 worker 重新能创建进程，此时由独立 uid 的 `RLIMIT_NPROC`、命名空间和 gVisor 兜底，内存上的后果见 4.7 节的剩余风险。
-- **rlimit、堆与线程。** `prlimit` 设置 `RLIMIT_NPROC`（`EXECUTOR_WORKER_NPROC`，默认 64；它计数线程，worker 在 runsc 下有 15 个线程，E1）、`RLIMIT_AS`（`EXECUTOR_WORKER_AS_MB`）、`RLIMIT_CPU`（`EXECUTOR_WORKER_CPU_SECONDS`）、`RLIMIT_FSIZE`。node 参数加 `--max-old-space-size=<EXECUTOR_WORKER_HEAP_MB>` 与 `--v8-pool-size=1`，环境加 `UV_THREADPOOL_SIZE=1`、`MALLOC_ARENA_MAX=2`。E1 实测：主线程空转加 8 个 pbkdf2 时，默认线程池用 4.39 个核，固定后 1.78 个核；加载 Univer 并计算后的 VmSize 从约 2.0 GiB（2007816 kB）降到约 1.1 GiB（1155444 kB），worker 在 `RLIMIT_AS` 1.5 GiB 下正常运行。这些值经 `pool.env` 传给包装器，对池内所有 worker 相同，不是密钥。数值见 4.7 节。
-- **代理入口。** worker 的网络命名空间里只有 `lo`。MCP 的 worker 入口（`apps/mcp/src/executor/worker.ts`）在交给 Client Core 之前，在 `127.0.0.1:<EXECUTOR_PROXY_PORT>` 上启动一个用 `node:net` 写的转发器，把连接原样接到 `/run/univer-mcp/proxy.sock`。socket 文件权限为 0666，认证靠 capability，不靠文件权限；E2 中不同 uid 的 worker 经它得到 200。所有 worker 的 `transportOrigin` 因此都是 `http://127.0.0.1:<EXECUTOR_PROXY_PORT>`，HTTP 与协同 WebSocket 都经它到达代理（`content-worker.ts` 中两者都由 `transportOrigin` 改写）。不需要修改 Client Core 的 worker，也不需要新依赖。本地开发开关（第 7 节）打开且 `EXECUTOR_WORKER_ISOLATION=none` 时，包装器只加权限模型参数，不换 uid、不建命名空间（macOS 的 runc 拒绝 `unshare`，附录 A），worker 入口不启动转发器，代理直接在同一回环端口上监听。
-- **pid 登记。** 包装器把自己在外层的 pid（`$$`）经环境变量交给 node。worker 入口在运行任何用户代码之前，用自己的 capability 向代理登记这个 pid；代理只接受每个 capability 的第一次登记，并检查该 pid 的父进程是执行层、uid 等于 `100000 + pid`。执行层据此执行墙钟 SIGKILL（4.7 节）、空闲 CPU 检查（4.5 节）和按 uid 的资源采样（4.7 节）。
-- **自检。** 执行层启动时用包装器运行一个自检入口，结果用于第 7 节的拒绝启动检查：uid 不等于父进程且等于 `100000 + pid`；`RLIMIT_NPROC`、`RLIMIT_AS`、`RLIMIT_CPU` 与配置一致；只有 `lo`；直接连接 `WORKSPACE_TRANSPORT_URL` 失败；`/proc` 只看到自己的进程；父进程 environ 与密钥文件不可读；`/tmp` 私有；根目录与其他挂载只读；每个可写挂载都是 `noexec`，且复制进去的原生扩展 `process.dlopen` 失败；`child_process.spawn`、`process.binding('spawn_sync')`、`new Worker` 返回 `ERR_ACCESS_DENIED`；代理 socket 可达。
+- **Node 权限模型。** node 参数为 `--permission --allow-fs-read=<应用目录>/ --allow-fs-read=/tmp/ --allow-fs-write=/tmp/ --allow-addons`，不授予 `--allow-child-process`、`--allow-worker`、`--allow-wasi`、`--allow-inspector`。附录 C 的 E1 在 runsc 下实测：headless Univer、Facade 脚本、Rust 公式、exchange-node 往返与 Typst 编译全部通过，不需要 worker 线程或 WASI；`child_process.spawn`、`execSync`、`fork`、`process.binding('spawn_sync')`、`new Worker`、WASI、`inspector.open` 和读 `/etc/passwd` 都返回 `ERR_ACCESS_DENIED`。效果是一个 worker 就是一个进程，每进程的 rlimit 因此成为每个 worker 的上限。Node 文档说明权限模型不是对抗恶意代码的边界，所以本文把它当作第一层：它的漏洞、或原生扩展中可由脚本触发的内存错误，会让 worker 重新能创建进程，此时由命名空间、共享的 `RLIMIT_NPROC` 上限、进程树采样器（4.7 节）和 gVisor 兜底；这条路径上的后果（内存、进程数）是第 10 节已接受的剩余风险。
+- **rlimit、堆与线程。** `prlimit` 设置 `RLIMIT_NPROC`（`EXECUTOR_NPROC`，默认 512，策略值；整个容器共享一个上限，worker 在 runsc 下有 15 个线程，见 4.7 节）、`RLIMIT_AS`（`EXECUTOR_WORKER_AS_MB`）、`RLIMIT_CPU`（`EXECUTOR_WORKER_CPU_SECONDS`）、`RLIMIT_FSIZE`。node 参数加 `--max-old-space-size=<EXECUTOR_WORKER_HEAP_MB>` 与 `--v8-pool-size=1`，环境加 `UV_THREADPOOL_SIZE=1`、`MALLOC_ARENA_MAX=2`。E1 实测：主线程空转加 8 个 pbkdf2 时，默认线程池用 4.39 个核，固定后 1.78 个核；加载 Univer 并计算后的 VmSize 从约 2.0 GiB（2007816 kB）降到约 1.1 GiB（1155444 kB），worker 在 `RLIMIT_AS` 1.5 GiB 下正常运行。这些值经 `pool.env` 传给包装器，对池内所有 worker 相同，不是密钥。数值见 4.7 节。
+- **代理入口。** worker 的网络命名空间里只有 `lo`。MCP 的 worker 入口（`apps/mcp/src/executor/worker.ts`）在交给 Client Core 之前，在 `127.0.0.1:<EXECUTOR_PROXY_PORT>` 上启动一个用 `node:net` 写的转发器，把连接原样接到 `/run/univer-mcp/proxy.sock`。socket 文件权限为 0666，认证靠 capability，不靠文件权限；附录 A 的 Q3 中，同样非 root 的网络隔离子进程经路径式 Unix socket 得到 200。所有 worker 的 `transportOrigin` 因此都是 `http://127.0.0.1:<EXECUTOR_PROXY_PORT>`，HTTP 与协同 WebSocket 都经它到达代理（`content-worker.ts` 中两者都由 `transportOrigin` 改写）。不需要修改 Client Core 的 worker，也不需要新依赖。本地开发开关（第 7 节）打开且 `EXECUTOR_WORKER_ISOLATION=none` 时，包装器只加权限模型参数，不建命名空间（macOS 的 runc 拒绝 `unshare`，附录 A），worker 入口不启动转发器，代理直接在同一回环端口上监听。
+- **pid 登记。** 包装器把自己在外层的 pid（`$$`）经环境变量交给 node。worker 入口在运行任何用户代码之前，用自己的 capability 向代理登记这个 pid；代理只接受每个 capability 的第一次登记，并检查该 pid 的父进程是执行层、没有登记给其他 binding。执行层据此执行墙钟 SIGKILL（4.7 节）、空闲 CPU 检查（4.5 节）和按进程树的资源采样（4.7 节）。登记发生在用户代码运行之前，之后 worker 改不了它。
+- **自检。** 执行层启动时用包装器运行一个自检入口，结果用于第 7 节的拒绝启动检查：执行层 uid 非 0；`RLIMIT_NPROC`、`RLIMIT_AS`、`RLIMIT_CPU` 与配置一致；只有 `lo`；直接连接 `WORKSPACE_TRANSPORT_URL` 失败；`/proc` 只看到自己的进程；父进程 environ 不可见，密钥目录与用量目录读到的是空目录；`/tmp` 私有；根目录与其他挂载只读；每个可写挂载都是 `noexec`，且复制进去的原生扩展 `process.dlopen` 失败；`child_process.spawn`、`process.binding('spawn_sync')`、`new Worker` 返回 `ERR_ACCESS_DENIED`；代理 socket 可达。
 
 **Workaround 说明。** `process.execPath` 是进程级全局状态。原因：上游池没有 spawn、execPath 或每 worker 参数选项，也不返回子进程句柄。影响范围：执行层父进程里所有不显式传 `execPath` 的 `fork`。作业子进程因此必须显式传入自己的包装器（4.9 节），执行层也不得新增其他 fork。删除条件：上游池提供 spawn 选项并返回子进程或 pid（第 12 节 U1），届时去掉 `process.execPath` 覆盖和 pid 登记，包装器改由 spawn 选项接入。workaround 只存在于执行层启动代码和 worker 入口两处。
 
@@ -140,7 +148,7 @@ interface WorkerBinding {                       // 每个 worker 一条，在 re
   readonly grantId: string;                     // "<subject.kind>:<subject.id>"，PAT id 或 OAuth grant id
   readonly scopes: ReadonlySet<ToolScope>;
   readonly target: WorkspaceRuntimeTarget;      // origin、scope（trunk 或 worktree）、unitId、unitType
-  outerPid: number | null;                      // 4.2 节的登记；uid 为 100000 + outerPid
+  outerPid: number | null;                      // 4.2 节的登记；进程树的根
   revoked: boolean;                             // 销毁或被执行层杀死后为 true，此后 capability 一律 403
 }
 
@@ -208,7 +216,7 @@ B 不允许其他 Worktree 的前缀，不允许任何非 GET。W12 `/resources`
 
 - HTTP：只放行 W2 替身和目标的 W5 `fetchmissing`，让上游客户端在断线后能重连并 pull。拒绝 W1、W3、W4、W6 和 W8 至 W12。常驻代码因此只能读到目标 Unit 的更新，这是同一主体本来就能读的数据。
 - WebSocket：连接保持，worker 发往服务端的帧仍按 4.6 节过滤。
-- CPU：4.7 节的资源采样器按 uid 汇总该 worker 所有进程的 `utime + stime + cutime + cstime`，不只看 worker 的 node 进程。只看 node 进程时，worker 派生的子进程在 3 秒空闲内烧掉 2650 ms CPU 而 node 只增加 10 ms（14.1 节 O3、S1）；按 uid 汇总时同样的子进程被完整计入（附录 C 的 E2：worker node +0 ms，uid 合计 +2580 ms）。一次空闲期内合计增长超过 `EXECUTOR_IDLE_CPU_MS`（默认 1000 ms，策略值）即 SIGKILL 该 worker 树，并计入 `mcp_executor_worker_kills_total{reason="idle_cpu"}`。
+- CPU：4.7 节的资源采样器按该 worker 的进程树汇总 `utime + stime + cutime + cstime`，不只看 worker 的 node 进程。只看 node 进程时，worker 派生的子进程在 3 秒空闲内烧掉 2650 ms CPU 而 node 只增加 10 ms（14.1 节 O3、S1）；按进程树汇总时同样的子进程被完整计入（附录 C 的 E2：worker node +0 ms，该 worker 全部进程合计 +2580 ms；E2 按 uid 汇总，每个 worker 一个 uid 时这组进程就是它的进程树）。一次空闲期内合计增长超过 `EXECUTOR_IDLE_CPU_MS`（默认 1000 ms，策略值）即 SIGKILL 该 worker 树，并计入 `mcp_executor_worker_kills_total{reason="idle_cpu"}`。
 - 墙钟：空闲 TTL 仍为 `EXECUTOR_IDLE_TTL_MS`（默认 60 秒），到期由池回收。
 - 内存：受 `RLIMIT_AS` 与堆上限约束，与 active 时相同。
 
@@ -241,10 +249,11 @@ W7 的 URL 是 `{PFX}/comb/connect?sessionTicket=<ticket>`，单元只出现在�
 
 ### 4.7 资源上限与公平（问题 4）
 
-gVisor 下没有每进程的 cgroup：runsc 的 cgroupfs 是普通 tmpfs，写入不生效；容器级 `--memory`、`--cpus` 生效（附录 A 的 Q4）。硬上限因此只有每进程的 rlimit、V8 堆上限和容器级限制；执行层的采样与 SIGKILL 是事后控制。评审实测了两件事，决定了本节的形状：
+gVisor 下没有每进程的 cgroup：runsc 的 cgroupfs 是普通 tmpfs，写入不生效；容器级 `--memory`、`--cpus` 生效（附录 A 的 Q4）。硬上限因此只有每进程的 rlimit、V8 堆上限和容器级限制；执行层的采样与 SIGKILL 是事后控制。评审实测了三件事，决定了本节的形状：
 
 - 每进程的 rlimit 管不住一个能创建进程和线程的 worker。`RLIMIT_AS` 为 2 GiB 时，worker 派生的子进程 RSS 合计 2888 MiB；一个 worker 用 8 个 libuv 线程平均占 3.59 个核（14.1 节 X2）。
 - runsc 下容器达到内存上限时，整个沙箱被杀，包括父进程和所有用户的 worker：`exit=137 oom=true`；runc 下只杀占用最多的进程（14.1 节 S2）。所以一个用户让容器 OOM，等于中断该执行层上的所有用户。
+- 所有 worker、作业和父进程共用一个内核 uid，而 `RLIMIT_NPROC` 按内核 uid 计数。E2 的对照组（所有 worker 同一 uid，`RLIMIT_NPROC=64`）中，A 的洪水停在 50 个进程，B 随后一个子进程也创建不了，`new Worker` 失败（14.1 节 S3）。所以它只能是整个容器共享的上限，不能当作每个 worker 的预算。
 
 设计因此先让一个 worker 只是一个进程（4.2 节的 Node 权限模型），再让容器内全部硬上限之和小于容器上限：
 
@@ -255,12 +264,14 @@ gVisor 下没有每进程的 cgroup：runsc 的 cgroupfs 是普通 tmpfs，写�
 | 每用户 worker 上限 | Client Core 增加 `maxWorkersPerCaller`（C13，按 `caller.userId` 计，含空闲 worker），MCP 设为 2。用户已有 2 个 worker 又打开新的 key 时，Client Core 在被淘汰 key 的同 key 链内作废该用户自己最久未用的空闲 worker，而不是让上游池淘汰全局最久未用的那个 | 上游池满时已经会为新 key 淘汰全局最久未用的空闲 worker（14.1 节 S5、O7：`destroy-start:userA-unit1:lru`，alice 的两个空闲 worker 占满池时 bob 33 ms 内冷启动）。空闲 worker 不会挡住新 key；真正的问题是一个用户轮换 Unit 时淘汰其他用户的热 worker，迫使他们冷启动（runsc 下约 784 ms，附录 A） |
 | 每用户作业上限 | `EXECUTOR_MAX_JOBS_PER_USER`，默认 1；全局 `EXECUTOR_MAX_JOBS` 仍为 2 | 当前一个用户能占满两个作业槽 |
 | 单次调用墙钟 | 池的操作超时 `EXECUTOR_OPERATION_TIMEOUT_MS`（25 秒）。执行层在调用 deadline 后 1 秒仍未返回时，SIGKILL 该 worker 已登记的外层 pid，并作废其 capability（4.5 节） | SIGKILL 包装器的 pid 会杀死整棵树，忙碌的子进程在 SIGKILL 后 0 至 6 ms 内退出（附录 A）。上游池 1.4.0 发布产物中，请求超时路径对 fork 出的子进程（即包装器）调用 `kill("SIGKILL")`；执行层补的这一次覆盖池超时之外的卡住情形 |
-| 单 worker CPU 总量 | `RLIMIT_CPU` 作为 worker 生命周期内的 CPU 秒数预算，`EXECUTOR_WORKER_CPU_SECONDS` 默认 300（策略值）；采样器按 uid 汇总的 CPU 超过同一预算时也 SIGKILL。用完后下一次调用经 C15 冷启动 | prlimit 的 CPU 上限在 runsc 下生效（附录 A）。它是累计值，不是速率；按 uid 汇总覆盖权限模型被绕过后的多进程情形 |
+| 单 worker CPU 总量 | `RLIMIT_CPU` 作为 worker 生命周期内的 CPU 秒数预算，`EXECUTOR_WORKER_CPU_SECONDS` 默认 300（策略值）；采样器按进程树汇总的 CPU 超过同一预算时也 SIGKILL。用完后下一次调用经 C15 冷启动 | prlimit 的 CPU 上限在 runsc 下生效（附录 A）。它是累计值，不是速率；按进程树汇总覆盖权限模型被绕过后的多进程情形 |
 | 单 worker 核数 | `UV_THREADPOOL_SIZE=1`，`--v8-pool-size=1` | E1：主线程空转加 8 个 pbkdf2，默认 4.39 个核，固定后 1.78 个核。Rust 公式引擎自己的线程在重负载下用几个核未测，PR G5 测量 |
 | 单 worker 内存 | `EXECUTOR_WORKER_AS_MB` 默认 2048，`EXECUTOR_WORKER_HEAP_MB` 默认 1024，`MALLOC_ARENA_MAX=2` | E1：加载 Univer 并计算后 VmSize 约 2.0 GiB，加 `MALLOC_ARENA_MAX=2` 后约 1.1 GiB，`RLIMIT_AS` 1.5 GiB 下正常运行。原设计的 2048 MiB 在没有 arena 上限时几乎没有余量。真实 Unit 的 VmSize 未测，PR G5 测量后调整 |
-| 作业子进程 | `EXECUTOR_JOB_AS_MB` 默认 1536（策略值，PR G5 测量后调整），堆仍为 `EXECUTOR_JOB_HEAP_MB`（256），CPU 秒数等于作业预算，与 worker 相同的 uid、权限模型和线程池设置 | 架构 D4 节 |
-| 进程数 | 每个 worker 与作业一个独立 uid，`RLIMIT_NPROC` 按该 uid 计数，`EXECUTOR_WORKER_NPROC` 默认 64 | E2：同一 uid 时 A 的洪水让 B 的 fork 与 `new Worker` 全部失败（14.1 节 S3）；独立 uid 时 A 停在 57 个进程，B 与父进程不受影响 |
-| 按 uid 的资源采样 | 执行层每 500 ms 读 `/proc`，按 uid 汇总每个 worker 与作业所有进程的 CPU（`utime + stime + cutime + cstime`）和 RSS。RSS 合计超过该进程的 AS 上限即 SIGKILL，计入 `mcp_executor_worker_kills_total{reason="rss"}`；CPU 用于 4.5 节的空闲检查和上面的 CPU 总量 | 正常 worker 只有一个进程，RSS 小于 AS，所以这条检查只在权限模型被绕过时触发。它是事后控制，500 ms 内的快速分配仍可能先碰到容器上限 |
+| 作业子进程 | `EXECUTOR_JOB_AS_MB` 默认 1536（策略值，PR G5 测量后调整），堆仍为 `EXECUTOR_JOB_HEAP_MB`（256），CPU 秒数等于作业预算，与 worker 相同的命名空间、权限模型和线程池设置 | 架构 D4 节 |
+| 进程数 | `RLIMIT_NPROC` 取容器共享上限 `EXECUTOR_NPROC`，默认 512（策略值）。它必须高于合法进程与线程的总数：父进程、`EXECUTOR_MAX_WORKERS` 个 worker（各约 16 个任务：unshare 1 个、node 15 个，C.6）和 `EXECUTOR_MAX_JOBS` 个作业（按同样的估计），合计约 100 至 130；作业与父进程的实际值由 PR G5 测量。每个 worker 的任务数另由下一行的采样器限制 | E2 对照组：同一 uid 下 rlimit 是共享的，不能当作每个 worker 的预算（14.1 节 S3）。512 让合法负载有约四倍余量，同时给洪水一个上限 |
+| 按进程树的资源采样 | 执行层每 500 ms 读 `/proc`，从每个 worker 与作业登记的外层 pid（4.2 节）出发，沿父进程链向下汇总整棵树的 CPU（`utime + stime + cutime + cstime`）、RSS 和任务数（各进程 `Threads` 之和）。RSS 合计超过该进程的 AS 上限，或任务数超过 `EXECUTOR_WORKER_TREE_TASKS`（默认 32，策略值），即 SIGKILL 外层 pid，计入 `mcp_executor_worker_kills_total{reason="rss"}` 或 `{reason="tasks"}`；CPU 用于 4.5 节的空闲检查和上面的 CPU 总量 | 正常 worker 的树是 unshare 与 node 两个进程、16 个任务（C.6），RSS 小于 AS，所以这两条检查只在权限模型被绕过时触发。SIGKILL 外层 pid 杀死整个命名空间（4.2 节）。覆盖与遗漏见下 |
+
+**进程树记账覆盖什么、遗漏什么。** 覆盖：树里的每个进程和线程，包括 fork 出来的孩子，以及 `setsid` 或双重 fork 脱离了进程组与会话的孩子。孤儿进程由内核重新挂到 pid 命名空间的 1 号进程（node）下，它仍是外层 pid 的后代，所以沿父进程链能走到；这是推断，没有在 gVisor 下测过，MG3 的进程树层用 `setsid` 与双重 fork 的 CPU 消耗者验证。即使某个进程在 `/proc` 里没有被走到，一旦采样器因树里其他部分超限而 SIGKILL 外层 pid，它也随命名空间一起死（4.2 节，同样是推断）。遗漏：(1) 500 ms 的采样间隔，更快的分配可能先触及容器上限（剩余风险 2）；(2) 两次采样之间产生又退出的进程，它们的 CPU 要等回收者累计到 `cutime`、`cstime` 才可见，RSS 与任务数的瞬时峰值看不到；(3) 采样器不阻止洪水，只在它出现后的一个采样间隔加杀死时间内终止它，期间共享的 `RLIMIT_NPROC` 可能已被耗尽（剩余风险 3）；(4) 它不限制 CPU 速率。
 
 **容器预算。** 按“容器内全部硬上限之和小于容器上限”来定预算，而不是按单个用户的最坏情况：
 
@@ -268,17 +279,18 @@ gVisor 下没有每进程的 cgroup：runsc 的 cgroupfs 是普通 tmpfs，写�
 容器内存上限 ≥ EXECUTOR_PARENT_BUDGET_MB                       1024（父进程，预算值）
              + EXECUTOR_MAX_WORKERS × EXECUTOR_WORKER_AS_MB     4 × 2048 = 8192
              + EXECUTOR_MAX_JOBS × EXECUTOR_JOB_AS_MB           2 × 1536 = 3072
-             = 12288 MiB，取 12 GiB
+             = 12288 MiB
 ```
 
-AS 是 gVisor 下唯一的每进程硬上限，所以预算按 AS 计。worker 的 RSS 远小于 AS（[架构 6.2](architecture.zh-CN.md#62-worker-池)：单 worker RSS 中位数 244.2 MiB），容器上限的大部分是预留，不是常驻；Kubernetes 中 request 可以按常驻内存给，limit 按本预算给。父进程是可信代码，没有 AS 上限，1024 MiB 是预算值（[架构 6.2](architecture.zh-CN.md#62-worker-池) 的常驻值为 417 MiB），父进程另设 `--max-old-space-size`。执行层启动时检查这条不等式：runsc 下 `os.totalmem()` 返回容器的内存上限（附录 C 的 E5：`--memory=3g` 时为 3072 MiB），不满足即拒绝启动（第 7 节）。MG7 验证一个用户无论怎样分配都只杀死自己的 worker，执行层容器不重启。
+AS 是 gVisor 下唯一的每进程硬上限，所以预算按 AS 计。worker 的 RSS 远小于 AS（[架构 6.2](architecture.zh-CN.md#62-worker-池)：单 worker RSS 中位数 244.2 MiB），容器上限的大部分是预留，不是常驻；Kubernetes 中 request 可以按常驻内存给，limit 按本预算给。父进程是可信代码，没有 AS 上限，1024 MiB 是预算值（[架构 6.2](architecture.zh-CN.md#62-worker-池) 的常驻值为 417 MiB），父进程另设 `--max-old-space-size`。执行层启动时检查这条不等式：runsc 下 `os.totalmem()` 返回容器的内存上限（附录 C 的 E5：`--memory=3g` 时为 3072 MiB），不满足即拒绝启动（第 7 节）。MG7 验证一个用户无论怎样分配都只杀死自己的 worker，执行层容器不重启。上面是今天默认值下的结果；容器的具体大小是阶段 H 的部署值，由这个公式和 PR G5 测得的真实 Unit 内存决定，与执行层是否以 root 运行无关。
 
 CPU 方面，一个用户最多同时运行 2 个 worker 和 1 个作业。脚本刻意使用 libuv 线程池时每个进程约 1.8 个核（E1），合计约 5.4 个核；普通脚本主要占主线程的 1 个核。CPU 争用只让其他用户变慢，不会让他们失败。
 
-**剩余风险。** 两项，都由每租户沙箱消除：每个用户（或每个 worker）一个 gVisor 沙箱，容器级 cgroup 即成为每租户限制，代价是每次冷启动多一次沙箱启动（runsc 下 `docker run true` 中位数 263 ms，附录 A）以及每个沙箱自己的 Sentry 内存。
+**剩余风险（已接受，14.3 节第 1 项）。** 三项，都由每租户沙箱消除，每租户沙箱排进后续阶段：每个用户（或每个 worker）一个 gVisor 沙箱，容器级 cgroup 即成为每租户限制，代价是每次冷启动多一次沙箱启动（runsc 下 `docker run true` 中位数 263 ms，附录 A）以及每个沙箱自己的 Sentry 内存。
 
 1. 没有每 worker 的 CPU 速率限制。一个用户能在自己的配额内持续占用约 5 个核，使同一执行层上其他用户变慢。阶段 H 的限流（每用户并发与每分钟写入）降低持续占用。
-2. Node 权限模型被绕过（Node 的漏洞，或原生扩展中可由脚本触发的内存错误）时，一个 worker 能创建最多 `RLIMIT_NPROC` 个任务，每个进程各有 AS 上限，合计可以超过预算。采样器在 500 ms 内杀死它，但更快的分配可能先触发容器 OOM，而 runsc 下容器 OOM 中断该执行层上的所有用户。是否接受这项剩余风险由产品负责人决定（14.3 节）。
+2. Node 权限模型被绕过（Node 的漏洞，或原生扩展中可由脚本触发的内存错误）时，一个 worker 能在采样器反应之前创建多个进程，每个进程各有 AS 上限，合计可以超过预算。采样器在 500 ms 内杀死它，但更快的分配可能先触发容器 OOM，而 runsc 下容器 OOM 中断该执行层上的所有用户。
+3. 权限模型被绕过时的 fork 或线程洪水。所有进程共用一个内核 uid，洪水耗尽共享的 `RLIMIT_NPROC`（`EXECUTOR_NPROC`）后，同一 uid 下的进程都创建不了新进程或线程，直到采样器因任务数超限杀死它。E2 的对照组测到了这个后果：A 的洪水之后，B 创建 0 个子进程，`new Worker` 失败。已测到的是其他 worker 里新建进程与线程失败；新 worker 与作业的启动、执行层父进程是否受影响没有测量（对照组的父进程是 root，不受 `RLIMIT_NPROC` 限制），按受影响对待。持续时间最长为一个采样间隔加杀死所需的时间，MG3 的进程树层测量实际窗口。后果是可用性，不是数据泄露。
 
 ### 4.8 父进程出网（问题 5）
 
@@ -294,17 +306,17 @@ CPU 方面，一个用户最多同时运行 2 个 worker 和 1 个作业。脚�
 
 Office 导入导出、Typst 编译、Markdown 物化在作业子进程里解析不可信字节（A3）。设计：
 
-- `jobs/run.ts` 的 `fork` 显式传入 `execPath` 指向 `ns-job` 包装器。独立 uid、命名空间、逐个挂载点只读、`noexec` 私有 tmpfs、rlimit、Node 权限模型与线程池设置都与 worker 相同（附录 C 的 E1 在这些条件下跑通了 exchange-node 往返与 Typst 编译）；没有代理 socket，网络命名空间里只有 `lo`。
+- `jobs/run.ts` 的 `fork` 显式传入 `execPath` 指向 `ns-job` 包装器。命名空间、逐个挂载点只读、`noexec` 私有 tmpfs、遮盖、rlimit、Node 权限模型与线程池设置都与 worker 相同（附录 C 的 E1 在 uid 1000 下，除 rlimit 与线程池设置外的这些条件下跑通了 exchange-node 往返与 Typst 编译）；没有代理 socket，网络命名空间里只有 `lo`。
 - `HOME`、`TMPDIR` 继续指向私有临时目录（现在由父进程在 `/tmp` 下创建，包装器内改为子进程自己的 tmpfs）。
-- 导入、Typst 与 Markdown 作业的 uid 是 `100000 + 包装器 pid`。导出作业例外：它以固定的 `EXECUTOR_EXPORT_UID`（默认 99999）运行，这个 uid 拥有 license 用量目录（第 6 节），每个副本同一时间最多一个导出作业。原因是 exchange-node 创建的用量目录只有创建者能打开：附录 C 的 E5 中，第二个 uid 即使在同一个组、目录设了 setgid，导出也返回 `LICENSE_USAGE_STORAGE_ERROR`（`PermissionDenied`）。串行化还顺带消除了“同一目录并发写是否安全”这个未知（第 6 节）。因为同一时间只有一个导出作业，它们共用 uid 不会互相耗尽 `RLIMIT_NPROC`。
-- 导出作业的包装器把用量目录重挂为 `rw,nosuid,nodev,noexec`，其他挂载点仍只读；其他作业和 worker 中该目录与其他挂载一样只读，而且属于其他 uid、权限 0700，读不到。用量目录可写，所以它也必须 `noexec`，否则导出作业能从那里加载原生扩展（4.2 节）。
+- 作业与 worker 同属执行层的内核 uid，没有独立 uid；导出作业与其他作业的区别只在下一条的挂载。每个副本同一时间最多一个导出作业（第 6 节）。现在串行化的依据只有一条：同一目录并发写入的行为没有被测量。附录 C 的 E5 曾因第二个 uid 打不开用量目录而需要串行（`LICENSE_USAGE_STORAGE_ERROR`，`PermissionDenied`），单一 uid 之后这个约束消失；但 E5 没有测同一 uid 的两个进程并发导出，exchange-node 的 README 也没有保证，所以串行化保留，直到 PR G8 测量（第 6 节步骤 7）；测量通过则去掉导出锁。
+- 导出作业的包装器不遮盖用量目录，而是把它重挂为 `rw,nosuid,nodev,noexec`，其他挂载点仍只读；其他作业和 worker 的包装器在该目录上挂空 tmpfs（4.2 节），读不到内容，也写不进去。用量目录可写，所以它也必须 `noexec`，否则导出作业能从那里加载原生扩展（4.2 节）。
 - 作业照旧只收到 license 与 license key，不收到 session、grant 或 Workspace 地址（架构 D4 节）。license key 对作业子进程可见是必要的：转换在子进程内调用 exchange-node。被攻破的作业能读到它，这是第 10 节列出的剩余风险。
 - SIGKILL 作用于包装器的外层 pid，整个树一起退出。
 
 ### 4.10 密钥与内部令牌
 
 - 每个密钥以 `<NAME>_FILE` 环境变量给出文件路径，进程启动时读取并只保存在内存里。涉及 `MCP_OAUTH_CLIENT_SECRET`（网关）、内部令牌、`METRICS_TOKEN`、`UNIVER_LICENSE_KEY`。设置了明文变量即拒绝启动（第 7 节）。
-- 密钥文件放在 `/run/secrets/univer-mcp`，属于 root、权限 0400。worker 与作业的 uid 不同，读不到（附录 C 的 E2：worker 读 root 的 0600 文件返回 EACCES），不再需要在该目录上挂空 tmpfs。
+- 密钥文件放在 `/run/secrets/univer-mcp`，属于执行层的 uid、权限 0400。worker 与作业有同一个内核 uid，文件权限挡不住它们，所以包装器在该目录上挂空 tmpfs（4.2 节），Node 权限模型另不授予读权限。密钥在父进程启动时读入内存。MG2、MG5 验证 worker 与作业看不到密钥文件。MG19 的测试 license 与 key 也以这种方式交付（第 6 节）。
 - 内部令牌按调用方向拆成两个：`MCP_EXECUTOR_TOKEN_FILE`（网关调用执行层，网关与执行层持有）和 `MCP_RENDERER_TOKEN_FILE`（执行层调用渲染服务，执行层与渲染服务持有）。渲染服务不再持有能调用执行层的令牌，Chromium 逃逸后拿到的令牌没有用处。当前三个角色共用一个 `MCP_INTERNAL_TOKEN`（`apps/mcp/docker/compose.verify.yml`）。
 - worker 的显式环境变量保持只有 `NODE_ENV` 加 4.2 节的非密钥限制值。
 
@@ -364,30 +376,38 @@ exchange-node 的 README 要求进程有“可写的本地持久存储”记录�
 **实测的存储位置与计数方式**（附录 C 的 E5）：
 
 - Linux 上 SDK 写到 `$XDG_STATE_HOME/univer-exchange-license/`，内含 `installation.marker`、`usage.key`、`usage.lock`、`usage.state`，另有 `executions/` 目录（评审者 O6 的运行中出现）。macOS 上写到 `$HOME/Library/Application Support/univer-exchange-license/`。
-- 这个目录只有创建它的 uid 能打开；另一个 uid 即使在同组、目录设了 setgid，也得到 `LICENSE_USAGE_STORAGE_ERROR`（`PermissionDenied`）。
+- 这个目录只有创建它的 uid 能打开；另一个 uid 即使在同组、目录设了 setgid，也得到 `LICENSE_USAGE_STORAGE_ERROR`（`PermissionDenied`）。这条约束是早期选择固定导出 uid 的依据；现在所有进程共用一个内核 uid，不再触发。
 - 执行层随镜像带的 license 查询用量得到 `{"licenseStatus":"valid","limit":null,"used":null,"remaining":null}`（14.1 节 O6），看不到计数。
 - 不配置 license 时是免费模式：`getExportQuota` 返回 `limit: 10` 与实际的 `used`，周期从该目录第一次使用起算一个月。免费额度记在这个目录里，新的目录就是新的 10 次：本机默认目录本月已经 `used=10`，换成新的 `XDG_STATE_HOME` 后导出照常成功。
 
 设计：
 
 1. **位置。** 一个专用卷挂到执行层的 `MCP_LICENSE_USAGE_DIRECTORY`（例如 `/var/lib/univer-mcp/license-usage`），只用于这件事。它不是产品数据卷，不与网关的暂存卷共享，要求 6 不受影响。导出作业的 `XDG_STATE_HOME` 指向该卷，`HOME`、`TMPDIR` 仍指向私有临时目录。
-2. **所有者与可见范围。** 卷属于 `EXECUTOR_EXPORT_UID`，权限 0700。只有导出作业以这个 uid 运行，并在包装器里把该目录重挂为 `rw,nosuid,nodev,noexec`（4.9 节）；worker、导入作业、Typst 与 Markdown 作业的 uid 不同，读不到它。
-3. **同一副本内的并发。** 每个副本同一时间最多一个导出作业（作业队列里一个导出专用的锁）。这由上面的 uid 约束决定，也让“两个进程并发写同一目录是否安全”不再需要回答。代价是每个副本的导出吞吐降为一个作业槽，由 9.4 节测量。
-4. **多副本。** SaaS 中每个执行层副本一个独立的持久卷（StatefulSet 的 `volumeClaimTemplates`），不共享。各副本分别计数，同一 License ID 的总用量是各副本之和。是否接受按副本计数由产品负责人决定（14.3 节）。
-5. **持久性。** 启动检查（第 7 节）拒绝 `tmpfs`、`ramfs`、`overlay` 等不持久的文件系统类型，要求它是独立挂载点、属于 `EXECUTOR_EXPORT_UID` 且可写，并在目录为空时写入一个标记文件 `.univer-mcp-volume`（随机 ID 与创建时间）。启动检查只能排除明显不持久的类型；卷是否真的跨容器重建保留，由 MG19 验证标记与计数在重建后仍在。评审中 O5 用 `--tmpfs` 挂载通过了原设计的设备号检查（`dev(dir)=36 dev(parent)=21 fstype=tmpfs`），所以设备号检查不够。
+2. **所有者与可见范围。** 卷属于执行层的 uid，权限 0700。只有导出作业的包装器把该目录重挂为 `rw,nosuid,nodev,noexec`（4.9 节）；worker、导入作业、Typst 与 Markdown 作业与它同一个内核 uid，文件权限挡不住，所以它们的包装器在该目录上挂空 tmpfs。
+3. **同一副本内的并发。** 每个副本同一时间最多一个导出作业（作业队列里一个导出专用的锁）。依据是同一目录的并发写入没有被测量（4.9 节）；PR G8 测量，通过则去掉这个锁。串行化的代价是每个副本的导出吞吐降为一个作业槽，由 9.4 节测量。
+4. **多副本。** SaaS 中每个执行层副本一个独立的持久卷（StatefulSet 的 `volumeClaimTemplates`），不共享。各副本分别计数，同一 License ID 的总用量是各副本之和。用户已于 2026-11-09 接受按副本计数（14.3 节第 3 项）。
+5. **持久性。** 启动检查（第 7 节）拒绝 `tmpfs`、`ramfs`、`overlay` 等不持久的文件系统类型，要求它是独立挂载点、属于执行层的 uid 且可写，并在目录为空时写入一个标记文件 `.univer-mcp-volume`（随机 ID 与创建时间）。启动检查只能排除明显不持久的类型；卷是否真的跨容器重建保留，由 MG19 验证标记与计数在重建后仍在。评审中 O5 用 `--tmpfs` 挂载通过了原设计的设备号检查（`dev(dir)=36 dev(parent)=21 fstype=tmpfs`），所以设备号检查不够。
 
-验证（MG19）。MG19 不能用随镜像带的 license 观察计数（它报告 `used: null`），也不消耗任何商业 license。设计用免费模式：导出作业在 `MCP_EXPORT_LICENSE_MODE=free` 时不收到 license 与 key，SDK 按免费模式计数；每次运行使用一个新建的卷，因此有确定的 10 次额度，不依赖任何人本月的用量。`MCP_EXPORT_LICENSE_MODE` 不放宽隔离，只决定导出用哪个 license，它在 gVisor 下也可用，`/healthz` 与启动日志写出当前值。步骤，合计不超过每个卷 10 次：
+验证（MG19）。MG19 用一个会报告用量的测试 license 验证存储机制与计数。随镜像带的 license 不能用，它报告 `used: null`（14.1 节 O6）。测试 license 由用户在 PR G8 开始时提供，处理规则如下：
 
-1. 新建卷，启动执行层，查询用量为 `used=0`；连续导出 3 次，再查询，`used=3`。
-2. 删除并重建执行层容器（卷保留），标记文件与 `used=3` 不变。
-3. 在导出过程中 SIGKILL 作业子进程，再在导出过程中 SIGKILL 整个容器；之后的查询与导出返回成功或 SDK 文档化的错误码，不出现 `LICENSE_USAGE_STATE_INVALID`，`used` 为 4 至 6 之间与已完成导出次数一致的值。
+- 它是仓库之外的本地文件（license 与 license key 各一个，路径经 `VERIFY_UVW_EXPORT_LICENSE_FILE` 与 `VERIFY_UVW_EXPORT_LICENSE_KEY_FILE` 交给 `verify-uvw`），不提交，不进日志，不进证据。`verify-uvw` 经 compose 的 file secrets 把它们作为执行层的 `*_FILE` 密钥送进容器（4.10 节），运行结束后删除容器。送到远端主机的做法在 G8 的第一步确认，目标是远端主机上不留明文文件。
+- 证据只记录 `getExportQuota` 的数值字段（`limit`、`used`、`remaining`）和“license 已配置”，不记录 license 或 key 的内容。运行结束时 `verify-uvw` 在运行目录、日志与 docker 输出中搜索两个文件的原文，找到即判失败。
+- 第一次运行先确认两件事并写回本节：查询返回的 `used` 是数字而不是 `null`；额度是按卷在本地计数，还是占用一个共享的额度。`used` 为 `null` 时这个 license 不满足 MG19，按后备处理。
+- 步骤 1 至 6 一次运行最多导出约 10 次；用户在提供 license 时说明剩余额度能否覆盖几次运行。
+
+每次运行新建卷。步骤，`u0` 是新卷上第一次查询得到的 `used`：
+
+1. 新建卷，启动执行层，记录 `u0`；连续导出 3 次，再查询，`used = u0 + 3`。
+2. 删除并重建执行层容器（卷保留），标记文件与 `used` 不变。
+3. 在导出过程中 SIGKILL 作业子进程，再在导出过程中 SIGKILL 整个容器；之后的查询与导出返回成功或 SDK 文档化的错误码，不出现 `LICENSE_USAGE_STATE_INVALID`，`used - u0` 不小于已完成的导出次数，不大于它加上被打断的次数。
 4. 同一副本内同时发起 2 个导出，两个都成功，第二个在导出锁上等待，`used` 增加 2。
-5. 两个副本（`compose.verify.yml` 已有 `executor-b`）各自一个新卷，各导出 1 次，各自 `used=1`，互不影响。
+5. 两个副本（`compose.verify.yml` 已有 `executor-b`）各自一个新卷，各导出 1 次，各自比自己的起始值增加 1，互不影响。
 6. 把卷换成 `--tmpfs` 挂载，执行层拒绝启动并写出失败的检查名。
+7. 并发测量（4.9 节）：另起一个新卷，用关闭导出锁的测试构建，并发 2 路、重复 3 轮导出，`used` 的增量等于完成次数，没有 `LICENSE_USAGE_STATE_INVALID`。结果决定是否去掉导出锁。
 
-用免费模式验证的是存储机制：位置、所有者、持久性、并发与崩溃后的状态。它不能验证商业 license 按 License ID 计数的语义；如果产品负责人要求用商业 license 做这项验证，需要提供一个会报告用量的测试 license（14.3 节）。
+**后备。** 如果 G8 时用户没有可用的测试 license，MG19 退回免费模式：`MCP_EXPORT_LICENSE_MODE=free` 时导出作业不收到 license 与 key，SDK 按免费模式计数，每次运行使用新卷，因此有确定的 10 次额度，不依赖任何人本月的用量。步骤 1 至 6 不变，步骤 7 另起新卷，合计各不超过 10 次。`MCP_EXPORT_LICENSE_MODE` 不放宽隔离，只决定导出用哪个 license，它在 gVisor 下也可用，`/healthz` 与启动日志写出当前值。免费模式验证的是存储机制：位置、所有者、持久性、并发与崩溃后的状态；它验证不了商业 license 按 License ID 计数的语义。用后备通过 MG19 时，G10 的验证记录写明这一点。
 
-**上游阻塞。** 如果产品负责人要求同一 License ID 在所有副本之间共享一个计数，就需要上游提供共享用量后端（第 12 节 U3）。在那之前的退路是网关把 `exchange.export` 固定路由到一个指定副本（rendezvous 使用常量 key），由该副本的一个卷记录全部用量，代价是导出吞吐只有一个作业槽。未通过 MG19 之前，不发布多用户 Office 导出（阶段 G 验收标准）。
+**上游阻塞。** 用户已接受按副本计数（14.3 节第 3 项），所以今天不需要上游的共享用量后端。如果以后要求同一 License ID 在所有副本之间共享一个计数，才需要上游提供共享用量后端（第 12 节 U3）；在那之前的退路是网关把 `exchange.export` 固定路由到一个指定副本（rendezvous 使用常量 key），由该副本的一个卷记录全部用量，代价是导出吞吐只有一个作业槽。未通过 MG19 之前，不发布多用户 Office 导出（阶段 G 验收标准）。
 
 ## 7. 拒绝不安全配置（要求 7）
 
@@ -408,10 +428,10 @@ exchange-node 的 README 要求进程有“可写的本地持久存储”记录�
 | 执行层、渲染服务 | 运行在 gVisor 下：`os.release()` 含 `gvisor`（附录 A 测得 `4.19.0-gvisor`） | 可不在 gVisor 下 |
 | 执行层 | `MCP_EXECUTOR_CREDENTIALS=proxy`。阶段 D 的 `session` 模式（worker 直接持有 session）在 PR G9 中删除 | G9 之前可为 `session` |
 | 执行层 | `EXECUTOR_WORKER_ISOLATION=namespace`；4.2 节的 worker 包装器自检与作业包装器自检全部通过 | 可为 `none`（只加权限模型参数，4.2 节） |
-| 执行层 | 1 号进程不是执行层自己（`/proc/1/comm` 为 `tini` 或 `docker-init`）；进程的有效 capability 恰好是 SETUID、SETGID、SETPCAP、KILL | 隔离为 `none` 时不检查 capability |
-| 执行层 | 内存预算：父进程预算加 `EXECUTOR_MAX_WORKERS × EXECUTOR_WORKER_AS_MB` 加 `EXECUTOR_MAX_JOBS × EXECUTOR_JOB_AS_MB` 不超过 `os.totalmem()`（4.7 节） | 不放宽 |
+| 执行层 | 1 号进程不是执行层自己（`/proc/1/comm` 为 `tini` 或 `docker-init`）；执行层的 uid 非 0，`CapEff` 与 `CapBnd` 为空 | 隔离为 `none` 时不检查 |
+| 执行层 | 内存预算：父进程预算加 `EXECUTOR_MAX_WORKERS × EXECUTOR_WORKER_AS_MB` 加 `EXECUTOR_MAX_JOBS × EXECUTOR_JOB_AS_MB` 不超过 `os.totalmem()`；`EXECUTOR_NPROC` 不小于合法任务总数的估计（4.7 节） | 不放宽 |
 | 执行层 | 出网探针：父进程连接 `MCP_EGRESS_PROBE_TARGETS`（默认 `169.254.169.254:80` 与一个公网地址）必须在 2 秒内失败；连接 Workspace 与渲染服务必须成功 | 可跳过 |
-| 执行层 | `MCP_LICENSE_USAGE_DIRECTORY` 已设置；文件系统类型不在 `tmpfs`、`ramfs`、`overlay` 之列；是独立挂载点；属于 `EXECUTOR_EXPORT_UID` 且可写；标记文件存在或目录为空时写入（第 6 节） | 可接受任意可写目录 |
+| 执行层 | `MCP_LICENSE_USAGE_DIRECTORY` 已设置；文件系统类型不在 `tmpfs`、`ramfs`、`overlay` 之列；是独立挂载点；属于执行层的 uid 且可写；标记文件存在或目录为空时写入（第 6 节） | 可接受任意可写目录 |
 | 执行层 | `EXECUTOR_PROXY_RECORD` 未设置（4.6 节的记录模式） | 可设置 |
 | 渲染服务 | `RENDERER_CHROMIUM_SANDBOX` 未设置为 `0`；启动一个备用 runtime，检查 Chromium renderer 进程的 `/proc/<pid>/status` 中 `Seccomp` 为 2 且 user 命名空间与浏览器主进程不同（附录 A 的检查方式） | 可为 `0` |
 | 渲染服务 | 出网探针：连接 `MCP_EGRESS_PROBE_TARGETS` 必须失败；解析一个公网域名必须失败 | 可跳过 |
@@ -427,7 +447,7 @@ exchange-node 的 README 要求进程有“可写的本地持久存储”记录�
 | --- | --- | --- | --- |
 | 网关 | ingress | Workspace、执行层 | 暂存卷 |
 | 执行层父进程 | 只有网关 | Workspace（`WORKSPACE_TRANSPORT_URL`）、渲染服务；`WORKSPACE_TRANSPORT_URL` 使用域名时另放行集群 DNS。父进程是可信代码，所有请求经 4.8 节的守卫，所以不检查它的解析结果 | license 用量卷、密钥文件 |
-| worker、作业子进程 | 无 | 无（只有 `lo`，worker 另有代理 socket） | 无；全部挂载只读，`noexec` 私有 tmpfs；导出作业另可写 license 用量卷（`noexec`） |
+| worker、作业子进程 | 无 | 无（只有 `lo`，worker 另有代理 socket） | 无；全部挂载只读，`noexec` 私有 tmpfs；密钥目录与用量卷（导出作业除外）被空 tmpfs 遮盖；导出作业另可写 license 用量卷（`noexec`） |
 | 渲染服务 | 只有执行层 | 无 | 密钥文件 |
 
 执行层和渲染服务都不挂载 Workspace 的数据卷或网关的暂存卷。Kubernetes 的 NetworkPolicy 与卷属于阶段 H 的 Helm release，本表是它们必须满足的规格。本地验证由 `verify-uvw` 的 compose 网络与 `doctor` 模拟，MG4、MG9 与 MG18 验证；第 7 节说明启动探针与这些旅程各自能证明什么。
@@ -436,9 +456,9 @@ exchange-node 的 README 要求进程有“可写的本地持久存储”记录�
 
 ### 9.1 七条要求与旅程
 
-MG1 至 MG11 定义在 `.agents/skills/verify-uvw/features/mcp-security.md`（G1，#266）：MG1 凭据与 scope，MG2 环境变量密钥，MG3 子进程与 Node 内置模块，MG4 网络可达，MG5 跨用户 `/proc` 与 tmp，MG6 失控 CPU，MG7 内存耗尽，MG8 池公平，MG9 挂载，MG10 配置失败即关闭，MG11 渲染服务共享。MG1、MG3 不写成攻击脚本，而是作为防线测试随 G4b、G5 交付（代理拒绝白名单之外的路由、worker 初始化数据里没有 session、包装器自检），它们在 `main` 上的基线由代码给出（`packages/client-core/src/content-worker.ts` 把 session 作为 `credential` 交给 worker）。#266 在 `main` 26c1b69d 上的基线：MG6、MG9 受控；MG2、MG4、MG5、MG7、MG8、MG10、MG11 暴露。MG12 至 MG20 由本文新增（9.2 节）。
+MG1 至 MG11 定义在 `.agents/skills/verify-uvw/features/mcp-security.md`（G1，#266）：MG1 凭据与 scope，MG2 环境变量密钥，MG3 子进程与 Node 内置模块，MG4 网络可达，MG5 跨用户 `/proc` 与 tmp，MG6 失控 CPU，MG7 内存耗尽，MG8 池公平，MG9 挂载，MG10 配置失败即关闭，MG11 渲染服务共享。MG1、MG3 不写成攻击脚本，而是作为防线测试随 G4b、G5 交付（代理拒绝白名单之外的路由、worker 初始化数据里没有 session、包装器自检），它们在 `main` 上的基线由代码给出（`packages/client-core/src/content-worker.ts` 把 session 作为 `credential` 交给 worker）。#266 在 `main` 26c1b69d 上的基线：MG6、MG9 受控；MG2、MG4、MG5、MG7、MG8、MG10、MG11 暴露。MG12 至 MG20 由本文新增（9.2 节），各由让它变为受控的 PR 写入。
 
-每条旅程先在当前 `main` 上记录“暴露”，再由对应 PR 变为“受控”（第 11 节）。门禁结果必须来自 runsc 拓扑（9.3 节）。
+MG2、MG4 至 MG11 先在当前 `main` 上记录“暴露”，PR G2 在 runsc 拓扑上重跑它们，得到门禁基线，再由对应 PR 变为“受控”（第 11 节）。MG12 至 MG20 在 G2 不写：每条由让它变为受控的 PR 加入，该 PR 同时给出它在 `main` 上的基线，做法与 MG1、MG3 相同（由代码给出）。门禁结果必须来自 runsc 拓扑（9.3 节）。
 
 | 要求 | 旅程 |
 | --- | --- |
@@ -454,7 +474,7 @@ MG1 至 MG11 定义在 `.agents/skills/verify-uvw/features/mcp-security.md`（G1
 #266 中几条旅程的通过条件在新设计下需要补充：
 
 - MG1：worker 内只能找到 capability，找不到 session；从 worker 外重放 capability 失败（代理只在 Unix socket 上接受它）；W6 对其他 Unit、其他 Worktree、路径与 body 不一致的请求都返回 403；读调用中的 W6 返回 403；替身 ticket 不能在代理之外使用；被执行层杀死的 worker 的旧 capability 返回 403。
-- MG3：分两层验证。权限模型层：worker 与作业内 `child_process` 的各个入口、`process.binding('spawn_sync')`、`new Worker`、WASI、`inspector.open` 返回 `ERR_ACCESS_DENIED`，复制到每个可写目录的原生扩展 `process.dlopen` 失败。uid 层：用一个只在验证中使用、不加权限模型参数的包装器变体重复附录 C 的 E2，worker A 的 fork 洪水不影响 worker B 和父进程创建进程与线程。
+- MG3：分两层验证。权限模型层：worker 与作业内 `child_process` 的各个入口、`process.binding('spawn_sync')`、`new Worker`、WASI、`inspector.open` 返回 `ERR_ACCESS_DENIED`，复制到每个可写目录的原生扩展 `process.dlopen` 失败。进程树层：用一个只在验证中使用、不加权限模型参数的包装器变体，worker A 做 fork 洪水（含 `setsid` 与双重 fork 的孩子，其中一部分烧 CPU），记录洪水期间 worker B 与执行层父进程创建进程与线程的失败窗口；采样器在 1 秒内杀死 A 的整棵树，包括脱离进程组的孩子，之后 B 与父进程恢复，僵尸数为 0。洪水期间 B 与父进程可能失败，这是第 10 节已接受的剩余风险；旅程记录窗口长度，不要求窗口内没有失败。
 - MG6、MG12、MG16：每次 SIGKILL 之后，执行层容器内的僵尸进程数为 0。
 - MG7：一个 worker 用 Buffer、ArrayBuffer 与 V8 堆分配直到失败，并尝试创建子进程；只有它自己的 worker 被杀死（`RLIMIT_AS` 或资源采样），执行层容器不重启，同时进行的另一个用户的调用成功。
 - MG8：#266 的场景是 A 用 12 秒的脚本占住全部 worker 槽位，B 在 5 秒排队超时后得到 `workspace-runtime-busy`；在 `EXECUTOR_MAX_ACTIVE_PER_USER=2` 下 B 应在排队期限内开始。另加一个场景对应 C13：B 先在一个 Unit 上留下热 worker，A 以 2 个并发轮流对 6 个不同 Unit 调用；之后 B 的调用是热启动（`executor: warm`），A 的 worker 数始终不超过 2。
@@ -471,8 +491,10 @@ MG1 至 MG11 定义在 `.agents/skills/verify-uvw/features/mcp-security.md`（G1
 | MG16 | 作业子进程隔离 | 导入一个触发长时间解析的文件，在作业中尝试出网、读父进程 environ、读密钥目录、写 `/tmp` 以外的路径 | 只有 `lo`；读取全部失败；超出预算时整棵树在 deadline 内被 SIGKILL；临时目录被清理 |
 | MG17 | Chromium 沙箱与故障恢复 | 截图后检查 Chromium 各进程的 seccomp 与命名空间；任务进行中 SIGKILL 页面所在的 renderer 进程；任务进行中让页面卡住直到超时；连续两个用户的截图 | renderer 进程 `Seccomp: 2` 且 userns 与浏览器主进程不同；两种故障都在 deadline 前返回可重试错误，5 秒内没有该 runtime 的 Chromium 进程（包括 crashpad），runtime 目录已删除；两个用户的任务使用不同的浏览器进程 |
 | MG18 | 执行层父进程出网 | 用测试替身让 sign-url 返回跨域 URL；从父进程连接云元数据地址与公网地址 | 跨域 URL 得到 `workspace-egress-refused` 且没有发出请求；网络层连接失败 |
-| MG19 | license 用量存储 | 第 6 节的六个步骤，免费模式，每次运行新建卷 | 第 6 节 |
+| MG19 | license 用量存储 | 第 6 节的步骤 1 至 7，用户提供的测试 license，每次运行新建卷；没有测试 license 时退回免费模式 | 第 6 节 |
 | MG20 | 同 key 并发调用的策略 | 同一授权（含 `read`、`write`）对同一 Unit 同时发起一个慢的 `inspect` 和一个 `execute`；`inspect` 的脚本在运行中尝试 W6；另对同一 Unit 同时发起 `exchange.export` 与 `execute` | `inspect` 期间的 W6 返回 403；`execute` 的 W6 成功并提交；代理日志中每个被转发的请求都带发起它的操作的 `requestId` 与 effect；阶段 D、E 中同一 Unit 的并发旅程照常通过 |
+
+**写入时机。** G2 不写这些旅程。每条由让它变为受控的 PR 随代码加入（第 11 节）：MG18 随 G3；MG13、MG14、MG15、MG20 随 G4b，MG12 的 HTTP 部分也随 G4b，G5 补它的 CPU 与僵尸部分；MG16 随 G5；MG17 随 G7；MG19 随 G8。
 
 每条旅程按 `features/mcp.md` 的既有格式写成可重复执行的脚本，证据进入本次运行目录，不含 token、cookie 或 capability。
 
@@ -499,16 +521,16 @@ minsky-ubuntu-remote（Linux aarch64，Docker + runsc）
 
 - 两个容器只在 internal 网络上，所以没有公网出网，第 7 节的出网探针能通过。internal 网络上的发布端口从宿主访问不到（14.1 节 S7b），所以入站不用 `-p`：verify-uvw 在 compose 启动后用 `docker inspect` 读执行层容器的 IP，ssh 的 `-L` 直接转发到这个 IP。附录 C 的 E4 实测：宿主能访问 internal 网络上的容器 IP，macOS 经 `ssh -L <本地端口>:<容器 IP>:8080` 得到容器的响应，容器内连接 1.1.1.1 与 169.254.169.254 都返回 ENETUNREACH。
 - Linux 上的容器不能访问宿主只监听 `127.0.0.1` 的进程（[本地验证](local-verification.zh-CN.md) R5），所以执行层到 Workspace 需要一个转发点：宿主上的转发进程（`socat` 或等价的一行脚本）只绑定在 internal 网络的网关地址上，不对局域网开放，也不需要修改 sshd 的 `GatewayPorts`。评审中 S7b 的复现确认容器能连到绑定在网关地址上的宿主进程。PR G2 写回 `local-verification.zh-CN.md`。
-- `doctor` 新增检查：两个容器内 `uname -r` 含 `gvisor`；执行层只能到达转发点与渲染服务；渲染服务没有任何出网；隧道往返时延（写入证据，供 9.4 节使用）。
+- `doctor` 新增检查：两个容器内 `uname -r` 含 `gvisor`；执行层 uid 非 0 且 `CapEff` 为空；执行层只能到达转发点与渲染服务；渲染服务没有任何出网；隧道往返时延（写入证据，供 9.4 节使用）。
 - 镜像在远端构建（`docker build` 经 ssh 发送构建上下文），两台机器都是 arm64。
 - 选择拆分拓扑，而不是整个运行都放到 Linux：后者需要在 Linux 上运行 Workspace、Vite、浏览器与 opencode，而且网关容器同样受 R5 限制。拆分拓扑保留 macOS 上已验收的全部客户端旅程。
 
-**macOS Docker Desktop 上能证明什么。** Docker Desktop 是 runc 加默认 seccomp：`unshare` 被拒绝，Chromium 沙箱无法启动（附录 A）。本地运行因此需要本地开发开关、`EXECUTOR_WORKER_ISOLATION=none` 与 `RENDERER_CHROMIUM_SANDBOX=0`，此时 worker 与执行层共享网络和 uid，代理在 TCP 回环上监听，包装器只加 Node 权限模型参数。
+**macOS Docker Desktop 上能证明什么。** Docker Desktop 是 runc 加默认 seccomp：`unshare` 被拒绝，Chromium 沙箱无法启动（附录 A）。本地运行因此需要本地开发开关、`EXECUTOR_WORKER_ISOLATION=none` 与 `RENDERER_CHROMIUM_SANDBOX=0`，此时 worker 与执行层共享网络与文件系统，代理在 TCP 回环上监听，包装器只加 Node 权限模型参数。
 
 | 能证明 | 不能证明 |
 | --- | --- |
 | 代理的策略逻辑：capability、替身 ticket、路由表、W6 校验、帧过滤、空闲策略、复用 key、策略绑定到操作（MG1、MG12 的 HTTP 部分、MG13、MG14、MG15 的策略结果、MG20） | worker 不能绕过代理（没有网络命名空间时它能直接连 Workspace） |
-| Node 权限模型拒绝子进程、worker 线程与非白名单文件（MG3 的权限模型层；权限模型是纯 Node 的检查，E1 在 macOS 与 runsc 下结果相同） | 独立 uid 与 `RLIMIT_NPROC` 的隔离（MG3 的 uid 层）、`noexec` 挡住 `dlopen`（macOS 上私有目录可执行，E1 中 dlopen 成功） |
+| Node 权限模型拒绝子进程、worker 线程与非白名单文件（MG3 的权限模型层；权限模型是纯 Node 的检查，E1 在 macOS 与 runsc 下结果相同） | 进程树采样与整树杀死、共享 `RLIMIT_NPROC` 的行为（MG3 的进程树层）、`noexec` 挡住 `dlopen`（macOS 上私有目录可执行，E1 中 dlopen 成功） |
 | 密钥不在环境变量里、内部令牌拆分、父进程出网守卫的代码路径（MG2、MG18 的代码部分） | 跨 worker 的 `/proc`、`/tmp`、挂载隔离（MG5、MG9） |
 | 每用户上限与公平（MG8）、license 用量的重启与多副本（MG19） | rlimit 在包装器内的效果、墙钟 SIGKILL 杀死整棵树（MG6、MG7、MG16） |
 | 生产配置在 runc 上拒绝启动（MG10 的 gVisor 检查一项） | Chromium 沙箱（MG17）、gVisor 的系统调用面、网络策略（MG4） |
@@ -542,10 +564,14 @@ minsky-ubuntu-remote（Linux aarch64，Docker + runsc）
 
 ## 10. 剩余风险
 
+前三行是要求 3 的剩余风险，用户已于 2026-11-09 接受（14.3 节第 1 项）：每租户沙箱排进后续阶段，不在阶段 G 内。这三项的后果是可用性，不是数据泄露。第四行由 14.3 节第 2 项的决定带来，需要评审者确认。
+
 | 风险 | 条件 | 消除办法 |
 | --- | --- | --- |
-| 一个用户在配额内持续占用约 5 个核，使同一执行层上其他用户变慢 | gVisor 下没有每进程 cgroup，也没有 CPU 速率限制（4.7 节） | 每租户沙箱；阶段 H 的限流降低持续占用 |
-| 绕过 Node 权限模型的 worker 创建多个进程，内存合计超过预算；采样器杀死它之前容器 OOM，runsc 下整个执行层沙箱被杀，所有用户的在途调用失败 | Node 权限模型的漏洞，或原生扩展中可由脚本触发的内存错误（4.2、4.7 节） | 每租户沙箱。是否接受由产品负责人决定（14.3 节） |
+| 一个用户在配额内持续占用约 5 个核，使同一执行层上其他用户变慢 | gVisor 下没有每进程 cgroup，也没有 CPU 速率限制（4.7 节） | 每租户沙箱（后续阶段）；阶段 H 的限流降低持续占用 |
+| 绕过 Node 权限模型的 worker 创建多个进程，内存合计超过预算；采样器杀死它之前容器 OOM，runsc 下整个执行层沙箱被杀，所有用户的在途调用失败 | Node 权限模型的漏洞，或原生扩展中可由脚本触发的内存错误（4.2、4.7 节） | 每租户沙箱（后续阶段） |
+| 绕过 Node 权限模型的 worker 做 fork 或线程洪水，耗尽容器共享的 `RLIMIT_NPROC`：其他 worker 里新建进程与线程失败（E2 对照组：B 创建 0 个子进程，`new Worker` 失败），直到采样器杀死它；新 worker、作业和执行层父进程是否受影响没有测量 | 同上；所有进程共用一个内核 uid（14.3 节第 2 项，4.7 节） | 每租户沙箱（后续阶段）；每 worker 一个 uid（已放弃） |
+| 命名空间或遮盖被绕过的 worker（包装器缺陷，或 gVisor 对命名空间、挂载的实现缺陷）与执行层父进程同一内核 uid：能 ptrace 父进程，读它的内存（在途调用的 session）和 0400 的密钥文件；独立 uid 加 root 父进程原本在这一步多一层 | 包装器缺陷或 gVisor 缺陷；由 14.3 节第 2 项的决定带来，第 1 项没有单独覆盖它 | 包装器自检逐项验证已知形状（4.2 节）；每租户沙箱 |
 | 渲染服务容器 OOM 时整个渲染沙箱被杀，所有在途渲染任务失败 | 恶意或超大的渲染数据让 Chromium 用尽容器内存；Chromium 进程没有每进程上限 | 每任务一个渲染沙箱；在此之前执行层把渲染失败作为可重试错误返回 |
 | 同一执行层容器内所有 worker 共享一个 gVisor Sentry；Sentry 逃逸可读取父进程内存中在途调用的 session | gVisor 漏洞 | 每租户沙箱 |
 | 被攻破的作业子进程能读到 license key，导出作业能篡改或清空本副本的用量记录；用量卷丢失后换上的空卷能通过启动检查，计数从零开始 | 原生解析器漏洞；卷的运维事故 | 上游让 license 校验与用量记录留在父进程（U3） |
@@ -559,18 +585,20 @@ minsky-ubuntu-remote（Linux aarch64，Docker + runsc）
 | PR | 标题 | 要求 | 旅程由暴露变为受控 | 依赖 | 主要文件 |
 | --- | --- | --- | --- | --- | --- |
 | G1 | `test(mcp): add stage G isolation baseline journey`（[#266](https://github.com/dream-num/univer-workspace/pull/266)） | 全部 | 记录 MG2、MG4 至 MG11 在 `main` 上的基线；MG1、MG3 随修复 PR 以防线测试交付 | 无 | `.agents/skills/verify-uvw/features/mcp-security.md`、`bin/mcp-security-probes.mjs` |
-| G2 | `test(verify-uvw): run the executor and renderer on a gVisor host` | 全部 | 记录 MG12 至 MG20 的基线；A 组性能 | G1 | `bin/verify-uvw`、`features/mcp.md`、`apps/mcp/docker/compose.verify.yml`、`local-verification.zh-CN.md` |
-| G3 | `fix(mcp): fail closed by default, read secrets from files and confine egress` | 1、5、7 | MG2、MG18；MG10 中 `NODE_ENV` 变体的部分 | G2 | `apps/mcp/src/shared/config*.ts`、`executor/dispatch.ts`、`executor/credentials.ts`、`renderer/server.ts`、`gateway/executor/`、`compose.verify.yml`、`.agents/skills/verify-uvw/bin/verify-uvw`、`apps/mcp/README.md` |
+| G2 | `test(verify-uvw): run the executor and renderer on a gVisor host` | 全部 | 不新增旅程。runsc 验证拓扑（9.3 节）与它的 `doctor` 检查；在 runsc 上重跑已有的 MG2、MG4 至 MG11，记录门禁基线；A 组性能 | G1 | `bin/verify-uvw`、`bin/executor-doctor-checks.mjs`、`bin/renderer-doctor-checks.mjs`、`features/mcp-security.md`、`bin/mcp-security-probes.mjs`、`apps/mcp/docker/compose.verify.yml`、`local-verification.zh-CN.md` |
+| G3 | `fix(mcp): fail closed by default, read secrets from files and confine egress` | 1、5、7 | MG2；新增并受控 MG18；MG10 中 `NODE_ENV` 变体的部分 | G2 | `apps/mcp/src/shared/config*.ts`、`executor/dispatch.ts`、`executor/credentials.ts`、`renderer/server.ts`、`gateway/executor/`、`compose.verify.yml`、`.agents/skills/verify-uvw/bin/verify-uvw`、`apps/mcp/README.md` |
 | G4a | `feat(client-core): add per-operation and worker retirement hooks to the content runtime` | 2、3 | 无（为 G4b 准备）。C10、C11、C12、C14、C15；以真实上游池验证并发同 key 读写的操作类型与杀死后的冷启动重试；CLI 测试与打包验证通过 | 无 | `packages/client-core/src/content-runtime.ts`、`runtime-target.ts` |
-| G4b | `feat(mcp): broker worker Workspace access through a credential proxy` | 1、2 | MG1、MG13、MG14、MG15、MG20，MG12 的 HTTP 部分与杀死后的调用 | G3、G4a | `apps/mcp/src/executor/proxy/`（新）、`executor/runtime.ts`、`executor/credentials.ts`、`executor/worker.ts`、`gateway/executor/grants.ts`、`gateway/auth.ts`、`shared/executor-protocol.ts`、`apps/mcp/package.json` |
-| G5 | `feat(mcp): run workers and conversion jobs under their own uids in namespaces` | 1、3、4、5、6 | MG3、MG4、MG5、MG6、MG7、MG9、MG16，MG12 的 CPU 与僵尸部分 | G4b | `apps/mcp/docker/ns-worker.sh`、`ns-job.sh`（新）、`apps/mcp/Dockerfile`（安装 `tini` 作 ENTRYPOINT，执行层以 root 运行）、`compose.verify.yml`（capability、`init`）、`executor/resources.ts`（新，按 uid 采样）、`executor/server.ts`、`executor/worker.ts`、`executor/jobs/run.ts`、`shared/config-executor.ts` |
+| G4b | `feat(mcp): broker worker Workspace access through a credential proxy` | 1、2 | MG1；新增并受控 MG13、MG14、MG15、MG20，以及 MG12 的 HTTP 部分与杀死后的调用 | G3、G4a | `apps/mcp/src/executor/proxy/`（新）、`executor/runtime.ts`、`executor/credentials.ts`、`executor/worker.ts`、`gateway/executor/grants.ts`、`gateway/auth.ts`、`shared/executor-protocol.ts`、`apps/mcp/package.json` |
+| G5 | `feat(mcp): run workers and conversion jobs in namespaces under the Node permission model` | 1、3、4、5、6 | MG3、MG4、MG5、MG6、MG7、MG9；新增并受控 MG16，以及 MG12 的 CPU 与僵尸部分 | G4b | `apps/mcp/docker/ns-worker.sh`、`ns-job.sh`（新）、`apps/mcp/Dockerfile`（安装 `tini` 作 ENTRYPOINT，执行层以 `node` 用户运行）、`compose.verify.yml`（`cap_drop: ALL`、`init`）、`executor/resources.ts`（新，按进程树采样）、`executor/server.ts`、`executor/worker.ts`、`executor/jobs/run.ts`、`shared/config-executor.ts` |
 | G6 | `feat(mcp): cap workers, calls and jobs per user` | 3 | MG8 | G2 | `packages/client-core/src/content-runtime.ts`、`apps/mcp/src/executor/dispatch.ts`、`executor/jobs/queue.ts` |
-| G7 | `feat(mcp): isolate each render task and enable the Chromium sandbox` | 1、3、4 | MG11、MG17 | G2 | `apps/mcp/src/renderer/pool.ts`、`renderer/server.ts`、`shared/renderer-protocol.ts`、`executor/renderer-client.ts`、`apps/mcp/docker/chromium.sh`（新） |
-| G8 | `feat(mcp): persist Office export license usage on a dedicated volume` | C7 | MG19 | G5 | `executor/jobs/run.ts`、`executor/jobs/queue.ts`（导出锁）、`ns-job.sh`（导出 uid 与可写用量目录）、`shared/config-executor.ts`、`compose.verify.yml` |
+| G7 | `feat(mcp): isolate each render task and enable the Chromium sandbox` | 1、3、4 | MG11；新增并受控 MG17 | G2 | `apps/mcp/src/renderer/pool.ts`、`renderer/server.ts`、`shared/renderer-protocol.ts`、`executor/renderer-client.ts`、`apps/mcp/docker/chromium.sh`（新） |
+| G8 | `feat(mcp): persist Office export license usage on a dedicated volume` | C7 | 新增并受控 MG19（测试 license 由用户在 PR 开始时提供） | G5 | `executor/jobs/run.ts`、`executor/jobs/queue.ts`（导出锁）、`ns-job.sh`（导出作业的可写用量目录）、`shared/config-executor.ts`、`compose.verify.yml` |
 | G9 | `feat(mcp): refuse to start on insecure configuration` | 7 | MG10 | G3 至 G8 | 各角色的 `server.ts` 与 `shared/config*.ts`；第 7 节的全部检查；开关在 gVisor 或 Kubernetes 中被拒绝；删除 `MCP_EXECUTOR_CREDENTIALS=session` 与 G3 的“未设开关即拒绝” |
 | G10 | `docs(mcp): record stage G verification and performance` | 全部 | 全部旅程在 runsc 上重跑；阶段 D、E 验收重跑；B 组性能 | G9 | 第 13 节列出的文档 |
 
 G4b 的第一步是 4.6 节的抓包，结果写入本文附录 B。G5 只能在 runsc 拓扑上验收。G3、G4a、G6、G7 只依赖探针旅程（G1、G2），可以从 `main` 各自开分支并行实施；G6 与 G4a 都修改 `content-runtime.ts`，后合入的一个需要 rebase。
+
+G2 只建立 runsc 验证拓扑并重跑已有旅程，不写 MG12 至 MG20；这些旅程各由让它变为受控的 PR 加入（9.2 节），与 G1 对 MG1、MG3 的做法相同。G8 开始时由用户提供 MG19 用的测试 license（第 6 节）。
 
 ## 12. 上游需求
 
@@ -578,19 +606,19 @@ G4b 的第一步是 4.6 节的抓包，结果写入本文附录 B。G5 只能在
 | --- | --- | --- | --- |
 | U1 | Univer CLI SDK `@univer-cli/univer-collaboration-runtime-pool` | 每 worker 的 spawn 选项（可执行文件、参数、环境），返回子进程或 pid；在文档中写明操作超时使用 SIGKILL（1.4.0 的实现如此）；worker 退出时立即作废实例并发出事件，而不是等下一次操作 | `process.execPath` 指向包装器，worker 入口登记外层 pid，执行层自行 SIGKILL 并作废 capability；Client Core 对死去的缓存 worker 冷启动重试（4.2、4.5、4.7 节） |
 | U2 | Univer CLI SDK `@univer-cli/univer-render-runtime` | 不硬编码 `--no-sandbox`，提供沙箱开关；支持注入浏览器或每任务创建 BrowserContext；暴露浏览器 pid 或强制关闭 | 包装脚本去掉 `--no-sandbox` 并记录 pid；每任务一个 runtime（5.1 至 5.3 节） |
-| U3 | `@univerjs-pro/exchange-node` | 可配置的用量存储位置（现在由 `XDG_STATE_HOME` 决定）；多进程、多副本共享的用量后端，或对同一目录多个 uid 并发写入的明确保证；让用量记录不需要转换进程持有可写目录；商业 license 的用量查询返回计数 | 每副本独立卷，导出以固定 uid 运行并在副本内串行；退路是导出固定到一个副本（第 6 节） |
+| U3 | `@univerjs-pro/exchange-node` | 可配置的用量存储位置（现在由 `XDG_STATE_HOME` 决定）；多进程、多副本共享的用量后端，或对同一目录多个进程并发写入的明确保证；让用量记录不需要转换进程持有可写目录；商业 license 的用量查询返回计数 | 每副本独立卷，导出在副本内串行，按副本计数（14.3 节第 3 项）；退路是导出固定到一个副本（第 6 节） |
 | U4 | Univer Collaboration SDK | 协同 WebSocket 帧协议的说明（类型、字段、哪些帧可以改变文档） | 抓包得到的白名单，未知帧关闭连接（4.6 节） |
 
 ## 13. 实现后需要更新的文档
 
 本次只在 [README](README.zh-CN.md) 第 6 节的文档索引中加入本文，并在[阶段计划](stages.zh-CN.md)阶段 G 交付物 1 处指向本文。实现完成后（PR G10）更新：
 
-- `architecture.zh-CN.md`：3.2 节表格中执行层和渲染服务的运行时改为已确认的 gVisor，渲染服务不出网；4.2 节最后一条指向本文；6.2 节的 key、每用户上限与新的 `EXECUTOR_*` 变量；6.4 节改为代理与 capability 的摘要；7.1 节去掉临时偏离与 `--no-sandbox`，写入每任务 runtime；7.1.2 节删除已修复的“故障后迟迟不应答”；9.1 节 C7 的状态与新增的 C10 至 C15；第 10 节标注已满足并指向本文；第 11 节的新变量（`*_FILE`、两个内部令牌、`MCP_LOCAL_DEVELOPMENT`、`EXECUTOR_WORKER_*`、`EXECUTOR_JOB_AS_MB`、`EXECUTOR_EXPORT_UID`、`EXECUTOR_PARENT_BUDGET_MB`、`EXECUTOR_MAX_ACTIVE_PER_USER`、`EXECUTOR_MAX_JOBS_PER_USER`、`EXECUTOR_IDLE_CPU_MS`、`EXECUTOR_PROXY_PORT`、`EXECUTOR_PROXY_RECORD`、`EXECUTOR_WORKER_ISOLATION`、`RENDERER_CHROMIUM_SANDBOX`、`MCP_LICENSE_USAGE_DIRECTORY`、`MCP_EXPORT_LICENSE_MODE`、`MCP_EGRESS_PROBE_TARGETS`），删除 `MCP_INTERNAL_TOKEN`；D4 节的作业包装器与用量存储；新增 9.4 节的复测结果。
+- `architecture.zh-CN.md`：3.2 节表格中执行层和渲染服务的运行时改为已确认的 gVisor，渲染服务不出网；4.2 节最后一条指向本文；6.2 节的 key、每用户上限与新的 `EXECUTOR_*` 变量；6.4 节改为代理与 capability 的摘要；7.1 节去掉临时偏离与 `--no-sandbox`，写入每任务 runtime；7.1.2 节删除已修复的“故障后迟迟不应答”；9.1 节 C7 的状态与新增的 C10 至 C15；第 10 节标注已满足并指向本文；第 11 节的新变量（`*_FILE`、两个内部令牌、`MCP_LOCAL_DEVELOPMENT`、`EXECUTOR_WORKER_*`、`EXECUTOR_JOB_AS_MB`、`EXECUTOR_NPROC`、`EXECUTOR_PARENT_BUDGET_MB`、`EXECUTOR_MAX_ACTIVE_PER_USER`、`EXECUTOR_MAX_JOBS_PER_USER`、`EXECUTOR_IDLE_CPU_MS`、`EXECUTOR_PROXY_PORT`、`EXECUTOR_PROXY_RECORD`、`EXECUTOR_WORKER_ISOLATION`、`RENDERER_CHROMIUM_SANDBOX`、`MCP_LICENSE_USAGE_DIRECTORY`、`MCP_EXPORT_LICENSE_MODE`、`MCP_EGRESS_PROBE_TARGETS`），删除 `MCP_INTERNAL_TOKEN`；D4 节的作业包装器与用量存储；新增 9.4 节的复测结果。
 - `stages.zh-CN.md`：阶段 G 各验收条目的证据，以及阶段 D、E 重跑的记录。
-- `apps/mcp/README.md`：配置项；部署要求（runsc、`tini` 作 1 号进程、执行层的四个 capability、按第 4.7 节公式给出的容器内存上限、网络策略、license 用量卷与其所有者、密钥文件、每副本卷）；删除“Stage G 之前仅限单用户”的说明；`mcp_executor_proxy_denied_total`、`mcp_executor_worker_kills_total` 指标。
+- `apps/mcp/README.md`：配置项；部署要求（runsc、`tini` 作 1 号进程、执行层以非 root 运行并丢弃全部 capability、按第 4.7 节公式给出的容器内存上限、网络策略、license 用量卷（属于执行层的 uid）、密钥文件、每副本卷）；删除“Stage G 之前仅限单用户”的说明；`mcp_executor_proxy_denied_total`、`mcp_executor_worker_kills_total` 指标。
 - `apps/mcp/AGENTS.md`：删除“Until Stage G passes”与渲染池跨用户复用两条；新增规则：worker 永不收到 session；代理路由表是 worker 的唯一放行清单，新增 worker 路由必须先进表并有旅程；代理策略只在 C14 钩子里切换；执行层不得新增未显式传 `execPath` 的 `fork`；worker 与作业以 Node 权限模型运行，包装器里每个可写挂载都是 `noexec`；新增放宽项必须进第 7 节的表并依赖本地开发开关；渲染 runtime 不跨任务复用。
 - `local-verification.zh-CN.md`：9.3 节的拓扑与转发点的实测结论。
-- `DREAMNUM.md`：部署交接新增 gVisor、`tini`、capability、网络策略与 license 用量卷的要求时更新（根 `AGENTS.md` 的规则）。
+- `DREAMNUM.md`：部署交接新增 gVisor、`tini`、非 root 与丢弃全部 capability、网络策略与 license 用量卷的要求时更新（根 `AGENTS.md` 的规则）。
 
 ## 14. 评审记录
 
@@ -603,7 +631,7 @@ G4b 的第一步是 4.6 节的抓包，结果写入本文附录 B。G5 只能在
 | 发现 | 评审者（模型） | 问题与证据 | 处理 |
 | --- | --- | --- | --- |
 | X1、O1 | Codex gpt-6-astra；Claude opus | 执行层在进入 Client Core 之前按 key 切换策略，而 Client Core 自己串行执行同 key 操作：排队的写调用把运行中读调用的策略改为 `write`（`read_call_observed_policy=write`）；opus 以真实 Client Core 复现，写调用随后在 `idle` 下运行，同一 Unit 的正常并发调用也会失败 | 已解决。策略由 C14 在同 key 链内按操作绑定（4.3 节第 2 点）。G4a 的 Client Core 测试与 MG20 验证 |
-| X2、S1、S2、S3、O3 | Codex gpt-6-astra；Claude sonnet；Claude opus | worker 能创建进程和线程，每进程的限制都被绕过：AS 2 GiB 下子进程 RSS 合计 2888 MiB；一个 worker 平均 3.59 个核；子进程在 2 秒 CPU 上限下烧掉 12 秒，空闲采样只看到 node 的 70 ms；runsc 下容器 OOM 杀死整个沙箱（`exit=137 oom=true`），runc 只杀占用者；共享 uid 的 `RLIMIT_NPROC` 让 A 的洪水使 B 的 exec 与 `new Worker` 失败 | 已解决，另有一项待决定的剩余风险。E1 选定 Node 权限模型加 `noexec`，一个 worker 只是一个进程；E2 选定每个 worker 一个 uid，`RLIMIT_NPROC` 互不影响，CPU 与 RSS 按 uid 汇总；线程池固定后 1.78 个核；容器预算改为全部硬上限之和并在启动时检查（4.2、4.7 节）。权限模型被绕过时容器仍可能 OOM，见 14.3 节第 1 项 |
+| X2、S1、S2、S3、O3 | Codex gpt-6-astra；Claude sonnet；Claude opus | worker 能创建进程和线程，每进程的限制都被绕过：AS 2 GiB 下子进程 RSS 合计 2888 MiB；一个 worker 平均 3.59 个核；子进程在 2 秒 CPU 上限下烧掉 12 秒，空闲采样只看到 node 的 70 ms；runsc 下容器 OOM 杀死整个沙箱（`exit=137 oom=true`），runc 只杀占用者；共享 uid 的 `RLIMIT_NPROC` 让 A 的洪水使 B 的 exec 与 `new Worker` 失败 | 已解决，剩余风险已接受（14.3 节第 1 项）。E1 选定 Node 权限模型加 `noexec`，一个 worker 只是一个进程；评审时 E2 选定每个 worker 一个 uid，用户随后决定放弃它（14.3 节第 2 项）：CPU、RSS 与任务数改为按进程树汇总，`RLIMIT_NPROC` 成为容器共享上限，S3 的 fork 洪水在权限模型被绕过时重新成立，列入第 10 节；线程池固定后 1.78 个核；容器预算改为全部硬上限之和并在启动时检查（4.2、4.7 节）。权限模型被绕过时容器仍可能 OOM，见第 10 节 |
 | O2 | Claude opus | 镜像以 node 作 1 号进程，不回收孤儿：runsc 下 30 次 SIGKILL 包装器留下 30 个僵尸，`RLIMIT_NPROC` 为 50 时无法再创建 worker | 已解决。`tini` 作 1 号进程（决策 G4；PR G5 的 Dockerfile）。E2：`--init` 时 SIGKILL 后僵尸数为 0，不加时为 2 至 3。MG6、MG12、MG16 检查僵尸数 |
 | S4 | Claude sonnet | 执行层 SIGKILL 空闲 worker 后，下一次调用以 `COLLABORATION_WORKER_CRASHED` 失败，第三次才成功；C12 的回调不在杀死时触发，capability 仍有效 | 已解决。执行层的杀死路径直接作废 capability；C15 在同一操作内冷启动重试（4.5 节）。MG12 增加“杀死后的下一次调用成功” |
 | S5、O7 | Claude sonnet；Claude opus | 上游池为新 key 淘汰全局最久未用的空闲 worker（`destroy-start:userA-unit1:lru`；alice 的两个空闲 worker 占满池时 bob 33 ms 冷启动），原设计 4.7 节的依据不成立 | 已解决。删除该依据与 C13 中重复的一半。C13 只保留“调用者达到上限时淘汰自己的空闲 worker”，针对一个用户轮换 Unit 淘汰他人热 worker（4.7 节）。MG8 增加对应场景 |
@@ -613,28 +641,39 @@ G4b 的第一步是 4.6 节的抓包，结果写入本文附录 B。G5 只能在
 | S8 | Claude sonnet | 拒绝启动只匹配 `NODE_ENV=production`：`Production`、`prod`、`staging` 与不设置时执行层与网关以不安全方式启动 | 已解决。默认即安全，唯一的本地开发开关，开关在 gVisor 或 Kubernetes 中被拒绝；G3 先落地“未设开关即拒绝”（第 7 节）。MG10 增加这些变体 |
 | O4 | Claude opus | runsc 容器在 internal 网络上，两个探针目标 ENETUNREACH，邻居 `172.18.0.2:5432` 却 `CONNECTED`；DNS 没有检查。出网自检不能证明允许清单 | 已解决。第 7 节写明探针能与不能证明什么；允许清单由第 8 节的网络策略规格与 MG4、MG18 的枚举证明；渲染服务增加 DNS 探针 |
 | O5 | Claude opus | 用量目录检查接受 tmpfs：`--tmpfs` 挂载得到 `dev(dir)=36 dev(parent)=21 fstype=tmpfs writable` | 已解决。增加文件系统类型黑名单、所有者检查与标记文件；持久性由 MG19 的容器重建步骤证明（第 6 节）。卷丢失后换上的空卷仍能通过启动检查，列入第 10 节 |
-| O6 | Claude opus | 随镜像的 license 查询用量得到 `"used":null`，MG19 无法观察计数；免费模式报告 `limit 10`；用量在 `$XDG_STATE_HOME/univer-exchange-license/` | 已解决。第 6 节记录位置与计数方式；MG19 改用免费模式和每次新建的卷（E5：新卷 `used` 由 0 变为 2）。E5 另发现用量目录只有创建者 uid 能打开，导出因此以固定 uid 在副本内串行运行（4.9 节） |
+| O6 | Claude opus | 随镜像的 license 查询用量得到 `"used":null`，MG19 无法观察计数；免费模式报告 `limit 10`；用量在 `$XDG_STATE_HOME/univer-exchange-license/` | 已解决。第 6 节记录位置与计数方式；评审时 MG19 改用免费模式和每次新建的卷（E5：新卷 `used` 由 0 变为 2），用户随后决定改用会报告用量的测试 license，免费模式留作后备（14.3 节第 4 项）。E5 另发现用量目录只有创建者 uid 能打开，导出因此曾设计为固定 uid 并在副本内串行；单一内核 uid 之后，串行只因并发写入未测量而保留（4.9 节） |
 
 评审中确认成立、本文继续依赖的前提：gVisor 下 uid 5000 不能卸载遮盖用的 tmpfs 或只读绑定；包装器内的回环可用；`os.release()` 的 gvisor 检查在 runsc 下成立；上游池 fork 时不传 `execPath`，覆盖能拦截它，其他 `@univer-cli` 与 exchange 代码不使用 `process.execPath`。
+
+“处理”列记录评审当时的修订。用户 2026-11-09 的决定（14.3 节）之后的现状以正文为准，受影响的几行已在“处理”列标出。
 
 ### 14.2 签字
 
 | 评审者 | 日期 | 结论 | 条件 |
 | --- | --- | --- | --- |
-| | | | |
+| yangluoshen（用户，人工评审） | | | |
 
-### 14.3 需要决定的事项
+### 14.3 用户的决定
 
-以下几项只能由产品负责人或部署负责人决定。每项给出选项和本文的建议。
+2026-11-09，用户（yangluoshen）决定了本文原先列出的四项，并指定了签字人。每项记录决定、后果和被拒绝的选项；正文已按这些决定修订。
 
-1. **要求 3 的剩余风险（4.7 节）。** Node 权限模型被绕过时，一个 worker 能创建多个进程，可能在采样器反应之前让执行层容器 OOM，runsc 下这会中断该执行层上的所有用户；另外一个用户能占用约 5 个核。选项：A 接受，依靠权限模型、独立 uid 与采样器三层，把每租户沙箱排进后续阶段；B 在阶段 G 内改为每个 worker 一个 runsc 沙箱，每次冷启动至少多 263 ms（附录 A），每个沙箱另有 Sentry 内存，执行层要改为管理沙箱。建议 A：触发它需要 Node 权限模型的漏洞或原生扩展的内存错误，并且要在 500 ms 内分配到容器上限；后果是可用性（在途调用失败、容器重启），不是数据泄露。
-2. **执行层以容器内 root 运行（4.1 节）。** 每 worker 一个 uid 需要 `CAP_SETUID`、`CAP_SETGID`、`CAP_SETPCAP`、`CAP_KILL`，执行层因此以 root 运行（仍在 gVisor 内），不满足 Kubernetes Pod Security Standards 的 restricted 级别（要求 `runAsNonRoot`）。选项：A 接受，执行层所在命名空间使用 baseline 级别；B 执行层以非 root 运行，放弃独立 uid，只保留权限模型，权限模型被绕过时 S3 的 fork 洪水重新成立。建议 A。同一项还包括执行层容器内存上限从 8 GiB 提高到约 12 GiB（limit；request 可按常驻内存给，4.7 节）。
-3. **license 用量按副本计数（第 6 节）。** 选项：A 接受各副本分别计数，同一 License ID 的总用量是各副本之和；B 导出固定路由到一个副本，导出吞吐只有一个作业槽；C 等待上游共享用量后端（U3）。另外每个副本同一时间只运行一个导出作业（4.9 节），吞吐影响由 9.4 节测量。建议 A。
-4. **MG19 使用的 license（第 6 节）。** 选项：A 免费模式加每次新建的卷，确定、不消耗任何人的额度，但不验证商业 license 的计数语义；B 产品负责人提供一个会报告用量的测试 license 和它的额度。建议 A 作为阶段 G 的门禁，B 在拿到测试 license 后补做一次。
+1. **要求 3 的剩余风险（4.7 节、第 10 节）：接受。** 每租户沙箱排进后续阶段，不在阶段 G 内。后果：4.7 节的两项剩余风险（CPU 无速率限制；权限模型被绕过时容器 OOM）和决定 2 带来的 fork 洪水按已接受记录在第 10 节，不再阻塞阶段 G 的验收；验收要求 MG7 在正常路径上通过，MG3 的进程树层如实记录窗口长度，不要求窗口内没有失败。被拒绝的选项：在阶段 G 内改为每个 worker 一个 runsc 沙箱，每次冷启动至少多 263 ms（附录 A），每个沙箱另有 Sentry 内存，执行层要改为管理沙箱。
+2. **执行层以非 root 运行（4.1 节）：非 root，放弃每个 worker 一个 uid。** 后果：
+   - 4.1、4.2、4.7、4.9 节，第 6、7、8、10、11 节与附录 C 的框架按此改写。执行层不持有任何 capability，Pod Security 的 restricted 级别因此可行；条件是 PR G5 在 `cap_drop: ALL` 与 `no-new-privileges` 下验证包装器（4.1 节）。
+   - 防止 worker 创建进程的措施是 Node 权限模型（E1）加可写挂载 `noexec`；uid 层没有了。
+   - 资源记账不再按 uid 汇总，改为按 worker 的进程树汇总：外层 pid（4.2 节的登记）下的全部进程，每 500 ms 采样，超限时 SIGKILL 外层 pid。它覆盖与遗漏的内容见 4.7 节；`setsid` 脱离树的进程随命名空间一起死，这一点是推断，由 MG3 的进程树层验证。
+   - 新增剩余风险：权限模型被绕过时，一个 worker 的 fork 洪水耗尽共享的 `RLIMIT_NPROC`，影响同一内核 uid 下的其他 worker，直到采样器杀死它（E2 对照组，第 10 节）。采样器为此增加了任务数上限（4.7 节），这是本文为让“采样器杀死它”成立而加的，是策略值，PR G5 测量。
+   - 另一项后果，需要评审者确认：命名空间或遮盖被绕过的 worker 与父进程同一内核 uid，可以 ptrace 父进程、读密钥文件（第 10 节第四行）。原设计的独立 uid 在这一步多一层。
+   - 内存规则不变：全部 worker 与作业的硬内存上限加父进程，不超过容器上限。4.7 节给出今天默认值下的公式（12288 MiB）；具体的容器大小是阶段 H 的部署值，原先“因 root 需要约 12 GiB”的说法删除，这个数来自内存公式，与 root 无关。
+   - 导出作业：用量目录属于创建它的 uid，也就是执行层的 uid。每个副本同一时间一个导出作业的串行化保留，依据只剩一条：同一目录并发写入没有被测量（E5 只测了第二个 uid 打不开目录，那条约束已消失）。PR G8 测量，通过则去掉锁（4.9 节、第 6 节）。
+   - 被拒绝的选项：执行层以容器内 root 加 `SETUID`、`SETGID`、`SETPCAP`、`KILL` 运行，每个 worker 一个 uid，执行层所在命名空间用 baseline 级别。
+3. **license 用量按副本计数（第 6 节）：接受。** 每个执行层副本一个持久卷，各副本分别计数，同一 License ID 的总用量是各副本之和。后果：发布多用户 Office 导出不需要等上游的共享用量后端（U3）；导出不固定路由到一个副本。被拒绝的选项：导出固定路由到一个副本（吞吐只有一个作业槽）；等待上游共享用量后端。
+4. **MG19 使用的 license（第 6 节）：用户提供会报告用量的测试 license。** 用户在 G8 以仓库之外的本地文件提供，不提交，不进日志，不进证据。后果：MG19 按第 6 节的步骤 1 至 7 用它验证；`verify-uvw` 运行后搜索证据中是否有 license 原文；第一次运行确认 `used` 不为 `null` 并写回额度的计数方式。免费模式加每次新建的卷只在 G8 时没有这个 license 的情况下作为后备，并在 G10 的验证记录中写明未验证商业 license 的计数语义。
+5. **签字人（14.2 节）：yangluoshen。** 结论与日期留空，待评审后填写。
 
 ## 附录 A. 沙箱原型实测（2026-11-09）
 
-主机 `minsky-ubuntu-remote`：OrbStack Linux 虚拟机，内核 `7.0.11-orbstack`，aarch64，12 vCPU，12 GiB，cgroup v2，Docker 29.5.3，没有 `/dev/kvm`。镜像为 `main` `26c1b69d` 的 `apps/mcp/Dockerfile`（Node 24.22.2、Chromium 156.0.8078.79、Univer 1.4.0、用户 `node` uid 1000）。runsc `release-20261102.0`，平台 systrap。安装 runsc 需要二进制旁的 `gvisor-bin/` 目录。原型脚本与原始输出没有提交，PR G2 把其中的检查改写为 `doctor` 与 MG 旅程。
+主机 `minsky-ubuntu-remote`：OrbStack Linux 虚拟机，内核 `7.0.11-orbstack`，aarch64，12 vCPU，12 GiB，cgroup v2，Docker 29.5.3，没有 `/dev/kvm`。镜像为 `main` `26c1b69d` 的 `apps/mcp/Dockerfile`（Node 24.22.2、Chromium 156.0.8078.79、Univer 1.4.0、用户 `node` uid 1000）。runsc `release-20261102.0`，平台 systrap。安装 runsc 需要二进制旁的 `gvisor-bin/` 目录。原型脚本与原始输出没有提交，PR G2 把其中的环境检查改写为 `doctor` 检查，MG 旅程由各自的 PR 加入（第 11 节）。
 
 | 问题 | 结论 |
 | --- | --- |
@@ -701,7 +740,7 @@ worker 不调用 Space、Node、Blob、Asset 或 exchange 路由。
 
 ## 附录 C. 评审后的补充实验（2026-11-09）
 
-本附录记录 14.1 节的修订所依据的实验。脚本在本机 `/tmp/g-rev-*` 与 minsky 上的临时目录中，没有提交；实验容器、网络和镜像在结束后删除。
+本附录记录 14.1 节的修订所依据的实验。脚本在本机 `/tmp/g-rev-*` 与 minsky 上的临时目录中，没有提交；实验容器、网络和镜像在结束后删除。E2 记录的每个 worker 一个 uid 已被放弃（14.3 节第 2 项），C.2 说明为什么仍保留它。
 
 - macOS：`feat-mcp` 工作区已安装的依赖，Node 24.19.0，darwin-arm64。脚本经 Client Core 的 `package.json` 解析包，与附录 A 的原型脚本方式相同。
 - minsky：附录 A 的主机。镜像 `g-rev-mcp:cc8ea219` 由 `apps/mcp/Dockerfile` 在 cc8ea219 上构建（代码与 `main` `26c1b69d` 相同），Node 24.22.2；`--runtime=runsc`，容器内 `uname -r` 为 `4.19.0-gvisor`。
@@ -742,7 +781,9 @@ node 参数：`--permission --allow-fs-read=/app/ --allow-fs-read=/g/ --allow-fs
 
 结论：权限模型下真实工作全部可用，不需要 `--allow-worker` 或 `--allow-wasi`。原生扩展必需，所以 `--allow-addons` 必需；它让 `dlopen` 能加载可写目录里的任意扩展，因此每个可写挂载必须是 `noexec`，这一点只在 Linux 的包装器里成立。Node 文档说明权限模型不是对抗恶意代码的边界，本文把它作为第一层（4.2 节）。
 
-### C.2 E2 每个 worker 一个 uid
+### C.2 E2 每个 worker 一个 uid（已放弃的做法）
+
+用户于 2026-11-09 决定不采用这个做法（14.3 节第 2 项）。保留本节有两个原因：对照组（所有 worker 同一 uid）测的正是现在的设计在权限模型被绕过时的 `RLIMIT_NPROC` 行为，第 10 节引用它；`--init` 的僵尸数结果适用于 `tini`。E2 的父进程以 root 运行，所以对照组没有测到父进程在同一 uid 下是否受影响。
 
 问题：执行层在 gVisor 内以 root 运行时，能否让每个 worker 以自己的真实 uid 运行，使 `RLIMIT_NPROC`、`/proc` 与文件所有权按 worker 区分；代理的 Unix socket 是否仍可用。
 
@@ -775,7 +816,7 @@ B after A's flood: {"kind":"probe","spawn10":{"spawned":0,"stoppedBy":"EAGAIN(pi
 zombies in container after SIGKILLs: 2
 ```
 
-结论：runsc 下 root 执行层能以 `setpriv` 给每个 worker 一个 uid，只需四个 capability；uid 之后的 `unshare --user` 与挂载照常可用；`RLIMIT_NPROC` 按 uid 隔离；按 uid 汇总 CPU 能看到子进程；不同 uid 经 0666 的 Unix socket 访问代理不受影响。uid 不限制内存：一个能创建进程的 worker 仍能有多个各自满 AS 的进程，所以内存仍依赖 E1 的权限模型。
+结论：runsc 下 root 执行层能以 `setpriv` 给每个 worker 一个 uid，只需四个 capability；uid 之后的 `unshare --user` 与挂载照常可用；`RLIMIT_NPROC` 按 uid 隔离；按 uid 汇总 CPU 能看到子进程；不同 uid 经 0666 的 Unix socket 访问代理不受影响。uid 不限制内存：一个能创建进程的 worker 仍能有多个各自满 AS 的进程，所以内存仍依赖 E1 的权限模型。对照组的结论是现在设计的行为：同一 uid 下 `RLIMIT_NPROC` 是共享的，A 的洪水让 B 的 fork 与 `new Worker` 全部失败。
 
 ### C.3 E3 渲染 runtime 的进程键
 
@@ -842,11 +883,13 @@ uid 100002 failed: LICENSE_USAGE_STORAGE_ERROR Export usage open failed at direc
 uid 100003 failed: LICENSE_USAGE_STORAGE_ERROR Export usage open failed at directory: PermissionDenied (commit status: not_started). Storage directory: /vol/usage/univer-exchange-license.
 ```
 
+这个结果是早期选择固定导出 uid 的依据。所有作业现在共用一个内核 uid，该约束不再触发；同一 uid 下并发导出没有被测量（4.9 节）。
+
 容器内存上限在 runsc 内可见：`--memory=3g` 时 `os.totalmem()` 为 3072 MiB，不加 `--memory` 时为 12017 MiB（主机内存）；`/sys/fs/cgroup/memory.max` 不存在。
 
 ### C.6 参考包装器
 
-PR G5 的 `ns-worker.sh` 从这个形状开始。它在 runsc 下以 root 执行层、上述四个 capability 和 `--init` 运行：
+这是 E2 时的版本，在 runsc 下以 root 执行层、四个 capability 和 `--init` 运行，现已被取代。非 root 版本的差异：去掉 `setpriv` 一行（不换 uid，不清 bounding set）；`prlimit` 的 `--nproc` 取共享上限 `EXECUTOR_NPROC`（脚本里的 64 在同一 uid 下会让合法负载失败）；`for d in` 循环之后增加对 `/run/secrets/univer-mcp` 与用量目录挂空 tmpfs。这个形状没有完整跑过：E1 以 uid 1000 跑了去掉 `setpriv`、`prlimit`、线程池与 arena 设置的版本（C.1），PR G5 在 `cap_drop: ALL` 下跑完整版本。
 
 ```sh
 #!/bin/sh
@@ -881,11 +924,12 @@ after 10 worker SIGKILLs: zombies in container = 0
 
 ### C.7 两种做法的比较
 
-| | Node 权限模型（E1） | 每 worker 一个 uid（E2） |
+| | Node 权限模型（E1，采用） | 每 worker 一个 uid（E2，已放弃） |
 | --- | --- | --- |
 | 管住什么 | 子进程、worker 线程、WASI、inspector、白名单外的文件；于是一个 worker 只有一个进程，每进程的 AS 与 CPU 上限成为每 worker 上限 | `RLIMIT_NPROC`、文件所有权、`/proc` 与信号按 worker 区分；CPU 与 RSS 可按 uid 汇总 |
 | 管不住什么 | Node 文档说明它不是对抗恶意代码的边界；它的漏洞或原生扩展的内存错误让 worker 重新能创建进程；`--allow-addons` 下必须靠 `noexec` 挡住 `dlopen` | 内存：能创建进程的 worker 仍能有多个各自满 AS 的进程 |
 | 复杂度 | 包装器多一组 node 参数和读写白名单；每个可写挂载 `noexec` | 执行层以 root 运行并保留四个 capability；包装器多 `setpriv`；导出作业改为固定 uid 并串行；Pod Security 只能用 baseline |
 | macOS 与 runc 上能证明什么 | 权限检查是纯 Node 的，macOS 上结果与 runsc 相同；但 macOS 上私有目录可执行，`dlopen` 绕过只在 Linux 包装器里被挡住 | 本地运行不换 uid（隔离为 `none`），只能在 runsc 拓扑上证明 |
+| 决定 | 采用 | 用户于 2026-11-09 决定放弃（14.3 节第 2 项）：执行层不以 root 运行，Pod Security restricted 仍可行 |
 
-两者解决的问题不同，所以本文两者都用：权限模型给出“一个 worker 一个进程”，内存预算和 CPU 上限依赖它；独立 uid 在权限模型失效时把进程与线程的耗尽限制在该 worker 自己的 uid 内，并让文件隔离不再只依赖挂载命名空间。
+原先两者都用。放弃独立 uid 之后，只剩权限模型给出“一个 worker 一个进程”，内存预算和 CPU 上限依赖它。独立 uid 原来提供的三样东西各有去处：`RLIMIT_NPROC` 按 worker 区分——放弃，成为第 10 节的剩余风险；CPU 与 RSS 按 uid 汇总——改为按进程树汇总（4.7 节）；文件隔离不再只依赖挂载命名空间——改回依赖挂载命名空间与遮盖，两层都被绕过时少一层，记在第 10 节。
