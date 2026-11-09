@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -297,12 +297,17 @@ cmd_up() {
   local run="$ROOT/$id"
   [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
   mkdir -p "$run"/{data,home,logs,evidence}
-  local oauth_clients="" server_oauth_env=("OAUTH_CLIENTS_JSON=")
+  local agent_port="${VERIFY_UVW_AGENT_PORT:-}" server_oauth_env=()
+  [[ -z "$agent_port" || "$agent_port" =~ ^[0-9]+$ ]] || die "choose VERIFY_UVW_AGENT_PORT as a port number"
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
-    oauth_clients="$(node -e 'console.log(JSON.stringify({clients:[{clientId:"univer-workspace-mcp-gateway",clientType:"confidential",clientSecret:require("node:fs").readFileSync(process.argv[1],"utf8").trim(),tokenExchange:true,redirectUris:["http://127.0.0.1/unused"],scopes:["identity"]}]}))' "$run/home/mcp-oauth-secret")"
-    server_oauth_env=("OAUTH_CLIENTS_JSON=$oauth_clients" "MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
+    server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
   fi
+  # The gateway's confidential client with MCP, and the Workspace Agent's public client when VERIFY_UVW_AGENT_PORT names its port.
+  server_oauth_env+=("OAUTH_CLIENTS_JSON=$(node -e 'const [secretFile,agentPort]=process.argv.slice(1),fs=require("node:fs"),clients=[];
+if (fs.existsSync(secretFile)) clients.push({clientId:"univer-workspace-mcp-gateway",clientType:"confidential",clientSecret:fs.readFileSync(secretFile,"utf8").trim(),tokenExchange:true,redirectUris:["http://127.0.0.1/unused"],scopes:["identity"]});
+if (agentPort) clients.push({clientId:"univer-workspace-harness",clientType:"public",requiresConsent:true,redirectUris:[`http://127.0.0.1:${agentPort}/auth/oauth/callback`],scopes:["identity","session"]});
+console.log(clients.length ? JSON.stringify({clients}) : "")' "$run/home/mcp-oauth-secret" "$agent_port")")
 
   # env -i keeps the developer's shell and apps/workspace/.env (OAuth, data paths) out of this instance.
   (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" \
@@ -406,6 +411,15 @@ cmd_user() {
   echo "password: $RUN/user.pw"
 }
 
+cmd_mcp_oauth() {
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  [[ -f "$RUN/user.env" ]] || die "no user; run: verify-uvw user"
+  # shellcheck disable=SC1091
+  source "$RUN/user.env"
+  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$REPO/.agents/skills/verify-uvw/bin/mcp-oauth.mjs" "$RUN" "$ORIGIN" "http://127.0.0.1:$MCP_PORT/mcp" "$USERNAME" "$@"
+}
+
 cmd_env() {
   load_run
   cat <<EOF
@@ -477,6 +491,7 @@ case "${1:-}" in
   mcp-resource) shift; cmd_mcp resource "$@" ;;
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;
   mcp-token) shift; cmd_mcp_token "$@" ;;
+  mcp-oauth) shift; cmd_mcp_oauth "$@" ;;
   renderer-call) shift; cmd_renderer_call "$@" ;;
   renderer-restart) shift; cmd_renderer_restart "$@" ;;
   mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b renderer ;;
