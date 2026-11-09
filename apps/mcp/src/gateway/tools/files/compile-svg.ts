@@ -12,7 +12,7 @@ export const compileSvgTool = executorTool({
   scope: "write",
   title: "Compile SVG onto a Slide page",
   description:
-    "Compile SVG into Slide Facade code. Pass estimate_text_size: true; real font metrics require the future renderer. To apply, set apply, page (1-based), worktree and unit. add overlays instead of replacing. This content commit has no idempotency key. After workspace-result-unknown, read back with inspect before retrying. Optional assets_upload_id names a ready svg-assets ZIP (256 entries, 4 MiB per file, 8 MiB total).",
+    "Compile SVG into Slide Facade code. Text is measured with real fonts by the renderer; estimate_text_size: true uses a built-in estimate instead (less accurate, no renderer call). To apply, set apply, page (1-based), worktree and unit. add overlays instead of replacing. This content commit has no idempotency key. After workspace-result-unknown, read back with inspect before retrying. Optional assets_upload_id names a ready svg-assets ZIP (256 entries, 4 MiB per file, 8 MiB total).",
   annotations: writeAnnotations,
   inputSchema: z.object({
     svg: svgCompileInput.shape.svg,
@@ -35,11 +35,6 @@ export const compileSvgTool = executorTool({
       worktreeId: args.worktree,
       unitId: args.unit,
     });
-    if (input.estimateTextSize !== true)
-      throw workspaceError(
-        "workspace-text-measure-unavailable",
-        "Pass estimate_text_size: true. Real font metrics arrive with the Stage E renderer.",
-      );
     if (args.assets_upload_id === undefined) return { input, bytes: new Uint8Array() };
     return stagingStore(context).withUpload(
       context.user.id,

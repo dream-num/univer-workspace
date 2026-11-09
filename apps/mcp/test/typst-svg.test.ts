@@ -261,11 +261,7 @@ it("reuses ZIP entry and size caps for both formats", async () => {
     { code: "workspace-argument-invalid" },
   );
 });
-it("requires explicit text estimation and retains the CLI estimation lint", async () => {
-  await expect(svgCompile(context(), { svg }, new Uint8Array())).rejects.toMatchObject({
-    code: "workspace-text-measure-unavailable",
-    message: expect.stringContaining("estimate_text_size: true"),
-  });
+it("retains the CLI estimation lint when estimation is requested", async () => {
   const ctx = context();
   const result = await svgCompile(ctx, { svg, estimateTextSize: true }, new Uint8Array());
   expect(result.output).toMatchObject({

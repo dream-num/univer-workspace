@@ -300,20 +300,10 @@ it.each([
     }
   },
 );
-it("requires estimation before sending SVG and advertises no idempotency key", async () => {
-  const store = new LocalStagingStore(testStagingDirectory(), "http://mcp.test/mcp");
-  const fetcher = vi.spyOn(globalThis, "fetch");
-  try {
-    await expect(compileSvgTool.run(context(store), { svg: "<svg/>" })).rejects.toMatchObject({
-      code: "workspace-text-measure-unavailable",
-    });
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(compileSvgTool.inputSchema.shape).not.toHaveProperty("idempotency_key");
-    expect(compileSvgTool.description).toContain("inspect before retrying");
-  } finally {
-    fetcher.mockRestore();
-    await store.close();
-  }
+it("advertises no idempotency key on compile_svg and the real-font default", () => {
+  expect(compileSvgTool.inputSchema.shape).not.toHaveProperty("idempotency_key");
+  expect(compileSvgTool.description).toContain("inspect before retrying");
+  expect(compileSvgTool.description).not.toContain("Pass estimate_text_size: true");
 });
 it.each([
   { label: "Typst", tool: compileTypstTool, args: { bundle_upload_id: "missing", worktree: "wt" } },

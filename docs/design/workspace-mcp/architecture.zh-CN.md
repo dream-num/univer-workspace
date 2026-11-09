@@ -65,7 +65,7 @@ MCP Server 不连接任何数据库（D12）。它保存的状态只有三类，
 | 纯 HTTP 命令 | 网关进程内直接调用 `client-core/product` | 与 CLI 共用同一套 feature 代码 |
 | daemon 与 unix socket | 删除 | 网关通过内部 RPC 调用执行层，执行层直接实现那三个操作 |
 | 运行时池与 worker | 执行层 | key 加入用户身份；跨 key 排队；参数可配置；见第 6 节 |
-| CLI 进程内的 Office、Markdown、Typst、SVG 处理 | 执行层及现有作业子进程 | Office 转换、Typst 编译与文档物化加载原生绑定，在 job child 中运行。SVG 使用 estimateTextSize 时只运行 JavaScript 编译与内置量字，不启动浏览器，保留在 executor；apply 使用绑定 runtime |
+| CLI 进程内的 Office、Markdown、Typst、SVG 处理 | 执行层及现有作业子进程 | Office 转换、Typst 编译与文档物化加载原生绑定，在 job child 中运行。SVG 编译保留在 executor：estimateTextSize 时只运行 JavaScript 编译与内置量字；默认实字体量度时由 executor 注入的 runtime 逐行调用渲染服务的 measureText，executor 自身不启动浏览器；apply 使用绑定 runtime |
 | Chromium | 渲染服务 | 目标是常驻浏览器池加每任务一个 BrowserContext；阶段 E 实际是复用的 runtime 池，见 7.1 节 |
 | session 文件 | 不存在 | 下游凭据由网关按请求换取，见第 4 节 |
 | `--file` 输入、`--out` 输出 | 暂存存储加签名 URL | 见第 5 节和[工具规格](tools.zh-CN.md) |
