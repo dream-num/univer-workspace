@@ -442,7 +442,7 @@ SDK's plain validation text) and the event records `tool_error` with the same co
 ```bash
 $V cli mcp-personal-id repo view "$O/personal" --json
 P=$(jq -r '.id' "$EVIDENCE/mcp-personal-id.out")
-KEY="mcp-pr-$VERIFY_UVW_RUN"
+KEY="mcp-pr-$VERIFY_UVW_RUN-idempotency"
 $V mcp mcp-pr-create pr_create "{\"repo\":\"$O/personal\",\"title\":\"Agent change\",\"body\":\"From MCP\",\"idempotency_key\":\"$KEY\"}"
 PN=$(jq -r '.number' "$EVIDENCE/mcp-pr-create.out")
 W=$(jq -r '.id' "$EVIDENCE/mcp-pr-create.out")
@@ -728,7 +728,7 @@ view of it, the deleted label is gone from the CLI list, `create` without `color
 $V mcp --toolsets all mcp-ms-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"MCP units\"}"
 WB=$(jq -r '.id' "$EVIDENCE/mcp-ms-pr.out")
 NB=$(jq -r '.number' "$EVIDENCE/mcp-ms-pr.out")
-UK="mcp-unit-$VERIFY_UVW_RUN"
+UK="mcp-unit-$VERIFY_UVW_RUN-idempotency"
 $V mcp --toolsets all mcp-unit-create unit_create "{\"worktree\":\"$WB\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Forecast\",\"parent\":\"$FOLDER\",\"idempotency_key\":\"$UK\"}"
 $V mcp --toolsets all mcp-unit-create-again unit_create "{\"worktree\":\"$WB\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Forecast\",\"parent\":\"$FOLDER\",\"idempotency_key\":\"$UK\"}"
 $V cli mcp-unit-create-cli unit list --worktree "$WB" --json
@@ -846,7 +846,7 @@ MCP and CLI with the same code (`workspace-lifecycle-invalid`), and the events c
 ```bash
 $V mcp --toolsets all mcp-prod-issue issue_create "{\"repo\":\"$O/verify-team\",\"title\":\"Quarterly forecast\",\"body\":\"Needs a forecast sheet\"}"
 IN=$(jq -r '.number' "$EVIDENCE/mcp-prod-issue.out")
-$V mcp --toolsets all mcp-prod-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"Add forecast sheet (#$IN)\",\"body\":\"Closes the forecast request\",\"idempotency_key\":\"mcp-prod-$VERIFY_UVW_RUN\"}"
+$V mcp --toolsets all mcp-prod-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"Add forecast sheet (#$IN)\",\"body\":\"Closes the forecast request\",\"idempotency_key\":\"mcp-prod-$VERIFY_UVW_RUN-idempotency\"}"
 PW=$(jq -r '.id' "$EVIDENCE/mcp-prod-pr.out")
 PRN=$(jq -r '.number' "$EVIDENCE/mcp-prod-pr.out")
 $V mcp --toolsets all mcp-prod-unit unit_create "{\"worktree\":\"$PW\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Q4 Forecast\"}"
@@ -1801,9 +1801,9 @@ relevant server log lines as a product finding; this journey does not pass.
 ```bash
 $V mcp mx-repo repo_view "{\"repo\":\"$O/personal\"}"
 MX_SPACE=$(jq -r .id "$EVIDENCE/mx-repo.out")
-$V mcp mx-pr pr_create "{\"repo\":\"$O/personal\",\"title\":\"Executor readback\",\"idempotency_key\":\"mx-pr-$VERIFY_UVW_RUN\"}"
+$V mcp mx-pr pr_create "{\"repo\":\"$O/personal\",\"title\":\"Executor readback\",\"idempotency_key\":\"mx-pr-$VERIFY_UVW_RUN-idempotency\"}"
 MX_W=$(jq -r .id "$EVIDENCE/mx-pr.out")
-$V mcp mx-unit unit_create "{\"worktree\":\"$MX_W\",\"space\":\"$MX_SPACE\",\"type\":\"sheet\",\"name\":\"Executor sheet\",\"idempotency_key\":\"mx-unit-$VERIFY_UVW_RUN\"}"
+$V mcp mx-unit unit_create "{\"worktree\":\"$MX_W\",\"space\":\"$MX_SPACE\",\"type\":\"sheet\",\"name\":\"Executor sheet\",\"idempotency_key\":\"mx-unit-$VERIFY_UVW_RUN-idempotency\"}"
 MX_U=$(jq -r .unit.unitId "$EVIDENCE/mx-unit.out")
 MX_CODE='const ws = workbook.getActiveSheet(); ws.getRange("A1:B2").setValues([["Region","Total"],["North",42]]); return ws.getRange("A1:B2").getValues();'
 $V mcp --expect-event '.executor == "cold_start" and .cost.committed_revisions == 1 and .cost.worker_cpu_ms > 0 and .unit_type == "sheet"' mx-execute execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_CODE" '{worktree:$worktree,unit:$unit,code:$code}')"
