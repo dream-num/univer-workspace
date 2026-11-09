@@ -197,9 +197,9 @@ Workspace 产品 API 与协同端点
 
 | # | 改动 | 说明 |
 | --- | --- | --- |
-| F1 | `GET /.well-known/oauth-authorization-server`（RFC 8414） | 声明 `client_id_metadata_document_supported: true`，`token_endpoint_auth_methods_supported` 含 `none`，`code_challenge_methods_supported` 含 `S256` |
-| F2 | Client ID Metadata Documents | `client_id` 可以是 https URL。授权时拉取并校验该文档中的 `redirect_uris`。Claude 在 F1 声明支持时走这条路 |
-| F3 | 动态客户端注册 `POST /api/auth/register`（RFC 7591） | 兼容仍依赖 DCR 的客户端（Cursor、Copilot）。注册结果需要持久化，属于 Workspace 产品数据 |
+| F1 | `GET /.well-known/oauth-authorization-server`（RFC 8414） | 声明 `client_id_metadata_document_supported: true`（`MCP_CIMD_ENABLED=0` 时不声明）、`authorization_response_iss_parameter_supported: true`，`token_endpoint_auth_methods_supported` 含 `none`，`code_challenge_methods_supported` 含 `S256`。MCP 客户端的每个授权响应都带 `iss`（RFC 9207） |
+| F2 | Client ID Metadata Documents | `client_id` 可以是 https URL。已登录用户授权时拉取并校验该文档，回调规则与 DCR 相同，不写产品库。抓取器防 SSRF：拒绝特殊用途地址、不跟随重定向、5 KB、5 秒、每用户 1 个并发、全局 32 个。Claude Code、VS Code、opencode 在 F1 声明支持时走这条路。设计与评审见 [cimd.zh-CN.md](cimd.zh-CN.md) |
+| F3 | 动态客户端注册 `POST /api/auth/register`（RFC 7591） | 兼容仍依赖 DCR 的客户端（Cursor、Copilot）。注册结果需要持久化，属于 Workspace 产品数据。回调地址限于 loopback `http`、`https`、反向域名私有 scheme，以及白名单里的私有 scheme（目前只有 Cursor 用的 `cursor`，2026-11-09 产品决定） |
 | F4 | `resource` 参数（RFC 8707） | 签发的 token 绑定受众，只对 MCP 有效 |
 | F5 | MCP 用的 access token 与 refresh token | 新的 token 类型，哈希后存入 Workspace 产品库，可吊销。refresh token 轮换。access token 1 小时，refresh token 30 天（可调） |
 | F6 | 新 scope 与同意页 | 见 4.3 节。现有客户端的同意页不变 |
