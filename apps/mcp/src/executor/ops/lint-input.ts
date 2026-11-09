@@ -32,9 +32,15 @@ export async function lintInput(
     loader: renderUnitLoader(ctx),
   });
   let built: UnitLayoutLintInput | undefined;
+  let loadError: unknown;
   const dependencies: UnitLayoutLintCommandDependencies = {
     loadUnit: ({ unitId }) =>
-      feature.loadUnit({ scope: { kind: "worktree", worktreeId: options.worktreeId }, unitId }),
+      feature
+        .loadUnit({ scope: { kind: "worktree", worktreeId: options.worktreeId }, unitId })
+        .catch((error: unknown) => {
+          loadError = error;
+          throw error;
+        }),
     lint: {
       lint: async (input) => {
         built = input;
@@ -59,13 +65,10 @@ export async function lintInput(
       { from: "user" },
     );
   } catch (error) {
-    if (error instanceof CommanderError) {
-      // The command renders an application error as `<code>: <message>`; keep its code.
-      const coded = /^(workspace-[a-z0-9-]+): ([\s\S]*)$/.exec(error.message);
-      throw coded?.[1] !== undefined && coded[2] !== undefined
-        ? workspaceError(coded[1], coded[2])
-        : workspaceError("workspace-argument-invalid", error.message);
-    }
+    // The command flattens a load failure into `<code>: <message>`; rethrow the original instead.
+    if (loadError !== undefined) throw loadError;
+    if (error instanceof CommanderError)
+      throw workspaceError("workspace-argument-invalid", error.message);
     throw error;
   }
   if (built === undefined) throw new Error("The lint command did not build an input.");

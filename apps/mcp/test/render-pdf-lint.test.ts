@@ -200,6 +200,16 @@ describe("render.lint", () => {
     expect(f.rendererFetch).not.toHaveBeenCalled();
   });
 
+  it("keeps the loader's own error code, upper case included", async () => {
+    const f = setup("slide", lintOutput);
+    const missing = Object.assign(new Error("Unit unit is not in Worktree wt-1."), {
+      code: "WORKSPACE_UNIT_NOT_FOUND",
+    });
+    f.worktree.mockRejectedValueOnce(missing);
+    await expect(renderLint(f.ctx, { worktreeId: "wt-1", unitId: "unit" })).rejects.toBe(missing);
+    expect(f.rendererFetch).not.toHaveBeenCalled();
+  });
+
   it.each([
     ["3-1", "Invalid page selector: 3-1"],
     [" ", "--pages cannot be empty"],
