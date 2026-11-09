@@ -34,6 +34,13 @@ const sheetMobileEditorSource = readFileSync(
   ),
   "utf8"
 );
+const embedProductRuntimeSource = readFileSync(
+  new URL(
+    "../../web/src/features/editor/embed-product-runtime.ts",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 describe("editor integration assets", () => {
   it("loads shared styles before manual Plugin Mode product styles", () => {
@@ -98,6 +105,33 @@ describe("editor integration assets", () => {
     expect(sheetComparisonPresetSource).not.toContain("history-ui");
     expect(sheetComparisonPresetSource).not.toContain("thread-comment");
     expect(sheetComparisonPresetSource).not.toContain("collaboration");
+  });
+
+  it("loads Sheet preset styles for the host embed runtime", () => {
+    // The shared runtime owns the presets but no styles. The Workspace host
+    // loads the published Sheet styles next to the re-export so an embedded
+    // Sheet renders styled without importing the whole comparison preset.
+    expectImportsInOrder(embedProductRuntimeSource, [
+      "@univerjs/preset-sheets-core/lib/index.css",
+      "@univerjs/preset-sheets-drawing/lib/index.css",
+      "@univerjs/preset-sheets-conditional-formatting/lib/index.css",
+      "@univerjs/preset-sheets-filter/lib/index.css",
+      "@univerjs/preset-sheets-hyper-link/lib/index.css",
+      "@univerjs/preset-sheets-data-validation/lib/index.css",
+      "@univerjs/preset-sheets-find-replace/lib/index.css",
+      "@univerjs/preset-sheets-note/lib/index.css",
+      "@univerjs/preset-sheets-sort/lib/index.css",
+      "@univerjs/preset-sheets-table/lib/index.css",
+      "@univerjs/preset-sheets-advanced/lib/index.css",
+    ]);
+    expect(embedProductRuntimeSource).toContain(
+      'export { createEmbedProductRuntime } from "@univerjs/univer-workspace-editor-presets/embed-product-runtime";'
+    );
+    // The host wrapper must not pull in the comparison preset module.
+    expect(embedProductRuntimeSource).not.toContain("sheet-comparison-presets");
+    // The shared package keeps owning no styles of its own.
+    expect(readSharedPreset("sheets")).not.toContain(".css");
+    expect(readSharedPreset("embed-product-runtime")).not.toContain(".css");
   });
 
   it("mirrors the desktop Sheet styles and output wiring in the mobile editor", () => {
