@@ -1,3 +1,4 @@
+import { ClientMetadataDocumentError, type CimdClient, type CimdClientId } from "./client-metadata-document.js";
 import { randomBytes } from "node:crypto";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
@@ -25,6 +26,8 @@ import {
   matchRegisteredRedirectUri,
   parseClientRegistration,
   parseMcpScopes,
+  resolveClientSource,
+  type ClientSource,
   type McpOAuthConfig,
 } from "./mcp-oauth.js";
 
@@ -49,6 +52,7 @@ export function createOAuthAuthorizationRouter(options: {
   readonly oauthClients: OAuthClientConfig | null;
   readonly authorizationStore: Map<string, IssuedAuthorization>;
   readonly mcpOAuth?: McpOAuthConfig | null;
+  readonly resolveClientMetadata: (clientId: CimdClientId, userId: string) => Promise<CimdClient>;
 }): Router {
   const router = Router();
   const mcp = options.mcpOAuth ?? null;
@@ -63,8 +67,8 @@ export function createOAuthAuthorizationRouter(options: {
     clients.set(client.clientId, client);
   }
 
-  router.get("/authorize", (request, response) => {
-    const authorizationRequest = resolveAuthorizationRequest(request.query, response);
+  router.get("/authorize", async (request, response) => {
+    const authorizationRequest = await resolveAuthorizationRequest(request, response);
     if (authorizationRequest === null) return;
 
     const session = options.identity.getSession(request.headers.cookie);
@@ -88,8 +92,8 @@ export function createOAuthAuthorizationRouter(options: {
     );
   });
 
-  router.get("/authorize/consent", (request, response) => {
-    const authorizationRequest = resolveAuthorizationRequest(request.query, response);
+  router.get("/authorize/consent", async (request, response) => {
+    const authorizationRequest = await resolveAuthorizationRequest(request, response);
     if (authorizationRequest === null) return;
     const session = options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
@@ -152,7 +156,7 @@ export function createOAuthAuthorizationRouter(options: {
     }
     consentTokens.delete(token);
     if (!allowed) {
-      response.redirect(303, authorizationErrorTarget(authorizationRequest.redirectUri, authorizationRequest.state, "access_denied"));
+      response.redirect(303, authorizationErrorTarget(authorizationRequest.redirectUri, authorizationRequest.state, "access_denied", undefined, authorizationRequest.kind === "mcp" ? authorizationRequest.issuer : undefined));
       return;
     }
     response.redirect(303, issueAuthorization(options, authorizationRequest, session.user));
@@ -163,18 +167,19 @@ export function createOAuthAuthorizationRouter(options: {
       exchangeToken(request, response);
       return;
     }
+    const source = resolveClientSource(request.body?.client_id, clients, options.accessTokens, mcp);
     if (
       mcp !== null &&
       (request.body?.grant_type === "refresh_token" ||
-        typeof request.body?.client_id !== "string" || !clients.has(request.body.client_id))
+        source?.kind !== "static")
     ) {
-      mcpToken(request, response);
+      mcpToken(request, response, source);
       return;
     }
     if (request.body.grant_type !== "authorization_code") {
       throw new ApplicationError("INVALID_INPUT", 400, "grant_type must be authorization_code.");
     }
-    const client = requireRegisteredClient(clients, request.body.client_id);
+    const client = source?.kind === "static" ? source.client : requireRegisteredClient(clients, request.body.client_id);
     validateOAuthClientAuthentication(client, request.body.client_secret);
     const redirectUri = validateRegisteredRedirectUri(
       request.body.redirect_uri,
@@ -242,30 +247,43 @@ export function createOAuthAuthorizationRouter(options: {
         oauthError(response, 400, "invalid_request", "token is required.");
         return;
       }
-      const client = findRegisteredClient(body.client_id);
-      if (client === null) {
+      const source = resolveClientSource(body.client_id, clients, options.accessTokens, mcp);
+      if (source === null || source.kind === "static") {
         oauthError(response, 401, "invalid_client", "client_id is not a registered MCP client.");
         return;
       }
-      options.accessTokens.revokeClientGrant(body.token, client.clientId);
+      options.accessTokens.revokeClientGrant(body.token, source.kind === "cimd" ? source.clientId : source.client.clientId);
       response.status(200).end();
     });
   }
 
-  /** A dynamically registered client, never a static `OAUTH_CLIENTS_JSON` client, and only while MCP OAuth is enabled. */
-  function findRegisteredClient(raw: unknown): OAuthClientRecord | null {
-    if (mcp === null || typeof raw !== "string" || raw === "" || clients.has(raw)) return null;
-    return options.accessTokens.getClient(raw);
-  }
-
-  /** Returns null after redirecting an RFC 6749 section 4.1.2.1 error back to a verified redirect URI. */
-  function resolveAuthorizationRequest(values: Record<string, unknown>, response: Response): AuthorizationRequest | null {
+  async function resolveAuthorizationRequest(request: Request, response: Response): Promise<AuthorizationRequest | null> {
+    const values = request.query;
     const clientId = requireQueryString(values.client_id);
-    const staticClient = clients.get(clientId);
-    if (staticClient !== undefined) return parseStaticAuthorizationRequest(staticClient, values);
-    const registered = findRegisteredClient(clientId);
-    if (mcp === null || registered === null) throw unavailableClient(clientId);
-    const parsed = parseMcpAuthorizationRequest(mcp, registered, values);
+    const source = resolveClientSource(clientId, clients, options.accessTokens, mcp);
+    if (source?.kind === "static") return parseStaticAuthorizationRequest(source.client, values);
+    if (mcp === null || source === null) throw unavailableClient(clientId);
+    let client: OAuthClientRecord | CimdClient;
+    if (source.kind === "cimd") {
+      const session = options.identity.getSession(request.headers.cookie);
+      if (!session.authenticated) {
+        response.redirect(`/login?returnTo=${encodeURIComponent(request.originalUrl)}`);
+        return null;
+      }
+      options.identity.requireInteractiveSession(request.headers.cookie);
+      try {
+        client = await options.resolveClientMetadata(source.clientId, session.user.id);
+      } catch (error) {
+        if (!(error instanceof ClientMetadataDocumentError)) throw error;
+        response.status(error.temporary ? 503 : 400).set({ "cache-control": "no-store", "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'" }).type("html").send(
+          `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>OAuth client unavailable</title></head><body><h1>${error.temporary ? "temporarily_unavailable" : "invalid_client"}</h1><p>${escapeHtml(error.message)}</p></body></html>`,
+        );
+        return null;
+      }
+    } else {
+      client = source.client;
+    }
+    const parsed = parseMcpAuthorizationRequest(mcp, client, values);
     if ("errorRedirect" in parsed) {
       response.redirect(parsed.errorRedirect);
       return null;
@@ -273,15 +291,15 @@ export function createOAuthAuthorizationRouter(options: {
     return parsed;
   }
 
-  function mcpToken(request: Request, response: Response): void {
+  function mcpToken(request: Request, response: Response, source: ClientSource | null): void {
     response.set({ "cache-control": "no-store", pragma: "no-cache" });
     const fail = (status: number, error: string, description: string) => oauthError(response, status, error, description);
     const body: Record<string, unknown> = request.body ?? {};
-    const client = findRegisteredClient(body.client_id);
-    if (client === null) {
+    if (source === null || source.kind === "static") {
       fail(401, "invalid_client", "client_id is not a registered MCP client.");
       return;
     }
+    const clientId = source.kind === "cimd" ? source.clientId : source.client.clientId;
     if (!request.is("application/x-www-form-urlencoded")) {
       fail(400, "invalid_request", "The token request must be a form body.");
       return;
@@ -304,7 +322,7 @@ export function createOAuthAuthorizationRouter(options: {
         fail(400, "invalid_request", "refresh_token is required.");
         return;
       }
-      const refreshed = options.accessTokens.refreshGrant({ refreshToken: body.refresh_token, clientId: client.clientId, resource });
+      const refreshed = options.accessTokens.refreshGrant({ refreshToken: body.refresh_token, clientId, resource });
       if (!refreshed.ok) {
         fail(400, "invalid_grant", "The refresh token is invalid, expired, revoked, already used, or bound to another client or resource.");
         return;
@@ -338,7 +356,7 @@ export function createOAuthAuthorizationRouter(options: {
     try {
       user = requireOAuthAuthorization(authorization, {
         code,
-        clientId: client.clientId,
+        clientId,
         redirectUri: URL.canParse(rawRedirectUri) ? new URL(rawRedirectUri).toString() : rawRedirectUri,
         codeVerifier,
         now,
@@ -353,7 +371,7 @@ export function createOAuthAuthorizationRouter(options: {
     }
     const issued = options.accessTokens.issueGrant({
       userId: user.id,
-      clientId: client.clientId,
+      clientId,
       scopes: authorization.scope.split(" "),
       resource: authorization.resource,
     });
@@ -512,7 +530,8 @@ interface StaticAuthorizationRequest {
 /** A request from a dynamically registered MCP client, bound to one MCP resource. */
 interface McpAuthorizationRequest {
   readonly kind: "mcp";
-  readonly client: OAuthClientRecord;
+  readonly client: OAuthClientRecord | CimdClient;
+  readonly issuer: string;
   readonly clientId: string;
   readonly redirectUri: string;
   /** Opaque and optional per RFC 6749; echoed back only when sent. */
@@ -560,7 +579,8 @@ function renderMcpConsentPage(
   displayName: string,
   consentToken: string,
 ): string {
-  const name = escapeHtml(request.client.clientName ?? "An unnamed application");
+  const client = request.client;
+  const name = escapeHtml("host" in client ? (client.clientName === null ? client.host : `${client.clientName} (${client.host})`) : client.clientName ?? "An unnamed application");
   const callback = new URL(request.redirectUri);
   const returnsTo = escapeHtml(callback.origin === "null" ? callback.protocol : callback.origin);
   const scopes = request.scopes
@@ -600,7 +620,7 @@ function parseStaticAuthorizationRequest(
  */
 function parseMcpAuthorizationRequest(
   config: McpOAuthConfig,
-  client: OAuthClientRecord,
+  client: OAuthClientRecord | CimdClient,
   values: Record<string, unknown>,
 ): McpAuthorizationRequest | { readonly errorRedirect: string } {
   const redirectUri = matchRegisteredRedirectUri(values.redirect_uri, client.redirectUris);
@@ -618,7 +638,7 @@ function parseMcpAuthorizationRequest(
   }
   const state = rawState ?? null;
   const fail = (error: string, description: string) => ({
-    errorRedirect: authorizationErrorTarget(redirectUri, state, error, description),
+    errorRedirect: authorizationErrorTarget(redirectUri, state, error, description, config.issuer),
   });
   if (values.response_type !== "code") return fail("unsupported_response_type", 'response_type must be "code".');
   if (values.code_challenge_method !== "S256") return fail("invalid_request", "PKCE with code_challenge_method S256 is required.");
@@ -634,12 +654,13 @@ function parseMcpAuthorizationRequest(
     ? [...MCP_SCOPES]
     : typeof values.scope === "string" ? parseMcpScopes(values.scope) : null;
   if (scopes === null) return fail("invalid_scope", `scope must be a subset of: ${MCP_SCOPES.join(" ")}.`);
-  return { kind: "mcp", client, clientId: client.clientId, redirectUri, state, codeChallenge, scopes, resource };
+  return { kind: "mcp", issuer: config.issuer, client, clientId: client.clientId, redirectUri, state, codeChallenge, scopes, resource };
 }
 
-function authorizationErrorTarget(redirectUri: string, state: string | null, error: string, description?: string): string {
+function authorizationErrorTarget(redirectUri: string, state: string | null, error: string, description?: string, issuer?: string): string {
   const target = new URL(redirectUri);
   target.searchParams.set("error", error);
+  if (issuer !== undefined) target.searchParams.set("iss", issuer);
   if (description !== undefined) target.searchParams.set("error_description", description);
   if (state !== null) target.searchParams.set("state", state);
   return target.toString();
@@ -703,6 +724,7 @@ function issueAuthorization(
       redirectUri: authorizationRequest.redirectUri,
       state: authorizationRequest.state,
       scope,
+      ...(authorizationRequest.kind === "mcp" ? { issuer: authorizationRequest.issuer } : {}),
     },
     authorization.code
   );

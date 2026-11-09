@@ -9,7 +9,7 @@ import { join } from 'node:path';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--scopes read,write,...]\n       verify-uvw mcp-oauth refresh|reuse|revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--scopes read,write,...] [--client-id <https-url>]\n       verify-uvw mcp-oauth refresh|reuse|revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
@@ -43,10 +43,13 @@ const keepGrant = body => {
 
 if (command === 'login') {
   let scopes = ['read', 'write', 'publish', 'worktree:merge'];
+  let clientId;
   while (args.length) {
     const flag = args.shift(), value = args.shift();
-    if (flag !== '--scopes' || value === undefined) usage(`Unknown option ${flag}`);
-    scopes = value.split(',').filter(Boolean);
+    if (value === undefined) usage(`Missing value for ${flag}`);
+    if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
+    else if (flag === '--client-id' && URL.canParse(value) && new URL(value).protocol === 'https:') clientId = value;
+    else usage(`Unknown or invalid option ${flag}`);
   }
   const callback = createServer();
   await new Promise(resolve => callback.listen(0, '127.0.0.1', resolve));
@@ -61,13 +64,16 @@ if (command === 'login') {
     catch { throw new Error(`agent-browser ${a[0]} failed`); }
   };
   try {
-    const registration = await fetch(`${origin}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ client_name: `verify-uvw ${label}`, redirect_uris: [redirectUri], grant_types: ['authorization_code', 'refresh_token'], token_endpoint_auth_method: 'none' }) });
-    const client = await registration.json();
-    if (registration.status !== 201 || typeof client.client_id !== 'string') throw new Error(`Registration returned ${registration.status}`);
+    if (clientId === undefined) {
+      const registration = await fetch(`${origin}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ client_name: `verify-uvw ${label}`, redirect_uris: [redirectUri], grant_types: ['authorization_code', 'refresh_token'], token_endpoint_auth_method: 'none' }) });
+      const client = await registration.json();
+      if (registration.status !== 201 || typeof client.client_id !== 'string') throw new Error(`Registration returned ${registration.status}`);
+      clientId = client.client_id;
+    }
     const verifier = randomBytes(48).toString('base64url'), state = randomBytes(24).toString('base64url');
     const authorize = new URL('/api/auth/authorize', origin);
-    authorize.search = new URLSearchParams({ response_type: 'code', client_id: client.client_id, redirect_uri: redirectUri, state, resource: mcpUrl,
+    authorize.search = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirectUri, state, resource: mcpUrl,
       scope: 'read write publish worktree:merge', code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' }).toString();
     browser('cookies', 'clear');
     browser('open', `${origin}/login`);
@@ -81,21 +87,24 @@ if (command === 'login') {
     browser('open', authorize.href);
     browser('wait', '--text', 'Connect an AI assistant');
     const readChecks = () => JSON.parse(JSON.parse(browser('eval', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input[name=scope]')].map(i => [i.value, i.checked])))")));
+    const clientName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
     const offered = readChecks();
     for (const scope of Object.keys(offered)) if (!scopes.includes(scope)) browser('click', `input[name=scope][value="${scope}"]`);
     const submitted = readChecks();
     browser('screenshot', `${evidence}-consent.png`);
     browser('find', 'role', 'button', 'click', '--name', 'Allow', '--exact');
-    const answer = await Promise.race([received, new Promise((_, reject) => setTimeout(() => reject(new Error('No callback within 30 s')), 30000))]);
+    let timer;
+    const answer = await Promise.race([received, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('No callback within 30 s')), 30000); })]).finally(() => clearTimeout(timer));
     if (answer.searchParams.get('state') !== state || !answer.searchParams.get('code')) throw new Error(`Callback carried ${answer.searchParams.get('error') ?? 'no code'} or a wrong state`);
-    const token = await form('/api/auth/token', { grant_type: 'authorization_code', client_id: client.client_id, code: answer.searchParams.get('code'),
+    if (answer.searchParams.get('iss') !== origin) throw new Error('Callback issuer does not match Workspace');
+    const token = await form('/api/auth/token', { grant_type: 'authorization_code', client_id: clientId, code: answer.searchParams.get('code'),
       code_verifier: verifier, redirect_uri: redirectUri, resource: mcpUrl });
     const ok = token.status === 200 && typeof token.body.access_token === 'string';
     if (ok) {
       keepGrant(token.body);
-      keep('mcp-oauth-client-id', client.client_id);
+      keep('mcp-oauth-client-id', clientId);
     }
-    save({ client_id: client.client_id, offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
+    save({ client_id: clientId, client_name: clientName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
   } finally {
     callback.close();
   }

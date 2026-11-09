@@ -403,7 +403,7 @@ OAuthTokenError:
 
 McpAuthorizationCodeRequest:
   type: object
-  description: Authorization code grant for a dynamically registered (public) MCP client.
+  description: Authorization code grant for a DCR or CIMD public MCP client.
   required: [grant_type, code, client_id, redirect_uri, code_verifier, resource]
   properties:
     grant_type:
@@ -413,6 +413,7 @@ McpAuthorizationCodeRequest:
       type: string
     client_id:
       type: string
+      description: DCR client ID or the exact HTTPS CIMD URL used in authorization.
     redirect_uri:
       type: string
       description: The exact redirect URI of the authorization request, including a loopback port.
@@ -424,7 +425,7 @@ McpAuthorizationCodeRequest:
 
 McpRefreshTokenRequest:
   type: object
-  description: Refresh token grant for a dynamically registered MCP client. The refresh token rotates.
+  description: Refresh token grant for a DCR or CIMD MCP client. The refresh token rotates; CIMD metadata is not fetched on refresh.
   required: [grant_type, refresh_token, client_id, resource]
   properties:
     grant_type:
@@ -434,6 +435,7 @@ McpRefreshTokenRequest:
       type: string
     client_id:
       type: string
+      description: DCR client ID or the exact HTTPS CIMD URL used in authorization.
     resource:
       type: string
       description: Must equal the resource the grant was issued for.
@@ -475,8 +477,17 @@ AuthorizationServerMetadata:
     - code_challenge_methods_supported
     - token_endpoint_auth_methods_supported
     - revocation_endpoint_auth_methods_supported
+    - authorization_response_iss_parameter_supported
     - scopes_supported
   properties:
+    authorization_response_iss_parameter_supported:
+      type: boolean
+      const: true
+      description: Every MCP authorization callback includes the issuer; static clients retain their original callbacks.
+    client_id_metadata_document_supported:
+      type: boolean
+      const: true
+      description: Present when CIMD is enabled (default); omitted when MCP_CIMD_ENABLED=0.
     issuer:
       type: string
       description: The configured `PUBLIC_ORIGIN`.
@@ -613,3 +624,4 @@ TokenRevocationRequest:
       description: Ignored.
     client_id:
       type: string
+      description: DCR client ID or HTTPS CIMD URL. Revocation does not fetch CIMD metadata.

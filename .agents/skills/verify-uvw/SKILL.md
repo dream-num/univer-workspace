@@ -168,7 +168,14 @@ VERIFY_UVW_RUN=b $V doctor
 On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
 `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
 port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS=2` at
-`up` to enable a second executor for MX13. The replica count is saved in the run. Without opt-in, existing commands
+`up` to enable a second executor for MX13. The replica count is saved in the run. With MCP enabled, `up` resolves `claude.ai`. Only when an address is in `198.18.0.0/15`,
+it prints a fake-IP notice and sets `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` for the Workspace
+Server alone. `MCP_CIMD_ENABLED=0` in the launching shell passes through to that server;
+unset defaults to enabled. To restart the same run for MO3, use `down`, then `up --reuse`
+with the same explicit run ID and ports. Reuse requires that `down` removed `data/` and
+`home/`; it creates fresh data and credentials while retaining evidence. Logs are replaced,
+so save the relevant redacted facts before restarting. Run `user` again after each restart.
+Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
 
 Set `EXECUTOR_MAX_WORKERS` and `EXECUTOR_IDLE_TTL_MS` in the launching shell before
@@ -192,13 +199,16 @@ $V mcp-resources [--protocol version] [--toolsets list] <label>
 $V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
 $V mcp-instructions [--protocol version] [--toolsets list] <label>
 $V mcp-token [--scopes read,write,...] [--name name]
-$V mcp-oauth login <label> [--scopes read,write,...]
+$V mcp-oauth login <label> [--scopes read,write,...] [--client-id <https-url>]
 $V mcp-oauth refresh|reuse|revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
 $V mcp-logs
 ```
 
-`mcp-oauth` is a scripted MCP OAuth client for MO2. `login` registers a client, clears the run browser's cookies, signs in
+`mcp-oauth` is a scripted MCP OAuth client for MO2 and MO3.
+`login --client-id <https-url>` skips registration and uses a CIMD client (the loopback
+callback path is `/callback`, as used by Claude Code). It records the consent name and
+checks the callback code, state and `iss` without saving the code or state. `login` registers a client, clears the run browser's cookies, signs in
 as the run user through the login page, approves the consent page with only `--scopes` checked (default all four), and keeps the access token, refresh token and client id in
 `home/mcp-oauth-*` (mode 0600); `mcp --auth oauth` then calls the gateway with that access token and expects `auth_kind: oauth`.
 `refresh` rotates the pair, `reuse` replays the previous refresh token, `revoke` calls RFC 7009 revocation, `direct` sends the

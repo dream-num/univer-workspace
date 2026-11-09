@@ -18,14 +18,18 @@
   get:
     tags: [Authentication]
     operationId: oauthAuthorize
-    summary: Start an OAuth-style authorization for a registered client.
+    summary: Start OAuth authorization for a configured, registered or CIMD client.
     description: |
       Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
       registered `redirect_uri`, a 32 to 256 character base64url `state`, and
       a `scope` from the client's configured scopes (default `identity`).
 
       When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
-      (`POST /api/auth/register`) may also authorize. They must send
+      (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
+      clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
+      disables it. CIMD metadata is fetched only after interactive sign-in; invalid
+      documents return 400 and temporary fetch failures return 503 here, never a
+      client redirect. CIMD names are displayed with their URL hostname. They must send
       `response_type=code`, `code_challenge_method=S256` and a `resource`
       equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
       `write`, `publish` and `worktree:merge` (default all four) and `state`
@@ -37,7 +41,8 @@
       `redirect_uri` is answered here with 400; once both are verified, other
       errors redirect to the client with RFC 6749 `error` (`invalid_request`,
       `invalid_scope`, `invalid_target`, `unsupported_response_type` or
-      `access_denied`), `error_description` and `state`.
+      `access_denied`), `error_description` and `state`. Every MCP success, error
+      and deny callback includes `iss` (RFC 9207); static callbacks are unchanged.
     security:
       - {}
       - sessionCookie: []
@@ -45,6 +50,7 @@
     parameters:
       - name: client_id
         in: query
+        description: Static configured ID, DCR client ID, or HTTPS CIMD URL (at most 2000 characters, non-root path, no credentials, query, fragment or dot segments). CIMD identity is compared verbatim.
         required: true
         schema:
           type: string
@@ -99,13 +105,105 @@
             schema:
               type: string
       "400":
-        $ref: ../schemas/common.yaml#/BadRequest
+        description: Unknown client, invalid redirect or invalid CIMD document. No client redirect.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+          text/html:
+            schema:
+              type: string
+      "503":
+        description: CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later.
+        content:
+          text/html:
+            schema:
+              type: string
       "403":
         description: The session was issued by token exchange; this action requires an interactive sign-in.
         content:
           application/json:
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/authorize/consent:
+  get:
+    tags: [Authentication]
+    operationId: getOAuthConsent
+    summary: Show the interactive OAuth consent form.
+    description: |
+      Uses the same client, redirect, PKCE and resource validation as authorize.
+      CIMD metadata is resolved only after interactive sign-in. The form saves the
+      verified request with a single-use consent token bound to the signed-in user
+      for five minutes. CIMD clients show their name and metadata URL hostname.
+    security:
+      - {}
+      - sessionCookie: []
+    parameters:
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/0"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/1"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/2"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/3"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/4"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/5"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/6"
+      - $ref: "#/~1api~1auth~1authorize/get/parameters/7"
+    responses:
+      "200":
+        description: The consent form, with individually selectable MCP scopes.
+        content:
+          text/html:
+            schema:
+              type: string
+      "302":
+        $ref: "#/~1api~1auth~1authorize/get/responses/302"
+      "400":
+        $ref: "#/~1api~1auth~1authorize/get/responses/400"
+      "403":
+        $ref: "#/~1api~1auth~1authorize/get/responses/403"
+      "503":
+        $ref: "#/~1api~1auth~1authorize/get/responses/503"
+  post:
+    tags: [Authentication]
+    operationId: submitOAuthConsent
+    summary: Allow or deny a saved authorization request.
+    description: |
+      Consumes the form's saved request without fetching CIMD metadata again.
+      Only checked MCP scopes are granted; at least one must be selected to allow.
+      Both successful and denied MCP callbacks include `iss`; static callbacks do not.
+    security:
+      - sessionCookie: []
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            type: object
+            required: [consent_token, decision]
+            properties:
+              consent_token:
+                type: string
+              decision:
+                type: string
+                enum: [allow, deny]
+              scope:
+                type: array
+                items:
+                  $ref: ../schemas/identity.yaml#/McpScope
+    responses:
+      "303":
+        description: Redirect to the verified callback with a one-time code or access_denied, the original state, and iss for MCP clients.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: "#/~1api~1auth~1authorize/get/responses/403"
 
 /api/auth/token:
   post:
@@ -117,7 +215,7 @@
 
       For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
       is set), `authorization_code` and `refresh_token` take a form body with
-      `client_id` and no secret, and must send the `resource` the grant is
+      `client_id` (DCR ID or CIMD HTTPS URL) and no secret, and must send the `resource` the grant is
       bound to. They return `McpTokenResponse` with `Cache-Control:
       no-store`. A code is good for one attempt; presenting an already
       redeemed code revokes the grant it produced. A refresh token rotates;

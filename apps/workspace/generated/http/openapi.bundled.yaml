@@ -116,14 +116,18 @@ paths:
       tags:
         - Authentication
       operationId: oauthAuthorize
-      summary: Start an OAuth-style authorization for a registered client.
+      summary: Start OAuth authorization for a configured, registered or CIMD client.
       description: |
         Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
         registered `redirect_uri`, a 32 to 256 character base64url `state`, and
         a `scope` from the client's configured scopes (default `identity`).
 
         When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
-        (`POST /api/auth/register`) may also authorize. They must send
+        (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
+        clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
+        disables it. CIMD metadata is fetched only after interactive sign-in; invalid
+        documents return 400 and temporary fetch failures return 503 here, never a
+        client redirect. CIMD names are displayed with their URL hostname. They must send
         `response_type=code`, `code_challenge_method=S256` and a `resource`
         equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
         `write`, `publish` and `worktree:merge` (default all four) and `state`
@@ -135,13 +139,15 @@ paths:
         `redirect_uri` is answered here with 400; once both are verified, other
         errors redirect to the client with RFC 6749 `error` (`invalid_request`,
         `invalid_scope`, `invalid_target`, `unsupported_response_type` or
-        `access_denied`), `error_description` and `state`.
+        `access_denied`), `error_description` and `state`. Every MCP success, error
+        and deny callback includes `iss` (RFC 9207); static callbacks are unchanged.
       security:
         - {}
         - sessionCookie: []
       parameters:
         - name: client_id
           in: query
+          description: Static configured ID, DCR client ID, or HTTPS CIMD URL (at most 2000 characters, non-root path, no credentials, query, fragment or dot segments). CIMD identity is compared verbatim.
           required: true
           schema:
             type: string
@@ -198,13 +204,110 @@ paths:
               schema:
                 type: string
         '400':
-          $ref: '#/components/responses/BadRequest'
+          description: Unknown client, invalid redirect or invalid CIMD document. No client redirect.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+            text/html:
+              schema:
+                type: string
         '403':
           description: The session was issued by token exchange; this action requires an interactive sign-in.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later.
+          content:
+            text/html:
+              schema:
+                type: string
+  /api/auth/authorize/consent:
+    get:
+      tags:
+        - Authentication
+      operationId: getOAuthConsent
+      summary: Show the interactive OAuth consent form.
+      description: |
+        Uses the same client, redirect, PKCE and resource validation as authorize.
+        CIMD metadata is resolved only after interactive sign-in. The form saves the
+        verified request with a single-use consent token bound to the signed-in user
+        for five minutes. CIMD clients show their name and metadata URL hostname.
+      security:
+        - {}
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/0'
+        - $ref: '#/components/parameters/1'
+        - $ref: '#/components/parameters/2'
+        - $ref: '#/components/parameters/3'
+        - $ref: '#/components/parameters/4'
+        - $ref: '#/components/parameters/5'
+        - $ref: '#/components/parameters/6'
+        - $ref: '#/components/parameters/7'
+      responses:
+        '200':
+          description: The consent form, with individually selectable MCP scopes.
+          content:
+            text/html:
+              schema:
+                type: string
+        '302':
+          $ref: '#/components/responses/302'
+        '400':
+          $ref: '#/components/responses/400'
+        '403':
+          $ref: '#/components/responses/403'
+        '503':
+          $ref: '#/components/responses/503'
+    post:
+      tags:
+        - Authentication
+      operationId: submitOAuthConsent
+      summary: Allow or deny a saved authorization request.
+      description: |
+        Consumes the form's saved request without fetching CIMD metadata again.
+        Only checked MCP scopes are granted; at least one must be selected to allow.
+        Both successful and denied MCP callbacks include `iss`; static callbacks do not.
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - consent_token
+                - decision
+              properties:
+                consent_token:
+                  type: string
+                decision:
+                  type: string
+                  enum:
+                    - allow
+                    - deny
+                scope:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/McpScope'
+      responses:
+        '303':
+          description: Redirect to the verified callback with a one-time code or access_denied, the original state, and iss for MCP clients.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/403'
   /api/auth/token:
     post:
       tags:
@@ -216,7 +319,7 @@ paths:
 
         For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
         is set), `authorization_code` and `refresh_token` take a form body with
-        `client_id` and no secret, and must send the `resource` the grant is
+        `client_id` (DCR ID or CIMD HTTPS URL) and no secret, and must send the `resource` the grant is
         bound to. They return `McpTokenResponse` with `Cache-Control:
         no-store`. A code is good for one attempt; presenting an already
         redeemed code revokes the grant it produced. A refresh token rotates;
@@ -4060,6 +4163,13 @@ components:
           $ref: '#/components/schemas/User'
         authenticationMethods:
           $ref: '#/components/schemas/AuthenticationMethods'
+    McpScope:
+      type: string
+      enum:
+        - read
+        - write
+        - publish
+        - worktree:merge
     TokenExchangeRequest:
       type: object
       required:
@@ -4089,7 +4199,7 @@ components:
           description: Required for OAuth access tokens; ignored for personal access tokens.
     McpAuthorizationCodeRequest:
       type: object
-      description: Authorization code grant for a dynamically registered (public) MCP client.
+      description: Authorization code grant for a DCR or CIMD public MCP client.
       required:
         - grant_type
         - code
@@ -4106,6 +4216,7 @@ components:
           type: string
         client_id:
           type: string
+          description: DCR client ID or the exact HTTPS CIMD URL used in authorization.
         redirect_uri:
           type: string
           description: The exact redirect URI of the authorization request, including a loopback port.
@@ -4116,7 +4227,7 @@ components:
           description: Must equal the `resource` of the authorization request.
     McpRefreshTokenRequest:
       type: object
-      description: Refresh token grant for a dynamically registered MCP client. The refresh token rotates.
+      description: Refresh token grant for a DCR or CIMD MCP client. The refresh token rotates; CIMD metadata is not fetched on refresh.
       required:
         - grant_type
         - refresh_token
@@ -4131,6 +4242,7 @@ components:
           type: string
         client_id:
           type: string
+          description: DCR client ID or the exact HTTPS CIMD URL used in authorization.
         resource:
           type: string
           description: Must equal the resource the grant was issued for.
@@ -4199,13 +4311,6 @@ components:
         error_description:
           type: string
           description: Present for MCP token errors, including unknown or missing clients.
-    McpScope:
-      type: string
-      enum:
-        - read
-        - write
-        - publish
-        - worktree:merge
     AuthorizationServerMetadata:
       type: object
       additionalProperties: false
@@ -4220,8 +4325,17 @@ components:
         - code_challenge_methods_supported
         - token_endpoint_auth_methods_supported
         - revocation_endpoint_auth_methods_supported
+        - authorization_response_iss_parameter_supported
         - scopes_supported
       properties:
+        authorization_response_iss_parameter_supported:
+          type: boolean
+          const: true
+          description: Every MCP authorization callback includes the issuer; static clients retain their original callbacks.
+        client_id_metadata_document_supported:
+          type: boolean
+          const: true
+          description: Present when CIMD is enabled (default); omitted when MCP_CIMD_ENABLED=0.
         issuer:
           type: string
           description: The configured `PUBLIC_ORIGIN`.
@@ -4383,6 +4497,7 @@ components:
           description: Ignored.
         client_id:
           type: string
+          description: DCR client ID or HTTPS CIMD URL. Revocation does not fetch CIMD metadata.
     PersonalAccessToken:
       type: object
       additionalProperties: false
@@ -6568,6 +6683,64 @@ components:
         worktree:
           $ref: '#/components/schemas/WorktreeSummary'
   parameters:
+    '0':
+      name: client_id
+      in: query
+      description: Static configured ID, DCR client ID, or HTTPS CIMD URL (at most 2000 characters, non-root path, no credentials, query, fragment or dot segments). CIMD identity is compared verbatim.
+      required: true
+      schema:
+        type: string
+    '1':
+      name: redirect_uri
+      in: query
+      required: true
+      schema:
+        type: string
+    '2':
+      name: state
+      in: query
+      required: false
+      description: Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients.
+      schema:
+        type: string
+    '3':
+      name: code_challenge
+      in: query
+      required: true
+      schema:
+        type: string
+        pattern: ^[A-Za-z0-9_-]{43,128}$
+    '4':
+      name: scope
+      in: query
+      required: false
+      schema:
+        type: string
+    '5':
+      name: response_type
+      in: query
+      required: false
+      description: Required for MCP clients.
+      schema:
+        type: string
+        enum:
+          - code
+    '6':
+      name: code_challenge_method
+      in: query
+      required: false
+      description: Required for MCP clients.
+      schema:
+        type: string
+        enum:
+          - S256
+    '7':
+      name: resource
+      in: query
+      required: false
+      description: Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly.
+      schema:
+        type: string
     Cursor:
       $ref: '#/components/parameters/CursorParameter'
     Limit:
@@ -6695,6 +6868,34 @@ components:
           - desc
         default: desc
   responses:
+    '302':
+      description: Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error.
+      headers:
+        Location:
+          required: true
+          schema:
+            type: string
+    '400':
+      description: Unknown client, invalid redirect or invalid CIMD document. No client redirect.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+        text/html:
+          schema:
+            type: string
+    '403':
+      description: The session was issued by token exchange; this action requires an interactive sign-in.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    '503':
+      description: CIMD fetch failed temporarily or capacity is busy, with no usable cached document. No client redirect; retry later.
+      content:
+        text/html:
+          schema:
+            type: string
     BadRequest:
       description: Invalid request.
       content:
