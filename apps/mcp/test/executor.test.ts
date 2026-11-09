@@ -662,6 +662,7 @@ it("declares the rerun policy for every executor operation", () => {
     "exchange.import": [], "exchange.export": ["auth"],
     "content.execute": ["revision", "auth"], "content.inspect": ["auth", "revision"],
     "render.screenshot": ["auth", "revision"],
+    "render.printPdf": ["auth", "revision"], "render.lint": ["auth", "revision"],
     "diagnostics.probe": [],
   });
 });

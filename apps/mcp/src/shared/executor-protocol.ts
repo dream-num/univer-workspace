@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { lintOutput, printPdfOutput } from "./pdf-lint-schema.js";
 import { screenshotOutput } from "./screenshot-schema.js";
 import { opMetaSchema } from "./usage.js";
 
@@ -454,6 +455,35 @@ export const opSpecs = {
       scope: input.scope.kind === "trunk" ? "trunk" : `worktree:${input.scope.worktreeId}`,
       unitId: input.unitId,
     }),
+  }),
+  "render.printPdf": defineOp({
+    queueFor: () => true,
+    name: "render.printPdf",
+    effect: "read",
+    payload: "response",
+    rerun: ["auth", "revision"],
+    limits: { requestBytes: 64 * 1024, responseBytes: 128 * MiB, budgetMs: JOB_DEADLINE_MS },
+    input: z.object({ scope: runtimeScope, unitId: z.string().min(1) }),
+    output: printPdfOutput,
+    route: (input) => ({
+      scope: input.scope.kind === "trunk" ? "trunk" : `worktree:${input.scope.worktreeId}`,
+      unitId: input.unitId,
+    }),
+  }),
+  "render.lint": defineOp({
+    queueFor: () => true,
+    name: "render.lint",
+    effect: "read",
+    payload: "none",
+    rerun: ["auth", "revision"],
+    limits: { requestBytes: 64 * 1024, responseBytes: 8 * MiB, budgetMs: 30_000 },
+    input: z.object({
+      worktreeId: z.string().min(1),
+      unitId: z.string().min(1),
+      pages: z.string().optional(),
+    }),
+    output: lintOutput,
+    route: (input) => ({ scope: `worktree:${input.worktreeId}`, unitId: input.unitId }),
   }),
   "diagnostics.probe": defineOp({
     name: "diagnostics.probe",

@@ -26,7 +26,7 @@ the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
 `content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`,
 `htmlView.create`, `markdown.compile`, `markdown.export`, `typst.compile`, `svg.compile`,
-`render.screenshot` and internal `diagnostics.probe`.
+`render.screenshot`, `render.printPdf`, `render.lint` and internal `diagnostics.probe`.
 The resilience table below declares each operation's rerun policy.
 Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
 Transport rejections use non-200 statuses. The grant travels only in the frame body.
@@ -34,7 +34,7 @@ Transport rejections use non-200 statuses. The grant travels only in the frame b
 Gateway rendezvous hashing pins `(userId, scope, unitId)` to an executor. Only failures
 known to precede delivery can fail over. A disconnected or timed-out write returns
 `workspace-result-unknown`; check current state before repeating it. Worker open timeouts
-remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export, screenshots and Typst compilation continue under a four-minute job deadline, with an earlier executor deadline.
+remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export, screenshots, PDF printing and Typst compilation continue under a four-minute job deadline, with an earlier executor deadline.
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
@@ -82,6 +82,10 @@ image Asset for trunk or Worktree scope, builds the screenshot target by running
 dependencies, and calls the renderer's `screenshot`. The renderer receives the unit and target only, never a grant, cookie or Workspace
 URL. The renderer's page count is added to the op's `render_pages`. The gateway stages every returned PNG so a job that outlives its
 caller can still hand out links, and counts the staged bytes as `export_bytes`.
+`render.printPdf` loads the Unit the same way (scope as for `render.screenshot`), rejects a Base Unit with the CLI's message, and the gateway
+stages the PDF as a download counted in `export_bytes`. `render.lint` is Worktree-only like `uvw lint`: it builds the lint input by
+running the `uvw lint` command with a recording lint dependency, which parses `pages` and applies the Slide-only check with the CLI's messages.
+Neither op sends the renderer anything but the unit and the page selectors. The PDF's file name is the renderer's `name`, which is the Unit ID.
 
 The build copies Client Core's render page to `dist/render-runtime`, validating its asset manifest, and the renderer serves it from there.
 The image installs Debian `chromium`, `fonts-noto-cjk` and `fonts-liberation`, and sets `UNIVER_RENDER_BROWSER`. Chromium
@@ -228,6 +232,8 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
 | `compile_markdown` | `markdown`; optional `assets_upload_id`, `title`; target options require `apply` | CLI compile result with `committed`, `targetUnitId`, diagnostics and materialized `sourceMap`; compile-only also returns `javascript` |
 | `export_markdown` | `worktree`, `unit`, `source_map`, `blocks` | Current Markdown, revision, source map, diagnostics and `assets: [{path, download}]` |
+| `print_pdf` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `idempotency_key` | `{ unitId, unitType, pageCount, download }`; the PDF link expires in 15 minutes. Base Units are rejected with the CLI's message. A long print returns a job, like `export` |
+| `lint` | Required `unit`, `worktree`; optional `pages` (`1,3-5,cover` or `all`) | The bare `uvw lint --json` report `{ kind, unitId, unitType, coverage, findings }`. Slide Units only, otherwise the CLI's `workspace-unit-layout-lint-unit-type-unsupported` code and message; a bad `pages` is `workspace-argument-invalid`; no trunk, as in the CLI. Always synchronous |
 
 `admin` toolset:
 
@@ -350,6 +356,7 @@ export's auth recovery applies only to its parent-side runtime read.
 | `content.inspect` | `auth`, `revision` | Shares the same-user Unit queue with execute. Retries revision races from other routes up to three times with jittered backoff and replaces a stale worker once. |
 | `exchange.export` | `auth` | The parent reads before credential-free conversion. |
 | `render.screenshot` | `auth`, `revision` | Shares the same-user Unit queue with execute and inspect. The runtime reads precede the credential-free renderer call, so a rerun repeats no write. |
+| `render.printPdf`, `render.lint` | `auth`, `revision` | Same as `render.screenshot`. |
 | `htmlView.validate`, `htmlView.create` | `auth` | Runtime reads precede Blob uploads. |
 | `markdown.compile` | None | Creation can write a Unit before a runtime rejection; block updates enter the write path before runtime execution. Do not replay the whole handler. |
 | `markdown.export` | `auth` | Native block and asset export only reads; a stale worker rejection cannot follow a write. |
@@ -550,7 +557,7 @@ Only known exchange, Typst and `LICENSE_*` errors cross the child boundary. Othe
 `exchange.import` permits a 64 MiB request frame for the default 50 MiB Office upload,
 and a 64 KiB response. `exchange.export` permits a 64 KiB request and a 128 MiB response
 frame, including framing overhead. Oversized exports return `workspace-result-too-large`.
-Import, export, screenshot and Typst compilation return their original result unchanged when they finish
+Import, export, screenshot, PDF printing and Typst compilation return their original result unchanged when they finish
 within `MCP_SYNC_BUDGET_MS`. A screenshot's job result is its download-link form, so the images that a
 waiting caller receives as `image` blocks stay out of `job_get`.
 A longer call returns `{job_id, status: "running"}`. This shape has no `download` or import result fields;
@@ -558,7 +565,7 @@ the text explicitly asks the client to poll `job_get {job_id}`. Poll until `succ
 is the original tool output, or `failed`, whose `error` has `code`, `message` and `detail`.
 `job_get` is read-only in `core` and requires `read` scope.
 
-Import requires an `idempotency_key`; export, `screenshot` and `compile_typst` optionally accept one
+Import requires an `idempotency_key`; export, `screenshot`, `print_pdf` and `compile_typst` optionally accept one
 with the same 16-to-200-character syntax.
 The tuple `(userId, tool, idempotency_key)` shares one running conversion or an unexpired successful result,
 including calls that first returned synchronously. A retry during the original synchronous wait joins it.

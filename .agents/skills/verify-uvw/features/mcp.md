@@ -73,6 +73,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MV2 compiles SVG with real fonts through the renderer against `uvw compile-svg`, applies it to a Slide, screenshots the page and times 55 text lines.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
+- MR11 prints a Doc and a Sheet with an image to PDF in a Worktree and on trunk against `uvw print-pdf`, lints a Slide deck with layout problems against `uvw lint`, and returns the CLI's rejections.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -181,7 +182,7 @@ $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
 CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","screenshot","import","export","job_get","api_find","api_show","skills_read"]'
-FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown","compile_typst","compile_svg"]'
+FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
@@ -191,7 +192,7 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|screenshot|export|job_get|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|screenshot|export|job_get|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|print_pdf|lint|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
@@ -1862,6 +1863,118 @@ Pass when:
 - The deck result has two download links, no `image` block, and the downloaded `mr10-deck-page-01.png` is a 1920x1080 PNG showing `Deck page 1` over noise.
   The usage event records `render_pages` 2 and `export_bytes` above 1 MiB.
 - Both rejections exit 1 with their message and a `tool_error` event.
+
+### MR11 print_pdf and lint tools
+
+Both tools load the Unit in the executor, which inlines every image Asset, and send only the unit to the renderer. A Worktree Unit proves the
+Worktree reads and a trunk Unit proves the trunk reads. Run it after MR9's `doctor` passes and use a parallel run id when another run is active.
+`poppler` (`pdfinfo`, `pdftoppm`) and ImageMagick (`magick`) must be installed. The tools are in `files`, so `mcp` calls pass `--toolsets all`.
+
+```bash
+FIX="$EVIDENCE/mr11"; mkdir -p "$FIX/deck"
+O=verify-$VERIFY_UVW_RUN
+node .agents/skills/verify-uvw/bin/png-fixture.mjs "$FIX/blocks.png" 240 160 blocks
+$V cli mr11-repo repo view "$O/personal" --json
+MR11_SPACE=$(jq -r .id "$EVIDENCE/mr11-repo.out")
+$V cli mr11-pr pr create -R "$O/personal" -t 'Print and lint' --json
+MR11_W=$(jq -r .id "$EVIDENCE/mr11-pr.out"); MR11_N=$(jq -r .number "$EVIDENCE/mr11-pr.out")
+
+# A multi-page Doc, a Sheet with text and an image, and a Base in one Worktree
+node -e 'let s="# Quarterly report\n\n";for(let i=1;i<=90;i++)s+="Paragraph "+i+": the quick brown fox jumps over the lazy dog while the totals for region "+i+" stay near "+(40+i)+" units, repeated so that this paragraph wraps onto a second line of the page.\n\n";require("fs").writeFileSync(process.argv[1],s)' "$FIX/report.md"
+$V cli mr11-doc compile-markdown "$FIX/report.md" --title 'Print doc' --apply --worktree "$MR11_W" --space "$MR11_SPACE" --idempotency-key "mr11-doc-$MR11_W" --json
+MR11_DOC=$(jq -r .targetUnitId "$EVIDENCE/mr11-doc.out")
+$V cli mr11-sheet unit create --worktree "$MR11_W" --space "$MR11_SPACE" --type sheet --name 'Print sheet' --json
+MR11_SHEET=$(jq -r .unit.unitId "$EVIDENCE/mr11-sheet.out")
+$V cli mr11-base unit create --worktree "$MR11_W" --space "$MR11_SPACE" --type base --name 'Print base' --json
+MR11_BASE=$(jq -r .unit.unitId "$EVIDENCE/mr11-base.out")
+node -e 'const fs=require("fs");const [d,o]=process.argv.slice(1);fs.writeFileSync(o,`const sheet = workbook.getActiveSheet();
+sheet.getRange("A1:B3").setValues([["Region","Total"],["North",42],["South",17]]);
+const image = await sheet.newOverGridImage().setSource(${JSON.stringify("data:image/png;base64,"+fs.readFileSync(d).toString("base64"))}, api.Enum.ImageSourceType.BASE64).setColumn(3).setRow(1).setWidth(240).setHeight(160).buildAsync();
+sheet.insertImages([image]);
+return { images: sheet.getImages().length };
+`)' "$FIX/blocks.png" "$FIX/sheet-script.js"
+$V cli mr11-write execute --worktree "$MR11_W" --unit "$MR11_SHEET" --script "$FIX/sheet-script.js" --json
+jq -e '.committed == true and .value.images == 1' "$EVIDENCE/mr11-write.out"
+
+# print_pdf against uvw print-pdf: the same page count, and a PDF that opens
+mr11_print() { # <label> <unit> <scope json> <uvw scope flag...>
+  local label=$1 unit=$2 scope=$3; shift 3
+  $V mcp --toolsets all --expect-event '.tool == "print_pdf" and .cost.render_pages >= 1 and .cost.export_bytes > 1000' "$label" print_pdf "$(jq -nc --arg u "$unit" --argjson s "$scope" '{unit:$u}+$s')"
+  curl -fsS -D "$FIX/$label.headers" -o "$FIX/$label.pdf" "$(jq -r .download.url "$EVIDENCE/$label.out")"
+  grep -i '^content-type: application/pdf' "$FIX/$label.headers"
+  $V cli "$label-cli" print-pdf "$FIX/$label-cli.pdf" --unit "$unit" "$@" --json
+  test "$(jq .pageCount "$EVIDENCE/$label.out")" = "$(jq .pageCount "$EVIDENCE/$label-cli.out")"
+  test "$(pdfinfo "$FIX/$label.pdf" | awk '/^Pages:/ {print $2}')" = "$(jq .pageCount "$EVIDENCE/$label.out")"
+  pdftoppm -f 1 -l 1 -r 70 -png "$FIX/$label.pdf" "$FIX/$label-page"
+  pdftoppm -f 1 -l 1 -r 70 -png "$FIX/$label-cli.pdf" "$FIX/$label-cli-page"
+  magick "$FIX/$label-page-1.png" "$FIX/$label-cli-page-1.png" -background white -splice 6x0 +append "$EVIDENCE/mr11-side-by-side-$label.png"
+}
+mr11_print mr11-doc-wt "$MR11_DOC" "$(jq -nc --arg w "$MR11_W" '{worktree:$w}')" --worktree "$MR11_W"
+mr11_print mr11-sheet-wt "$MR11_SHEET" "$(jq -nc --arg w "$MR11_W" '{worktree:$w}')" --worktree "$MR11_W"
+jq -e '.unitType == "doc" and .pageCount > 1' "$EVIDENCE/mr11-doc-wt.out"
+jq -e '.tool == "print_pdf" and .unit_type == "doc" and (.repo | type) == "string"' "$EVIDENCE/mr11-doc-wt.event.json"
+
+# A Base is rejected with the CLI's message
+$V mcp --toolsets all mr11-base-pdf print_pdf "$(jq -nc --arg u "$MR11_BASE" --arg w "$MR11_W" '{unit:$u,worktree:$w}')"
+test $? -eq 1
+$V cli mr11-base-pdf-cli print-pdf "$FIX/cli-base.pdf" --worktree "$MR11_W" --unit "$MR11_BASE" --json
+test "$(jq -r '"\(.code): \(.message)"' "$EVIDENCE/mr11-base-pdf.out")" = "$(head -n1 "$EVIDENCE/mr11-base-pdf-cli.err")"
+# A missing scope is rejected before any render
+$V mcp --toolsets all mr11-noscope print_pdf "$(jq -nc --arg u "$MR11_DOC" '{unit:$u}')"
+test $? -eq 1
+jq -e '.code == "workspace-print-pdf-scope-required"' "$EVIDENCE/mr11-noscope.out"
+# A key makes a retry return the first result
+for i in 1 2; do $V mcp --toolsets all "mr11-idem-$i" print_pdf "$(jq -nc --arg u "$MR11_DOC" --arg w "$MR11_W" '{unit:$u,worktree:$w,idempotency_key:"mr11-print-key-0001"}')"; done
+diff <(jq -S . "$EVIDENCE/mr11-idem-1.out") <(jq -S . "$EVIDENCE/mr11-idem-2.out")
+
+# Trunk scope: the same Units after merge
+$V cli mr11-ready pr ready "$MR11_N" -R "$O/personal" --json
+$V cli mr11-merge pr merge "$MR11_N" -R "$O/personal" --json
+mr11_print mr11-doc-trunk "$MR11_DOC" '{"trunk":true}' --trunk
+mr11_print mr11-sheet-trunk "$MR11_SHEET" '{"trunk":true}' --trunk
+
+# lint: a deck with text off the page and overlapping text
+$V cli mr11-pr2 pr create -R "$O/personal" -t 'Lint deck' --json
+MR11_W2=$(jq -r .id "$EVIDENCE/mr11-pr2.out")
+$V cli mr11-deck unit create --worktree "$MR11_W2" --space "$MR11_SPACE" --type slide --name 'Lint deck' --json
+MR11_DECK=$(jq -r .unit.unitId "$EVIDENCE/mr11-deck.out")
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#ffffff"/><text x="40" y="80" font-size="40" font-family="Arial" fill="#111111">Tidy title</text></svg>\n' > "$FIX/deck/page1.svg"
+printf '<svg xmlns="http://www.w3.org/2000/svg" width="960" height="540" viewBox="0 0 960 540"><rect width="960" height="540" fill="#ffffff"/><text x="600" y="120" font-size="56" font-family="Arial" fill="#111111">This sentence runs far past the right edge of the page</text><text x="60" y="300" font-size="48" font-family="Arial" fill="#111111">Overlapping text one</text><text x="80" y="315" font-size="48" font-family="Arial" fill="#c00000">Overlapping text two</text></svg>\n' > "$FIX/deck/page2.svg"
+for n in 1 2; do $V cli mr11-svg$n compile-svg "$FIX/deck/page$n.svg" --page $n --estimate-text-size --apply --worktree "$MR11_W2" --unit "$MR11_DECK" --json; done
+$V cli mr11-lint-cli lint --worktree "$MR11_W2" --unit "$MR11_DECK" --json
+$V mcp --toolsets all --expect-event '.tool == "lint" and .unit_type == "slide" and .cost.render_pages == 2 and .executor != "none"' mr11-lint lint "$(jq -nc --arg u "$MR11_DECK" --arg w "$MR11_W2" '{unit:$u,worktree:$w}')"
+jq -e '.findings | map(.rule) | sort == ["text-off-page","text-overlaps-text"]' "$EVIDENCE/mr11-lint.out"
+# Equal apart from host font metrics: compare the report identity, coverage and each finding's identity and rule
+project='{kind,unitId,unitType,coverage,findings:(.findings|map({id,rule,severity,page,pageId,fingerprint}))}'
+diff <(jq -S "$project" "$EVIDENCE/mr11-lint.out") <(jq -S "$project" "$EVIDENCE/mr11-lint-cli.out")
+# A page selector narrows the report, and a bad one reads like uvw
+$V mcp --toolsets all mr11-lint-p2 lint "$(jq -nc --arg u "$MR11_DECK" --arg w "$MR11_W2" '{unit:$u,worktree:$w,pages:"2"}')"
+$V cli mr11-lint-p2-cli lint --worktree "$MR11_W2" --unit "$MR11_DECK" --pages 2 --json
+diff <(jq -S "$project" "$EVIDENCE/mr11-lint-p2.out") <(jq -S "$project" "$EVIDENCE/mr11-lint-p2-cli.out")
+jq -e '.coverage.pages | length == 1' "$EVIDENCE/mr11-lint-p2.out"
+$V mcp --toolsets all mr11-lint-badpages lint "$(jq -nc --arg u "$MR11_DECK" --arg w "$MR11_W2" '{unit:$u,worktree:$w,pages:"3-1"}')"
+test $? -eq 1
+jq -e '.code == "workspace-argument-invalid" and .message == "Invalid page selector: 3-1"' "$EVIDENCE/mr11-lint-badpages.out"
+# A Sheet is rejected with the CLI's code and message
+$V mcp --toolsets all mr11-lint-sheet lint "$(jq -nc --arg u "$MR11_SHEET" --arg w "$MR11_W" '{unit:$u,worktree:$w}')"
+test $? -eq 1
+$V cli mr11-lint-sheet-cli lint --worktree "$MR11_W" --unit "$MR11_SHEET" --json
+test "$(jq -r '"\(.code): \(.message)"' "$EVIDENCE/mr11-lint-sheet.out")" = "$(head -n1 "$EVIDENCE/mr11-lint-sheet-cli.err")"
+```
+
+Pass when:
+
+- Every `mr11_print` call exits 0, the downloaded file is a PDF that `pdfinfo` opens, its page count equals `uvw print-pdf` on the same Unit and scope
+  (the Doc has several pages, the Sheet one), and the event records `render_pages`, `export_bytes` and the Unit type.
+  `mr11-side-by-side-mr11-doc-wt.png` (MCP left, CLI right) shows `Quarterly report` and the numbered paragraphs on the same lines. Look at it. The two
+  renderings can differ in glyph weight because the renderer runs Linux Chromium and the CLI runs the host browser.
+- `mr11-side-by-side-mr11-sheet-wt.png` and `mr11-side-by-side-mr11-sheet-trunk.png` show `Region`, `Total`, `North`, `42`, `South`, `17` and the same
+  four-colour image, so the Worktree and the trunk Asset reads both reach the renderer.
+- The Base and the missing scope exit 1 with the CLI's message and a `tool_error` event; a retry with the same `idempotency_key` returns the first result.
+- The MCP lint report has the CLI report's coverage and the same two findings (`text-off-page` and `text-overlaps-text`) with the same ids and fingerprints.
+  The only differences are the font-metric fields: the `detail` text, ink and box geometry (about one pixel) and `overlapRatio` (about 0.01), because the
+  renderer and the CLI measure text with different Chromium builds and fonts.
+- The lint rejections exit 1 with the CLI's text, and the Sheet keeps the CLI's code `workspace-unit-layout-lint-unit-type-unsupported`.
 
 ## Gotchas
 

@@ -135,7 +135,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `export_markdown` | `export-markdown` | `worktree`、`unit`、`source_map`、`blocks` | 是 | 否 | `read` |
 | `compile_typst` | `compile-typst` | `bundle_upload_id`、`apply`、`worktree`、`space`、`parent`、`idempotency_key` | 否 | 否 | `write` |
 | `compile_svg` | `compile-svg` | `svg`、`assets_upload_id`、`page`、`add`、`estimate_text_size`、`apply`、`worktree`、`unit` | 否 | 否 | `write` |
-| `print_pdf` | `print-pdf` | `unit`、`trunk` 或 `worktree` | 是 | 否 | `read` |
+| `print_pdf` | `print-pdf` | `unit`、`trunk` 或 `worktree`、`idempotency_key` | 是 | 否 | `read` |
 | `lint` | `lint` | `unit`、`worktree`、`pages` | 是 | 否 | `read` |
 
 说明：
@@ -152,6 +152,8 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `compile_svg` 的本地图片可通过 `svg-assets` ZIP 提供。`add` 要求 `page`；apply 要求 `page`、`worktree` 和 `unit`。不带 apply 时拒绝 Workspace 目标参数。它不接受幂等键，未知写入结果返回 `workspace-result-unknown`，先用 `inspect` 回读再决定是否重试。
 - 两种 ZIP 共用 Markdown 的 256 entry、单文件 4 MiB、总解压 8 MiB、路径长度与碰撞限制。较大的资源也无法保证满足 900 KiB UnitData 创建上限或 8 MiB RPC 响应上限。
 - SVG 编译默认用实字体量度：executor 向 Client Core 的 SVG feature 注入文本量度 runtime，其 `measureText` 经渲染服务客户端调用渲染服务的 `measureText`（每个被量度的行一次 RPC），`close` 不做任何事。结果的 `textMeasure` 为 `univer-render-runtime`，不带估算 lint。传 `estimate_text_size: true` 时仍用 JavaScript 内置量字器，不访问渲染服务，并保留 CLI 的估算 lint。未配置渲染服务时返回不可重试的 `workspace-renderer-not-configured`；渲染服务故障沿用渲染服务客户端的错误码。
+- `print_pdf` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-print-pdf-scope-required`，两者同时给出报 `workspace-argument-invalid`）。executor 用 Client Core 的渲染 Unit 加载器取出 Unit，Base Unit 返回 CLI 的 `workspace-print-pdf-type-unsupported`（`Base Units do not support PDF printing.`），其余交给渲染服务。结果是 `{unitId, unitType, pageCount, download}`，`download` 是 PDF 的暂存下载链接，文件名是渲染服务给出的名称（Unit ID）加 `.pdf`。`print_pdf` 与 `export` 一样走长任务路径：超过同步预算返回任务，`idempotency_key` 规则相同；渲染页数记入 `render_pages`，PDF 字节记入 `export_bytes`。渲染服务的 PDF 结果上限为 128 MiB。
+- `lint` 必须给出 `worktree`（`uvw lint` 只接受 `--worktree`，不接受 `--trunk`），`pages` 沿用 `uvw lint --pages` 的写法（`1,3-5,cover` 或 `all`）。executor 用 `uvw lint` 自己的命令解析 `pages` 并执行仅 Slide 的检查，所以拒绝信息与 CLI 一致：非 Slide Unit 返回 `workspace-unit-layout-lint-unit-type-unsupported`，消息为 `Slide layout lint requires a Slide Unit; <unit> is sheet.`；无效的 `pages` 返回 `workspace-argument-invalid`，消息如 `Invalid page selector: 3-1`。结果的 `structuredContent` 就是 `uvw lint --json` 的报告（`kind`、`unitId`、`unitType`、`coverage`、`findings`）。`lint` 同步返回，不走长任务路径，也不接受幂等键；渲染页数记入 `render_pages`。
 - Typst bundle 输入错误包含相对 bundle 的文件路径。子进程错误和诊断中的临时路径统一改写为 bundle 相对路径。Typst 与 SVG facade 输入错误分别映射为 `workspace-typst-invalid` 与 `workspace-svg-invalid`，保留 facade 消息及可用的 `detail.diagnostics`。
 - Typst 编译与物化在现有 job child 中运行。SVG 估算编译使用 JavaScript 内置量字器，不创建浏览器，可在 executor 中运行；apply 使用绑定的协同 runtime。仅编译时 Typst 报告 `executor: cold_start`，SVG 报告 `executor: none`（实字体量度的渲染成本在渲染服务内，不改变该字段）；两者均报告 `unit_type: null`、`repo: null`，消费的 ZIP 计入 upload_bytes，确认的创建或提交计入 committed_revisions。
 - Typst 的仅编译和 apply 均已接入第 7 节的长任务路径。仅编译可选幂等键；不提供时每次独立执行。SVG 保持 30 秒同步预算。
@@ -256,7 +258,7 @@ PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大�
 MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去掉了 SSE 断点续传。所以：
 
 - 所有工具的同步预算为 30 秒。
-- 当前已实现 `import`、`export`、`screenshot`、`compile_typst` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。`print_pdf` 在渲染服务阶段接入。
+- 当前已实现 `import`、`export`、`screenshot`、`print_pdf`、`compile_typst` 超过预算时返回 `{job_id, status: "running"}`，agent 用 `job_get` 轮询。
 - `job_get` 返回 `job_id` 和 `status`（`running`、`succeeded`、`failed`）。成功时 `result` 为原工具的结果，失败时 `error` 带 `code`、`message`、`detail`。未知、过期、其他用户的任务均报 `workspace-job-not-found`。
 - 任务状态保存在网关内存和暂存存储的 sidecar 文件中，不使用数据库。任务结果的有效期与下载链接一致。
 - `idempotency_key` 绑定参数：同用户、同工具、同 key 但参数不同（上传、Worktree、Space、Unit、格式等）返回 `workspace-idempotency-conflict`，不启动转换。
