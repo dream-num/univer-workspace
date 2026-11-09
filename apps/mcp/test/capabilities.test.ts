@@ -49,7 +49,7 @@ async function close(server: Server) {
 function replica(operations = allOperations, v = PROTOCOL_VERSION) {
   return { operations, v, status: 200, calls: 0, rpcCalls: 0 };
 }
-async function start(replicas: ReturnType<typeof replica>[] = []) {
+async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds?: string) {
   const urls: string[] = [];
   for (const declaration of replicas) {
     const server = createServer((request, response) => {
@@ -76,12 +76,22 @@ async function start(replicas: ReturnType<typeof replica>[] = []) {
       WORKSPACE_ORIGIN: "https://workspace.test",
       MCP_PUBLIC_URL: `${origin}/mcp`,
       MCP_STAGING_DIRECTORY: testStagingDirectory(),
+      ...(allowedUserIds === undefined ? {} : { MCP_EXECUTOR_ALLOWED_USER_IDS: allowedUserIds }),
       ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_INTERNAL_TOKEN: token } : {}),
     }),
     {
       logger: pino({ level: "silent" }),
-      fetcher: async () =>
-        Response.json({ authenticated: true, user: { id: "user", displayName: "User" } }),
+      fetcher: async (_url, init) =>
+        Response.json({
+          authenticated: true,
+          user: {
+            id:
+              new Headers(init?.headers).get("cookie") === "workspace_session=listed"
+                ? "listed"
+                : "user",
+            displayName: "User",
+          },
+        }),
     },
   );
   gateway.server.listen(Number(new URL(origin).port), "127.0.0.1");
@@ -90,7 +100,11 @@ async function start(replicas: ReturnType<typeof replica>[] = []) {
     await gateway.close();
     await close(gateway.server);
   });
-  return async (toolsets: string, mode: "legacy" | { pin: string } = { pin: "2026-07-28" }) => {
+  return async (
+    toolsets: string,
+    mode: "legacy" | { pin: string } = { pin: "2026-07-28" },
+    session = "session",
+  ) => {
     const client = new Client(
       { name: "capabilities-test", version: "1" },
       { versionNegotiation: { mode } },
@@ -98,7 +112,7 @@ async function start(replicas: ReturnType<typeof replica>[] = []) {
     cleanup.push(() => client.close());
     await client.connect(
       new StreamableHTTPClientTransport(new URL(`${origin}/mcp?toolsets=${toolsets}`), {
-        requestInit: { headers: { authorization: "Bearer session" } },
+        requestInit: { headers: { authorization: `Bearer ${session}` } },
       }),
     );
     return client;
@@ -111,8 +125,68 @@ function selectedNames(toolsets: string) {
     ...(toolsets === "all" || toolsets.includes("admin") ? adminNames : []),
   ];
 }
+async function callError(client: Client, name: string) {
+  try {
+    await client.callTool({ name, arguments: {} });
+  } catch (error) {
+    if (error instanceof ProtocolError)
+      return { code: error.code, message: error.message, data: error.data };
+    throw error;
+  }
+  throw new Error("Expected an unknown-tool error");
+}
 
 describe("capabilities through MCP tools/list and initialize", () => {
+  it.each([undefined, " listed , another "])(
+    "applies the per-user executor allowlist %s through MCP",
+    async (allowlist) => {
+      const executor = replica();
+      const connect = await start([executor], allowlist);
+      const withoutExecutor = await start([], allowlist);
+      const notice =
+        "Editing document contents is not enabled for this account; ask the user to edit in the browser.";
+      for (const mode of ["legacy", { pin: "2026-07-28" }] as const) {
+        const listed = await connect("all", mode, "listed");
+        expect((await listed.listTools()).tools.map((tool) => tool.name)).toEqual(allNames);
+        expect(listed.getInstructions()).not.toContain(notice);
+        for (const toolset of ["core", "files", "admin", "all"]) {
+          const unlisted = await connect(toolset, mode);
+          const baseline = await withoutExecutor(toolset, mode);
+          const listedTools = (await unlisted.listTools()).tools;
+          if (allowlist === undefined)
+            expect(listedTools.map((tool) => tool.name)).toEqual(selectedNames(toolset));
+          else expect(listedTools).toEqual((await baseline.listTools()).tools);
+          expect(baseline.getInstructions()).not.toContain(notice);
+          if (allowlist === undefined) {
+            expect(unlisted.getInstructions()).not.toContain(notice);
+          } else {
+            expect(unlisted.getInstructions()).toContain(notice);
+            for (const name of [...executorTools, "job_get"])
+              expect(unlisted.getInstructions()).not.toMatch(new RegExp(`\\b${name}\\b`));
+            if (toolset === "all") {
+              const unknown = await callError(unlisted, "unknown");
+              const hidden = await callError(unlisted, "execute");
+              expect(JSON.stringify(hidden).replaceAll("execute", "unknown")).toBe(
+                JSON.stringify(unknown),
+              );
+              expect(executor.rpcCalls).toBe(0);
+            }
+          }
+        }
+      }
+      const allowed = await connect(
+        "all",
+        undefined,
+        allowlist === undefined ? "session" : "listed",
+      );
+      await allowed.callTool({
+        name: "execute",
+        arguments: { worktree: "wt", unit: "unit", code: "return 1" },
+      });
+      expect(executor.rpcCalls).toBeGreaterThan(0);
+    },
+  );
+
   it.each(["full", "no-renderer", "no-executor"])(
     "preserves tool order and names only visible tools for %s",
     async (deployment) => {
@@ -167,21 +241,11 @@ describe("capabilities through MCP tools/list and initialize", () => {
           : [replica(allOperations.filter((name) => !name.startsWith("render.")))],
       );
       const client = await connect("all");
-      const callError = async (name: string) => {
-        try {
-          await client.callTool({ name, arguments: {} });
-        } catch (error) {
-          if (error instanceof ProtocolError)
-            return { code: error.code, message: error.message, data: error.data };
-          throw error;
-        }
-        throw new Error("Expected an unknown-tool error");
-      };
-      const unknown = await callError("unknown");
+      const unknown = await callError(client, "unknown");
       for (const name of deployment === "no-executor"
         ? [...executorTools, "job_get"]
         : renderTools) {
-        const result = await callError(name);
+        const result = await callError(client, name);
         expect(JSON.stringify(result).replaceAll(name, "unknown")).toBe(JSON.stringify(unknown));
       }
     },

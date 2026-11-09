@@ -106,9 +106,15 @@ describe("executor protocol boundaries", () => {
         },
       }),
     );
-    logger.info({ grant, nested: { session: grant.session }, MCP_INTERNAL_TOKEN: token });
+    logger.info({
+      grant,
+      nested: { session: grant.session },
+      MCP_INTERNAL_TOKEN: token,
+      MCP_EXECUTOR_ALLOWED_USER_IDS: "private-allowlist-id",
+    });
     expect(output).not.toContain(grant.session);
     expect(output).not.toContain(token);
+    expect(output).not.toContain("private-allowlist-id");
     expect(workerEnvironment).toEqual({ NODE_ENV: "production" });
   });
 
@@ -284,6 +290,67 @@ describe("executor protocol boundaries", () => {
     },
   );
 
+  it("rejects unlisted grant users before Workspace calls or worker starts over real HTTP", async () => {
+    const runtime: WorkspaceContentRuntime = {
+      executeRead: vi.fn(),
+      executeAndCommit: vi.fn(),
+      exportUnitData: vi.fn(),
+      close: async () => {},
+    };
+    const executor = createExecutor(
+      parseExecutorConfig({
+        WORKSPACE_ORIGIN: "https://workspace.test",
+        MCP_INTERNAL_TOKEN: token,
+        MCP_EXECUTOR_ALLOWED_USER_IDS: "trusted",
+        NODE_ENV: "production",
+      }),
+      { runtime, logger: pino({ level: "silent" }) },
+    );
+    executor.server.listen(0, "127.0.0.1");
+    await once(executor.server, "listening");
+    const address = executor.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected TCP address");
+    const send = fetch;
+    const workspace = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("Unexpected Workspace call"));
+    try {
+      const response = await send(`http://127.0.0.1:${address.port}/rpc/v1/content.execute`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": FRAME_CONTENT_TYPE,
+          "x-mcp-rpc-version": String(PROTOCOL_VERSION),
+        },
+        body: new Uint8Array(
+          encodeFrame({
+            v: PROTOCOL_VERSION,
+            op: "content.execute",
+            requestId: "unlisted",
+            deadlineMs: 500,
+            grant,
+            input: { worktreeId: "wt", unitId: "unit", code: "return 1" },
+          }),
+        ),
+      });
+      expect(response.status).toBe(200);
+      const result = decodeFrame(Buffer.from(await response.arrayBuffer()));
+      expect(result.header).toMatchObject({
+        ok: false,
+        error: { code: "workspace-permission-denied", outcome: "tool_error" },
+      });
+      expect(JSON.stringify(result.header)).not.toContain(grant.userId);
+      expect(JSON.stringify(result.header)).not.toContain(grant.session);
+      expect(workspace).not.toHaveBeenCalled();
+      expect(runtime.executeRead).not.toHaveBeenCalled();
+      expect(runtime.executeAndCommit).not.toHaveBeenCalled();
+      expect(runtime.exportUnitData).not.toHaveBeenCalled();
+    } finally {
+      workspace.mockRestore();
+      await executor.close();
+    }
+  });
+
   it("rejects missing bearer and caller before dispatch over real HTTP", async () => {
     const runtime: WorkspaceContentRuntime = {
       executeRead: vi.fn(),
@@ -377,7 +444,7 @@ describe("executor regression boundaries", () => {
     }
   });
 
-  it("checks session ownership once per session, expiry, and 401", async () => {
+  it("checks allowlisted session ownership once per session, expiry, and 401", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
@@ -391,13 +458,21 @@ describe("executor regression boundaries", () => {
           JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "Alice" } }),
         ),
     );
-    const verify = createGrantVerifier({
-      WORKSPACE_ORIGIN: "https://identity.test",
-      WORKSPACE_TRANSPORT_URL: "https://transport.test",
-    }, fetcher);
+    const verify = createGrantVerifier(
+      {
+        WORKSPACE_ORIGIN: "https://identity.test",
+        WORKSPACE_TRANSPORT_URL: "https://transport.test",
+        MCP_EXECUTOR_ALLOWED_USER_IDS: new Set(["user-1", "victim"]),
+      },
+      fetcher,
+    );
     await Promise.all([verify(grant, "test"), verify(grant, "test")]);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(String(fetcher.mock.calls[0]?.[0])).toBe("https://transport.test/api/session");
+    await expect(verify({ ...grant, userId: "unlisted" }, "test")).rejects.toMatchObject({
+      code: "workspace-permission-denied",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
     await expect(verify({ ...grant, userId: "victim" }, "test")).rejects.toMatchObject({
       code: "workspace-authentication-required",
     });

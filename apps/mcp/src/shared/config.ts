@@ -35,6 +35,11 @@ const quota = z
   .regex(/^\d+$/)
   .transform(Number)
   .pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
+export const executorAllowedUserIds = z
+  .string()
+  .transform((value) => value.split(",").map((id) => id.trim()))
+  .pipe(z.array(z.string().min(1)).min(1))
+  .transform((ids): ReadonlySet<string> => new Set(ids));
 const environment = z.object({
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   PORT: z.string().regex(/^\d+$/).transform(Number).pipe(z.int().min(1).max(65535)).default(3000),
@@ -56,6 +61,7 @@ const environment = z.object({
     .pipe(z.array(origin).min(1))
     .optional(),
   MCP_INTERNAL_TOKEN: z.string().min(32).optional(),
+  MCP_EXECUTOR_ALLOWED_USER_IDS: executorAllowedUserIds.optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
@@ -91,6 +97,12 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
   } = config;
   if ((urls === undefined) !== (internalToken === undefined))
     throw new Error("MCP_EXECUTOR_URLS and MCP_INTERNAL_TOKEN must be set together");
+  if (
+    env["NODE_ENV"] === "production" &&
+    urls !== undefined &&
+    config.MCP_EXECUTOR_ALLOWED_USER_IDS === undefined
+  )
+    throw new Error("NODE_ENV=production requires MCP_EXECUTOR_ALLOWED_USER_IDS with an executor");
   const clientId = config.MCP_OAUTH_CLIENT_ID;
   if ((clientId === undefined) !== (clientSecret === undefined)) {
     throw new Error("MCP_OAUTH_CLIENT_ID and MCP_OAUTH_CLIENT_SECRET must be set together");
