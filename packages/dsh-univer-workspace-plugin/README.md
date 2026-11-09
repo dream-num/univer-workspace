@@ -238,22 +238,42 @@ remote Workspace Resources. The shared operations are deliberately mapped to
 the remote contract rather than accepting a local file path that the server
 cannot authorize:
 
-| dsh-univer-office                                          | Workspace plugin                                                       | Boundary                                                                                                                                  |
-| ---------------------------------------------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `univer_new`                                               | `univer_new` / `univer_create`                                         | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`.                                                 |
-| `univer_unit`                                              | `univer_unit` (`create`, `remove`, `restore`)                          | Create draft Units or update their deletion intent through the Workspace product API; merge approval remains a separate Worktree action.  |
-| `univer_status`                                            | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open`   | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources.   |
-| `univer_execute`                                           | `univer_execute` (or `univer_edit` `mode=write`)                       | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted.           |
-| `univer_inspect`                                           | `univer_inspect`                                                       | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution.      |
-| `univer_worktree`                                          | `univer_worktree`                                                      | Lifecycle and approval semantics are aligned.                                                                                             |
-| `univer_import` / `univer_export`                          | same names                                                             | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output. |
-| `univer_api`                                               | `univer_api` (`find`/`show`)                                           | Pinned local CLI SDK reference; read-only and independent of Workspace ACL.                                                               |
-| `univer_resources`                                         | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing.                          |
-| `univer_compile_markdown`                                  | `univer_compile_markdown`                                              | Shared Markdown compiler, SDK default styling, and stable-ID block updates in a draft Worktree.                                           |
-| `univer_export_markdown`                                   | `univer_export_markdown`                                               | Read selected current native Doc blocks to session Markdown/resources with their authoritative revision and refreshed mapping.            |
-| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | —                                                                      | No deployable remote render contract is available yet; these remain explicit follow-up work, not silently faked tools.                    |
+| dsh-univer-office                                          | Workspace plugin                                                       | Boundary                                                                                                                                                                                         |
+| ---------------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `univer_new`                                               | `univer_new` / `univer_create`                                         | Resource creation is a Workspace API operation; the result is opened to resolve `unitId`.                                                                                                        |
+| `univer_unit`                                              | `univer_unit` (`create`, `remove`, `restore`)                          | Create draft Units or update their deletion intent through the Workspace product API; merge approval remains a separate Worktree action.                                                         |
+| `univer_status`                                            | `univer_status` + `univer_spaces`, `univer_documents`, `univer_open`   | Status returns the selected trunk Resource or Worktree Unit/file-state; Space, Node and Unit identity remain separate remote resources.                                                          |
+| `univer_execute`                                           | `univer_execute` (or `univer_edit` `mode=write`)                       | Writes are Worktree-scoped and commit a collaboration changeset; exactly one inline `code`/safe session `codeFile` is accepted.                                                                  |
+| `univer_inspect`                                           | `univer_inspect`                                                       | Uses the public content-inspection SDK over the same headless collaboration runtime; range selectors are validated before execution.                                                             |
+| `univer_worktree`                                          | `univer_worktree`                                                      | Lifecycle and approval semantics are aligned.                                                                                                                                                    |
+| `univer_import` / `univer_export`                          | same names                                                             | Local exchange SDK conversion; import creates a Worktree-local Unit and export reads trunk/draft UnitData into a session-relative output.                                                        |
+| `univer_api`                                               | `univer_api` (`find`/`show`)                                           | Pinned local CLI SDK reference; read-only and independent of Workspace ACL.                                                                                                                      |
+| `univer_resources`                                         | `univer_resources` (`registries`/`find`/`read`/`export`/`clear-cache`) | Pinned local visual-resource library; cache/export are session-relative. This is not a product Resource listing.                                                                                 |
+| `univer_compile_markdown`                                  | `univer_compile_markdown`                                              | Shared Markdown compiler, SDK default styling, and stable-ID block updates in a draft Worktree.                                                                                                  |
+| `univer_export_markdown`                                   | `univer_export_markdown`                                               | Read selected current native Doc blocks to session Markdown/resources with their authoritative revision and refreshed mapping.                                                                   |
+| `univer_screenshot` / `univer_lint` / `univer_compile_svg` | same names                                                             | Uses the CLI SDK over the synchronized Unit. Rendered checks require a version-matched render page and browser. Board model lint runs headless. Screenshots require the host attachment service. |
 
 ## Architecture boundary
+
+Board rendered/both `includePortPlan: true` returns native automatic port-order plans in `analyses[].portPlan`.
+It preserves node frames, authored ports/routes and editing ownership. Missing or incomplete requested planning
+keeps coverage incomplete, and original findings remain visible. Apply one ready plan through the editing Board
+Facade, then lint a fresh snapshot before using another plan.
+
+Board rendered/both lint also accepts explicit generated `textPlanElementIds` and optional `textPlanMaximumWidthGrowth` from 1 to 2. The width limit requires a non-empty unique selection. Plans remain read-only; missing/incomplete native planning remains incomplete coverage. Apply only a ready current plan through the editing Facade, then replan and lint.
+
+`univer_lint` accepts Slide and Board Units. Board `mode: "model"` runs without a browser;
+`"rendered"` checks final geometry and `"both"` (the default) preserves both raw analyses.
+Reports retain status, incomplete coverage and the inspected snapshot hash. An empty findings list with
+incomplete coverage is not a clean pass. Configure `UWH_RENDER_PAGE_ROOT` (or `UNIVER_RENDER_PAGE_ROOT`)
+for rendered checks and screenshots; rendering errors remain explicit failures.
+
+Board rendered/both lint accepts optional `maximumAutomaticLabelDistance`, a finite non-negative number
+of Board units including zero. It forwards the caller policy to the CLI SDK; missing native support or
+unresolved requested distance leaves coverage incomplete, and exceeded limits remain native errors.
+Fixed/authored and endpoint-role labels are excluded. The native sampled, marker-trimmed stroke-centerline
+metric is not raster ink, and inspection never moves labels. The tool's operation-success envelope does
+not override the report's findings or incomplete status.
 
 - No separate gateway process: the browser-facing API is registered on the
   DSH web server (`/univer-workspace/api/**`), and the host side calls the

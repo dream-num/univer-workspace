@@ -42,7 +42,6 @@ Use-case reuse and conditional extension remain semantic, without coordinates or
 
 ```json
 {
-  "schemaVersion": 1,
   "diagramType": "uml-use-case",
   "nodes": [
     {
@@ -75,7 +74,6 @@ orientation records ownership, not a call arrow. For example:
 
 ```json
 {
-  "schemaVersion": 1,
   "diagramType": "uml-component",
   "nodes": [
     {
@@ -119,3 +117,12 @@ Inspect the installed positioned-endpoint contract before connecting native inte
 explicit side-center `position: 0.5` projects to the native outline; the plain frame-side anchor may leave a gap
 because the glyph has internal padding. Check both stems at readable scale. A reversed-terminal diagnostic on an open stem is not an acceptable UML exception; report a runtime
 limitation if the installed version cannot bind it correctly, rather than replacing the binding with a free point.
+
+## Native symbol stroke scaling
+
+Keep a new `BoardCustomShapeType.ComponentBox` symbol's native designed stroke width when setting its
+fill/stroke colors. Omit the generic `strokeWidth: 1.25` override for that reference-scaled glyph; the native
+geometry scales its body and component badge strokes with its transform. A nominal model width copied from
+ordinary rectangles can make its visible icon much thinner. Do not hardcode an inverse-scale formula, replace
+the icon geometry, or rewrite an authored symbol's width. Verify the actual painted body and badge at 100%
+for the final generated size, including long bilingual content.

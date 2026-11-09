@@ -58,6 +58,18 @@ Inspect `outputs[0].layoutAnalysis` in the JSON result. A static screenshot prov
 
 `uvw print-pdf <output.pdf>` prints Sheet, Doc, Slide, or Board from explicit `--trunk --unit <id>` or `--worktree <id> --unit <id>` scope. Base is not printable. An existing PDF output is never replaced. Use `uvw browse <n> -R <repo> --unit <id>` for the Workspace review URL.
 
+### Board layout diagnostics
+
+Use model mode for browser-free checks and both mode for model and rendered diagnostics. Use `--trunk` in place of `--worktree <id>` to inspect shared content.
+
+```bash
+uvw lint --worktree <id> --unit <board-id> --mode model --json
+uvw lint --worktree <id> --unit <board-id> --mode both --json
+uvw lint --worktree <id> --unit <board-id> --mode rendered --pages <page-id> --plan routes --plan-ids edge-a edge-b --json
+```
+
+Check `uvw lint --help` for the available planners. For automatic label distance diagnostics, add `--maximum-automatic-label-distance 12` in rendered or both mode. When supported, `--plan-labels`, `--plan-ports`, and `--plan-text <element-id...>` request read-only plans. Add `--text-width-growth 1.25` to text planning when that option is available.
+
 ## Slide SVG pages and assets
 
 Write the deck plan in `spec.md`. Keep each hand-authored `page-NN.svg` through delivery, with the page's photos, logos, QR codes, icons, emoji, illustrations, and textures as individual files. Record exported paths in the spec and reuse earlier exported assets. Do not generate or rewrite pages through scripts, shared templates, or bulk substitutions.

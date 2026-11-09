@@ -35,7 +35,6 @@ The agent translates them through the installed dedicated APIs; no coordinates o
 
 ```json
 {
-  "schemaVersion": 1,
   "diagramType": "architecture",
   "title": "Agent evaluation workbench (illustrative data)",
   "nodes": [

@@ -2,17 +2,14 @@
 import { createStandardApiReference } from "@univer-cli/api-reference";
 import { createApiCommand } from "@univer-cli/api-reference-command";
 import type { Config } from "@univer-cli/config";
-import { createConfigCommand } from "@univer-cli/config-command";
 import { createWorktreeContentInspectionCommand } from "@univer-cli/content-inspection-command";
 import { createDaemonClient, createDaemonControl, type JsonValue } from "@univer-cli/daemon";
-import { createDaemonCommand } from "@univer-cli/daemon-command";
 import { createNodeResourceLibraryFactory } from "@univer-cli/resource-library";
 import { createResourcesCommand } from "@univer-cli/resource-library-command";
 import type {
   UniverPrintPdfRuntime,
   UniverRenderRuntime,
   UniverRenderRuntimeOptions,
-  UniverSlideLayoutRuntime,
   UniverTextMeasureRuntime,
 } from "@univer-cli/univer-render-runtime";
 import {
@@ -58,6 +55,7 @@ import {
   createProductServices,
   createRootCommand,
 } from "./product-commands.js";
+import { createLifecycleCommands } from "./lifecycle-commands.js";
 import { workspaceDaemonIdentity } from "./runtime/daemon-identity.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
@@ -72,9 +70,9 @@ export interface WorkspaceCliProgramOptions {
   readonly createPrintPdfRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverPrintPdfRuntime>;
-  readonly createSlideLayoutRuntime?: (
-    options: UniverRenderRuntimeOptions,
-  ) => Promise<UniverSlideLayoutRuntime & { close(): Promise<void> }>;
+  readonly createLayoutRuntime?: ConstructorParameters<
+    typeof WorkspaceUnitLayoutLintFeature
+  >[0]["createRuntime"];
   readonly createTextMeasureRuntime?: (
     options: UniverRenderRuntimeOptions,
   ) => Promise<UniverTextMeasureRuntime>;
@@ -183,9 +181,9 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     license,
     env: options.env,
     loader: renderUnitLoader,
-    ...(options.createSlideLayoutRuntime === undefined
+    ...(options.createLayoutRuntime === undefined
       ? {}
-      : { createRuntime: options.createSlideLayoutRuntime }),
+      : { createRuntime: options.createLayoutRuntime }),
   });
   const compileSvg = new WorkspaceCompileSvgFeature({
     contentExecution,
@@ -197,8 +195,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
       : { createRuntime: options.createTextMeasureRuntime }),
   });
   const commands = [
-    createConfigCommand({ config: options.config }),
-    createDaemonCommand({ control: daemonControl }),
+    ...createLifecycleCommands({ config: options.config, control: daemonControl }),
     createApiCommand({ reference: createStandardApiReference() }),
     createResourcesCommand({ openLibrary: openResourceLibrary }),
     createSkillsCommand(options.skillDataRoot),

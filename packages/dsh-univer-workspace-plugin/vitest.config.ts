@@ -8,6 +8,7 @@ export default defineConfig({
     '@univer-cli/univer-render-runtime': fileURLToPath(import.meta.resolve('@univer-cli/univer-render-runtime')),
     '@univer-cli/unit-screenshot': fileURLToPath(import.meta.resolve('@univer-cli/unit-screenshot')),
     '@univer-cli/unit-layout-lint': fileURLToPath(import.meta.resolve('@univer-cli/unit-layout-lint')),
+    '@univer-cli/headless-univer': fileURLToPath(import.meta.resolve('@univer-cli/headless-univer')),
     '@univerjs/univer-workspace-agent-runtime/workspace-screenshot': fileURLToPath(new URL('../workspace-agent-runtime/src/workspace/screenshot-support.ts', import.meta.url)),
     '@univerjs/univer-workspace-agent-runtime/workspace-render': fileURLToPath(new URL('../workspace-agent-runtime/src/workspace/render-operations.ts', import.meta.url)),
     '@univerjs/univer-workspace-agent-runtime/manager': fileURLToPath(new URL('../workspace-agent-runtime/src/manager.ts', import.meta.url)),
