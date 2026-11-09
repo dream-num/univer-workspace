@@ -77,6 +77,11 @@ if [ -n "$INTERNAL_PLUGINS" ]; then
   done
 fi
 
+# This profile never edits its patch layers at runtime, so apply them once at
+# startup, as the Desktop profile does. The `live` default for custom profiles
+# also makes published dsh 0.1.5-rc.1 exit at startup (#246).
+(cd "$PROFILE_DIR" && npm pkg set dsh.profile.patchReload=startup)
+
 # Verify the composed tree (bundles + patch layers) without booting the process.
 dsh --profile "$PROFILE" --dump-config >/dev/null
 
