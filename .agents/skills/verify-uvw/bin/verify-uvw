@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -274,6 +274,90 @@ cmd_mcp_token() {
   mcp_token "$@"
 }
 
+cmd_agent_up() {
+  load_run
+  [[ -n "${AGENT_PORT:-}" ]] || die "no Agent callback registered; start up with VERIFY_UVW_AGENT_PORT"
+  [[ -z "$(listener_pid "$AGENT_PORT")" ]] || die "Agent port $AGENT_PORT is occupied"
+  if [[ -f "$RUN/agent.pid" ]] && kill -0 "$(cat "$RUN/agent.pid")" 2>/dev/null; then
+    die "Agent already started; run: verify-uvw agent-down"
+  fi
+  echo "installing disposable Agent; see $RUN/logs/agent-install.log"
+  (
+    set -e
+    umask 077
+    export HOME="$RUN/home" XDG_CACHE_HOME="$RUN/home/.cache" npm_config_cache="$RUN/home/.npm"
+    export PNPM_CONFIG_STORE_DIR="$RUN/home/.pnpm-store" PNPM_CONFIG_CACHE_DIR="$RUN/home/.cache/pnpm"
+    export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+    export UWH_LOCAL_ROOT="$RUN/home/agent"
+    export UWH_DSH_BOOTSTRAP="$UWH_LOCAL_ROOT/dsh-cli" DSH_HOME="$UWH_LOCAL_ROOT/install"
+    export UWH_DSH_DATA_HOME="$UWH_LOCAL_ROOT/data"
+    export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
+    export DSH_PROFILE=univer-workspace-harness
+    mkdir -p "$UWH_LOCAL_ROOT/runtime" "$DSH_HOME/internal-packages"
+    export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
+    cd "$REPO"
+    [[ "$(pnpm config get store-dir)" == "$PNPM_CONFIG_STORE_DIR" ]] || die "pnpm must use this run's package store"
+    # Install the pinned nested workspace in the run, keeping its modules and lockfile disposable.
+    cp packages/dsh-runtime/{package.json,pnpm-lock.yaml,pnpm-workspace.yaml} "$UWH_LOCAL_ROOT/runtime/"
+    pnpm --dir "$UWH_LOCAL_ROOT/runtime" install --frozen-lockfile
+    pnpm --dir "$UWH_LOCAL_ROOT/runtime" deploy --legacy --filter @univerjs/univer-workspace-dsh-runtime \
+      --prod --config.node-linker=hoisted "$UWH_DSH_BOOTSTRAP"
+    pnpm --filter @univerjs/univer-workspace-client-core build
+    pnpm --filter @univerjs/workspace-agent build
+    pnpm --filter dsh-univer-workspace-plugin build
+    pnpm --filter dsh-univer-workspace-skin-plugin build
+    for package in @univerjs/workspace-agent dsh-univer-workspace-plugin dsh-univer-workspace-skin-plugin; do
+      pnpm --filter "$package" pack --pack-destination "$UWA_PACKAGES"
+    done
+    export DSH_PLUGINS="file:$UWA_PACKAGES/univerjs-workspace-agent-0.1.0.tgz file:$UWA_PACKAGES/dsh-univer-workspace-plugin-0.1.0.tgz file:$UWA_PACKAGES/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
+    NPM_CONFIG_USERCONFIG="$REPO/.npmrc" ./apps/agent/scripts/build-profile.sh
+  ) >"$RUN/logs/agent-install.log" 2>&1 || die "Agent installation failed; see $RUN/logs/agent-install.log; run down"
+  # start-local clears the unconnected child's origin env; seed its configured origin without a session.
+  (umask 077; mkdir -p "$RUN/home/agent/data"
+    if [[ ! -f "$RUN/home/agent/data/connection.json" ]]; then
+      printf '{"version":1,"configuredOrigin":"%s"}\n' "$ORIGIN" >"$RUN/home/agent/data/connection.json"
+    fi)
+  rm -f "$RUN/home/agent-url"
+  (
+    umask 077
+    cd "$REPO"
+    exec nohup env -i PATH="$PATH" HOME="$RUN/home" XDG_CACHE_HOME="$RUN/home/.cache" \
+      DSH_HOME="$RUN/home/agent/install" DSH_PROFILE=univer-workspace-harness \
+      DSH_BIN="$RUN/home/agent/dsh-cli/node_modules/@deepseek-ai/dsh/lib/bin.js" \
+      UWH_DSH_DATA_HOME="$RUN/home/agent/data" UWH_WORKSPACE_ORIGIN="$ORIGIN" \
+      node apps/agent/scripts/start-local.mjs --port "$AGENT_PORT" --no-open --trusted-host 127.0.0.1 \
+      >"$RUN/home/agent-log.private" 2>&1
+  ) &
+  local pid=$! i
+  printf '%s\n' "$pid" >"$RUN/agent.pid"
+  for ((i = 0; i < 120; i++)); do
+    kill -0 "$pid" 2>/dev/null || die "Agent exited; see $RUN/home/agent-log.private; run down"
+    if node - "$RUN" "$AGENT_PORT" <<'JS'
+const fs = require('node:fs'), [run,port] = process.argv.slice(2);
+const log = fs.readFileSync(run+'/home/agent-log.private','utf8');
+const url = log.match(/dsh web: (http:\/\/127\.0\.0\.1:[0-9]+\/\?token=[^\s]+)/)?.[1];
+if (!url || new URL(url).port !== port) process.exit(1);
+fs.writeFileSync(run+'/home/agent-url',url+'\n',{mode:0o600});
+JS
+    then
+      if [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$AGENT_PORT/")" == 401 ]]; then
+        echo "ok    Agent answers on 127.0.0.1:$AGENT_PORT (pid $pid); private URL: $RUN/home/agent-url"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  die "Agent not ready after 120 seconds; see $RUN/home/agent-log.private; run down"
+}
+
+cmd_agent_down() {
+  load_run
+  if [[ -f "$RUN/agent.pid" ]]; then
+    stop_pid "$(cat "$RUN/agent.pid")" "apps/agent/scripts/start-local.mjs --port ${AGENT_PORT:?}"
+    rm -f "$RUN/agent.pid"
+  fi
+}
+
 cmd_up() {
   deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
   cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
@@ -296,9 +380,12 @@ cmd_up() {
   fi
   local run="$ROOT/$id"
   [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
-  mkdir -p "$run"/{data,home,logs,evidence}
   local agent_port="${VERIFY_UVW_AGENT_PORT:-}" server_oauth_env=()
-  [[ -z "$agent_port" || "$agent_port" =~ ^[0-9]+$ ]] || die "choose VERIFY_UVW_AGENT_PORT as a port number"
+  if [[ -n "$agent_port" ]]; then
+    [[ "$agent_port" =~ ^[0-9]+$ && "$agent_port" -ge 1 && "$agent_port" -le 65535 ]] || die "choose VERIFY_UVW_AGENT_PORT between 1 and 65535"
+    [[ "$agent_port" != "$server_port" && "$agent_port" != "$web_port" && ( "$mcp_enabled" != 1 || "$agent_port" != "$mcp_port" ) && -z "$(listener_pid "$agent_port")" ]] || die "Agent port $agent_port is occupied or shared with this run"
+  fi
+  mkdir -p "$run"/{data,home,logs,evidence}
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
     server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
@@ -327,6 +414,7 @@ console.log(clients.length ? JSON.stringify({clients}) : "")' "$run/home/mcp-oau
 RUN_ID=$id
 SERVER_PORT=$server_port
 WEB_PORT=$web_port
+AGENT_PORT=$agent_port
 SERVER_PID=$server_pid
 WEB_PID=$web_pid
 GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
@@ -468,6 +556,7 @@ stop_pid() { # pid expected-command-fragment
 
 cmd_down() {
   load_run
+  cmd_agent_down
   [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_down
   agent-browser close >/dev/null 2>&1 || true
   uvw_raw daemon stop >/dev/null 2>&1 || true
@@ -495,6 +584,8 @@ case "${1:-}" in
   renderer-call) shift; cmd_renderer_call "$@" ;;
   renderer-restart) shift; cmd_renderer_restart "$@" ;;
   mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b renderer ;;
+  agent-up) shift; cmd_agent_up "$@" ;;
+  agent-down) shift; cmd_agent_down "$@" ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;
 esac
