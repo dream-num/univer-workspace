@@ -6,6 +6,7 @@ import { tools, toolAvailable } from "./tools/registry.js";
 export function buildServerInstructions(
   selected: readonly ToolDefinition[],
   operations: ReadonlySet<OpName>,
+  executorRestricted: boolean,
 ): string {
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
@@ -27,6 +28,11 @@ export function buildServerInstructions(
   ];
   const instructions = [
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change goes through a pull request (a Worktree), never straight into the shared files.",
+    ...(executorRestricted
+      ? [
+          "Editing document contents is not enabled for this account; ask the user to edit in the browser.",
+        ]
+      : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
     "Never mix up spaceId, nodeId, resourceId, unitId, pull request number and Worktree id; take identifiers from tool results, not from display names. Never invent the user, the repository or a confirmed revision.",
     ...(has("api_find") && has("api_show")

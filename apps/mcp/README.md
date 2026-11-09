@@ -19,6 +19,10 @@ A missing or unknown role exits 1 and lists the valid roles.
 The gateway imports Client Core's `/product` entry only. Headless execution and inspection
 run in the executor. Tools are listed only when their required executor operations are available. Without an executor
 configuration, executor-backed tools and `job_get` are hidden. `execute` requires `write`; `inspect` requires `read`.
+With `MCP_EXECUTOR_ALLOWED_USER_IDS` set, only listed users receive executor-backed tools.
+Other users retain every tool that does not need the executor, and their server instructions
+ask them to edit document contents in the browser. The executor also checks each grant's user
+against its own allowlist before contacting Workspace or starting work.
 
 The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response
 contains `v` (the protocol version) and `operations` (operation names). The three `render.*` operations
@@ -57,8 +61,8 @@ Workers are replaced before reuse when their creating grant expires within 60 se
 
 Session grants and process separation do not provide a multi-user sandbox. In particular,
 a worker may read its executor's `/proc/1/environ` under the same uid, exposing the internal
-token. Stage G must address that before multi-user deployment. Production refuses this
-session-grant executor.
+token. In production, the shared session-grant executor serves only allowlisted trusted users.
+Public executor access still requires Stage G.
 
 ## Renderer
 
@@ -133,7 +137,8 @@ With `MCP_DEV_SESSION_PASSTHROUGH=1`, any other bearer is treated as a Workspace
 Client Core `whoami` on every request, with every scope (`auth_kind` `dev`). A `uvw_pat_` or `uvw_at_` bearer is
 never used as a session: without exchange configuration it gets HTTP 401. Production rejects any non-empty
 `MCP_DEV_SESSION_PASSTHROUGH`. Development authentication must never appear in SaaS configuration.
-Until Stage G passes, use the gateway only locally or in internal single-user environments.
+In production, configure the shared executor for allowlisted trusted users only.
+Public executor access still requires Stage G.
 
 ## Configuration
 
@@ -160,7 +165,8 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
 | `MCP_EXECUTOR_URLS`, `MCP_INTERNAL_TOKEN` | Unset on gateway | Comma-separated internal HTTP(S) origins and a shared token of at least 32 characters. Set both or neither. The executor requires the token |
-| `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. `NODE_ENV=production` refuses session grants |
+| `MCP_EXECUTOR_ALLOWED_USER_IDS` | Unset | Comma-separated Workspace user IDs, trimmed. Empty values or entries are errors. Set the same trusted-user list on the gateway and executor. Required in production on the executor and on gateways with `MCP_EXECUTOR_URLS`. Unset outside production allows every user |
+| `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
 | `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
 | `EXECUTOR_MAX_WORKERS` | `4` | Maximum cached Unit workers. Tune to the host's memory budget |

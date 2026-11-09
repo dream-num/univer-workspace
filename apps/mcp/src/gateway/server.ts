@@ -57,6 +57,7 @@ interface RequestState {
   readonly usage: UsageAccumulator;
   readonly selected: readonly ToolDefinition[];
   readonly operations: ReadonlySet<OpName>;
+  readonly executorRestricted: boolean;
   outcome: Outcome;
   errorCode: string | null;
   repo: string | null;
@@ -152,7 +153,13 @@ export function createGateway(
     state.modern = era === "modern";
     const server = new McpServer(
       { name: "univer-workspace", version: "0.0.0" },
-      { instructions: buildServerInstructions(state.selected, state.operations) },
+      {
+        instructions: buildServerInstructions(
+          state.selected,
+          state.operations,
+          state.executorRestricted,
+        ),
+      },
     );
     server.registerResource(
       "skills",
@@ -382,7 +389,11 @@ export function createGateway(
       throw error;
     }
     await capabilities.ready;
-    const operations = capabilities.operations;
+    const executorRestricted =
+      config.executor !== null &&
+      config.MCP_EXECUTOR_ALLOWED_USER_IDS !== undefined &&
+      !config.MCP_EXECUTOR_ALLOWED_USER_IDS.has(user.id);
+    const operations = executorRestricted ? new Set<OpName>() : capabilities.operations;
     const selected = selectTools(url.searchParams.get("toolsets"), operations);
     if (!selected)
       return Response.json({ message: "Unknown toolset", valid: toolsets }, { status: 400 });
@@ -417,6 +428,7 @@ export function createGateway(
       auth: authentication,
       selected,
       operations,
+      executorRestricted,
       outcome: "tool_error",
       errorCode: null,
       repo: null,

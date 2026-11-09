@@ -11,6 +11,8 @@ export const credentialRedactions = [
   "*.session",
   "MCP_INTERNAL_TOKEN",
   "*.MCP_INTERNAL_TOKEN",
+  "MCP_EXECUTOR_ALLOWED_USER_IDS",
+  "*.MCP_EXECUTOR_ALLOWED_USER_IDS",
   "UNIVER_LICENSE",
   "UNIVER_LICENSE_KEY",
   "METRICS_TOKEN",

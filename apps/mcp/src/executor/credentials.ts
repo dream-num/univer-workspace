@@ -23,11 +23,22 @@ export function grantCookie(grant: ExecutorGrant): string {
 }
 
 export function createGrantVerifier(
-  config: Pick<ExecutorConfig, "WORKSPACE_ORIGIN" | "WORKSPACE_TRANSPORT_URL">,
+  config: Pick<
+    ExecutorConfig,
+    "WORKSPACE_ORIGIN" | "WORKSPACE_TRANSPORT_URL" | "MCP_EXECUTOR_ALLOWED_USER_IDS"
+  >,
   fetcher: typeof fetch = fetch,
 ) {
   const sessions = new Map<string, { expiresAt: number; user: Promise<string> }>();
   const verify = async (grant: ExecutorGrant, requestId: string): Promise<void> => {
+    if (
+      config.MCP_EXECUTOR_ALLOWED_USER_IDS !== undefined &&
+      !config.MCP_EXECUTOR_ALLOWED_USER_IDS.has(grant.userId)
+    )
+      throw workspaceError(
+        "workspace-permission-denied",
+        "Executor access is not enabled for this account.",
+      );
     const key = createHash("sha256").update(grant.session).digest("hex");
     for (const [hash, entry] of sessions) {
       if (entry.expiresAt <= Date.now()) sessions.delete(hash);
