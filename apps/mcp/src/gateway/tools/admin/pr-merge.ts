@@ -7,9 +7,15 @@ import { pullNumberInput, transitionPr } from "../core/pr-support.js";
 const inputSchema = z.object({
   repo: repoInput,
   number: pullNumberInput,
-  review_token: z.string().trim().min(1).max(4096).optional().describe(
-    "Required to merge: the Server Worktree reviewToken for the exact preview explicitly reviewed by the user. Never invent a token or automatically review on the user's behalf.",
-  ),
+  review_token: z
+    .string()
+    .trim()
+    .min(1)
+    .max(4096)
+    .optional()
+    .describe(
+      "Required to merge: the Server Worktree reviewToken for the exact preview explicitly reviewed by the user. Never invent a token or automatically review on the user's behalf.",
+    ),
 });
 export const prMergeTool: ToolDefinition = {
   name: "pr_merge",
