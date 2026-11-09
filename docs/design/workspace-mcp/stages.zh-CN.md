@@ -146,11 +146,24 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 
 **验收标准。**
 
-- [ ] trunk 和 Worktree 两种范围的截图都包含图片，与 `uvw screenshot` 的结果目视一致（两张截图并列作为证据）。
-- [ ] 小截图以图片内容返回，opencode 的会话记录里能看到 `image` 类型的结果，模型对截图内容的描述与 Unit 内容相符。多页截图返回下载链接。
-- [ ] `print_pdf` 生成的 PDF 能打开，页数与 `uvw print-pdf` 一致。
-- [ ] 渲染服务的容器没有到 Workspace 的网络路由，渲染仍然成功。
-- [ ] 测量浏览器池的单任务内存和吞吐，写回架构文档。
+- [x] trunk 和 Worktree 两种范围的截图都包含图片，与 `uvw screenshot` 的结果目视一致（两张截图并列作为证据）。 证据：PR #235（trunk 图片内联）、#237，`verify-uvw` MR10 的 `mr10-side-by-side-worktree.png` 与 `mr10-side-by-side-trunk.png`（CLI 在上，MCP 在下，四色图和单元格文字一致），MR11 的 Sheet 并列图覆盖打印路径。
+- [x] 小截图以图片内容返回，opencode 的会话记录里能看到 `image` 类型的结果，模型对截图内容的描述与 Unit 内容相符。多页截图返回下载链接。 证据：MR12（`console-deepseek/deepseek-flash#high`）。会话记录里 `verify-uvw.screenshot` 调用完成，结果是文本加一个 `image/png` 的 `file` 片段（opencode 对 MCP `image` 块的表示），模型的回答写出 `Aurora Kettle`、`KT-48213`、`77` 和红绿蓝黄四象限的位置，与解码出的图一致；同一旅程里两页 Slide（共 6.4 MB）返回两个下载链接且没有图片片段，MR10 下载的页面是 1920×1080 PNG。多页 Doc 的截图是一张高图，约 4 页以上超过像素上限，`uvw screenshot` 同样失败，是上游行为，见下文已知问题，所以多页下载链接用 Slide 验收。
+- [x] `print_pdf` 生成的 PDF 能打开，页数与 `uvw print-pdf` 一致。 证据：PR #238，MR11（Doc 在 Worktree 和 trunk 各 5 页、Sheet 各 1 页，与 CLI 页数一致，`pdfinfo` 打开，并列图目视一致）；同一旅程还验证 `lint` 与 CLI 的发现一致。
+- [x] 渲染服务的容器没有到 Workspace 的网络路由，渲染仍然成功。 证据：PR #236，MR9 与 `doctor`（renderer 只加入 `internal: true` 网络，没有 published port，`host.docker.internal:3925` 与公网主机都 `blocked`），在这个拓扑下 MR9、MR10、MR11、MR12 的渲染全部成功。
+- [x] 测量浏览器池的单任务内存和吞吐，写回架构文档。 证据：[架构 7.1.1](architecture.zh-CN.md#711-容量测量2026-11-09)：冷、热延迟，1、2（补充 4）个 runtime 的吞吐与限制因素，每个 runtime 的内存与容器预算（2 GiB 下 OOM，3 GiB 通过），200 次复用渲染的内存序列，以及复跑命令。
+- [x] 真实字体的 SVG 文字测量（交付物之一，不在原验收清单内）。 证据：PR #239，MV2（与 `uvw compile-svg` 结构一致，估算模式对照，Slide 页面截图无溢出，55 行量字 378 ms）。
+
+**验收记录（2026-11-09，`verify-uvw` run e6，启动 HEAD `239e433e`）。** MR9、MR10、MR11、MV2 在当前 `main` 上按文档原样逐条通过，MR12 新增为可重复旅程。验收中发现的问题没有在本阶段修复，列在架构 [7.1.2](architecture.zh-CN.md#712-已知问题与后续)，每条给出触发条件：
+
+- 故障后的请求迟迟不应答，被丢弃 runtime 的浏览器还会存活约 2 分钟（页面进程被杀或容器 OOM 时复现）；
+- 回收守卫：200 次渲染内没有增长，暂不加，给出重测阈值；
+- renderer 进程经 `shared/errors.ts` 间接加载 client-core 产品模块，import 边界测试只检查直接导入；
+- Chromium 空闲时死亡后，最多 `RENDERER_MAX_RUNTIMES` 次调用先失败再得到新 runtime；
+- 冷启动 runtime 不能被中断，deadline 短于冷启动的请求在启动结束后才失败；
+- Sheet 默认截图范围不包含网格外的图片；
+- Doc skill 的示例使用 SDK 没有的 `api.Enum.DocsImageWrappingStyle`；
+- Doc 截图约 4 页以上超过像素上限，CLI 同样失败（上游行为）；
+- 内存预算没有覆盖大输入。
 
 ## 阶段 F：Workspace 认证
 
