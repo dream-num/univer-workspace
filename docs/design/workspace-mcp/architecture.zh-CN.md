@@ -559,7 +559,8 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `WORKSPACE_TRANSPORT_URL` | 网关、执行层 | 实际请求地址，默认等于 `WORKSPACE_ORIGIN` |
 | `MCP_PUBLIC_URL` | 网关 | MCP 的公网地址，例如 `https://space.univer.ai/mcp` |
 | `MCP_EXECUTOR_URLS`、`MCP_RENDERER_URL` | 网关、执行层 | 内部服务地址 |
-| `MCP_INTERNAL_TOKEN` | 全部 | 内部 RPC 的共享令牌 |
+| `MCP_EXECUTOR_TOKEN` | 网关、执行层 | 网关调用执行层（含 capability discovery）的令牌，至少 32 字符。网关与 `MCP_EXECUTOR_URLS` 同时设置或同时不设；执行层必填 |
+| `MCP_RENDERER_TOKEN` | 执行层、渲染服务 | 执行层调用渲染服务的令牌，至少 32 字符。执行层与 `MCP_RENDERER_URL` 同时设置或同时不设，且必须与 `MCP_EXECUTOR_TOKEN` 不同；渲染服务必填，网关不持有 |
 | `MCP_STAGING_DIRECTORY` | 网关 | 暂存存储目录 |
 | `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端，两者同时设置或同时不设。启用 PAT 与 OAuth access token 认证 |
 | `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节）。与上一行至少设置一项，本地验证两者同时设置 |

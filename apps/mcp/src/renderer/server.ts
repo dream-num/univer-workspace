@@ -68,7 +68,7 @@ export function createRenderer(
       this.set({ state: "busy" }, pool.stats.busy);
     },
   });
-  const authorized = createBearerCheck(config.MCP_INTERNAL_TOKEN);
+  const authorized = createBearerCheck(config.MCP_RENDERER_TOKEN);
   const metricsAuthorized = config.METRICS_TOKEN ? createBearerCheck(config.METRICS_TOKEN) : null;
 
   async function dispatch(name: RendererOpName, header: RendererRequestHeader) {

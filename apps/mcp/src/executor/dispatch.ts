@@ -126,7 +126,7 @@ export function createDispatcher(
         http: () => http,
         renderer: createRendererClient({
           url: config.MCP_RENDERER_URL,
-          internalToken: config.MCP_INTERNAL_TOKEN,
+          rendererToken: config.MCP_RENDERER_TOKEN,
           requestId: header.requestId,
           deadlineAt,
           signal: controller.signal,

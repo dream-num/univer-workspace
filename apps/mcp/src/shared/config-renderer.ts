@@ -4,7 +4,7 @@ const positive = z.coerce.number().int().positive().max(2_147_483_647);
 const environment = z.object({
   HOST: z.string().min(1).default("127.0.0.1"),
   PORT: positive.max(65535).default(3000),
-  MCP_INTERNAL_TOKEN: z.string().min(32),
+  MCP_RENDERER_TOKEN: z.string().min(32),
   METRICS_TOKEN: z.string().optional(),
   RENDERER_MAX_RUNTIMES: positive.default(2),
   RENDERER_QUEUE_TIMEOUT_MS: positive.default(5_000),

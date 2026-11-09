@@ -14,7 +14,7 @@ configuration refuses to start.
 
 - MG1 (requirements 1, 2) is reserved: a user script cannot obtain the Workspace credential given to its worker. Covered by implementation tests.
 - MG2 (requirement 1) lists the variable names a script sees in its own environment and in `/proc/<pid>/environ` of every process it can see.
-  `contained` if no name matching `MCP_INTERNAL_TOKEN`, `UNIVER_LICENSE*`, `*_SECRET`, `*_TOKEN` or `*_KEY` is visible.
+  `contained` if no name matching `MCP_EXECUTOR_TOKEN`, `MCP_RENDERER_TOKEN`, `UNIVER_LICENSE*`, `*_SECRET`, `*_TOKEN` or `*_KEY` is visible.
 - MG3 (requirements 1, 5) is reserved: Node built-ins (`process.getBuiltinModule`, `process.binding`, `fetch`) are not reachable from the script
   realm. Covered by implementation tests.
 - MG4 (requirement 5) makes one HTTP GET from a script to the renderer, the gateway, the Workspace transport URL, `169.254.169.254` and a public
@@ -83,7 +83,7 @@ Baseline of MG2 and MG4-MG11 on `main` 26c1b69d with a local Docker Desktop stac
 
 | Check | Result | Reason |
 |---|---|---|
-| MG2 | exposed | `MCP_INTERNAL_TOKEN` is visible in `/proc/1/environ` of the executor server, readable by the script (same uid). The worker's own environment holds only `NODE_ENV`. |
+| MG2 | exposed | `MCP_EXECUTOR_TOKEN` and `MCP_RENDERER_TOKEN` are visible in `/proc/1/environ` of the executor server, readable by the script (same uid). The worker's own environment holds only `NODE_ENV`. |
 | MG4 | exposed | The script reaches the renderer, the gateway, the Workspace transport and a public host; only `169.254.169.254` times out. |
 | MG5 | exposed | A sees B's worker pid in `/proc`, B's `/tmp` marker and other worker processes. |
 | MG6 | contained | The 25 s operation timeout ends A; its worker process is gone within a second and B is served in under 100 ms. |

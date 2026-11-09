@@ -18,7 +18,8 @@ const job = {
 } as const;
 
 it("forks with an explicit environment and advanced binary serialization, then removes its private directory", async () => {
-  vi.stubEnv("MCP_INTERNAL_TOKEN", "internal-secret");
+  vi.stubEnv("MCP_EXECUTOR_TOKEN", "executor-secret");
+  vi.stubEnv("MCP_RENDERER_TOKEN", "renderer-secret");
   vi.stubEnv("WORKSPACE_ORIGIN", "https://workspace.test");
   vi.stubEnv("UNIVER_LICENSE_KEY", "parent-key");
   const fixture = new URL("./fixtures/job-audit.mjs", import.meta.url);
@@ -78,7 +79,7 @@ it("forks with an explicit environment and advanced binary serialization, then r
     expect(env).toEqual(jobEnvironment(env["HOME"]!));
     expect(join(await realpath(dirname(env["HOME"]!)), basename(env["HOME"]!))).toBe(audit.cwd);
     expect(JSON.stringify(audit)).not.toMatch(
-      /internal-secret|parent-key|workspace\.test|session|grant/i,
+      /executor-secret|renderer-secret|parent-key|workspace\.test|session|grant/i,
     );
     await expect(access(audit.cwd)).rejects.toThrow();
   } finally {

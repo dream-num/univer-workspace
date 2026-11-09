@@ -104,7 +104,7 @@ describe("gateway over real HTTP and the MCP client", () => {
   let runtimeError: Error | undefined;
   let inspectValue: unknown;
   let observedKeys: string[];
-  const internalToken = "executor-internal-test-token-123456789";
+  const executorToken = "executor-internal-test-token-123456789";
   const rangeResult = {
     kind: "worksheet-range",
     unitId: "unit-1",
@@ -256,8 +256,9 @@ describe("gateway over real HTTP and the MCP client", () => {
       parseExecutorConfig({
         WORKSPACE_ORIGIN: identityOrigin,
         WORKSPACE_TRANSPORT_URL: transportOrigin,
-        MCP_INTERNAL_TOKEN: internalToken,
+        MCP_EXECUTOR_TOKEN: executorToken,
         MCP_RENDERER_URL: "http://renderer.test",
+        MCP_RENDERER_TOKEN: "renderer-test-token-".repeat(4),
       }),
       { runtime, logger: pino({ level: "silent" }) },
     );
@@ -281,7 +282,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
         METRICS_TOKEN: "metrics-secret",
         MCP_EXECUTOR_URLS: executorUrl,
-        MCP_INTERNAL_TOKEN: internalToken,
+        MCP_EXECUTOR_TOKEN: executorToken,
       }),
       { logger: pino({}, logOutput) },
     );
@@ -404,7 +405,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       ]);
       expect(new Set(observedKeys).size).toBe(1);
       expect(observedKeys[0]).toContain(":caller:user-1");
-      expect(logs).not.toContain(internalToken);
+      expect(logs).not.toContain(executorToken);
       expect(logs).not.toContain("Apples");
     },
   );

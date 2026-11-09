@@ -47,7 +47,7 @@ export class ExecutorCapabilities {
       config.urls.map(async (url) => {
         try {
           const response = await fetch(`${url}/rpc/v1/capabilities`, {
-            headers: { authorization: `Bearer ${config.internalToken}` },
+            headers: { authorization: `Bearer ${config.executorToken}` },
             signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(5_000)]),
             redirect: "error",
           });

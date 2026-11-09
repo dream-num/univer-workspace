@@ -31,7 +31,7 @@ function context(store: LocalStagingStore): ToolContext {
     scopes: new Set(["read", "write"]),
     executor: createExecutorLinks({
       urls: ["http://executor.test"],
-      internalToken: "internal-token-".repeat(4),
+      executorToken: "executor-token-".repeat(4),
     })(
       {
         authKind: "dev",

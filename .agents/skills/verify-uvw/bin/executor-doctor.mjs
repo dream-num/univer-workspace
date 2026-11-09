@@ -10,7 +10,7 @@ const [repo, run, project, image, imageId, origin, serverPort, mcpPort, executor
 const secret = name => readFileSync(join(run, 'home', name), 'utf8').trim();
 const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'staging'), VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
-  VERIFY_UVW_METRICS_TOKEN: secret('metrics-token'), VERIFY_UVW_INTERNAL_TOKEN: secret('internal-token'),
+  VERIFY_UVW_METRICS_TOKEN: secret('metrics-token'), VERIFY_UVW_EXECUTOR_TOKEN: secret('executor-token'), VERIFY_UVW_RENDERER_TOKEN: secret('renderer-token'),
   VERIFY_UVW_MCP_OAUTH_SECRET: secret('mcp-oauth-secret') };
 const docker = (args, input) => execFileSync('docker', args, { env, input, encoding: 'utf8', maxBuffer: 1 << 28, timeout: 25_000, stdio: ['pipe', 'pipe', 'pipe'] });
 const compose = (args, input) => docker(['compose', '-p', project, '-f', join(repo, 'apps/mcp/docker/compose.verify.yml'), ...args], input);
@@ -24,11 +24,16 @@ try {
     const [container] = JSON.parse(docker(['inspect', cid]));
     assert(container.State.Running && container.State.Health?.Status === 'healthy' && container.Image === imageId, 'executor healthy on this run image');
     const settings = Object.fromEntries(container.Config.Env.map(item => { const i = item.indexOf('='); return [item.slice(0, i), item.slice(i + 1)]; }));
+    assert(settings.MCP_EXECUTOR_TOKEN === secret('executor-token'), 'executor has this run executor credential');
+    assert(settings.MCP_RENDERER_TOKEN === (renderer === '1' ? secret('renderer-token') : undefined), 'executor renderer credential matches renderer mode');
     assert.equal(settings.NODE_ENV, production === '1' ? 'production' : 'development');
     assert.equal(settings.MCP_RENDERER_URL, renderer === '1' ? 'http://renderer:3000' : undefined);
     const allowlistPath = join(run, 'executor-allowed-user-ids');
     assert.equal(settings.MCP_EXECUTOR_ALLOWED_USER_IDS, existsSync(allowlistPath) ? readFileSync(allowlistPath, 'utf8').trim() : undefined);
     const [gateway] = JSON.parse(docker(['inspect', compose(['ps', '-q', 'gateway']).trim()]));
+    assert(gateway.Config.Env.includes('MCP_EXECUTOR_TOKEN=' + secret('executor-token')), 'gateway has this run executor credential');
+    assert(!gateway.Config.Env.some(item => item.startsWith('MCP_RENDERER_TOKEN=')), 'gateway holds no renderer credential');
+    console.log('ok    MCP gateway and executor hold only their call-direction credentials');
     assert(gateway.Config.Env.includes('NODE_ENV=' + settings.NODE_ENV));
     assert.equal(gateway.Config.Env.find(item => item.startsWith('MCP_EXECUTOR_ALLOWED_USER_IDS=')), settings.MCP_EXECUTOR_ALLOWED_USER_IDS === undefined ? undefined : 'MCP_EXECUTOR_ALLOWED_USER_IDS=' + settings.MCP_EXECUTOR_ALLOWED_USER_IDS);
     assert.equal(gateway.Config.Env.find(item => item.startsWith('MCP_DEV_SESSION_PASSTHROUGH=')), production === '1' ? undefined : 'MCP_DEV_SESSION_PASSTHROUGH=1');
@@ -51,7 +56,7 @@ try {
       import { encodeFrame, decodeFrame, FRAME_CONTENT_TYPE } from './dist/shared/frame.js';
       const grant = JSON.parse(readFileSync(0,'utf8'));
       const response = await fetch(new URL('/rpc/v1/diagnostics.probe', process.env.MCP_EXECUTOR_URLS.split(',')[0]), {
-        method:'POST', headers:{authorization:'Bearer '+process.env.MCP_INTERNAL_TOKEN,'content-type':FRAME_CONTENT_TYPE,'x-mcp-rpc-version':'1'},
+        method:'POST', headers:{authorization:'Bearer '+process.env.MCP_EXECUTOR_TOKEN,'content-type':FRAME_CONTENT_TYPE,'x-mcp-rpc-version':'1'},
         body:encodeFrame({v:1,op:'diagnostics.probe',requestId:'doctor-probe',deadlineMs:8000,grant,input:{}}), signal:AbortSignal.timeout(10000)
       });
       if (!response.ok) throw new Error('RPC transport rejected');
@@ -80,7 +85,7 @@ try {
       let status, environ;
       try { status=readFileSync('/proc/'+pid+'/status','utf8'); environ=readFileSync('/proc/'+pid+'/environ','utf8'); } catch { continue; }
       if (!/^PPid:\\s+1$/m.test(status)) continue;
-      if (environ.split('\\0').some(v => /^(MCP_INTERNAL_TOKEN|METRICS_TOKEN|UNIVER_LICENSE|UNIVER_LICENSE_KEY|MCP_OAUTH_CLIENT_SECRET)=/.test(v))) process.exit(1);
+      if (environ.split('\\0').some(v => /^(MCP_EXECUTOR_TOKEN|MCP_RENDERER_TOKEN|METRICS_TOKEN|UNIVER_LICENSE|UNIVER_LICENSE_KEY|MCP_OAUTH_CLIENT_SECRET)=/.test(v))) process.exit(1);
       checked++;
     }
     console.log(checked);
@@ -89,7 +94,7 @@ try {
   writeFileSync(join(run, 'evidence/executor-worker-environ.txt'), `Checked ${children} worker children; no inherited secret environment variables. Same-uid workers can still read /proc/1/environ until Stage G.\n`);
   console.log(`ok    MCP executor worker environment excludes inherited secrets (${children} live children)`);
   const logs = compose(['logs', '--no-color', '--no-log-prefix', 'gateway', ...executors]);
-  for (const name of ['mcp-session', 'mcp-token', 'internal-token', 'metrics-token', 'mcp-oauth-secret']) {
+  for (const name of ['mcp-session', 'mcp-token', 'executor-token', 'renderer-token', 'metrics-token', 'mcp-oauth-secret']) {
     if (existsSync(join(run, 'home', name))) assertLogsExclude(logs, [secret(name)]);
   }
   const licenses = await import(pathToFileURL(join(repo, 'apps/cli/dist/license.js')).href);

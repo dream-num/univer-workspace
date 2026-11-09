@@ -23,7 +23,7 @@ export function createExecutor(
   const runtime = options.runtime ?? createExecutorRuntime(config);
   const logger = options.logger ?? pino({ level: config.LOG_LEVEL, redact: credentialRedactions });
   const dispatch = createDispatcher(config, runtime, logger);
-  const authorized = createBearerCheck(config.MCP_INTERNAL_TOKEN);
+  const authorized = createBearerCheck(config.MCP_EXECUTOR_TOKEN);
   let draining = false;
   const server = createServer((request, response) => {
     const reject = (status: number, code: string) => {

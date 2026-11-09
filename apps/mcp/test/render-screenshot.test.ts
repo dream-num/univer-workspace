@@ -10,7 +10,7 @@ import { zeroCost } from "../src/shared/usage.js";
 
 const session = "secret-session-value";
 const origin = "https://workspace.test";
-const token = "internal-token-".repeat(4);
+const token = "executor-token-".repeat(4);
 const sheetData = {
   id: "unit",
   name: "Budget",
@@ -94,7 +94,7 @@ function setup() {
     exchange: { license: "", licenseKey: "" },
     renderer: createRendererClient({
       url: "http://renderer:3000",
-      internalToken: token,
+      rendererToken: token,
       requestId: "shot",
       deadlineAt: Date.now() + 30_000,
       signal: new AbortController().signal,
@@ -194,7 +194,7 @@ describe("render.screenshot", () => {
       ...bare,
       renderer: createRendererClient({
         url: undefined,
-        internalToken: token,
+        rendererToken: token,
         requestId: "shot",
         deadlineAt: Date.now() + 30_000,
         signal: new AbortController().signal,

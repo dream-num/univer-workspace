@@ -14,7 +14,7 @@ import { classifyFetchFailure, ExecutorRouter } from "./router.js";
 
 export interface ExecutorConnection {
   readonly router: ExecutorRouter;
-  readonly internalToken: string;
+  readonly executorToken: string;
   readonly grant: ExecutorGrant;
   readonly requestId: string;
   readonly deadlineAt: number;
@@ -68,7 +68,7 @@ export async function callExecutor<
       response = await fetch(new URL(`/rpc/v1/${spec.name}`, url), {
         method: "POST",
         headers: {
-          authorization: `Bearer ${connection.internalToken}`,
+          authorization: `Bearer ${connection.executorToken}`,
           "content-type": FRAME_CONTENT_TYPE,
           "x-mcp-rpc-version": "1",
         },

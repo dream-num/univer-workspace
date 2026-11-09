@@ -89,7 +89,7 @@ async function start(options: { syncBudgetMs?: number } = {}) {
       MCP_PUBLIC_URL: `${origin}/mcp`,
       MCP_STAGING_DIRECTORY: testStagingDirectory(),
       MCP_EXECUTOR_URLS: executorUrl,
-      MCP_INTERNAL_TOKEN: "t".repeat(32),
+      MCP_EXECUTOR_TOKEN: "t".repeat(32),
       MCP_SYNC_BUDGET_MS: String(options.syncBudgetMs ?? 30_000),
     }),
     {

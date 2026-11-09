@@ -21,7 +21,7 @@ for (const production of [0, 1]) for (const renderer of [0, 1]) {
       writeFileSync(join(root, 'docker'), `#!${process.execPath}\nrequire('node:fs').appendFileSync(${JSON.stringify(capture)}, JSON.stringify({args:process.argv.slice(2),env:process.env})+'\\n');\n`, { mode: 0o755 });
       const call = ids => spawnSync('bash', [helper, 'mcp-allow-users', ...ids], {
         env: { ...process.env, PATH: root + ':' + process.env.PATH, VERIFY_UVW_ROOT: root, VERIFY_UVW_RUN: 'test',
-          MCP_DEV_SESSION_PASSTHROUGH: 'pollution', MCP_RENDERER_URL: 'http://pollution', MCP_EXECUTOR_ALLOWED_USER_IDS: 'pollution' }, encoding: 'utf8',
+          MCP_RENDERER_TOKEN: 'pollution', MCP_DEV_SESSION_PASSTHROUGH: 'pollution', MCP_RENDERER_URL: 'http://pollution', MCP_EXECUTOR_ALLOWED_USER_IDS: 'pollution' }, encoding: 'utf8',
       });
       const result = call(['user-a', 'user-b']);
       assert.equal(result.status, 0, result.stderr);
@@ -35,6 +35,7 @@ for (const production of [0, 1]) for (const renderer of [0, 1]) {
       assert.equal(captured.env.VERIFY_UVW_MCP_NODE_ENV, production ? 'production' : 'development');
       assert.equal(captured.env.MCP_DEV_SESSION_PASSTHROUGH, production ? undefined : '1');
       assert.equal(captured.env.MCP_RENDERER_URL, renderer ? 'http://renderer:3000' : undefined);
+      assert.equal(captured.env.MCP_RENDERER_TOKEN, renderer ? 'removed' : undefined);
       assert.equal(captured.env.COMPOSE_PROFILES, renderer ? 'renderer,replicas' : 'replicas');
       assert.equal(readFileSync(join(run, 'executor-allowed-user-ids'), 'utf8'), 'user-a,user-b\n');
       for (const invalid of [[], [''], ['user-a,user-b'], ['user a'], ['$(id)']]) {
@@ -47,14 +48,15 @@ for (const production of [0, 1]) for (const renderer of [0, 1]) {
   test(`real docker compose config (production=${production}, renderer=${renderer})`, () => {
     const env = { ...process.env, VERIFY_UVW_MCP_PROJECT: 'verify-uvw-config-test', VERIFY_UVW_MCP_IMAGE: 'test:image',
       VERIFY_UVW_ORIGIN: 'http://127.0.0.1:6000', VERIFY_UVW_SERVER_PORT: '3950', VERIFY_UVW_MCP_PORT: '3955',
-      VERIFY_UVW_MCP_STAGING_DIRECTORY: '/tmp/verify-uvw-config-test/staging', VERIFY_UVW_INTERNAL_TOKEN: 'test-only',
+      VERIFY_UVW_MCP_STAGING_DIRECTORY: '/tmp/verify-uvw-config-test/staging', VERIFY_UVW_EXECUTOR_TOKEN: 'executor-test-only', VERIFY_UVW_RENDERER_TOKEN: 'renderer-test-only',
       VERIFY_UVW_METRICS_TOKEN: 'test-only', VERIFY_UVW_MCP_OAUTH_SECRET: 'test-only',
       VERIFY_UVW_MCP_NODE_ENV: production ? 'production' : 'development', COMPOSE_PROFILES: renderer ? 'renderer' : '' };
     delete env.MCP_DEV_SESSION_PASSTHROUGH;
     delete env.MCP_RENDERER_URL;
+    delete env.MCP_RENDERER_TOKEN;
     delete env.MCP_EXECUTOR_ALLOWED_USER_IDS;
     if (!production) env.MCP_DEV_SESSION_PASSTHROUGH = '1';
-    if (renderer) env.MCP_RENDERER_URL = 'http://renderer:3000';
+    if (renderer) { env.MCP_RENDERER_URL = 'http://renderer:3000'; env.MCP_RENDERER_TOKEN = 'renderer-test-only'; }
     if (production) env.MCP_EXECUTOR_ALLOWED_USER_IDS = 'verify-uvw-pending-user';
     const config = JSON.parse(execFileSync('docker', ['compose', '-f', compose, 'config', '--format', 'json'], { env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
     assert.deepEqual(Object.keys(config.services).sort(), renderer ? ['executor', 'gateway', 'renderer'] : ['executor', 'gateway']);
@@ -62,6 +64,14 @@ for (const production of [0, 1]) for (const renderer of [0, 1]) {
     for (const service of ['gateway', 'executor']) {
       assert.equal(config.services[service].environment.NODE_ENV, production ? 'production' : 'development');
       assert.equal(config.services[service].environment.MCP_EXECUTOR_ALLOWED_USER_IDS ?? undefined, production ? 'verify-uvw-pending-user' : undefined);
+    }
+    assert.equal(config.services.gateway.environment.MCP_EXECUTOR_TOKEN, 'executor-test-only');
+    assert.equal(config.services.gateway.environment.MCP_RENDERER_TOKEN, undefined);
+    assert.equal(config.services.executor.environment.MCP_EXECUTOR_TOKEN, 'executor-test-only');
+    assert.equal(config.services.executor.environment.MCP_RENDERER_TOKEN ?? undefined, renderer ? 'renderer-test-only' : undefined);
+    if (renderer) {
+      assert.equal(config.services.renderer.environment.MCP_RENDERER_TOKEN, 'renderer-test-only');
+      assert.equal(config.services.renderer.environment.MCP_EXECUTOR_TOKEN, undefined);
     }
     assert.equal(config.services.gateway.environment.MCP_DEV_SESSION_PASSTHROUGH ?? undefined, production ? undefined : '1');
   });

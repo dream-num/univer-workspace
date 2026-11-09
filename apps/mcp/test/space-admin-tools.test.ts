@@ -207,7 +207,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       executorUrl = `http://127.0.0.1:${address.port}`;
     }
     gateway = createGateway(
-      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url, ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_INTERNAL_TOKEN: "t".repeat(32) } : {}) }),
+      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url, ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}) }),
       { logger: pino({ level: "silent" }), fetcher, ...(scopes === undefined ? {} : { scopes }) },
     );
     gateway.server.listen(port, "127.0.0.1");

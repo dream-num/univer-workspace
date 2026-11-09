@@ -60,15 +60,15 @@ A mismatched user or 401 requires authentication.
 Workers are replaced before reuse when their creating grant expires within 60 seconds.
 
 Session grants and process separation do not provide a multi-user sandbox. In particular,
-a worker may read its executor's `/proc/1/environ` under the same uid, exposing the internal
-token. In production, the shared session-grant executor serves only allowlisted trusted users.
+a worker may read its executor's `/proc/1/environ` under the same uid, exposing
+`MCP_EXECUTOR_TOKEN` and, when configured, `MCP_RENDERER_TOKEN`. In production, the shared session-grant executor serves only allowlisted trusted users.
 Public executor access still requires Stage G.
 
 ## Renderer
 
 `MCP_ROLE=renderer` turns an already materialized Univer render unit into PNG, PDF, lint facts or text metrics.
 It holds no Workspace origin, session or grant, and the compose bench gives it only an `internal: true` network shared with
-the executors. It requires `MCP_INTERNAL_TOKEN`; `METRICS_TOKEN` protects `/metrics` (unset hides it, as on the gateway).
+the executors. It requires `MCP_RENDERER_TOKEN` and holds no executor token; `METRICS_TOKEN` protects `/metrics` (unset hides it, as on the gateway).
 
 The RPC reuses the executor's framing, bearer check and error envelope with `POST /rpc/v1/<op>`, but the request header has no
 `grant`. The shared protocol module `src/shared/renderer-protocol.ts` owns the operations and their zod schemas:
@@ -164,7 +164,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
 | `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
-| `MCP_EXECUTOR_URLS`, `MCP_INTERNAL_TOKEN` | Unset on gateway | Comma-separated internal HTTP(S) origins and a shared token of at least 32 characters. Set both or neither. The executor requires the token |
+| `MCP_EXECUTOR_URLS`, `MCP_EXECUTOR_TOKEN` | Unset on gateway | Comma-separated executor HTTP(S) origins and the gateway-to-executor token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_ALLOWED_USER_IDS` | Unset | Comma-separated Workspace user IDs, trimmed. Empty values or entries are errors. Set the same trusted-user list on the gateway and executor. Required in production on the executor and on gateways with `MCP_EXECUTOR_URLS`. Unset outside production allows every user |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
@@ -173,7 +173,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
 | `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |
-| `MCP_RENDERER_URL` | Unset | Internal origin of the renderer. Compose gives it to the executor, whose renderer client (`src/executor/renderer-client.ts`) calls it with `MCP_INTERNAL_TOKEN`. Unset, render operations fail with the non-retryable `workspace-renderer-not-configured` |
+| `MCP_RENDERER_URL`, `MCP_RENDERER_TOKEN` | Unset on executor | Renderer origin and executor-to-renderer token of at least 32 characters. Set both or neither on the executor. The token must differ from `MCP_EXECUTOR_TOKEN`; the renderer requires only `MCP_RENDERER_TOKEN`. Unset, render operations fail with the non-retryable `workspace-renderer-not-configured` |
 | `RENDERER_MAX_RUNTIMES` | `2` | Renderer: maximum live render runtimes, one Chromium each. Measured on local Docker Desktop (architecture 7.1.1): throughput doubles from 1 to 2, a renderer container needs about 3 GiB for 2 runtimes (2 GiB was OOM-killed under Doc printing), 4 runtimes need about 4.5 GiB and stop scaling once the CPUs are busy |
 | `RENDERER_QUEUE_TIMEOUT_MS` | `5000` | Renderer: maximum wait for a free runtime before a retryable `workspace-renderer-busy` |
 | `RENDERER_OPERATION_TIMEOUT_MS` | `25000` | Renderer: runtime launch and operation timeout. A timed-out runtime is closed and replaced |
@@ -382,7 +382,7 @@ export's auth recovery applies only to its parent-side runtime read.
 | `diagnostics.probe` | None | Uses the current session without a cached worker. |
 
 Reruns add worker time to the same usage event. Executor logs record `mcp.executor_rerun`
-with `reason`, and its internal-token-protected `/metrics` exposes
+with `reason`, and its executor-token-protected `/metrics` exposes
 `mcp_executor_reruns_total{reason="auth"|"revision"}`. The version 1 usage event is unchanged.
 Queued calls cancelled before acquiring a lease return `workspace-executor-timeout` with
 `detail: { retryable: true, started: false }`; they never execute later. A started write

@@ -104,7 +104,7 @@ async function start({ oauth = false, executor = false, failure = "", clientSecr
       ...(oauth
         ? { MCP_OAUTH_CLIENT_ID: "readiness-client", MCP_OAUTH_CLIENT_SECRET: clientSecret }
         : {}),
-      ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_INTERNAL_TOKEN: secret } : {}),
+      ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_EXECUTOR_TOKEN: secret } : {}),
     }),
     { logger: pino({ level: "silent" }) },
   );
