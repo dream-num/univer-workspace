@@ -9,6 +9,7 @@ import { SelectionEditing } from '../lib/selection-editing.js';
 import { EditorInputGate } from '../lib/editor-input-gate.js';
 import { captureDocTarget } from '../lib/doc-focus.js';
 import { IMenuManagerService } from '@univerjs/ui';
+import { DocCanvasPopManagerService, DocFloatMenuService } from '@univerjs/docs-ui';
 import { selectionEditActions, selectionProjection } from '../lib/selection-projection.js';
 
 // These checks exercise Accept with a real SDK document/commands/history. UI
@@ -388,4 +389,33 @@ test('same-document Conversation changes retain a pending proposal and its captu
     assert.equal(f.doc.undo(), true);
     assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
   } finally { f.dispose(); }
+});
+
+test('instruction popup replaces formatting without clearing its target or suppressing future selection menus', () => {
+  const calls = [], target = { text: 'Gamma' };
+  const editor = Object.create(SelectionEditing.prototype);
+  Object.assign(editor, {
+    state: { phase: 'instruction', target }, file: { unitId: 'doc' }, componentKey: 'ask', popupKey: '',
+    validate: () => ({ start: 11, end: 16 }),
+    renderer: () => ({ render: { with(service) {
+      assert.equal(service, DocFloatMenuService);
+      return { hideFloatMenu() { calls.push('hide-format'); } };
+    } } }),
+    univer: { __getInjector: () => ({ get(service) {
+      assert.equal(service, DocCanvasPopManagerService);
+      return { attachPopupToRange(range) {
+        assert.deepEqual(range, { startOffset: 11, endOffset: 16, collapsed: false, segmentId: undefined });
+        calls.push('attach-instruction'); return { dispose() { calls.push('dispose-instruction'); } };
+      } };
+    } }) },
+  });
+  editor.updatePopup();
+  assert.deepEqual(calls, ['hide-format', 'attach-instruction']);
+  assert.equal(editor.state.target, target);
+  editor.updatePopup(); // phase updates in the same popup retain its mounted input.
+  assert.equal(calls.length, 2);
+  editor.state = { phase: 'selected', target: { text: 'Beta' } };
+  editor.updatePopup();
+  assert.deepEqual(calls, ['hide-format', 'attach-instruction', 'dispose-instruction']);
+  assert.equal(editor.popup, undefined);
 });

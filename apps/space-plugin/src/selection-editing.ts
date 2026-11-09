@@ -1,7 +1,7 @@
 import { CommandType, DocumentDataModel, ICommandService, IUniverInstanceService, JSONX, TextX, TextXActionType, getRichTextEditPath, type ICommand, type Univer, type IDisposable } from '@univerjs/core';
 import type { FUniver } from '@univerjs/core/facade';
 import { DocSelectionManagerService, DocSkeletonManagerService, RichTextEditingMutation, type IRichTextEditingMutationParams } from '@univerjs/docs';
-import { DocCanvasPopManagerService, DocSelectionRenderService, FLOAT_TOOLBAR_MENU_POSITION } from '@univerjs/docs-ui';
+import { DocCanvasPopManagerService, DocFloatMenuService, DocSelectionRenderService, FLOAT_TOOLBAR_MENU_POSITION } from '@univerjs/docs-ui';
 import { IMenuManagerService, MenuItemType } from '@univerjs/ui';
 import { BehaviorSubject, Subscription } from 'rxjs';
 import { captureDocTarget, resolveDocTarget, DocFocusUnavailableError, type DocTarget } from './doc-focus.js';
@@ -164,6 +164,9 @@ export class SelectionEditing {
     const key = `${start}/${projectedEnd}/${direction}`;
     if (key === this.popupKey) return;
     this.popup?.dispose();
+    // The instruction/review popup replaces formatting controls, retaining the
+    // SDK selection highlight. A later selection can open its normal menu again.
+    this.renderer().render.with(DocFloatMenuService).hideFloatMenu();
     // The native popup owns viewport/zoom/layout subscriptions and placement.
     // Univer's desktop UI mounts this floating layer outside the SDK container.
     this.popup = this.univer.__getInjector().get(DocCanvasPopManagerService).attachPopupToRange({
