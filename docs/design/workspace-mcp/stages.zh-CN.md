@@ -255,7 +255,7 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
    - skills 的内容来自 `apps/cli/skill-data`，与 CLI 保持一致，本阶段不修改。skills 提到的 `uvw` 命令没有对应工具时，沿用现有 instructions 的规则，告诉用户这一步在这里不可用。
 5. 就绪检查 `GET /readyz`。`/healthz` 仍然只表示进程存活。网关就绪需要同时满足：
    - 经 `WORKSPACE_TRANSPORT_URL` 访问 Workspace 的 `/healthz` 成功；
-   - 配置了 OAuth 时，Workspace 的 `/.well-known/oauth-authorization-server` 在 `grant_types_supported` 中声明 token exchange；
+   - 配置了 OAuth 时，网关的机密客户端能做 token exchange：用网关的客户端凭据、不带 subject token 调用 token 端点，得到 `invalid_request` 才算通过。Workspace 的授权服务器元数据只列出 `authorization_code` 和 `refresh_token`，不能用来判断；
    - 配置了执行层时，至少一个执行层返回了兼容的能力。
 
    Workspace 版本接口暂不做（产品负责人 2026-11-09 决定）。[架构 3.2](architecture.zh-CN.md#32-saas-拓扑) 中按版本号拒绝就绪的要求暂缓。
