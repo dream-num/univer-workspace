@@ -152,6 +152,29 @@ describe("renderer RPC", () => {
     );
   });
 
+  it("serves the first request warm after warm-up launched a runtime", async () => {
+    const { call, frame, create } = await start();
+    await started.at(-1)!.warm();
+    const doc = { id: "d", body: { dataStream: "warm\r\n" } };
+    expect((await frame(await call("measureText", { doc }))).header).toMatchObject({
+      ok: true,
+      meta: { executor: "warm" },
+    });
+    expect(create).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps serving when warm-up fails and starts a runtime on the first request", async () => {
+    const { call, frame, create, runtime } = await start();
+    create.mockRejectedValueOnce(new Error("browser missing"));
+    create.mockResolvedValueOnce(runtime);
+    await started.at(-1)!.warm();
+    const doc = { id: "d", body: { dataStream: "cold\r\n" } };
+    expect((await frame(await call("measureText", { doc }))).header).toMatchObject({
+      ok: true,
+      meta: { executor: "cold_start" },
+    });
+  });
+
   it("returns screenshot images as binary payloads with offsets", async () => {
     const { call, frame } = await start();
     const { header, payload } = await frame(await call("screenshot", sheet));

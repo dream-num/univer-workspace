@@ -15,7 +15,9 @@ async function createRole(role: string | undefined) {
   }
   if (role === "renderer") {
     const config = parseRendererConfig(process.env);
-    return { config, app: (await import("./renderer/server.js")).createRenderer(config) };
+    const app = (await import("./renderer/server.js")).createRenderer(config);
+    void app.warm();
+    return { config, app };
   }
   throw new Error("MCP_ROLE must be one of gateway, executor, renderer");
 }
