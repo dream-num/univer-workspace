@@ -367,3 +367,25 @@ test('new replacement paragraphs use SDK-compatible IDs while retaining source i
     assert.ok(f.doc.getDocumentDataModel().getBody().paragraphs.every(p => p.paragraphId.startsWith('para_')));
   } finally { f.dispose(); }
 });
+
+
+test('same-document Conversation changes retain a pending proposal and its captured target', async () => {
+  let resolve, input;
+  const f = fixture({ selectionProposal: value => { input = value; return new Promise(done => { resolve = done; }); } });
+  try {
+    f.editor.undo(); f.select(0, 5); f.editor.begin();
+    f.editor.face.store.getSnapshot = () => ({ sessionId: 'conversation-B' });
+    const generating = f.editor.submit('Replace selected text');
+    const captured = f.editor.getSnapshot().target;
+    f.editor.face.store.getSnapshot = () => ({ sessionId: 'conversation-C' });
+    resolve({ text: 'Changed' }); await generating;
+    assert.equal(input.sessionId, 'conversation-B');
+    assert.equal(f.editor.getSnapshot().target, captured);
+    assert.equal(f.editor.getSnapshot().phase, 'reviewing');
+    assert.equal(f.editor.getSnapshot().candidate, 'Changed');
+    await f.editor.accept();
+    assert.match(f.doc.getDocumentDataModel().getBody().dataStream, /^Changed red kite/);
+    assert.equal(f.doc.undo(), true);
+    assert.equal(f.doc.getDocumentDataModel().getBody().dataStream, `${f.text}\r\n`);
+  } finally { f.dispose(); }
+});

@@ -5,7 +5,7 @@ import { workspaceListParameters, workspaceListOutput } from './workspace-list-c
 import { referenceText, type Content, type FileReference } from './model.js';
 export type { FileReference } from './model.js';
 import { SpaceError, type WorkspaceConnection } from './workspace.js';
-import type { DocFocus } from './doc-focus.js';
+import type { DocFocus, LiveDocFocusVersion } from './doc-focus.js';
 import { blobPreviewKind } from './content-types.js';
 
 interface Binding {
@@ -17,9 +17,11 @@ interface Binding {
 export class ToolBindings {
   private sessions = new Map<string, Binding>();
   private epoch = 0;
+  private owner = '';
+  private retiredOwners = new Set<string>();
   private current = new Map<
     string,
-    { owner: string; sequence: number; file: FileReference | null; space: string; parent: string; focus: DocFocus | null }
+    { owner: string; sequence: number; file: FileReference | null; space: string; parent: string; focus: DocFocus | null; mount?: { generation: number; sequence: number; channel: string; retired: boolean } }
   >();
   private requested = new Map<string, number>();
   private admissions = new Map<string, { file: FileReference | null; space: string; parent: string; focus: DocFocus | null }>();
@@ -30,6 +32,8 @@ export class ToolBindings {
   constructor(private workspace: WorkspaceConnection) {}
   clear() {
     this.epoch++;
+    if (this.owner) this.retiredOwners.add(this.owner);
+    this.owner = '';
     this.sessions.clear();
     this.current.clear();
     this.requested.clear();
@@ -111,6 +115,23 @@ export class ToolBindings {
       throw new SpaceError(409, 'The supplied Workspace identities do not refer to the same document.');
     return file;
   }
+  /** Owner acquisition is synchronous, before any association metadata await.
+   * An old Face may finish requests but cannot reacquire a retired lifetime. */
+  claimOwner(owner: string, retire = false) {
+    if (retire) {
+      this.retiredOwners.add(owner);
+      if (this.owner !== owner) return { accepted: false };
+      this.owner = '';
+    } else {
+      if (this.retiredOwners.has(owner)) return { accepted: false };
+      if (this.owner === owner) return { accepted: true };
+      if (this.owner) this.retiredOwners.add(this.owner);
+      this.owner = owner;
+    }
+    this.current.clear();
+    this.requested.clear();
+    return { accepted: true };
+  }
   /** Latest Page association is separate from historical read grants. */
   async setCurrent(
     sessionId: string,
@@ -120,47 +141,70 @@ export class ToolBindings {
     space = '',
     parent = '',
   ) {
-    const key = `${sessionId}/${owner}`,
-      epoch = this.epoch;
-    const previous = this.requested.get(key) ?? -1;
+    if (owner !== this.owner) return { applied: false };
+    const epoch = this.epoch;
+    const previous = this.requested.get(sessionId) ?? -1;
     if (sequence <= previous) return { applied: false };
-    this.requested.set(key, sequence);
+    this.requested.set(sessionId, sequence);
+    // Invalidate immediately: failed or pending binds must not retain the old target.
+    this.current.set(sessionId, { owner, sequence, file: null, space, parent, focus: null });
     const file = nodeId ? await this.bind(sessionId, nodeId) : null;
-    if (epoch !== this.epoch || this.requested.get(key) !== sequence)
+    if (epoch !== this.epoch || owner !== this.owner || this.requested.get(sessionId) !== sequence)
       return { applied: false };
     this.current.set(sessionId, { owner, sequence, file, space, parent, focus: null });
     return { applied: true, file };
   }
-  setFocus(sessionId: string, focus: DocFocus | null) {
+  setFocus(sessionId: string, version: LiveDocFocusVersion, focus: DocFocus | null) {
     const current = this.current.get(sessionId);
-    if (!current?.file || current.file.type !== 'doc' || focus && (focus.nodeId !== current.file.nodeId || focus.resourceId !== current.file.resourceId || focus.unitId !== current.file.unitId)) return { accepted: false };
-    this.current.set(sessionId, { ...current, focus });
-    return { accepted: true };
-  }
-  clearFocus(sessionId: string, channel: string) {
-    const current = this.current.get(sessionId);
-    if (!current?.focus || current.focus.channel !== channel) return { accepted: false };
-    this.current.set(sessionId, { ...current, focus: null });
+    if (version.owner !== this.owner || !current?.file || current.file.type !== 'doc' ||
+        current.owner !== version.owner || current.sequence !== version.association)
+      return { accepted: false };
+    const mount = current.mount;
+    if (mount && (version.generation < mount.generation ||
+        version.generation === mount.generation && (mount.retired || version.channel !== mount.channel)))
+      return { accepted: false };
+    if (version.action === 'retire') {
+      // Tombstone even if register/first update has not arrived yet.
+      current.mount = { ...version, retired: true };
+      current.focus = null;
+      return { accepted: true };
+    }
+    if (version.action === 'register') {
+      if (mount && version.generation <= mount.generation) return { accepted: false };
+      current.mount = { ...version, retired: false };
+      current.focus = null;
+      return { accepted: true };
+    }
+    if (!mount || version.generation !== mount.generation || version.sequence <= mount.sequence ||
+        focus && (focus.channel !== version.channel || focus.nodeId !== current.file.nodeId ||
+          focus.resourceId !== current.file.resourceId || focus.unitId !== current.file.unitId))
+      return { accepted: false };
+    mount.sequence = version.sequence;
+    current.focus = focus;
     return { accepted: true };
   }
   /** Snapshot at native inbox admission, including queued human messages. */
   admit(sessionId: string, messageId: string) {
     const current = this.current.get(sessionId);
-    this.admissions.set(`${sessionId}/${messageId}`, { file: current?.file ?? null, space: current?.space ?? '', parent: current?.parent ?? '', focus: current?.focus ?? null });
+    this.admissions.set(`${sessionId}/${messageId}`, { file: current?.file ?? null, space: current?.space ?? '', parent: current?.parent ?? '', focus: current?.focus ? structuredClone(current.focus) : null });
   }
   beginStep(
     sessionId: string,
     turn: number,
     messages: readonly { id: string }[],
   ) {
-    if (this.turns.get(sessionId)?.turn === turn) return;
-    const admitted = messages.find((message) =>
-      this.admissions.has(`${sessionId}/${message.id}`),
-    );
-    const current = this.current.get(sessionId);
-    const context = admitted
-      ? this.admissions.get(`${sessionId}/${admitted.id}`)!
-      : { file: current?.file ?? null, space: current?.space ?? '', parent: current?.parent ?? '', focus: current?.focus ?? null };
+    const admitted = messages.flatMap(message => {
+      const context = this.admissions.get(`${sessionId}/${message.id}`);
+      return context ? [context] : [];
+    });
+    if (!admitted.length && this.turns.get(sessionId)?.turn === turn) return;
+    // One step can consume multiple queued messages. Different targets cannot
+    // be represented by one focus tool, so require a fresh unambiguous request.
+    const first = admitted[0];
+    const sameFile = first && admitted.every(context => context.file?.resourceId === first.file?.resourceId);
+    const sameFocus = sameFile && admitted.every(context => context.focus?.id === first.focus?.id);
+    const context = first ? { ...first, file: sameFile ? first.file : null, focus: sameFocus ? first.focus : null }
+      : { file: null, space: '', parent: '', focus: null };
     for (const message of messages)
       this.admissions.delete(`${sessionId}/${message.id}`);
     this.turns.set(sessionId, { turn, ...context });

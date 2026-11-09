@@ -76,7 +76,7 @@ test('failed current-focus capture clears the previous target and recovers on a 
     getParagraphs() { if (fault) throw new Error('injected getInfo failure'); return [row]; },
     getTextRange: () => ({ getText: () => 'Alp' }),
   }) }, file: { unitId: 'doc', nodeId: 'node', resourceId: 'resource' }, focusChannel: 'owner', captureDocTarget, crypto,
-  face: { updateDocFocus(value, channel) { focus = value; if (!value) assert.equal(channel, 'owner'); } }, setFocusError(value) { error = value; } };
+  focusPublisher: { update(value) { focus = value; } }, setFocusError(value) { error = value; } };
   const publish = new Function('env', `with (env) { ${source.slice(start, end)}; return publishDocFocus; }`)(env);
   publish(); assert.equal(focus, null); assert.match(error, /injected/);
   fault = false; publish(); assert.equal(focus.text, 'Alp'); assert.equal(error, '');

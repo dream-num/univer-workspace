@@ -24,7 +24,7 @@ import sdkCss from '../lib/univer-scoped.css';
 import hiddenEditorInputCss from './workarounds/hidden-editor-input.css';
 import { configureLicense } from './license.js';
 import { Settings } from './components/settings.js';
-import type { DocFocus } from './doc-focus.js';
+import type { DocFocus, DocFocusPublisher } from './doc-focus.js';
 import type { EditorLanguageSource } from './editor-language.js';
 import { EditorResources, type EditorBinding, type EditorResource } from './editor-lifecycle.js';
 
@@ -95,8 +95,80 @@ export function apply(ctx: any) {
   const pageSessions = new Map<string, string>();
   let defaultSessionId: string | undefined;
   let sessionRequest = 0;
-  const contextOwner = crypto.randomUUID();
+  let contextOwner = crypto.randomUUID();
   let contextSequence = 0;
+  let ownerReady: Promise<void> | undefined;
+  const ensureOwner = () => ownerReady ??= api('current-owner', { owner: contextOwner }).then(result => {
+    if (!result.accepted) throw new Error('This Space view has been replaced. Reopen Space.');
+  });
+  let focusGeneration = 0;
+  let liveFocus: (DocFocusPublisher & {
+    file: OpenFile;
+    loadId: number | undefined;
+    connect(sessionId: string, association: number): void;
+    disconnect(sessionId?: string | null): void;
+  }) | undefined;
+  function mountDocFocus(file: OpenFile, loadId: number | undefined): DocFocusPublisher {
+    liveFocus?.dispose();
+    const mount = ++focusGeneration, channel = crypto.randomUUID(), owner = contextOwner;
+    let retired = false, selection: DocFocus | null = null, sequence = 0;
+    let link: { sessionId: string; association: number; ready: boolean } | undefined;
+    const current = () => !retired && liveFocus === publisher && !disposed &&
+      view.content?.nodeId === file.nodeId && view.contentLoadId === loadId && !view.opening;
+    const send = (binding: NonNullable<typeof link>, action: 'register' | 'update' | 'retire', focus: DocFocus | null) =>
+      api('focus', { sessionId: binding.sessionId, owner, association: binding.association,
+        generation: mount, sequence: ++sequence, channel, action, focus });
+    const failed = (binding: NonNullable<typeof link>) => {
+      if (current() && link === binding) {
+        update({ error: '无法同步当前选区，请重新选择；如仍失败，请重新打开文档。' });
+      }
+    };
+    const publish = () => {
+      const binding = link;
+      if (!current() || !binding?.ready) return;
+      const pending = send(binding, 'update', selection), sentSequence = sequence;
+      void pending.then(result => {
+        if (!result.accepted && sentSequence === sequence) failed(binding);
+      }, () => { if (sentSequence === sequence) failed(binding); });
+    };
+    const publisher = {
+      file, loadId,
+      update(focus: DocFocus | null) {
+        if (!current()) return;
+        selection = focus ? { ...focus, channel } : null;
+        publish();
+      },
+      disconnect(sessionId?: string | null) {
+        const binding = link;
+        if (!binding || sessionId && binding.sessionId !== sessionId) return;
+        link = undefined;
+        void send(binding, 'retire', null).catch(() => {});
+      },
+      connect(sessionId: string, association: number) {
+        publisher.disconnect();
+        if (!current()) return;
+        const binding = { sessionId, association, ready: false };
+        link = binding;
+        void send(binding, 'register', null).then(result => {
+          if (!current() || link !== binding) return;
+          if (!result.accepted) { failed(binding); return; }
+          binding.ready = true;
+          publish();
+        }, () => failed(binding));
+      },
+      dispose() {
+        if (retired) return;
+        publisher.disconnect();
+        retired = true;
+        selection = null;
+        if (liveFocus === publisher) liveFocus = undefined;
+      },
+    };
+    liveFocus = publisher;
+    if (view.context?.state === 'linked' && view.sessionId)
+      publisher.connect(view.sessionId, contextSequence);
+    return publisher;
+  }
   const removedContexts = new Set<string>();
   let ownBlock: { session: string; block: { reason: string } } | undefined;
   function unblock() {
@@ -138,6 +210,9 @@ export function apply(ctx: any) {
       },
     });
     try {
+      liveFocus?.disconnect(sessionId);
+      await ensureOwner();
+      if (sequence !== contextSequence) return;
       const result = await api('current', {
         sessionId,
         nodeId: removed ? '' : file.nodeId,
@@ -147,6 +222,7 @@ export function apply(ctx: any) {
         sequence,
       });
       if (
+        sequence !== contextSequence ||
         before !== generation ||
         request !== sessionRequest ||
         view.content !== file ||
@@ -160,6 +236,7 @@ export function apply(ctx: any) {
           state: removed ? 'removed' : 'linked',
         },
       });
+      if (!removed) liveFocus?.connect(sessionId, sequence);
     } catch (error) {
       if (
         sequence === contextSequence &&
@@ -180,8 +257,11 @@ export function apply(ctx: any) {
     }
   }
   async function clearCurrent(sessionId = view.sessionId, space = view.location === 'space' || view.location === 'folder' ? view.space : '') {
-    const sequence = ++contextSequence;
-    if (sessionId)
+    const sequence = ++contextSequence, owner = contextOwner;
+    liveFocus?.disconnect(sessionId);
+    if (sessionId) {
+      await ensureOwner();
+      if (owner !== contextOwner) return;
       await api('current', {
         sessionId,
         nodeId: '',
@@ -190,6 +270,7 @@ export function apply(ctx: any) {
         owner: contextOwner,
         sequence,
       });
+    }
     if (sequence === contextSequence) unblock();
   }
   const workKey = () =>
@@ -346,6 +427,11 @@ export function apply(ctx: any) {
     }
   }
   function clearContent() {
+    liveFocus?.dispose();
+    const previousOwner = contextOwner;
+    contextOwner = crypto.randomUUID();
+    ownerReady = undefined;
+    void ctx.connection.rpc.call('/api', 'space/current-owner', { owner: previousOwner, retire: true }).catch(() => {});
     generation++;
     cancelFileOpen();
     contextSequence++;
@@ -857,9 +943,7 @@ export function apply(ctx: any) {
         void run(associateCurrent);
       }
     },
-    updateDocFocus: (focus: DocFocus | null, channel = focus?.channel ?? '') => {
-      if (view.sessionId) void api('focus', { sessionId: view.sessionId, focus, channel }).catch(() => {});
-    },
+    mountDocFocus,
     chat: () => run(() => nativeChat(Boolean(view.content))),
     back: () =>
       run(async () => {
@@ -885,6 +969,8 @@ export function apply(ctx: any) {
     return () => style.remove();
   });
   ctx.effect(() => () => {
+    liveFocus?.dispose();
+    void ctx.connection.rpc.call('/api', 'space/current-owner', { owner: contextOwner, retire: true }).catch(() => {});
     disposed = true;
     lifetime.abort();
     unblock();
@@ -1121,7 +1207,7 @@ export type Face = {
   ): Promise<{ status: number; statusText: string; body: string }>;
   editorUpload(file: OpenFile, userId: string, input: { path: string; method: string; body: FormData }, signal: AbortSignal): Promise<{ status: number; statusText: string; body: string }>;
   bindEditor(node: string, binding: EditorResource): () => void;
-  updateDocFocus(focus: DocFocus | null, channel?: string): void;
+  mountDocFocus(file: OpenFile, loadId: number | undefined): DocFocusPublisher;
   newConversation(): void;
   pin(id: string): void;
   reference(): any;

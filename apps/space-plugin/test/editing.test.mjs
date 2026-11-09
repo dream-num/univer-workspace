@@ -70,6 +70,7 @@ function setup() {
   };
   const bindings = new ToolBindings(workspace),
     editing = new AgentEditing(workspace, bindings);
+  bindings.claimOwner('surface');
   async function admit(node, seq) {
     await bindings.setCurrent('s', node, 'surface', seq);
     bindings.admit('s', `m${seq}`);

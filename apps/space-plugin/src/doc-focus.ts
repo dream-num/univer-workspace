@@ -17,6 +17,20 @@ export interface DocFocus {
   unitId: string;
 }
 
+/** Live editor transport only; captured proposals keep their independent target. */
+export interface LiveDocFocusVersion {
+  owner: string;
+  association: number;
+  generation: number;
+  sequence: number;
+  channel: string;
+  action: 'register' | 'update' | 'retire';
+}
+export interface DocFocusPublisher {
+  update(focus: DocFocus | null): void;
+  dispose(): void;
+}
+
 // Structural Facade interfaces keep this policy testable without another Univer
 // runtime. The real FDocument/FDocumentParagraph satisfy these interfaces.
 interface Paragraph {

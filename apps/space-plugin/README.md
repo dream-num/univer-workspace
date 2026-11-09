@@ -121,6 +121,22 @@ open still checks the current Node/Resource ACL before any cached bytes are used
 The formal HTML sandbox, scripts, Sheet bindings and departure save/resume
 protocol are unchanged.
 
+Live Docs focus is scoped to the active Space owner, document association and
+editor mount generation. Selection updates within that mount are ordered, and
+retirement prevents delayed updates from restoring a closed editor. Captured
+message targets and pending selection suggestions have separate lifetimes;
+switching Conversation in the same document does not retire a pending suggestion.
+A step consuming queued messages with different targets has no implicit focus.
+
+**Known limitation on official DSH 0.2.1-rc.3:** native Conversation focus is still
+captured from Host state after inbox insertion, rather than at the send gesture.
+A selection update still in transit can therefore leave an earlier target in that
+message's snapshot. Generation ordering does not close this window. Exact native
+send binding requires a supported per-attempt snapshot/admission API from DSH;
+composer blocks and pre-step hooks do not provide it. This remains a preview
+blocker. The separate **Ask for change** control captures its SDK selection at
+activation and retains the existing target, content, permission and revision checks.
+
 Docs selection tools require unique IDs compatible with the SDK's public
 `PARAGRAPH_ID_PREFIX`. Capture validates
 IDs before the SDK resolves paragraph offsets. A capture error clears the old

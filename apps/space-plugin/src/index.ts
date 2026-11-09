@@ -22,7 +22,7 @@ import { registerUnitTool } from './unit-tool.js';
 import type { CredentialKey } from '@deepseek-ai/dsh-credentials';
 import { WorkspaceOAuth } from './oauth.js';
 import { SpaceError, WorkspaceConnection } from './workspace.js';
-import { parseDocFocus } from './doc-focus.js';
+import { parseDocFocus, type LiveDocFocusVersion } from './doc-focus.js';
 import { selectionProposal } from './selection-proposal.js';
 
 export const name = 'space-plugin';
@@ -170,6 +170,9 @@ export function apply(ctx: Context) {
         case 'sign-out':
           value = await auth.signOut();
           break;
+        case 'current-owner':
+          value = bindings.claimOwner(string('owner'), input?.retire === true);
+          break;
         case 'current': {
           const sequence = input?.sequence;
           if (!Number.isSafeInteger(sequence) || Number(sequence) < 0)
@@ -186,10 +189,14 @@ export function apply(ctx: Context) {
         }
         case 'focus': {
           const focus = parseDocFocus(input?.focus);
-          const sessionId = string('sessionId');
-          value = focus
-            ? bindings.setFocus(sessionId, focus)
-            : bindings.clearFocus(sessionId, string('channel'));
+          const version = input as unknown as LiveDocFocusVersion;
+          if (!['register', 'update', 'retire'].includes(version.action) ||
+              !['association', 'generation', 'sequence'].every(key => Number.isSafeInteger(input?.[key]) && Number(input?.[key]) >= 0))
+            throw new SpaceError(400, 'Invalid live focus version.');
+          value = bindings.setFocus(string('sessionId'), {
+            owner: string('owner'), association: version.association, generation: version.generation,
+            sequence: version.sequence, channel: string('channel'), action: version.action,
+          }, focus);
           break;
         }
         case 'recent': {
@@ -344,6 +351,7 @@ export function apply(ctx: Context) {
     'associate',
     'index',
     'current',
+    'current-owner',
     'focus',
     'metadata',
     'html-source',

@@ -124,7 +124,8 @@ export function CollaborativeEditor({
     let accessCheckRunning = false;
     let startup: Promise<void>;
     let runtime: ReturnType<typeof createUniver> | undefined;
-    let focusChannel = '';
+    const focusPublisher = file.type === 'doc' ? face.mountDocFocus(file, loadId) : undefined;
+    const focusChannel = crypto.randomUUID();
     let selectionEditingBinding: SelectionEditing | undefined;
     let transport: ReturnType<typeof editorHTTP> | undefined;
     let docState: DocStateChangeManagerService | undefined;
@@ -349,7 +350,6 @@ export function CollaborativeEditor({
       });
       releaseLanguage = bindEditorLanguage(runtime.univerAPI, face.editorLanguage);
       const { univer, univerAPI: api } = runtime;
-      focusChannel = crypto.randomUUID();
       const selectionService = file.type === 'doc'
         ? univer.__getInjector().get(DocSelectionManagerService)
         : undefined;
@@ -361,12 +361,12 @@ export function CollaborativeEditor({
             ? selectionService.getSelectionInfo(current) : undefined;
           const doc = api.getDocument(file.unitId);
           const target = doc && info ? captureDocTarget(doc, info.textRanges, !!info.rectRanges.length) : null;
-          face.updateDocFocus(target ? { ...target, id: crypto.randomUUID(), channel: focusChannel, nodeId: file.nodeId, resourceId: file.resourceId, unitId: file.unitId } : null);
+          focusPublisher?.update(target ? { ...target, id: crypto.randomUUID(), channel: focusChannel, nodeId: file.nodeId, resourceId: file.resourceId, unitId: file.unitId } : null);
           setFocusError('');
         } catch (cause) {
           // Current-document association must never retain a stale edit target.
           // This optional capture cannot fail native editor startup or saving.
-          face.updateDocFocus(null, focusChannel);
+          focusPublisher?.update(null);
           setFocusError(cause instanceof Error ? cause.message : 'Cannot capture document focus. Select the text again.');
         }
       };
@@ -667,7 +667,7 @@ export function CollaborativeEditor({
         () => selectionEditingBinding?.dispose(),
         () => releaseLanguage(),
         () => setSelectionEditing(null),
-        () => face.updateDocFocus(null, focusChannel),
+        () => focusPublisher?.dispose(),
         () => publishComments(null),
         () => publishMembers([]),
         () => releaseEditor(),

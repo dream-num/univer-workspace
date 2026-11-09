@@ -23,7 +23,7 @@ for (const failure of [undefined, 'selection', 'language', 'disposable', 'subscr
     const env = {
       canceled: false, cancelingLoad: false, startup: Promise.resolve(), closingEditor: undefined,
       selectionEditingBinding: { dispose: action('selection') }, releaseLanguage: action('language'), setSelectionEditing: action('state'),
-      face: { updateDocFocus: action('focus'), update: action('cache-notice') }, focusChannel: 'channel',
+      face: { update: action('cache-notice') }, focusPublisher: { dispose: action('focus') },
       publishComments: action('comments'), publishMembers: action('members'),
       releaseEditor: resources.bind('node', { flush: async () => {}, isSaved: () => true }),
       transport: { drainWrites: action('writes'), drain: action('drain') },
