@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url';
 import { assertWorkerCount, assertLogsExclude } from './executor-doctor-checks.mjs';
 import { join } from 'node:path';
 
-const [repo, run, project, image, imageId, origin, serverPort, mcpPort, executorCount = "1"] = process.argv.slice(2);
+const [repo, run, project, image, imageId, origin, serverPort, mcpPort, executorCount = "1", production = "0", renderer = "1"] = process.argv.slice(2);
 const secret = name => readFileSync(join(run, 'home', name), 'utf8').trim();
 const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'staging'), VERIFY_UVW_MCP_PROJECT: project, VERIFY_UVW_MCP_IMAGE: image,
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
@@ -23,6 +23,16 @@ try {
     assert(cid, 'executor container exists');
     const [container] = JSON.parse(docker(['inspect', cid]));
     assert(container.State.Running && container.State.Health?.Status === 'healthy' && container.Image === imageId, 'executor healthy on this run image');
+    const settings = Object.fromEntries(container.Config.Env.map(item => { const i = item.indexOf('='); return [item.slice(0, i), item.slice(i + 1)]; }));
+    assert.equal(settings.NODE_ENV, production === '1' ? 'production' : 'development');
+    assert.equal(settings.MCP_RENDERER_URL, renderer === '1' ? 'http://renderer:3000' : undefined);
+    const allowlistPath = join(run, 'executor-allowed-user-ids');
+    assert.equal(settings.MCP_EXECUTOR_ALLOWED_USER_IDS, existsSync(allowlistPath) ? readFileSync(allowlistPath, 'utf8').trim() : undefined);
+    const [gateway] = JSON.parse(docker(['inspect', compose(['ps', '-q', 'gateway']).trim()]));
+    assert(gateway.Config.Env.includes('NODE_ENV=' + settings.NODE_ENV));
+    assert.equal(gateway.Config.Env.find(item => item.startsWith('MCP_EXECUTOR_ALLOWED_USER_IDS=')), settings.MCP_EXECUTOR_ALLOWED_USER_IDS === undefined ? undefined : 'MCP_EXECUTOR_ALLOWED_USER_IDS=' + settings.MCP_EXECUTOR_ALLOWED_USER_IDS);
+    assert.equal(gateway.Config.Env.find(item => item.startsWith('MCP_DEV_SESSION_PASSTHROUGH=')), production === '1' ? undefined : 'MCP_DEV_SESSION_PASSTHROUGH=1');
+    console.log('ok    MCP gateway and executor mode, allowlist and renderer configuration match this run');
     console.log('ok    MCP executor is healthy and uses this run\'s image');
     assert(Object.values(container.NetworkSettings.Ports ?? {}).every(value => value === null), 'executor has no published ports');
     console.log('ok    MCP executor has no published port');
@@ -53,7 +63,7 @@ try {
     console.log('ok    MCP executor reaches Workspace HTTP and collaboration WebSocket through transport');
     const mcp = (label, tool, args) => {
       execFileSync(join(repo, '.agents/skills/verify-uvw/bin/verify-uvw'),
-        ['mcp', '--auth', 'dev', label, tool, JSON.stringify(args)], { env, cwd: repo, encoding: 'utf8', timeout: 40_000, stdio: ['pipe', 'pipe', 'pipe'] });
+        ['mcp', '--auth', production === '1' ? 'pat' : 'dev', label, tool, JSON.stringify(args)], { env, cwd: repo, encoding: 'utf8', timeout: 40_000, stdio: ['pipe', 'pipe', 'pipe'] });
       return JSON.parse(readFileSync(join(run, 'evidence', label + '.out'), 'utf8'));
     };
     const space = mcp('doctor-worker-repo', 'repo_list', { type: 'personal' }).repos[0];

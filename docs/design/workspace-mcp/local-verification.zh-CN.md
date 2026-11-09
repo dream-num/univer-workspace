@@ -97,8 +97,9 @@ services:
     image: ${VERIFY_UVW_MCP_IMAGE:?}
     environment:
       MCP_ROLE: gateway
-      NODE_ENV: development
-      MCP_DEV_SESSION_PASSTHROUGH: "1"
+      NODE_ENV: ${VERIFY_UVW_MCP_NODE_ENV:-development}
+      MCP_DEV_SESSION_PASSTHROUGH:
+      MCP_EXECUTOR_ALLOWED_USER_IDS:
       HOST: 0.0.0.0
       PORT: "3000"
       WORKSPACE_ORIGIN: ${VERIFY_UVW_ORIGIN:?}
@@ -116,7 +117,7 @@ services:
 
 - 端口只发布在 `127.0.0.1`。
 - gateway 将 `${VERIFY_UVW_MCP_STAGING_DIRECTORY}`（本次 run 的 `staging/`）挂载到 `/staging`，并设置 `MCP_STAGING_DIRECTORY=/staging`。目录 0700，归容器 node uid 1000 所有。executor 不挂载。`doctor` 在容器内检查 uid 和权限；`down` 移除目录及全部暂存字节。
-- D1b 在同一个文件里增加 `executor`，阶段 E 增加 `renderer`。它们不发布端口，网关按服务名访问 executor。`renderer` 只加入声明为 `internal: true` 的 `render` 网络，executor（含 `executor-b`）同时加入默认网络和 `render` 网络，并收到 `MCP_RENDERER_URL=http://renderer:3000`；网关不加入 `render` 网络，启动依赖 executor 和 renderer 都健康。阶段 E 的“渲染服务没有到 Workspace 的路由”由这个网络实现。实测（2026-11-09，Docker Desktop，arm64）：`internal: true` 网络足以阻断 `host.docker.internal`。renderer 容器里对 `host.docker.internal` 和公网域名的 DNS 解析返回 `EAI_AGAIN`，直连宿主网关地址 `192.168.65.254:<server 端口>` 超时，而同一请求从 executor 容器发出返回 200。因此不需要额外的 compose 措施。
+- D1b 在同一个文件里增加 `executor`，阶段 E 增加 `renderer`。它们不发布端口，网关按服务名访问 executor。`renderer` 只加入声明为 `internal: true` 的 `render` 网络，executor（含 `executor-b`）同时加入默认网络和 `render` 网络，默认收到 `MCP_RENDERER_URL=http://renderer:3000`；网关不加入 `render` 网络，默认启动依赖 executor 和 renderer 都健康。renderer 使用 `renderer` profile，依赖声明 `required: false`，关闭时不阻止 gateway 启动。阶段 E 的“渲染服务没有到 Workspace 的路由”由这个网络实现。实测（2026-11-09，Docker Desktop，arm64）：`internal: true` 网络足以阻断 `host.docker.internal`。renderer 容器里对 `host.docker.internal` 和公网域名的 DNS 解析返回 `EAI_AGAIN`，直连宿主网关地址 `192.168.65.254:<server 端口>` 超时，而同一请求从 executor 容器发出返回 200。因此不需要额外的 compose 措施。
 - 容器加固（只读根文件系统、去掉 capability 等）属于阶段 G，本文件不提前加。
 
 D1b 使用同一镜像增加 `executor` 服务，没有 published ports；gateway 通过
@@ -197,6 +198,8 @@ ready 错误、停机错误和 Browser 截图。
 | 变量 | 默认 | 作用 |
 | --- | --- | --- |
 | `VERIFY_UVW_MCP` | 不设置 | 只在 `up` 时读取。`1` 表示本次运行启动 MCP（R6）。不设置或取其他值时不启动，所有现有命令的行为和输出与扩展前相同，MCP 命令报错退出 |
+| `VERIFY_UVW_MCP_RENDERER` | `1` | 只在 `up` 读取并持久化为 `MCP_RENDERER`。`0` 不启动 renderer，也不向 executor 注入 `MCP_RENDERER_URL`；doctor 确认 renderer 容器不存在并跳过 renderer 探针 |
+| `VERIFY_UVW_MCP_PRODUCTION` | `0` | 只在 `up` 读取并持久化为 `MCP_PRODUCTION`。`1` 将 gateway 与 executor 的 `NODE_ENV` 设为 `production`，不注入开发认证变量，使用 PAT 或 OAuth |
 | `VERIFY_UVW_MCP_PORT` | `3930` | 网关发布到宿主的端口。启动 MCP 的并行运行要与 `VERIFY_UVW_SERVER_PORT`、`VERIFY_UVW_WEB_PORT` 一起指定。`SKILL.md` 的“Parallel runs”一节补上这个变量 |
 
 `run.env` 增加以下变量，`down` 之后保留：
@@ -222,6 +225,35 @@ ready 错误、停机错误和 Browser 截图。
 | `logs/mcp-build.log` | `docker build` 输出 | 是 |
 | `logs/mcp-gateway.log` | `down` 时导出的网关完整日志 | 是 |
 | `logs/mcp-renderer.log` | `down` 时导出的 renderer 完整日志 | 是 |
+
+### 6.1.1 G0 生产模式与执行层白名单
+
+两个模式变量独立组合，值只能为 `0` 或 `1`，都需要 `VERIFY_UVW_MCP=1`。
+没有设置时仍启动 gateway、executor、renderer 三个 development 容器，开启开发 session passthrough，执行层不限制用户。
+Compose 的空值环境项由 runner 的环境决定；未提供时不会进入容器。runner 清除调用 shell 的同名变量，再按本次 run 的持久化配置注入，避免外部环境改变认证或渲染模式。
+
+生产启动时用户还不存在，因此 `up` 向两侧注入非用户占位 ID `verify-uvw-pending-user`。
+它保存在 `executor-allowed-user-ids`，不授权任何真实用户，不放宽产品启动检查。
+第一次 `user` 注册后用真实 Workspace 用户 ID 替换占位项，并仅重建 gateway 和 executor。
+后续 `user` 不覆盖已显式配置的白名单。生产模式下 doctor 的 MCP 调用使用 PAT，默认模式仍检查开发认证；内部传输探针仍使用独立 session。
+
+```bash
+VERIFY_UVW_MCP=1 VERIFY_UVW_MCP_RENDERER=0 VERIFY_UVW_MCP_PRODUCTION=1 $V up
+$V user
+$V mcp whoami whoami '{}'
+$V mcp-allow-users <workspace-user-id> [<another-workspace-user-id> ...]
+```
+
+`mcp-allow-users` 在两种模式中替换整份白名单。每个 ID 是独立参数，只接受字母、数字、下划线与连字符；不能为空。
+命令持久化后执行 `compose up --force-recreate --no-deps --wait`，只指定 gateway 和 executor，启用双副本时同时指定 executor-b。
+命令先等待重建的 executor 健康，再重建 gateway，保证首次能力发现能看到执行层。不重建镜像，不重启 Workspace、Vite 或 renderer。失败时保留所选白名单，重试同一命令即可。
+`executor-allowed-user-ids` 与 `run.env` 一起保留以供审查；凭据仍只保存在 `home/` 并由 `down` 删除。
+
+MB 旅程由 [mcp-availability.mjs](../../../.agents/skills/verify-uvw/bin/mcp-availability.mjs) 执行，步骤见 [features/mcp.md](../../../.agents/skills/verify-uvw/features/mcp.md#mb-deployment-and-per-account-tools)。
+MB1 比对七种 toolset 的显式有序列表，MB2 检查 instructions，MB3 用第二个非白名单用户验证 40 个纯 HTTP 工具与 unknown-tool 错误，MB4 用 PAT 完成 MX1 至 MX3，MB5 先验证 `/readyz` 为 200，再停止 executor 并通过 `$V mcp-gateway-restart` 仅重建 gateway，预期为 503 且命名 executor 检查；启动 executor 后十秒内恢复 200。已发现过兼容能力的 gateway 不因 executor 停止而未就绪，仍可服务 HTTP 工具。Workspace 的可选停机检查记录为未运行，因为 helper 没有独立的 server stop/restart 命令。
+若基线尚未合入该端点而返回 404，脚本记录 MB5 未运行，不能宣称就绪验收通过。
+
+开发 session 认证在 production 不可用。MA5 的 `--auth dev` 步骤和 MF4 的 session 第二用户客户端只在默认模式执行；生产验收使用 PAT 或 OAuth。M2、M3、M11 在 `user` 后使用 PAT，可以在生产模式执行；M9 在认证前校验 Origin，不依赖开发认证。渲染相关 MR 旅程、截图、PDF、lint 与精确量字要求 renderer 开启。
 
 ### 6.2 现有命令的变化
 

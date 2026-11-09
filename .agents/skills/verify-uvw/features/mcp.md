@@ -2814,3 +2814,35 @@ a measurement must report lines. Errors and unreal outputs are counted in the JS
 process that maps it, PSS splits it, and cgroup anon is what the container is charged without file cache (this kernel has no `memory.peak`, so a
 peak is the largest sample). A runtime's tree is its Chromium processes; the Node process is shared by all runtimes.
 Summarize an existing JSON without a stack: `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`.
+
+
+## MB. Deployment and per-account tools
+
+Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
+
+MB validates the G0 shape with a gateway and one shared executor, no renderer, and PAT authentication. Start `up` in a persistent shell so Workspace and Vite survive between tool calls. Choose unused ports and a unique run ID; always keep that ID for subsequent commands.
+
+```bash
+V="$PWD/.agents/skills/verify-uvw/bin/verify-uvw"
+export VERIFY_UVW_RUN=mb-g0 VERIFY_UVW_MCP=1
+export VERIFY_UVW_SERVER_PORT=3950 VERIFY_UVW_WEB_PORT=6001 VERIFY_UVW_MCP_PORT=3955
+VERIFY_UVW_MCP_RENDERER=0 VERIFY_UVW_MCP_PRODUCTION=1 $V up
+$V user
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/mcp-availability.mjs
+$V down
+```
+
+The script replaces the executor allowlist with the run user's ID through `$V mcp-allow-users <user-id>`. It checks the following and saves `mb.json` plus per-call evidence under `$EVIDENCE`:
+
+- MB1 compares ordered `tools/list` names for `core`, `files`, `admin`, `core,files`, `core,admin`, `files,admin` and `all` with literal expected lists in the script. These are the full lists minus `screenshot`, `print_pdf` and `lint`.
+- MB2 checks instructions for all seven connections and rejects those three hidden tool names.
+- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 40 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
+- MB4 runs MX1 through MX3 above with PAT authentication. It compares MCP and CLI write/readback results, checks cold/warm usage events, verifies the Ready error, runs doctor, and stops only this run's executor to check the unavailable error. A `finally` restarts it even after a failed assertion.
+- MB5 checks `/readyz` for 200. It stops the executor, then uses `$V mcp-gateway-restart` to recreate only the gateway and clear its remembered capabilities. `/readyz` must return 503 naming the `executor` check, then 200 within ten seconds after the executor restarts. Stopping an executor after successful discovery alone does not make the gateway unready, because HTTP tools remain usable. The optional Workspace stop/restart check is recorded as not run because `verify-uvw` has no independent server restart command. A base returning 404 records MB5 as `not_run` in `mb.json`; it does not claim readiness passed. Other unexpected statuses fail the script.
+
+Successful output is `PASS MB1` through `PASS MB5`, or `NOT RUN MB5 /readyz returned 404` for the sibling-PR dependency. Repeated runs create new PRs and a new restricted user inside this disposable Workspace. `down` removes all of them with the run's data.
+
+`VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.
+
+Journeys with development session authentication run only in the default development mode. Search this file for `--auth dev` and session-based MCP clients before selecting journeys for production. MF4's direct second-user client uses a Workspace session. Renderer journeys, including screenshots, PDF, lint and precise text measurement, require the renderer enabled.
