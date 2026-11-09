@@ -320,6 +320,48 @@ export function createGateway(
     started: number,
   ): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/healthz") return new Response("ok");
+    if (request.method === "GET" && url.pathname === "/readyz") {
+      const probe = async (path: string): Promise<"ok" | "failed"> => {
+        try {
+          const response = await upstream(`${config.WORKSPACE_TRANSPORT_URL}${path}`, {
+            signal: AbortSignal.timeout(2_000),
+            redirect: "error",
+          });
+          if (!response.ok || path === "/healthz") {
+            await response.body?.cancel();
+            return response.ok ? "ok" : "failed";
+          }
+          const metadata = z
+            .object({ grant_types_supported: z.array(z.string()) })
+            .parse(await response.json());
+          return metadata.grant_types_supported.includes(
+            "urn:ietf:params:oauth:grant-type:token-exchange",
+          )
+            ? "ok"
+            : "failed";
+        } catch {
+          return "failed";
+        }
+      };
+      const [workspace, tokenExchange] = await Promise.all([
+        probe("/healthz"),
+        config.auth.exchange ? probe("/.well-known/oauth-authorization-server") : undefined,
+        config.executor && !capabilities.available ? capabilities.refresh() : undefined,
+      ]);
+      const checks = {
+        workspace,
+        ...(tokenExchange === undefined ? {} : { token_exchange: tokenExchange }),
+        ...(config.executor ? { executor: capabilities.available ? "ok" : "failed" } : {}),
+      };
+      const status = Object.values(checks).every((check) => check === "ok") ? "ok" : "failed";
+      return Response.json(
+        { status, checks },
+        {
+          status: status === "ok" ? 200 : 503,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
     if (request.method === "GET" && url.pathname === "/metrics") {
       const headers = { "Cache-Control": "no-store" };
       if (!expectedMetricsToken) return new Response("Not found", { status: 404, headers });

@@ -14,6 +14,7 @@ export class ExecutorCapabilities {
   private readonly replicas = new Map<string, ReadonlySet<OpName>>();
   private readonly controller = new AbortController();
   private readonly timer: ReturnType<typeof setInterval> | undefined;
+  private refreshing: Promise<void> | undefined;
   readonly ready: Promise<void>;
 
   constructor(
@@ -29,7 +30,17 @@ export class ExecutorCapabilities {
     }
   }
 
-  private async refresh(): Promise<void> {
+  get available(): boolean {
+    return this.replicas.size > 0;
+  }
+
+  refresh(): Promise<void> {
+    return (this.refreshing ??= this.discover().finally(() => {
+      this.refreshing = undefined;
+    }));
+  }
+
+  private async discover(): Promise<void> {
     const config = this.config;
     if (!config) return;
     await Promise.all(

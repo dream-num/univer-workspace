@@ -1,9 +1,9 @@
 # Univer Workspace MCP
 
 A private remote MCP application built on `@univerjs/univer-workspace-client-core`.
-Stage A and the Stage B slices so far expose identity, repositories, Issues, pull requests,
-search, browse, files in a pull request, repository and label administration, merge or
-discard, the SVG resource catalog, the Facade API reference and the Skills over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols. Results match
+It serves product tools over Streamable HTTP using the 2026-07-28 and 2025-11-25 protocols.
+Executor-backed tools are available when an executor is configured and the user is allowed.
+Renderer-backed tools are available when that executor has a renderer. Results match
 the CLI `--json` output and add Browser URLs. Lists return `{ repos: [...] }` in both protocols.
 
 The gateway talks to Workspace through HTTP. It has no database and does not import
@@ -190,6 +190,7 @@ Docker Desktop without changing those identities.
 | Endpoint | Behavior |
 | --- | --- |
 | `GET /healthz` | Returns 200 without contacting Workspace |
+| `GET /readyz` | No bearer required. Returns 200 when applicable checks pass, otherwise 503. JSON contains `status` and `checks` with `workspace`, `token_exchange` when OAuth is configured, and `executor` when configured, each `ok` or `failed`. Workspace checks use `WORKSPACE_TRANSPORT_URL` with two-second timeouts. OAuth metadata must advertise token exchange. Without cached compatible capabilities, the executor check awaits discovery with its existing five-second timeout. Checks run concurrently. Responses use `Cache-Control: no-store` and contain no upstream details |
 | `GET /metrics` | Prometheus text with a matching bearer token. Returns 404 when unset, or 401 with `WWW-Authenticate: Bearer` on mismatch |
 | `GET /.well-known/oauth-protected-resource` and `/mcp` suffix | RFC 9728 metadata `{ resource: MCP_PUBLIC_URL, authorization_servers: [WORKSPACE_ORIGIN], scopes_supported, bearer_methods_supported }`. No authentication, `Cache-Control: public, max-age=300` |
 | `PUT /mcp/files/uploads/{id}?token=...` | Capability upload, 10-minute link; optional Content-Length, optional size upper limit, single successful PUT |
