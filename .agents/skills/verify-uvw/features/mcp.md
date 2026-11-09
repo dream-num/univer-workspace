@@ -1476,6 +1476,8 @@ $V mcp-oauth revoke mcp-oauth2-revoke
 jq -e '.status == 200' "$EVIDENCE/mcp-oauth2-revoke.json"
 $V mcp --auth oauth mcp-oauth2-revoked-whoami whoami
 echo $? > "$EVIDENCE/mcp-oauth2-revoked-whoami.exit-observed"
+$V mcp --auth oauth mcp-oauth2-revoked-api api_find '{"terms":["setValues"],"unit":"sheet"}'
+echo $? > "$EVIDENCE/mcp-oauth2-revoked-api.exit-observed"
 $V mcp --auth oauth mcp-oauth2-revoked repo_list
 test $? -eq 4
 jq -e '.status == 401 and (.www_authenticate | contains("resource_metadata"))' "$EVIDENCE/mcp-oauth2-revoked.out"
@@ -1518,8 +1520,9 @@ while `pr_merge` and `pr_discard` exit 1 with `workspace-scope-required`, the pu
 `ready`, and the full-scope PAT then merges it. Refresh returns a new pair with the same scopes,
 and the new access token works. After revocation the first Workspace-backed call exits 4 with a
 `resource_metadata` challenge, the following `whoami` exits 4, and the refresh token gets
-`invalid_grant`. `mcp-oauth2-revoked-whoami.exit-observed` records the first `whoami` after
-revocation (`0` on 2026-11-09: served from the exchange cache). A replay inside the grace window
+`invalid_grant`. `mcp-oauth2-revoked-whoami.exit-observed` and `mcp-oauth2-revoked-api.exit-observed`
+record the first `whoami` and `api_find` after revocation, before any Workspace-backed call; `0`
+means the gateway answered from its 30-second exchange cache. A replay inside the grace window
 gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
 call exits 4 and the current refresh token gets `invalid_grant`.
 
