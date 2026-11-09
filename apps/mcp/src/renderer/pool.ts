@@ -31,6 +31,10 @@ export class RuntimePool<R extends { close(): Promise<void> }> {
     signal?: AbortSignal,
   ): Promise<{ value: T; cold: boolean }> {
     const { runtime, cold } = await this.#lease(signal);
+    if (signal?.aborted) {
+      this.#release(runtime);
+      throw signal.reason;
+    }
     const controller = new AbortController();
     const abort = () => controller.abort(signal?.reason ?? timeoutError());
     const timer = setTimeout(

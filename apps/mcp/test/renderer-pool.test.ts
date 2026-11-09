@@ -90,6 +90,29 @@ describe("renderer runtime pool", () => {
     expect([next.value, next.cold]).toEqual([1, true]);
   });
 
+  it("skips the operation and keeps the runtime when the deadline passes during creation", async () => {
+    const started = deferred();
+    const created: FakeRuntime[] = [];
+    const pool = new RuntimePool<FakeRuntime>({
+      create: async () => {
+        await started.promise;
+        return created[created.push(new FakeRuntime(created.length)) - 1]!;
+      },
+      max: 1,
+      queueTimeoutMs: 5_000,
+      operationTimeoutMs: 25_000,
+    });
+    const deadline = new AbortController();
+    const operation = vi.fn(() => Promise.resolve("ran"));
+    const pending = pool.run(operation, deadline.signal);
+    deadline.abort(new Error("deadline"));
+    started.resolve();
+    await expect(pending).rejects.toThrow("deadline");
+    expect(operation).not.toHaveBeenCalled();
+    expect(pool.stats).toEqual({ idle: 1, busy: 0 });
+    expect(created[0]?.closed).toBe(0);
+  });
+
   it("returns the runtime to the pool after an input error", async () => {
     const { pool, created } = setup();
     await expect(
