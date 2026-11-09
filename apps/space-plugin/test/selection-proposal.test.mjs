@@ -63,7 +63,7 @@ test('model receives readonly neighbors separately from the unique editable sele
   const request = f.calls[0], data = JSON.parse(request.messages[0].content[0].text);
   assert.equal(data.selectedText, focus.text);
   assert.equal(data.selectionId, focus.id);
-  assert.deepEqual(data.context, { before: 'Alpha marker: ', after: '. Beta marker: keep-beta. Gamma marker: keep-gamma.' });
+  assert.deepEqual(data.context, { before: 'Alpha marker: ', after: '. Beta marker: keep-beta. Gamma marker: keep-gamma.', originalSelectedText: focus.text });
   assert.equal(request.messages.length, 1);
   assert.equal(request.tools, undefined);
 });
@@ -101,7 +101,7 @@ test('refinement uses only the pending replacement as its model input', async ()
   assert.deepEqual(await f.run(), { text: 'CHANGED' });
   const data = JSON.parse(f.calls[0].messages[0].content[0].text);
   assert.equal(data.selectedText, 'Earlier suggestion');
-  assert.ok(!JSON.stringify(data).includes('TARGET'));
+  assert.equal(data.context.originalSelectedText, focus.text);
   assert.ok(data.context.after.includes('keep-beta'));
 });
 test('an explicitly verified empty replacement is a valid deletion', async () => {
@@ -127,7 +127,7 @@ test('multi-paragraph framing uses exact captured offsets', async () => {
   const f = fixture(valid, { target });
   assert.deepEqual(await f.run(), { text: 'CHANGED' });
   const data = JSON.parse(f.calls[0].messages[0].content[0].text);
-  assert.deepEqual(data.context, { before: 'First ', after: ' head' });
+  assert.deepEqual(data.context, { before: 'First ', after: ' head', originalSelectedText: target.text });
 });
 test('repeated context is not located by quote or similarity', async () => {
   const target = { ...focus, start: 8, end: 14,
