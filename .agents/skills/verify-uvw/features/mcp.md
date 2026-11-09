@@ -74,6 +74,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - MR11 prints a Doc and a Sheet with an image to PDF in a Worktree and on trunk against `uvw print-pdf`, lints a Slide deck with layout problems against `uvw lint`, and returns the CLI's rejections.
+- MR12 has opencode call `screenshot` on a Sheet with text and an image, checks that the image reaches the model and that its description is right, and asks for a deck above 1 MiB to check the download links.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -1976,6 +1977,81 @@ Pass when:
   renderer and the CLI measure text with different Chromium builds and fonts.
 - The lint rejections exit 1 with the CLI's text, and the Sheet keeps the CLI's code `workspace-unit-layout-lint-unit-type-unsupported`.
 
+### MR12 opencode screenshot
+
+An agent reads a screenshot through `screenshot`, so the image must reach the model and the model must describe it correctly. The model is
+`$MCP_OPENCODE_MODEL` (`console-deepseek/deepseek-flash#high`, which reads images). The default MCP URL lists only the core tools, so the journey
+runs opencode from a copy of the project whose URL adds `?toolsets=all`. opencode wraps MCP tools in its `execute` tool, so the MCP call is
+recorded under `part.state.metadata.metadata.toolCalls`, and opencode renders an MCP `image` result as a `file` part with MIME `image/png`.
+Run it after MR10 (the download-link half reuses MR10's two-page deck) and use a parallel run id when another run is active.
+
+```bash
+B=.agents/skills/verify-uvw/bin
+FIX="$EVIDENCE/mr12"; mkdir -p "$FIX"
+O=verify-$VERIFY_UVW_RUN
+node $B/png-fixture.mjs "$FIX/blocks.png" 240 160 blocks
+$V cli mr12-repo repo view "$O/personal" --json
+MR12_SPACE=$(jq -r .id "$EVIDENCE/mr12-repo.out")
+$V cli mr12-pr pr create -R "$O/personal" -t 'opencode screenshot' --json
+MR12_W=$(jq -r .id "$EVIDENCE/mr12-pr.out")
+$V cli mr12-unit unit create --worktree "$MR12_W" --space "$MR12_SPACE" --type sheet --name 'Kettle stock' --json
+MR12_U=$(jq -r .unit.unitId "$EVIDENCE/mr12-unit.out")
+node -e 'const fs=require("fs");const [d,o]=process.argv.slice(1);fs.writeFileSync(o,`const sheet = workbook.getActiveSheet();
+sheet.getRange("A1:B3").setValues([["Product","Aurora Kettle"],["SKU","KT-48213"],["Stock",77]]);
+const image = await sheet.newOverGridImage().setSource(${JSON.stringify("data:image/png;base64,"+fs.readFileSync(d).toString("base64"))}, api.Enum.ImageSourceType.BASE64).setColumn(3).setRow(1).setWidth(240).setHeight(160).buildAsync();
+sheet.insertImages([image]);
+return { images: sheet.getImages().length };
+`)' "$FIX/blocks.png" "$FIX/sheet-script.js"
+$V cli mr12-write execute --worktree "$MR12_W" --unit "$MR12_U" --script "$FIX/sheet-script.js" --json
+jq -e '.committed == true and .value.images == 1' "$EVIDENCE/mr12-write.out"
+
+MR12_DIR="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/home/opencode-mr12"
+rm -rf "$MR12_DIR"; mkdir -m 700 "$MR12_DIR"
+jq '.mcp["verify-uvw"].url += "?toolsets=all"' "$MCP_OPENCODE_DIR/opencode.json" > "$MR12_DIR/opencode.json"; chmod 600 "$MR12_DIR/opencode.json"
+shot_call='select(.type == "tool_use" and any(.part.state.metadata.metadata.toolCalls[]?; .tool == "verify-uvw.screenshot" and .status == "completed"))'
+
+# A Sheet in a Worktree: the image reaches the model and the description is right
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+(cd "$MR12_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
+  "Call the screenshot tool of the verify-uvw MCP server once with unit \"$MR12_U\", worktree \"$MR12_W\" and range \"A1:J12\". Then describe exactly what the picture shows: every piece of cell text you can read, and the image you can see, with its colours and where each colour sits." < /dev/null) > "$EVIDENCE/mr12-opencode.jsonl"
+echo $? > "$EVIDENCE/mr12-opencode.exit"
+test "$(cat "$EVIDENCE/mr12-opencode.exit")" = 0
+jq -s -e "[.[] | $shot_call] | length >= 1 and all(.[]; .part.state.metadata.content | map(.type) == [\"text\",\"file\"] and .[1].mime == \"image/png\")" "$EVIDENCE/mr12-opencode.jsonl"
+jq -r "select(.type == \"tool_use\") | select(.part.state.metadata.content // [] | any(.type == \"file\")) | .part.state.metadata.content[] | select(.type == \"file\") | .uri | sub(\"^data:image/png;base64,\"; \"\")" "$EVIDENCE/mr12-opencode.jsonl" | head -n1 | base64 -d > "$EVIDENCE/mr12-opencode-image.png"
+magick identify "$EVIDENCE/mr12-opencode-image.png"
+jq -r 'select(.type == "text") | .part.text' "$EVIDENCE/mr12-opencode.jsonl" > "$EVIDENCE/mr12-opencode.answer.txt"
+for word in 'Aurora Kettle' 'KT-48213' red green blue yellow; do grep -qi -- "$word" "$EVIDENCE/mr12-opencode.answer.txt" || echo "MISSING in answer: $word"; done
+$V mcp-logs | jq -s --arg since "$since" '[.[] | select(.event == "mcp.tool_call" and .tool == "screenshot" and .ts >= $since)]' > "$EVIDENCE/mr12-opencode.event.json"
+jq -e 'length >= 1 and all(.[]; .outcome == "ok" and .cost.render_pages == 1 and .client_name == null)' "$EVIDENCE/mr12-opencode.event.json"
+
+# A two-page deck above 1 MiB (MR10): download links, no image part, and the model reports them
+MR12_DECK=$(jq -r .unitId "$EVIDENCE/mr10-deck.out"); MR12_DECK_W=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
+since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+(cd "$MR12_DIR" && opencode run --format json -m "$MCP_OPENCODE_MODEL" \
+  "Call the screenshot tool of the verify-uvw MCP server once with unit \"$MR12_DECK\" and worktree \"$MR12_DECK_W\". Report how many images came back and, for each one, its page, size in bytes, and whether the result gave a download link. Do not repeat any URL." < /dev/null) > "$EVIDENCE/mr12-opencode-deck.jsonl"
+echo $? > "$EVIDENCE/mr12-opencode-deck.exit"
+test "$(cat "$EVIDENCE/mr12-opencode-deck.exit")" = 0
+jq -s -e "[.[] | $shot_call] | length >= 1 and all(.[]; .part.state.metadata.content | map(.type) == [\"text\"])" "$EVIDENCE/mr12-opencode-deck.jsonl"
+jq -s -e "[.[] | $shot_call | .part.state.output | fromjson | .images | length == 2 and all(.[]; .download.url != null)] | all" "$EVIDENCE/mr12-opencode-deck.jsonl"
+jq -r 'select(.type == "text") | .part.text' "$EVIDENCE/mr12-opencode-deck.jsonl" > "$EVIDENCE/mr12-opencode-deck.answer.txt"
+$V mcp-logs | jq -s --arg since "$since" '[.[] | select(.event == "mcp.tool_call" and .tool == "screenshot" and .ts >= $since)]' > "$EVIDENCE/mr12-opencode-deck.event.json"
+jq -e 'length >= 1 and all(.[]; .outcome == "ok" and .cost.render_pages == 2 and .cost.export_bytes > 1048576)' "$EVIDENCE/mr12-opencode-deck.event.json"
+```
+
+Pass when both opencode runs exit 0 and:
+
+- The Sheet run has a completed `verify-uvw.screenshot` call whose result is a text part followed by a `file` part with MIME `image/png`
+  (opencode's form of the MCP `image` block). `mr12-opencode-image.png` is decoded from that part and shows `Product`, `Aurora Kettle`, `SKU`,
+  `KT-48213`, `Stock`, `77` and a four-colour image (red and green on top, blue and yellow below). Look at it.
+- The model's final text (`mr12-opencode.answer.txt`) names those cell texts and the image's four colours and their places, and the script prints no
+  `MISSING in answer` line. Read it against the picture: the colour words are the automatic part of the check, the placement is yours.
+- The event has outcome `ok`, `render_pages` 1 and a null client name.
+- The deck run's `screenshot` result has no `file` part, two entries with `download.url`, and its event records `render_pages` 2 and `export_bytes`
+  above 1 MiB. The model's answer reports two images with download links. It may repeat the links despite the prompt. They are capability URLs that
+  expire in 15 minutes on a disposable run, and they stay out of reports.
+- The model's tool choices are not fixed. If it explores resources or skills first, only its `screenshot` calls count. Rerun the section when a prompt
+  gets no `screenshot` call.
+
 ## Gotchas
 
 - MCP is opt-in at `up`. Setting `VERIFY_UVW_MCP` later does not change an existing run.
@@ -2226,3 +2302,49 @@ Pass when apply returns a running job, `job_get` returns the committed Doc,
 the same-key retry returns that job or its original result, and `unit_list`
 has exactly one new Unit. Inspect the native Doc to read back its text.
 Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.
+
+## Renderer capacity benchmark
+
+Measures the renderer role on a disposable local Docker Desktop stack: latency per operation (cold and warm), throughput against
+`RENDERER_MAX_RUNTIMES`, memory per runtime, and memory growth when one runtime serves many renders. It calls the renderer RPC from inside
+the executor container, so gateway, executor and Workspace time are excluded, and it recreates the renderer container (about 6 s each)
+dozens of times with `verify-uvw renderer-restart <max-runtimes>`. Do not use the stack for anything else while it runs, and note the host
+load it reports: it waits for quiet only when `--quiet-timeout` is set.
+
+```bash
+eval "$($V env)"
+mkdir -p "$EVIDENCE/renderer-bench"
+node .agents/skills/verify-uvw/bin/renderer-bench.mjs --help
+node .agents/skills/verify-uvw/bin/renderer-bench.mjs --self-test
+node .agents/skills/verify-uvw/bin/renderer-bench.mjs --output "$EVIDENCE/renderer-bench/renderer-bench.json"
+# Tool-level comparison for the "does it matter" check: a Sheet and a Doc Unit already in a Worktree, as UNIT:WORKTREE
+node .agents/skills/verify-uvw/bin/renderer-bench.mjs --scenario e2e --e2e-sheet "$SHEET_UNIT:$SHEET_WORKTREE" --e2e-doc "$DOC_UNIT:$DOC_WORKTREE" --output "$EVIDENCE/renderer-bench/renderer-bench-e2e.json"
+python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py "$EVIDENCE/renderer-bench/renderer-bench.json" > "$EVIDENCE/renderer-bench/summary.json"
+python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py "$EVIDENCE/renderer-bench/renderer-bench.json" --markdown > "$EVIDENCE/renderer-bench/tables.md"
+```
+
+What each scenario does, and how to read it:
+
+- **cold.** Per operation and repeat (rotating the operation order), recreate the renderer with `RENDERER_MAX_RUNTIMES=2`, wait for its startup
+  runtime, then fire two concurrent calls. The one the pool answers from the startup runtime is "first use of a prewarmed runtime" (a fresh page,
+  `executor: warm`). The other starts a runtime and is the "cold runtime" figure (`executor: cold_start`), which includes Chromium launch, page load
+  and the first render, while the first call runs beside it. Memory snapshots before the calls (one idle runtime, nothing rendered) and after
+  (two idle runtimes) feed the idle rows.
+- **warm.** After a restart and three unrecorded calls per operation, blocks of sequential calls. Operations rotate between blocks. The figure is
+  the median of block medians with its range, next to the pooled p50 and p95.
+- **throughput.** For each setting of `--settings` (default 1,2) and operation (screenshot of the Sheet, print of the Doc), a fresh renderer, a 4 s
+  unrecorded warm-up so every runtime exists, then a closed loop of `--concurrency` callers for `--seconds`. Settings alternate order each repeat.
+  Only calls that finish inside the window count. During the run a sampler inside the renderer reads `/proc` every 250 ms, and `docker stats`
+  gives the renderer and the load generator (the executor container) CPU. A limiter claim needs the renderer's CPU next to the generator's.
+- **soak.** One runtime (`RENDERER_MAX_RUNTIMES=1`) serves `--soak-renders` sequential renders of each of the Sheet screenshot, Doc screenshot and
+  Doc print, and memory is sampled (3 snapshots, 1 s after the last call) every `--soak-every` renders. The run asserts that no second runtime was
+  created, so every render reused the page. Read the series and the slope together: Chromium memory moves up and down with garbage collection,
+  so a slope over few points is noise.
+- **e2e.** Warm `screenshot` tool calls on one Sheet and one Doc Unit; the gateway event's `duration_ms` is joined by request ID to the renderer's
+  own `duration_ms`, which shows what share of a tool call the renderer takes.
+
+Every call is checked for real output: a screenshot must hold PNG signatures at its image offsets, a print must start with `%PDF` and report pages,
+a measurement must report lines. Errors and unreal outputs are counted in the JSON and the tables. Memory columns: RSS counts a shared page in every
+process that maps it, PSS splits it, and cgroup anon is what the container is charged without file cache (this kernel has no `memory.peak`, so a
+peak is the largest sample). A runtime's tree is its Chromium processes; the Node process is shared by all runtimes.
+Summarize an existing JSON without a stack: `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`.

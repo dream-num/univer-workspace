@@ -1,5 +1,6 @@
 import type { IPreset, IPresetPlugin } from "@univerjs/presets";
 import { UniverExchangeClientPlugin } from "@univerjs-pro/exchange-client";
+import { WorkspaceOleLinkPlugin } from "./ole-link-plugin";
 
 export function createWorkspaceExchangeClientConfig(origin: string) {
   const endpoint = origin.replace(/\/+$/u, "");
@@ -27,6 +28,7 @@ export function createMobileExchangeFeaturePlugins(
       UniverExchangeClientPlugin,
       createWorkspaceExchangeClientConfig(window.location.origin),
     ],
+    WorkspaceOleLinkPlugin,
     ...unitPlugins,
   ];
 }
@@ -46,6 +48,7 @@ export function createWorkspaceOutputPlugins({
   exchangeFeaturePlugins,
   printFeaturePlugins,
 }: IWorkspaceOutputPluginOptions): IPresetPlugin[] {
+  // Converted attachments open through the exchange client, so their link follows it.
   const sharedExchangePlugins: IPresetPlugin[] =
     exchangeEnabled && !exchangeProvidedByPreset
       ? [
@@ -53,6 +56,7 @@ export function createWorkspaceOutputPlugins({
             UniverExchangeClientPlugin,
             createWorkspaceExchangeClientConfig(origin),
           ],
+          WorkspaceOleLinkPlugin,
         ]
       : [];
 
@@ -78,6 +82,7 @@ function isExchangePlugin(plugin: IPresetPlugin): boolean {
   const PluginConstructor = Array.isArray(plugin) ? plugin[0] : plugin;
   return (
     PluginConstructor.pluginName === "UNIVER_EXCHANGE_CLIENT_PLUGIN" ||
-    PluginConstructor.pluginName === "SHEET_EXCHANGE_CLIENT_PLUGIN"
+    PluginConstructor.pluginName === "SHEET_EXCHANGE_CLIENT_PLUGIN" ||
+    PluginConstructor.pluginName === WorkspaceOleLinkPlugin.pluginName
   );
 }

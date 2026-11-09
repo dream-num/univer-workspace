@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-logs | renderer-call <label> <op> | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -249,6 +249,19 @@ cmd_renderer_call() { # label op, with the operation input as JSON on stdin
   mcp_compose exec -T executor node --input-type=module -e "$(cat "$bin/renderer-call.mjs")" "$2" | node "$bin/renderer-save.mjs" "$base"
 }
 
+cmd_renderer_restart() { # [max-runtimes]: recreate only this run's renderer, optionally with another RENDERER_MAX_RUNTIMES
+  [[ $# -le 1 && "${1:-2}" =~ ^[1-9][0-9]?$ ]] || die "usage: verify-uvw renderer-restart [max-runtimes]"
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  RENDERER_MAX_RUNTIMES="${1:-2}" mcp_compose up -d --force-recreate --no-deps --wait renderer >/dev/null 2>&1 || die "renderer did not become healthy"
+  local i
+  for ((i = 0; i < 60; i++)); do
+    mcp_compose logs --no-log-prefix renderer 2>&1 | grep -q 'Renderer runtime warmed' && { echo "renderer restarted with RENDERER_MAX_RUNTIMES=${1:-2}, first runtime warm"; return 0; }
+    sleep 1
+  done
+  die "renderer did not warm its first runtime within 60 s"
+}
+
 cmd_mcp_token() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
@@ -460,6 +473,7 @@ case "${1:-}" in
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;
   mcp-token) shift; cmd_mcp_token "$@" ;;
   renderer-call) shift; cmd_renderer_call "$@" ;;
+  renderer-restart) shift; cmd_renderer_restart "$@" ;;
   mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b renderer ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;

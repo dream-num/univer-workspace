@@ -12,11 +12,13 @@ describe("Workspace output plugins", () => {
       { UniverDocsPrintPlugin },
       { UniverExchangeClientPlugin },
       { createWorkspaceOutputPlugins },
+      { WorkspaceOleLinkPlugin },
     ] = await Promise.all([
       import("@univerjs-pro/docs-exchange-client"),
       import("@univerjs-pro/docs-print"),
       import("@univerjs-pro/exchange-client"),
       import("../../web/src/features/editor/features/exchange-plugins.js"),
+      import("../../web/src/features/editor/features/ole-link-plugin.js"),
     ]);
 
     const enabled = createWorkspaceOutputPlugins({
@@ -26,8 +28,10 @@ describe("Workspace output plugins", () => {
       exchangeFeaturePlugins: [UniverDocsExchangeClientPlugin],
       printFeaturePlugins: [UniverDocsPrintPlugin],
     });
+    // Converted attachments open through the exchange client, so their link plugin follows it.
     expect(enabled.map(pluginConstructor)).toEqual([
       UniverExchangeClientPlugin,
+      WorkspaceOleLinkPlugin,
       UniverDocsExchangeClientPlugin,
       UniverDocsPrintPlugin,
     ]);

@@ -159,7 +159,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
 | `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |
 | `MCP_RENDERER_URL` | Unset | Internal origin of the renderer. Compose gives it to the executor, whose renderer client (`src/executor/renderer-client.ts`) calls it with `MCP_INTERNAL_TOKEN`. Unset, render operations fail with the non-retryable `workspace-renderer-not-configured` |
-| `RENDERER_MAX_RUNTIMES` | `2` | Renderer: maximum live render runtimes, one Chromium each |
+| `RENDERER_MAX_RUNTIMES` | `2` | Renderer: maximum live render runtimes, one Chromium each. Measured on local Docker Desktop (architecture 7.1.1): throughput doubles from 1 to 2, a renderer container needs about 3 GiB for 2 runtimes (2 GiB was OOM-killed under Doc printing), 4 runtimes need about 4.5 GiB and stop scaling once the CPUs are busy |
 | `RENDERER_QUEUE_TIMEOUT_MS` | `5000` | Renderer: maximum wait for a free runtime before a retryable `workspace-renderer-busy` |
 | `RENDERER_OPERATION_TIMEOUT_MS` | `25000` | Renderer: runtime launch and operation timeout. A timed-out runtime is closed and replaced |
 | `UNIVER_RENDER_BROWSER` | Image sets `/usr/bin/chromium` | Renderer: Chromium executable the render runtime launches |

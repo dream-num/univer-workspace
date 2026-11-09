@@ -36,7 +36,13 @@ export interface ResourcesModule {
   create(
     userId: string,
     operationId: unknown,
-    input: unknown
+    input: unknown,
+    /**
+     * Server-internal: a Unit ID the caller already bound dependent records to
+     * (an Office import stages its Assets under the Unit it is about to create).
+     * HTTP clients never choose Unit IDs; the router does not pass this.
+     */
+    reserved?: { readonly unitId: string }
   ): Promise<CreateResourceResult>;
   get(userId: string, resourceId: string): ResourceResponse;
   getByUnit(userId: string, unitId: string): ResourceResponse;
@@ -147,7 +153,7 @@ export function createResourcesModule(options: {
   }
 
   return {
-    async create(userId, operationIdValue, inputValue) {
+    async create(userId, operationIdValue, inputValue, reserved) {
       const operationId = validOperationId(operationIdValue);
       const intent = validCreateResource(inputValue);
       validateTarget(userId, intent, options.access);
@@ -158,7 +164,7 @@ export function createResourcesModule(options: {
           ...intent,
           nodeId: randomUUID(),
           resourceId: randomUUID(),
-          unitId: randomUUID(),
+          unitId: reserved?.unitId ?? randomUUID(),
         },
         createdAt: now(),
       });
