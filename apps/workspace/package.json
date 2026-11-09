@@ -105,7 +105,7 @@
     "@univerjs-pro/engine-shape": "1.4.0",
     "@univerjs-pro/exchange-client": "1.4.0",
     "@univerjs-pro/exchange-node": "1.4.0",
-    "@univerjs-pro/exchange-pdf-node-binding": "1.0.1",
+    "@univerjs-pro/exchange-pdf-node-binding": "1.1.0",
     "@univerjs-pro/ink": "1.4.0",
     "@univerjs-pro/ink-ui": "1.4.0",
     "@univerjs-pro/license": "1.4.0",

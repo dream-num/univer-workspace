@@ -184,15 +184,26 @@ the default; it prints only the PAT id.
 and the metrics token stay under `home/` with credential files mode 0600.
 
 ```bash
-$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|dev|none|invalid] [--toolsets list] <label> <tool> [json]
+$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid] [--toolsets list] <label> <tool> [json]
 $V mcp-tools [--protocol version] [--toolsets list] <label>
 $V mcp-resources [--protocol version] [--toolsets list] <label>
 $V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
 $V mcp-instructions [--protocol version] [--toolsets list] <label>
 $V mcp-token [--scopes read,write,...] [--name name]
+$V mcp-oauth login <label> [--scopes read,write,...]
+$V mcp-oauth refresh|reuse|revoke|direct <label>
+$V mcp-oauth exchange <label> pat|oauth
 $V mcp-logs
 ```
 
+`mcp-oauth` is a scripted MCP OAuth client for MO2. `login` registers a client, clears the run browser's cookies, signs in
+as the run user through the login page, approves the consent page with only `--scopes` checked (default all four), and keeps the access token, refresh token and client id in
+`home/mcp-oauth-*` (mode 0600); `mcp --auth oauth` then calls the gateway with that access token and expects `auth_kind: oauth`.
+`refresh` rotates the pair, `reuse` replays the previous refresh token, `revoke` calls RFC 7009 revocation, `direct` sends the
+access token straight to Workspace, and `exchange` performs the gateway's token exchange for the PAT or the access token, then
+signs the returned session out. Each writes `<label>.json` with token shapes only and exits 0 on the expected success status, 1 otherwise.
+Set `VERIFY_UVW_AGENT_PORT=<port>` at `up` to also register the Workspace Agent's public OAuth client
+`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`, for checking the Agent's OAuth login against the run.
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
 to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.

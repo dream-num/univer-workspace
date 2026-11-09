@@ -581,7 +581,7 @@ importers:
         version: 0.1.0
       '@univerjs-pro/exchange-node':
         specifier: 1.4.0
-        version: 1.4.0(rxjs@7.8.2)
+        version: 1.4.0(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(rxjs@7.8.2)
       '@univerjs/univer-workspace-client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
@@ -855,10 +855,10 @@ importers:
         version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.4.0
-        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@19.2.8)(rxjs@7.8.2)
+        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/exchange-pdf-node-binding':
-        specifier: 1.0.1
-        version: 1.0.1
+        specifier: 1.1.0
+        version: 1.1.0
       '@univerjs-pro/ink':
         specifier: 1.4.0
         version: 1.4.0(react@19.2.8)(rxjs@7.8.2)
@@ -1330,7 +1330,7 @@ importers:
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.4.0
-        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
+        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core':
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
@@ -1382,7 +1382,7 @@ importers:
         version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/exchange-node':
         specifier: 1.4.0
-        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
+        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/sheets-print':
         specifier: 1.4.0
         version: 1.4.0(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
@@ -1398,9 +1398,6 @@ importers:
       '@univerjs/univer-workspace-agent-runtime':
         specifier: workspace:*
         version: link:../workspace-agent-runtime
-      '@univerjs/univer-workspace-client-core':
-        specifier: workspace:*
-        version: link:../client-core
       ws:
         specifier: 8.21.3
         version: 8.21.3
@@ -1966,6 +1963,9 @@ importers:
       '@univerjs/ui':
         specifier: 1.4.0
         version: 1.4.0(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/univer-workspace-client-core':
+        specifier: workspace:*
+        version: link:../client-core
       '@univerjs/univer-workspace-file-browser':
         specifier: workspace:*
         version: link:../workspace-file-browser
@@ -5956,40 +5956,54 @@ packages:
       '@univerjs-pro/exchange-pdf-node-binding':
         optional: true
 
-  '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.0.1':
-    resolution: {integrity: sha512-miJ/ztLS2qXOZmTBgVyoKhaLg4l+wEVe4i3v/7tZzS8bn9YGxiayPzRD7iCAU0X/8OYC0livj+DCZUFciUFhRQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-arm64/-/exchange-pdf-node-binding-darwin-arm64-1.0.1.tgz}
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.1.0':
+    resolution: {integrity: sha512-FPUq9uogmhbeArSVQciodQSUzsZNlvol8mIgURzAdzh9gBu9KIWZ3Nc89BhQ1guTRTsM3nuMc2tiSIyh28v4bw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-arm64/-/exchange-pdf-node-binding-darwin-arm64-1.1.0.tgz}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [darwin]
 
-  '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.0.1':
-    resolution: {integrity: sha512-ydmSqNNZJwqYfM9cn4q+vEXE/Pb8TC3UTPuvKp+uDvBg8Xeu76f1TbMQHGk2C1yC0rjV4AFmmuE9tuGFhDY/GQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-x64/-/exchange-pdf-node-binding-darwin-x64-1.0.1.tgz}
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.1.0':
+    resolution: {integrity: sha512-televRH4f/MNxnRBgQAadife4eeCBmoFYRfcqUTyaN05VT2iTbzU7q+mkUYGH4Yj3npIK8op+D0CkWcf5HOmkg==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-x64/-/exchange-pdf-node-binding-darwin-x64-1.1.0.tgz}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [darwin]
 
-  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.0.1':
-    resolution: {integrity: sha512-ubY+ALkrPsrcnOE2xSPfCaOghDkXsMILcbyEDIyas2g3EFqFqE9t5F0PxtjYkRnbzLcWZ0KE3ZWZO+xUedBfPQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu/-/exchange-pdf-node-binding-linux-arm64-gnu-1.0.1.tgz}
+  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.1.0':
+    resolution: {integrity: sha512-iLm03bpb5v0fGrV6Dps1PFDhPrTFLnfOtRG9k+Rja5uuSvhVQVtlbWTyN3L62QMf0XgCEr1i040RHLflCSpi6g==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu/-/exchange-pdf-node-binding-linux-arm64-gnu-1.1.0.tgz}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
-  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.0.1':
-    resolution: {integrity: sha512-Q4qg3PJmCZsBBnZiErWnUfW6m3KaaXPlSRy4g1ZVGuB3bsZu8EICo+b2LAYNPnPYqUddg7iacRqd0ebe9AieEA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu/-/exchange-pdf-node-binding-linux-x64-gnu-1.0.1.tgz}
+  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-musl@1.1.0':
+    resolution: {integrity: sha512-IBJvRRu9V/HMJxWw0LgCbh1pAYSVOcSW2tDy5+yY/tXPaWg7Wjm9H5nzsNmYXnWKpOgIPemG/viyurMtvwwmug==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-arm64-musl/-/exchange-pdf-node-binding-linux-arm64-musl-1.1.0.tgz}
+    engines: {node: '>=20'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.1.0':
+    resolution: {integrity: sha512-WvYdJ/0dUBABzUeXiQ5A+JKQW/Oqw5MnrDpy3Y3dEvyldp6CyYc3PPH8em1q84heSPVCtZ+7ugMmKAhFbZJ0qQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu/-/exchange-pdf-node-binding-linux-x64-gnu-1.1.0.tgz}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
-  '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.0.1':
-    resolution: {integrity: sha512-oOv8Dx6fTb3Luw4RX6hdKOToFt/46Z5NIgAZG/gLghzHtPxdAP/cq7yQQIU6oSlFPxmf+9r7+lQ29dqJBHmpFw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu/-/exchange-pdf-node-binding-win32-x64-gnu-1.0.1.tgz}
+  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-musl@1.1.0':
+    resolution: {integrity: sha512-yUPpAnhMzQWZqpuHAM7+dSaXE62xOzEc0UJL9tBRicTZoxJZWDXq0kHQECjf1VS34XCNUdgLIt8Si8UPz7c7Lw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-x64-musl/-/exchange-pdf-node-binding-linux-x64-musl-1.1.0.tgz}
+    engines: {node: '>=20'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.1.0':
+    resolution: {integrity: sha512-4hDkol+3YBlzq/52SlMoAMMSnPNhnmb32rwqLkgw89qgpybld/zHFwucyuK13Y6FtIF2I9RrxsLOWC83vwkpcw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu/-/exchange-pdf-node-binding-win32-x64-gnu-1.1.0.tgz}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [win32]
 
-  '@univerjs-pro/exchange-pdf-node-binding@1.0.1':
-    resolution: {integrity: sha512-RLpAndeI5gHwIR2odPuX1bKGM+XWGQBcYLELCQTShXyc1giAUL4W6YCyaZ5Lrg/APKH1rbgrABEsC1MTGPpvtw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding/-/exchange-pdf-node-binding-1.0.1.tgz}
+  '@univerjs-pro/exchange-pdf-node-binding@1.1.0':
+    resolution: {integrity: sha512-rj3k1wgKv5mGFwRqu+WTFVrJDp8Jpk3r/HAg7TeZNw3DyqBe3e8STy4Vu4pnXSTt1MyK4E2pp+z2Z0fxIyKfrQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding/-/exchange-pdf-node-binding-1.1.0.tgz}
     engines: {node: '>=20'}
 
   '@univerjs-pro/ink-ui@1.4.0':
@@ -17259,7 +17273,7 @@ snapshots:
       '@univerjs-pro/exchange-node-binding-linux-x64-musl': 1.1.0
       '@univerjs-pro/exchange-node-binding-win32-x64-msvc': 1.1.0
 
-  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@18.3.1)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/boards': 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/collaboration': 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
@@ -17268,12 +17282,14 @@ snapshots:
       '@univerjs-pro/slides': 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/core': 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/protocol': 1.4.0
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding': 1.1.0
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
 
-  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.0.1)(react@19.2.8)(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@19.2.8)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/boards': 1.4.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration': 1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
@@ -17283,13 +17299,13 @@ snapshots:
       '@univerjs/core': 1.4.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/protocol': 1.4.0
     optionalDependencies:
-      '@univerjs-pro/exchange-pdf-node-binding': 1.0.1
+      '@univerjs-pro/exchange-pdf-node-binding': 1.1.0
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
 
-  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(react@19.3.0)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/boards': 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/collaboration': 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
@@ -17298,12 +17314,14 @@ snapshots:
       '@univerjs-pro/slides': 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core': 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/protocol': 1.4.0
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding': 1.1.0
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
 
-  '@univerjs-pro/exchange-node@1.4.0(rxjs@7.8.2)':
+  '@univerjs-pro/exchange-node@1.4.0(@univerjs-pro/exchange-pdf-node-binding@1.1.0)(rxjs@7.8.2)':
     dependencies:
       '@univerjs-pro/boards': 1.4.0(rxjs@7.8.2)
       '@univerjs-pro/collaboration': 1.4.0(rxjs@7.8.2)
@@ -17312,33 +17330,43 @@ snapshots:
       '@univerjs-pro/slides': 1.4.0(rxjs@7.8.2)
       '@univerjs/core': 1.4.0(rxjs@7.8.2)
       '@univerjs/protocol': 1.4.0
+    optionalDependencies:
+      '@univerjs-pro/exchange-pdf-node-binding': 1.1.0
     transitivePeerDependencies:
       - '@univerjs-pro/embed'
       - react
       - rxjs
 
-  '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.0.1':
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.1.0':
     optional: true
 
-  '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.0.1':
+  '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.1.0':
     optional: true
 
-  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.0.1':
+  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.1.0':
     optional: true
 
-  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.0.1':
+  '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-musl@1.1.0':
     optional: true
 
-  '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.0.1':
+  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.1.0':
     optional: true
 
-  '@univerjs-pro/exchange-pdf-node-binding@1.0.1':
+  '@univerjs-pro/exchange-pdf-node-binding-linux-x64-musl@1.1.0':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.1.0':
+    optional: true
+
+  '@univerjs-pro/exchange-pdf-node-binding@1.1.0':
     optionalDependencies:
-      '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64': 1.0.1
-      '@univerjs-pro/exchange-pdf-node-binding-darwin-x64': 1.0.1
-      '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu': 1.0.1
-      '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu': 1.0.1
-      '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu': 1.0.1
+      '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64': 1.1.0
+      '@univerjs-pro/exchange-pdf-node-binding-darwin-x64': 1.1.0
+      '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu': 1.1.0
+      '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-musl': 1.1.0
+      '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu': 1.1.0
+      '@univerjs-pro/exchange-pdf-node-binding-linux-x64-musl': 1.1.0
+      '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu': 1.1.0
 
   '@univerjs-pro/ink-ui@1.4.0(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)':
     dependencies:

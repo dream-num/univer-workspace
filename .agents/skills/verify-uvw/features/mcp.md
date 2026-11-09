@@ -58,6 +58,10 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA4 revokes a PAT and gets HTTP 401 on the next Workspace-backed call.
 - MA5 keeps development session authentication available with `--auth dev`.
 - MO1 signs opencode in through browser OAuth with one MCP URL and checks scoped consent and OAuth usage events.
+- MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
+- MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
+- MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
+- MA8 checks that Browser sign-in and both `uvw auth login` paths still work with MCP OAuth enabled.
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
 - MX3 verifies executor unavailability.
@@ -1329,6 +1333,224 @@ callback grants exactly `read write publish`, auth prints `Connected to ws`, and
 registered OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 `mcp-oauth-*` evidence. The trap stops only the isolated service and auth process, then
 removes its temporary project and credentials even if an assertion fails.
+
+**MA6. PAT defaults and Browser management.** Run after MA5. D9 says a PAT gets every scope and never
+expires unless the user narrows it. The API check reads the token list with the run's session; the
+token exchange (`verify-uvw mcp-oauth exchange`) is the call the gateway makes, so it also shows
+the downstream session lasts 10 minutes.
+
+```bash
+$V mcp-token --name mcp-pat-default > "$EVIDENCE/mcp-pat-default.id"
+curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" > "$EVIDENCE/mcp-pat-list.json"
+jq -e --arg id "$(cat "$EVIDENCE/mcp-pat-default.id")" '[.tokens[] | select(.id == $id)] | length == 1 and .[0].scopes == ["read","write","publish","worktree:merge"] and .[0].expiresAt == null and .[0].revokedAt == null' "$EVIDENCE/mcp-pat-list.json"
+$V mcp-oauth exchange mcp-pat-exchange pat
+jq -e --arg id "$(cat "$EVIDENCE/mcp-pat-default.id")" '.status == 200 and .body.scope == "read write publish worktree:merge" and .body.subject == {kind:"pat",id:$id,client_id:null} and .body.expires_in == 600' "$EVIDENCE/mcp-pat-exchange.json"
+```
+
+The Browser part creates a PAT with the dialog's defaults, uses it, and revokes it from the same
+dialog. The Account menu can ignore a click that lands before the page settles, hence the retry.
+The plaintext PAT goes straight to `home/mcp-token` (mode 0600) and never into evidence.
+
+```bash
+agent-browser cookies clear
+agent-browser open "$ORIGIN/login"
+agent-browser storage local set univer-workspace-language en-US
+agent-browser reload
+agent-browser wait --text Username
+agent-browser find label Username fill "verify-$VERIFY_UVW_RUN"
+agent-browser find label Password fill "$(cat "$RUN/user.pw")"
+agent-browser click 'form button[type=submit]'
+agent-browser wait --url '**/home'
+agent-browser wait --text 'Your repositories'
+for i in 1 2 3 4 5; do
+  agent-browser find role button click --name Account
+  agent-browser wait 500
+  agent-browser snapshot -i -c | grep -q 'menuitem "Access tokens"' && break
+done
+agent-browser find role menuitem click --name 'Access tokens'
+agent-browser wait --text 'New token'
+agent-browser find role button click --name 'New token'
+agent-browser wait --text 'Create token'
+agent-browser snapshot -i -c > "$EVIDENCE/mcp-pat-browser-form.txt"
+for scope in read write publish worktree:merge; do grep -E "checkbox \"$scope .*checked=true" "$EVIDENCE/mcp-pat-browser-form.txt"; done
+grep -E 'combobox "Expires".*: Never$' "$EVIDENCE/mcp-pat-browser-form.txt"
+agent-browser find label Name fill "browser-pat-$VERIFY_UVW_RUN"
+agent-browser screenshot "$EVIDENCE/mcp-pat-browser-form.png"
+agent-browser find role button click --name 'Create token'
+agent-browser wait --text 'Copy and save this token now'
+(umask 077 && agent-browser get value 'input[readonly], textarea' > "$RUN/home/mcp-token")
+grep -q '^uvw_pat_' "$RUN/home/mcp-token"
+curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" |
+  jq -r --arg name "browser-pat-$VERIFY_UVW_RUN" '.tokens[] | select(.name == $name) | .id' > "$RUN/home/mcp-token-id"
+$V mcp mcp-pat-browser repo_list
+agent-browser find role button click --name Done
+agent-browser find role button click --name "Revoke browser-pat-$VERIFY_UVW_RUN"
+agent-browser find role button click --name Revoke --exact
+agent-browser wait 1000
+agent-browser screenshot "$EVIDENCE/mcp-pat-browser-revoked.png"
+$V mcp mcp-pat-browser-revoked-whoami whoami
+echo $? > "$EVIDENCE/mcp-pat-browser-revoked-whoami.observed"
+$V mcp mcp-pat-browser-revoked repo_list
+test $? -eq 4
+curl -sS -H "Cookie: workspace_session=$(cat "$RUN/home/mcp-session")" "$ORIGIN/api/auth/tokens" > "$EVIDENCE/mcp-pat-list-after.json"
+jq -e --arg name "browser-pat-$VERIFY_UVW_RUN" '.tokens[] | select(.name == $name) | .revokedAt != null and .scopes == ["read","write","publish","worktree:merge"] and .expiresAt == null' "$EVIDENCE/mcp-pat-list-after.json"
+if agent-browser snapshot -i -c | grep -F "Revoke browser-pat-$VERIFY_UVW_RUN"; then false; fi
+$V mcp-token > "$EVIDENCE/mcp-token-restored-ma6.id"
+```
+
+Pass when the default PAT lists all four scopes with `expiresAt: null`, the exchange returns those
+scopes with `expires_in: 600`, and the Browser form opens with all four scopes checked and Expires
+`Never` (`mcp-pat-browser-form.png`). The Browser PAT calls `repo_list` with `auth_kind: pat`; after
+Revoke the next Workspace-backed call exits 4, the token list keeps the row with `revokedAt` set,
+and the dialog no longer lists it. `mcp-pat-browser-revoked-whoami.observed` records whether
+`whoami` still answered from the gateway's 30-second exchange cache (`0` on 2026-11-09; see the
+stage F acceptance record). The last command restores a working default PAT.
+
+**MA7. A PAT without `worktree:merge`.**
+
+```bash
+$V mcp-token --scopes read,write,publish > "$EVIDENCE/mcp-token-nomerge.id"
+$V mcp --toolsets all mcp-pat-nomerge-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"PAT merge scope\"}"
+NM=$(jq -r '.number' "$EVIDENCE/mcp-pat-nomerge-pr.out")
+$V mcp --toolsets all mcp-pat-nomerge-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$NM\"}"
+$V mcp --toolsets all mcp-pat-nomerge-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NM\"}"
+test $? -eq 1
+jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-pat-nomerge-merge.out"
+jq -e '.auth_kind == "pat" and .outcome == "tool_error" and .error_code == "workspace-scope-required"' "$EVIDENCE/mcp-pat-nomerge-merge.event.json"
+$V cli mcp-pat-nomerge-pr-cli pr view "$NM" -R "$O/verify-team" --json
+jq -e '.state == "ready"' "$EVIDENCE/mcp-pat-nomerge-pr-cli.out"
+$V mcp-token > "$EVIDENCE/mcp-token-restored-ma7.id"
+$V mcp --toolsets all mcp-pat-nomerge-discard pr_discard "{\"repo\":\"$O/verify-team\",\"number\":\"$NM\"}"
+jq -e '.state == "discarded"' "$EVIDENCE/mcp-pat-nomerge-discard.out"
+```
+
+Pass when `pr_merge` exits 1 with `workspace-scope-required` and a matching `pat` usage event, the
+CLI still shows the pull request `ready`, and the discard with the restored full-scope PAT succeeds.
+
+**MO2. Scripted OAuth: scope withheld, refresh and revocation.** Run after MA7. MO1 proves a real
+client; this drives the same endpoints from `verify-uvw mcp-oauth`, so it needs no model and can
+replay refresh and revocation. `login` registers a client (RFC 7591), opens the authorize URL with
+PKCE and `resource=$MCP_URL` in the run's browser, unchecks every scope not in `--scopes`, approves,
+catches the callback on a loopback port and redeems the code. Tokens stay in `home/` (mode 0600);
+`<label>.json` keeps only shapes such as `<uvw_at_… 87 chars>`, and `<label>-consent.png` shows the
+consent page. `mcp --auth oauth` calls the gateway with the current access token.
+
+```bash
+$V mcp-oauth login mcp-oauth2-login --scopes read,write,publish
+jq -e '([.offered[]] | all) and .submitted["worktree:merge"] == false and .callback_scope == "read write publish"
+  and .token.status == 200 and .token.cache_control == "no-store" and .token.body.token_type == "Bearer" and .token.body.expires_in == 3600
+  and .token.body.scope == "read write publish" and (.token.body.access_token | startswith("<uvw_at_")) and (.token.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth2-login.json"
+CLIENT=$(jq -r '.client_id' "$EVIDENCE/mcp-oauth2-login.json")
+$V mcp --auth oauth mcp-oauth2-whoami whoami
+$V mcp-oauth direct mcp-oauth2-direct
+$V mcp-oauth exchange mcp-oauth2-exchange oauth
+jq -e --arg client "$CLIENT" '.status == 200 and .body.scope == "read write publish" and .body.subject.kind == "oauth" and .body.subject.client_id == $client
+  and .body.expires_in > 0 and .body.expires_in <= 600 and .body.access_token == "[REDACTED]"' "$EVIDENCE/mcp-oauth2-exchange.json"
+
+$V mcp --auth oauth --toolsets all mcp-oauth2-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"OAuth merge scope\"}"
+NO=$(jq -r '.number' "$EVIDENCE/mcp-oauth2-pr.out")
+WO=$(jq -r '.id' "$EVIDENCE/mcp-oauth2-pr.out")
+$V mcp --auth oauth --toolsets all mcp-oauth2-unit unit_create "{\"worktree\":\"$WO\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"OAuth Scope\",\"idempotency_key\":\"mcp-oauth2-unit-$VERIFY_UVW_RUN\"}"
+$V mcp --auth oauth --toolsets all mcp-oauth2-ready pr_ready "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
+$V mcp --auth oauth --toolsets all mcp-oauth2-merge pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
+test $? -eq 1
+jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-merge.out"
+jq -e --arg client "$CLIENT" '.auth_kind == "oauth" and .client_id == $client and .outcome == "tool_error" and .error_code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-merge.event.json"
+$V mcp --auth oauth --toolsets all mcp-oauth2-discard pr_discard "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
+test $? -eq 1
+jq -e '.code == "workspace-scope-required"' "$EVIDENCE/mcp-oauth2-discard.out"
+$V cli mcp-oauth2-pr-cli pr view "$NO" -R "$O/verify-team" --json
+jq -e '.state == "ready"' "$EVIDENCE/mcp-oauth2-pr-cli.out"
+$V mcp --toolsets all mcp-oauth2-merge-pat pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NO\"}"
+jq -e '.state == "merged"' "$EVIDENCE/mcp-oauth2-merge-pat.out"
+```
+
+Then refresh, use the new token, and revoke it the way a client does (RFC 7009).
+
+```bash
+$V mcp-oauth refresh mcp-oauth2-refresh
+jq -e '.status == 200 and .cache_control == "no-store" and .body.expires_in == 3600 and .body.scope == "read write publish"
+  and (.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth2-refresh.json"
+$V mcp --auth oauth mcp-oauth2-after-refresh repo_list
+$V mcp-oauth revoke mcp-oauth2-revoke
+jq -e '.status == 200' "$EVIDENCE/mcp-oauth2-revoke.json"
+$V mcp --auth oauth mcp-oauth2-revoked-whoami whoami
+echo $? > "$EVIDENCE/mcp-oauth2-revoked-whoami.exit-observed"
+$V mcp --auth oauth mcp-oauth2-revoked-api api_find '{"terms":["setValues"],"unit":"sheet"}'
+echo $? > "$EVIDENCE/mcp-oauth2-revoked-api.exit-observed"
+$V mcp --auth oauth mcp-oauth2-revoked repo_list
+test $? -eq 4
+jq -e '.status == 401 and (.www_authenticate | contains("resource_metadata"))' "$EVIDENCE/mcp-oauth2-revoked.out"
+$V mcp --auth oauth mcp-oauth2-revoked-again whoami
+test $? -eq 4
+$V mcp-oauth refresh mcp-oauth2-refresh-revoked
+test $? -eq 1
+jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth2-refresh-revoked.json"
+```
+
+Last, refresh-token replay. A rotated refresh token replayed within 60 seconds is refused but keeps
+the grant, so two clients racing one refresh do not sign the user out. Replayed later, it revokes
+the whole grant.
+
+```bash
+$V mcp-oauth login mcp-oauth3-login
+jq -e '.token.body.scope == "read write publish worktree:merge"' "$EVIDENCE/mcp-oauth3-login.json"
+$V mcp-oauth refresh mcp-oauth3-refresh
+$V mcp-oauth reuse mcp-oauth3-reuse-grace
+test $? -eq 1
+jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth3-reuse-grace.json"
+$V mcp --auth oauth mcp-oauth3-after-grace repo_list
+sleep 61
+$V mcp-oauth reuse mcp-oauth3-reuse
+test $? -eq 1
+jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth3-reuse.json"
+$V mcp --auth oauth mcp-oauth3-after-reuse repo_list
+test $? -eq 4
+$V mcp-oauth refresh mcp-oauth3-refresh-after-reuse
+test $? -eq 1
+jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth3-refresh-after-reuse.json"
+```
+
+Pass when the consent page offered four checked scopes and the token grants exactly
+`read write publish` with `expires_in: 3600`, a `uvw_rt_` refresh token and `no-store`; the access
+token works through the gateway (`auth_kind: oauth`, this client) but not against Workspace directly
+(`direct`: both Bearer and cookie read as signed out); the exchange keeps the narrowed scopes and a
+session of at most 600 seconds. With that token `pr_create`, `unit_create` and `pr_ready` succeed,
+while `pr_merge` and `pr_discard` exit 1 with `workspace-scope-required`, the pull request stays
+`ready`, and the full-scope PAT then merges it. Refresh returns a new pair with the same scopes,
+and the new access token works. After revocation the first Workspace-backed call exits 4 with a
+`resource_metadata` challenge, the following `whoami` exits 4, and the refresh token gets
+`invalid_grant`. `mcp-oauth2-revoked-whoami.exit-observed` and `mcp-oauth2-revoked-api.exit-observed`
+record the first `whoami` and `api_find` after revocation, before any Workspace-backed call; `0`
+means the gateway answered from its 30-second exchange cache. A replay inside the grace window
+gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
+call exits 4 and the current refresh token gets `invalid_grant`.
+
+**MA8. Existing sign-in clients.** Stage F must not change how the Browser, uvw and the Workspace
+Agent sign in, so run these in the same MCP-enabled run, where the MCP OAuth code paths are active.
+First run every step of [Accounts and sign-in](auth.md) as written: Browser registration and
+sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
+Browser-approved `uvw auth login`, which prints an approval URL and exits; the raw URL and code stay
+in the run's `home/` and never reach evidence.
+
+```bash
+(umask 077 && $V uvw auth login > "$RUN/home/cli-login.private" 2>&1)
+agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/cli-login.private" | head -n1)"
+agent-browser wait --text 'Confirm and authorize CLI'
+test "$(agent-browser get value input)" = "$(sed -n 's/^Verification code: //p' "$RUN/home/cli-login.private")"
+agent-browser find role button click --name 'Confirm and authorize CLI'
+agent-browser wait --text 'CLI authorized'
+agent-browser screenshot "$EVIDENCE/mcp-cli-authorized.png"
+$V cli mcp-cli-login-complete auth login --complete --json
+jq -e --arg origin "$ORIGIN" --arg name "Verify $VERIFY_UVW_RUN" '.status == "authenticated" and .origin == $origin and .subject.name == $name' "$EVIDENCE/mcp-cli-login-complete.out"
+rm -f "$RUN/home/cli-login.private"
+```
+
+Pass when every auth.md step passes, the approval page shows the code uvw printed, and `--complete`
+signs uvw in as the run user. The Workspace Agent's browser OAuth login is not part of this journey
+yet: on 2026-11-09 its documented local install failed (fixed by #245) and the Agent then exits at
+startup before OAuth (#246). Once #246 is fixed, start the run with `VERIFY_UVW_AGENT_PORT`, which
+registers the Agent's public client, and add the Agent login here.
 
 **MX1. Executor write and readback.**
 

@@ -47,7 +47,6 @@
     "@univerjs-pro/slides-print": "1.4.0",
     "@univerjs-pro/slides-thread-comment": "1.4.0",
     "@univerjs/docs-thread-comment": "1.4.0",
-    "@univerjs/univer-workspace-client-core": "workspace:*",
     "ws": "8.21.3",
     "@univerjs/univer-workspace-agent-runtime": "workspace:*"
   },
@@ -240,6 +239,7 @@
     "@univerjs/themes": "1.4.0",
     "@univerjs/thread-comment-ui": "1.4.0",
     "@univerjs/ui": "1.4.0",
+    "@univerjs/univer-workspace-client-core": "workspace:*",
     "@univerjs/univer-workspace-file-browser": "workspace:*",
     "@univerjs/univer-workspace-html-viewer": "workspace:*",
     "@univerjs/univer-workspace-markdown-viewer": "workspace:*",
