@@ -2,6 +2,13 @@ import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
 
+/** Files the Workspace upload action converts into a Univer Unit instead of storing a Blob. */
+const IMPORTABLE_DOCUMENT_EXTENSION = /\.(?:xls|xlsx|csv|tsv|doc|docx|ppt|pptx|pdf)$/iu;
+
+export function isImportableDocument(fileName: string): boolean {
+  return IMPORTABLE_DOCUMENT_EXTENSION.test(fileName);
+}
+
 export async function uploadBlob(
   spaceId: string,
   parentNodeId: string | null,

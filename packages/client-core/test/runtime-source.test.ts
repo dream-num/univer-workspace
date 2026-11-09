@@ -33,6 +33,30 @@ describe("Workspace runtime source resolution", () => {
     ]);
   });
 
+  it("downloads a Trunk image Asset through the Trunk sign-url route", async () => {
+    const requests: string[] = [];
+    const source = contentSource(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : input.toString());
+      requests.push(url.toString());
+      if (url.pathname.endsWith("/sign-url")) {
+        return Response.json({ error: { code: 1, message: "" }, url: "/universer-api/file/asset%2F1/content?sig=x" });
+      }
+      return new Response(Uint8Array.from([4, 5]), {
+        headers: { "content-length": "2", "content-type": "image/png" },
+      });
+    });
+
+    await expect(source.resolveImageAsset({ assetId: "asset/1" })).resolves.toEqual({
+      bytes: Uint8Array.from([4, 5]),
+      contentLength: 2,
+      mediaType: "image/png",
+    });
+    expect(requests).toEqual([
+      "https://workspace.test/universer-api/file/asset%2F1/sign-url",
+      "https://workspace.test/universer-api/file/asset%2F1/content?sig=x",
+    ]);
+  });
+
   it("resolves a strictly parsed Worktree Unit target", async () => {
     const source = contentSource(async () => Response.json({ worktree: rawWorktree() }));
     await expect(source.resolveRuntimeTarget({ unitId: "book-1", worktreeId: "wt-1" })).resolves.toEqual({
@@ -255,7 +279,7 @@ function rawUnit(overrides: Partial<Record<string, unknown>> = {}): Record<strin
 }
 
 function snapshot(type: WorkspaceUnitType, unitId: string, revision: number): Record<string, unknown> {
-  const wire = { base: 5, board: 6, doc: 1, sheet: 2, slide: 3 }[type];
+  const wire = { base: 5, board: 6, doc: 1, pdf: 7, sheet: 2, slide: 3 }[type];
   if (type === "sheet" || type === "base") {
     return { rev: revision, type: wire, unitID: unitId, workbook: { originalMeta: "YQ==", sheets: {} } };
   }

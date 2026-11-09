@@ -1,6 +1,13 @@
 import { workspaceError } from "./errors.js";
 import type { WorkspaceUnitType } from "./space-model.js";
 
+/**
+ * Unit types the worker-backed content runtime can materialize. PDF Units are
+ * catalogued by Workspace but have no headless runtime yet, so a target naming
+ * one is rejected at the boundary instead of failing inside the worker.
+ */
+export type WorkspaceRuntimeUnitType = Exclude<WorkspaceUnitType, "pdf">;
+
 export type WorkspaceRuntimeScope =
   | { readonly kind: "trunk" }
   | { readonly kind: "worktree"; readonly worktreeId: string };
@@ -10,7 +17,7 @@ export type WorkspaceRuntimeTarget = {
   readonly revision: number;
   readonly scope: WorkspaceRuntimeScope;
   readonly unitId: string;
-  readonly unitType: WorkspaceUnitType;
+  readonly unitType: WorkspaceRuntimeUnitType;
 };
 
 export function workspaceSnapshotPrefix(scope: WorkspaceRuntimeScope): string {
@@ -19,25 +26,34 @@ export function workspaceSnapshotPrefix(scope: WorkspaceRuntimeScope): string {
     : `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/snapshot`;
 }
 
-export function workspaceRuntimeKey(target: WorkspaceRuntimeTarget): string {
+export type WorkspaceRuntimeCaller = {
+  readonly userId: string;
+  readonly grant?: unknown;
+};
+
+export function workspaceRuntimeKey(
+  target: WorkspaceRuntimeTarget,
+  caller?: WorkspaceRuntimeCaller,
+): string {
   const scope =
     target.scope.kind === "trunk"
       ? "trunk"
       : `worktree:${encodeURIComponent(target.scope.worktreeId)}`;
-  return [
+  const key = [
     "workspace",
     encodeURIComponent(target.origin),
     scope,
     encodeURIComponent(target.unitId),
     target.unitType,
   ].join(":");
+  return caller === undefined ? key : `${key}:caller:${encodeURIComponent(caller.userId)}`;
 }
 
 export function parseWorkspaceRuntimeTarget(value: unknown): WorkspaceRuntimeTarget {
   if (!isRecord(value) || typeof value["origin"] !== "string") {
     throw invalidTarget();
   }
-  const origin = normalizeOrigin(value["origin"]);
+  const origin = normalizeWorkspaceRuntimeOrigin(value["origin"]);
   if (
     typeof value["unitId"] !== "string" ||
     !isUnitType(value["unitType"]) ||
@@ -83,7 +99,7 @@ function parseScope(value: unknown): WorkspaceRuntimeScope {
   throw invalidTarget();
 }
 
-function normalizeOrigin(value: string): string {
+export function normalizeWorkspaceRuntimeOrigin(value: string): string {
   let url: URL;
   try {
     url = new URL(value);
@@ -113,7 +129,7 @@ function nonEmpty(value: string, name: string): string {
   return value;
 }
 
-function isUnitType(value: unknown): value is WorkspaceUnitType {
+function isUnitType(value: unknown): value is WorkspaceRuntimeUnitType {
   return (
     value === "sheet" ||
     value === "doc" ||

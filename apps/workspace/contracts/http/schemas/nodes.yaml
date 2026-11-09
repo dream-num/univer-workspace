@@ -1,6 +1,6 @@
 UnitType:
   type: string
-  enum: [sheet, doc, slide, board, base]
+  enum: [sheet, doc, slide, board, base, pdf]
 
 AccessRole:
   type: string

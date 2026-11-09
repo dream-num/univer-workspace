@@ -131,7 +131,8 @@ export interface WorkspaceHistoryDefinition {
 
 export interface ICollaborationEditorDefinition {
   readonly label: string;
-  readonly history: WorkspaceHistoryDefinition;
+  /** Edit history UI; absent for products without a history plugin. */
+  readonly history?: WorkspaceHistoryDefinition;
   readonly enableDocumentCollaborationUI?: boolean;
   readonly liveSheetReferences?: boolean;
   readonly collaborationProvidedByPreset?: boolean;
@@ -670,10 +671,11 @@ export function createWorkspaceHistoryPlugins(
   collaborationScope: NonNullable<
     CollaborationEditorProps["collaborationScope"]
   >,
-  history: WorkspaceHistoryDefinition,
+  history: WorkspaceHistoryDefinition | undefined,
   containerId: string
 ): IPresetPlugin[] {
   if (
+    !history ||
     collaborationScope.kind !== "trunk" ||
     history.providedByPreset === true
   ) {
@@ -684,8 +686,9 @@ export function createWorkspaceHistoryPlugins(
 
 function historyLocales(
   language: AppLanguage,
-  history: WorkspaceHistoryDefinition
+  history: WorkspaceHistoryDefinition | undefined
 ): ILanguagePack[] {
+  if (!history) return [];
   return language === "zh-CN"
     ? [EditHistoryUIZhCN, history.locales[language]]
     : [EditHistoryUIEnUS, history.locales[language]];
@@ -701,7 +704,7 @@ function configurePresetCollaboration(
   historyEnabled: boolean,
   containerId: string
 ): IPreset[] {
-  const presetHistoryPlugin = definition.history.providedByPreset
+  const presetHistoryPlugin = definition.history?.providedByPreset
     ? definition.history.createPlugin(containerId)
     : null;
   const presetHistoryPluginConstructor = Array.isArray(presetHistoryPlugin)
@@ -906,6 +909,8 @@ function loadFrozenSnapshot(
       return snapshotService.loadBase(unitId, 0);
     case "board":
       return snapshotService.loadBoard(unitId, 0);
+    case "pdf":
+      return snapshotService.loadPdf(unitId, 0);
     default:
       return Promise.reject(
         new Error(`The ${label} could not be loaded.`)

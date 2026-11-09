@@ -5,7 +5,7 @@ import {
   WorkspaceUnitExchangeFeature,
   type WorkspaceUnit,
   type WorkspaceUnitExchangeDependencies,
-  type WorkspaceUnitType,
+  type WorkspaceRuntimeUnitType,
 } from "../src/index.js";
 
 const INPUT_CASES = [
@@ -556,7 +556,7 @@ function createdUnit(input: CreateInput, overrides: Partial<WorkspaceUnit> = {})
   };
 }
 
-function target(type: WorkspaceUnitType) {
+function target(type: WorkspaceRuntimeUnitType) {
   return {
     origin: "https://workspace.example.com",
     revision: 3,

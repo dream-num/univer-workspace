@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import type { EmailConfig } from "./integrations/email/index.js";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
+import { parseMcpResourceUrls, type McpOAuthConfig } from "./modules/identity/mcp-oauth.js";
 import {
   resolveUniverLicense,
   type UniverLicenseCredentials,
@@ -38,6 +39,8 @@ export interface WorkspaceConfig {
     readonly callbackUrl: string;
   } | null;
   readonly oauthClients: OAuthClientConfig | null;
+  /** MCP OAuth for dynamically registered clients; null (the default) disables it. */
+  readonly mcpOAuth?: McpOAuthConfig | null;
   /** Defaults to the bundled development license. */
   readonly univerLicense?: UniverLicenseCredentials;
 }
@@ -115,6 +118,7 @@ export function loadConfig(
     googleOAuth,
     discordOAuth,
     oauthClients: oauthClientsConfig,
+    mcpOAuth: mcpOAuthConfig(environment),
     univerLicense: resolveUniverLicense(environment),
   };
 }
@@ -138,6 +142,7 @@ function oauthClientConfig(
     readonly clientType?: "confidential" | "public";
     readonly clientSecret?: string;
     readonly requiresConsent?: boolean;
+    readonly tokenExchange?: boolean;
     readonly redirectUris: readonly string[];
     readonly scopes: readonly string[];
   }[];
@@ -157,6 +162,10 @@ function oauthClientConfig(
       const clientSecret = clientType === "confidential"
         ? requireString(rawClient.clientSecret, "clientSecret")
         : undefined;
+      const tokenExchange = rawClient.tokenExchange === true;
+      if (tokenExchange && clientType !== "confidential") {
+        throw new Error("OAUTH_CLIENTS_JSON tokenExchange requires a confidential client");
+      }
       const redirectUris = convertStringArray(rawClient.redirectUris, "redirectUris");
       if (redirectUris.length === 0) {
         throw new Error("OAUTH_CLIENTS_JSON client redirectUris must be a non-empty array");
@@ -169,11 +178,32 @@ function oauthClientConfig(
         clientId,
         clientType,
         requiresConsent: rawClient.requiresConsent === true,
+        ...(tokenExchange ? { tokenExchange } : {}),
         ...(clientSecret === undefined ? {} : { clientSecret }),
         redirectUris,
         scopes,
       };
     }),
+  };
+}
+
+function mcpOAuthConfig(environment: NodeJS.ProcessEnv): McpOAuthConfig | null {
+  const raw = environment.MCP_RESOURCE_URLS;
+  if (raw === undefined || raw.trim() === "") return null;
+  const resources = parseMcpResourceUrls(raw);
+  const publicOrigin = environment.PUBLIC_ORIGIN;
+  if (publicOrigin === undefined || publicOrigin === "") {
+    throw new Error("MCP_RESOURCE_URLS requires PUBLIC_ORIGIN, the Workspace origin MCP clients reach");
+  }
+  const url = URL.canParse(publicOrigin) ? new URL(publicOrigin) : null;
+  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== publicOrigin.replace(/\/$/u, "")) {
+    throw new Error("PUBLIC_ORIGIN must be an http or https origin without a path, for example https://space.example.com");
+  }
+  const issuer = url.origin;
+  return {
+    issuer,
+    resources,
+    maxRegisteredClients: integer(environment.MCP_MAX_REGISTERED_CLIENTS, 10_000, "MCP_MAX_REGISTERED_CLIENTS"),
   };
 }
 

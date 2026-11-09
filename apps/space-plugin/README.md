@@ -25,7 +25,7 @@ npm run package:release -- /absolute/output/outside/repository
 ```
 
 Install the resulting tarball with the official DSH Plugins manager. Coupled
-Univer dependencies are pinned to 1.3.1; React 18 is resolved by the official
+Univer dependencies are pinned to 1.4.0; React 18 is resolved by the official
 host module loader. Tailwind utilities are prefixed/scoped with preflight off.
 The packager copies the production closure from committed `package-lock.json`;
 it never resolves fresh transitive versions. Manifest/version changes require a

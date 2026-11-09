@@ -28,7 +28,7 @@ import type {
 } from "./types.js";
 import css from "./CreateNodeMenu.module.scss";
 
-const unitTypes: readonly WorkspaceUnitType[] = ["doc", "sheet", "slide", "board", "base"];
+const unitTypes: readonly WorkspaceUnitType[] = ["doc", "sheet", "slide", "board", "base", "pdf"];
 
 export function CreateNodeMenu(props: {
   readonly spaceId: string;

@@ -6,21 +6,31 @@ import { workspaceError } from "./errors.js";
 import type { WorkspaceTypstMaterializer } from "./typst.js";
 import type { WorkspaceUnitFeature } from "./unit.js";
 import type { WorkspaceUnit } from "./worktree-model.js";
+import type { WorkspaceSourceFiles } from "./files.js";
 import {
   compileWorkspaceMarkdownFile,
+  compileWorkspaceMarkdownSource,
   workspaceMarkdownTargetUnitId,
   type WorkspaceMarkdownCompilation,
   type WorkspaceMarkdownUpdate,
 } from "./markdown-source.js";
 export {
   compileWorkspaceMarkdownFile,
+  compileWorkspaceMarkdownSource,
   type WorkspaceMarkdownOptions,
   type WorkspaceMarkdownCompilation,
   type WorkspaceMarkdownUpdate,
 } from "./markdown-source.js";
 
-export interface WorkspaceCompileMarkdownInput {
-  readonly file: string;
+export type WorkspaceCompileMarkdownSource =
+  | { readonly file: string; readonly markdown?: never; readonly assets?: never }
+  | {
+      readonly markdown: string;
+      readonly assets?: WorkspaceSourceFiles;
+      readonly file?: never;
+    };
+
+export type WorkspaceCompileMarkdownInput = WorkspaceCompileMarkdownSource & {
   readonly title?: string;
   readonly apply?: {
     readonly worktreeId: string;
@@ -34,7 +44,7 @@ export interface WorkspaceCompileMarkdownInput {
     readonly sourceMap: WorkspaceMarkdownUpdate["sourceMap"];
     readonly blockIds: string[];
   };
-}
+};
 
 export interface WorkspaceCompileMarkdownResult extends WorkspaceMarkdownCompilation {
   readonly committed: boolean;
@@ -45,6 +55,7 @@ export interface WorkspaceCompileMarkdownResult extends WorkspaceMarkdownCompila
 
 export interface WorkspaceCompileMarkdownDependencies {
   readonly compile?: typeof compileWorkspaceMarkdownFile;
+  readonly compileSource?: typeof compileWorkspaceMarkdownSource;
   readonly materializer: WorkspaceTypstMaterializer;
   readonly units: Pick<WorkspaceUnitFeature, "create">;
   readonly contentExecution: Pick<WorkspaceContentExecutionFeature, "execute">;
@@ -60,14 +71,28 @@ export class WorkspaceCompileMarkdownFeature {
     if (input.apply !== undefined && input.update !== undefined) {
       throw workspaceError("workspace-argument-invalid", "Choose create or update, not both.");
     }
-    const compiled = await (this.dependencies.compile ?? compileWorkspaceMarkdownFile)(input.file, {
+    if ((input.file === undefined) === (input.markdown === undefined)) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        "Provide exactly one of a Markdown file or in-memory Markdown.",
+      );
+    }
+    const options = {
       targetUnitId:
         input.update?.unitId ?? workspaceMarkdownTargetUnitId(input.apply?.idempotencyKey),
       ...(input.title === undefined ? {} : { title: input.title }),
       ...(input.update === undefined
         ? {}
         : { update: { sourceMap: input.update.sourceMap, blockIds: input.update.blockIds } }),
-    });
+    };
+    const compiled =
+      input.file !== undefined
+        ? await (this.dependencies.compile ?? compileWorkspaceMarkdownFile)(input.file, options)
+        : await (this.dependencies.compileSource ?? compileWorkspaceMarkdownSource)(
+            input.markdown as string,
+            options,
+            input.assets,
+          );
     if (input.apply === undefined && input.update === undefined)
       return { ...compiled, committed: false };
     const errors = compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error");

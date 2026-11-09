@@ -6,6 +6,8 @@ import type {
 import type { IssueProductChange } from "../../modules/issues/index.js";
 import type { WorktreeProductChange } from "../../modules/worktrees/index.js";
 
+import type { SessionSockets } from "./session-sockets.js";
+
 export const WORKTREE_CHANGE_FEED_PATH = "/api/worktree-events";
 
 export interface WorktreeChangeFeed {
@@ -16,7 +18,7 @@ export interface WorktreeChangeFeed {
   dispose(): Promise<void>;
 }
 
-export function createWorktreeChangeFeed(): WorktreeChangeFeed {
+export function createWorktreeChangeFeed(sessionSockets: SessionSockets): WorktreeChangeFeed {
   const connections = new Map<
     string,
     Map<string, NodeTransportConnection>
@@ -43,8 +45,13 @@ export function createWorktreeChangeFeed(): WorktreeChangeFeed {
               context.reject(401, "Invalid or expired session ticket");
               return;
             }
+            let untrack: (() => void) | undefined;
             context.accept({
               open({ connection }) {
+                const { sessionId, sessionExpiresAt } = ticket.customData;
+                if (typeof sessionId === "string" && typeof sessionExpiresAt === "number") {
+                  untrack = sessionSockets.track(sessionId, sessionExpiresAt, connection);
+                }
                 const userConnections = connections.get(ticket.userID) ?? new Map();
                 userConnections.set(connection.id, connection);
                 connections.set(ticket.userID, userConnections);
@@ -54,6 +61,7 @@ export function createWorktreeChangeFeed(): WorktreeChangeFeed {
                 connection.close(1003, "Worktree change feed is server-only");
               },
               close({ connection }) {
+                untrack?.();
                 removeConnection(ticket.userID, connection.id);
               },
             });

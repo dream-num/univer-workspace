@@ -83,6 +83,48 @@ describe("Resources", () => {
     });
   });
 
+  it("creates a PDF Unit through the product API and lists it with its type", async () => {
+    const requested: UnitType[] = [];
+    const application = createTestApplication(async ({ unitType }) => {
+      requested.push(unitType);
+    });
+    const userId = await register(application, "alice");
+    const space = application.spaces.list(userId).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+
+    const created = await application.resources.create(
+      userId,
+      "create-pdf-resource-0001",
+      {
+        kind: "univer",
+        spaceId: space.id,
+        parentNodeId: null,
+        name: "Brochure",
+        unitType: "pdf",
+      }
+    );
+    expect(created).toMatchObject({
+      status: 201,
+      body: { node: { name: "Brochure", resource: { unitType: "pdf" } } },
+    });
+    expect(requested).toEqual(["pdf"]);
+    expect(
+      application.views.listOwned(userId, { cursor: undefined, limit: undefined })
+    ).toMatchObject({
+      items: [{ node: { name: "Brochure" }, resource: { unitType: "pdf" } }],
+    });
+
+    await expect(
+      application.resources.create(userId, "create-bogus-resource-0001", {
+        kind: "univer",
+        spaceId: space.id,
+        parentNodeId: null,
+        name: "Bogus",
+        unitType: "docx" as UnitType,
+      })
+    ).rejects.toMatchObject<ApplicationError>({ status: 400 });
+  });
+
   it("records recent only after a successful Resource open", async () => {
     const application = createTestApplication(async () => {});
     const userId = await register(application, "alice");
@@ -318,6 +360,7 @@ describe("Univer unit store", () => {
       "slide",
       "board",
       "base",
+      "pdf",
     ];
     for (const unitType of types) {
       const initialData = {
@@ -356,6 +399,7 @@ describe("Univer unit store", () => {
       "slide",
       "board",
       "base",
+      "pdf",
     ];
 
     try {
@@ -385,6 +429,7 @@ describe("Univer unit store", () => {
       "slide",
       "board",
       "base",
+      "pdf",
     ];
 
     try {
@@ -443,6 +488,7 @@ describe("Univer unit store", () => {
       "slide",
       "board",
       "base",
+      "pdf",
     ];
 
     try {

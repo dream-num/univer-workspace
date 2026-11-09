@@ -8,6 +8,7 @@ import {
   type WorkspaceRuntimeTarget,
 } from "./runtime-target.js";
 import type { WorkspaceUnitType } from "./space-model.js";
+import type { WorkspaceRuntimeUnitType } from "./runtime-target.js";
 import { getWorktree } from "./worktree.js";
 import type { WorkspaceWorktree } from "./worktree-model.js";
 
@@ -15,6 +16,7 @@ const WIRE_TYPES = {
   base: 5,
   board: 6,
   doc: 1,
+  pdf: 7,
   sheet: 2,
   slide: 3,
 } as const satisfies Record<WorkspaceUnitType, UniverType>;
@@ -25,7 +27,7 @@ const UNIT_TYPES = [
   "slide",
   "base",
   "board",
-] as const satisfies readonly WorkspaceUnitType[];
+] as const satisfies readonly WorkspaceRuntimeUnitType[];
 
 export class WorkspaceContentSource {
   public constructor(private readonly http: WorkspaceHttp) {}
@@ -95,7 +97,7 @@ export class WorkspaceContentSource {
   public async resolveImageAsset(input: {
     readonly assetId: string;
     readonly signal?: AbortSignal;
-    readonly worktreeId: string;
+    readonly worktreeId?: string;
   }): Promise<{
     readonly bytes: Uint8Array;
     readonly contentLength?: number;
@@ -182,6 +184,13 @@ function resolveWorktreeTarget(
     throw workspaceError(
       "WORKSPACE_UNIT_NOT_FOUND",
       `Unit ${input.unitId} is not in Worktree ${input.worktreeId}`,
+    );
+  }
+  if (unit.type === "pdf") {
+    throw workspaceError(
+      "workspace-unit-type-unsupported",
+      "Workspace content runtime does not support PDF Units yet.",
+      { supportedUnitTypes: UNIT_TYPES, unitId: input.unitId },
     );
   }
   return {

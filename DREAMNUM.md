@@ -55,6 +55,14 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   passwordless CLI session handoff for password, Email-code, and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
+- **Univer Workspace MCP** — the private remote gateway under `apps/mcp`, built on Client Core.
+  It exposes identity, repository, Issue, pull request, Space, Unit, Blob, label, merge, Facade API reference, Skills,
+  and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
+  them at Workspace for short-lived sessions; development session authentication is refused in production. It runs
+  apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
+  environments until Stage G.
+  Contract: [MCP README](apps/mcp/README.md).
+
 - **Univer Workspace Agent** — the local browser application for conversations, document references,
   and agent Worktree review, composed from published DSH packages. Each instance has
   one active account for its single operator; switching accounts applies to every open tab.
@@ -138,8 +146,14 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   preferences, not memberships or access grants: `GET/PUT/DELETE /api/spaces/pins` read, replace, and reset the
   caller's ordered list. Product V15 adds them, with a `space_stars(user_id)` index, through a backed-up
   V14 → V15 startup migration that backfills nothing.
-- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), sharing state, and user-authored
-  content are protected application data. OAuth access tokens are used only during sign-in and are not persisted.
+- Product V18 adds MCP OAuth clients, OAuth grants with their retired refresh tokens, and personal access tokens,
+  plus the `login_sessions` columns that tie a session issued by token exchange to its token, through a backed-up
+  V17 → V18 startup migration that backfills nothing. Workspace issues and stores these tokens itself; the
+  database keeps only their hashes, and the plaintext is returned once at creation or issuance. Revoking a token
+  deletes the sessions issued for it.
+- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
+  content are protected application data. Access tokens from external OAuth identity providers are used only during
+  sign-in and account linking and are not persisted.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are

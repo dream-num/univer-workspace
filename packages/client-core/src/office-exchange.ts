@@ -1,10 +1,14 @@
+import { Buffer } from "node:buffer";
 import { extname } from "node:path";
 import {
   ExchangeFormat,
   FormulaCalculationMode,
   configureExchange,
+  exportToBuffer,
   exportToFile,
+  importBuffer,
   importFile,
+  type BufferImportOptions,
   type ExportOptions,
   type IExchangeConfig,
   type ImportOptions,
@@ -33,8 +37,19 @@ type ExportOfficeFile = (
   options: ExportOptions,
 ) => Promise<void>;
 
+type ImportOfficeBuffer = (
+  input: Buffer,
+  options: BufferImportOptions,
+) => Promise<Readonly<Record<string, unknown>>>;
+type ExportOfficeBuffer = (
+  data: Readonly<Record<string, unknown>>,
+  options: ExportOptions,
+) => Promise<Buffer>;
+
 const importOfficeFile = importFile as unknown as ImportOfficeFile;
 const exportOfficeFile = exportToFile as unknown as ExportOfficeFile;
+const importOfficeBuffer = importBuffer as unknown as ImportOfficeBuffer;
+const exportOfficeBuffer = exportToBuffer as unknown as ExportOfficeBuffer;
 
 export interface WorkspaceUnitExchangeDependencies {
   /** Exchange verifies the license with its key; without both it runs on the free tier. */
@@ -45,6 +60,14 @@ export interface WorkspaceUnitExchangeDependencies {
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
   readonly exportToFile?: ExportOfficeFile;
   readonly importFile?: ImportOfficeFile;
+  readonly exportToBuffer?: ExportOfficeBuffer;
+  readonly importBuffer?: ImportOfficeBuffer;
+  /**
+   * "process" (default) configures the credentials once per process.
+   * "per-operation" never touches the process configuration and passes the
+   * credentials with each export, so one process can serve many licenses.
+   */
+  readonly licenseMode?: "process" | "per-operation";
   readonly createUnit: (input: {
     readonly idempotencyKey?: string;
     readonly initialData: Readonly<Record<string, unknown>>;
@@ -66,7 +89,7 @@ export interface WorkspaceImportFileInput {
   readonly parentNodeId?: string;
   readonly sourcePath: string;
   readonly spaceId: string;
-  readonly type?: Exclude<WorkspaceUnitType, "board">;
+  readonly type?: Exclude<WorkspaceUnitType, "board" | "pdf">;
   readonly worktreeId: string;
 }
 
@@ -76,7 +99,7 @@ export interface WorkspaceImportFileResult {
   readonly nodeId: string;
   readonly resourceId: string;
   readonly sourcePath: string;
-  readonly type: Exclude<WorkspaceUnitType, "board">;
+  readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   readonly unitId: string;
   readonly worktreeId: string;
 }
@@ -89,24 +112,109 @@ export interface WorkspaceExportFileInput {
 
 export interface WorkspaceExportFileResult {
   readonly outputPath: string;
-  readonly type: Exclude<WorkspaceUnitType, "board">;
+  readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   readonly unitId: string;
   readonly worktreeId: string;
 }
 
+export interface WorkspaceImportBufferInput extends Omit<WorkspaceImportFileInput, "sourcePath"> {
+  readonly bytes: Uint8Array;
+  /** Drives type inference and the default Unit name, like `sourcePath` for files. */
+  readonly fileName: string;
+}
+
+export interface WorkspaceImportBufferResult extends Omit<WorkspaceImportFileResult, "sourcePath"> {
+  readonly fileName: string;
+}
+
+export interface WorkspaceExportBufferInput {
+  readonly format: "xlsx" | "docx" | "pptx";
+  readonly unitId: string;
+  readonly worktreeId: string;
+}
+
+export interface WorkspaceExportBufferResult {
+  readonly bytes: Uint8Array;
+  readonly format: "xlsx" | "docx" | "pptx";
+  readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
+  readonly unitId: string;
+  readonly worktreeId: string;
+}
+
+type ImportedUnitFields = Omit<WorkspaceImportFileResult, "sourcePath">;
+
 export class WorkspaceUnitExchangeFeature {
   private configured: Promise<void> | undefined;
 
-  public constructor(private readonly dependencies: WorkspaceUnitExchangeDependencies) {}
+  public constructor(private readonly dependencies: WorkspaceUnitExchangeDependencies) {
+    if (
+      dependencies.licenseMode === "per-operation" &&
+      (nonEmpty(dependencies.license) === undefined) !==
+        (nonEmpty(dependencies.licenseKey) === undefined)
+    ) {
+      throw workspaceError(
+        "workspace-exchange-license-incomplete",
+        "Per-operation exchange needs both license and licenseKey, or neither for the free tier.",
+      );
+    }
+  }
 
   public async importFile(input: WorkspaceImportFileInput): Promise<WorkspaceImportFileResult> {
-    const type = inferImportType(input.sourcePath, input.type);
+    const imported = await this.importUnit(input, input.sourcePath, (options) =>
+      (this.dependencies.importFile ?? importOfficeFile)(input.sourcePath, options),
+    );
+    return { ...imported, sourcePath: input.sourcePath };
+  }
+
+  public async importBuffer(input: WorkspaceImportBufferInput): Promise<WorkspaceImportBufferResult> {
+    const imported = await this.importUnit(input, input.fileName, (options) =>
+      (this.dependencies.importBuffer ?? importOfficeBuffer)(
+        Buffer.from(input.bytes.buffer, input.bytes.byteOffset, input.bytes.byteLength),
+        { ...options, fileName: input.fileName } as BufferImportOptions,
+      ),
+    );
+    return { ...imported, fileName: input.fileName };
+  }
+
+  public async exportFile(input: WorkspaceExportFileInput): Promise<WorkspaceExportFileResult> {
+    const prepared = await this.prepareExport(input, () => inferExportFormat(input.outputPath));
+    await (this.dependencies.exportToFile ?? exportOfficeFile)(
+      prepared.data,
+      input.outputPath,
+      this.exportOptions(prepared.type, prepared.format),
+    );
+    return {
+      outputPath: input.outputPath,
+      type: prepared.type,
+      unitId: prepared.unitId,
+      worktreeId: input.worktreeId,
+    };
+  }
+
+  public async exportBuffer(input: WorkspaceExportBufferInput): Promise<WorkspaceExportBufferResult> {
+    const prepared = await this.prepareExport(input, () => bufferExportFormat(input.format));
+    const output = await (this.dependencies.exportToBuffer ?? exportOfficeBuffer)(
+      prepared.data,
+      this.exportOptions(prepared.type, prepared.format),
+    );
+    return {
+      bytes: new Uint8Array(output),
+      format: input.format,
+      type: prepared.type,
+      unitId: prepared.unitId,
+      worktreeId: input.worktreeId,
+    };
+  }
+
+  private async importUnit(
+    input: Omit<WorkspaceImportFileInput, "sourcePath">,
+    fileName: string,
+    convert: (options: ImportOptions) => Promise<Readonly<Record<string, unknown>>>,
+  ): Promise<ImportedUnitFields> {
+    const type = inferImportType(fileName, input.type);
     const unitType = toInstanceType(type);
     await this.configureExchange();
-    const imported = await (this.dependencies.importFile ?? importOfficeFile)(
-      input.sourcePath,
-      importOptions(input.sourcePath, unitType),
-    );
+    const imported = await convert(importOptions(fileName, unitType));
     const explicitName = nonEmpty(input.name);
     const name =
       explicitName ??
@@ -132,14 +240,21 @@ export class WorkspaceUnitExchangeFeature {
       name,
       nodeId: created.nodeId,
       resourceId: created.resourceId,
-      sourcePath: input.sourcePath,
       type,
       unitId: created.unitId,
       worktreeId: input.worktreeId,
     };
   }
 
-  public async exportFile(input: WorkspaceExportFileInput): Promise<WorkspaceExportFileResult> {
+  private async prepareExport(
+    input: { readonly unitId: string; readonly worktreeId: string },
+    formatOf: () => ExchangeFormat,
+  ): Promise<{
+    readonly data: Readonly<Record<string, unknown>>;
+    readonly format: ExchangeFormat;
+    readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
+    readonly unitId: string;
+  }> {
     const target = await this.dependencies.resolveRuntimeTarget({
       unitId: input.unitId,
       worktreeId: input.worktreeId,
@@ -151,8 +266,9 @@ export class WorkspaceUnitExchangeFeature {
         { unitId: input.unitId },
       );
     }
-    const format = inferExportFormat(input.outputPath);
-    requireCompatibleExport(target.unitType, format);
+    const type = target.unitType;
+    const format = formatOf();
+    requireCompatibleExport(type, format);
     await this.configureExchange();
     const result: unknown = await this.dependencies.runtime.exportUnitData({ target });
     if (!isRecord(result) || result["id"] !== target.unitId) {
@@ -161,24 +277,43 @@ export class WorkspaceUnitExchangeFeature {
         `Workspace runtime exported invalid UnitData for ${target.unitId}.`,
       );
     }
-    await exportUnit(
-      this.dependencies.exportToFile ?? exportOfficeFile,
-      target.unitType,
-      await resolveWorkspaceExportImages(result, input.worktreeId, this.dependencies.resolveImageAsset),
-      format,
-      input.outputPath,
-    );
     return {
-      outputPath: input.outputPath,
-      type: target.unitType,
+      data: await resolveWorkspaceExportImages(
+        result,
+        input.worktreeId,
+        this.dependencies.resolveImageAsset,
+      ),
+      format,
+      type,
       unitId: target.unitId,
-      worktreeId: input.worktreeId,
     };
+  }
+
+  private exportOptions(
+    type: Exclude<WorkspaceUnitType, "board" | "pdf">,
+    format: ExchangeFormat,
+  ): ExportOptions {
+    const unitType = toInstanceType(type);
+    const license = nonEmpty(this.dependencies.license)?.trim();
+    const licenseKey = nonEmpty(this.dependencies.licenseKey)?.trim();
+    return {
+      format,
+      type: unitType,
+      ...(unitType === UniverInstanceType.UNIVER_SHEET
+        ? { formulaCalculation: FormulaCalculationMode.FORCED }
+        : {}),
+      ...(this.dependencies.licenseMode === "per-operation" &&
+      license !== undefined &&
+      licenseKey !== undefined
+        ? { license, licenseKey }
+        : {}),
+    } as ExportOptions;
   }
 
   // Exchange credentials belong to the JS context, so set them once before the
   // first conversion; a rejected configuration is retried by the next call.
   private async configureExchange(): Promise<void> {
+    if (this.dependencies.licenseMode === "per-operation") return;
     this.configured ??= (this.dependencies.configureExchange ?? configureExchange)({
       license: this.dependencies.license,
       licenseKey: this.dependencies.licenseKey,
@@ -192,8 +327,8 @@ export class WorkspaceUnitExchangeFeature {
 
 function inferImportType(
   sourcePath: string,
-  explicit?: Exclude<WorkspaceUnitType, "board">,
-): Exclude<WorkspaceUnitType, "board"> {
+  explicit?: Exclude<WorkspaceUnitType, "board" | "pdf">,
+): Exclude<WorkspaceUnitType, "board" | "pdf"> {
   const extension = extname(sourcePath).toLowerCase();
   if (extension === ".xls" || extension === ".xlsx") {
     if (explicit === undefined || explicit === "sheet" || explicit === "base") {
@@ -227,7 +362,7 @@ function inferExportFormat(outputPath: string): ExchangeFormat {
 }
 
 function requireCompatibleExport(
-  type: Exclude<WorkspaceUnitType, "board">,
+  type: Exclude<WorkspaceUnitType, "board" | "pdf">,
   format: ExchangeFormat,
 ): void {
   const compatible =
@@ -242,7 +377,7 @@ function requireCompatibleExport(
   }
 }
 
-function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): WorkspaceExchangeUnitType {
+function toInstanceType(type: Exclude<WorkspaceUnitType, "board" | "pdf">): WorkspaceExchangeUnitType {
   switch (type) {
     case "sheet":
       return UniverInstanceType.UNIVER_SHEET;
@@ -255,21 +390,20 @@ function toInstanceType(type: Exclude<WorkspaceUnitType, "board">): WorkspaceExc
   }
 }
 
-async function exportUnit(
-  exchange: ExportOfficeFile,
-  type: Exclude<WorkspaceUnitType, "board">,
-  data: Readonly<Record<string, unknown>>,
-  format: ExchangeFormat,
-  outputPath: string,
-): Promise<void> {
-  const unitType = toInstanceType(type);
-  await exchange(data, outputPath, {
-    format,
-    type: unitType,
-    ...(unitType === UniverInstanceType.UNIVER_SHEET
-      ? { formulaCalculation: FormulaCalculationMode.FORCED }
-      : {}),
-  } as ExportOptions);
+function bufferExportFormat(format: WorkspaceExportBufferInput["format"]): ExchangeFormat {
+  switch (format) {
+    case "xlsx":
+      return ExchangeFormat.XLSX;
+    case "docx":
+      return ExchangeFormat.DOCX;
+    case "pptx":
+      return ExchangeFormat.PPTX;
+    default:
+      throw workspaceError(
+        "workspace-exchange-export-format-unsupported",
+        "Export format must be xlsx, docx, or pptx.",
+      );
+  }
 }
 
 function importOptions(sourcePath: string, type: WorkspaceExchangeUnitType): ImportOptions {
@@ -288,9 +422,9 @@ function importOptions(sourcePath: string, type: WorkspaceExchangeUnitType): Imp
 
 function requireCreatedUnit(
   unit: WorkspaceUnit,
-  input: WorkspaceImportFileInput & {
+  input: Omit<WorkspaceImportFileInput, "sourcePath"> & {
     readonly name: string;
-    readonly type: Exclude<WorkspaceUnitType, "board">;
+    readonly type: Exclude<WorkspaceUnitType, "board" | "pdf">;
   },
 ): void {
   if (

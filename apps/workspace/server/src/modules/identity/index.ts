@@ -12,7 +12,7 @@ export { createIdentityRouter } from "./identity.router.js";
 export { createGitHubOAuthProvider } from "./github-oauth.js";
 export { createDiscordOAuthProvider } from "./discord-oauth.js";
 export { createGoogleOAuthProvider } from "./google-oauth.js";
-export { createOAuthAuthorizationRouter } from "./oauth-authorization-router.js";
+export { createMcpClientRegistrationHandler, createOAuthAuthorizationRouter } from "./oauth-authorization-router.js";
 export type {
   IssuedAuthorization,
   OAuthClientConfig,
@@ -23,3 +23,6 @@ export type {
   GoogleOAuthProvider,
 } from "./identity.types.js";
 export { writeSourceView, type WriteSource, type WriteSourceView } from "./write-source.js";
+export { createAccessTokenService } from "./access-tokens.js";
+export type { AccessTokenService, McpScope } from "./access-tokens.js";
+export { authorizationServerMetadata, type McpOAuthConfig } from "./mcp-oauth.js";

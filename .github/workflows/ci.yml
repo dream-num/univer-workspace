@@ -1,6 +1,6 @@
 name: CI
 
-# Only Markdown that no build, test, or package step reads. Required status
+# Only docs and examples that no build, test, or package step reads. Required status
 # checks stay pending on skipped runs, so a ruleset requiring `verify` needs a
 # job-level skip instead.
 on:
@@ -11,6 +11,7 @@ on:
       - README.zh-CN.md
       - DREAMNUM.md
       - docs/**
+      - apps/workspace/.env.example
       - apps/workspace/*.md
       - apps/workspace/docs/**
       - apps/agent/desktop/docs/**

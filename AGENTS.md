@@ -8,10 +8,11 @@
 ## 项目目标
 
 本仓库拥有 Univer Workspace 产品及其配套 CLI。它将 Univer、Univer Pro、Univer Collaboration
-SDK 和 Univer CLI SDK 组装成两个对外应用：
+SDK 和 Univer CLI SDK 组装成以下应用：
 
 - Univer Workspace：可部署的 Browser、产品 HTTP API、协同入口和后台任务。
 - Univer Workspace CLI：面向 Agent 的远程 Workspace 自动化应用。
+- Univer Workspace MCP：基于 Client Core 的 private 远程 MCP 应用，阶段 A 只提供开发认证和身份、仓库只读工具。
 
 本仓库还包含供 Browser 或 Node-hosted Workspace Agent Client 使用的 private packages。它们是内部
 实现，不是额外的对外应用或跨仓库公共 SDK。
@@ -21,6 +22,7 @@ SDK 和 Univer CLI SDK 组装成两个对外应用：
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       Univer Workspace CLI
+apps/mcp                       Private Workspace MCP gateway（阶段 A 开发认证）
 apps/agent                   Univer Workspace Agent（DSH 定制服务 + 两个预装插件）
 packages/client-core           Node-hosted Workspace Agent Client 共享能力
 packages/reference-provider   Browser 专用的 private referenced-Unit policy
@@ -32,6 +34,7 @@ scripts                       仓库级 SDK 版本与 CLI 本地开发脚本
 - `apps/workspace` 拥有 Workspace 产品模型，包括 Identity、Space、Node、Resource、ACL、Trash、
   Recent、Blob、Asset、Operation 和 Worktree 的产品级组织。
 - `apps/cli` 拥有 Workspace origin、登录 Session、Commander composition 和面向 Agent 的 CLI 交付体验。
+- `apps/mcp` 是基于 Client Core 的第三个 Node-hosted Workspace Client，拥有远程 MCP 协议、工具映射、认证边界和用量事件；不连接数据库，不依赖 CLI 应用。阶段 A 仅供本地和内部单用户开发验证。
 - `packages/client-core` 拥有 Node-hosted Workspace Agent Client 共享的 HTTP、错误、storage-neutral 认证协议、
   远程产品 workflow 与 worker-backed content runtime；Client Shell 注入 origin、凭据、license 与 packaged
   worker entry，package 不读取 CLI Session 或配置。
@@ -121,7 +124,7 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 
 ## Package 与发布边界
 
-- `apps/workspace`、`packages/client-core`、`packages/reference-provider` 和
+- `apps/workspace`、`apps/mcp`、`packages/client-core`、`packages/reference-provider` 和
   `packages/unit-comparison-viewer` 是 private workspace package，不发布为公共 SDK。
 - `univer-workspace-cli` 通过仓库内 packaging workflow 生成内部安装包；不要把 source workspace
   manifest 的 `private` 状态误当成公共 npm SDK 合同。

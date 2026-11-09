@@ -55,7 +55,9 @@ describe("Workspace application feature parity", () => {
       "blob-key",
       "blob-key",
     ]);
-    await expect(Promise.all(requests.map(async (request) => await request.json()))).resolves.toEqual(
+    await expect(
+      Promise.all(requests.map(async (request) => await request.json())),
+    ).resolves.toEqual(
       Array.from({ length: 3 }, () => ({
         byteSize: 3,
         name: "payload.bin",
@@ -64,6 +66,94 @@ describe("Workspace application feature parity", () => {
         spaceId: "space-1",
       })),
     );
+  });
+
+  it("uploads in-memory bytes with the same requests as a file of the same content", async () => {
+    const directory = await temporaryDirectory();
+    const sourcePath = join(directory, "payload.bin");
+    await writeFile(sourcePath, "abc");
+    const run = async (
+      upload: (feature: WorkspaceBlobFeature) => Promise<Record<string, unknown>>,
+    ) => {
+      const requests: unknown[] = [];
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input, init) => {
+          const request = new Request(input, init);
+          const url = new URL(request.url);
+          requests.push({
+            body: request.method === "GET" ? "" : await request.text(),
+            headers: [...request.headers].sort(),
+            method: request.method,
+            path: url.pathname,
+          });
+          if (url.pathname === "/api/blob-upload-sessions" && request.method === "POST") {
+            return jsonResponse(uploadEnvelope("waitingForUpload", { uploadTarget: true }));
+          }
+          if (url.pathname.endsWith("/content")) return new Response(null, { status: 204 });
+          if (url.pathname === "/api/blob-upload-sessions/upload-1") {
+            return jsonResponse(uploadEnvelope("completed"));
+          }
+          const owningNode = node({ id: "node-1", name: "payload.bin", resource: blobResource() });
+          return jsonResponse({ node: owningNode, resource: owningNode.resource });
+        }),
+      );
+      const result = await upload(feature);
+      return { requests, result };
+    };
+    const common = { idempotencyKey: "blob-key", spaceId: "space-1" };
+    const fromFile = await run((feature) => feature.upload({ ...common, filePath: sourcePath }));
+    const fromMemory = await run((feature) =>
+      feature.uploadBytes({
+        ...common,
+        bytes: new TextEncoder().encode("abc"),
+        fileName: "payload.bin",
+      }),
+    );
+    expect(fromFile.requests).toContainEqual(
+      expect.objectContaining({ body: "abc", method: "PUT" }),
+    );
+    expect(fromMemory).toEqual(fromFile);
+  });
+
+  it("rejects in-memory Blob input without a usable file name before authentication", async () => {
+    const provider = vi.fn<AuthenticatedWorkspaceHttp>();
+    const feature = new WorkspaceBlobFeature(provider);
+    for (const fileName of ["", "  ", ".", " .. ", "a/b.bin"]) {
+      await expect(
+        feature.uploadBytes({ bytes: new Uint8Array(1), fileName, spaceId: "space-1" }),
+      ).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+    }
+    expect(provider).not.toHaveBeenCalled();
+  });
+
+  it("trims the in-memory file name and copies the caller's bytes at entry", async () => {
+    const puts: { body: string; name: unknown }[] = [];
+    const feature = new WorkspaceBlobFeature(
+      authFor(async (input, init) => {
+        const request = new Request(input, init);
+        const url = new URL(request.url);
+        if (url.pathname === "/api/blob-upload-sessions" && request.method === "POST") {
+          const body = (await request.json()) as { originalFilename?: unknown };
+          puts.push({ body: "", name: body.originalFilename });
+          return jsonResponse(uploadEnvelope("waitingForUpload", { uploadTarget: true }));
+        }
+        if (url.pathname.endsWith("/content")) {
+          puts.push({ body: await request.text(), name: undefined });
+          return new Response(null, { status: 204 });
+        }
+        if (url.pathname === "/api/blob-upload-sessions/upload-1") {
+          return jsonResponse(uploadEnvelope("completed"));
+        }
+        const owningNode = node({ id: "node-1", name: "payload.bin", resource: blobResource() });
+        return jsonResponse({ node: owningNode, resource: owningNode.resource });
+      }),
+    );
+    const bytes = new TextEncoder().encode("abc");
+    const pending = feature.uploadBytes({ bytes, fileName: " payload.bin ", spaceId: "space-1" });
+    bytes.fill(0x7a);
+    await pending;
+    expect(puts).toContainEqual({ body: "abc", name: undefined });
+    expect(puts[0]?.name).toBe("payload.bin");
   });
 
   it("recovers Blob PUT and completion without replaying a confirmed write", async () => {
@@ -278,12 +368,12 @@ describe("Workspace application feature parity", () => {
       }),
     );
 
-    await expect(feature.upload({ filePath: sourcePath, spaceId: "space-1" })).rejects.toMatchObject(
-      {
-        code: "workspace-result-unknown",
-        detail: { state: "waitingForUpload", uploadId: "upload-1" },
-      },
-    );
+    await expect(
+      feature.upload({ filePath: sourcePath, spaceId: "space-1" }),
+    ).rejects.toMatchObject({
+      code: "workspace-result-unknown",
+      detail: { state: "waitingForUpload", uploadId: "upload-1" },
+    });
     expect(requests).toEqual([
       "POST /api/blob-upload-sessions",
       "PUT /api/blob-upload-sessions/upload-1/content",
@@ -347,7 +437,10 @@ describe("Workspace application feature parity", () => {
     });
 
     await expect(
-      new WorkspaceBlobFeature(authFor(fetcher)).upload({ filePath: sourcePath, spaceId: "space-1" }),
+      new WorkspaceBlobFeature(authFor(fetcher)).upload({
+        filePath: sourcePath,
+        spaceId: "space-1",
+      }),
     ).rejects.toMatchObject({ code: "workspace-result-mismatch" });
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
@@ -456,6 +549,132 @@ describe("Workspace application feature parity", () => {
             : "workspace-result-mismatch",
       });
       expect(fetcher).toHaveBeenCalledTimes(1);
+    }
+  });
+
+  it.each(["ab", "abcd"])(
+    "preserves the CLI Blob mismatch detail including path (%s)",
+    async (content) => {
+      const directory = await temporaryDirectory();
+      const outputPath = join(directory, "cli.bin");
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input) => {
+          if (
+            new URL(input instanceof Request ? input.url : input.toString()).pathname.startsWith(
+              "/api/resources/",
+            )
+          ) {
+            const owningNode = node({ resource: blobResource() });
+            return jsonResponse({ node: owningNode, resource: owningNode.resource });
+          }
+          return new Response(content, {
+            headers: { "content-type": "application/octet-stream", etag: '\"v1\"' },
+          });
+        }),
+      );
+      await expect(feature.download({ outputPath, resourceId: "resource-1" })).rejects.toEqual(
+        expect.objectContaining({
+          code: "workspace-blob-size-mismatch",
+          detail: { actualByteSize: content.length, expectedByteSize: 3, path: outputPath },
+        }),
+      );
+      expect(await readdir(directory)).toEqual([]);
+    },
+  );
+
+  it.each(["abc", "ab", "abcd"])(
+    "checks streamed Blob byte counts without an output file (%s)",
+    async (content) => {
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input) => {
+          if (
+            new URL(input instanceof Request ? input.url : input.toString()).pathname.startsWith(
+              "/api/resources/",
+            )
+          ) {
+            const owningNode = node({ name: "payload.bin", resource: blobResource() });
+            return jsonResponse({ node: owningNode, resource: owningNode.resource });
+          }
+          return new Response(content, {
+            headers: { "content-type": "application/octet-stream", etag: '\"v1\"' },
+          });
+        }),
+      );
+      const stream = await feature.downloadStream("resource-1");
+      const consume = async () => {
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of stream.content) chunks.push(chunk);
+        return Buffer.concat(chunks).toString();
+      };
+      try {
+        if (content === "abc") {
+          expect(stream).toMatchObject({
+            fileName: "payload.bin",
+            byteSize: 3,
+            etag: '\"v1\"',
+            spaceId: "space-1",
+          });
+          await expect(consume()).resolves.toBe("abc");
+        } else
+          await expect(consume()).rejects.toMatchObject({ code: "workspace-blob-size-mismatch" });
+      } finally {
+        await stream.close();
+      }
+    },
+  );
+
+  it("rejects a streaming Blob with inconsistent Content-Length or weak ETag", async () => {
+    for (const headers of [
+      { "content-length": "4", etag: '\"v1\"' },
+      { "content-length": "3", etag: 'W/\"v1\"' },
+    ]) {
+      const feature = new WorkspaceBlobFeature(
+        authFor(async (input) => {
+          if (
+            new URL(input instanceof Request ? input.url : input.toString()).pathname.startsWith(
+              "/api/resources/",
+            )
+          ) {
+            const owningNode = node({ resource: blobResource() });
+            return jsonResponse({ node: owningNode, resource: owningNode.resource });
+          }
+          return new Response("abc", { headers: { ...headers, "content-type": "text/plain" } });
+        }),
+      );
+      await expect(feature.downloadStream("resource-1")).rejects.toMatchObject({
+        code: "workspace-invalid-response",
+      });
+    }
+  });
+
+  it("streams Asset bytes and refuses a truncated response", async () => {
+    for (const length of [3, 4]) {
+      const feature = new WorkspaceAssetFeature(
+        authFor(async (input) => {
+          if (
+            new URL(input instanceof Request ? input.url : input.toString()).pathname.endsWith(
+              "/sign-url",
+            )
+          )
+            return jsonResponse({ error: { code: 1, message: "" }, url: "https://cdn.test/file" });
+          return new Response("abc", {
+            headers: { "content-type": "image/png", "content-length": String(length) },
+          });
+        }),
+      );
+      const stream = await feature.downloadStream({ assetId: "asset-1", worktreeId: "wt-1" });
+      const consume = async () => {
+        for await (const _chunk of stream.content) {
+          /* Drain to validate the wire byte count. */
+        }
+      };
+      try {
+        if (length === 3) await expect(consume()).resolves.toBeUndefined();
+        else
+          await expect(consume()).rejects.toMatchObject({ code: "workspace-asset-size-mismatch" });
+      } finally {
+        await stream.close();
+      }
     }
   });
 
@@ -627,7 +846,6 @@ describe("Workspace application feature parity", () => {
     expect(authenticatedHttp).toHaveBeenCalledTimes(1);
     expect(await readFile(outputPath, "utf8")).toBe("keep");
   });
-
 });
 
 function authFor(fetcher: typeof fetch): AuthenticatedWorkspaceHttp {

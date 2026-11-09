@@ -65,7 +65,6 @@ import "@univerjs-pro/boards-ui/facade";
 import "@univerjs-pro/chart-ui/facade";
 import "@univerjs-pro/docs-latex/facade";
 import "@univerjs-pro/engine-chart/facade";
-import "@univerjs-pro/ink/facade";
 import "@univerjs/design/lib/index.css";
 import "@univerjs/ui/lib/index.css";
 import "@univerjs/docs-ui/lib/index.css";

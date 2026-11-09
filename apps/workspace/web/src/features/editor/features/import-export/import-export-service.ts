@@ -146,9 +146,8 @@ export class WorkspaceImportExportService extends Disposable {
   /**
    * Export the current Unit through the server; `targetId` picks a sheet or
    * table. The download takes the Workspace Node name, as the server's own
-   * filename does. `file.name` is not used: the SDK reads it from
-   * Content-Disposition with `/filename=(.+)/`, which returns the quoted ASCII
-   * fallback and the `filename*` parameter after it.
+   * filename does, so `file.name` (the Content-Disposition name the SDK parses)
+   * is not used.
    */
   async exportUnit(format: ExchangeFormat, targetId?: string): Promise<boolean> {
     const unit = this.dependencies.exchange.currentUnit();

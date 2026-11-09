@@ -10,7 +10,7 @@ Everything goes through one helper. Run it from the repository root:
 ```bash
 V=.agents/skills/verify-uvw/bin/verify-uvw
 $V up        # start server :3920 + web :5973 on a fresh temp data dir
-$V doctor    # read-only: is this instance ours and worth driving?
+$V doctor    # is this instance ours and worth driving?
 $V user      # register a throwaway password user and sign uvw in as it
 $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
@@ -49,7 +49,9 @@ Prerequisites, checked by `up` and `doctor`, each with its fix:
 1. Starts `node --import tsx server/src/main.ts` in `apps/workspace` under `env -i` with
    `HOST=127.0.0.1 PORT=3920` and `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE`,
    `BLOB_DIRECTORY` inside `data/`. `env -i` keeps `apps/workspace/.env` and your shell's
-   OAuth/data variables out, so password auth is the only sign-in method.
+   OAuth provider/data variables out, so password auth is the only user sign-in method.
+   With MCP enabled, it also sets `MCP_RESOURCE_URLS=http://127.0.0.1:<mcp port>/mcp`
+   and `PUBLIC_ORIGIN=http://127.0.0.1:<web port>` for Workspace MCP OAuth authorization.
 2. Starts Vite on 5973 with `WORKSPACE_DEV_API_PORT=3920`; it proxies `/api` and
    `/universer-api` (including WebSockets) to the server.
 3. Waits until `GET /api/session` answers on both ports. The server creates and migrates
@@ -69,7 +71,7 @@ The server does not reload. After changing server or CLI code: rebuild the CLI i
 
 ## Doctor
 
-`$V doctor` is read-only. Run it first, and again whenever anything looks off. It
+`$V doctor` checks the disposable instance. With MCP enabled after `user`, it creates or reuses a dedicated idempotent doctor Worktree and Sheet, then opens a worker through gateway inspection. Run it first, and again whenever anything looks off. It
 exits non-zero when any line says `FAIL`:
 
 - dependency and CLI build freshness (as above)
@@ -129,8 +131,9 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
   insert SQLite rows, call internal services, or use test-only endpoints. Registration via
   the public register endpoint in `$V user` is setup, not proof of the auth feature. The
   [auth journey](features/auth.md) proves that.
-- Nothing is mocked. Collaboration, Office exchange, and the CLI daemon are all real. OAuth
-  providers are absent by design and are not verifiable here.
+- Nothing is mocked. Collaboration, Office exchange, and the CLI daemon are all real. External OAuth
+  providers are absent by design. Workspace acting as the MCP OAuth authorization server
+  is covered by MO1 in [the MCP journeys](features/mcp.md).
 - In the report, give the run id, launch HEAD (`run.env`), feature IDs, and artifact paths.
 
 ## Cleanup
@@ -154,6 +157,111 @@ One run per port pair. A second concurrent run needs its own ports and an explic
 **every** call, because `current` follows the newest `up`:
 
 ```bash
-VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 $V up
+VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 VERIFY_UVW_MCP_PORT=3931 $V up
 VERIFY_UVW_RUN=b $V doctor
 ```
+
+## MCP gateway
+
+On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
+`apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
+port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS=2` at
+`up` to enable a second executor for MX13. The replica count is saved in the run. Without opt-in, existing commands
+keep their behavior and output, including runs created before MCP support.
+
+Set `EXECUTOR_MAX_WORKERS` and `EXECUTOR_IDLE_TTL_MS` in the launching shell before
+`up` to size an experimental executor pool. Unset values keep the existing defaults
+of 4 workers and 60000 ms. These Compose settings also apply to `executor-b`.
+Restart with `down`, then `up` after changing them. They do not change product defaults.
+
+Run `$V user` to create an independent MCP session, a fresh opencode directory and a personal
+access token (PAT). The gateway exchanges the PAT with Workspace (confidential client
+`univer-workspace-mcp-gateway`, created by `up` with a random secret in `home/mcp-oauth-secret`) for a
+short-lived downstream session and scopes. `$V mcp-token [--scopes read,...]` creates another PAT and makes it
+the default; it prints only the PAT id.
+`$V env` exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR`, and
+`MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high`. Sessions, opencode config,
+and the metrics token stay under `home/` with credential files mode 0600.
+
+```bash
+$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|dev|none|invalid] [--toolsets list] <label> <tool> [json]
+$V mcp-tools [--protocol version] [--toolsets list] <label>
+$V mcp-resources [--protocol version] [--toolsets list] <label>
+$V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
+$V mcp-instructions [--protocol version] [--toolsets list] <label>
+$V mcp-token [--scopes read,write,...] [--name name]
+$V mcp-logs
+```
+
+Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
+object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
+to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
+`mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
+`$V renderer-call <label> screenshot|printPdf|lint|measureText < input.json` sends one operation to the renderer from inside the
+executor container and saves `<label>.json` plus the PNG or PDF payload in `$EVIDENCE`. `bin/renderer-proof.mjs` prints a small
+Sheet or Doc with Latin and Chinese text as such an input.
+Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
+MO1 proves browser OAuth sign-in from a single MCP URL using a separate `ws` opencode
+config without an Authorization header. It needs the Workspace MCP OAuth authorization
+server (PR #216), agent-browser, and the model credentials available to the isolated
+opencode environment. It checks discovery through Vite, the four consent scopes, the
+callback without `worktree:merge`, and successful `whoami` and `repo_list` OAuth events.
+Its temporary project lives under this run's `home/`, with all four XDG directories and
+a free managed-service port set by `opencode service set port`. The trap stops that
+service and the auth process, saves the consent screenshot and redacted transcripts in
+`$EVIDENCE`, and deletes the isolated credentials on success or failure. Never record
+raw codes, tokens, or `state` values in evidence.
+
+Calls save `<label>.cmd`, `.out`, `.result.json`, `.err`, `.exit`, `.gateway.log`,
+and `.workspace.log` in `$EVIDENCE`. Tool calls also save `.event.json` and check its
+fields, Workspace request correlation, and Bearer leakage. HTTP failures preserve the
+status, authentication challenge, and body. Exit codes are 0 for success, 1 for a tool
+error, 2 for usage, 3 for transport or protocol failure, 4 for HTTP 401, and 5 for a
+completed call with invalid evidence.
+
+`doctor` checks Docker Desktop, the source digest, container health and image identity,
+port mapping, container configuration and Workspace access, protected metrics, and,
+after `user`, MCP identity, the PAT token exchange, and session, PAT and client-secret leakage. Rebuild with `down`, then `up` when
+inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
+
+`down` saves `logs/mcp-gateway.log`, `logs/mcp-executor.log` and `logs/mcp-renderer.log`, removes this run's compose containers, networks,
+volumes and image tag, then deletes `home/` with the other disposable data. It prints
+`ok    MCP resources removed` only after checking resource removal. Cleanup failures
+warn and continue. Run `down` after failures too. Build cache and evidence survive.
+
+The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts with every MCP run on its own compose
+network declared `internal: true`, joined only by the executor(s) and the renderer. The gateway waits for it to be healthy.
+`doctor` checks its image, that it has no published port and joins one internal network, bearer rejection, protected metrics,
+a real `measureText` call from the executor, that it cannot reach `host.docker.internal:<server port>`, the gateway or a public
+host, and that its logs hold no credential. `down` removes its container and network with the rest of the project.
+
+The executor has no published port. `doctor` verifies its image, bearer rejection, HTTP/ticket/
+collaboration WebSocket transport, log redaction and worker environment. The positive RPC check runs inside the gateway with its configured token and executor URL.
+The worker check rejects zero inspected workers. It verifies the child environment only; same-uid
+workers can still read the executor environment through `/proc/1/environ` until Stage G.
+Log checks include license and license-key values. `mcp --expect-event '<jq expression>'` adds a per-call event
+assertion. `executor: none` requires zero worker costs (`worker_cpu_ms`, `worker_peak_rss_mb`,
+`render_pages`, `committed_revisions`); gateway file tools may report transfer bytes.
+Worker calls report cold/warm and nonnegative costs.
+
+
+For long Office or Typst jobs, set `MCP_SYNC_BUDGET_MS=1` before starting the verification stack.
+The default is 30000. A job-returning call can have no usage event yet; `mcp-call` records
+that response without requiring an early event. Poll `job_get`, then inspect the original
+request ID in gateway logs to verify one settled conversion event and its real costs.
+Deduplicated retries emit no second conversion event. Start a default-budget stack for
+existing synchronous Office journeys.
+
+A succeeded same-key import/export/compile_typst retry returns the original tool result directly.
+Deduplicated responses carry `_meta["univer.workspace.deduplicated"]: true`; the call helper
+requires zero additional conversion events for that marker. Failed jobs release their keys,
+so a retry runs again and emits its own settled event. A reused key with different arguments
+returns `workspace-idempotency-conflict` and starts nothing (MX10).
+
+For executor sizing and sustained-write measurements, use
+`node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help` and the
+[capacity benchmark recipe](features/mcp.md#executor-capacity-benchmark).
+Run `--self-test` before a real run. The default benchmark saves JSON with sample
+counts, median, range, p95 for at least twenty observations, errors, usage events,
+readback checks, process RSS, and host counters. It waits for a quiet machine and
+never supplies production sizing numbers without a local measurement.

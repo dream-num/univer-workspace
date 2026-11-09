@@ -1,13 +1,78 @@
 import { randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { access, link, open, rename, stat, unlink, type FileHandle } from "node:fs/promises";
-import { basename, dirname, resolve } from "node:path";
+import { basename, dirname, posix, resolve } from "node:path";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 
 export interface SourceFile {
+  /** Present for in-memory input; `path` then holds the caller's file name. */
+  readonly bytes?: Uint8Array;
   readonly byteSize: number;
   readonly originalFilename: string;
   readonly path: string;
+}
+
+/** Relative POSIX paths ("img/a.png") to bytes. No absolute paths, no "..", no backslashes, no empty segments. */
+export type WorkspaceSourceFiles = ReadonlyMap<string, Uint8Array>;
+
+/** The one place a caller-supplied file set is checked; later steps trust the type. */
+export function assertWorkspaceSourceFiles(files: WorkspaceSourceFiles): void {
+  const folded = new Map<string, string>();
+  for (const key of files.keys()) {
+    if (
+      key.length === 0 ||
+      key.includes("\\") ||
+      key.includes("\0") ||
+      key.startsWith("/") ||
+      key.split("/").some((segment) => segment === "" || segment === "." || segment === "..")
+    ) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        `Source file path ${JSON.stringify(key)} must be a relative POSIX path without empty, "." or ".." segments.`,
+      );
+    }
+    const fold = key.normalize("NFC").toLowerCase();
+    const same = folded.get(fold);
+    if (same !== undefined) throw sourceFileCollision(same, key);
+    folded.set(fold, key);
+  }
+  // A key that is a directory prefix of another cannot be both a file and a directory on disk.
+  for (const [fold, key] of folded) {
+    const segments = fold.split("/");
+    for (let length = 1; length < segments.length; length += 1) {
+      const prefix = folded.get(segments.slice(0, length).join("/"));
+      if (prefix !== undefined) throw sourceFileCollision(prefix, key);
+    }
+  }
+}
+
+function sourceFileCollision(first: string, second: string): WorkspaceApplicationError {
+  return workspaceError(
+    "workspace-argument-invalid",
+    `Source file paths ${JSON.stringify(first)} and ${JSON.stringify(second)} collide on a case-insensitive or Unicode-normalizing filesystem, or one is a directory of the other.`,
+  );
+}
+
+/** Look up a reference as the path variant would resolve it; a miss mimics a missing file. */
+export function readWorkspaceSourceFile(
+  files: WorkspaceSourceFiles,
+  reference: string,
+): Uint8Array {
+  const key = posix.normalize(reference);
+  const escapes = key.startsWith("/") || key === ".." || key.startsWith("../");
+  const bytes = escapes ? undefined : files.get(key);
+  if (bytes === undefined) {
+    throw Object.assign(new Error(`ENOENT: no such file in the provided sources: ${reference}`), {
+      code: "ENOENT",
+    });
+  }
+  return bytes;
+}
+
+/** In-memory Blob input; the file name is trimmed and must be a plain basename. */
+export interface WorkspaceBlobBytes {
+  readonly bytes: Uint8Array;
+  readonly fileName: string;
 }
 
 export interface DownloadTarget {
@@ -17,6 +82,23 @@ export interface DownloadTarget {
     content: AsyncIterable<Uint8Array>,
     expectedSize?: number,
   ): Promise<{ readonly byteSize: number; readonly outputPath: string }>;
+}
+
+/** Copies the caller's bytes so later mutation cannot change what a retry sends. */
+export function memorySource(input: WorkspaceBlobBytes): SourceFile {
+  const fileName = input.fileName.trim();
+  if (fileName === "" || fileName === "." || fileName === ".." || /[\\/\0]/.test(fileName)) {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      'In-memory Blob input needs a file name without path separators, not empty, "." or "..".',
+    );
+  }
+  return {
+    bytes: input.bytes.slice(),
+    byteSize: input.bytes.byteLength,
+    originalFilename: fileName,
+    path: fileName,
+  };
 }
 
 export async function inspectSource(path: string): Promise<SourceFile> {
@@ -43,6 +125,10 @@ export async function inspectSource(path: string): Promise<SourceFile> {
 }
 
 export async function* openSource(source: SourceFile): AsyncIterable<Uint8Array> {
+  if (source.bytes !== undefined) {
+    if (source.bytes.byteLength > 0) yield source.bytes;
+    return;
+  }
   let byteSize = 0;
   try {
     for await (const chunk of createReadStream(source.path)) {

@@ -376,7 +376,8 @@ function validUnitType(value: unknown): UnitType {
     value !== "doc" &&
     value !== "slide" &&
     value !== "board" &&
-    value !== "base"
+    value !== "base" &&
+    value !== "pdf"
   ) {
     throw invalidInput("unitType is invalid.", "unitType");
   }

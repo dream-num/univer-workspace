@@ -30,7 +30,7 @@ import { UniverBasesThreadCommentUIPlugin } from '@univerjs-pro/bases-thread-com
 import { UniverBasesHistoryUIPlugin } from '@univerjs-pro/bases-history-ui';
 import baseHistoryLocale from '@univerjs-pro/bases-history-ui/locale/zh-CN';
 import { UniverBasesExchangeClientPlugin } from '@univerjs-pro/bases-exchange-client';
-import { yellowTheme } from '@univerjs/themes';
+import { defaultTheme, greenTheme, yellowTheme } from '@univerjs/themes';
 
 import { UniverBoardsThreadCommentUIPlugin, OpenBoardCommentPanelOperation } from '@univerjs-pro/boards-thread-comment-ui';
 import { UniverBoardsHistoryUIPlugin } from '@univerjs-pro/boards-history-ui';
@@ -352,7 +352,7 @@ export function CollaborativeEditor({
       runtime = createUniver({
         locale: LocaleType.ZH_CN,
         collaboration: true,
-        ...(file.type === 'slide' ? { theme: purpleTheme } : file.type === 'board' ? { theme: redTheme } : file.type === 'base' ? { theme: yellowTheme } : {}),
+        theme: file.type === 'sheet' ? greenTheme : file.type === 'slide' ? purpleTheme : file.type === 'board' ? redTheme : file.type === 'base' ? yellowTheme : defaultTheme,
         locales: {
           [LocaleType.ZH_CN]: mergeLocales(
             docsLocale,

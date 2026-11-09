@@ -3,4 +3,4 @@ import { createCollaborationRuntime } from "../dist/server/integrations/univer/u
 import { verifyCollaborationMigration } from "./support/collaboration-migration-checks.js";
 
 await verifyCollaborationMigration(prepareCollaborationDatabase, createCollaborationRuntime);
-console.log("Production build passed the SDK 1.0.0 Collaboration migration matrix.");
+console.log("Production build passed the Collaboration SDK migration matrix.");

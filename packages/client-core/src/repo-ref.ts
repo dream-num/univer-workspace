@@ -20,6 +20,10 @@ export interface ResolvedWorkspaceRepo {
   readonly worktreeId?: string;
 }
 
+export type ItemTarget =
+  | { readonly kind: "number"; readonly number: number; readonly spaceId: string }
+  | { readonly kind: "id"; readonly id: string };
+
 const ITEM_ROUTES = { issues: "issue", pulls: "pr" } as const;
 
 /**
@@ -80,6 +84,33 @@ export async function resolveRepoReference(
     case "full-name":
       return { spaceId: (await spaces.lookup(parsed.owner, parsed.slug)).id };
   }
+}
+
+export async function resolveItemTarget(
+  argument: string,
+  kind: "issue" | "pr",
+  origin: () => Promise<string>,
+  repo: () => Promise<ResolvedWorkspaceRepo>,
+): Promise<ItemTarget> {
+  const text = argument.trim();
+  if (/^https?:\/\//i.test(text)) {
+    if (new URL(text).origin !== new URL(await origin()).origin) {
+      throw workspaceError(
+        "workspace-origin-mismatch",
+        "The URL belongs to a different Workspace than the configured origin.",
+      );
+    }
+    const parsed = parseRepoReference(text);
+    if (parsed.kind === "worktree-url" && kind === "pr") return { kind: "id", id: parsed.worktreeId };
+    if (parsed.kind === "url" && parsed.item?.kind === kind) {
+      return { kind: "number", number: parsed.item.number, spaceId: parsed.spaceId };
+    }
+    throw invalid(`"${text}" does not point at ${kind === "pr" ? "a pull request" : "an issue"}.`);
+  }
+  const number = parseItemNumber(text);
+  if (number !== undefined) return { kind: "number", number, spaceId: (await repo()).spaceId };
+  if (kind === "pr") return { kind: "id", id: text };
+  throw invalid(`Issue number must look like 12 or #12, got "${argument}".`);
 }
 
 function parseBrowserUrl(value: string): WorkspaceRepoReference {

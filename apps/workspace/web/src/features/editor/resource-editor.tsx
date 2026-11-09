@@ -20,6 +20,9 @@ const BoardEditor = mobile
 const BaseEditor = mobile
   ? lazy(() => import("./units/base/base-editor.mobile"))
   : lazy(() => import("./units/base/base-editor"));
+const PdfEditor = mobile
+  ? lazy(() => import("./units/pdf/pdf-editor.mobile"))
+  : lazy(() => import("./units/pdf/pdf-editor"));
 
 type UnitType = components["schemas"]["UnitType"];
 
@@ -66,6 +69,8 @@ export function ResourceEditor(props: {
         <SlideEditor {...editorProps} />
       ) : props.unitType === "board" ? (
         <BoardEditor {...editorProps} />
+      ) : props.unitType === "pdf" ? (
+        <PdfEditor {...editorProps} />
       ) : <BaseEditor {...editorProps} />}
     </Suspense>
   );

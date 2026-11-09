@@ -59,7 +59,7 @@ export function useCreateUniverResource(
     mutationFn: async (
       input: Destination & {
         readonly name: string;
-        readonly unitType: "sheet" | "doc" | "slide" | "board" | "base";
+        readonly unitType: "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
         readonly documentMode: NewDocumentMode;
       },
     ) => {

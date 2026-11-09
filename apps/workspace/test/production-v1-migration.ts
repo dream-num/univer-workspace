@@ -48,6 +48,7 @@ try {
   v1.exec(`
     PRAGMA foreign_keys = OFF;
     BEGIN IMMEDIATE;
+    ${DROP_V14_SQL}
     DROP TRIGGER univer_asset_uploads_scope_update;
     DROP TRIGGER univer_asset_uploads_trunk_unit_insert;
     DROP TRIGGER univer_assets_trunk_unit_update;
@@ -103,7 +104,6 @@ try {
     CREATE INDEX operations_actor
       ON operations(actor_user_id, created_at DESC);
     ${DROP_V12_SQL}
-    ${DROP_V14_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -126,7 +126,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 16);
+    assert.equal(version.user_version, 18);
     const resource = migrated.database.connection
       .prepare("SELECT id, kind FROM resources")
       .get() as { readonly id: string; readonly kind: string };

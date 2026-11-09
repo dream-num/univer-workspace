@@ -27,6 +27,7 @@ import {
   createCollaborationGateway,
   type CollaborationGateway,
 } from "./integrations/univer/collaboration-gateway.js";
+import { createSessionSockets } from "./integrations/realtime/session-sockets.js";
 import { createWorktreeChangeFeed } from "./integrations/realtime/worktree-change-feed.js";
 import {
   errorHandler,
@@ -56,11 +57,14 @@ import {
   type ResourcesModule,
 } from "./modules/resources/index.js";
 import {
+  authorizationServerMetadata,
+  createAccessTokenService,
   createIdentityModule,
   createIdentityRouter,
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
   createGoogleOAuthProvider,
+  createMcpClientRegistrationHandler,
   createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
   type GoogleOAuthProvider,
@@ -176,8 +180,13 @@ export function createWorkspaceApplication(
   const emailSender =
     dependencies.emailSender ??
     (config.emailAuth ? createEmailSender(config.emailAuth) : null);
+  const identityRepository = new IdentityRepository(database);
+  const sessionSockets = createSessionSockets((sessionId) => identityRepository.findSession(sessionId) !== null);
+  const onSessionsDeleted = sessionSockets.closeSessions;
+  const accessTokens = createAccessTokenService({ database, onSessionsDeleted });
   const identity = createIdentityModule({
-    repository: new IdentityRepository(database),
+    repository: identityRepository,
+    onSessionsDeleted,
     sessionTtlMs: config.sessionTtlMs,
     githubOAuthProvider:
       dependencies.githubOAuthProvider ??
@@ -267,7 +276,7 @@ export function createWorkspaceApplication(
     access,
   });
   const univerAssetsRepository = new UniverAssetsRepository(database);
-  const worktreeChangeFeed = createWorktreeChangeFeed();
+  const worktreeChangeFeed = createWorktreeChangeFeed(sessionSockets);
   const issues = createIssuesModule({
     repository: new IssuesRepository(database),
     access,
@@ -327,6 +336,7 @@ export function createWorkspaceApplication(
         snapshotMaterializer: collaboration.snapshotMaterializer,
         worktrees,
         worktreeChangeFeed,
+        sessionSockets,
       })
     : null;
   invalidateRealtimeNodeAccess = () =>
@@ -343,6 +353,12 @@ export function createWorkspaceApplication(
   });
   // The operational endpoint is disabled unless a dedicated scrape token is set.
   app.get("/metrics", createMetricsHandler(config.metricsToken));
+  const mcpOAuth = config.mcpOAuth;
+  if (mcpOAuth) {
+    app.get("/.well-known/oauth-authorization-server", (_request, response) => {
+      response.json(authorizationServerMetadata(mcpOAuth));
+    });
+  }
   app.get("/openapi.yaml", (_request, response) => {
     const filename = resolve("generated/http/openapi.bundled.yaml");
     if (!existsSync(filename)) {
@@ -362,10 +378,14 @@ export function createWorkspaceApplication(
       pageTitle: "Univer Workspace API",
     })
   );
+  if (mcpOAuth) {
+    app.post("/api/auth/register", createMcpClientRegistrationHandler({ accessTokens, mcpOAuth }));
+  }
   app.use(
     "/api",
     createIdentityRouter({
       identity,
+      accessTokens,
       secureCookies: config.secureCookies,
       ...(config.discordBotApiKey
         ? { discordBotApiKey: config.discordBotApiKey }
@@ -378,9 +398,12 @@ export function createWorkspaceApplication(
     "/api/auth",
     createOAuthAuthorizationRouter({
       identity,
+      accessTokens,
+      database,
       secureCookies: config.secureCookies,
       oauthClients,
       authorizationStore,
+      mcpOAuth: mcpOAuth ?? null,
     })
   );
   app.use("/api", createSpacesRouter({ identity, spaces }));

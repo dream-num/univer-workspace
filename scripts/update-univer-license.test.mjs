@@ -34,9 +34,10 @@ test("renders every constant a target declares", () => {
   const rendered = LICENSE_TARGETS.map((target) =>
     renderLicenseModule(target, { license, licenseKey: "c2VjcmV0" }, details),
   );
-  assert.equal(rendered.length, 5);
-  assert.doesNotMatch(rendered[0], /c2VjcmV0/u);
-  for (const source of rendered.slice(1)) assert.match(source, /"c2VjcmV0"/u);
+  assert.equal(rendered.length, 6);
+  assert.match(rendered[0], /"c2VjcmV0"/u);
+  assert.doesNotMatch(rendered[1], /c2VjcmV0/u);
+  for (const source of rendered.slice(2)) assert.match(source, /"c2VjcmV0"/u);
   for (const source of rendered) {
     assert.match(source, /Issued 2026-11-02T12:19:19Z; expires 2027-02-02T15:00:00Z/u);
     assert.ok(source.includes(JSON.stringify(license)));

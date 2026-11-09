@@ -8,16 +8,14 @@ import {
 import {
   contentLength,
   inspectSource,
+  memorySource,
   openSource,
   prepareDownload,
   responseContent,
   type SourceFile,
+  type WorkspaceBlobBytes,
 } from "./files.js";
-import {
-  isWorkspaceRecord,
-  type AuthenticatedWorkspaceHttp,
-  type WorkspaceHttp,
-} from "./http.js";
+import { isWorkspaceRecord, type AuthenticatedWorkspaceHttp, type WorkspaceHttp } from "./http.js";
 import {
   parseDetachedNode,
   parseNodeResource,
@@ -91,6 +89,14 @@ interface ReplacementResult {
 
 const BLOB_UPLOAD_MAX_ATTEMPTS = 3;
 
+interface UploadOptions {
+  readonly declaredMediaType?: string;
+  readonly idempotencyKey?: string;
+  readonly name?: string;
+  readonly parentNodeId?: string;
+  readonly spaceId: string;
+}
+
 export class WorkspaceBlobFeature {
   public constructor(private readonly authenticatedHttp: AuthenticatedWorkspaceHttp) {}
 
@@ -101,15 +107,28 @@ export class WorkspaceBlobFeature {
     return await getBlob(await this.authenticatedHttp(), id);
   }
 
-  public async upload(input: {
-    readonly declaredMediaType?: string;
-    readonly filePath: string;
-    readonly idempotencyKey?: string;
-    readonly name?: string;
-    readonly parentNodeId?: string;
-    readonly spaceId: string;
-  }): Promise<Record<string, unknown>> {
+  public async upload(
+    input: UploadOptions & { readonly filePath: string; readonly fileName?: string },
+  ): Promise<Record<string, unknown>> {
     const source = await inspectSource(input.filePath);
+    const originalFilename =
+      input.fileName === undefined
+        ? source.originalFilename
+        : memorySource({ fileName: input.fileName, bytes: new Uint8Array() }).originalFilename;
+    return await this.uploadSource({ ...source, originalFilename }, input);
+  }
+
+  /** Same upload for bytes that never touched a local disk; `fileName` replaces the source path. */
+  public async uploadBytes(
+    input: UploadOptions & WorkspaceBlobBytes,
+  ): Promise<Record<string, unknown>> {
+    return await this.uploadSource(memorySource(input), input);
+  }
+
+  private async uploadSource(
+    source: SourceFile,
+    input: UploadOptions,
+  ): Promise<Record<string, unknown>> {
     const declaredMediaType = normalizeOptionalMediaType(input.declaredMediaType);
     const intent: UploadIntent = {
       idempotencyKey: input.idempotencyKey ?? randomUUID(),
@@ -134,7 +153,7 @@ export class WorkspaceBlobFeature {
 
     for (let attempt = 0; attempt < BLOB_UPLOAD_MAX_ATTEMPTS; attempt += 1) {
       if (envelope.upload.state === "waitingForUpload") {
-        envelope = await this.uploadBytes(http, envelope, reserved, intent, source);
+        envelope = await this.putUploadBytes(http, envelope, reserved, intent, source);
         continue;
       }
       if (envelope.upload.state === "verifying") {
@@ -170,9 +189,21 @@ export class WorkspaceBlobFeature {
 
   /** Replacements publish directly and preserve the existing Resource identity. */
   public async replace(
-    input: ReplacementIntent & {
-      readonly filePath: string;
-    },
+    input: ReplacementIntent & { readonly filePath: string },
+  ): Promise<ReplacementResult> {
+    return await this.replaceSource(input, async () => await inspectSource(input.filePath));
+  }
+
+  public async replaceBytes(
+    input: ReplacementIntent & WorkspaceBlobBytes,
+  ): Promise<ReplacementResult> {
+    const source = memorySource(input);
+    return await this.replaceSource(input, async () => source);
+  }
+
+  private async replaceSource(
+    input: ReplacementIntent,
+    readSource: () => Promise<SourceFile>,
   ): Promise<ReplacementResult> {
     const intent: ReplacementIntent = {
       resourceId: requireIdentity(input.resourceId, "Resource ID"),
@@ -185,7 +216,7 @@ export class WorkspaceBlobFeature {
         "ETag must be the exact quoted strong ETag from the downloaded Blob.",
       );
     }
-    const source = await inspectSource(input.filePath);
+    const source = await readSource();
     const http = await this.authenticatedHttp();
     const recovery = {
       ...intent,
@@ -248,36 +279,46 @@ export class WorkspaceBlobFeature {
     readonly resourceId: string;
   }): Promise<Record<string, unknown>> {
     const view = await this.get(input.resourceId);
-    if (view.resource.availability !== "ready" || !view.resource.capabilities.downloadContent) {
-      throw workspaceError(
-        "workspace-blob-download-unavailable",
-        "Workspace Blob is not available for download.",
-        {
-          resourceId: view.resource.resourceId,
-          availability: view.resource.availability,
-          downloadContent: view.resource.capabilities.downloadContent,
-        },
-      );
-    }
+    assertDownloadAvailable(view);
     const target = await prepareDownload({
       kind: "blob",
       outputPath: input.outputPath,
       ...(input.force === true ? { force: true } : {}),
     });
     try {
-      const response = await (
-        await this.authenticatedHttp()
-      ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`, {
-        acceptEncoding: "identity",
-      });
+      // The file writer owns CLI size errors, including the destination path.
+      const stream = await this.openDownload(view, false);
+      const written = await target.writeAndCommit(stream.content, stream.byteSize);
+      return {
+        resourceId: stream.resourceId,
+        nodeId: stream.nodeId,
+        outputPath: written.outputPath,
+        byteSize: written.byteSize,
+        mediaType: stream.mediaType,
+        etag: stream.etag,
+      };
+    } finally {
+      await target.discard();
+    }
+  }
+
+  /** The caller must consume or close the stream; byte count and strong ETag remain checked. */
+  public async downloadStream(resourceId: string) {
+    const view = await this.get(resourceId);
+    assertDownloadAvailable(view);
+    return this.openDownload(view);
+  }
+
+  private async openDownload(view: Awaited<ReturnType<typeof getBlob>>, checkSize = true) {
+    const response = await (
+      await this.authenticatedHttp()
+    ).request(`/api/blob-resources/${encodeURIComponent(view.resource.resourceId)}/download`, {
+      acceptEncoding: "identity",
+    });
+    try {
       const mediaType = response.headers.get("content-type");
       const etag = response.headers.get("etag");
-      if (
-        mediaType === null ||
-        mediaType.length === 0 ||
-        response.body === null ||
-        !isStrongEtag(etag)
-      ) {
+      if (!mediaType || response.body === null || !isStrongEtag(etag)) {
         throw workspaceError(
           "workspace-invalid-response",
           "Workspace Blob download response is missing content metadata or a quoted strong ETag.",
@@ -295,24 +336,29 @@ export class WorkspaceBlobFeature {
           },
         );
       }
-      const written = await target.writeAndCommit(
-        responseContent(response),
-        view.resource.byteSize,
-      );
+      const content = checkSize
+        ? checkedBlobContent(response, view.resource.byteSize)
+        : responseContent(response);
       return {
+        content,
         resourceId: view.resource.resourceId,
         nodeId: view.node.nodeId,
-        outputPath: written.outputPath,
-        byteSize: written.byteSize,
+        spaceId: view.node.spaceId,
+        fileName: view.node.name,
+        byteSize: view.resource.byteSize,
         mediaType,
         etag,
+        close: async () => {
+          await response.body?.cancel();
+        },
       };
-    } finally {
-      await target.discard();
+    } catch (error) {
+      await response.body?.cancel();
+      throw error;
     }
   }
 
-  private async uploadBytes(
+  private async putUploadBytes(
     http: WorkspaceHttp,
     envelope: UploadEnvelope,
     reserved: UploadEnvelope,
@@ -836,4 +882,44 @@ function isNonNegativeSafeInteger(value: unknown): value is number {
 
 function invalidResponse(message: string): WorkspaceApplicationError {
   return workspaceError("workspace-invalid-response", message);
+}
+
+function assertDownloadAvailable(view: Awaited<ReturnType<typeof getBlob>>): void {
+  if (view.resource.availability !== "ready" || !view.resource.capabilities.downloadContent) {
+    throw workspaceError(
+      "workspace-blob-download-unavailable",
+      "Workspace Blob is not available for download.",
+      {
+        resourceId: view.resource.resourceId,
+        availability: view.resource.availability,
+        downloadContent: view.resource.capabilities.downloadContent,
+      },
+    );
+  }
+}
+async function* checkedBlobContent(
+  response: Response,
+  expectedByteSize: number,
+): AsyncIterable<Uint8Array> {
+  let actualByteSize = 0;
+  try {
+    for await (const chunk of responseContent(response)) {
+      actualByteSize += chunk.byteLength;
+      if (actualByteSize > expectedByteSize)
+        throw workspaceError(
+          "workspace-blob-size-mismatch",
+          "Blob byte stream does not match the expected byte size.",
+          { expectedByteSize, actualByteSize },
+        );
+      yield chunk;
+    }
+    if (actualByteSize !== expectedByteSize)
+      throw workspaceError(
+        "workspace-blob-size-mismatch",
+        "Blob byte stream does not match the expected byte size.",
+        { expectedByteSize, actualByteSize },
+      );
+  } finally {
+    await response.body?.cancel();
+  }
 }

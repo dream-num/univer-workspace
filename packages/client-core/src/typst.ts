@@ -1,22 +1,29 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import {
   compileDocTypstBundle,
   type CompileDocTypstBundleOptions,
   type CompileDocTypstBundleResult,
 } from "@univer-cli/doc-typst-facade";
 import { workspaceError } from "./errors.js";
+import { assertWorkspaceSourceFiles, type WorkspaceSourceFiles } from "./files.js";
 import type { WorkspaceUnitFeature } from "./unit.js";
 import type { WorkspaceUnit } from "./worktree-model.js";
 
-export interface WorkspaceCompileTypstInput {
+export type WorkspaceCompileTypstSource =
+  | { readonly bundlePath: string; readonly bundle?: never }
+  | { readonly bundle: WorkspaceSourceFiles; readonly bundlePath?: never };
+
+export type WorkspaceCompileTypstInput = WorkspaceCompileTypstSource & {
   readonly apply?: {
     readonly idempotencyKey?: string;
     readonly parentNodeId?: string;
     readonly spaceId: string;
     readonly worktreeId: string;
   };
-  readonly bundlePath: string;
   readonly previewDir?: string;
-}
+};
 
 export interface WorkspaceCompileTypstResult extends CompileDocTypstBundleResult {
   readonly committed: boolean;
@@ -56,9 +63,26 @@ export class WorkspaceCompileTypstFeature {
   }
 
   public async execute(input: WorkspaceCompileTypstInput): Promise<WorkspaceCompileTypstResult> {
+    if ((input.bundlePath === undefined) === (input.bundle === undefined)) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        "Provide exactly one of a Typst bundle path or in-memory bundle files.",
+      );
+    }
+    if (input.bundle !== undefined && input.previewDir !== undefined) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        "previewDir is not supported with an in-memory Typst bundle.",
+      );
+    }
     const compileOptions: CompileDocTypstBundleOptions =
       input.previewDir === undefined ? {} : { previewDir: input.previewDir };
-    const compiled = await this.compile(input.bundlePath, compileOptions);
+    const compiled =
+      input.bundlePath !== undefined
+        ? await this.compile(input.bundlePath, compileOptions)
+        : await withBundleDirectory(input.bundle as WorkspaceSourceFiles, (directory) =>
+            this.compile(directory, compileOptions),
+          );
     if (input.apply === undefined) return { ...compiled, committed: false };
 
     const errors = compiled.diagnostics.filter((diagnostic) => diagnostic.severity === "error");
@@ -85,5 +109,24 @@ export class WorkspaceCompileTypstFeature {
         : { idempotencyKey: input.apply.idempotencyKey }),
     });
     return { ...compiled, committed: true, unit };
+  }
+}
+
+/** The facade reads a directory, so an in-memory bundle lives in a private one for the compile only. */
+async function withBundleDirectory<Result>(
+  files: WorkspaceSourceFiles,
+  operation: (directory: string) => Promise<Result>,
+): Promise<Result> {
+  assertWorkspaceSourceFiles(files);
+  const directory = await mkdtemp(join(tmpdir(), "workspace-typst-"));
+  try {
+    for (const [path, bytes] of files) {
+      const target = join(directory, ...path.split("/"));
+      await mkdir(dirname(target), { recursive: true });
+      await writeFile(target, bytes, { flag: "wx" });
+    }
+    return await operation(directory);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
   }
 }

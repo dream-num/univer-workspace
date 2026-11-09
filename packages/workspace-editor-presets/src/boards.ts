@@ -64,7 +64,6 @@ import "@univerjs-pro/boards-ui/facade";
 import "@univerjs-pro/chart-ui/facade";
 import "@univerjs-pro/docs-latex/facade";
 import "@univerjs-pro/engine-chart/facade";
-import "@univerjs-pro/ink/facade";
 const MAX_UNIVER_IMAGE_BYTES = 20 * 1024 * 1024;
 export const boardEditorLocales: Readonly<
   Record<"zh-CN" | "en-US", ILanguagePack>

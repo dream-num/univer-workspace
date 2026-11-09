@@ -19,6 +19,25 @@
     tags: [Authentication]
     operationId: oauthAuthorize
     summary: Start an OAuth-style authorization for a registered client.
+    description: |
+      Static `OAUTH_CLIENTS_JSON` clients keep their rules: an exact
+      registered `redirect_uri`, a 32 to 256 character base64url `state`, and
+      a `scope` from the client's configured scopes (default `identity`).
+
+      When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
+      (`POST /api/auth/register`) may also authorize. They must send
+      `response_type=code`, `code_challenge_method=S256` and a `resource`
+      equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
+      `write`, `publish` and `worktree:merge` (default all four) and `state`
+      is optional, 1 to 1024 printable ASCII characters. A loopback
+      `redirect_uri` matches a registered one with any port (RFC 8252); every
+      other URI matches exactly. The user always sees a consent page that
+      lists the requested scopes, each of which can be unchecked; the code
+      carries only the checked scopes. An unknown client or unregistered
+      `redirect_uri` is answered here with 400; once both are verified, other
+      errors redirect to the client with RFC 6749 `error` (`invalid_request`,
+      `invalid_scope`, `invalid_target`, `unsupported_response_type` or
+      `access_denied`), `error_description` and `state`.
     security:
       - {}
       - sessionCookie: []
@@ -36,10 +55,10 @@
           type: string
       - name: state
         in: query
-        required: true
+        required: false
+        description: Required for static clients, as a 32 to 256 character base64url value; optional for MCP clients.
         schema:
           type: string
-          pattern: ^[A-Za-z0-9_-]{32,256}$
       - name: code_challenge
         in: query
         required: true
@@ -51,9 +70,29 @@
         required: false
         schema:
           type: string
+      - name: response_type
+        in: query
+        required: false
+        description: Required for MCP clients.
+        schema:
+          type: string
+          enum: [code]
+      - name: code_challenge_method
+        in: query
+        required: false
+        description: Required for MCP clients.
+        schema:
+          type: string
+          enum: [S256]
+      - name: resource
+        in: query
+        required: false
+        description: Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly.
+        schema:
+          type: string
     responses:
       "302":
-        description: Redirect to Workspace login or back to the registered redirect_uri with a one-time code.
+        description: Redirect to Workspace login, to the consent page, or back to the registered redirect_uri with a one-time code or an OAuth error.
         headers:
           Location:
             required: true
@@ -61,13 +100,63 @@
               type: string
       "400":
         $ref: ../schemas/common.yaml#/BadRequest
+      "403":
+        description: The session was issued by token exchange; this action requires an interactive sign-in.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/auth/token:
   post:
     tags: [Authentication]
     operationId: oauthToken
-    summary: Exchange a one-time authorization code for a registered client identity.
+    summary: Exchange a one-time authorization code for a registered client identity or MCP tokens, refresh MCP tokens, or exchange a personal access token or MCP access token for a downstream session.
     description: |
+      Three grants share this endpoint.
+
+      For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
+      is set), `authorization_code` and `refresh_token` take a form body with
+      `client_id` and no secret, and must send the `resource` the grant is
+      bound to. They return `McpTokenResponse` with `Cache-Control:
+      no-store`. A code is good for one attempt; presenting an already
+      redeemed code revokes the grant it produced. A refresh token rotates;
+      presenting a rotated one within 60 seconds fails without side effects,
+      later it revokes the grant. Errors use the RFC 6749 section 5.2 body
+      `{ "error": "<code>", "error_description": "<description>" }` with
+      `Cache-Control: no-store`: `invalid_request` (400, malformed request),
+      `invalid_client` (401, unknown or missing `client_id`),
+      `unsupported_grant_type` (400, a grant the client may not use or the
+      server does not support) or `invalid_grant` (400, a bad code or refresh
+      token, including a wrong client, `redirect_uri`, `code_verifier` or
+      `resource`). While MCP OAuth is enabled, every non-static client
+      request and every `refresh_token` request uses these errors, including
+      unknown or missing clients. Token exchange keeps the rules below.
+
+      Static `OAUTH_CLIENTS_JSON` clients keep their existing
+      `authorization_code` behavior (JSON or form body) and Workspace error
+      objects. When MCP OAuth is disabled, all requests keep their existing
+      behavior.
+
+      `urn:ietf:params:oauth:grant-type:token-exchange` (RFC 8693) accepts
+      only an `application/x-www-form-urlencoded` body and is open only to a
+      confidential client registered with `"tokenExchange": true` that
+      authenticates with `client_secret`. The `subject_token` is a personal
+      access token or an MCP OAuth access token. An OAuth access token is
+      valid only when `resource` equals the resource its grant was issued
+      for; a personal access token ignores `resource`. The revocation check
+      and the session insert happen in one database transaction. The
+      response `access_token` is a Workspace login session, presented as the
+      `workspace_session` cookie. It lives for 10 minutes, or less when the
+      subject token expires sooner or the deployment session lifetime is
+      shorter; `expires_in` reports the actual lifetime. Such a session
+      cannot create personal access tokens, approve CLI logins, authorize
+      OAuth clients or link identities (403). Errors use the RFC 6749 body
+      `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
+      body), `invalid_grant` (400), `unauthorized_client` (400, a
+      confidential client without `tokenExchange`) or `invalid_client` (401,
+      an unknown or public client or a wrong secret).
+
       When the granted scope includes `session`, the response also carries a
       Workspace login session token in `access_token`; the client presents
       it as the `workspace_session` cookie on product and collaboration
@@ -96,36 +185,222 @@
                 type: string
               code_verifier:
                 type: string
+        application/x-www-form-urlencoded:
+          schema:
+            oneOf:
+              - $ref: ../schemas/identity.yaml#/TokenExchangeRequest
+              - $ref: ../schemas/identity.yaml#/McpAuthorizationCodeRequest
+              - $ref: ../schemas/identity.yaml#/McpRefreshTokenRequest
     responses:
       "200":
-        description: The registered client identity and, for `session` grants, a login session token.
+        description: The registered client identity and, for `session` grants, a login session token; or MCP tokens.
         content:
           application/json:
             schema:
-              type: object
-              properties:
-                access_token:
-                  type: string
-                  description: |
-                    Workspace session token for `session` grants, empty
-                    string for identity-only grants.
-                token_type:
-                  type: string
-                expires_in:
-                  type: integer
-                  description: |
-                    Seconds until the issued session expires for `session`
-                    grants.
-                user:
-                  $ref: ../schemas/identity.yaml#/User
+              anyOf:
+                - $ref: ../schemas/identity.yaml#/McpTokenResponse
+                - type: object
+                  properties:
+                    access_token:
+                      type: string
+                      description: |
+                        Workspace session token for `session` grants, empty
+                        string for identity-only grants.
+                    token_type:
+                      type: string
+                    expires_in:
+                      type: integer
+                      description: |
+                        Seconds until the issued session expires for `session`
+                        grants and token exchange.
+                    issued_token_type:
+                      type: string
+                      description: Present for token exchange only.
+                      enum: [urn:univer:params:oauth:token-type:workspace-session]
+                    scope:
+                      type: string
+                      description: Present for token exchange only. Granted MCP scopes, space-separated.
+                    subject:
+                      $ref: ../schemas/identity.yaml#/TokenExchangeSubject
+                    user:
+                      $ref: ../schemas/identity.yaml#/User
+      "400":
+        description: Workspace error for static clients or when MCP OAuth is disabled; otherwise `invalid_request`, `unsupported_grant_type` or `invalid_grant`. Token exchange may also return `unauthorized_client`.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../schemas/common.yaml#/ErrorResponse
+                - $ref: ../schemas/identity.yaml#/OAuthTokenError
+      "401":
+        description: Workspace error for an invalid static-client secret or PKCE verifier; `invalid_client` for an unknown or missing MCP client or failed token-exchange client authentication.
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: ../schemas/common.yaml#/ErrorResponse
+                - $ref: ../schemas/identity.yaml#/OAuthTokenError
+
+/.well-known/oauth-authorization-server:
+  get:
+    tags: [Authentication]
+    operationId: getOAuthAuthorizationServerMetadata
+    summary: RFC 8414 authorization server metadata for MCP clients.
+    description: |
+      Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Endpoints
+      are absolute URLs under `PUBLIC_ORIGIN`. Client ID Metadata Documents
+      are not advertised.
+    security: []
+    responses:
+      "200":
+        description: Authorization server metadata.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AuthorizationServerMetadata
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/auth/register:
+  post:
+    tags: [Authentication]
+    operationId: registerOAuthClient
+    summary: RFC 7591 dynamic registration of a public MCP client.
+    description: |
+      Unauthenticated. Served only while `MCP_RESOURCE_URLS` is set;
+      otherwise 404. Accepts a JSON body of at most 16 KiB. No client secret
+      is issued. Registration stops with 503 once the deployment holds
+      `MCP_MAX_REGISTERED_CLIENTS` clients (default 10,000).
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/ClientRegistrationRequest
+    responses:
+      "201":
+        description: The registered client.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationResponse
+      "400":
+        description: "`invalid_redirect_uri` or `invalid_client_metadata`."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationError
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "413":
+        description: "`invalid_client_metadata`: the body is larger than 16 KiB."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationError
+      "503":
+        description: "`temporarily_unavailable`: the registered-client cap is reached."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClientRegistrationError
+
+/api/auth/revoke:
+  post:
+    tags: [Authentication]
+    operationId: revokeOAuthToken
+    summary: RFC 7009 revocation of an MCP client's grant.
+    description: |
+      Served only while `MCP_RESOURCE_URLS` is set; otherwise 404. Revokes
+      the grant behind a current access or refresh token, and the downstream
+      sessions exchanged from it, when it belongs to `client_id`. Answers 200
+      with an empty body whether or not the token was valid.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/x-www-form-urlencoded:
+          schema:
+            $ref: ../schemas/identity.yaml#/TokenRevocationRequest
+    responses:
+      "200":
+        description: Processed; the token is no longer valid if it was.
+      "400":
+        description: "`invalid_request`: a JSON body or a missing token."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/OAuthTokenError
+      "401":
+        description: "`invalid_client`: `client_id` is not a registered MCP client."
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/OAuthTokenError
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+
+/api/auth/tokens:
+  get:
+    tags: [Authentication]
+    operationId: listPersonalAccessTokens
+    summary: List the current User's personal access tokens.
+    description: Token secrets and hashes are never returned.
+    responses:
+      "200":
+        description: Personal access tokens, newest first.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/PersonalAccessTokenList
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+  post:
+    tags: [Authentication]
+    operationId: createPersonalAccessToken
+    summary: Create a personal access token.
+    description: |
+      The plaintext token is returned only in this response. A session that
+      was itself issued by token exchange cannot create tokens.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/PersonalAccessTokenCreate
+    responses:
+      "201":
+        description: Created token.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/PersonalAccessTokenCreated
       "400":
         $ref: ../schemas/common.yaml#/BadRequest
       "401":
-        description: Invalid client secret or PKCE verifier.
-        content:
-          application/json:
-            schema:
-              $ref: ../schemas/common.yaml#/ErrorResponse
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+
+/api/auth/tokens/{id}:
+  delete:
+    tags: [Authentication]
+    operationId: revokePersonalAccessToken
+    summary: Revoke one of the current User's personal access tokens and end its downstream sessions.
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      "204":
+        description: Token revoked.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
 
 /api/auth/logout:
   post:
@@ -333,6 +608,8 @@
         $ref: ../schemas/common.yaml#/BadRequest
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
       "409":
         $ref: ../schemas/common.yaml#/Conflict
 
@@ -378,6 +655,12 @@
         $ref: ../schemas/common.yaml#/BadRequest
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: The session was issued by token exchange; this action requires an interactive sign-in.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
       "409":
         $ref: ../schemas/common.yaml#/Conflict
       "410":
@@ -471,6 +754,12 @@
               format: uri
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: The session was issued by token exchange; this action requires an interactive sign-in.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/auth/github/callback:
   get:
@@ -570,6 +859,12 @@
               format: uri
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: The session was issued by token exchange; this action requires an interactive sign-in.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/auth/google/callback:
   get:
@@ -711,6 +1006,12 @@
               format: uri
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: The session was issued by token exchange; this action requires an interactive sign-in.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/auth/discord/callback:
   get:

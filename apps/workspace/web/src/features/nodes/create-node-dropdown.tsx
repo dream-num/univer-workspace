@@ -2,6 +2,7 @@ import { ChevronDown, Plus, Upload } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { useCreateFolder, useCreateUniverResource, useUploadBlob, useImportDocument } from "./nodes.commands";
+import { isImportableDocument } from "./node-transfers";
 import { useI18n } from "../../shared/i18n";
 import { cn } from "../../shared/utils/cn";
 import {
@@ -23,10 +24,7 @@ import {
 import type { NewDocumentMode } from "./create-document-initial-data";
 import { NodeIcon } from "./node-icon";
 
-type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
-
-const IMPORTABLE_DOCUMENT_EXTENSION =
-  /\.(?:xls|xlsx|csv|tsv|doc|docx|ppt|pptx)$/iu;
+type UnitType = "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
 
 export function CreateNodeDropdown(props: {
   readonly spaceId?: string;
@@ -126,7 +124,7 @@ export function CreateNodeDropdown(props: {
     const file = event.target.files?.[0];
     event.target.value = "";
     if (!file) return;
-    if (IMPORTABLE_DOCUMENT_EXTENSION.test(file.name)) {
+    if (isImportableDocument(file.name)) {
       importDocument.mutate({ spaceId: props.spaceId ?? "", parentNodeId, file }, importDocumentCallbacks);
     } else {
       uploadBlob.mutate({ spaceId: props.spaceId ?? "", parentNodeId, file }, uploadBlobCallbacks);
@@ -236,7 +234,7 @@ export function CreateNodeDropdown(props: {
             <MenuGroup>
               <MenuGroupLabel>{t("newDocument")}</MenuGroupLabel>
               {(
-                ["doc", "sheet", "slide", "board", "base"] as const
+                ["doc", "sheet", "slide", "board", "base", "pdf"] as const
               ).map((unitType) => (
                 <MenuItem
                   key={unitType}

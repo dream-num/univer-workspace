@@ -19,6 +19,7 @@ import {
   ExportIcon,
   FolderIcon,
   LoadingMultiIcon,
+  PdfMultiIcon,
   MoreDownIcon,
   ShareRangeIcon,
   SheetsMultiIcon,
@@ -55,6 +56,7 @@ const STATE_TITLES: Record<UploadNotificationState, ImportExportLocaleKey> = {
 function UnitIcon({ type }: { readonly type: WorkspaceExchangeUnitType }) {
   if (type === "doc") return <DocsMultiIcon />;
   if (type === "slide") return <SlidesMultiIcon />;
+  if (type === "pdf") return <PdfMultiIcon />;
   return <SheetsMultiIcon />;
 }
 

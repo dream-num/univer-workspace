@@ -3,6 +3,7 @@ import type { WorkspaceDatabase } from "../../db/database.js";
 import type {
   AuthenticationMethods,
   ExternalIdentityProvider,
+  SessionIssuedFor,
   User,
 } from "./identity.types.js";
 import type { WriteSource } from "./write-source.js";
@@ -12,6 +13,7 @@ export interface StoredSession extends User {
   readonly secretHash: string;
   readonly expiresAt: number;
   readonly writeSource: WriteSource | null;
+  readonly tokenIssued: boolean;
 }
 
 export interface StoredCredential extends User {
@@ -31,6 +33,7 @@ export interface NewPasswordUser {
     readonly createdAt: number;
     readonly expiresAt: number;
     readonly writeSource: WriteSource;
+    readonly issuedFor?: SessionIssuedFor;
   };
   readonly createdAt: number;
 }
@@ -401,6 +404,8 @@ export class IdentityRepository {
            login_sessions.secret_hash,
            login_sessions.expires_at,
            login_sessions.write_source,
+           login_sessions.issued_for_pat_id IS NOT NULL
+             OR login_sessions.issued_for_grant_id IS NOT NULL AS token_issued,
            users.id,
            users.username,
            users.display_name,
@@ -417,6 +422,7 @@ export class IdentityRepository {
           secretHash: row.secret_hash,
           expiresAt: row.expires_at,
           writeSource: row.write_source,
+          tokenIssued: row.token_issued === 1,
         }
       : null;
   }
@@ -592,10 +598,11 @@ export class IdentityRepository {
       .run(sessionId);
   }
 
-  deleteExpiredSessions(now: number): void {
-    this._database.connection
-      .prepare("DELETE FROM login_sessions WHERE expires_at <= ?")
-      .run(now);
+  deleteExpiredSessions(now: number): string[] {
+    return this._database.connection
+      .prepare("DELETE FROM login_sessions WHERE expires_at <= ? RETURNING id")
+      .all(now)
+      .map((row) => String(row.id));
   }
 }
 
@@ -612,6 +619,7 @@ interface CredentialRow extends UserRow {
 
 interface SessionRow extends UserRow {
   readonly write_source: WriteSource | null;
+  readonly token_issued: number;
   readonly session_id: string;
   readonly secret_hash: string;
   readonly expires_at: number;
@@ -636,8 +644,9 @@ function insertSession(
   database
     .prepare(
       `INSERT INTO login_sessions
-        (id, secret_hash, user_id, created_at, expires_at, write_source)
-       VALUES (?, ?, ?, ?, ?, ?)`
+        (id, secret_hash, user_id, created_at, expires_at, write_source,
+         issued_for_pat_id, issued_for_grant_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .run(
       session.id,
@@ -645,7 +654,9 @@ function insertSession(
       userId,
       session.createdAt,
       session.expiresAt,
-      session.writeSource
+      session.writeSource,
+      session.issuedFor?.kind === "pat" ? session.issuedFor.id : null,
+      session.issuedFor?.kind === "oauth" ? session.issuedFor.id : null
     );
 }
 

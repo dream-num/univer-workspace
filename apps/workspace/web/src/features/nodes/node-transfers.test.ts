@@ -3,7 +3,7 @@ const { post, remove } = vi.hoisted(() => ({ post: vi.fn(), remove: vi.fn() }));
 vi.mock("../../shared/api/client", () => ({
   api: { POST: post, DELETE: remove },
 }));
-import { importDocument, uploadBlob } from "./node-transfers";
+import { importDocument, isImportableDocument, uploadBlob } from "./node-transfers";
 
 const file = new File(["abc"], "sample.csv", { type: "text/csv" });
 const reserved = {
@@ -94,5 +94,16 @@ describe("文档导入", () => {
     await expect(importDocument("space", null, file, "导入失败", requireUnitId)).rejects.toMatchObject({
       message: requireUnitId ? "导入失败" : "",
     });
+  });
+});
+
+describe("可导入文档判断", () => {
+  it("Office 与 PDF 文件走导入，其他文件按 Blob 上传", () => {
+    for (const name of ["book.xlsx", "data.CSV", "notes.docx", "deck.pptx", "brochure.pdf", "Scan.PDF"]) {
+      expect(isImportableDocument(name)).toBe(true);
+    }
+    for (const name of ["photo.png", "archive.zip", "pdf", "report.pdf.bak"]) {
+      expect(isImportableDocument(name)).toBe(false);
+    }
   });
 });

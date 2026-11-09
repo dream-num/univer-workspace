@@ -3,6 +3,7 @@ import {
   BoardsMultiIcon,
   DocsMultiIcon,
   FolderIcon,
+  PdfMultiIcon,
   SheetsMultiIcon,
   SlidesMultiIcon,
 } from "@univerjs/icons";
@@ -10,7 +11,7 @@ import { File } from "lucide-react";
 import { getWorkspaceBlobIcon } from "@univerjs/univer-workspace-file-browser";
 import { cn } from "../../shared/utils/cn";
 
-type UnitType = "sheet" | "doc" | "slide" | "board" | "base";
+type UnitType = "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
 
 const unitTypeIcons = {
   doc: DocsMultiIcon,
@@ -18,6 +19,7 @@ const unitTypeIcons = {
   slide: SlidesMultiIcon,
   board: BoardsMultiIcon,
   base: BasesMultiIcon,
+  pdf: PdfMultiIcon,
 } as const;
 
 /**

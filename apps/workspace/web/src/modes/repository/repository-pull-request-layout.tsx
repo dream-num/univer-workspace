@@ -7,6 +7,7 @@ import {
   Database,
   FileDiff,
   FileText,
+  FileType,
   MessageSquareText,
   Presentation,
   Shapes,
@@ -87,6 +88,7 @@ export function RepositoryPullRequestLayout({
               slide: Presentation,
               board: Shapes,
               base: Database,
+              pdf: FileType,
             }[unit.unitType];
             return (
               <li key={unit.unitId} className="min-w-0">

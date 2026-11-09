@@ -46,6 +46,8 @@ export {
   writeDownload,
   type DownloadTarget,
   type SourceFile,
+  type WorkspaceBlobBytes,
+  type WorkspaceSourceFiles,
 } from "./files.js";
 export {
   isWorkspaceRecord,
@@ -93,18 +95,24 @@ export {
 export { WorkspaceOpenFeature, type WorkspaceOpenResult } from "./open.js";
 export {
   WorkspaceUnitExchangeFeature,
+  type WorkspaceExportBufferInput,
+  type WorkspaceExportBufferResult,
   type WorkspaceExportFileInput,
   type WorkspaceExportFileResult,
+  type WorkspaceImportBufferInput,
+  type WorkspaceImportBufferResult,
   type WorkspaceImportFileInput,
   type WorkspaceImportFileResult,
   type WorkspaceUnitExchangeDependencies,
 } from "./office-exchange.js";
 export { WorkspaceUnitFeature } from "./unit.js";
+export { issueUrl, pullUrl, repoUrl } from "./urls.js";
 export { usernameKey } from "./username.js";
 export {
   WorkspaceCompileTypstFeature,
   type WorkspaceCompileTypstDependencies,
   type WorkspaceCompileTypstInput,
+  type WorkspaceCompileTypstSource,
   type WorkspaceCompileTypstResult,
   type WorkspaceTypstMaterializeInput,
   type WorkspaceTypstMaterializeResult,
@@ -146,14 +154,18 @@ export {
   type WorkspaceApplySvgResult,
   type WorkspaceCompileSvgDependencies,
   type WorkspaceCompileSvgInput,
+  type WorkspaceCompileSvgSource,
   type WorkspaceCompileSvgResult,
   type WorkspaceSvgTextMeasurePort,
 } from "./svg.js";
 export {
   createWorkspaceContentRuntime,
+  getWorkspaceRuntimeFailurePhase,
   type WorkspaceContentRuntime,
   type WorkspaceContentRuntimeOperations,
+  type WorkspaceContentRuntimeObservation,
   type WorkspaceContentRuntimeOptions,
+  type WorkspaceContentRuntimePoolOptions,
   type WorkspaceContentRuntimeWriteResult,
 } from "./content-runtime.js";
 export {
@@ -188,8 +200,10 @@ export {
   serializeWorkspaceRuntimeTarget,
   workspaceRuntimeKey,
   workspaceSnapshotPrefix,
+  type WorkspaceRuntimeCaller,
   type WorkspaceRuntimeScope,
   type WorkspaceRuntimeTarget,
+  type WorkspaceRuntimeUnitType,
 } from "./runtime-target.js";
 export {
   getWorktree,
@@ -207,10 +221,12 @@ export {
 
 export {
   compileWorkspaceMarkdownFile,
+  compileWorkspaceMarkdownSource,
   WorkspaceCompileMarkdownFeature,
   type WorkspaceMarkdownCompilation,
   type WorkspaceMarkdownOptions,
   type WorkspaceCompileMarkdownInput,
+  type WorkspaceCompileMarkdownSource,
   type WorkspaceCompileMarkdownResult,
   type WorkspaceCompileMarkdownDependencies,
 } from "./markdown.js";
@@ -226,3 +242,11 @@ export {
   type WorkspaceMarkdownExportResult,
 } from "./markdown-export.js";
 export { readWorkspaceMarkdownImage } from "./markdown-assets.js";
+
+export {
+  WorkspaceHtmlViewFeature,
+  normalizeHtmlViewDestination,
+  type WorkspaceHtmlViewSource,
+  type WorkspaceHtmlViewOptions,
+  type WorkspaceHtmlViewDestination,
+} from "./html-view.js";

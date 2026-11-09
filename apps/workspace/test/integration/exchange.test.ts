@@ -7,6 +7,15 @@ import { deflateRawSync } from "node:zlib";
 import { Readable } from "node:stream";
 import { getSlidesEmptySnapshot, PageElementTypeEnum } from "@univerjs-pro/slides";
 import {
+  getPdfsEmptySnapshot,
+  PdfEditability,
+  PdfObjectOrigin,
+  PdfObjectType,
+  ptToEmu,
+  type IPdfTextObject,
+  type IPdfUnitData,
+} from "@univerjs-pro/pdfs";
+import {
   ExchangeFormat,
   exportToBuffer,
   importBuffer,
@@ -201,6 +210,149 @@ describe("Universer Exchange protocol", () => {
     });
     const worksheet = workbook.sheets[workbook.sheetOrder[0]!];
     expect(worksheet?.cellData?.[0]?.[0]?.v).toBe("Revenue");
+  }, 20_000);
+
+  it("exports a PDF Unit as a PDF file and imports a PDF file as a PDF Unit", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "pdf-owner");
+    const personalSpace = application.spaces
+      .list(owner.userId)
+      .spaces.find((space) => space.type === "personal");
+    expect(personalSpace).toBeDefined();
+    const created = await application.resources.create(
+      owner.userId,
+      randomUUID(),
+      {
+        kind: "univer",
+        spaceId: personalSpace!.id,
+        parentNodeId: null,
+        name: "Brochure",
+        unitType: "pdf",
+      }
+    );
+    if (created.status === 202) throw new Error("PDF Unit creation is pending.");
+    const unitId = created.body.node.resource?.unitId;
+    expect(unitId).toEqual(expect.any(String));
+
+    const exportedTask = await startTask(
+      origin,
+      owner.cookie,
+      "/universer-api/exchange/7/export",
+      { unitID: unitId, format: "pdf" }
+    );
+    const exported = await waitForTask(origin, owner.cookie, exportedTask);
+    expect(exported.error.code).toBe(ErrorCode.OK);
+    expect(exported.status).toBe("done");
+    const pdf = await downloadArtifact(origin, owner.cookie, exported.export!.fileID);
+    expect(pdf.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+
+    const upload = await uploadExchangeFile(
+      origin,
+      owner.cookie,
+      new File([pdf], "brochure.pdf", { type: "application/pdf" })
+    );
+    expect(upload.response.status).toBe(201);
+    const importedTask = await startTask(
+      origin,
+      owner.cookie,
+      "/universer-api/exchange/import",
+      { fileID: upload.body.FileId, outputType: 1 }
+    );
+    const imported = await waitForTask(origin, owner.cookie, importedTask);
+    expect(imported.error.code).toBe(ErrorCode.OK);
+    expect(imported.status).toBe("done");
+    expect(imported.import?.unitID).toEqual(expect.any(String));
+    expect(imported.import?.unitID).not.toBe(unitId);
+    expect(
+      application.access.resolveUnit(owner.userId, imported.import!.unitID)
+    ).toMatchObject({
+      kind: "univer",
+      unitType: "pdf",
+      node: { name: "brochure" },
+    });
+
+    await expectTaskStart(
+      origin,
+      owner.cookie,
+      "/universer-api/exchange/7/export",
+      { unitID: unitId, format: "docx" },
+      400
+    );
+  });
+
+  // SDK 1.4.0 (unchanged since 1.3.1): the PDF editor reducer (`updateObjectPatch`) mirrors
+  // every overlay-object edit into `editState.objectPatches` and keeps entries of removed
+  // objects; the native exporter reads that map as patches to imported source objects and
+  // fails a Unit without a source PDF with "source-less PDF cannot apply imported semantic
+  // patches". Workspace keeps the SDK behavior; enable this case with the SDK release that
+  // fixes it.
+  it.skip("exports a blank PDF Unit after editor edits", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "pdf-editor-owner");
+    const unitId = randomUUID();
+    const unit = getPdfsEmptySnapshot(unitId, "Notes");
+    const page = unit.document.pages[0]!;
+    const object: IPdfTextObject = {
+      id: `${unitId}:object:text`,
+      type: PdfObjectType.TEXT_BOX,
+      origin: PdfObjectOrigin.USER_CREATED,
+      editability: PdfEditability.SEMANTIC,
+      bbox: [ptToEmu(48), ptToEmu(48), ptToEmu(300), ptToEmu(72)],
+      runs: [{ text: "Edited note", fontFamily: "Arial", fontSize: 12 }],
+    };
+    unit.editState.overlayObjects[object.id] = { object, pageId: page.id, zIndex: 0 };
+    unit.editState.objectPatches[object.id] = {
+      objectId: object.id,
+      pageId: page.id,
+      bbox: object.bbox,
+      text: { range: { start: 0, end: 0 }, text: "Edited note", runs: object.runs },
+    };
+    unit.editState.objectPatches[`${unitId}:object:removed`] = {
+      objectId: `${unitId}:object:removed`,
+      pageId: page.id,
+      bbox: [0, 0, ptToEmu(10), ptToEmu(10)],
+    };
+    const snapshotJson = JSON.stringify({
+      snapshot: {
+        unitID: unitId,
+        rev: 1,
+        type: UniverType.UNIVER_PDF,
+        pdf: {
+          unitID: unitId,
+          rev: 1,
+          creator: "",
+          name: "Notes",
+          pdfModelSchema: "univer-pdf-unit",
+          pdfModelSchemaVersion: 1,
+          originalMeta: Buffer.from(JSON.stringify(unit)).toString("base64"),
+        },
+      },
+      sheetBlocks: {},
+    });
+    const upload = await uploadExchangeFile(
+      origin,
+      owner.cookie,
+      new File([snapshotJson], "notes.json", { type: "application/json" })
+    );
+    expect(upload.response.status).toBe(201);
+
+    const exportedTask = await startTask(
+      origin,
+      owner.cookie,
+      "/universer-api/exchange/7/export",
+      { jsonID: upload.body.FileId, format: "pdf" }
+    );
+    const exported = await waitForTask(origin, owner.cookie, exportedTask);
+    expect(exported.error.code).toBe(ErrorCode.OK);
+    expect(exported.status).toBe("done");
+    const pdf = await downloadArtifact(origin, owner.cookie, exported.export!.fileID);
+    expect(pdf.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+    const reimported = (await importBuffer(pdf, {
+      type: UniverInstanceType.UNIVER_PDF,
+      format: ExchangeFormat.PDF,
+      fileName: "notes.pdf",
+    } as never)) as unknown as IPdfUnitData;
+    expect(JSON.stringify(reimported.document)).toContain("Edited note");
   }, 20_000);
 
   it("round-trips the client JSON snapshot flow", async () => {

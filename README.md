@@ -4,7 +4,7 @@
 
 **An open-source Office workspace where people and AI agents create, collaborate, and review together.**
 
-[Univer Docs](https://docs.univer.ai/) · [Office SDK](https://office.univer.ai/) · [CLI guide](apps/cli/README.md) · [Workspace Agent](apps/agent/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
+[Univer Docs](https://docs.univer.ai/) · [Server SDK](https://docs.univer.ai/server) · [CLI guide](apps/cli/README.md) · [Workspace Agent](apps/agent/README.md) · [Issues](https://github.com/dream-num/univer-workspace/issues)
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 [![Node.js](https://img.shields.io/badge/Node.js-%3E%3D24-339933?logo=node.js&logoColor=white)](package.json)
@@ -135,6 +135,10 @@ The Server can also serve the latest built Browser from port 3020 when
 Configuration, authentication, storage, Docker, and database migration details live
 in the [Workspace application guide](apps/workspace/README.md).
 
+## One-Click Deploy
+
+[![Deploy on RepoCloud](https://d16t0pc4846x52.cloudfront.net/deploylobe.svg)](https://repocloud.io/details/Univer%20Workspace/)
+
 ## Use Workspace Agent
 
 Workspace Agent is a desktop app built on DSH for Univer Workspace. Reference Workspace files with `@`, create and edit documents through conversation, then review changes and choose whether to merge or discard them.
@@ -182,6 +186,7 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
+apps/mcp                       Private MCP gateway, Stage A local development authentication
 apps/agent                     Workspace Agent application for document conversations and review
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
@@ -267,8 +272,8 @@ the actual package artifact before publication.
 
 | Resource                                                            | Scope                                                                           |
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| [Univer Runtime documentation](https://docs.univer.ai/)             | Browser Runtime, presets, plugins, Facade API, and editor capabilities          |
-| [Univer Office SDK documentation](https://office.univer.ai/)        | Office SDK stack: Runtime, Collaboration, CLI, and Worktree                     |
+| [Univer Web SDK documentation](https://docs.univer.ai/guides)       | Browser Runtime, presets, plugins, Facade API, and editor capabilities          |
+| [Univer Server SDK documentation](https://docs.univer.ai/server)    | Server SDK: collaboration, import and export, deployment, and license           |
 | [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                    |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                      |
 | [Workspace Agent guide](apps/agent/README.md)                       | Local profile, browser OAuth, sessions, files, Worktree, and identity switching |

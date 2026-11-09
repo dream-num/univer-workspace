@@ -1,7 +1,7 @@
 import { DROP_V14_SQL } from "./v14-downgrade.js";
 
 /**
- * Removes V15 pins and V14 Email structures so a schema.sql-built fixture reads as V13.
+ * Removes the V17 PDF Unit type, V16 source columns, V15 pins and V14 Email structures so a schema.sql-built fixture reads as V13.
  * Every other structure and row is untouched.
  */
 export const DOWNGRADE_TO_V13_SQL = `

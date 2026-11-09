@@ -1566,6 +1566,7 @@ function protocolUnitType(unitType: UnitType): UniverType {
     slide: UniverType.UNIVER_SLIDE,
     board: UniverType.UNIVER_BOARD,
     base: UniverType.UNIVER_BASE,
+    pdf: UniverType.UNIVER_PDF,
   } as const;
   return types[unitType];
 }
@@ -1698,7 +1699,8 @@ function validUnitType(value: unknown): UnitType {
     value !== "doc" &&
     value !== "slide" &&
     value !== "board" &&
-    value !== "base"
+    value !== "base" &&
+    value !== "pdf"
   ) {
     throw invalidInput("unitType is invalid.", "unitType");
   }
@@ -1706,7 +1708,7 @@ function validUnitType(value: unknown): UnitType {
 }
 
 function unitTypeFromProtocol(value: UniverType | undefined): UnitType | null {
-  for (const type of ["sheet", "doc", "slide", "board", "base"] as const) {
+  for (const type of ["sheet", "doc", "slide", "board", "base", "pdf"] as const) {
     if (protocolUnitType(type) === value) return type;
   }
   return null;

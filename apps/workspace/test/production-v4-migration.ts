@@ -41,6 +41,7 @@ try {
   v4.exec(`
     PRAGMA foreign_keys = OFF;
     BEGIN IMMEDIATE;
+    ${DROP_V14_SQL}
     ALTER TABLE external_identities RENAME TO external_identities_v5;
     CREATE TABLE external_identities (
       provider TEXT NOT NULL CHECK (provider IN ('github')),
@@ -56,7 +57,6 @@ try {
     INSERT INTO external_identities SELECT * FROM external_identities_v5;
     DROP TABLE external_identities_v5;
     ${DROP_V12_SQL}
-    ${DROP_V14_SQL}
     ALTER TABLE spaces DROP COLUMN description;
     DROP TABLE IF EXISTS space_stars;
     DROP TABLE IF EXISTS issue_node_refs;
@@ -79,7 +79,7 @@ try {
     const version = migrated.database.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 16);
+    assert.equal(version.user_version, 18);
     const identity = migrated.database.connection
       .prepare(
         "SELECT provider, provider_subject, user_id FROM external_identities"

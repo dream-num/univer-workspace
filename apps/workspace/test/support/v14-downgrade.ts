@@ -1,6 +1,6 @@
 import { DROP_V15_SQL } from "./v15-downgrade.js";
 
-/** Removes V15 pins and V14 Email structures for older-schema fixtures. */
+/** Removes the V17 PDF Unit type, V16 source columns, V15 pins and V14 Email structures for older-schema fixtures. */
 export const DROP_V14_SQL = `
   ${DROP_V15_SQL}
   DROP INDEX IF EXISTS users_email;

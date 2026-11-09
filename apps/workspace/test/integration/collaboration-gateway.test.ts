@@ -8,6 +8,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { decode } from "@msgpack/msgpack";
 import {
   deserializeToCombResponse,
   serializeCombRequest,
@@ -1597,17 +1598,21 @@ function readStoredChangesetMetadata(
 ) {
   const database = new DatabaseSync(filename, { readOnly: true });
   try {
+    // Core v3 stores changesets as MessagePack `payload`; Worktree v3 still stores JSON text.
     const row = worktreeId
       ? database
           .prepare(
-            `SELECT payload_json FROM ${table} WHERE worktree_id = ? AND unit_id = ?`
+            `SELECT payload_json AS payload FROM ${table} WHERE worktree_id = ? AND unit_id = ?`
           )
           .get(worktreeId, unitId)
       : database
-          .prepare(`SELECT payload_json FROM ${table} WHERE unit_id = ?`)
+          .prepare(`SELECT payload FROM ${table} WHERE unit_id = ?`)
           .get(unitId);
     if (!row) throw new Error("Stored changeset is missing");
-    return JSON.parse(String(row.payload_json)) as {
+    const payload = row.payload;
+    return (
+      payload instanceof Uint8Array ? decode(payload) : JSON.parse(String(payload))
+    ) as {
       readonly createTime?: number;
       readonly mutationSize?: number;
     };
@@ -1869,10 +1874,9 @@ describe("content permission integration", () => {
     };
   }
 
-  // The Trunk gate lets a Viewer submit comment anchors, but the installed SDK still collects
-  // Unit Edit for them, so commitChangeset rejects. Flip to it() once the SDK includes
-  // univer-collaboration-sdk#172 (comment anchors require only Unit Comment).
-  it.fails("lets a Viewer submit a comment-only changeset", async () => {
+  // Comment anchors need Unit Comment only: the Trunk gate maps them through the SDK's
+  // isCommentOnlyChangeset and commitChangeset collects Unit Comment for them (SDK 1.4.0).
+  it("lets a Viewer submit a comment-only changeset", async () => {
     const f = await fixture();
     const viewer = await sheetSubmit(f, f.viewer.cookie);
     expect(

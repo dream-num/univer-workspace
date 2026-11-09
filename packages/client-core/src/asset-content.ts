@@ -3,10 +3,12 @@ import { isWorkspaceRecord, type WorkspaceHttp } from "./http.js";
 
 export async function resolveWorkspaceAssetContent(
   http: WorkspaceHttp,
-  input: { readonly assetId: string; readonly signal?: AbortSignal; readonly worktreeId: string },
+  input: { readonly assetId: string; readonly signal?: AbortSignal; readonly worktreeId?: string },
 ): Promise<Response> {
+  const scopePath =
+    input.worktreeId === undefined ? "" : `/worktrees/${encodeURIComponent(input.worktreeId)}`;
   const body = await http.json(
-    `/universer-api/worktrees/${encodeURIComponent(input.worktreeId)}/file/${encodeURIComponent(input.assetId)}/sign-url`,
+    `/universer-api${scopePath}/file/${encodeURIComponent(input.assetId)}/sign-url`,
     input.signal === undefined ? {} : { signal: input.signal },
   );
   const serviceError = body["error"];

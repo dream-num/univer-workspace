@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
-/** SDK 1.3.1 embeds a development WebSocket fallback. Space always supplies
+/** SDK 1.4.0 embeds a development WebSocket fallback. Space always supplies
  * its authenticated endpoint explicitly. Make a missing configuration fail
  * closed in the distributed bundle instead of contacting that local service.
  * Installed SDK files stay unchanged. Remove when upstream has no dev default. */
@@ -12,7 +12,7 @@ export function releaseSdkDefaults() {
       const pkg = JSON.parse(await readFile(resolve(directory, '../../package.json'), 'utf8'));
       const contents = await readFile(path, 'utf8');
       const development = 'ws://127.0.0.1:8000/universer-api/comb/connect';
-      if (pkg.version !== '1.3.1' || contents.split(development).length !== 3)
+      if (pkg.version !== '1.4.0' || contents.split(development).length !== 2)
         throw new Error('Re-audit the published collaboration-client default before releasing this SDK version.');
       return { contents: contents.replaceAll(development, 'wss://workspace-endpoint-required.invalid/universer-api/comb/connect'), loader: 'js', resolveDir: directory };
     });
