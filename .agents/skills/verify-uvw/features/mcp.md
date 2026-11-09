@@ -61,6 +61,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
 - MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
+- MA8 checks that Browser sign-in and both `uvw auth login` paths still work with MCP OAuth enabled.
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
 - MX3 verifies executor unavailability.
@@ -1521,6 +1522,32 @@ and the new access token works. After revocation the first Workspace-backed call
 revocation (`0` on 2026-11-09: served from the exchange cache). A replay inside the grace window
 gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
 call exits 4 and the current refresh token gets `invalid_grant`.
+
+**MA8. Existing sign-in clients.** Stage F must not change how the Browser, uvw and the Workspace
+Agent sign in, so run these in the same MCP-enabled run, where the MCP OAuth code paths are active.
+First run every step of [Accounts and sign-in](auth.md) as written: Browser registration and
+sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
+Browser-approved `uvw auth login`, which prints an approval URL and exits; the raw URL and code stay
+in the run's `home/` and never reach evidence.
+
+```bash
+(umask 077 && $V uvw auth login > "$RUN/home/cli-login.private" 2>&1)
+agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/cli-login.private" | head -n1)"
+agent-browser wait --text 'Confirm and authorize CLI'
+test "$(agent-browser get value input)" = "$(sed -n 's/^Verification code: //p' "$RUN/home/cli-login.private")"
+agent-browser find role button click --name 'Confirm and authorize CLI'
+agent-browser wait --text 'CLI authorized'
+agent-browser screenshot "$EVIDENCE/mcp-cli-authorized.png"
+$V cli mcp-cli-login-complete auth login --complete --json
+jq -e --arg origin "$ORIGIN" --arg name "Verify $VERIFY_UVW_RUN" '.status == "authenticated" and .origin == $origin and .subject.name == $name' "$EVIDENCE/mcp-cli-login-complete.out"
+rm -f "$RUN/home/cli-login.private"
+```
+
+Pass when every auth.md step passes, the approval page shows the code uvw printed, and `--complete`
+signs uvw in as the run user. The Workspace Agent's browser OAuth login is not part of this journey
+yet: on 2026-11-09 its documented local install failed (fixed by #245) and the Agent then exits at
+startup before OAuth (#246). Once #246 is fixed, start the run with `VERIFY_UVW_AGENT_PORT`, which
+registers the Agent's public client, and add the Agent login here.
 
 **MX1. Executor write and readback.**
 

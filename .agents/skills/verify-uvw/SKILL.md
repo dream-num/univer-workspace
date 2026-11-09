@@ -203,7 +203,7 @@ run's browser with only `--scopes` checked (default all four), and keeps the acc
 access token straight to Workspace, and `exchange` performs the gateway's token exchange for the PAT or the access token, then
 signs the returned session out. Each writes `<label>.json` with token shapes only and exits 0 on the expected success status, 1 otherwise.
 Set `VERIFY_UVW_AGENT_PORT=<port>` at `up` to also register the Workspace Agent's public OAuth client
-`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback` (MA8).
+`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`, for checking the Agent's OAuth login against the run.
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
 to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
