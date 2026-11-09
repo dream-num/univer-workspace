@@ -201,6 +201,8 @@ pnpm --dir packages/dsh-runtime deploy --legacy \
   --prod --config.node-linker=hoisted "$UWH_DSH_BOOTSTRAP"
 export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
 
+# 能力插件会内联 Client Core，先构建它。
+pnpm --filter @univerjs/univer-workspace-client-core build
 pnpm --filter @univerjs/workspace-agent build
 pnpm --filter dsh-univer-workspace-plugin build
 pnpm --filter dsh-univer-workspace-skin-plugin build
@@ -215,7 +217,6 @@ export DSH_PLUGINS="file:$UWA_PACKAGES/univerjs-workspace-agent-0.1.0.tgz file:$
 NPM_CONFIG_USERCONFIG="$PWD/.npmrc" ./apps/agent/scripts/build-profile.sh
 
 # Optional but required for univer_lint and univer_screenshot.
-pnpm --filter @univerjs/univer-workspace-client-core build
 export UWH_RENDER_PAGE_ROOT="$PWD/packages/client-core/dist/render-runtime"
 # Point this at a compatible local Chrome/Chromium binary when it is not on PATH.
 export UWH_RENDER_BROWSER="${UWH_RENDER_BROWSER:-$(command -v google-chrome || command -v chromium || true)}"
