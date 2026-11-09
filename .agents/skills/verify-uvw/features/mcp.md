@@ -178,7 +178,7 @@ jq -e --arg code "$code" '.outcome == "tool_error" and .error_code == $code' "$E
 Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr prefix,
 and the event records `tool_error` with the same code.
 
-**M7. Tool lists.**
+**M7. Tool lists.** Needs the renderer; MB1 checks the lists of a run without one.
 
 ```bash
 $V mcp-tools mcp-tools-core
@@ -864,6 +864,7 @@ agent-browser find label "Username" fill "verify-$VERIFY_UVW_RUN"
 agent-browser find label "Password" fill "$(cat "${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/user.pw")"
 agent-browser click 'form button[type=submit]'
 agent-browser wait --url '**/home'
+agent-browser set viewport 1280 1000
 agent-browser open "$PR_URL" && agent-browser wait 3000
 agent-browser screenshot "$EVIDENCE/mcp-product-pr-ready.png"
 agent-browser snapshot -c > "$EVIDENCE/mcp-product-pr-ready.snapshot.txt"

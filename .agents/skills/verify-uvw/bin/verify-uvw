@@ -80,7 +80,7 @@ mcp_compose() {
     executor_urls+=",http://executor-b:3000"
     profiles="${profiles:+$profiles,}replicas"
   fi
-  COMPOSE_PROFILES="$profiles" VERIFY_UVW_EXECUTOR_URLS="$executor_urls" \
+  COMPOSE_PROFILES="$profiles" VERIFY_UVW_EXECUTOR_URLS="$executor_urls" MCP_SYNC_BUDGET_MS="${MCP_SYNC_BUDGET_MS:-30000}" \
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
@@ -479,7 +479,7 @@ GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
 EOF
   printf 'MCP_ENABLED=%s\n' "$mcp_enabled" >>"$run/run.env"
   if [[ "$mcp_enabled" == 1 ]]; then
-    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" >>"$run/run.env"
+    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
     [[ ! -f "$run/executor-allowed-user-ids" ]] || unlink "$run/executor-allowed-user-ids"
     [[ "${VERIFY_UVW_MCP_PRODUCTION:-0}" != 1 ]] || printf 'verify-uvw-pending-user\n' >"$run/executor-allowed-user-ids"
     printf 'MCP_PORT=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
