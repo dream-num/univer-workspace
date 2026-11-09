@@ -535,7 +535,9 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 `prepareContentExecutionProgram` 的 README 写明它不判断代码是否安全，也不提供进程级沙箱。
 
 对抗审查已经确认，阶段 D 沿用的现有执行方式不足以支撑多用户环境。具体的安全设计是阶段 G 的交付物，需要单独评审。
-在 G 通过之前，执行层和渲染服务只能在本地原型和内部单用户环境运行。
+阶段 G 已于 2026-11-09 搁置（见 [阶段计划](stages.zh-CN.md)）。在 G 通过之前，执行层和渲染服务不对公众开放。
+阶段 G0 在生产环境用执行层白名单 `MCP_EXECUTOR_ALLOWED_USER_IDS` 代替这道门禁：只有白名单内互相信任的用户能使用共享执行层，
+其他用户只看到不依赖执行层的工具。白名单不满足下面任何一条要求，它只限制谁承担这些风险。
 
 阶段 G 的设计必须满足以下要求，并给出可复现的验证结果：
 
@@ -561,6 +563,7 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `MCP_STAGING_DIRECTORY` | 网关 | 暂存存储目录 |
 | `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端，两者同时设置或同时不设。启用 PAT 与 OAuth access token 认证 |
 | `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节）。与上一行至少设置一项，本地验证两者同时设置 |
+| `MCP_EXECUTOR_ALLOWED_USER_IDS` | 网关、执行层 | 逗号分隔的 Workspace 用户 ID，只有这些用户能使用执行层（第 10 节）。生产环境的执行层必须设置；配置了执行层的网关在生产环境也必须设置。非生产环境不设置时所有用户都能使用执行层 |
 | `UNIVER_LICENSE`、`UNIVER_LICENSE_KEY` | 执行层、渲染服务 | license 注入。渲染服务只读取 `UNIVER_LICENSE`，未设置时使用与执行层相同的内置开发 license |
 | `EXECUTOR_*` | 执行层 | 见 6.2 节 |
 | `RENDERER_MAX_RUNTIMES` | 渲染服务 | 同时存在的 runtime（每个一个 Chromium）上限，默认 2 |
@@ -570,7 +573,7 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `METRICS_TOKEN` | 全部 | 指标端点令牌 |
 | `LOG_LEVEL` | 全部 | 日志级别，日志格式与 Workspace 一致（pino JSON） |
 
-每个已实现角色提供 `GET /healthz`。当前 healthz 仅检查进程存活，执行层可达性由 verify-uvw doctor 验证；Workspace 版本与 readiness 检查尚未实现。
+每个已实现角色提供 `GET /healthz`，只检查进程存活。网关另有 `GET /readyz`：Workspace 可达，配置了 OAuth 时网关的机密客户端能做 token exchange（用网关的客户端凭据、不带 subject token 调用 token 端点，Workspace 校验凭据和 exchange 权限之后、查找 token 之前返回 `invalid_request` 才算通过，所以 `MCP_OAUTH_CLIENT_SECRET` 配错时网关不就绪），配置了执行层时至少一个执行层返回了兼容的能力（`GET /rpc/v1/capabilities`），三者都满足才就绪。Workspace 没有版本接口，按版本号拒绝就绪（3.2 节）暂缓。
 
 ## 12. `apps/mcp` 的代码组织建议
 
