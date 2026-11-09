@@ -11,6 +11,7 @@ export interface McpOAuthConfig {
 
 export const MAX_REGISTERED_REDIRECT_URIS = 10;
 export const MAX_CLIENT_NAME_LENGTH = 100;
+const ALLOWED_PRIVATE_USE_SCHEMES: readonly string[] = ["cursor"];
 const MAX_REDIRECT_URI_LENGTH = 2000;
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "localhost"]);
 const GRANT_TYPES = ["authorization_code", "refresh_token"] as const;
@@ -58,7 +59,7 @@ export function parseClientRegistration(body: unknown): RegistrationResult {
       return {
         ok: false,
         error: "invalid_redirect_uri",
-        description: "Each redirect URI must be a loopback http URL, an https URL, or a reverse-domain private-use scheme, without a fragment or credentials.",
+        description: "Each redirect URI must be a loopback http URL, an https URL, or a reverse-domain or allowlisted private-use scheme (currently cursor), without a fragment or credentials.",
       };
     }
     if (!redirectUris.includes(uri)) redirectUris.push(uri);
@@ -102,9 +103,9 @@ export function registrableRedirectUri(raw: unknown): string | null {
   if (url === null || url.username !== "" || url.password !== "") return null;
   if (url.protocol === "https:") return url.toString();
   if (url.protocol === "http:") return isLoopback(url) ? url.toString() : null;
-  // RFC 8252 section 7.1: a private-use scheme is a reverse domain name, which always contains a dot.
+  // RFC 8252 section 7.1 requires a reverse-domain scheme; known MCP clients may need an exception.
   const scheme = url.protocol.slice(0, -1);
-  return /^[a-z][a-z0-9+.-]*$/u.test(scheme) && scheme.includes(".") ? url.toString() : null;
+  return /^[a-z][a-z0-9+.-]*$/u.test(scheme) && (scheme.includes(".") || ALLOWED_PRIVATE_USE_SCHEMES.includes(scheme)) ? url.toString() : null;
 }
 
 /**

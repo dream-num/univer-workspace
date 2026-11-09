@@ -2211,8 +2211,8 @@ export interface components {
             /**
              * @description Each URI is a loopback `http` URL (`127.0.0.1`, `[::1]` or
              *     `localhost`), an `https` URL, or a reverse-domain private-use scheme
-             *     such as `com.example.app:/callback`, without a fragment or
-             *     credentials.
+             *     such as `com.example.app:/callback`, or an allowlisted private-use
+             *     scheme (currently `cursor`), without a fragment or credentials.
              */
             redirect_uris: string[];
             client_name?: string;

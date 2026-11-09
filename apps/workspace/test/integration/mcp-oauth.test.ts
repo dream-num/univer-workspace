@@ -325,6 +325,32 @@ describe("MCP OAuth", () => {
     expect(denied.headers.get("location")).toBe(`com.example.app:/oauth?error=access_denied&state=${STATE}`);
   });
 
+  it("registers Cursor's redirects and denies consent through its private-use callback", async () => {
+    const origin = await start();
+    const redirectUri = "cursor://anysphere.cursor-mcp/oauth/callback";
+    const redirectUris = [redirectUri, "https://www.cursor.com/agents/mcp/oauth/callback", "http://localhost:8787/callback"];
+    const registered = await registerClient(origin, { redirect_uris: redirectUris });
+    expect(registered.status).toBe(201);
+    const client = (await registered.json()) as { client_id: string; redirect_uris: string[] };
+    expect(client.redirect_uris).toEqual(redirectUris);
+
+    const alice = await registerUser(origin, "alice");
+    const query = authorizeQuery({ client_id: client.client_id, redirect_uri: redirectUri });
+    const authorized = await fetch(`${origin}/api/auth/authorize?${query}`, {
+      headers: { cookie: alice }, redirect: "manual",
+    });
+    expect(authorized.status).toBe(302);
+    const consentUrl = new URL(authorized.headers.get("location")!, origin);
+    expect(consentUrl.pathname).toBe("/api/auth/authorize/consent");
+    expect(Object.fromEntries(consentUrl.searchParams)).toEqual(Object.fromEntries(query));
+    const consent = await fetch(consentUrl, { headers: { cookie: alice } });
+    expect(consent.status).toBe(200);
+    expect(consent.headers.get("content-security-policy")).toContain("form-action 'self' cursor:;");
+    const denied = await submitConsent(origin, alice, consentTokenOf(await consent.text()), [], "deny");
+    expect(denied.status).toBe(303);
+    expect(denied.headers.get("location")).toBe(`${redirectUri}?error=access_denied&state=${STATE}`);
+  });
+
   it("validates registration metadata, caps the request size and the number of clients", async () => {
     const origin = await start({ maxRegisteredClients: 2 });
     const rejected = async (body: unknown, error: string) => {
@@ -336,6 +362,9 @@ describe("MCP OAuth", () => {
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: ["https://app.example.test/cb#x"] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: ["https://user:pw@app.example.test/cb"] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: ["javascript:alert(1)"] }, "invalid_redirect_uri");
+    await rejected({ redirect_uris: ["myapp://callback"] }, "invalid_redirect_uri");
+    await rejected({ redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback#x"] }, "invalid_redirect_uri");
+    await rejected({ redirect_uris: ["cursor://user:pw@anysphere.cursor-mcp/oauth/callback"] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: [] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: Array.from({ length: 11 }, (_, i) => `https://app.example.test/${i}`) }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, token_endpoint_auth_method: "client_secret_basic" }, "invalid_client_metadata");
