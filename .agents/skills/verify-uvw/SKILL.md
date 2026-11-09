@@ -303,3 +303,7 @@ For renderer sizing (latency per operation, throughput against `RENDERER_MAX_RUN
 renders), use `node .agents/skills/verify-uvw/bin/renderer-bench.mjs --help` and the
 [renderer benchmark recipe](features/mcp.md#renderer-capacity-benchmark). It recreates the renderer many times, so run it on a stack
 nothing else is using. `bin/renderer-bench-summary.py` renders its JSON as the tables in the architecture document.
+
+For the stage G isolation baseline (secrets, network, cross-user visibility, CPU and memory limits, pool fairness, mounts, fail-closed
+configuration, renderer separation), run `node .agents/skills/verify-uvw/bin/mcp-security-probes.mjs [--only MG6,MG7]`. It prints one JSON
+line per check, `contained` or `exposed`; see [the MCP security journeys](features/mcp-security.md).
