@@ -381,7 +381,7 @@ valueTruncated: true；文本确认已提交，不提示重试写入。未提交
 
 2 个 runtime 相对 1 个：Sheet 截图逐轮配对的比值中位数 1.94 倍（1.76 至 2.00），print_pdf 2.00 倍（1.75 至 2.00）。4 个 runtime（补充一组，宿主一分钟 load 中位数 10.7、范围 5.8 至 15.8，高于主测量）：相对 2 个，Sheet 截图约 1.9 倍，print_pdf 只有约 1.3 倍。
 
-**限制因素。** 一个 runtime 同一时刻只渲染一个请求，在 Chromium 的页面线程上约占一个核：单 runtime 时 renderer 容器 CPU 为 74%（Sheet）和 98%（打印）。池从 1 增到 2 个 runtime，吞吐和 CPU 同步翻倍，所以 1 到 2 个 runtime 受“每个 runtime 一个页面线程”限制，不受 Node、压测端（CPU 8% 至 9%）或排队限制（没有 `workspace-renderer-busy`）。到 4 个 runtime，打印的容器 CPU 中位数 436%、峰值 530%，接近 Docker 虚拟机的 6 vCPU，且宿主同时有其他负载，这时 CPU 成为限制，吞吐不再随 runtime 数线性增长；Sheet 截图更轻，4 个时仍接近线性。结论：默认 2 对本机合理，它只占约 2 个 vCPU；调大只在渲染容器有更多 CPU 时有收益，而且每个 runtime 的内存成本见下。
+**限制因素。** 一个 runtime 同一时刻只渲染一个请求，在 Chromium 的页面线程上约占一个核：单 runtime 时 renderer 容器 CPU 为 74%（Sheet）和 98%（打印）。池从 1 增到 2 个 runtime，吞吐提高 1.94 倍（Sheet）和 2.00 倍（打印），容器 CPU 提高 1.65 倍和 1.9 倍，所以 1 到 2 个 runtime 受“每个 runtime 一个页面线程”限制，不受 Node、压测端（CPU 8% 至 9%）或排队限制（没有 `workspace-renderer-busy`）。到 4 个 runtime，打印的容器 CPU 中位数 436%、峰值 530%，接近 Docker 虚拟机的 6 vCPU，且宿主同时有其他负载，这时 CPU 成为限制，吞吐不再随 runtime 数线性增长；Sheet 截图更轻，4 个时仍接近线性。结论：默认 2 对本机合理，它只占约 2 个 vCPU；调大只在渲染容器有更多 CPU 时有收益，而且每个 runtime 的内存成本见下。
 
 内存（MiB）。树是一个 runtime 的 Chromium 进程，Node 进程由所有 runtime 共享。
 
@@ -399,7 +399,7 @@ RSS 把共享的 Chromium 库和字体页在每个进程里重复计入，两个
 | --- | --- | --- | --- |
 | 2 GiB，2 个 runtime | 无法满足 0.75 余量：`170 + 2 × 730 = 1630`，`1630 / 0.75 = 2173`，约 2.1 GiB | Doc 打印 1.4 至 1.6 GiB | 施加 2048 MiB 硬限制，5 轮 Doc 打印中 3 轮触发 cgroup OOM（共 4 次 OOM kill），一次调用超过 40 秒没有应答；Sheet 截图 5 轮无错误 |
 | 3 GiB，2 个 runtime | 同上，余量 0.75 时需约 2.1 GiB | 同上 | 施加 3072 MiB 硬限制，Sheet 截图与 Doc 打印各 5 轮，0 错误、0 OOM、0 个 runtime 被丢弃 |
-| 4 GiB，4 个 runtime | `(170 + 4 × 740) / 0.75 = 4180`，略超 4 GiB | Doc 打印 2.9 至 3.1 GiB | 补充组没有施加限制，预算为外推 |
+| 4 GiB，4 个 runtime | `(170 + 4 × 740) / 0.75 = 4180`，略超 4 GiB | Doc 打印 2.8 至 3.0 GiB（中位数 2.88） | 补充组没有施加限制，预算为外推 |
 
 建议：默认 2 个 runtime 时给 renderer 容器 3 GiB，这是唯一实测通过的预算；2 GiB 会在 Doc 打印下被 OOM 杀进程。若调到 4 个 runtime，预算至少 4.5 GiB 并重测。余量系数 0.75 沿用 6.2 节，仍是策略假设。预算没有覆盖更大的输入（整页噪声图的 1920×1080 Slide、接近 1677 万像素上限的 Doc 截图）；Chromium 对这类输入的峰值更高，上线前须另测。
 
@@ -416,7 +416,7 @@ RSS 把共享的 Chromium 库和字体页在每个进程里重复计入，两个
 
 **对用户可见延迟的占比。** 暖的 `screenshot` 工具调用（网关事件 `duration_ms` 按请求 ID 与 renderer 日志的 `duration_ms` 关联，各 10 次）：Sheet 593 ms 中 renderer 占 558 ms（94%），Doc 926 ms 中 renderer 占 882 ms（95%）。渲染服务就是 `screenshot` 的延迟，执行层与网关合计约 35 至 45 ms。
 
-复跑：`node .agents/skills/verify-uvw/bin/renderer-bench.mjs --output <json>`，汇总用 `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`，步骤和各场景的含义见[渲染服务测量](../../../.agents/skills/verify-uvw/features/mcp.md#renderer-capacity-benchmark)。本节的原始 JSON 是主测量一份（冷、热、吞吐 1 与 2、复用）、4 个 runtime 一份、2048 与 3072 MiB 限制各一份和端到端一份。主测量的脚本是 `renderer-bench.mjs` 加入 `--memory-limit` 之前的版本，其余场景代码没有改动。
+复跑：`node .agents/skills/verify-uvw/bin/renderer-bench.mjs --output <json>`，汇总用 `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`，步骤和各场景的含义见[渲染服务测量](../../../.agents/skills/verify-uvw/features/mcp.md#renderer-capacity-benchmark)。本节的原始 JSON 是主测量一份（冷、热、吞吐 1 与 2、复用）、4 个 runtime 一份、2048 与 3072 MiB 限制各一份和端到端一份。主测量和 4 个 runtime 那一份用的是 `renderer-bench.mjs` 加入 `--memory-limit` 之前的版本（`scriptSha256` 为 `8501c746…`），其余三份用当前版本；据作者说明场景代码没有改动，旧版本不在 git 中，无法逐行核对，独立复测的热延迟与吞吐中位数与本节相差不超过 5%。
 
 #### 7.1.2 已知问题与后续
 

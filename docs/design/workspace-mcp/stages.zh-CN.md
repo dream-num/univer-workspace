@@ -151,7 +151,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 - [x] `print_pdf` 生成的 PDF 能打开，页数与 `uvw print-pdf` 一致。 证据：PR #238，MR11（Doc 在 Worktree 和 trunk 各 5 页、Sheet 各 1 页，与 CLI 页数一致，`pdfinfo` 打开，并列图目视一致）；同一旅程还验证 `lint` 与 CLI 的发现一致。
 - [x] 渲染服务的容器没有到 Workspace 的网络路由，渲染仍然成功。 证据：PR #236，MR9 与 `doctor`（renderer 只加入 `internal: true` 网络，没有 published port，`host.docker.internal:3925` 与公网主机都 `blocked`），在这个拓扑下 MR9、MR10、MR11、MR12 的渲染全部成功。
 - [x] 测量浏览器池的单任务内存和吞吐，写回架构文档。 证据：[架构 7.1.1](architecture.zh-CN.md#711-容量测量2026-11-09)：冷、热延迟，1、2（补充 4）个 runtime 的吞吐与限制因素，每个 runtime 的内存与容器预算（2 GiB 下 OOM，3 GiB 通过），200 次复用渲染的内存序列，以及复跑命令。
-- [x] 真实字体的 SVG 文字测量（交付物之一，不在原验收清单内）。 证据：PR #239，MV2（与 `uvw compile-svg` 结构一致，估算模式对照，Slide 页面截图无溢出，55 行量字 378 ms）。
+- [x] 真实字体的 SVG 文字测量（交付物之一，不在原验收清单内）。 证据：PR #239，MV2（与 `uvw compile-svg` 结构一致，估算模式对照，Slide 页面截图无溢出，55 行量字客户端墙钟 378 ms，网关记录约 150 ms）。
 
 **验收记录（2026-11-09，`verify-uvw` run e6，启动 HEAD `239e433e`）。** MR9、MR10、MR11、MV2 在当前 `main` 上按文档原样逐条通过，MR12 新增为可重复旅程。验收中发现的问题没有在本阶段修复，列在架构 [7.1.2](architecture.zh-CN.md#712-已知问题与后续)，每条给出触发条件：
 
