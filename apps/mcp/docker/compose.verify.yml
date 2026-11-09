@@ -26,6 +26,8 @@ services:
     depends_on:
       executor:
         condition: service_healthy
+      renderer:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 1s
@@ -39,11 +41,29 @@ services:
       EXECUTOR_MAX_WORKERS: ${EXECUTOR_MAX_WORKERS:-4}
       EXECUTOR_IDLE_TTL_MS: ${EXECUTOR_IDLE_TTL_MS:-60000}
       MCP_INTERNAL_TOKEN: ${VERIFY_UVW_INTERNAL_TOKEN:?}
+      MCP_RENDERER_URL: http://renderer:3000
       HOST: 0.0.0.0
       PORT: "3000"
       WORKSPACE_ORIGIN: ${VERIFY_UVW_ORIGIN:?}
       WORKSPACE_TRANSPORT_URL: http://host.docker.internal:${VERIFY_UVW_SERVER_PORT:?}
       LOG_LEVEL: info
+    networks: [default, render]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+      interval: 1s
+      retries: 30
+  renderer:
+    image: ${VERIFY_UVW_MCP_IMAGE:?}
+    environment:
+      MCP_ROLE: renderer
+      NODE_ENV: development
+      MCP_INTERNAL_TOKEN: ${VERIFY_UVW_INTERNAL_TOKEN:?}
+      METRICS_TOKEN: ${VERIFY_UVW_METRICS_TOKEN:?}
+      RENDERER_MAX_RUNTIMES: ${RENDERER_MAX_RUNTIMES:-2}
+      HOST: 0.0.0.0
+      PORT: "3000"
+      LOG_LEVEL: info
+    networks: [render]
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
       interval: 1s
@@ -52,3 +72,6 @@ services:
     extends:
       service: executor
     profiles: [replicas]
+networks:
+  render:
+    internal: true

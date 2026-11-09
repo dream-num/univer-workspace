@@ -66,7 +66,7 @@ MCP Server 不连接任何数据库（D12）。它保存的状态只有三类，
 | daemon 与 unix socket | 删除 | 网关通过内部 RPC 调用执行层，执行层直接实现那三个操作 |
 | 运行时池与 worker | 执行层 | key 加入用户身份；跨 key 排队；参数可配置；见第 6 节 |
 | CLI 进程内的 Office、Markdown、Typst、SVG 处理 | 执行层及现有作业子进程 | Office 转换、Typst 编译与文档物化加载原生绑定，在 job child 中运行。SVG 使用 estimateTextSize 时只运行 JavaScript 编译与内置量字，不启动浏览器，保留在 executor；apply 使用绑定 runtime |
-| Chromium | 渲染服务 | 常驻浏览器池，每个任务一个 BrowserContext，任务结束即销毁 |
+| Chromium | 渲染服务 | 目标是常驻浏览器池加每任务一个 BrowserContext；阶段 E 实际是复用的 runtime 池，见 7.1 节 |
 | session 文件 | 不存在 | 下游凭据由网关按请求换取，见第 4 节 |
 | `--file` 输入、`--out` 输出 | 暂存存储加签名 URL | 见第 5 节和[工具规格](tools.zh-CN.md) |
 | 资源缓存、Chromium 二进制、render-runtime 页面 | 打进镜像，只读共享 | 不区分用户 |
@@ -335,7 +335,10 @@ valueTruncated: true；文本确认已提交，不提示重试写入。未提交
 
 - 输入是执行层组装好的渲染数据（`UniverRenderUnit`），输出是 PNG、PDF 或 lint 报告。
 - 不访问 Workspace，不持有任何用户凭据。图片资产必须在执行层内联后再交给它。
-- 常驻浏览器池，每个任务一个 BrowserContext，任务结束即销毁，不跨用户复用。
+- 目标：常驻浏览器池，每个任务一个 BrowserContext，任务结束即销毁，不跨用户复用。
+- 当前（2026-11-09 产品负责人决定，阶段 G 收口）：`createUniverRenderRuntime` 只接受 `renderPageRoot`、浏览器路径、`env`、`license` 和 `signal`，不能注入浏览器或 BrowserContext。阶段 E 因此只能用长驻的 runtime 池代替“每任务一个 BrowserContext”：每个 runtime 自带一个 Chromium 和一个页面，跨请求、跨用户复用，这是对上一条的临时偏离。runtime 的每个方法都带完整的 unit，runtime 在两次调用之间不保存请求状态，但浏览器页面是共享的。阶段 G 必须恢复每任务隔离（换用支持 BrowserContext 的渲染入口，或每任务一个 runtime），在那之前渲染服务只用于本机和内部单用户环境。
+- 池参数：最多 `RENDERER_MAX_RUNTIMES` 个 runtime（默认 2），按需创建，一次请求独占一个 runtime。排队超过 `RENDERER_QUEUE_TIMEOUT_MS`（默认 5000）返回可重试的 `workspace-renderer-busy`。操作超过 `RENDERER_OPERATION_TIMEOUT_MS`（默认 25000），或抛出浏览器、runtime 故障时，关闭并丢弃该 runtime，下一次请求重新创建；输入错误（unit 数据无效、不支持的类型）不影响 runtime，归还给池。关闭服务时关闭全部 runtime。
+- 渲染服务的内部 RPC 沿用执行层的帧格式、Bearer 校验和错误信封，不带用户 grant。操作为 `screenshot`、`printPdf`、`lint`、`measureText`，协议定义在 `apps/mcp/src/shared/renderer-protocol.ts`，执行层之后从这里导入。
 - 页面只来自镜像内的 render-runtime 产物，不访问外部网络。
 - 现有启动参数含 `--no-sandbox`（`@univer-cli/univer-render-runtime` README）。在沙箱运行时下如何处理由阶段 G 确定。
 
@@ -403,6 +406,8 @@ MCP 不连数据库（D12），所以第一版的“统计接口”由两部分�
 | `mcp_executor_queue_wait_seconds` | 无 |
 | `mcp_executor_collaboration_connections` | 无 |
 | `mcp_renderer_jobs_total` | `kind`、`outcome` |
+| `mcp_renderer_runtimes` | `state`（`idle`、`busy`） |
+| `mcp_renderer_runtime_creations_total`、`mcp_renderer_runtime_discards_total` | 无 |
 | `mcp_staging_bytes` | `purpose` |
 
 Grafana 面板沿用 `observability/` 的方案，新增一个 MCP 面板。
@@ -463,8 +468,12 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `MCP_STAGING_DIRECTORY` | 网关 | 暂存存储目录 |
 | `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端，两者同时设置或同时不设。启用 PAT 与 OAuth access token 认证 |
 | `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节）。与上一行至少设置一项，本地验证两者同时设置 |
-| `UNIVER_LICENSE`、`UNIVER_LICENSE_KEY` | 执行层、渲染服务 | license 注入 |
+| `UNIVER_LICENSE`、`UNIVER_LICENSE_KEY` | 执行层、渲染服务 | license 注入。渲染服务只读取 `UNIVER_LICENSE`，未设置时使用与执行层相同的内置开发 license |
 | `EXECUTOR_*` | 执行层 | 见 6.2 节 |
+| `RENDERER_MAX_RUNTIMES` | 渲染服务 | 同时存在的 runtime（每个一个 Chromium）上限，默认 2 |
+| `RENDERER_QUEUE_TIMEOUT_MS` | 渲染服务 | 等待空闲 runtime 的最长时间，默认 5000；超时返回可重试错误 |
+| `RENDERER_OPERATION_TIMEOUT_MS` | 渲染服务 | 单次渲染操作和 runtime 启动的超时，默认 25000；超时即丢弃该 runtime |
+| `UNIVER_RENDER_BROWSER` | 渲染服务 | Chromium 可执行文件。镜像设为 `/usr/bin/chromium`（Debian 包，含 `fonts-noto-cjk` 与 `fonts-liberation`） |
 | `METRICS_TOKEN` | 全部 | 指标端点令牌 |
 | `LOG_LEVEL` | 全部 | 日志级别，日志格式与 Workspace 一致（pino JSON） |
 

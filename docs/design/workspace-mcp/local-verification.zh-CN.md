@@ -116,7 +116,7 @@ services:
 
 - 端口只发布在 `127.0.0.1`。
 - gateway 将 `${VERIFY_UVW_MCP_STAGING_DIRECTORY}`（本次 run 的 `staging/`）挂载到 `/staging`，并设置 `MCP_STAGING_DIRECTORY=/staging`。目录 0700，归容器 node uid 1000 所有。executor 不挂载。`doctor` 在容器内检查 uid 和权限；`down` 移除目录及全部暂存字节。
-- D1b 在同一个文件里增加 `executor`，阶段 E 再增加 `renderer`。它们不发布端口，网关按服务名访问。阶段 E 的“渲染服务没有到 Workspace 的路由”用 `internal: true` 的网络实现，需要届时实测这种网络能否阻断 `host.docker.internal`。
+- D1b 在同一个文件里增加 `executor`，阶段 E 增加 `renderer`。它们不发布端口，网关按服务名访问 executor。`renderer` 只加入声明为 `internal: true` 的 `render` 网络，executor（含 `executor-b`）同时加入默认网络和 `render` 网络，并收到 `MCP_RENDERER_URL=http://renderer:3000`；网关不加入 `render` 网络，启动依赖 executor 和 renderer 都健康。阶段 E 的“渲染服务没有到 Workspace 的路由”由这个网络实现。实测（2026-11-09，Docker Desktop，arm64）：`internal: true` 网络足以阻断 `host.docker.internal`。renderer 容器里对 `host.docker.internal` 和公网域名的 DNS 解析返回 `EAI_AGAIN`，直连宿主网关地址 `192.168.65.254:<server 端口>` 超时，而同一请求从 executor 容器发出返回 200。因此不需要额外的 compose 措施。
 - 容器加固（只读根文件系统、去掉 capability 等）属于阶段 G，本文件不提前加。
 
 D1b 使用同一镜像增加 `executor` 服务，没有 published ports；gateway 通过
@@ -221,6 +221,7 @@ ready 错误、停机错误和 Browser 截图。
 | `mcp-build.json` | 构建开始时间、`GIT_HEAD`、构建输入的源码摘要、镜像 ID | 是 |
 | `logs/mcp-build.log` | `docker build` 输出 | 是 |
 | `logs/mcp-gateway.log` | `down` 时导出的网关完整日志 | 是 |
+| `logs/mcp-renderer.log` | `down` 时导出的 renderer 完整日志 | 是 |
 
 ### 6.2 现有命令的变化
 
@@ -296,6 +297,12 @@ export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high
 4. 按 label `com.docker.compose.project=$MCP_PROJECT` 列出剩余的容器、网络和卷，镜像按 tag 列出。全部为空时输出 `ok    MCP resources removed`，否则逐个列出并给出删除命令。
 
 `down` 只操作带本次项目 label 或本次 tag 的资源，不执行 `docker system prune`，也不按名字或端口删除容器。
+
+**`doctor`（阶段 E）。** 增加 renderer 检查，实现在 `bin/renderer-doctor.mjs`：renderer 容器健康且使用本次运行的镜像；没有 published port；只加入一个网络，该网络是 `internal: true`；无 bearer 和错误 bearer 的 RPC 均为 401；`/metrics` 不带令牌为 401、带 `home/metrics-token` 为 200；从 executor 容器发出的 `measureText` 请求（含中英文）在 Chromium 中成功，响应保存为 `evidence/renderer-probe.json`；从 renderer 容器访问 `host.docker.internal:<server 端口>`、gateway 和公网都被阻断，结果保存为 `evidence/renderer-isolation.json`；renderer 日志不含 session、PAT、内部令牌、metrics 令牌和客户端密钥。
+
+**`down`（阶段 E）。** 同时导出 `logs/mcp-renderer.log`。`compose down` 移除 renderer 容器和 `render` 网络，剩余资源检查按同一个项目 label 覆盖它们。
+
+**`renderer-call`（阶段 E）。** `verify-uvw renderer-call <label> screenshot|printPdf|lint|measureText < input.json` 在 executor 容器内用 `MCP_RENDERER_URL` 和内部令牌调用 renderer，保存 `evidence/<label>.json`，截图写 `<label>-<name>.png`，PDF 写 `<label>.pdf`。`bin/renderer-proof.mjs` 输出带中英文的小 Sheet 或 Doc 作为输入。renderer 还没有工具调用方，所以这是目前唯一的端到端入口。
 
 ### 6.3 `mcp`
 
@@ -453,7 +460,7 @@ M2 到 M6 的每次工具调用都由 6.3 节的退出码 5 自动核对用量�
 | 事项 | 阶段 |
 | --- | --- |
 | 暂存目录挂载（executor 与容器内 HTTP / 协同 WebSocket doctor 已在 D1b 实现） | D |
-| compose 增加 `renderer`；实测 `internal: true` 网络能否阻断 `host.docker.internal` | E |
+| ~~compose 增加 `renderer`；实测 `internal: true` 网络能否阻断 `host.docker.internal`~~ 已在阶段 E 完成，见第 4 节 | E |
 | `verify-uvw mcp-token` 生成 PAT，`mcp --auth pat`；认证失败事件的验收；本地验证默认改用 PAT | F |
 | 容器加固与沙箱运行时 | G |
 | 把 6.6 节的比较步骤收进脚本 | B |

@@ -558,6 +558,18 @@ importers:
       '@univer-cli/resource-library':
         specifier: 1.4.0
         version: 1.4.0
+      '@univer-cli/unit-layout-lint':
+        specifier: 1.4.0
+        version: 1.4.0(rxjs@7.8.2)
+      '@univer-cli/unit-pdf-printer':
+        specifier: 1.4.0
+        version: 1.4.0(rxjs@7.8.2)
+      '@univer-cli/unit-screenshot':
+        specifier: 1.4.0
+        version: 1.4.0(rxjs@7.8.2)
+      '@univer-cli/univer-render-runtime':
+        specifier: 1.4.0
+        version: 1.4.0(rxjs@7.8.2)
       '@univerjs-pro/cli-assets':
         specifier: 0.1.0
         version: 0.1.0
@@ -12647,9 +12659,31 @@ snapshots:
       - utf-8-validate
       - yauzl
 
+  '@univer-cli/unit-layout-lint@1.4.0(rxjs@7.8.2)':
+    dependencies:
+      '@univer-cli/univer-render-runtime': 1.4.0(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - bufferutil
+      - proxy-agent
+      - react
+      - rxjs
+      - utf-8-validate
+      - yauzl
+
   '@univer-cli/unit-pdf-printer@1.4.0(react@19.3.0)(rxjs@7.8.2)':
     dependencies:
       '@univer-cli/univer-render-runtime': 1.4.0(react@19.3.0)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - bufferutil
+      - proxy-agent
+      - react
+      - rxjs
+      - utf-8-validate
+      - yauzl
+
+  '@univer-cli/unit-pdf-printer@1.4.0(rxjs@7.8.2)':
+    dependencies:
+      '@univer-cli/univer-render-runtime': 1.4.0(rxjs@7.8.2)
     transitivePeerDependencies:
       - bufferutil
       - proxy-agent
@@ -12698,6 +12732,17 @@ snapshots:
   '@univer-cli/unit-screenshot@1.4.0(react@19.3.0)(rxjs@7.8.2)':
     dependencies:
       '@univer-cli/univer-render-runtime': 1.4.0(react@19.3.0)(rxjs@7.8.2)
+    transitivePeerDependencies:
+      - bufferutil
+      - proxy-agent
+      - react
+      - rxjs
+      - utf-8-validate
+      - yauzl
+
+  '@univer-cli/unit-screenshot@1.4.0(rxjs@7.8.2)':
+    dependencies:
+      '@univer-cli/univer-render-runtime': 1.4.0(rxjs@7.8.2)
     transitivePeerDependencies:
       - bufferutil
       - proxy-agent
@@ -13021,6 +13066,21 @@ snapshots:
       '@univerjs-pro/boards': 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-pro/slides': 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs/core': 1.4.0(react@19.3.0)(rxjs@7.8.2)
+      puppeteer-core: 25.8.0
+    transitivePeerDependencies:
+      - bufferutil
+      - proxy-agent
+      - react
+      - rxjs
+      - utf-8-validate
+      - yauzl
+
+  '@univer-cli/univer-render-runtime@1.4.0(rxjs@7.8.2)':
+    dependencies:
+      '@puppeteer/browsers': 3.2.1
+      '@univerjs-pro/boards': 1.4.0(rxjs@7.8.2)
+      '@univerjs-pro/slides': 1.4.0(rxjs@7.8.2)
+      '@univerjs/core': 1.4.0(rxjs@7.8.2)
       puppeteer-core: 25.8.0
     transitivePeerDependencies:
       - bufferutil

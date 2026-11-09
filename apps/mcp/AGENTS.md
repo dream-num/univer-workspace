@@ -25,3 +25,6 @@ Validate Docker changes against the built image and `docker compose config`.
 - Session grants remain internal single-user development only. Required caller IDs enter every worker key;
   production refuses session grants. Grant secrets are read only by `executor/credentials.ts`.
 - Worker environments are explicit and exclude internal/metrics tokens, license keys and OAuth secrets.
+- `renderer/` has no route to Workspace: it must not import the gateway, Client Core, `@univerjs-pro/*` or the executor (except the generated `executor/license.ts`), and must not mention Workspace origins, grants or sessions. The import-boundary test enforces it.
+- `shared/renderer-protocol.ts` owns the renderer operation list and its schemas; the executor imports it later. The render page ships in `dist/render-runtime` (copied from Client Core at build).
+- The renderer pool reuses runtimes across requests and users. That deviates from architecture 7.1 until Stage G; keep it local and single-user.
