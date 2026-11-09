@@ -211,7 +211,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 
 **交付物。**
 
-1. 一份安全设计文档，放在本目录下，说明如何满足架构文档第 10 节的七条要求。
+1. 一份安全设计文档，放在本目录下，说明如何满足架构文档第 10 节的七条要求。设计稿见 [security.zh-CN.md](security.zh-CN.md)，待评审。
 2. 按设计实现。可能涉及 `apps/mcp`、`packages/client-core`，以及向上游 Univer CLI SDK 提出的改动。
 3. 每条要求对应的验证脚本和结果，可以在 `verify-uvw` 上复现。
 4. 沙箱运行时（gVisor 或替代方案）下 Univer、原生绑定、Chromium 的兼容性结论。
