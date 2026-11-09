@@ -561,6 +561,9 @@ importers:
       '@univer-cli/unit-layout-lint':
         specifier: 1.4.0
         version: 1.4.0(rxjs@7.8.2)
+      '@univer-cli/unit-layout-lint-command':
+        specifier: 1.4.0
+        version: 1.4.0(commander@15.0.0)(rxjs@7.8.2)
       '@univer-cli/unit-pdf-printer':
         specifier: 1.4.0
         version: 1.4.0(rxjs@7.8.2)
@@ -12634,6 +12637,18 @@ snapshots:
   '@univer-cli/unit-layout-lint-command@1.4.0(commander@15.0.0)(react@19.3.0)(rxjs@7.8.2)':
     dependencies:
       '@univer-cli/unit-layout-lint': 1.4.0(react@19.3.0)(rxjs@7.8.2)
+      commander: 15.0.0
+    transitivePeerDependencies:
+      - bufferutil
+      - proxy-agent
+      - react
+      - rxjs
+      - utf-8-validate
+      - yauzl
+
+  '@univer-cli/unit-layout-lint-command@1.4.0(commander@15.0.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univer-cli/unit-layout-lint': 1.4.0(rxjs@7.8.2)
       commander: 15.0.0
     transitivePeerDependencies:
       - bufferutil

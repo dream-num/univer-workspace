@@ -43,6 +43,8 @@ export const filesNames = [
   "export_markdown",
   "compile_typst",
   "compile_svg",
+  "print_pdf",
+  "lint",
 ];
 export const adminNames = [
   "repo_create",
@@ -98,6 +100,8 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   unit_create: "write",
   import: "write",
   export: "read",
+  print_pdf: "read",
+  lint: "read",
   job_get: "read",
   blob_get: "read",
   file_upload_create: "write",

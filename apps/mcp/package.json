@@ -19,6 +19,7 @@
     "@univer-cli/content-inspection-command": "1.4.0",
     "@univer-cli/resource-library": "1.4.0",
     "@univer-cli/unit-layout-lint": "1.4.0",
+    "@univer-cli/unit-layout-lint-command": "1.4.0",
     "@univer-cli/unit-pdf-printer": "1.4.0",
     "@univer-cli/unit-screenshot": "1.4.0",
     "@univer-cli/unit-screenshot-command": "1.4.0",

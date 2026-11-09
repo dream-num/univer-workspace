@@ -1,5 +1,7 @@
 import { compileTypstTool } from "./files/compile-typst.js";
 import { compileSvgTool } from "./files/compile-svg.js";
+import { printPdfTool } from "./files/print-pdf.js";
+import { lintTool } from "./files/lint.js";
 import { compileMarkdownTool } from "./files/compile-markdown.js";
 import { exportMarkdownTool } from "./files/export-markdown.js";
 import { fileUploadCreateTool } from "./core/file-upload-create.js";
@@ -95,6 +97,8 @@ export const tools: readonly ToolDefinition[] = [
   exportMarkdownTool,
   compileTypstTool,
   compileSvgTool,
+  printPdfTool,
+  lintTool,
   repoCreateTool,
   repoEditTool,
   labelListTool,

@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { PROTOCOL_VERSION } from "./executor-protocol.js";
+import { lintOutput, printPdfOutput } from "./pdf-lint-schema.js";
 import { box, screenshotImage, screenshotOutput, unitType } from "./screenshot-schema.js";
 
 export { responseHeaderSchema } from "./executor-protocol.js";
-export { screenshotImage, screenshotOutput };
+export { lintOutput, printPdfOutput, screenshotImage, screenshotOutput };
 
 // The renderer receives no grant: it has no route to Workspace and holds no user credentials.
 const MiB = 1024 * 1024;
@@ -52,29 +53,12 @@ const screenshotTarget = z.discriminatedUnion("kind", [
 export const screenshotInput = renderUnitSchema.extend({ target: screenshotTarget.optional() });
 
 export const printPdfInput = renderUnitSchema;
-export const printPdfOutput = z.object({
-  unitId: z.string(),
-  unitType,
-  name: z.string(),
-  mediaType: z.literal("application/pdf"),
-  pageCount: z.int().nonnegative(),
-});
 
 export const lintInput = z.object({
   unitType: z.literal("slide"),
   unitData,
   formulaReferenceUnits: renderUnitSchema.shape.formulaReferenceUnits,
   pages: z.array(z.union([z.number(), z.string()])).optional(),
-});
-export const lintOutput = z.object({
-  kind: z.literal("unit-layout-lint"),
-  unitId: z.string(),
-  unitType: z.literal("slide"),
-  coverage: z.object({
-    pages: z.array(z.object({ page: z.number(), pageId: z.string() })),
-    rules: z.array(z.string()),
-  }),
-  findings: z.array(z.json()),
 });
 
 export const measureTextInput = z.object({

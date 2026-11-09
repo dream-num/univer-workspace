@@ -10,7 +10,7 @@ import { JOB_TTL_MS, type JobRecord } from "./model.js";
 // A job never outlives the session that must finish it.
 const GRANT_MARGIN_MS = 5_000;
 
-const readTools: readonly JobRecord["tool"][] = ["export", "screenshot"];
+const readTools: readonly JobRecord["tool"][] = ["export", "screenshot", "print_pdf"];
 
 function deadlineError(tool: JobRecord["tool"]) {
   return !readTools.includes(tool)
