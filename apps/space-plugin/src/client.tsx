@@ -118,9 +118,10 @@ export function apply(ctx: any) {
     const send = (binding: NonNullable<typeof link>, action: 'register' | 'update' | 'retire', focus: DocFocus | null) =>
       api('focus', { sessionId: binding.sessionId, owner, association: binding.association,
         generation: mount, sequence: ++sequence, channel, action, focus });
+    const syncError = '无法同步当前选区，请重新选择；如仍失败，请重新打开文档。';
     const failed = (binding: NonNullable<typeof link>) => {
       if (current() && link === binding) {
-        update({ error: '无法同步当前选区，请重新选择；如仍失败，请重新打开文档。' });
+        update({ error: syncError });
       }
     };
     const publish = () => {
@@ -128,7 +129,9 @@ export function apply(ctx: any) {
       if (!current() || !binding?.ready) return;
       const pending = send(binding, 'update', selection), sentSequence = sequence;
       void pending.then(result => {
-        if (!result.accepted && sentSequence === sequence) failed(binding);
+        if (sentSequence !== sequence) return;
+        if (!result.accepted) failed(binding);
+        else if (current() && link === binding && view.error === syncError) update({ error: '' });
       }, () => { if (sentSequence === sequence) failed(binding); });
     };
     const publisher = {
@@ -258,6 +261,9 @@ export function apply(ctx: any) {
   }
   async function clearCurrent(sessionId = view.sessionId, space = view.location === 'space' || view.location === 'folder' ? view.space : '') {
     const sequence = ++contextSequence, owner = contextOwner;
+    // Host association is being invalidated. A returning editor must wait for
+    // associateCurrent instead of registering against the old linked view.
+    if (sessionId === view.sessionId) update({ context: null });
     liveFocus?.disconnect(sessionId);
     if (sessionId) {
       await ensureOwner();

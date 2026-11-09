@@ -9,6 +9,7 @@ import { ToolBindings } from '../lib/tools.js';
 const source = readFileSync(new URL('../src/client.tsx', import.meta.url), 'utf8');
 const body = source.slice(source.indexOf('  function mountDocFocus('), source.indexOf('  const removedContexts'));
 const compiled = transformSync(body, { loader: 'ts', target: 'es2022' }).code;
+const clearBody = transformSync(source.slice(source.indexOf('  async function clearCurrent('), source.indexOf('  const workKey')), { loader: 'ts', target: 'es2022' }).code;
 const tick = () => new Promise(resolve => setImmediate(resolve));
 async function fixture() {
   const b = new ToolBindings({
@@ -20,14 +21,16 @@ async function fixture() {
   const env = { liveFocus: undefined, focusGeneration: 0, disposed: false, contextOwner: 'owner', contextSequence: 1,
     view: { content: file, contentLoadId: 1, sessionId: 's', context: { state: 'linked' } },
     update(patch) { Object.assign(env.view, patch); },
-    api(operation, payload) { assert.equal(operation, 'focus'); return new Promise((resolve, reject) => calls.push({ payload, resolve, reject })); },
+    ensureOwner: async () => {}, unblock() {},
+    api(operation, payload) { assert.ok(['focus', 'current'].includes(operation)); return new Promise((resolve, reject) => calls.push({ operation, payload, resolve, reject })); },
   };
   const mount = new Function('env', `with (env) { ${compiled}; return mountDocFocus; }`)(env);
-  const deliver = async call => { const p = call.payload; const result = b.setFocus(p.sessionId, p, p.focus); call.resolve(result); await tick(); return result; };
+  const clearCurrent = new Function('env', `with (env) { ${clearBody}; return clearCurrent; }`)(env);
+  const deliver = async call => { const p = call.payload; const result = call.operation === 'focus' ? b.setFocus(p.sessionId, p, p.focus) : await b.setCurrent(p.sessionId, p.nodeId, p.owner, p.sequence); call.resolve(result); await tick(); return result; };
   const target = text => ({ id: text, channel: 'sdk', nodeId: 'n', resourceId: 'r', unitId: 'u', text });
   let turn = 0;
   const captured = () => { b.admit('s', 'm'); b.beginStep('s', ++turn, [{ id: 'm' }]); return b.activeTurn('s').focus; };
-  return { b, env, calls, file, mount, deliver, target, captured };
+  return { b, env, calls, file, mount, clearCurrent, deliver, target, captured };
 }
 
 test('selection produced while register is in flight publishes the latest selection after acknowledgement', async () => {
@@ -77,4 +80,48 @@ test('register timeout followed by dispose cannot publish a late snapshot or rev
   editor.dispose(); await f.deliver(f.calls[1]);
   assert.equal((await f.deliver(f.calls[0])).accepted, false);
   assert.equal(f.captured(), null);
+});
+
+
+test('Space departure invalidates linked client state before a returning editor can register', async () => {
+  const f = await fixture(), old = f.mount(f.file, 1);
+  await f.deliver(f.calls[0]); await f.deliver(f.calls[1]);
+  const departure = f.clearCurrent();
+  assert.equal(f.env.view.context, null);
+  old.dispose();
+  const count = f.calls.length, returning = f.mount(f.file, 1);
+  returning.update(f.target('B'));
+  assert.equal(f.calls.length, count);
+  await tick();
+  await f.deliver(f.calls.find(call => call.operation === 'current'));
+  await departure;
+  const association = ++f.env.contextSequence;
+  await f.b.setCurrent('s', 'n', 'owner', association);
+  f.env.view.context = { state: 'linked' };
+  returning.connect('s', association);
+  await f.deliver(f.calls.at(-1)); await f.deliver(f.calls.at(-1));
+  assert.equal(f.env.view.error, undefined);
+  assert.equal(f.captured().text, 'B');
+});
+
+test('only the latest successful current focus update clears its own sync warning', async () => {
+  const f = await fixture(), editor = f.mount(f.file, 1);
+  await f.deliver(f.calls[0]); await f.deliver(f.calls[1]);
+  editor.update(f.target('A')); const old = f.calls.at(-1);
+  editor.update(f.target('B')); f.calls.at(-1).resolve({ accepted: false }); await tick();
+  assert.match(f.env.view.error, /同步/);
+  await f.deliver(old); assert.match(f.env.view.error, /同步/);
+  editor.update(f.target('C')); await f.deliver(f.calls.at(-1));
+  assert.equal(f.env.view.error, ''); assert.equal(f.captured().text, 'C');
+  f.env.view.error = 'Independent save failure';
+  editor.update(f.target('D')); await f.deliver(f.calls.at(-1));
+  assert.equal(f.env.view.error, 'Independent save failure');
+});
+
+test('clearing another Session does not erase the visible document association', async () => {
+  const f = await fixture(), linked = f.env.view.context;
+  const pending = f.clearCurrent('other');
+  assert.equal(f.env.view.context, linked);
+  await tick(); await f.deliver(f.calls.at(-1)); await pending;
+  assert.equal(f.env.view.context, linked);
 });
