@@ -115,7 +115,8 @@ if (record) {
       env: { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(internal.run, 'staging'), VERIFY_UVW_MCP_PROJECT: internal.project, VERIFY_UVW_MCP_IMAGE: internal.image,
         VERIFY_UVW_ORIGIN: internal.origin, VERIFY_UVW_SERVER_PORT: internal['server-port'], VERIFY_UVW_MCP_PORT: url.port,
         VERIFY_UVW_METRICS_TOKEN: readFileSync(tokenPath, 'utf8').trim(),
-        VERIFY_UVW_INTERNAL_TOKEN: readFileSync(join(internal.run, 'home/internal-token'), 'utf8').trim(),
+        VERIFY_UVW_EXECUTOR_TOKEN: readFileSync(join(internal.run, 'home/executor-token'), 'utf8').trim(),
+        VERIFY_UVW_RENDERER_TOKEN: readFileSync(join(internal.run, 'home/renderer-token'), 'utf8').trim(),
         VERIFY_UVW_MCP_OAUTH_SECRET: readFileSync(join(internal.run, 'home/mcp-oauth-secret'), 'utf8').trim() } });
   } catch { errors.push('Cannot read gateway logs'); }
   try { workspace = readFileSync(join(internal.run, 'logs/server.log'), 'utf8'); }

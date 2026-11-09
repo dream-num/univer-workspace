@@ -5,7 +5,7 @@ import { testStagingDirectory } from "./staging-directory.js";
 
 const executor = {
   WORKSPACE_ORIGIN: "https://workspace.test",
-  MCP_INTERNAL_TOKEN: "internal-token-".repeat(4),
+  MCP_EXECUTOR_TOKEN: "executor-token-".repeat(4),
 };
 const gateway = {
   WORKSPACE_ORIGIN: executor.WORKSPACE_ORIGIN,
@@ -17,7 +17,7 @@ const gateway = {
 const linkedGateway = {
   ...gateway,
   MCP_EXECUTOR_URLS: "http://executor:3000",
-  MCP_INTERNAL_TOKEN: executor.MCP_INTERNAL_TOKEN,
+  MCP_EXECUTOR_TOKEN: executor.MCP_EXECUTOR_TOKEN,
 };
 
 describe("executor allowlist configuration", () => {

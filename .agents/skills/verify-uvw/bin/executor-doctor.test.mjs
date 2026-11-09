@@ -7,7 +7,7 @@ test('worker inspection fails closed when none are inspected', () => {
   assertWorkerCount(1);
 });
 test('log inspection rejects license or token leaks', () => {
-  for (const secret of ['license-value', 'license-key', 'internal-token']) {
+  for (const secret of ['license-value', 'license-key', 'executor-token']) {
     assert.throws(() => assertLogsExclude('prefix ' + secret, [secret]));
   }
   assertLogsExclude('safe metadata', ['license-value', 'license-key', '', undefined]);

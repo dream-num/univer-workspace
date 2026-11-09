@@ -15,6 +15,14 @@ import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { credentialRedactions } from "../shared/logging.js";
 import { createDispatcher } from "./dispatch.js";
 import { createExecutorRuntime } from "./runtime.js";
+import { RendererCapabilities } from "./renderer-capabilities.js";
+import type { RendererOpName } from "../shared/renderer-protocol.js";
+
+const renderOperations = new Map<string, RendererOpName>([
+  ["render.screenshot", "screenshot"],
+  ["render.printPdf", "printPdf"],
+  ["render.lint", "lint"],
+]);
 
 export function createExecutor(
   config: ExecutorConfig,
@@ -22,11 +30,17 @@ export function createExecutor(
 ) {
   const runtime = options.runtime ?? createExecutorRuntime(config);
   const logger = options.logger ?? pino({ level: config.LOG_LEVEL, redact: credentialRedactions });
-  const dispatch = createDispatcher(config, runtime, logger);
-  const authorized = createBearerCheck(config.MCP_INTERNAL_TOKEN);
+  const capabilities = new RendererCapabilities(config, logger);
+  const dispatch = createDispatcher(config, runtime, logger, () => capabilities.operations);
+  const authorized = createBearerCheck(config.MCP_EXECUTOR_TOKEN);
   let draining = false;
   const server = createServer((request, response) => {
+    const receivedAt = Date.now();
     const reject = (status: number, code: string) => {
+      if (!request.complete) {
+        response.setHeader("connection", "close");
+        request.resume();
+      }
       response
         .writeHead(status, { "content-type": "application/json" })
         .end(JSON.stringify({ error: { code, message: code, detail: null } }));
@@ -51,12 +65,16 @@ export function createExecutor(
         return;
       }
       if (request.method === "GET" && request.url === "/rpc/v1/capabilities") {
+        await capabilities.ready;
+        // A renderer that started after this executor shows up here instead of after the next refresh.
+        if (config.MCP_RENDERER_URL && capabilities.operations.size === 0) await capabilities.refresh();
         response.writeHead(200, { "content-type": "application/json" }).end(
           JSON.stringify({
             v: PROTOCOL_VERSION,
-            operations: Object.keys(opSpecs).filter(
-              (name) => config.MCP_RENDERER_URL !== undefined || !name.startsWith("render."),
-            ),
+            operations: Object.keys(opSpecs).filter((name) => {
+              const operation = renderOperations.get(name);
+              return operation === undefined || capabilities.operations.has(operation);
+            }),
           }),
         );
         return;
@@ -82,7 +100,7 @@ export function createExecutor(
       }
       const chunks: Buffer[] = [];
       let size = 0;
-      for await (const chunk of request) {
+      for await (const chunk of request.iterator({ destroyOnReturn: false })) {
         const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += bytes.length;
         if (size > limits.requestBytes) {
@@ -113,9 +131,12 @@ export function createExecutor(
         reject(400, "workspace-executor-frame-invalid");
         return;
       }
-      const result = await dispatch(name, header, payload);
+      const result = await dispatch(name, header, payload, receivedAt);
       let frame = encodeFrame(result.header, result.payload);
       if (frame.length > limits.responseBytes) {
+        const committed =
+          result.header.ok &&
+          (spec.effectFor?.(spec.input.parse(header.input)) ?? spec.effect) === "write";
         const output =
           name === "content.execute" && result.header.ok
             ? truncateCommittedExecute(result.header.output)
@@ -128,8 +149,10 @@ export function createExecutor(
                 meta: result.header.meta,
                 error: {
                   code: "workspace-result-too-large",
-                  message: "Narrow the request; the executor result exceeds its byte limit.",
-                  detail: null,
+                  message: committed
+                    ? "The write succeeded but its result exceeds the byte limit. Read the current state instead of repeating the write."
+                    : "Narrow the request; the executor result exceeds its byte limit.",
+                  detail: committed ? { committed: true, retryable: false } : null,
                   outcome: "tool_error",
                 },
               },
@@ -146,6 +169,7 @@ export function createExecutor(
     server,
     async close() {
       draining = true;
+      capabilities.close();
       await new Promise<void>((resolve) => server.close(() => resolve()));
       await runtime.close();
     },

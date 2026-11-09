@@ -24,7 +24,7 @@ import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "../src/executor/license.js";
 
 const configInput = {
   WORKSPACE_ORIGIN: "http://workspace.test",
-  MCP_INTERNAL_TOKEN: "token".repeat(10),
+  MCP_EXECUTOR_TOKEN: "token".repeat(10),
 };
 const config = parseExecutorConfig(configInput);
 const credentials = { license: UNIVER_LICENSE, licenseKey: UNIVER_LICENSE_KEY };

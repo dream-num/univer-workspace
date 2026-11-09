@@ -10,7 +10,7 @@ import { zeroCost } from "../src/shared/usage.js";
 
 const session = "secret-session-value";
 const origin = "https://workspace.test";
-const token = "internal-token-".repeat(4);
+const token = "executor-token-".repeat(4);
 const unitData = { id: "unit", name: "Unit", appVersion: "1", locale: "enUS" };
 const pdfOutput = {
   unitId: "unit",
@@ -94,7 +94,7 @@ function setup(unitType: string, output: object, payload?: Uint8Array, pages = 2
     exchange: { license: "", licenseKey: "" },
     renderer: createRendererClient({
       url: "http://renderer:3000",
-      internalToken: token,
+      rendererToken: token,
       requestId: "render",
       deadlineAt: Date.now() + 30_000,
       signal: new AbortController().signal,

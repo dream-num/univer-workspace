@@ -67,7 +67,7 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
       MCP_PUBLIC_URL: `${origin}/mcp`,
       MCP_STAGING_DIRECTORY: testStagingDirectory(),
       MCP_EXECUTOR_URLS: executorUrl,
-      MCP_INTERNAL_TOKEN: "t".repeat(32),
+      MCP_EXECUTOR_TOKEN: "t".repeat(32),
       MCP_SYNC_BUDGET_MS: "5",
     }),
     {

@@ -58,7 +58,7 @@ export function createExecutorLinks(
         config && router
           ? {
               router,
-              internalToken: config.internalToken,
+              executorToken: config.executorToken,
               grant: issueGrant(auth, user),
               requestId,
               deadlineAt,

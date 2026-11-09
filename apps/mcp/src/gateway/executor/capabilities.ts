@@ -11,6 +11,7 @@ import { ExecutorRouter } from "./router.js";
 export class ExecutorCapabilities {
   readonly router = new ExecutorRouter([]);
   operations: ReadonlySet<OpName> = new Set();
+  private discovered = false;
   private readonly replicas = new Map<string, ReadonlySet<OpName>>();
   private readonly controller = new AbortController();
   private readonly timer: ReturnType<typeof setInterval> | undefined;
@@ -31,7 +32,7 @@ export class ExecutorCapabilities {
   }
 
   get available(): boolean {
-    return this.replicas.size > 0;
+    return this.discovered;
   }
 
   refresh(): Promise<void> {
@@ -47,7 +48,7 @@ export class ExecutorCapabilities {
       config.urls.map(async (url) => {
         try {
           const response = await fetch(`${url}/rpc/v1/capabilities`, {
-            headers: { authorization: `Bearer ${config.internalToken}` },
+            headers: { authorization: `Bearer ${config.executorToken}` },
             signal: AbortSignal.any([this.controller.signal, AbortSignal.timeout(5_000)]),
             redirect: "error",
           });
@@ -56,9 +57,10 @@ export class ExecutorCapabilities {
             throw new Error("Executor capability request failed");
           }
           const body = executorCapabilitiesSchema.parse(await response.json());
-          if (body.v === PROTOCOL_VERSION)
+          if (body.v === PROTOCOL_VERSION) {
             this.replicas.set(url, new Set(body.operations.filter(isOpName)));
-          else this.replicas.delete(url);
+            this.discovered = true;
+          } else this.replicas.delete(url);
         } catch {
           if (!this.controller.signal.aborted)
             this.logger.warn(

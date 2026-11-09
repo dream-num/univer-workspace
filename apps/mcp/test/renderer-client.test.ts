@@ -4,7 +4,7 @@ import { parseExecutorConfig } from "../src/shared/config-executor.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";
 
-const token = "internal-token-".repeat(4);
+const token = "renderer-token-".repeat(4);
 const meta = { executor: "warm", cost: { ...zeroCost, render_pages: 1 } };
 const output = {
   unitId: "u1",
@@ -16,7 +16,7 @@ const unit = { unitType: "sheet", unitData: { id: "u1" } } as const;
 function client(options: { url?: string | null; remainingMs?: number } = {}) {
   return createRendererClient({
     url: options.url === null ? undefined : (options.url ?? "http://renderer.test:3000"),
-    internalToken: token,
+    rendererToken: token,
     requestId: "req-1",
     deadlineAt: Date.now() + (options.remainingMs ?? 30_000),
     signal: new AbortController().signal,
@@ -28,7 +28,7 @@ const frameResponse = (header: unknown, payload?: Uint8Array) =>
 afterEach(() => vi.restoreAllMocks());
 
 describe("renderer client", () => {
-  it("authenticates with the internal token and sends only the operation input", async () => {
+  it("authenticates with the renderer token and sends only the operation input", async () => {
     const fetcher = vi
       .spyOn(globalThis, "fetch")
       .mockImplementation(async (_url, options) =>
@@ -134,11 +134,19 @@ describe("renderer client", () => {
   });
 
   it("reads the renderer URL from the executor configuration", () => {
-    const env = { WORKSPACE_ORIGIN: "https://workspace.test", MCP_INTERNAL_TOKEN: token };
+    const env = { WORKSPACE_ORIGIN: "https://workspace.test", MCP_EXECUTOR_TOKEN: "executor-token-".repeat(4) };
     expect(parseExecutorConfig(env).MCP_RENDERER_URL).toBeUndefined();
     expect(
-      parseExecutorConfig({ ...env, MCP_RENDERER_URL: "http://renderer:3000" }).MCP_RENDERER_URL,
+      parseExecutorConfig({ ...env, MCP_RENDERER_URL: "http://renderer:3000", MCP_RENDERER_TOKEN: token }).MCP_RENDERER_URL,
     ).toBe("http://renderer:3000");
-    expect(() => parseExecutorConfig({ ...env, MCP_RENDERER_URL: "http://renderer/x" })).toThrow();
+    for (const invalid of [
+      { MCP_RENDERER_URL: "http://renderer:3000" },
+      { MCP_RENDERER_TOKEN: token },
+      { MCP_RENDERER_URL: "http://renderer:3000", MCP_RENDERER_TOKEN: "short" },
+      { MCP_RENDERER_URL: "http://renderer/x", MCP_RENDERER_TOKEN: token },
+    ]) expect(() => parseExecutorConfig({ ...env, ...invalid })).toThrow();
+    expect(() => parseExecutorConfig({
+      ...env, MCP_RENDERER_URL: "http://renderer:3000", MCP_RENDERER_TOKEN: env.MCP_EXECUTOR_TOKEN,
+    })).toThrow(/must differ/);
   });
 });

@@ -287,7 +287,7 @@ D4 已实现同步 `import` 与 `export`。`import` 必填 `upload_id`、`worktr
 `export` 接受 `worktree`、`unit`、`format`，返回 `{download, type}`，下载保留既有 attachment、
 sandbox 和 private/no-store 头。导入记录 `upload_bytes`，导出记录 `export_bytes`。
 
-本切片不实现 ChatGPT 文件参数。D5 已实现 `job_get`；两种操作超过同步预算后返回任务句柄，继续在四分钟期限内执行。读超时返回
+本切片不实现 ChatGPT 文件参数。D5 已实现 `job_get`；两种操作（阶段 E 又加入 `screenshot`、`print_pdf`）超过同步预算后返回任务句柄，继续在四分钟期限内执行。读超时返回
 `workspace-executor-timeout`，写超时返回 `workspace-result-unknown`。import 的 rerun 为空。
 Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响应帧上限为 128 MiB，
 包含 JSON 头与长度前缀，超限返回 `workspace-result-too-large`。第 7 节的异步任务是后续目标。
@@ -295,7 +295,7 @@ Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响�
 ### D5 长任务实现
 
 `MCP_SYNC_BUDGET_MS` 默认 30000，允许 1 到 30000，供测试与运维降低同步等待。
-只有已实现的 `import`、`export`、`compile_typst` 进入任务路径，其余工具保持既有预算。
+只有 `import`、`export`、`compile_typst`（阶段 E 加入 `screenshot`、`print_pdf`）进入任务路径，其余工具保持既有预算。
 同步完成的调用保持原结果；异步调用返回 `{job_id,status:"running"}`，由 `job_get` 取回原结果。
 任务 sidecar 在开始和结束时原子写入。导入、Typst 和失败结果从完成时起保留十五分钟，导出结果与下载链接在链接生成十五分钟后一起过期。
 同用户、同工具、同 key 的并发调用共享执行，首次同步等待内的重试加入该等待。
@@ -304,4 +304,4 @@ Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响�
 原工具仅在转换结束时发出一次真实用量事件，去重重试不重复计费事件；job_get 每次按非执行工具记零成本事件。
 网关重启不恢复转换。超过 deadlineAt 的 running 记录在读取时变为 failed，export 使用
 workspace-executor-timeout，import 和 compile_typst 使用 workspace-result-unknown，因为 sidecar 不保存 apply 参数，无法确认是否已开始创建 Unit。
-只有 exchange.import、exchange.export、typst.compile 允许超过 30 秒的 RPC deadline。Typst 编译和物化子进程共享 dispatcher 的 abort signal，受同一任务期限约束。
+只有 exchange.import、exchange.export、typst.compile、render.screenshot、render.printPdf 允许超过 30 秒的 RPC deadline。Typst 编译和物化子进程共享 dispatcher 的 abort signal，受同一任务期限约束。

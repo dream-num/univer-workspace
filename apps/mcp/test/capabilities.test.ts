@@ -77,7 +77,7 @@ async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds
       MCP_PUBLIC_URL: `${origin}/mcp`,
       MCP_STAGING_DIRECTORY: testStagingDirectory(),
       ...(allowedUserIds === undefined ? {} : { MCP_EXECUTOR_ALLOWED_USER_IDS: allowedUserIds }),
-      ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_INTERNAL_TOKEN: token } : {}),
+      ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_EXECUTOR_TOKEN: token } : {}),
     }),
     {
       logger: pino({ level: "silent" }),

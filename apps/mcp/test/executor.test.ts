@@ -33,7 +33,8 @@ import {
 } from "../src/gateway/executor/router.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
 
-const token = "internal-token-".repeat(4);
+const token = "executor-token-".repeat(4);
+const rendererToken = "renderer-token-".repeat(4);
 const grant: ExecutorGrant = {
   kind: "session",
   userId: "user-1",
@@ -41,7 +42,7 @@ const grant: ExecutorGrant = {
   expiresAt: Date.now() + 600_000,
 };
 const config = () =>
-  parseExecutorConfig({ WORKSPACE_ORIGIN: "https://workspace.test", MCP_INTERNAL_TOKEN: token });
+  parseExecutorConfig({ WORKSPACE_ORIGIN: "https://workspace.test", MCP_EXECUTOR_TOKEN: token });
 
 describe("executor protocol boundaries", () => {
   it("round trips JSON and binary payloads and refuses truncated frames", () => {
@@ -71,7 +72,7 @@ describe("executor protocol boundaries", () => {
     expect(() =>
       parseExecutorConfig({
         WORKSPACE_ORIGIN: "https://workspace.test",
-        MCP_INTERNAL_TOKEN: "short",
+        MCP_EXECUTOR_TOKEN: "short",
       }),
     ).toThrow();
     expect(() =>
@@ -82,6 +83,11 @@ describe("executor protocol boundaries", () => {
         MCP_EXECUTOR_URLS: "http://executor:3000",
       }),
     ).toThrow(/together/);
+    expect(() => parseGatewayConfig({
+      MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: "https://workspace.test",
+      MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "https://mcp.test/mcp",
+      MCP_EXECUTOR_TOKEN: token,
+    })).toThrow(/together/);
   });
 
   it("requires caller identity and redacts grant secrets", () => {
@@ -109,11 +115,16 @@ describe("executor protocol boundaries", () => {
     logger.info({
       grant,
       nested: { session: grant.session },
-      MCP_INTERNAL_TOKEN: token,
+      MCP_EXECUTOR_TOKEN: token,
+      MCP_RENDERER_TOKEN: rendererToken,
+      nestedTokens: { MCP_EXECUTOR_TOKEN: token, MCP_RENDERER_TOKEN: rendererToken },
+      executorToken: token,
+      rendererToken,
       MCP_EXECUTOR_ALLOWED_USER_IDS: "private-allowlist-id",
     });
     expect(output).not.toContain(grant.session);
     expect(output).not.toContain(token);
+    expect(output).not.toContain(rendererToken);
     expect(output).not.toContain("private-allowlist-id");
     expect(workerEnvironment).toEqual({ NODE_ENV: "production" });
   });
@@ -211,7 +222,7 @@ describe("executor protocol boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = () => ({
       router: new ExecutorRouter(urls),
-      internalToken: token,
+      executorToken: token,
       grant,
       requestId: "routing",
       deadlineAt: Date.now() + 30_000,
@@ -249,13 +260,19 @@ describe("executor protocol boundaries", () => {
   });
 
   it.each([undefined, "http://renderer.test"])(
-    "authenticates capability discovery and declares renderer operations only with %s",
+    "authenticates capability discovery and uses declared renderer operations with %s",
     async (rendererUrl) => {
+      const nativeFetch = globalThis.fetch;
+      const discovery = vi.spyOn(globalThis, "fetch").mockImplementation((url, options) =>
+        String(url) === "http://renderer.test/rpc/v1/capabilities"
+          ? Promise.resolve(Response.json({ v: 1, operations: ["screenshot", "printPdf", "lint", "measureText"] }))
+          : nativeFetch(url, options),
+      );
       const executor = createExecutor(
         parseExecutorConfig({
           WORKSPACE_ORIGIN: "https://workspace.test",
-          MCP_INTERNAL_TOKEN: token,
-          ...(rendererUrl === undefined ? {} : { MCP_RENDERER_URL: rendererUrl }),
+          MCP_EXECUTOR_TOKEN: token,
+          ...(rendererUrl === undefined ? {} : { MCP_RENDERER_URL: rendererUrl, MCP_RENDERER_TOKEN: rendererToken }),
         }),
         {
           runtime: {
@@ -273,7 +290,12 @@ describe("executor protocol boundaries", () => {
       if (!address || typeof address === "string") throw new Error("Expected TCP address");
       const url = `http://127.0.0.1:${address.port}/rpc/v1/capabilities`;
       try {
-        for (const authorization of ["", "Bearer wrong"]) {
+        for (const authorization of ["", "Bearer wrong", `Bearer ${rendererToken}`]) {
+          expect((await fetch(url.replace("capabilities", "content.execute"), {
+            method: "POST", headers: { authorization },
+          })).status).toBe(401);
+        }
+        for (const authorization of ["", "Bearer wrong", `Bearer ${rendererToken}`]) {
           expect((await fetch(url, { headers: { authorization } })).status).toBe(401);
         }
         const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
@@ -286,6 +308,7 @@ describe("executor protocol boundaries", () => {
         });
       } finally {
         await executor.close();
+        discovery.mockRestore();
       }
     },
   );
@@ -300,7 +323,7 @@ describe("executor protocol boundaries", () => {
     const executor = createExecutor(
       parseExecutorConfig({
         WORKSPACE_ORIGIN: "https://workspace.test",
-        MCP_INTERNAL_TOKEN: token,
+        MCP_EXECUTOR_TOKEN: token,
         MCP_EXECUTOR_ALLOWED_USER_IDS: "trusted",
         NODE_ENV: "production",
       }),
@@ -508,7 +531,7 @@ describe("executor regression boundaries", () => {
           callExecutor(
             {
               router,
-              internalToken: token,
+              executorToken: token,
               grant,
               requestId: "request",
               deadlineAt: Date.now() + 30_000,
@@ -539,7 +562,7 @@ describe("executor regression boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = {
       router: new ExecutorRouter(["http://one.test"]),
-      internalToken: token,
+      executorToken: token,
       grant,
       requestId: "request",
       deadlineAt: Date.now() + 30_000,
@@ -749,7 +772,7 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
       callExecutor(
         {
           router: new ExecutorRouter(["http://one.test"]),
-          internalToken: token,
+          executorToken: token,
           grant,
           requestId: "large-wire",
           deadlineAt: Date.now() + 30_000,

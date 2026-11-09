@@ -122,7 +122,9 @@ services:
 
 D1b 使用同一镜像增加 `executor` 服务，没有 published ports；gateway 通过
 `http://executor:3000` 调用，启动依赖 executor healthy。`up` 在本次 run 的
-`home/internal-token` 生成 0600 令牌文件，compose 两侧使用同一令牌。
+`home/executor-token` 和 `home/renderer-token` 分别生成独立的 0600 令牌文件。
+网关只接收 `MCP_EXECUTOR_TOKEN`，执行层接收它并在启用渲染服务时接收
+`MCP_RENDERER_TOKEN`，渲染服务只接收 `MCP_RENDERER_TOKEN`。
 
 `VERIFY_UVW_MCP_EXECUTORS` 默认 `1`。启动时设为 `2` 会启用 compose 的 `replicas` profile，
 增加无 published port 的 `executor-b`，并将两个 URL 传给 gateway。副本数持久化在 `run.env`，

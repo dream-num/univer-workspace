@@ -10,7 +10,7 @@ import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const SENSITIVE_NAME = /^(MCP_INTERNAL_TOKEN|UNIVER_LICENSE.*|.*_SECRET|.*_TOKEN|.*_KEY)$/;
+export const SENSITIVE_NAME = /^(MCP_EXECUTOR_TOKEN|MCP_RENDERER_TOKEN|UNIVER_LICENSE.*|.*_SECRET|.*_TOKEN|.*_KEY)$/;
 export const REQUIREMENTS = {
   MG1: [1, 2], MG2: [1], MG3: [1, 5], MG4: [5], MG5: [1], MG6: [3, 4], MG7: [3, 4], MG8: [3], MG9: [6], MG10: [7], MG11: [1],
 };
@@ -314,7 +314,7 @@ const PROBES = {
   async MG10(ctx) {
     const suffix = rand(4), net = `mg10-net-${suffix}`, image = ctx.env.MCP_IMAGE, names = [];
     const base = role => ['run', '-d', '--runtime=runc', '--name', `mg10-${role}-${suffix}`, '--network', net, '-e', `MCP_ROLE=${role}`, '-e', 'NODE_ENV=production',
-      '-e', `MCP_INTERNAL_TOKEN=${rand(24)}`, '-e', 'HOST=0.0.0.0', '-e', 'PORT=3000'];
+      '-e', `${role === 'renderer' ? 'MCP_RENDERER_TOKEN' : 'MCP_EXECUTOR_TOKEN'}=${rand(24)}`, '-e', 'HOST=0.0.0.0', '-e', 'PORT=3000'];
     const start = async (role, extra) => {
       const name = `mg10-${role}-${suffix}`;
       names.push(name);

@@ -150,7 +150,7 @@ async function targets(n) {
 }
 const inspect = (target, range = 'A1:A1') => ({ ...target, target: 'range', selectors: [range], worksheet: 'index:1' });
 async function metrics() {
-  return await docker(['exec', gateway, 'node', '--input-type=module', '-e', `const r=await fetch(new URL('/metrics', process.env.MCP_EXECUTOR_URLS),{headers:{authorization:'Bearer '+process.env.MCP_INTERNAL_TOKEN}});if(!r.ok)throw Error(r.status);console.log(await r.text());`]);
+  return await docker(['exec', gateway, 'node', '--input-type=module', '-e', `const r=await fetch(new URL('/metrics', process.env.MCP_EXECUTOR_URLS),{headers:{authorization:'Bearer '+process.env.MCP_EXECUTOR_TOKEN}});if(!r.ok)throw Error(r.status);console.log(await r.text());`]);
 }
 function metricValues(text) {
   return Object.fromEntries(text.split('\n').filter(l => l && !l.startsWith('#')).map(l => [l.slice(0, l.lastIndexOf(' ')), Number(l.slice(l.lastIndexOf(' ') + 1))]));

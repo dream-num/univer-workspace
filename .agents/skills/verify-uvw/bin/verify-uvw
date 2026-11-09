@@ -69,7 +69,7 @@ mcp_digest() {
 
 mcp_compose() {
   local executor_urls="http://executor:3000" profiles="" mode_env=()
-  [[ "${MCP_RENDERER:-1}" != 1 ]] || { profiles=renderer; mode_env+=("MCP_RENDERER_URL=http://renderer:3000"); }
+  [[ "${MCP_RENDERER:-1}" != 1 ]] || { profiles=renderer; mode_env+=("MCP_RENDERER_URL=http://renderer:3000" "MCP_RENDERER_TOKEN=$(cat "$RUN/home/renderer-token" 2>/dev/null || echo removed)"); }
   if [[ "${MCP_PRODUCTION:-0}" == 1 ]]; then
     mode_env+=("VERIFY_UVW_MCP_NODE_ENV=production")
   else
@@ -85,9 +85,10 @@ mcp_compose() {
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_STAGING_DIRECTORY="$RUN/staging" \
-    VERIFY_UVW_INTERNAL_TOKEN="$(cat "$RUN/home/internal-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_RENDERER_TOKEN="$(cat "$RUN/home/renderer-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_EXECUTOR_TOKEN="$(cat "$RUN/home/executor-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_OAUTH_SECRET="$(cat "$RUN/home/mcp-oauth-secret" 2>/dev/null || echo removed)" \
-    env -u MCP_RENDERER_URL -u MCP_DEV_SESSION_PASSTHROUGH -u MCP_EXECUTOR_ALLOWED_USER_IDS "${mode_env[@]}" \
+    env -u MCP_RENDERER_URL -u MCP_RENDERER_TOKEN -u MCP_DEV_SESSION_PASSTHROUGH -u MCP_EXECUTOR_ALLOWED_USER_IDS "${mode_env[@]}" \
     docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
 }
 
@@ -112,7 +113,8 @@ mcp_up() {
   printf 'MCP_IMAGE_ID=%s\n' "$MCP_IMAGE_ID" >>"$RUN/run.env"
   node -e 'const fs=require("node:fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.image_id=process.argv[2];fs.writeFileSync(p,JSON.stringify(v,null,2)+"\n")' "$RUN/mcp-build.json" "$MCP_IMAGE_ID"
   (umask 077 && openssl rand -hex 24 >"$RUN/home/metrics-token")
-  (umask 077 && openssl rand -hex 24 >"$RUN/home/internal-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/executor-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/renderer-token")
   mcp_compose up -d --wait --wait-timeout 60 \
     || die "MCP gateway not ready; see compose logs and run: verify-uvw down"
   wait_http "http://127.0.0.1:$MCP_PORT/healthz" 60 || die "MCP healthz failed; run: verify-uvw down"

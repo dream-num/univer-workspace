@@ -139,6 +139,7 @@ B、C、F 可以在 A 之后并行推进。首次开放时，网关对所有用�
 | [架构](architecture.zh-CN.md) | 组件划分、部署拓扑、本机组件的去向、认证、存储、统计、`client-core` 改造 | 开始任何阶段之前 |
 | [工具规格](tools.zh-CN.md) | 工具映射、命名与输出约定、差异、结果大小、文件进出、长任务 | 阶段 B、D、E |
 | [阶段计划](stages.zh-CN.md) | 每个阶段的交付物、验收标准、不做什么 | 每个阶段开始时 |
+| [执行后端协议](backend-protocol.zh-CN.md) | 网关与执行层、渲染服务之间的协议：操作目录、能力发现、帧、截止时间、重试、凭据、认证、错误与版本、契约测试、serverless 思路 | 改动 `apps/mcp/src/shared/*-protocol.ts`、执行层或渲染服务的 RPC，或接入新的后端实现之前 |
 | [本地验证环境](local-verification.zh-CN.md) | Docker 原型和 `verify-uvw` 扩展的规格。由阶段 A 的实施者在动手前编写，范围见阶段计划的阶段 A | 阶段 A，以及每次验收 |
 
 ## 7. 术语

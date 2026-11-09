@@ -24,7 +24,7 @@ const target = {
 };
 const config = parseExecutorConfig({
   WORKSPACE_ORIGIN: target.origin,
-  MCP_INTERNAL_TOKEN: "internal-token-".repeat(4),
+  MCP_EXECUTOR_TOKEN: "executor-token-".repeat(4),
 });
 function runtime() {
   return createWorkspaceContentRuntime({

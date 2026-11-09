@@ -200,6 +200,7 @@ short-lived downstream session and scopes. `$V mcp-token [--scopes read,...]` cr
 the default; it prints only the PAT id.
 `$V env` exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR`, and
 `MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high`. Sessions, opencode config,
+both call-direction tokens (`executor-token` and `renderer-token`),
 and the metrics token stay under `home/` with credential files mode 0600.
 
 ```bash

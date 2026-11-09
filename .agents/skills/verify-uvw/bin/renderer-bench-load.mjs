@@ -27,7 +27,7 @@ async function once(spec, origin, sequence) {
   try {
     const response = await fetch(new URL(`/rpc/v1/${op}`, process.env.MCP_RENDERER_URL), {
       method: 'POST',
-      headers: { authorization: `Bearer ${process.env.MCP_INTERNAL_TOKEN}`, 'content-type': FRAME_CONTENT_TYPE, 'x-mcp-rpc-version': '1' },
+      headers: { authorization: `Bearer ${process.env.MCP_RENDERER_TOKEN}`, 'content-type': FRAME_CONTENT_TYPE, 'x-mcp-rpc-version': '1' },
       body: encodeFrame({ v: 1, op, requestId: `bench-${Date.now()}-${sequence}`, deadlineMs: spec.call.deadlineMs ?? (op === 'measureText' ? 9000 : 28000), input: spec.call.input }),
       signal: AbortSignal.timeout(40000),
     });

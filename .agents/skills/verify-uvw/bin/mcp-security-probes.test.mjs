@@ -6,10 +6,10 @@ import {
 } from './mcp-security-probes.mjs';
 
 test('sensitive names match the Stage G patterns and nothing else', () => {
-  assert.deepEqual(sensitiveNames(['PATH', 'MCP_INTERNAL_TOKEN', 'UNIVER_LICENSE', 'UNIVER_LICENSE_KEY', 'X_SECRET', 'API_KEY', 'NODE_ENV', 'KEYBOARD', 'TOKEN_COUNT']),
-    ['API_KEY', 'MCP_INTERNAL_TOKEN', 'UNIVER_LICENSE', 'UNIVER_LICENSE_KEY', 'X_SECRET']);
+  assert.deepEqual(sensitiveNames(['PATH', 'MCP_EXECUTOR_TOKEN', 'MCP_RENDERER_TOKEN', 'UNIVER_LICENSE', 'UNIVER_LICENSE_KEY', 'X_SECRET', 'API_KEY', 'NODE_ENV', 'KEYBOARD', 'TOKEN_COUNT']),
+    ['API_KEY', 'MCP_EXECUTOR_TOKEN', 'MCP_RENDERER_TOKEN', 'UNIVER_LICENSE', 'UNIVER_LICENSE_KEY', 'X_SECRET']);
   assert.equal(classifyMg2({ processes: { a: ['NODE_ENV'], b: [] } }).result, 'contained');
-  assert.equal(classifyMg2({ processes: { a: ['NODE_ENV'], b: ['MCP_INTERNAL_TOKEN'] } }).result, 'exposed');
+  assert.equal(classifyMg2({ processes: { a: ['NODE_ENV'], b: ['MCP_EXECUTOR_TOKEN'] } }).result, 'exposed');
 });
 test('--only keeps probe order and rejects reserved or unknown ids', () => {
   assert.deepEqual(parseOnly('mg7, MG6'), ['MG6', 'MG7']);

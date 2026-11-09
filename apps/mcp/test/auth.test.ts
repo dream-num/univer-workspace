@@ -116,7 +116,7 @@ describe("gateway authentication", () => {
         WORKSPACE_TRANSPORT_URL: transport,
         MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
         ...env,
-        ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_INTERNAL_TOKEN: "t".repeat(32) } : {}),
+        ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}),
       }),
       {
         logger: pino(
