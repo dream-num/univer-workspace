@@ -1,4 +1,7 @@
-import { MCP_SCOPES, type McpScope } from "./access-tokens.js";
+import type { BlockList } from "node:net";
+import { isCimdClientId, type CimdClientId } from "./client-metadata-document.js";
+import type { OAuthClient } from "./oauth-clients.js";
+import { MCP_SCOPES, type McpScope, type AccessTokenService, type OAuthClientRecord } from "./access-tokens.js";
 
 /** MCP OAuth is enabled only when the deployment names the MCP resources clients may request. */
 export interface McpOAuthConfig {
@@ -7,6 +10,8 @@ export interface McpOAuthConfig {
   /** Exact `resource` values (RFC 8707) MCP clients may request. */
   readonly resources: readonly string[];
   readonly maxRegisteredClients: number;
+  readonly cimdEnabled?: boolean;
+  readonly cimdExemptNetworks?: BlockList;
 }
 
 export const MAX_REGISTERED_REDIRECT_URIS = 10;
@@ -19,6 +24,8 @@ const GRANT_TYPES = ["authorization_code", "refresh_token"] as const;
 export function authorizationServerMetadata(config: McpOAuthConfig) {
   return {
     issuer: config.issuer,
+    authorization_response_iss_parameter_supported: true,
+    ...(config.cimdEnabled === false ? {} : { client_id_metadata_document_supported: true }),
     authorization_endpoint: `${config.issuer}/api/auth/authorize`,
     token_endpoint: `${config.issuer}/api/auth/token`,
     registration_endpoint: `${config.issuer}/api/auth/register`,
@@ -164,4 +171,24 @@ function parseUrl(value: string): URL | null {
   } catch {
     return null;
   }
+}
+
+export type ClientSource =
+  | { readonly kind: "static"; readonly client: OAuthClient }
+  | { readonly kind: "dcr"; readonly client: OAuthClientRecord }
+  | { readonly kind: "cimd"; readonly clientId: CimdClientId };
+
+export function resolveClientSource(
+  raw: unknown,
+  clients: ReadonlyMap<string, OAuthClient>,
+  accessTokens: AccessTokenService,
+  config: McpOAuthConfig | null,
+): ClientSource | null {
+  if (typeof raw !== "string" || raw === "") return null;
+  const client = clients.get(raw);
+  if (client !== undefined) return { kind: "static", client };
+  if (config === null) return null;
+  if (config.cimdEnabled !== false && isCimdClientId(raw, [config.issuer, ...config.resources])) return { kind: "cimd", clientId: raw };
+  const registered = accessTokens.getClient(raw);
+  return registered === null ? null : { kind: "dcr", client: registered };
 }

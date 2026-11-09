@@ -359,6 +359,7 @@ cmd_agent_down() {
 }
 
 cmd_up() {
+  [[ $# == 0 || ( $# == 1 && "$1" == --reuse ) ]] || die "usage: verify-uvw up [--reuse]"
   deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
   cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
   local server_port="${VERIFY_UVW_SERVER_PORT:-3920}" web_port="${VERIFY_UVW_WEB_PORT:-5973}"
@@ -379,7 +380,11 @@ cmd_up() {
     [[ "$mcp_port" != "$server_port" && "$mcp_port" != "$web_port" && -z "$(listener_pid "$mcp_port")" ]] || die "MCP port $mcp_port is occupied; choose VERIFY_UVW_MCP_PORT"
   fi
   local run="$ROOT/$id"
-  [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
+  if [[ -e "$run" ]]; then
+    [[ "${1:-}" == --reuse && -f "$run/run.env" && ! -d "$run/data" && ! -d "$run/home" ]] \
+      || die "$run already exists; down first, then up --reuse to retain evidence"
+    [[ ! -f "$run/user.env" ]] || unlink "$run/user.env"
+  fi
   local agent_port="${VERIFY_UVW_AGENT_PORT:-}" server_oauth_env=()
   if [[ -n "$agent_port" ]]; then
     [[ "$agent_port" =~ ^[0-9]+$ && "$agent_port" -ge 1 && "$agent_port" -le 65535 ]] || die "choose VERIFY_UVW_AGENT_PORT between 1 and 65535"
@@ -388,7 +393,11 @@ cmd_up() {
   mkdir -p "$run"/{data,home,logs,evidence}
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
-    server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
+    server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port" "MCP_CIMD_ENABLED=${MCP_CIMD_ENABLED:-1}")
+    if node --input-type=module -e 'import { lookup } from "node:dns/promises"; const addresses = await lookup("claude.ai", {all:true}).catch(() => []); process.exit(addresses.some(({address}) => /^198\.(18|19)\./.test(address)) ? 0 : 1)'; then
+      server_oauth_env+=("MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15")
+      echo "CIMD: claude.ai resolves to fake-IP; Workspace Server only exempts 198.18.0.0/15"
+    fi
   fi
   # The gateway's confidential client with MCP, and the Workspace Agent's public client when VERIFY_UVW_AGENT_PORT names its port.
   server_oauth_env+=("OAUTH_CLIENTS_JSON=$(node -e 'const [secretFile,agentPort]=process.argv.slice(1),fs=require("node:fs"),clients=[];

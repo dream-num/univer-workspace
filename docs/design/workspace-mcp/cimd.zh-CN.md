@@ -1,6 +1,6 @@
 # Client ID Metadata Documents（F2）设计
 
-> 状态：设计，已经过两轮对抗评审并按第 8 节修订。对应 [architecture](architecture.zh-CN.md) 4.4 节 F2、[stages](stages.zh-CN.md) 阶段 F。
+> 状态：已实现（2026-11-09）。设计经两轮对抗评审并按第 8 节修订。对应 [architecture](architecture.zh-CN.md) 4.4 节 F2、[stages](stages.zh-CN.md) 阶段 F。
 > 规范依据：`draft-ietf-oauth-client-id-metadata-document-03`（下称“草案”）；MCP 授权规范 2025-11-25 起优先 CIMD、弃用 DCR。
 
 ## 1. 要解决的问题
@@ -101,7 +101,7 @@ query 在草案里是 SHOULD NOT，这里直接拒绝，少一类边界情况；
 
 ### 3.7 同意页
 
-CIMD 客户端显示文档里的名称和 `client_id` 的主机名，例如“Claude Code（claude.ai）”（草案 10.6、10.9）。没有名称时只显示主机名。
+CIMD 客户端显示文档里的名称和 `client_id` 的主机名，例如 `Claude Code (claude.ai)`（草案 10.6、10.9）。没有名称时只显示主机名。
 DCR 客户端的显示不变。
 
 ### 3.8 开关
@@ -133,7 +133,7 @@ DCR 客户端的显示不变。
 1. 发现文档声明 `client_id_metadata_document_supported: true` 与 `authorization_response_iss_parameter_supported: true`。
 2. 以 Claude Code 的真实 `client_id` 走完整流程：脚本扮演客户端，在本机 loopback 端口监听回调，生成 PKCE；agent-browser 登录并在同意页看到“Claude Code（claude.ai）”（截图）；回调带 `code`、`state`、`iss`；兑换 token，经网关调用 `whoami` 成功，用量事件 `client_id` 是该 URL；refresh 成功；吊销后访问 Workspace 的调用返回 401。
 3. 以 VS Code 的真实 `client_id` 进入同意页，证明多出的 `device_code` 被忽略。
-4. 拒绝路径，每一条都看到错误页且没有重定向：`https://127.0.0.1/x`；`https://[::1]/x`；解析到 `127.0.0.1` 的公网域名（例如 `localtest.me`）；带 query 的 `client_id`；`client_id` 与文档不符（对 VS Code 文档 URL 加尾随路径或换大小写，服务器返回的不是同一文档或文档里 `client_id` 不相等）；未登录访问时服务器没有发出抓取（看 Server 日志）。
+4. 拒绝路径，每一条都看到错误页且没有重定向：`https://127.0.0.1/x`；`https://[::1]/x`；解析到 loopback 的域名（DNS 正常的主机用 `localtest.me`；fake-IP 主机会把这类公网域名改写成 `198.18/15` 地址，改用系统解析的 `localhost`，并记录公网域名的实际解析结果）；带 query 的 `client_id`；`client_id` 与文档不符（对 VS Code 文档 URL 加尾随路径或换大小写，服务器返回的不是同一文档或文档里 `client_id` 不相等）；未登录访问时服务器没有发出抓取（看 Server 日志）。
 5. `MCP_CIMD_ENABLED=0` 时元数据不声明支持，Claude Code 的 `client_id` 返回未知客户端。
 
 可选：用本机安装的 Claude Code 对本地 MCP 走真实的 `/mcp` 登录，作为真实客户端的补充证据。

@@ -61,6 +61,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
 - MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
+- MO3 uses real Claude Code and VS Code CIMD documents, checks SSRF refusals and anonymous no-fetch behavior, then disables CIMD.
 - MO4 registers Cursor's exact callbacks and completes consent and token redemption on its `cursor://` callback.
 - MA8 checks Browser sign-in, both `uvw auth login` paths, and Workspace Agent browser OAuth with `agent-up` while MCP OAuth is enabled.
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
@@ -1327,11 +1328,11 @@ JS
 ```
 
 Pass when the unauthenticated POST returns the metadata challenge, both discovery documents
-match this run, opencode prints an authorize URL after registration, and the consent page
+match this run, opencode prints an authorize URL after client discovery or registration, and the consent page
 shows all four scopes. The consent screenshot must show `worktree:merge` unchecked. The
 callback grants exactly `read write publish`, auth prints `Connected to ws`, and the run exits
 0 with both completed tools. Exactly two matching usage events identify this user and the
-registered OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
+OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 `mcp-oauth-*` evidence. The trap stops only the isolated service and auth process, then
 removes its temporary project and credentials even if an assertion fails.
 
@@ -1527,6 +1528,91 @@ means the gateway answered from its 30-second exchange cache. A replay inside th
 gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
 call exits 4 and the current refresh token gets `invalid_grant`.
 
+**MO3. HTTPS Client ID Metadata Documents.** Requires outbound HTTPS and the baseline
+`up`, `user`, `doctor` with MCP enabled. Run before MO1/MO2 because step 5 starts fresh data.
+Every helper call must use the explicit run ID when another verification run is active.
+The helper detects fake-IP DNS at `up`; it never exempts loopback or link-local addresses.
+
+1. Discover support.
+
+```bash
+export VERIFY_UVW_RUN=cimd VERIFY_UVW_MCP=1 VERIFY_UVW_SERVER_PORT=3924 VERIFY_UVW_WEB_PORT=5977 VERIFY_UVW_MCP_PORT=3934
+V=.agents/skills/verify-uvw/bin/verify-uvw
+eval "$(VERIFY_UVW_RUN=cimd $V env)"
+RUN=/tmp/verify-uvw/cimd
+curl -fsS "$ORIGIN/.well-known/oauth-authorization-server" > "$EVIDENCE/mcp-cimd-discovery.json"
+jq -e --arg issuer "$ORIGIN" '.issuer == $issuer and .client_id_metadata_document_supported == true and .authorization_response_iss_parameter_supported == true' "$EVIDENCE/mcp-cimd-discovery.json"
+```
+
+Pass when both advertised flags are true and the issuer matches the run's web origin.
+
+2. Complete Claude Code's CIMD flow, including a real loopback callback, token exchange,
+MCP use, refresh and revocation. No DCR request is made by `login --client-id`.
+
+```bash
+CLAUDE_CLIENT=https://claude.ai/oauth/claude-code-client-metadata
+VERIFY_UVW_RUN=cimd $V mcp-oauth login mcp-cimd-login --client-id "$CLAUDE_CLIENT"
+jq -e --arg issuer "$ORIGIN" --arg client "$CLAUDE_CLIENT" '.client_id == $client and .client_name == "Claude Code (claude.ai)" and .callback_code_present and .callback_state_matches and .callback_iss == $issuer and .token.status == 200' "$EVIDENCE/mcp-cimd-login.json"
+VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-whoami whoami
+jq -e --arg client "$CLAUDE_CLIENT" '.client_id == $client and .auth_kind == "oauth" and .outcome == "ok"' "$EVIDENCE/mcp-cimd-whoami.event.json"
+VERIFY_UVW_RUN=cimd $V mcp-oauth refresh mcp-cimd-refresh
+VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-refreshed repo_list
+VERIFY_UVW_RUN=cimd $V mcp-oauth revoke mcp-cimd-revoke
+if VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-revoked repo_list; then false; else test $? -eq 4; fi
+jq -e '.status == 401' "$EVIDENCE/mcp-cimd-revoked.out"
+```
+
+Pass when `mcp-cimd-login-consent.png` shows `Claude Code (claude.ai)`, callback code/state/issuer
+checks pass, tokens are issued, `whoami` records the URL client ID, refresh and the subsequent
+Workspace-backed call succeed, and the Workspace-backed call after revocation returns 401.
+Tokens, codes and state stay out of evidence.
+
+3. Open VS Code's consent page using its real metadata, whose extra `device_code` grant
+must not prevent authorization.
+
+```bash
+VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" vscode
+```
+
+Pass when `mcp-cimd-vscode.json` records 200 and the consent text includes `vscode.dev`,
+with `mcp-cimd-vscode.png` showing the consent page.
+
+4. Refuse private addresses, malformed identity and mismatched metadata; prove anonymous
+requests never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
+when it resolves to 127.0.0.1, adds a query to Claude's URL, and adds `/mismatch` to VS Code's URL.
+If fake-IP DNS also rewrites `localtest.me`, the helper records that answer and uses
+system-resolved `localhost` to exercise the same connection-level DNS refusal without
+changing host DNS or introducing a test-only server resolver.
+
+```bash
+VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" reject
+```
+
+Pass when every `mcp-cimd-reject-*.json` records 400 with no Location and the corresponding
+screenshot shows the in-place error. Both anonymous authorize paths return the login
+redirect; `mcp-cimd-anonymous.json` shows equal before/after fetch counts. The public-only
+`mcp-cimd-fetch-events.json` preserves the fetch attempts and outcomes from the server log.
+
+5. Disable CIMD, then restore the default before MO1, MO2 and MO4. `--reuse` only accepts
+a run already torn down; evidence survives, data and credentials are fresh. Keep the launching
+shell alive throughout all `up` calls so its services survive between tool calls.
+
+```bash
+VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-enabled-down.txt"
+MCP_CIMD_ENABLED=0 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-disabled-up.txt"
+VERIFY_UVW_RUN=cimd $V user
+VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" disabled
+VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-disabled-down.txt"
+MCP_CIMD_ENABLED=1 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-restored-up.txt"
+VERIFY_UVW_RUN=cimd $V user
+VERIFY_UVW_RUN=cimd $V doctor | tee "$EVIDENCE/mcp-cimd-restored-doctor.txt"
+```
+
+Pass when `mcp-cimd-disabled.json` has no CIMD support flag, retains the issuer-response
+flag, rejects Claude's URL as `OAUTH_CLIENT_UNAVAILABLE` with 400, and records zero fetches.
+Both teardown transcripts say `ok    MCP resources removed`; restored doctor has no `FAIL`.
+The optional real Claude Code `/mcp` login is supplementary and not required by MO3.
+
 **MO4. Cursor's private-use callback.** Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
 next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only
 from a fixed allowlist (currently `cursor`), so this registers Cursor's exact list, then drives
@@ -1567,7 +1653,8 @@ grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" | grep -q
 grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" > "$EVIDENCE/mcp-cursor-consent-csp.txt"
 cursor_decide "$TOKEN" deny > "$RUN/home/cursor-deny.headers"
 grep -i '^location:' "$RUN/home/cursor-deny.headers" | sed "s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-deny-location.txt"
-grep -qx "location: $CURSOR_CB?error=access_denied&state=<state>" "$EVIDENCE/mcp-cursor-deny-location.txt"
+ISS_ENCODED=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$ORIGIN")
+grep -qx "location: $CURSOR_CB?error=access_denied&iss=$ISS_ENCODED&state=<state>" "$EVIDENCE/mcp-cursor-deny-location.txt"
 
 TOKEN=$(cursor_consent)
 cursor_decide "$TOKEN" allow --data-urlencode scope=read --data-urlencode scope=write --data-urlencode scope=publish --data-urlencode scope=worktree:merge \
@@ -1575,6 +1662,7 @@ cursor_decide "$TOKEN" allow --data-urlencode scope=read --data-urlencode scope=
 CODE=$(sed -n 's/^location: .*[?&]code=\([^&]*\).*/\1/p' "$RUN/home/cursor-approve.headers")
 grep -i '^location:' "$RUN/home/cursor-approve.headers" | sed "s/$CODE/<code>/; s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-approve-location.txt"
 grep -q "^location: $CURSOR_CB?code=<code>" "$EVIDENCE/mcp-cursor-approve-location.txt"
+grep -F "&iss=$ISS_ENCODED&" "$EVIDENCE/mcp-cursor-approve-location.txt"
 curl -sS -X POST "$ORIGIN/api/auth/token" -H 'content-type: application/x-www-form-urlencoded' \
   --data-urlencode grant_type=authorization_code --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "code=$CODE" \
   --data-urlencode "code_verifier=$VERIFIER" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode "resource=$MCP_URL" \
@@ -1586,8 +1674,8 @@ rm -f "$RUN"/home/cursor-*
 Pass when Cursor's
 three callbacks register with 201 in order and `myapp://callback` gets 400; the consent page for
 the `cursor://` callback returns 200 with `form-action 'self' cursor:` in its CSP; denying redirects to
-`cursor://anysphere.cursor-mcp/oauth/callback?error=access_denied&state=…`; approving redirects there
-with a `code`, and redeeming that code with the `cursor://` callback returns a one-hour `uvw_at_`
+`cursor://anysphere.cursor-mcp/oauth/callback?error=access_denied&iss=…&state=…`; approving redirects there
+with a `code` and `iss`, and redeeming that code with the `cursor://` callback returns a one-hour `uvw_at_`
 access token and a `uvw_rt_` refresh token.
 
 **MA8. Existing sign-in clients.** Stage F must not change how the Browser, uvw and the Workspace

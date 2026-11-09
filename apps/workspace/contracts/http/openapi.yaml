@@ -48,6 +48,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1session
   /api/auth/authorize:
     $ref: ./paths/auth.yaml#/~1api~1auth~1authorize
+  /api/auth/authorize/consent:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1authorize~1consent
   /api/auth/token:
     $ref: ./paths/auth.yaml#/~1api~1auth~1token
   /.well-known/oauth-authorization-server:
