@@ -8,8 +8,8 @@
 
 | 调用方向 | 调用方模块 | 被调用方入口 | 操作目录 | 调用方认证 | 调用者凭据 |
 | --- | --- | --- | --- | --- | --- |
-| 网关调用执行层 | `apps/mcp/src/gateway/executor/client.ts` | `apps/mcp/src/executor/server.ts` | `opSpecs`（`apps/mcp/src/shared/executor-protocol.ts`） | `MCP_EXECUTOR_TOKEN`（本阶段实现，第 10 节） | 有 |
-| 执行层调用渲染服务 | `apps/mcp/src/executor/renderer-client.ts` | `apps/mcp/src/renderer/server.ts` | `rendererOpSpecs`（`apps/mcp/src/shared/renderer-protocol.ts`） | `MCP_RENDERER_TOKEN`（本阶段实现，第 10 节） | 无 |
+| 网关调用执行层 | `apps/mcp/src/gateway/executor/client.ts` | `apps/mcp/src/executor/server.ts` | `opSpecs`（`apps/mcp/src/shared/executor-protocol.ts`） | `MCP_EXECUTOR_TOKEN`（第 10 节） | 有 |
+| 执行层调用渲染服务 | `apps/mcp/src/executor/renderer-client.ts` | `apps/mcp/src/renderer/server.ts` | `rendererOpSpecs`（`apps/mcp/src/shared/renderer-protocol.ts`） | `MCP_RENDERER_TOKEN`（第 10 节） | 无 |
 
 - 网关不直接调用渲染服务（第 13 节）。（已实现）
 - 抽象的单位是这份线上协议，加上网关里的后端客户端模块 `apps/mcp/src/gateway/executor/`：`client.ts` 发送调用，`capabilities.ts` 读取能力，`router.ts` 选择实例，`grants.ts` 签发调用者凭据。连接参数在 `apps/mcp/src/gateway/tools/executor-tool.ts` 的 `createExecutorLinks` 里组装。没有插件框架，也没有只有一个实现的适配器接口。将来接入 serverless 型后端时，平台相关的调用细节（认证方式、租户头、端点）只改这些文件，不改工具定义。两项预留会超出这些文件：按引用传递负载要改带负载的工具（`import`、`export`、`screenshot`、`print_pdf` 等）如何准备和取回字节；按目标限定的凭据要改 `executor-tool.ts` 签发凭据的时机，因为今天凭据在知道操作和目标之前就签发了。
@@ -103,7 +103,7 @@
 - 配置了执行层时，`/readyz` 的 `executor` 检查要求至少有一个已记录的执行层（`apps/mcp/src/gateway/server.ts`）。记录在失败时保留，所以某个执行层回答过之后，它再停机也不会让网关变为未就绪。（已实现）
 - 版本与网关不兼容的执行层不计入可用操作集合，也不进入路由。（已实现）
 - `executor` 检查在网关启动后第一次记录到兼容的执行层时通过，此后一直通过。之后执行层停机或改报不同的版本，网关仍然就绪，依赖执行层的工具随可用操作集合隐藏或返回可重试的错误。（本阶段实现）今天的检查要求当前有已记录的执行层：执行层改报不同版本后，网关在下一次刷新时变为未就绪。
-- 这样两种发布顺序都不会中断服务。先发布执行层时，旧网关保持就绪，执行层的工具暂时隐藏，直到新网关发布。先发布网关时，新网关一直等不到兼容的执行层，不会就绪，滚动发布停住，旧网关继续服务。
+- 网关带上这条规则之后，两种发布顺序都不会中断服务。先发布执行层时，旧网关保持就绪，执行层的工具暂时隐藏，直到新网关发布。先发布网关时，新网关一直等不到兼容的执行层，不会就绪，滚动发布停住，旧网关继续服务。
 
 ## 4. 传输是 HTTP POST 加二进制帧
 
@@ -277,10 +277,10 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 
 | 调用方向 | 变量 | 状态 |
 | --- | --- | --- |
-| 网关调用执行层 | `MCP_EXECUTOR_TOKEN` | 本阶段实现 |
-| 执行层调用渲染服务 | `MCP_RENDERER_TOKEN` | 本阶段实现 |
+| 网关调用执行层 | `MCP_EXECUTOR_TOKEN` | 已实现 |
+| 执行层调用渲染服务 | `MCP_RENDERER_TOKEN` | 已实现 |
 
-- 两个值必须不同。只持有其中一个令牌的一方，不能冒充另一个方向的调用方。（本阶段实现）
+- 两个值必须不同，执行层在两者相同时拒绝启动。只持有其中一个令牌的一方，不能冒充另一个方向的调用方。（已实现）
 - 在此之前三个角色共用 `MCP_INTERNAL_TOKEN`，PR #279 删除它。
 - 协议只要求被调用方能验证调用方。被调用方在处理能力端点和任何操作之前验证，失败时返回 401，code 为 `workspace-executor-unauthorized` 或 `workspace-renderer-unauthorized`。常驻型用 Bearer 令牌，比较两边的 SHA-256 并用 `timingSafeEqual`（`apps/mcp/src/shared/bearer.ts`）。（已实现）
 - serverless 型可以改用平台签名，只要被调用方能验证调用方。（预留）
@@ -396,9 +396,9 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 | 错误信封的形状 | 输入不符合目录 schema 的合法帧 | 200，`ok: false`，`error` 有四个字段，code 为 `workspace-argument-invalid`，`outcome` 为 `tool_error`，`meta` 符合 `opMetaSchema` | 4.4 节，11.2 节 |
 | 截止时间已到 | `deadlineMs` 为 0；`deadlineMs` 为预算加 1 | 400 `frame-invalid`，操作没有执行 | 6.3 节 |
 | 传输拒绝与应用失败 | 上面的拒绝请求，与一次应用失败对比 | 拒绝为非 200、JSON `{error}`、没有 `meta`；应用失败为 200 帧并带 `meta` | 第 11 节 |
-| 写操作只执行一次 | 对一个 Worktree 中的 Unit 发送一次合法的 `content.execute` 写入，记录前后的 revision | revision 正好增加 1，响应只有一个 | 8.2 节 |
-| 按截止时间回答 | Workspace 替身永不应答；`deadlineMs` 为 2000，请求体在 1500 毫秒内慢慢上传 | 从开始发送起不晚于 `deadlineMs` 加 1000 毫秒得到 `workspace-executor-timeout` 和 `started: false` | 6.2、6.3 节。本阶段实现 |
-| 用错方向的令牌 | 用 `MCP_RENDERER_TOKEN` 调用执行层；用 `MCP_EXECUTOR_TOKEN` 调用渲染服务 | 都返回 401 | 第 10 节。本阶段实现 |
+| 写操作只执行一次 | 对一个 Worktree 中的 Unit 发送一次合法的 `content.execute`，脚本每次运行都改变内容（例如把一个单元格加 1），记录前后的 revision | revision 正好增加 1，响应只有一个 | 8.2 节 |
+| 按截止时间回答 | 对 `content.execute` 写入；Workspace 替身永不应答；`deadlineMs` 为 2000，请求体在 1500 毫秒内慢慢上传 | 从开始发送起不晚于 `deadlineMs` 加 1000 毫秒得到 `workspace-executor-timeout` 和 `started: false` | 6.2、6.3 节。本阶段实现 |
+| 用错方向的令牌 | 用 `MCP_RENDERER_TOKEN` 调用执行层；用 `MCP_EXECUTOR_TOKEN` 调用渲染服务 | 都返回 401 | 第 10 节 |
 
 网关一侧的检查如下。
 
