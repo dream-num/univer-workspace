@@ -61,6 +61,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
 - MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
+- MO4 registers Cursor's exact callbacks and completes consent and token redemption on its `cursor://` callback.
 - MA8 checks that Browser sign-in and both `uvw auth login` paths still work with MCP OAuth enabled.
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
@@ -1525,6 +1526,69 @@ record the first `whoami` and `api_find` after revocation, before any Workspace-
 means the gateway answered from its 30-second exchange cache. A replay inside the grace window
 gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
 call exits 4 and the current refresh token gets `invalid_grant`.
+
+**MO4. Cursor's private-use callback.** Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
+next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only
+from a fixed allowlist (currently `cursor`), so this registers Cursor's exact list, then drives
+consent with the `cursor://` callback as the run user. A browser cannot follow a `cursor://` redirect,
+so `curl` sends the run's `workspace_session` from `home/mcp-session` and evidence keeps only
+statuses and redacted `Location` shapes. Run after `user` with MCP enabled.
+
+```bash
+CURSOR_CB='cursor://anysphere.cursor-mcp/oauth/callback'
+COOKIE="workspace_session=$(cat "$RUN/home/mcp-session")"
+curl -sS -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
+  -d "{\"client_name\":\"Cursor\",\"redirect_uris\":[\"$CURSOR_CB\",\"https://www.cursor.com/agents/mcp/oauth/callback\",\"http://localhost:8787/callback\"]}" \
+  -w '\n%{http_code}\n' > "$EVIDENCE/mcp-cursor-register.txt"
+test "$(tail -n1 "$EVIDENCE/mcp-cursor-register.txt")" = 201
+CURSOR_CLIENT=$(head -n1 "$EVIDENCE/mcp-cursor-register.txt" | jq -r .client_id)
+head -n1 "$EVIDENCE/mcp-cursor-register.txt" | jq -e --arg cb "$CURSOR_CB" '.redirect_uris == [$cb, "https://www.cursor.com/agents/mcp/oauth/callback", "http://localhost:8787/callback"]'
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
+  -d '{"redirect_uris":["myapp://callback"]}' > "$EVIDENCE/mcp-cursor-register-other.txt"
+test "$(cat "$EVIDENCE/mcp-cursor-register-other.txt")" = 400
+
+VERIFIER=$(openssl rand -hex 32)
+CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+STATE=$(openssl rand -hex 24)
+cursor_consent() {
+  curl -sS -D "$RUN/home/cursor-consent.headers" -o "$RUN/home/cursor-consent.html" -H "cookie: $COOKIE" -G "$ORIGIN/api/auth/authorize/consent" \
+    --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode response_type=code \
+    --data-urlencode "code_challenge=$CHALLENGE" --data-urlencode code_challenge_method=S256 --data-urlencode "state=$STATE" \
+    --data-urlencode "resource=$MCP_URL"
+  grep -oE 'name="consent_token" value="[^"]+"' "$RUN/home/cursor-consent.html" | sed 's/.*value="//; s/"$//'
+}
+cursor_decide() {
+  curl -sS -o /dev/null -D - -H "cookie: $COOKIE" -H "origin: $ORIGIN" -X POST "$ORIGIN/api/auth/authorize/consent" \
+    --data-urlencode "consent_token=$1" --data-urlencode "decision=$2" "${@:3}" | tr -d '\r' | sed 's/^Location:/location:/'
+}
+TOKEN=$(cursor_consent)
+head -n1 "$RUN/home/cursor-consent.headers" | grep -q ' 200'
+grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" | grep -q "form-action 'self' cursor:;"
+grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" > "$EVIDENCE/mcp-cursor-consent-csp.txt"
+cursor_decide "$TOKEN" deny > "$RUN/home/cursor-deny.headers"
+grep -i '^location:' "$RUN/home/cursor-deny.headers" | sed "s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-deny-location.txt"
+grep -qx "location: $CURSOR_CB?error=access_denied&state=<state>" "$EVIDENCE/mcp-cursor-deny-location.txt"
+
+TOKEN=$(cursor_consent)
+cursor_decide "$TOKEN" allow --data-urlencode scope=read --data-urlencode scope=write --data-urlencode scope=publish --data-urlencode scope=worktree:merge \
+  > "$RUN/home/cursor-approve.headers"
+CODE=$(sed -n 's/^location: .*[?&]code=\([^&]*\).*/\1/p' "$RUN/home/cursor-approve.headers")
+grep -i '^location:' "$RUN/home/cursor-approve.headers" | sed "s/$CODE/<code>/; s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-approve-location.txt"
+grep -q "^location: $CURSOR_CB?code=<code>" "$EVIDENCE/mcp-cursor-approve-location.txt"
+curl -sS -X POST "$ORIGIN/api/auth/token" -H 'content-type: application/x-www-form-urlencoded' \
+  --data-urlencode grant_type=authorization_code --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "code=$CODE" \
+  --data-urlencode "code_verifier=$VERIFIER" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode "resource=$MCP_URL" \
+  | jq '{token_type, expires_in, scope, access: (.access_token | .[0:7]), refresh: (.refresh_token | .[0:7])}' > "$EVIDENCE/mcp-cursor-token.json"
+jq -e '.token_type == "Bearer" and .expires_in == 3600 and .access == "uvw_at_" and .refresh == "uvw_rt_"' "$EVIDENCE/mcp-cursor-token.json"
+rm -f "$RUN"/home/cursor-*
+```
+
+Pass when Cursor's
+three callbacks register with 201 in order and `myapp://callback` gets 400; the consent page for
+the `cursor://` callback returns 200 with `form-action 'self' cursor:` in its CSP; denying redirects to
+`cursor://anysphere.cursor-mcp/oauth/callback?error=access_denied&state=…`; approving redirects there
+with a `code`, and redeeming that code with the `cursor://` callback returns a one-hour `uvw_at_`
+access token and a `uvw_rt_` refresh token.
 
 **MA8. Existing sign-in clients.** Stage F must not change how the Browser, uvw and the Workspace
 Agent sign in, so run these in the same MCP-enabled run, where the MCP OAuth code paths are active.
