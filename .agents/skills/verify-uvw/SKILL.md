@@ -196,8 +196,8 @@ $V mcp-oauth exchange <label> pat|oauth
 $V mcp-logs
 ```
 
-`mcp-oauth` is a scripted MCP OAuth client for MO2. `login` registers a client, approves the consent page in the
-run's browser with only `--scopes` checked (default all four), and keeps the access token, refresh token and client id in
+`mcp-oauth` is a scripted MCP OAuth client for MO2. `login` registers a client, clears the run browser's cookies, signs in
+as the run user through the login page, approves the consent page with only `--scopes` checked (default all four), and keeps the access token, refresh token and client id in
 `home/mcp-oauth-*` (mode 0600); `mcp --auth oauth` then calls the gateway with that access token and expects `auth_kind: oauth`.
 `refresh` rotates the pair, `reuse` replays the previous refresh token, `revoke` calls RFC 7009 revocation, `direct` sends the
 access token straight to Workspace, and `exchange` performs the gateway's token exchange for the PAT or the access token, then

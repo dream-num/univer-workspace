@@ -182,7 +182,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 - [x] 取消 `worktree:merge` 后，`pr_merge` 返回 `workspace-scope-required`。 证据：MO2（同意页取消 `worktree:merge` 得到的 OAuth token 能 `pr_create`、`unit_create`、`pr_ready`，`pr_merge` 和 `pr_discard` 返回 `workspace-scope-required`，用量事件记录同一错误码，CLI 看到 PR 仍是 `ready`，随后全 scope 的 PAT 合入成功）；MA7 对不含 `worktree:merge` 的 PAT 得到同样结果。
 - [ ] refresh token 能续期；吊销后，网关在下一次调用时返回 401。 续期满足：MO2 的 refresh 返回新的一对 token，scope 不变，`expires_in` 为 3600，新 access token 可用；超过 60 秒宽限期重放旧 refresh token 会吊销整个授权。吊销后访问 Workspace 的下一次调用返回 401（带 `resource_metadata`），refresh token 也失效。**差距：** 吊销后紧接着的 `whoami`、`api_find` 仍然成功，因为网关最多 30 秒内直接用交换缓存回答不访问 Workspace 的调用（`apps/mcp/src/gateway/auth.ts` 的 `maxCacheMs`）。见验收记录。
 - [ ] PAT 能调用工具；吊销后立即失效；默认全部 scope、不过期（D9）。 调用与默认值满足：MA1；MA6 中 API 列出的默认 PAT 有四个 scope、`expiresAt` 为 `null`，Browser 的新建表单默认勾选四个 scope、过期时间为“Never”（`mcp-pat-browser-form.png`），在 Browser 创建的 PAT 能经网关调用工具。吊销后访问 Workspace 的下一次调用返回 401（MA4、MA6）。**差距：** 与上一条相同，吊销后的 `whoami`、`api_find` 在缓存期内仍然成功。
-- [ ] 现有客户端不受影响：`apps/agent` 的 OAuth 登录、`uvw auth login`、浏览器登录都照常工作。 Browser 注册与登录、`uvw auth login --password-stdin`、Browser 批准的 `uvw auth login` 在开启 MCP OAuth 的运行中都通过（MA8 与 [auth 旅程](../../../.agents/skills/verify-uvw/features/auth.md)）。**差距：** `apps/agent` 的 OAuth 登录无法验证。按 README 本地安装时，干净检出上插件构建先于 Client Core 构建而失败（PR #248），profile 安装从 npm 拉取私有包失败（PR #245），两者修复后 Agent 在进入 OAuth 之前启动失败（#246）。三个问题都发生在 OAuth 之前，与阶段 F 的认证改动无关；前两个来自 #170。
+- [ ] 现有客户端不受影响：`apps/agent` 的 OAuth 登录、`uvw auth login`、浏览器登录都照常工作。 Browser 注册与登录、`uvw auth login --password-stdin`、Browser 批准的 `uvw auth login` 在开启 MCP OAuth 的运行中都通过（MA8 与 [auth 旅程](../../../.agents/skills/verify-uvw/features/auth.md)）。**差距：** `apps/agent` 的 OAuth 登录无法验证。按 README 本地安装时，干净检出上插件构建先于 Client Core 构建而失败（PR #248 修复，已验证，待合入），profile 安装从 npm 拉取私有包失败（PR #245 已修复），绕过这两处后 Agent 在进入 OAuth 之前启动失败（issue #246）。三个问题都发生在 OAuth 之前，与阶段 F 的认证改动无关；前两个来自 #170。
 - [x] `api:verify` 通过；`verify-db-migration` 的完整矩阵通过。 证据：在 `72e6d781` 上 `api:verify` 退出 0 且工作区无改动；源码与 `--dist` 的 schema parity 对 12 个历史 schema 全部 `ok`；V17→V18 矩阵覆盖 skill 第 3 步的全部七项（`apps/workspace/test/support/v17-migration-checks.ts`），集成用例与 `test:production-import` 通过；`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。审计中发现的 data-model 表数笔误由 PR #244 修正。
 - [x] 本地验证默认改用 PAT，开发认证模式只在显式指定时使用。 证据：PR #247；`user` 默认创建 PAT，`verify-uvw mcp` 不带 `--auth` 时用 PAT（MA1 的 `auth=pat`），只有 `--auth dev` 才走开发认证（MA5）；opencode 配置原先带的是开发 session，#247 改为 PAT 后，run f5 中 M11 的事件是 `auth_kind: pat`。
 - [x] token 不透传，下游凭据短时效（交付物之一，不在原验收清单内）。 证据：MO2 的 `direct` 把 OAuth access token 直接作为 Bearer 和 cookie 发给 Workspace，`/api/session` 都是未登录；token exchange 返回的下游 session 不超过 600 秒，scope 与 token 一致（MO2、MA6）；生产环境拒绝开发认证（M10）。
@@ -191,7 +191,7 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 **验收记录（2026-11-09，`verify-uvw` run f5，产品代码为 `main` `d8178a12`，工作区另带本次新增的验证工具与旅程）。** M4、M10、M11、MA1–MA5、MO1 按文档原样通过；MA6、MA7、MO2、MA8 新增为可重复旅程，在同一次运行中通过，结束时 `doctor` 无 `FAIL`，`down` 清理完毕，证据中没有 token 或密钥。未满足项与原因：
 
 - 吊销与缓存：OAuth token 或 PAT 吊销后，网关在最多 30 秒内仍用交换缓存回答不访问 Workspace 的调用（实测 `whoami` 与 `api_find` 都返回成功，见 MO2、MA6 的 `*.observed` 证据）。访问 Workspace 的调用立即返回 401 并清除缓存，此后所有调用都是 401。架构 4.2 节写明网关缓存下游凭据，与验收里的“下一次调用”“立即失效”冲突，需要产品负责人二选一：接受这个窗口并改写验收条目，或者要求网关在每次调用前确认 token 仍有效；
-- `apps/agent` 的 OAuth 登录：见上文，#245、#248 修复安装，#246 跟踪启动失败，修复后在 MA8 中补上 Agent 登录再验；
+- `apps/agent` 的 OAuth 登录：见上文，安装问题由 PR #245、#248 处理，启动失败由 issue #246 跟踪，修复后在 MA8 中补上 Agent 登录再验；
 - CIMD 与私有 scheme 回调：见上文；
 - 用户看不到、也不能吊销已授权的 AI 助手，只有客户端自己能调用吊销端点。管理入口属于 F11（“连接到 AI 助手”，阶段 H）。
 

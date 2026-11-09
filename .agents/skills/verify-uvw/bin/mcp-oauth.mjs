@@ -55,7 +55,11 @@ if (command === 'login') {
     response.end('verify-uvw received the authorization response');
     resolve(new URL(request.url, redirectUri));
   }));
-  const browser = (...a) => execFileSync('agent-browser', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 60000 });
+  // Arguments carry the password and the authorize URL with its state, so a failure names only the subcommand.
+  const browser = (...a) => {
+    try { return execFileSync('agent-browser', a, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 60000 }); }
+    catch { throw new Error(`agent-browser ${a[0]} failed`); }
+  };
   try {
     const registration = await fetch(`${origin}/api/auth/register`, { method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ client_name: `verify-uvw ${label}`, redirect_uris: [redirectUri], grant_types: ['authorization_code', 'refresh_token'], token_endpoint_auth_method: 'none' }) });
