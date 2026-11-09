@@ -151,9 +151,9 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `compile_typst` 的 bundle 目录打成 ZIP 上传，purpose 为 `typst-bundle`，根目录必须包含 `typst.json`。创建要求 `apply`、`worktree` 和 `space`。创建前生成幂等键，重试时复用相同键与内容。原生 ID 由 bundle 的固定 targetUnitId 与物化器的确定性随机种子重现，创建键按调用者和 `compile_typst` 工具名隔离。
 - `compile_svg` 的本地图片可通过 `svg-assets` ZIP 提供。`add` 要求 `page`；apply 要求 `page`、`worktree` 和 `unit`。不带 apply 时拒绝 Workspace 目标参数。它不接受幂等键，未知写入结果返回 `workspace-result-unknown`，先用 `inspect` 回读再决定是否重试。
 - 两种 ZIP 共用 Markdown 的 256 entry、单文件 4 MiB、总解压 8 MiB、路径长度与碰撞限制。较大的资源也无法保证满足 900 KiB UnitData 创建上限或 8 MiB RPC 响应上限。
-- 阶段 D 的 SVG 编译必须传 `estimate_text_size: true`，否则返回 `workspace-text-measure-unavailable`，提示实字体量度将在渲染服务阶段提供。估算结果保留 CLI 的 lint。
+- SVG 编译默认用实字体量度：executor 向 Client Core 的 SVG feature 注入文本量度 runtime，其 `measureText` 经渲染服务客户端调用渲染服务的 `measureText`（每个被量度的行一次 RPC），`close` 不做任何事。结果的 `textMeasure` 为 `univer-render-runtime`，不带估算 lint。传 `estimate_text_size: true` 时仍用 JavaScript 内置量字器，不访问渲染服务，并保留 CLI 的估算 lint。未配置渲染服务时返回不可重试的 `workspace-renderer-not-configured`；渲染服务故障沿用渲染服务客户端的错误码。
 - Typst bundle 输入错误包含相对 bundle 的文件路径。子进程错误和诊断中的临时路径统一改写为 bundle 相对路径。Typst 与 SVG facade 输入错误分别映射为 `workspace-typst-invalid` 与 `workspace-svg-invalid`，保留 facade 消息及可用的 `detail.diagnostics`。
-- Typst 编译与物化在现有 job child 中运行。SVG 估算编译使用 JavaScript 内置量字器，不创建浏览器，可在 executor 中运行；apply 使用绑定的协同 runtime。仅编译时 Typst 报告 `executor: cold_start`，SVG 报告 `executor: none`；两者均报告 `unit_type: null`、`repo: null`，消费的 ZIP 计入 upload_bytes，确认的创建或提交计入 committed_revisions。
+- Typst 编译与物化在现有 job child 中运行。SVG 估算编译使用 JavaScript 内置量字器，不创建浏览器，可在 executor 中运行；apply 使用绑定的协同 runtime。仅编译时 Typst 报告 `executor: cold_start`，SVG 报告 `executor: none`（实字体量度的渲染成本在渲染服务内，不改变该字段）；两者均报告 `unit_type: null`、`repo: null`，消费的 ZIP 计入 upload_bytes，确认的创建或提交计入 committed_revisions。
 - Typst 的仅编译和 apply 均已接入第 7 节的长任务路径。仅编译可选幂等键；不提供时每次独立执行。SVG 保持 30 秒同步预算。
 - 不带 `apply` 的编译工具返回生成的 Facade 代码和诊断，不写入 Workspace。
 

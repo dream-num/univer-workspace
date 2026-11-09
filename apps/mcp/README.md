@@ -679,11 +679,16 @@ The manifest's `targetUnitId` remains the compiled target; the returned `unit.un
 Workspace Unit. Compilation and materialization run in bounded conversion children.
 
 `compile_svg` accepts SVG text up to 512 KiB and an optional ready `svg-assets` ZIP.
-Pass `estimate_text_size: true`. Without it, `workspace-text-measure-unavailable` explains
-that real font metrics arrive with the renderer. Core imports the SVG facade and render-runtime
-adapter, but with estimation it uses the JavaScript `builtinTextMeasurer` and never starts a
-browser or loads the native formula engine for compilation. Compilation stays in the executor.
-The result retains the CLI's estimation lint. `page` is 1-based; `add` requires `page`.
+Without `estimate_text_size`, text is measured with real fonts: the executor injects a text-measure
+runtime into Client Core's SVG feature whose `measureText` calls the renderer (one `measureText` RPC
+per measured line, each with the renderer's own 10-second budget inside the 30-second compile budget)
+and whose `close` does nothing. The result reports `textMeasure: "univer-render-runtime"` and no
+estimation lint. With `estimate_text_size: true` the JavaScript `builtinTextMeasurer` runs in the
+executor, never contacts the renderer and retains the CLI's estimation lint. Without a configured
+renderer, real measurement fails with the non-retryable `workspace-renderer-not-configured`;
+renderer faults map to the renderer client's errors (`workspace-renderer-unavailable`,
+`-timeout`, `-busy`). The compile itself never starts a browser in the executor or loads the native
+formula engine. `page` is 1-based; `add` requires `page`.
 Apply requires `page`, `worktree` and an existing Slide `unit`, and uses the caller-bound runtime.
 SVG apply joins the executor FIFO shared with execute and inspect for the same user, scope
 and Unit. Compile-only bypasses that queue.

@@ -6,8 +6,9 @@ import {
 import {
   pullSpaceId,
   WorkspaceSpaceFeature,
-  workspaceError,
 } from "@univerjs/univer-workspace-client-core/product";
+import type { z } from "zod";
+import type { measureTextInput } from "../../shared/renderer-protocol.js";
 import { svgCompileOutput } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
 import { compilerSourceLimits, readSourceZip } from "../source-zip.js";
@@ -15,11 +16,6 @@ import { compilerOperation } from "./compiler-errors.js";
 
 export const svgCompile: Handler<"svg.compile"> = (ctx, input, bytes) =>
   compilerOperation("svg", async () => {
-    if (input.estimateTextSize !== true)
-      throw workspaceError(
-        "workspace-text-measure-unavailable",
-        "Pass estimate_text_size: true. Real font metrics arrive with the Stage E renderer.",
-      );
     const assets =
       bytes.length === 0
         ? new Map<string, Uint8Array>()
@@ -28,6 +24,19 @@ export const svgCompile: Handler<"svg.compile"> = (ctx, input, bytes) =>
       env: {},
       license: "",
       renderPageRoot: "",
+      // Only used without estimateTextSize. One renderer RPC per measured line; the renderer owns
+      // the browser, so closing the injected runtime has nothing to release here.
+      createRuntime: async () => ({
+        measureText: async ({ doc, wrapWidth }) => {
+          if (!ctx.renderer) throw new Error("The executor was built without a renderer client.");
+          const { output } = await ctx.renderer.call("measureText", {
+            doc,
+            ...(wrapWidth === undefined ? {} : { wrapWidth }),
+          } as unknown as z.input<typeof measureTextInput>);
+          return output;
+        },
+        close: async () => {},
+      }),
       contentExecution: new WorkspaceContentExecutionFeature(ctx.source(), {
         executeAndCommit: async (request) => {
           ctx.signal.throwIfAborted();
@@ -39,7 +48,7 @@ export const svgCompile: Handler<"svg.compile"> = (ctx, input, bytes) =>
     const compiled = await feature.compile({
       svg: input.svg,
       assets,
-      estimateTextSize: true,
+      ...(input.estimateTextSize === undefined ? {} : { estimateTextSize: input.estimateTextSize }),
       ...(input.add === undefined ? {} : { add: input.add }),
       ...(input.page === undefined ? {} : { page: input.page }),
     });

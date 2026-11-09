@@ -220,6 +220,17 @@ export function createRenderer(
   });
   return {
     server,
+    // The first measureText call has a short budget; launching one browser before traffic keeps it
+    // from paying the Chromium start. A failure here only means the first request starts it instead.
+    async warm() {
+      await pool
+        .run(() => Promise.resolve())
+        .then(
+          () => logger.info("Renderer runtime warmed"),
+          (error: unknown) =>
+            logger.warn({ ...safeErrorFields(error) }, "Renderer warm-up failed"),
+        );
+    },
     async close() {
       draining = true;
       await new Promise<void>((resolve) => {
