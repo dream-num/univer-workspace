@@ -17,8 +17,17 @@ PDF printing, Slide layout lint and text measurement (see [Renderer](#renderer))
 A missing or unknown role exits 1 and lists the valid roles.
 
 The gateway imports Client Core's `/product` entry only. Headless execution and inspection
-run in the executor. Tools remain listed without an executor configuration and return
-`workspace-executor-unavailable`. `execute` requires `write`; `inspect` requires `read`.
+run in the executor. Tools are listed only when their required executor operations are available. Without an executor
+configuration, executor-backed tools and `job_get` are hidden. `execute` requires `write`; `inspect` requires `read`.
+
+The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response
+contains `v` (the protocol version) and `operations` (operation names). The three `render.*` operations
+are declared only when `MCP_RENDERER_URL` is configured. The gateway discovers capabilities at startup
+and every minute, retaining each replica's last known response on refresh failure. Until discovery
+succeeds no executor operations are available. Protocol-incompatible replicas are excluded from routing;
+visible tools use the intersection of compatible replicas' operations, in registry order.
+Instructions follow each connection's visible tools and direct callers to `?toolsets=files` for available
+file capabilities outside their selected toolsets.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -692,7 +701,7 @@ per measured line, each with the renderer's own 10-second budget inside the 30-s
 and whose `close` does nothing. The result reports `textMeasure: "univer-render-runtime"` and no
 estimation lint. With `estimate_text_size: true` the JavaScript `builtinTextMeasurer` runs in the
 executor, never contacts the renderer and retains the CLI's estimation lint. Without a configured
-renderer, real measurement fails with the non-retryable `workspace-renderer-not-configured`;
+renderer, compilation uses the built-in text estimate even when `estimate_text_size` is false or omitted;
 renderer faults map to the renderer client's errors (`workspace-renderer-unavailable`,
 `-timeout`, `-busy`). The compile itself never starts a browser in the executor or loads the native
 formula engine. `page` is 1-based; `add` requires `page`.

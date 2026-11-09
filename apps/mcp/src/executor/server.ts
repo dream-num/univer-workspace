@@ -4,6 +4,7 @@ import { pino, type Logger } from "pino";
 import { createBearerCheck } from "../shared/bearer.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
 import {
+  PROTOCOL_VERSION,
   isOpName,
   opSpecs,
   requestHeaderSchema,
@@ -47,6 +48,17 @@ export function createExecutor(
       }
       if (draining) {
         reject(503, "workspace-executor-unavailable");
+        return;
+      }
+      if (request.method === "GET" && request.url === "/rpc/v1/capabilities") {
+        response.writeHead(200, { "content-type": "application/json" }).end(
+          JSON.stringify({
+            v: PROTOCOL_VERSION,
+            operations: Object.keys(opSpecs).filter(
+              (name) => config.MCP_RENDERER_URL !== undefined || !name.startsWith("render."),
+            ),
+          }),
+        );
         return;
       }
       const name = request.url?.slice("/rpc/v1/".length) ?? "";

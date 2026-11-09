@@ -7,6 +7,7 @@ import type {
   ExecutorRequest,
   ExecutorResult,
   OpSpec,
+  OpName,
   PayloadDirection,
 } from "../../shared/executor-protocol.js";
 import { ExecutorCallError } from "../../shared/errors.js";
@@ -40,8 +41,10 @@ const links = new WeakMap<
   { connection: ExecutorConnection | null; usage: UsageAccumulator }
 >();
 
-export function createExecutorLinks(config: GatewayConfig["executor"]) {
-  const router = config ? new ExecutorRouter(config.urls) : null;
+export function createExecutorLinks(
+  config: GatewayConfig["executor"],
+  router = config ? new ExecutorRouter(config.urls) : null,
+) {
   return (
     auth: Authentication,
     user: WorkspaceSubject,
@@ -76,7 +79,7 @@ export function executorTool<
   definition: Omit<ToolDefinition, "run" | "inputSchema" | "outputSchema"> & {
     inputSchema: A;
     job?: { tool: JobRecord["tool"]; key(args: z.output<A>): string | undefined };
-    op: OpSpec<I, O, P>;
+    op: OpSpec<I, O, P> & { readonly name: OpName };
     outputSchema?: z.ZodObject;
     response?(
       result: ExecutorResult<OpSpec<I, O, P>>,
@@ -93,6 +96,7 @@ export function executorTool<
   const finishedSchema = outputSchema ?? op.output;
   return {
     ...tool,
+    executorOperations: [op.name],
     outputSchema: job ? z.union([finishedSchema, jobHandleSchema]) : finishedSchema,
     async run(context, args) {
       const link = context.executor ? links.get(context.executor) : undefined;

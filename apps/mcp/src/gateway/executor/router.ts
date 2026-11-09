@@ -8,7 +8,10 @@ export function rendezvous(urls: readonly string[], key: string): string[] {
 
 export class ExecutorRouter {
   private readonly downUntil = new Map<string, number>();
-  constructor(private readonly urls: readonly string[]) {}
+  constructor(private urls: readonly string[]) {}
+  setUrls(urls: readonly string[]): void {
+    this.urls = urls;
+  }
   candidates(key: string): string[] {
     const ordered = rendezvous(this.urls, key);
     const healthy = ordered.filter((url) => (this.downUntil.get(url) ?? 0) <= Date.now());

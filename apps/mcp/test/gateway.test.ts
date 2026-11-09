@@ -257,6 +257,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         WORKSPACE_ORIGIN: identityOrigin,
         WORKSPACE_TRANSPORT_URL: transportOrigin,
         MCP_INTERNAL_TOKEN: internalToken,
+        MCP_RENDERER_URL: "http://renderer.test",
       }),
       { runtime, logger: pino({ level: "silent" }) },
     );
@@ -507,8 +508,8 @@ describe("gateway over real HTTP and the MCP client", () => {
   });
 
   it("keeps executor tools listed while an executor is stopped", async () => {
-    await executor.close();
     const client = await connect();
+    await executor.close();
     expect((await client.listTools()).tools.map((tool) => tool.name)).toContain("execute");
     expect(
       await client.callTool({

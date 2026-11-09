@@ -13,6 +13,7 @@ import { parseExecutorConfig } from "../src/shared/config-executor.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../src/shared/frame.js";
 import {
+  PROTOCOL_VERSION,
   opSpecs,
   requestHeaderSchema,
   type ExecutorGrant,
@@ -240,6 +241,48 @@ describe("executor protocol boundaries", () => {
       fetcher.mockRestore();
     }
   });
+
+  it.each([undefined, "http://renderer.test"])(
+    "authenticates capability discovery and declares renderer operations only with %s",
+    async (rendererUrl) => {
+      const executor = createExecutor(
+        parseExecutorConfig({
+          WORKSPACE_ORIGIN: "https://workspace.test",
+          MCP_INTERNAL_TOKEN: token,
+          ...(rendererUrl === undefined ? {} : { MCP_RENDERER_URL: rendererUrl }),
+        }),
+        {
+          runtime: {
+            executeRead: vi.fn(),
+            executeAndCommit: vi.fn(),
+            exportUnitData: vi.fn(),
+            close: async () => {},
+          },
+          logger: pino({ level: "silent" }),
+        },
+      );
+      executor.server.listen(0, "127.0.0.1");
+      await once(executor.server, "listening");
+      const address = executor.server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP address");
+      const url = `http://127.0.0.1:${address.port}/rpc/v1/capabilities`;
+      try {
+        for (const authorization of ["", "Bearer wrong"]) {
+          expect((await fetch(url, { headers: { authorization } })).status).toBe(401);
+        }
+        const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          v: PROTOCOL_VERSION,
+          operations: Object.keys(opSpecs).filter(
+            (name) => rendererUrl !== undefined || !name.startsWith("render."),
+          ),
+        });
+      } finally {
+        await executor.close();
+      }
+    },
+  );
 
   it("rejects missing bearer and caller before dispatch over real HTTP", async () => {
     const runtime: WorkspaceContentRuntime = {
