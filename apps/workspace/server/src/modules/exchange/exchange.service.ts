@@ -45,6 +45,7 @@ import {
   type ImportedUniverAsset,
   type UniverAssetsModule,
 } from "../univer-assets/index.js";
+import { keepsPdfImportFontInline } from "./workarounds/pdf-import-fonts.js";
 import {
   exportLoadsFiles,
   exportWorkspaceSnapshot,
@@ -402,6 +403,7 @@ export function createExchangeModule(options: {
           buffer,
           withImportedFiles(importOptions, unitType, (file) => {
             if (file.size > MAX_UNIVER_ASSET_BYTES) return { mode: "inline" };
+            if (unitType === "pdf" && keepsPdfImportFontInline(file)) return { mode: "inline" };
             const assetId = randomUUID();
             files.push({ assetId, filename: file.name, mediaType: file.mimeType, bytes: file.bytes });
             return { mode: "reference", source: assetId };
@@ -640,13 +642,20 @@ interface ImportSource {
   readonly target?: { readonly spaceId: string; readonly parentNodeId: string | null };
 }
 
-/** exchange-node splits images and attachments out of Sheet, Doc and Slide imports only. */
+/**
+ * exchange-node splits images and attachments out of Sheet, Doc and Slide imports, and the
+ * decoded images, fonts and source streams out of PDF imports. A PDF Unit draws an image or
+ * font only through the `resourceBindings` that `files.store` produces: without the hook the
+ * bytes stay inline in `document.assets` and the editor draws no images at all.
+ */
 function withImportedFiles(
   importOptions: BufferImportOptions,
   unitType: ExchangeUnitType,
   store: (file: IImportedFile) => IImportFileResult
 ): BufferImportOptions {
-  if (unitType !== "sheet" && unitType !== "doc" && unitType !== "slide") return importOptions;
+  if (unitType !== "sheet" && unitType !== "doc" && unitType !== "slide" && unitType !== "pdf") {
+    return importOptions;
+  }
   return {
     ...importOptions,
     files: { store: (file: IImportedFile) => Promise.resolve(store(file)) },
