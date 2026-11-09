@@ -15,7 +15,9 @@ $V user      # register a throwaway password user and sign uvw in as it
 $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
-$V down      # stop what this run started, delete data; keep evidence + logs
+$V agent-up  # install/start Agent (requires VERIFY_UVW_AGENT_PORT at up)
+$V agent-down # stop only this run's Agent
+$V down      # stop what this run started, including Agent; delete data; keep evidence + logs
 ```
 
 A run lives at `/tmp/verify-uvw/<run-id>/` (`VERIFY_UVW_ROOT` overrides `/tmp/verify-uvw`):
@@ -203,7 +205,16 @@ as the run user through the login page, approves the consent page with only `--s
 access token straight to Workspace, and `exchange` performs the gateway's token exchange for the PAT or the access token, then
 signs the returned session out. Each writes `<label>.json` with token shapes only and exits 0 on the expected success status, 1 otherwise.
 Set `VERIFY_UVW_AGENT_PORT=<port>` at `up` to also register the Workspace Agent's public OAuth client
-`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`, for checking the Agent's OAuth login against the run.
+`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`.
+Then `$V agent-up` builds and packs the repository's Agent and plugins, installs the pinned DSH
+runtime and profile under `home/agent/`, checks that pnpm uses the run-local package store, and starts `apps/agent/scripts/start-local.mjs` on that
+port. Installation can take several minutes; see `logs/agent-install.log`. The one-time browser
+URL is in `home/agent-url` (mode 0600), and raw Agent logs stay in `home/agent-log.private`
+(mode 0600); never copy either into evidence. Open the URL in this run's agent-browser session.
+The helper seeds the configured `127.0.0.1` Workspace origin without a session; confirm the
+onboarding service URL is `$ORIGIN` before signing in. No model credentials are needed.
+`$V agent-down` stops the recorded launcher after checking its command line; `$V down` does this
+as well and deletes the installation, runtime data and private logs with `home/`.
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
 to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.

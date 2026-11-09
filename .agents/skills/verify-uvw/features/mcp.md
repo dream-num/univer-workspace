@@ -62,7 +62,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
 - MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
 - MO4 registers Cursor's exact callbacks and completes consent and token redemption on its `cursor://` callback.
-- MA8 checks that Browser sign-in and both `uvw auth login` paths still work with MCP OAuth enabled.
+- MA8 checks Browser sign-in, both `uvw auth login` paths, and Workspace Agent browser OAuth with `agent-up` while MCP OAuth is enabled.
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
 - MX3 verifies executor unavailability.
@@ -1592,14 +1592,28 @@ access token and a `uvw_rt_` refresh token.
 
 **MA8. Existing sign-in clients.** Stage F must not change how the Browser, uvw and the Workspace
 Agent sign in, so run these in the same MCP-enabled run, where the MCP OAuth code paths are active.
-First run every step of [Accounts and sign-in](auth.md) as written: Browser registration and
-sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
+Start a fresh run with an explicit free Agent callback port (these ports also isolate it from other runs):
+
+```bash
+V=.agents/skills/verify-uvw/bin/verify-uvw
+export VERIFY_UVW_RUN=ma8
+VERIFY_UVW_MCP=1 VERIFY_UVW_SERVER_PORT=3923 VERIFY_UVW_WEB_PORT=5976 VERIFY_UVW_MCP_PORT=3933 VERIFY_UVW_AGENT_PORT=3191 $V up
+$V user
+$V doctor
+eval "$($V env)"
+RUN=/tmp/verify-uvw/$VERIFY_UVW_RUN
+```
+
+Keep this shell open until `down` so command-runner cleanup cannot stop its background services.
+Keep `VERIFY_UVW_RUN` exported on every later call. First run every step of
+[Accounts and sign-in](auth.md) as written: Browser registration and sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
 Browser-approved `uvw auth login`, which prints an approval URL and exits; the raw URL and code stay
-in the run's `home/` and never reach evidence.
+in the run's `home/` and never reach evidence. Leave private files there until `$V down`
+removes the disposable home; journey steps do not delete files from it.
 
 ```bash
 (umask 077 && $V uvw auth login > "$RUN/home/cli-login.private" 2>&1)
-agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/cli-login.private" | head -n1)"
+agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/cli-login.private" | head -n1)" > /dev/null
 agent-browser wait --text 'Confirm and authorize CLI'
 test "$(agent-browser get value input)" = "$(sed -n 's/^Verification code: //p' "$RUN/home/cli-login.private")"
 agent-browser find role button click --name 'Confirm and authorize CLI'
@@ -1607,14 +1621,86 @@ agent-browser wait --text 'CLI authorized'
 agent-browser screenshot "$EVIDENCE/mcp-cli-authorized.png"
 $V cli mcp-cli-login-complete auth login --complete --json
 jq -e --arg origin "$ORIGIN" --arg name "Verify $VERIFY_UVW_RUN" '.status == "authenticated" and .origin == $origin and .subject.name == $name' "$EVIDENCE/mcp-cli-login-complete.out"
-rm -f "$RUN/home/cli-login.private"
 ```
 
-Pass when every auth.md step passes, the approval page shows the code uvw printed, and `--complete`
-signs uvw in as the run user. The Workspace Agent's browser OAuth login is not part of this journey
-yet: on 2026-11-09 its documented local install failed (fixed by #245) and the Agent then exits at
-startup before OAuth (#246). Once #246 is fixed, start the run with `VERIFY_UVW_AGENT_PORT`, which
-registers the Agent's public client, and add the Agent login here.
+Then install and start the Agent. Its token URL is private; suppress `open` output until the
+browser has exchanged the token for its cookie and reached the clean root URL.
+
+```bash
+$V agent-up
+agent-browser open "$(cat "$RUN/home/agent-url")" > /dev/null
+agent-browser wait --url 'http://127.0.0.1:3191/' > /dev/null
+agent-browser wait --text 'Connect your Workspace'
+agent-browser find label 'Workspace service URL' fill "$ORIGIN"
+agent-browser snapshot -i -c > "$EVIDENCE/mcp-agent-before-signin.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-before-signin.png"
+agent-browser find role button click --name 'Sign in to Workspace' --exact
+# The local Web Agent navigates this same tab to Workspace.
+# If Workspace asks for login, run these three commands; skip them if consent is visible:
+agent-browser find label 'Username' fill "verify-$VERIFY_UVW_RUN"
+agent-browser find label 'Password' fill "$(cat "$RUN/user.pw")"
+agent-browser click 'form button[type=submit]'
+# Continue on the Workspace consent page:
+agent-browser wait --text 'univer-workspace-harness'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-consent.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-consent.png"
+agent-browser find role button click --name 'Allow' --exact
+# Do not record the callback URL: it briefly holds the one-time authorization code.
+agent-browser wait --url 'http://127.0.0.1:3191/' > /dev/null
+```
+
+The callback briefly shows **Workspace connected**, then returns to the Agent after its
+account services are ready. A fresh profile then shows **Add an API key to get started**;
+choose **Configure later**. No model credentials are needed for login or browsing.
+Settings → General contains the **Workspace connection settings** region; wait for its
+connected account to load and scroll the service URL into view before capturing it.
+
+```bash
+agent-browser wait --text 'Add an API key to get started'
+agent-browser find role button click --name 'Configure later' --exact
+agent-browser wait --text 'Files'
+agent-browser find role button click --name 'Settings' --exact
+agent-browser wait --text "Connected: Verify $VERIFY_UVW_RUN"
+test "$(agent-browser get value 'input[type=url]')" = "$ORIGIN"
+agent-browser scrollintoview 'input[type=url]'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-after-signin.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-after-signin.png"
+agent-browser find role button click --name 'Close' --exact
+agent-browser find role tab click --name 'Files' --exact
+agent-browser wait --text 'No files'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-files.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-files.png"
+# Read the run user's remotely listed Space through the Agent's picker as well:
+agent-browser find role tab click --name 'Sessions' --exact
+agent-browser find role button click --name 'Add workspace' --exact
+agent-browser wait --text "Verify $VERIFY_UVW_RUN's Personal Space"
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-space-picker.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-space-picker.png"
+agent-browser find role button click --name "Verify $VERIFY_UVW_RUN's Personal Space Personal Space" --exact
+# Adding a Space briefly remounts the navigation; wait for the Files tab itself, not the word.
+agent-browser wait --fn 'Array.from(document.querySelectorAll("[role=tab]")).some(tab => tab.textContent.trim() === "Files")'
+agent-browser find role tab click --name 'Files' --exact
+agent-browser find role button click --name 'Refresh files' --exact
+agent-browser wait --text 'No files'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-files.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-files.png"
+agent-browser eval 'location.origin === "http://127.0.0.1:3191" && location.pathname === "/" && !location.search' > "$EVIDENCE/mcp-agent-clean-url.txt"
+
+$V down
+rg -n 'token=[A-Za-z0-9]|uvw_(at|rt|pat)_[A-Za-z0-9]{8,}|workspace_session=' "$EVIDENCE"
+# Expected: no matches (rg exits 1), down prints `ok    MCP resources removed`,
+# and no process from this run remains in `pgrep -f start-local.mjs`.
+```
+
+Pass when every auth.md step passes, the CLI approval page shows the code uvw printed, and
+`--complete` signs uvw in as the run user; the Agent stays running, its Workspace consent page
+names `univer-workspace-harness`, and the Agent shows the connected run user and origin. The
+Agent Space picker lists `Verify <run-id>'s Personal Space`, selecting it succeeds, and Files
+refreshes that Space with `No files`. The fresh Space has no trunk files; doctor's Sheet lives
+in a Worktree. The clean-URL assertion returns `true`. The three sign-in screenshots and Files evidence must
+contain no tokens, authorization codes or cookies. Teardown stops the Agent and removes MCP
+resources and disposable data. If Agent OAuth fails, record the exact step, screen text and
+relevant server log lines as a product finding; this journey does not pass.
 
 **MX1. Executor write and readback.**
 
