@@ -69,7 +69,8 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MM1 checks Markdown apply retries, CLI parity, image downloads and explicit block updates.
 - MX10 rejects a reused import key with a different upload.
 - MT1 compares Typst compilation with the CLI and reads back one native Doc after a same-key retry.
-- MV1 compares SVG compilation with the CLI and reads back its committed Slide.
+- MV1 compares estimated SVG compilation with the CLI and reads back its committed Slide.
+- MV2 compiles SVG with real fonts through the renderer against `uvw compile-svg`, applies it to a Slide, screenshots the page and times 55 text lines.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - M12 removes this run's resources and preserves developer processes.
@@ -1760,8 +1761,8 @@ and the Browser screenshots show North and 42 before and after reload.
 
 ### MR9 renderer role
 
-The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. Only `screenshot`
-(MR10) calls it from a tool so far, so drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
+The renderer starts with the other roles and sits alone with the executor on an `internal: true` compose network. `screenshot`
+(MR10) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
 
 ```bash
 V=.agents/skills/verify-uvw/bin
@@ -2069,10 +2070,33 @@ its content, and a same-key retry returns the same single Unit. All MCP calls go
 node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg
 ```
 
-Pass when estimated SVG compilation matches the CLI, retains its estimation lint, rejects
-missing estimation with `workspace-text-measure-unavailable`, commits page 1 of a new Slide,
-and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There is no SVG
-retry key; an unknown write outcome requires inspection before another apply.
+Pass when estimated SVG compilation matches the CLI, retains its estimation lint, commits page 1
+of a new Slide, and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There
+is no SVG retry key; an unknown write outcome requires inspection before another apply.
+
+**MV2. Real-font SVG measurement through the renderer.** Run it after `doctor` passes, with the
+`eval "$($V env)"` variables set. The first measurement after the renderer starts launches
+Chromium (6 s measured with another stack running, and above the 9 s budget once), so a cold
+first call can return the retryable `workspace-renderer-timeout`; rerun it.
+
+```bash
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg-real
+```
+
+Pass when, for one SVG with Latin and Chinese text, left, centred and right-anchored lines:
+
+- `compile_svg` without `estimate_text_size` reports `textMeasure: "univer-render-runtime"` and no
+  estimation lint, and has the same keys and the same code structure as `uvw compile-svg` on the
+  file (`mcp-svg-real-compile.out` against `mcp-svg-real-cli.out`, compared with numbers masked).
+  Numeric metrics may differ because the CLI measures with the host browser's fonts; diff the two
+  files and record any differences. With `estimate_text_size: true` the mode is `builtin-estimate`
+  with the estimation lint and different box widths.
+- Apply into a Slide in a Worktree commits one revision and `inspect` reads `季度回顾`.
+- `mcp-svg-real-shot.image-1.png` (MCP `screenshot` of that page) shows every line inside its box
+  without overflow or clipping. Look at it.
+- The journey prints the wall time of a 55-line compile (`mcp-svg-real-50.wall-ms`, one renderer
+  RPC per line, warm renderer) and the usage event stays `executor: none` with zero render cost.
+- Stop with `$V down` for the run, even on failure.
 
 ### Typst job verification
 
