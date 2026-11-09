@@ -1,3 +1,4 @@
+import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -64,6 +65,11 @@ async function start(options: { syncBudgetMs?: number } = {}) {
     throw new Error("No executor reply configured");
   };
   const executor = createServer((request, response) => {
+    if (request.url === "/rpc/v1/capabilities") {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ v: PROTOCOL_VERSION, operations: Object.keys(opSpecs) }));
+      return;
+    }
     const chunks: Buffer[] = [];
     request.on("data", (chunk: Buffer) => chunks.push(chunk));
     request.on("end", () => {

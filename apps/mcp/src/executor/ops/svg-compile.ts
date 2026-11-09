@@ -48,7 +48,7 @@ export const svgCompile: Handler<"svg.compile"> = (ctx, input, bytes) =>
     const compiled = await feature.compile({
       svg: input.svg,
       assets,
-      ...(input.estimateTextSize === undefined ? {} : { estimateTextSize: input.estimateTextSize }),
+      estimateTextSize: ctx.renderer?.configured !== true || input.estimateTextSize === true,
       ...(input.add === undefined ? {} : { add: input.add }),
       ...(input.page === undefined ? {} : { page: input.page }),
     });

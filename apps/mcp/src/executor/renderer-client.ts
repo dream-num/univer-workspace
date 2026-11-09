@@ -15,6 +15,7 @@ export interface RendererResult<K extends RendererOpName> {
   readonly meta: OpMeta;
 }
 export interface RendererClient {
+  readonly configured: boolean;
   call<K extends RendererOpName>(
     name: K,
     input: z.input<(typeof rendererOpSpecs)[K]["input"]>,
@@ -55,6 +56,7 @@ export function createRendererClient(options: {
   readonly signal: AbortSignal;
 }): RendererClient {
   return {
+    configured: options.url !== undefined,
     async call(name, input) {
       const spec = rendererOpSpecs[name];
       if (options.url === undefined)

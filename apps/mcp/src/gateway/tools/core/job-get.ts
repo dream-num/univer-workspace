@@ -5,6 +5,7 @@ import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 
 export const jobGetTool: ToolDefinition = {
   name: "job_get",
+  executorAnyOperations: ["exchange.import", "exchange.export", "typst.compile"],
   toolset: "core",
   scope: "read",
   title: "Get a conversion job",

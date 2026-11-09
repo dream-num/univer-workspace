@@ -44,9 +44,12 @@ export interface OpSpec<
   readonly output: O;
   route(input: z.output<I>): RouteKey;
 }
-function defineOp<I extends z.ZodType, O extends z.ZodObject, const P extends PayloadDirection>(
-  spec: OpSpec<I, O, P>,
-): OpSpec<I, O, P> {
+function defineOp<
+  I extends z.ZodType,
+  O extends z.ZodObject,
+  const P extends PayloadDirection,
+  const N extends string,
+>(spec: OpSpec<I, O, P> & { readonly name: N }): OpSpec<I, O, P> & { readonly name: N } {
   return spec;
 }
 
@@ -502,6 +505,10 @@ export const opSpecs = {
   }),
 } as const;
 export type OpName = keyof typeof opSpecs;
+export const executorCapabilitiesSchema = z.object({
+  v: z.int().positive(),
+  operations: z.array(z.string()).max(256),
+});
 export type AnyOp = (typeof opSpecs)[OpName];
 export type OpInput<S extends { input: z.ZodType }> = z.output<S["input"]>;
 export type OpOutput<S extends { output: z.ZodType }> = z.output<S["output"]>;

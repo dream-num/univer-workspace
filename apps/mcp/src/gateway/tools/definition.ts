@@ -5,6 +5,7 @@ import type {
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { z } from "zod";
 
+import type { OpName } from "../../shared/executor-protocol.js";
 import type { ToolJobs } from "../jobs/store.js";
 import type { StagingStore } from "../staging/model.js";
 import type { UsageAccumulator } from "../../shared/usage.js";
@@ -28,6 +29,8 @@ export interface ToolContext {
 }
 
 export interface ToolDefinition {
+  readonly executorOperations?: readonly OpName[];
+  readonly executorAnyOperations?: readonly OpName[];
   readonly name: string;
   readonly toolset: "core" | "files" | "admin";
   readonly scope: ToolScope;

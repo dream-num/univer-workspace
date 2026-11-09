@@ -8,7 +8,6 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { createStandardApiReference } from "@univer-cli/api-reference";
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { SERVER_INSTRUCTIONS } from "../src/gateway/instructions.js";
 import { createGateway } from "../src/gateway/server.js";
 import { SKILL_NAMES } from "../src/gateway/skills.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
@@ -267,13 +266,13 @@ describe("API reference, Skills, resources and server instructions", () => {
     async (mode) => {
       await start();
       const client = await connect(mode);
-      expect(client.getInstructions()).toBe(SERVER_INSTRUCTIONS);
+      const instructions = client.getInstructions()!;
       for (const word of ["pull request", "ready", "review", "merg", "api_find", "skills_read"]) {
-        expect(SERVER_INSTRUCTIONS).toContain(word);
+        expect(instructions).toContain(word);
       }
-      expect(SERVER_INSTRUCTIONS).toContain("no matching tool");
-      expect(SERVER_INSTRUCTIONS).toContain("tell the user");
-      expect(SERVER_INSTRUCTIONS).toContain("?toolsets=admin");
+      expect(instructions).toContain("no matching tool");
+      expect(instructions).toContain("tell the user");
+      expect(instructions).toContain("?toolsets=admin");
       const listed = (await client.listResources()).resources;
       const expected: string[] = [];
       for (const name of SKILL_NAMES) {
