@@ -1608,6 +1608,8 @@ VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-disabled-down.txt"
 MCP_CIMD_ENABLED=1 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-restored-up.txt"
 VERIFY_UVW_RUN=cimd $V user
 VERIFY_UVW_RUN=cimd $V doctor | tee "$EVIDENCE/mcp-cimd-restored-doctor.txt"
+# The restored run has a new home/ and opencode directory; refresh the exported paths before later journeys.
+eval "$(VERIFY_UVW_RUN=cimd $V env)"
 ```
 
 Pass when `mcp-cimd-disabled.json` has no CIMD support flag, retains the issuer-response
@@ -1767,9 +1769,11 @@ agent-browser wait --text "Verify $VERIFY_UVW_RUN's Personal Space"
 agent-browser snapshot -c > "$EVIDENCE/mcp-agent-space-picker.txt"
 agent-browser screenshot "$EVIDENCE/mcp-agent-space-picker.png"
 agent-browser find role button click --name "Verify $VERIFY_UVW_RUN's Personal Space Personal Space" --exact
-# Adding a Space briefly remounts the navigation; wait for the Files tab itself, not the word.
-agent-browser wait --fn 'Array.from(document.querySelectorAll("[role=tab]")).some(tab => tab.textContent.trim() === "Files")'
-agent-browser find role tab click --name 'Files' --exact
+# Adding a Space remounts the navigation, sometimes more than once after the tab first appears.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  agent-browser find role tab click --name 'Files' --exact && break
+  test "$attempt" -lt 10 && sleep 1
+done
 agent-browser find role button click --name 'Refresh files' --exact
 agent-browser wait --text 'No files'
 agent-browser snapshot -c > "$EVIDENCE/mcp-agent-files.txt"
