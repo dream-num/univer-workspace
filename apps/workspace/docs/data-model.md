@@ -621,7 +621,7 @@ V16 → V17 允许 `univer_resources` 与 `worktree_node_intents` 的 `unit_type
 成功后重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V17 实例完成迁移和健康检查后恢复服务；
 回退先停止新实例，再恢复 V16 备份。不得让 V16 与 V17 进程同时写同一 SQLite 文件。
 
-V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述三张表，并以 `ALTER TABLE ... ADD COLUMN` 向 `login_sessions`
+V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述四张表，并以 `ALTER TABLE ... ADD COLUMN` 向 `login_sessions`
 追加两个可空列（SQLite 允许默认为 `NULL` 的新列带 `REFERENCES` 与列级 CHECK），不重建任何表。准备阶段先校验 V17 指纹，
 生成并验证 `.v17-backup-…sqlite` 一致性备份；事务内比对 Session 行、检查外键与完整性，随后校验 V18 指纹。
 失败事务回滚至 V17，备份保留且启动失败；成功后重复启动不重复迁移或备份。部署先停止全部旧实例，
