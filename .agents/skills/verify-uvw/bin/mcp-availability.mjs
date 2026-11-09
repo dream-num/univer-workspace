@@ -183,7 +183,7 @@ async function main() {
   if (!missingReadiness) assert.equal(before.status, 200);
   // Workspace has no stop/restart command; do not kill it without a supported restart path.
   proof.workspaceReadiness = { status: 'not_run', reason: 'verify-uvw has no independent Workspace stop/restart command' };
-  const docker = args => execFileSync('docker', args, { encoding: 'utf8', timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] });
+  const docker = args => execFileSync('docker', args, { encoding: 'utf8', maxBuffer: 1 << 28, timeout: 30_000, stdio: ['ignore', 'pipe', 'pipe'] });
   const container = docker(['ps', '-q', '--filter', `label=com.docker.compose.project=${settings.MCP_PROJECT}`, '--filter', 'label=com.docker.compose.service=executor']).trim();
   assert(container && !container.includes('\n'));
   let stopped, after;

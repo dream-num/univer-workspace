@@ -12,7 +12,7 @@ const env = { ...process.env, VERIFY_UVW_MCP_STAGING_DIRECTORY: join(run, 'stagi
   VERIFY_UVW_ORIGIN: origin, VERIFY_UVW_SERVER_PORT: serverPort, VERIFY_UVW_MCP_PORT: mcpPort,
   VERIFY_UVW_METRICS_TOKEN: secret('metrics-token'), VERIFY_UVW_INTERNAL_TOKEN: secret('internal-token'),
   VERIFY_UVW_MCP_OAUTH_SECRET: secret('mcp-oauth-secret') };
-const docker = (args, input) => execFileSync('docker', args, { env, input, encoding: 'utf8', timeout: 25_000, stdio: ['pipe', 'pipe', 'pipe'] });
+const docker = (args, input) => execFileSync('docker', args, { env, input, encoding: 'utf8', maxBuffer: 1 << 28, timeout: 25_000, stdio: ['pipe', 'pipe', 'pipe'] });
 const compose = (args, input) => docker(['compose', '-p', project, '-f', join(repo, 'apps/mcp/docker/compose.verify.yml'), ...args], input);
 const node = (service, code, input) => compose(['exec', '-T', service, 'node', '--input-type=module', '-e', code], input);
 

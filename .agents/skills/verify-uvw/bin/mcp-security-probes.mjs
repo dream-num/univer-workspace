@@ -100,7 +100,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, '../../../..');
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const rand = n => randomBytes(n).toString('hex');
-const docker = (args, opts = {}) => execFileSync('docker', args, { encoding: 'utf8', timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
+const docker = (args, opts = {}) => execFileSync('docker', args, { encoding: 'utf8', maxBuffer: 1 << 28, timeout: 60_000, stdio: ['ignore', 'pipe', 'pipe'], ...opts });
 const code = body => `return (async()=>{${body}})()`;
 const worker = ps => ps.split('\n').filter(l => l.includes('worker-child')).map(l => Number(l.trim().split(/\s+/)[0]));
 
