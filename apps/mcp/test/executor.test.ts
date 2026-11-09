@@ -260,8 +260,14 @@ describe("executor protocol boundaries", () => {
   });
 
   it.each([undefined, "http://renderer.test"])(
-    "authenticates capability discovery and declares renderer operations only with %s",
+    "authenticates capability discovery and uses declared renderer operations with %s",
     async (rendererUrl) => {
+      const nativeFetch = globalThis.fetch;
+      const discovery = vi.spyOn(globalThis, "fetch").mockImplementation((url, options) =>
+        String(url) === "http://renderer.test/rpc/v1/capabilities"
+          ? Promise.resolve(Response.json({ v: 1, operations: ["screenshot", "printPdf", "lint", "measureText"] }))
+          : nativeFetch(url, options),
+      );
       const executor = createExecutor(
         parseExecutorConfig({
           WORKSPACE_ORIGIN: "https://workspace.test",
@@ -302,6 +308,7 @@ describe("executor protocol boundaries", () => {
         });
       } finally {
         await executor.close();
+        discovery.mockRestore();
       }
     },
   );

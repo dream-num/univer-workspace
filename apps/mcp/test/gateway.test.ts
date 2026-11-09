@@ -149,6 +149,11 @@ describe("gateway over real HTTP and the MCP client", () => {
     workspaceRequests = [];
     workspace = createServer((request, response) => {
       const path = new URL(request.url ?? "/", "http://localhost");
+      if (path.pathname === "/rpc/v1/capabilities") {
+        response.setHeader("Content-Type", "application/json");
+        response.end(JSON.stringify({ v: 1, operations: ["screenshot", "printPdf", "lint", "measureText"] }));
+        return;
+      }
       workspaceRequests.push({
         path: path.pathname,
         cookie: request.headers.cookie,
@@ -257,7 +262,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         WORKSPACE_ORIGIN: identityOrigin,
         WORKSPACE_TRANSPORT_URL: transportOrigin,
         MCP_EXECUTOR_TOKEN: executorToken,
-        MCP_RENDERER_URL: "http://renderer.test",
+        MCP_RENDERER_URL: transportOrigin,
         MCP_RENDERER_TOKEN: "renderer-test-token-".repeat(4),
       }),
       { runtime, logger: pino({ level: "silent" }) },

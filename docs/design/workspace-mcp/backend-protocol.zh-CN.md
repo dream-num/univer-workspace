@@ -74,9 +74,8 @@
 
 - 后端提供 `GET /rpc/v1/capabilities`，要求调用方认证（第 10 节）。响应是 JSON `{v, operations}`，按 `executorCapabilitiesSchema` 解析。`v` 为正整数，`operations` 为字符串数组，最多 256 项。（执行层已实现）
 - 后端排空时停止接受新连接，新请求得到连接拒绝；正在处理请求的连接上的后续请求返回 503，两种情况网关都按“没有送达”处理（第 7 节）。空闲的 keep-alive 连接被直接关闭，调用方此时得到连接重置。网关不把重置算作“没有送达”，所以执行层滚动重启时，恰好落在空闲连接上的写入可能得到 `workspace-result-unknown`。这是已知问题，改动排空方式属于后续工作，不在本阶段验收内。（执行层已实现）
-- 执行层声明 `opSpecs` 中的全部操作名。今天它只在配置了 `MCP_RENDERER_URL` 时才声明三个 `render.*` 操作（`apps/mcp/src/executor/server.ts`）。（已实现）
-- 渲染服务提供同一个端点，响应形状相同，`operations` 取自 `rendererOpSpecs`。（本阶段实现）
-- 执行层只在渲染服务声明了对应操作时，才声明 `render.*`。这条规则替换上面“看 `MCP_RENDERER_URL`”的规则。渲染服务的 `v` 与执行层不同时，按没有声明处理（第 12 节）。（本阶段实现）
+- 渲染服务提供同一个端点，响应形状相同，`operations` 取自 `rendererOpSpecs`。（已实现）
+- 执行层只在渲染服务声明了对应操作时，才声明 `render.*`。渲染服务的 `v` 与执行层不同时，按没有声明处理（第 12 节）。（已实现）
 
 | 执行层操作 | 需要渲染服务声明 |
 | --- | --- |
@@ -84,7 +83,7 @@
 | `render.printPdf` | `printPdf` |
 | `render.lint` | `lint` |
 
-- `svg.compile` 只在渲染服务声明了 `measureText` 时才用真实字体量字，否则用估算量字。它不受渲染服务影响是否可见。今天它看的是 `MCP_RENDERER_URL` 是否配置。（本阶段实现）
+- `svg.compile` 只在渲染服务声明了 `measureText` 时才用真实字体量字，否则用估算量字。它不受渲染服务影响是否可见。（已实现）
 
 ### 3.2 网关计算可用操作集合
 
@@ -100,9 +99,8 @@
 
 ### 3.3 就绪
 
-- 配置了执行层时，`/readyz` 的 `executor` 检查要求至少有一个已记录的执行层（`apps/mcp/src/gateway/server.ts`）。记录在失败时保留，所以某个执行层回答过之后，它再停机也不会让网关变为未就绪。（已实现）
 - 版本与网关不兼容的执行层不计入可用操作集合，也不进入路由。（已实现）
-- `executor` 检查在网关启动后第一次记录到兼容的执行层时通过，此后一直通过。之后执行层停机或改报不同的版本，网关仍然就绪，依赖执行层的工具随可用操作集合隐藏或返回可重试的错误。（本阶段实现）今天的检查要求当前有已记录的执行层：执行层改报不同版本后，网关在下一次刷新时变为未就绪。
+- `executor` 检查在网关启动后第一次记录到兼容的执行层时通过，此后一直通过。之后执行层停机或改报不同的版本，网关仍然就绪，依赖执行层的工具随可用操作集合隐藏或返回可重试的错误。（已实现）
 - 网关带上这条规则之后，两种发布顺序都不会中断服务。先发布执行层时，旧网关保持就绪，执行层的工具暂时隐藏，直到新网关发布。先发布网关时，新网关一直等不到兼容的执行层，不会就绪，滚动发布停住，旧网关继续服务。
 
 ## 4. 传输是 HTTP POST 加二进制帧
@@ -156,7 +154,7 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 - 调用方在发送前用 `requestBytes` 检查编码后的请求帧。超过时不发送，返回 `workspace-request-too-large`。
 - 被调用方先看 `content-length`，再在读取请求体时计数。任一超过 `requestBytes` 时返回 413 `workspace-request-too-large`，不执行操作。
 - 被调用方编码后的响应帧超过 `responseBytes` 时，改为返回 `workspace-result-too-large` 的失败信封。例外是已提交的 `content.execute`，它保留 `committed`、`revision`、`status`，去掉 `value`，加上 `valueTruncated: true`（`apps/mcp/src/shared/execute-result.ts`）。（已实现）
-- 其他写操作成功后结果超过上限时，失败信封带 `detail.committed: true` 和 `retryable: false`，消息要求读回当前状态，不要重复这次写入。（本阶段实现）今天这时返回的消息是“缩小请求”，`detail` 为 null，会让调用方重复一次已经提交的写入（`apps/mcp/src/executor/server.ts`）。
+- 其他写操作成功后结果超过上限时，失败信封带 `detail.committed: true` 和 `retryable: false`，消息要求读回当前状态，不要重复这次写入。（已实现）
 - 调用方读取的响应超过 `responseBytes` 时停止读取。网关对写操作返回 `workspace-result-unknown`，对读操作返回 `workspace-result-too-large`。执行层读渲染服务的响应时返回 `workspace-result-too-large`。
 
 ## 5. 小负载内联，大负载预留按引用传递
@@ -175,8 +173,8 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 
 ### 6.2 截止时间
 
-- `deadlineMs` 是调用方还愿意等待的毫秒数，从被调用方开始收到请求时算起，上传请求体的时间也计入。它是必填字段。（本阶段实现）今天执行层在读完整个请求体之后才开始计时，上传慢时实际截止时间晚于调用方的等待时间：网关先超时，写操作得到 `workspace-result-unknown`，执行层却还在期限内继续执行。
-- 执行层的实际截止时间是开始收到请求的时刻加上 `min(deadlineMs, budgetMs)`（`apps/mcp/src/executor/dispatch.ts`，今天取读完请求体的时刻）。渲染服务用 `deadlineMs` 限制等待 runtime 和执行操作的总时间（`apps/mcp/src/renderer/server.ts`）。（已实现）
+- `deadlineMs` 是调用方还愿意等待的毫秒数，从被调用方开始收到请求时算起，上传请求体的时间也计入。它是必填字段。（已实现）
+- 执行层的实际截止时间是开始收到请求的时刻加上 `min(deadlineMs, budgetMs)`（`apps/mcp/src/executor/dispatch.ts`）。渲染服务用 `deadlineMs` 限制等待 runtime 和执行操作的总时间（`apps/mcp/src/renderer/server.ts`）。（已实现）
 - 调用方从自己的截止时间里扣除余量后再发送。下表的 T 是调用方算出的剩余预算。（已实现）
 
 | 调用方 | T | 不发送的条件 | 发送的 `deadlineMs` | HTTP 超时 |
@@ -193,7 +191,7 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
   - 读操作返回 `workspace-executor-timeout`，`retryable: true`。
   - 写操作还在排队或尚未开始写入时，返回 `workspace-executor-timeout`，带 `started: false`。
   - 写操作已经开始时，返回 `workspace-result-unknown`，`retryable: false`。
-  - `content.execute` 在取得 Unit 队列的 lease 之前都算没有开始，包括校验调用者凭据的阶段。（本阶段实现）今天它从收到请求起就算已经开始，凭据校验期间超时也返回 `workspace-result-unknown`。
+  - `content.execute` 在取得 Unit 队列的 lease 之前都算没有开始，包括校验调用者凭据的阶段。（已实现）
 
 ### 6.4 取消不是协议保证
 
@@ -351,14 +349,14 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 - 协议版本是 `PROTOCOL_VERSION`（`apps/mcp/src/shared/executor-protocol.ts`），今天为 1，渲染服务协议使用同一个常量。兼容指相等。（已实现）
 - 版本出现在三处，即请求头 `x-mcp-rpc-version`（代码中写为字面量 `"1"`）、帧头 `v`、能力响应 `v`。（已实现）
 - 调用时版本不同，被调用方返回 426（11.1 节）。（已实现）
-- 能力响应的 `v` 不同时，网关把这个后端排除出可用操作集合和路由。（已实现）网关是否就绪按 3.3 节的规则，只取决于启动后是否记录到过兼容的执行层。（本阶段实现）
+- 能力响应的 `v` 不同时，网关把这个后端排除出可用操作集合和路由。（已实现）网关是否就绪按 3.3 节的规则，只取决于启动后是否记录到过兼容的执行层。（已实现）
 - 能力响应里有目录中没有的操作名时，网关忽略这些名字。（已实现）
 
 ## 13. 执行层调用渲染服务，网关不编排
 
 - `render.*` 和 `svg.compile` 是执行层的操作。执行层用调用者凭据加载 Unit，组装渲染数据，然后不带凭据调用渲染服务（`apps/mcp/src/executor/ops/render-screenshot.ts`、`render-print-pdf.ts`、`render-lint.ts`）。（已实现）
 - `render.screenshot`、`render.printPdf`、`render.lint` 分别调用一次 `screenshot`、`printPdf`、`lint`。`svg.compile` 不估算量字时，每量一行调用一次 `measureText`（`apps/mcp/src/executor/ops/svg-compile.ts`）。（已实现）
-- 没有配置渲染服务时，执行层不声明 `render.*`，`svg.compile` 改用估算量字。直接调用渲染操作时，执行层先加载 Unit，再返回 `workspace-renderer-not-configured`；Unit 读不到时先返回读取错误。（已实现）本阶段改为看渲染服务声明的能力（3.1 节）。
+- 没有配置渲染服务时，执行层不声明 `render.*`，`svg.compile` 改用估算量字。直接调用渲染操作时，执行层先加载 Unit，再返回 `workspace-renderer-not-configured`；Unit 读不到时先返回读取错误。（已实现）可用渲染能力按 3.1 节的声明判断。
 - 渲染服务返回的 `render_pages` 计入执行层这次调用的 `meta`。网关只看到一次调用。（已实现）
 - 这条调用链留在后端内部。网关不调用渲染服务，也不为渲染编排步骤。
 
@@ -378,33 +376,33 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 
 ## 15. 契约测试必须覆盖的检查
 
-契约测试把下列检查写成测试，任何后端实现都必须通过。今天它们在常驻型执行层和渲染服务上运行。（本阶段实现）
+契约测试把下列检查写成测试，任何后端实现都必须通过。今天它们在常驻型执行层和渲染服务上运行。（已实现）
 
 后端必须通过的检查如下。
 
 | 检查 | 请求 | 期望 | 证明的规则 |
 | --- | --- | --- | --- |
-| 能力端点的形状 | 正确令牌的 `GET /rpc/v1/capabilities` | 200，JSON 符合 `{v, operations}`，`v` 为 1，每个操作名都在该角色的目录里，`render.*` 符合 3.1 节的条件 | 3.1 节。渲染服务部分本阶段实现 |
-| 能力端点的认证 | 不带令牌，或令牌错误 | 401 和对应的 `unauthorized` code，不返回能力 | 3.1 节，第 10 节。渲染服务部分本阶段实现 |
+| 能力端点的形状 | 正确令牌的 `GET /rpc/v1/capabilities` | 200，JSON 符合 `{v, operations}`，`v` 为 1，每个操作名都在该角色的目录里，`render.*` 符合 3.1 节的条件 | 3.1 节。渲染服务部分已实现 |
+| 能力端点的认证 | 不带令牌，或令牌错误 | 401 和对应的 `unauthorized` code，不返回能力 | 3.1 节，第 10 节。渲染服务部分已实现 |
 | 帧格式 | 合法帧；不足 4 字节；头长度为 0；头长度大于剩余字节；头不是合法 UTF-8 或 JSON | 合法帧被处理，其余返回 400 `frame-invalid` | 4.2 节 |
 | 请求头 | `content-type` 错误；`op` 与路径不符；不接受负载的操作带了负载 | 分别返回 415、400、400 | 4.1、4.3、4.4 节 |
 | 请求大小上限 | `content-length` 超过 `requestBytes`；不带 `content-length`、流式发送超过 `requestBytes` 的请求体 | 413 `workspace-request-too-large`，操作没有执行 | 4.5 节 |
 | 响应大小上限 | 结果超过 `responseBytes` 的操作 | 200，失败信封 `workspace-result-too-large`；已提交的 `content.execute` 带 `valueTruncated: true` | 4.5 节 |
-| 已提交写入的结果过大 | 一次 `apply` 成功、结果超过 `responseBytes` 的 `svg.compile` | 失败信封 `workspace-result-too-large`，`detail.committed` 为 `true`，`retryable` 为 `false` | 4.5 节。本阶段实现 |
+| 已提交写入的结果过大 | 一次 `apply` 成功、结果超过 `responseBytes` 的 `svg.compile` | 失败信封 `workspace-result-too-large`，`detail.committed` 为 `true`，`retryable` 为 `false` | 4.5 节。已实现 |
 | 版本不一致 | `x-mcp-rpc-version: 2`；帧头 `v` 为 2 | 426 和对应的 `version-mismatch` code | 第 12 节 |
 | 未知操作 | `POST /rpc/v1/` 加一个不在目录里的名字；对目录里的操作发 GET | 404 和对应的 `operation-unknown` code | 2.1、2.2 节，11.1 节 |
 | 错误信封的形状 | 输入不符合目录 schema 的合法帧 | 200，`ok: false`，`error` 有四个字段，code 为 `workspace-argument-invalid`，`outcome` 为 `tool_error`，`meta` 符合 `opMetaSchema` | 4.4 节，11.2 节 |
 | 截止时间已到 | `deadlineMs` 为 0；`deadlineMs` 为预算加 1 | 400 `frame-invalid`，操作没有执行 | 6.3 节 |
 | 传输拒绝与应用失败 | 上面的拒绝请求，与一次应用失败对比 | 拒绝为非 200、JSON `{error}`、没有 `meta`；应用失败为 200 帧并带 `meta` | 第 11 节 |
 | 写操作只执行一次 | 对一个 Worktree 中的 Unit 发送一次合法的 `content.execute`，脚本每次运行都改变内容（例如把一个单元格加 1），记录前后的 revision | revision 正好增加 1，响应只有一个 | 8.2 节 |
-| 按截止时间回答 | 对 `content.execute` 写入；Workspace 替身永不应答；`deadlineMs` 为 2000，请求体在 1500 毫秒内慢慢上传 | 从开始发送起不晚于 `deadlineMs` 加 1000 毫秒得到 `workspace-executor-timeout` 和 `started: false` | 6.2、6.3 节。本阶段实现 |
+| 按截止时间回答 | 对 `content.execute` 写入；Workspace 替身永不应答；`deadlineMs` 为 2000，请求体在 1500 毫秒内慢慢上传 | 从开始发送起不晚于 `deadlineMs` 加 1000 毫秒得到 `workspace-executor-timeout` 和 `started: false` | 6.2、6.3 节。已实现 |
 | 用错方向的令牌 | 用 `MCP_RENDERER_TOKEN` 调用执行层；用 `MCP_EXECUTOR_TOKEN` 调用渲染服务 | 都返回 401 | 第 10 节 |
 
 网关一侧的检查如下。
 
 | 检查 | 做法 | 期望 | 证明的规则 |
 | --- | --- | --- | --- |
-| 版本不兼容的执行层被排除 | 两个执行层中一个在能力响应里返回 `v: 2`；唯一的执行层从启动起返回 `v: 2`；唯一的执行层在网关就绪后改报 `v: 2` 并等到下一次刷新 | 第一种只把兼容的执行层计入路由，`/readyz` 返回 200；第二种 `/readyz` 返回 503 并指出 `executor`；第三种依赖执行层的工具不在 `tools/list` 中，`/readyz` 仍为 200 | 3.3 节，第 12 节。第三种本阶段实现 |
+| 版本不兼容的执行层被排除 | 两个执行层中一个在能力响应里返回 `v: 2`；唯一的执行层从启动起返回 `v: 2`；唯一的执行层在网关就绪后改报 `v: 2` 并等到下一次刷新 | 第一种只把兼容的执行层计入路由，`/readyz` 返回 200；第二种 `/readyz` 返回 503 并指出 `executor`；第三种依赖执行层的工具不在 `tools/list` 中，`/readyz` 仍为 200 | 3.3 节，第 12 节。第三种已实现 |
 | 写操作不重试 | 一个收下写请求后断开连接的执行层 | 它只收到一次请求，工具返回 `workspace-result-unknown` | 8.2、8.3 节 |
 
 ## 16. 将来的 serverless 实现思路

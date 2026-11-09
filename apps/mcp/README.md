@@ -26,7 +26,10 @@ against its own allowlist before contacting Workspace or starting work.
 
 The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response
 contains `v` (the protocol version) and `operations` (operation names). The three `render.*` operations
-are declared only when `MCP_RENDERER_URL` is configured. The gateway discovers capabilities at startup
+are declared only when the renderer declares the matching operation with a compatible protocol version.
+The renderer serves the same capabilities endpoint behind `MCP_RENDERER_TOKEN`. The executor discovers it at startup
+and every minute, retaining its last response on failure and clearing it on an incompatible version.
+The gateway discovers executor capabilities at startup
 and every minute, retaining each replica's last known response on refresh failure. Until discovery
 succeeds no executor operations are available. Protocol-incompatible replicas are excluded from routing;
 visible tools use the intersection of compatible replicas' operations, in registry order.
@@ -42,7 +45,12 @@ effect, limits, routing keys, budget and rerun policy. The initial operations ar
 `render.screenshot`, `render.printPdf`, `render.lint` and internal `diagnostics.probe`.
 The resilience table below declares each operation's rerun policy.
 Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
-Transport rejections use non-200 statuses. The grant travels only in the frame body.
+Transport rejections use non-200 statuses. The grant travels only in the frame body. `deadlineMs` starts when the backend receives the request,
+including body upload. `content.execute` counts as started only after acquiring its Unit queue lease.
+An oversized successful write returns `workspace-result-too-large` with `detail.committed: true` and
+`retryable: false`, asking the caller to read current state before repeating the write. Committed
+`content.execute` results retain the commit fields and use `valueTruncated: true`.
+See [backend protocol contracts](test/contract/README.md) for local and deployed-backend checks.
 
 Gateway rendezvous hashing pins `(userId, scope, unitId)` to an executor. Only failures
 known to precede delivery can fail over. A disconnected or timed-out write returns
@@ -190,7 +198,7 @@ Docker Desktop without changing those identities.
 | Endpoint | Behavior |
 | --- | --- |
 | `GET /healthz` | Returns 200 without contacting Workspace |
-| `GET /readyz` | No bearer required. Returns 200 when applicable checks pass, otherwise 503. JSON contains `status` and `checks` with `workspace`, `token_exchange` when OAuth is configured, and `executor` when configured, each `ok` or `failed`. Workspace checks use `WORKSPACE_TRANSPORT_URL` with two-second timeouts. The `token_exchange` check posts a token-exchange request with the gateway client credentials and no subject token, and passes only on `invalid_request`: Workspace returns that after it accepts the credentials and the exchange permission, before any token lookup, so a wrong `MCP_OAUTH_CLIENT_SECRET` makes the gateway unready. Without cached compatible capabilities, the executor check awaits discovery with its existing five-second timeout. Checks run concurrently. Responses use `Cache-Control: no-store` and contain no upstream details |
+| `GET /readyz` | No bearer required. Returns 200 when applicable checks pass, otherwise 503. JSON contains `status` and `checks` with `workspace`, `token_exchange` when OAuth is configured, and `executor` when configured, each `ok` or `failed`. Workspace checks use `WORKSPACE_TRANSPORT_URL` with two-second timeouts. The `token_exchange` check posts a token-exchange request with the gateway client credentials and no subject token, and passes only on `invalid_request`: Workspace returns that after it accepts the credentials and the exchange permission, before any token lookup, so a wrong `MCP_OAUTH_CLIENT_SECRET` makes the gateway unready. Until a compatible executor has been recorded since gateway startup, the executor check awaits discovery with its existing five-second timeout. Once recorded, this check stays ready even after executors stop or change version. Checks run concurrently. Responses use `Cache-Control: no-store` and contain no upstream details |
 | `GET /metrics` | Prometheus text with a matching bearer token. Returns 404 when unset, or 401 with `WWW-Authenticate: Bearer` on mismatch |
 | `GET /.well-known/oauth-protected-resource` and `/mcp` suffix | RFC 9728 metadata `{ resource: MCP_PUBLIC_URL, authorization_servers: [WORKSPACE_ORIGIN], scopes_supported, bearer_methods_supported }`. No authentication, `Cache-Control: public, max-age=300` |
 | `PUT /mcp/files/uploads/{id}?token=...` | Capability upload, 10-minute link; optional Content-Length, optional size upper limit, single successful PUT |
@@ -707,8 +715,8 @@ runtime into Client Core's SVG feature whose `measureText` calls the renderer (o
 per measured line, each with the renderer's own 10-second budget inside the 30-second compile budget)
 and whose `close` does nothing. The result reports `textMeasure: "univer-render-runtime"` and no
 estimation lint. With `estimate_text_size: true` the JavaScript `builtinTextMeasurer` runs in the
-executor, never contacts the renderer and retains the CLI's estimation lint. Without a configured
-renderer, compilation uses the built-in text estimate even when `estimate_text_size` is false or omitted;
+executor, never contacts the renderer and retains the CLI's estimation lint. Without a compatible renderer declaring `measureText`,
+compilation uses the built-in text estimate even when `estimate_text_size` is false or omitted;
 renderer faults map to the renderer client's errors (`workspace-renderer-unavailable`,
 `-timeout`, `-busy`). The compile itself never starts a browser in the executor or loads the native
 formula engine. `page` is 1-based; `add` requires `page`.

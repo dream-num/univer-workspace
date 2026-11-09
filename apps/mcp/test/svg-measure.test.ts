@@ -41,6 +41,7 @@ function setup(configured = true) {
     exchange: { license: "", licenseKey: "" },
     renderer: createRendererClient({
       url: configured ? "http://renderer:3000" : undefined,
+      operations: new Set(configured ? ["measureText"] : []),
       rendererToken: token,
       requestId: "svg",
       deadlineAt: Date.now() + 30_000,
@@ -167,7 +168,7 @@ describe("svg.compile text measurement", () => {
       MCP_RENDERER_URL: "http://renderer.test", MCP_RENDERER_TOKEN: rendererToken,
     }), {
       executeRead: vi.fn(), executeAndCommit: vi.fn(), exportUnitData: vi.fn(), close: async () => {},
-    }, pino({ level: "silent" }));
+    }, pino({ level: "silent" }), () => new Set(["measureText"]));
     const { header } = await dispatch("svg.compile", {
       v: 1, op: "svg.compile", requestId: "renderer-token", deadlineMs: 15_000,
       grant: { kind: "session", userId: "owner", session: "session", expiresAt: Date.now() + 60_000 },

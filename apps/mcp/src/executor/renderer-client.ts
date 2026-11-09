@@ -15,7 +15,7 @@ export interface RendererResult<K extends RendererOpName> {
   readonly meta: OpMeta;
 }
 export interface RendererClient {
-  readonly configured: boolean;
+  readonly operations: ReadonlySet<RendererOpName>;
   call<K extends RendererOpName>(
     name: K,
     input: z.input<(typeof rendererOpSpecs)[K]["input"]>,
@@ -54,9 +54,10 @@ export function createRendererClient(options: {
   readonly requestId: string;
   readonly deadlineAt: number;
   readonly signal: AbortSignal;
+  readonly operations?: ReadonlySet<RendererOpName>;
 }): RendererClient {
   return {
-    configured: options.url !== undefined,
+    operations: options.operations ?? new Set(),
     async call(name, input) {
       const spec = rendererOpSpecs[name];
       if (options.url === undefined)
