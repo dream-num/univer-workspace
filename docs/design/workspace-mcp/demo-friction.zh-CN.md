@@ -51,7 +51,7 @@
 ### P5（中）ready 和 draft 之间来回切换（#261）
 
 - **现象。** server instructions 第 5 步要求每个任务结束时 `pr_ready`。用户在同一个 PR 上追加修改时，`execute` 只能用于 draft（`packages/client-core/src/runtime-source.ts:47`），所以模型先 `pr_ready(undo: true)`，改完再 `pr_ready`。场景 4 出现了这个往返。场景 3 中，用户没有要求 ready，模型也按 instructions 标记了 ready，这才使场景 4 需要先 undo。
-- **方向。** 二选一：允许在 ready 的 PR 上继续写入并自动回到 draft，或者在 `execute` 的描述里写明“ready 状态要先 undo”。也可以让 instructions 只在用户表示完成时才 ready。这一项需要产品负责人决定。
+- **决定（2026-11-09，产品负责人）。** 只在用户表示完成或要求评审时才标记 ready。instructions 第 5 步相应修改，追加修改不再需要 undo。见 #261。
 
 ### P6（低）`execute` 的脚本错误没有位置
 
