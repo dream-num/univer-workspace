@@ -19,10 +19,11 @@ test('Module cache revisions may change without changing the supported release',
   });
   assert.equal(supportsHostNavigation(graph), true);
 });
-test('Desktop full commit and Web short commit identify the same exact supported release', () => {
+test('only the observed npm Host commit enables the navigation adapter', () => {
   const graph = known();
-  graph.release.commit = navigationHost.fullCommit;
   assert.equal(supportsHostNavigation(graph), true);
+  graph.release.commit = '66491b05e3f05ad35bcdd4f6cd7ed26041d9e3db';
+  assert.equal(supportsHostNavigation(graph), false);
   graph.release.commit = navigationHost.commit + '-unrelated-build';
   assert.equal(supportsHostNavigation(graph), false);
 });

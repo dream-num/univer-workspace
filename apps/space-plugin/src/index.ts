@@ -26,7 +26,7 @@ import { parseDocFocus, type LiveDocFocusVersion } from './doc-focus.js';
 import { selectionProposal } from './selection-proposal.js';
 
 export const name = 'space-plugin';
-export const inject = ['connection', 'tools', 'systemPrompt', 'credentials', 'llm', 'agents', 'agentDefaultModel', 'sessionProjections'];
+export const inject = ['connection', 'tools', 'systemPrompt', 'credentials', 'llm', 'agents', 'agentDefaultModel'];
 
 /** Use the public Connection carrier; no webServer or Desktop-private IPC. */
 export function apply(ctx: Context) {

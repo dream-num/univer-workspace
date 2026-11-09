@@ -15,9 +15,8 @@ export async function selectionProposal(ctx: Context, workspace: WorkspaceConnec
   const file = await workspace.open(focus.nodeId, active);
   if (file.type !== 'doc' || file.resourceId !== focus.resourceId || file.unitId !== focus.unitId || !file.node?.resource?.capabilities.editContent)
     throw new SpaceError(403, 'The document is unavailable or cannot be edited.');
-  const session = typeof input.sessionId === 'string' ? ctx.agents.get(input.sessionId as SessionId)?.session : undefined;
-  const selection = session && ctx.sessionProjections.stateOf(session, 'modelSelection');
-  const route = selection?.pending ?? selection?.lastUsed ?? ctx.agentDefaultModel.currentSelection();
+  const agent = typeof input.sessionId === 'string' ? ctx.agents.get(input.sessionId as SessionId) : undefined;
+  const route = agent?.model.current() ?? ctx.agentDefaultModel.currentSelection();
   const first = focus.paragraphs[0]!.text, last = focus.paragraphs.at(-1)!.text;
   if (focus.start < 0 || focus.end < 0 || focus.start > first.length || focus.end > last.length + 1)
     throw new SpaceError(400, 'Invalid selection boundaries.');

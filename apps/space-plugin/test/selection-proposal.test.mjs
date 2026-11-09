@@ -28,9 +28,10 @@ const focus = {
   paragraphs: [{ id: 'para_source', text: 'Alpha marker: TARGET. Beta marker: keep-beta. Gamma marker: keep-gamma.' }],
   nodeId: 'node', resourceId: 'resource', unitId: 'unit',
 };
-function fixture(reply, { finish = 'stop', blocks, editable = true, candidate, target = focus } = {}) {
+function fixture(reply, { finish = 'stop', blocks, editable = true, candidate, target = focus, sessionId, model } = {}) {
   const calls = [];
   const ctx = {
+    agents: { get(id) { assert.equal(id, sessionId); return model ? { model: { current: () => model } } : undefined; } },
     agentDefaultModel: { currentSelection: () => ({ provider: 'provider', model: 'model' }) },
     llm: { async prepareCall(config) {
       return { config, async *stream(options) {
@@ -52,10 +53,25 @@ function fixture(reply, { finish = 'stop', blocks, editable = true, candidate, t
       node: { resource: { capabilities: { editContent: editable } } } };
   } };
   return { calls, run: (signal = new AbortController().signal) => selectionProposal(ctx, workspace,
-    { focus: target, instruction: 'Replace the selection with CHANGED; leave everything else unchanged.', candidate }, signal) };
+    { focus: target, sessionId, instruction: 'Replace the selection with CHANGED; leave everything else unchanged.', candidate }, signal) };
 }
 const frame = (r, replacement) => JSON.stringify({ selectionId: r.selectionId, resultText: r.context.before + replacement + r.context.after });
 const valid = r => frame(r, 'CHANGED');
+
+test('Ask uses the selected Agent model through the public current route', async () => {
+  const model = { provider: 'session-provider', model: 'session-model', reasoningEffort: 'high' };
+  const f = fixture(valid, { sessionId: 'native-session', model });
+  assert.deepEqual(await f.run(), { text: 'CHANGED' });
+  assert.equal(f.calls[0].provider, model.provider);
+  assert.equal(f.calls[0].model, model.model);
+  assert.equal(f.calls[0].reasoningEffort, model.reasoningEffort);
+});
+test('Ask falls back to the Host default when the native Agent has no selected route', async () => {
+  const f = fixture(valid, { sessionId: 'native-session' });
+  assert.deepEqual(await f.run(), { text: 'CHANGED' });
+  assert.equal(f.calls[0].provider, 'provider');
+  assert.equal(f.calls[0].model, 'model');
+});
 
 test('model receives readonly neighbors separately from the unique editable selection', async () => {
   const f = fixture(valid);

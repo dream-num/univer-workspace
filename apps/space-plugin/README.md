@@ -53,7 +53,7 @@ These workflow artifacts are builds for review, not GitHub Releases or npm publi
    content with the Space heading. The top secondary button collapses it; the selected Activity entry
    restores it. Plugins/Automation have no Session list or unused secondary track.
    This controlled DOM/CSS integration is gated to official Web release
-   `0.2.1-rc.3` / commit `be72761` and tested native structure. Unknown builds keep
+   `0.2.2-rc.1` / commit `c59d10a` and tested native structure. Unknown builds keep
    native navigation without applying this adapter. Host controls,
    width preference and Sessions stay Host-owned; uninstall removes the adapter.
 2. Select **Sign in to Univer**. The default service is `https://space.univer.ai/`;
@@ -128,11 +128,11 @@ message targets and pending selection suggestions have separate lifetimes;
 switching Conversation in the same document does not retire a pending suggestion.
 A step consuming queued messages with different targets has no implicit focus.
 
-**Known limitation on official DSH 0.2.1-rc.3:** native Conversation focus is still
+**Known limitation on official DSH 0.2.2-rc.1:** native Conversation focus is still
 captured from Host state after inbox insertion, rather than at the send gesture.
 A selection update still in transit can therefore leave an earlier target in that
-message's snapshot. Generation ordering does not close this window. Exact native
-send binding requires a supported per-attempt snapshot/admission API from DSH;
+message's snapshot. Generation ordering and the native sending phase do not close
+this window. Exact native send binding requires a supported per-attempt snapshot/admission API from DSH;
 composer blocks and pre-step hooks do not provide it. This remains a preview
 blocker. The separate **Ask for change** control captures its SDK selection at
 activation and retains the existing target, content, permission and revision checks.
@@ -270,8 +270,9 @@ Keep credentials outside the repository and generated evidence.
 ## Release candidate
 
 This package is a release candidate and is not certified for Public Preview.
-The target platform is official DSH Desktop 0.2.1-rc.3 on macOS arm64 (macOS 13+).
-The compatible official Web build is 0.2.1-rc.3 / be72761.
+The target Host version is official DSH 0.2.2-rc.1.
+The navigation adapter recognizes the published Web build 0.2.2-rc.1 / c59d10a.
+Desktop 0.2.2-rc.1 installation and native return-flow acceptance remain pending.
 
 In Plugins, choose Add plugin and paste the generated tarball's path into Package name or address, then install and cold-restart DSH. For updates, remove the existing dsh-space-plugin bundle first, install the new exact tarball and cold-restart; verify the checksum first. Uninstall by removing dsh-space-plugin in Plugins and restarting. Workspace documents remain on the Server; native conversation history stays DSH-owned. Hot reinstall can encounter official Host module-identity diagnostics, so it is not the supported update procedure. The package contains no second DSH runtime or local Workspace Server.
 
@@ -288,11 +289,20 @@ The Server must run the matching release commit (including the Review/Apply fixe
 
 First use: select Space and choose Sign in to Univer. Sign in and authorize in the system browser; successful authorization loads Space Home. DSH Settings → Workspace manages the current account and server, Switch Account, Sign Out and Custom Workspace URL. Session reuse uses the official Host credential provider's isolated `dsh-space-plugin/workspace` grant record. Only that record is changed; DSH model credentials and native Sessions remain owned by DSH. A denied, cancelled or expired request can be retried. Switching accounts uses the browser's Workspace account; sign out or choose the desired account there before authorizing.
 
-The existing cloud registration accepts the exact loopback return `http://127.0.0.1:3101/auth/oauth/callback`. The plugin binds only IPv4 loopback for the pending authorization and closes it on completion, cancellation or timeout. Keep that port free; a conflicting listener produces a retryable sign-in error, never a fallback credential form. Custom Server administrators must register the same exact callback. The authenticated public DSH Connection starts/cancels requests; the loopback listener accepts only bounded, state-matched OAuth callbacks. Official Desktop 0.2.1-rc.3 forwards external HTTP(S) window opens to the system browser; its installed `dsh://open` handler focuses the app without carrying any credential. An OS/browser confirmation may appear for the return link. No `univer-workspace://` scheme or DSH account grant is used.
+The existing cloud registration accepts the exact loopback return `http://127.0.0.1:3101/auth/oauth/callback`. The plugin binds only IPv4 loopback for the pending authorization and closes it on completion, cancellation or timeout. Keep that port free; a conflicting listener produces a retryable sign-in error, never a fallback credential form. Custom Server administrators must register the same exact callback. The authenticated public DSH Connection starts/cancels requests; the loopback listener accepts only bounded, state-matched OAuth callbacks. Native Desktop external-browser forwarding and the return link require separate acceptance on 0.2.2-rc.1. An OS/browser confirmation may appear for the return link. No `univer-workspace://` scheme or DSH account grant is used.
 
 Reproduce the demo with a disposable Team Space and two accounts: create a Folder and all six content types; rename/move/trash/restore a file; edit Docs/Sheets from both clients; share with the second account and add a comment. Associate a Doc with the native conversation, ask the Agent to append a unique paragraph to a private Worktree and mark it ready, inspect Review, explicitly Apply, and verify the already-open second client and a reopen. Repeat with a Sheet formula, Reject, and a shared edit after Review; verify the SDK merge/conflict behavior and persisted result. Viewer / removed-member writes must fail. No test fixture, model credential or private Session archive is included.
 
 The release script stages only runtime files, a production-only manifest, notices and npm-shrinkwrap.json. npm consumers honor that lock; DSH's pnpm manager owns its profile lock and needs registry access. Preserve the profile lock for exact reinstall. Run the release scan and actual clean-profile install before distributing a new artifact.
+
+## DSH declaration dependencies
+
+The exact development-only `dsh-client-ui-dockkit`, `dsh-util-file-drag` and
+`@shikijs/langs` entries satisfy imports in the published DSH 0.2.2-rc.1 type
+declarations. Upstream lists those edges only as development dependencies.
+They are not added to the installed plugin's production runtime. Remove these
+consumer entries after a published DSH metadata repair and a clean typecheck
+confirm that they resolve through the owning packages.
 
 ## SDK and lock updates
 

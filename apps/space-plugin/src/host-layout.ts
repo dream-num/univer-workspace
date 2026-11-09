@@ -1,8 +1,8 @@
-/** Exact official release identity; the DOM is checked independently of CSS artifact hashes. */
+/** Published npm Host build identity; the public release tag has a different SHA.
+ * DOM structure is checked independently of CSS artifact hashes. */
 export const navigationHost = {
-  version: '0.2.1-rc.3',
-  commit: 'be72761',
-  fullCommit: 'be72761ee1a6736ebcdf4f3739363b083ae53c98',
+  version: '0.2.2-rc.1',
+  commit: 'c59d10a',
 } as const;
 export function supportsHostNavigation(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -12,7 +12,7 @@ export function supportsHostNavigation(value: unknown): boolean {
   };
   return (
     graph.release?.version === navigationHost.version &&
-    (graph.release.commit === navigationHost.commit || graph.release.commit === navigationHost.fullCommit) &&
+    graph.release.commit === navigationHost.commit &&
     Array.isArray(graph.entries) &&
     graph.entries.some(
       (e) => e && e.id === '@deepseek-ai/dsh-client-ui-sidebar',
