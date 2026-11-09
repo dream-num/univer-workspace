@@ -73,8 +73,9 @@ export async function transitionPr(
   repo: string,
   number: string,
   action: "merge" | "discard",
+  reviewToken?: string,
 ) {
   const { worktree, spaceId } = await findPr(context, repo, number);
-  const updated = await worktreeFeature(context).transition(worktree.id, action);
+  const updated = await worktreeFeature(context).transition(worktree.id, action, reviewToken);
   return { output: prWithUrl(context, updated, spaceId), repo: spaceId };
 }
