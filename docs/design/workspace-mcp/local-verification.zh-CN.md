@@ -302,7 +302,9 @@ export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high
 
 **`down`（阶段 E）。** 同时导出 `logs/mcp-renderer.log`。`compose down` 移除 renderer 容器和 `render` 网络，剩余资源检查按同一个项目 label 覆盖它们。
 
-**`renderer-call`（阶段 E）。** `verify-uvw renderer-call <label> screenshot|printPdf|lint|measureText < input.json` 在 executor 容器内用 `MCP_RENDERER_URL` 和内部令牌调用 renderer，保存 `evidence/<label>.json`，截图写 `<label>-<name>.png`，PDF 写 `<label>.pdf`。`bin/renderer-proof.mjs` 输出带中英文的小 Sheet 或 Doc 作为输入。renderer 还没有工具调用方，所以这是目前唯一的端到端入口。
+**`renderer-call`（阶段 E）。** `verify-uvw renderer-call <label> screenshot|printPdf|lint|measureText < input.json` 在 executor 容器内用 `MCP_RENDERER_URL` 和内部令牌调用 renderer，保存 `evidence/<label>.json`，截图写 `<label>-<name>.png`，PDF 写 `<label>.pdf`。`bin/renderer-proof.mjs` 输出带中英文的小 Sheet 或 Doc 作为输入。`screenshot`、`print_pdf`、`lint` 和真实字体的 `compile_svg` 现已调用 renderer，这个命令用于直接驱动 renderer 的单个操作。
+
+**`renderer-restart`（阶段 E 验收）。** `verify-uvw renderer-restart [max-runtimes]` 只重建本次运行的 renderer 容器，把 `RENDERER_MAX_RUNTIMES` 设为参数（默认 2），等容器健康且启动时预热的第一个 runtime 就绪后返回。`bin/renderer-bench.mjs` 用它在不同池大小之间切换，测量方法见[渲染服务测量](../../../.agents/skills/verify-uvw/features/mcp.md#renderer-capacity-benchmark)，结果在[架构 7.1](architecture.zh-CN.md#71-渲染服务)。
 
 ### 6.3 `mcp`
 

@@ -337,10 +337,100 @@ valueTruncated: true；文本确认已提交，不提示重试写入。未提交
 - 不访问 Workspace，不持有任何用户凭据。图片资产必须在执行层内联后再交给它。
 - 目标：常驻浏览器池，每个任务一个 BrowserContext，任务结束即销毁，不跨用户复用。
 - 当前（2026-11-09 产品负责人决定，阶段 G 收口）：`createUniverRenderRuntime` 只接受 `renderPageRoot`、浏览器路径、`env`、`license` 和 `signal`，不能注入浏览器或 BrowserContext。阶段 E 因此只能用长驻的 runtime 池代替“每任务一个 BrowserContext”：每个 runtime 自带一个 Chromium 和一个页面，跨请求、跨用户复用，这是对上一条的临时偏离。runtime 的每个方法都带完整的 unit，runtime 在两次调用之间不保存请求状态，但浏览器页面是共享的。阶段 G 必须恢复每任务隔离（换用支持 BrowserContext 的渲染入口，或每任务一个 runtime），在那之前渲染服务只用于本机和内部单用户环境。
-- 池参数：最多 `RENDERER_MAX_RUNTIMES` 个 runtime（默认 2），按需创建，一次请求独占一个 runtime。排队超过 `RENDERER_QUEUE_TIMEOUT_MS`（默认 5000）返回可重试的 `workspace-renderer-busy`。操作超过 `RENDERER_OPERATION_TIMEOUT_MS`（默认 25000），或抛出浏览器、runtime 故障时，关闭并丢弃该 runtime，下一次请求重新创建；输入错误（unit 数据无效、不支持的类型）不影响 runtime，归还给池。关闭服务时关闭全部 runtime。
+- 池参数：最多 `RENDERER_MAX_RUNTIMES` 个 runtime（默认 2，依据与容器内存预算见 7.1.1 节），按需创建，一次请求独占一个 runtime。排队超过 `RENDERER_QUEUE_TIMEOUT_MS`（默认 5000）返回可重试的 `workspace-renderer-busy`。操作超过 `RENDERER_OPERATION_TIMEOUT_MS`（默认 25000），或抛出浏览器、runtime 故障时，关闭并丢弃该 runtime，下一次请求重新创建；输入错误（unit 数据无效、不支持的类型）不影响 runtime，归还给池。关闭服务时关闭全部 runtime。
 - 渲染服务的内部 RPC 沿用执行层的帧格式、Bearer 校验和错误信封，不带用户 grant。操作为 `screenshot`、`printPdf`、`lint`、`measureText`，协议定义在 `apps/mcp/src/shared/renderer-protocol.ts`，执行层之后从这里导入。
 - 页面只来自镜像内的 render-runtime 产物，不访问外部网络。
 - 现有启动参数含 `--no-sandbox`（`@univer-cli/univer-render-runtime` README）。在沙箱运行时下如何处理由阶段 G 确定。
+
+#### 7.1.1 容量测量（2026-11-09）
+
+回答两个问题：`RENDERER_MAX_RUNTIMES=2` 与渲染容器内存预算是否是合理默认值；复用 runtime 的页面是否需要“用满 N 次就回收”的守卫。
+
+环境同 6.2：本机 Docker Desktop，宿主 M2 Pro、10 逻辑 CPU；Docker 报告 6 vCPU、11.68 GiB，gateway、executor、renderer 与宿主上的其他工作共享，Chromium 为镜像内的 Linux arm64 版本，无 GPU。宿主不是安静的：每轮开始前一分钟 load 中位数 5.4（范围 3.3 至 8.6，共 63 次），其中 36 次高于 5（逻辑 CPU 的一半，即脚本的 quiet 阈值），启动时占 CPU 最多的是 Docker 虚拟机（约 37%）和 WindowServer（约 19%）。吞吐的两个设置按重复轮次交替顺序运行，所以背景负载对两边的影响相同，但绝对数字仍带本机噪声。不是生产硬件结论，阶段 H 须在最终沙箱与生产硬件上重测。
+
+方法。调用方在 executor 容器内直接请求 renderer 的 RPC，因此不含网关、执行层和 Workspace 的时间；每次调用都检查输出确实产生（截图含 PNG 签名，PDF 以 `%PDF` 开头且有页数，量字返回行数）。输入为 40 行 8 列的 Sheet（范围 A1:H40）、40 段的 Doc（截图为一张高图，打印为 6 页）和一行中英混排文字。1859 次调用没有错误。每轮 renderer 容器都重建（`verify-uvw renderer-restart <n>`），内存从渲染容器内读 `/proc`，并读 cgroup。
+
+| 术语 | 含义 |
+| --- | --- |
+| 冷 runtime | 池已有的 runtime 都在用时新启动的 runtime，含 Chromium 启动、页面加载和首次渲染。测量时与另一个调用并发 |
+| 预热 runtime 首次使用 | 启动时预热的 runtime 上的第一次渲染，页面是新的 |
+| 热 | 同一 runtime 上的后续渲染 |
+| RSS | 每个进程都计入共享页，会高估 |
+| PSS | 共享页按映射进程均摊 |
+| cgroup anon | 容器被计费的匿名内存，不含文件缓存。这个内核没有 `memory.peak`，峰值取 250 ms 采样的最大值，会低估瞬时峰值 |
+
+延迟（毫秒，中位数，范围）。冷与首次使用各 5 次独立重启；热为 5 个块各 20 次顺序调用，取块中位数的中位数。
+
+| 操作 | 冷 runtime | 预热 runtime 首次使用 | 热，块中位数的中位数 | 热，全部调用 p50 / p95 | 输出 |
+| --- | --- | --- | --- | --- | --- |
+| screenshot Sheet | 3125，2639 至 3333 | 1646，1614 至 1911 | 584，568 至 601 | 582 / 923 | 645 KB PNG |
+| screenshot Doc | 2941，2807 至 3320 | 1804，1694 至 2143 | 992，981 至 1022 | 991 / 1220 | 3.3 MB PNG |
+| print_pdf Doc | 3222，3029 至 3515 | 1949，1916 至 2129 | 1208，1193 至 1259 | 1210 / 1372 | 1.5 MB PDF，6 页 |
+| measureText | 1251，1084 至 2600 | 60，55 至 87 | 3，2 至 3 | 3 / 7 | 无载荷 |
+
+吞吐：4 个调用方闭环，预热 4 秒后计 20 秒窗口内完成的调用，每个设置 5 轮，中位数与范围。
+
+| 操作 | `RENDERER_MAX_RUNTIMES` | 次/秒 | 负载下单次调用 ms | renderer 容器 CPU %（每轮中位数的中位数；每轮峰值的中位数） | 压测端 CPU % | 错误 / 调用 |
+| --- | --- | --- | --- | --- | --- | --- |
+| screenshot Sheet | 1 | 1.75，1.70 至 1.75 | 2266 | 74；101 | 8 | 0 / 193 |
+| screenshot Sheet | 2 | 3.40，3.00 至 3.50 | 1136 | 122；372 | 9 | 0 / 352 |
+| screenshot Sheet | 4（补充） | 6.45，5.25 至 6.75 | 586 | 256；537 | 11 | 0 / 648 |
+| print_pdf Doc | 1 | 0.80，0.80 至 0.80 | 4746 | 98；131 | 8 | 0 / 100 |
+| print_pdf Doc | 2 | 1.60，1.40 至 1.60 | 2482 | 187；311 | 9 | 0 / 174 |
+| print_pdf Doc | 4（补充） | 2.05，1.20 至 2.50 | 1769 | 436；530 | 14 | 0 / 215 |
+
+2 个 runtime 相对 1 个：Sheet 截图逐轮配对的比值中位数 1.94 倍（1.76 至 2.00），print_pdf 2.00 倍（1.75 至 2.00）。4 个 runtime（补充一组，宿主一分钟 load 中位数 10.7、范围 5.8 至 15.8，高于主测量）：相对 2 个，Sheet 截图约 1.9 倍，print_pdf 只有约 1.3 倍。
+
+**限制因素。** 一个 runtime 同一时刻只渲染一个请求，在 Chromium 的页面线程上约占一个核：单 runtime 时 renderer 容器 CPU 为 74%（Sheet）和 98%（打印）。池从 1 增到 2 个 runtime，吞吐提高 1.94 倍（Sheet）和 2.00 倍（打印），容器 CPU 提高 1.65 倍和 1.9 倍，所以 1 到 2 个 runtime 受“每个 runtime 一个页面线程”限制，不受 Node、压测端（CPU 8% 至 9%）或排队限制（没有 `workspace-renderer-busy`）。到 4 个 runtime，打印的容器 CPU 中位数 436%、峰值 530%，接近 Docker 虚拟机的 6 vCPU，且宿主同时有其他负载，这时 CPU 成为限制，吞吐不再随 runtime 数线性增长；Sheet 截图更轻，4 个时仍接近线性。结论：默认 2 对本机合理，它只占约 2 个 vCPU；调大只在渲染容器有更多 CPU 时有收益，而且每个 runtime 的内存成本见下。
+
+内存（MiB）。树是一个 runtime 的 Chromium 进程，Node 进程由所有 runtime 共享。
+
+| 时刻 | 活 runtime | Node RSS | 单树 RSS | 单树 PSS | cgroup anon |
+| --- | --- | --- | --- | --- | --- |
+| 空闲，启动预热，未渲染 | 1 | 121 | 1028 | 511 | 339 |
+| 空闲，每个 runtime 渲染过一次（Sheet 截图） | 2 | 141 | 1204 | 555 | 901 |
+| 空闲，每个 runtime 渲染过一次（Doc 打印） | 2 | 162 | 1320 | 662 | 1031 |
+| 负载下采样峰值，Sheet 截图 | 1 / 2 / 4 | 150 / 157 / 203 | 1337 / 1344 / 1363 | 813 / 705 / 656 | 650 / 1204 / 2258 |
+| 负载下采样峰值，Doc 打印 | 1 / 2 / 4 | 168 / 162 / 171 | 1761 / 1883 / 1920 | 1196 / 1185 / 1201 | 915 / 1629 / 2946 |
+
+RSS 把共享的 Chromium 库和字体页在每个进程里重复计入，两个 runtime 的 RSS 合计约为 cgroup anon 的 2.2 至 2.8 倍，不能当预算。以 cgroup anon 为准：Node 约 170 MiB，每个 runtime 打印 6 页 Doc 时采样峰值约 730 MiB（`(1629 - 162) / 2`），Sheet 截图约 520 MiB。
+
+| renderer 容器预算 | 计算（MiB） | 采样峰值 | 实测 |
+| --- | --- | --- | --- |
+| 2 GiB，2 个 runtime | 无法满足 0.75 余量：`170 + 2 × 730 = 1630`，`1630 / 0.75 = 2173`，约 2.1 GiB | Doc 打印 1.4 至 1.6 GiB | 施加 2048 MiB 硬限制，5 轮 Doc 打印中 3 轮触发 cgroup OOM（共 4 次 OOM kill），一次调用超过 40 秒没有应答；Sheet 截图 5 轮无错误 |
+| 3 GiB，2 个 runtime | 同上，余量 0.75 时需约 2.1 GiB | 同上 | 施加 3072 MiB 硬限制，Sheet 截图与 Doc 打印各 5 轮，0 错误、0 OOM、0 个 runtime 被丢弃 |
+| 4 GiB，4 个 runtime | `(170 + 4 × 740) / 0.75 = 4180`，略超 4 GiB | Doc 打印 2.8 至 3.0 GiB（中位数 2.88） | 补充组没有施加限制，预算为外推 |
+
+建议：默认 2 个 runtime 时给 renderer 容器 3 GiB，这是唯一实测通过的预算；2 GiB 会在 Doc 打印下被 OOM 杀进程。若调到 4 个 runtime，预算至少 4.5 GiB 并重测。余量系数 0.75 沿用 6.2 节，仍是策略假设。预算没有覆盖更大的输入（整页噪声图的 1920×1080 Slide、接近 1677 万像素上限的 Doc 截图）；Chromium 对这类输入的峰值更高，上线前须另测。
+
+复用：把池限制为 1 个 runtime，让 200 次顺序渲染全部落在同一个页面上，每 25 次渲染取 3 个快照，取中位数。每个操作 1 次完整运行，没有错误，没有新建或丢弃 runtime（`mcp_renderer_runtime_creations_total` 增量为 0）。
+
+| 操作 | 0 次 | 25 次 | 50 次 | 100 次 | 150 次 | 200 次 | 50 至 200 次的变化 |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| screenshot Sheet，cgroup anon | 340 | 538 | 541 | 516 | 533 | 534 | -7 |
+| screenshot Doc，cgroup anon | 345 | 511 | 482 | 496 | 510 | 492 | +10 |
+| print_pdf Doc，cgroup anon | 336 | 531 | 581 | 585 | 875 | 598 | +17 |
+| 每块 25 次的中位延迟 ms（Sheet / Doc / 打印） | n/a | 567 / 995 / 1177 | 591 / 999 / 1192 | 576 / 988 / 1212 | 589 / 983 / 1249 | 584 / 1000 / 1216 | 无漂移 |
+
+前 25 至 50 次渲染把页面工作集撑起来（cgroup anon 增加约 170 至 245 MiB），之后进入平台；50 至 200 次渲染的净变化在 -7 至 +17 MiB，不随次数增长，延迟也没有漂移。Doc 打印在第 150 次出现一次 +290 MiB 的瞬时高点，下一次采样回落，说明峰值要为这类瞬时增长留余量，不说明泄漏。**结论：200 次渲染内没有证据表明复用的页面持续增长，本 PR 不加“用满 N 次回收”的守卫。** 200 次不能证明数千次后也有界；回收守卫列为后续，触发条件见下。
+
+**对用户可见延迟的占比。** 暖的 `screenshot` 工具调用（网关事件 `duration_ms` 按请求 ID 与 renderer 日志的 `duration_ms` 关联，各 10 次）：Sheet 593 ms 中 renderer 占 558 ms（94%），Doc 926 ms 中 renderer 占 882 ms（95%）。渲染服务就是 `screenshot` 的延迟，执行层与网关合计约 35 至 45 ms。
+
+复跑：`node .agents/skills/verify-uvw/bin/renderer-bench.mjs --output <json>`，汇总用 `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`，步骤和各场景的含义见[渲染服务测量](../../../.agents/skills/verify-uvw/features/mcp.md#renderer-capacity-benchmark)。本节的原始 JSON 是主测量一份（冷、热、吞吐 1 与 2、复用）、4 个 runtime 一份、2048 与 3072 MiB 限制各一份和端到端一份。主测量和 4 个 runtime 那一份用的是 `renderer-bench.mjs` 加入 `--memory-limit` 之前的版本（`scriptSha256` 为 `8501c746…`），其余三份用当前版本；据作者说明场景代码没有改动，旧版本不在 git 中，无法逐行核对，独立复测的热延迟与吞吐中位数与本节相差不超过 5%。
+
+#### 7.1.2 已知问题与后续
+
+每条给出触发条件。
+
+- **故障后的请求迟迟不应答。** 超时或 runtime 故障时，池先 `await` 上游 runtime 的关闭再抛错，所以应答要等关闭完成。验收时实测：杀掉存活浏览器的页面进程，或容器 OOM 杀掉一个 Chromium 进程，请求超过 40 秒没有应答（deadline 28 秒、操作超时 25 秒），被丢弃 runtime 的浏览器在丢弃后仍存活约 2 分钟（`ps` 每 30 秒一次，120 秒时还在，150 秒时消失）。条件：操作超时或 Chromium 子进程死亡而浏览器主进程存活。建议在阶段 G 恢复每任务隔离时一并处理：先应答、后台关闭并强杀进程树。浏览器主进程被杀时没有这个问题（MR9：立即返回可重试的 `workspace-renderer-failed`）。
+- **回收守卫。** 200 次渲染内没有增长，不加。触发条件：把同一脚本的 `--soak-renders` 提到 2000 以上，Doc 打印或截图在平台之后每 1000 次渲染 cgroup anon 增长超过 50 MiB（该阈值是本次的选择，不是测得的），或阶段 H 的内存面板显示 renderer 内存在两次重启之间持续上升。
+- **renderer 进程经 `shared/errors.ts` 间接加载 client-core 的产品模块。** import 边界测试只检查直接导入。条件：`shared/errors.ts` 再被其他模块引入产品代码时，边界测试不会发现。
+- **Chromium 空闲时死亡后，最多 `RENDERER_MAX_RUNTIMES` 次调用先失败再得到新 runtime。** 每次失败都是可重试错误。MR9 在池里只有 1 个空闲 runtime 时失败 1 次。条件：池里有多个空闲 runtime 同时死亡。
+- **冷启动 runtime 不能被中断。** deadline 短于冷启动（约 3 秒，含首次渲染）的请求会在启动结束之后才失败。条件：调用方给出很短的 deadline。
+- **Sheet 默认截图范围不包含网格外的图片。** 条件：图片锚在默认范围之外，需显式给 `range`。这一条由实现者提供，本次验收没有复测。
+- **Doc skill 的示例使用 `api.Enum.DocsImageWrappingStyle`，SDK 没有这个枚举。** 条件：agent 照抄示例。这一条由实现者提供，本次验收没有复测。
+- **Doc 截图是一张高图，约 4 页以上超过 16,777,216 像素上限。** 实测 60 段（`pdfPages` 4，1920×7421）成功，7 页的 Doc 报 `workspace-render-input-invalid`、`PIXEL_LIMIT_EXCEEDED`；`uvw screenshot` 对同一 Unit 同样报 `PIXEL_LIMIT_EXCEEDED`，所以这是上游行为，MCP 与 CLI 一致。agent 需要多页 Doc 时应改用 `print_pdf`。
+- **内存预算没有覆盖大输入。** 条件：Slide 页面含大图或 Doc 截图接近像素上限；上线前用真实大小的 Unit 重测，并同时压测 `RENDERER_MAX_RUNTIMES` 与容器预算。
 
 ### 7.2 trunk 渲染需要补的路径
 
