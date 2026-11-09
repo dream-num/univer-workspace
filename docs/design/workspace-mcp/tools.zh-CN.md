@@ -304,4 +304,4 @@ Office 上传默认 50 MiB；内部导入请求帧上限为 64 MiB。导出响�
 原工具仅在转换结束时发出一次真实用量事件，去重重试不重复计费事件；job_get 每次按非执行工具记零成本事件。
 网关重启不恢复转换。超过 deadlineAt 的 running 记录在读取时变为 failed，export 使用
 workspace-executor-timeout，import 和 compile_typst 使用 workspace-result-unknown，因为 sidecar 不保存 apply 参数，无法确认是否已开始创建 Unit。
-只有 exchange.import、exchange.export、typst.compile 允许超过 30 秒的 RPC deadline。Typst 编译和物化子进程共享 dispatcher 的 abort signal，受同一任务期限约束。
+只有 exchange.import、exchange.export、typst.compile、render.screenshot、render.printPdf 允许超过 30 秒的 RPC deadline。Typst 编译和物化子进程共享 dispatcher 的 abort signal，受同一任务期限约束。
