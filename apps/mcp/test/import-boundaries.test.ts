@@ -42,7 +42,12 @@ it("keeps native execution, RPC framing and credential access behind their owner
         failures.push(`${path} imports application internals`);
       if (
         resolved === "shared/frame.js" &&
-        !["gateway/executor/client.ts", "executor/server.ts", "renderer/server.ts"].includes(path)
+        ![
+          "gateway/executor/client.ts",
+          "executor/renderer-client.ts",
+          "executor/server.ts",
+          "renderer/server.ts",
+        ].includes(path)
       )
         failures.push(`${path} imports frame codec`);
       if (resolved === "gateway/executor/client.js" && path !== "gateway/tools/executor-tool.ts")

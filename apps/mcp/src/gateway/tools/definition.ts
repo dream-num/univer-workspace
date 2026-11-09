@@ -61,7 +61,16 @@ export const destructiveAnnotations = {
   openWorldHint: false,
 } as const;
 
+export interface ImageContent {
+  readonly type: "image";
+  readonly data: string;
+  readonly mimeType: string;
+}
+
 export interface ToolResult {
+  /** The durable result: what `job_get` returns for a job that outlived its caller. */
   readonly output: object;
   readonly repo: string | null;
+  /** Replaces `output` for a caller that waited for the result and adds content blocks after the text line. */
+  readonly waiting?: { readonly output: object; readonly content: readonly ImageContent[] };
 }

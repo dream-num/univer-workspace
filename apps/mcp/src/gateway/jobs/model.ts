@@ -6,7 +6,7 @@ export const jobErrorSchema = z.object({ code: z.string(), message: z.string(), 
 const jobBase = z.object({
   id: z.uuid(),
   userId: z.string().min(1),
-  tool: z.enum(["import", "export", "compile_typst"]),
+  tool: z.enum(["import", "export", "compile_typst", "screenshot"]),
   key: z.string().optional(),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
   createdAt: z.number(),

@@ -196,7 +196,8 @@ export function createGateway(
               );
             }
             const result = await tool.run(state.context, tool.inputSchema.parse(args));
-            const json = z.json().safeParse(result.output);
+            const delivered = result.waiting ?? { output: result.output, content: [] };
+            const json = z.json().safeParse(delivered.output);
             if (!json.success || !tool.outputSchema.safeParse(json.data).success) {
               throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
             }
@@ -232,6 +233,7 @@ export function createGateway(
                         ? `${tool.name} is running. Poll job_get with job_id.`
                         : `${tool.name} completed.`,
                 },
+                ...delivered.content,
               ],
               structuredContent,
               ...(state.jobUsage && state.jobUsage.completion === undefined

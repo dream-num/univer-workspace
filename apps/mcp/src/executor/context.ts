@@ -9,6 +9,7 @@ import type {
 import type { WorkspaceHttp } from "@univerjs/univer-workspace-client-core/product";
 import type { OpInput, OpName, OpOutput, opSpecs } from "../shared/executor-protocol.js";
 import type { OpMeta } from "../shared/usage.js";
+import type { RendererClient } from "./renderer-client.js";
 
 export type BoundRuntime = {
   [K in keyof WorkspaceContentRuntimeOperations]: (
@@ -30,6 +31,7 @@ export interface OpContext {
     WorkspaceUnitExchangeDependencies,
     "license" | "licenseKey" | "importBuffer" | "exportToBuffer"
   >;
+  readonly renderer?: RendererClient;
   onCreateUnit?(): void;
   http(): WorkspaceHttp;
   source(): WorkspaceContentSource;

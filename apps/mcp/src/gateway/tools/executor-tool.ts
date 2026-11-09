@@ -15,7 +15,7 @@ import type { Authentication } from "../auth.js";
 import { callExecutor, type ExecutorConnection } from "../executor/client.js";
 import { issueGrant } from "../executor/grants.js";
 import { ExecutorRouter } from "../executor/router.js";
-import type { ToolContext, ToolDefinition } from "./definition.js";
+import type { ToolContext, ToolDefinition, ToolResult } from "./definition.js";
 
 // Key order must not change the fingerprint; undefined members vanish as they do in JSON.
 function canonicalJson(value: unknown): string {
@@ -28,6 +28,8 @@ function canonicalJson(value: unknown): string {
       .join(",")}}`;
   return JSON.stringify(value) ?? "null";
 }
+
+type MappedResult = Pick<ToolResult, "output" | "waiting"> & { repo?: string | null };
 
 const linkBrand = Symbol("ExecutorLink");
 export interface ExecutorLink {
@@ -80,7 +82,7 @@ export function executorTool<
       result: ExecutorResult<OpSpec<I, O, P>>,
       args: z.output<A>,
       context: ToolContext,
-    ): Promise<{ output: object; repo?: string | null }> | { output: object; repo?: string | null };
+    ): Promise<MappedResult> | MappedResult;
     request(
       args: z.output<A>,
       context: ToolContext,
@@ -108,14 +110,18 @@ export function executorTool<
           throw error;
         });
         link?.usage.addOp(result.meta);
-        const mapped = response
+        const mapped: MappedResult = response
           ? await response(result, parsed, context)
           : { output: result.output };
-        if (!finishedSchema.safeParse(mapped.output).success)
+        if (
+          !finishedSchema.safeParse(mapped.output).success ||
+          (mapped.waiting && !finishedSchema.safeParse(mapped.waiting.output).success)
+        )
           throw new Error(`Tool ${tool.name} returned output that violates its output schema.`);
         return {
           output: mapped.output,
           repo: "repo" in mapped ? (mapped.repo ?? null) : (result.meta.repo ?? null),
+          ...(mapped.waiting ? { waiting: mapped.waiting } : {}),
         };
       };
       if (job && context.jobs)

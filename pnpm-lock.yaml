@@ -567,6 +567,9 @@ importers:
       '@univer-cli/unit-screenshot':
         specifier: 1.4.0
         version: 1.4.0(rxjs@7.8.2)
+      '@univer-cli/unit-screenshot-command':
+        specifier: 1.4.0
+        version: 1.4.0(commander@15.0.0)(rxjs@7.8.2)
       '@univer-cli/univer-render-runtime':
         specifier: 1.4.0
         version: 1.4.0(rxjs@7.8.2)
@@ -579,6 +582,9 @@ importers:
       '@univerjs/univer-workspace-client-core':
         specifier: workspace:*
         version: link:../../packages/client-core
+      commander:
+        specifier: 15.0.0
+        version: 15.0.0
       fflate:
         specifier: 0.8.3
         version: 0.8.3
@@ -12709,6 +12715,19 @@ snapshots:
     dependencies:
       '@univer-cli/unit-screenshot': 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univer-cli/univer-render-runtime': 1.4.0(react@19.3.0)(rxjs@7.8.2)
+      commander: 15.0.0
+    transitivePeerDependencies:
+      - bufferutil
+      - proxy-agent
+      - react
+      - rxjs
+      - utf-8-validate
+      - yauzl
+
+  '@univer-cli/unit-screenshot-command@1.4.0(commander@15.0.0)(rxjs@7.8.2)':
+    dependencies:
+      '@univer-cli/unit-screenshot': 1.4.0(rxjs@7.8.2)
+      '@univer-cli/univer-render-runtime': 1.4.0(rxjs@7.8.2)
       commander: 15.0.0
     transitivePeerDependencies:
       - bufferutil

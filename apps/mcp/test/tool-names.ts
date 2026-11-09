@@ -23,6 +23,7 @@ export const coreNames = [
   "file_upload_create",
   "execute",
   "inspect",
+  "screenshot",
   "import",
   "export",
   "job_get",
