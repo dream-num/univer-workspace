@@ -321,31 +321,42 @@ export function createGateway(
   ): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/healthz") return new Response("ok");
     if (request.method === "GET" && url.pathname === "/readyz") {
-      const probe = async (path: string): Promise<"ok" | "failed"> => {
+      const passes = async (
+        path: string,
+        expect: (status: number, body: string) => boolean,
+        init?: RequestInit,
+      ): Promise<"ok" | "failed"> => {
         try {
           const response = await upstream(`${config.WORKSPACE_TRANSPORT_URL}${path}`, {
+            ...init,
             signal: AbortSignal.timeout(2_000),
             redirect: "error",
           });
-          if (!response.ok || path === "/healthz") {
-            await response.body?.cancel();
-            return response.ok ? "ok" : "failed";
-          }
-          const metadata = z
-            .object({ grant_types_supported: z.array(z.string()) })
-            .parse(await response.json());
-          return metadata.grant_types_supported.includes(
-            "urn:ietf:params:oauth:grant-type:token-exchange",
-          )
-            ? "ok"
-            : "failed";
+          return expect(response.status, await response.text()) ? "ok" : "failed";
         } catch {
           return "failed";
         }
       };
+      const exchange = config.auth.exchange;
       const [workspace, tokenExchange] = await Promise.all([
-        probe("/healthz"),
-        config.auth.exchange ? probe("/.well-known/oauth-authorization-server") : undefined,
+        passes("/healthz", (status) => status === 200),
+        // An empty subject token gets invalid_request only after Workspace has accepted
+        // this client's credentials and its token-exchange permission, and before any lookup.
+        exchange
+          ? passes(
+              "/api/auth/token",
+              (status, body) => status === 400 && body.includes('"invalid_request"'),
+              {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                  grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                  client_id: exchange.clientId,
+                  client_secret: exchange.clientSecret,
+                }),
+              },
+            )
+          : undefined,
         config.executor && !capabilities.available ? capabilities.refresh() : undefined,
       ]);
       const checks = {

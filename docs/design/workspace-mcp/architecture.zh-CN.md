@@ -573,7 +573,7 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `METRICS_TOKEN` | 全部 | 指标端点令牌 |
 | `LOG_LEVEL` | 全部 | 日志级别，日志格式与 Workspace 一致（pino JSON） |
 
-每个已实现角色提供 `GET /healthz`，只检查进程存活。网关另有 `GET /readyz`：Workspace 可达，配置了 OAuth 时 Workspace 声明支持 token exchange，配置了执行层时至少一个执行层返回了兼容的能力（`GET /rpc/v1/capabilities`），三者都满足才就绪。Workspace 没有版本接口，按版本号拒绝就绪（3.2 节）暂缓。
+每个已实现角色提供 `GET /healthz`，只检查进程存活。网关另有 `GET /readyz`：Workspace 可达，配置了 OAuth 时网关的机密客户端能做 token exchange（用网关的客户端凭据、不带 subject token 调用 token 端点，Workspace 校验凭据和 exchange 权限之后、查找 token 之前返回 `invalid_request` 才算通过，所以 `MCP_OAUTH_CLIENT_SECRET` 配错时网关不就绪），配置了执行层时至少一个执行层返回了兼容的能力（`GET /rpc/v1/capabilities`），三者都满足才就绪。Workspace 没有版本接口，按版本号拒绝就绪（3.2 节）暂缓。
 
 ## 12. `apps/mcp` 的代码组织建议
 

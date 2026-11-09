@@ -30,14 +30,14 @@ async function listen(server: Server) {
   return `http://127.0.0.1:${address.port}`;
 }
 
-async function start({ oauth = false, executor = false, failure = "" } = {}) {
+async function start({ oauth = false, executor = false, failure = "", clientSecret = secret } = {}) {
   const workspacePaths: string[] = [];
   const state = {
     healthStatus: 200,
     healthHang: false,
-    metadataStatus: 200,
-    metadataHang: false,
-    metadata: JSON.stringify({ grant_types_supported: [exchangeGrant] }),
+    tokenHang: false,
+    tokenReply: undefined as undefined | { status: number; body: string },
+    tokenExchangeAllowed: true,
     executorStatus: failure === "unavailable" ? 503 : 200,
     executorVersion: failure === "incompatible" ? PROTOCOL_VERSION + 1 : PROTOCOL_VERSION,
     executorHang: failure === "pending",
@@ -54,8 +54,26 @@ async function start({ oauth = false, executor = false, failure = "" } = {}) {
       if (path === "/healthz") {
         if (!state.healthHang)
           response.writeHead(state.healthStatus).end(`private upstream ${secret} ${workspaceUrl}`);
-      } else if (path === "/.well-known/oauth-authorization-server") {
-        if (!state.metadataHang) response.writeHead(state.metadataStatus).end(state.metadata);
+      } else if (path === "/api/auth/token" && request.method === "POST") {
+        let raw = "";
+        request.on("data", (chunk: Buffer) => (raw += chunk.toString()));
+        request.on("end", () => {
+          if (state.tokenHang) return;
+          const form = new URLSearchParams(raw);
+          const reply = (status: number, error: string) =>
+            response.writeHead(status).end(JSON.stringify({ error }));
+          if (state.tokenReply)
+            response.writeHead(state.tokenReply.status).end(state.tokenReply.body);
+          else if (form.get("grant_type") !== exchangeGrant) reply(400, "unsupported_grant_type");
+          else if (
+            form.get("client_id") !== "readiness-client" ||
+            form.get("client_secret") !== secret
+          )
+            reply(401, "invalid_client");
+          else if (!state.tokenExchangeAllowed) reply(400, "unauthorized_client");
+          else if (!form.get("subject_token")) reply(400, "invalid_request");
+          else reply(500, "probe must not send a subject token");
+        });
       } else response.writeHead(404).end();
     }),
   );
@@ -84,7 +102,7 @@ async function start({ oauth = false, executor = false, failure = "" } = {}) {
       MCP_PUBLIC_URL: "https://gateway.invalid/mcp",
       MCP_STAGING_DIRECTORY: testStagingDirectory(),
       ...(oauth
-        ? { MCP_OAUTH_CLIENT_ID: "readiness-client", MCP_OAUTH_CLIENT_SECRET: secret }
+        ? { MCP_OAUTH_CLIENT_ID: "readiness-client", MCP_OAUTH_CLIENT_SECRET: clientSecret }
         : {}),
       ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_INTERNAL_TOKEN: secret } : {}),
     }),
@@ -138,33 +156,37 @@ describe("gateway readiness over real HTTP", () => {
   it("times out concurrent Workspace checks within the probe budget", async () => {
     const { state, probe } = await start({ oauth: true });
     state.healthHang = true;
-    state.metadataHang = true;
+    state.tokenHang = true;
     expect(await probe()).toEqual({
       status: 503,
       body: { status: "failed", checks: { workspace: "failed", token_exchange: "failed" } },
     });
   }, 3_500);
 
-  it.each([
-    "{}",
-    JSON.stringify({ grant_types_supported: ["authorization_code"] }),
-    JSON.stringify({ grant_types_supported: exchangeGrant }),
-    `private upstream error https://workspace.private ${secret}`,
-  ])(
-    "rejects unsupported or malformed OAuth metadata without exposing it (%s)",
-    async (metadata) => {
-      const { state, probe } = await start({ oauth: true });
-      state.metadata = metadata;
-      expect(await probe()).toEqual({
-        status: 503,
-        body: { status: "failed", checks: { workspace: "ok", token_exchange: "failed" } },
-      });
-    },
-  );
+  it("fails token exchange when Workspace rejects this client's credentials", async () => {
+    const { probe } = await start({ oauth: true, clientSecret: `${secret}-wrong` });
+    expect(await probe()).toEqual({
+      status: 503,
+      body: { status: "failed", checks: { workspace: "ok", token_exchange: "failed" } },
+    });
+  });
 
-  it("fails token exchange when the metadata endpoint fails", async () => {
+  it("fails token exchange when this client may not exchange tokens", async () => {
     const { state, probe } = await start({ oauth: true });
-    state.metadataStatus = 503;
+    state.tokenExchangeAllowed = false;
+    expect(await probe()).toEqual({
+      status: 503,
+      body: { status: "failed", checks: { workspace: "ok", token_exchange: "failed" } },
+    });
+  });
+
+  it.each([
+    { status: 404, body: "Not found" },
+    { status: 400, body: JSON.stringify({ error: "unsupported_grant_type" }) },
+    { status: 503, body: `private upstream error https://workspace.private ${secret}` },
+  ])("fails token exchange on any other answer without exposing it (%o)", async (reply) => {
+    const { state, probe } = await start({ oauth: true });
+    state.tokenReply = reply;
     expect(await probe()).toEqual({
       status: 503,
       body: { status: "failed", checks: { workspace: "ok", token_exchange: "failed" } },
@@ -198,7 +220,7 @@ describe("gateway readiness over real HTTP", () => {
   it("keeps healthz public and independent of all upstream checks", async () => {
     const { state, url } = await start({ oauth: true });
     state.healthHang = true;
-    state.metadataHang = true;
+    state.tokenHang = true;
     const response = await fetch(`${url}/healthz`);
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("ok");
