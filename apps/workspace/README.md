@@ -94,9 +94,21 @@ files are temporary BlobStore objects with process-local task metadata and a
 two-hour lifetime. Exchange actions are not shown for Worktree or merge-preview
 editors because those scopes do not yet have scope-aware Office conversion.
 
-Office export resolves managed image Asset IDs through the requesting user's
-existing Trunk permissions before conversion, including images in master pages
-and serialized drawing resources. The export copy contains inline image bytes;
+Importing XLSX, DOCX or PPTX stores the pictures and embedded Office attachments
+of the file as Trunk Assets of the new Unit (files over 20 MB stay inline); the
+Unit keeps only Asset IDs. An embedded attachment can be converted into its own
+online document from the attachment toolbar: the server checks that the caller
+can open the host Unit and that the attachment belongs to it, creates the new
+Unit in the host's folder when the caller may create there (otherwise in the
+Personal Space root), and keeps the attachment on the host. XLSX, DOCX, PPTX
+and PDF exports embed the current online version of every converted attachment:
+each converted document is read with the requesting user's permissions, and the
+export fails if one is not readable. API callers can pass
+`options.oleAttachmentSource: "original"` to embed the original files instead.
+
+Office export resolves managed Asset IDs through the requesting user's existing
+Trunk permissions before conversion, including images in master pages and
+serialized drawing resources. The export copy contains inline file bytes;
 stored snapshots and Assets remain unchanged. Missing, inaccessible or invalid
 images fail the export instead of producing a document with missing pictures.
 

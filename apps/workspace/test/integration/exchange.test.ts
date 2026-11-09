@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { DatabaseSync } from "node:sqlite";
+import { decode } from "@msgpack/msgpack";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateRawSync } from "node:zlib";
 import { Readable } from "node:stream";
-import { getSlidesEmptySnapshot, PageElementTypeEnum } from "@univerjs-pro/slides";
+import { transformSnapshotToSlideData } from "@univerjs-pro/collaboration";
+import { getSlidesEmptySnapshot, PageElementTypeEnum, type ISlideData } from "@univerjs-pro/slides";
 import {
   getPdfsEmptySnapshot,
   PdfEditability,
@@ -482,6 +486,120 @@ describe("Universer Exchange protocol", () => {
     expect(bytes.subarray(0, 2).toString()).toBe("PK");
   });
 
+  it("stores imported images and attachments as Trunk Assets of the new Unit", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "ole-import-owner");
+    const uploaded = await uploadExchangeFile(origin, owner.cookie, await oleFixture());
+    const imported = await waitForTask(
+      origin,
+      owner.cookie,
+      await startTask(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/import`, {
+        fileID: uploaded.body.FileId,
+        outputType: 1,
+      })
+    );
+    expect(imported, JSON.stringify(imported)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const unitId = imported.import!.unitID;
+
+    const assets = listAssets(application);
+    expect(assets.length).toBeGreaterThan(0);
+    expect(assets.every((asset) => asset.unit_id === unitId && asset.worktree_id === null)).toBe(true);
+    expect(assets.some((asset) => asset.original_filename.endsWith(".docx"))).toBe(true);
+    expect(count(application, "univer_asset_uploads")).toBe(0);
+    // The stored snapshot keeps Asset IDs, never the bytes.
+    const serialized = JSON.stringify(storedSlideData(unitId));
+    for (const asset of assets) expect(serialized).toContain(asset.id);
+    expect(Buffer.byteLength(serialized)).toBeLessThan(200_000);
+
+    // Exporting loads the stored files back through exchange-node.
+    const exported = await waitForTask(
+      origin,
+      owner.cookie,
+      await startTask(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`, {
+        unitID: unitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX,
+      })
+    );
+    expect(exported, JSON.stringify(exported)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const bytes = await downloadArtifact(origin, owner.cookie, exported.export!.fileID);
+    expect(bytes.subarray(0, 2).toString()).toBe("PK");
+  }, 60_000);
+
+  it("converts a stored attachment into an online document next to its host and embeds it on export", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "ole-convert-owner");
+    const viewer = await register(application, "ole-convert-viewer");
+    const outsider = await register(application, "ole-convert-outsider");
+    const personalSpace = application.spaces.list(owner.userId).spaces.find((space) => space.type === "personal")!;
+    const folder = application.nodes.create(owner.userId, { spaceId: personalSpace.id, parentNodeId: null, name: "Decks" });
+    const uploaded = await uploadExchangeFile(origin, owner.cookie, await oleFixture());
+    const imported = await waitForTask(
+      origin,
+      owner.cookie,
+      await startTask(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/import`, {
+        fileID: uploaded.body.FileId, outputType: 1, spaceId: personalSpace.id, parentNodeId: folder.id,
+      })
+    );
+    expect(imported).toMatchObject({ status: "done" });
+    const hostUnitId = imported.import!.unitID;
+    const hostNode = application.access.resolveUnit(owner.userId, hostUnitId)!.node;
+    const attachment = listAssets(application).find((asset) => asset.original_filename.endsWith(".docx"))!;
+    expect(attachment).toBeDefined();
+    const convertPath = `/universer-api/exchange/${UniverType.UNIVER_DOC}/import`;
+    const convertBody = { fileID: attachment.id, outputType: 1, sourceUnitID: hostUnitId };
+
+    // Only a caller who can open the host may convert, and only the host's own attachments.
+    await expectTaskStart(origin, outsider.cookie, convertPath, convertBody, 404);
+    await expectTaskStart(origin, owner.cookie, convertPath, { ...convertBody, sourceUnitID: randomUUID() }, 404);
+    await expectTaskStart(origin, owner.cookie, convertPath, { ...convertBody, outputType: 2 }, 400);
+
+    const converted = await waitForTask(origin, owner.cookie, await startTask(origin, owner.cookie, convertPath, convertBody));
+    expect(converted, JSON.stringify(converted)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const childUnitId = converted.import!.unitID;
+    const child = application.access.resolveUnit(owner.userId, childUnitId)!;
+    expect(child).toMatchObject({ kind: "univer", unitType: "doc" });
+    // The online document lands in the host's folder; the attachment stays with the host.
+    expect(child.node.parentNodeId).toBe(hostNode.parentNodeId);
+    expect(child.node.spaceId).toBe(hostNode.spaceId);
+    await expect(application.univerAssets.openContent(owner.userId, { kind: "trunk" }, attachment.id, undefined))
+      .resolves.toMatchObject({ asset: { unit_id: hostUnitId } });
+
+    // The client records the conversion on the host drawing as `oleOnlineUnit`; this host deck
+    // carries that link so the online export has a child document to embed.
+    const hostSlide = storedSlideData(hostUnitId);
+    const oleElements = Object.values(hostSlide.slides)
+      .flatMap((page) => Object.values(page.elements))
+      .filter((element) => element.type === PageElementTypeEnum.Ole);
+    expect(oleElements).toHaveLength(1);
+    Object.assign(oleElements[0]!, { oleOnlineUnit: { unitId: childUnitId, type: UniverInstanceType.UNIVER_DOC } });
+    const linkedDeck = await application.resources.create(owner.userId, randomUUID(), {
+      name: "Linked deck", spaceId: personalSpace.id, parentNodeId: folder.id, kind: "univer", unitType: "slide",
+      initialData: { ...hostSlide },
+    });
+    const linkedUnitId = (linkedDeck.body.node.resource as { readonly unitId: string }).unitId;
+
+    // Exports that take files embed the online version by default; the others cannot ask for it.
+    application.permissions.upsertNodeGrant(owner.userId, hostNode.id, viewer.userId, { role: "viewer" });
+    application.permissions.upsertNodeGrant(owner.userId, linkedDeck.body.node.id, viewer.userId, { role: "viewer" });
+    const exportPath = `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`;
+    const byDefault = { unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX };
+    await expectTaskStart(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SHEET}/export`, {
+      unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SHEET, format: ExchangeFormat.CSV, options: { oleAttachmentSource: "online", sheet: { csv: { sheetId: "x" } } },
+    }, 400);
+    await expectTaskStart(origin, owner.cookie, exportPath, { ...byDefault, options: { oleAttachmentSource: "latest" } }, 400);
+
+    // A reader of the host who cannot open the converted document cannot export the host either,
+    // unless the request asks for the original attachment files.
+    const viewerDefault = await waitForTask(origin, viewer.cookie, await startTask(origin, viewer.cookie, exportPath, byDefault));
+    expect(viewerDefault).toMatchObject({ status: "failed" });
+    const viewerOriginal = await waitForTask(origin, viewer.cookie, await startTask(origin, viewer.cookie, exportPath, { ...byDefault, options: { oleAttachmentSource: "original" } }));
+    expect(viewerOriginal, JSON.stringify(viewerOriginal)).toMatchObject({ status: "done" });
+
+    const ownerDefault = await waitForTask(origin, owner.cookie, await startTask(origin, owner.cookie, exportPath, byDefault));
+    expect(ownerDefault, JSON.stringify(ownerDefault)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const bytes = await downloadArtifact(origin, owner.cookie, ownerDefault.export!.fileID);
+    expect(bytes.subarray(0, 2).toString()).toBe("PK");
+  }, 90_000);
+
   it("preserves a UTF-8 filename when importing Office content", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "exchange-utf8-filename-owner");
@@ -602,6 +720,40 @@ async function officeFile(fixture: {
     format: fixture.format,
   });
   return new File([output], `import.${fixture.format}`);
+}
+
+async function oleFixture(): Promise<File> {
+  // A Slide with an embedded Office attachment and pictures; see test/fixtures/office/README.md.
+  const bytes = await readFile(new URL("../fixtures/office/nested-ole.pptx", import.meta.url));
+  return new File([bytes], "nested-ole.pptx", {
+    type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  });
+}
+
+/** The Slide data of the Unit's stored snapshot (Core v3 MessagePack in the collaboration database). */
+function storedSlideData(unitId: string): ISlideData {
+  const database = new DatabaseSync(join(directories.at(-1)!, "collaboration.sqlite"), { readOnly: true });
+  try {
+    const row = database
+      .prepare("SELECT payload FROM collaboration_snapshots WHERE unit_id = ? ORDER BY revision DESC LIMIT 1")
+      .get(unitId) as { readonly payload: Uint8Array } | undefined;
+    if (!row) throw new Error("The imported Unit has no stored snapshot.");
+    return transformSnapshotToSlideData(decode(row.payload) as never);
+  } finally {
+    database.close();
+  }
+}
+
+function listAssets(application: WorkspaceApplication): readonly {
+  readonly id: string;
+  readonly unit_id: string;
+  readonly worktree_id: string | null;
+  readonly original_filename: string;
+  readonly media_type: string;
+}[] {
+  return application.database.connection
+    .prepare("SELECT id, unit_id, worktree_id, original_filename, media_type FROM univer_assets ORDER BY created_at, id")
+    .all() as never;
 }
 
 async function uploadExchangeFile(

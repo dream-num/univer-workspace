@@ -279,7 +279,9 @@ ETag 和创建者。`worktree_id IS NULL` 表示 Trunk；非空时 Asset 只属�
 必须引用现有 `univer_resources.unit_id`，Worktree Asset 必须引用对应 `worktree_units`。
 
 Snapshot 只保存 Asset ID，不保存 Object Key、文件路径、短期地址或字节。Asset 不创建 Node，
-也不进入 Recent、分享或 Tree API。
+也不进入 Recent、分享或 Tree API。Office 导入拆出的图片与内嵌附件也是这里的 Trunk Asset：导入任务先
+预留 Unit ID，Resource 创建成功后再以 `univer_asset_uploads` 生命周期写入并发布（见
+application-design.md "Office Exchange Module"）。附件转成在线文档后，附件 Asset 仍属于宿主 Unit。
 
 ### `univer_asset_uploads`
 

@@ -228,10 +228,11 @@ describe("Workspace mobile unit presets", () => {
       configurable: true,
       value: { location: { origin: "https://workspace.test" } },
     });
-    const [{ UniverExchangeClientPlugin }, { createMobileExchangeFeaturePlugins }] =
+    const [{ UniverExchangeClientPlugin }, { createMobileExchangeFeaturePlugins }, { WorkspaceOleLinkPlugin }] =
       await Promise.all([
         import("@univerjs-pro/exchange-client"),
         import("../../web/src/features/editor/features/exchange-plugins.js"),
+        import("../../web/src/features/editor/features/ole-link-plugin.js"),
       ]);
     class UnitExchangePlugin {}
 
@@ -247,6 +248,7 @@ describe("Workspace mobile unit presets", () => {
             "https://workspace.test/universer-api/exchange/{type}/import",
         }),
       ],
+      WorkspaceOleLinkPlugin,
       UnitExchangePlugin,
     ]);
   }, 30_000);

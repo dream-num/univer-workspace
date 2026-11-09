@@ -1,4 +1,4 @@
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
 import { FileSource } from "@univerjs/protocol";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
@@ -15,6 +15,14 @@ export const MAX_UNIVER_ASSET_BYTES = 20 * 1024 * 1024;
 export type UniverAssetScope =
   | { readonly kind: "trunk" }
   | { readonly kind: "worktree"; readonly worktreeId: string };
+
+/** A file an Office import split out of a Unit; the import chose its Asset ID while converting. */
+export interface ImportedUniverAsset {
+  readonly assetId: string;
+  readonly filename: string;
+  readonly mediaType: string;
+  readonly bytes: Uint8Array;
+}
 
 export interface UniverAssetsModule {
   upload(
@@ -47,6 +55,19 @@ export interface UniverAssetsModule {
     readonly end: number;
     readonly partial: boolean;
   }>;
+  /**
+   * Server-side import path for files an Office import splits out of a Unit
+   * (images and embedded attachments). The import already authorized the
+   * target and created the Trunk Unit, so no Unit check runs here; the schema
+   * still requires that Unit to exist. Each file goes through the same upload
+   * lifecycle as a client upload, so an interrupted import is recovered or
+   * abandoned at startup like any other upload.
+   */
+  storeImported(input: {
+    readonly actorUserId: string;
+    readonly unitId: string;
+    readonly files: readonly ImportedUniverAsset[];
+  }): Promise<void>;
 }
 
 export function createUniverAssetsModule(options: {
@@ -109,6 +130,52 @@ export function createUniverAssetsModule(options: {
         return `/universer-api/file/${encodedAssetId}/content`;
       }
       return `/universer-api/worktrees/${encodeURIComponent(scope.worktreeId)}/file/${encodedAssetId}/content`;
+    },
+
+    async storeImported(input) {
+      for (const file of input.files) {
+        if (file.bytes.byteLength > maxAssetBytes) {
+          throw new ApplicationError(
+            "PAYLOAD_TOO_LARGE",
+            413,
+            `Imported file exceeds the ${maxAssetBytes} byte limit.`,
+            "file"
+          );
+        }
+        const createdAt = now();
+        const upload = options.repository.reserveUpload({
+          actorUserId: input.actorUserId,
+          unitId: input.unitId,
+          worktreeId: null,
+          originalFilename: (file.filename || "attachment").slice(0, 1024),
+          declaredMediaType: (file.mediaType || "application/octet-stream").slice(0, 255),
+          expectedSize: file.bytes.byteLength,
+          createdAt,
+          expiresAt: createdAt + 60 * 60 * 1000,
+          assetId: file.assetId,
+        });
+        try {
+          const stored = await options.store.put({
+            objectKey: upload.object_key,
+            body: Readable.from([
+              Buffer.from(file.bytes.buffer, file.bytes.byteOffset, file.bytes.byteLength),
+            ]),
+            expectedByteSize: file.bytes.byteLength,
+            detectMediaType: false,
+          });
+          options.repository.markStored({
+            uploadId: upload.id,
+            receivedSize: stored.byteSize,
+            sha256: stored.sha256,
+            etag: stored.etag,
+            updatedAt: now(),
+          });
+        } catch (error) {
+          options.repository.abandonUpload(upload.id, now());
+          throw error;
+        }
+        options.repository.publishStored(upload.id);
+      }
     },
 
     async openContent(userId, scope, assetId, rangeHeader) {
