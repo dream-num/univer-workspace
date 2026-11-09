@@ -1677,8 +1677,8 @@ agent-browser wait --text "Verify $VERIFY_UVW_RUN's Personal Space"
 agent-browser snapshot -c > "$EVIDENCE/mcp-agent-space-picker.txt"
 agent-browser screenshot "$EVIDENCE/mcp-agent-space-picker.png"
 agent-browser find role button click --name "Verify $VERIFY_UVW_RUN's Personal Space Personal Space" --exact
-# Adding a Space briefly remounts the navigation; wait before selecting Files again.
-agent-browser wait --text 'Files'
+# Adding a Space briefly remounts the navigation; wait for the Files tab itself, not the word.
+agent-browser wait --fn 'Array.from(document.querySelectorAll("[role=tab]")).some(tab => tab.textContent.trim() === "Files")'
 agent-browser find role tab click --name 'Files' --exact
 agent-browser find role button click --name 'Refresh files' --exact
 agent-browser wait --text 'No files'
