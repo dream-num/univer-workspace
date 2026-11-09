@@ -27,14 +27,14 @@ const [label, tool, json = '{}'] = argv;
 auth ??= existsSync(join(internal.run, 'home/mcp-token')) ? 'pat' : 'dev';
 const listing = ['tools', 'resources', 'instructions'].includes(mode);
 if (!['call', 'tools', 'doctor', 'resources', 'resource', 'instructions'].includes(mode) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '') ||
-    !['2026-07-28', '2025-11-25'].includes(protocol) || !['pat', 'dev', 'none', 'invalid'].includes(auth) ||
+    !['2026-07-28', '2025-11-25'].includes(protocol) || !['pat', 'oauth', 'dev', 'none', 'invalid'].includes(auth) ||
     (listing ? argv.length !== 1 : mode === 'resource' ? argv.length !== 2 : argv.length < 2 || argv.length > 3)) usage('Invalid command, label, protocol, or authentication mode');
 let args;
 try { args = JSON.parse(json); } catch { usage('Tool arguments must be a JSON object'); }
 if (args === null || typeof args !== 'object' || Array.isArray(args)) usage('Tool arguments must be a JSON object');
 
 function usage(message) {
-  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] <label>`);
+  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] <label>`);
   process.exit(2);
 }
 const requestId = `${label}.${randomBytes(4).toString('hex')}`;
@@ -59,9 +59,11 @@ const errors = [], responses = [];
 try {
   bearer = auth === 'dev' ? readFileSync(join(internal.run, 'home/mcp-session'), 'utf8').trim()
     : auth === 'pat' ? readFileSync(join(internal.run, 'home/mcp-token'), 'utf8').trim()
+    : auth === 'oauth' ? readFileSync(join(internal.run, 'home/mcp-oauth-access'), 'utf8').trim()
     : auth === 'invalid' ? randomBytes(24).toString('hex') : undefined;
   if (auth === 'dev' && !bearer) throw new Error('Missing MCP session; run verify-uvw user');
   if (auth === 'pat') patId = readFileSync(join(internal.run, 'home/mcp-token-id'), 'utf8').trim();
+  if (auth === 'oauth') patId = readFileSync(join(internal.run, 'home/mcp-oauth-client-id'), 'utf8').trim();
   const require = createRequire(join(internal.repo, 'apps/mcp/package.json'));
   const { Client, StreamableHTTPClientTransport } = require('@modelcontextprotocol/client');
   client = new Client({ name: 'verify-uvw', version: '1.0.0' }, {
@@ -179,7 +181,7 @@ function eventIssues(event) {
     if (!(key in event) || (required.includes(key) && event[key] == null)) issues.push(`Missing event field ${key}`);
   }
   if (event.schema_version !== 1 || !['none', 'cold_start', 'warm'].includes(event.executor)) issues.push('Invalid event version or executor');
-  const [kind, clientId] = auth === 'pat' ? ['pat', patId] : ['dev', 'dev'];
+  const [kind, clientId] = auth === 'pat' || auth === 'oauth' ? [auth, patId] : ['dev', 'dev'];
   if (event.auth_kind !== kind || event.client_id !== clientId) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
     const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_create', 'compile_markdown', 'compile_typst', 'compile_svg'].includes(tool)) ||
