@@ -48,13 +48,14 @@ if (command === 'vscode') {
   assert.ok(addresses.some(({address}) => address === '127.0.0.1'), 'The DNS probe must resolve to loopback');
   for (const [label, clientId] of [
     ['ipv4', 'https://127.0.0.1/x'], ['ipv6', 'https://[::1]/x'], ['dns-loopback', `https://${hostname}/x`],
-    ['query', `${claude}?query=1`], ['mismatch', `${vscode}/mismatch`],
+    ['query', `${claude}?query=1`], ['mismatch', claude.replace('https://claude.ai/', 'https://CLAUDE.ai/')],
   ]) {
     const url = authorize(clientId);
     const response = await fetch(url, { headers: { cookie }, redirect: 'manual' });
     const body = await response.text();
     assert.equal(response.status, 400, `${label}: ${body}`);
     assert.equal(response.headers.get('location'), null);
+    if (label === 'mismatch') assert.match(body, /client_id must match the requested URL exactly/);
     browser('open', url.href);
     browser('screenshot', join(evidence, `mcp-cimd-reject-${label}.png`));
     save(`mcp-cimd-reject-${label}`, { client_id: clientId, status: response.status, location: null, body, ...(label === 'dns-loopback' ? { hostname, addresses, public_domain: 'localtest.me', public_domain_addresses: publicAddresses } : {}) });

@@ -1579,7 +1579,9 @@ with `mcp-cimd-vscode.png` showing the consent page.
 
 4. Refuse private addresses, malformed identity and mismatched metadata; prove anonymous
 requests never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
-when it resolves to 127.0.0.1, adds a query to Claude's URL, and adds `/mismatch` to VS Code's URL.
+when it resolves to 127.0.0.1, adds a query to Claude's URL, and upper-cases the host in Claude's URL. The server fetches
+the same real document for `https://CLAUDE.ai/…`, but its `client_id` is the lower-case URL, so the
+error page must name the `client_id` mismatch.
 If fake-IP DNS also rewrites `localtest.me`, the helper records that answer and uses
 system-resolved `localhost` to exercise the same connection-level DNS refusal without
 changing host DNS or introducing a test-only server resolver.
