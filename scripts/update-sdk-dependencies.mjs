@@ -19,7 +19,11 @@ const INDEPENDENTLY_VERSIONED_PACKAGES = new Set([
   "@univerjs-pro/cli-assets",
   "@univerjs-pro/doc-typst-native-binding",
   // Optional peer of @univerjs-pro/exchange-node: the wrapper does not pull it
-  // in, so the application declares it to enable PDF conversion.
+  // in, so the application declares it to enable PDF conversion. Each
+  // exchange-node release pins its own peer range (1.3.1 → ~1.0.1, 1.4.0 →
+  // ~1.1.0); after an SDK bump, `pnpm peers check` must not report it, or
+  // deployments on platforms the old binding does not ship (Alpine/musl) fail
+  // every exchange task with NATIVE_LOAD_FAILED.
   "@univerjs-pro/exchange-pdf-node-binding",
 ]);
 // Native bindings owned by a wrapper package manifest. The repository consumes

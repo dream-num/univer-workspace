@@ -36,6 +36,7 @@ import {
   type UniverLicenseCredentials,
 } from "../../integrations/univer/univer-license.js";
 import { ApplicationError } from "../../middleware/errors.js";
+import { logger } from "../../logging/logger.js";
 import type { AccessResolver, NodeAccess, UnitType } from "../access/index.js";
 import type { ResourcesModule } from "../resources/index.js";
 import type { SpacesModule } from "../spaces/index.js";
@@ -235,6 +236,9 @@ export function createExchangeModule(options: {
             expiresAt: now() + ARTIFACT_TTL_MS,
           }),
         (error: unknown) => {
+          // The task only keeps the SDK's code and message; the cause (a native binding that
+          // did not load, a rejected license) is what operators need to diagnose a failure.
+          logger.error({ err: error, taskId: id, kind }, "exchange task failed");
           tasks.set(id, {
             id,
             ownerUserId,
