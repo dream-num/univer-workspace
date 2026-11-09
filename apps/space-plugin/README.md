@@ -136,12 +136,13 @@ send binding requires a supported per-attempt snapshot/admission API from DSH;
 composer blocks and pre-step hooks do not provide it. This remains a preview
 blocker. The separate **Ask for change** control captures its SDK selection at
 activation and retains the existing target, content, permission and revision checks.
-Its model request contains only the current selected text (or pending replacement)
-and instruction. Paragraph snapshots remain target-validation data, not generation
-context. A single structured response must match that selection request and contain
-only its replacement; legacy, mismatched, ambiguous or incomplete responses fail
-without projecting or applying a candidate. The existing Review/Accept remains
-the user's check on the proposed wording.
+Its model request separates the selected text from read-only surrounding paragraph
+text. The model returns a complete local fragment tied to that selection request.
+The Host verifies the exact unchanged prefix and suffix before extracting the
+replacement at those declared boundaries; it never searches for similar text or
+repairs a response. Legacy, mismatched, ambiguous, context-changing or incomplete
+responses fail without projecting a new candidate. Review remains the user's
+check on the proposed wording.
 
 Docs selection tools require unique IDs compatible with the SDK's public
 `PARAGRAPH_ID_PREFIX`. Capture validates

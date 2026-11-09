@@ -28,7 +28,7 @@ const focus = {
   paragraphs: [{ id: 'para_source', text: 'Alpha marker: TARGET. Beta marker: keep-beta. Gamma marker: keep-gamma.' }],
   nodeId: 'node', resourceId: 'resource', unitId: 'unit',
 };
-function fixture(reply, { finish = 'stop', blocks, editable = true, candidate } = {}) {
+function fixture(reply, { finish = 'stop', blocks, editable = true, candidate, target = focus } = {}) {
   const calls = [];
   const ctx = {
     agentDefaultModel: { currentSelection: () => ({ provider: 'provider', model: 'model' }) },
@@ -52,35 +52,46 @@ function fixture(reply, { finish = 'stop', blocks, editable = true, candidate } 
       node: { resource: { capabilities: { editContent: editable } } } };
   } };
   return { calls, run: (signal = new AbortController().signal) => selectionProposal(ctx, workspace,
-    { focus, instruction: 'Replace the selection with CHANGED; leave everything else unchanged.', candidate }, signal) };
+    { focus: target, instruction: 'Replace the selection with CHANGED; leave everything else unchanged.', candidate }, signal) };
 }
-const valid = request => JSON.stringify({ selectionId: request.selectionId, replacementText: 'CHANGED' });
+const frame = (r, replacement) => JSON.stringify({ selectionId: r.selectionId, resultText: r.context.before + replacement + r.context.after });
+const valid = r => frame(r, 'CHANGED');
 
-test('model receives one editable selection, never surrounding document text or identity', async () => {
+test('model receives readonly neighbors separately from the unique editable selection', async () => {
   const f = fixture(valid);
   assert.deepEqual(await f.run(), { text: 'CHANGED' });
   const request = f.calls[0], data = JSON.parse(request.messages[0].content[0].text);
   assert.equal(data.selectedText, focus.text);
   assert.equal(data.selectionId, focus.id);
+  assert.deepEqual(data.context, { before: 'Alpha marker: ', after: '. Beta marker: keep-beta. Gamma marker: keep-gamma.' });
   assert.equal(request.messages.length, 1);
   assert.equal(request.tools, undefined);
-  for (const outside of ['keep-beta', 'keep-gamma', 'Private document name', 'originalSelectedText'])
-    assert.ok(!JSON.stringify(request).includes(outside), outside);
-  assert.equal('context' in data, false);
 });
 
+for (const [name, transform] of [
+  ['prefix', r => ({ ...r, context: { ...r.context, before: 'Changed prefix' } })],
+  ['suffix', r => ({ ...r, context: { ...r.context, after: 'Changed suffix' } })],
+]) test(`changed readonly ${name} is rejected`, async () => {
+  await assert.rejects(fixture(r => valid(transform(r))).run(), error => error.status === 502);
+});
+test('replacement-only result is rejected, never guessed into a complete fragment', async () => {
+  await assert.rejects(fixture(r => JSON.stringify({ selectionId: r.selectionId, resultText: 'CHANGED' })).run(), error => error.status === 502);
+});
+test('a full edited paragraph is decoded by declared boundaries without duplicating context', async () => {
+  assert.deepEqual(await fixture(valid).run(), { text: 'CHANGED' });
+});
 test('legacy whole-paragraph text response is rejected rather than projected, trimmed or returned', async () => {
   const f = fixture(JSON.stringify({ text: focus.paragraphs[0].text.replace('TARGET', 'CHANGED') }));
   await assert.rejects(f.run(), error => error.status === 502);
 });
 for (const [name, reply] of [
-  ['wrong selection basis', () => JSON.stringify({ selectionId: 'another-selection', replacementText: 'CHANGED' })],
-  ['extra document field', r => JSON.stringify({ selectionId: r.selectionId, replacementText: 'CHANGED', document: 'whole document' })],
-  ['mixed old and new response', r => JSON.stringify({ selectionId: r.selectionId, replacementText: 'CHANGED', text: 'ambiguous' })],
+  ['wrong selection basis', () => JSON.stringify({ selectionId: 'another-selection', resultText: 'CHANGED' })],
+  ['extra document field', r => JSON.stringify({ selectionId: r.selectionId, resultText: 'CHANGED', document: 'whole document' })],
+  ['mixed old and new response', r => JSON.stringify({ selectionId: r.selectionId, resultText: 'CHANGED', text: 'ambiguous' })],
   ['array envelope', r => JSON.stringify([r.selectionId, 'CHANGED'])],
   ['null envelope', () => 'null'],
-  ['non-text replacement', r => JSON.stringify({ selectionId: r.selectionId, replacementText: { text: 'CHANGED' } })],
-  ['document control', r => JSON.stringify({ selectionId: r.selectionId, replacementText: 'bad\u0000text' })],
+  ['non-text replacement', r => JSON.stringify({ selectionId: r.selectionId, resultText: { text: 'CHANGED' } })],
+  ['document control', r => JSON.stringify({ selectionId: r.selectionId, resultText: 'bad\u0000text' })],
   ['prose outside JSON', r => 'Here is the edit: ' + valid(r)],
 ]) test(`unverified candidate is rejected: ${name}`, async () => {
   await assert.rejects(fixture(reply).run(), error => error.status === 502);
@@ -91,20 +102,35 @@ test('refinement uses only the pending replacement as its model input', async ()
   const data = JSON.parse(f.calls[0].messages[0].content[0].text);
   assert.equal(data.selectedText, 'Earlier suggestion');
   assert.ok(!JSON.stringify(data).includes('TARGET'));
+  assert.ok(data.context.after.includes('keep-beta'));
 });
 test('an explicitly verified empty replacement is a valid deletion', async () => {
-  const f = fixture(r => JSON.stringify({ selectionId: r.selectionId, replacementText: '' }));
+  const f = fixture(r => frame(r, ''));
   assert.deepEqual(await f.run(), { text: '' });
 });
 for (const finish of ['length', null]) test(`incomplete generation cannot become a candidate: ${finish ?? 'missing finish'}`, async () => {
   await assert.rejects(fixture(valid, { finish }).run(), error => error.status === 502);
 });
 test('separate text blocks cannot be concatenated into an apparently valid response', async () => {
-  const text = valid({ selectionId: focus.id });
+  const text = valid({ selectionId: focus.id, context: { before: 'Alpha marker: ', after: '. Beta marker: keep-beta. Gamma marker: keep-gamma.' } });
   await assert.rejects(fixture('', { blocks: [text.slice(0, 20), text.slice(20)] }).run(), error => error.status === 502);
 });
 test('revoked editing permission prevents model dispatch', async () => {
   const f = fixture(valid, { editable: false });
   await assert.rejects(f.run(), error => error.status === 403);
   assert.equal(f.calls.length, 0);
+});
+
+test('multi-paragraph framing uses exact captured offsets', async () => {
+  const target = { ...focus, text: 'tail\rSecond', start: 6, end: 6,
+    paragraphs: [{ id: 'para_first', text: 'First tail' }, { id: 'para_last', text: 'Second head' }] };
+  const f = fixture(valid, { target });
+  assert.deepEqual(await f.run(), { text: 'CHANGED' });
+  const data = JSON.parse(f.calls[0].messages[0].content[0].text);
+  assert.deepEqual(data.context, { before: 'First ', after: ' head' });
+});
+test('repeated context is not located by quote or similarity', async () => {
+  const target = { ...focus, start: 8, end: 14,
+    paragraphs: [{ id: 'para_repeat', text: 'TARGET--TARGET--TARGET' }] };
+  assert.deepEqual(await fixture(valid, { target }).run(), { text: 'CHANGED' });
 });
