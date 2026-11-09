@@ -14,6 +14,7 @@ import { importTool } from "./core/import.js";
 import { jobGetTool } from "./core/job-get.js";
 import { exportTool } from "./core/export.js";
 import { inspectTool } from "./core/inspect.js";
+import { screenshotTool } from "./core/screenshot.js";
 import { whoamiTool } from "./core/whoami.js";
 import { repoListTool } from "./core/repo-list.js";
 import { repoViewTool } from "./core/repo-view.js";
@@ -76,6 +77,7 @@ export const tools: readonly ToolDefinition[] = [
   fileUploadCreateTool,
   executeTool,
   inspectTool,
+  screenshotTool,
   importTool,
   exportTool,
   jobGetTool,

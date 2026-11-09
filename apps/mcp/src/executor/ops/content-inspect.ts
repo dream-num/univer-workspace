@@ -3,12 +3,11 @@ import {
   InspectionCommandInputError,
   parseInspectionQuery,
 } from "@univer-cli/content-inspection-command";
-import { getWorktree } from "@univerjs/univer-workspace-client-core";
-import { pullSpaceId, WorkspaceSpaceFeature } from "@univerjs/univer-workspace-client-core/product";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { opSpecs } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
+import { attributeRepo } from "./scope.js";
 
 export const contentInspect: Handler<"content.inspect"> = async (ctx, input) => {
   let query;
@@ -31,12 +30,7 @@ export const contentInspect: Handler<"content.inspect"> = async (ctx, input) => 
           unitId: input.unitId,
           worktreeId: input.scope.worktreeId,
         });
-  if (input.scope.kind === "worktree")
-    ctx.usage.repo =
-      (await pullSpaceId(
-        new WorkspaceSpaceFeature(async () => ctx.http()),
-        await getWorktree(ctx.http(), input.scope.worktreeId),
-      )) ?? null;
+  await attributeRepo(ctx, input.scope);
   const result = await inspectContent(
     {
       unitId: target.unitId,

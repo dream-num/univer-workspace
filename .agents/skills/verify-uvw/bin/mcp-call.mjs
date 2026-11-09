@@ -139,7 +139,7 @@ if (record) {
       const jobReturned = output?.job_id && output?.status === 'running';
       const deduplicated = result._meta?.['univer.workspace.deduplicated'] === true;
       if (deduplicated) {
-        if (!['import', 'export', 'compile_typst'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
+        if (!['import', 'export', 'compile_typst', 'screenshot'].includes(tool) || !args.idempotency_key) issues.push('Invalid deduplication marker');
         if (events.length !== 0) issues.push(`Deduplicated call emitted ${events.length} conversion events`);
       } else if (jobReturned) {
         if (events.length > 1) issues.push(`Expected at most one settled job event, found ${events.length}`);
@@ -159,7 +159,11 @@ const redact = value => bearer ? value.split(bearer).join('[REDACTED]') : value;
 const out = redact(pretty(output ?? null));
 const err = redact(errors.join('\n') + (errors.length ? '\n' : ''));
 save('out', out);
-save('result.json', redact(pretty({ ...result, protocolVersion: negotiated ?? null, request_id: requestId })));
+// An image content block is saved as <label>.image-<n>.png, so result.json keeps only its size.
+const images = (result?.content ?? []).filter(block => block.type === 'image');
+images.forEach((block, index) => save(`image-${index + 1}.png`, Buffer.from(block.data, 'base64')));
+const listed = images.length ? { ...result, content: result.content.map(block => block.type === 'image' ? { ...block, data: `<${block.data.length} base64 characters>` } : block) } : result;
+save('result.json', redact(pretty({ ...listed, protocolVersion: negotiated ?? null, request_id: requestId })));
 save('err', err);
 save('exit', `${code}\n`);
 process.stdout.write(out);
@@ -193,7 +197,7 @@ function eventIssues(event) {
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
   const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node'].includes(tool) || (['execute', 'inspect', 'screenshot', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
   const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true;
   const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
   const invalidUnitType = event.executor === 'none' || compileOnlyTypst

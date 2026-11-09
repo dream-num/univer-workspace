@@ -661,6 +661,7 @@ it("declares the rerun policy for every executor operation", () => {
     "typst.compile": [], "svg.compile": ["auth"],
     "exchange.import": [], "exchange.export": ["auth"],
     "content.execute": ["revision", "auth"], "content.inspect": ["auth", "revision"],
+    "render.screenshot": ["auth", "revision"],
     "diagnostics.probe": [],
   });
 });

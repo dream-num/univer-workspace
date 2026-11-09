@@ -19,6 +19,7 @@ import type { Handler, OpContext } from "./context.js";
 import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js";
 import { mapRuntimeError, timeoutError } from "./errors.js";
 import { handlers } from "./ops/index.js";
+import { createRendererClient } from "./renderer-client.js";
 import { bindRuntime, getRuntimeRerun } from "./runtime.js";
 import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
@@ -123,6 +124,13 @@ export function createDispatcher(
         transportOrigin: config.WORKSPACE_TRANSPORT_URL,
         usage,
         http: () => http,
+        renderer: createRendererClient({
+          url: config.MCP_RENDERER_URL,
+          internalToken: config.MCP_INTERNAL_TOKEN,
+          requestId: header.requestId,
+          deadlineAt,
+          signal: controller.signal,
+        }),
         onCreateUnit: () => {
           writeStarted = true;
         },

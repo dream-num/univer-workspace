@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { screenshotOutput } from "./screenshot-schema.js";
 import { opMetaSchema } from "./usage.js";
 
 export const PROTOCOL_VERSION = 1;
@@ -68,6 +69,18 @@ export const inspectionOptions = z.object({
   target: inspectionTarget,
   selectors: z.array(z.string()).optional(),
   worksheet: z.string().optional(),
+});
+// The strings are `uvw screenshot` flag values; the executor parses them with the CLI's own command.
+export const screenshotOptions = z.object({
+  pages: z.string().optional(),
+  contactSlide: z.boolean().optional(),
+  tile: z.string().optional(),
+  sheet: z.string().optional(),
+  range: z.string().optional(),
+  region: z.string().optional(),
+  elements: z.string().optional(),
+  padding: z.number().optional(),
+  scale: z.number().optional(),
 });
 export const codeInput = z
   .string()
@@ -419,6 +432,24 @@ export const opSpecs = {
         unitId: z.string().min(1),
       })
       .catchall(z.json()),
+    route: (input) => ({
+      scope: input.scope.kind === "trunk" ? "trunk" : `worktree:${input.scope.worktreeId}`,
+      unitId: input.unitId,
+    }),
+  }),
+  "render.screenshot": defineOp({
+    queueFor: () => true,
+    name: "render.screenshot",
+    effect: "read",
+    payload: "response",
+    rerun: ["auth", "revision"],
+    limits: { requestBytes: 256 * 1024, responseBytes: 64 * MiB, budgetMs: JOB_DEADLINE_MS },
+    input: z.object({
+      scope: runtimeScope,
+      unitId: z.string().min(1),
+      options: screenshotOptions,
+    }),
+    output: screenshotOutput,
     route: (input) => ({
       scope: input.scope.kind === "trunk" ? "trunk" : `worktree:${input.scope.worktreeId}`,
       unitId: input.unitId,

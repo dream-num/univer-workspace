@@ -8,6 +8,7 @@ const environment = z.object({
   WORKSPACE_ORIGIN: origin,
   WORKSPACE_TRANSPORT_URL: origin.optional(),
   MCP_INTERNAL_TOKEN: z.string().min(32),
+  MCP_RENDERER_URL: origin.optional(),
   MCP_EXECUTOR_CREDENTIALS: z.literal("session").default("session"),
   EXECUTOR_MAX_JOBS: positive.default(2),
   EXECUTOR_JOB_HEAP_MB: positive.default(256),

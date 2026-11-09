@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { PROTOCOL_VERSION } from "./executor-protocol.js";
+import { box, screenshotImage, screenshotOutput, unitType } from "./screenshot-schema.js";
 
 export { responseHeaderSchema } from "./executor-protocol.js";
+export { screenshotImage, screenshotOutput };
 
 // The renderer receives no grant: it has no route to Workspace and holds no user credentials.
 const MiB = 1024 * 1024;
-const unitType = z.enum(["sheet", "doc", "slide", "board", "base"]);
 // Univer owns the deep unit shape; the render packages reject malformed data with INVALID_INPUT.
 const unitData = z.record(z.string(), z.unknown());
 const embeddedUnit = z.object({ unitType, unitData });
@@ -19,7 +20,6 @@ export const renderUnitSchema = z.object({
 });
 
 const scale = z.number().positive().optional();
-const box = z.object({ left: z.number(), top: z.number(), width: z.number(), height: z.number() });
 const screenshotTarget = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("sheet-viewport"), scale }),
   z.strictObject({
@@ -50,30 +50,6 @@ const screenshotTarget = z.discriminatedUnion("kind", [
 ]);
 
 export const screenshotInput = renderUnitSchema.extend({ target: screenshotTarget.optional() });
-export const screenshotImage = z.object({
-  name: z.string(),
-  mediaType: z.literal("image/png"),
-  width: z.number(),
-  height: z.number(),
-  offset: z.int().nonnegative(),
-  size: z.int().nonnegative(),
-  page: z.number().optional(),
-  pageId: z.string().optional(),
-  range: z.string().optional(),
-  role: z.enum(["board-content", "contact-slide"]).optional(),
-  scale: z.number().optional(),
-  sheetName: z.string().optional(),
-  tiles: z.number().optional(),
-  padding: z.number().optional(),
-  contentBounds: box.optional(),
-  boardSelector: z.json().optional(),
-  layoutAnalysis: z.json().optional(),
-});
-export const screenshotOutput = z.object({
-  unitId: z.string(),
-  unitType,
-  images: z.array(screenshotImage),
-});
 
 export const printPdfInput = renderUnitSchema;
 export const printPdfOutput = z.object({

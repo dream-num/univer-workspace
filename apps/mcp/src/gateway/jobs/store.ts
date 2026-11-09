@@ -10,8 +10,10 @@ import { JOB_TTL_MS, type JobRecord } from "./model.js";
 // A job never outlives the session that must finish it.
 const GRANT_MARGIN_MS = 5_000;
 
+const readTools: readonly JobRecord["tool"][] = ["export", "screenshot"];
+
 function deadlineError(tool: JobRecord["tool"]) {
-  return tool !== "export"
+  return !readTools.includes(tool)
     ? resultUnknown("deadline", true)
     : {
         outcome: "timeout" as const,
@@ -35,6 +37,21 @@ export class ToolJobs {
     private readonly now = Date.now,
     private readonly deadlineMs = JOB_DEADLINE_MS,
   ) {}
+
+  // A read job's result lives as long as its first download link.
+  private downloadExpiry(output: object): number {
+    const links = z
+      .union([
+        z.object({ download: downloadSchema }).transform(({ download }) => [download]),
+        z
+          .object({ images: z.array(z.object({ download: downloadSchema })) })
+          .transform(({ images }) => images.map((image) => image.download)),
+      ])
+      .parse(output);
+    return links.length === 0
+      ? this.now() + JOB_TTL_MS
+      : Math.min(...links.map((link) => Date.parse(link.expires_at)));
+  }
 
   private releaseKey(entry: Entry) {
     if (entry.record.key === undefined) return;
@@ -213,12 +230,9 @@ export class ToolJobs {
           ...record,
           status: "succeeded",
           result: z.record(z.string(), z.json()).parse(result.output),
-          expiresAt:
-            record.tool === "export"
-              ? Date.parse(
-                  z.object({ download: downloadSchema }).parse(result.output).download.expires_at,
-                )
-              : this.now() + JOB_TTL_MS,
+          expiresAt: readTools.includes(record.tool)
+            ? this.downloadExpiry(result.output)
+            : this.now() + JOB_TTL_MS,
         };
         await this.staging.writeJob(succeeded);
         entry.record = succeeded;

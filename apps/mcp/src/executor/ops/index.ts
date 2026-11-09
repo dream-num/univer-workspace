@@ -12,6 +12,7 @@ import { typstCompile } from "./typst-compile.js";
 import { svgCompile } from "./svg-compile.js";
 import { markdownCompile } from "./markdown-compile.js";
 import { markdownExport } from "./markdown-export.js";
+import { renderScreenshot } from "./render-screenshot.js";
 
 export const handlers = {
   "htmlView.validate": htmlViewValidate,
@@ -24,5 +25,6 @@ export const handlers = {
   "exchange.export": exchangeExport,
   "content.execute": contentExecute,
   "content.inspect": contentInspect,
+  "render.screenshot": renderScreenshot,
   "diagnostics.probe": diagnosticsProbe,
 } satisfies { [K in OpName]: Handler<K> };
