@@ -173,7 +173,10 @@ Workspace 产品 API 与协同端点
 
 - **不透传。** 用户交给 MCP 的 token 不直接发给 Workspace 产品 API。这是 MCP 安全规范的要求。
 - **token exchange 兼作校验。** 网关把收到的 access token 或 PAT 作为 `subject_token` 提交给 Workspace，换回下游凭据。换取失败即视为认证失败。
-  网关按 token 摘要缓存下游凭据直到过期，避免每次调用都换取。
+  网关按 token 摘要缓存换取结果，最长 30 秒且不超过下游凭据的有效期，避免每次调用都换取。
+  token 吊销时它派生的下游凭据一并失效，所以访问 Workspace 的下一次调用返回 401 并清除缓存；
+  不访问 Workspace 的调用（例如 `whoami`、`api_find`）在缓存剩余时间内仍会成功。这个最长 30 秒的窗口是
+  产品负责人在 2026-11-09 接受的取舍：这类调用不读写用户的 Workspace 数据。
 - **scope 由网关执行。** 下游凭据仍是普通登录 session，带用户的全部权限。网关在调用工具前检查 scope。
   Workspace 产品 API 第一阶段不需要逐路由识别 scope。执行层如何持有和使用下游凭据，由阶段 G 的安全设计最终确定。
 - **认证失败的表现。** 网关返回 HTTP 401 和 `WWW-Authenticate`（带 `resource_metadata`），让客户端重新走 OAuth。这对应 CLI 的退出码 4。
