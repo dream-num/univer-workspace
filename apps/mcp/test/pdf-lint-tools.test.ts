@@ -312,15 +312,16 @@ describe("lint tool", () => {
     const missing = await t.client.callTool({ name: "lint", arguments: { unit: "u" } });
     expect(missing.isError).toBe(true);
     expect(t.requests).toHaveLength(0);
-    const message =
-      "workspace-unit-layout-lint-unit-type-unsupported: Slide layout lint requires a Slide Unit; u is sheet.";
-    t.reply(failure("workspace-argument-invalid", message));
+    const message = "Slide layout lint requires a Slide Unit; u is sheet.";
+    t.reply(failure("workspace-unit-layout-lint-unit-type-unsupported", message));
     const result = await t.client.callTool({
       name: "lint",
       arguments: { unit: "u", worktree: "wt-1" },
     });
     expect(result.isError).toBe(true);
     expect(result.content).toEqual([{ type: "text", text: message }]);
-    expect(result.structuredContent).toMatchObject({ code: "workspace-argument-invalid" });
+    expect(result.structuredContent).toMatchObject({
+      code: "workspace-unit-layout-lint-unit-type-unsupported",
+    });
   });
 });

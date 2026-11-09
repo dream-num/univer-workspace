@@ -59,8 +59,13 @@ export async function lintInput(
       { from: "user" },
     );
   } catch (error) {
-    if (error instanceof CommanderError)
-      throw workspaceError("workspace-argument-invalid", error.message);
+    if (error instanceof CommanderError) {
+      // The command renders an application error as `<code>: <message>`; keep its code.
+      const coded = /^(workspace-[a-z0-9-]+): ([\s\S]*)$/.exec(error.message);
+      throw coded?.[1] !== undefined && coded[2] !== undefined
+        ? workspaceError(coded[1], coded[2])
+        : workspaceError("workspace-argument-invalid", error.message);
+    }
     throw error;
   }
   if (built === undefined) throw new Error("The lint command did not build an input.");

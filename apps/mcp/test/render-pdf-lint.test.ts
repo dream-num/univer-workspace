@@ -191,18 +191,23 @@ describe("render.lint", () => {
     ).toBeUndefined();
   });
 
+  it("rejects a non-Slide Unit with the CLI's code and message", async () => {
+    const f = setup("sheet", lintOutput);
+    await expect(renderLint(f.ctx, { worktreeId: "wt-1", unitId: "unit" })).rejects.toMatchObject({
+      code: "workspace-unit-layout-lint-unit-type-unsupported",
+      message: "Slide layout lint requires a Slide Unit; unit is sheet.",
+    });
+    expect(f.rendererFetch).not.toHaveBeenCalled();
+  });
+
   it.each([
-    ["sheet", undefined, "Slide layout lint requires a Slide Unit; unit is sheet."],
-    ["slide", "3-1", "Invalid page selector: 3-1"],
-    ["slide", " ", "--pages cannot be empty"],
-  ])("rejects a %s Unit with pages %j using the uvw message", async (unitType, pages, message) => {
-    const f = setup(unitType, lintOutput);
+    ["3-1", "Invalid page selector: 3-1"],
+    [" ", "--pages cannot be empty"],
+  ])("rejects pages %j with the uvw message", async (pages, message) => {
+    const f = setup("slide", lintOutput);
     await expect(
       renderLint(f.ctx, { worktreeId: "wt-1", unitId: "unit", pages }),
-    ).rejects.toMatchObject({
-      code: "workspace-argument-invalid",
-      message: expect.stringContaining(message),
-    });
+    ).rejects.toMatchObject({ code: "workspace-argument-invalid", message });
     expect(f.rendererFetch).not.toHaveBeenCalled();
   });
 });
