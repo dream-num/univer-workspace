@@ -94,6 +94,12 @@ jobs:
         run: |
           make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR"
 
+      - name: Build and Push MCP Image
+        env:
+          IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+        run: |
+          make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR" REPOSITORY=colla-workspace-mcp IMAGE_DIR=./apps/mcp
+
   deploy-k8s:
     name: DeployK8s
     runs-on: arc-runner-set
