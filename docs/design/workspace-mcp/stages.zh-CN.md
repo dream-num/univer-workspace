@@ -385,6 +385,18 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
 - [ ] 限流触发时，客户端得到可读的错误信息。
 - [ ] 用量事件进入日志管道，能按用户、客户端、工具汇总一天的调用量。
 
+**部署记录（2026-11-10，镜像 `sha-82be1c84`）。** 网关和执行层已部署到 staging 与 prod，渲染服务未部署，限流按产品负责人决定延后。
+部署形态没有新建 Helm release，而是照 Workspace 的方式在 `dream-num/helm-chart-private` 增加 `deploy/colla-workspace-mcp/`：
+`push.yml` 用同一个 tag 构建两个镜像（#284），dispatch workflow 先发布 Workspace，等它就绪后再发布 MCP（helm-chart-private#376、#377）。
+
+- staging（`workspace.univer.plus`）：执行层白名单为 `*`（#283，内部用户）。401 质询、两份元数据、`/readyz`（workspace、token_exchange、executor）通过；
+  opencode 经 CIMD 完成 OAuth；`console-deepseek/deepseek-flash#high` 以一句自然语言完成新建表格、开 PR、`execute`、`inspect`、ready，网关用量事件全部是 `auth_kind: oauth`。
+- prod（`space.univer.ai`）：白名单只有产品负责人一个账号（helm-chart-private#378）。暂存目录使用新建的加密 EFS（静态 NFS PV）。同样的检查和旅程全部通过。
+- 事故：prod 首次发布时 MCP Pod 按 `biz-intensive` 偏好落到唯一的 c5.xlarge 节点，该节点上其他 Pod 的 memory request 远低于实际用量，
+  MCP 加入并滚动一次后节点内存耗尽，失联约 14 分钟，Workspace 与同节点的其他服务不可用，重启实例后恢复。prod MCP 改为只调度到通用节点、
+  memory request 按实测设置（helm-chart-private#379），Workspace 改到独占节点。staging 集群 CPU request 接近用满，staging MCP 的 sidecar CPU request 降为 10m。
+- 未做：上面的六项验收；不在白名单内的用户在 prod 上的行为只由本地 MB 旅程覆盖；“连接到 AI 助手”设置页、Grafana 面板、渲染服务、限流、运维手册。
+
 ## 阶段 I：来源归因（可选）
 
 **目标。** Workspace 的 Space 活动统计能区分 MCP 客户端与 CLI。
