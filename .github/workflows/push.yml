@@ -1,5 +1,7 @@
 name: Deploy Workspace
 
+run-name: "[${{ inputs.environment }}]: ${{ inputs.runner-name }} machine deploy ${{ inputs.acr-region }} image"
+
 on:
   workflow_dispatch:
     inputs:
