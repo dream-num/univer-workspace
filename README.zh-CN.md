@@ -52,6 +52,17 @@ Workspace Agent 是基于 DSH（DeepSeek Harness）的本地 Web 应用。
 它的本地文件引用指向运行 Agent 的机器，Workspace 文档仍由连接的服务管理。
 Agent 和 CLI 都可以连接现有的 Workspace 部署，或在本地启动的 Workspace。
 
+## Space Preview（预览版）
+
+Space 是面向 Univer Workspace 的概念验证插件，安装在官方 DeepSeek Harness（DSH）中。
+它连接你的 Workspace 服务，让你浏览文件、编辑 Univer Docs 与 Sheets，并在打开的文档
+旁边与 AI 对话。
+
+![Space 在 DeepSeek Harness 中的预览：文件导航、Univer 文档与对话输入框](apps/space-plugin/docs/images/space-preview.png)
+
+安装包、安装步骤与已知限制见 [Space 插件指南](apps/space-plugin/README.zh-CN.md)。
+Space 是可选的，不替代 Workspace Agent。评估此预览版期间请使用非关键文档。
+
 ## 工作原理
 
 ```mermaid
