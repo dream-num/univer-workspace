@@ -4,6 +4,7 @@ import type { JobRecord } from "../jobs/model.js";
 export const purposeSchema = z.enum([
   "office-import",
   "blob",
+  "html-view",
   "markdown-assets",
   "svg-assets",
   "typst-bundle",
@@ -57,6 +58,7 @@ export type UploadLimits = Readonly<Record<UploadPurpose, number>>;
 export const defaultLimits: UploadLimits = {
   "office-import": 50 * 1024 * 1024,
   blob: 512 * 1024 * 1024,
+  "html-view": 512 * 1024,
   "markdown-assets": 50 * 1024 * 1024,
   "svg-assets": 50 * 1024 * 1024,
   "typst-bundle": 50 * 1024 * 1024,

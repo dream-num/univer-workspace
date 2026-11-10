@@ -167,6 +167,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_STAGING_DIRECTORY` | Required | Private 0700 directory owned by the gateway uid. Atomic JSON sidecars and byte files; startup and minute sweeps remove expired objects |
 | `MCP_STAGING_USER_MAX_BYTES` | `2147483648` (2 GiB) | Combined staged upload/download bytes per user; in-flight bytes count too. Accounting is per gateway replica, refreshed from valid sidecars on startup and each minute |
 | `MCP_STAGING_USER_MAX_PENDING_UPLOADS` | `20` | Pending upload reservations per user |
+| `MCP_UPLOAD_HTML_VIEW_MAX_BYTES` | `524288` | HTML upload staging limit in bytes; tools always enforce the 512 KiB UTF-8 cap |
 | `MCP_UPLOAD_BLOB_MAX_BYTES` | `536870912` | Blob upload/download staging limit in bytes; align with Workspace `maxBlobBytes` |
 | `MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`, `MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`, `MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`, `MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` | `52428800` each | Per-purpose upload limits in bytes |
 | `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp-<uid>/resources` | Private directory where the SVG resource catalog caches downloaded SVG files. Public data shared by gateway users under the same uid |
@@ -236,7 +237,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
-| `file_upload_create` | Required `purpose`, `file_name`, `media_type`; optional `size` (upper bound) | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
+| `file_upload_create` | Required `purpose` (`office-import`, `blob`, `html-view`, `markdown-assets`, `svg-assets`, `typst-bundle`), `file_name`, `media_type`; optional `size` (upper bound) | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
 | `screenshot` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `pages`, `contact_slide`, `tile`, `sheet`, `range`, `region`, `elements`, `padding`, `scale`, `idempotency_key` | `{ unitId, unitType, images: [{ name, width, height, size, page?, ... }] }`. Within the synchronous wait and at most 1 MiB in total, each PNG is also an MCP `image` content block after the text line and entries carry no link. Otherwise each entry carries a `download` link and there are no image blocks. A long render returns a job; `job_get` results always carry links. Options are the `uvw screenshot` flag values and are parsed with the CLI's own command, so rejections read like `uvw` (`workspace-argument-invalid`, or `workspace-render-input-invalid` from the renderer) |
@@ -250,6 +251,8 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
+| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
+| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | Bare CLI upload fields plus `workspaceUrl`. Publishes validated bytes directly; reuse the same upload and key on retry |
 | `blob_get` | Required `resource` | `{ node, resource }` |
 | `blob_upload` | Required `upload_id`, `space`, `idempotency_key`; optional `name` (defaults to uploaded file name), `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
 | `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
@@ -523,7 +526,7 @@ matching purpose. A foreign upload is reported as not found. Consumption retains
 for idempotent retries until its one-hour expiry. Workspace remains the permission authority.
 
 `blob` accepts any syntactically valid media type. `office-import` accepts the OpenXML
-Word, Excel and PowerPoint types and the legacy Office types. CSV is not supported by this import workflow. The other three
+Word, Excel and PowerPoint types and the legacy Office types. CSV is not supported by this import workflow. `html-view` accepts `text/html` up to 512 KiB by default. The three ZIP
 purposes accept `application/zip` and `application/x-zip-compressed`. The office upload cap
 does not lift Workspace's 1 MiB UnitData commit limit. Office import refuses converted UnitData above 900 KiB inside the child before IPC and again before creating a Unit, with `workspace-import-too-large` and byte counts. Markdown, Typst and SVG ZIPs are consumed by `compile_markdown`, `compile_typst` and `compile_svg` respectively.
 
@@ -643,8 +646,14 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
-The `files` toolset includes `html_view_validate {html}` (`read`) and
-`html_view_create {html, space, name, parent?, idempotency_key}` (`publish`).
+The `files` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
+`html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`publish`).
+Each call requires exactly one of `html` or `html_upload_id`; both or neither return
+`workspace-argument-invalid`. For a local page, reserve `file_upload_create` with purpose
+`html-view` and media type `text/html`, PUT its bytes, then pass the ready upload ID as
+`html_upload_id`. Uploads must be valid UTF-8 and at most 512 KiB, even if the staging
+limit is raised. Invalid UTF-8 or oversized ready uploads return `workspace-argument-invalid`.
+The upload remains available for retries until its one-hour expiry.
 Both run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
 referenced trunk Sheet through the caller-bound `exportUnitData`. They validate
 declarative bindings without executing page JavaScript. The CLI retains file
@@ -660,10 +669,10 @@ with stable original filename `view.univer.html`. It creates no temporary HTML f
 Validation and source-read failures before upload preserve their read error semantics;
 a pre-upload deadline is retryable and never reports `workspace-result-unknown`.
 Generate a 16 to 200 character URL-safe idempotency key before creation and reuse it
-with identical HTML and destination after `workspace-result-unknown`.
+with identical HTML or the same upload ID and destination after `workspace-result-unknown`.
 
-Runtime exports report worker observations. Successful creation adds HTML UTF-8
-`upload_bytes` at the gateway, including when a page has no bindings and
+Runtime exports report worker observations. Consumed HTML uploads add `upload_bytes` at the gateway; successful inline creation adds HTML UTF-8
+`upload_bytes`, including when a page has no bindings and
 `executor: none`; Blob publication creates no committed Unit revisions.
 
 ## Markdown tools

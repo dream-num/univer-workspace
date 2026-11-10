@@ -227,6 +227,10 @@ for one hour after reservation. Never pass a local file path to a tool.
 
 - `import`, `blob_upload` and `blob_replace` consume upload_id. Choose purpose
   office-import for Office input or blob for original files.
+- `html_view_validate` and `html_view_create` take exactly one of inline html or
+  html_upload_id. Reserve purpose html-view with media_type text/html for a local
+  page, upload its bytes, then pass its upload_id as html_upload_id. HTML must be
+  valid UTF-8 and at most 512 KiB. Reuse the upload and idempotency_key on creation retries.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
 - `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at

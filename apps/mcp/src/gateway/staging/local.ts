@@ -247,7 +247,8 @@ export class LocalStagingStore implements StagingStore {
     const input = uploadInputSchema.parse(value);
     if (
       (input.purpose === "office-import" && !officeTypes.has(input.media_type)) ||
-      (!["office-import", "blob"].includes(input.purpose) &&
+      (input.purpose === "html-view" && input.media_type !== "text/html") ||
+      (!["office-import", "blob", "html-view"].includes(input.purpose) &&
         !["application/zip", "application/x-zip-compressed"].includes(input.media_type))
     ) {
       throw workspaceError(
