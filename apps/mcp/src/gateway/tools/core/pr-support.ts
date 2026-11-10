@@ -75,6 +75,9 @@ export async function transitionPr(
   action: "merge" | "discard",
 ) {
   const { worktree, spaceId } = await findPr(context, repo, number);
-  const updated = await worktreeFeature(context).transition(worktree.id, action);
-  return { output: prWithUrl(context, updated, spaceId), repo: spaceId };
+  const worktrees = worktreeFeature(context);
+  const updated = await worktrees.transition(worktree.id, action);
+  // The merge response is a summary without Units; read them back to report what entered trunk.
+  const result = action === "merge" ? await worktrees.get(worktree.id) : updated;
+  return { output: prWithUrl(context, result, spaceId), repo: spaceId };
 }
