@@ -6,10 +6,11 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm -r test",
+    "test": "pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm test:docker-inputs && pnpm -r test",
     "test:sdk-dependencies": "node --test scripts/update-sdk-dependencies.test.mjs scripts/sdk-type-identity.test.mjs",
     "test:univer-license": "node --test scripts/update-univer-license.test.mjs",
     "test:release": "node --test scripts/release/*.test.mjs",
+    "test:docker-inputs": "node --test scripts/docker-inputs.test.mjs",
     "check": "pnpm typecheck && pnpm test",
     "format": "oxfmt",
     "format:check": "oxfmt --check",

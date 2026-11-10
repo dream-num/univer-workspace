@@ -42,7 +42,7 @@ jobs:
             run: pnpm --filter univer-workspace-cli test
           - stage: test-rest
             run: >-
-              pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release &&
+              pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm test:docker-inputs &&
               pnpm -r --no-sort --filter '!@univerjs/univer-workspace' --filter '!univer-workspace-cli' test
           - stage: package
             run: >-
