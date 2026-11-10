@@ -21,7 +21,9 @@ export async function markdownOperation<T>(operation: () => Promise<T>): Promise
         });
       throw workspaceError(
         "workspace-markdown-invalid",
-        error.message,
+        hasCode("DOC_MARKDOWN_SOURCE_MAP_INVALID")
+          ? `${error.message} Pass the sourceMap returned by the last compile_markdown or export_markdown of this Doc; hand-built maps are rejected. A Doc without one can be read with inspect or read-only execute.`
+          : error.message,
         "diagnostics" in error ? { diagnostics: error.diagnostics } : undefined,
       );
     }

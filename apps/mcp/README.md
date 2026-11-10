@@ -259,8 +259,8 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key` | `{ replacement: { operationId, resourceId, etag } }`. Destructive, requires `publish` |
 | `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
 | `compile_markdown` | `markdown`; optional `assets_upload_id`, `title`; target options require `apply` | CLI compile result with `committed`, `targetUnitId`, diagnostics and materialized `sourceMap`; compile-only also returns `javascript` |
-| `export_markdown` | `worktree`, `unit`, `source_map`, `blocks` | Current Markdown, revision, source map, diagnostics and `assets: [{path, download}]` |
-| `print_pdf` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `idempotency_key` | `{ unitId, unitType, pageCount, download }`; the PDF link expires in 15 minutes. Base Units are rejected with the CLI's message. A long print returns a job, like `export` |
+| `export_markdown` | `worktree`, `unit`, `source_map`, `blocks` | Current Markdown in Univer directive syntax (not GitHub Markdown), revision, source map, diagnostics and `assets: [{path, download}]`. `source_map` must come from the last `compile_markdown` or `export_markdown` of the Doc |
+| `print_pdf` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `idempotency_key` | `{ unitId, unitType, pageCount, download }`; the PDF link expires in 15 minutes. Base Units are rejected with the CLI's message. A long print returns a job, like `export`. Layout follows the renderer's default page; there are no paper, orientation, range or fit options |
 | `lint` | Required `unit`, `worktree`; optional `pages` (`1,3-5,cover` or `all`) | The bare `uvw lint --json` report `{ kind, unitId, unitType, coverage, findings }`. Slide Units only, otherwise the CLI's `workspace-unit-layout-lint-unit-type-unsupported` code and message; a bad `pages` is `workspace-argument-invalid`; no trunk, as in the CLI. Always synchronous |
 
 `admin` toolset:

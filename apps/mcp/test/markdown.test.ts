@@ -387,7 +387,7 @@ it.each(["update", "export"])(
     expect(mapRuntimeError(error, mode === "update" ? "write" : "read")).toEqual({
       outcome: "tool_error",
       code: "workspace-markdown-invalid",
-      message: expected instanceof Error ? expected.message : "",
+      message: `${expected instanceof Error ? expected.message : ""} Pass the sourceMap returned by the last compile_markdown or export_markdown of this Doc; hand-built maps are rejected. A Doc without one can be read with inspect or read-only execute.`,
       detail: {
         diagnostics: [
           expect.objectContaining({

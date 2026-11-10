@@ -12,7 +12,7 @@ export const exportMarkdownTool = executorTool({
   scope: "read",
   title: "Export current Doc blocks as Markdown",
   description:
-    "Read current native Doc blocks as Markdown, a refreshed sourceMap and private asset download links valid for 15 minutes. Like the CLI, requires the source_map from the last successful compile or export and distinct explicit blocks. No resource bytes are inlined.",
+    "Read current native Doc blocks as Markdown, a refreshed sourceMap and private asset download links valid for 15 minutes. Like the CLI, requires the source_map from the last successful compile or export and distinct explicit blocks; a hand-built map is rejected, and a Doc never compiled from Markdown has none, so read it with inspect or read-only execute instead. Output uses Univer directive Markdown (::heading, :span{...}), not GitHub Markdown; convert it before handing it to the user as plain Markdown. No resource bytes are inlined.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
     worktree: z.string().min(1),
