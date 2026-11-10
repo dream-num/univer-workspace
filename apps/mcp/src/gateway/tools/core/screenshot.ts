@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { opSpecs } from "../../../shared/executor-protocol.js";
@@ -38,7 +39,7 @@ export const screenshotTool = executorTool({
     elements: text("Board element IDs separated by commas.").optional(),
     padding: z.number().describe("Board content padding in pixels.").optional(),
     scale: z.number().describe("Board selector scale between 0.1 and 4.").optional(),
-    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional(),
+    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional().describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   outputSchema: screenshotOutput.extend({
     images: z.array(imageEntry.extend({ download: downloadSchema.optional() })),

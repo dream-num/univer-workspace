@@ -1,7 +1,7 @@
 import { WorkspaceBlobFeature, nodeUrl } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
-import { blobResourceSchema, nodeSummarySchema } from "../schemas.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION, blobResourceSchema, nodeSummarySchema } from "../schemas.js";
 import { resolveRepo, repoInput } from "../core/issue-support.js";
 import { stagingStore } from "./staging-support.js";
 const inputSchema = z.object({
@@ -10,7 +10,7 @@ const inputSchema = z.object({
   parent: z.string().optional(),
   name: z.string().optional(),
   media_type: z.string().optional(),
-  idempotency_key: z.string().min(1),
+  idempotency_key: z.string().min(1).describe(IDEMPOTENCY_KEY_DESCRIPTION),
 });
 export const blobUploadTool: ToolDefinition = {
   name: "blob_upload",

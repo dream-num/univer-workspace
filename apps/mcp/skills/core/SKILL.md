@@ -179,9 +179,10 @@ the `doc` Skill), `compile_typst` for a Typst Doc, or `import` for Office conten
 Choose the destination Space and stable parent nodeId deliberately. Do not add
 an unrelated Unit to an existing task Worktree.
 
-Generate an idempotency key before creation and reuse it only with identical
-inputs on retry. Use a new key for an intentional second copy. Where a schema
-requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
+Every creating tool takes an idempotency key. Generate a new random value, such
+as a UUID, for each new operation. Reuse it only to retry the same call with
+identical arguments. Never derive it from names or reuse a key from earlier work.
+Where a schema requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
 underscores or hyphens. After an unknown content commit, read back before retrying.
 
 ## Edit one Unit

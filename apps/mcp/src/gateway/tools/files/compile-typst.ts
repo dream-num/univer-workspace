@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
 import { typstCompileInput, opSpecs } from "../../../shared/executor-protocol.js";
@@ -20,7 +21,7 @@ export const compileTypstTool = executorTool({
     worktree: z.string().min(1).optional(),
     space: repoInput.optional(),
     parent: z.string().min(1).optional(),
-    idempotency_key: typstCompileInput.shape.idempotencyKey,
+    idempotency_key: typstCompileInput.shape.idempotencyKey.describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   op: opSpecs["typst.compile"],
   job: { tool: "compile_typst", key: (args) => args.idempotency_key },
