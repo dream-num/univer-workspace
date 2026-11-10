@@ -363,7 +363,9 @@ revision; read-only code creates no revision. `inspect` is always read-only.
 Use the public Facade with the original image source. The system automatically converts supported
 BASE64 images to Workspace FileIds and stores their bytes separately, which keeps collaboration
 snapshots smaller and improves loading performance; browser clients load those images automatically.
-No manual image upload, format conversion, or mutation-storage handling is needed.
+No manual image upload, format conversion, or mutation-storage handling is needed. This applies to
+`execute`; Docs created by `compile-markdown`, `compile-typst` or `import` keep their images inline, so
+readback returns BASE64 data URIs that already contain the bytes.
 
 When Facade readback returns a UUID and the original asset bytes are needed, download them through
 the managed CLI path:

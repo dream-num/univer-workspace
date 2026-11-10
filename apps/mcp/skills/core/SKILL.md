@@ -123,8 +123,11 @@ not permission to reuse another draft because its name or Unit looks suitable.
 Continue an existing Worktree only for rework of the same task, when this agent
 already worked in that known Worktree or the user supplies its identity for that
 rework, and its state is draft or ready. If identity is uncertain, start a new one.
-Continue draft directly. Return ready to draft with `pr_ready` and undo true before
-editing. Never reuse merged or discarded Worktrees; stage the current file anew.
+Continue draft directly. Only writes need draft: reading tools such as `inspect`,
+read-only `execute`, `screenshot`, `export`, `export_markdown` and `print_pdf` work
+on a ready Worktree unchanged. Before the first write of a rework, return ready to
+draft once with `pr_ready` and undo true; mark it ready once when the rework is done.
+Never reuse merged or discarded Worktrees; stage the current file anew.
 
 ## Manage Space Nodes
 
@@ -201,10 +204,12 @@ base or board. Never redeclare it. Sheet execution uses the explicit Unit's
 Workbook, never an active Workbook.
 
 Use the public Facade with the original image source. Supported BASE64 images
-are automatically stored as Workspace FileIds with bytes stored separately.
-Browser clients load them automatically; no manual asset upload or mutation
-storage handling is needed. When readback returns a UUID and you need the original
-bytes, use `asset_download` with that id and Worktree.
+written with `execute` are stored as Workspace FileIds with bytes stored separately;
+later reads return that UUID. Docs created by `compile_markdown`, `compile_typst` or
+`import` keep their images inline, so reads return BASE64 data URIs that already
+contain the bytes. Browser clients load both forms automatically; no manual asset
+upload or mutation storage handling is needed. When readback returns a UUID and you
+need the original bytes, use `asset_download` with that id and Worktree.
 
 ### Facade API lookup
 
@@ -230,9 +235,22 @@ for one hour after reservation. Never pass a local file path to a tool.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
 - `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at
-  its root. Include the source and supporting assets in the bundle.
+  its root, ordered `pages/*.typ`, an optional prelude and optional `assets/`.
+  The manifest requires at least
+  `{ "schemaVersion": 1, "targetUnitId": "report", "pages": ["pages/01.typ"] }`
+  and may declare `title` and `prelude`. Put shared definitions in the prelude
+  instead of `#import` or `#include`. Store PNG, JPEG, GIF, WebP or SVG images under
+  bundle-root `assets/` and reference them as
+  `#image("assets/name.png", width: 240pt, height: 120pt)`.
+  targetUnitId is a local compiler ID, not a Workspace Unit: compile_typst always
+  creates a new Doc. Never put an existing unitId there. The result returns it as
+  `compiledTargetUnitId`; use only the returned `unit.unitId` afterwards. Errors
+  block apply; after warnings, compare a `screenshot` with the intended layout.
 - `compile_markdown` takes Markdown text and optionally assets_upload_id for a
-  markdown-assets ZIP. Save its returned sourceMap for block updates and exports.
+  markdown-assets ZIP. Its returned sourceMap is the only way to update or export
+  those blocks later; keep it in your notes for the task. A hand-built map is
+  rejected. A Doc not compiled from Markdown has no map: read it with `inspect` or
+  read-only `execute`.
 - `resources_export` returns SVG text, not files. Use that text in authored content.
 - `export`, `print_pdf`, `blob_download` and `asset_download` return expiring download
   links. They last fifteen minutes. Download the bytes before expiry. To replace an
@@ -241,6 +259,11 @@ for one hour after reservation. Never pass a local file path to a tool.
 - Short screenshots arrive as image content when they fit the synchronous image
   budget. Larger or long-running screenshot results provide download links.
   `export_markdown` returns Markdown, a refreshed sourceMap and asset download links.
+  Its Markdown uses Univer directives such as `::heading[...]` and `:span[...]{...}`;
+  convert them when the user asks for plain Markdown.
+- `print_pdf` has no paper, orientation, range or fit options. Content wider than
+  the default page continues on the next page; tell the user rather than moving
+  content unless they ask for that edit.
 
 For a running job, poll `job_get` until succeeded or failed. Do not treat a job
 handle as completed output. Successful job results carry the original tool output;
