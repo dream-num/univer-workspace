@@ -50,11 +50,190 @@ review. Humans can continue editing and stay in control of what gets merged.
 | **Workspace Browser** | Edit documents directly, collaborate, organize Spaces, and review changes                                          | [Start Workspace](#quick-start)                                          |
 | **Workspace Agent**   | Chat with an agent beside your documents, reference local or remote files and folders, and review Worktree changes | [Install and use Agent](apps/agent/README.md#installation-and-first-use) |
 | **Workspace CLI**     | Automate document tasks from a terminal, scripts, or an existing agent environment                                 | [CLI installation and usage](apps/cli/README.md)                         |
+| **Workspace MCP**     | Let Claude, ChatGPT, Cursor, VS Code, Codex, and other AI assistants work in Workspace with one URL                 | [Connect an AI assistant](#connect-an-ai-assistant-mcp)                  |
 
 Workspace Agent is a local web application built on DSH (DeepSeek Harness). Its
 local file references point to the machine running Agent; Workspace documents
 remain on the connected service. Both Agent and CLI can connect to your existing
 Workspace deployment or one you start locally.
+
+## Connect an AI assistant (MCP)
+
+Workspace runs a remote [MCP](https://modelcontextprotocol.io) server. An assistant connected to it can find
+your files, open a pull request, edit Sheets, Docs, and Slides, read the result back, and mark the pull request
+ready for you to review in the browser. Nothing is installed on your machine.
+
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=univer-workspace&config=eyJ1cmwiOiJodHRwczovL3NwYWNlLnVuaXZlci5haS9tY3AifQ%3D%3D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Univer_Workspace-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=univer-workspace&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fspace.univer.ai%2Fmcp%22%7D)
+
+| Setting    | Value                                                                                                                                      |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Server URL | `https://space.univer.ai/mcp`. For your own deployment, use `https://<your-workspace>/mcp` ([MCP server guide](apps/mcp/README.md)) |
+| Transport  | Streamable HTTP                                                                                                                            |
+| Sign-in    | OAuth in your browser. The consent page lists `read`, `write`, `publish`, and `worktree:merge`; uncheck anything you do not want to grant |
+| Toolsets   | `core` by default. Add `?toolsets=core,files` for Blob, Asset, Markdown, Typst, SVG, and HTML View tools, `admin` for repository and label management, or `all` |
+
+A client that cannot run OAuth can send a personal access token as `Authorization: Bearer <token>`. Create one
+from **Access tokens** in the Workspace account menu. On `space.univer.ai`, editing tools (`execute`, `inspect`,
+import, and export) are currently enabled only for invited accounts; every account can browse, search, and manage
+issues and pull requests.
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add --transport http univer-workspace https://space.univer.ai/mcp
+```
+
+Run `/mcp` in a Claude Code session, select `univer-workspace`, and sign in. Add `--scope user` to use it in every
+project. Claude Code skips OAuth when an `Authorization` header is configured, so do not set one together with it.
+
+</details>
+
+<details>
+<summary><b>Claude.ai and Claude Desktop</b></summary>
+
+Open **Customize → Connectors**, choose **+ Add → Add custom connector**, enter `Univer Workspace` and
+`https://space.univer.ai/mcp`, then sign in. Claude Desktop uses the same connector list. On Team and Enterprise
+plans an owner adds the connector under **Organization settings → Connectors** first, and members click
+**Connect**. These connectors connect from Anthropic's cloud, so a self-hosted Workspace must be reachable from
+the internet.
+
+</details>
+
+<details>
+<summary><b>ChatGPT</b></summary>
+
+In ChatGPT on the web, open the apps settings (labelled **Apps**, **Plugins**, or **Connectors** depending on your
+version), turn on **Developer mode** if your plan requires it, and create a custom MCP app with
+`https://space.univer.ai/mcp` and OAuth. Select it with `@` in a new chat. Availability depends on the plan;
+Business and Enterprise admins may need to allow custom MCP apps first.
+
+</details>
+
+<details>
+<summary><b>Codex</b></summary>
+
+```bash
+codex mcp add univer-workspace --url https://space.univer.ai/mcp
+codex mcp login univer-workspace
+```
+
+`codex mcp add` may start the sign-in by itself. The CLI, IDE extension, and desktop app share
+`~/.codex/config.toml`:
+
+```toml
+[mcp_servers.univer-workspace]
+url = "https://space.univer.ai/mcp"
+```
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+Use the button above, or add this to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project). Cursor asks you to
+sign in the first time it connects.
+
+```json
+{
+  "mcpServers": {
+    "univer-workspace": { "url": "https://space.univer.ai/mcp" }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>VS Code (GitHub Copilot)</b></summary>
+
+Use the button above, or run:
+
+```bash
+code --add-mcp '{"name":"univer-workspace","type":"http","url":"https://space.univer.ai/mcp"}'
+```
+
+Then run **MCP: List Servers**, start `univer-workspace`, and sign in in the browser. Remote OAuth needs VS Code
+1.101 or later. For a single workspace, put the server in `.vscode/mcp.json` under `servers` with `"type": "http"`.
+
+</details>
+
+<details>
+<summary><b>Gemini CLI</b></summary>
+
+```bash
+gemini mcp add --transport http --scope user univer-workspace https://space.univer.ai/mcp
+```
+
+Run `/mcp auth univer-workspace` to sign in. In `settings.json`, Streamable HTTP servers use `httpUrl`; `url` means
+SSE.
+
+</details>
+
+<details>
+<summary><b>opencode</b></summary>
+
+```bash
+opencode mcp add univer-workspace --url https://space.univer.ai/mcp --global
+opencode mcp auth univer-workspace
+```
+
+</details>
+
+<details>
+<summary><b>Windsurf</b></summary>
+
+Open the MCP config file from Windsurf Settings (**Add Server** or **Open MCP config file**), add the server, and
+refresh. Windsurf asks you to sign in when it connects.
+
+```json
+{
+  "mcpServers": {
+    "univer-workspace": { "serverUrl": "https://space.univer.ai/mcp" }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>WorkBuddy</b></summary>
+
+Open **Connectors → Custom Connector → Configure MCP**, add the server, save, and enable it. When it shows
+"Authentication required", click **Connect** and sign in.
+
+```json
+{
+  "mcpServers": {
+    "univer-workspace": { "type": "streamableHttp", "url": "https://space.univer.ai/mcp" }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Grok</b></summary>
+
+On [grok.com](https://grok.com), open **Connectors → New Connector → Custom**, enter
+`https://space.univer.ai/mcp`, and sign in. Grok connects from xAI's cloud, so a self-hosted Workspace must be
+reachable from the internet.
+
+</details>
+
+<details>
+<summary><b>Other clients</b></summary>
+
+Any client that supports Streamable HTTP and OAuth 2.1 can use the server URL directly. Workspace supports Client
+ID Metadata Documents and dynamic client registration. A client that only runs local stdio servers can use a
+bridge such as `npx -y mcp-remote https://space.univer.ai/mcp`.
+
+</details>
+
+If a client keeps asking you to sign in, sign out of the server in that client (for example
+`claude mcp logout univer-workspace`, `opencode mcp logout univer-workspace`, or `/mcp auth` in Gemini CLI) and
+sign in again. If a tool you expect is missing, check the `?toolsets=` part of the URL.
 
 ## Space Preview
 
