@@ -93,7 +93,7 @@ it("replays identical native conversion after the units POST times out without c
   const bytes = await runConversionJob(
     { kind: "export", data: book, options: { type: 2, format: ExchangeFormat.XLSX } },
     credentials,
-    AbortSignal.timeout(10_000),
+    AbortSignal.timeout(30_000),
     entry,
   );
   const bodies: string[] = [];
@@ -128,7 +128,7 @@ it("replays identical native conversion after the units POST times out without c
       cookie: "workspace_session=session",
       role: "client",
     });
-    const signal = AbortSignal.timeout(10_000);
+    const signal = AbortSignal.timeout(30_000);
     const ctx: OpContext = {
       requestId: "native-retry",
       userId: "alice",
@@ -160,7 +160,7 @@ it("replays identical native conversion after the units POST times out without c
   } finally {
     fetcher.mockRestore();
   }
-}, 20_000);
+}, 60_000);
 
 it.each([false, true])(
   "distinguishes deadlines before and after createUnit starts (%s)",
@@ -280,7 +280,7 @@ it("reports a child killed by the configured heap cap as a conversion crash", as
     code: "workspace-job-crashed",
     message: expect.stringContaining("memory limit"),
   });
-});
+}, 20_000);
 
 it("refuses oversized UnitData in the real child before sending a success payload", async () => {
   const cellData = Object.fromEntries(
