@@ -42,6 +42,12 @@ describe("MCP core Skill tool bindings", () => {
     }
   });
 
+  it("describes every tool without naming the CLI", () => {
+    expect(
+      tools.filter(({ description }) => /\buvw\b/u.test(description)).map(({ name }) => name),
+    ).toEqual([]);
+  });
+
   it("rejects invented snake_case tools and single-word operation bindings", () => {
     expect(unknownTools("Use `invented_tool`.\n| `inspect` | `invented` | Read content |")).toEqual(
       ["invented_tool", "invented"],
