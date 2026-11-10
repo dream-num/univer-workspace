@@ -11,7 +11,7 @@ export const lintTool = executorTool({
   scope: "read",
   title: "Lint Slide layout",
   description:
-    "Lint the layout of a Slide Unit in a Worktree, like `uvw lint`: text that leaves its page, escapes its container or overlaps other text. Other Unit types are rejected. pages selects Slide pages or page IDs, for example 1,3-5,cover, or all. Returns the same report as `uvw lint --json`: coverage (checked pages and rules) and findings, each with page, rule, detail and boxes.",
+    "Lint the layout of a Slide Unit in a Worktree: text that leaves its page, escapes its container or overlaps other text. Other Unit types are rejected. pages selects Slide pages or page IDs, for example 1,3-5,cover, or all. Returns a report with coverage (checked pages and rules) and findings, each with page, rule, detail and boxes.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
     unit: z.string().min(1),

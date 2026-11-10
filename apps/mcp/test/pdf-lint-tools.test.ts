@@ -6,7 +6,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jobHandleSchema, jobViewSchema } from "../src/gateway/jobs/model.js";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { decodeFrame, encodeFrame } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";

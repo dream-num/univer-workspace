@@ -1,7 +1,6 @@
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { pageText, RESULT_LIMIT } from "../../paging.js";
-import { getSkill, listSkills, readSkillResource } from "../../skills.js";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 
 const inputSchema = z.object({
@@ -55,27 +54,67 @@ export const skillsReadTool: ToolDefinition = {
   annotations: readOnlyAnnotations,
   async run(context, args) {
     const { name, resource, full, cursor } = inputSchema.parse(args);
-    const root = context.skillDataRoot;
+    if (!context.skills) throw new Error("Missing Skill catalog");
+    const { catalog, read } = await context.skills;
     if (name === undefined) {
       if (resource !== undefined || full !== undefined || cursor !== undefined) {
         throw invalid("resource, full and cursor need a skill name.");
       }
-      return { output: { skills: await listSkills(root) }, repo: null };
+      return {
+        output: {
+          skills: catalog.entries.map(({ frontmatter: { name, description } }) => ({
+            name,
+            description,
+          })),
+        },
+        repo: null,
+      };
     }
+    const entry = catalog.entries.find((skill) => skill.frontmatter.name === name);
+    if (!entry)
+      throw invalid(
+        `Unknown skill: ${name}. Call skills_read without arguments to list the skills.`,
+      );
+    if (!Array.isArray(entry.resources)) throw new Error("Static Skill resources are required");
+    const paths = entry.resources.map(({ uri }) => uri.slice(entry.uri.lastIndexOf("/") + 1));
     if (resource !== undefined) {
       if (full !== undefined) throw invalid("full applies only when resource is omitted.");
-      const read = await readSkillResource(root, name, resource);
+      if (!paths.includes(resource))
+        throw invalid(
+          `Unknown resource for skill ${name}: ${resource}. Call skills_read with name "${name}" to list resources.`,
+        );
       return {
-        output: pageText("skills_read", { name, resource }, cursor, read.content, (content) => ({
-          name: read.name,
-          path: read.path,
-          content,
-        })),
+        output: pageText(
+          "skills_read",
+          { name, resource },
+          cursor,
+          read(name, resource),
+          (content) => ({ name, path: resource, content }),
+        ),
         repo: null,
       };
     }
     if (cursor !== undefined) throw invalid("cursor applies only when resource is given.");
-    const output = { skills: [await getSkill(root, name, full === true)] };
+    const supplemental = paths.filter((path) => path !== "SKILL.md");
+    const output = {
+      skills: [
+        {
+          name,
+          content: read(name, "SKILL.md"),
+          ...(supplemental.length
+            ? {
+                resources: supplemental.map((path) => ({
+                  path,
+                  readCommand: `Call skills_read with name "${name}" and resource "${path}".`,
+                })),
+              }
+            : {}),
+          ...(full === true
+            ? { files: supplemental.map((path) => ({ path, content: read(name, path) })) }
+            : {}),
+        },
+      ],
+    };
     if (full === true && JSON.stringify(output).length > RESULT_LIMIT) {
       throw workspaceError(
         "workspace-result-too-large",

@@ -6,7 +6,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { whoamiTool } from "../src/gateway/tools/core/whoami.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
 import { parseGatewayConfig } from "../src/shared/config.js";

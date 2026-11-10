@@ -6,6 +6,7 @@ import type { ResourceLibrary } from "@univer-cli/resource-library";
 import type { z } from "zod";
 
 import type { OpName } from "../../shared/executor-protocol.js";
+import type { WorkspaceSkills } from "../skill-catalog.js";
 import type { ToolJobs } from "../jobs/store.js";
 import type { StagingStore } from "../staging/model.js";
 import type { UsageAccumulator } from "../../shared/usage.js";
@@ -23,7 +24,7 @@ export interface ToolContext {
   readonly user: WorkspaceSubject;
   readonly requestId: string;
   readonly identityOrigin: string;
-  readonly skillDataRoot: string;
+  readonly skills?: Promise<WorkspaceSkills>;
   readonly resources: () => ResourceLibrary;
   readonly scopes: ReadonlySet<ToolScope>;
 }

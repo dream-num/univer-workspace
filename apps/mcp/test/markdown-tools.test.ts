@@ -26,7 +26,6 @@ function context(store: LocalStagingStore): ToolContext {
     user,
     identityOrigin: http.origin,
     requestId: "exchange-test",
-    skillDataRoot: "unused",
     resources: () => {
       throw new Error("unused");
     },

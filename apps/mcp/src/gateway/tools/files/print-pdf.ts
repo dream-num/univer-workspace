@@ -14,7 +14,7 @@ export const printPdfTool = executorTool({
   scope: "read",
   title: "Print a Unit to PDF",
   description:
-    "Print a Sheet, Doc or Slide from trunk or a Worktree to PDF, like `uvw print-pdf`; Base Units are rejected. Returns a private download link valid for 15 minutes with the page count. If the print outlasts the server's synchronous wait (30 seconds by default), returns a job_id with status running; poll job_get until succeeded or failed. Reuse idempotency_key with the same arguments on retry to avoid a second print; different arguments return workspace-idempotency-conflict. The renderer result is capped at 128 MiB.",
+    "Print a Sheet, Doc or Slide from trunk or a Worktree to PDF; Base Units are rejected. Returns a private download link valid for 15 minutes with the page count. If the print outlasts the server's synchronous wait (30 seconds by default), returns a job_id with status running; poll job_get until succeeded or failed. Reuse idempotency_key with the same arguments on retry to avoid a second print; different arguments return workspace-idempotency-conflict. The renderer result is capped at 128 MiB.",
   annotations: readOnlyAnnotations,
   inputSchema: z.object({
     unit: z.string().min(1),

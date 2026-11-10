@@ -8,10 +8,7 @@ description: "Embed one remote Workspace Univer Unit into another Host using an 
 Load `core` plus the Host and child Unit Skills. The command targets the Host Unit; the embedded
 child is a read-only Source selected by a ResourceRef.
 
-```bash
-uvw api show FUniver.createEmbed FEmbed FEmbedHostSurface ICreateEmbedParams IEmbedDescriptor
-uvw api find embed host surface
-```
+Use `api show` for `FUniver.createEmbed`, `FEmbed`, `FEmbedHostSurface`, `ICreateEmbedParams`, and `IEmbedDescriptor`. Use `api find` with keywords `embed host surface`.
 
 ## Identity contract
 
@@ -67,9 +64,7 @@ keeps the Chart connected to the Source.
 The Host and Source are Univer Units in the same Workspace deployment and are addressed by stable
 `unitId`. Resolve the exact input with:
 
-```bash
-uvw api show IResourceRefChartDataSourceInput
-```
+Use `api show` for `IResourceRefChartDataSourceInput`.
 
 Pass the ref contents (`{ file?, unit, part }`) directly to
 `newChart(...).setSource(ref)`. For an existing live Chart, use

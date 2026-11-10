@@ -25,8 +25,8 @@ while (argv[0]?.startsWith('--')) {
 const [label, tool, json = '{}'] = argv;
 // A run with a PAT authenticates through the gateway's token exchange; without one only the development session works.
 auth ??= existsSync(join(internal.run, 'home/mcp-token')) ? 'pat' : 'dev';
-const listing = ['tools', 'resources', 'instructions'].includes(mode);
-if (!['call', 'tools', 'doctor', 'resources', 'resource', 'instructions'].includes(mode) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '') ||
+const listing = ['tools', 'resources', 'instructions', 'skills'].includes(mode);
+if (!['call', 'tools', 'doctor', 'resources', 'resource', 'instructions', 'skills'].includes(mode) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '') ||
     !['2026-07-28', '2025-11-25'].includes(protocol) || !['pat', 'oauth', 'dev', 'none', 'invalid'].includes(auth) ||
     (listing ? argv.length !== 1 : mode === 'resource' ? argv.length !== 2 : argv.length < 2 || argv.length > 3)) usage('Invalid command, label, protocol, or authentication mode');
 let args;
@@ -34,7 +34,7 @@ try { args = JSON.parse(json); } catch { usage('Tool arguments must be a JSON ob
 if (args === null || typeof args !== 'object' || Array.isArray(args)) usage('Tool arguments must be a JSON object');
 
 function usage(message) {
-  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] <label>`);
+  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-skills [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] <label>`);
   process.exit(2);
 }
 const requestId = `${label}.${randomBytes(4).toString('hex')}`;
@@ -82,6 +82,11 @@ try {
   if (negotiated !== protocol) throw new Error(`Expected protocol ${protocol}, negotiated ${negotiated}`);
   if (mode === 'instructions') {
     result = { instructions: client.getInstructions() ?? null };
+    output = result;
+  } else if (mode === 'skills') {
+    const { SkillsClient } = require('@modelcontextprotocol/client/ext/skills');
+    const skills = new SkillsClient(client);
+    result = { supported: skills.supported, extensions: client.getServerCapabilities()?.extensions, ...(await skills.list()) };
     output = result;
   } else if (mode === 'resources') {
     result = await client.listResources();

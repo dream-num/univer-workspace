@@ -2,7 +2,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGateway } from "../../src/gateway/server.js";
+import { createGateway } from "../gateway.js";
 import { parseGatewayConfig } from "../../src/shared/config.js";
 import { testStagingDirectory } from "../staging-directory.js";
 import { closeServer, executorToken, listen, logger } from "./harness.js";

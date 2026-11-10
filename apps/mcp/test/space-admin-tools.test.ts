@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { pino } from "pino";
 import { afterEach, describe, expect, it } from "vitest";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";

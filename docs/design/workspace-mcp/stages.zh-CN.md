@@ -252,7 +252,7 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
 4. server instructions 按当前连接实际可见的工具生成。
    - 不提及不可见的工具。
    - 连接没有选择 `files` 时，说明哪些能力需要 `?toolsets=files`（#256 的 P1：`core,admin` 连接里模型找不到 `print_pdf`）。只提部署中真正可用的能力。
-   - skills 的内容来自 `apps/cli/skill-data`，与 CLI 保持一致，本阶段不修改。skills 提到的 `uvw` 命令没有对应工具时，沿用现有 instructions 的规则，告诉用户这一步在这里不可用。
+   - Skills 由 MCP 专用 core 与 `apps/cli/skill-data` 的九个共享领域 Skill 组成，通过 Skills 扩展和 skills_read 读取同一 catalog。MCP core 负责操作与工具绑定；工具不在当前连接列表时，告诉用户该步骤不可用。
 5. 就绪检查 `GET /readyz`。`/healthz` 仍然只表示进程存活。网关就绪需要同时满足：
    - 经 `WORKSPACE_TRANSPORT_URL` 访问 Workspace 的 `/healthz` 成功；
    - 配置了 OAuth 时，网关的机密客户端能做 token exchange：用网关的客户端凭据、不带 subject token 调用 token 端点，得到 `invalid_request` 才算通过。Workspace 的授权服务器元数据只列出 `authorization_code` 和 `refresh_token`，不能用来判断；

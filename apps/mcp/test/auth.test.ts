@@ -6,7 +6,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthenticator } from "../src/gateway/auth.js";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 

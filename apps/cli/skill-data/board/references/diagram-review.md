@@ -2,7 +2,7 @@
 
 Use this reference when testing several Board profiles or assessing skill coverage. Test the installed SDK, not
 only the APIs described by an unreleased change. Keep semantic specs, realization scripts, persisted readbacks,
-full screenshots, and raw layout diagnostics together in a local output directory. Do not add generated user
+full screenshots, and raw layout diagnostics together. Follow the `core` Skill for evidence output handling. Do not add generated user
 artifacts to repository history unless requested.
 
 ## Evidence by profile

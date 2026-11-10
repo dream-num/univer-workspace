@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -639,6 +639,7 @@ case "${1:-}" in
   cli) shift; cmd_cli "$@" ;;
   mcp) shift; cmd_mcp call "$@" ;;
   mcp-tools) shift; cmd_mcp tools "$@" ;;
+  mcp-skills) shift; cmd_mcp skills "$@" ;;
   mcp-resources) shift; cmd_mcp resources "$@" ;;
   mcp-resource) shift; cmd_mcp resource "$@" ;;
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;

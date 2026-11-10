@@ -9,6 +9,12 @@ Use `uvw` for remote Workspace content. If it is unavailable, stop and report th
 the Workspace CLI is not installed. Do not substitute a local office writer because that bypasses
 the remote Worktree and review lifecycle.
 
+## Bind shared operations to the CLI
+
+Other Skills name operations without `uvw`. Each is the `uvw` command of the same name, with flags defined by `uvw <command> --help`. Load a Skill with `uvw skills get <name>` and a reference with `uvw skills read <name> <path>`. Use `uvw skills get <name> --full` only when all references are needed; `uvw skills path <name> --json` locates installed files.
+
+For local inputs, output paths, structured JSON, overwrite controls, browser setup, and file-backed sources, read [CLI files and sources](references/files-and-sources.md). It covers Office exchange, screenshots and PDFs, Slide SVG assets and resources, Typst bundles, Markdown maps and assets, Blob transfer, and HTML View sources.
+
 ## SVG resources
 
 When a Unit needs icons, logos, emoji, or illustrations, use the built-in SVG resource library:

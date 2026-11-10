@@ -12,9 +12,7 @@ this Topic Skill owns external Source binding, formula, calculation, and cross-U
 
 Resolve the public Facade contract before authoring:
 
-```bash
-uvw api show FRange.setFormula FShape.setFormula FShape.getFormulaResult FFormula.buildReference FFormula.upsertExternalReference FFormula.onCalculationResultApplied
-```
+Use `api show` for `FRange.setFormula`, `FShape.setFormula`, `FShape.getFormulaResult`, `FFormula.buildReference`, `FFormula.upsertExternalReference`, and `FFormula.onCalculationResultApplied`.
 
 ## Identity contract
 

@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { Client, StreamableHTTPClientTransport, ProtocolError } from "@modelcontextprotocol/client";
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { adminNames, coreNames, filesNames } from "./tool-names.js";

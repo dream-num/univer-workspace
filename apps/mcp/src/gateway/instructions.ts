@@ -40,11 +40,10 @@ export function buildServerInstructions(
       : []),
     ...(has("skills_read")
       ? [
-          "Read the matching skill first with skills_read: call it without arguments to list the skills, then with name (and full, or resource) to read one. The skills also appear as resources under uvw://skills/. Skill text names uvw commands; the tool with the same name in snake_case does the same thing." +
-            (has("pr_create") ? " (uvw pr create is pr_create)." : ""),
+          "Read skill://univer-workspace/core/SKILL.md first, or call skills_read with name core when the client cannot read resources. The core Skill explains workflows and operation bindings; then load the matching domain Skill.",
         ]
       : []),
-    "When a skill names a uvw command with no matching tool in this connection's tool list, that step is not available here; tell the user instead of guessing. Admin tools appear only when the connection URL selects ?toolsets=admin (alone or with other toolsets) or ?toolsets=all.",
+    "When a tool named in a Skill is not in this connection's tool list, that step is not available here; tell the user instead of guessing. Admin tools appear only when the connection URL selects ?toolsets=admin (alone or with other toolsets) or ?toolsets=all.",
     "Creating tools take an idempotency_key: generate one before the first attempt and reuse it when you retry. When a result is too large, repeat the call with the cursor it returned, or narrow the request.",
   ];
   if (!selected.some((tool) => tool.toolset === "files")) {

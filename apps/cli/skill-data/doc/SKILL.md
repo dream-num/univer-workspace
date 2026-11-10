@@ -5,22 +5,18 @@ description: "Create, import, read, edit, paginate, chart, inspect, export, and 
 
 # Workspace Doc units
 
-Commands that read or edit an existing Doc target one remote draft explicitly with `--worktree <id>`
-and `--unit <id>`. Markdown creation allocates the new Unit as described below. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `doc` (the `FDocument` bound by `--unit`). Do not redeclare them. A Doc unit does not provide `workbook` or `presentation`; if one is undefined, verify the selected unit type.
+Operations that read or edit an existing Doc target one remote draft explicitly by Worktree and Unit ID. Markdown creation allocates the new Unit as described below. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `doc` (the `FDocument` bound to the selected Unit). Do not redeclare them. A Doc unit does not provide `workbook` or `presentation`; if one is undefined, verify the selected unit type.
 
 Use `doc.getParagraphs()` and `doc.getParagraph(paragraphId)` to select paragraphs. Use
-`uvw api find <query...>` to discover API symbols, then use
-`uvw api show <symbol...>` for exact signatures, enum values, documentation, and
+`api find` with API-name keywords or identifier fragments to discover API symbols, then use
+`api show` with exact symbols for exact signatures, enum values, documentation, and
 examples.
 
 ## Workspace target
 
 Create an empty Doc Unit or import an existing document into the selected Worktree:
 
-```bash
-uvw unit create --worktree <worktree-id> --space <space-id> --type doc --name <name> --json
-uvw import --file source.docx --worktree <worktree-id> --space <space-id> --type doc --json
-```
+Run `unit create` with type `doc`, a name, and the destination Space in the selected Worktree, or run `import` with the document source and type `doc`. Follow the `core` Skill for source handling.
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
 for every content command; never reuse an imported document's internal id as the Workspace address.
@@ -30,12 +26,11 @@ Blob Resources have no `unitId` and cannot use this Skill's commands.
 ## Modern Docs through Markdown
 
 For new Modern Docs, write Markdown and compile it once into editable native content. Read
-[Markdown authoring](references/markdown.md) with `uvw skills read doc references/markdown.md`
+the [Markdown authoring](references/markdown.md) reference of the `doc` Skill
 for valid directives, assets, and full creation/update examples. The compiler is shared through the
 AI SDK; this Skill owns the Workspace target and review workflow.
 
-- Apply with `uvw compile-markdown report.md --apply --worktree <id> --space <space-id>
---source-map-out review/doc-map.json --json`. It creates the draft Doc; do not create an empty
+- Run `compile-markdown` with the Markdown source, apply enabled, and the destination Space in the task Worktree. Follow the `core` Skill for source and map handling. It creates the draft Doc; do not create an empty
   placeholder first. Use the returned server-owned `unit.unitId` for later commands.
 - Preserve SDK default typography, line/paragraph spacing, and callout colors. Use plain
   `:::callout{#notice}`. Modern columns use native ColumnGroup with 2–5 columns; do not use
@@ -44,7 +39,7 @@ AI SDK; this Skill owns the Workspace target and review workflow.
   not contain native identities and cannot address later edits.
 - Before each partial update, export the selected current native blocks with `export-markdown`,
   including their resources, refreshed source map, and authoritative revision. Edit that fragment,
-  retain its root IDs, and apply with `--unit`, `--source-map`, and `--blocks` together.
+  retain its root IDs, and apply with the Doc Unit, refreshed source map, and selected block IDs together.
   Save the new execution map after success. Native content is authoritative; old Markdown does not
   include subsequent editor changes.
 - On conflicts, read/export again and replan. Unsupported content or diagnostic errors stop the
@@ -69,7 +64,7 @@ The body is one `dataStream` string. Paragraphs are separated by `\r`, and the d
 
 ## Paragraph and text styles
 
-Pass paragraph properties and `textStyle` together to `paragraph.setStyle` when the entire current paragraph should share one style. Important paragraph fields include `horizontalAlign`, `namedStyleType`, `headingId`, `indentStart`, and `indentFirstLine`. Always query `uvw api show IParagraphStyle` instead of guessing enum values.
+Pass paragraph properties and `textStyle` together to `paragraph.setStyle` when the entire current paragraph should share one style. Important paragraph fields include `horizontalAlign`, `namedStyleType`, `headingId`, `indentStart`, and `indentFirstLine`. Always query `api show` for `IParagraphStyle` instead of guessing enum values.
 
 ```js
 const paragraph = doc.appendParagraph("Section Title");
@@ -146,35 +141,21 @@ are not hard page breaks.
 
 ## Typst, tables, pagination, and reference fidelity
 
-For a formal document authored from Typst, use a lightweight Typst Source Bundle instead of copying generated Facade JavaScript. The bundle root contains `typst.json`, ordered `pages/*.typ`, an optional prelude, and optional `assets/`. The manifest must declare at least:
-
-```json
-{ "schemaVersion": 1, "targetUnitId": "report", "pages": ["pages/01.typ"] }
-```
+For a formal document authored from Typst, use a lightweight Typst Source Bundle instead of copying generated Facade JavaScript. The bundle contains a manifest with schema version 1, a compiler target Unit ID, ordered page sources, an optional prelude, and optional assets. Follow the `core` Skill for bundle structure and source handling.
 
 It may also declare `title` and `prelude`. Compile once for review, then apply the same result:
 
-```bash
-uvw compile-typst paper/typst.json --out review/doc.js \
-  --diagnostics-out review/diagnostics.json --preview-dir review/png --json
-uvw compile-typst paper/typst.json --apply --worktree <id> --space <space-id> \
-  --out review/doc.js --diagnostics-out review/diagnostics.json --json
-```
+Run `compile-typst` on the Typst bundle in build-only mode for a generated program, diagnostics, and preview PNGs. Then apply the same bundle to the destination Space in the Worktree. Follow the `core` Skill for bundle and output handling.
 
 `targetUnitId` in the manifest is the compiler target used to validate the generated action batch; it
 is not the Workspace content address. On apply, the server allocates and returns the actual
-`unitId`, `resourceId`, and `nodeId`, while JSON reports the manifest value separately as
+`unitId`, `resourceId`, and `nodeId`, while the result reports the manifest value separately as
 `compiledTargetUnitId`. Use only the returned server `unitId` in later `execute`, `inspect`,
-`screenshot`, `export`, and `open` commands. Workspace apply requires `--apply`, `--worktree`, and
-`--space` together and optionally accepts `--parent <node-id>` and `--idempotency-key <key>`.
-Build-only mode opens no mutation session and requires `--out`; unrequested outputs are not
-generated. Errors block apply; warnings allow it but require review of both the Typst PNG and the
+`screenshot`, `export`, and `browse` operations. Workspace apply requires apply enabled, a Worktree, and a destination Space together, with optional parent Node and idempotency key. Build-only mode opens no mutation session. Follow the `core` Skill for required outputs; unrequested outputs are not generated. Errors block apply; warnings allow it but require review of both the Typst PNG and the
 final Workspace screenshot. The compiler loads only the official bundled
 `@univerjs-pro/doc-typst-native-binding`; do not install or fall back to a system `typst`.
 
-Put shared definitions in the manifest prelude rather than using `#import` or `#include`. Store PNG,
-JPEG, GIF, WebP, or SVG images under the bundle-root `assets/` directory and reference them as
-`#image("assets/name.png", width: 240pt, height: 120pt)`. The compiler embeds the asset and inserts a
+Put shared definitions in the manifest prelude rather than using `#import` or `#include`. Use PNG, JPEG, GIF, WebP, or SVG assets with explicit dimensions, for example 240pt by 120pt. Follow the `core` Skill for bundle image references. The compiler embeds the asset and inserts a
 native Doc image with deterministic dimensions; it does not emit a table placeholder. Review any
 warning about mismatched `cover` / `contain` geometry or unavailable alternative-text authoring
 against the direct Typst PNG. A fixed left/right layout must pass every cell as an argument of one
@@ -199,8 +180,9 @@ For a fixed two-column region or one-row grid in a paginated Doc, prefer a **bor
 
 Typst source must express border topology and fill regions explicitly. Use a static table `fill` for uniform backgrounds and `table.cell(fill: ...)[...]` for local row, column, or cell highlights. For booktabs or local rules, use `stroke: none` plus explicit `table.hline(...)` or `table.vline(...)`; use the default full grid only when the reference actually has one. Use `table.header(...)` and static colspan or rowspan for grouped headers, and `table.cell(stroke: ...)[...]` for cell-local borders. Do not rely on Typst defaults or opaque dynamic fill/stroke functions when static semantics can be mapped deterministically.
 
-```bash
-uvw execute --worktree <id> --unit <u> -e '
+Pass this code to `execute` for the Unit in its Worktree:
+
+```js
 const table = doc.insertTableFromData(
   [["Group", ""], ["Name", "Description"], ["A", "Long description"]],
   { width: 602, columnWidths: [200.667, 401.333], headerRowCount: 2 }
@@ -215,7 +197,6 @@ table.setBorder(
   { startRow: 1, endRow: 1, startColumn: 0, endColumn: 1 },
   { preset: api.Enum.DocsTableBorderPreset.Bottom, color: "#000000", width: 1 }
 );
-'
 ```
 
 For cell-local paragraph styles, constrain the target with `table.getCellContentRange(row, column)` and confirm the target text. Do not search duplicate text globally and broadcast a mutation. Merge base font family, size, line spacing, and paragraph spacing with bold, italic, underline, and color overlays; a later `setStyle` can otherwise replace the base font. Do not use DocModel internals, `tableSource`, body markers, or invisible control characters to force layout.
@@ -229,10 +210,7 @@ spacers, or repeated fixed page numbers. Literal headers and footers are support
 Doc chart support is registered in the runtime. Create detached chart information directly from
 `doc`, then insert it to obtain a live `FDocumentChart`. Query exact signatures before authoring:
 
-```bash
-uvw api show FDocument.newChart FDocument.insertChart FDocument.getCharts \
-  FDocument.getChart FDocumentChartBuilderOf DocsChartInsertAnchorKind
-```
+Use `api show` for `FDocument.newChart`, `FDocument.insertChart`, `FDocument.getCharts`, `FDocument.getChart`, `FDocumentChartBuilderOf`, and `DocsChartInsertAnchorKind`.
 
 Build the chart detached, configure its data, mapping, anchor, and size, then await insertion:
 
@@ -271,15 +249,12 @@ task.
 
 ## Inspect and verify
 
-- `uvw inspect document --worktree <id> --unit <id>` reports title, mode, paragraph and character counts, structural features, and paragraph previews.
-- `uvw inspect paragraph <index|id> [...] --worktree <id> --unit <id>` reports full text, paragraph style, list membership, and text-run summaries. Indexes are zero-based.
+- `inspect` with target `document` for the Doc Unit in its Worktree reports title, mode, paragraph and character counts, structural features, and paragraph previews.
+- `inspect` with target `paragraph` and one or more paragraph indexes or IDs for the Doc Unit in its Worktree reports full text, paragraph style, list membership, and text-run summaries. Indexes are zero-based.
 - For fine-grained reads, use read-only execute: `return doc.getParagraphs().map((p) => p.getText());`.
 
 Logical inspection cannot reveal actual wrapping or pagination. For layout-sensitive work, render PNGs with `screenshot` before following the core Skill's "Finish the task" steps. Imported DOCX paragraphs may lack persistent paragraph ids, in which case inspect falls back to a zero-based index; paragraphs created or edited in the same session have stable ids.
 
 For visual and exchange verification, use the same explicit remote address:
 
-```bash
-uvw screenshot --worktree <id> --unit <id>
-uvw export output.docx --worktree <id> --unit <id>
-```
+Run `screenshot` and `export` with format `docx` for the same Doc Unit in its Worktree. Follow the `core` Skill for output handling.
