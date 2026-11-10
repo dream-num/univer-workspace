@@ -171,6 +171,39 @@ test('the publish job owns the only write permission and refuses to clobber rele
   assert.doesNotMatch(releaseWorkflow, /internal evaluation/);
 });
 
+test('the verify job always runs with read permissions and gates the publish job', () => {
+  const verifyJob = releaseWorkflow.slice(
+    releaseWorkflow.indexOf('\n  verify:\n'),
+    releaseWorkflow.indexOf('\n  publish:\n'),
+  );
+  assert.ok(verifyJob.length > 0, 'verify job not found');
+  assert.match(verifyJob, /needs:\n\s+- validate\n\s+- build/);
+  assert.doesNotMatch(verifyJob, /if:/);
+  assert.doesNotMatch(verifyJob, /dry_run/);
+  assert.match(verifyJob, /permissions:\n\s+contents: read/);
+  assert.doesNotMatch(verifyJob, /contents: write/);
+  assert.match(verifyJob, /actions\/download-artifact@v4/);
+  assert.match(verifyJob, /sha256sum -c SHA256SUMS/);
+  assert.match(verifyJob, /build-info\.json matches the reviewed build outputs/);
+
+  const publishJob = releaseWorkflow.slice(releaseWorkflow.indexOf('\n  publish:\n'));
+  assert.match(publishJob, /needs:\n\s+- validate\n\s+- build\n\s+- verify/);
+  assert.match(publishJob, /if: \$\{\{ !inputs\.dry_run \}\}/);
+  assert.match(publishJob, /permissions:\n\s+contents: write/);
+});
+
+test('the workflow states that a failed publish can leave a draft behind', () => {
+  const comments = releaseWorkflow
+    .split('\n')
+    .filter((line) => /^\s*#/.test(line))
+    .map((line) => line.replace(/^\s*#\s?/, ''))
+    .join(' ');
+  assert.match(comments, /a failure after the draft is created can leave that draft behind/);
+  assert.match(comments, /an operator must inspect the existing draft and decide what to do with it/);
+  assert.match(comments, /never deletes or overwrites a release/);
+  assert.doesNotMatch(releaseWorkflow, /gh release delete/);
+});
+
 test('the build workflow exposes the reviewed artifact through workflow_call', () => {
   assert.match(buildWorkflow, /workflow_call:/);
   for (const output of ['artifact_name', 'filename', 'version', 'sha256']) {

@@ -97,10 +97,74 @@ jobs:
       contents: read
     uses: ./.github/workflows/space-plugin-build.yml
 
+  # The artifact verification runs for every dispatch, including dry runs, so a
+  # dry run exercises the same download and checksum path the publish job uses.
+  verify:
+    needs:
+      - validate
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Download the reviewed artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: artifacts/space-plugin
+
+      - name: Verify the downloaded artifact
+        shell: bash
+        env:
+          ARTIFACT_DIR: artifacts/space-plugin
+          EXPECTED_SHA256: ${{ needs.build.outputs.sha256 }}
+          EXPECTED_VERSION: ${{ needs.validate.outputs.version }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+          EXPECTED_FILENAME: ${{ needs.build.outputs.filename }}
+        run: |
+          set -euo pipefail
+          cd "$ARTIFACT_DIR"
+          sha256sum -c SHA256SUMS
+          ACTUAL_SHA="$(sha256sum "$EXPECTED_FILENAME" | cut -d ' ' -f 1)"
+          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA256" ]]; then
+            echo "Refusing to publish: the artifact checksum does not match the reviewed build." >&2
+            exit 1
+          fi
+          TARBALL_COUNT="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n' | wc -l)"
+          if [[ "$TARBALL_COUNT" -ne 1 ]]; then
+            echo "Refusing to publish: the artifact must contain exactly one tarball." >&2
+            exit 1
+          fi
+          TARBALL_NAME="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n')"
+          if [[ "$TARBALL_NAME" != "$EXPECTED_FILENAME" ]]; then
+            echo "Refusing to publish: the tarball name does not match the reviewed build." >&2
+            exit 1
+          fi
+          if [[ ! "$TARBALL_NAME" =~ ^space-plugin-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)-[0-9a-f]{12}\.tgz$ ]]; then
+            echo "Refusing to publish: unexpected tarball name." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const info = JSON.parse(readFileSync('build-info.json', 'utf8'));
+          assert.equal(info.version, process.env.EXPECTED_VERSION);
+          assert.equal(info.commit, process.env.EXPECTED_COMMIT);
+          assert.equal(info.artifact, process.env.EXPECTED_FILENAME);
+          console.log('build-info.json matches the reviewed build outputs.');
+          NODE
+
+  # Publishing is not idempotent. `gh release create` fails when the release
+  # already exists, and a failure after the draft is created can leave that
+  # draft behind. This workflow never deletes or overwrites a release, so an
+  # operator must inspect the existing draft and decide what to do with it
+  # before dispatching again.
   publish:
     needs:
       - validate
       - build
+      - verify
     if: ${{ !inputs.dry_run }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
