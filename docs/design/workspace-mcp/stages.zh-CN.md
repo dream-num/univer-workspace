@@ -7,16 +7,20 @@
 ## 依赖关系
 
 ```text
-A ──▶ B ──────────────────────┐
-│                             │
-├──▶ C ──▶ D ──▶ E            │
-│          │     │            │
-└──▶ F ────┼─────┼────────────┤
-           ▼     ▼            ▼
-           G（门禁）──────────▶ H ──▶ I（可选）
+A ──▶ B ─────────────────┐
+│                        │
+├──▶ C ──▶ D ──▶ E ──────┤
+│                        │
+└──▶ F ──────────────────┤
+                         ▼
+                  G0 受信用户先行开放 ──▶ H ──▶ I（可选）
+                         │
+                         ▼
+                  G 执行层多租户隔离（已搁置）
 ```
 
-B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B 和 G。
+B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需要 E。H 需要 G0 第一步，首次开放时执行层只对白名单用户开放。
+对公众开放执行层和渲染服务需要 G，G 已搁置，以后基于 G0 的执行后端协议重新设计。
 
 ## 阶段 A：骨架与本地验证环境
 
@@ -178,30 +182,165 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 
 **验收标准。**
 
-- [x] opencode 对本地 MCP 走完整的 OAuth 流程：发现元数据，CIMD 或 DCR，浏览器同意，拿到 token，调用工具成功。 证据：PR #214、#216，`verify-uvw` MO1：未认证的 POST 返回带 `resource_metadata` 的 401，两份发现文档与本次运行一致；opencode 经 DCR 注册，同意页列出四个 scope 并取消 `worktree:merge`（`mcp-oauth-consent.png`），回调只授予 `read write publish`；`whoami`、`repo_list` 各一条 `auth_kind: oauth`、`outcome: ok` 的用量事件，`client_id` 是注册得到的客户端。走的是 DCR，CIMD 没有实现，见下文。
-- [x] 取消 `worktree:merge` 后，`pr_merge` 返回 `workspace-scope-required`。 证据：MO2（同意页取消 `worktree:merge` 得到的 OAuth token 能 `pr_create`、`unit_create`、`pr_ready`，`pr_merge` 和 `pr_discard` 返回 `workspace-scope-required`，用量事件记录同一错误码，CLI 看到 PR 仍是 `ready`，随后全 scope 的 PAT 合入成功）；MA7 对不含 `worktree:merge` 的 PAT 得到同样结果。
-- [ ] refresh token 能续期；吊销后，网关在下一次调用时返回 401。 续期满足：MO2 的 refresh 返回新的一对 token，scope 不变，`expires_in` 为 3600，新 access token 可用；超过 60 秒宽限期重放旧 refresh token 会吊销整个授权。吊销后访问 Workspace 的下一次调用返回 401（带 `resource_metadata`），refresh token 也失效。**差距：** 吊销后紧接着的 `whoami`、`api_find` 仍然成功，因为网关最多 30 秒内直接用交换缓存回答不访问 Workspace 的调用（`apps/mcp/src/gateway/auth.ts` 的 `maxCacheMs`）。见验收记录。
-- [ ] PAT 能调用工具；吊销后立即失效；默认全部 scope、不过期（D9）。 调用与默认值满足：MA1；MA6 中 API 列出的默认 PAT 有四个 scope、`expiresAt` 为 `null`，Browser 的新建表单默认勾选四个 scope、过期时间为“Never”（`mcp-pat-browser-form.png`），在 Browser 创建的 PAT 能经网关调用工具。吊销后访问 Workspace 的下一次调用返回 401（MA4、MA6）。**差距：** 与上一条相同，吊销后的 `whoami`、`api_find` 在缓存期内仍然成功。
-- [ ] 现有客户端不受影响：`apps/agent` 的 OAuth 登录、`uvw auth login`、浏览器登录都照常工作。 Browser 注册与登录、`uvw auth login --password-stdin`、Browser 批准的 `uvw auth login` 在开启 MCP OAuth 的运行中都通过（MA8 与 [auth 旅程](../../../.agents/skills/verify-uvw/features/auth.md)）。**差距：** `apps/agent` 的 OAuth 登录无法验证。按 README 本地安装时，干净检出上插件构建先于 Client Core 构建而失败（PR #248 修复，已验证，待合入），profile 安装从 npm 拉取私有包失败（PR #245 已修复），绕过这两处后 Agent 在进入 OAuth 之前启动失败（issue #246）。三个问题都发生在 OAuth 之前，与阶段 F 的认证改动无关；前两个来自 #170。
-- [x] `api:verify` 通过；`verify-db-migration` 的完整矩阵通过。 证据：在 `72e6d781` 上 `api:verify` 退出 0 且工作区无改动；源码与 `--dist` 的 schema parity 对 12 个历史 schema 全部 `ok`；V17→V18 矩阵覆盖 skill 第 3 步的全部七项（`apps/workspace/test/support/v17-migration-checks.ts`），集成用例与 `test:production-import` 通过；`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。审计中发现的 data-model 表数笔误由 PR #244 修正。
-- [x] 本地验证默认改用 PAT，开发认证模式只在显式指定时使用。 证据：PR #247；`user` 默认创建 PAT，`verify-uvw mcp` 不带 `--auth` 时用 PAT（MA1 的 `auth=pat`），只有 `--auth dev` 才走开发认证（MA5）；opencode 配置原先带的是开发 session，#247 改为 PAT 后，run f5 中 M11 的事件是 `auth_kind: pat`。
-- [x] token 不透传，下游凭据短时效（交付物之一，不在原验收清单内）。 证据：MO2 的 `direct` 把 OAuth access token 直接作为 Bearer 和 cookie 发给 Workspace，`/api/session` 都是未登录；token exchange 返回的下游 session 不超过 600 秒，scope 与 token 一致（MO2、MA6）；生产环境拒绝开发认证（M10）。
-- [ ] Client ID Metadata Documents（F2，交付物之一，不在原验收清单内）。 未实现：PR #216 推迟，原因是需要防 SSRF 的抓取器；授权服务器元数据不声明 `client_id_metadata_document_supported`，依赖 CIMD 的客户端只能退回 DCR。同时推迟的还有不带点的私有 scheme 回调（例如 `cursor://`），等待策略决定。
+- [x] opencode 对本地 MCP 走完整的 OAuth 流程：发现元数据，CIMD 或 DCR，浏览器同意，拿到 token，调用工具成功。 证据：PR #214、#216、#253，run f6 的 MO1：当前 opencode 发现授权服务器支持 CIMD 后，以 `https://opencode.ai/oauth/opencode/client.json` 为 `client_id` 登录，同意页显示 `opencode (opencode.ai)` 并取消 `worktree:merge`，回调只授予 `read write publish`，`whoami`、`repo_list` 各一条 `auth_kind: oauth`、`outcome: ok` 的用量事件，`client_id` 是该 URL。DCR 由 MO2、MO4 证明（run f5 的 MO1 也走 DCR）。
+- [x] 取消 `worktree:merge` 后，`pr_merge` 返回 `workspace-scope-required`。 证据：run f6 的 MO2（OAuth token 能 `pr_create`、`unit_create`、`pr_ready`，`pr_merge` 和 `pr_discard` 返回 `workspace-scope-required`，用量事件记录同一错误码，CLI 看到 PR 仍是 `ready`，随后全 scope 的 PAT 合入成功）；MA7 对不含 `worktree:merge` 的 PAT 得到同样结果。
+- [x] refresh token 能续期；吊销后，访问 Workspace 的下一次调用返回 401，不访问 Workspace 的调用最多 30 秒内仍由网关缓存回答（措辞于 2026-11-09 由产品负责人改定，见架构 4.2 节）。 证据：run f6 的 MO2：refresh 返回新的一对 token，scope 不变，`expires_in` 为 3600，新 access token 可用；吊销后紧接着的 `whoami`、`api_find` 退出码为 0（缓存窗口内，`mcp-oauth2-revoked-*.exit-observed`），第一次访问 Workspace 的 `repo_list` 返回 401 并带 `resource_metadata`，随后 `whoami` 也是 401，refresh token 返回 `invalid_grant`；超过 60 秒宽限期重放旧 refresh token 会吊销整个授权。MO3 对 CIMD 客户端（Claude Code）得到同样的续期与吊销结果。
+- [x] PAT 能调用工具；吊销后访问 Workspace 的调用立即失效，不访问 Workspace 的调用最多 30 秒内仍由网关缓存回答（措辞同上）；默认全部 scope、不过期（D9）。 证据：run f6 的 MA1（默认用 PAT，`auth_kind: pat`）；MA6 中 API 列出的默认 PAT 有四个 scope、`expiresAt` 为 `null`，Browser 新建表单默认勾选四个 scope、过期时间为 Never，在 Browser 创建的 PAT 能经网关调用工具，吊销后紧接着的 `whoami` 退出码为 0（缓存窗口内），随后访问 Workspace 的调用返回 401；MA4 吊销后连续两次访问 Workspace 的调用都是 401；PAT 换取的下游 session 保留四个 scope，`expires_in` 为 600。
+- [x] 现有客户端不受影响：`apps/agent` 的 OAuth 登录、`uvw auth login`、浏览器登录都照常工作。 证据：PR #252 修复 Agent 启动失败（#246，缺陷在上游 DSH 0.1.5-rc.1：自定义 profile 默认的 live patch 监听在 HMR 服务注册前就开始；本仓库的 profile 改为启动时应用 patch，与 Desktop 一致）。run f6-ma8 的 MA8：`agent-up` 按 README 的构建步骤安装并启动 Agent，Agent 的 Workspace 登录进入 `univer-workspace-harness` 的同意页，批准后显示 `Connected: Verify f6-ma8`、服务地址为本次运行的 Workspace，并能列出该用户的 Personal Space；同一次运行里 Browser 注册与登录、`uvw auth login --password-stdin`、Browser 批准的 `uvw auth login`、错误密码用例都通过。
+- [x] `api:verify` 通过；`verify-db-migration` 的完整矩阵通过。 证据：在 `72e6d781` 上 `api:verify` 退出 0 且工作区无改动；源码与 `--dist` 的 schema parity 对 12 个历史 schema 全部 `ok`；V17→V18 矩阵覆盖 skill 第 3 步的全部七项（`apps/workspace/test/support/v17-migration-checks.ts`），集成用例与 `test:production-import` 通过；`pnpm typecheck`、`pnpm test`、`pnpm build` 通过。审计中发现的 data-model 表数笔误由 PR #244 修正。此后的 #251、#253 不改 schema，各自的 `api:verify` 退出 0，#253 的 `test:production-import` 通过。
+- [x] 本地验证默认改用 PAT，开发认证模式只在显式指定时使用。 证据：PR #247；`user` 默认创建 PAT，`verify-uvw mcp` 不带 `--auth` 时用 PAT（MA1 的 `auth=pat`），只有 `--auth dev` 才走开发认证（MA5）；run f6 中 M11 的 opencode 事件是 `auth_kind: pat`。
+- [x] token 不透传，下游凭据短时效（交付物之一，不在原验收清单内）。 证据：run f6 的 MO2 `direct` 把 OAuth access token 直接作为 Bearer 和 cookie 发给 Workspace，`/api/session` 都是未登录；token exchange 返回的下游 session 为 600 秒，scope 与 token 一致（MO2、MA6）；生产环境拒绝开发认证（M10）。
+- [x] Client ID Metadata Documents（F2，交付物之一，不在原验收清单内）。 证据：PR #253，设计与两轮对抗评审见 [cimd.zh-CN.md](cimd.zh-CN.md)。run f6 的 MO3：授权服务器元数据声明 `client_id_metadata_document_supported` 与 `authorization_response_iss_parameter_supported`；以 Claude Code 的真实文档登录，同意页显示 `Claude Code (claude.ai)`，回调带 `iss`，token、refresh、吊销都符合预期；VS Code 的真实文档进入同意页，多出的 `device_code` 被忽略；IPv4 与 IPv6 loopback 字面量、解析到 loopback 的域名、带 query 的 URL、`client_id` 与文档不符（主机名大写）都在 Workspace 上返回 400，不重定向；未登录访问不触发抓取；`MCP_CIMD_ENABLED=0` 时不声明支持且不抓取。本机 DNS 是 fake-IP，运行只为 Workspace Server 豁免 `198.18.0.0/15`。
+- [x] 不带点的私有 scheme 回调（交付物之一，不在原验收清单内）。 产品负责人 2026-11-09 决定只放行白名单里的 scheme，目前只有 Cursor 用的 `cursor`。证据：PR #251，run f6 的 MO4：Cursor 原样的三个回调注册返回 201，`myapp://callback` 返回 400，`cursor://` 回调的同意页 CSP 含 `form-action 'self' cursor:`，拒绝与批准都重定向到该回调并带 `iss`，授权码兑换得到一小时的 access token 和 refresh token。
 
-**验收记录（2026-11-09，`verify-uvw` run f5，产品代码为 `main` `d8178a12`，工作区另带本次新增的验证工具与旅程）。** M4、M10、M11、MA1–MA5、MO1 按文档原样通过；MA6、MA7、MO2、MA8 新增为可重复旅程，在同一次运行中通过，结束时 `doctor` 无 `FAIL`，`down` 清理完毕，证据中没有 token 或密钥。未满足项与原因：
+**验收记录（2026-11-09，`verify-uvw` run f6 与 f6-ma8，`main` `2ec43c08`）。** M4、M10、M11、MA1–MA8、MO1–MO4 全部通过，每次运行的 `doctor` 无 `FAIL`，`down` 清理完毕，证据中没有 token、授权码或 cookie。按文档原样执行时发现三处旅程文档缺陷，都不是产品问题，已在本次变更中修正：MO3 用 `--reuse` 重启后需要重新导出环境变量，否则其后的 M11 用到已删除的 opencode 目录；MA8 添加 Space 后导航会多次重新挂载，`Files` 标签页的点击改为重试；auth.md 仍写着 Browser 批准的登录不在范围内。
 
-- 吊销与缓存：OAuth token 或 PAT 吊销后，网关在最多 30 秒内仍用交换缓存回答不访问 Workspace 的调用（实测 `whoami` 与 `api_find` 都返回成功，见 MO2、MA6 的 `*.observed` 证据）。访问 Workspace 的调用立即返回 401 并清除缓存，此后所有调用都是 401。架构 4.2 节写明网关缓存下游凭据，与验收里的“下一次调用”“立即失效”冲突，需要产品负责人二选一：接受这个窗口并改写验收条目，或者要求网关在每次调用前确认 token 仍有效；
-- `apps/agent` 的 OAuth 登录：见上文，安装问题由 PR #245、#248 处理，启动失败由 issue #246 跟踪，修复后在 MA8 中补上 Agent 登录再验；
-- CIMD 与私有 scheme 回调：见上文；
-- 用户看不到、也不能吊销已授权的 AI 助手，只有客户端自己能调用吊销端点。管理入口属于 F11（“连接到 AI 助手”，阶段 H）。
+仍然存在、但不阻塞阶段 F 的事项：
 
-按本文开头的规则，前两项（对应三条未勾选的验收）解决之前阶段 F 不算完成，依赖它的阶段 G 不应开始。
+- 吊销后最多 30 秒的缓存窗口是接受的取舍，见架构 4.2 节；
+- 用户看不到、也不能吊销已授权的 AI 助手，只有客户端自己能调用吊销端点。管理入口属于 F11（“连接到 AI 助手”，阶段 H）；
+- CIMD 不在 refresh 时重新抓取文档，文档撤下后已签发的 refresh token 最长仍可续期 30 天（[cimd.zh-CN.md](cimd.zh-CN.md) 第 7 节）；
+- 上游 DSH 的 HMR 竞态与 `cordis-plugin-hmr` 版本错配仍在，本仓库已不依赖它们；`packages/dsh-runtime` 的 README 说 `pnpm deploy --legacy` 遵守 committed lockfile，实测不遵守；
+- `apps/mcp` 的 `exchange-hardening` 测试有两个偶发超时（#250、#254），与阶段 F 的改动无关。
+
+阶段 F 的验收全部满足，依赖它的阶段 G 可以开始。（2026-11-09 补记：G 已搁置，F 之后进入 G0。）
 
 **不做。** 产品 API 逐路由识别 scope（scope 由网关执行，架构文档 4.2 节）；来源归因（阶段 I）。
 
 **风险。** 各 MCP 客户端实际发送的 `state` 格式可能不符合现有校验（F7）。开工时先用 opencode 实测，再决定放宽方式。
 
-## 阶段 G：执行层安全设计与评审（门禁）
+## 阶段 G0：受信用户先行开放与执行后端协议
+
+**背景。** 原阶段 G 想在 MCP 自己的代码里，把一个执行层容器做成多个用户共用、彼此隔离的环境。设计稿是 PR #267，
+它为此引入了凭据代理、命名空间包装器、进程树采样、每用户配额等机制。产品负责人评审后认为复杂度过高，于 2026-11-09 搁置
+（见 #267 的评论）。G0 取代原 G 中“开放给真实用户”这一半：网关对所有用户开放，执行层先只对白名单内的受信用户开放，沿用现在的共享常驻实现。
+原 G 中“执行层和渲染服务多租户隔离”这一半没有被 G0 取代，仍然搁置。对公众开放仍然需要它，以后基于本阶段的协议另行设计。
+
+三类组件的信任关系不同，这是本阶段拆分的依据：
+
+| 组件 | 运行什么 | G0 中的状态 |
+| --- | --- | --- |
+| 网关 | 我们的代码：MCP 协议、认证、产品工具、文件进出 | 第一步开放 |
+| 脚本执行与转换（`execute`、`inspect`、import、export、Markdown、Typst、SVG、HTML View） | 模型生成的代码，以及处理不可信数据的我们的代码 | 第一步只对白名单用户开放；对公众开放需要隔离，倾向于由平台按租户隔离 |
+| 渲染（截图、PDF、lint） | 我们的代码，处理不可信数据 | 第一步可以不部署，第二步接入 |
+
+**目标。**
+
+1. 第一个可验收版本是“网关加执行层”：白名单用户在生产配置下能完成“找文件、开 PR、`execute` 写入、`inspect` 读回、ready”的完整任务，其他用户能使用全部纯 HTTP 工具。渲染服务可以不部署，此时依赖它的工具不出现。
+2. 网关与执行后端（执行层、渲染服务）之间有一份与部署形态无关的协议。常驻型后端现在实现并通过 D、E 的全部验收。
+   serverless 型后端以后按同一份协议接入，不修改网关的工具代码。
+
+### 第一步：网关加执行层，执行层只对白名单用户开放
+
+**交付物。**
+
+1. 执行层白名单 `MCP_EXECUTOR_ALLOWED_USER_IDS`，值为逗号分隔的 Workspace 用户 ID。它只限制谁能使用执行层，不限制谁能使用网关。
+   - 网关认证之后检查用户 ID。白名单内的用户得到部署的全部可用操作。不在白名单内的用户得到空的操作集合，看到的工具与没有执行层的部署相同，纯 HTTP 工具照常可用（产品负责人 2026-11-09 决定）。
+   - 不在白名单内的用户，server instructions 说明这个账号不能修改文档内容，请用户在浏览器里修改。
+   - 执行层读取同一个变量，拒绝白名单之外的 grant。这是网关检查之外的第二道检查，两个角色的配置不一致时以更严格的一方为准。
+   - `NODE_ENV=production` 时，执行层只在设置了白名单时接受 session grant，替换 `shared/config-executor.ts` 中“生产环境一律拒绝”的规则。网关在生产环境配置了执行层、却没有设置白名单时拒绝启动。开发认证在生产环境仍然被拒绝。
+   - 非生产环境不设置白名单时，所有用户都能使用执行层，本地验证保持不变。
+   - 执行层没有多租户隔离，这就是白名单存在的原因。`apps/mcp/README.md` 写明：加入白名单的用户能在共享执行层里看到彼此的脚本环境，只能加入互相信任的用户。
+2. 能力发现。
+   - 执行层提供 `GET /rpc/v1/capabilities`，返回协议版本和它能处理的操作名。只有配置了 `MCP_RENDERER_URL` 时才声明 `screenshot`、`print_pdf`、`lint` 所需的 `render.*` 操作。
+   - 网关在启动和就绪检查时读取能力，算出可用操作集合。版本不兼容的执行层不计入集合。
+3. 网关只列出当前部署能完成的工具。
+   - 每个工具声明它依赖的后端操作（`shared/executor-protocol.ts` 的操作名）。依赖不满足的工具不进入 `tools/list`，调用时与不存在的工具一样处理。
+   - 没有渲染服务时隐藏 `screenshot`、`print_pdf`、`lint`。`compile_svg` 保留，改用估算量字，与带 `estimate_text_size` 的行为一致，工具描述写明这一点。
+   - 没有执行层时隐藏全部 14 个依赖执行层的工具（13 个直接调用执行层，加上只取回任务结果的 `job_get`）。这种部署不是本步骤的验收目标，只由单元测试覆盖。
+   - 每种 toolset 组合下的工具顺序固定，等于完整列表去掉被隐藏的工具。有执行层和渲染服务时，`tools/list` 与改动前完全相同。
+4. server instructions 按当前连接实际可见的工具生成。
+   - 不提及不可见的工具。
+   - 连接没有选择 `files` 时，说明哪些能力需要 `?toolsets=files`（#256 的 P1：`core,admin` 连接里模型找不到 `print_pdf`）。只提部署中真正可用的能力。
+   - skills 的内容来自 `apps/cli/skill-data`，与 CLI 保持一致，本阶段不修改。skills 提到的 `uvw` 命令没有对应工具时，沿用现有 instructions 的规则，告诉用户这一步在这里不可用。
+5. 就绪检查 `GET /readyz`。`/healthz` 仍然只表示进程存活。网关就绪需要同时满足：
+   - 经 `WORKSPACE_TRANSPORT_URL` 访问 Workspace 的 `/healthz` 成功；
+   - 配置了 OAuth 时，网关的机密客户端能做 token exchange：用网关的客户端凭据、不带 subject token 调用 token 端点，得到 `invalid_request` 才算通过。Workspace 的授权服务器元数据只列出 `authorization_code` 和 `refresh_token`，不能用来判断；
+   - 配置了执行层时，至少一个执行层返回了兼容的能力。
+
+   Workspace 版本接口暂不做（产品负责人 2026-11-09 决定）。[架构 3.2](architecture.zh-CN.md#32-saas-拓扑) 中按版本号拒绝就绪的要求暂缓。
+6. 文档。
+   - `apps/mcp/README.md` 开头的状态说明改为当前事实。Roles and limits 一节改写为白名单与能力发现的现状，并说明生产部署需要哪些变量。
+   - `apps/mcp/AGENTS.md` 中“Stage G 通过前只能在本地或内部单用户环境使用”改为“生产环境中执行层只对白名单内的受信用户开放”。
+   - 架构文档第 10、11 节同步更新：第 10 节的七条要求仍然是对公众开放的门禁，G0 用白名单替代它，而不是满足它。
+7. 本地验证。
+   - `verify-uvw` 增加不启动渲染服务的模式，`doctor` 在这种模式下不检查渲染服务。
+   - 新增 MB 旅程，写入 `features/mcp.md`：在不启动渲染服务的模式下，对 `core`、`files`、`admin`、`core,files`、`core,admin`、`files,admin`、`all` 七种组合各取一次 `tools/list`，与预期列表逐项比较；检查 server instructions 不出现被隐藏的工具名；不在白名单内的第二个用户看到的工具列表与没有执行层时相同，纯 HTTP 工具照常可用，调用 `execute` 与调用不存在的工具一样失败；Workspace 停止时 `/readyz` 变为未就绪，恢复后变为就绪。
+
+**验收标准。**
+
+- [x] 网关和执行层在 `NODE_ENV=production`、OAuth 和白名单配置下正常启动，不部署渲染服务，`/readyz` 返回就绪。去掉白名单时，网关和执行层都拒绝启动；加上 `MCP_DEV_SESSION_PASSTHROUGH=1` 时网关拒绝启动。 证据：PR #271、#274、#276、#277，run g0acc2：`doctor` 无 FAIL，两个容器都是 `NODE_ENV=production`、没有开发认证、没有渲染服务容器；用本次镜像 `docker run` 的三种错误配置都以非零退出并指出对应变量；以真实 Workspace 为后端，正确的网关客户端密钥下 `/readyz` 为 200，错误密钥为 503 并指出 `token_exchange`。
+- [x] 在上述生产配置下，opencode（模型 `console-deepseek/deepseek-flash#high`）用 OAuth 登录，以自然语言完成“找到表格、开 PR、写入数据、读回、ready”，在浏览器里看到 PR 中的数据（截图）。 证据：run g0cli（`782a4024`）：同意页上 `worktree:merge` 默认不勾选，一次中文请求依次调用 `space_find`、`pr_create`、`unit_add`、`execute`、`inspect`、`pr_ready`、`browse`，11 条用量事件都是 `auth_kind: oauth`、`outcome: ok`；`uvw` 读回 PR #3 为 ready，A1:B4 为表头加 华北 42、华东 57、华南 31；`oauth-pr-ready-rows-full.png` 显示 Ready 标记和这三行。此后的改动只涉及 `/readyz` 与 verify-uvw，不在这条路径上。
+- [x] MB 旅程通过。 证据：run g0acc2 的 MB1–MB5：七种组合的工具列表与脚本中逐项写出的预期一致；instructions 不含被隐藏的工具名；不在白名单内的第二个用户得到 40 个工具，`execute` 与未知工具一样失败，instructions 说明不能修改文档内容；MX1–MX3 通过；执行层停止时重建网关，`/readyz` 从 200 变为 503 并指出 `executor`，执行层恢复后回到 200。
+- [x] 不启动渲染服务时，阶段 A、B、D、F 的旅程通过：M、MI、MP、MS、MR1–MR8、MX、MH、MM、MT、MV（估算量字部分）、MA、MO 各组。 证据：run g0acc2 在同一个栈上连续执行，87 条中 81 条按原文通过，包括 MA8 的 Workspace Agent 登录；5 条按 skill 的说明不适用：M7（需要渲染服务，由 MB1 覆盖）、MA5 与 MX14（需要开发认证）、MX13（需要两个执行层副本）、MV2（真实字体量字）。MO3 的原文会关闭并重建专用的 `cimd` 运行，与连续执行冲突，它的启用与禁用检查用文档中的脚本分别在 g0acc2 和 g0job 上通过。Typst 任务旅程在 `MCP_SYNC_BUDGET_MS=1` 的 g0job 上通过，`user` 重建网关后预算仍为 1。
+- [x] 启动渲染服务时，`tools/list` 与改动前完全相同，B 的 toolset 验收原样通过。 证据：PR #271 的独立验证（`6bc05b34`）：七种组合的工具名称与顺序与 `origin/main` 一致，除 `compile_svg` 外 53 个工具的 schema 与注解逐字节一致；run g0def（`782a4024`）：默认栈 `all` 为 54 个工具、顺序与注册表一致，MR10、MV2 通过。
+- [x] CLI 的测试与打包验证通过（如果改动涉及 `packages/client-core`）。 不适用：第一步没有修改 `packages/client-core`。
+
+**验收记录（2026-11-10，`verify-uvw` run g0acc2、g0job、g0cli、g0def，HEAD `62d237df`，g0cli 与 g0def 为 `782a4024`）。** 第一步的验收全部满足。验收中发现并已修复：
+
+- `/readyz` 原先在授权服务器元数据里找 token exchange，但 Workspace 的元数据只列出 `authorization_code` 和 `refresh_token`，所以每个真实部署都不就绪。现在改为用网关的客户端凭据、不带 subject token 调用 token 端点，得到 `invalid_request` 才算通过，密钥配错时网关也不就绪（PR #276）。
+- verify-uvw 读容器日志时使用 1 MiB 的默认缓冲区，长时间运行后每次记录调用都失败；现在所有同步的 `docker` 调用都设置 `maxBuffer`，并有测试防止回归。另修正了三个过短的 Typst 幂等键、`user` 重建网关时丢失 `MCP_SYNC_BUDGET_MS`、MS11 截图视口过小（PR #277）。
+
+仍然存在、但不阻塞第一步的事项：
+
+- MO3 的原文要求专用运行，不能与其他旅程连续执行；
+- 执行层没有多租户隔离，白名单只能加入互相信任的用户；对公众开放执行层仍然需要阶段 G。
+
+### 第二步：执行后端协议
+
+**交付物。**
+
+1. 协议文档 `backend-protocol.zh-CN.md`，放在本目录下，经过评审。它把现有的执行层和渲染服务协议写成正式规格，并逐项说明哪些假设会挡住 serverless 型实现：
+   - **操作目录。** `opSpecs` 本身就是协议：schema、读写效果、限额、路由键、预算、重试策略。它与传输方式无关。
+   - **能力发现。** 写入第一步实现的能力端点：后端声明协议版本和操作，网关据此计算可用操作集合。渲染服务同样声明自己的能力，执行层据此决定是否声明 `render.*`。
+   - **调用语义。** 同步调用必须带截止时间。长任务的状态由网关持有，后端无状态。协议不依赖后端进程长期存活。
+   - **路由与正确性。** 路由键只是性能提示。任何实例都能正确处理任何请求（[架构 6.3](architecture.zh-CN.md#63-路由与状态) 已满足）。
+   - **负载。** 小负载内联。大负载允许按引用传递（预签名地址或暂存对象 ID），协议声明各自的上限。常驻型继续内联，协议只预留引用方式，本阶段不实现。
+   - **重试与幂等。** 保持每个操作声明的重试策略。后端和平台都不得自行重试写操作。提交阶段结果不确定时返回 `workspace-result-unknown`。
+   - **调用者凭据。** 协议只定义“调用者凭据”字段，不限定类型。今天是 session grant，以后可以换成 Workspace 签发、只对本次目标有效的凭据。白名单检查属于部署策略，不写进协议。
+   - **认证。** 按调用方向区分凭据：网关到执行层、执行层到渲染服务各用各的令牌，不再共用 `MCP_INTERNAL_TOKEN`。协议只要求被调用方能验证调用方，serverless 型可以改用平台签名。
+   - **截止时间与取消。** 截止时间是协议字段。能否中途取消是实现的能力，协议不保证。
+   - **错误信封与版本。** 写入现有信封。网关遇到不兼容的后端版本时，不把该后端计入可用操作集合和路由。网关启动后记录到过兼容的执行层就一直就绪，从未记录到时不就绪，这样先发布网关会停住滚动发布，先发布执行层只暂时隐藏工具（2026-11-10 修订，见 [执行后端协议 3.3](backend-protocol.zh-CN.md#33-就绪)）。
+   - **执行层调用渲染服务。** 保持为后端内部的事，网关不编排。协议文档说明这一点。
+   - **将来的 serverless 实现思路。** 只记录思路，不做设计：按租户隔离的平台能力（AWS Lambda tenant isolation、阿里云函数计算的实例隔离和会话隔离）、负载上限对按引用传递的要求、同一镜像的部署方式、平台隔离解决不了的部分（脚本仍然持有用户 session）、环境变量可见、网络与配额、冷启动、取消和平台自动重试。
+2. 按调用方向拆分内部令牌。本地验证和 compose 同步更新。
+3. 协议契约测试：一套任何后端实现都必须通过的测试，覆盖能力发现、帧格式、版本不兼容、错误信封、截止时间、写操作不重试、认证拒绝。今天在常驻型执行层和渲染服务上运行，将来接入 serverless 型时直接复用。
+
+**实现原则。** 抽象的单位是线上协议，加网关里的一个后端客户端模块。不为“可插拔”造只有一个实现的插件框架，本阶段不写 serverless 适配器。
+
+**验收标准。**
+
+- [x] 协议文档包含上列各项，经一名未参与编写的评审者评审通过。 证据：PR #280。两名对抗评审者（Opus、Sonnet）对照代码运行复现，经复核成立的发现中，五项是产品缺陷，由 PR #282 修复（执行层先发布会使所有网关不就绪、截止时间在慢上传之后才开始、`content.execute` 进队列前超时报告“可能已提交”、已提交写入的结果过大时要求重试、一致性检查放过重复执行写入的后端），其余是文档与代码不符，已改正。第三名评审者（Sonnet）复核修订稿，11 项中 10 项确认解决，剩下一项是令牌规则的状态标记，已改为“已实现”。执行层排空时空闲 keep-alive 连接被重置、写入可能得到 `workspace-result-unknown`，记为已知问题，不在本阶段。
+- [x] 协议契约测试在常驻型执行层和渲染服务上通过。 证据：PR #282 的 `apps/mcp/test/contract/`；验收运行（HEAD `8e8bf74b`）中进程内 45 个检查全部通过；用 `apps/mcp/dist/main.js` 单独启动的执行层和渲染服务按黑盒方式各通过 14 个检查，其余 16 个因需要受控依赖、网关副本或另一方向的令牌而跳过并写明原因。
+- [x] 后端声明的协议版本与网关不兼容时，该后端被排除；网关从启动起没有兼容的执行层时 `/readyz` 返回 503，就绪之后执行层改报不同版本时工具隐藏、`/readyz` 仍为 200（契约测试证据）。 证据：`apps/mcp/test/contract/gateway.test.ts` 的三种情形（两个执行层中一个不兼容、从启动起不兼容、就绪后改报版本）在同一次验收运行中通过。
+- [x] 常驻型下，阶段 D、E 的全部旅程原样通过，包括 MX、MH、MM、MT、MV、MR9–MR12。 证据：run g0s2 在同一个带渲染服务的栈上连续执行，26 条适用旅程全部按原文通过，MX13 需要两个执行层副本，不适用；MR12 用 `console-deepseek/deepseek-flash#high`，模型的回答写出图中全部单元格和四色位置，两页 Slide 返回下载链接；Typst 任务旅程在 `MCP_SYNC_BUDGET_MS=1` 的 g0s2job 上通过。同一次运行中停掉渲染服务后 39 秒，网关不再列出 `screenshot`、`print_pdf`、`lint`，`compile_svg` 保留；渲染服务恢复后 61 秒三者回来，随后截图成功。第一步的生产形态 g0s2p 上 MB1–MB5 再次通过。
+- [x] 如果改动涉及 `packages/client-core`，CLI 的测试与打包验证通过，行为不变（[README](README.zh-CN.md) 第 4.1 节）。 不适用：第二步没有修改 `packages/client-core`。
+
+**验收记录（2026-11-10，`verify-uvw` run g0s2、g0s2job、g0s2p，HEAD `8e8bf74b`）。** 第二步的验收全部满足，阶段 G0 完成。各次运行的日志中没有 session、PAT、OAuth token、两个内部令牌、OAuth secret 或 license，`down` 清理完毕。
+
+仍然存在、但不阻塞 G0 的事项：
+
+- 执行层排空时空闲 keep-alive 连接被重置，网关不把重置算作“没有送达”，执行层滚动重启时个别写入可能得到 `workspace-result-unknown`（[执行后端协议 3.1](backend-protocol.zh-CN.md#31-能力端点)）；
+- 渲染服务晚于执行层启动、或停机后恢复时，网关最多约一分钟后才重新列出渲染工具；
+- 按引用传递负载、按目标限定的凭据、serverless 后端都是预留项，没有实现；
+- 执行层没有多租户隔离，对公众开放执行层仍然需要阶段 G。
+
+**不做。**
+
+- 执行层和渲染服务的多租户隔离（原阶段 G 的这一半，已搁置）。对公众开放执行层需要它。
+- Workspace 版本接口。
+- serverless 后端的设计、原型与实现。
+- Workspace 签发按目标限定的凭据。协议只在凭据字段上留出位置。
+- SaaS 部署本身，包括镜像发布、Helm、ingress、限流、“连接到 AI 助手”设置页、各客户端实测。这些属于阶段 H。
+
+**建议的 PR。** 第一步一个 stack：能力发现与按能力决定工具可见性、instructions；白名单与生产配置；`/readyz`；`verify-uvw` 无渲染服务模式与 MB 旅程，以及文档。第二步先单独提交协议文档，评审通过后再提交令牌拆分、契约测试两个 PR。
+
+## 阶段 G：执行层安全设计与评审（已搁置）
+
+> 2026-11-09 搁置，设计稿 PR #267 转为 draft。开放改由 [阶段 G0](#阶段-g0受信用户先行开放与执行后端协议) 先行，执行层只对白名单内的受信用户开放。
+> 下文的多租户隔离要求仍然有效：执行层和渲染服务在满足架构文档第 10 节之前，不对公众开放。
+> 新的隔离方案以后基于 G0 的执行后端协议设计，倾向于由平台按租户隔离，届时重写本节。
+> #267 的威胁模型、附录 A 的 gVisor 实测、附录 B 的 Workspace 路由清单、附录 C 的实验和 14.1 节的评审记录仍可参考。
 
 **目标。** 执行层和渲染服务能安全地服务多个互不信任的用户。这是对外开放的门禁。
 
@@ -224,6 +363,8 @@ B、C、F 在 A 之后可以并行。G 需要 D、E、F 都完成。H 需要 B �
 ## 阶段 H：SaaS 部署与开放
 
 **目标。** 在 `space.univer.ai` 上对外开放远程 MCP。
+
+首次开放时执行层只对白名单用户（G0 第一步），部署 gateway 和 executor 两个 release 以及共享暂存卷，渲染服务可以晚些加入。沙箱运行时与面向公众的隔离配置，在 G 重新设计并通过后再做。
 
 **交付物。**
 

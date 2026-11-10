@@ -131,10 +131,12 @@ export async function exportWorkspaceSnapshot(
   }
 }
 
-/** exchange-node accepts `files` and `ole` for Sheet XLSX, Doc, Slide and PDF exports. */
+/**
+ * Whether an export passes `files` and `ole`: exchange-node rejects them for Base and for CSV/TSV,
+ * and the check names those rather than the accepted exports, as `withImportedFiles` does.
+ */
 export function exportLoadsFiles(options: { readonly type: UniverInstanceType; readonly format: string }): boolean {
-  if (options.type === UniverInstanceType.UNIVER_SHEET) return options.format === "xlsx";
-  return options.type !== UniverInstanceType.UNIVER_BASE;
+  return options.type !== UniverInstanceType.UNIVER_BASE && options.format !== "csv" && options.format !== "tsv";
 }
 
 function unitTypeOf(type: UniverInstanceType): UnitType | null {

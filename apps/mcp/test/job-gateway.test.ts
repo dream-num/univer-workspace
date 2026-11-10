@@ -1,3 +1,4 @@
+import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -31,6 +32,11 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
     finish = resolve;
   });
   const executor = createServer((request, response) => {
+    if (request.url === "/rpc/v1/capabilities") {
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ v: PROTOCOL_VERSION, operations: Object.keys(opSpecs) }));
+      return;
+    }
     request.resume();
     conversions++;
     void conversion.then(() =>
@@ -61,7 +67,7 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
       MCP_PUBLIC_URL: `${origin}/mcp`,
       MCP_STAGING_DIRECTORY: testStagingDirectory(),
       MCP_EXECUTOR_URLS: executorUrl,
-      MCP_INTERNAL_TOKEN: "t".repeat(32),
+      MCP_EXECUTOR_TOKEN: "t".repeat(32),
       MCP_SYNC_BUDGET_MS: "5",
     }),
     {

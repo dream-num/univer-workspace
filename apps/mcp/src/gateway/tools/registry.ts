@@ -52,6 +52,7 @@ import { prDiscardTool } from "./admin/pr-discard.js";
 import { resourcesRegistriesTool } from "./admin/resources-registries.js";
 import { resourcesFindTool } from "./admin/resources-find.js";
 import { resourcesExportTool } from "./admin/resources-export.js";
+import type { OpName } from "../../shared/executor-protocol.js";
 import type { ToolDefinition } from "./definition.js";
 
 export const tools: readonly ToolDefinition[] = [
@@ -112,8 +113,23 @@ export const tools: readonly ToolDefinition[] = [
 ];
 export const toolsets = ["core", "files", "admin", "all"] as const;
 
-export function selectTools(value: string | null): readonly ToolDefinition[] | undefined {
+export function selectTools(
+  value: string | null,
+  operations: ReadonlySet<OpName>,
+): readonly ToolDefinition[] | undefined {
   const selected = (value ?? "core").split(",");
   if (selected.some((name) => !toolsets.some((valid) => valid === name))) return undefined;
-  return tools.filter((tool) => selected.includes("all") || selected.includes(tool.toolset));
+  return tools.filter(
+    (tool) =>
+      (selected.includes("all") || selected.includes(tool.toolset)) &&
+      toolAvailable(tool, operations),
+  );
+}
+
+export function toolAvailable(tool: ToolDefinition, operations: ReadonlySet<OpName>): boolean {
+  return (
+    (tool.executorOperations ?? []).every((name) => operations.has(name)) &&
+    (tool.executorAnyOperations === undefined ||
+      tool.executorAnyOperations.some((name) => operations.has(name)))
+  );
 }

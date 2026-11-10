@@ -3,10 +3,7 @@ import {
   WorkspaceContentExecutionFeature,
   getWorktree,
 } from "@univerjs/univer-workspace-client-core";
-import {
-  pullSpaceId,
-  WorkspaceSpaceFeature,
-} from "@univerjs/univer-workspace-client-core/product";
+import { pullSpaceId, WorkspaceSpaceFeature } from "@univerjs/univer-workspace-client-core/product";
 import type { z } from "zod";
 import type { measureTextInput } from "../../shared/renderer-protocol.js";
 import { svgCompileOutput } from "../../shared/executor-protocol.js";
@@ -48,7 +45,8 @@ export const svgCompile: Handler<"svg.compile"> = (ctx, input, bytes) =>
     const compiled = await feature.compile({
       svg: input.svg,
       assets,
-      ...(input.estimateTextSize === undefined ? {} : { estimateTextSize: input.estimateTextSize }),
+      estimateTextSize:
+        ctx.renderer?.operations.has("measureText") !== true || input.estimateTextSize === true,
       ...(input.add === undefined ? {} : { add: input.add }),
       ...(input.page === undefined ? {} : { page: input.page }),
     });

@@ -62,4 +62,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [Issues](./issues.md): Team Space repo creation, Issue open via uvw, comment and close
   in the browser, timeline readback via uvw.
 - [MCP gateway](./mcp.md): Docker Desktop opt-in, both protocols, repository parity,
+  MO3 Claude Code/VS Code CIMD, SSRF refusals, anonymous no-fetch and the CIMD off switch,
   authentication, usage evidence, opencode, and cleanup.
+- [MCP executor and renderer isolation](./mcp-security.md): stage G sandbox baseline, MG1-MG11
+  checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
+  configuration and renderer separation, each reported `contained` or `exposed`.

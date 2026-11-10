@@ -332,7 +332,35 @@ External browser clients should use `clientType: "public"`, PKCE, and `requiresC
 
 A confidential client with `"tokenExchange": true` (for example the MCP gateway) may call the RFC 8693 grant on `POST /api/auth/token` to turn a personal access token or an MCP OAuth access token into a Workspace login session of at most 10 minutes (shorter when the token or the deployment session lifetime ends sooner); the grant takes a form body only, and the flag is rejected on public clients. Signed-in users manage personal access tokens with `GET`/`POST /api/auth/tokens` and `DELETE /api/auth/tokens/:id`; the plaintext token is returned only at creation, and a session issued by token exchange cannot create tokens, approve CLI logins, authorize OAuth clients or link identities (`403`), so no access it creates can outlive the token.
 
-MCP clients such as opencode, Claude and ChatGPT obtain their tokens through standard OAuth once `MCP_RESOURCE_URLS` lists the MCP server URLs they may request (comma-separated, compared exactly, for example `https://space.example.com/mcp`). It requires `PUBLIC_ORIGIN`, the Workspace origin those clients reach (for example `https://space.example.com`), which becomes the issuer of `GET /.well-known/oauth-authorization-server` (RFC 8414). Clients register themselves with `POST /api/auth/register` (RFC 7591, public clients only: loopback `http`, `https` or reverse-domain private-use redirect URIs, no secret; registration stops with `503` at `MCP_MAX_REGISTERED_CLIENTS`, default 10,000), then use `GET /api/auth/authorize` with PKCE `S256` and `resource`. A loopback redirect URI matches with any port. The user always sees a consent page listing `read`, `write`, `publish` and `worktree:merge`, each of which can be unchecked. `POST /api/auth/token` then returns a one-hour `uvw_at_` access token bound to that resource and a rotating 30-day `uvw_rt_` refresh token, and `POST /api/auth/revoke` (RFC 7009) revokes the grant. Without `MCP_RESOURCE_URLS` none of this is served and static clients behave as before; with it, static clients keep their exact rules. In development set `PUBLIC_ORIGIN=http://127.0.0.1:5173`; the Vite server proxies `/.well-known` to the API.
+MCP clients such as opencode, Claude and ChatGPT obtain their tokens through standard OAuth once `MCP_RESOURCE_URLS` lists the MCP server URLs they may request (comma-separated, compared exactly, for example `https://space.example.com/mcp`). It requires `PUBLIC_ORIGIN`, the Workspace origin those clients reach (for example `https://space.example.com`), which becomes the issuer of `GET /.well-known/oauth-authorization-server` (RFC 8414). Clients register themselves with `POST /api/auth/register` (RFC 7591, public clients only: loopback `http` or `https` redirect URIs, or reverse-domain or allowlisted private-use schemes (currently `cursor`), no secret; registration stops with `503` at `MCP_MAX_REGISTERED_CLIENTS`, default 10,000), then use `GET /api/auth/authorize` with PKCE `S256` and `resource`. A loopback redirect URI matches with any port. The user always sees a consent page listing `read`, `write`, `publish` and `worktree:merge`, each of which can be unchecked. `POST /api/auth/token` then returns a one-hour `uvw_at_` access token bound to that resource and a rotating 30-day `uvw_rt_` refresh token, and `POST /api/auth/revoke` (RFC 7009) revokes the grant. Without `MCP_RESOURCE_URLS` none of this is served and static clients behave as before; with it, static clients keep their exact rules. In development set `PUBLIC_ORIGIN=http://127.0.0.1:5173`; the Vite server proxies `/.well-known` to the API.
+
+HTTPS `client_id` URLs can identify public MCP clients through Client ID Metadata Documents
+(CIMD), without dynamic registration or a row in `oauth_clients`. With MCP OAuth enabled,
+CIMD is on by default and discovery advertises `client_id_metadata_document_supported`
+and `authorization_response_iss_parameter_supported`. All MCP authorization callbacks
+(success, error and deny) include `iss`; static client callbacks remain unchanged.
+Set `MCP_CIMD_ENABLED=0` for deployments without outbound HTTPS: discovery omits CIMD
+support and URL client IDs are treated as unknown clients, while DCR remains available.
+
+CIMD URLs must use HTTPS, contain a non-root path, and omit credentials, query,
+fragment and dot segments. Metadata is fetched only after interactive sign-in, with
+connection-level public-address checks, no environment proxy or redirects, a 5 KB body
+limit and a five-second total deadline. Requests for the same URL coalesce; each user
+may have one fetch in flight and the process allows 32. Valid documents are cached for
+5 minutes to 24 hours (at most 1000 entries); a previously valid document can survive a
+temporary fetch failure for up to 24 hours from its fetch. Consent shows the client name
+and hostname. Fetch failures stay on Workspace with 400 (invalid) or 503 (temporary).
+Token exchange, refresh and revocation do not fetch metadata; a removed document does
+not revoke an existing refresh grant, whose lifetime is at most 30 days.
+
+`MCP_CIMD_EXEMPT_NETWORKS` accepts comma-separated CIDRs (default empty) for deployments
+whose fake-IP or TUN resolver maps public hosts into a blocked network, for example
+`198.18.0.0/15`. Exemptions allow outbound metadata connections to those networks;
+configure only the required proxy network. Behind such a resolver the proxy, not Workspace, resolves the real
+address, so internal hosts the proxy can reach by name are not blocked; use it only where that proxy cannot
+reach internal services. Startup rejects any exemption overlapping
+IPv4/IPv6 loopback or link-local networks, which remain blocked in every environment.
+
 
 The Agent client is not enabled by default: the entry in `.env.example` is only a
 commented example. For the exact active configuration and the local server, browser,

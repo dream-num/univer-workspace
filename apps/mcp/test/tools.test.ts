@@ -247,7 +247,9 @@ describe("Issue tools and gateway infrastructure", () => {
   it("lists the core tools in registry order and describes the Issue list input", async () => {
     await start();
     const core = await (await connect("?toolsets=core")).listTools();
-    expect(core.tools.map((tool) => tool.name)).toEqual(coreNames);
+    expect(core.tools.map((tool) => tool.name)).toEqual(
+      coreNames.filter((name) => !["execute", "inspect", "screenshot", "import", "export", "job_get"].includes(name)),
+    );
     const list = core.tools.find((tool) => tool.name === "issue_list")!;
     expect(list.inputSchema).toMatchObject({
       required: ["repo"],

@@ -24,6 +24,7 @@ import { bindRuntime, getRuntimeRerun } from "./runtime.js";
 import { ConversionJobQueue } from "./jobs/queue.js";
 import { runConversionJob } from "./jobs/run.js";
 import { UNIVER_LICENSE, UNIVER_LICENSE_KEY } from "./license.js";
+import type { RendererOpName } from "../shared/renderer-protocol.js";
 
 // Same-user reads and writes take turns on a Unit; other routes still need revision reruns.
 function createUnitQueue() {
@@ -61,6 +62,7 @@ export function createDispatcher(
   config: ExecutorConfig,
   runtime: WorkspaceContentRuntime,
   logger: Logger,
+  rendererOperations: () => ReadonlySet<RendererOpName> = () => new Set(),
 ) {
   const jobs = new ConversionJobQueue(config.EXECUTOR_MAX_JOBS);
   const verifyGrant = createGrantVerifier(config);
@@ -73,12 +75,18 @@ export function createDispatcher(
     labelNames: ["reason"],
     registers: [metrics],
   });
-  async function dispatch<K extends OpName>(name: K, header: RequestHeader, payload: Uint8Array) {
+  async function dispatch<K extends OpName>(
+    name: K,
+    header: RequestHeader,
+    payload: Uint8Array,
+    receivedAt = Date.now(),
+  ) {
     const spec: OpSpec = opSpecs[name];
     const controller = new AbortController();
-    const deadlineAt = Date.now() + Math.min(header.deadlineMs, spec.limits.budgetMs);
+    const deadlineAt = receivedAt + Math.min(header.deadlineMs, spec.limits.budgetMs);
     const usage: OpMeta = { executor: "none", cost: { ...zeroCost } };
     let writeStarted = ![
+      "content.execute",
       "exchange.import",
       "markdown.compile",
       "typst.compile",
@@ -90,6 +98,7 @@ export function createDispatcher(
     const currentTimeout = () => timeoutError(effect, "deadline", !queued && writeStarted);
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
+      if (deadlineAt <= Date.now()) throw currentTimeout();
       const input = spec.input.parse(header.input) as OpInput<(typeof opSpecs)[K]>;
       effect = spec.effectFor?.(input) ?? spec.effect;
       const grant = resolveGrant(header.grant);
@@ -126,10 +135,11 @@ export function createDispatcher(
         http: () => http,
         renderer: createRendererClient({
           url: config.MCP_RENDERER_URL,
-          internalToken: config.MCP_INTERNAL_TOKEN,
+          rendererToken: config.MCP_RENDERER_TOKEN,
           requestId: header.requestId,
           deadlineAt,
           signal: controller.signal,
+          operations: rendererOperations(),
         }),
         onCreateUnit: () => {
           writeStarted = true;
@@ -222,7 +232,7 @@ export function createDispatcher(
             controller.abort(error);
             setImmediate(() => reject(error));
           },
-          Math.min(header.deadlineMs, spec.limits.budgetMs),
+          Math.max(0, deadlineAt - Date.now()),
         );
       });
       const payloadArgs = (
@@ -242,6 +252,7 @@ export function createDispatcher(
               controller.signal,
             );
             queued = false;
+            if (name === "content.execute") writeStarted = true;
           }
           try {
             for (;;) {
@@ -293,6 +304,7 @@ export function createDispatcher(
         controller.signal.aborted &&
         (effect === "read" ||
           [
+            "content.execute",
             "exchange.import",
             "markdown.compile",
             "typst.compile",

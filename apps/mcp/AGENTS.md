@@ -13,7 +13,8 @@ The [local verification specification](../../docs/design/workspace-mcp/local-ver
   all non-ignored files under `apps/mcp/` and `packages/client-core/`, including `render-runtime/`, and `apps/cli/skill-data/`
   (the build copies it to `dist/skill-data`; the gateway never reads `apps/cli` at runtime).
 - Development session passthrough must never reach SaaS. Production refuses any non-empty `MCP_DEV_SESSION_PASSTHROUGH`.
-- Until Stage G passes, use this application only locally or in internal single-user environments.
+- In production, the shared executor serves only allowlisted trusted users through `MCP_EXECUTOR_ALLOWED_USER_IDS`.
+  Public executor access still requires Stage G.
 - Treat the `mcp.tool_call` event in `README.md` as a stable versioned contract. Do not log credentials, document contents, or raw tool arguments.
 
 Run `pnpm --filter @univerjs/univer-workspace-mcp typecheck`, `test`, and `build` for gateway changes.
@@ -22,9 +23,10 @@ Validate Docker changes against the built image and `docker compose config`.
 - Executor-backed tools use `executorTool`; only that helper opens `ToolContext.executor`.
 - `shared/executor-protocol.ts` owns the operation list. Executor handlers satisfy its mapped type.
 - Gateway/shared code must not load headless or native packages. The import-boundary test enforces the role split.
-- Session grants remain internal single-user development only. Required caller IDs enter every worker key;
-  production refuses session grants. Grant secrets are read only by `executor/credentials.ts`.
-- Worker environments are explicit and exclude internal/metrics tokens, license keys and OAuth secrets.
+- Required caller IDs enter every worker key. In production, session grants on the shared executor require
+  allowlisted trusted users; public executor access still requires Stage G.
+  Grant secrets are read only by `executor/credentials.ts`.
+- Worker environments are explicit and exclude `MCP_EXECUTOR_TOKEN`, `MCP_RENDERER_TOKEN`, metrics tokens, license keys and OAuth secrets.
 - `renderer/` has no route to Workspace: it must not import the gateway, Client Core, `@univerjs-pro/*` or the executor (except the generated `executor/license.ts`), and must not mention Workspace origins, grants or sessions. The import-boundary test enforces it.
 - `shared/renderer-protocol.ts` owns the renderer operation list and its schemas; the executor imports it later. The render page ships in `dist/render-runtime` (copied from Client Core at build).
 - The renderer pool reuses runtimes across requests and users. That deviates from architecture 7.1 until Stage G; keep it local and single-user.

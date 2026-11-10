@@ -13,6 +13,7 @@ import { parseExecutorConfig } from "../src/shared/config-executor.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../src/shared/frame.js";
 import {
+  PROTOCOL_VERSION,
   opSpecs,
   requestHeaderSchema,
   type ExecutorGrant,
@@ -32,7 +33,8 @@ import {
 } from "../src/gateway/executor/router.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
 
-const token = "internal-token-".repeat(4);
+const token = "executor-token-".repeat(4);
+const rendererToken = "renderer-token-".repeat(4);
 const grant: ExecutorGrant = {
   kind: "session",
   userId: "user-1",
@@ -40,7 +42,7 @@ const grant: ExecutorGrant = {
   expiresAt: Date.now() + 600_000,
 };
 const config = () =>
-  parseExecutorConfig({ WORKSPACE_ORIGIN: "https://workspace.test", MCP_INTERNAL_TOKEN: token });
+  parseExecutorConfig({ WORKSPACE_ORIGIN: "https://workspace.test", MCP_EXECUTOR_TOKEN: token });
 
 describe("executor protocol boundaries", () => {
   it("round trips JSON and binary payloads and refuses truncated frames", () => {
@@ -70,7 +72,7 @@ describe("executor protocol boundaries", () => {
     expect(() =>
       parseExecutorConfig({
         WORKSPACE_ORIGIN: "https://workspace.test",
-        MCP_INTERNAL_TOKEN: "short",
+        MCP_EXECUTOR_TOKEN: "short",
       }),
     ).toThrow();
     expect(() =>
@@ -81,6 +83,11 @@ describe("executor protocol boundaries", () => {
         MCP_EXECUTOR_URLS: "http://executor:3000",
       }),
     ).toThrow(/together/);
+    expect(() => parseGatewayConfig({
+      MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: "https://workspace.test",
+      MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: "https://mcp.test/mcp",
+      MCP_EXECUTOR_TOKEN: token,
+    })).toThrow(/together/);
   });
 
   it("requires caller identity and redacts grant secrets", () => {
@@ -105,9 +112,20 @@ describe("executor protocol boundaries", () => {
         },
       }),
     );
-    logger.info({ grant, nested: { session: grant.session }, MCP_INTERNAL_TOKEN: token });
+    logger.info({
+      grant,
+      nested: { session: grant.session },
+      MCP_EXECUTOR_TOKEN: token,
+      MCP_RENDERER_TOKEN: rendererToken,
+      nestedTokens: { MCP_EXECUTOR_TOKEN: token, MCP_RENDERER_TOKEN: rendererToken },
+      executorToken: token,
+      rendererToken,
+      MCP_EXECUTOR_ALLOWED_USER_IDS: "private-allowlist-id",
+    });
     expect(output).not.toContain(grant.session);
     expect(output).not.toContain(token);
+    expect(output).not.toContain(rendererToken);
+    expect(output).not.toContain("private-allowlist-id");
     expect(workerEnvironment).toEqual({ NODE_ENV: "production" });
   });
 
@@ -204,7 +222,7 @@ describe("executor protocol boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = () => ({
       router: new ExecutorRouter(urls),
-      internalToken: token,
+      executorToken: token,
       grant,
       requestId: "routing",
       deadlineAt: Date.now() + 30_000,
@@ -238,6 +256,121 @@ describe("executor protocol boundaries", () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
     } finally {
       fetcher.mockRestore();
+    }
+  });
+
+  it.each([undefined, "http://renderer.test"])(
+    "authenticates capability discovery and uses declared renderer operations with %s",
+    async (rendererUrl) => {
+      const nativeFetch = globalThis.fetch;
+      const discovery = vi.spyOn(globalThis, "fetch").mockImplementation((url, options) =>
+        String(url) === "http://renderer.test/rpc/v1/capabilities"
+          ? Promise.resolve(Response.json({ v: 1, operations: ["screenshot", "printPdf", "lint", "measureText"] }))
+          : nativeFetch(url, options),
+      );
+      const executor = createExecutor(
+        parseExecutorConfig({
+          WORKSPACE_ORIGIN: "https://workspace.test",
+          MCP_EXECUTOR_TOKEN: token,
+          ...(rendererUrl === undefined ? {} : { MCP_RENDERER_URL: rendererUrl, MCP_RENDERER_TOKEN: rendererToken }),
+        }),
+        {
+          runtime: {
+            executeRead: vi.fn(),
+            executeAndCommit: vi.fn(),
+            exportUnitData: vi.fn(),
+            close: async () => {},
+          },
+          logger: pino({ level: "silent" }),
+        },
+      );
+      executor.server.listen(0, "127.0.0.1");
+      await once(executor.server, "listening");
+      const address = executor.server.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP address");
+      const url = `http://127.0.0.1:${address.port}/rpc/v1/capabilities`;
+      try {
+        for (const authorization of ["", "Bearer wrong", `Bearer ${rendererToken}`]) {
+          expect((await fetch(url.replace("capabilities", "content.execute"), {
+            method: "POST", headers: { authorization },
+          })).status).toBe(401);
+        }
+        for (const authorization of ["", "Bearer wrong", `Bearer ${rendererToken}`]) {
+          expect((await fetch(url, { headers: { authorization } })).status).toBe(401);
+        }
+        const response = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toEqual({
+          v: PROTOCOL_VERSION,
+          operations: Object.keys(opSpecs).filter(
+            (name) => rendererUrl !== undefined || !name.startsWith("render."),
+          ),
+        });
+      } finally {
+        await executor.close();
+        discovery.mockRestore();
+      }
+    },
+  );
+
+  it("rejects unlisted grant users before Workspace calls or worker starts over real HTTP", async () => {
+    const runtime: WorkspaceContentRuntime = {
+      executeRead: vi.fn(),
+      executeAndCommit: vi.fn(),
+      exportUnitData: vi.fn(),
+      close: async () => {},
+    };
+    const executor = createExecutor(
+      parseExecutorConfig({
+        WORKSPACE_ORIGIN: "https://workspace.test",
+        MCP_EXECUTOR_TOKEN: token,
+        MCP_EXECUTOR_ALLOWED_USER_IDS: "trusted",
+        NODE_ENV: "production",
+      }),
+      { runtime, logger: pino({ level: "silent" }) },
+    );
+    executor.server.listen(0, "127.0.0.1");
+    await once(executor.server, "listening");
+    const address = executor.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected TCP address");
+    const send = fetch;
+    const workspace = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("Unexpected Workspace call"));
+    try {
+      const response = await send(`http://127.0.0.1:${address.port}/rpc/v1/content.execute`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${token}`,
+          "content-type": FRAME_CONTENT_TYPE,
+          "x-mcp-rpc-version": String(PROTOCOL_VERSION),
+        },
+        body: new Uint8Array(
+          encodeFrame({
+            v: PROTOCOL_VERSION,
+            op: "content.execute",
+            requestId: "unlisted",
+            deadlineMs: 500,
+            grant,
+            input: { worktreeId: "wt", unitId: "unit", code: "return 1" },
+          }),
+        ),
+      });
+      expect(response.status).toBe(200);
+      const result = decodeFrame(Buffer.from(await response.arrayBuffer()));
+      expect(result.header).toMatchObject({
+        ok: false,
+        error: { code: "workspace-permission-denied", outcome: "tool_error" },
+      });
+      expect(JSON.stringify(result.header)).not.toContain(grant.userId);
+      expect(JSON.stringify(result.header)).not.toContain(grant.session);
+      expect(workspace).not.toHaveBeenCalled();
+      expect(runtime.executeRead).not.toHaveBeenCalled();
+      expect(runtime.executeAndCommit).not.toHaveBeenCalled();
+      expect(runtime.exportUnitData).not.toHaveBeenCalled();
+    } finally {
+      workspace.mockRestore();
+      await executor.close();
     }
   });
 
@@ -334,7 +467,7 @@ describe("executor regression boundaries", () => {
     }
   });
 
-  it("checks session ownership once per session, expiry, and 401", async () => {
+  it("checks allowlisted session ownership once per session, expiry, and 401", async () => {
     const fetcher = vi
       .fn<typeof fetch>()
       .mockResolvedValue(
@@ -348,13 +481,21 @@ describe("executor regression boundaries", () => {
           JSON.stringify({ authenticated: true, user: { id: "user-1", displayName: "Alice" } }),
         ),
     );
-    const verify = createGrantVerifier({
-      WORKSPACE_ORIGIN: "https://identity.test",
-      WORKSPACE_TRANSPORT_URL: "https://transport.test",
-    }, fetcher);
+    const verify = createGrantVerifier(
+      {
+        WORKSPACE_ORIGIN: "https://identity.test",
+        WORKSPACE_TRANSPORT_URL: "https://transport.test",
+        MCP_EXECUTOR_ALLOWED_USER_IDS: new Set(["user-1", "victim"]),
+      },
+      fetcher,
+    );
     await Promise.all([verify(grant, "test"), verify(grant, "test")]);
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(String(fetcher.mock.calls[0]?.[0])).toBe("https://transport.test/api/session");
+    await expect(verify({ ...grant, userId: "unlisted" }, "test")).rejects.toMatchObject({
+      code: "workspace-permission-denied",
+    });
+    expect(fetcher).toHaveBeenCalledTimes(1);
     await expect(verify({ ...grant, userId: "victim" }, "test")).rejects.toMatchObject({
       code: "workspace-authentication-required",
     });
@@ -390,7 +531,7 @@ describe("executor regression boundaries", () => {
           callExecutor(
             {
               router,
-              internalToken: token,
+              executorToken: token,
               grant,
               requestId: "request",
               deadlineAt: Date.now() + 30_000,
@@ -421,7 +562,7 @@ describe("executor regression boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = {
       router: new ExecutorRouter(["http://one.test"]),
-      internalToken: token,
+      executorToken: token,
       grant,
       requestId: "request",
       deadlineAt: Date.now() + 30_000,
@@ -631,7 +772,7 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
       callExecutor(
         {
           router: new ExecutorRouter(["http://one.test"]),
-          internalToken: token,
+          executorToken: token,
           grant,
           requestId: "large-wire",
           deadlineAt: Date.now() + 30_000,

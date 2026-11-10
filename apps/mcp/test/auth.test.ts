@@ -7,6 +7,7 @@ import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthenticator } from "../src/gateway/auth.js";
 import { createGateway } from "../src/gateway/server.js";
+import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 
 const identityOrigin = "https://workspace.example";
@@ -47,6 +48,7 @@ describe("gateway authentication", () => {
   async function start(
     env: Record<string, string>,
     behavior: {
+      executor?: boolean;
       exchangeStatus?: number;
       exchangeBody?: object;
       beforeExchange?: () => Promise<void>;
@@ -60,6 +62,10 @@ describe("gateway authentication", () => {
     const workspace = createServer(async (request, response) => {
       const path = new URL(request.url ?? "/", "http://localhost").pathname;
       response.setHeader("Content-Type", "application/json");
+      if (path === "/rpc/v1/capabilities") {
+        response.end(JSON.stringify({ v: PROTOCOL_VERSION, operations: Object.keys(opSpecs) }));
+        return;
+      }
       if (path === "/api/auth/token") {
         let body = "";
         request.on("data", (chunk) => (body += chunk));
@@ -110,6 +116,7 @@ describe("gateway authentication", () => {
         WORKSPACE_TRANSPORT_URL: transport,
         MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
         ...env,
+        ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}),
       }),
       {
         logger: pino(
@@ -249,8 +256,8 @@ describe("gateway authentication", () => {
     expect(gateway.productCookies).toEqual([]);
   });
 
-  it("requires publish scope for html_view_create before contacting an executor", async () => {
-    const gateway = await start(exchangeEnv);
+  it("requires publish scope for html_view_create before executor dispatch", async () => {
+    const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_pat_readonly", "?toolsets=files");
     expect(
       await client.callTool({
@@ -266,6 +273,7 @@ describe("gateway authentication", () => {
       isError: true,
       structuredContent: { code: "workspace-scope-required", detail: { required: "publish" } },
     });
+    expect(gateway.productCookies).toEqual([]);
   });
 
   it("re-exchanges a dead downstream session and lets the client retry the same valid token", async () => {

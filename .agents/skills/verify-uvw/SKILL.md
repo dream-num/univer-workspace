@@ -15,7 +15,9 @@ $V user      # register a throwaway password user and sign uvw in as it
 $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
-$V down      # stop what this run started, delete data; keep evidence + logs
+$V agent-up  # install/start Agent (requires VERIFY_UVW_AGENT_PORT at up)
+$V agent-down # stop only this run's Agent
+$V down      # stop what this run started, including Agent; delete data; keep evidence + logs
 ```
 
 A run lives at `/tmp/verify-uvw/<run-id>/` (`VERIFY_UVW_ROOT` overrides `/tmp/verify-uvw`):
@@ -166,8 +168,25 @@ VERIFY_UVW_RUN=b $V doctor
 On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
 `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
 port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS=2` at
-`up` to enable a second executor for MX13. The replica count is saved in the run. Without opt-in, existing commands
+`up` to enable a second executor for MX13. The replica count is saved in the run. With MCP enabled, `up` resolves `claude.ai`. Only when an address is in `198.18.0.0/15`,
+it prints a fake-IP notice and sets `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` for the Workspace
+Server alone. `MCP_CIMD_ENABLED=0` in the launching shell passes through to that server;
+unset defaults to enabled. To restart the same run for MO3, use `down`, then `up --reuse`
+with the same explicit run ID and ports. Reuse requires that `down` removed `data/` and
+`home/`; it creates fresh data and credentials while retaining evidence. Logs are replaced,
+so save the relevant redacted facts before restarting. Run `user` again after each restart.
+Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
+
+Two independent flags at `up` select the deployment shape and are saved in `run.env`:
+
+- `VERIFY_UVW_MCP_RENDERER=0` omits the renderer container and `MCP_RENDERER_URL` from the executor(s). Doctor verifies that no renderer exists and skips renderer probes. `renderer-call` and `renderer-restart` refuse this mode.
+- `VERIFY_UVW_MCP_PRODUCTION=1` sets `NODE_ENV=production` and omits `MCP_DEV_SESSION_PASSTHROUGH`. Gateway and executor start with the non-user placeholder `verify-uvw-pending-user` in their allowlists. The first `user` replaces that placeholder with the registered Workspace user ID and recreates only gateway and executor(s). Product startup validation stays intact.
+
+With neither flag, MCP still starts three containers in development mode, allows dev passthrough, and leaves the executor unrestricted. Both flags require `VERIFY_UVW_MCP=1`.
+`$V mcp-allow-users <user-id>...` replaces the entire allowlist in either mode, including both replicas when enabled. Supply one or more explicit Workspace user IDs as separate arguments, not usernames or a comma-separated string. It saves `executor-allowed-user-ids` beside `run.env`, waits for recreated executor(s), then recreates the gateway so capability discovery sees the ready executors, without rebuilding or restarting Workspace, Vite or the renderer. Retry the same command after a failed recreation. Repeated `user` preserves an explicitly chosen allowlist.
+
+Run the [MB journey](features/mcp.md#mb-deployment-and-per-account-tools) with both flags to verify the G0 gateway and allowlisted executor without a renderer. Journeys using `--auth dev` need the default mode. MA5 (`--auth dev`) and MF4's session-based second-user client need development mode. M2/M3 and M11 use the run's PAT after `user` and also work in production; M9 rejects the Origin before authentication. PAT and OAuth journeys work in production. M7, renderer journeys MR9 onward, screenshot checks and the renderer benchmark need the renderer enabled.
 
 Set `EXECUTOR_MAX_WORKERS` and `EXECUTOR_IDLE_TTL_MS` in the launching shell before
 `up` to size an experimental executor pool. Unset values keep the existing defaults
@@ -181,6 +200,7 @@ short-lived downstream session and scopes. `$V mcp-token [--scopes read,...]` cr
 the default; it prints only the PAT id.
 `$V env` exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR`, and
 `MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high`. Sessions, opencode config,
+both call-direction tokens (`executor-token` and `renderer-token`),
 and the metrics token stay under `home/` with credential files mode 0600.
 
 ```bash
@@ -190,23 +210,37 @@ $V mcp-resources [--protocol version] [--toolsets list] <label>
 $V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
 $V mcp-instructions [--protocol version] [--toolsets list] <label>
 $V mcp-token [--scopes read,write,...] [--name name]
-$V mcp-oauth login <label> [--scopes read,write,...]
+$V mcp-oauth login <label> [--scopes read,write,...] [--client-id <https-url>]
 $V mcp-oauth refresh|reuse|revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
+$V mcp-allow-users <user-id>... # replace the executor allowlist; recreate executor(s), then gateway
+$V mcp-gateway-restart       # recreate only gateway, including when executor is stopped
 $V mcp-logs
 ```
 
-`mcp-oauth` is a scripted MCP OAuth client for MO2. `login` registers a client, clears the run browser's cookies, signs in
+`mcp-oauth` is a scripted MCP OAuth client for MO2 and MO3.
+`login --client-id <https-url>` skips registration and uses a CIMD client (the loopback
+callback path is `/callback`, as used by Claude Code). It records the consent name and
+checks the callback code, state and `iss` without saving the code or state. `login` registers a client, clears the run browser's cookies, signs in
 as the run user through the login page, approves the consent page with only `--scopes` checked (default all four), and keeps the access token, refresh token and client id in
 `home/mcp-oauth-*` (mode 0600); `mcp --auth oauth` then calls the gateway with that access token and expects `auth_kind: oauth`.
 `refresh` rotates the pair, `reuse` replays the previous refresh token, `revoke` calls RFC 7009 revocation, `direct` sends the
 access token straight to Workspace, and `exchange` performs the gateway's token exchange for the PAT or the access token, then
 signs the returned session out. Each writes `<label>.json` with token shapes only and exits 0 on the expected success status, 1 otherwise.
 Set `VERIFY_UVW_AGENT_PORT=<port>` at `up` to also register the Workspace Agent's public OAuth client
-`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`, for checking the Agent's OAuth login against the run.
+`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`.
+Then `$V agent-up` builds and packs the repository's Agent and plugins, installs the pinned DSH
+runtime and profile under `home/agent/`, checks that pnpm uses the run-local package store, and starts `apps/agent/scripts/start-local.mjs` on that
+port. Installation can take several minutes; see `logs/agent-install.log`. The one-time browser
+URL is in `home/agent-url` (mode 0600), and raw Agent logs stay in `home/agent-log.private`
+(mode 0600); never copy either into evidence. Open the URL in this run's agent-browser session.
+The helper seeds the configured `127.0.0.1` Workspace origin without a session; confirm the
+onboarding service URL is `$ORIGIN` before signing in. No model credentials are needed.
+`$V agent-down` stops the recorded launcher after checking its command line; `$V down` does this
+as well and deletes the installation, runtime data and private logs with `home/`.
 Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
 object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
-to `dev` otherwise; the development session passthrough stays enabled for `--auth dev`.
+to `dev` otherwise. Development session passthrough is available only in the default development mode; production requires PAT or OAuth.
 `mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
 `$V renderer-call <label> screenshot|printPdf|lint|measureText < input.json` sends one operation to the renderer from inside the
 executor container and saves `<label>.json` plus the PNG or PDF payload in `$EVIDENCE`. `bin/renderer-proof.mjs` prints a small
@@ -241,7 +275,7 @@ volumes and image tag, then deletes `home/` with the other disposable data. It p
 `ok    MCP resources removed` only after checking resource removal. Cleanup failures
 warn and continue. Run `down` after failures too. Build cache and evidence survive.
 
-The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts with every MCP run on its own compose
+The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts by default with MCP on its own compose
 network declared `internal: true`, joined only by the executor(s) and the renderer. The gateway waits for it to be healthy.
 `doctor` checks its image, that it has no published port and joins one internal network, bearer rejection, protected metrics,
 a real `measureText` call from the executor, that it cannot reach `host.docker.internal:<server port>`, the gateway or a public
@@ -282,3 +316,7 @@ For renderer sizing (latency per operation, throughput against `RENDERER_MAX_RUN
 renders), use `node .agents/skills/verify-uvw/bin/renderer-bench.mjs --help` and the
 [renderer benchmark recipe](features/mcp.md#renderer-capacity-benchmark). It recreates the renderer many times, so run it on a stack
 nothing else is using. `bin/renderer-bench-summary.py` renders its JSON as the tables in the architecture document.
+
+For the stage G isolation baseline (secrets, network, cross-user visibility, CPU and memory limits, pool fairness, mounts, fail-closed
+configuration, renderer separation), run `node .agents/skills/verify-uvw/bin/mcp-security-probes.mjs [--only MG6,MG7]`. It prints one JSON
+line per check, `contained` or `exposed`; see [the MCP security journeys](features/mcp-security.md).

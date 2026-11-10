@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { ClientMetadataDocumentError, type FetchClientMetadataDocument } from "../../server/src/modules/identity/client-metadata-document.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 
 const ISSUER = "https://space.example.test";
@@ -131,6 +132,8 @@ describe("MCP OAuth", () => {
     expect(metadata.status).toBe(200);
     expect(await metadata.json()).toEqual({
       issuer: ISSUER,
+      client_id_metadata_document_supported: true,
+      authorization_response_iss_parameter_supported: true,
       authorization_endpoint: `${ISSUER}/api/auth/authorize`,
       token_endpoint: `${ISSUER}/api/auth/token`,
       registration_endpoint: `${ISSUER}/api/auth/register`,
@@ -189,6 +192,7 @@ describe("MCP OAuth", () => {
     const callback = new URL(allowed.headers.get("location")!);
     expect(`${callback.origin}${callback.pathname}`).toBe(redirectUri);
     expect(callback.searchParams.get("state")).toBe(STATE);
+    expect(callback.searchParams.get("iss")).toBe(ISSUER);
     expect(callback.searchParams.get("scope")).toBe("read write publish");
     const code = callback.searchParams.get("code")!;
 
@@ -290,6 +294,7 @@ describe("MCP OAuth", () => {
       const target = new URL(response.headers.get("location")!);
       expect(`${target.origin}${target.pathname}`).toBe("https://app.example.test/cb");
       expect(target.searchParams.get("state")).toBe(STATE);
+      expect(target.searchParams.get("iss")).toBe(ISSUER);
       return target.searchParams.get("error");
     };
     expect(await errorOf({ resource: "https://other.example.test/mcp" })).toBe("invalid_target");
@@ -322,7 +327,33 @@ describe("MCP OAuth", () => {
     });
     expect(native.headers.get("content-security-policy")).toContain("form-action 'self' com.example.app:;");
     const denied = await submitConsent(origin, alice, consentTokenOf(await native.text()), ALL_SCOPES.split(" "), "deny");
-    expect(denied.headers.get("location")).toBe(`com.example.app:/oauth?error=access_denied&state=${STATE}`);
+    expect(denied.headers.get("location")).toBe(`com.example.app:/oauth?error=access_denied&iss=${encodeURIComponent(ISSUER)}&state=${STATE}`);
+  });
+
+  it("registers Cursor's redirects and denies consent through its private-use callback", async () => {
+    const origin = await start();
+    const redirectUri = "cursor://anysphere.cursor-mcp/oauth/callback";
+    const redirectUris = [redirectUri, "https://www.cursor.com/agents/mcp/oauth/callback", "http://localhost:8787/callback"];
+    const registered = await registerClient(origin, { redirect_uris: redirectUris });
+    expect(registered.status).toBe(201);
+    const client = (await registered.json()) as { client_id: string; redirect_uris: string[] };
+    expect(client.redirect_uris).toEqual(redirectUris);
+
+    const alice = await registerUser(origin, "alice");
+    const query = authorizeQuery({ client_id: client.client_id, redirect_uri: redirectUri });
+    const authorized = await fetch(`${origin}/api/auth/authorize?${query}`, {
+      headers: { cookie: alice }, redirect: "manual",
+    });
+    expect(authorized.status).toBe(302);
+    const consentUrl = new URL(authorized.headers.get("location")!, origin);
+    expect(consentUrl.pathname).toBe("/api/auth/authorize/consent");
+    expect(Object.fromEntries(consentUrl.searchParams)).toEqual(Object.fromEntries(query));
+    const consent = await fetch(consentUrl, { headers: { cookie: alice } });
+    expect(consent.status).toBe(200);
+    expect(consent.headers.get("content-security-policy")).toContain("form-action 'self' cursor:;");
+    const denied = await submitConsent(origin, alice, consentTokenOf(await consent.text()), [], "deny");
+    expect(denied.status).toBe(303);
+    expect(denied.headers.get("location")).toBe(`${redirectUri}?error=access_denied&iss=${encodeURIComponent(ISSUER)}&state=${STATE}`);
   });
 
   it("validates registration metadata, caps the request size and the number of clients", async () => {
@@ -336,6 +367,9 @@ describe("MCP OAuth", () => {
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: ["https://app.example.test/cb#x"] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: ["https://user:pw@app.example.test/cb"] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: ["javascript:alert(1)"] }, "invalid_redirect_uri");
+    await rejected({ redirect_uris: ["myapp://callback"] }, "invalid_redirect_uri");
+    await rejected({ redirect_uris: ["cursor://anysphere.cursor-mcp/oauth/callback#x"] }, "invalid_redirect_uri");
+    await rejected({ redirect_uris: ["cursor://user:pw@anysphere.cursor-mcp/oauth/callback"] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: [] }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, redirect_uris: Array.from({ length: 11 }, (_, i) => `https://app.example.test/${i}`) }, "invalid_redirect_uri");
     await rejected({ ...OPENCODE_REGISTRATION, token_endpoint_auth_method: "client_secret_basic" }, "invalid_client_metadata");
@@ -420,6 +454,7 @@ describe("MCP OAuth", () => {
     expect(allowed.status).toBe(302);
     const location = new URL(allowed.headers.get("location")!);
     expect(`${location.origin}${location.pathname}`).toBe(STATIC_REDIRECT);
+    expect(location.searchParams.has("iss")).toBe(false);
     const response = await token(origin, {
       grant_type: "authorization_code",
       code: location.searchParams.get("code")!,
@@ -431,9 +466,114 @@ describe("MCP OAuth", () => {
     expect(await response.json()).toMatchObject({ access_token: "", token_type: "Bearer", expires_in: 3600 });
   });
 
+  it("authorizes a CIMD client without registration, and never refetches on consent POST, token, refresh or revoke", async () => {
+    const clientId = "https://client.example.test/metadata";
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockResolvedValue({ body: JSON.stringify({
+      client_id: clientId, client_name: "Claude Code", redirect_uris: ["http://127.0.0.1/callback"],
+      grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"],
+    }) });
+    const origin = await start({ fetchDocument, maxRegisteredClients: 1 });
+    await registeredClientId(origin);
+    const redirectUri = "http://127.0.0.1:61234/callback";
+    const query = authorizeQuery({ client_id: clientId, redirect_uri: redirectUri });
+    for (const route of ["/authorize", "/authorize/consent"]) {
+      const anonymous = await fetch(`${origin}/api/auth${route}?${query}`, { redirect: "manual" });
+      expect(anonymous.status).toBe(302);
+      expect(anonymous.headers.get("location")).toMatch(/^\/login\?/u);
+    }
+    expect(fetchDocument).not.toHaveBeenCalled();
+    const alice = await registerUser(origin, "alice");
+    const consent = await fetch(`${origin}/api/auth/authorize?${query}`, { headers: { cookie: alice } });
+    expect(consent.status).toBe(200);
+    const page = await consent.text();
+    expect(page).toContain("Claude Code (client.example.test)");
+    expect(fetchDocument).toHaveBeenCalledTimes(1);
+    fetchDocument.mockRejectedValue(new Error("offline"));
+    const allowed = await submitConsent(origin, alice, consentTokenOf(page), ["read"]);
+    const callback = new URL(allowed.headers.get("location")!);
+    expect(callback.searchParams.get("iss")).toBe(ISSUER);
+    expect(callback.searchParams.get("state")).toBe(STATE);
+    const issued = await token(origin, { grant_type: "authorization_code", client_id: clientId, code: callback.searchParams.get("code")!,
+      redirect_uri: redirectUri, resource: RESOURCE, code_verifier: VERIFIER });
+    expect(issued.status).toBe(200);
+    const first = await issued.json() as { access_token: string; refresh_token: string };
+    const exchanged = await exchange(origin, first.access_token);
+    expect(await exchanged.json()).toMatchObject({ subject: { client_id: clientId } });
+    const second = await refresh(origin, clientId, first.refresh_token);
+    expect(second.status).toBe(200);
+    const rotated = await second.json() as { access_token: string; refresh_token: string };
+    expect((await revoke(origin, "https://other.test/client", rotated.access_token)).status).toBe(200);
+    expect((await exchange(origin, rotated.access_token)).status).toBe(200);
+    expect((await revoke(origin, clientId, rotated.refresh_token)).status).toBe(200);
+    expect((await exchange(origin, rotated.access_token)).status).toBe(400);
+    expect((await refresh(origin, clientId, rotated.refresh_token)).status).toBe(400);
+    expect(fetchDocument).toHaveBeenCalledTimes(1);
+    expect(application!.database.connection.prepare("SELECT count(*) AS n FROM oauth_clients").get()).toEqual({ n: 1 });
+  });
+
+  it("adds iss to CIMD error and deny callbacks, and keeps fetch failures on the server", async () => {
+    const clientId = "https://client.example.test/metadata";
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => {
+      if (id.endsWith("/offline")) throw new ClientMetadataDocumentError(true, "offline");
+      return { body: JSON.stringify({ client_id: clientId, client_name: "<script>bad</script>", redirect_uris: ["cursor://app/cb"] }) };
+    });
+    const origin = await start({ fetchDocument });
+    const alice = await registerUser(origin, "alice");
+    const get = (fields: Record<string, string>) => fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: "cursor://app/cb", ...fields })}`, { headers: { cookie: alice }, redirect: "manual" });
+    const failed = await get({ resource: "https://wrong.test/mcp" });
+    const error = new URL(failed.headers.get("location")!);
+    expect(error.searchParams.get("error")).toBe("invalid_target");
+    expect(error.searchParams.get("iss")).toBe(ISSUER);
+    const page = await (await get({})).text();
+    expect(page).toContain("&lt;script&gt;bad&lt;/script&gt; (client.example.test)");
+    const denied = await submitConsent(origin, alice, consentTokenOf(page), [], "deny");
+    const target = new URL(denied.headers.get("location")!);
+    expect(target.searchParams.get("error")).toBe("access_denied");
+    expect(target.searchParams.get("iss")).toBe(ISSUER);
+    for (const [suffix, status] of [["/mismatch", 400], ["/offline", 503]] as const) {
+      const response = await get({ client_id: clientId + suffix });
+      expect(response.status).toBe(status);
+      expect(response.headers.has("location")).toBe(false);
+      expect(response.headers.get("content-type")).toContain("text/html");
+    }
+    expect((await get({ redirect_uri: "https://unregistered.test/cb" })).status).toBe(400);
+  });
+
+  it("disables CIMD without disabling DCR and validates network exemptions at startup", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>();
+    const origin = await start({ cimdEnabled: false, fetchDocument });
+    const metadata = await (await fetch(`${origin}/.well-known/oauth-authorization-server`)).json();
+    expect(metadata).not.toHaveProperty("client_id_metadata_document_supported");
+    expect(metadata).toHaveProperty("authorization_response_iss_parameter_supported", true);
+    const response = await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: "https://claude.ai/oauth/claude-code-client-metadata" })}`, { redirect: "manual" });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: { code: "OAUTH_CLIENT_UNAVAILABLE" } });
+    expect((await token(origin, { client_id: "https://client.test/doc", grant_type: "refresh_token" })).status).toBe(401);
+    expect((await registerClient(origin, OPENCODE_REGISTRATION)).status).toBe(201);
+    expect(fetchDocument).not.toHaveBeenCalled();
+    expect(loadConfig({ MCP_RESOURCE_URLS: RESOURCE, PUBLIC_ORIGIN: ISSUER, MCP_CIMD_ENABLED: "0" }).mcpOAuth?.cimdEnabled).toBe(false);
+    expect(() => loadConfig({ MCP_RESOURCE_URLS: RESOURCE, PUBLIC_ORIGIN: ISSUER, MCP_CIMD_EXEMPT_NETWORKS: "127.0.0.0/8" })).toThrow(/MCP_CIMD_EXEMPT_NETWORKS/u);
+  });
+
+  it("keeps iss absent from static success and deny consent callbacks", async () => {
+    const origin = await start({ staticConsent: true });
+    const alice = await registerUser(origin, "alice");
+    for (const decision of ["allow", "deny"]) {
+      const page = await fetch(`${origin}/api/auth/authorize/consent?${new URLSearchParams({
+        client_id: STATIC_ID, redirect_uri: STATIC_REDIRECT, state: STATE, code_challenge: CHALLENGE, scope: "identity",
+      })}`, { headers: { cookie: alice } });
+      expect(page.status).toBe(200);
+      const result = await submitConsent(origin, alice, consentTokenOf(await page.text()), [], decision);
+      const target = new URL(result.headers.get("location")!);
+      expect(target.searchParams.has("iss")).toBe(false);
+      expect(target.searchParams.has(decision === "allow" ? "code" : "error")).toBe(true);
+    }
+  });
+
   it("loads MCP OAuth from MCP_RESOURCE_URLS and PUBLIC_ORIGIN", () => {
     expect(loadConfig({}).mcpOAuth).toBeNull();
-    expect(loadConfig({ MCP_RESOURCE_URLS: `${RESOURCE}, https://b.example.test/mcp`, PUBLIC_ORIGIN: `${ISSUER}/` }).mcpOAuth).toEqual({
+    expect(loadConfig({ MCP_RESOURCE_URLS: `${RESOURCE}, https://b.example.test/mcp`, PUBLIC_ORIGIN: `${ISSUER}/` }).mcpOAuth).toMatchObject({
+      cimdEnabled: true,
       issuer: ISSUER,
       resources: [RESOURCE, "https://b.example.test/mcp"],
       maxRegisteredClients: 10_000,
@@ -534,7 +674,7 @@ async function registerUser(origin: string, username: string): Promise<string> {
   return response.headers.get("set-cookie")!.split(";", 1)[0]!;
 }
 
-async function start(options: { maxRegisteredClients?: number; disabled?: boolean } = {}): Promise<string> {
+async function start(options: { maxRegisteredClients?: number; disabled?: boolean; staticConsent?: boolean; cimdEnabled?: boolean; fetchDocument?: FetchClientMetadataDocument } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-mcp-oauth-"));
   application = createWorkspaceApplication({
     host: "127.0.0.1",
@@ -545,11 +685,11 @@ async function start(options: { maxRegisteredClients?: number; disabled?: boolea
     sessionTtlMs: 24 * 60 * 60_000,
     passwordAuthEnabled: true,
     emailAuth: null,
-    oauthClients: OAUTH_CLIENTS,
+    oauthClients: options.staticConsent ? { clients: OAUTH_CLIENTS!.clients.map((client) => ({ ...client, requiresConsent: true })) } : OAUTH_CLIENTS,
     mcpOAuth: options.disabled
       ? null
-      : { issuer: ISSUER, resources: [RESOURCE], maxRegisteredClients: options.maxRegisteredClients ?? 10_000 },
-  });
+      : { issuer: ISSUER, resources: [RESOURCE], maxRegisteredClients: options.maxRegisteredClients ?? 10_000, cimdEnabled: options.cimdEnabled ?? true },
+  }, options.fetchDocument === undefined ? {} : { fetchClientMetadataDocument: options.fetchDocument });
   server = createServer(application.app);
   await new Promise<void>((resolve, reject) => {
     server!.once("error", reject);

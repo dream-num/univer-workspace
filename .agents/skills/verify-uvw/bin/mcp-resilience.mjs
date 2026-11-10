@@ -99,7 +99,7 @@ try {
       for (const url of process.env.MCP_EXECUTOR_URLS.split(',')) {
         const endpoint = new URL('/metrics', url);
         if ((await fetch(endpoint)).status !== 401) throw new Error('metrics must require internal bearer');
-        const response = await fetch(endpoint, { headers: { authorization: 'Bearer ' + process.env.MCP_INTERNAL_TOKEN } });
+        const response = await fetch(endpoint, { headers: { authorization: 'Bearer ' + process.env.MCP_EXECUTOR_TOKEN } });
         if (response.status !== 200) throw new Error('metrics bearer rejected');
         results.push({ url, metrics: await response.text() });
       }
@@ -143,12 +143,12 @@ try {
       import { encodeFrame, decodeFrame, FRAME_CONTENT_TYPE } from './dist/shared/frame.js';
       const { grant, html, label, deadlineMs } = JSON.parse(readFileSync(0, 'utf8'));
       const response = await fetch(new URL('/rpc/v1/htmlView.validate', process.env.MCP_EXECUTOR_URLS.split(',')[0]), {
-        method: 'POST', headers: { authorization: 'Bearer ' + process.env.MCP_INTERNAL_TOKEN, 'content-type': FRAME_CONTENT_TYPE, 'x-mcp-rpc-version': '1' },
+        method: 'POST', headers: { authorization: 'Bearer ' + process.env.MCP_EXECUTOR_TOKEN, 'content-type': FRAME_CONTENT_TYPE, 'x-mcp-rpc-version': '1' },
         body: encodeFrame({ v: 1, op: 'htmlView.validate', requestId: label, deadlineMs, grant, input: { html } }), signal: AbortSignal.timeout(30000),
       });
       if (!response.ok) throw new Error('RPC transport rejected ' + response.status);
       console.log(JSON.stringify(decodeFrame(new Uint8Array(await response.arrayBuffer())).header));
-    `], { encoding: 'utf8', timeout: 40_000, input: JSON.stringify({ grant, html, label: `${prefix}-${label}`, deadlineMs }) }));
+    `], { encoding: 'utf8', maxBuffer: 1 << 28, timeout: 40_000, input: JSON.stringify({ grant, html, label: `${prefix}-${label}`, deadlineMs }) }));
     const floor = rpc('floor', 4000);
     proof.floor = floor;
     assert(!floor.ok && floor.error.outcome !== 'auth_error' && floor.error.code === 'workspace-executor-timeout' && floor.error.detail.retryable === true && floor.error.detail.started === false, 'no rerun yields a retryable non-auth error');

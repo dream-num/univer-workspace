@@ -19,6 +19,7 @@ import { zeroCost, type OpMeta } from "../shared/usage.js";
 import { mapRendererError } from "./errors.js";
 import { runOp, type RenderRuntime } from "./ops.js";
 import { RuntimePool } from "./pool.js";
+import { PROTOCOL_VERSION } from "../shared/executor-protocol.js";
 
 const renderPageRoot = fileURLToPath(new URL("../render-runtime", import.meta.url));
 
@@ -68,17 +69,19 @@ export function createRenderer(
       this.set({ state: "busy" }, pool.stats.busy);
     },
   });
-  const authorized = createBearerCheck(config.MCP_INTERNAL_TOKEN);
+  const authorized = createBearerCheck(config.MCP_RENDERER_TOKEN);
   const metricsAuthorized = config.METRICS_TOKEN ? createBearerCheck(config.METRICS_TOKEN) : null;
 
-  async function dispatch(name: RendererOpName, header: RendererRequestHeader) {
+  async function dispatch(name: RendererOpName, header: RendererRequestHeader, receivedAt: number) {
     const spec = rendererOpSpecs[name];
     const started = Date.now();
     try {
+      const remainingMs = header.deadlineMs - (Date.now() - receivedAt);
+      if (remainingMs <= 0) throw new DOMException("Renderer deadline elapsed", "TimeoutError");
       const input = spec.input.parse(header.input);
       const { value, cold } = await pool.run(
         (runtime, signal) => runOp(name, runtime, input, signal),
-        AbortSignal.timeout(header.deadlineMs),
+        AbortSignal.timeout(remainingMs),
       );
       const meta: OpMeta = {
         executor: cold ? "cold_start" : "warm",
@@ -119,7 +122,12 @@ export function createRenderer(
 
   let draining = false;
   const server = createServer((request, response) => {
+    const receivedAt = Date.now();
     const reject = (status: number, code: string) => {
+      if (!request.complete) {
+        response.setHeader("connection", "close");
+        request.resume();
+      }
       response
         .writeHead(status, { "content-type": "application/json" })
         .end(JSON.stringify({ error: { code, message: code, detail: null } }));
@@ -147,6 +155,12 @@ export function createRenderer(
         reject(503, "workspace-renderer-unavailable");
         return;
       }
+      if (request.method === "GET" && request.url === "/rpc/v1/capabilities") {
+        response
+          .writeHead(200, { "content-type": "application/json" })
+          .end(JSON.stringify({ v: PROTOCOL_VERSION, operations: Object.keys(rendererOpSpecs) }));
+        return;
+      }
       const name = request.url?.slice("/rpc/v1/".length) ?? "";
       if (
         request.method !== "POST" ||
@@ -171,7 +185,7 @@ export function createRenderer(
       }
       const chunks: Buffer[] = [];
       let size = 0;
-      for await (const chunk of request) {
+      for await (const chunk of request.iterator({ destroyOnReturn: false })) {
         const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
         size += bytes.length;
         if (size > limits.requestBytes) {
@@ -199,7 +213,7 @@ export function createRenderer(
         reject(400, "workspace-renderer-frame-invalid");
         return;
       }
-      const result = await dispatch(name, header);
+      const result = await dispatch(name, header, receivedAt);
       let frame = encodeFrame(result.header, result.payload);
       if (frame.length > limits.responseBytes)
         frame = encodeFrame({
@@ -227,8 +241,7 @@ export function createRenderer(
         .run(() => Promise.resolve())
         .then(
           () => logger.info("Renderer runtime warmed"),
-          (error: unknown) =>
-            logger.warn({ ...safeErrorFields(error) }, "Renderer warm-up failed"),
+          (error: unknown) => logger.warn({ ...safeErrorFields(error) }, "Renderer warm-up failed"),
         );
     },
     async close() {

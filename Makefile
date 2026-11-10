@@ -1,6 +1,6 @@
 CR ?= univer-acr-registry.cn-shenzhen.cr.aliyuncs.com
 NS ?= univer
-REPOSITORY = colla-workspace
+REPOSITORY ?= colla-workspace
 IMAGE_TAG ?= latest
 BASE_IMAGE ?= 
 HTTP_PROXY ?=
@@ -19,7 +19,7 @@ ADD_HOST_OPT = --add-host "$(ADD_HOST)"
 endif
 
 
-IMAGE_DIR = ./apps/workspace
+IMAGE_DIR ?= ./apps/workspace
 
 push_image:
 	@docker build \

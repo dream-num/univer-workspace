@@ -13,7 +13,7 @@ import {
   screenshotInput,
 } from "../src/shared/renderer-protocol.js";
 
-const token = "internal-token-".repeat(4);
+const token = "renderer-token-".repeat(4);
 const png = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==",
   "base64",
@@ -44,7 +44,7 @@ afterEach(async () => {
 
 async function start(runtime = fakeRuntime(), env: Record<string, string> = {}) {
   const create = vi.fn(() => Promise.resolve(runtime));
-  const renderer = createRenderer(parseRendererConfig({ MCP_INTERNAL_TOKEN: token, ...env }), {
+  const renderer = createRenderer(parseRendererConfig({ MCP_RENDERER_TOKEN: token, ...env }), {
     createRuntime: create,
     logger: pino({ level: "silent" }),
   });
@@ -102,10 +102,10 @@ describe("renderer protocol", () => {
       expect(rendererRequestHeaderSchema.safeParse(invalid).success).toBe(false);
   });
 
-  it("requires the internal token and configuration limits", () => {
+  it("requires the renderer token and configuration limits", () => {
     expect(() => parseRendererConfig({})).toThrow();
-    expect(() => parseRendererConfig({ MCP_INTERNAL_TOKEN: "short" })).toThrow();
-    expect(parseRendererConfig({ MCP_INTERNAL_TOKEN: token })).toMatchObject({
+    expect(() => parseRendererConfig({ MCP_RENDERER_TOKEN: "short" })).toThrow();
+    expect(parseRendererConfig({ MCP_RENDERER_TOKEN: token })).toMatchObject({
       RENDERER_MAX_RUNTIMES: 2,
       RENDERER_QUEUE_TIMEOUT_MS: 5_000,
       RENDERER_OPERATION_TIMEOUT_MS: 25_000,
@@ -123,7 +123,8 @@ describe("renderer RPC", () => {
     });
     expect(metrics.status).toBe(200);
     expect(await metrics.text()).toContain("mcp_renderer_jobs_total");
-    expect((await call("measureText", {}, { authorization: "Bearer wrong" })).status).toBe(401);
+    for (const authorization of ["", "Bearer wrong", `Bearer ${"executor-token-".repeat(4)}`])
+      expect((await call("measureText", {}, { authorization })).status).toBe(401);
     expect((await call("measureText", {}, { "x-mcp-rpc-version": "2" })).status).toBe(426);
     expect((await call("measureText", {}, { "content-type": "text/plain" })).status).toBe(415);
     expect((await call("diagnostics.probe", {})).status).toBe(404);

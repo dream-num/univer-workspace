@@ -15,6 +15,7 @@ export interface RendererResult<K extends RendererOpName> {
   readonly meta: OpMeta;
 }
 export interface RendererClient {
+  readonly operations: ReadonlySet<RendererOpName>;
   call<K extends RendererOpName>(
     name: K,
     input: z.input<(typeof rendererOpSpecs)[K]["input"]>,
@@ -44,17 +45,19 @@ const timeout = () =>
   });
 
 /**
- * Calls the renderer role over its internal RPC with the shared internal token. The renderer gets
+ * Calls the renderer role over its internal RPC with the renderer token. The renderer gets
  * no grant, so the request carries only the render unit and options.
  */
 export function createRendererClient(options: {
   readonly url: string | undefined;
-  readonly internalToken: string;
+  readonly rendererToken: string | undefined;
   readonly requestId: string;
   readonly deadlineAt: number;
   readonly signal: AbortSignal;
+  readonly operations?: ReadonlySet<RendererOpName>;
 }): RendererClient {
   return {
+    operations: options.operations ?? new Set(),
     async call(name, input) {
       const spec = rendererOpSpecs[name];
       if (options.url === undefined)
@@ -87,7 +90,7 @@ export function createRendererClient(options: {
         response = await fetch(new URL(`/rpc/v1/${name}`, options.url), {
           method: "POST",
           headers: {
-            authorization: `Bearer ${options.internalToken}`,
+            authorization: `Bearer ${options.rendererToken}`,
             "content-type": FRAME_CONTENT_TYPE,
             "x-mcp-rpc-version": "1",
           },
@@ -117,7 +120,7 @@ export function createRendererClient(options: {
             "internal_error",
             null,
           );
-        // 401 means the two roles disagree on the internal token: a deployment fault, not the caller's.
+        // 401 means the two roles disagree on the renderer token: a deployment fault, not the caller's.
         throw unavailable(response.status === 503 ? "tool_error" : "internal_error");
       }
       const chunks: Uint8Array[] = [];

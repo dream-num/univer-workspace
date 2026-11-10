@@ -31,10 +31,12 @@ import { credentialRedactions, safeErrorFields, isClientAbort } from "../shared/
 import { ToolJobs } from "./jobs/store.js";
 import { LocalStagingStore } from "./staging/local.js";
 import { UsageAccumulator } from "../shared/usage.js";
+import { ExecutorCapabilities } from "./executor/capabilities.js";
+import type { OpName } from "../shared/executor-protocol.js";
 import { createExecutorLinks } from "./tools/executor-tool.js";
 import type { GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
-import { SERVER_INSTRUCTIONS } from "./instructions.js";
+import { buildServerInstructions } from "./instructions.js";
 import { openResourceLibrary } from "./resources.js";
 import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { RESULT_LIMIT } from "./paging.js";
@@ -54,6 +56,8 @@ interface RequestState {
   readonly auth: Authentication;
   readonly usage: UsageAccumulator;
   readonly selected: readonly ToolDefinition[];
+  readonly operations: ReadonlySet<OpName>;
+  readonly executorRestricted: boolean;
   outcome: Outcome;
   errorCode: string | null;
   repo: string | null;
@@ -137,7 +141,8 @@ export function createGateway(
   const expectedMetricsToken = config.METRICS_TOKEN
     ? createBearerCheck(config.METRICS_TOKEN)
     : null;
-  const executorLink = createExecutorLinks(config.executor);
+  const capabilities = new ExecutorCapabilities(config.executor, logger);
+  const executorLink = createExecutorLinks(config.executor, capabilities.router);
   const upstream = (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
     (options.fetcher ?? fetch)(input, init);
   const authenticator = createAuthenticator(config, logger, upstream);
@@ -148,7 +153,13 @@ export function createGateway(
     state.modern = era === "modern";
     const server = new McpServer(
       { name: "univer-workspace", version: "0.0.0" },
-      { instructions: SERVER_INSTRUCTIONS },
+      {
+        instructions: buildServerInstructions(
+          state.selected,
+          state.operations,
+          state.executorRestricted,
+        ),
+      },
     );
     server.registerResource(
       "skills",
@@ -309,6 +320,59 @@ export function createGateway(
     started: number,
   ): Promise<Response> {
     if (request.method === "GET" && url.pathname === "/healthz") return new Response("ok");
+    if (request.method === "GET" && url.pathname === "/readyz") {
+      const passes = async (
+        path: string,
+        expect: (status: number, body: string) => boolean,
+        init?: RequestInit,
+      ): Promise<"ok" | "failed"> => {
+        try {
+          const response = await upstream(`${config.WORKSPACE_TRANSPORT_URL}${path}`, {
+            ...init,
+            signal: AbortSignal.timeout(2_000),
+            redirect: "error",
+          });
+          return expect(response.status, await response.text()) ? "ok" : "failed";
+        } catch {
+          return "failed";
+        }
+      };
+      const exchange = config.auth.exchange;
+      const [workspace, tokenExchange] = await Promise.all([
+        passes("/healthz", (status) => status === 200),
+        // An empty subject token gets invalid_request only after Workspace has accepted
+        // this client's credentials and its token-exchange permission, and before any lookup.
+        exchange
+          ? passes(
+              "/api/auth/token",
+              (status, body) => status === 400 && body.includes('"invalid_request"'),
+              {
+                method: "POST",
+                headers: { "content-type": "application/x-www-form-urlencoded" },
+                body: new URLSearchParams({
+                  grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                  client_id: exchange.clientId,
+                  client_secret: exchange.clientSecret,
+                }),
+              },
+            )
+          : undefined,
+        config.executor && !capabilities.available ? capabilities.refresh() : undefined,
+      ]);
+      const checks = {
+        workspace,
+        ...(tokenExchange === undefined ? {} : { token_exchange: tokenExchange }),
+        ...(config.executor ? { executor: capabilities.available ? "ok" : "failed" } : {}),
+      };
+      const status = Object.values(checks).every((check) => check === "ok") ? "ok" : "failed";
+      return Response.json(
+        { status, checks },
+        {
+          status: status === "ok" ? 200 : 503,
+          headers: { "Cache-Control": "no-store" },
+        },
+      );
+    }
     if (request.method === "GET" && url.pathname === "/metrics") {
       const headers = { "Cache-Control": "no-store" };
       if (!expectedMetricsToken) return new Response("Not found", { status: 404, headers });
@@ -377,7 +441,13 @@ export function createGateway(
         return unauthorized(true);
       throw error;
     }
-    const selected = selectTools(url.searchParams.get("toolsets"));
+    await capabilities.ready;
+    const executorRestricted =
+      config.executor !== null &&
+      config.MCP_EXECUTOR_ALLOWED_USER_IDS !== undefined &&
+      !config.MCP_EXECUTOR_ALLOWED_USER_IDS.has(user.id);
+    const operations = executorRestricted ? new Set<OpName>() : capabilities.operations;
+    const selected = selectTools(url.searchParams.get("toolsets"), operations);
     if (!selected)
       return Response.json({ message: "Unknown toolset", valid: toolsets }, { status: 400 });
     let body: unknown;
@@ -410,6 +480,8 @@ export function createGateway(
       },
       auth: authentication,
       selected,
+      operations,
+      executorRestricted,
       outcome: "tool_error",
       errorCode: null,
       repo: null,
@@ -584,6 +656,7 @@ export function createGateway(
     server,
     registry,
     close: async () => {
+      capabilities.close();
       await staging.close();
       await mcp.close();
     },

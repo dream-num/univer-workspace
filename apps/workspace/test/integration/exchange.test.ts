@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateRawSync } from "node:zlib";
 import { Readable } from "node:stream";
-import { transformSnapshotToSlideData } from "@univerjs-pro/collaboration";
+import { transformSnapshotToPdfData, transformSnapshotToSlideData } from "@univerjs-pro/collaboration";
 import { getSlidesEmptySnapshot, PageElementTypeEnum, type ISlideData } from "@univerjs-pro/slides";
 import {
   getPdfsEmptySnapshot,
@@ -524,6 +524,50 @@ describe("Universer Exchange protocol", () => {
     expect(bytes.subarray(0, 2).toString()).toBe("PK");
   }, 60_000);
 
+  it("stores a PDF import's images as Trunk Assets the PDF Unit binds to", async () => {
+    const { application, origin } = await startApplication();
+    const owner = await register(application, "pdf-image-owner");
+    const uploaded = await uploadExchangeFile(
+      origin,
+      owner.cookie,
+      new File([pdfWithImage()], "picture.pdf", { type: "application/pdf" })
+    );
+    const imported = await waitForTask(
+      origin,
+      owner.cookie,
+      await startTask(origin, owner.cookie, "/universer-api/exchange/import", {
+        fileID: uploaded.body.FileId,
+        outputType: 1,
+      })
+    );
+    expect(imported, JSON.stringify(imported)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const unitId = imported.import!.unitID;
+
+    const assets = listAssets(application);
+    expect(assets.every((asset) => asset.unit_id === unitId && asset.worktree_id === null)).toBe(true);
+    const assetIds = new Set(assets.map((asset) => asset.id));
+    // The PDF editor draws an image only through its resource binding.
+    const unit = storedPdfData(unitId);
+    const images = Object.values(unit.document.assets.images);
+    expect(images.length).toBeGreaterThan(0);
+    for (const image of images) {
+      const binding = unit.resourceBindings?.[image.decodedAssetId ?? image.id] ?? unit.resourceBindings?.[image.id];
+      expect(binding, image.id).toMatchObject({ kind: "universer-resource", imageSourceType: ImageSourceType.UUID });
+      expect(assetIds.has((binding as { source: string }).source)).toBe(true);
+    }
+    expect(count(application, "univer_asset_uploads")).toBe(0);
+
+    // Exporting loads the stored files back through exchange-node.
+    const exported = await waitForTask(
+      origin,
+      owner.cookie,
+      await startTask(origin, owner.cookie, "/universer-api/exchange/7/export", { unitID: unitId, format: "pdf" })
+    );
+    expect(exported, JSON.stringify(exported)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+    const bytes = await downloadArtifact(origin, owner.cookie, exported.export!.fileID);
+    expect(bytes.subarray(0, 5).toString("ascii")).toBe("%PDF-");
+  }, 60_000);
+
   it("converts a stored attachment into an online document next to its host and embeds it on export", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "ole-convert-owner");
@@ -728,6 +772,61 @@ async function oleFixture(): Promise<File> {
   return new File([bytes], "nested-ole.pptx", {
     type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   });
+}
+
+/** The PDF Unit data of the Unit's stored snapshot (Core v3 MessagePack in the collaboration database). */
+function storedPdfData(unitId: string): IPdfUnitData {
+  const database = new DatabaseSync(join(directories.at(-1)!, "collaboration.sqlite"), { readOnly: true });
+  try {
+    const row = database
+      .prepare("SELECT payload FROM collaboration_snapshots WHERE unit_id = ? ORDER BY revision DESC LIMIT 1")
+      .get(unitId) as { readonly payload: Uint8Array } | undefined;
+    if (!row) throw new Error("The imported Unit has no stored snapshot.");
+    return transformSnapshotToPdfData(decode(row.payload) as never) as IPdfUnitData;
+  } finally {
+    database.close();
+  }
+}
+
+/** A one-page PDF that draws a 2x2 RGB image, built here so no binary fixture is needed. */
+function pdfWithImage(): Buffer {
+  const pixels = Buffer.from([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]);
+  const content = "q 144 0 0 144 72 600 cm /Im1 Do Q";
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /XObject << /Im1 5 0 R >> >> /Contents 4 0 R >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    null,
+  ];
+  const parts: Buffer[] = [Buffer.from("%PDF-1.4\n")];
+  const offsets: number[] = [];
+  let length = parts[0]!.length;
+  objects.forEach((object, index) => {
+    offsets.push(length);
+    const body = object === null
+      ? Buffer.concat([
+          Buffer.from(`${index + 1} 0 obj\n<< /Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${pixels.length} >>\nstream\n`),
+          pixels,
+          Buffer.from("\nendstream\nendobj\n"),
+        ])
+      : Buffer.from(`${index + 1} 0 obj\n${object}\nendobj\n`);
+    parts.push(body);
+    length += body.length;
+  });
+  const xref = [
+    "xref",
+    `0 ${objects.length + 1}`,
+    "0000000000 65535 f ",
+    ...offsets.map((offset) => `${String(offset).padStart(10, "0")} 00000 n `),
+    "trailer",
+    `<< /Size ${objects.length + 1} /Root 1 0 R >>`,
+    "startxref",
+    String(length),
+    "%%EOF",
+  ].join("\n");
+  parts.push(Buffer.from(`${xref}\n`));
+  return Buffer.concat(parts);
 }
 
 /** The Slide data of the Unit's stored snapshot (Core v3 MessagePack in the collaboration database). */

@@ -173,7 +173,10 @@ Workspace 产品 API 与协同端点
 
 - **不透传。** 用户交给 MCP 的 token 不直接发给 Workspace 产品 API。这是 MCP 安全规范的要求。
 - **token exchange 兼作校验。** 网关把收到的 access token 或 PAT 作为 `subject_token` 提交给 Workspace，换回下游凭据。换取失败即视为认证失败。
-  网关按 token 摘要缓存下游凭据直到过期，避免每次调用都换取。
+  网关按 token 摘要缓存换取结果，最长 30 秒且不超过下游凭据的有效期，避免每次调用都换取。
+  token 吊销时它派生的下游凭据一并失效，所以访问 Workspace 的下一次调用返回 401 并清除缓存；
+  不访问 Workspace 的调用（例如 `whoami`、`api_find`）在缓存剩余时间内仍会成功。这个最长 30 秒的窗口是
+  产品负责人在 2026-11-09 接受的取舍：这类调用不读写用户的 Workspace 数据。
 - **scope 由网关执行。** 下游凭据仍是普通登录 session，带用户的全部权限。网关在调用工具前检查 scope。
   Workspace 产品 API 第一阶段不需要逐路由识别 scope。执行层如何持有和使用下游凭据，由阶段 G 的安全设计最终确定。
 - **认证失败的表现。** 网关返回 HTTP 401 和 `WWW-Authenticate`（带 `resource_metadata`），让客户端重新走 OAuth。这对应 CLI 的退出码 4。
@@ -194,9 +197,9 @@ Workspace 产品 API 与协同端点
 
 | # | 改动 | 说明 |
 | --- | --- | --- |
-| F1 | `GET /.well-known/oauth-authorization-server`（RFC 8414） | 声明 `client_id_metadata_document_supported: true`，`token_endpoint_auth_methods_supported` 含 `none`，`code_challenge_methods_supported` 含 `S256` |
-| F2 | Client ID Metadata Documents | `client_id` 可以是 https URL。授权时拉取并校验该文档中的 `redirect_uris`。Claude 在 F1 声明支持时走这条路 |
-| F3 | 动态客户端注册 `POST /api/auth/register`（RFC 7591） | 兼容仍依赖 DCR 的客户端（Cursor、Copilot）。注册结果需要持久化，属于 Workspace 产品数据 |
+| F1 | `GET /.well-known/oauth-authorization-server`（RFC 8414） | 声明 `client_id_metadata_document_supported: true`（`MCP_CIMD_ENABLED=0` 时不声明）、`authorization_response_iss_parameter_supported: true`，`token_endpoint_auth_methods_supported` 含 `none`，`code_challenge_methods_supported` 含 `S256`。MCP 客户端的每个授权响应都带 `iss`（RFC 9207） |
+| F2 | Client ID Metadata Documents | `client_id` 可以是 https URL。已登录用户授权时拉取并校验该文档，回调规则与 DCR 相同，不写产品库。抓取器防 SSRF：拒绝特殊用途地址、不跟随重定向、5 KB、5 秒、每用户 1 个并发、全局 32 个。Claude Code、VS Code、opencode 在 F1 声明支持时走这条路。设计与评审见 [cimd.zh-CN.md](cimd.zh-CN.md) |
+| F3 | 动态客户端注册 `POST /api/auth/register`（RFC 7591） | 兼容仍依赖 DCR 的客户端（Cursor、Copilot）。注册结果需要持久化，属于 Workspace 产品数据。回调地址限于 loopback `http`、`https`、反向域名私有 scheme，以及白名单里的私有 scheme（目前只有 Cursor 用的 `cursor`，2026-11-09 产品决定） |
 | F4 | `resource` 参数（RFC 8707） | 签发的 token 绑定受众，只对 MCP 有效 |
 | F5 | MCP 用的 access token 与 refresh token | 新的 token 类型，哈希后存入 Workspace 产品库，可吊销。refresh token 轮换。access token 1 小时，refresh token 30 天（可调） |
 | F6 | 新 scope 与同意页 | 见 4.3 节。现有客户端的同意页不变 |
@@ -306,16 +309,16 @@ MCP 不连数据库（D12），但需要临时存放上传文件和导出结果�
 ### 6.3 路由与状态
 
 - MCP 2026-07-28 版去掉了 session，客户端也不保证复用连接。热 worker 只能是可丢弃的缓存。
-- 每次操作都会先 pull 并检查 `baseRevision === target.revision`（`content-runtime.ts:283-305`），所以任意执行层副本都能从 Workspace 重建状态。热缓存只影响速度，不影响正确性。
+- 每次操作都会先 pull 并检查 `baseRevision === target.revision`（`packages/client-core/src/content-runtime.ts` 的 `synchronize`），所以任意执行层副本都能从 Workspace 重建状态。热缓存只影响速度，不影响正确性。
 - 网关按 `(用户 ID, scope, unitId)` 一致性哈希选择执行层副本。副本增减时只损失部分缓存。
 - 同一 key 的操作串行，这是现有行为（`runForRuntimeKey` 加池内 FIFO）。
-- 操作表声明重试策略；执行层重新解析目标并重试，网关不持有 revision。`content.execute` 对脚本执行前（worker 打开或 pull 阶段，不可能发生在提交之后）的 `workspace-result-mismatch` 与 `workspace-runtime-target-stale` 重试一次；幂等的 `content.inspect` 最多重试三次，每次等待 25 到 100 ms 随机退避。`content.execute`、`content.inspect`、`exchange.export`、`htmlView.validate` 和 `htmlView.create` 对持有不同 session 的热 worker 的 401 重建后重试一次（htmlView 的 401 只可能来自上传前的校验读取）；当前 session 自身被拒绝则返回认证错误（被撤销的 session 在 trunk 协同端点上表现为 403，持有不同 session 的 worker 的 403 同样按 stale 处理）。`content.execute` 与 `content.inspect` 在执行层共用按 user、scope、Unit 分组的 FIFO 队列，读写和纯读取都依次执行，避免同一用户的持续写入与读取争抢 revision。worktree inspect 和 execute 的 route 相同，trunk inspect 使用独立 scope。排队时间计入原 deadline，排队超时返回 `workspace-executor-timeout`（`started: false`）。其他用户、副本或未进入该队列的写入仍可能造成 revision 冲突，由读重试兜底；单靠重试无法保证持续写入下的读取成功。无法重试时（操作未声明 auth、剩余不足 5 秒或已重试过）返回可重试的 `workspace-executor-timeout`（`started: false`），不返回认证错误，客户端保持登录。auth 最多重试一次，revision 读最多三次、写最多一次，且原 deadline 至少剩余 5 秒，读退避后再次检查。commit 阶段的不确定写入不重试。重试的 worker 时间计入同一用量事件，原因记录到日志和 `mcp_executor_reruns_total{reason}`。
+- 操作表声明重试策略；执行层重新解析目标并重试，网关不持有 revision。下文列出阶段 D 的首批操作；完整的重跑原因和排队范围以操作目录为准，见 [执行后端协议 2.1](backend-protocol.zh-CN.md#21-执行层操作)。`content.execute` 对脚本执行前（worker 打开或 pull 阶段，不可能发生在提交之后）的 `workspace-result-mismatch` 与 `workspace-runtime-target-stale` 重试一次；幂等的 `content.inspect` 最多重试三次，每次等待 25 到 100 ms 随机退避。`content.execute`、`content.inspect`、`exchange.export`、`htmlView.validate` 和 `htmlView.create` 对持有不同 session 的热 worker 的 401 重建后重试一次（htmlView 的 401 只可能来自上传前的校验读取）；当前 session 自身被拒绝则返回认证错误（被撤销的 session 在 trunk 协同端点上表现为 403，持有不同 session 的 worker 的 403 同样按 stale 处理）。`content.execute` 与 `content.inspect` 在执行层共用按 user、scope、Unit 分组的 FIFO 队列，读写和纯读取都依次执行，避免同一用户的持续写入与读取争抢 revision。worktree inspect 和 execute 的 route 相同，trunk inspect 使用独立 scope。排队时间计入原 deadline，排队超时返回 `workspace-executor-timeout`（`started: false`）。其他用户、副本或未进入该队列的写入仍可能造成 revision 冲突，由读重试兜底；单靠重试无法保证持续写入下的读取成功。无法重试时（操作未声明 auth、剩余不足 5 秒或已重试过）返回可重试的 `workspace-executor-timeout`（`started: false`），不返回认证错误，客户端保持登录。auth 最多重试一次，revision 读最多三次、写最多一次，且原 deadline 至少剩余 5 秒，读退避后再次检查。commit 阶段的不确定写入不重试。重试的 worker 时间计入同一用量事件，原因记录到日志和 `mcp_executor_reruns_total{reason}`。
 - 网关使用 rendezvous hashing。只对连接拒绝、DNS 失败或明确未接收的传输拒绝切换副本；已发送写入的断连或超时返回 `workspace-result-unknown`。
 
 ### 6.4 凭据
 
 阶段 D 沿用 `client-core` 现有的方式：网关把下游凭据随请求交给执行层，执行层在创建 worker 时传入。这个方式只适用于本地原型和内部单用户环境。
-首批 grant 为 `{kind:"session",userId,session,expiresAt}`，只放在 RPC frame body。执行层的一个 resolver 读取凭据，并通过 `caller.grant` 传给 Client Core；所有 worker 调用绑定必填 userId。生产拒绝 session grants。执行层先通过 transport URL 的 whoami 验证 session 所属 userId，以 session 的 SHA-256 缓存到 grant.expiresAt，最多 10,000 条；不匹配或 401 拒绝认证。每次复用前检查创建 worker 的 grant，距过期不超过 60 秒时销毁并用当前 grant 重建。显式 worker env 阻止环境变量继承，但同 uid 子进程仍可能读取执行层 `/proc/1/environ`，阶段 G 必须解决。
+首批 grant 为 `{kind:"session",userId,session,expiresAt}`，只放在 RPC frame body。执行层的一个 resolver 读取凭据，并通过 `caller.grant` 传给 Client Core；所有 worker 调用绑定必填 userId。生产环境只在设置了 `MCP_EXECUTOR_ALLOWED_USER_IDS` 时接受 session grants（第 10 节）。执行层先通过 transport URL 的 whoami 验证 session 所属 userId，以 session 的 SHA-256 缓存到 grant.expiresAt，最多 10,000 条；不匹配或 401 拒绝认证。每次复用前检查创建 worker 的 grant，距过期不超过 60 秒时销毁并用当前 grant 重建。显式 worker env 阻止环境变量继承，但同 uid 子进程仍可能读取执行层 `/proc/1/environ`，阶段 G 必须解决。
 多用户环境下执行层如何持有凭据，由阶段 G 的安全设计决定。阶段 D 的实现要把凭据的获取集中在一个接口后面，方便阶段 G 替换。
 
 
@@ -532,7 +535,9 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 `prepareContentExecutionProgram` 的 README 写明它不判断代码是否安全，也不提供进程级沙箱。
 
 对抗审查已经确认，阶段 D 沿用的现有执行方式不足以支撑多用户环境。具体的安全设计是阶段 G 的交付物，需要单独评审。
-在 G 通过之前，执行层和渲染服务只能在本地原型和内部单用户环境运行。
+阶段 G 已于 2026-11-09 搁置（见 [阶段计划](stages.zh-CN.md)）。在 G 通过之前，执行层和渲染服务不对公众开放。
+阶段 G0 在生产环境用执行层白名单 `MCP_EXECUTOR_ALLOWED_USER_IDS` 代替这道门禁：只有白名单内互相信任的用户能使用共享执行层，
+其他用户只看到不依赖执行层的工具。白名单不满足下面任何一条要求，它只限制谁承担这些风险。
 
 阶段 G 的设计必须满足以下要求，并给出可复现的验证结果：
 
@@ -554,20 +559,22 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `WORKSPACE_TRANSPORT_URL` | 网关、执行层 | 实际请求地址，默认等于 `WORKSPACE_ORIGIN` |
 | `MCP_PUBLIC_URL` | 网关 | MCP 的公网地址，例如 `https://space.univer.ai/mcp` |
 | `MCP_EXECUTOR_URLS`、`MCP_RENDERER_URL` | 网关、执行层 | 内部服务地址 |
-| `MCP_INTERNAL_TOKEN` | 全部 | 内部 RPC 的共享令牌 |
+| `MCP_EXECUTOR_TOKEN` | 网关、执行层 | 网关调用执行层（含 capability discovery）的令牌，至少 32 字符。网关与 `MCP_EXECUTOR_URLS` 同时设置或同时不设；执行层必填 |
+| `MCP_RENDERER_TOKEN` | 执行层、渲染服务 | 执行层调用渲染服务的令牌，至少 32 字符。执行层与 `MCP_RENDERER_URL` 同时设置或同时不设，且必须与 `MCP_EXECUTOR_TOKEN` 不同；渲染服务必填，网关不持有 |
 | `MCP_STAGING_DIRECTORY` | 网关 | 暂存存储目录 |
 | `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端，两者同时设置或同时不设。启用 PAT 与 OAuth access token 认证 |
 | `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节）。与上一行至少设置一项，本地验证两者同时设置 |
+| `MCP_EXECUTOR_ALLOWED_USER_IDS` | 网关、执行层 | 逗号分隔的 Workspace 用户 ID，只有这些用户能使用执行层（第 10 节）。单独的 `*` 表示所有用户，只用于用户全部可信的部署，例如内部 staging。生产环境的执行层必须设置；配置了执行层的网关在生产环境也必须设置。非生产环境不设置时所有用户都能使用执行层 |
 | `UNIVER_LICENSE`、`UNIVER_LICENSE_KEY` | 执行层、渲染服务 | license 注入。渲染服务只读取 `UNIVER_LICENSE`，未设置时使用与执行层相同的内置开发 license |
 | `EXECUTOR_*` | 执行层 | 见 6.2 节 |
 | `RENDERER_MAX_RUNTIMES` | 渲染服务 | 同时存在的 runtime（每个一个 Chromium）上限，默认 2 |
 | `RENDERER_QUEUE_TIMEOUT_MS` | 渲染服务 | 等待空闲 runtime 的最长时间，默认 5000；超时返回可重试错误 |
 | `RENDERER_OPERATION_TIMEOUT_MS` | 渲染服务 | 单次渲染操作和 runtime 启动的超时，默认 25000；超时即丢弃该 runtime |
 | `UNIVER_RENDER_BROWSER` | 渲染服务 | Chromium 可执行文件。镜像设为 `/usr/bin/chromium`（Debian 包，含 `fonts-noto-cjk` 与 `fonts-liberation`） |
-| `METRICS_TOKEN` | 全部 | 指标端点令牌 |
+| `METRICS_TOKEN` | 网关、渲染服务 | 指标端点令牌。执行层的 `/metrics` 与它的 RPC 共用调用方令牌 |
 | `LOG_LEVEL` | 全部 | 日志级别，日志格式与 Workspace 一致（pino JSON） |
 
-每个已实现角色提供 `GET /healthz`。当前 healthz 仅检查进程存活，执行层可达性由 verify-uvw doctor 验证；Workspace 版本与 readiness 检查尚未实现。
+每个已实现角色提供 `GET /healthz`，只检查进程存活。网关另有 `GET /readyz`：Workspace 可达，配置了 OAuth 时网关的机密客户端能做 token exchange（用网关的客户端凭据、不带 subject token 调用 token 端点，Workspace 校验凭据和 exchange 权限之后、查找 token 之前返回 `invalid_request` 才算通过，所以 `MCP_OAUTH_CLIENT_SECRET` 配错时网关不就绪），配置了执行层时至少一个执行层返回了兼容的能力（`GET /rpc/v1/capabilities`），三者都满足才就绪。Workspace 没有版本接口，按版本号拒绝就绪（3.2 节）暂缓。
 
 ## 12. `apps/mcp` 的代码组织建议
 
@@ -616,11 +623,11 @@ CLI 默认路径没有新增限制。导入请求帧为 64 MiB，导出响应帧
 
 ### D5 网关任务生命周期
 
-网关为 import/export/compile_typst 持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
+网关为 import、export、compile_typst、screenshot、print_pdf（后两者由阶段 E 加入）持有 running、succeeded、failed 判别联合，内存缓存与 staging 的私有
 `.job.json` sidecar 同步，开始和结束均原子写入。记录包含随机 id、userId、tool、可选 key、
 createdAt、deadlineAt、expiresAt，以及仅在成功时存在的 result 或仅在失败时存在的 error。
 共享 staging 的副本可读取结果，并通过同用户、同工具、同 key 的短期 reservation lock 防止重复启动。
-转换进程、队列和 SIGKILL 仍属于 executor；只有 exchange.import、exchange.export、typst.compile 允许四分钟 RPC 期限。
+转换进程、队列和 SIGKILL 仍属于 executor；只有 exchange.import、exchange.export、typst.compile、render.screenshot、render.printPdf 允许四分钟 RPC 期限（`JOB_DEADLINE_MS`）。
 同步预算默认三十秒，MCP_SYNC_BUDGET_MS 可降低；超过预算只结束同步等待，原执行继续。
 网关重启会丢失在途调用；过 deadlineAt 的记录按读超时或写结果未知回答，不重新执行。
 结果保留十五分钟，由 staging sweeper 清理。原工具事件延迟到执行结束后发出一次，

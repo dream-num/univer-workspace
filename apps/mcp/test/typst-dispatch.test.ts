@@ -30,7 +30,7 @@ it("reports cold_start and no Unit/runtime costs for a compile-only Typst job", 
     const dispatch = createDispatcher(
       parseExecutorConfig({
         WORKSPACE_ORIGIN: "http://workspace.test",
-        MCP_INTERNAL_TOKEN: "token".repeat(10),
+        MCP_EXECUTOR_TOKEN: "token".repeat(10),
       }),
       runtime,
       pino({ level: "silent" }),

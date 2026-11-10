@@ -1,3 +1,4 @@
+import { parseCimdExemptNetworks } from "./modules/identity/client-metadata-document.js";
 import { resolve } from "node:path";
 import type { EmailConfig } from "./integrations/email/index.js";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
@@ -204,6 +205,8 @@ function mcpOAuthConfig(environment: NodeJS.ProcessEnv): McpOAuthConfig | null {
     issuer,
     resources,
     maxRegisteredClients: integer(environment.MCP_MAX_REGISTERED_CLIENTS, 10_000, "MCP_MAX_REGISTERED_CLIENTS"),
+    cimdEnabled: environment.MCP_CIMD_ENABLED !== "0",
+    cimdExemptNetworks: parseCimdExemptNetworks(environment.MCP_CIMD_EXEMPT_NETWORKS),
   };
 }
 

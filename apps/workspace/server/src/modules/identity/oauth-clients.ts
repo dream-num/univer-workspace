@@ -204,11 +204,13 @@ export function authorizeRedirectTarget(
     readonly redirectUri: string;
     readonly state: string | null;
     readonly scope: string;
+    readonly issuer?: string;
   },
   code: string
 ): string {
   const target = new URL(input.redirectUri);
   target.searchParams.set("code", code);
+  if (input.issuer !== undefined) target.searchParams.set("iss", input.issuer);
   if (input.state !== null) target.searchParams.set("state", input.state);
   target.searchParams.set("scope", input.scope);
   return target.toString();

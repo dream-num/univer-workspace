@@ -1,3 +1,4 @@
+import { createClientMetadataDocumentResolver, type FetchClientMetadataDocument } from "./modules/identity/client-metadata-document.js";
 import { createActivityModule, createActivityRouter } from "./modules/activity/index.js";
 import { createStandaloneAppRouter } from "./modules/views/standalone-app.router.js";
 import { existsSync } from "node:fs";
@@ -169,6 +170,7 @@ export function createWorkspaceApplication(
     readonly discordOAuthProvider?: DiscordOAuthProvider;
     readonly emailSender?: EmailSender;
     readonly oauthStateSecret?: string;
+    readonly fetchClientMetadataDocument?: FetchClientMetadataDocument;
   } = {},
 ): WorkspaceApplication {
   const database = openWorkspaceDatabase(config.databaseFilename);
@@ -401,6 +403,10 @@ export function createWorkspaceApplication(
       oauthClients,
       authorizationStore,
       mcpOAuth: mcpOAuth ?? null,
+      resolveClientMetadata: createClientMetadataDocumentResolver({
+        ...(dependencies.fetchClientMetadataDocument === undefined ? {} : { fetchDocument: dependencies.fetchClientMetadataDocument }),
+        ...(mcpOAuth?.cimdExemptNetworks === undefined ? {} : { exemptions: mcpOAuth.cimdExemptNetworks }),
+      }),
     })
   );
   app.use("/api", createSpacesRouter({ identity, spaces }));

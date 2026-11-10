@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | down
+# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -68,18 +68,27 @@ mcp_digest() {
 }
 
 mcp_compose() {
-  local executor_urls="http://executor:3000" profiles=""
+  local executor_urls="http://executor:3000" profiles="" mode_env=()
+  [[ "${MCP_RENDERER:-1}" != 1 ]] || { profiles=renderer; mode_env+=("MCP_RENDERER_URL=http://renderer:3000" "MCP_RENDERER_TOKEN=$(cat "$RUN/home/renderer-token" 2>/dev/null || echo removed)"); }
+  if [[ "${MCP_PRODUCTION:-0}" == 1 ]]; then
+    mode_env+=("VERIFY_UVW_MCP_NODE_ENV=production")
+  else
+    mode_env+=("VERIFY_UVW_MCP_NODE_ENV=development" "MCP_DEV_SESSION_PASSTHROUGH=1")
+  fi
+  [[ ! -f "$RUN/executor-allowed-user-ids" ]] || mode_env+=("MCP_EXECUTOR_ALLOWED_USER_IDS=$(cat "$RUN/executor-allowed-user-ids")")
   if [[ "${MCP_EXECUTORS:-1}" == 2 ]]; then
     executor_urls+=",http://executor-b:3000"
-    profiles=replicas
+    profiles="${profiles:+$profiles,}replicas"
   fi
-  COMPOSE_PROFILES="$profiles" VERIFY_UVW_EXECUTOR_URLS="$executor_urls" \
+  COMPOSE_PROFILES="$profiles" VERIFY_UVW_EXECUTOR_URLS="$executor_urls" MCP_SYNC_BUDGET_MS="${MCP_SYNC_BUDGET_MS:-30000}" \
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
     VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_STAGING_DIRECTORY="$RUN/staging" \
-    VERIFY_UVW_INTERNAL_TOKEN="$(cat "$RUN/home/internal-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_RENDERER_TOKEN="$(cat "$RUN/home/renderer-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_EXECUTOR_TOKEN="$(cat "$RUN/home/executor-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_OAUTH_SECRET="$(cat "$RUN/home/mcp-oauth-secret" 2>/dev/null || echo removed)" \
+    env -u MCP_RENDERER_URL -u MCP_RENDERER_TOKEN -u MCP_DEV_SESSION_PASSTHROUGH -u MCP_EXECUTOR_ALLOWED_USER_IDS "${mode_env[@]}" \
     docker compose -p "$MCP_PROJECT" -f "$REPO/apps/mcp/docker/compose.verify.yml" "$@"
 }
 
@@ -104,19 +113,26 @@ mcp_up() {
   printf 'MCP_IMAGE_ID=%s\n' "$MCP_IMAGE_ID" >>"$RUN/run.env"
   node -e 'const fs=require("node:fs"),p=process.argv[1],v=JSON.parse(fs.readFileSync(p));v.image_id=process.argv[2];fs.writeFileSync(p,JSON.stringify(v,null,2)+"\n")' "$RUN/mcp-build.json" "$MCP_IMAGE_ID"
   (umask 077 && openssl rand -hex 24 >"$RUN/home/metrics-token")
-  (umask 077 && openssl rand -hex 24 >"$RUN/home/internal-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/executor-token")
+  (umask 077 && openssl rand -hex 24 >"$RUN/home/renderer-token")
   mcp_compose up -d --wait --wait-timeout 60 \
     || die "MCP gateway not ready; see compose logs and run: verify-uvw down"
   wait_http "http://127.0.0.1:$MCP_PORT/healthz" 60 || die "MCP healthz failed; run: verify-uvw down"
 }
 
 mcp_doctor() {
-  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "${MCP_EXECUTORS:-1}" || bad "MCP executor checks failed"
-  node "$REPO/.agents/skills/verify-uvw/bin/renderer-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP renderer checks failed"
+  local renderer_cid
+  node "$REPO/.agents/skills/verify-uvw/bin/executor-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" "${MCP_EXECUTORS:-1}" "${MCP_PRODUCTION:-0}" "${MCP_RENDERER:-1}" || bad "MCP executor checks failed"
+  if [[ "${MCP_RENDERER:-1}" == 1 ]]; then
+    node "$REPO/.agents/skills/verify-uvw/bin/renderer-doctor.mjs" "$REPO" "$RUN" "$MCP_PROJECT" "$MCP_IMAGE" "${MCP_IMAGE_ID:-}" "$ORIGIN" "$SERVER_PORT" "$MCP_PORT" || bad "MCP renderer checks failed"
+  elif renderer_cid="$(mcp_compose ps -aq renderer)" && [[ -z "$renderer_cid" ]]; then
+    ok "MCP renderer disabled; renderer checks skipped and no renderer container exists"
+  else bad "MCP renderer disabled but container exists"; fi
   if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
     ok "MCP staging directory is private and owned by the gateway uid"
   else bad "MCP staging directory is missing or unsafe"; fi
-  local desktop digest cid inspect mapping gateway_logs who
+  local desktop digest cid inspect mapping gateway_logs who auth=dev
+  [[ "${MCP_PRODUCTION:-0}" != 1 ]] || auth=pat
   if desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" && [[ "$desktop" == 'Docker Desktop' ]]; then
     ok "MCP Docker Desktop is available"
   else bad "MCP Docker Desktop unavailable; start Docker Desktop"; fi
@@ -146,7 +162,7 @@ mcp_doctor() {
     ok "MCP metrics reject missing token and accept this run's token"
   else bad "MCP metrics token protection failed"; fi
   if [[ -f "$RUN/user.env" ]]; then
-    if who="$(mcp_client doctor --auth dev doctor-whoami whoami)" && node -e 'const v=JSON.parse(process.argv[1]);process.exit(v.subject?.name===process.argv[2]&&v.origin===process.argv[3]?0:1)' "$who" "Verify $RUN_ID" "$ORIGIN"; then
+    if who="$(mcp_client doctor --auth "$auth" doctor-whoami whoami)" && node -e 'const v=JSON.parse(process.argv[1]);process.exit(v.subject?.name===process.argv[2]&&v.origin===process.argv[3]?0:1)' "$who" "Verify $RUN_ID" "$ORIGIN"; then
       ok "MCP whoami returns this run's user"
     else bad "MCP whoami failed: run verify-uvw user"; fi
     if [[ -s "$RUN/home/mcp-token" ]] && who="$(mcp_client doctor --auth pat doctor-pat-whoami whoami)" \
@@ -177,6 +193,13 @@ if (!session) throw new Error('MCP password login returned no session cookie');
 writeFileSync(run+'/home/mcp-session',session,{mode:0o600});
 JS
   [[ -s "$RUN/home/mcp-token" ]] || mcp_token >/dev/null
+  if [[ "${MCP_PRODUCTION:-0}" == 1 ]]; then
+    local user_id
+    user_id="$(node -e 'const fs=require("node:fs");console.log(JSON.parse(fs.readFileSync(process.argv[1])).user.id)' "$RUN/logs/register.json")"
+    if [[ "$(cat "$RUN/executor-allowed-user-ids")" == verify-uvw-pending-user ]]; then
+      cmd_mcp_allow_users "$user_id"
+    fi
+  fi
   node --input-type=module - "$RUN" "$MCP_PORT" <<'JS'
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
@@ -250,6 +273,7 @@ cmd_renderer_call() { # label op, with the operation input as JSON on stdin
   [[ $# -eq 2 && "$1" =~ ^[A-Za-z0-9._-]{1,64}$ && "$2" =~ ^(screenshot|printPdf|lint|measureText)$ ]] || die "usage: verify-uvw renderer-call <label> screenshot|printPdf|lint|measureText < input.json"
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  [[ "${MCP_RENDERER:-1}" == 1 ]] || die "renderer disabled for this run"
   local base="$RUN/evidence/$1" bin="$REPO/.agents/skills/verify-uvw/bin"
   printf 'renderer-call %s\n' "$2" >"$base.cmd"
   mcp_compose exec -T executor node --input-type=module -e "$(cat "$bin/renderer-call.mjs")" "$2" | node "$bin/renderer-save.mjs" "$base"
@@ -259,6 +283,7 @@ cmd_renderer_restart() { # [max-runtimes]: recreate only this run's renderer, op
   [[ $# -le 1 && "${1:-2}" =~ ^[1-9][0-9]?$ ]] || die "usage: verify-uvw renderer-restart [max-runtimes]"
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
+  [[ "${MCP_RENDERER:-1}" == 1 ]] || die "renderer disabled for this run"
   RENDERER_MAX_RUNTIMES="${1:-2}" mcp_compose up -d --force-recreate --no-deps --wait renderer >/dev/null 2>&1 || die "renderer did not become healthy"
   local i
   for ((i = 0; i < 60; i++)); do
@@ -268,13 +293,123 @@ cmd_renderer_restart() { # [max-runtimes]: recreate only this run's renderer, op
   die "renderer did not warm its first runtime within 60 s"
 }
 
+cmd_mcp_allow_users() {
+  [[ $# -gt 0 ]] || die "usage: verify-uvw mcp-allow-users <user-id>..."
+  local id
+  for id in "$@"; do
+    [[ "$id" =~ ^[A-Za-z0-9_-]+$ ]] || die "user IDs must contain only letters, digits, underscores or hyphens"
+  done
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"
+  (IFS=,; printf '%s\n' "$*") >"$RUN/executor-allowed-user-ids"
+  local services=(executor)
+  [[ "${MCP_EXECUTORS:-1}" != 2 ]] || services+=(executor-b)
+  mcp_compose up -d --force-recreate --no-deps --wait --wait-timeout 60 "${services[@]}" \
+    || die "allowlist saved but MCP restart failed; retry mcp-allow-users"
+  cmd_mcp_gateway_restart
+  echo "MCP executor allowlist updated; only gateway and executor(s) recreated"
+}
+
+cmd_mcp_gateway_restart() {
+  [[ $# -eq 0 ]] || die "usage: verify-uvw mcp-gateway-restart"
+  load_run
+  [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"
+  mcp_compose up -d --force-recreate --no-deps --wait --wait-timeout 60 gateway \
+    || die "MCP gateway restart failed"
+}
+
 cmd_mcp_token() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
   mcp_token "$@"
 }
 
+cmd_agent_up() {
+  load_run
+  [[ -n "${AGENT_PORT:-}" ]] || die "no Agent callback registered; start up with VERIFY_UVW_AGENT_PORT"
+  [[ -z "$(listener_pid "$AGENT_PORT")" ]] || die "Agent port $AGENT_PORT is occupied"
+  if [[ -f "$RUN/agent.pid" ]] && kill -0 "$(cat "$RUN/agent.pid")" 2>/dev/null; then
+    die "Agent already started; run: verify-uvw agent-down"
+  fi
+  echo "installing disposable Agent; see $RUN/logs/agent-install.log"
+  (
+    set -e
+    umask 077
+    export HOME="$RUN/home" XDG_CACHE_HOME="$RUN/home/.cache" npm_config_cache="$RUN/home/.npm"
+    export PNPM_CONFIG_STORE_DIR="$RUN/home/.pnpm-store" PNPM_CONFIG_CACHE_DIR="$RUN/home/.cache/pnpm"
+    export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+    export UWH_LOCAL_ROOT="$RUN/home/agent"
+    export UWH_DSH_BOOTSTRAP="$UWH_LOCAL_ROOT/dsh-cli" DSH_HOME="$UWH_LOCAL_ROOT/install"
+    export UWH_DSH_DATA_HOME="$UWH_LOCAL_ROOT/data"
+    export DSH_BIN="$UWH_DSH_BOOTSTRAP/node_modules/@deepseek-ai/dsh/lib/bin.js"
+    export DSH_PROFILE=univer-workspace-harness
+    mkdir -p "$UWH_LOCAL_ROOT/runtime" "$DSH_HOME/internal-packages"
+    export UWA_PACKAGES="$(mktemp -d "$DSH_HOME/internal-packages/build.XXXXXX")"
+    cd "$REPO"
+    [[ "$(pnpm config get store-dir)" == "$PNPM_CONFIG_STORE_DIR" ]] || die "pnpm must use this run's package store"
+    # Install the pinned nested workspace in the run, keeping its modules and lockfile disposable.
+    cp packages/dsh-runtime/{package.json,pnpm-lock.yaml,pnpm-workspace.yaml} "$UWH_LOCAL_ROOT/runtime/"
+    pnpm --dir "$UWH_LOCAL_ROOT/runtime" install --frozen-lockfile
+    pnpm --dir "$UWH_LOCAL_ROOT/runtime" deploy --legacy --filter @univerjs/univer-workspace-dsh-runtime \
+      --prod --config.node-linker=hoisted "$UWH_DSH_BOOTSTRAP"
+    pnpm --filter @univerjs/univer-workspace-client-core build
+    pnpm --filter @univerjs/workspace-agent build
+    pnpm --filter dsh-univer-workspace-plugin build
+    pnpm --filter dsh-univer-workspace-skin-plugin build
+    for package in @univerjs/workspace-agent dsh-univer-workspace-plugin dsh-univer-workspace-skin-plugin; do
+      pnpm --filter "$package" pack --pack-destination "$UWA_PACKAGES"
+    done
+    export DSH_PLUGINS="file:$UWA_PACKAGES/univerjs-workspace-agent-0.1.0.tgz file:$UWA_PACKAGES/dsh-univer-workspace-plugin-0.1.0.tgz file:$UWA_PACKAGES/dsh-univer-workspace-skin-plugin-0.1.0.tgz"
+    NPM_CONFIG_USERCONFIG="$REPO/.npmrc" ./apps/agent/scripts/build-profile.sh
+  ) >"$RUN/logs/agent-install.log" 2>&1 || die "Agent installation failed; see $RUN/logs/agent-install.log; run down"
+  # start-local clears the unconnected child's origin env; seed its configured origin without a session.
+  (umask 077; mkdir -p "$RUN/home/agent/data"
+    if [[ ! -f "$RUN/home/agent/data/connection.json" ]]; then
+      printf '{"version":1,"configuredOrigin":"%s"}\n' "$ORIGIN" >"$RUN/home/agent/data/connection.json"
+    fi)
+  rm -f "$RUN/home/agent-url"
+  (
+    umask 077
+    cd "$REPO"
+    exec nohup env -i PATH="$PATH" HOME="$RUN/home" XDG_CACHE_HOME="$RUN/home/.cache" \
+      DSH_HOME="$RUN/home/agent/install" DSH_PROFILE=univer-workspace-harness \
+      DSH_BIN="$RUN/home/agent/dsh-cli/node_modules/@deepseek-ai/dsh/lib/bin.js" \
+      UWH_DSH_DATA_HOME="$RUN/home/agent/data" UWH_WORKSPACE_ORIGIN="$ORIGIN" \
+      node apps/agent/scripts/start-local.mjs --port "$AGENT_PORT" --no-open --trusted-host 127.0.0.1 \
+      >"$RUN/home/agent-log.private" 2>&1
+  ) &
+  local pid=$! i
+  printf '%s\n' "$pid" >"$RUN/agent.pid"
+  for ((i = 0; i < 120; i++)); do
+    kill -0 "$pid" 2>/dev/null || die "Agent exited; see $RUN/home/agent-log.private; run down"
+    if node - "$RUN" "$AGENT_PORT" <<'JS'
+const fs = require('node:fs'), [run,port] = process.argv.slice(2);
+const log = fs.readFileSync(run+'/home/agent-log.private','utf8');
+const url = log.match(/dsh web: (http:\/\/127\.0\.0\.1:[0-9]+\/\?token=[^\s]+)/)?.[1];
+if (!url || new URL(url).port !== port) process.exit(1);
+fs.writeFileSync(run+'/home/agent-url',url+'\n',{mode:0o600});
+JS
+    then
+      if [[ "$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$AGENT_PORT/")" == 401 ]]; then
+        echo "ok    Agent answers on 127.0.0.1:$AGENT_PORT (pid $pid); private URL: $RUN/home/agent-url"
+        return 0
+      fi
+    fi
+    sleep 1
+  done
+  die "Agent not ready after 120 seconds; see $RUN/home/agent-log.private; run down"
+}
+
+cmd_agent_down() {
+  load_run
+  if [[ -f "$RUN/agent.pid" ]]; then
+    stop_pid "$(cat "$RUN/agent.pid")" "apps/agent/scripts/start-local.mjs --port ${AGENT_PORT:?}"
+    rm -f "$RUN/agent.pid"
+  fi
+}
+
 cmd_up() {
+  [[ $# == 0 || ( $# == 1 && "$1" == --reuse ) ]] || die "usage: verify-uvw up [--reuse]"
   deps_fresh || die "node_modules is older than pnpm-lock.yaml; run: pnpm install --frozen-lockfile"
   cli_fresh || die "CLI build is stale; run: pnpm --filter 'univer-workspace-cli...' build"
   local server_port="${VERIFY_UVW_SERVER_PORT:-3920}" web_port="${VERIFY_UVW_WEB_PORT:-5973}"
@@ -283,6 +418,7 @@ cmd_up() {
     [[ -z "$(listener_pid "$port")" ]] || die "port $port is already in use; not driving an instance this run did not start"
   done
 
+  [[ "${VERIFY_UVW_MCP_RENDERER:-1}" =~ ^[01]$ && "${VERIFY_UVW_MCP_PRODUCTION:-0}" =~ ^[01]$ ]] || die "MCP renderer and production flags must be 0 or 1"
   [[ "${VERIFY_UVW_MCP_EXECUTORS:-1}" =~ ^[12]$ ]] || die "VERIFY_UVW_MCP_EXECUTORS must be 1 or 2"
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
   local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" desktop
@@ -295,13 +431,24 @@ cmd_up() {
     [[ "$mcp_port" != "$server_port" && "$mcp_port" != "$web_port" && -z "$(listener_pid "$mcp_port")" ]] || die "MCP port $mcp_port is occupied; choose VERIFY_UVW_MCP_PORT"
   fi
   local run="$ROOT/$id"
-  [[ ! -e "$run" ]] || die "$run already exists; pick another VERIFY_UVW_RUN"
-  mkdir -p "$run"/{data,home,logs,evidence}
+  if [[ -e "$run" ]]; then
+    [[ "${1:-}" == --reuse && -f "$run/run.env" && ! -d "$run/data" && ! -d "$run/home" ]] \
+      || die "$run already exists; down first, then up --reuse to retain evidence"
+    [[ ! -f "$run/user.env" ]] || unlink "$run/user.env"
+  fi
   local agent_port="${VERIFY_UVW_AGENT_PORT:-}" server_oauth_env=()
-  [[ -z "$agent_port" || "$agent_port" =~ ^[0-9]+$ ]] || die "choose VERIFY_UVW_AGENT_PORT as a port number"
+  if [[ -n "$agent_port" ]]; then
+    [[ "$agent_port" =~ ^[0-9]+$ && "$agent_port" -ge 1 && "$agent_port" -le 65535 ]] || die "choose VERIFY_UVW_AGENT_PORT between 1 and 65535"
+    [[ "$agent_port" != "$server_port" && "$agent_port" != "$web_port" && ( "$mcp_enabled" != 1 || "$agent_port" != "$mcp_port" ) && -z "$(listener_pid "$agent_port")" ]] || die "Agent port $agent_port is occupied or shared with this run"
+  fi
+  mkdir -p "$run"/{data,home,logs,evidence}
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
-    server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port")
+    server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port" "MCP_CIMD_ENABLED=${MCP_CIMD_ENABLED:-1}")
+    if node --input-type=module -e 'import { lookup } from "node:dns/promises"; const addresses = await lookup("claude.ai", {all:true}).catch(() => []); process.exit(addresses.some(({address}) => /^198\.(18|19)\./.test(address)) ? 0 : 1)'; then
+      server_oauth_env+=("MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15")
+      echo "CIMD: claude.ai resolves to fake-IP; Workspace Server only exempts 198.18.0.0/15"
+    fi
   fi
   # The gateway's confidential client with MCP, and the Workspace Agent's public client when VERIFY_UVW_AGENT_PORT names its port.
   server_oauth_env+=("OAUTH_CLIENTS_JSON=$(node -e 'const [secretFile,agentPort]=process.argv.slice(1),fs=require("node:fs"),clients=[];
@@ -327,12 +474,16 @@ console.log(clients.length ? JSON.stringify({clients}) : "")' "$run/home/mcp-oau
 RUN_ID=$id
 SERVER_PORT=$server_port
 WEB_PORT=$web_port
+AGENT_PORT=$agent_port
 SERVER_PID=$server_pid
 WEB_PID=$web_pid
 GIT_HEAD=$(git -C "$REPO" rev-parse HEAD)
 EOF
   printf 'MCP_ENABLED=%s\n' "$mcp_enabled" >>"$run/run.env"
   if [[ "$mcp_enabled" == 1 ]]; then
+    printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
+    [[ ! -f "$run/executor-allowed-user-ids" ]] || unlink "$run/executor-allowed-user-ids"
+    [[ "${VERIFY_UVW_MCP_PRODUCTION:-0}" != 1 ]] || printf 'verify-uvw-pending-user\n' >"$run/executor-allowed-user-ids"
     printf 'MCP_PORT=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
   fi
   ln -sfn "$run" "$ROOT/current"
@@ -468,6 +619,7 @@ stop_pid() { # pid expected-command-fragment
 
 cmd_down() {
   load_run
+  cmd_agent_down
   [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_down
   agent-browser close >/dev/null 2>&1 || true
   uvw_raw daemon stop >/dev/null 2>&1 || true
@@ -490,11 +642,15 @@ case "${1:-}" in
   mcp-resources) shift; cmd_mcp resources "$@" ;;
   mcp-resource) shift; cmd_mcp resource "$@" ;;
   mcp-instructions) shift; cmd_mcp instructions "$@" ;;
+  mcp-gateway-restart) shift; cmd_mcp_gateway_restart "$@" ;;
+  mcp-allow-users) shift; cmd_mcp_allow_users "$@" ;;
   mcp-token) shift; cmd_mcp_token "$@" ;;
   mcp-oauth) shift; cmd_mcp_oauth "$@" ;;
   renderer-call) shift; cmd_renderer_call "$@" ;;
   renderer-restart) shift; cmd_renderer_restart "$@" ;;
   mcp-logs) shift; load_run; [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"; mcp_compose logs --no-color --no-log-prefix gateway executor executor-b renderer ;;
+  agent-up) shift; cmd_agent_up "$@" ;;
+  agent-down) shift; cmd_agent_down "$@" ;;
   down) shift; cmd_down "$@" ;;
   *) sed -n 2,3p "$0" >&2; exit 2 ;;
 esac

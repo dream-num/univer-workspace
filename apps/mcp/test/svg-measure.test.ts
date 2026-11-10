@@ -1,11 +1,14 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { pino } from "pino";
+import { createDispatcher } from "../src/executor/dispatch.js";
+import { parseExecutorConfig } from "../src/shared/config-executor.js";
 import type { OpContext } from "../src/executor/context.js";
 import { svgCompile } from "../src/executor/ops/svg-compile.js";
 import { createRendererClient } from "../src/executor/renderer-client.js";
 import { decodeFrame, encodeFrame } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";
 
-const token = "internal-token-".repeat(4);
+const token = "executor-token-".repeat(4);
 const svg =
   '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="100" viewBox="0 0 400 100">' +
   '<text x="10" y="40" font-size="20" font-family="Arial">Hello 世界</text></svg>';
@@ -38,7 +41,8 @@ function setup(configured = true) {
     exchange: { license: "", licenseKey: "" },
     renderer: createRendererClient({
       url: configured ? "http://renderer:3000" : undefined,
-      internalToken: token,
+      operations: new Set(configured ? ["measureText"] : []),
+      rendererToken: token,
       requestId: "svg",
       deadlineAt: Date.now() + 30_000,
       signal: new AbortController().signal,
@@ -103,14 +107,88 @@ describe("svg.compile text measurement", () => {
     });
   });
 
-  it("fails non-retryably when no renderer is configured, but still estimates", async () => {
-    const f = setup(false);
-    await expect(svgCompile(f.ctx, { svg }, new Uint8Array())).rejects.toMatchObject({
-      wire: { code: "workspace-renderer-not-configured", detail: { retryable: false } },
+  it("dispatches SVG compilation without a renderer using the built-in estimate", async () => {
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(
+        Response.json({ authenticated: true, user: { id: "owner", displayName: "Owner" } }),
+      );
+    const dispatch = createDispatcher(
+      parseExecutorConfig({
+        WORKSPACE_ORIGIN: "https://workspace.test",
+        MCP_EXECUTOR_TOKEN: token,
+      }),
+      {
+        executeRead: vi.fn(),
+        executeAndCommit: vi.fn(),
+        exportUnitData: vi.fn(),
+        close: async () => {},
+      },
+      pino({ level: "silent" }),
+    );
+    const { header } = await dispatch(
+      "svg.compile",
+      {
+        v: 1,
+        op: "svg.compile",
+        requestId: "no-renderer",
+        deadlineMs: 15_000,
+        grant: {
+          kind: "session",
+          userId: "owner",
+          session: "session",
+          expiresAt: Date.now() + 60_000,
+        },
+        input: { svg },
+      },
+      new Uint8Array(),
+    );
+    expect(header).toMatchObject({
+      ok: true,
+      output: {
+        textMeasure: "builtin-estimate",
+        lints: expect.arrayContaining([expect.stringContaining("estimat")]),
+      },
     });
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(String(fetcher.mock.calls[0]![0])).toContain("https://workspace.test/api/");
+  });
+
+  it("dispatches renderer calls with the renderer credential", async () => {
+    const rendererToken = "renderer-token-".repeat(4);
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url, options) => {
+      if (String(url).startsWith("https://workspace.test/"))
+        return Response.json({ authenticated: true, user: { id: "owner", displayName: "Owner" } });
+      expect(String(url)).toBe("http://renderer.test/rpc/v1/measureText");
+      expect(options?.headers).toMatchObject({ authorization: `Bearer ${rendererToken}` });
+      return new Response(new Uint8Array(encodeFrame({ ok: true, output: metrics, meta })));
+    });
+    const dispatch = createDispatcher(parseExecutorConfig({
+      WORKSPACE_ORIGIN: "https://workspace.test", MCP_EXECUTOR_TOKEN: token,
+      MCP_RENDERER_URL: "http://renderer.test", MCP_RENDERER_TOKEN: rendererToken,
+    }), {
+      executeRead: vi.fn(), executeAndCommit: vi.fn(), exportUnitData: vi.fn(), close: async () => {},
+    }, pino({ level: "silent" }), () => new Set(["measureText"]));
+    const { header } = await dispatch("svg.compile", {
+      v: 1, op: "svg.compile", requestId: "renderer-token", deadlineMs: 15_000,
+      grant: { kind: "session", userId: "owner", session: "session", expiresAt: Date.now() + 60_000 },
+      input: { svg },
+    }, new Uint8Array());
+    expect(header).toMatchObject({ ok: true, output: { textMeasure: "univer-render-runtime" } });
+    expect(fetcher.mock.calls.some(([url]) => String(url).startsWith("http://renderer.test/"))).toBe(true);
+  });
+
+  it("uses the built-in estimate without a configured renderer, including explicit false", async () => {
+    const f = setup(false);
+    for (const estimateTextSize of [undefined, false, true]) {
+      const { output } = await svgCompile(
+        f.ctx,
+        { svg, ...(estimateTextSize === undefined ? {} : { estimateTextSize }) },
+        new Uint8Array(),
+      );
+      expect(output.textMeasure).not.toBe("univer-render-runtime");
+      expect(output.lints.join("\n")).toContain("estimat");
+    }
     expect(f.rendererFetch).not.toHaveBeenCalled();
-    await expect(
-      svgCompile(f.ctx, { svg, estimateTextSize: true }, new Uint8Array()),
-    ).resolves.toBeDefined();
   });
 });

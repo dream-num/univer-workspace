@@ -61,7 +61,9 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
 - MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
-- MA8 checks that Browser sign-in and both `uvw auth login` paths still work with MCP OAuth enabled.
+- MO3 uses real Claude Code and VS Code CIMD documents, checks SSRF refusals and anonymous no-fetch behavior, then disables CIMD.
+- MO4 registers Cursor's exact callbacks and completes consent and token redemption on its `cursor://` callback.
+- MA8 checks Browser sign-in, both `uvw auth login` paths, and Workspace Agent browser OAuth with `agent-up` while MCP OAuth is enabled.
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
 - MX3 verifies executor unavailability.
@@ -176,7 +178,7 @@ jq -e --arg code "$code" '.outcome == "tool_error" and .error_code == $code' "$E
 Pass when MCP and CLI both exit 1, the structured code matches the CLI stderr prefix,
 and the event records `tool_error` with the same code.
 
-**M7. Tool lists.**
+**M7. Tool lists.** Needs the renderer; MB1 checks the lists of a run without one.
 
 ```bash
 $V mcp-tools mcp-tools-core
@@ -440,7 +442,7 @@ SDK's plain validation text) and the event records `tool_error` with the same co
 ```bash
 $V cli mcp-personal-id repo view "$O/personal" --json
 P=$(jq -r '.id' "$EVIDENCE/mcp-personal-id.out")
-KEY="mcp-pr-$VERIFY_UVW_RUN"
+KEY="mcp-pr-$VERIFY_UVW_RUN-idempotency"
 $V mcp mcp-pr-create pr_create "{\"repo\":\"$O/personal\",\"title\":\"Agent change\",\"body\":\"From MCP\",\"idempotency_key\":\"$KEY\"}"
 PN=$(jq -r '.number' "$EVIDENCE/mcp-pr-create.out")
 W=$(jq -r '.id' "$EVIDENCE/mcp-pr-create.out")
@@ -726,7 +728,7 @@ view of it, the deleted label is gone from the CLI list, `create` without `color
 $V mcp --toolsets all mcp-ms-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"MCP units\"}"
 WB=$(jq -r '.id' "$EVIDENCE/mcp-ms-pr.out")
 NB=$(jq -r '.number' "$EVIDENCE/mcp-ms-pr.out")
-UK="mcp-unit-$VERIFY_UVW_RUN"
+UK="mcp-unit-$VERIFY_UVW_RUN-idempotency"
 $V mcp --toolsets all mcp-unit-create unit_create "{\"worktree\":\"$WB\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Forecast\",\"parent\":\"$FOLDER\",\"idempotency_key\":\"$UK\"}"
 $V mcp --toolsets all mcp-unit-create-again unit_create "{\"worktree\":\"$WB\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Forecast\",\"parent\":\"$FOLDER\",\"idempotency_key\":\"$UK\"}"
 $V cli mcp-unit-create-cli unit list --worktree "$WB" --json
@@ -844,7 +846,7 @@ MCP and CLI with the same code (`workspace-lifecycle-invalid`), and the events c
 ```bash
 $V mcp --toolsets all mcp-prod-issue issue_create "{\"repo\":\"$O/verify-team\",\"title\":\"Quarterly forecast\",\"body\":\"Needs a forecast sheet\"}"
 IN=$(jq -r '.number' "$EVIDENCE/mcp-prod-issue.out")
-$V mcp --toolsets all mcp-prod-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"Add forecast sheet (#$IN)\",\"body\":\"Closes the forecast request\",\"idempotency_key\":\"mcp-prod-$VERIFY_UVW_RUN\"}"
+$V mcp --toolsets all mcp-prod-pr pr_create "{\"repo\":\"$O/verify-team\",\"title\":\"Add forecast sheet (#$IN)\",\"body\":\"Closes the forecast request\",\"idempotency_key\":\"mcp-prod-$VERIFY_UVW_RUN-idempotency\"}"
 PW=$(jq -r '.id' "$EVIDENCE/mcp-prod-pr.out")
 PRN=$(jq -r '.number' "$EVIDENCE/mcp-prod-pr.out")
 $V mcp --toolsets all mcp-prod-unit unit_create "{\"worktree\":\"$PW\",\"space\":\"$O/verify-team\",\"type\":\"sheet\",\"name\":\"Q4 Forecast\"}"
@@ -862,6 +864,7 @@ agent-browser find label "Username" fill "verify-$VERIFY_UVW_RUN"
 agent-browser find label "Password" fill "$(cat "${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/user.pw")"
 agent-browser click 'form button[type=submit]'
 agent-browser wait --url '**/home'
+agent-browser set viewport 1280 1000
 agent-browser open "$PR_URL" && agent-browser wait 3000
 agent-browser screenshot "$EVIDENCE/mcp-product-pr-ready.png"
 agent-browser snapshot -c > "$EVIDENCE/mcp-product-pr-ready.snapshot.txt"
@@ -1326,11 +1329,11 @@ JS
 ```
 
 Pass when the unauthenticated POST returns the metadata challenge, both discovery documents
-match this run, opencode prints an authorize URL after registration, and the consent page
+match this run, opencode prints an authorize URL after client discovery or registration, and the consent page
 shows all four scopes. The consent screenshot must show `worktree:merge` unchecked. The
 callback grants exactly `read write publish`, auth prints `Connected to ws`, and the run exits
 0 with both completed tools. Exactly two matching usage events identify this user and the
-registered OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
+OAuth client with `auth_kind: oauth` and `outcome: ok`. Keep the redacted
 `mcp-oauth-*` evidence. The trap stops only the isolated service and auth process, then
 removes its temporary project and credentials even if an assertion fails.
 
@@ -1526,16 +1529,184 @@ means the gateway answered from its 30-second exchange cache. A replay inside th
 gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
 call exits 4 and the current refresh token gets `invalid_grant`.
 
+**MO3. HTTPS Client ID Metadata Documents.** Requires outbound HTTPS and the baseline
+`up`, `user`, `doctor` with MCP enabled. Run before MO1/MO2 because step 5 starts fresh data.
+Every helper call must use the explicit run ID when another verification run is active.
+The helper detects fake-IP DNS at `up`; it never exempts loopback or link-local addresses.
+
+1. Discover support.
+
+```bash
+export VERIFY_UVW_RUN=cimd VERIFY_UVW_MCP=1 VERIFY_UVW_SERVER_PORT=3924 VERIFY_UVW_WEB_PORT=5977 VERIFY_UVW_MCP_PORT=3934
+V=.agents/skills/verify-uvw/bin/verify-uvw
+eval "$(VERIFY_UVW_RUN=cimd $V env)"
+RUN=/tmp/verify-uvw/cimd
+curl -fsS "$ORIGIN/.well-known/oauth-authorization-server" > "$EVIDENCE/mcp-cimd-discovery.json"
+jq -e --arg issuer "$ORIGIN" '.issuer == $issuer and .client_id_metadata_document_supported == true and .authorization_response_iss_parameter_supported == true' "$EVIDENCE/mcp-cimd-discovery.json"
+```
+
+Pass when both advertised flags are true and the issuer matches the run's web origin.
+
+2. Complete Claude Code's CIMD flow, including a real loopback callback, token exchange,
+MCP use, refresh and revocation. No DCR request is made by `login --client-id`.
+
+```bash
+CLAUDE_CLIENT=https://claude.ai/oauth/claude-code-client-metadata
+VERIFY_UVW_RUN=cimd $V mcp-oauth login mcp-cimd-login --client-id "$CLAUDE_CLIENT"
+jq -e --arg issuer "$ORIGIN" --arg client "$CLAUDE_CLIENT" '.client_id == $client and .client_name == "Claude Code (claude.ai)" and .callback_code_present and .callback_state_matches and .callback_iss == $issuer and .token.status == 200' "$EVIDENCE/mcp-cimd-login.json"
+VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-whoami whoami
+jq -e --arg client "$CLAUDE_CLIENT" '.client_id == $client and .auth_kind == "oauth" and .outcome == "ok"' "$EVIDENCE/mcp-cimd-whoami.event.json"
+VERIFY_UVW_RUN=cimd $V mcp-oauth refresh mcp-cimd-refresh
+VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-refreshed repo_list
+VERIFY_UVW_RUN=cimd $V mcp-oauth revoke mcp-cimd-revoke
+if VERIFY_UVW_RUN=cimd $V mcp --auth oauth mcp-cimd-revoked repo_list; then false; else test $? -eq 4; fi
+jq -e '.status == 401' "$EVIDENCE/mcp-cimd-revoked.out"
+```
+
+Pass when `mcp-cimd-login-consent.png` shows `Claude Code (claude.ai)`, callback code/state/issuer
+checks pass, tokens are issued, `whoami` records the URL client ID, refresh and the subsequent
+Workspace-backed call succeed, and the Workspace-backed call after revocation returns 401.
+Tokens, codes and state stay out of evidence.
+
+3. Open VS Code's consent page using its real metadata, whose extra `device_code` grant
+must not prevent authorization.
+
+```bash
+VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" vscode
+```
+
+Pass when `mcp-cimd-vscode.json` records 200 and the consent text includes `vscode.dev`,
+with `mcp-cimd-vscode.png` showing the consent page.
+
+4. Refuse private addresses, malformed identity and mismatched metadata; prove anonymous
+requests never fetch. The helper exercises both IPv4/IPv6 literals, uses `localtest.me`
+when it resolves to 127.0.0.1, adds a query to Claude's URL, and upper-cases the host in Claude's URL. The server fetches
+the same real document for `https://CLAUDE.ai/…`, but its `client_id` is the lower-case URL, so the
+error page must name the `client_id` mismatch.
+If fake-IP DNS also rewrites `localtest.me`, the helper records that answer and uses
+system-resolved `localhost` to exercise the same connection-level DNS refusal without
+changing host DNS or introducing a test-only server resolver.
+
+```bash
+VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" reject
+```
+
+Pass when every `mcp-cimd-reject-*.json` records 400 with no Location and the corresponding
+screenshot shows the in-place error. Both anonymous authorize paths return the login
+redirect; `mcp-cimd-anonymous.json` shows equal before/after fetch counts. The public-only
+`mcp-cimd-fetch-events.json` preserves the fetch attempts and outcomes from the server log.
+
+5. Disable CIMD, then restore the default before MO1, MO2 and MO4. `--reuse` only accepts
+a run already torn down; evidence survives, data and credentials are fresh. Keep the launching
+shell alive throughout all `up` calls so its services survive between tool calls.
+
+```bash
+VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-enabled-down.txt"
+MCP_CIMD_ENABLED=0 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-disabled-up.txt"
+VERIFY_UVW_RUN=cimd $V user
+VERIFY_UVW_RUN=cimd node .agents/skills/verify-uvw/bin/mcp-cimd.mjs "$RUN" "$ORIGIN" "$MCP_URL" disabled
+VERIFY_UVW_RUN=cimd $V down | tee "$EVIDENCE/mcp-cimd-disabled-down.txt"
+MCP_CIMD_ENABLED=1 VERIFY_UVW_RUN=cimd $V up --reuse | tee "$EVIDENCE/mcp-cimd-restored-up.txt"
+VERIFY_UVW_RUN=cimd $V user
+VERIFY_UVW_RUN=cimd $V doctor | tee "$EVIDENCE/mcp-cimd-restored-doctor.txt"
+# The restored run has a new home/ and opencode directory; refresh the exported paths before later journeys.
+eval "$(VERIFY_UVW_RUN=cimd $V env)"
+```
+
+Pass when `mcp-cimd-disabled.json` has no CIMD support flag, retains the issuer-response
+flag, rejects Claude's URL as `OAUTH_CLIENT_UNAVAILABLE` with 400, and records zero fetches.
+Both teardown transcripts say `ok    MCP resources removed`; restored doctor has no `FAIL`.
+The optional real Claude Code `/mcp` login is supplementary and not required by MO3.
+
+**MO4. Cursor's private-use callback.** Cursor registers `cursor://anysphere.cursor-mcp/oauth/callback`
+next to an https and a loopback callback. Workspace accepts private-use schemes without a dot only
+from a fixed allowlist (currently `cursor`), so this registers Cursor's exact list, then drives
+consent with the `cursor://` callback as the run user. A browser cannot follow a `cursor://` redirect,
+so `curl` sends the run's `workspace_session` from `home/mcp-session` and evidence keeps only
+statuses and redacted `Location` shapes. Run after `user` with MCP enabled.
+
+```bash
+CURSOR_CB='cursor://anysphere.cursor-mcp/oauth/callback'
+COOKIE="workspace_session=$(cat "$RUN/home/mcp-session")"
+curl -sS -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
+  -d "{\"client_name\":\"Cursor\",\"redirect_uris\":[\"$CURSOR_CB\",\"https://www.cursor.com/agents/mcp/oauth/callback\",\"http://localhost:8787/callback\"]}" \
+  -w '\n%{http_code}\n' > "$EVIDENCE/mcp-cursor-register.txt"
+test "$(tail -n1 "$EVIDENCE/mcp-cursor-register.txt")" = 201
+CURSOR_CLIENT=$(head -n1 "$EVIDENCE/mcp-cursor-register.txt" | jq -r .client_id)
+head -n1 "$EVIDENCE/mcp-cursor-register.txt" | jq -e --arg cb "$CURSOR_CB" '.redirect_uris == [$cb, "https://www.cursor.com/agents/mcp/oauth/callback", "http://localhost:8787/callback"]'
+curl -sS -o /dev/null -w '%{http_code}' -X POST "$ORIGIN/api/auth/register" -H 'content-type: application/json' \
+  -d '{"redirect_uris":["myapp://callback"]}' > "$EVIDENCE/mcp-cursor-register-other.txt"
+test "$(cat "$EVIDENCE/mcp-cursor-register-other.txt")" = 400
+
+VERIFIER=$(openssl rand -hex 32)
+CHALLENGE=$(printf %s "$VERIFIER" | openssl dgst -sha256 -binary | openssl base64 -A | tr '+/' '-_' | tr -d '=')
+STATE=$(openssl rand -hex 24)
+cursor_consent() {
+  curl -sS -D "$RUN/home/cursor-consent.headers" -o "$RUN/home/cursor-consent.html" -H "cookie: $COOKIE" -G "$ORIGIN/api/auth/authorize/consent" \
+    --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode response_type=code \
+    --data-urlencode "code_challenge=$CHALLENGE" --data-urlencode code_challenge_method=S256 --data-urlencode "state=$STATE" \
+    --data-urlencode "resource=$MCP_URL"
+  grep -oE 'name="consent_token" value="[^"]+"' "$RUN/home/cursor-consent.html" | sed 's/.*value="//; s/"$//'
+}
+cursor_decide() {
+  curl -sS -o /dev/null -D - -H "cookie: $COOKIE" -H "origin: $ORIGIN" -X POST "$ORIGIN/api/auth/authorize/consent" \
+    --data-urlencode "consent_token=$1" --data-urlencode "decision=$2" "${@:3}" | tr -d '\r' | sed 's/^Location:/location:/'
+}
+TOKEN=$(cursor_consent)
+head -n1 "$RUN/home/cursor-consent.headers" | grep -q ' 200'
+grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" | grep -q "form-action 'self' cursor:;"
+grep -i '^content-security-policy:' "$RUN/home/cursor-consent.headers" > "$EVIDENCE/mcp-cursor-consent-csp.txt"
+cursor_decide "$TOKEN" deny > "$RUN/home/cursor-deny.headers"
+grep -i '^location:' "$RUN/home/cursor-deny.headers" | sed "s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-deny-location.txt"
+ISS_ENCODED=$(node -e 'console.log(encodeURIComponent(process.argv[1]))' "$ORIGIN")
+grep -qx "location: $CURSOR_CB?error=access_denied&iss=$ISS_ENCODED&state=<state>" "$EVIDENCE/mcp-cursor-deny-location.txt"
+
+TOKEN=$(cursor_consent)
+cursor_decide "$TOKEN" allow --data-urlencode scope=read --data-urlencode scope=write --data-urlencode scope=publish --data-urlencode scope=worktree:merge \
+  > "$RUN/home/cursor-approve.headers"
+CODE=$(sed -n 's/^location: .*[?&]code=\([^&]*\).*/\1/p' "$RUN/home/cursor-approve.headers")
+grep -i '^location:' "$RUN/home/cursor-approve.headers" | sed "s/$CODE/<code>/; s/$STATE/<state>/" > "$EVIDENCE/mcp-cursor-approve-location.txt"
+grep -q "^location: $CURSOR_CB?code=<code>" "$EVIDENCE/mcp-cursor-approve-location.txt"
+grep -F "&iss=$ISS_ENCODED&" "$EVIDENCE/mcp-cursor-approve-location.txt"
+curl -sS -X POST "$ORIGIN/api/auth/token" -H 'content-type: application/x-www-form-urlencoded' \
+  --data-urlencode grant_type=authorization_code --data-urlencode "client_id=$CURSOR_CLIENT" --data-urlencode "code=$CODE" \
+  --data-urlencode "code_verifier=$VERIFIER" --data-urlencode "redirect_uri=$CURSOR_CB" --data-urlencode "resource=$MCP_URL" \
+  | jq '{token_type, expires_in, scope, access: (.access_token | .[0:7]), refresh: (.refresh_token | .[0:7])}' > "$EVIDENCE/mcp-cursor-token.json"
+jq -e '.token_type == "Bearer" and .expires_in == 3600 and .access == "uvw_at_" and .refresh == "uvw_rt_"' "$EVIDENCE/mcp-cursor-token.json"
+rm -f "$RUN"/home/cursor-*
+```
+
+Pass when Cursor's
+three callbacks register with 201 in order and `myapp://callback` gets 400; the consent page for
+the `cursor://` callback returns 200 with `form-action 'self' cursor:` in its CSP; denying redirects to
+`cursor://anysphere.cursor-mcp/oauth/callback?error=access_denied&iss=…&state=…`; approving redirects there
+with a `code` and `iss`, and redeeming that code with the `cursor://` callback returns a one-hour `uvw_at_`
+access token and a `uvw_rt_` refresh token.
+
 **MA8. Existing sign-in clients.** Stage F must not change how the Browser, uvw and the Workspace
 Agent sign in, so run these in the same MCP-enabled run, where the MCP OAuth code paths are active.
-First run every step of [Accounts and sign-in](auth.md) as written: Browser registration and
-sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
+Start a fresh run with an explicit free Agent callback port (these ports also isolate it from other runs):
+
+```bash
+V=.agents/skills/verify-uvw/bin/verify-uvw
+export VERIFY_UVW_RUN=ma8
+VERIFY_UVW_MCP=1 VERIFY_UVW_SERVER_PORT=3923 VERIFY_UVW_WEB_PORT=5976 VERIFY_UVW_MCP_PORT=3933 VERIFY_UVW_AGENT_PORT=3191 $V up
+$V user
+$V doctor
+eval "$($V env)"
+RUN=/tmp/verify-uvw/$VERIFY_UVW_RUN
+```
+
+Keep this shell open until `down` so command-runner cleanup cannot stop its background services.
+Keep `VERIFY_UVW_RUN` exported on every later call. First run every step of
+[Accounts and sign-in](auth.md) as written: Browser registration and sign-in, `uvw auth login --password-stdin`, `auth status`, and the wrong-password case. Then the
 Browser-approved `uvw auth login`, which prints an approval URL and exits; the raw URL and code stay
-in the run's `home/` and never reach evidence.
+in the run's `home/` and never reach evidence. Leave private files there until `$V down`
+removes the disposable home; journey steps do not delete files from it.
 
 ```bash
 (umask 077 && $V uvw auth login > "$RUN/home/cli-login.private" 2>&1)
-agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/cli-login.private" | head -n1)"
+agent-browser open "$(grep -oE 'https?://[^ ]+' "$RUN/home/cli-login.private" | head -n1)" > /dev/null
 agent-browser wait --text 'Confirm and authorize CLI'
 test "$(agent-browser get value input)" = "$(sed -n 's/^Verification code: //p' "$RUN/home/cli-login.private")"
 agent-browser find role button click --name 'Confirm and authorize CLI'
@@ -1543,23 +1714,97 @@ agent-browser wait --text 'CLI authorized'
 agent-browser screenshot "$EVIDENCE/mcp-cli-authorized.png"
 $V cli mcp-cli-login-complete auth login --complete --json
 jq -e --arg origin "$ORIGIN" --arg name "Verify $VERIFY_UVW_RUN" '.status == "authenticated" and .origin == $origin and .subject.name == $name' "$EVIDENCE/mcp-cli-login-complete.out"
-rm -f "$RUN/home/cli-login.private"
 ```
 
-Pass when every auth.md step passes, the approval page shows the code uvw printed, and `--complete`
-signs uvw in as the run user. The Workspace Agent's browser OAuth login is not part of this journey
-yet: on 2026-11-09 its documented local install failed (fixed by #245) and the Agent then exits at
-startup before OAuth (#246). Once #246 is fixed, start the run with `VERIFY_UVW_AGENT_PORT`, which
-registers the Agent's public client, and add the Agent login here.
+Then install and start the Agent. Its token URL is private; suppress `open` output until the
+browser has exchanged the token for its cookie and reached the clean root URL.
+
+```bash
+$V agent-up
+agent-browser open "$(cat "$RUN/home/agent-url")" > /dev/null
+agent-browser wait --url 'http://127.0.0.1:3191/' > /dev/null
+agent-browser wait --text 'Connect your Workspace'
+agent-browser find label 'Workspace service URL' fill "$ORIGIN"
+agent-browser snapshot -i -c > "$EVIDENCE/mcp-agent-before-signin.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-before-signin.png"
+agent-browser find role button click --name 'Sign in to Workspace' --exact
+# The local Web Agent navigates this same tab to Workspace.
+# If Workspace asks for login, run these three commands; skip them if consent is visible:
+agent-browser find label 'Username' fill "verify-$VERIFY_UVW_RUN"
+agent-browser find label 'Password' fill "$(cat "$RUN/user.pw")"
+agent-browser click 'form button[type=submit]'
+# Continue on the Workspace consent page:
+agent-browser wait --text 'univer-workspace-harness'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-consent.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-consent.png"
+agent-browser find role button click --name 'Allow' --exact
+# Do not record the callback URL: it briefly holds the one-time authorization code.
+agent-browser wait --url 'http://127.0.0.1:3191/' > /dev/null
+```
+
+The callback briefly shows **Workspace connected**, then returns to the Agent after its
+account services are ready. A fresh profile then shows **Add an API key to get started**;
+choose **Configure later**. No model credentials are needed for login or browsing.
+Settings → General contains the **Workspace connection settings** region; wait for its
+connected account to load and scroll the service URL into view before capturing it.
+
+```bash
+agent-browser wait --text 'Add an API key to get started'
+agent-browser find role button click --name 'Configure later' --exact
+agent-browser wait --text 'Files'
+agent-browser find role button click --name 'Settings' --exact
+agent-browser wait --text "Connected: Verify $VERIFY_UVW_RUN"
+test "$(agent-browser get value 'input[type=url]')" = "$ORIGIN"
+agent-browser scrollintoview 'input[type=url]'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-after-signin.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-after-signin.png"
+agent-browser find role button click --name 'Close' --exact
+agent-browser find role tab click --name 'Files' --exact
+agent-browser wait --text 'No files'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-files.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-files.png"
+# Read the run user's remotely listed Space through the Agent's picker as well:
+agent-browser find role tab click --name 'Sessions' --exact
+agent-browser find role button click --name 'Add workspace' --exact
+agent-browser wait --text "Verify $VERIFY_UVW_RUN's Personal Space"
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-space-picker.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-space-picker.png"
+agent-browser find role button click --name "Verify $VERIFY_UVW_RUN's Personal Space Personal Space" --exact
+# Adding a Space remounts the navigation, sometimes more than once after the tab first appears.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  agent-browser find role tab click --name 'Files' --exact && break
+  test "$attempt" -lt 10 && sleep 1
+done
+agent-browser find role button click --name 'Refresh files' --exact
+agent-browser wait --text 'No files'
+agent-browser snapshot -c > "$EVIDENCE/mcp-agent-files.txt"
+agent-browser screenshot "$EVIDENCE/mcp-agent-files.png"
+agent-browser eval 'location.origin === "http://127.0.0.1:3191" && location.pathname === "/" && !location.search' > "$EVIDENCE/mcp-agent-clean-url.txt"
+
+$V down
+rg -n 'token=[A-Za-z0-9]|uvw_(at|rt|pat)_[A-Za-z0-9]{8,}|workspace_session=' "$EVIDENCE"
+# Expected: no matches (rg exits 1), down prints `ok    MCP resources removed`,
+# and no process from this run remains in `pgrep -f start-local.mjs`.
+```
+
+Pass when every auth.md step passes, the CLI approval page shows the code uvw printed, and
+`--complete` signs uvw in as the run user; the Agent stays running, its Workspace consent page
+names `univer-workspace-harness`, and the Agent shows the connected run user and origin. The
+Agent Space picker lists `Verify <run-id>'s Personal Space`, selecting it succeeds, and Files
+refreshes that Space with `No files`. The fresh Space has no trunk files; doctor's Sheet lives
+in a Worktree. The clean-URL assertion returns `true`. The three sign-in screenshots and Files evidence must
+contain no tokens, authorization codes or cookies. Teardown stops the Agent and removes MCP
+resources and disposable data. If Agent OAuth fails, record the exact step, screen text and
+relevant server log lines as a product finding; this journey does not pass.
 
 **MX1. Executor write and readback.**
 
 ```bash
 $V mcp mx-repo repo_view "{\"repo\":\"$O/personal\"}"
 MX_SPACE=$(jq -r .id "$EVIDENCE/mx-repo.out")
-$V mcp mx-pr pr_create "{\"repo\":\"$O/personal\",\"title\":\"Executor readback\",\"idempotency_key\":\"mx-pr-$VERIFY_UVW_RUN\"}"
+$V mcp mx-pr pr_create "{\"repo\":\"$O/personal\",\"title\":\"Executor readback\",\"idempotency_key\":\"mx-pr-$VERIFY_UVW_RUN-idempotency\"}"
 MX_W=$(jq -r .id "$EVIDENCE/mx-pr.out")
-$V mcp mx-unit unit_create "{\"worktree\":\"$MX_W\",\"space\":\"$MX_SPACE\",\"type\":\"sheet\",\"name\":\"Executor sheet\",\"idempotency_key\":\"mx-unit-$VERIFY_UVW_RUN\"}"
+$V mcp mx-unit unit_create "{\"worktree\":\"$MX_W\",\"space\":\"$MX_SPACE\",\"type\":\"sheet\",\"name\":\"Executor sheet\",\"idempotency_key\":\"mx-unit-$VERIFY_UVW_RUN-idempotency\"}"
 MX_U=$(jq -r .unit.unitId "$EVIDENCE/mx-unit.out")
 MX_CODE='const ws = workbook.getActiveSheet(); ws.getRange("A1:B2").setValues([["Region","Total"],["North",42]]); return ws.getRange("A1:B2").getValues();'
 $V mcp --expect-event '.executor == "cold_start" and .cost.committed_revisions == 1 and .cost.worker_cpu_ms > 0 and .unit_type == "sheet"' mx-execute execute "$(jq -nc --arg worktree "$MX_W" --arg unit "$MX_U" --arg code "$MX_CODE" '{worktree:$worktree,unit:$unit,code:$code}')"
@@ -2570,3 +2815,35 @@ a measurement must report lines. Errors and unreal outputs are counted in the JS
 process that maps it, PSS splits it, and cgroup anon is what the container is charged without file cache (this kernel has no `memory.peak`, so a
 peak is the largest sample). A runtime's tree is its Chromium processes; the Node process is shared by all runtimes.
 Summarize an existing JSON without a stack: `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`.
+
+
+## MB. Deployment and per-account tools
+
+Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
+
+MB validates the G0 shape with a gateway and one shared executor, no renderer, and PAT authentication. Start `up` in a persistent shell so Workspace and Vite survive between tool calls. Choose unused ports and a unique run ID; always keep that ID for subsequent commands.
+
+```bash
+V="$PWD/.agents/skills/verify-uvw/bin/verify-uvw"
+export VERIFY_UVW_RUN=mb-g0 VERIFY_UVW_MCP=1
+export VERIFY_UVW_SERVER_PORT=3950 VERIFY_UVW_WEB_PORT=6001 VERIFY_UVW_MCP_PORT=3955
+VERIFY_UVW_MCP_RENDERER=0 VERIFY_UVW_MCP_PRODUCTION=1 $V up
+$V user
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/mcp-availability.mjs
+$V down
+```
+
+The script replaces the executor allowlist with the run user's ID through `$V mcp-allow-users <user-id>`. It checks the following and saves `mb.json` plus per-call evidence under `$EVIDENCE`:
+
+- MB1 compares ordered `tools/list` names for `core`, `files`, `admin`, `core,files`, `core,admin`, `files,admin` and `all` with literal expected lists in the script. These are the full lists minus `screenshot`, `print_pdf` and `lint`.
+- MB2 checks instructions for all seven connections and rejects those three hidden tool names.
+- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 40 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
+- MB4 runs MX1 through MX3 above with PAT authentication. It compares MCP and CLI write/readback results, checks cold/warm usage events, verifies the Ready error, runs doctor, and stops only this run's executor to check the unavailable error. A `finally` restarts it even after a failed assertion.
+- MB5 checks `/readyz` for 200. It stops the executor, then uses `$V mcp-gateway-restart` to recreate only the gateway and clear its remembered capabilities. `/readyz` must return 503 naming the `executor` check, then 200 within ten seconds after the executor restarts. Stopping an executor after successful discovery alone does not make the gateway unready, because HTTP tools remain usable. The optional Workspace stop/restart check is recorded as not run because `verify-uvw` has no independent server restart command. A base returning 404 records MB5 as `not_run` in `mb.json`; it does not claim readiness passed. Other unexpected statuses fail the script.
+
+Successful output is `PASS MB1` through `PASS MB5`, or `NOT RUN MB5 /readyz returned 404` for the sibling-PR dependency. Repeated runs create new PRs and a new restricted user inside this disposable Workspace. `down` removes all of them with the run's data.
+
+`VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.
+
+Journeys with development session authentication run only in the default development mode. Search this file for `--auth dev` and session-based MCP clients before selecting journeys for production. MF4's direct second-user client uses a Workspace session. Renderer journeys, including screenshots, PDF, lint and precise text measurement, require the renderer enabled.

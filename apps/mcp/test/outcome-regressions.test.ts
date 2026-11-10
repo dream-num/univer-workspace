@@ -19,7 +19,7 @@ import { testStagingDirectory } from "./staging-directory.js";
 const config = parseExecutorConfig({
   WORKSPACE_ORIGIN: "https://workspace.test",
   WORKSPACE_TRANSPORT_URL: "https://transport.test",
-  MCP_INTERNAL_TOKEN: "internal-token-".repeat(4),
+  MCP_EXECUTOR_TOKEN: "executor-token-".repeat(4),
 });
 const grant: ExecutorGrant = {
   kind: "session",

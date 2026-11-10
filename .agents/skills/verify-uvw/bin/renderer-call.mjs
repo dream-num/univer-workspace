@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Runs inside the executor container: node --input-type=module -e "$(cat renderer-call.mjs)" <op>
-// Reads the operation input as JSON on stdin, calls MCP_RENDERER_URL with the executor's internal token, and prints
+// Reads the operation input as JSON on stdin, calls MCP_RENDERER_URL with MCP_RENDERER_TOKEN, and prints
 // {header, payload} where payload is base64.
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from './dist/shared/frame.js';
 
@@ -9,7 +9,7 @@ const chunks = [];
 for await (const chunk of process.stdin) chunks.push(chunk);
 const response = await fetch(new URL(`/rpc/v1/${op}`, process.env.MCP_RENDERER_URL), {
   method: 'POST',
-  headers: { authorization: `Bearer ${process.env.MCP_INTERNAL_TOKEN}`, 'content-type': FRAME_CONTENT_TYPE, 'x-mcp-rpc-version': '1' },
+  headers: { authorization: `Bearer ${process.env.MCP_RENDERER_TOKEN}`, 'content-type': FRAME_CONTENT_TYPE, 'x-mcp-rpc-version': '1' },
   body: encodeFrame({ v: 1, op, requestId: `renderer-call-${Date.now()}`, deadlineMs: op === 'measureText' ? 9000 : 28000, input: JSON.parse(Buffer.concat(chunks).toString('utf8')) }),
   signal: AbortSignal.timeout(40000),
 });

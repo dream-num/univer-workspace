@@ -1,11 +1,12 @@
 import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
-import { createServer } from "node:http";
+import { createServer, type Server } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { pino } from "pino";
 import { afterEach, describe, expect, it } from "vitest";
 import { createGateway } from "../src/gateway/server.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
+import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { toolScopes } from "./tool-names.js";
 
@@ -98,6 +99,7 @@ const prUrl = `${origin}/spaces/team-1/pulls/3`;
 describe("space, unit, repository admin, label and merge tools", () => {
   let gateway: ReturnType<typeof createGateway> | undefined;
   let url: string;
+  let executor: Server | undefined;
   let clients: Client[] = [];
   let requests: { method: string; path: string; body: unknown; key: string | null }[] = [];
   let prState = "draft";
@@ -192,8 +194,20 @@ describe("space, unit, repository admin, label and merge tools", () => {
     const port = address.port;
     await new Promise((resolve) => socket.close(resolve));
     url = `http://127.0.0.1:${String(port)}/mcp`;
+    let executorUrl: string | undefined;
+    if (scopes) {
+      executor = createServer((request, response) => {
+        if (request.url !== "/rpc/v1/capabilities") throw new Error("Scope check must precede executor dispatch");
+        response.end(JSON.stringify({ v: PROTOCOL_VERSION, operations: Object.keys(opSpecs) }));
+      });
+      executor.listen(0, "127.0.0.1");
+      await once(executor, "listening");
+      const address = executor.address();
+      if (!address || typeof address === "string") throw new Error("Expected TCP address");
+      executorUrl = `http://127.0.0.1:${address.port}`;
+    }
     gateway = createGateway(
-      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url }),
+      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url, ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}) }),
       { logger: pino({ level: "silent" }), fetcher, ...(scopes === undefined ? {} : { scopes }) },
     );
     gateway.server.listen(port, "127.0.0.1");
@@ -212,6 +226,10 @@ describe("space, unit, repository admin, label and merge tools", () => {
   afterEach(async () => {
     await Promise.all(clients.map((client) => client.close()));
     clients = [];
+    if (executor) {
+      await new Promise<void>((resolve) => executor!.close(() => resolve()));
+      executor = undefined;
+    }
     requests = [];
     prState = "draft";
     if (gateway !== undefined) {
