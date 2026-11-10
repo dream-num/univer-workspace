@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../auth";
 import { api } from "../../shared/api/client";
@@ -126,6 +127,14 @@ export function ProfileDialog({
       ...(avatarUrl.trim() ? { avatarUrl: avatarUrl.trim() } : {}),
     });
   };
+  const copyUserId = async () => {
+    try {
+      await navigator.clipboard.writeText(current.user.id);
+      toast.success(t("userIdCopied"));
+    } catch {
+      toast.error(t("copyUserIdFailed"));
+    }
+  };
 
   return (
     <Dialog
@@ -167,6 +176,22 @@ export function ProfileDialog({
             onChange={(event) => setAvatarUrl(event.target.value)}
           />
         </Field>
+        <div className="flex min-w-0 items-center gap-1 text-xs text-subtle-foreground">
+          <span className="shrink-0">{t("userId")}:</span>
+          <code className="truncate text-foreground" title={current.user.id}>
+            {current.user.id}
+          </code>
+          <Button
+            type="button"
+            aria-label={t("copyUserId")}
+            title={t("copyUserId")}
+            size="icon-sm"
+            variant="ghost"
+            onClick={() => void copyUserId()}
+          >
+            <Copy />
+          </Button>
+        </div>
         {current.authenticationMethods.email === null ? null : (
           <p className="m-0 text-[13px] text-muted-foreground">
             {t("profileEmail")}：
