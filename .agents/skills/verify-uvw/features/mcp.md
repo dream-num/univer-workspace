@@ -9,7 +9,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - M2 and M3 read identity over the 2026-07-28 and 2025-11-25 protocols.
 - M4 and M5 compare repository lists and details with uvw.
 - M6 preserves a missing-repository error and its usage event.
-- M7 checks the ordered tool list of every toolset selection, schemas, and per-tool annotations.
+- M7 checks the ordered tool list of every toolset selection, schemas, per-tool annotations, descriptions that never name `uvw`, and the shared `idempotency_key` rule.
 - M8 rejects missing and invalid credentials in both protocols.
 - M9 rejects an untrusted Origin.
 - M10 refuses development authentication in production.
@@ -23,7 +23,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MI9 preserves a missing-Issue-number error and its usage event.
 - MI10 preserves a nonexistent-Issue error from the Workspace and its usage event.
 - MI11 returns a structured `workspace-argument-invalid` for an invalid argument and records its usage event.
-- MP1 creates a Personal Space pull request with an idempotency key, and the same key returns the same pull request.
+- MP1 creates a Personal Space pull request with an idempotency key, the same key returns the same pull request, and the same key with different arguments is refused.
 - MP2 and MP3 view a pull request by number and by Browser URL against the CLI.
 - MP4 lists pull requests against the CLI.
 - MP5 edits a pull request and compares it with the CLI view.
@@ -49,7 +49,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR2 reads a shared Skill resource through `skills_read`, checks MCP read instructions, and confirms MCP core differs from CLI core.
 - MR3 and MR4 search and show Facade API symbols against the CLI and the reference library.
 - MR5 lists and reads Skill files as MCP resources against the CLI.
-- MR6 checks the server instructions in the initialize result in both protocols.
+- MR6 checks the server instructions in the initialize result in both protocols, including the new-key-per-operation rule.
 - MR7 reads a long class through `api_show` cursors and compares the pages with the reference library.
 - MR8 rejects a cursor reused with other arguments and an unknown Skill.
 - MA1 calls the gateway with the default personal access token (PAT) and records `auth_kind: pat`.
@@ -67,20 +67,28 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX1 writes a 2x2 range through the executor and compares MCP and CLI readbacks and usage events.
 - MX2 preserves a ready Worktree error with detail.
 - MX3 verifies executor unavailability.
+- MX4 captures the written values in the Browser.
 - MX5 compares uncoded script failure messages with the CLI.
 - MX6 verifies a large committed result keeps commit facts and writes once.
-- MX4 captures the written values in the Browser.
+- MX16 returns `inspect` input errors in MCP words, without CLI flags, and requires exactly one scope.
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
+- MX7 and MX8 round-trip xlsx and docx through Office import and export.
 - MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and publish/retry/open the validated page.
-- MM1 checks Markdown apply retries, CLI parity, image downloads and explicit block updates.
-- MX10 rejects a reused import key with a different upload.
-- MT1 compares Typst compilation with the CLI and reads back one native Doc after a same-key retry.
-- MV1 compares estimated SVG compilation with the CLI and reads back its committed Slide.
-- MV2 compiles SVG with real fonts through the renderer against `uvw compile-svg`, applies it to a Slide, screenshots the page and times 55 text lines.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - MR11 prints a Doc and a Sheet with an image to PDF in a Worktree and on trunk against `uvw print-pdf`, lints a Slide deck with layout problems against `uvw lint`, and returns the CLI's rejections.
 - MR12 has opencode call `screenshot` on a Sheet with text and an image, checks that the image reaches the model and that its description is right, and asks for a deck above 1 MiB to check the download links.
+- MX9 retries an Office import with the same upload and key and gets the original result.
+- MX10 rejects a reused import key with a different upload.
+- MM1 checks Markdown apply retries, CLI parity, image downloads and explicit block updates.
+- MM2 preserves Markdown input errors and bounds ZIP paths.
+- MX11 through MX15 cover stale worker sessions, concurrent revision conflicts, two executor replicas (opt-in), stale sessions on HTML View validation, and parallel writes with reads.
+- MT1 compares Typst compilation with the CLI and reads back one native Doc after a same-key retry.
+- MV1 compares estimated SVG compilation with the CLI and reads back its committed Slide.
+- MV2 compiles SVG with real fonts through the renderer against `uvw compile-svg`, applies it to a Slide, screenshots the page and times 55 text lines.
+- Typst job verification runs Typst as a job on a stack with `MCP_SYNC_BUDGET_MS=1`.
+- MB1 through MB5 verify the G0 production shape without a renderer: tool lists, instructions, a user outside the executor allowlist, executor journeys and `/readyz`.
+- The executor and renderer capacity benchmarks measure local sizing; they are not pass/fail journeys.
 - M12 removes this run's resources and preserves developer processes.
 
 ## How to get to it (user POV)
@@ -208,12 +216,15 @@ diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:31]' "$EVIDENCE/mcp-t
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
+jq -e 'all(.[]; .description | test("\\buvw\\b") | not)' "$EVIDENCE/mcp-tools-all.out"
+jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 11 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
 ```
 
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 30 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; unknown
+first 31 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; no tool description
+names `uvw`; the 11 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -452,11 +463,15 @@ diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/m
 diff <(jq -S '.' "$EVIDENCE/mcp-pr-create.out") <(jq -S '.' "$EVIDENCE/mcp-pr-create-again.out")
 jq -e --arg origin "$ORIGIN" --arg p "$P" '.url == "\($origin)/spaces/\($p)/pulls/\(.number)" and .state == "draft" and .kind == "user"' "$EVIDENCE/mcp-pr-create.out"
 jq -e --arg repo "$P" '.tool == "pr_create" and .repo == $repo and .outcome == "ok"' "$EVIDENCE/mcp-pr-create.event.json"
+$V mcp mcp-pr-create-reused pr_create "{\"repo\":\"$O/personal\",\"title\":\"Other change\",\"idempotency_key\":\"$KEY\"}"
+test $? -eq 1
+jq -e '.code == "CONFLICT" and (.message | contains("Idempotency-Key"))' "$EVIDENCE/mcp-pr-create-reused.out"
 ```
 
-Pass when every command exits 0, the CLI view equals the MCP result without `url`, the retry
+Pass when every command exits 0 except the reused key, the CLI view equals the MCP result without `url`, the retry
 with the same key returns an identical pull request (same `id` and `number`), the `url` is
-the Personal Space pull request address, and the event carries the resolved Space ID.
+the Personal Space pull request address, and the event carries the resolved Space ID. The same key with a different
+title is a new operation: it exits 1 with `CONFLICT` and creates nothing.
 
 **MP2. Pull request view by number.**
 
@@ -1059,10 +1074,10 @@ Pass when the extension declares ten static Skills, the resource entry points ma
 $V mcp-instructions mcp-instructions
 $V mcp-instructions --protocol 2025-11-25 mcp-instructions-legacy
 diff "$EVIDENCE/mcp-instructions.out" "$EVIDENCE/mcp-instructions-legacy.out"
-jq -e '.instructions | contains("pull request") and contains("pr_create") and contains("pr_ready") and contains("api_find") and contains("skills_read") and contains("review") and contains("Leave merging")' "$EVIDENCE/mcp-instructions.out"
+jq -e '.instructions | contains("pull request") and contains("pr_create") and contains("pr_ready") and contains("api_find") and contains("skills_read") and contains("review") and contains("Leave merging") and contains("Generate a new random value, such as a UUID, for each new operation.")' "$EVIDENCE/mcp-instructions.out"
 ```
 
-Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, hand over the review link, leave merging to the user).
+Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, hand over the review link, leave merging to the user) and tell the agent to generate a new idempotency key for each new operation.
 
 **MR7. Truncation with cursors.** `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` paging and `workspace-result-too-large` are covered by the gateway tests.
 
@@ -1850,6 +1865,7 @@ test $? -eq 1
 jq -e '.code == "workspace-executor-unavailable"' "$EVIDENCE/mx-executor-stopped.out"
 docker start "$MX_CONTAINER"
 trap - EXIT
+until [ "$(docker inspect -f '{{.State.Health.Status}}' "$MX_CONTAINER")" = healthy ]; do sleep 1; done
 ```
 
 Pass when the gateway returns `workspace-executor-unavailable` and the executor restarts.
@@ -1874,7 +1890,7 @@ agent-browser screenshot "$EVIDENCE/mx-pull-request.png"
 
 Pass when the screenshot shows Region, Total, North and 42 in the pull request's Sheet.
 
-**MX5. Script errors match CLI text.**
+**MX5. Script errors match CLI text.** Run right after MX3: its executor restart makes this call `cold_start`.
 
 ```bash
 $V mcp mx-script-draft pr_ready "$(jq -nc --arg repo "$O/personal" --arg number "$MX_W" '{repo:$repo,number:$number,undo:true}')"
@@ -1903,20 +1919,40 @@ jq -en --slurpfile before "$EVIDENCE/mx-large-before.out" --slurpfile after "$EV
 Pass when the Sheet counter advances exactly once and the committed result has no retry hint.
 Credential replacement near expiry is covered by automated Client Core and MCP worker tests.
 
+**MX16. Inspect input errors in MCP words.**
+
+```bash
+mx_inspect() { $V mcp "mx-inspect-$1" inspect "$(jq -c --arg worktree "$MX_W" --arg unit "$MX_U" '. + {worktree:$worktree,unit:$unit}' <<< "$2")"; test $? -eq 1; }
+mx_inspect no-worksheet '{"target":"range","selectors":["A1:B2"]}'
+mx_inspect index-zero '{"target":"range","selectors":["A1:B2"],"worksheet":"index:0"}'
+mx_inspect not-range '{"target":"workbook","worksheet":"index:1"}'
+jq -e '.code == "workspace-argument-invalid" and .message == "range requires the worksheet argument (id:<id>, name:<name> or index:N)"' "$EVIDENCE/mx-inspect-no-worksheet.out"
+jq -e '.message == "Invalid index \"0\"; indices start at 1"' "$EVIDENCE/mx-inspect-index-zero.out"
+jq -e '.message == "worksheet is only valid when target is range, not workbook"' "$EVIDENCE/mx-inspect-not-range.out"
+$V mcp mx-inspect-no-scope inspect "$(jq -nc --arg unit "$MX_U" '{unit:$unit,target:"workbook"}')"
+test $? -eq 1
+jq -e '.code == "workspace-inspect-scope-required"' "$EVIDENCE/mx-inspect-no-scope.out"
+jq -e '.outcome == "tool_error" and .error_code == "workspace-argument-invalid"' "$EVIDENCE/mx-inspect-no-worksheet.event.json"
+```
+
+Pass when each call exits 1 with the message above, none names a CLI flag (`--worksheet`) or the CLI, and the event
+records the tool error. The CLI keeps its own wording for the same input.
+
 **MF1. Stage and publish a Blob.** Uses the Team Space from M4.
 
 ```bash
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 MF_SPACE=$(jq -r '.id' "$EVIDENCE/mcp-repo-verify-team.out")
 printf 'gateway upload\n' > "$EVIDENCE/mf-original.txt"
 MF_SIZE=$(wc -c < "$EVIDENCE/mf-original.txt" | tr -d ' ')
 $V mcp mf-reserve file_upload_create "$(jq -nc --argjson size "$MF_SIZE" '{purpose:"blob",file_name:"original.txt",size:$size,media_type:"text/plain"}')"
 MF_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-reserve.out")
 node .agents/skills/verify-uvw/bin/mcp-file.mjs put "$EVIDENCE/mf-reserve.out" "$EVIDENCE/mf-original.txt"
-$V mcp --toolsets files --expect-event '.executor == "none" and .cost.upload_bytes > 0' mf-publish blob_upload "$(jq -nc --arg upload "$MF_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-publish-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,name:"gateway.txt",idempotency_key:$key}')"
+$V mcp --toolsets files --expect-event '.executor == "none" and .cost.upload_bytes > 0' mf-publish blob_upload "$(jq -nc --arg upload "$MF_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-publish-$MF_KEY" '{upload_id:$upload,space:$space,name:"gateway.txt",idempotency_key:$key}')"
 MF_RESOURCE=$(jq -r '.upload.resourceId' "$EVIDENCE/mf-publish.out")
 $V cli mf-get-cli blob get "$MF_RESOURCE" --json
 diff <(jq -S '.upload | {node:(.node | del(.url)),resource}' "$EVIDENCE/mf-publish.out") <(jq -S '.' "$EVIDENCE/mf-get-cli.out")
-$V mcp --toolsets files mf-publish-retry blob_upload "$(jq -nc --arg upload "$MF_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-publish-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,name:"gateway.txt",idempotency_key:$key}')"
+$V mcp --toolsets files mf-publish-retry blob_upload "$(jq -nc --arg upload "$MF_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-publish-$MF_KEY" '{upload_id:$upload,space:$space,name:"gateway.txt",idempotency_key:$key}')"
 diff "$EVIDENCE/mf-publish.out" "$EVIDENCE/mf-publish-retry.out"
 $V mcp --toolsets files --expect-event '.executor == "none" and .cost.export_bytes > 0' mf-download blob_download "$(jq -nc --arg resource "$MF_RESOURCE" '{resource:$resource}')"
 node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-download.out" "$EVIDENCE/mf-downloaded.txt"
@@ -1928,13 +1964,14 @@ Pass when upload and retry return the same Resource, CLI metadata matches, downl
 **MF2. Replace a Blob with its ETag.**
 
 ```bash
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 printf 'replacement bytes\n' > "$EVIDENCE/mf-replacement.txt"
 MF_NEW_SIZE=$(wc -c < "$EVIDENCE/mf-replacement.txt" | tr -d ' ')
 $V mcp mf-replace-reserve file_upload_create "$(jq -nc --argjson size "$MF_NEW_SIZE" '{purpose:"blob",file_name:"replacement.txt",size:$size,media_type:"text/plain"}')"
 MF_REPLACE_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-replace-reserve.out")
 node .agents/skills/verify-uvw/bin/mcp-file.mjs put "$EVIDENCE/mf-replace-reserve.out" "$EVIDENCE/mf-replacement.txt"
 MF_ETAG=$(jq -r '.etag' "$EVIDENCE/mf-download.out")
-MF_REPLACE_ARGS=$(jq -nc --arg resource "$MF_RESOURCE" --arg upload "$MF_REPLACE_UPLOAD" --arg etag "$MF_ETAG" --arg key "mf-replace-$VERIFY_UVW_RUN" '{resource:$resource,upload_id:$upload,etag:$etag,idempotency_key:$key}')
+MF_REPLACE_ARGS=$(jq -nc --arg resource "$MF_RESOURCE" --arg upload "$MF_REPLACE_UPLOAD" --arg etag "$MF_ETAG" --arg key "mf-replace-$MF_KEY" '{resource:$resource,upload_id:$upload,etag:$etag,idempotency_key:$key}')
 $V mcp --toolsets files mf-replace blob_replace "$MF_REPLACE_ARGS"
 $V mcp --toolsets files mf-replace-retry blob_replace "$MF_REPLACE_ARGS"
 diff "$EVIDENCE/mf-replace.out" "$EVIDENCE/mf-replace-retry.out"
@@ -1951,6 +1988,7 @@ Pass when replacement retains identity, retries return the same result, the link
 **MF3. Capability and owner boundaries, browser upload.**
 
 ```bash
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-page-reserve file_upload_create '{"purpose":"blob","file_name":"never-render-this-name.txt","media_type":"text/plain"}'
 MF_PAGE=$(jq -r '.upload.page_url' "$EVIDENCE/mf-page-reserve.out")
 curl -fsS -D "$EVIDENCE/mf-page.headers" "$MF_PAGE" > "$EVIDENCE/mf-page.html"
@@ -1967,7 +2005,7 @@ agent-browser click 'button'
 agent-browser wait --text 'Upload complete'
 agent-browser screenshot "$EVIDENCE/mf-upload-complete.png"
 MF_PAGE_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-page-reserve.out")
-$V mcp --toolsets files mf-page-publish blob_upload "$(jq -nc --arg upload "$MF_PAGE_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-page-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
+$V mcp --toolsets files mf-page-publish blob_upload "$(jq -nc --arg upload "$MF_PAGE_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-page-$MF_KEY" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
 $V mcp --toolsets files mf-page-download blob_download "$(jq -nc --arg resource "$(jq -r '.upload.resourceId' "$EVIDENCE/mf-page-publish.out")" '{resource:$resource}')"
 node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-page-download.out" "$EVIDENCE/mf-page-downloaded.txt"
 cmp "$EVIDENCE/mf-original.txt" "$EVIDENCE/mf-page-downloaded.txt"
@@ -2000,9 +2038,10 @@ Pass when the wrong token is refused, the page has a strict CSP and no supplied 
 **MF4. Download a Worktree image Asset.**
 
 ```bash
-$V mcp mf-asset-pr pr_create "$(jq -nc --arg repo "$O/personal" --arg key "mf-asset-pr-$VERIFY_UVW_RUN" '{repo:$repo,title:"Asset transfer",idempotency_key:$key}')"
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
+$V mcp mf-asset-pr pr_create "$(jq -nc --arg repo "$O/personal" --arg key "mf-asset-pr-$MF_KEY" '{repo:$repo,title:"Asset transfer",idempotency_key:$key}')"
 MF_WORKTREE=$(jq -r '.id' "$EVIDENCE/mf-asset-pr.out")
-$V mcp mf-asset-unit unit_create "$(jq -nc --arg worktree "$MF_WORKTREE" --arg space "$MX_SPACE" --arg key "mf-asset-unit-$VERIFY_UVW_RUN" '{worktree:$worktree,space:$space,type:"sheet",name:"Image asset",idempotency_key:$key}')"
+$V mcp mf-asset-unit unit_create "$(jq -nc --arg worktree "$MF_WORKTREE" --arg space "$MX_SPACE" --arg key "mf-asset-unit-$MF_KEY" '{worktree:$worktree,space:$space,type:"sheet",name:"Image asset",idempotency_key:$key}')"
 MF_UNIT=$(jq -r '.unit.unitId' "$EVIDENCE/mf-asset-unit.out")
 node --input-type=module - "$ORIGIN" "$RUN" "$MF_WORKTREE" "$MF_UNIT" "$EVIDENCE" <<'JS'
 import assert from 'node:assert/strict';
@@ -2028,9 +2067,10 @@ Pass when MCP, public upload and CLI return identical image bytes, with the down
 **MF5. Pending uploads and purpose validation.**
 
 ```bash
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 $V mcp mf-pending-reserve file_upload_create '{"purpose":"blob","file_name":"pending.txt","size":3,"media_type":"text/plain"}'
 MF_PENDING=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-pending-reserve.out")
-$V mcp --toolsets files mf-pending-publish blob_upload "$(jq -nc --arg upload "$MF_PENDING" --arg space "$MF_SPACE" --arg key "mf-pending-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,name:"pending.txt",idempotency_key:$key}')"
+$V mcp --toolsets files mf-pending-publish blob_upload "$(jq -nc --arg upload "$MF_PENDING" --arg space "$MF_SPACE" --arg key "mf-pending-$MF_KEY" '{upload_id:$upload,space:$space,name:"pending.txt",idempotency_key:$key}')"
 test $? -eq 1
 jq -e '.code == "workspace-upload-not-ready"' "$EVIDENCE/mf-pending-publish.out"
 $V mcp mf-invalid-purpose file_upload_create '{"purpose":"office-import","file_name":"invalid.txt","size":3,"media_type":"text/plain"}'
@@ -2068,13 +2108,14 @@ Pass when over-limit files leave an upload retryable, smaller files are accepted
 **MF7. Binary XLSX and PNG round trips.** Generates a valid 50,000-row OpenXML workbook larger than 4 MiB and a PNG. Python 3 is needed for standard-library fixture generation.
 
 ```bash
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 python3 .agents/skills/verify-uvw/bin/file-fixtures.py "$EVIDENCE" > "$EVIDENCE/mf-binary-fixtures.tsv"
 for MF_EXT in xlsx png; do
   if [ "$MF_EXT" = xlsx ]; then MF_TYPE=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet; else MF_TYPE=image/png; fi
   $V mcp "mf-binary-$MF_EXT-reserve" file_upload_create "$(jq -nc --arg name "mf-binary.$MF_EXT" --arg type "$MF_TYPE" '{purpose:"blob",file_name:$name,media_type:$type}')"
   MF_BINARY_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-binary-$MF_EXT-reserve.out")
   node .agents/skills/verify-uvw/bin/mcp-file.mjs put "$EVIDENCE/mf-binary-$MF_EXT-reserve.out" "$EVIDENCE/mf-binary.$MF_EXT"
-  $V mcp --toolsets files "mf-binary-$MF_EXT-publish" blob_upload "$(jq -nc --arg upload "$MF_BINARY_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-binary-$MF_EXT-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
+  $V mcp --toolsets files "mf-binary-$MF_EXT-publish" blob_upload "$(jq -nc --arg upload "$MF_BINARY_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-binary-$MF_EXT-$MF_KEY" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
   MF_BINARY_RESOURCE=$(jq -r '.upload.resourceId' "$EVIDENCE/mf-binary-$MF_EXT-publish.out")
   $V mcp --toolsets files "mf-binary-$MF_EXT-download" blob_download "$(jq -nc --arg resource "$MF_BINARY_RESOURCE" '{resource:$resource}')"
   node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-binary-$MF_EXT-download.out" "$EVIDENCE/mf-binary-downloaded.$MF_EXT"
@@ -2094,13 +2135,14 @@ Pass when both hashes match after PUT, publication and download, default Blob na
 **MF8. Normalized binary upload paths.** Needs the MF7 PNG and the Team Space from M4.
 
 ```bash
+MF_KEY=$(uuidgen | tr -d -)  # one new key per journey; its retries reuse it
 for MF_PATH in canonical dot; do
   $V mcp "mf-path-$MF_PATH-reserve" file_upload_create '{"purpose":"blob","file_name":"path.png","media_type":"image/png"}'
   MF_PATH_URL=$(jq -r '.upload.upload_url' "$EVIDENCE/mf-path-$MF_PATH-reserve.out")
   if [ "$MF_PATH" = dot ]; then MF_PATH_URL=$(printf '%s' "$MF_PATH_URL" | sed 's@/mcp/files/@/mcp/./files/@'); fi
   curl --fail --silent --show-error --path-as-is -X PUT --data-binary "@$EVIDENCE/mf-binary.png" "$MF_PATH_URL" > "$EVIDENCE/mf-path-$MF_PATH-put.out"
   MF_PATH_UPLOAD=$(jq -r '.upload.upload_id' "$EVIDENCE/mf-path-$MF_PATH-reserve.out")
-  $V mcp --toolsets files "mf-path-$MF_PATH-publish" blob_upload "$(jq -nc --arg upload "$MF_PATH_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-path-$MF_PATH-$VERIFY_UVW_RUN" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
+  $V mcp --toolsets files "mf-path-$MF_PATH-publish" blob_upload "$(jq -nc --arg upload "$MF_PATH_UPLOAD" --arg space "$MF_SPACE" --arg key "mf-path-$MF_PATH-$MF_KEY" '{upload_id:$upload,space:$space,idempotency_key:$key}')"
   MF_PATH_RESOURCE=$(jq -r '.upload.resourceId' "$EVIDENCE/mf-path-$MF_PATH-publish.out")
   $V mcp --toolsets files "mf-path-$MF_PATH-download" blob_download "$(jq -nc --arg resource "$MF_PATH_RESOURCE" '{resource:$resource}')"
   node .agents/skills/verify-uvw/bin/mcp-file.mjs get "$EVIDENCE/mf-path-$MF_PATH-download.out" "$EVIDENCE/mf-path-$MF_PATH.png"
@@ -2151,22 +2193,6 @@ node .agents/skills/verify-uvw/bin/mcp-office-roundtrip.mjs docx
 Pass with the same upload, import, inspection and export checks for a Doc containing text,
 using a reserved size upper bound larger than the actual file.
 The same base binary-upload defect may block this journey before import.
-
-**M12. Cleanup.**
-
-```bash
-for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-before.txt"
-$V down | tee "$EVIDENCE/mcp-down.txt"
-for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-after.txt"
-diff "$EVIDENCE/mcp-dev-before.txt" "$EVIDENCE/mcp-dev-after.txt"
-docker ps -a --filter "label=com.docker.compose.project=$MCP_PROJECT"
-docker network ls --filter "label=com.docker.compose.project=$MCP_PROJECT"
-docker volume ls --filter "label=com.docker.compose.project=$MCP_PROJECT"
-docker image ls "$MCP_IMAGE"
-```
-
-Pass when `down` prints `ok    MCP resources removed`, resource listings have no entries,
-and developer PIDs are unchanged or absent both times. Evidence and logs survive.
 
 **MH1. HTML View validation parity over a populated trunk Sheet.**
 
@@ -2241,11 +2267,11 @@ The renderer starts with the other roles and sits alone with the executor on an 
 (MR10) and real-font `compile_svg` (MV2) call it from a tool; drive the other operations from the executor container with `renderer-call`. Use a parallel run id when another run is active.
 
 ```bash
-V=.agents/skills/verify-uvw/bin
-VERIFY_UVW_MCP=1 $V/verify-uvw doctor            # ends with the renderer checks
-node $V/renderer-proof.mjs screenshot | $V/verify-uvw renderer-call mr9-shot screenshot
-node $V/renderer-proof.mjs printPdf | $V/verify-uvw renderer-call mr9-pdf printPdf
-node $V/renderer-proof.mjs measureText | $V/verify-uvw renderer-call mr9-measure measureText
+B=.agents/skills/verify-uvw/bin
+$V doctor            # ends with the renderer checks
+node $B/renderer-proof.mjs screenshot | $V renderer-call mr9-shot screenshot
+node $B/renderer-proof.mjs printPdf | $V renderer-call mr9-pdf printPdf
+node $B/renderer-proof.mjs measureText | $V renderer-call mr9-measure measureText
 ```
 
 Pass when:
@@ -2311,7 +2337,7 @@ $V cli mr10-pr2 pr create -R "$O/personal" -t 'Screenshot deck' --json
 MR10_W2=$(jq -r .id "$EVIDENCE/mr10-pr2.out")
 $V cli mr10-deck unit create --worktree "$MR10_W2" --space "$MR10_SPACE" --type slide --name 'Shot deck' --json
 MR10_D=$(jq -r .unit.unitId "$EVIDENCE/mr10-deck.out")
-for n in 1 2; do (cd "$FIX/deck" && $V cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json); done
+for n in 1 2; do (V=$(realpath "$V") && cd "$FIX/deck" && $V cli mr10-svg$n compile-svg "$PWD/page$n.svg" --page $n --apply --worktree "$MR10_W2" --unit "$MR10_D" --json); done
 $V mcp --expect-event '.cost.render_pages == 2 and .cost.export_bytes > 1048576' mr10-deck screenshot "$(jq -nc --arg u "$MR10_D" --arg w "$MR10_W2" '{unit:$u,worktree:$w}')"
 jq -e '[.content[].type] == ["text"]' "$EVIDENCE/mr10-deck.result.json"
 jq -e '.images | length == 2 and all(.[]; .download.url != null and .size > 1048576 / 2)' "$EVIDENCE/mr10-deck.out"
@@ -2526,25 +2552,6 @@ Pass when both opencode runs exit 0 and:
 - The model's tool choices are not fixed. If it explores resources or skills first, only its `screenshot` calls count. Rerun the section when a prompt
   gets no `screenshot` call.
 
-## Gotchas
-
-- MCP is opt-in at `up`. Setting `VERIFY_UVW_MCP` later does not change an existing run.
-- Only macOS Docker Desktop is supported. The container accesses the loopback Server
-  through `host.docker.internal`, bypassing Vite's host checks.
-- `user` gets a separate session from the public CLI login endpoint. It never reads
-  uvw's private session file. Every call to `user` creates a fresh opencode directory
-  because opencode caches project configuration by directory.
-- Credentials remain under `home/`. Never paste their values into evidence or reports.
-- The image digest includes tracked and non-ignored untracked build inputs. Timestamp
-  changes alone do not affect it. A content change requires `down`, then `up`.
-- Run negative journeys without `set -e`, or capture their expected nonzero status in
-  an `if` statement. Exit 5 indicates invalid evidence even if the tool returned a result.
-- Run M11 through the background opencode service. Do not use `--standalone`, start
-  `opencode serve`, or use `--auto`. This adds an entry to local opencode session history.
-- Run `down` after failed launches too. It only removes this run's project resources
-  and image tag, preserves BuildKit cache, and deletes disposable credentials.
-
-
 **MX9. Office import idempotent retry.** Repeat the same upload and key after a delay and verify the Worktree still has one imported Unit.
 
 ```bash
@@ -2647,7 +2654,114 @@ Pass when every write commits, every committed value is read back at its written
 `resilience-harsh.json` records request outcomes, read latency p50 and p95 in milliseconds, and reruns.
 Latency includes MCP connection, queue wait, the tool call, and client close on the local Docker stack.
 
-## Executor capacity benchmark
+**MT1. Typst bundle compilation and retry-safe Doc creation.**
+
+```bash
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst
+```
+
+Pass when a ZIP containing a heading, paragraph, table and image is uploaded by PUT,
+compile-only JavaScript and diagnostics match the CLI, native Doc inspection reads back
+its content, and a same-key retry returns the same single Unit. All MCP calls go through
+`mcp-call.mjs`. Evidence uses the `mcp-typst-*` prefix and `compiler-fixture/`.
+
+**MV1. SVG compilation and Slide content commit.**
+
+```bash
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg
+```
+
+Pass when estimated SVG compilation matches the CLI, retains its estimation lint, commits page 1
+of a new Slide, and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There
+is no SVG retry key; an unknown write outcome requires inspection before another apply.
+
+**MV2. Real-font SVG measurement through the renderer.** Run it after `doctor` passes, with the
+`eval "$($V env)"` variables set. The first measurement after the renderer starts launches
+Chromium (6 s measured with another stack running, and above the 9 s budget once), so a cold
+first call can return the retryable `workspace-renderer-timeout`; rerun it.
+
+```bash
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg-real
+```
+
+Pass when, for one SVG with Latin and Chinese text, left, centred and right-anchored lines:
+
+- `compile_svg` without `estimate_text_size` reports `textMeasure: "univer-render-runtime"` and no
+  estimation lint, and has the same keys and the same code structure as `uvw compile-svg` on the
+  file (`mcp-svg-real-compile.out` against `mcp-svg-real-cli.out`, compared with numbers masked).
+  Numeric metrics may differ because the CLI measures with the host browser's fonts; diff the two
+  files and record any differences. With `estimate_text_size: true` the mode is `builtin-estimate`
+  with the estimation lint and different box widths.
+- Apply into a Slide in a Worktree commits one revision and `inspect` reads `季度回顾`.
+- `mcp-svg-real-shot.image-1.png` (MCP `screenshot` of that page) shows every line inside its box
+  without overflow or clipping. Look at it.
+- The journey prints the wall time of a 55-line compile (`mcp-svg-real-50.wall-ms`, one renderer
+  RPC per line, warm renderer) and the usage event stays `executor: none` with zero render cost.
+- Stop with `$V down` for the run, even on failure.
+
+### Typst job verification
+
+After the default-budget journeys, run `down` and start a fresh stack with
+`MCP_SYNC_BUDGET_MS=1 VERIFY_UVW_MCP=1 $V up`, then `user` and `doctor`.
+Keep those commands and the journey in the same long-lived shell.
+
+```bash
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst-jobs
+```
+
+Pass when apply returns a running job, `job_get` returns the committed Doc,
+the same-key retry returns that job or its original result, and `unit_list`
+has exactly one new Unit. Inspect the native Doc to read back its text.
+Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.
+
+### MB. Deployment and per-account tools
+
+Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
+
+MB validates the G0 shape with a gateway and one shared executor, no renderer, and PAT authentication. Start `up` in a persistent shell so Workspace and Vite survive between tool calls. Choose unused ports and a unique run ID; always keep that ID for subsequent commands.
+
+```bash
+V="$PWD/.agents/skills/verify-uvw/bin/verify-uvw"
+export VERIFY_UVW_RUN=mb-g0 VERIFY_UVW_MCP=1
+export VERIFY_UVW_SERVER_PORT=3950 VERIFY_UVW_WEB_PORT=6001 VERIFY_UVW_MCP_PORT=3955
+VERIFY_UVW_MCP_RENDERER=0 VERIFY_UVW_MCP_PRODUCTION=1 $V up
+$V user
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/mcp-availability.mjs
+$V down
+```
+
+The script replaces the executor allowlist with the run user's ID through `$V mcp-allow-users <user-id>`. It checks the following and saves `mb.json` plus per-call evidence under `$EVIDENCE`:
+
+- MB1 compares ordered `tools/list` names for `core`, `files`, `admin`, `core,files`, `core,admin`, `files,admin` and `all` with literal expected lists in the script. These are the full lists minus `screenshot`, `print_pdf` and `lint`.
+- MB2 checks instructions for all seven connections and rejects those three hidden tool names.
+- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 40 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
+- MB4 runs MX1 through MX3 above with PAT authentication. It compares MCP and CLI write/readback results, checks cold/warm usage events, verifies the Ready error, runs doctor, and stops only this run's executor to check the unavailable error. A `finally` restarts it even after a failed assertion.
+- MB5 checks `/readyz` for 200. It stops the executor, then uses `$V mcp-gateway-restart` to recreate only the gateway and clear its remembered capabilities. `/readyz` must return 503 naming the `executor` check, then 200 within ten seconds after the executor restarts. Stopping an executor after successful discovery alone does not make the gateway unready, because HTTP tools remain usable. The optional Workspace stop/restart check is recorded as not run because `verify-uvw` has no independent server restart command. A base older than `/readyz` (#276) returns 404 and records MB5 as `not_run` in `mb.json`; it does not claim readiness passed. Other unexpected statuses fail the script.
+
+Successful output is `PASS MB1` through `PASS MB5`. `NOT RUN MB5 /readyz returned 404` means the base predates `/readyz`. Repeated runs create new PRs and a new restricted user inside this disposable Workspace. `down` removes all of them with the run's data.
+
+To check the `*` allowlist on the same stack before `down`, shut the run user out, then open the executor to everyone:
+
+```bash
+$V mcp-allow-users someone-else
+$V mcp-tools --toolsets all mb-star-before
+$V mcp-allow-users '*'
+$V mcp-tools --toolsets all mb-star-after
+jq -e 'map(.name) | index("execute") == null and length == 40' "$EVIDENCE/mb-star-before.out"
+jq -e 'map(.name) | index("execute") != null and length == 51' "$EVIDENCE/mb-star-after.out"
+$V doctor
+```
+
+Pass when the run user, outside an explicit allowlist, gets the 40 non-executor tools, then all 51 renderer-less tools with
+`*`, and doctor reports the allowlist matches the run. Running `$V user` again keeps `*`.
+
+`VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.
+
+Journeys with development session authentication run only in the default development mode. Search this file for `--auth dev` and session-based MCP clients before selecting journeys for production. MF4's direct second-user client uses a Workspace session. Renderer journeys, including screenshots, PDF, lint and precise text measurement, require the renderer enabled.
+
+### Executor capacity benchmark
 
 Use a quiet local Docker Desktop machine. This benchmark creates draft pull requests
 and Sheets in the disposable run. It verifies every reported commit through `inspect`
@@ -2716,68 +2830,7 @@ as expected for each microbenchmark call, the expected live-worker population in
 RSS sample, and readback of every confirmed write. The JSON retains partial evidence
 and a failure message if one of those checks fails.
 
-**MT1. Typst bundle compilation and retry-safe Doc creation.**
-
-```bash
-node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst
-```
-
-Pass when a ZIP containing a heading, paragraph, table and image is uploaded by PUT,
-compile-only JavaScript and diagnostics match the CLI, native Doc inspection reads back
-its content, and a same-key retry returns the same single Unit. All MCP calls go through
-`mcp-call.mjs`. Evidence uses the `mcp-typst-*` prefix and `compiler-fixture/`.
-
-**MV1. SVG compilation and Slide content commit.**
-
-```bash
-node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg
-```
-
-Pass when estimated SVG compilation matches the CLI, retains its estimation lint, commits page 1
-of a new Slide, and inspection reads the diagram text. Evidence uses the `mcp-svg-*` prefix. There
-is no SVG retry key; an unknown write outcome requires inspection before another apply.
-
-**MV2. Real-font SVG measurement through the renderer.** Run it after `doctor` passes, with the
-`eval "$($V env)"` variables set. The first measurement after the renderer starts launches
-Chromium (6 s measured with another stack running, and above the 9 s budget once), so a cold
-first call can return the retryable `workspace-renderer-timeout`; rerun it.
-
-```bash
-node .agents/skills/verify-uvw/bin/compiler-journeys.mjs svg-real
-```
-
-Pass when, for one SVG with Latin and Chinese text, left, centred and right-anchored lines:
-
-- `compile_svg` without `estimate_text_size` reports `textMeasure: "univer-render-runtime"` and no
-  estimation lint, and has the same keys and the same code structure as `uvw compile-svg` on the
-  file (`mcp-svg-real-compile.out` against `mcp-svg-real-cli.out`, compared with numbers masked).
-  Numeric metrics may differ because the CLI measures with the host browser's fonts; diff the two
-  files and record any differences. With `estimate_text_size: true` the mode is `builtin-estimate`
-  with the estimation lint and different box widths.
-- Apply into a Slide in a Worktree commits one revision and `inspect` reads `季度回顾`.
-- `mcp-svg-real-shot.image-1.png` (MCP `screenshot` of that page) shows every line inside its box
-  without overflow or clipping. Look at it.
-- The journey prints the wall time of a 55-line compile (`mcp-svg-real-50.wall-ms`, one renderer
-  RPC per line, warm renderer) and the usage event stays `executor: none` with zero render cost.
-- Stop with `$V down` for the run, even on failure.
-
-### Typst job verification
-
-After the default-budget journeys, run `down` and start a fresh stack with
-`MCP_SYNC_BUDGET_MS=1 VERIFY_UVW_MCP=1 $V up`, then `user` and `doctor`.
-Keep those commands and the journey in the same long-lived shell.
-
-```bash
-eval "$($V env)"
-node .agents/skills/verify-uvw/bin/compiler-journeys.mjs typst-jobs
-```
-
-Pass when apply returns a running job, `job_get` returns the committed Doc,
-the same-key retry returns that job or its original result, and `unit_list`
-has exactly one new Unit. Inspect the native Doc to read back its text.
-Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.
-
-## Renderer capacity benchmark
+### Renderer capacity benchmark
 
 Measures the renderer role on a disposable local Docker Desktop stack: latency per operation (cold and warm), throughput against
 `RENDERER_MAX_RUNTIMES`, memory per runtime, and memory growth when one runtime serves many renders. It calls the renderer RPC from inside
@@ -2823,34 +2876,36 @@ process that maps it, PSS splits it, and cgroup anon is what the container is ch
 peak is the largest sample). A runtime's tree is its Chromium processes; the Node process is shared by all runtimes.
 Summarize an existing JSON without a stack: `python3 .agents/skills/verify-uvw/bin/renderer-bench-summary.py <json> --markdown`.
 
-
-## MB. Deployment and per-account tools
-
-Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
-
-MB validates the G0 shape with a gateway and one shared executor, no renderer, and PAT authentication. Start `up` in a persistent shell so Workspace and Vite survive between tool calls. Choose unused ports and a unique run ID; always keep that ID for subsequent commands.
+**M12. Cleanup.**
 
 ```bash
-V="$PWD/.agents/skills/verify-uvw/bin/verify-uvw"
-export VERIFY_UVW_RUN=mb-g0 VERIFY_UVW_MCP=1
-export VERIFY_UVW_SERVER_PORT=3950 VERIFY_UVW_WEB_PORT=6001 VERIFY_UVW_MCP_PORT=3955
-VERIFY_UVW_MCP_RENDERER=0 VERIFY_UVW_MCP_PRODUCTION=1 $V up
-$V user
-eval "$($V env)"
-node .agents/skills/verify-uvw/bin/mcp-availability.mjs
-$V down
+for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-before.txt"
+$V down | tee "$EVIDENCE/mcp-down.txt"
+for port in 3020 5173; do lsof -nP -iTCP:"$port" -sTCP:LISTEN -t || true; done > "$EVIDENCE/mcp-dev-after.txt"
+diff "$EVIDENCE/mcp-dev-before.txt" "$EVIDENCE/mcp-dev-after.txt"
+docker ps -a --filter "label=com.docker.compose.project=$MCP_PROJECT"
+docker network ls --filter "label=com.docker.compose.project=$MCP_PROJECT"
+docker volume ls --filter "label=com.docker.compose.project=$MCP_PROJECT"
+docker image ls "$MCP_IMAGE"
 ```
 
-The script replaces the executor allowlist with the run user's ID through `$V mcp-allow-users <user-id>`. It checks the following and saves `mb.json` plus per-call evidence under `$EVIDENCE`:
+Pass when `down` prints `ok    MCP resources removed`, resource listings have no entries,
+and developer PIDs are unchanged or absent both times. Evidence and logs survive.
 
-- MB1 compares ordered `tools/list` names for `core`, `files`, `admin`, `core,files`, `core,admin`, `files,admin` and `all` with literal expected lists in the script. These are the full lists minus `screenshot`, `print_pdf` and `lint`.
-- MB2 checks instructions for all seven connections and rejects those three hidden tool names.
-- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 40 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
-- MB4 runs MX1 through MX3 above with PAT authentication. It compares MCP and CLI write/readback results, checks cold/warm usage events, verifies the Ready error, runs doctor, and stops only this run's executor to check the unavailable error. A `finally` restarts it even after a failed assertion.
-- MB5 checks `/readyz` for 200. It stops the executor, then uses `$V mcp-gateway-restart` to recreate only the gateway and clear its remembered capabilities. `/readyz` must return 503 naming the `executor` check, then 200 within ten seconds after the executor restarts. Stopping an executor after successful discovery alone does not make the gateway unready, because HTTP tools remain usable. The optional Workspace stop/restart check is recorded as not run because `verify-uvw` has no independent server restart command. A base returning 404 records MB5 as `not_run` in `mb.json`; it does not claim readiness passed. Other unexpected statuses fail the script.
+## Gotchas
 
-Successful output is `PASS MB1` through `PASS MB5`, or `NOT RUN MB5 /readyz returned 404` for the sibling-PR dependency. Repeated runs create new PRs and a new restricted user inside this disposable Workspace. `down` removes all of them with the run's data.
-
-`VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.
-
-Journeys with development session authentication run only in the default development mode. Search this file for `--auth dev` and session-based MCP clients before selecting journeys for production. MF4's direct second-user client uses a Workspace session. Renderer journeys, including screenshots, PDF, lint and precise text measurement, require the renderer enabled.
+- MCP is opt-in at `up`. Setting `VERIFY_UVW_MCP` later does not change an existing run.
+- Only macOS Docker Desktop is supported. The container accesses the loopback Server
+  through `host.docker.internal`, bypassing Vite's host checks.
+- `user` gets a separate session from the public CLI login endpoint. It never reads
+  uvw's private session file. Every call to `user` creates a fresh opencode directory
+  because opencode caches project configuration by directory.
+- Credentials remain under `home/`. Never paste their values into evidence or reports.
+- The image digest includes tracked and non-ignored untracked build inputs. Timestamp
+  changes alone do not affect it. A content change requires `down`, then `up`.
+- Run negative journeys without `set -e`, or capture their expected nonzero status in
+  an `if` statement. Exit 5 indicates invalid evidence even if the tool returned a result.
+- Run M11 through the background opencode service. Do not use `--standalone`, start
+  `opencode serve`, or use `--auto`. This adds an entry to local opencode session history.
+- Run `down` after failed launches too. It only removes this run's project resources
+  and image tag, preserves BuildKit cache, and deletes disposable credentials.

@@ -333,9 +333,10 @@ const PROBES = {
     };
     try {
       docker(['network', 'create', '--internal', net]);
-      const executor = await start('executor', ['-e', 'MCP_EXECUTOR_CREDENTIALS=session', '-e', 'WORKSPACE_ORIGIN=http://workspace.invalid']);
+      // `*` passes the G0 allowlist gate, so a refusal comes from the session-grant configuration itself.
+      const executor = await start('executor', ['-e', 'MCP_EXECUTOR_CREDENTIALS=session', '-e', 'MCP_EXECUTOR_ALLOWED_USER_IDS=*', '-e', 'WORKSPACE_ORIGIN=http://workspace.invalid']);
       const renderer = await start('renderer', []);
-      return { ...classifyMg10({ executor, renderer }), data: { settings: 'NODE_ENV=production, MCP_EXECUTOR_CREDENTIALS=session, runc, image default Chromium launch, no published ports, internal network', executor, renderer } };
+      return { ...classifyMg10({ executor, renderer }), data: { settings: 'NODE_ENV=production, MCP_EXECUTOR_CREDENTIALS=session, MCP_EXECUTOR_ALLOWED_USER_IDS=*, runc, image default Chromium launch, no published ports, internal network', executor, renderer } };
     } finally {
       for (const name of names) try { docker(['rm', '-f', name]); } catch { /* already gone */ }
       try { docker(['network', 'rm', net]); } catch { /* already gone */ }

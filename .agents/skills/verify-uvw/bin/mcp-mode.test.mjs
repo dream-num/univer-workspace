@@ -38,10 +38,13 @@ for (const production of [0, 1]) for (const renderer of [0, 1]) {
       assert.equal(captured.env.MCP_RENDERER_TOKEN, renderer ? 'removed' : undefined);
       assert.equal(captured.env.COMPOSE_PROFILES, renderer ? 'renderer,replicas' : 'replicas');
       assert.equal(readFileSync(join(run, 'executor-allowed-user-ids'), 'utf8'), 'user-a,user-b\n');
-      for (const invalid of [[], [''], ['user-a,user-b'], ['user a'], ['$(id)']]) {
+      for (const invalid of [[], [''], ['user-a,user-b'], ['user a'], ['$(id)'], ['*', 'user-a'], ['user-a', '*']]) {
         assert.equal(call(invalid).status, 1);
         assert.equal(readFileSync(join(run, 'executor-allowed-user-ids'), 'utf8'), 'user-a,user-b\n');
       }
+      assert.equal(call(['*']).status, 0);
+      assert.equal(readFileSync(join(run, 'executor-allowed-user-ids'), 'utf8'), '*\n');
+      assert.equal(JSON.parse(readFileSync(capture, 'utf8').trim().split('\n').at(-1)).env.MCP_EXECUTOR_ALLOWED_USER_IDS, '*');
     } finally { rmSync(root, { recursive: true, force: true }); }
   });
 

@@ -98,3 +98,5 @@ Preconditions:
   Proof is the `repo list` readback, not the toast or the redirect.
 - The `Page theme` buttons are named exactly `Wiki` and `Repository`; there is no `(experimental)`
   suffix any more.
+- The Repository top bar also has icon links `Issues` and `Pull requests` beside `Main navigation`, so
+  `find role link --name "Issues"` matches twice, and a `Light`/`Dark` color-scheme button sits before `Account`.

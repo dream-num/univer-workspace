@@ -42,13 +42,15 @@ Preconditions:
   The timeline shows `closed this as completed`, and the button now reads `Reopen issue`.
 - **CLI readback.** Run `$V cli issue-timeline-cli issue view 1 -R $O/verify-team -c --json`.
   The output has state `closed`, a comment with body `Confirmed in browser`, and an event
-  with `kind: "closed"`, `reason: "completed"`.
+  with `type: "event"`, `kind: "closed"` and `payload.reason: "completed"`.
 
 ## Gotchas
 
 - `agent-browser find label "Add a comment" fill …` sets the value without React noticing.
   `Comment` stays disabled, and a later `Close issue` closes without the comment. Click and
   `keyboard type` instead, and confirm `Comment` is enabled in `snapshot -i` first.
+- While the comment box holds text, the close button reads `Close with comment`. It reads `Close issue`
+  only after `Comment` has posted and cleared the box.
 - Issues need a Team Space. `uvw issue create -R <owner>/personal` fails with
   `CONFLICT: Issues are available only in team spaces.`
 - The page's accessibility snapshot does not include comment bodies (`snapshot -c` will not

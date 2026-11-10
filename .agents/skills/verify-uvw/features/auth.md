@@ -12,11 +12,13 @@ in non-interactively with a username and a password piped on stdin.
   `/api/auth/cli/password/login` to create an Agent session, with one retry on
   `/api/auth/password/login` only after HTTP 404 from an older server.
 - `auth-cli-status` shows the signed-in origin and user.
+- `auth-profile-user-id` shows the Workspace user ID in the Profile dialog, with a `Copy user ID` button. This is
+  the ID that `$V mcp-allow-users` takes.
 
 ## How to get to it (user POV)
 
 - Open `http://127.0.0.1:5973/login` (any signed-out route redirects there). Choose
-  `Create account` or stay on `Sign in`.
+  `Create account` or stay on `Password`.
 - Run `uvw auth login --username <name> --password-stdin`, then `uvw auth status`.
 
 ## Driving it with agent-browser and uvw
@@ -48,12 +50,21 @@ Preconditions:
   subject.
 - **Wrong password.** Run `printf wrong-password | $V cli auth-bad auth login --username "verify-$VERIFY_UVW_RUN" --password-stdin`.
   It exits non-zero and `auth status` still reports the previous session.
+- **Profile user ID.** Run `agent-browser find role button click --name "Account"`, then
+  `agent-browser find role menuitem click --name "Profile"`. The dialog `Profile and sign-in methods` shows
+  `User ID: <id>`, equal to `subject.id` from `$V uvw auth status --json`. Run
+  `agent-browser find role button click --name "Copy user ID"`: a `User ID copied.` toast shows. Screenshot
+  `$EVIDENCE/auth-profile-user-id.png`.
 
 ## Gotchas
 
-- `Create account` and `Sign in` each name two buttons. `find role button … --exact` picks
-  the mode tab, not submit, so the form silently stays on `/login`.
+- In sign-up mode `Create account` names both the mode tab and submit. `find role button … --exact` picks
+  the mode tab, not submit, so the form silently stays on `/login`. The other tab is `Password`; only
+  submit is named `Sign in`. An `Email` tab appears only when the server has an email sender, which a
+  verify run never has.
 - `auth status` reports the display name (`Verify <run-id>`), not the username.
 - Registration from curl without `Accept-Language` still names the space
   `<display name> 的个人空间`; the name is fixed server-side, not a locale bug in the run.
-- Browser-approved `uvw auth login` (no `--username`) waits for a human approval in the Browser. MA8 in [the MCP journeys](mcp.md) drives that approval with agent-browser.
+- Browser-approved `uvw auth login` (no `--username`) prints a verification URL and code and exits; after the
+  approval in the Browser, `uvw auth login --complete` finishes it. MA8 in [the MCP journeys](mcp.md) drives that
+  approval with agent-browser.
