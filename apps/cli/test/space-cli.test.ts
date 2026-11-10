@@ -162,6 +162,10 @@ async function handleRequest(
     );
     return;
   }
+  if (request.method === "GET" && request.url === "/api/spaces/space-1") {
+    writeJson(response, 200, { id: "space-1", name: "Personal", type: "personal" });
+    return;
+  }
   if (request.method === "GET" && request.url === "/api/spaces/space-1/nodes") {
     writeJson(response, 200, page([node("node-1", "Quarterly Plan")], "next page"));
     return;

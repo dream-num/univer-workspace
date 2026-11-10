@@ -12,7 +12,7 @@ import {
 /** `-R, --repo <ref>` (shared by every repository-scoped command). */
 export const REPO_OPTION = [
   "-R, --repo <ref>",
-  "repository: owner/slug, owner/personal, a Space ID or a Workspace URL (default: $UVW_REPO)",
+  "repository: owner/slug, owner/personal, a unique bare slug from repo list, a Space ID or a Workspace URL (default: $UVW_REPO)",
 ] as const;
 
 /**
@@ -21,7 +21,7 @@ export const REPO_OPTION = [
  */
 export class RepoContext {
   public constructor(
-    private readonly spaces: Pick<WorkspaceSpaceFeature, "lookup">,
+    private readonly spaces: Pick<WorkspaceSpaceFeature, "lookup" | "get" | "list">,
     private readonly origin: () => Promise<string>,
     private readonly env: NodeJS.ProcessEnv,
   ) {}

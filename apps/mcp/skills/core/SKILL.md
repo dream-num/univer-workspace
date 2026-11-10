@@ -89,8 +89,9 @@ toolset. An executor restriction can hide content tools even with all selected.
 - A Space (repository) contains a visible tree of Nodes. A Team Space is shared;
   access follows membership and role. Its repository name is owner/slug. A Personal
   Space is the connected user's owner/personal and contains personal files.
-  Repository arguments also accept Space IDs or Workspace URLs. Older Team Spaces
-  without slugs use their Space ID.
+  Repository arguments also accept a bare slug that uniquely matches `repo_list`,
+  Space IDs, or Workspace URLs. Unknown or ambiguous slugs require owner/slug;
+  the error lists matching candidates. Older Team Spaces without slugs use their Space ID.
 - A Node is a position identified by nodeId. Every Node may have children, even a
   Resource Node. An organizational Node has resource null.
 - A Resource is product content attached to a Node. A Univer Resource has kind

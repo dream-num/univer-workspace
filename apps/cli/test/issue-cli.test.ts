@@ -43,7 +43,9 @@ describe("Workspace CLI Issue commands", () => {
           return;
         }
         requests.push({ body: text ? JSON.parse(text) : undefined, method: request.method ?? "GET", path });
-        if (path.endsWith("/comments")) {
+        if (path === "/api/spaces/s1") {
+          respond(200, { id: "s1", name: "Team", type: "team" });
+        } else if (path.endsWith("/comments")) {
           respond(201, { author: user, body: "closing note\n", createdAt: "2026-09-29T00:00:00.000Z", id: "c1", updatedAt: "2026-09-29T00:00:00.000Z" });
         } else if (path.startsWith("/api/spaces/s1/issues?")) {
           respond(200, { counts: { closed: 0, open: 0 }, items: [issue("open")], nextCursor: null });
@@ -76,9 +78,11 @@ describe("Workspace CLI Issue commands", () => {
       const rejected = await runCli(["issue", "view", "abc", "-R", "s1"], env);
 
       expect(requests).toEqual([
+        { body: undefined, method: "GET", path: "/api/spaces/s1" },
         { body: undefined, method: "GET", path: "/api/spaces/s1/issues/3" },
         { body: { body: "closing note\n" }, method: "POST", path: "/api/spaces/s1/issues/3/comments" },
         { body: { state: "closed", stateReason: "not_planned" }, method: "PATCH", path: "/api/spaces/s1/issues/3" },
+        { body: undefined, method: "GET", path: "/api/spaces/s1" },
         { body: undefined, method: "GET", path: "/api/spaces/s1/issues?state=open&label=bug&label=docs&assignee=me&limit=30" },
       ]);
       for (const [args, expected] of [

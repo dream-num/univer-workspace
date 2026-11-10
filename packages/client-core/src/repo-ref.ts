@@ -1,4 +1,5 @@
-import { workspaceError } from "./errors.js";
+import { WorkspaceApplicationError, workspaceError } from "./errors.js";
+import { isWorkspaceRecord } from "./http.js";
 import type { WorkspaceSpaceFeature } from "./space.js";
 
 /** A repository reference as typed by a user, before any server lookup. */
@@ -27,7 +28,7 @@ export type ItemTarget =
 const ITEM_ROUTES = { issues: "issue", pulls: "pr" } as const;
 
 /**
- * Accepts `owner/slug`, `owner/personal`, a Space ID, or a Browser URL:
+ * Accepts `owner/slug`, `owner/personal`, a bare slug, a Space ID, or a Browser URL:
  * `/spaces/<id>[/issues|/pulls[/<n>]]` and the legacy `/worktrees?worktree=<id>`.
  */
 export function parseRepoReference(text: string): WorkspaceRepoReference {
@@ -39,7 +40,7 @@ export function parseRepoReference(text: string): WorkspaceRepoReference {
   if (parts.length === 2 && parts[0] !== "" && parts[1] !== "") {
     return { kind: "full-name", owner: parts[0]!, slug: parts[1]! };
   }
-  throw invalid(`"${value}" is not owner/slug, a Space ID, or a Workspace URL.`);
+  throw invalid(`"${value}" is not owner/slug, a bare slug, a Space ID, or a Workspace URL.`);
 }
 
 /** Accepts `12`, `#12`, or an issue/pull Browser URL; returns undefined for anything else (e.g. an ID). */
@@ -57,7 +58,7 @@ export function parseItemNumber(text: string): number | undefined {
  * The lookup asks the server, which also decides visibility: hidden and missing are both 404.
  */
 export async function resolveRepoReference(
-  spaces: Pick<WorkspaceSpaceFeature, "lookup">,
+  spaces: Pick<WorkspaceSpaceFeature, "lookup" | "get" | "list">,
   reference: string | WorkspaceRepoReference,
   origin?: string,
 ): Promise<ResolvedWorkspaceRepo> {
@@ -71,8 +72,29 @@ export async function resolveRepoReference(
     }
   }
   switch (parsed.kind) {
-    case "id":
-      return { spaceId: parsed.spaceId };
+    case "id": {
+      // Current Space IDs are UUIDs; older databases do not enforce an ID shape.
+      if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(parsed.spaceId)) {
+        return { spaceId: parsed.spaceId };
+      }
+      try {
+        await spaces.get(parsed.spaceId);
+        return { spaceId: parsed.spaceId };
+      } catch (error) {
+        if (!(error instanceof WorkspaceApplicationError) || !isWorkspaceRecord(error.detail) || error.detail["status"] !== 404) {
+          throw error;
+        }
+      }
+      const matches = (await spaces.list()).filter(
+        (space) => space.slug?.toLowerCase() === parsed.spaceId.toLowerCase(),
+      );
+      if (matches.length === 1) return { spaceId: matches[0]!.id };
+      const candidates = matches.flatMap((space) => space.fullName
+        ? [space.fullName]
+        : space.owner === undefined ? [] : [`${space.owner.username}/${space.slug}`]);
+      const hint = candidates.length === 0 ? "Use owner/slug." : `Use owner/slug, such as ${candidates.join(", ")}.`;
+      throw invalid(`Repository "${parsed.spaceId}" ${matches.length === 0 ? "was not found" : "is ambiguous"}. ${hint}`);
+    }
     case "url":
       return { spaceId: parsed.spaceId, ...(parsed.item === undefined ? {} : { item: parsed.item }) };
     case "worktree-url":

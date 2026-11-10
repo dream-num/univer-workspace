@@ -97,6 +97,8 @@ describe("Issue tools and gateway infrastructure", () => {
     if (target.pathname === "/api/session") {
       return Response.json({ authenticated: true, user: user("user-1") });
     }
+    if (target.pathname === "/api/spaces") return Response.json({ spaces: [personal, team] });
+    if (target.pathname === "/api/spaces/team-1/star") return Response.json({ starCount: 0, starred: false });
     if (target.pathname === "/api/spaces/lookup") {
       return Response.json(target.searchParams.get("slug") === "personal" ? personal : team);
     }
@@ -255,6 +257,14 @@ describe("Issue tools and gateway infrastructure", () => {
       required: ["repo"],
       properties: { state: { enum: ["open", "closed", "all"] }, limit: { minimum: 1 } },
     });
+  });
+
+  it("views a repository by its unique bare slug", async () => {
+    await start();
+    const result = await (await connect()).callTool({ name: "repo_view", arguments: { repo: "team" } });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({ id: "team-1", fullName: "bob/team" });
+    expect(requests.filter((request) => request.path === "/api/spaces")).toHaveLength(1);
   });
 
   it("attaches url to an Issue and reports the resolved Space", async () => {

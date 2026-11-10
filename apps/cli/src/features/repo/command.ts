@@ -57,7 +57,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
 
   const view = new Command("view")
     .description("Show a repository")
-    .argument("[ref]", "owner/slug, Space ID or URL (default: $UVW_REPO)")
+    .argument("[ref]", "owner/slug, unique bare slug from repo list, Space ID or URL (default: $UVW_REPO)")
     .addOption(jsonFieldsOption([...REPO_JSON_FIELDS, "starCount", "starred"]))
     .action(async (ref: string | undefined, options: JsonFieldsOption) => {
       const space = await executeCommand(view, async () => {
@@ -107,7 +107,7 @@ export function createRepoCommand(spaces: WorkspaceSpaceFeature, context: RepoCo
 
   const edit = new Command("edit")
     .description("Change a repository's display name, description or visibility")
-    .argument("[ref]", "owner/slug, Space ID or URL (default: $UVW_REPO)")
+    .argument("[ref]", "owner/slug, unique bare slug from repo list, Space ID or URL (default: $UVW_REPO)")
     .option("--name <name>")
     .option("--description <text>", "plain text; an empty string clears it")
     .option("--visibility <visibility>", "public or private")

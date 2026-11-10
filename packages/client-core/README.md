@@ -9,7 +9,7 @@
 - 提供 Workspace HTTP transport、错误和 result-unknown 语义。
 - 提供 storage-neutral 的 password login、browser approval、`whoami` 和 remote logout 协议。
 - 提供 Space/Node 模型、严格响应解析和远程 workflow。
-- 提供仓库引用解析（`owner/slug`、`owner/personal`、Space ID、Browser URL）与 `#N` 编号参数解析；
+- 提供仓库引用解析（`owner/slug`、`owner/personal`、可列出仓库中唯一匹配的裸 slug、Space ID、Browser URL）与 `#N` 编号参数解析；
   服务端不支持时返回 `workspace-server-capability-missing`。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
 - 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。

@@ -7,7 +7,7 @@ import { nodeIdInput, unitFeature, unitsWithUrl, unitTypeInput, worktreeInput } 
 const inputSchema = z.object({
   worktree: worktreeInput,
   space: repoInput.describe(
-    "Repository the new file will belong to once merged: owner/slug, owner/personal, a Space ID or a Workspace URL.",
+    "Repository the new file will belong to once merged: owner/slug, owner/personal, a unique bare slug from repo_list, a Space ID or a Workspace URL.",
   ),
   type: unitTypeInput.describe("Document type."),
   name: z.string().describe("File name."),

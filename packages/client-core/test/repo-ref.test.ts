@@ -96,7 +96,7 @@ describe("repository references", () => {
     const { spaces, calls } = clients(() => Response.json(view()));
     await expect(resolveRepoReference(spaces, "Me/Docs")).resolves.toEqual({ spaceId: "s1" });
     expect(calls.map((call) => call.path)).toEqual(["/api/spaces/lookup?owner=Me&slug=Docs"]);
-    await expect(resolveRepoReference(spaces, "s2")).resolves.toEqual({ spaceId: "s2" });
+    await expect(resolveRepoReference(spaces, "08c0a307-edab-42f5-8f08-2852641fab0e")).resolves.toEqual({ spaceId: "08c0a307-edab-42f5-8f08-2852641fab0e" });
     await expect(resolveRepoReference(spaces, "https://workspace.test/spaces/s3/issues/5", "https://workspace.test"))
       .resolves.toEqual({ spaceId: "s3", item: { kind: "issue", number: 5 } });
     await expect(resolveRepoReference(spaces, "https://other.test/spaces/s3", "https://workspace.test"))
@@ -104,6 +104,51 @@ describe("repository references", () => {
     await expect(resolveRepoReference(spaces, "https://workspace.test/worktrees?worktree=w1"))
       .rejects.toMatchObject({ code: "workspace-argument-invalid" });
     expect(calls).toHaveLength(1);
+  });
+
+  it("resolves UUID Space IDs without a list or get request", async () => {
+    const { spaces, calls } = clients(() => { throw new Error("No request expected"); });
+    const id = "08c0a307-edab-42f5-8f08-2852641fab0e";
+    await expect(resolveRepoReference(spaces, id)).resolves.toEqual({ spaceId: id });
+    expect(calls).toEqual([]);
+  });
+
+  it("resolves a unique bare slug among listed repositories", async () => {
+    const { spaces, calls } = clients((call) => call.path === "/api/spaces"
+      ? Response.json({ spaces: [view(), view({ id: "old", slug: null, fullName: null })] })
+      : notFound());
+    await expect(resolveRepoReference(spaces, "docs")).resolves.toEqual({ spaceId: "s1" });
+    expect(calls.map((call) => call.path)).toEqual(["/api/spaces/docs", "/api/spaces"]);
+  });
+
+  it("hints owner/slug when a bare slug is unknown", async () => {
+    const { spaces } = clients((call) => call.path === "/api/spaces"
+      ? Response.json({ spaces: [view()] }) : notFound());
+    await expect(resolveRepoReference(spaces, "missing")).rejects.toMatchObject({
+      code: "workspace-argument-invalid", message: expect.stringContaining("Use owner/slug"),
+    });
+  });
+
+  it("lists owner/slug candidates when a bare slug is ambiguous", async () => {
+    const { spaces } = clients((call) => call.path === "/api/spaces"
+      ? Response.json({ spaces: [view(), view({ id: "s2", fullName: "other/docs", owner: { id: "u2", username: "other" } })] })
+      : notFound());
+    await expect(resolveRepoReference(spaces, "docs")).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: expect.stringMatching(/Use owner\/slug.*me\/docs.*other\/docs/),
+    });
+  });
+
+  it("keeps non-UUID historical Space IDs without listing repositories", async () => {
+    const { spaces, calls } = clients(() => Response.json(view({ id: "legacy", slug: null, fullName: null })));
+    await expect(resolveRepoReference(spaces, "legacy")).resolves.toEqual({ spaceId: "legacy" });
+    expect(calls.map((call) => call.path)).toEqual(["/api/spaces/legacy"]);
+  });
+
+  it.each([401, 403, 503])("does not reinterpret an ID lookup failure with status %s", async (status) => {
+    const { spaces, calls } = clients(() => Response.json({ error: { code: "DENIED", message: "Unavailable" } }, { status }));
+    await expect(resolveRepoReference(spaces, "docs")).rejects.toBeInstanceOf(Error);
+    expect(calls.map((call) => call.path)).toEqual(["/api/spaces/docs"]);
   });
 
   it("reports a missing server capability only when the server predates Space full names", async () => {

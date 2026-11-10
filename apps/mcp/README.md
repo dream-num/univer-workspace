@@ -213,11 +213,15 @@ Docker Desktop without changing those identities.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
+A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.
+Unknown or ambiguous slugs return `workspace-argument-invalid` with an owner/slug hint
+and the matching owner/slug candidates when available.
+
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
 | `whoami` | None | `{ origin, subject: { id, name } }` |
 | `repo_list` | Optional `owner`, `type`, `limit` | `{ repos: [...] }`. Limit defaults to 30. Owner accepts a username or `@me`. Type accepts `personal` or `team` |
-| `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Accepts owner/slug, owner/personal, Space ID, or Workspace URL |
+| `repo_view` | Required `repo` | Repository fields, `starCount`, `starred`, and `url`. Accepts owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL |
 | `issue_list` | Required `repo`; optional `state` (default `open`), `labels`, `assignee`, `author`, `search`, `limit` (default 30) | `{ issues: [...] }` |
 | `issue_view` | Required `repo`, `number` (`12`, `#12` or Issue URL); optional `comments` | Issue, plus `timeline` when `comments` is true |
 | `issue_create` | Required `repo`, `title`; optional `body`, `labels`, `assignees`, `nodes` | Issue |
