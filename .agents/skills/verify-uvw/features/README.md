@@ -22,8 +22,8 @@ as the recipe.
   `agent-browser storage local set univer-workspace-language en-US` then `agent-browser reload`.
 - After `agent-browser open`, wait before `find` (`agent-browser wait 1500`, or
   `wait --url`/`wait <selector>`). An immediate `find` races the SPA and reports "No element found".
-- Prefer ARIA roles, accessible names, and labels. The login form has two buttons
-  named `Create account` and two named `Sign in` (mode tab and submit), so submit with
+- Prefer ARIA roles, accessible names, and labels. The login form's mode tabs are `Password` and
+  `Create account`, and in sign-up mode the submit button is also `Create account`, so submit with
   `agent-browser click 'form button[type=submit]'`.
 - Run uvw only through `$V cli <label> …` (recorded) or `$V uvw …`. Use IDs from earlier
   `--json` output.
@@ -63,7 +63,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   in the browser, timeline readback via uvw.
 - [MCP gateway](./mcp.md): Docker Desktop opt-in, both protocols, repository parity,
   MO3 Claude Code/VS Code CIMD, SSRF refusals, anonymous no-fetch and the CIMD off switch,
-  authentication, usage evidence, opencode, and cleanup.
+  authentication, idempotency keys and `inspect` input errors, the executor, files, Office, renderer and
+  compilers, the G0 production shape with the `*` allowlist, usage evidence, opencode, and cleanup.
 - [MCP executor and renderer isolation](./mcp-security.md): stage G sandbox baseline, MG1-MG11
   checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
   configuration and renderer separation, each reported `contained` or `exposed`.

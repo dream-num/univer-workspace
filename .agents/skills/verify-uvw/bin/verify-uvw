@@ -294,11 +294,13 @@ cmd_renderer_restart() { # [max-runtimes]: recreate only this run's renderer, op
 }
 
 cmd_mcp_allow_users() {
-  [[ $# -gt 0 ]] || die "usage: verify-uvw mcp-allow-users <user-id>..."
+  [[ $# -gt 0 ]] || die "usage: verify-uvw mcp-allow-users <user-id>... | '*'"
   local id
-  for id in "$@"; do
-    [[ "$id" =~ ^[A-Za-z0-9_-]+$ ]] || die "user IDs must contain only letters, digits, underscores or hyphens"
-  done
+  if [[ $# -ne 1 || "$1" != '*' ]]; then
+    for id in "$@"; do
+      [[ "$id" =~ ^[A-Za-z0-9_-]+$ ]] || die "user IDs must contain only letters, digits, underscores or hyphens; '*' must be the only argument"
+    done
+  fi
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run"
   (IFS=,; printf '%s\n' "$*") >"$RUN/executor-allowed-user-ids"

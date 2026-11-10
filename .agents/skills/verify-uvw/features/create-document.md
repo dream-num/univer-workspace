@@ -27,7 +27,8 @@ Preconditions:
 - No file named `Verify Budget` exists.
 
 - **Open the New menu.** Run `agent-browser find role button click --name "New Create a document to start collaborating"`.
-  A menu lists `Document`, `Spreadsheet`, `Presentation`, `Board`, `Base`, `Group`.
+  A menu lists `Document`, `Spreadsheet`, `Presentation`, `Board`, `Base`, `PDF`, `Group`. The sidebar `New`
+  menu lists `Document`, `Sheet`, `Slides`, `Board`, `Base`, `PDF`, `Upload file` and `Folder`.
 - **Choose and name.** Run `agent-browser find role menuitem click --name "Spreadsheet"`,
   then `agent-browser find label "Document name" fill "Verify Budget"`, then
   `agent-browser find role button click --name "Create" --exact`. The URL becomes

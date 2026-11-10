@@ -4,10 +4,13 @@ import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 const root = process.cwd();
 const evidence = process.env.EVIDENCE;
 const run = process.env.VERIFY_UVW_RUN;
+// A new key per invocation: a rerun uploads a new bundle, and a reused key would conflict.
+const attempt = randomUUID();
 assert.ok(evidence && run, 'Run eval "$(.agents/skills/verify-uvw/bin/verify-uvw env)" first.');
 const v = join(root, '.agents/skills/verify-uvw/bin/verify-uvw');
 const require = createRequire(join(root, 'apps/mcp/package.json'));
@@ -36,9 +39,9 @@ if (process.argv[2] === 'typst-jobs') {
   const manifest = { schemaVersion: 1, targetUnitId: `typst-job-${run}`, title: 'Typst job', pages: ['page.typ'] };
   const bytes = zipSync({ 'typst.json': Buffer.from(JSON.stringify(manifest)), 'page.typ': Buffer.from('= Typst job\n\nSurvives the synchronous budget.') });
   const id = await upload('mcp-typst-job-upload', 'typst-bundle', bytes);
-  const pr = mcp('mcp-typst-job-pr', 'pr_create', { repo, title: 'Typst job verification', idempotency_key: `typst-job-pr-${run}-verify` });
+  const pr = mcp('mcp-typst-job-pr', 'pr_create', { repo, title: 'Typst job verification', idempotency_key: `typst-job-pr-${attempt}-verify` });
   const before = mcp('mcp-typst-job-before', 'unit_list', { worktree: pr.id });
-  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-job-apply-${run}-verify` };
+  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-job-apply-${attempt}-verify` };
   const handle = mcp('mcp-typst-job-apply', 'compile_typst', args);
   assert.equal(handle.status, 'running'); assert.ok(handle.job_id);
   const retry = mcp('mcp-typst-job-retry', 'compile_typst', args);
@@ -76,8 +79,8 @@ if (process.argv[2] === 'typst-jobs') {
   const event = JSON.parse(readFileSync(join(evidence, 'mcp-typst-compile.event.json'), 'utf8'));
   assert.equal(event.executor, 'cold_start'); assert.equal(event.unit_type, null); assert.equal(event.repo, null);
   assert.equal(event.cost.upload_bytes, bytes.length);
-  const pr = mcp('mcp-typst-pr', 'pr_create', { repo, title: 'Typst compiler verification', idempotency_key: `typst-pr-${run}-verify` });
-  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-apply-${run}-verify` };
+  const pr = mcp('mcp-typst-pr', 'pr_create', { repo, title: 'Typst compiler verification', idempotency_key: `typst-pr-${attempt}-verify` });
+  const args = { bundle_upload_id: id, apply: true, worktree: pr.id, space: repo, idempotency_key: `typst-apply-${attempt}-verify` };
   const applied = mcp('mcp-typst-apply', 'compile_typst', args);
   const retry = mcp('mcp-typst-retry', 'compile_typst', args);
   assert.equal(retry.unit.unitId, applied.unit.unitId);
@@ -96,8 +99,8 @@ if (process.argv[2] === 'typst-jobs') {
   command(['cli', 'mcp-svg-cli', 'compile-svg', file, '--estimate-text-size', '--page', '1', '--json']);
   assert.deepEqual(compiled, read('mcp-svg-cli'));
   assert.ok(compiled.lints.some(lint => lint.includes('estimation')));
-  const pr = mcp('mcp-svg-pr', 'pr_create', { repo, title: 'SVG compiler verification', idempotency_key: `svg-pr-${run}-verify` });
-  const { unit } = mcp('mcp-svg-unit', 'unit_create', { worktree: pr.id, space: repo, type: 'slide', name: 'SVG diagram', idempotency_key: `svg-unit-${run}-verify` });
+  const pr = mcp('mcp-svg-pr', 'pr_create', { repo, title: 'SVG compiler verification', idempotency_key: `svg-pr-${attempt}-verify` });
+  const { unit } = mcp('mcp-svg-unit', 'unit_create', { worktree: pr.id, space: repo, type: 'slide', name: 'SVG diagram', idempotency_key: `svg-unit-${attempt}-verify` });
   const applied = mcp('mcp-svg-apply', 'compile_svg', { svg, estimate_text_size: true, page: 1, apply: true, worktree: pr.id, unit: unit.unitId });
   assert.equal(applied.applied.committed, true);
   const inspected = mcp('mcp-svg-inspect', 'inspect', { target: 'slide', selectors: ['index:1'], worktree: pr.id, unit: unit.unitId });
@@ -121,8 +124,8 @@ if (process.argv[2] === 'typst-jobs') {
   const estimated = mcp('mcp-svg-real-estimate', 'compile_svg', { svg, estimate_text_size: true, page: 1 });
   assert.equal(estimated.textMeasure, 'builtin-estimate'); assert.ok(estimated.lints.some(lint => lint.includes('estimation')));
   assert.notEqual(estimated.code, real.code);
-  const pr = mcp('mcp-svg-real-pr', 'pr_create', { repo, title: 'SVG real-font verification', idempotency_key: `svg-real-pr-${run}-verify` });
-  const { unit } = mcp('mcp-svg-real-unit', 'unit_create', { worktree: pr.id, space: repo, type: 'slide', name: 'Real fonts', idempotency_key: `svg-real-unit-${run}-verify` });
+  const pr = mcp('mcp-svg-real-pr', 'pr_create', { repo, title: 'SVG real-font verification', idempotency_key: `svg-real-pr-${attempt}-verify` });
+  const { unit } = mcp('mcp-svg-real-unit', 'unit_create', { worktree: pr.id, space: repo, type: 'slide', name: 'Real fonts', idempotency_key: `svg-real-unit-${attempt}-verify` });
   const applied = mcp('mcp-svg-real-apply', 'compile_svg', { svg, page: 1, apply: true, worktree: pr.id, unit: unit.unitId });
   assert.equal(applied.applied.committed, true); assert.equal(applied.textMeasure, 'univer-render-runtime');
   const inspected = mcp('mcp-svg-real-inspect', 'inspect', { target: 'slide', selectors: ['index:1'], worktree: pr.id, unit: unit.unitId });

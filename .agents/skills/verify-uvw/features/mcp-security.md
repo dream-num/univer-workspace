@@ -33,7 +33,8 @@ configuration refuses to start.
   the standard container mounts has a mount point or source containing `staging`, `data`, `workspace`, `sqlite`, `blob` or `verify-uvw`. The
   gateway's `/staging` mount is recorded as a control that the detector sees.
 - MG10 (requirement 7) starts the run's image as executor and as renderer with `NODE_ENV=production`, session credentials, `runc`, the image's
-  Chromium launch (`--no-sandbox`) on a throwaway internal network with no published ports. `contained` if both refuse to become healthy within
+  Chromium launch (`--no-sandbox`) on a throwaway internal network with no published ports. The executor also gets
+  `MCP_EXECUTOR_ALLOWED_USER_IDS=*`, so the G0 allowlist gate is not what refuses it. `contained` if both refuse to become healthy within
   30 s. The containers and the network are removed afterwards.
 - MG11 (requirement 1) has A and B each call `screenshot`, then attributes each call to a Chromium browser process of the renderer by the CPU time
   that process tree used. `contained` if the two users were served by different browser processes.
@@ -42,7 +43,8 @@ configuration refuses to start.
 
 An agent reaches these paths through the MCP gateway (`verify-uvw mcp ... execute`, `screenshot`) with a PAT. Isolation is invisible to a
 well-behaved user, so a hostile user is simulated: the probes send scripts exactly as an agent would (MX1 in [mcp.md](./mcp.md)). The run needs
-Docker Desktop, the MCP stack (`VERIFY_UVW_MCP=1 $V up`) and the disposable user (`$V user`).
+Docker Desktop, the default development MCP stack with the renderer (`VERIFY_UVW_MCP=1 $V up`) and the disposable user (`$V user`).
+MG9 and MG11 read the renderer container. In production mode the second user is not on the executor allowlist and its calls are refused; run `$V mcp-allow-users '*'` first.
 
 ## Driving it with agent-browser and uvw
 
@@ -51,7 +53,7 @@ No browser. From the repository root:
 ```bash
 V=.agents/skills/verify-uvw/bin/verify-uvw
 export VERIFY_UVW_RUN=<run-id>
-$V doctor                                   # no FAIL; the executor worker check passes once a worker is warm (run $V user, then any execute)
+$V doctor                                   # no FAIL
 node .agents/skills/verify-uvw/bin/mcp-security-probes.mjs
 node .agents/skills/verify-uvw/bin/mcp-security-probes.mjs --only MG6,MG7
 $V doctor
@@ -79,7 +81,7 @@ Baseline of the reserved checks, from code at `main` 26c1b69d (not a probe):
 - MG3: an exploratory `execute` showed `process.getBuiltinModule("fs")`, `process.binding` and `fetch` reachable from the script, and a script that
   reads `/proc/<pid>/environ` of other processes (MG2). Exposed, to be pinned by the implementation tests.
 
-Baseline of MG2 and MG4-MG11 on `main` 26c1b69d with a local Docker Desktop stack (`runc`, one executor, `EXECUTOR_MAX_WORKERS=4`):
+Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker Desktop stack (`runc`, one executor, `EXECUTOR_MAX_WORKERS=4`):
 
 | Check | Result | Reason |
 |---|---|---|
@@ -90,7 +92,7 @@ Baseline of MG2 and MG4-MG11 on `main` 26c1b69d with a local Docker Desktop stac
 | MG7 | exposed | A allocates 2 GiB without a limit stopping it and its worker stays warm; B is served and the executor survives. |
 | MG8 | exposed | While A holds all four slots, B gets `workspace-runtime-busy` after the 5 s queue timeout. |
 | MG9 | contained | Neither container mounts a data or staging directory; the control sees `/staging` on the gateway. |
-| MG10 | exposed | The executor refuses (`NODE_ENV=production forbids executor session grants until Stage G`); the renderer becomes healthy with `--no-sandbox`. |
+| MG10 | exposed | With the allowlist set to `*`, the executor becomes healthy with session grants; the renderer becomes healthy with `--no-sandbox`. |
 | MG11 | exposed | One Chromium browser process serves both users; each call gets a context in the shared browser. |
 
 ## Gotchas
@@ -107,8 +109,6 @@ Baseline of MG2 and MG4-MG11 on `main` 26c1b69d with a local Docker Desktop stac
   lazily) both users share it by construction; the evidence records how many browser processes existed.
 - MG10 runs `docker run` with this run's image and `--internal` networking. If the probe is killed mid-run, remove `mg10-*` containers and
   networks by hand (`docker rm -f $(docker ps -aq --filter name=mg10-)`).
-- `$V doctor` fails "MCP executor verification: at least one live worker must be inspected" until a worker is warm. A worker idles out after
-  `EXECUTOR_IDLE_TTL_MS` (60 s), so run doctor soon after a probe, or after any `execute`.
 - The probes assume Docker Desktop's executor and renderer share the compose network `default` and `render`. The Workspace transport target is
   `http://host.docker.internal:<server port>`.
 - Never point the probes at another run's ports, the developer's `:3020`/`:5173` instance or a real host.
