@@ -243,6 +243,7 @@ export function createWorkspaceContentRuntime(
         );
         const { init, initEntry, key, lease } = acquired;
         let reusable = false;
+        let reload = false;
         try {
           await synchronize(lease, input.target);
           const executed: unknown = await inRuntimePhase("script", () =>
@@ -277,6 +278,8 @@ export function createWorkspaceContentRuntime(
           await lease.replacePendingMutations(mutations);
           const committed = await inRuntimePhase("commit", () => commitStableChangeset(lease));
           reusable = true;
+          // The runtime model still holds the executed BASE64 images; reload to read the stored FileIds.
+          reload = mutations !== executed["mutations"];
           return {
             committed: true,
             revision: committed.state.baseRevision,
@@ -285,9 +288,9 @@ export function createWorkspaceContentRuntime(
           };
         } finally {
           try {
-            if (reusable) await lease.release();
+            if (reusable && !reload) await lease.release();
             else {
-              if (initByKey.get(key) === initEntry) initByKey.delete(key);
+              if (!reusable && initByKey.get(key) === initEntry) initByKey.delete(key);
               await lease.invalidate();
             }
           } finally {

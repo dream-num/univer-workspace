@@ -364,6 +364,8 @@ describe("Workspace content runtime owner", () => {
           data: JSON.stringify({ imageSourceType: "UUID", source: "file-transport" }),
         },
       ]);
+      expect(current.invalidate).toHaveBeenCalledOnce();
+      expect(current.release).not.toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve, reject) =>
         server.close((error) => (error === undefined ? resolve() : reject(error))),
@@ -895,7 +897,7 @@ describe("Workspace content runtime owner", () => {
     expect(fetcher).toHaveBeenCalledOnce();
     expect(current.replacePendingMutations).toHaveBeenCalledOnce();
     expect(current.commit).toHaveBeenCalledTimes(3);
-    expect(current.release).toHaveBeenCalledOnce();
+    expect(current.invalidate).toHaveBeenCalledOnce();
     vi.unstubAllGlobals();
   });
 
