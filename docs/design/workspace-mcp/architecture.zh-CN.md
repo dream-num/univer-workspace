@@ -564,7 +564,7 @@ D4 接受在服务端执行模型生成的代码。CLI 里这些代码跑在用�
 | `MCP_STAGING_DIRECTORY` | 网关 | 暂存存储目录 |
 | `MCP_OAUTH_CLIENT_ID`、`MCP_OAUTH_CLIENT_SECRET` | 网关 | token exchange 用的机密客户端，两者同时设置或同时不设。启用 PAT 与 OAuth access token 认证 |
 | `MCP_DEV_SESSION_PASSTHROUGH` | 网关 | 开发认证，生产环境禁止（4.6 节）。与上一行至少设置一项，本地验证两者同时设置 |
-| `MCP_EXECUTOR_ALLOWED_USER_IDS` | 网关、执行层 | 逗号分隔的 Workspace 用户 ID，只有这些用户能使用执行层（第 10 节）。生产环境的执行层必须设置；配置了执行层的网关在生产环境也必须设置。非生产环境不设置时所有用户都能使用执行层 |
+| `MCP_EXECUTOR_ALLOWED_USER_IDS` | 网关、执行层 | 逗号分隔的 Workspace 用户 ID，只有这些用户能使用执行层（第 10 节）。单独的 `*` 表示所有用户，只用于用户全部可信的部署，例如内部 staging。生产环境的执行层必须设置；配置了执行层的网关在生产环境也必须设置。非生产环境不设置时所有用户都能使用执行层 |
 | `UNIVER_LICENSE`、`UNIVER_LICENSE_KEY` | 执行层、渲染服务 | license 注入。渲染服务只读取 `UNIVER_LICENSE`，未设置时使用与执行层相同的内置开发 license |
 | `EXECUTOR_*` | 执行层 | 见 6.2 节 |
 | `RENDERER_MAX_RUNTIMES` | 渲染服务 | 同时存在的 runtime（每个一个 Chromium）上限，默认 2 |

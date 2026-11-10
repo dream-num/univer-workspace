@@ -4989,7 +4989,7 @@ packages:
     resolution: {integrity: sha512-kVpIOkhWRxDsPUsF2Ji9WKfnAaw+MqNTGq2CvZjANkHC3yGZYDu/2bfYZO4QNqraQ0T3sa8nVDLTyb2nuYI5Bw==, tarball: https://registry.npmjs.org/@univer-cli/daemon/-/daemon-1.4.0.tgz}
 
   '@univer-cli/doc-markdown-facade@1.4.0':
-    resolution: {integrity: sha512-QaHzspk6O9PYQpPjc2ALZei3UkIMbvKCsGazWOJBJqahxiGDwBOfmpT4MLz2vSKviu/u5Z9yB/kTZBRfL2t7WQ==, tarball: https://registry.npmjs.org/@univer-cli/doc-markdown-facade/-/doc-markdown-facade-1.4.0.tgz}
+    resolution: {integrity: sha512-QaHzspk6O9PYQpPjc2ALZei3UkIMbvKCsGazWOJBJqahxiGDwBOfmpT4MLz2vSKviu/u5Z9yB/kTZBRfL2t7WQ==}
 
   '@univer-cli/doc-typst-facade@1.4.0':
     resolution: {integrity: sha512-I5hwMRpgNGx1WKLDHUJRo71z/wuIHKN9wRY2N0CTTkjqo2lbcpH+/NEdPP/8BWIUU1Lwi4msCBxwB5JFP6Le5w==, tarball: https://registry.npmjs.org/@univer-cli/doc-typst-facade/-/doc-typst-facade-1.4.0.tgz}
@@ -5565,19 +5565,19 @@ packages:
         optional: true
 
   '@univerjs-pro/exchange-pdf-node-binding-darwin-arm64@1.1.0':
-    resolution: {integrity: sha512-FPUq9uogmhbeArSVQciodQSUzsZNlvol8mIgURzAdzh9gBu9KIWZ3Nc89BhQ1guTRTsM3nuMc2tiSIyh28v4bw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-arm64/-/exchange-pdf-node-binding-darwin-arm64-1.1.0.tgz}
+    resolution: {integrity: sha512-FPUq9uogmhbeArSVQciodQSUzsZNlvol8mIgURzAdzh9gBu9KIWZ3Nc89BhQ1guTRTsM3nuMc2tiSIyh28v4bw==}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/exchange-pdf-node-binding-darwin-x64@1.1.0':
-    resolution: {integrity: sha512-televRH4f/MNxnRBgQAadife4eeCBmoFYRfcqUTyaN05VT2iTbzU7q+mkUYGH4Yj3npIK8op+D0CkWcf5HOmkg==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-darwin-x64/-/exchange-pdf-node-binding-darwin-x64-1.1.0.tgz}
+    resolution: {integrity: sha512-televRH4f/MNxnRBgQAadife4eeCBmoFYRfcqUTyaN05VT2iTbzU7q+mkUYGH4Yj3npIK8op+D0CkWcf5HOmkg==}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu@1.1.0':
-    resolution: {integrity: sha512-iLm03bpb5v0fGrV6Dps1PFDhPrTFLnfOtRG9k+Rja5uuSvhVQVtlbWTyN3L62QMf0XgCEr1i040RHLflCSpi6g==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-arm64-gnu/-/exchange-pdf-node-binding-linux-arm64-gnu-1.1.0.tgz}
+    resolution: {integrity: sha512-iLm03bpb5v0fGrV6Dps1PFDhPrTFLnfOtRG9k+Rja5uuSvhVQVtlbWTyN3L62QMf0XgCEr1i040RHLflCSpi6g==}
     engines: {node: '>=20'}
     cpu: [arm64]
     os: [linux]
@@ -5591,7 +5591,7 @@ packages:
     libc: [musl]
 
   '@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu@1.1.0':
-    resolution: {integrity: sha512-WvYdJ/0dUBABzUeXiQ5A+JKQW/Oqw5MnrDpy3Y3dEvyldp6CyYc3PPH8em1q84heSPVCtZ+7ugMmKAhFbZJ0qQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-linux-x64-gnu/-/exchange-pdf-node-binding-linux-x64-gnu-1.1.0.tgz}
+    resolution: {integrity: sha512-WvYdJ/0dUBABzUeXiQ5A+JKQW/Oqw5MnrDpy3Y3dEvyldp6CyYc3PPH8em1q84heSPVCtZ+7ugMmKAhFbZJ0qQ==}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [linux]
@@ -5605,13 +5605,13 @@ packages:
     libc: [musl]
 
   '@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu@1.1.0':
-    resolution: {integrity: sha512-4hDkol+3YBlzq/52SlMoAMMSnPNhnmb32rwqLkgw89qgpybld/zHFwucyuK13Y6FtIF2I9RrxsLOWC83vwkpcw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding-win32-x64-gnu/-/exchange-pdf-node-binding-win32-x64-gnu-1.1.0.tgz}
+    resolution: {integrity: sha512-4hDkol+3YBlzq/52SlMoAMMSnPNhnmb32rwqLkgw89qgpybld/zHFwucyuK13Y6FtIF2I9RrxsLOWC83vwkpcw==}
     engines: {node: '>=20'}
     cpu: [x64]
     os: [win32]
 
   '@univerjs-pro/exchange-pdf-node-binding@1.1.0':
-    resolution: {integrity: sha512-rj3k1wgKv5mGFwRqu+WTFVrJDp8Jpk3r/HAg7TeZNw3DyqBe3e8STy4Vu4pnXSTt1MyK4E2pp+z2Z0fxIyKfrQ==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-pdf-node-binding/-/exchange-pdf-node-binding-1.1.0.tgz}
+    resolution: {integrity: sha512-rj3k1wgKv5mGFwRqu+WTFVrJDp8Jpk3r/HAg7TeZNw3DyqBe3e8STy4Vu4pnXSTt1MyK4E2pp+z2Z0fxIyKfrQ==}
     engines: {node: '>=20'}
 
   '@univerjs-pro/ink-ui@1.4.0':

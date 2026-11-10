@@ -41,7 +41,13 @@ describe("executor allowlist configuration", () => {
     ]).toEqual(["alice", "bob"]);
   });
 
-  it.each(["", " ", ",", "alice,", ",alice", "alice, ,bob", "alice,,bob"])(
+  it("lets an explicit * admit every user in production", () => {
+    const env = { NODE_ENV: "production", MCP_EXECUTOR_ALLOWED_USER_IDS: "*" };
+    expect(parseExecutorConfig({ ...executor, ...env }).MCP_EXECUTOR_ALLOWED_USER_IDS).toBeUndefined();
+    expect(parseGatewayConfig({ ...linkedGateway, ...env }).MCP_EXECUTOR_ALLOWED_USER_IDS).toBeUndefined();
+  });
+
+  it.each(["", " ", ",", "alice,", ",alice", "alice, ,bob", "alice,,bob", "*,alice", "alice, *"])(
     "rejects an empty allowlist or entry %j in both roles in every environment",
     (value) => {
       for (const NODE_ENV of ["development", "production"]) {
