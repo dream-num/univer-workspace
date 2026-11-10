@@ -385,7 +385,7 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
 - [ ] 限流触发时，客户端得到可读的错误信息。
 - [ ] 用量事件进入日志管道，能按用户、客户端、工具汇总一天的调用量。
 
-**部署记录（2026-11-10，镜像 `sha-82be1c84`）。** 网关和执行层已部署到 staging 与 prod，渲染服务未部署，限流按产品负责人决定延后。
+**部署记录（2026-11-10，镜像 `sha-82be1c84`）。** 网关和执行层已部署到 staging 与 prod，渲染服务在同一天随后加入，限流按产品负责人决定延后。
 部署形态没有新建 Helm release，而是照 Workspace 的方式在 `dream-num/helm-chart-private` 增加 `deploy/colla-workspace-mcp/`：
 `push.yml` 用同一个 tag 构建两个镜像（#284），dispatch workflow 先发布 Workspace，等它就绪后再发布 MCP（helm-chart-private#376、#377）。
 
@@ -395,7 +395,15 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
 - 事故：prod 首次发布时 MCP Pod 按 `biz-intensive` 偏好落到唯一的 c5.xlarge 节点，该节点上其他 Pod 的 memory request 远低于实际用量，
   MCP 加入并滚动一次后节点内存耗尽，失联约 14 分钟，Workspace 与同节点的其他服务不可用，重启实例后恢复。prod MCP 改为只调度到通用节点、
   memory request 按实测设置（helm-chart-private#379），Workspace 改到独占节点。staging 集群 CPU request 接近用满，staging MCP 的 sidecar CPU request 降为 10m。
-- 未做：上面的六项验收；不在白名单内的用户在 prod 上的行为只由本地 MB 旅程覆盖；“连接到 AI 助手”设置页、Grafana 面板、渲染服务、限流、运维手册。
+- 渲染服务：两个环境都是 1 个副本、2 个 runtime，memory request 3Gi、limit 3.5Gi（架构 7.1.1）。两个集群都不执行 NetworkPolicy，
+  所以用 Istio `Sidecar`（`REGISTRY_ONLY`，出站只到 `istio-system`）阻止它访问 Workspace 和公网。
+  prod 调度到通用节点（helm-chart-private#380），opencode 对一个 Worktree 中的表格截图，图片以内联内容返回，模型读出的单元格与表格一致。
+  staging 的共享节点实际内存已用 76–92%，渲染服务与 Workspace 一起固定在新加的 `colla-workspace` 专用节点上（4 核 16 GiB，helm-chart-private#381，镜像 `sha-97b83a8e`）。
+  在 staging 验证：渲染服务 Pod 访问 Workspace、公网和执行层都被拒绝；执行层能力端点声明 `render.screenshot`、`render.printPdf`、`render.lint`；
+  opencode（`console-deepseek/deepseek-flash#high`，OAuth）对一个 trunk 表格的整表截图返回下载链接（2112×7920，约 8 MB），区域截图以内联内容返回，
+  模型读出的表头与数据和 `inspect` 结果一致，网关和渲染服务各有对应记录。执行层先于渲染服务就绪时首次能力读取失败，随后自动恢复（G0 已知问题）。
+  `print_pdf` 和 `lint` 在 `files` toolset 中，需要以 `?toolsets=files` 或 `all` 的 URL 重新 OAuth 授权，staging 上尚未经 MCP 调用验证。
+- 未做：上面的六项验收；不在白名单内的用户在 prod 上的行为只由本地 MB 旅程覆盖；“连接到 AI 助手”设置页、Grafana 面板、限流、运维手册；两个环境上 `print_pdf`、`lint` 经 MCP 的调用。
 
 ## 阶段 I：来源归因（可选）
 
