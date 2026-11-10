@@ -1,7 +1,7 @@
 import { pullRequestSpace } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
-import { worktreeSchema } from "../schemas.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION, worktreeSchema } from "../schemas.js";
 import { repoInput, resolveRepo } from "./issue-support.js";
 import { prWithUrl, spaceFeature, visibilityInput, worktreeFeature } from "./pr-support.js";
 
@@ -13,7 +13,7 @@ const inputSchema = z.object({
   idempotency_key: z
     .string()
     .optional()
-    .describe("Retry-safe key for this creation; reuse the same key when retrying."),
+    .describe(IDEMPOTENCY_KEY_DESCRIPTION),
 });
 export const prCreateTool: ToolDefinition = {
   name: "pr_create",

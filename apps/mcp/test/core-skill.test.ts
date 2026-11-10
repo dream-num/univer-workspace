@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { tools } from "../src/gateway/tools/registry.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 
 const names = new Set(tools.map(({ name }) => name));
 
@@ -20,6 +21,11 @@ function unknownTools(content: string) {
 }
 
 describe("MCP core Skill tool bindings", () => {
+  it("states the shared idempotency key rule", async () => {
+    const content = await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8");
+    expect(content.replace(/\s+/gu, " ")).toContain(IDEMPOTENCY_KEY_DESCRIPTION);
+  });
+
   it("names only registered tools, including single-word table bindings", async () => {
     const root = new URL("../skills/", import.meta.url).pathname;
     for (const entry of await readdir(root, { recursive: true, withFileTypes: true })) {

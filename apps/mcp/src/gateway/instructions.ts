@@ -1,6 +1,7 @@
 import type { OpName } from "../shared/executor-protocol.js";
 import type { ToolDefinition } from "./tools/definition.js";
 import { tools, toolAvailable } from "./tools/registry.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "./tools/schemas.js";
 
 // The core Skill's workflow rules, for clients that cannot load Skills.
 export function buildServerInstructions(
@@ -44,7 +45,7 @@ export function buildServerInstructions(
         ]
       : []),
     "When a tool named in a Skill is not in this connection's tool list, that step is not available here; tell the user instead of guessing. Admin tools appear only when the connection URL selects ?toolsets=admin (alone or with other toolsets) or ?toolsets=all.",
-    "Creating tools take an idempotency_key: generate one before the first attempt and reuse it when you retry. When a result is too large, repeat the call with the cursor it returned, or narrow the request.",
+    `Creating tools take an idempotency_key. ${IDEMPOTENCY_KEY_DESCRIPTION} When a result is too large, repeat the call with the cursor it returned, or narrow the request.`,
   ];
   if (!selected.some((tool) => tool.toolset === "files")) {
     const available = new Set(

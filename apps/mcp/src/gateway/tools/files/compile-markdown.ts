@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
@@ -27,7 +28,7 @@ export const compileMarkdownTool = executorTool({
     unit: z.string().min(1).optional(),
     source_map: markdownCompileInput.shape.sourceMap,
     blocks: markdownCompileInput.shape.blockIds,
-    idempotency_key: markdownCompileInput.shape.idempotencyKey,
+    idempotency_key: markdownCompileInput.shape.idempotencyKey.describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   op,
   async request(args, context) {

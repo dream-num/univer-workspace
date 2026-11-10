@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { opSpecs } from "../../../shared/executor-protocol.js";
@@ -20,7 +21,7 @@ export const printPdfTool = executorTool({
     unit: z.string().min(1),
     trunk: z.boolean().optional(),
     worktree: worktreeInput.optional(),
-    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional(),
+    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional().describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   outputSchema: printPdfOutput
     .pick({ unitId: true, unitType: true, pageCount: true })

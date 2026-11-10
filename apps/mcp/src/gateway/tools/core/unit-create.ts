@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
-import { unitWithUrlSchema } from "../schemas.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION, unitWithUrlSchema } from "../schemas.js";
 import { repoInput, resolveRepo } from "./issue-support.js";
 import { nodeIdInput, unitFeature, unitsWithUrl, unitTypeInput, worktreeInput } from "./space-support.js";
 
@@ -15,7 +15,7 @@ const inputSchema = z.object({
   idempotency_key: z
     .string()
     .optional()
-    .describe("Retry-safe key for this creation; reuse the same key when retrying."),
+    .describe(IDEMPOTENCY_KEY_DESCRIPTION),
 });
 export const unitCreateTool: ToolDefinition = {
   name: "unit_create",

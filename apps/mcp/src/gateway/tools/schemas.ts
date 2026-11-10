@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const IDEMPOTENCY_KEY_DESCRIPTION =
+  "Generate a new random value, such as a UUID, for each new operation. Reuse it only to retry the same call with identical arguments. Never derive it from names or reuse a key from earlier work.";
+
 export const repoSchema = z.object({
   id: z.string(),
   name: z.string(),

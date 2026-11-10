@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { WorkspaceBlobFeature } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { destructiveAnnotations, type ToolDefinition } from "../definition.js";
@@ -6,7 +7,7 @@ const inputSchema = z.object({
   resource: z.string(),
   upload_id: z.string(),
   etag: z.string(),
-  idempotency_key: z.string().min(1),
+  idempotency_key: z.string().min(1).describe(IDEMPOTENCY_KEY_DESCRIPTION),
 });
 export const blobReplaceTool: ToolDefinition = {
   name: "blob_replace",

@@ -8,6 +8,8 @@ import { parseGatewayConfig } from "../src/shared/config.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { adminNames, coreNames, filesNames } from "./tool-names.js";
 import { testStagingDirectory } from "./staging-directory.js";
+import { tools } from "../src/gateway/tools/registry.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 
 const token = "internal-capabilities-token-".repeat(2);
 const allOperations = Object.keys(opSpecs);
@@ -153,6 +155,25 @@ describe("capabilities through MCP tools/list and initialize", () => {
       },
     });
   });
+
+  it.each(["legacy", { pin: "2026-07-28" }] as const)(
+    "describes every listed idempotency_key with the shared rule in %j",
+    async (mode) => {
+      const connect = await start([replica()]);
+      const client = await connect("all", mode);
+      const listed = (await client.listTools()).tools;
+      let count = 0;
+      for (const tool of tools) {
+        const advertised = listed.find(({ name }) => name === tool.name);
+        expect(advertised, tool.name).toBeDefined();
+        const key = advertised?.inputSchema.properties?.["idempotency_key"];
+        if (key === undefined) continue;
+        expect(key, tool.name).toHaveProperty("description", IDEMPOTENCY_KEY_DESCRIPTION);
+        count++;
+      }
+      expect(count).toBeGreaterThanOrEqual(10);
+    },
+  );
 
   it.each([undefined, " listed , another "])(
     "applies the per-user executor allowlist %s through MCP",

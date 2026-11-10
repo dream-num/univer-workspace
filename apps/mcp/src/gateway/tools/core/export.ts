@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { z } from "zod";
 import { opSpecs } from "../../../shared/executor-protocol.js";
 import { downloadSchema } from "../../staging/model.js";
@@ -22,7 +23,7 @@ export const exportTool = executorTool({
     worktree: z.string().min(1),
     unit: z.string().min(1),
     format: z.enum(["xlsx", "docx", "pptx"]),
-    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional(),
+    idempotency_key: opSpecs["exchange.import"].input.shape.idempotencyKey.optional().describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   outputSchema: z.object({
     download: downloadSchema,

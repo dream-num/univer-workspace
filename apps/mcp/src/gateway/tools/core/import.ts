@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { pullUrl, pullSpaceId } from "@univerjs/univer-workspace-client-core/product";
 import { readFile } from "node:fs/promises";
 import { z } from "zod";
@@ -24,7 +25,7 @@ export const importTool = executorTool({
     type: op.input.shape.type,
     name: z.string().optional(),
     parent: z.string().optional(),
-    idempotency_key: op.input.shape.idempotencyKey,
+    idempotency_key: op.input.shape.idempotencyKey.describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   outputSchema: op.output.extend({ url: z.url() }),
   op,

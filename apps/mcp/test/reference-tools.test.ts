@@ -12,6 +12,7 @@ import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 
 const cliSkillData = new URL("../../cli/skill-data/", import.meta.url).pathname;
 const mcpSkillData = new URL("../skills/", import.meta.url).pathname;
@@ -289,6 +290,9 @@ describe("API reference, Skills, resources and server instructions", () => {
       await start();
       const client = await connect(mode);
       const instructions = client.getInstructions()!;
+      expect(instructions).toContain(
+        `Creating tools take an idempotency_key. ${IDEMPOTENCY_KEY_DESCRIPTION}`,
+      );
       for (const word of ["pull request", "ready", "review", "merg", "api_find", "skills_read"]) {
         expect(instructions).toContain(word);
       }

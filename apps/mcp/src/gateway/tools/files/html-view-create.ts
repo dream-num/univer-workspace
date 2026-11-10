@@ -1,3 +1,4 @@
+import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { z } from "zod";
 import { htmlViewInput, opSpecs } from "../../../shared/executor-protocol.js";
 import { writeAnnotations } from "../definition.js";
@@ -17,7 +18,7 @@ export const htmlViewCreateTool = executorTool({
     space: repoInput,
     name: opSpecs["htmlView.create"].input.shape.name,
     parent: opSpecs["htmlView.create"].input.shape.parentNodeId,
-    idempotency_key: opSpecs["htmlView.create"].input.shape.idempotencyKey,
+    idempotency_key: opSpecs["htmlView.create"].input.shape.idempotencyKey.describe(IDEMPOTENCY_KEY_DESCRIPTION),
   }),
   op: opSpecs["htmlView.create"],
   request: async ({ html, space, name, parent, idempotency_key }, context) => ({
