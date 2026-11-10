@@ -9,11 +9,9 @@ tools call. It is not published to npm.
 ## Why this package exists
 
 Two Node hosts need the same product operations and runtime composition: the
-DSH-hosted Workspace Agent and the isolated Space app. When each host carried
-its own copy of that logic and its own plugin composition, the two drifted
-apart. This package is the shared home for the common core; it is not a claim
-that every behavior was moved over unchanged, and host policy stays with each
-host.
+DSH-hosted Workspace Agent and the isolated Space app. Sharing this common core
+avoids duplicated execution logic and reduces behavioral drift as the hosts
+evolve. Host-specific policy stays with each host.
 
 ## Consumers
 

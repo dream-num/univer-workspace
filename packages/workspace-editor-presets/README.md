@@ -9,12 +9,10 @@ consuming application compiles it in its own bundle.
 
 ## Why this package exists
 
-Both browser hosts assemble the same editor capabilities for the same product
-types. When each host composed its own preset list, the assembly code was
-duplicated and the two plugin sets drifted apart between products. This package
-is the shared composition point; it is not a claim that every host behavior was
-moved here unchanged, since what is shared is the preset and plugin composition
-rather than the surrounding product behavior.
+Both browser hosts assemble editor capabilities for the same product types.
+Sharing the preset and plugin composition avoids duplicated assembly code and
+reduces the risk of plugin sets drifting between hosts. The surrounding product
+behavior stays with each host.
 
 ## What it owns
 
