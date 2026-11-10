@@ -20,6 +20,10 @@ export const typstCompile: Handler<"typst.compile"> = async (ctx, input, bytes) 
       },
     },
     units: {
+      list: async (worktreeId) => {
+        ctx.signal.throwIfAborted();
+        return await new WorkspaceUnitFeature(async () => ctx.http()).list(worktreeId);
+      },
       create: async (request) => {
         ctx.signal.throwIfAborted();
         ctx.onCreateUnit?.();
