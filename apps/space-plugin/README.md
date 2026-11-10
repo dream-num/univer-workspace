@@ -9,6 +9,10 @@ formal Slides/Canvas/Relational Table viewers and the shared Workspace HTML View
 native DSH Conversation in a floating overlay. DSH owns Session history, composer, model,
 Agent and tool logs. Official host source is unchanged.
 
+![Space preview in DeepSeek Harness: file navigation, an editable Univer document, and the floating AI chat composer.](docs/images/space-preview.png)
+
+Space keeps your document and chat composer in the same view. This screenshot uses an English demo workspace; the example message is an unsent draft.
+
 ## Build / install
 
 Use Node >=24.9.0, pnpm 11 and this application's isolated npm graph. From the
