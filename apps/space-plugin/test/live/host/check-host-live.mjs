@@ -1,5 +1,5 @@
-import { writeEvidence } from './evidence-output.mjs';
-import { connectHost, authorizeWorkspace } from './host-connection.mjs';
+import { writeEvidence } from '../../helpers/evidence-output.mjs';
+import { connectHost, authorizeWorkspace } from '../../helpers/host-connection.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 const host = await connectHost();

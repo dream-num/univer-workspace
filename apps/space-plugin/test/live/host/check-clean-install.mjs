@@ -1,7 +1,7 @@
 /** Official manager, empty profile, no inherited build approvals. */
 import assert from 'node:assert/strict';
-import { writeEvidence } from './evidence-output.mjs';
-import { connectHost } from './host-connection.mjs';
+import { writeEvidence } from '../../helpers/evidence-output.mjs';
+import { connectHost } from '../../helpers/host-connection.mjs';
 const host = await connectHost();
 const spec = process.env.SPACE_PLUGIN_TARBALL;
 if (!spec) throw new Error('SPACE_PLUGIN_TARBALL is required.');

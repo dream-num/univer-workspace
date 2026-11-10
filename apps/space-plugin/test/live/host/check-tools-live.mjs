@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
-import { WorkspaceConnection } from '../lib/workspace.js';
-import { ToolBindings } from '../lib/tools.js';
-import { writeEvidence } from './evidence-output.mjs';
+import { WorkspaceConnection } from '../../../lib/workspace.js';
+import { ToolBindings } from '../../../lib/tools.js';
+import { writeEvidence } from '../../helpers/evidence-output.mjs';
 const login=JSON.parse(await readFile(process.env.SPACE_TEST_LOGIN_FILE ?? '/tmp/task005-workspace-login.json','utf8'));
 const other=JSON.parse(await readFile(process.env.SPACE_OTHER_LOGIN_FILE ?? '/tmp/task004-workspace-login.json','utf8'));
 const workspace=new WorkspaceConnection();const bindings=new ToolBindings(workspace);const checks=[];

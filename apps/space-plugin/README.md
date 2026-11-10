@@ -159,7 +159,7 @@ Current protocol and real Server regression (use an isolated local Server with t
 ```sh
 SPACE_TEST_LOGIN_FILE=/path/to/private-fixture-login.json \
 SPACE_EVIDENCE_DIR=/path/to/evidence/outside/source \
-node scripts/check-oauth-api-live.mjs
+node test/live/auth/check-oauth-api-live.mjs
 ```
 
 The protocol check covers consent, code exchange, PKCE, callback, identity,
@@ -173,7 +173,7 @@ formula Worker is packaged and served through the owner Connection.
 
 For the original Workspace Browser's minimum assembly check, serve it with its
 own Vite config against the same Server, set `SPACE_WORKSPACE_BROWSER_ORIGIN`,
-and run `node scripts/check-editor-assembly-live.mjs`. It observes the real
+and run `node test/live/editor/check-editor-assembly-live.mjs`. It observes the real
 collaboration WebSocket and current History version, performs no edits, and
 compares persisted Snapshot hashes. This does not certify Comments writes,
 multi-user editing or offline persistence.
@@ -209,17 +209,12 @@ runtime dependency from returning. No DSH source or installed SDK is patched.
 Shell icons use Lucide React 0.468.0; the ISC/Feather notice is retained in
 `THIRD_PARTY_NOTICES.txt` and included in the package.
 
-Run `node scripts/check-layout-live.mjs` with the Host/browser/evidence environment
-to inspect native sidebar width and collapse behavior.
-
-Additional read-only UI check: `node scripts/check-readonly-live.mjs` with the
+Additional read-only UI check: `node test/live/editor/check-readonly-live.mjs` with the
 same Host/browser/MVP-fixture variables, after connecting Workspace. It verifies
 that Base create controls are disabled and a Slides insertion is rejected by
 the SDK permission guard. Source snapshots remain unchanged.
 
-Run `node scripts/check-navigation-live.mjs` to exercise Chat/Space/Plugins/Automation,
-narrow navigation, six file types and a Tool read in the existing Session.
-`node scripts/check-navigation-lifecycle-live.mjs` also requires
+`node test/live/navigation/check-navigation-lifecycle-live.mjs` also requires
 `SPACE_PLUGIN_TARBALL=/absolute/path/to/exact-built-package.tgz` and removes and
 reinstalls that bundle through the official manager. Preserve any Host diagnostics.
 
@@ -233,19 +228,17 @@ control; Space keeps its Space heading. No extra chrome row, white strip or top
 padding is added. The Host excludes interactive controls from drag geometry.
 
 The shell uses Host theme tokens for surfaces, text, muted labels, borders and
-selected/hover states. `check-navigation-theme-live.mjs` changes themes through
+selected/hover states. `test/live/navigation/check-navigation-theme-live.mjs` changes themes through
 actual native Settings controls and restores the previous preference; it captures
-both Chat and Space in light/dark. `check-all-context-live.mjs` exercises all six
-file identities, remove/reassociate and new formal Tool reads in the existing
-Session. No document bodies are injected into ordinary prompts. Structured Unit
-inspection is bounded JSON data returned by a Tool, not a full editor or write
-capability. Schemas/names stay unchanged; the inspect description now documents
-these added read formats in the checked contract fixture.
+both Chat and Space in light/dark. No document bodies are injected into ordinary
+prompts. Structured Unit inspection is bounded JSON data returned by a Tool, not a
+full editor or write capability. Schemas/names stay unchanged; the inspect
+description now documents these added read formats in the checked contract fixture.
 
 The taxonomy in `src/content-types.ts` owns every UI name and creation entry.
-`node scripts/check-crud-live.mjs` covers all eight object types against the Server,
+`node test/live/editor/check-crud-live.mjs` covers all eight object types against the Server,
 including content/identity after restore and unauthorized-write rejection.
-`node scripts/check-html-live.mjs` covers Page scripts, Sheet binding reads/writes,
+`node test/live/editor/check-html-live.mjs` covers Page scripts, Sheet binding reads/writes,
 persisted reopen, inspection and resume after a rejected connection change.
 
 The formal HTML Viewer is a build-time `file:` dependency on the Fork's existing
@@ -258,14 +251,13 @@ an ordinary Desktop launch needs no environment-variable setup. The license's
 existing scope and expiry still apply; the SDK remains responsible for validation.
 Run build/install from this repository, preserving those source directories.
 
-Run `node scripts/check-human-collaboration-live.mjs` and
-`node scripts/check-sharing-live.mjs` with two independently configured DSH Hosts,
+Run `node test/live/collaboration/check-human-collaboration-live.mjs` and
+`node test/live/collaboration/check-sharing-live.mjs` with two independently configured DSH Hosts,
 each authenticated as a different Workspace test user. Supply `SPACE_SECOND_DSH_LOG`
 and `SPACE_SECOND_LOGIN_FILE` in addition to the Host/browser/evidence variables.
 These scripts cover comments, identities, permissions, grants and sharing.
 Keep credentials outside the repository and generated evidence.
 
-`check-coediting-live.mjs` performs real native Agent editing, current-document Review/Apply/Reject, two-user synchronization and reopen checks for Docs and Sheets, concurrent human edits, cancel/switch races and Viewer/revoked-member denial. It requires two independent owner Hosts and both private fixture-login files; those files and Host logs never enter the evidence package. Browser evidence identifies the official DSH Web carrier and does not certify the Electron window.
 
 ## Release candidate
 
@@ -322,15 +314,15 @@ exist only while a menu is open. Native DSH, Univer and formal File Tree menus
 keep their existing implementations. File actions and Server capability checks
 remain in the shared `FileActions` component.
 
-Run `node scripts/check-floating-menu-regression.mjs` with
+Run `node test/browser/check-floating-menu-regression.mjs` with
 `SPACE_PLAYWRIGHT_MODULE`, optional `SPACE_BROWSER_EXECUTABLE` and
 `SPACE_EVIDENCE_DIR` to exercise actual React components in an isolated browser
 fixture: corners, resize, ancestor scroll, long menus, theme switching, CSS and
 visual viewport scaling, outside-click and keyboard behavior. This fixture does
 not certify the original reported scene or Electron Desktop. The existing
-`check-create-menu-regression.mjs` checks the eight-entry creation workflow.
+`test/browser/check-create-menu-regression.mjs` checks the eight-entry creation workflow.
 
-`node scripts/check-navigation-menu-regression.mjs` uses the same browser/evidence
+`node test/browser/check-navigation-menu-regression.mjs` uses the same browser/evidence
 environment to check the actual Navigation nested scroll container. Placement
 continues to use the shell boundary; hidden-reference detection uses the
 reference's clipping ancestors. A partly clipped trigger keeps its menu; a fully

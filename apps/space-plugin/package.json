@@ -21,11 +21,11 @@
     "test": "node --test test/*.test.mjs",
     "dsh": "dsh",
     "typecheck": "node scripts/typecheck.mjs",
-    "test:live": "node scripts/check-live.mjs",
-    "seed:live": "node scripts/seed-live.mjs",
-    "test:host": "node scripts/check-host-live.mjs",
-    "seed:product": "node scripts/seed-product.mjs",
-    "test:tools:live": "node scripts/check-tools-live.mjs",
+    "test:live": "node test/live/auth/check-live.mjs",
+    "seed:live": "node test/fixtures/seed-live.mjs",
+    "test:host": "node test/live/host/check-host-live.mjs",
+    "seed:product": "node test/fixtures/seed-product.mjs",
+    "test:tools:live": "node test/live/host/check-tools-live.mjs",
     "lock:runtime": "node scripts/runtime-lock.mjs"
   },
   "dsh": {

@@ -2,9 +2,9 @@
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
-import{WorkspaceConnection}from'../lib/workspace.js';
-import{WorkspaceOAuth}from'../lib/oauth.js';
-import{authorizeWorkspace}from'./host-connection.mjs';
+import{WorkspaceConnection}from'../../../lib/workspace.js';
+import{WorkspaceOAuth}from'../../../lib/oauth.js';
+import{authorizeWorkspace}from'../../helpers/host-connection.mjs';
 const fixture=JSON.parse(fs.readFileSync(process.env.SPACE_TEST_LOGIN_FILE,'utf8'));
 const output=process.env.SPACE_EVIDENCE_DIR;
 if(!output)throw new Error('SPACE_EVIDENCE_DIR is required.');

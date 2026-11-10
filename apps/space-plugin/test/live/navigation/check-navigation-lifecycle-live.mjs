@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile, readdir, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { connectHost } from './host-connection.mjs';
+import { connectHost } from '../../helpers/host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -149,7 +149,7 @@ try {
         {
           carrier: 'Official Host Web UI + actual plugin manager removal',
           pluginVersion: JSON.parse(
-            await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+            await readFile(new URL('../../../package.json', import.meta.url), 'utf8'),
           ).version,
           sessionId: session,
           uninstallFunctionalAcceptance: true,

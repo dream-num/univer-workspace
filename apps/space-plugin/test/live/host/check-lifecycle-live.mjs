@@ -1,5 +1,5 @@
-import { connectHost } from './host-connection.mjs';
-import { writeEvidence } from './evidence-output.mjs';
+import { connectHost } from '../../helpers/host-connection.mjs';
+import { writeEvidence } from '../../helpers/evidence-output.mjs';
 import { readFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 const tarball=process.env.SPACE_PLUGIN_TARBALL;

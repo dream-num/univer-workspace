@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { build } from 'esbuild';
-import { writeEvidence } from './evidence-output.mjs';
+import { writeEvidence } from '../helpers/evidence-output.mjs';
 const { chromium } = await import(process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright');
 const baseline = process.argv.includes('--baseline');
 let viewer = baseline
@@ -33,7 +33,7 @@ createRoot(document.getElementById('app')).render(React.createElement('div',{sty
 const bundle = await build({ stdin: { contents, resolveDir: process.cwd(), loader: 'jsx' },
   bundle: true, platform: 'browser', format: 'esm', write: false, target: 'es2022',
   loader: { '.css': 'text' }, plugins: [{ name: 'observe-preview-errors', setup(build) {
-    build.onLoad({ filter: /\/src\/viewer\.tsx$/ }, args => ({ contents: viewer, loader: 'tsx', resolveDir: new URL('../src', import.meta.url).pathname }));
+    build.onLoad({ filter: /\/src\/viewer\.tsx$/ }, args => ({ contents: viewer, loader: 'tsx', resolveDir: new URL('../../src', import.meta.url).pathname }));
   } }] });
 const css = await readFile('lib/univer-scoped.css', 'utf8');
 const server = createServer((req, res) => {

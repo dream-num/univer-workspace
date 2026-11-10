@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { WorkspaceConnection } from '../lib/workspace.js';
-import { connectHost, authorizeWorkspace, openWorkspaceSettings } from './host-connection.mjs';
+import { WorkspaceConnection } from '../../../lib/workspace.js';
+import { connectHost, authorizeWorkspace, openWorkspaceSettings } from '../../helpers/host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );

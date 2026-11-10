@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
-import { connectHost, authorizeWorkspace } from './host-connection.mjs';
-import { WorkspaceConnection } from '../lib/workspace.js';
+import { connectHost, authorizeWorkspace } from '../../helpers/host-connection.mjs';
+import { WorkspaceConnection } from '../../../lib/workspace.js';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );
@@ -527,7 +527,7 @@ try {
     JSON.stringify(
       {
         carrier: 'Official DSH 0.2.1-rc.3 Web / Microsoft Edge',
-        pluginVersion: JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')).version,
+        pluginVersion: JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')).version,
         at: new Date().toISOString(),
         matrix,
         checks,

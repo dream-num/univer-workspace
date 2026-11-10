@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
-import { connectHost } from './host-connection.mjs';
+import { connectHost } from '../../helpers/host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );

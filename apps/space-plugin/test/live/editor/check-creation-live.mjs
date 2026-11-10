@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile, mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { connectHost, authorizeWorkspace } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from '../../helpers/host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );

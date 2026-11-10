@@ -1,7 +1,7 @@
-import { writeEvidence } from './evidence-output.mjs';
+import { writeEvidence } from '../../helpers/evidence-output.mjs';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { WorkspaceConnection } from '../lib/workspace.js';
+import { WorkspaceConnection } from '../../../lib/workspace.js';
 const login = JSON.parse(await readFile(process.env.SPACE_TEST_LOGIN_FILE ?? '/tmp/task004-workspace-login.json', 'utf8'));
 const workspace = new WorkspaceConnection();
 const checks=[];

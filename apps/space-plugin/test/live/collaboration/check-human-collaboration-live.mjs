@@ -9,7 +9,7 @@ import {
 } from '@univerjs-pro/collaboration-client';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { connectHost, authorizeWorkspace } from './host-connection.mjs';
+import { connectHost, authorizeWorkspace } from '../../helpers/host-connection.mjs';
 const { chromium } = await import(
   process.env.SPACE_PLAYWRIGHT_MODULE ?? 'playwright'
 );

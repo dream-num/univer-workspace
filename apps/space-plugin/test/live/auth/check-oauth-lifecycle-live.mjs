@@ -1,9 +1,9 @@
 /** Real issuer lifecycle regression, Node/Server boundary; Desktop UI is separate. */
 import assert from 'node:assert/strict';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
-import { WorkspaceConnection } from '../lib/workspace.js';
-import { WorkspaceOAuth } from '../lib/oauth.js';
-import { authorizeWorkspace } from './host-connection.mjs';
+import { WorkspaceConnection } from '../../../lib/workspace.js';
+import { WorkspaceOAuth } from '../../../lib/oauth.js';
+import { authorizeWorkspace } from '../../helpers/host-connection.mjs';
 const alice = JSON.parse(await readFile(process.env.SPACE_TEST_LOGIN_FILE, 'utf8'));
 const bob = JSON.parse(await readFile(process.env.SPACE_SECOND_LOGIN_FILE, 'utf8'));
 const secondOrigin = process.env.SPACE_SECOND_ENDPOINT;
