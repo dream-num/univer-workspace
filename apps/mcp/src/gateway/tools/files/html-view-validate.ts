@@ -1,3 +1,4 @@
+import { htmlViewSourceSchema, readHtmlView } from "./html-view-support.js";
 import { opSpecs } from "../../../shared/executor-protocol.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
@@ -8,9 +9,9 @@ export const htmlViewValidateTool = executorTool({
   scope: "read",
   title: "Validate an HTML View",
   description:
-    "Check HTML bindings against trunk Sheets without executing JavaScript. HTML is limited to 512 KiB of UTF-8 text.",
+    "Check HTML bindings against trunk Sheets without executing JavaScript. Provide exactly one of html or html_upload_id (a ready html-view upload). HTML is limited to 512 KiB of UTF-8 text.",
   annotations: readOnlyAnnotations,
-  inputSchema: opSpecs["htmlView.validate"].input,
+  inputSchema: htmlViewSourceSchema,
   op: opSpecs["htmlView.validate"],
-  request: (input) => ({ input }),
+  request: async (args, context) => ({ input: { html: await readHtmlView(args, context) } }),
 });

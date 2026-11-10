@@ -129,8 +129,8 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `blob_download` | `blob download` | `resource` | 是 | 否 | `read` |
 | `blob_replace` | `blob replace` | `resource`、`upload_id`、`etag`、`idempotency_key` | 否 | 是 | `publish` |
 | `asset_download` | `asset download` | `id`、`worktree` | 是 | 否 | `read` |
-| `html_view_validate` | `html-view validate` | `html` | 是 | 否 | `read` |
-| `html_view_create` | `html-view create` | `html`、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `publish` |
+| `html_view_validate` | `html-view validate` | `html` 或 `html_upload_id`（恰选一个） | 是 | 否 | `read` |
+| `html_view_create` | `html-view create` | `html` 或 `html_upload_id`（恰选一个）、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `publish` |
 | `compile_markdown` | `compile-markdown` | `markdown`、`assets_upload_id`、`title`、`apply`、`worktree`、`space`、`parent`、`unit`、`source_map`、`blocks`、`idempotency_key` | 否 | 否 | `write` |
 | `export_markdown` | `export-markdown` | `worktree`、`unit`、`source_map`、`blocks` | 是 | 否 | `read` |
 | `compile_typst` | `compile-typst` | `bundle_upload_id`、`apply`、`worktree`、`space`、`parent`、`idempotency_key` | 否 | 否 | `write` |
@@ -140,7 +140,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 说明：
 
-- `html_view_validate` 与 `html_view_create` 接受最多 512 KiB UTF-8 HTML，超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果及 `workspaceUrl`；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 和目标重试。
+- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果及 `workspaceUrl`；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 或上传 ID 和目标重试，上传保留至一小时过期。
 - `blob_download`、`asset_download`、`print_pdf` 返回签名下载链接。`blob_download` 同时返回 ETag，因为 `blob_replace` 需要它。
 - `compile_markdown` 的 Markdown 正文以字符串传入。正文引用的本地图片打成 zip 上传，用 `assets_upload_id` 传入，zip 内路径对应 Markdown 里的相对路径。CLI 要求资源不能超出源文件目录（`packages/client-core/src/markdown-source.ts:31-47`），MCP 同样拒绝 zip 中越界的路径。
 - `compile_markdown` 的 ZIP 最多 256 个 entry，单个文件解压后最多 4 MiB，总解压大小最多 8 MiB。解压前拒绝超过 1,024 UTF-8 字节或 32 段的 entry 名称。拒绝路径穿越、大小写和 Unicode 规范化碰撞，以及文件与目录冲突。
@@ -238,6 +238,7 @@ PUT 支持 chunked，Content-Length 可省略；提供时不得超过有效大�
 | `purpose` | 用于 | 上限 |
 | --- | --- | --- |
 | `office-import` | `import` | 50 MiB，仍受 Workspace 1 MiB UnitData 提交上限约束 |
+| `html-view` | `html_view_validate`、`html_view_create` 的 `html_upload_id` | 默认 512 KiB；合法 UTF-8 `text/html`，工具固定上限 512 KiB |
 | `blob` | `blob_upload`、`blob_replace` | 默认 512 MiB，与 Workspace `maxBlobBytes` 对齐 |
 | `markdown-assets` | `compile_markdown` | ZIP 上传默认 50 MiB，解压后单文件 4 MiB、合计 8 MiB；生成结果另受上述提交与响应上限约束 |
 | `svg-assets`、`typst-bundle` | 对应的编译工具 | zip，默认各 50 MiB |
@@ -283,8 +284,8 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
 D3 已实现 `file_upload_create`、`blob_upload`、`blob_download`、`blob_replace` 和 `asset_download`。
 `MCP_UPLOAD_BLOB_MAX_BYTES`、`MCP_UPLOAD_OFFICE_IMPORT_MAX_BYTES`、
 `MCP_UPLOAD_MARKDOWN_ASSETS_MAX_BYTES`、`MCP_UPLOAD_SVG_ASSETS_MAX_BYTES`、
-`MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES` 可配置用途上限。Blob 接受合法 MIME 类型；Office 接受
-OpenXML、legacy Office 和 `text/csv`；其余三种用途只接受 `application/zip` 或
+`MCP_UPLOAD_TYPST_BUNDLE_MAX_BYTES`、`MCP_UPLOAD_HTML_VIEW_MAX_BYTES`（默认 `524288`）可配置用途上限。Blob 接受合法 MIME 类型；Office 接受
+OpenXML 和 legacy Office；HTML View 接受 `text/html`，其余三种 ZIP 用途只接受 `application/zip` 或
 `application/x-zip-compressed`。上传对象一小时有效，链接十分钟有效。工具消费不删除对象，
 同一 `idempotency_key` 可重试。外用户上传统一返回 `workspace-upload-not-found`，未完成或用途不符
 分别返回 `workspace-upload-not-ready`、`workspace-upload-purpose-mismatch`。
