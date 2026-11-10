@@ -1,5 +1,7 @@
 # Space plugin for official DeepSeek Harness
 
+English | [简体中文](README.zh-CN.md)
+
 Space is a proof-of-concept plugin for Univer Workspace. It runs inside official DeepSeek Harness (DSH), connects to a Workspace service, and lets you browse your files, edit Univer Docs and Sheets, and chat with an AI alongside an open document.
 
 This preview targets DSH 0.2.2-rc.1. It is an optional way to use Workspace inside DSH, not a replacement for the separate Workspace Agent Desktop application. Use non-critical documents while evaluating it.
