@@ -343,14 +343,14 @@ it("uses read failure semantics for SVG compilation and unknown-result semantics
 });
 
 it.each([
-  { tool: compileMarkdownTool, args: { markdown: "Hello", worktree: "wt", space: "space" },
-    input: { markdown: "Hello", worktreeId: "wt", spaceId: "space", apply: true },
+  { tool: compileMarkdownTool, args: { markdown: "Hello", worktree: "wt", space: "00000000-0000-4000-8000-000000000001" },
+    input: { markdown: "Hello", worktreeId: "wt", spaceId: "00000000-0000-4000-8000-000000000001", apply: true },
     output: { committed: true, targetUnitId: "doc", diagnostics: [], sourceMap: [] } },
   { tool: compileMarkdownTool, args: { markdown: "Hello", worktree: "wt", unit: "doc", source_map: [], blocks: ["intro"] },
     input: { markdown: "Hello", worktreeId: "wt", unitId: "doc", sourceMap: [], blockIds: ["intro"], apply: true },
     output: { committed: true, targetUnitId: "doc", diagnostics: [], sourceMap: [] } },
-  { tool: compileTypstTool, args: { worktree: "wt", space: "space" },
-    input: { worktreeId: "wt", spaceId: "space", apply: true },
+  { tool: compileTypstTool, args: { worktree: "wt", space: "00000000-0000-4000-8000-000000000001" },
+    input: { worktreeId: "wt", spaceId: "00000000-0000-4000-8000-000000000001", apply: true },
     output: { committed: true, compiledTargetUnitId: "doc", diagnostics: [], previews: [] } },
   { tool: compileSvgTool, args: { svg: "<svg/>", page: 1, worktree: "wt", unit: "slide" },
     input: { svg: "<svg/>", page: 1, worktreeId: "wt", unitId: "slide", apply: true },
