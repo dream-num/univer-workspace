@@ -25,6 +25,7 @@ COPY packages/workspace-file-browser/package.json ./packages/workspace-file-brow
 COPY packages/workspace-ui/package.json ./packages/workspace-ui/package.json
 COPY packages/workspace-html-viewer/package.json ./packages/workspace-html-viewer/package.json
 COPY packages/workspace-markdown-viewer/package.json ./packages/workspace-markdown-viewer/package.json
+COPY packages/workspace-editor-presets/package.json ./packages/workspace-editor-presets/package.json
 
 RUN HTTP_PROXY="${HTTP_PROXY}" HTTPS_PROXY="${HTTP_PROXY}" pnpm install \
     --frozen-lockfile \
@@ -39,6 +40,7 @@ COPY packages/workspace-file-browser ./packages/workspace-file-browser
 COPY packages/workspace-ui ./packages/workspace-ui
 COPY packages/workspace-html-viewer ./packages/workspace-html-viewer
 COPY packages/workspace-markdown-viewer ./packages/workspace-markdown-viewer
+COPY packages/workspace-editor-presets ./packages/workspace-editor-presets
 
 # The production Workspace graph excludes the desktop-only signing package.
 RUN NODE_OPTIONS="--max-old-space-size=${NODE_MAX_OLD_SPACE_SIZE}" pnpm --filter @univerjs/univer-workspace-reference-provider build \
