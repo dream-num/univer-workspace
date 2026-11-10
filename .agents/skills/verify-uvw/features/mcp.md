@@ -980,7 +980,7 @@ $V mcp mcp-skills-full skills_read '{"name":"html-view","full":true}'
 node --input-type=module - "$EVIDENCE/mcp-skills-full.out" <<'JS'
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const skill = JSON.parse(readFileSync(process.argv[2], 'utf8')).skills[0];
+const skill = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const root = 'apps/cli/skill-data/html-view/';
 assert.equal(skill.content, readFileSync(root + 'SKILL.md', 'utf8'));
 assert.equal(skill.files.length, skill.resources.length);
@@ -996,9 +996,9 @@ Pass when all commands exit 0, the fallback lists ten names with descriptions, a
 $V mcp mcp-skills-read skills_read '{"name":"html-view","resource":"references/charts.md"}'
 node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-read.out" > "$EVIDENCE/mcp-skills-read.md"
 cmp "$EVIDENCE/mcp-skills-read.md" apps/cli/skill-data/html-view/references/charts.md
-jq -e '.skills[0].resources | length > 0 and all(.[]; .readCommand | startswith("Call skills_read with name \"html-view\" and resource \"references/"))' "$EVIDENCE/mcp-skills-get.out"
+jq -e '.resources | length > 0 and all(.[]; .readCommand | startswith("Call skills_read with name \"html-view\" and resource \"references/"))' "$EVIDENCE/mcp-skills-get.out"
 $V mcp mcp-skills-core skills_read '{"name":"core"}'
-node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).skills[0].content)' "$EVIDENCE/mcp-skills-core.out" > "$EVIDENCE/mcp-skills-core.md"
+node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-core.out" > "$EVIDENCE/mcp-skills-core.md"
 cmp "$EVIDENCE/mcp-skills-core.md" apps/mcp/skills/core/SKILL.md
 ! cmp -s "$EVIDENCE/mcp-skills-core.md" apps/cli/skill-data/core/SKILL.md
 ! rg -n '\buvw\b' "$EVIDENCE/mcp-skills-core.md"

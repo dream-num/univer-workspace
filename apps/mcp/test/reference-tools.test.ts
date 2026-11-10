@@ -182,13 +182,13 @@ describe("API reference, Skills, resources and server instructions", () => {
 
     const core = await call(client, "skills_read", { name: "core" });
     expect(core.structured).toEqual({
-      skills: [
-        { name: "core", content: await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8") },
-      ],
+      name: "core", content: await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8"),
     });
 
     const html = await call(client, "skills_read", { name: "html-view" });
-    const [skill] = html.structured["skills"];
+    const skill = html.structured;
+    expect(skill["skills"]).toBeUndefined();
+    expect(skill["content"]).toBe(await readFile(join(cliSkillData, "html-view/SKILL.md"), "utf8"));
     expect(skill.resources.map((resource: { path: string }) => resource.path)).toEqual(
       (await readdir(join(cliSkillData, "html-view/references")))
         .sort((a, b) => a.localeCompare(b))
@@ -201,7 +201,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(skill.files).toBeUndefined();
 
     const full = await call(client, "skills_read", { name: "html-view", full: true });
-    expect(full.structured["skills"][0].files).toHaveLength(skill.resources.length);
+    expect(full.structured["files"]).toHaveLength(skill.resources.length);
 
     const resource = await call(client, "skills_read", {
       name: "html-view",
@@ -338,7 +338,7 @@ describe("API reference, Skills, resources and server instructions", () => {
           expect(Buffer.from(served.bytes)).toEqual(bytes);
         }
         const fallback = await call(client, "skills_read", { name: entry.frontmatter.name });
-        expect(fallback.structured["skills"][0].content).toBe(
+        expect(fallback.structured["content"]).toBe(
           await readFile(join(sourceRoot, entry.frontmatter.name, "SKILL.md"), "utf8"),
         );
       }
@@ -379,7 +379,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     await writeFile(join(sourceRoot, "core/SKILL.md"), `${original}\nChanged after startup.\n`);
     expect((await extension.read(skill)).text).toBe(original);
     expect(
-      (await call(client, "skills_read", { name: "core" })).structured["skills"][0].content,
+      (await call(client, "skills_read", { name: "core" })).structured["content"],
     ).toBe(original);
   });
 

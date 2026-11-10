@@ -29,6 +29,10 @@ describe("content.inspect input errors", () => {
       message: "range requires the worksheet argument (id:<id>, name:<name> or index:N)",
     },
     {
+      input: { target: "range", selectors: ["A1:E6"], worksheet: "b764cbb9-uuid" },
+      message: 'Invalid worksheet "b764cbb9-uuid"; use id:<id>, name:<name> or index:N.',
+    },
+    {
       input: { target: "worksheet", selectors: ["index:1"], worksheet: "name:Sheet1" },
       message: "worksheet is only valid when target is range, not worksheet",
     },
@@ -45,6 +49,19 @@ describe("content.inspect input errors", () => {
       contentInspect(context(), { unitId: "unit", scope: { kind: "trunk" }, ...input }),
     ).rejects.toMatchObject({ code: "workspace-argument-invalid", message });
   });
+
+  it.each(["id:sheet-uuid", "name:Sheet1", "index:1"])(
+    "accepts the explicit worksheet form %s before resolving a source",
+    async (worksheet) => {
+      const ctx = context();
+      const resolved = new Error("source reached");
+      vi.mocked(ctx.source).mockImplementation(() => { throw resolved; });
+      await expect(contentInspect(ctx, {
+        unitId: "unit", scope: { kind: "trunk" }, target: "range", selectors: ["A1:E6"], worksheet,
+      })).rejects.toBe(resolved);
+      expect(ctx.source).toHaveBeenCalledOnce();
+    },
+  );
 
   const invalidInputs: InspectionOptions[] = [
     ...(["worksheet", "paragraph", "slide", "board-element"] as const).flatMap(

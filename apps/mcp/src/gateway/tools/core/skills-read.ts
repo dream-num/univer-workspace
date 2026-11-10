@@ -31,7 +31,7 @@ export const skillsReadTool: ToolDefinition = {
   scope: "read",
   title: "Read Skills",
   description:
-    "Read the version-matched operational Skills that teach the Workspace workflow. Without arguments it lists the skills. With name it returns that skill (with full: true also its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
+    "Read the version-matched operational Skills that teach the Workspace workflow. Without arguments it lists the skills. With name it returns {name, content, resources?} directly (with full: true also files containing its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
   inputSchema,
   outputSchema: z.object({
     skills: z
@@ -39,13 +39,12 @@ export const skillsReadTool: ToolDefinition = {
         z.object({
           name: z.string(),
           description: z.string().optional(),
-          content: z.string().optional(),
-          resources: z.array(z.object({ path: z.string(), readCommand: z.string() })).optional(),
-          files: z.array(z.object({ path: z.string(), content: z.string() })).optional(),
         }),
       )
       .optional(),
     name: z.string().optional(),
+    resources: z.array(z.object({ path: z.string(), readCommand: z.string() })).optional(),
+    files: z.array(z.object({ path: z.string(), content: z.string() })).optional(),
     path: z.string().optional(),
     content: z.string().optional(),
     truncated: z.boolean().optional(),
@@ -97,23 +96,19 @@ export const skillsReadTool: ToolDefinition = {
     if (cursor !== undefined) throw invalid("cursor applies only when resource is given.");
     const supplemental = paths.filter((path) => path !== "SKILL.md");
     const output = {
-      skills: [
-        {
-          name,
-          content: read(name, "SKILL.md"),
-          ...(supplemental.length
-            ? {
-                resources: supplemental.map((path) => ({
-                  path,
-                  readCommand: `Call skills_read with name "${name}" and resource "${path}".`,
-                })),
-              }
-            : {}),
-          ...(full === true
-            ? { files: supplemental.map((path) => ({ path, content: read(name, path) })) }
-            : {}),
-        },
-      ],
+      name,
+      content: read(name, "SKILL.md"),
+      ...(supplemental.length
+        ? {
+            resources: supplemental.map((path) => ({
+              path,
+              readCommand: `Call skills_read with name "${name}" and resource "${path}".`,
+            })),
+          }
+        : {}),
+      ...(full === true
+        ? { files: supplemental.map((path) => ({ path, content: read(name, path) })) }
+        : {}),
     };
     if (full === true && JSON.stringify(output).length > RESULT_LIMIT) {
       throw workspaceError(

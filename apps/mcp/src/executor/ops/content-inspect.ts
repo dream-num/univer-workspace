@@ -24,6 +24,15 @@ const inspectionInputMessages: [RegExp, string][] = [
 ];
 
 export const contentInspect: Handler<"content.inspect"> = async (ctx, input) => {
+  if (
+    input.target === "range" &&
+    input.worksheet !== undefined &&
+    !/^(id|name|index):[\s\S]+$/.test(input.worksheet)
+  )
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `Invalid worksheet "${input.worksheet}"; use id:<id>, name:<name> or index:N.`,
+    );
   let query;
   try {
     query = parseInspectionQuery(
