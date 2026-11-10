@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { resolve, join, relative, isAbsolute } from 'node:path';
 import { scanRelease } from './scan-release.mjs';
 import { productionLock } from './runtime-lock.mjs';
+import { buildPackageReadme } from './package-readme.mjs';
 
 const root = resolve('../..');
 const args = process.argv.slice(2);
@@ -35,11 +36,11 @@ try {
   const keyMatch = serverLicenseSource.match(/export const UNIVER_LICENSE_KEY\s*=\s*(["'])([^"']+)\1/);
   if (!keyMatch) throw new Error('Workspace Exchange development license key not found.');
   await writeFile(join(stage, 'lib/runtime-license.json'), JSON.stringify({ scope: 'internal-desktop-test', license: value, licenseKey: keyMatch[2] }) + '\n');
-  const readme = await readFile('README.md', 'utf8');
-  const instructions = readme.split('## Release candidate\n')[1];
-  if (!instructions) throw new Error('Missing customer installation instructions.');
+  // The packaged README is the customer installation document, not the
+  // repository README. Read it explicitly instead of slicing a heading.
+  const instructions = await readFile('docs/installation.md', 'utf8');
   const licensing = 'Internal Desktop test package: includes the existing Workspace application development license as a Host-only fallback. A nonempty UNIVER_LICENSE overrides it. This does not extend its validity or authorized scope.';
-  await writeFile(join(stage, 'README.md'), `# Space Plugin ${version} release candidate\n\n${licensing}\n\n` + instructions.trim() + '\n');
+  await writeFile(join(stage, 'README.md'), buildPackageReadme({ version, instructions, licensing }));
   await cp('../../LICENSE', join(stage, 'LICENSE'));
   const notices = ['Space Plugin third-party notices', '', 'DSH and React are provided by the official Host.', licensing, ''];
   for (const name of Object.keys({ ...source.devDependencies, ...dependencies }).filter(name => /^@univer|^@floating-ui|^lucide|^rxjs|^zustand|^immer/.test(name)).sort()) {
