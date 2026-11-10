@@ -27,6 +27,7 @@ import {
   parseClientRegistration,
   parseMcpScopes,
   resolveClientSource,
+  resolveMcpResource,
   type ClientSource,
   type McpOAuthConfig,
 } from "./mcp-oauth.js";
@@ -316,7 +317,7 @@ export function createOAuthAuthorizationRouter(options: {
       fail(400, "invalid_request", "resource is required.");
       return;
     }
-    const resource = body.resource;
+    const resource = (mcp === null ? undefined : resolveMcpResource(mcp, body.resource)) ?? body.resource;
     if (body.grant_type === "refresh_token") {
       if (typeof body.refresh_token !== "string" || body.refresh_token === "") {
         fail(400, "invalid_request", "refresh_token is required.");
@@ -646,8 +647,8 @@ function parseMcpAuthorizationRequest(
   if (typeof codeChallenge !== "string" || !PKCE_CHALLENGE_PATTERN.test(codeChallenge)) {
     return fail("invalid_request", "code_challenge must be a base64url S256 PKCE challenge.");
   }
-  const resource = values.resource;
-  if (typeof resource !== "string" || !config.resources.includes(resource)) {
+  const resource = typeof values.resource === "string" ? resolveMcpResource(config, values.resource) : undefined;
+  if (resource === undefined) {
     return fail("invalid_target", "resource must name this Workspace's MCP server.");
   }
   const scopes = values.scope === undefined || values.scope === ""

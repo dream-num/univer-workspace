@@ -67,7 +67,8 @@ export interface paths {
          *     documents return 400 and temporary fetch failures return 503 here, never a
          *     client redirect. CIMD names are displayed with their URL hostname. They must send
          *     `response_type=code`, `code_challenge_method=S256` and a `resource`
-         *     equal to one of `MCP_RESOURCE_URLS`; `scope` is a subset of `read`,
+         *     equal to one of `MCP_RESOURCE_URLS`, optionally followed by a query such as
+         *     `?toolsets=all`; the grant is bound to the listed URL. `scope` is a subset of `read`,
          *     `write`, `publish` and `worktree:merge` (default all four) and `state`
          *     is optional, 1 to 1024 printable ASCII characters. A loopback
          *     `redirect_uri` matches a registered one with any port (RFC 8252); every
@@ -3201,7 +3202,7 @@ export interface components {
         5: "code";
         /** @description Required for MCP clients. */
         6: "S256";
-        /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly. */
+        /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly after removing a query string such as `?toolsets=all`. */
         7: string;
         Cursor: string;
         Limit: string;
@@ -3306,7 +3307,7 @@ export interface operations {
                 response_type?: "code";
                 /** @description Required for MCP clients. */
                 code_challenge_method?: "S256";
-                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly. */
+                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly after removing a query string such as `?toolsets=all`. */
                 resource?: string;
             };
             header?: never;
@@ -3367,7 +3368,7 @@ export interface operations {
                 response_type?: components["parameters"]["5"];
                 /** @description Required for MCP clients. */
                 code_challenge_method?: components["parameters"]["6"];
-                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly. */
+                /** @description Required for MCP clients (RFC 8707); one of `MCP_RESOURCE_URLS`, compared exactly after removing a query string such as `?toolsets=all`. */
                 resource?: components["parameters"]["7"];
             };
             header?: never;
