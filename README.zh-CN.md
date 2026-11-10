@@ -47,10 +47,179 @@ Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类�
 | **Workspace Browser** | 直接编辑文档、协同、组织 Space 和审阅变更                             | [启动 Workspace](#快速开始)                                   |
 | **Workspace Agent**   | 在文档旁与 Agent 对话、引用本地或远程文件与文件夹、审查 Worktree 变更 | [安装和使用 Agent](apps/agent/README.zh-CN.md#安装与首次使用) |
 | **Workspace CLI**     | 从终端、脚本或已有 Agent 环境自动化处理文档                           | [CLI 安装与使用](apps/cli/README.md)                          |
+| **Workspace MCP**     | 用一个 URL 让 Claude、ChatGPT、Cursor、VS Code、Codex 等 AI 助手操作 Workspace | [连接 AI 助手](#连接-ai-助手mcp)                              |
 
 Workspace Agent 是基于 DSH（DeepSeek Harness）的本地 Web 应用。
 它的本地文件引用指向运行 Agent 的机器，Workspace 文档仍由连接的服务管理。
 Agent 和 CLI 都可以连接现有的 Workspace 部署，或在本地启动的 Workspace。
+
+## 连接 AI 助手（MCP）
+
+Workspace 提供远程 [MCP](https://modelcontextprotocol.io) 服务。连上它的 AI 助手可以查找你的文件、开 PR、编辑 Sheet、Doc 和 Slide、
+读回结果，再把 PR 标记为 ready，交给你在浏览器里审阅。本机不需要安装任何东西。
+
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=univer-workspace&config=eyJ1cmwiOiJodHRwczovL3NwYWNlLnVuaXZlci5haS9tY3AifQ%3D%3D)
+[![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Univer_Workspace-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=univer-workspace&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fspace.univer.ai%2Fmcp%22%7D)
+
+| 项目     | 值                                                                                                                       |
+| -------- | ------------------------------------------------------------------------------------------------------------------------ |
+| 服务 URL | `https://space.univer.ai/mcp`。自己部署时为 `https://<你的 Workspace>/mcp`（见 [MCP 服务说明](apps/mcp/README.md)）    |
+| 传输方式 | Streamable HTTP                                                                                                          |
+| 登录     | 在浏览器中完成 OAuth。同意页列出 `read`、`write`、`publish` 和 `worktree:merge`，不想授予的可以取消勾选                    |
+| toolset  | 默认 `core`。加 `?toolsets=core,files` 启用 Blob、Asset、Markdown、Typst、SVG、HTML View 工具，`admin` 用于仓库与 Label 管理，`all` 启用全部 |
+
+不支持 OAuth 的客户端可以把个人访问令牌放在 `Authorization: Bearer <token>` 中发送，令牌在 Workspace 账号菜单的
+**访问令牌**里创建。`space.univer.ai` 目前只对受邀账号开放编辑类工具（`execute`、`inspect`、导入和导出），所有账号都可以浏览、
+搜索、管理 Issue 和 PR。
+
+<details>
+<summary><b>Claude Code</b></summary>
+
+```bash
+claude mcp add --transport http univer-workspace https://space.univer.ai/mcp
+```
+
+在 Claude Code 会话中运行 `/mcp`，选择 `univer-workspace` 并登录。加 `--scope user` 可在所有项目中使用。配置了 `Authorization`
+请求头时 Claude Code 不会走 OAuth，两者不要同时设置。
+
+</details>
+
+<details>
+<summary><b>Claude.ai 与 Claude Desktop</b></summary>
+
+打开 **Customize → Connectors**，选择 **+ Add → Add custom connector**，填入 `Univer Workspace` 和
+`https://space.univer.ai/mcp`，然后登录。Claude Desktop 使用同一个连接器列表。Team 与 Enterprise 方案需要 Owner 先在
+**Organization settings → Connectors** 中添加，成员再点 **Connect**。这类连接器从 Anthropic 的云端发起连接，自己部署的
+Workspace 需要能从公网访问。
+
+</details>
+
+<details>
+<summary><b>ChatGPT</b></summary>
+
+在网页版 ChatGPT 中打开应用设置（不同版本显示为 **Apps**、**Plugins** 或 **Connectors**），方案需要时先开启
+**Developer mode**，再用 `https://space.univer.ai/mcp` 和 OAuth 创建自定义 MCP 应用。新对话里用 `@` 选中它。
+是否可用取决于方案，Business 与 Enterprise 可能需要管理员先允许自定义 MCP 应用。
+
+</details>
+
+<details>
+<summary><b>Codex</b></summary>
+
+```bash
+codex mcp add univer-workspace --url https://space.univer.ai/mcp
+codex mcp login univer-workspace
+```
+
+`codex mcp add` 可能会自动开始登录。CLI、IDE 插件和桌面应用共用 `~/.codex/config.toml`：
+
+```toml
+[mcp_servers.univer-workspace]
+url = "https://space.univer.ai/mcp"
+```
+
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+点上面的按钮，或在 `~/.cursor/mcp.json`（项目内为 `.cursor/mcp.json`）中加入下面的配置。Cursor 首次连接时会提示登录。
+
+```json
+{
+  "mcpServers": {
+    "univer-workspace": { "url": "https://space.univer.ai/mcp" }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>VS Code（GitHub Copilot）</b></summary>
+
+点上面的按钮，或运行：
+
+```bash
+code --add-mcp '{"name":"univer-workspace","type":"http","url":"https://space.univer.ai/mcp"}'
+```
+
+然后运行 **MCP: List Servers**，启动 `univer-workspace`，在浏览器中登录。远程 OAuth 需要 VS Code 1.101 或更高版本。
+只在一个工作区使用时，把服务写进 `.vscode/mcp.json` 的 `servers`，并设置 `"type": "http"`。
+
+</details>
+
+<details>
+<summary><b>Gemini CLI</b></summary>
+
+```bash
+gemini mcp add --transport http --scope user univer-workspace https://space.univer.ai/mcp
+```
+
+运行 `/mcp auth univer-workspace` 登录。在 `settings.json` 中，Streamable HTTP 服务使用 `httpUrl`，`url` 表示 SSE。
+
+</details>
+
+<details>
+<summary><b>opencode</b></summary>
+
+```bash
+opencode mcp add univer-workspace --url https://space.univer.ai/mcp --global
+opencode mcp auth univer-workspace
+```
+
+</details>
+
+<details>
+<summary><b>Windsurf</b></summary>
+
+在 Windsurf Settings 中打开 MCP 配置文件（**Add Server** 或 **Open MCP config file**），加入下面的服务后刷新。连接时 Windsurf
+会提示登录。
+
+```json
+{
+  "mcpServers": {
+    "univer-workspace": { "serverUrl": "https://space.univer.ai/mcp" }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>WorkBuddy</b></summary>
+
+打开 **连接器 → 自定义连接器 → 配置 MCP**，加入下面的服务，保存并启用。显示需要认证时点 **连接** 并登录。
+
+```json
+{
+  "mcpServers": {
+    "univer-workspace": { "type": "streamableHttp", "url": "https://space.univer.ai/mcp" }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Grok</b></summary>
+
+在 [grok.com](https://grok.com) 打开 **Connectors → New Connector → Custom**，填入 `https://space.univer.ai/mcp` 并登录。
+Grok 从 xAI 的云端发起连接，自己部署的 Workspace 需要能从公网访问。
+
+</details>
+
+<details>
+<summary><b>其他客户端</b></summary>
+
+支持 Streamable HTTP 和 OAuth 2.1 的客户端都可以直接使用服务 URL。Workspace 支持 Client ID Metadata Documents
+和动态客户端注册。只能运行本地 stdio 服务的客户端可以通过 `npx -y mcp-remote https://space.univer.ai/mcp` 之类的桥接使用。
+
+</details>
+
+客户端反复要求登录时，先在该客户端中退出这个服务（例如 `claude mcp logout univer-workspace`、
+`opencode mcp logout univer-workspace`，或 Gemini CLI 中的 `/mcp auth`），再重新登录。缺少预期的工具时，检查 URL 中的
+`?toolsets=`。
 
 ## Space Preview（预览版）
 
