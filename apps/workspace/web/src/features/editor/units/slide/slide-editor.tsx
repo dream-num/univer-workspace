@@ -1,3 +1,4 @@
+import { createSlideEditorPresets, slideEditorLocales } from "@univerjs/univer-workspace-editor-presets/slides";
 import { SetSlideZoomRatioOperation, UniverSlidesPlugin } from "@univerjs-pro/slides";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
 import ChartUIZhCN from "@univerjs-pro/chart-ui/locale/zh-CN";
@@ -81,81 +82,9 @@ import { downloadSlidePreview } from "./download-preview";
 
 export type SlideEditorProps = CollaborationEditorProps;
 
-export const slideEditorLocales: Readonly<
-  Record<"zh-CN" | "en-US", ILanguagePack>
-> = {
-  "zh-CN": mergeLocales(
-    ChartUIZhCN,
-    EngineChartZhCN,
-    UniverDesignZhCN,
-    UniverUIZhCN,
-    UniverDocsUIZhCN,
-    UniverDrawingUIZhCN,
-    UniverSlidesZhCN,
-    UniverShapeEditorUIZhCN,
-    UniverSlidesUIZhCN,
-    UniverSlidesPrintZhCN,
-    UniverSlidesChartUIZhCN,
-    UniverSlidesTableUIZhCN,
-    ThreadCommentUIZhCN,
-    SlidesThreadCommentUIZhCN
-  ),
-  "en-US": mergeLocales(
-    ChartUIEnUS,
-    EngineChartEnUS,
-    UniverDesignEnUS,
-    UniverUIEnUS,
-    UniverDocsUIEnUS,
-    UniverDrawingUIEnUS,
-    UniverSlidesEnUS,
-    UniverShapeEditorUIEnUS,
-    UniverSlidesUIEnUS,
-    UniverSlidesPrintEnUS,
-    UniverSlidesChartUIEnUS,
-    UniverSlidesTableUIEnUS,
-    ThreadCommentUIEnUS,
-    SlidesThreadCommentUIEnUS
-  ),
-};
+export { slideEditorLocales } from "@univerjs/univer-workspace-editor-presets/slides";
 
-export function createSlideComparisonPresets(
-  container: HTMLElement,
-  collaboration = false,
-): IPreset[] {
-  return [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            header: false,
-            toolbar: false,
-            footer: false,
-            disableAutoFocus: true,
-          },
-        ],
-        UniverDocsPlugin,
-        UniverDocsUIPlugin,
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
-          },
-        ],
-        UniverSlidesPlugin,
-        UniverSlidesUIPlugin,
-        UniverSlidesChartPlugin,
-        UniverSlidesChartUIPlugin,
-        UniverSlidesTablePlugin,
-        UniverSlidesTableUIPlugin,
-      ],
-    },
-  ];
-}
+export { createSlideComparisonPresets } from "@univerjs/univer-workspace-editor-presets/slides";
 
 export const slideEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,
@@ -202,39 +131,7 @@ export const slideEditorDefinition: ICollaborationEditorDefinition = {
     createWorkspaceImportExportFeature("slide", { mobile: false }),
   ],
   printFeaturePlugins: () => [UniverSlidesPrintPlugin],
-  createPresets: (container, _license, _scope, compact) => [
-    { plugins: getReferencedSheetPlugins() },
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            ...(compact ? { header: false, toolbar: false, disableAutoFocus: true } : {}),
-          },
-        ],
-        UniverDocsPlugin,
-        UniverDocsUIPlugin,
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            // The collaboration plugin owns the remote image service. Remove
-            // Drawing's local implementation to keep a single registration.
-            override: [[IImageIoService, null]],
-          },
-        ],
-        UniverSlidesPlugin,
-        UniverSlidesUIPlugin,
-        UniverSlidesChartPlugin,
-        UniverSlidesChartUIPlugin,
-        UniverSlidesTablePlugin,
-        UniverSlidesTableUIPlugin,
-      ],
-    },
-  ],
+  createPresets: (container, _license, _scope, compact) => createSlideEditorPresets(container, compact),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadSlideAsync(unitId),
 };

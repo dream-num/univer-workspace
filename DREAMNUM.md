@@ -31,6 +31,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   the same repository source in separate React/Univer peer contexts; Agent bundles its copy into its browser artifact. Until an application-level shared component home is
   available, changes remain synchronized with the copies in `dream-num/univer-cli` and the DSH plugin.
 
+- The private `packages/workspace-agent-runtime` headless content runtime, extracted from the existing Workspace Agent plugin. It supplies the same Facade worker and Worktree changeset path to that plugin and the isolated Space application. It owns no DSH Agent, conversation, document authority or permission model.
+
 - The private shared HTML View host under `packages/workspace-html-viewer`, consumed by Browser and Agent.
   It owns sandbox rendering and Binding Host lifecycle; applications own source authorization,
   runtime assembly, and leave/save behavior.
@@ -68,6 +70,17 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   default-browser OAuth with a one-use `univer-workspace://login` return link and
   backend-owned PKCE/session storage, with an isolated embedded-browser fallback when the
   operating system cannot open the default browser. Contract: [Agent README](apps/agent/README.md).
+
+- **Space Plugin release candidate** — `apps/space-plugin` packages a standard Cordis/DSH
+  plugin for the unchanged official DSH Desktop. This is an extension, not an Electron fork,
+  a new Agent runtime, a managed Workspace Server, or a public SDK. Its isolated React 18/npm
+  graph bundles the private content worker and carries the existing application development
+  license and matching Exchange key in Host-only packaged configuration. It does not extend
+  their validity. Markdown compilation/export reuse Client Core and the shared content runtime;
+  compilation requires an explicit draft Worktree and does not implicitly publish to trunk.
+  The current candidate targets DSH 0.2.1-rc.3 on macOS arm64; native acceptance and safe
+  recovery after a Server crash in SDK `merging` remain release gates. Contract and install
+  requirements: [Space Plugin README](apps/space-plugin/README.md).
 
 ## Depends on
 

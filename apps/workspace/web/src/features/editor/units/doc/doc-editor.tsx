@@ -1,3 +1,4 @@
+import { createDocEditorPresets, docEditorLocales } from "@univerjs/univer-workspace-editor-presets/docs";
 import { UniverDocsCorePreset } from "@univerjs/preset-docs-core";
 import UniverPresetDocsCoreEnUS from "@univerjs/preset-docs-core/locales/en-US";
 import UniverPresetDocsCoreZhCN from "@univerjs/preset-docs-core/locales/zh-CN";
@@ -94,76 +95,9 @@ import { getReferencedSheetPlugins } from "../../features/referenced-sheet-plugi
 
 export type DocEditorProps = CollaborationEditorProps;
 
-export const docEditorLocales: Readonly<
-  Record<"zh-CN" | "en-US", ILanguagePack>
-> = {
-  "zh-CN": mergeLocales(
-    ChartUIZhCN,
-    EngineChartZhCN,
-    UniverPresetDocsCoreZhCN,
-    UniverPresetDocsDrawingZhCN,
-    UniverPresetDocsHyperLinkZhCN,
-    UniverPresetDocsThreadCommentZhCN,
-    FindReplaceZhCN,
-    UniverDocsCalloutUIZhCN,
-    UniverDocsChartUIZhCN,
-    UniverDocsCodeUIZhCN,
-    UniverDocsColumnUIZhCN,
-    UniverDocsLatexUIZhCN,
-    UniverDocsListUIZhCN,
-    UniverDocsPrintZhCN,
-    UniverDocsQuoteUIZhCN,
-    UniverDocsShapeUIZhCN,
-    UniverDocsTableUIZhCN,
-    UniverShapeEditorUIZhCN
-  ),
-  "en-US": mergeLocales(
-    ChartUIEnUS,
-    EngineChartEnUS,
-    UniverPresetDocsCoreEnUS,
-    UniverPresetDocsDrawingEnUS,
-    UniverPresetDocsHyperLinkEnUS,
-    UniverPresetDocsThreadCommentEnUS,
-    FindReplaceEnUS,
-    UniverDocsCalloutUIEnUS,
-    UniverDocsChartUIEnUS,
-    UniverDocsCodeUIEnUS,
-    UniverDocsColumnUIEnUS,
-    UniverDocsLatexUIEnUS,
-    UniverDocsListUIEnUS,
-    UniverDocsPrintEnUS,
-    UniverDocsQuoteUIEnUS,
-    UniverDocsShapeUIEnUS,
-    UniverDocsTableUIEnUS,
-    UniverShapeEditorUIEnUS
-  ),
-};
+export { docEditorLocales } from "@univerjs/univer-workspace-editor-presets/docs";
 
-export function createDocComparisonPresets(
-  container: HTMLElement
-): IPreset[] {
-  return [
-    UniverDocsCorePreset({
-      container,
-      ribbonType: "grid",
-      header: false,
-      toolbar: false,
-      footer: false,
-      contextMenu: false,
-      disableAutoFocus: true,
-    }),
-    UniverDocsDrawingPreset({
-      collaboration: false,
-    }),
-    UniverDocsHyperLinkPreset(),
-    {
-      plugins: [
-        ...getDocReplayCompatibilityPlugins(),
-        ...getDocAuthoringUIPlugins(),
-      ],
-    },
-  ];
-}
+export { createDocComparisonPresets } from "@univerjs/univer-workspace-editor-presets/docs";
 
 export const docEditorDefinition: ICollaborationEditorDefinition = {
   liveSheetReferences: true,
@@ -190,26 +124,7 @@ export const docEditorDefinition: ICollaborationEditorDefinition = {
     createWorkspaceImportExportFeature("doc", { mobile: false }),
   ],
   printFeaturePlugins: () => [UniverDocsPrintPlugin],
-  createPresets: (container, _license, _collaborationScope, compact) => [
-    { plugins: getReferencedSheetPlugins() },
-    UniverDocsCorePreset({
-      container,
-      ribbonType: "grid",
-      ...(compact ? { header: false, toolbar: false, disableAutoFocus: true } : {}),
-    }),
-    UniverDocsDrawingPreset({
-      collaboration: true,
-    }),
-    UniverDocsHyperLinkPreset(),
-    UniverDocsThreadCommentPreset(),
-    {
-      plugins: [
-        ...getDocReplayCompatibilityPlugins(),
-        ...getDocAuthoringUIPlugins(),
-        ...getDocFindReplacePlugins(),
-      ],
-    },
-  ],
+  createPresets: (container, _license, _collaborationScope, compact) => createDocEditorPresets(container, compact),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadDocAsync(unitId),
 };

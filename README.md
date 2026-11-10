@@ -56,6 +56,18 @@ local file references point to the machine running Agent; Workspace documents
 remain on the connected service. Both Agent and CLI can connect to your existing
 Workspace deployment or one you start locally.
 
+## Space Preview
+
+Space is a proof-of-concept plugin for Univer Workspace that you install in official
+DeepSeek Harness (DSH). It connects to your Workspace service so you can browse files,
+edit Univer Docs and Sheets, and chat with an AI alongside an open document.
+
+![Space Preview in DeepSeek Harness: file navigation, a Univer document, and the chat composer](apps/space-plugin/docs/images/space-preview.png)
+
+See the [Space plugin guide](apps/space-plugin/README.md) for the package, installation
+steps, and known limitations. Space is optional and does not replace Workspace Agent.
+Use non-critical documents while evaluating this preview.
+
 ## How it works
 
 ```mermaid
@@ -302,3 +314,5 @@ pnpm update:univer-license --license <license.txt> --license-key <licenseKey.txt
 ## License
 
 Univer Workspace is licensed under [Apache-2.0](LICENSE).
+
+Space 和原 Workspace Agent 共用 `packages/workspace-agent-runtime` 的既有 Headless Facade / Worktree changeset 实现。它只负责内容 worker，不提供另一个 DSH Runtime。先运行 `pnpm --filter @univerjs/univer-workspace-agent-runtime build`，再构建相应消费者；Space 将该公开入口与 worker 内联/复制到自己的安装包，不把 file: 开发依赖带入 Host。

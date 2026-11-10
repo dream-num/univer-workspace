@@ -436,7 +436,7 @@ SDK 生成的权限需求。Browser 为五类 Unit 注册对象权限类型，Wo
 
 ## Modern Markdown authoring
 
-Workspace CLI 的 `compile-markdown` 与 Workspace Agent 的 `univer_compile_markdown` 通过 private
+Workspace CLI 的 `compile-markdown`、Workspace Agent 与 Space Plugin 的 `univer_compile_markdown` 通过 private
 Client Core 复用 Univer AI SDK 的 `@univer-cli/doc-markdown-facade`。SDK 负责 Markdown/GFM 与
 Univer directive 解析、原生 Facade program、diagnostic 和 source map；application 负责本地授权资源
 目录、Workspace 身份、Worktree Unit 创建和提交。编译产物沿用 Univer SDK Modern 文档的默认

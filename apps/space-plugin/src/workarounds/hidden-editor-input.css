@@ -1,0 +1,10 @@
+/* Univer 1.1.0 creates an empty absolutely positioned contenteditable with no
+   minimum size. In Chromium it can shrink to 0x0: focus succeeds but there is
+   no DOM caret, so typing emits no beforeinput/input events. Keep a nonzero
+   input surface inside the SDK's existing 1px clipped parent. The SDK still
+   owns input, IME, mutations and permissions. Remove when the pinned SDK gives
+   its hidden editor an intrinsic minimum size. */
+.sp-sdk [data-u-comp='editor'][contenteditable='true'] {
+  min-width: 1px;
+  min-height: 1px;
+}

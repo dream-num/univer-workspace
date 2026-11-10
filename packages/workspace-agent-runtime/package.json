@@ -1,0 +1,156 @@
+{
+  "name": "@univerjs/univer-workspace-agent-runtime",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "files": [
+    "lib",
+    "src"
+  ],
+  "exports": {
+    ".": {
+      "types": "./src/manager.ts",
+      "default": "./lib/index.js"
+    },
+    "./worker": {
+      "types": "./src/worker.ts",
+      "default": "./lib/worker.js"
+    },
+    "./manager": {
+      "types": "./src/manager.ts",
+      "default": "./lib/manager.js"
+    },
+    "./target": {
+      "types": "./src/target.ts",
+      "default": "./lib/target.js"
+    },
+    "./worker-http": {
+      "types": "./src/worker-http.ts",
+      "default": "./lib/worker-http.js"
+    },
+    "./snapshot-adapter": {
+      "types": "./src/snapshot-adapter.ts",
+      "default": "./lib/snapshot-adapter.js"
+    },
+    "./worker-child": "./lib/worker-child.mjs",
+    "./worker-child-upstream": "./lib/worker-child-upstream.mjs",
+    "./api-reference": {
+      "types": "./src/api-reference.d.ts",
+      "default": "./lib/api-reference.js"
+    },
+    "./workspace-spaces": {
+      "types": "./src/workspace/index.ts",
+      "default": "./lib/workspace/index.js"
+    },
+    "./workspace-api-errors": {
+      "types": "./src/workspace/api-errors.ts",
+      "default": "./lib/workspace/api-errors.js"
+    },
+    "./workspace-wire": {
+      "types": "./src/workspace/wire.ts",
+      "default": "./lib/workspace/wire.js"
+    },
+    "./workspace-resources": {
+      "types": "./src/workspace/resources-api.ts",
+      "default": "./lib/workspace/resources-api.js"
+    },
+    "./workspace-json": {
+      "types": "./src/workspace/json-value.ts",
+      "default": "./lib/workspace/json-value.js"
+    },
+    "./workspace-exchange": {
+      "types": "./src/workspace/local-exchange.ts",
+      "default": "./lib/workspace/local-exchange.js"
+    },
+    "./workspace-session-path": {
+      "types": "./src/workspace/session-path.ts",
+      "default": "./lib/workspace/session-path.js"
+    },
+    "./workspace-inspection": {
+      "types": "./src/workspace/inspection.ts",
+      "default": "./lib/workspace/inspection.js"
+    },
+    "./workspace-blob": {
+      "types": "./src/workspace/blob-api.ts",
+      "default": "./lib/workspace/blob-api.js"
+    },
+    "./workspace-html-view": {
+      "types": "./src/workspace/html-view.ts",
+      "default": "./lib/workspace/html-view.js"
+    },
+    "./workspace-svg": {
+      "types": "./src/workspace/svg-operations.ts",
+      "default": "./lib/workspace/svg-operations.js"
+    },
+    "./workspace-skill-resources": {
+      "types": "./src/workspace/skill-resources.ts",
+      "default": "./lib/workspace/skill-resources.js"
+    },
+    "./workspace-resource-library": {
+      "types": "./src/workspace/resource-library.ts",
+      "default": "./lib/workspace/resource-library.js"
+    },
+    "./workspace-issues": {
+      "types": "./src/workspace/issues-api.ts",
+      "default": "./lib/workspace/issues-api.js"
+    },
+    "./workspace-issue-operations": {
+      "types": "./src/workspace/issue-operations.ts",
+      "default": "./lib/workspace/issue-operations.js"
+    },
+    "./workspace-render": {
+      "types": "./src/workspace/render-operations.ts",
+      "default": "./lib/workspace/render-operations.js"
+    },
+    "./workspace-screenshot": {
+      "types": "./src/workspace/screenshot-support.ts",
+      "default": "./lib/workspace/screenshot-support.js"
+    },
+    "./workspace-state": {
+      "types": "./src/workspace/state.ts",
+      "default": "./lib/workspace/state.js"
+    },
+    "./workspace-worktree-api": {
+      "types": "./src/workspace/worktree-api.ts",
+      "default": "./lib/workspace/worktree-api.js"
+    },
+    "./workspace-file-state-api": {
+      "types": "./src/workspace/file-state-api.ts",
+      "default": "./lib/workspace/file-state-api.js"
+    },
+    "./workspace-status": {
+      "types": "./src/workspace/status-operations.ts",
+      "default": "./lib/workspace/status-operations.js"
+    },
+    "./workspace-unit-operations": {
+      "types": "./src/workspace/unit-operations.ts",
+      "default": "./lib/workspace/unit-operations.js"
+    }
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
+  "dependencies": {
+    "@univer-cli/content-execution": "1.4.0",
+    "@univer-cli/content-inspection": "1.4.0",
+    "@univer-cli/headless-univer": "1.4.0",
+    "@univer-cli/univer-collaboration-runtime": "1.4.0",
+    "@univer-cli/univer-collaboration-runtime-pool": "1.4.0",
+    "@univerjs-pro/collaboration": "1.4.0",
+    "@univerjs-pro/engine-formula-rust": "1.4.0",
+    "@univerjs-pro/exchange-node": "1.4.0",
+    "@univerjs/protocol": "1.4.0",
+    "@univerjs/core": "1.4.0",
+    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
+    "@univer-cli/svg-facade": "1.4.0",
+    "@univer-cli/resource-library": "1.4.0",
+    "@univer-cli/unit-layout-lint": "1.4.0",
+    "@univer-cli/unit-screenshot": "1.4.0",
+    "@univer-cli/univer-render-runtime": "1.4.0",
+    "@univer-cli/doc-markdown-facade": "1.4.0"
+  },
+  "devDependencies": {
+    "@univer-cli/api-reference": "1.4.0",
+    "esbuild": "0.27.7"
+  }
+}

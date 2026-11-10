@@ -1,8 +1,2 @@
-/** JSON-compatible value shared by tool implementations and render metadata. */
-export type JsonValue =
-  | null
-  | boolean
-  | number
-  | string
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+/** Shared JSON value type for Workspace tools. */
+export type * from "@univerjs/univer-workspace-agent-runtime/workspace-json";

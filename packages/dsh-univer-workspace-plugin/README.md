@@ -350,6 +350,8 @@ sign-in state, while permission and network failures retain their own errors.
 Desktop delegates sign-in to its default-browser bridge; browser deployments
 keep the local OAuth navigation. Settings also offers **Switch account**.
 
+The original headless implementation now lives in the private `@univerjs/univer-workspace-agent-runtime` package. Build it first; the existing runtime paths re-export that shared implementation. This extraction supplies no external product UI or DSH service to the Space app.
+
 Modern Doc generation uses `univer_compile_markdown`: session Markdown and bounded local resources are compiled
 through the same Univer AI SDK capability as both CLIs. It creates a staged native Doc with SDK default styling;
 explicit source IDs and execution source maps support stable-ID block replacement. Native edits remain authoritative.

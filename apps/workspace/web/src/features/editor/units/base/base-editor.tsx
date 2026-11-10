@@ -1,3 +1,4 @@
+import { createBaseEditorPresets, baseEditorLocales } from "@univerjs/univer-workspace-editor-presets/bases";
 import { UniverBasesPlugin } from "@univerjs-pro/bases";
 import UniverBasesEnUS from "@univerjs-pro/bases/locale/en-US";
 import UniverBasesZhCN from "@univerjs-pro/bases/locale/zh-CN";
@@ -50,81 +51,9 @@ import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export type BaseEditorProps = CollaborationEditorProps;
 
-export const baseEditorLocales: Readonly<
-  Record<"zh-CN" | "en-US", ILanguagePack>
-> = {
-  "zh-CN": mergeLocales(
-    UniverDesignZhCN,
-    UniverUIZhCN,
-    UniverEngineFormulaZhCN,
-    UniverBasesZhCN,
-    UniverBasesUIZhCN,
-    ThreadCommentUIZhCN,
-    BasesThreadCommentUIZhCN
-  ),
-  "en-US": mergeLocales(
-    UniverDesignEnUS,
-    UniverUIEnUS,
-    UniverEngineFormulaEnUS,
-    UniverBasesEnUS,
-    UniverBasesUIEnUS,
-    ThreadCommentUIEnUS,
-    BasesThreadCommentUIEnUS
-  ),
-};
+export { baseEditorLocales } from "@univerjs/univer-workspace-editor-presets/bases";
 
-export function createBaseComparisonPresets(
-  container: HTMLElement,
-  options: { collaboration?: boolean; worker?: boolean; onWorker?: (worker: Worker) => void } = {},
-): IPreset[] {
-  const worker = options.worker === false ? undefined : new Worker(
-    new URL("./base-worker.ts", import.meta.url), { type: "module" },
-  );
-  if (worker) options.onWorker?.(worker);
-  return [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverProFormulaEnginePlugin,
-          {
-            notExecuteFormula: true,
-          },
-        ],
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            header: false,
-            toolbar: false,
-            footer: false,
-            disableAutoFocus: true,
-          },
-        ],
-        ...(worker ? [[UniverRPCMainThreadPlugin, { workerURL: worker }] satisfies IPresetPlugin] : []),
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            ...(options.collaboration ? { override: [[IImageIoService, null]] } : {}),
-          },
-        ],
-        UniverBasesPlugin,
-        [
-          UniverBasesUIPlugin,
-          {
-            ...(options.collaboration ? { override: [[IAttachmentIoService, null]] } : {}),
-            workbench: {
-              collaborationStatus: false,
-              footer: false,
-            },
-          },
-        ],
-      ],
-    },
-  ];
-}
+export { createBaseComparisonPresets } from "@univerjs/univer-workspace-editor-presets/bases";
 
 export const baseEditorDefinition: ICollaborationEditorDefinition = {
   label: "base",
@@ -150,56 +79,8 @@ export const baseEditorDefinition: ICollaborationEditorDefinition = {
     UniverBasesExchangeClientPlugin,
     createWorkspaceImportExportFeature("base", { mobile: false }),
   ],
-  createPresets: (container) => [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverProFormulaEnginePlugin,
-          {
-            notExecuteFormula: true,
-          },
-        ],
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            toolbar: false,
-            footer: false,
-          },
-        ],
-        [
-          UniverRPCMainThreadPlugin,
-          {
-            workerURL: new Worker(new URL("./base-worker.ts", import.meta.url), {
-              type: "module",
-            }),
-          },
-        ],
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            // The collaboration plugin owns the remote image service. Remove
-            // Drawing's local implementation to keep a single registration.
-            override: [[IImageIoService, null]],
-          },
-        ],
-        UniverBasesPlugin,
-        [
-          UniverBasesUIPlugin,
-          {
-            override: [[IAttachmentIoService, null]],
-            workbench: {
-              collaborationStatus: false,
-              footer: false,
-            },
-          },
-        ],
-      ],
-    },
-  ],
+  createPresets: (container) => createBaseEditorPresets(container,
+    new Worker(new URL("./base-worker.ts", import.meta.url), { type: "module" })),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadBaseAsync(unitId),
 };

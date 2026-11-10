@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.json",
+  "files": ["src/client.tsx", "src/assets.d.ts"],
+  "include": []
+}

@@ -1,3 +1,4 @@
+import { createBoardEditorPresets, boardEditorLocales } from "@univerjs/univer-workspace-editor-presets/boards";
 import { UniverBoardsPlugin } from "@univerjs-pro/boards";
 import ChartUIEnUS from "@univerjs-pro/chart-ui/locale/en-US";
 import ChartUIZhCN from "@univerjs-pro/chart-ui/locale/zh-CN";
@@ -91,91 +92,9 @@ import { MAX_UNIVER_IMAGE_BYTES } from "../../features/univer-assets";
 
 export type BoardEditorProps = CollaborationEditorProps;
 
-export const boardEditorLocales: Readonly<
-  Record<"zh-CN" | "en-US", ILanguagePack>
-> = {
-  "zh-CN": mergeLocales(
-    ChartUIZhCN,
-    EngineChartZhCN,
-    UniverDesignZhCN,
-    UniverUIZhCN,
-    UniverDocsUIZhCN,
-    UniverDocsLatexUIZhCN,
-    UniverDrawingUIZhCN,
-    UniverInkUIZhCN,
-    UniverShapeEditorUIZhCN,
-    UniverBoardsUIZhCN,
-    UniverBoardsChartUIZhCN,
-    UniverBoardsMindUIZhCN,
-    UniverBoardsPrintZhCN,
-    UniverBoardsTableUIZhCN,
-    ThreadCommentUIZhCN,
-    BoardsThreadCommentUIZhCN
-  ),
-  "en-US": mergeLocales(
-    ChartUIEnUS,
-    EngineChartEnUS,
-    UniverDesignEnUS,
-    UniverUIEnUS,
-    UniverDocsUIEnUS,
-    UniverDocsLatexUIEnUS,
-    UniverDrawingUIEnUS,
-    UniverInkUIEnUS,
-    UniverShapeEditorUIEnUS,
-    UniverBoardsUIEnUS,
-    UniverBoardsChartUIEnUS,
-    UniverBoardsMindUIEnUS,
-    UniverBoardsPrintEnUS,
-    UniverBoardsTableUIEnUS,
-    ThreadCommentUIEnUS,
-    BoardsThreadCommentUIEnUS
-  ),
-};
+export { boardEditorLocales } from "@univerjs/univer-workspace-editor-presets/boards";
 
-export function createBoardComparisonPresets(
-  container: HTMLElement,
-  collaboration = false,
-): IPreset[] {
-  return [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            header: false,
-            toolbar: false,
-            footer: false,
-            disableAutoFocus: true,
-          },
-        ],
-        UniverDocsPlugin,
-        UniverDocsUIPlugin,
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            ...(collaboration ? { override: [[IImageIoService, null]] } : {}),
-          },
-        ],
-        UniverDocsLatexPlugin,
-        UniverDocsLatexUIPlugin,
-        UniverBoardsPlugin,
-        UniverInkPlugin,
-        UniverInkUIPlugin,
-        UniverBoardsUIPlugin,
-        UniverBoardsChartPlugin,
-        UniverBoardsChartUIPlugin,
-        UniverBoardsMindPlugin,
-        UniverBoardsMindUIPlugin,
-        UniverBoardsTablePlugin,
-        UniverBoardsTableUIPlugin,
-      ],
-    },
-  ];
-}
+export { createBoardComparisonPresets } from "@univerjs/univer-workspace-editor-presets/boards";
 
 export const boardEditorDefinition: ICollaborationEditorDefinition = {
   label: "board",
@@ -199,46 +118,7 @@ export const boardEditorDefinition: ICollaborationEditorDefinition = {
   collaborationFeaturePlugins: () =>
     getThreadCommentCollaborationPlugins(UniverBoardsThreadCommentUIPlugin),
   printFeaturePlugins: () => [UniverBoardsPrintPlugin],
-  createPresets: (container) => [
-    {
-      plugins: [
-        UniverRenderEnginePlugin,
-        [
-          UniverUIPlugin,
-          {
-            container,
-            ribbonType: "grid",
-            header: false,
-            toolbar: false,
-            footer: false,
-          },
-        ],
-        UniverDocsPlugin,
-        UniverDocsUIPlugin,
-        [
-          UniverDrawingPlugin,
-          {
-            allowImageSize: MAX_UNIVER_IMAGE_BYTES,
-            // The collaboration plugin owns the remote image service. Remove
-            // Drawing's local implementation to keep a single registration.
-            override: [[IImageIoService, null]],
-          },
-        ],
-        UniverDocsLatexPlugin,
-        UniverDocsLatexUIPlugin,
-        UniverBoardsPlugin,
-        UniverInkPlugin,
-        UniverInkUIPlugin,
-        UniverBoardsUIPlugin,
-        UniverBoardsChartPlugin,
-        UniverBoardsChartUIPlugin,
-        UniverBoardsMindPlugin,
-        UniverBoardsMindUIPlugin,
-        UniverBoardsTablePlugin,
-        UniverBoardsTableUIPlugin,
-      ],
-    },
-  ],
+  createPresets: (container) => createBoardEditorPresets(container),
   load: (univerAPI, unitId) =>
     univerAPI.getCollaboration().loadBoardAsync(unitId),
 };

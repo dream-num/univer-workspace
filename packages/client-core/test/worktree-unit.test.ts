@@ -209,6 +209,7 @@ describe("Workspace Worktree model and workflow", () => {
         state: expected,
       });
       expect(requests.map((request) => request.method)).toEqual(["GET", "POST"]);
+      expect(await requests[1]!.text()).toBe("");
       expect(requests[1]!.headers.get("idempotency-key")).toBe(
         idempotent ? stableKey(action, "wt-1") : null,
       );

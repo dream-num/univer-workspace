@@ -24,3 +24,5 @@ export {
   WORKSPACE_REFERENCE_SCOPE_CONFORMANCE_CASES,
   type WorkspaceReferenceScopeConformanceCase,
 } from "./conformance.js";
+
+export { withLiveSheetReferences } from "./live-sheet-references.js";

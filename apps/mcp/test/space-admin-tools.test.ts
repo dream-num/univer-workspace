@@ -466,9 +466,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
       isError: true,
       structuredContent: { code: "workspace-lifecycle-invalid" },
     });
-    expect(writesOf().map((request) => request.path)).toEqual([
-      "/api/worktrees/wt-3/merge",
-      "/api/worktrees/wt-3/discard",
+    expect(writesOf()).toEqual([
+      { method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined },
+      { method: "POST", path: "/api/worktrees/wt-3/discard", body: undefined },
     ]);
   });
 

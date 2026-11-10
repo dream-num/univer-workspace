@@ -2,12 +2,9 @@ import { requireBlobIdempotencyKey } from "./blob-input.ts";
 import { readFile } from "node:fs/promises";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
-import {
-  DEFAULT_WORKSHEET_ROW_COUNT,
-  DEFAULT_WORKSHEET_COLUMN_COUNT,
-  type IWorkbookData,
-} from "@univerjs/core";
-import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
+import type { IWorkbookData } from "@univerjs/core";
+import { isHtmlViewFilename } from "@univerjs-labs/html-view";
+import { validateHtmlView } from "@univerjs/univer-workspace-agent-runtime/workspace-html-view";
 import { resolveToolScope, resolveTargetSpace } from "./tool-scope.ts";
 import { existingSessionPath } from "./workspace-path.ts";
 import { registerUniverTool } from "./presentation.ts";
@@ -50,38 +47,12 @@ export function registerHtmlViewTool(ctx: Context): () => void {
         const source = await existingSessionPath(exec, args.source);
         exec.signal?.throwIfAborted();
         const html = await readFile(source.path, { encoding: "utf8", signal: exec.signal });
-        const parsed = parseHtmlView(html);
-        const unitIds = getHtmlViewUnitIds(parsed);
-        for (const unitId of unitIds) {
+        const validation = await validateHtmlView(html, async (unitId) => {
           const opened = await service.resolveUnitResource(scope.userId, unitId);
-          if (opened.unitType !== "sheet" || opened.unitId !== unitId)
-            throw new Error("Source must be a Sheet Unit.");
-          const data = await service.exportUnitData(scope.userId, {
-            scope: { kind: "trunk" },
-            unitId,
-            unitType: "sheet",
-          });
-          const workbook = data as IWorkbookData;
-          for (const binding of parsed.bindings.filter(
-            (binding) => binding.reference.unitId === unitId,
-          )) {
-            const { reference } = binding;
-            const sheet = Object.hasOwn(workbook.sheets, reference.sheetId)
-              ? workbook.sheets[reference.sheetId]
-              : undefined;
-            if (!sheet) throw new Error(`Source worksheet not found: ${reference.sheetId}`);
-            if (
-              (binding.kind === "range" ? binding.reference.range.endRow : binding.reference.row) >=
-                (sheet.rowCount ?? DEFAULT_WORKSHEET_ROW_COUNT) ||
-              (binding.kind === "range"
-                ? binding.reference.range.endColumn
-                : binding.reference.col) >= (sheet.columnCount ?? DEFAULT_WORKSHEET_COLUMN_COUNT)
-            )
-              throw new Error("Source binding is outside the worksheet.");
-          }
-        }
-        if (args.action === "validate")
-          return { valid: true, unitIds, bindingCount: parsed.bindings.length };
+          if (opened.unitType !== "sheet" || opened.unitId !== unitId) throw new Error("Source must be a Sheet Unit.");
+          return await service.exportUnitData(scope.userId, { scope: { kind: "trunk" }, unitId, unitType: "sheet" }) as IWorkbookData;
+        }, exec.signal);
+        if (args.action === "validate") return validation;
         if (!args.name?.trim()) throw new Error("create requires name.");
         const idempotencyKey = requireBlobIdempotencyKey(args.idempotencyKey);
         const origin = ctx.get("workspaceAuth")?.effectiveOrigin();

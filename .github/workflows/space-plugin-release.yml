@@ -1,0 +1,280 @@
+name: Publish Space Plugin prerelease (manual)
+run-name: Space Plugin ${{ github.ref_name }}${{ inputs.dry_run && ' (dry run)' || ' (publish)' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and verify the tagged artifact without publishing a release
+        type: boolean
+        default: true
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: space-plugin-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      version: ${{ steps.validate.outputs.version }}
+      tag: ${{ steps.validate.outputs.tag }}
+      commit: ${{ steps.validate.outputs.commit }}
+    steps:
+      - name: Check out the release tag
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate the release tag
+        id: validate
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+
+          TAG_NAME="$GITHUB_REF_NAME"
+          REF_TYPE="$GITHUB_REF_TYPE"
+          EXPECTED_SHA="$GITHUB_SHA"
+          DEFAULT_BRANCH_NAME="$DEFAULT_BRANCH"
+
+          if [[ "$REF_TYPE" != "tag" ]]; then
+            echo "Refusing to publish: this workflow must run from an existing space-plugin-vX.Y.Z-preview.N tag." >&2
+            exit 1
+          fi
+
+          if [[ ! "$TAG_NAME" =~ ^space-plugin-v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)$ ]]; then
+            echo "Refusing to publish: unexpected tag name." >&2
+            exit 1
+          fi
+
+          VERSION="${TAG_NAME#space-plugin-v}"
+
+          PACKAGE_VERSION="$(node -e 'process.stdout.write(require("./apps/space-plugin/package.json").version)')"
+          if [[ "$PACKAGE_VERSION" != "$VERSION" ]]; then
+            echo "Refusing to publish: the tag version does not match the Space Plugin package version." >&2
+            exit 1
+          fi
+
+          HEAD_SHA="$(git rev-parse HEAD)"
+          if [[ "$HEAD_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "Refusing to publish: the checkout does not match the workflow commit." >&2
+            exit 1
+          fi
+
+          TAG_COMMIT="$(git rev-parse "${TAG_NAME}^{commit}")"
+          if [[ "$TAG_COMMIT" != "$EXPECTED_SHA" ]]; then
+            echo "Refusing to publish: the tag does not point at the workflow commit." >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor HEAD "origin/$DEFAULT_BRANCH_NAME"; then
+            echo "Refusing to publish: the tagged commit is not contained in the default branch." >&2
+            exit 1
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "tag=$TAG_NAME"
+            echo "commit=$EXPECTED_SHA"
+          } >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: validate
+    permissions:
+      contents: read
+    uses: ./.github/workflows/space-plugin-build.yml
+
+  # The artifact verification runs for every dispatch, including dry runs, so a
+  # dry run exercises the same download and checksum path the publish job uses.
+  verify:
+    needs:
+      - validate
+      - build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Download the reviewed artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: artifacts/space-plugin
+
+      - name: Verify the downloaded artifact
+        shell: bash
+        env:
+          ARTIFACT_DIR: artifacts/space-plugin
+          EXPECTED_SHA256: ${{ needs.build.outputs.sha256 }}
+          EXPECTED_VERSION: ${{ needs.validate.outputs.version }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+          EXPECTED_FILENAME: ${{ needs.build.outputs.filename }}
+        run: |
+          set -euo pipefail
+          cd "$ARTIFACT_DIR"
+          sha256sum -c SHA256SUMS
+          ACTUAL_SHA="$(sha256sum "$EXPECTED_FILENAME" | cut -d ' ' -f 1)"
+          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA256" ]]; then
+            echo "Refusing to publish: the artifact checksum does not match the reviewed build." >&2
+            exit 1
+          fi
+          TARBALL_COUNT="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n' | wc -l)"
+          if [[ "$TARBALL_COUNT" -ne 1 ]]; then
+            echo "Refusing to publish: the artifact must contain exactly one tarball." >&2
+            exit 1
+          fi
+          TARBALL_NAME="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n')"
+          if [[ "$TARBALL_NAME" != "$EXPECTED_FILENAME" ]]; then
+            echo "Refusing to publish: the tarball name does not match the reviewed build." >&2
+            exit 1
+          fi
+          if [[ ! "$TARBALL_NAME" =~ ^space-plugin-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)-[0-9a-f]{12}\.tgz$ ]]; then
+            echo "Refusing to publish: unexpected tarball name." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const info = JSON.parse(readFileSync('build-info.json', 'utf8'));
+          assert.equal(info.version, process.env.EXPECTED_VERSION);
+          assert.equal(info.commit, process.env.EXPECTED_COMMIT);
+          assert.equal(info.artifact, process.env.EXPECTED_FILENAME);
+          console.log('build-info.json matches the reviewed build outputs.');
+          NODE
+
+  # Publishing is not idempotent. `gh release create` fails when the release
+  # already exists, and a failure after the draft is created can leave that
+  # draft behind. This workflow never deletes or overwrites a release, so an
+  # operator must inspect the existing draft and decide what to do with it
+  # before dispatching again.
+  publish:
+    needs:
+      - validate
+      - build
+      - verify
+    if: ${{ !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - name: Download the reviewed artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: artifacts/space-plugin
+
+      - name: Verify the downloaded artifact
+        shell: bash
+        env:
+          ARTIFACT_DIR: artifacts/space-plugin
+          EXPECTED_SHA256: ${{ needs.build.outputs.sha256 }}
+          EXPECTED_VERSION: ${{ needs.validate.outputs.version }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+          EXPECTED_FILENAME: ${{ needs.build.outputs.filename }}
+        run: |
+          set -euo pipefail
+          cd "$ARTIFACT_DIR"
+          sha256sum -c SHA256SUMS
+          ACTUAL_SHA="$(sha256sum "$EXPECTED_FILENAME" | cut -d ' ' -f 1)"
+          if [[ "$ACTUAL_SHA" != "$EXPECTED_SHA256" ]]; then
+            echo "Refusing to publish: the artifact checksum does not match the reviewed build." >&2
+            exit 1
+          fi
+          TARBALL_COUNT="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n' | wc -l)"
+          if [[ "$TARBALL_COUNT" -ne 1 ]]; then
+            echo "Refusing to publish: the artifact must contain exactly one tarball." >&2
+            exit 1
+          fi
+          TARBALL_NAME="$(find . -maxdepth 1 -type f -name '*.tgz' -printf '%f\n')"
+          if [[ "$TARBALL_NAME" != "$EXPECTED_FILENAME" ]]; then
+            echo "Refusing to publish: the tarball name does not match the reviewed build." >&2
+            exit 1
+          fi
+          if [[ ! "$TARBALL_NAME" =~ ^space-plugin-(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)-preview\.(0|[1-9][0-9]*)-[0-9a-f]{12}\.tgz$ ]]; then
+            echo "Refusing to publish: unexpected tarball name." >&2
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          const info = JSON.parse(readFileSync('build-info.json', 'utf8'));
+          assert.equal(info.version, process.env.EXPECTED_VERSION);
+          assert.equal(info.commit, process.env.EXPECTED_COMMIT);
+          assert.equal(info.artifact, process.env.EXPECTED_FILENAME);
+          console.log('build-info.json matches the reviewed build outputs.');
+          NODE
+
+      - name: Confirm the remote tag still resolves to the validated commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.validate.outputs.tag }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+        run: |
+          set -euo pipefail
+          REMOTE_COMMIT="$(gh api "repos/$GH_REPO/commits/$TAG_NAME" --jq .sha)"
+          if [[ "$REMOTE_COMMIT" != "$EXPECTED_COMMIT" ]]; then
+            echo "Refusing to publish: the remote tag no longer resolves to the validated commit." >&2
+            exit 1
+          fi
+
+      - name: Create the draft prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.validate.outputs.tag }}
+          EXPECTED_VERSION: ${{ needs.validate.outputs.version }}
+          EXPECTED_COMMIT: ${{ needs.validate.outputs.commit }}
+          EXPECTED_FILENAME: ${{ needs.build.outputs.filename }}
+        run: |
+          set -euo pipefail
+          NOTES_FILE="$RUNNER_TEMP/space-plugin-release-notes.md"
+          {
+            echo "Space Plugin $EXPECTED_VERSION is a public preview for the official DSH Desktop."
+            echo
+            echo "This is a public preview release. It is not a stable release and carries no compatibility guarantee."
+            echo
+            echo "- Version: $EXPECTED_VERSION"
+            echo "- Commit: $EXPECTED_COMMIT"
+            echo "- Install guide: https://github.com/$GH_REPO/blob/$TAG_NAME/apps/space-plugin/README.md"
+            echo
+            echo "Download the tarball, verify SHA256SUMS, then install it in DSH through Plugins -> Add plugin."
+            echo
+            echo "The existing Univer Workspace Agent Desktop release stays available and is unaffected by this preview."
+          } > "$NOTES_FILE"
+          gh release create "$TAG_NAME" \
+            --verify-tag \
+            --draft \
+            --prerelease \
+            --latest=false \
+            --title "Space Plugin $EXPECTED_VERSION (public preview)" \
+            --notes-file "$NOTES_FILE" \
+            "artifacts/space-plugin/$EXPECTED_FILENAME" \
+            "artifacts/space-plugin/SHA256SUMS" \
+            "artifacts/space-plugin/build-info.json"
+
+      - name: Publish the prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG_NAME: ${{ needs.validate.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG_NAME" --draft=false --prerelease --latest=false

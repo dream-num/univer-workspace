@@ -34,6 +34,13 @@ const sheetMobileEditorSource = readFileSync(
   ),
   "utf8"
 );
+const embedProductRuntimeSource = readFileSync(
+  new URL(
+    "../../web/src/features/editor/embed-product-runtime.ts",
+    import.meta.url
+  ),
+  "utf8"
+);
 
 describe("editor integration assets", () => {
   it("loads shared styles before manual Plugin Mode product styles", () => {
@@ -98,6 +105,33 @@ describe("editor integration assets", () => {
     expect(sheetComparisonPresetSource).not.toContain("history-ui");
     expect(sheetComparisonPresetSource).not.toContain("thread-comment");
     expect(sheetComparisonPresetSource).not.toContain("collaboration");
+  });
+
+  it("loads Sheet preset styles for the host embed runtime", () => {
+    // The shared runtime owns the presets but no styles. The Workspace host
+    // loads the published Sheet styles next to the re-export so an embedded
+    // Sheet renders styled without importing the whole comparison preset.
+    expectImportsInOrder(embedProductRuntimeSource, [
+      "@univerjs/preset-sheets-core/lib/index.css",
+      "@univerjs/preset-sheets-drawing/lib/index.css",
+      "@univerjs/preset-sheets-conditional-formatting/lib/index.css",
+      "@univerjs/preset-sheets-filter/lib/index.css",
+      "@univerjs/preset-sheets-hyper-link/lib/index.css",
+      "@univerjs/preset-sheets-data-validation/lib/index.css",
+      "@univerjs/preset-sheets-find-replace/lib/index.css",
+      "@univerjs/preset-sheets-note/lib/index.css",
+      "@univerjs/preset-sheets-sort/lib/index.css",
+      "@univerjs/preset-sheets-table/lib/index.css",
+      "@univerjs/preset-sheets-advanced/lib/index.css",
+    ]);
+    expect(embedProductRuntimeSource).toContain(
+      'export { createEmbedProductRuntime } from "@univerjs/univer-workspace-editor-presets/embed-product-runtime";'
+    );
+    // The host wrapper must not pull in the comparison preset module.
+    expect(embedProductRuntimeSource).not.toContain("sheet-comparison-presets");
+    // The shared package keeps owning no styles of its own.
+    expect(readSharedPreset("sheets")).not.toContain(".css");
+    expect(readSharedPreset("embed-product-runtime")).not.toContain(".css");
   });
 
   it("mirrors the desktop Sheet styles and output wiring in the mobile editor", () => {
@@ -196,9 +230,9 @@ describe("editor integration assets", () => {
 
   it("keeps Base chrome out without clipping product content", () => {
     expect(editorSources.base).toContain("hideCollaborationStatus: true");
-    expect(editorSources.base).toContain("toolbar: false");
-    expect(editorSources.base).toContain("collaborationStatus: false");
-    expect(editorSources.base).toContain("footer: false");
+    expect(readSharedPreset("bases")).toContain("toolbar: false");
+    expect(readSharedPreset("bases")).toContain("collaborationStatus: false");
+    expect(readSharedPreset("bases")).toContain("footer: false");
     expect(globalStyles).not.toContain('[id^="univer-base-"]');
     expect(globalStyles).not.toContain("margin-bottom: -36px");
   });
@@ -232,9 +266,9 @@ describe("editor integration assets", () => {
 
   it("keeps Board chrome out and contains viewport overscroll", () => {
     expect(editorSources.board).toContain("hideCollaborationStatus: true");
-    expect(editorSources.board).toContain("header: false");
-    expect(editorSources.board).toContain("toolbar: false");
-    expect(editorSources.board).toContain("footer: false");
+    expect(readSharedPreset("boards")).toContain("header: false");
+    expect(readSharedPreset("boards")).toContain("toolbar: false");
+    expect(readSharedPreset("boards")).toContain("footer: false");
     expect(globalStyles).toContain("overscroll-behavior: none");
     expect(globalStyles).toContain(".univer-editor-shell");
     expect(globalStyles).toContain("overflow: hidden");
@@ -267,4 +301,8 @@ function expectImportsInOrder(
   expect(indexes, `incorrect import order: ${specifiers.join(" -> ")}`).toEqual(
     [...indexes].sort((left, right) => left - right)
   );
+}
+
+function readSharedPreset(product: string): string {
+  return readFileSync(new URL(import.meta.resolve(`@univerjs/univer-workspace-editor-presets/${product}`)), "utf8");
 }

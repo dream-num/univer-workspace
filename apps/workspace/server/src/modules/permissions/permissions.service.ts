@@ -69,6 +69,7 @@ export function createPermissionsModule(options: {
   readonly access: AccessResolver;
   readonly now?: () => number;
   readonly onLinkSharingUpdated?: (nodeId: string) => void;
+  readonly onAccessRevoked?: () => void;
 }): PermissionsModule {
   const now = options.now ?? Date.now;
 
@@ -160,6 +161,9 @@ export function createPermissionsModule(options: {
         throw forbidden();
       }
       if (!options.repository.removeMember(spaceId, userId)) throw notFound();
+      // Reuse the gateway's existing policy invalidation so removed users
+      // cannot keep reading a room through an already authenticated socket.
+      options.onAccessRevoked?.();
     },
 
     listNodeGrants(actorUserId, nodeId) {
@@ -195,6 +199,7 @@ export function createPermissionsModule(options: {
     removeNodeGrant(actorUserId, nodeId, userId) {
       shareableNode(actorUserId, nodeId);
       if (!options.repository.removeGrant(nodeId, userId)) throw notFound();
+      options.onAccessRevoked?.();
       const remaining = options.access.resolveNode(userId, nodeId);
       return {
         effectiveRole:

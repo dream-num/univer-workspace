@@ -4,17 +4,16 @@ import { describe, expect, it } from "vitest";
 describe("Workspace standard Thread Comment plugins", () => {
   it("keeps the standard UI integration in every Unit-specific lazy editor", async () => {
     for (const [pluginFilename, pluginName] of [
-      ["units/sheet/sheet-presets.ts", "UniverSheetsThreadCommentPreset"],
-      ["units/doc/doc-editor.tsx", "UniverDocsThreadCommentPreset"],
+      ["@univerjs/univer-workspace-editor-presets/sheets", "UniverSheetsThreadCommentPreset"],
+      ["@univerjs/univer-workspace-editor-presets/docs", "UniverDocsThreadCommentPreset"],
       ["units/slide/slide-editor.tsx", "UniverSlidesThreadCommentUIPlugin"],
       ["units/base/base-editor.tsx", "UniverBasesThreadCommentUIPlugin"],
       ["units/board/board-editor.tsx", "UniverBoardsThreadCommentUIPlugin"],
     ] as const) {
       const pluginSource = await readFile(
-        new URL(
-          `../../web/src/features/editor/${pluginFilename}`,
-          import.meta.url
-        ),
+        pluginFilename.startsWith("@")
+          ? new URL(import.meta.resolve(pluginFilename))
+          : new URL(`../../web/src/features/editor/${pluginFilename}`, import.meta.url),
         "utf8"
       );
       expect(pluginSource).toContain(pluginName);

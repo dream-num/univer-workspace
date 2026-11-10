@@ -1,0 +1,486 @@
+[
+  {
+    "name": "univer_focus",
+    "description": "Read the Docs text selected or the paragraph containing the caret when this user message was admitted. For a direct replacement, first read this target, then call this tool again with action replace, the exact targetId and expectedText, and plain replacement text. It validates paragraph identity and exact text against the current Server document before applying through the official Facade and collaboration write path. Stale targets, unsupported blocks, Pages, Sheets, closed editors and missing focus are rejected; it never falls back to a whole-document edit.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "read",
+            "replace"
+          ]
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "expectedText": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "action"
+      ]
+    },
+    "output": {},
+    "presentation": {
+      "card": "generic",
+      "title": "Replace focused Docs text",
+      "kind": "edit"
+    }
+  },
+  {
+    "name": "univer_spaces",
+    "description": "List Spaces accessible to the current authenticated Workspace user. Read only.",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    },
+    "output": {}
+  },
+  {
+    "name": "univer_documents",
+    "description": "List Nodes in a Univer Workspace Space. Omit spaceId to use the current Space or personal Space, or provide another accessible Space. Includes nested folders and Univer and Blob resources; filter by parentNodeId, recursive, query, resourceKind, or unitType.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "spaceId": {
+          "type": "string",
+          "description": "Optional. Omit to list the Space linked to this session; an explicit value may select any Space accessible to the authenticated User."
+        },
+        "parentNodeId": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "query": {
+          "type": "string"
+        },
+        "resourceKind": {
+          "type": "string",
+          "enum": [
+            "univer",
+            "blob",
+            "folder",
+            "all"
+          ]
+        },
+        "unitType": {
+          "type": "string",
+          "enum": [
+            "sheet",
+            "doc",
+            "slide",
+            "board",
+            "base"
+          ]
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "spaceId": {
+          "type": "string"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parentNodeId": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hasChildren": {
+                "type": "boolean"
+              },
+              "updatedAt": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "resourceKind": {
+                "type": "string",
+                "enum": [
+                  "univer",
+                  "blob"
+                ]
+              },
+              "unitType": {
+                "type": "string"
+              },
+              "mediaType": {
+                "type": "string"
+              },
+              "byteSize": {
+                "type": "number"
+              },
+              "availability": {
+                "type": "string"
+              },
+              "accessRole": {
+                "type": "string"
+              },
+              "nodeCapabilities": {},
+              "resourceCapabilities": {}
+            },
+            "required": [
+              "nodeId",
+              "name",
+              "parentNodeId",
+              "hasChildren",
+              "updatedAt",
+              "resourceId",
+              "resourceKind",
+              "accessRole"
+            ]
+          }
+        },
+        "folders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parentNodeId": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hasChildren": {
+                "type": "boolean"
+              },
+              "updatedAt": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "accessRole": {
+                "type": "string"
+              },
+              "nodeCapabilities": {}
+            },
+            "required": [
+              "nodeId",
+              "name",
+              "parentNodeId",
+              "hasChildren",
+              "updatedAt",
+              "accessRole"
+            ]
+          }
+        }
+      },
+      "required": [
+        "spaceId",
+        "documents",
+        "folders"
+      ]
+    },
+    "presentation": {
+      "card": "generic",
+      "title": "List Workspace documents",
+      "kind": "read"
+    }
+  },
+  {
+    "name": "univer_list",
+    "description": "Alias of univer_documents with the same Space and filter options.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "spaceId": {
+          "type": "string",
+          "description": "Optional. Omit to list the Space linked to this session; an explicit value may select any Space accessible to the authenticated User."
+        },
+        "parentNodeId": {
+          "type": "string"
+        },
+        "recursive": {
+          "type": "boolean"
+        },
+        "query": {
+          "type": "string"
+        },
+        "resourceKind": {
+          "type": "string",
+          "enum": [
+            "univer",
+            "blob",
+            "folder",
+            "all"
+          ]
+        },
+        "unitType": {
+          "type": "string",
+          "enum": [
+            "sheet",
+            "doc",
+            "slide",
+            "board",
+            "base"
+          ]
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "spaceId": {
+          "type": "string"
+        },
+        "documents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parentNodeId": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hasChildren": {
+                "type": "boolean"
+              },
+              "updatedAt": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "resourceId": {
+                "type": "string"
+              },
+              "resourceKind": {
+                "type": "string",
+                "enum": [
+                  "univer",
+                  "blob"
+                ]
+              },
+              "unitType": {
+                "type": "string"
+              },
+              "mediaType": {
+                "type": "string"
+              },
+              "byteSize": {
+                "type": "number"
+              },
+              "availability": {
+                "type": "string"
+              },
+              "accessRole": {
+                "type": "string"
+              },
+              "nodeCapabilities": {},
+              "resourceCapabilities": {}
+            },
+            "required": [
+              "nodeId",
+              "name",
+              "parentNodeId",
+              "hasChildren",
+              "updatedAt",
+              "resourceId",
+              "resourceKind",
+              "accessRole"
+            ]
+          }
+        },
+        "folders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "nodeId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "parentNodeId": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "hasChildren": {
+                "type": "boolean"
+              },
+              "updatedAt": {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "accessRole": {
+                "type": "string"
+              },
+              "nodeCapabilities": {}
+            },
+            "required": [
+              "nodeId",
+              "name",
+              "parentNodeId",
+              "hasChildren",
+              "updatedAt",
+              "accessRole"
+            ]
+          }
+        }
+      },
+      "required": [
+        "spaceId",
+        "documents",
+        "folders"
+      ]
+    },
+    "presentation": {
+      "card": "generic",
+      "title": "List Workspace documents",
+      "kind": "read"
+    }
+  },
+  {
+    "name": "univer_open",
+    "description": "Open an authorized Workspace file by resourceId, nodeId, or unitId and return its stable identity and a Workspace reference. Use univer_inspect to read content on demand.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "nodeId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "unitId": {
+          "type": "string"
+        }
+      }
+    },
+    "output": {}
+  },
+  {
+    "name": "univer_inspect",
+    "description": "Inspect an authorized Workspace document by nodeId, resourceId or unitId, or use the document admitted with this request. Docs, Sheets and Slides support the original structured SDK inspection; Sheet range accepts an exact selector such as Sheet1!A1:D20. Canvas, Relational Table and Pages expose bounded current Server content. With worktreeId inspect the authorized current draft. Never writes.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "nodeId": {
+          "type": "string"
+        },
+        "resourceId": {
+          "type": "string"
+        },
+        "unitId": {
+          "type": "string"
+        },
+        "unitType": {
+          "type": "string",
+          "enum": [
+            "doc",
+            "sheet",
+            "slide",
+            "board",
+            "base"
+          ]
+        },
+        "revision": {
+          "type": "integer"
+        },
+        "offset": {
+          "type": "integer"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "sheet": {
+          "type": "string"
+        },
+        "range": {
+          "type": "string"
+        },
+        "worktreeId": {
+          "type": "string"
+        }
+      }
+    },
+    "output": {},
+    "presentation": {
+      "card": "generic",
+      "title": "Read Workspace file",
+      "kind": "read"
+    }
+  }
+]

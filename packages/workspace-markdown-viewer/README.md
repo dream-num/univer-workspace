@@ -1,7 +1,7 @@
 # Workspace Markdown Viewer
 
-Private, read-only Markdown presentation shared by Workspace Browser (React 19)
-and Workspace Agent (React 18). The host supplies its React runtime, decoded text
+Private, read-only Markdown presentation shared by Workspace Browser (React 19),
+Workspace Agent and Space Plugin (React 18). The host supplies its React runtime, decoded text
 and `zh-CN`/`en-US` locale. Both applications bundle this package;
 it is not a public SDK or an independently deployed service.
 
@@ -24,6 +24,10 @@ covers historical MIME misclassification without changing stored metadata.
 Styles use host `--color-*` tokens, with `--uvf-color-*` fallbacks. Host builds
 must resolve React from the consuming application; do not bundle this package's
 React 18 development runtime into Workspace Browser.
+Space materializes this package as a build-time file dependency in its isolated
+npm graph. Its build compiles the shared Sass module and includes the resulting
+CSS in the Host-owned plugin stylesheet lifecycle; the installed plugin does not
+depend on a repository checkout or install this private package at runtime.
 
 ```bash
 pnpm --filter @univerjs/univer-workspace-markdown-viewer typecheck
