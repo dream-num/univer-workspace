@@ -382,7 +382,7 @@ function authCommands(auth: WorkspaceAuth): readonly Command[] {
 
 function repoContext(): RepoContext {
   return new RepoContext(
-    { lookup: async () => ({ id: "looked-up", name: "Looked up" }) },
+    { lookup: async () => ({ id: "looked-up", name: "Looked up" }), get: async (id) => ({ id, name: "By ID" }), list: async () => [] },
     async () => "https://workspace.test",
     {},
   );

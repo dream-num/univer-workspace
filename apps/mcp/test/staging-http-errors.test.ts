@@ -164,7 +164,7 @@ it("correlates safe failure diagnostics and logs each client abort once at info"
     const toolResult = await (
       await call("internal-tool", "blob_upload", {
         upload_id: ready.upload.upload_id,
-        space: "space",
+        space: "08c0a307-edab-42f5-8f08-2852641fab0e",
         idempotency_key: "test",
       })
     ).text();

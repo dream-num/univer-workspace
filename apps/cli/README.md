@@ -116,6 +116,9 @@ use the legacy password route when the CLI route returns HTTP 404.
 Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>/<slug>`
 (`<username>/personal` is your Personal Space); pass it with `-R` or set `UVW_REPO`. A pull request is a
 Worktree; `uvw worktree ...` is the same command group under its product name.
+Repository references also accept a Space ID, a Workspace URL, or a bare slug that
+uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
+`workspace-argument-invalid` with an owner/slug hint and matching candidates.
 
 | Group   | Commands                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

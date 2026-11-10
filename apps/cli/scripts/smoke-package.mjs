@@ -282,7 +282,7 @@ try {
   const spaces = await run(executable, ["repo", "list", "--json"], installRoot, smokeEnv);
   const nodes = await run(
     executable,
-    ["space", "browse", "space-1", "--json"],
+    ["space", "browse", "00000000-0000-4000-8000-0000000000a1", "--json"],
     installRoot,
     smokeEnv,
   );
@@ -298,7 +298,7 @@ try {
       "pr",
       "create",
       "-R",
-      "space-1",
+      "00000000-0000-4000-8000-0000000000a1",
       "-t",
       "Draft",
       "--idempotency-key",
@@ -334,7 +334,7 @@ try {
       "--worktree",
       "wt-1",
       "--space",
-      "space-1",
+      "00000000-0000-4000-8000-0000000000a1",
       "--type",
       "doc",
       "--name",
@@ -366,7 +366,7 @@ try {
       "--file",
       blobSourcePath,
       "--space",
-      "space-1",
+      "00000000-0000-4000-8000-0000000000a1",
       "--idempotency-key",
       "smoke-blob",
       "--json",
@@ -457,7 +457,7 @@ try {
     throw new Error("Installed HTML View validation did not inspect the trunk Sheet binding");
   }
   const htmlCreated = JSON.parse((await run(executable, [
-    "html-view", "create", "--file", htmlPath, "--space", "space-1", "--name", "Dashboard",
+    "html-view", "create", "--file", htmlPath, "--space", "00000000-0000-4000-8000-0000000000a1", "--name", "Dashboard",
     "--idempotency-key", "html-view-key", "--json",
   ], installRoot, smokeEnv)).stdout);
   if (htmlCreated.resourceId !== "resource-html" ||
@@ -778,23 +778,23 @@ async function handleWorkspaceRequest(request, response, fixture) {
     fixture.requests.spaceList += 1;
     return writeJson(response, 200, {
       spaces: [{
-        id: "space-1",
+        id: "00000000-0000-4000-8000-0000000000a1",
         name: "Personal",
         type: "personal",
         owner: { id: smokeUser.id, username: smokeUser.username },
       }],
     });
   }
-  if (request.method === "GET" && request.url === "/api/spaces/space-1") {
+  if (request.method === "GET" && request.url === "/api/spaces/00000000-0000-4000-8000-0000000000a1") {
     fixture.requests.spaceGet += 1;
     return writeJson(response, 200, {
-      id: "space-1",
+      id: "00000000-0000-4000-8000-0000000000a1",
       name: "Personal",
       type: "personal",
       owner: { id: smokeUser.id, username: smokeUser.username },
     });
   }
-  if (request.method === "GET" && request.url === "/api/spaces/space-1/nodes") {
+  if (request.method === "GET" && request.url === "/api/spaces/00000000-0000-4000-8000-0000000000a1/nodes") {
     fixture.requests.spaceBrowse += 1;
     return writeJson(response, 200, {
       breadcrumbs: [],
@@ -802,7 +802,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
       nextCursor: null,
       nodes: [],
       parentNode: null,
-      space: { id: "space-1", name: "Personal", type: "personal" },
+      space: { id: "00000000-0000-4000-8000-0000000000a1", name: "Personal", type: "personal" },
     });
   }
   if (request.method === "GET" && request.url === "/api/worktrees?scope=active&limit=30") {
@@ -875,7 +875,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
     if (
       body.source === "worktree" &&
       body.name === "Planning" &&
-      body.targetSpaceId === "space-1" &&
+      body.targetSpaceId === "00000000-0000-4000-8000-0000000000a1" &&
       body.targetParentNodeId === null &&
       body.unitType === "doc"
     ) {
@@ -887,7 +887,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
   if (request.method === "POST" && request.url === "/api/blob-upload-sessions" &&
       request.headers["idempotency-key"] === "html-view-key") {
     const body = await readJsonBody(request);
-    if (body.spaceId !== "space-1" || body.parentNodeId !== null ||
+    if (body.spaceId !== "00000000-0000-4000-8000-0000000000a1" || body.parentNodeId !== null ||
         body.name !== "Dashboard.univer.html" || body.originalFilename !== "view.univer.html" ||
         body.byteSize !== htmlViewBytes) return writeJson(response, 400, {});
     return writeJson(response, 200, htmlViewUploadEnvelope("waitingForUpload"));
@@ -919,7 +919,7 @@ async function handleWorkspaceRequest(request, response, fixture) {
     if (
       JSON.stringify(body) !==
       JSON.stringify({
-        spaceId: "space-1",
+        spaceId: "00000000-0000-4000-8000-0000000000a1",
         parentNodeId: null,
         name: "blob-source.bin",
         originalFilename: "blob-source.bin",
@@ -1068,7 +1068,7 @@ function localUnit() {
     nodeId: "node-local",
     resourceId: "resource-local",
     source: "worktree",
-    target: { parentNodeId: null, spaceId: "space-1" },
+    target: { parentNodeId: null, spaceId: "00000000-0000-4000-8000-0000000000a1" },
     unitId: "unit-2",
     unitType: "doc",
   });
@@ -1171,7 +1171,7 @@ function blobNode() {
       kind: "blob",
       mediaType: "application/octet-stream",
     },
-    spaceId: "space-1",
+    spaceId: "00000000-0000-4000-8000-0000000000a1",
     updatedAt: "2026-08-28T00:00:00.000Z",
   };
 }

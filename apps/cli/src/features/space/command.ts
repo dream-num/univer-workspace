@@ -22,7 +22,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
   const space = new Command("space").description("Browse and manage the files (Nodes) of a repository; list repositories with `uvw repo list`");
   const browse = new Command("browse")
     .description("Browse a Space Node directory")
-    .argument("<repo>", "owner/slug, Space ID or URL")
+    .argument("<repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
     .option("--parent <node>", "parent Node ID")
     .option("--recursive", "browse descendants recursively")
     .option("--resource-kind <kind>", "none, univer, or blob")
@@ -46,7 +46,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
   const find = new Command("find")
     .description("Find Nodes by name across a Space")
     .argument("<query...>", "name query")
-    .requiredOption("--space <repo>", "owner/slug, Space ID or URL")
+    .requiredOption("--space <repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
     .option("--resource-kind <kind>", "none, univer, or blob")
     .option("--unit-type <type>", "sheet, base, doc, slide, or board")
     .option("--json", "write structured JSON")
@@ -67,7 +67,7 @@ export function createSpaceCommand(feature: WorkspaceSpaceFeature, context: Repo
   const node = new Command("node").description("Manage Workspace Nodes");
   const create = new Command("create")
     .description("Create an organizational Node in a repository")
-    .argument("<repo>", "owner/slug, Space ID or URL")
+    .argument("<repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
     .requiredOption("--name <name>", "Node name")
     .option("--parent <node>", "parent Node ID")
     .option("--json", "write structured JSON")

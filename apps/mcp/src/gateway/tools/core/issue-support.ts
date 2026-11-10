@@ -12,7 +12,7 @@ import type { ToolContext } from "../definition.js";
 
 export const repoInput = z
   .string()
-  .describe("Repository: owner/slug, owner/personal, a Space ID or a Workspace URL.");
+  .describe("Repository: owner/slug, owner/personal, a unique bare slug from repo_list, a Space ID or a Workspace URL.");
 export const numberInput = z
   .string()
   .describe(

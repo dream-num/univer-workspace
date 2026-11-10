@@ -68,7 +68,7 @@ function context(env: NodeJS.ProcessEnv = {}) {
     id: slug === "personal" ? "personal-1" : "space-1",
     name: `${owner}/${slug}`,
   }));
-  return { lookup, repoContext: new RepoContext({ lookup }, async () => ORIGIN, env) };
+  return { lookup, repoContext: new RepoContext({ lookup, get: async (id) => ({ ...teamSpace, id }), list: async () => [teamSpace] }, async () => ORIGIN, env) };
 }
 
 describe("uvw repository and Issue commands", () => {
@@ -88,6 +88,22 @@ describe("uvw repository and Issue commands", () => {
     await expect(run(command, ["view", `https://elsewhere.test/spaces/s/issues/1`])).rejects.toMatchObject({
       exitCode: 1,
     });
+  });
+
+  it("resolves a bare slug through the shared repository context", async () => {
+    const spaces = {
+      lookup: vi.fn(async () => teamSpace),
+      get: vi.fn(async () => { throw workspaceError("NOT_FOUND", "Not found", { status: 404 }); }),
+      list: vi.fn(async () => [teamSpace]),
+    };
+    const repoContext = new RepoContext(spaces, async () => ORIGIN, {});
+    const get = vi.fn(async () => issue());
+    const command = createIssueCommand({
+      context: repoContext, feature: { get } as unknown as WorkspaceIssueFeature, origin: async () => ORIGIN,
+    });
+    await run(command, ["view", "3", "-R", "docs"]);
+    expect(get).toHaveBeenCalledWith("space-1", 3);
+    expect(spaces.list).toHaveBeenCalledTimes(1);
   });
 
   it("exits 4 and points at `uvw auth login` when sign-in is required", async () => {
@@ -446,6 +462,7 @@ describe("Personal pull request Browser URLs", () => {
     const writes: string[] = [];
     const spaces = {
       get: vi.fn(async () => personalSpace),
+      list: vi.fn(async () => [personalSpace]),
       lookup: vi.fn(async () => personalSpace),
     };
     const worktrees = {

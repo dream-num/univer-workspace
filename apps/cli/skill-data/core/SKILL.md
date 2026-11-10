@@ -34,7 +34,9 @@ Understand these identities before running a mutation:
   connecting.
 - **Space** (a _repository_): the container whose visible tree is made of Nodes. A Team Space is named
   `<owner>/<slug>`; every Personal Space is `<owner>/personal`. Pass that name as `-R <owner>/<slug>`
-  (or set `UVW_REPO`); a Space ID or a Workspace URL is accepted wherever a repository is expected.
+  (or set `UVW_REPO`); a Space ID, a Workspace URL, or a bare slug that uniquely matches
+  `uvw repo list` is accepted wherever a repository is expected. Unknown or ambiguous slugs
+  require owner/slug; the error lists matching candidates.
   A Team Space created before slugs existed may have no name; use its Space ID.
 - **Personal Space**: the authenticated user's own Space. Files here are personal Workspace files.
   A Personal Space is not a Worktree. Its repository name is `<username>/personal`.

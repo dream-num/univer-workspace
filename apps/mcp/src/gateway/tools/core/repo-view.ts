@@ -13,7 +13,7 @@ export const repoViewTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "View repository",
-  description: "Show a repository by owner/slug, owner/personal, Space ID, or Workspace URL.",
+  description: "Show a repository by owner/slug, owner/personal, a unique bare slug from repo_list, Space ID, or Workspace URL.",
   inputSchema,
   outputSchema: repoSchema.extend({ starCount: z.number(), starred: z.boolean() }),
   annotations: readOnlyAnnotations,
