@@ -9,6 +9,20 @@ import { opSpecs } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
 import { attributeRepo } from "./scope.js";
 
+// Workaround for #263: the upstream parser words three errors for the CLI. Delete this table once
+// dream-num/univer-cli-sdk#92 returns structured errors that the executor can phrase itself.
+const inspectionInputMessages: [RegExp, string][] = [
+  [
+    /^range requires --worksheet <selector>$/,
+    "range requires the worksheet argument (id:<id>, name:<name> or index:N)",
+  ],
+  [/^Invalid index "(.*)"; CLI indices start at 1$/, 'Invalid index "$1"; indices start at 1'],
+  [
+    /^--worksheet is only valid for range, not (.+)$/,
+    "worksheet is only valid when target is range, not $1",
+  ],
+];
+
 export const contentInspect: Handler<"content.inspect"> = async (ctx, input) => {
   let query;
   try {
@@ -19,7 +33,13 @@ export const contentInspect: Handler<"content.inspect"> = async (ctx, input) => 
     );
   } catch (error) {
     if (error instanceof InspectionCommandInputError)
-      throw workspaceError("workspace-argument-invalid", error.message);
+      throw workspaceError(
+        "workspace-argument-invalid",
+        inspectionInputMessages.reduce(
+          (message, [pattern, replacement]) => message.replace(pattern, replacement),
+          error.message,
+        ),
+      );
     throw error;
   }
   const source = ctx.source();

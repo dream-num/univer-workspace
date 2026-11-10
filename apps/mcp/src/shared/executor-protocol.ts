@@ -71,7 +71,12 @@ export const inspectionTarget = z.enum([
 ]);
 export const inspectionOptions = z.object({
   target: inspectionTarget,
-  selectors: z.array(z.string()).optional(),
+  selectors: z.array(z.string()).optional().describe(
+    "worksheet: id:<id>, name:<name> or index:N. " +
+    "range: A1 ranges such as A1:B2; requires the separate worksheet argument. " +
+    "paragraph and slide: index:N or id:<id>. board-element: id:<id>. " +
+    "index: is 1-based. Other targets take no selectors.",
+  ),
   worksheet: z.string().optional(),
 });
 // The strings are `uvw screenshot` flag values; the executor parses them with the CLI's own command.

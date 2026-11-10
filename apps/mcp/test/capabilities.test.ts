@@ -137,6 +137,23 @@ async function callError(client: Client, name: string) {
 }
 
 describe("capabilities through MCP tools/list and initialize", () => {
+  it("lists the selector syntax for each inspect target", async () => {
+    const connect = await start([replica()]);
+    const client = await connect("core");
+    const tool = (await client.listTools()).tools.find(({ name }) => name === "inspect");
+    expect(tool?.inputSchema).toMatchObject({
+      properties: {
+        selectors: {
+          description:
+            "worksheet: id:<id>, name:<name> or index:N. " +
+            "range: A1 ranges such as A1:B2; requires the separate worksheet argument. " +
+            "paragraph and slide: index:N or id:<id>. board-element: id:<id>. " +
+            "index: is 1-based. Other targets take no selectors.",
+        },
+      },
+    });
+  });
+
   it.each([undefined, " listed , another "])(
     "applies the per-user executor allowlist %s through MCP",
     async (allowlist) => {
