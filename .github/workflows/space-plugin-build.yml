@@ -4,6 +4,20 @@ on:
   push:
     branches:
       - feat/space-full-univer-integration
+  workflow_call:
+    outputs:
+      artifact_name:
+        description: Name of the uploaded Space Plugin workflow artifact.
+        value: ${{ jobs.build.outputs.artifact_name }}
+      filename:
+        description: File name of the packaged Space Plugin tarball.
+        value: ${{ jobs.build.outputs.filename }}
+      version:
+        description: Version of the packaged Space Plugin.
+        value: ${{ jobs.build.outputs.version }}
+      sha256:
+        description: SHA256 checksum of the packaged Space Plugin tarball.
+        value: ${{ jobs.build.outputs.sha256 }}
 
 permissions:
   contents: read
@@ -12,6 +26,11 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      artifact_name: ${{ steps.package.outputs.artifact_name }}
+      filename: ${{ steps.package.outputs.filename }}
+      version: ${{ steps.package.outputs.version }}
+      sha256: ${{ steps.package.outputs.sha256 }}
     steps:
       - name: Check out source
         uses: actions/checkout@v4
