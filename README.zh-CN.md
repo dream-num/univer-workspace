@@ -58,7 +58,7 @@ Agent 和 CLI 都可以连接现有的 Workspace 部署，或在本地启动的 
 Workspace 提供远程 [MCP](https://modelcontextprotocol.io) 服务。连上它的 AI 助手可以查找你的文件、开 PR、编辑 Sheet、Doc 和 Slide、
 读回结果，再把 PR 标记为 ready，交给你在浏览器里审阅。本机不需要安装任何东西。
 
-[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=univer-workspace&config=eyJ1cmwiOiJodHRwczovL3NwYWNlLnVuaXZlci5haS9tY3AifQ%3D%3D)
+[![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=univer-workspace&config=eyJ1cmwiOiJodHRwczovL3NwYWNlLnVuaXZlci5haS9tY3AifQ%3D%3D)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Univer_Workspace-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=univer-workspace&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fspace.univer.ai%2Fmcp%22%7D)
 
 | 项目     | 值                                                                                                                       |
