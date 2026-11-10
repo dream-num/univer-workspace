@@ -5,23 +5,20 @@ description: "Create, import, read, write, format, calculate, export, and verify
 
 # Workspace Sheet unit reference
 
-Every content command targets one remote draft explicitly with `--worktree <id>` and `--unit <id>`. `execute` provides `univerAPI`, `api` (the same object), and `workbook` (an `FWorkbook` bound by `--unit`). Obtain a worksheet with `workbook.getActiveSheet()` or `workbook.getSheetByName("…")`. Examples from `api show` use the already available `univerAPI` variable. Never redeclare these injected variables. `execute` is ESM and has no `require`.
+Every content operation targets one remote draft explicitly by Worktree and Unit ID. `execute` provides `univerAPI`, `api` (the same object), and `workbook` (an `FWorkbook` bound to the selected Unit). Obtain a worksheet with `workbook.getActiveSheet()` or `workbook.getSheetByName("…")`. Examples from `api show` use the already available `univerAPI` variable. Never redeclare these injected variables. `execute` is ESM and has no `require`.
 
 ## Workspace target
 
 Create an empty Sheet Unit or import workbook data into the selected Worktree:
 
-```bash
-uvw unit create --worktree <worktree-id> --space <space-id> --type sheet --name <name> --json
-uvw import --file source.xlsx --worktree <worktree-id> --space <space-id> --type sheet --json
-```
+Run `unit create` with type `sheet`, a name, and the destination Space in the selected Worktree, or run `import` with the workbook source and type `sheet`. Follow the `core` Skill for source handling.
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
 for every content command; never reuse an imported workbook's internal id as the Workspace address.
 For original-file preservation without an editable Sheet Unit, read the [Blob Skill](../blob/SKILL.md).
 Blob Resources have no `unitId` and cannot use this Skill's commands.
 
-Use `uvw api find <term>` and `uvw api show <symbol>` instead of guessing Facade signatures.
+Use `api find` with a term and `api show` with an exact symbol instead of guessing Facade signatures.
 
 ## Cell model: v, t, f, and number formats
 
@@ -57,8 +54,8 @@ Dates, percentages, and currencies are numbers plus number formats, not separate
 
 ## Reading evidence
 
-- `inspect range --json` returns `{ v, t, displayValue, f }` per cell and is authoritative for values, types, and formulas. It omits `s` (style and number format) and `p` (rich text); read those with `getCellDatas()` or `getCellStyleData()` through `execute`.
-- Text-mode inspect returns only display values and is not evidence of stored values.
+- Structured `inspect` with target `range` returns `{ v, t, displayValue, f }` per cell and is authoritative for values, types, and formulas. It omits `s` (style and number format) and `p` (rich text); read those with `getCellDatas()` or `getCellStyleData()` through `execute`.
+- Display-only inspection is not evidence of stored values. Use the `core` Skill to request structured output.
 
 ## Common APIs
 
@@ -128,8 +125,8 @@ text and computed cell values.
 - Write explicit `ICellData` and specify `t` for every written cell.
 - Do not use `getValue()` / `getValues()` for authoritative reads. Formatted dates and currencies become display strings and booleans become `1`/`0`. Use `getCellDatas()` for stored values and `getDisplayValues()` for display text.
 - Colors must be xlsx-safe: only `"#RRGGBB"` or `"rgb(r,g,b)"`. Invalid colors can make an exported `.xlsx` unreadable and cannot be repaired by later overwriting the color.
-- Sheet tab name, Unit display name, Unit id, and resource id are distinct. Use `inspect workbook` for
-  Sheet tab names. `inspect range` requires one explicit worksheet selector with a `name:`, `id:`,
+- Sheet tab name, Unit display name, Unit id, and resource id are distinct. Use `inspect` with target `workbook` for
+  Sheet tab names. `inspect` with target `range` requires one explicit worksheet selector with a `name:`, `id:`,
   or 1-based `index:` prefix and accepts multiple A1 ranges within that worksheet.
 - Formulas do not trigger an implicit full recalculation. Follow the recalculation recipe above before reading calculated values or exporting.
 - Copy formatted cells with a deep copy of `getCellData()` or complete explicit `ICellData`, never `getValues()` followed by `setValues()`.
@@ -137,8 +134,8 @@ text and computed cell values.
 
 ## Verification
 
-- Values, types, and formulas: `uvw inspect range A1:C9 --worksheet name:<sheet-name> --worktree <id> --unit <id> --json`.
-- Styles, number formats, and rich text: read back `getCellDatas()` through `uvw execute --worktree <id> --unit <id>`.
+- Values, types, and formulas: `inspect` with target `range`, range `A1:C9`, and worksheet selector `name:<sheet-name>` for the Sheet Unit in its Worktree.
+- Styles, number formats, and rich text: read back `getCellDatas()` through `execute` for the Sheet Unit in its Worktree.
 
 ## Rich text (when mixed styling inside one cell is required)
 
@@ -159,7 +156,4 @@ workbook.getActiveSheet().getRange("A1").setRichTextValueForCell(rich);
 
 Export only after formula and style verification:
 
-```bash
-uvw screenshot --worktree <id> --unit <id> --sheet <name> --range A1:H40
-uvw export output.xlsx --worktree <id> --unit <id>
-```
+Run `screenshot` for worksheet name `<name>` and range `A1:H40` in the Unit's Worktree, then `export` with format `xlsx` for the same Unit. Follow the `core` Skill for output handling.

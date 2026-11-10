@@ -18,9 +18,7 @@ emphasis for the actual content; examples are not templates that every Board mus
   before choosing geometry. Translate it through Facade APIs; it is not an SDK input or another persisted model.
 - Direct edits, standalone charts, images, sticky notes, and freehand work can call their dedicated APIs without
   a spec. Do not invent graph relations just to use one.
-- Read only the relevant reference below. Use `uvw skills get board` for this entrypoint and
-  `uvw skills path board --json` to locate selected files; `--full` loads every reference and is unnecessary
-  for ordinary tasks.
+- Read only the relevant reference of the `board` Skill below. The `core` Skill explains how to load it. Loading every reference is unnecessary for ordinary tasks.
 
 | Task                                                            | Read when needed                                     |
 | --------------------------------------------------------------- | ---------------------------------------------------- |
@@ -42,13 +40,9 @@ size, layout direction, color palette, or animation count is required.
 
 Create a Board only when a new unit is needed; retain its returned unit ID:
 
-```bash
-uvw unit create --worktree <id> --space <space-id> --type board --name "Planning Board" --json
-uvw inspect board --worktree <id> --unit <board-id> --json
-uvw api show FBoard.insertShape FBoard.insertConnector
-```
+Run `unit create` with type `board`, name `Planning Board`, and the destination Space in the task Worktree. Run `inspect` with target `board` for its Unit, and use `api show` for `FBoard.insertShape` and `FBoard.insertConnector`.
 
-`inspect board` is a selector-free overview. `inspect board-element id:<element-id> ...` gives type-specific
+`inspect` with target `board` is a selector-free overview. `inspect` with target `board-element` and one or more `id:<element-id>` selectors gives type-specific
 detail without the full snapshot. Both are read-only. Query only the Facade methods/types needed for the next
 operation with `api find` / `api show`, rather than loading the entire capability catalog.
 
@@ -57,15 +51,16 @@ SDK is authoritative: before a large batch, probe selected runtime methods/enums
 availability is uncertain. An indexed type alone does not establish runtime support. Do not invent parameters or
 upgrade dependencies to match a reference; report unavailable capabilities or explain a semantics-preserving fallback.
 
-```bash
-uvw execute --worktree <id> --unit <board-id> -e '
+Pass this code to `execute` for the Unit in its Worktree:
+
+```js
 const shape = board.insertShape({
   shapeType: api.Enum.ShapeTypeEnum.RoundRect,
   transform: { left: 80, top: 80, width: 180, height: 100 }
 });
 if (!shape) throw new Error("Cannot insert Board shape");
 shape.getText().setText("Review");
-return { shapeId: shape.getId(), elements: board.describeElements() };'
+return { shapeId: shape.getId(), elements: board.describeElements() };
 ```
 
 `insertShape` takes geometry in `transform`, visual properties in `shapeData`, and text through the returned
@@ -87,7 +82,7 @@ For a generated diagram, follow intent → spec when useful → layout decisions
 
 1. Read back persisted elements/text, ownership and bindings with `describeElements()`, `getElements()`, or
    type-specific inspection. Check the requested meaning, not only counts.
-2. Run `board.analyzeModelLayout(48)`, then a full `uvw screenshot ... --json`. Inspect the image and
+2. Run `board.analyzeModelLayout(48)`, then a full `screenshot` with structured results. Inspect the image and
    `outputs[0].layoutAnalysis`; headless analysis cannot establish final font metrics or automatic routes.
 3. Repair implicated elements and recapture. Use [routing](references/connector-routing.md) or
    [label](references/connector-labels.md) guidance for their diagnostics. Never silently discard semantics to pass.
@@ -98,9 +93,6 @@ For a localized edit, inspect the changed region and affected relationships; do 
 an unrelated profile matrix. Full drag/menu/Undo/Redo testing belongs to explicit interaction or coverage requests,
 not every authoring task. A static screenshot does not prove UI behavior.
 
-```bash
-uvw screenshot --worktree <id> --unit <board-id> --out ./board-overview --json
-uvw browse <n> -R <repo> --unit <board-id>
-```
+Run `screenshot` for the Board Unit in its Worktree, then `browse` for its review link. Follow the `core` Skill for output handling.
 
 Board has no supported Office import/export format. Keep merge and discard user-authorized as described by `core`.

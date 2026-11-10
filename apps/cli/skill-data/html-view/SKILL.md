@@ -1,6 +1,6 @@
 ---
 name: html-view
-description: Create or revise live .univer.html pages backed by existing Workspace Sheet data using HTML bindings and JavaScript. Validate sources and publish pages with uvw html-view; revise existing pages through the Blob workflow.
+description: Create or revise live .univer.html pages backed by existing Workspace Sheet data using HTML bindings and JavaScript. Validate sources and publish pages with HTML View operations; revise existing pages through the Blob workflow.
 ---
 
 # Workspace HTML Views
@@ -10,26 +10,13 @@ Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
 Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
-For binding syntax, JavaScript data access, controls and frontend libraries, load the bundled
-authoring reference through the CLI:
+For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
 
-```bash
-uvw skills read html-view references/authoring.md
-```
-
-This prints [authoring](references/authoring.md). `skills get html-view` lists the other references
-and their read commands; use `skills read html-view references/<name>.md` when one is needed.
-`skills get html-view --full` prints all references at once. If the needed sections are already
-in context, use them directly. No `ls`, `cat`, or installation-directory access is needed.
-
-Create a complete local `.univer.html` file; sibling scripts
-and assets are not uploaded automatically. Opening the local file alone does not provide
-`window.univerBinding`; use the published Workspace URL.
+Prepare a complete HTML source. Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 
 ## Find the sources
 
-Use `uvw skills get core` for authentication and discovery, and
-`uvw skills get sheet` to inspect worksheets, values and formulas. Bind to actual Unit
+Use the `core` Skill for authentication and discovery, and the `sheet` Skill to inspect worksheets, values and formulas. Bind to actual Unit
 and worksheet IDs; Resource IDs and worksheet names are different identities.
 
 Sources always resolve on trunk. If the required Unit, worksheet or changes exist only in a
@@ -43,11 +30,7 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 
 ## Validate and create
 
-```bash
-uvw html-view validate --file ./dashboard.univer.html --json
-uvw html-view create --file ./dashboard.univer.html \
-  --space <space-id> --name Dashboard --idempotency-key <key> [--parent <node-id>] --json
-```
+Run `html-view validate` with the complete HTML source. Then run `html-view create` with the same source, destination Space, name `Dashboard`, stable idempotency key, and optional parent Node. Follow the `core` Skill for source handling.
 
 `validate` parses declarative HTML bindings, reads accessible trunk Sheet data, and checks
 worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount }`. It does not
@@ -68,10 +51,9 @@ synchronization; report which checks ran. Unit screenshot commands do not render
 
 ## Revise an existing page
 
-Read `uvw skills get blob`: download the existing Resource to a local `.univer.html`
-file, edit it, run `html-view validate`, then use `blob replace` with its downloaded ETag and a new
+Read the `blob` Skill. Download the existing Resource, edit the original HTML source, run `html-view validate`, then use `blob replace` with its downloaded ETag and a new
 stable write key. Replacement preserves the existing page identity and URL. Reconcile ETag
 conflicts; create another Blob only when a separate page is wanted.
 
-Page access does not grant access to the source Sheets. Author validation uses the current CLI
+Page access does not grant access to the source Sheets. Author validation uses the current authenticated
 identity; each viewer's source access is checked separately by Workspace at runtime.

@@ -1,22 +1,17 @@
-# Modern Doc Markdown for Workspace CLI
+# Modern Doc Markdown for Workspace
 
-Load the `core` and `doc` Skills first. `uvw` authenticates to the configured Workspace origin;
+Load the `core` and `doc` Skills first. The client authenticates to its Workspace origin;
 Markdown compilation does not bypass Space permissions or the Worktree review lifecycle.
 
 ## Create and review
 
-Create a draft Worktree for this task, then author `report.md` and its local assets. Compilation
-with apply creates the new Doc Unit; `--unit` is reserved for updates.
+Create a draft Worktree for this task, then author the Markdown source and its assets. Compilation
+with apply creates the new Doc Unit; selecting an existing Unit is reserved for updates.
 
-```bash
-uvw compile-markdown report.md --apply --worktree <worktree-id> --space <space-id> \
-  --source-map-out review/doc-map.json --json
-```
+Run `compile-markdown` with the Markdown source, apply enabled, and the destination Space in the task Worktree. Retain the execution source map. Follow the `core` Skill for source, asset, and map handling.
 
 Use the returned server-owned `unit.unitId`; never reuse a source/compiled target ID as the Workspace
-address. Optional `--parent <node-id>` chooses the target Node. For compile-only diagnostics,
-`uvw compile-markdown report.md --out review/report.js --json` writes a program without creating a
-Doc. Compile-only mode accepts no Worktree/Unit/Space target options.
+address. An optional parent Node chooses the destination. For compile-only diagnostics, run `compile-markdown` without apply to produce a program without creating a Doc. Compile-only mode accepts no Worktree, Unit, or Space target.
 
 Keep the actual execution map from apply. Inspect the Doc and every returned screenshot page,
 then follow `core` for Ready and review handoff. No formatting mutation should be needed after
@@ -25,24 +20,16 @@ conversion; SDK defaults govern body spacing, headings, tables, quotes, and call
 ## Edit selected current blocks
 
 Always export the current native fragment before editing; editor changes may have made the original
-Markdown stale. The following read returns the authoritative revision and writes current assets:
+Markdown stale. The following read returns the authoritative revision and current assets:
 
-```bash
-uvw export-markdown --worktree <worktree-id> --unit <doc-id> \
-  --source-map review/doc-map.json --blocks overview,readiness \
-  --out review/edit.md --source-map-out review/current-map.json --json
-```
+Run `export-markdown` for the Doc Unit in its Worktree with the saved source map and selected block IDs `overview,readiness`. Retain the exported fragment, assets, refreshed map, and authoritative revision together.
 
-Edit `review/edit.md`, retain the selected root IDs and exported assets, then use the refreshed map
+Edit the exported Markdown, retain the selected root IDs and exported assets, then use the refreshed map
 for the block update. The returned revision remains read metadata:
 
-```bash
-uvw compile-markdown review/edit.md --apply --worktree <worktree-id> --unit <doc-id> \
-  --source-map review/current-map.json \
-  --blocks overview,readiness --source-map-out review/updated-map.json --json
-```
+Run `compile-markdown` with the edited fragment, apply enabled, the Doc Unit in its Worktree, the refreshed source map, and selected block IDs `overview,readiness`. Retain the updated execution map.
 
-Creation options (`--space`, `--parent`, `--idempotency-key`) cannot accompany `--unit`. On a mapping
+Creation parameters (Space, parent Node, idempotency key) cannot accompany an existing Unit target. On a mapping
 or block-boundary conflict, export again and replan; never overwrite unrelated blocks.
 Save the new execution map, inspect structural readback and screenshots, then hand off the Worktree.
 
@@ -118,12 +105,6 @@ Review the native document before handing it off.
 | Review  | Pending |
 
 :::
-
-::image{#cover src="assets/cover.svg" width="560"}
-
-::chart{#adoption src="assets/adoption.chart.json"}
-
-::shape{#milestone src="assets/milestone.shape.json"}
 ```
 
 - `columns` contains 2–5 direct `column` children; positive `width` values are ratios. Nested
@@ -143,16 +124,15 @@ Review the native document before handing it off.
 - Keep exported `::heading[Title]{id="..." level="2"}` identities and `:br[]` breaks intact.
   Ordinary headings use levels 1–6; standard hard breaks preserve line breaks inside paragraphs.
 
-## Local assets
+## Assets
 
-Put assets beside the Markdown under its directory, such as `assets/cover.svg`. Paths must be safe
-relative paths: no absolute paths, network image URLs, `..`, or symlinks escaping the asset root.
+Use the `core` Skill for image, chart, and shape source references, asset roots, and path restrictions.
 PNG, JPEG, GIF, WebP, and SVG dimensions are inferred. `::image` accepts positive width/height;
 omitting height preserves aspect ratio. Standard images must occupy a standalone paragraph and
 use a maximum width of 640 by default. Their alt text currently warns because the native image
 Facade cannot persist it. Review warnings against the rendered output.
 
-Chart JSON (`assets/adoption.chart.json`):
+Chart JSON for a chart source:
 
 ```json
 {
@@ -175,7 +155,7 @@ Supported chart types: `column`, `bar`, `line`, `area`, `pie`, and `scatter`. Da
 with a header row; the header supplies labels, not plotted values. Native charts require valid
 runtime credentials.
 
-Shape JSON (`assets/milestone.shape.json`):
+Shape JSON for a shape source:
 
 ```json
 {

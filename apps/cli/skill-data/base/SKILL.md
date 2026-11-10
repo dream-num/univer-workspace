@@ -33,14 +33,7 @@ FUniver
 
 Create an empty Base or stage an existing Base Resource in the task Worktree:
 
-```bash
-uvw unit create \
-  --worktree <worktree-id> --space <space-id> \
-  --type base --name <name> --json
-uvw unit list --worktree <worktree-id> --json
-uvw inspect base \
-  --worktree <worktree-id> --unit <base-id> --json
-```
+Run `unit create` with type `base`, a name, and the destination Space in the task Worktree. Use `unit list` to confirm the staged Unit, then `inspect` with target `base` for that Unit.
 
 Creation returns server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId` for
 every Base content command. For original-file preservation without an editable Base Unit, read the
@@ -49,28 +42,23 @@ every Base content command. For original-file preservation without an editable B
 Base authoring uses the shared execute transaction. Workspace execution injects the selected
 `FBase` as `base`, together with `univerAPI` and alias `api`; do not redeclare them:
 
-```bash
-uvw execute \
-  --worktree <worktree-id> --unit <base-id> \
-  -e 'return base.getId();' \
-  --json
+Pass this code to `execute` for the Base Unit in its Worktree:
+
+```js
+return base.getId();
 ```
 
 Do not call `createBase()` after `unit create` merely to obtain a handle. A new Base already contains
 `Table 1` with a primary `Name` field and `Grid`; `insertTable()` also creates a Grid. Run
-`inspect base` first, then deliberately reuse, rename, or delete defaults.
+`inspect` with target `base` first, then deliberately reuse, rename, or delete defaults.
 
 ## Exact API
 
-```bash
-uvw api show FUniver.getBase FBase FBaseTable FBaseTableField FBaseTableRecord FBaseTableView
-uvw api show FEnum.BaseFieldType FBase.insertTable FBaseTable.addField FBaseTable.addRecords FBaseTable.createView
-uvw api show IGridViewConfig ICalendarViewConfig IGalleryViewConfig IGanttViewConfig IKanbanViewConfig ICardLayoutConfig
-```
+Use `api show` for `FUniver.getBase`, `FBase`, `FBaseTable`, `FBaseTableField`, `FBaseTableRecord`, and `FBaseTableView`. Also look up `FEnum.BaseFieldType`, `FBase.insertTable`, `FBaseTable.addField`, `FBaseTable.addRecords`, and `FBaseTable.createView`. For views, look up `IGridViewConfig`, `ICalendarViewConfig`, `IGalleryViewConfig`, `IGanttViewConfig`, `IKanbanViewConfig`, and `ICardLayoutConfig`.
 
-Use focused discovery such as `uvw api find recordLink --unit base`. Follow every
+Use focused discovery such as `api find` with keyword `recordLink` and Unit type `base`. Follow every
 referenced child type: if a result says `card?: ICardLayoutConfig`, run
-`api show ICardLayoutConfig` instead of guessing its shape.
+`api show` for `ICardLayoutConfig` instead of guessing its shape.
 
 ## Core contracts
 
@@ -88,7 +76,7 @@ referenced child type: if a result says `card?: ICardLayoutConfig`, run
 
 After the last write, check:
 
-1. `uvw inspect base --worktree <worktree-id> --unit <base-id> --json` for tables,
+1. `inspect` with target `base` for the Base Unit in its Worktree for tables,
    primary fields, field types and config, record counts, and view types. It is read-only and accepts
    no selector.
 2. In a fresh read-only `execute`, explicitly `return` record values plus `view.getConfig()` and
@@ -96,18 +84,14 @@ After the last write, check:
 3. Review the required rendered views for blank labels, exposed IDs, implausible dates or
    percentages, missing card fields, and empty defaults.
 
-```bash
-uvw screenshot \
-  --worktree <worktree-id> --unit <base-id> --out <directory> --json
-uvw browse <n> -R <repo> --unit <base-id>
-```
+Run `screenshot` for the Base Unit in its Worktree, then `browse` for its review link. Follow the `core` Skill for output handling.
 
 Base screenshots accept only common screenshot options; do not pass Sheet ranges or Slide page
 selectors.
 
 ## Formula fields
 
-Run `uvw skills get base --full` and follow `references/formulas.md`. Formula
+Read the `formulas.md` reference of the `base` Skill. Formula
 fields use exact Excel structured references. Await calculation and read back computed record
 values; stored formula text alone is not correctness evidence.
 

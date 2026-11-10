@@ -30,7 +30,7 @@ Declare marker type/size/offset; let the renderer calculate paint bounds and ter
 
 ## Rendered evidence
 
-Run model analysis and a full `screenshot --json`; inspect `outputs[0].layoutAnalysis`. An automatic connector
+Run model analysis and a full `screenshot` with structured results; inspect `outputs[0].layoutAnalysis`. An automatic connector
 without persisted route points can be unresolved in model analysis. Only final rendering establishes its route.
 
 | Finding                                                                                            | Response                                                                                  |
@@ -56,11 +56,7 @@ remains, fix its cause (bindings, spacing, labels or routing intent) rather than
 
 Use focused readable evidence and finish with an overview:
 
-```bash
-uvw screenshot --worktree <id> --unit <board-id> --out ./board-overview --json
-uvw screenshot --worktree <id> --unit <board-id> \
-  --region <left,top,width,height> --scale 2 --out ./board-detail --json
-```
+Run `screenshot` for a full overview of the Board Unit in its Worktree. Capture readable details with region `<left,top,width,height>` and scale 2, then finish with an overview. Follow the `core` Skill for output handling.
 
 ## Optional motion
 

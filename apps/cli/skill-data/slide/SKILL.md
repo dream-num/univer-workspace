@@ -5,16 +5,15 @@ description: "Create, import, edit, inspect, compile, export, and visually verif
 
 # Workspace Slide units
 
-Every content command targets one remote draft explicitly with `--worktree <id>` and `--unit <id>`. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `presentation` (the `FPresentation` bound by `--unit`). Do not redeclare them. Select pages with `presentation.getSlideByIndex(0)`, `presentation.getSlideById(id)`, or `presentation.getSlides()`. A Slide unit does not provide `workbook`; if it is undefined, verify the selected unit type.
+Every content operation targets one remote draft explicitly by Worktree and Unit ID. `execute` provides `univerAPI`, `api` (an alias of `univerAPI`), and `presentation` (the `FPresentation` bound to the selected Unit). Do not redeclare them. Select pages with `presentation.getSlideByIndex(0)`, `presentation.getSlideById(id)`, or `presentation.getSlides()`. A Slide unit does not provide `workbook`; if it is undefined, verify the selected unit type.
 
-CLI page indices are 1-based: structured inspection uses `inspect slide index:N` or
-`inspect slide id:<id>`, screenshot and layout lint use `--pages`, and `compile-svg` uses `--page`.
+Operation page indices are 1-based: structured inspection uses target `slide` and selector `index:N` or `id:<id>`; screenshot and layout lint take a page selection, and `compile-svg` takes a page number.
 Inside `execute`, Facade indexes are 0-based (`getSlideByIndex`, `getSlides()[i]`). When carrying a
-page from CLI output into code, prefer `getSlideById(id)` — every page node and lint finding carries
+page from operation output into code, prefer `getSlideById(id)` — every page node and lint finding carries
 the page `id`.
 
-Use `uvw api find <query...>` to discover API symbols, then use
-`uvw api show <symbol...>` for exact signatures, enum values, documentation, and
+Use `api find` with API-name keywords or identifier fragments to discover API symbols, then use
+`api show` with exact symbols for exact signatures, enum values, documentation, and
 examples. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFillEnum`, and
 `ShapeLineTypeEnum`.
 
@@ -22,10 +21,7 @@ examples. Use the declared common Shape names such as `ShapeTypeEnum`, `ShapeFil
 
 Create an empty Slide Unit or import a deck into the selected Worktree:
 
-```bash
-uvw unit create --worktree <worktree-id> --space <space-id> --type slide --name <name> --json
-uvw import --file source.pptx --worktree <worktree-id> --space <space-id> --type slide --json
-```
+Run `unit create` with type `slide`, a name, and the destination Space in the selected Worktree, or run `import` with the deck source and type `slide`. Follow the `core` Skill for source handling.
 
 Both commands return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned `unitId`
 for every content command; never reuse an imported deck's internal id as the Workspace address.
@@ -34,7 +30,7 @@ Blob Resources have no `unitId` and cannot use this Skill's commands.
 
 ## Presentation structure
 
-A slide unit is one presentation: the presentation holds slides ("Deck and pages"), a slide holds elements in stacking order ("Stacking order"), and an element is a shape, an image, or a group — a text box is a shape ("Elements"). Tables and charts are elements too, and both are editable ("Tables", "Charts"). Native charts use the direct `FSlide` chart methods ("Native charts"). Imported decks can carry further element kinds (placeholders, connectors, media); address those through the generic element surface and verify their dedicated facade before editing. Master/layout pages render underneath a slide but are not edited here. A transition is a per-slide page-enter effect ("Transitions"). The facade mirrors this shape — `FPresentation` → `FSlide` → `FShape` / `FImage` / `FGroup` — and `uvw api show` gives signatures.
+A slide unit is one presentation: the presentation holds slides ("Deck and pages"), a slide holds elements in stacking order ("Stacking order"), and an element is a shape, an image, or a group — a text box is a shape ("Elements"). Tables and charts are elements too, and both are editable ("Tables", "Charts"). Native charts use the direct `FSlide` chart methods ("Native charts"). Imported decks can carry further element kinds (placeholders, connectors, media); address those through the generic element surface and verify their dedicated facade before editing. Master/layout pages render underneath a slide but are not edited here. A transition is a per-slide page-enter effect ("Transitions"). The facade mirrors this shape — `FPresentation` → `FSlide` → `FShape` / `FImage` / `FGroup` — and `api show` gives signatures.
 
 ## Task routing
 
@@ -42,7 +38,7 @@ A slide unit is one presentation: the presentation holds slides ("Deck and pages
 - Edit existing content: facade through `execute` — element CRUD in "Elements", content rules in "Text", "Shapes, fill, and stroke", and "Images and textures"; block-level rework in "Editing existing pages"; tables and charts in "Tables" and "Charts".
 - Insert or update data-driven charts: reserve the chart rectangle in the page SVG, then use the direct `FSlide` chart methods through `execute` ("Native charts").
 - Restack or add page-enter effects: "Stacking order", "Transitions".
-- Verify: "Visual verification" — run per-page `lint --pages N` while building, then review screenshots of every page before delivery.
+- Verify: "Visual verification" — run per-page `lint` with page N while building, then review screenshots of every page before delivery.
 
 ## Multi-page deck workflow
 
@@ -50,7 +46,7 @@ Four stages. Stage 1 fixes the deck-level plan, stage 2 runs once **per page** a
 
 ### 1. Write the per-page specification
 
-Before drawing SVG, write `spec.md` precisely enough that page generation requires no fresh decisions about copy, palette, or structure. Specify what each page should be, not merely what is easy to implement. The environment includes a semantic library of about 18,000 SVG resources across icons, logos, emoji, and illustrations, so do not remove useful assets to save drawing effort. At this stage describe asset meaning, not concrete registry names; exporting happens per page in stage 2.
+Before drawing SVG, write a deck specification precisely enough that page generation requires no fresh decisions about copy, palette, or structure. Specify what each page should be, not merely what is easy to implement. The environment includes a semantic library of about 18,000 SVG resources across icons, logos, emoji, and illustrations, so do not remove useful assets to save drawing effort. At this stage describe asset meaning, not concrete registry names; exporting happens per page in stage 2.
 
 Fix deck-level constants once: named colors in `#RRGGBB`, font roles expressed in points (`design px × 0.75`), font families, a baseline `outline` or `filled` icon style, illustration style, and page size. Each page section must define:
 
@@ -66,35 +62,25 @@ For reconstruction, transcribe reference text exactly. For original work, derive
 
 Run steps 2a–2e for page N and reach a clean 2d before starting page N+1.
 
-**2a. Prepare this page's assets.** Prepare the photos, logos, QR codes, icons, emoji, illustrations, and textures this page needs as individual files, record each exported path in the spec, and reuse files already exported for earlier pages. Discover and export SVG resources by meaning:
+**2a. Prepare this page's assets.** Prepare the photos, logos, QR codes, icons, emoji, illustrations, and textures this page needs as individual assets, record each asset reference in the spec, and reuse assets already exported for earlier pages. Discover and export SVG resources by meaning:
 
-```bash
-uvw resources registries
-uvw resources find <query> [<query>...] [--registry <id>]... [--limit <n>]
-uvw resources export <registry>/<resource> [<handle>...] --out ./resources/
-```
+Use `resources registries`, then `resources find` with semantic queries, optional registry filters, and a result limit. Use `resources export` with the canonical handles. Follow the `core` Skill for resource files and cache handling.
 
-Copy the canonical handle exactly. Export downloads uncached resources once and then reuses `UNIVER_HOME/cache/resources`; output files are named `<registryId>--<resourceId>.svg`. `colorEditable: true` resources can follow an authored color, while fixed logos, color emoji, and illustrations remain whole-image assets. Keep one icon registry/style baseline across the deck. Hand-draw an icon only when the library has no appropriate result. Do not clone one icon under different names, substitute Unicode glyphs, or use empty circles as placeholders. Keep exported resources as files and reference them with `<image href="./resources/<registry>--<resource>.svg">`; use `<defs><symbol>` + `<use>` for a self-authored graphic deliberately reused within a page. Never extract and copy an exported resource's path data into the page: that loses source organization, and truncated paths can still render without warnings.
+Copy the canonical handle exactly. Follow the `core` Skill for exported files, naming, and cache handling. `colorEditable: true` resources can follow an authored color, while fixed logos, color emoji, and illustrations remain whole-image assets. Keep one icon registry/style baseline across the deck. Hand-draw an icon only when the library has no appropriate result. Do not clone one icon under different names, substitute Unicode glyphs, or use empty circles as placeholders. Keep exported resources as separate assets and reference them through the `core` Skill's source handling; use `<defs><symbol>` + `<use>` for a self-authored graphic deliberately reused within a page. Never extract and copy an exported resource's path data into the page: that loses source organization, and truncated paths can still render without warnings.
 
-**2b. Author the page SVG.** Reread the page's spec section, then hand-author the complete `page-NN.svg` with inline styles and the prepared assets, and check it against all five spec fields. Keep every SVG through delivery so review can compare exact coordinates. Do not generate or rewrite pages through scripts, shared templates, or bulk substitutions; that produces repeated layouts and propagates page-specific errors.
+**2b. Author the page SVG.** Reread the page's spec section, then hand-author the complete page SVG with inline styles and the prepared assets, and check it against all five spec fields. Keep every SVG through delivery so review can compare exact coordinates. Do not generate or rewrite pages through scripts, shared templates, or bulk substitutions; that produces repeated layouts and propagates page-specific errors.
 
-**2c. Compile and apply with zero warnings.** Run `uvw screenshot setup` once before the first compile so real fonts can be measured. Apply the page:
+**2c. Compile and apply with zero warnings.** Follow the `core` Skill's browser setup before the first compile so real fonts can be measured. Apply the page:
 
-```bash
-uvw compile-svg page-NN.svg --page N --apply \
-  --worktree <id> --unit <id> --json
-```
+Run `compile-svg` with the page SVG and its asset files, page number N, and apply enabled for the Slide Unit in its Worktree. Follow the `core` Skill for source handling.
 
 Clear every `warning` before continuing because warnings mean output was dropped or degraded. Review every `lint`; a lint is advisory and may remain only when the behavior is intentional. Errors mean the SVG construct has no Slide representation and must be redrawn.
 
 **2d. Check the rendered lint and snapshot facts (required, every page).**
 
-```bash
-uvw lint --worktree <id> --unit <id> --pages N --json
-uvw inspect slide index:N --worktree <id> --unit <id> --json
-```
+Run `lint` for page N, then `inspect` with target `slide` and selector `index:N` for the Slide Unit in its Worktree.
 
-`lint` is a standalone Slide-only command. With `--pages`, it reports only the selected page's findings. It covers three conservative rules (text off the page, text escaping an opaque card, two texts overlapping) and is tuned to almost never fire on a healthy deck, so **assume every finding is real until the evidence says otherwise**. Each finding includes the rendered ink and related geometry needed to judge that finding; `inspect slide index:N` provides the declared element facts for that page. Check everything else in the screenshot against this checklist:
+`lint` is a standalone Slide-only command. With a page selection, it reports only the selected page's findings. It covers three conservative rules (text off the page, text escaping an opaque card, two texts overlapping) and is tuned to almost never fire on a healthy deck, so **assume every finding is real until the evidence says otherwise**. Each finding includes the rendered ink and related geometry needed to judge that finding; `inspect` with target `slide` and selector `index:N` provides the declared element facts for that page. Check everything else in the screenshot against this checklist:
 
 1. **Overflow** — resolve every lint finding and visually check anything sitting close to a page or card edge.
 2. **Unexpected wrapping** — compare the screenshot with the intended copy and line breaks. An extra line means the box is too narrow or the copy too long.
@@ -113,11 +99,11 @@ Each lint finding carries its own evidence: the text content and its `ink` box, 
 
 Judge occlusion and contrast risks from the same facts (stacking order, fill, opacity); stage 3 confirms them visually. Do not screenshot inside this loop — screenshots belong to stage 3.
 
-**2e. Fix and re-verify.** Fix the page by editing its `page-NN.svg` and reapplying it with `--page N` (a replacement). **Never patch a page with `--add`.** `--add` overlays: the old, broken element stays exactly where it was and the corrected one lands on top of it, so a single "fix" leaves two copies of the line — the overflow you set out to remove is still there, now with a ghost stacked over it. Seen in a real run: three pages patched this way ended with 19 duplicated texts and the original overflows intact. `--add` is for adding genuinely new content to a finished page, never for rework. After fixing, re-run 2d: the page is done when the scan is clean or every surviving finding has a written justification. If the rescan shows the same text twice, you patched with `--add` — redraw the full page and replace it.
+**2e. Fix and re-verify.** Fix the page by editing its page SVG and reapplying it for page N in replacement mode. **Never patch a page with overlay mode.** Overlay mode retains the old elements: the old, broken element stays exactly where it was and the corrected one lands on top of it, so a single "fix" leaves two copies of the line — the overflow you set out to remove is still there, now with a ghost stacked over it. Seen in a real run: three pages patched this way ended with 19 duplicated texts and the original overflows intact. Overlay mode is for adding genuinely new content to a finished page, never for rework. After fixing, re-run 2d: the page is done when the scan is clean or every surviving finding has a written justification. If the rescan shows the same text twice, you patched with overlay mode — redraw the full page and replace it.
 
 ### 3. Review the whole deck
 
-After every page has passed its loop, screenshot every page and review in batches of no more than five pages, using independent reviewer agents when the host supports them; otherwise review the batches directly. A review must answer each checklist item with an explicit PASS or FAIL plus the observed evidence — an open-ended "does it look fine?" reliably misses defects. Check, in order: the seven items in "Visual verification", then cross-page consistency — adjacent pages should not repeat the same structure, and colors, fonts, and icon style should not drift from the spec constants. Treat each defect as a pattern: search every page SVG for the same mistake, fix the sources, reapply those pages with `--page N` (each reapplied page goes through its 2d check again), and re-screenshot them. Report anything that genuinely requires human redesign.
+After every page has passed its loop, screenshot every page and review in batches of no more than five pages, using independent reviewer agents when the host supports them; otherwise review the batches directly. A review must answer each checklist item with an explicit PASS or FAIL plus the observed evidence — an open-ended "does it look fine?" reliably misses defects. Check, in order: the seven items in "Visual verification", then cross-page consistency — adjacent pages should not repeat the same structure, and colors, fonts, and icon style should not drift from the spec constants. Treat each defect as a pattern: search every page SVG for the same mistake, fix the sources, reapply those pages for page N in replacement mode (each reapplied page goes through its 2d check again), and re-screenshot them. Report anything that genuinely requires human redesign.
 
 ### 4. Deliver
 
@@ -128,7 +114,7 @@ Workspace review link together with any requested exported artifact.
 
 For new pages or generated elements, author SVG and compile it. Do not hand-write individual shape and text calls or paste generated Facade code into `execute`. The compiler owns geometry conversion, baseline conversion, page selection, and common Facade workarounds, including `textWrap=None + NoAutoFit + padding=0` for measured SVG text. **Native charts are the deliberate exception**: use SVG to establish the page layout and leave the chart rectangle empty, then insert the chart through `slide.insertChart()` in a follow-up `execute`. Reapplying the full page SVG clears every page element, including the chart, so finish page rework before inserting it or reinsert it afterward.
 
-`--page` is one-based and declarative: an existing page is cleared and replaced, `pageCount + 1` appends, and a larger number fails. Add `--add` only when an SVG contains genuinely new elements to overlay onto a finished page. **`--add` is never the way to fix something**: it keeps the old element and stacks the corrected one on top, leaving both. Rework always means editing the page's SVG and reapplying it with `--page N`, which clears the page first and is idempotent. Without `--apply`, compilation is a read-only preview; `--out` writes the generated script. Reapplying the same replacement is idempotent.
+The `compile-svg` page number is one-based and declarative: an existing page is cleared and replaced, `pageCount + 1` appends, and a larger number fails. Enable overlay mode only when an SVG contains genuinely new elements to overlay onto a finished page. **Overlay mode is never the way to fix something**: it keeps the old element and stacks the corrected one on top, leaving both. Rework always means editing the page's SVG and reapplying it for page N in replacement mode, which clears the page first and is idempotent. Without apply, compilation is a read-only preview that can return a generated script. Follow the `core` Skill for output handling. Reapplying the same replacement is idempotent.
 
 Use ordinary browser-valid SVG: shapes, paths, transforms, gradients, text, bitmaps, `<use>`, style sheets, CSS units, and color functions. Open the SVG in a browser before compilation when one is available; its visible result is the baseline expectation.
 
@@ -150,17 +136,17 @@ A few things the slide renderer cannot reproduce, so the compiler warns. Mark th
 - **A translucent gradient** — a `stop-opacity` below 1, or a gradient-filled shape with element `opacity` below 1 — renders as a solid block. Illustration packs stack pale gradient shadows behind every card; that is the common case.
 - **A radial gradient on a non-square shape** — the renderer draws a circle centred on the box, not an ellipse fitted to it.
 
-SVG resources inline at compile time three ways: an exported file, `<image href="./resources/<registry>--<resource>.svg" width=".." height=".."/>` (the normal choice); a self-authored reusable page graphic, `<defs><symbol id="ic" viewBox="0 0 24 24">…</symbol></defs>` + `<use href="#ic" x=".." width=".."/>`; or an external sprite sheet, `<use href="./icons.svg#home" …/>`. Each `<use>` is one logical instance regardless of whether its target is `<symbol>`, `<g>`, or another graphical element. All three forms use the same logical lowering: one visible leaf remains one native element; multiple faithfully vectorizable single-paint leaves become one multi-path custom shape; multi-paint or text content becomes one Slide group; content that cannot be faithfully vectorized follows `data-univer-embed="auto|vector|image"` (default `auto`) and may become one image. Nested `<use>` keeps the outermost visible instance boundary. A plain `<g>` is only a transform/style/layout container and stays flat; it does not request a Slide group. These compile-time guarantees are not a reason to copy exported path data into the page.
+SVG resources inline at compile time three ways: an exported asset referenced by an image with explicit width and height (the normal choice); a self-authored reusable page graphic, `<defs><symbol id="ic" viewBox="0 0 24 24">…</symbol></defs>` + `<use href="#ic" x=".." width=".."/>`; or an external sprite sheet reference with its symbol ID. Each `<use>` is one logical instance regardless of whether its target is `<symbol>`, `<g>`, or another graphical element. All three forms use the same logical lowering: one visible leaf remains one native element; multiple faithfully vectorizable single-paint leaves become one multi-path custom shape; multi-paint or text content becomes one Slide group; content that cannot be faithfully vectorized follows `data-univer-embed="auto|vector|image"` (default `auto`) and may become one image. Nested `<use>` keeps the outermost visible instance boundary. A plain `<g>` is only a transform/style/layout container and stays flat; it does not request a Slide group. These compile-time guarantees are not a reason to copy exported path data into the page.
 
-Preserve the registry in exported filenames. A sprite sheet previews in a browser only over http — `file://` blocks the cross-file reference by same-origin policy and shows blank icons; that is browser security, not a broken page. Only resources reported as `colorEditable: true` may follow an authored color; fixed logos, color emoji, and illustrations keep their intrinsic colors and must remain whole-image assets. An `<image>` recolor can preview differently in a browser, so inspect the compiled result before relying on it.
+Follow the `core` Skill for registry-preserving filenames and browser sprite previews. Only resources reported as `colorEditable: true` may follow an authored color; fixed logos, color emoji, and illustrations keep their intrinsic colors and must remain whole-image assets. An `<image>` recolor can preview differently in a browser, so inspect the compiled result before relying on it.
 
 ## Visual verification
 
 Snapshot inspection and lint report facts, not final visual quality — you still decide what is a defect, because legitimate slide designs overlap backgrounds and decorations on purpose.
 
-`inspect slide index:N` gives each element's declared facts straight from the snapshot: `id`, `type` (plus `shapeType` like `rect`, `line`), `transform` (the box you drew, rotation included), `fill` and `stroke` (`{"type":"none"}` means the element is invisible — connector bounding boxes and transparent placeholders look like cards otherwise, so exclude them when deciding which card a text sits in), and for text an object with `content`, `align`, `color`, `opacity`. The `elements` array is in stacking order, bottom to top. Use `inspect presentation` without a selector only for the presentation overview.
+`inspect` with target `slide` and selector `index:N` gives each element's declared facts straight from the snapshot: `id`, `type` (plus `shapeType` like `rect`, `line`), `transform` (the box you drew, rotation included), `fill` and `stroke` (`{"type":"none"}` means the element is invisible — connector bounding boxes and transparent placeholders look like cards otherwise, so exclude them when deciding which card a text sits in), and for text an object with `content`, `align`, `color`, `opacity`. The `elements` array is in stacking order, bottom to top. Use `inspect` with target `presentation` without a selector only for the presentation overview.
 
-The standalone `lint` command derives three high-precision checks from browser-rendered facts (text off the page, text escaping an opaque rectangular card, two text glyph bands overlapping) and reports nothing else. Each finding includes its relevant ink evidence; there is no raw bbox command. `compile-svg` normally measures text with the real browser and fails with setup guidance when measurement is unavailable. `--estimate-text-size` is an emergency fallback for browserless environments, not a shortcut; it can shift long or aligned text significantly and must be removed before delivery.
+The standalone `lint` command derives three high-precision checks from browser-rendered facts (text off the page, text escaping an opaque rectangular card, two text glyph bands overlapping) and reports nothing else. Each finding includes its relevant ink evidence; there is no raw bbox command. `compile-svg` normally measures text with the real browser and fails with setup guidance when measurement is unavailable. Estimated text measurement is an emergency fallback for browserless environments, not a shortcut; it can shift long or aligned text significantly and must be removed before delivery.
 
 Screenshot review must check:
 
@@ -174,13 +160,13 @@ Screenshot review must check:
 
 ## Deck and pages
 
-A new deck contains one empty page. `compile-svg --page 1` handles it automatically. When using Facade calls directly, reuse `presentation.getSlides()[0]`; call `appendSlide()` only for page two and later. The default page is 16:9 at 960 × 540, with a top-left origin. Use `getPageSize` and `setPageSize` for dimensions.
+A new deck contains one empty page. `compile-svg` with page 1 handles it automatically. When using Facade calls directly, reuse `presentation.getSlides()[0]`; call `appendSlide()` only for page two and later. The default page is 16:9 at 960 × 540, with a top-left origin. Use `getPageSize` and `setPageSize` for dimensions.
 
 Page backgrounds support solid colors, images, gradients, and patterns through `slide.setBackground`. `deleteSlide`, `insertSlide`, and `moveSlide` return booleans instead of throwing, so check their results. Slides have no formulas or recalculation.
 
 ## Elements
 
-Read with `getElements()` or `getElementById(id)`; `getShapes()` narrows to shapes (`getImages()` / `getGroups()` likewise). Every element or shape exposes its id through `getId()`. Create a normal shape with `slide.insertShape({ shapeType, transform?, shapeData? })`; it returns a live `FShape` / `FConnectorShape` or `null`, so check the result and record `getId()` immediately. Change it through that live handle (`setTransform`, `setSolidFill`, `setStroke…`, `getText()`); `getShapeData()` is detached, so assigning into the returned object never persists — use `setShapeData` or a dedicated setter. `slide.insertElement(element, index?)` is the snapshot-restoration API: its complete `ISlidePageElement` carries an explicit `id`, and the returned element must have that same id. Use it only when restoring imported snapshot identity and references, not to invent ids for ordinary authoring. Images still use `newImage().…build()` → `insertImage`. Delete with `deleteElement`, which accepts the element object, not its id. Group with `slide.group(...)` / `ungroup()` (`api show FSlide.group FGroup`). Mutation methods often return booleans rather than throwing, so verify results.
+Read with `getElements()` or `getElementById(id)`; `getShapes()` narrows to shapes (`getImages()` / `getGroups()` likewise). Every element or shape exposes its id through `getId()`. Create a normal shape with `slide.insertShape({ shapeType, transform?, shapeData? })`; it returns a live `FShape` / `FConnectorShape` or `null`, so check the result and record `getId()` immediately. Change it through that live handle (`setTransform`, `setSolidFill`, `setStroke…`, `getText()`); `getShapeData()` is detached, so assigning into the returned object never persists — use `setShapeData` or a dedicated setter. `slide.insertElement(element, index?)` is the snapshot-restoration API: its complete `ISlidePageElement` carries an explicit `id`, and the returned element must have that same id. Use it only when restoring imported snapshot identity and references, not to invent ids for ordinary authoring. Images still use `newImage().…build()` → `insertImage`. Delete with `deleteElement`, which accepts the element object, not its id. Group with `slide.group(...)` / `ungroup()` (`api show` for `FSlide.group` and `FGroup`). Mutation methods often return booleans rather than throwing, so verify results.
 
 ## Text
 
@@ -301,26 +287,20 @@ Legacy text boxes may store a white fill, gray line, dark 16-point text, and a 2
 
 ## Images and textures
 
-Use bitmap images for photos, logos, QR codes, 3D icons, and complex illustrations instead of Unicode or assemblies of primitive shapes. In SVG, reference a local path:
+Use bitmap images for photos, logos, QR codes, 3D icons, and complex illustrations instead of Unicode or assemblies of primitive shapes. In SVG, use image assets with explicit position and dimensions. The compiler accepts PNG, JPEG, GIF, WebP, and SVG images and fails early for missing or invalid assets. Follow the `core` Skill for source references and validation timing. Facade insertion supports BASE64 and URL sources. `setCrop` values are distances cropped from each edge in displayed element pixels, not source pixels or percentages; scale crop values with the displayed size. `setClipShape` can crop to a preset shape.
 
-```svg
-<image x="0" y="0" width="240" height="160" href="./materials/photo.png"/>
-```
-
-The compiler reads local PNG, JPEG, GIF, WebP, and SVG files and fails early for missing or invalid files. Prefer local files over HTTP URLs, which cannot be validated until rendering. Facade insertion supports BASE64 and URL sources. `setCrop` values are distances cropped from each edge in displayed element pixels, not source pixels or percentages; scale crop values with the displayed size. `setClipShape` can crop to a preset shape.
-
-For `compile-svg`, source images should be local assets; the compiler embeds them into the program
+For `compile-svg`, provide source images through the `core` Skill's asset handling; the compiler embeds them into the program
 applied to the remote Unit. Never place a full-page reference screenshot behind editable elements; it
 leaves artifacts and destroys editability. For decorative noise, dots, or grids, tile a small bitmap
 rather than creating hundreds of tiny shapes.
 
 ## Editing existing pages
 
-For dense pages, lay out a structural skeleton and then add logical blocks. Record returned element ids. To rebuild one block, **delete every one of its old elements first**, then reapply an SVG containing only that block with `--add` — skipping the deletion leaves the old block underneath the new one. When in doubt, redraw the whole page and reapply it with `--page N`. Always review the full page after block edits.
+For dense pages, lay out a structural skeleton and then add logical blocks. Record returned element ids. To rebuild one block, **delete every one of its old elements first**, then reapply an SVG containing only that block with overlay mode — skipping the deletion leaves the old block underneath the new one. When in doubt, redraw the whole page and reapply it for page N in replacement mode. Always review the full page after block edits.
 
 ## Stacking order
 
-There is no `zIndex`. Stacking is the element order, bottom to top — the same rule as SVG document order and OOXML `spTree` — and `compile-svg` preserves your SVG's document order exactly. A normal `insertShape` lands on top; move the returned shape with `bringToFront`, `bringForward`, `sendBackward`, or `sendToBack`, or use the complete-order command below for an exact index. Only snapshot restoration through `insertElement(element, index)` accepts an insertion index. `getElements()` and the `elements` array in `inspect slide index:N` both list stacking order, bottom to top.
+There is no `zIndex`. Stacking is the element order, bottom to top — the same rule as SVG document order and OOXML `spTree` — and `compile-svg` preserves your SVG's document order exactly. A normal `insertShape` lands on top; move the returned shape with `bringToFront`, `bringForward`, `sendBackward`, or `sendToBack`, or use the complete-order command below for an exact index. Only snapshot restoration through `insertElement(element, index)` accepts an insertion index. `getElements()` and the `elements` array in `inspect` with target `slide` and selector `index:N` both list stacking order, bottom to top.
 
 For an exact complete order, use the reorder command. Each mutation commits a Worktree revision, so
 verify it immediately:
@@ -350,8 +330,7 @@ Two traps, both verified against the real runtime:
 
 Slide chart support is registered in the runtime. Create detached chart information directly from
 the slide, call `.build()`, then await `slide.insertChart(info)` to obtain a live `FSlideChart`.
-Query `uvw api show FSlide.newChart FSlide.insertChart FSlide.getCharts
-FSlide.getChart FSlideChart` when the exact builder and live-chart surfaces matter.
+Query `api show` for `FSlide.newChart`, `FSlide.insertChart`, `FSlide.getCharts`, `FSlide.getChart`, and `FSlideChart` when the exact builder and live-chart surfaces matter.
 
 The first data row is the header row; use field indexes to declare category and value columns:
 
@@ -397,16 +376,16 @@ and data; after a removal, confirm the chart is absent.
 Await insertion, data updates, replacement, and removal before `execute` returns. Verify persistence
 with a fresh
 `slide.getCharts().map((item) => ({ id: item.getId(), type: item.getType(), info: item.getInfo(), resource: item.getChartData() }))`
-read, confirm `inspect slide index:N` reports a chart element, then screenshot the page
+read, confirm `inspect` with target `slide` and selector `index:N` reports a chart element, then screenshot the page
 and test the exported PPTX. Insert charts after the final full-page SVG replacement, which replaces
 every page element.
 
-Use model readback as structural proof and the rendered series as visual proof. If `uvw screenshot`
-captures the generic blue loading placeholder, run `uvw browse <n> -R <repo> --unit <id>`, open the returned Workspace review URL, wait for the real series to appear, and capture that rendered page.
+Use model readback as structural proof and the rendered series as visual proof. If `screenshot`
+captures the generic blue loading placeholder, run `browse` for the Unit's Worktree review link, open the returned Workspace review URL, wait for the real series to appear, and capture that rendered page.
 
 ## Transitions
 
-A transition is the page-enter effect played when the show moves **to** that slide: "fade from page 2 to page 3" is set on page 3, not on page 2. Full preset API, discoverable with `api find transition`:
+A transition is the page-enter effect played when the show moves **to** that slide: "fade from page 2 to page 3" is set on page 3, not on page 2. Full preset API, discoverable with `api find` with keyword `transition`:
 
 ```js
 const slide = presentation.getSlideByIndex(2);
@@ -431,7 +410,7 @@ Build one with `slide.newTable()` — `setValues`, `setRows` / `setColumns`, `se
 
 **Styling takes two settings that must agree.** `setStyleId(id)` picks the palette; `setOptions({ firstRow, bandRow, firstCol, lastCol, lastRow, bandCol })` decides which roles paint — `setStyleId("univerPrimaryHeaderBandedRows")` alone renders a plain grid until you also `setOptions({ firstRow: true, bandRow: true })`. Ids are `univer` + family (`Neutral`, `Primary`, `Blue`, `Cyan`, `Green`, `Orange`, `Purple`, `Pink`) + variant (`LightPlainGrid`, `LightHeader`, `LightHeaderBandedRows`, `MediumStrongHeader`, `MediumFirstColumn`, `MediumHeaderFirstColumn`, `HorizontalLines`), plus `univerPrimaryPlainGrid` (the default). **`setStyleId` does not validate** — a misspelled id returns `true` and the styling is silently lost. Cell fill and borders go through `setCellStyle(range, style)`, text color and font through `setCellTextStyle(range, textStyle)`.
 
-`uvw api show FSlideTable` gives the rest.
+`api show` for `FSlideTable` gives the rest.
 
 ## Capability boundary
 
@@ -445,7 +424,4 @@ logical inspection alone cannot establish visual correctness.
 
 Export only after every page has passed logical and visual verification:
 
-```bash
-uvw screenshot --worktree <id> --unit <id> --pages all
-uvw export output.pptx --worktree <id> --unit <id>
-```
+Run `screenshot` with pages `all`, then `export` with format `pptx` for the same Slide Unit in its Worktree. Follow the `core` Skill for output handling.

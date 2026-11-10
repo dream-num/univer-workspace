@@ -39,6 +39,21 @@ describe("Workspace CLI skills command", () => {
     });
   });
 
+  it("discovers and reads the CLI file binding from core", async () => {
+    const path = "references/files-and-sources.md";
+    const content = await readFile(join(skillRoot, "core", path), "utf8");
+    const entry = await runSkills(["skills", "get", "core", "--json"]);
+    expect(entry.data).toEqual([
+      expect.objectContaining({
+        resources: [{ path, readCommand: `uvw skills read core ${path}` }],
+      }),
+    ]);
+    expect(await runSkills(["skills", "read", "core", path, "--json"])).toEqual({
+      success: true,
+      data: { name: "core", path, content },
+    });
+  });
+
   it("discovers Blob as a standalone Skill and resolves its installed path", async () => {
     const located = await runSkills(["skills", "path", "blob", "--json"]);
     const path = (located.data as { path: string }).path;
@@ -197,10 +212,10 @@ describe("Workspace CLI skills command", () => {
     expect(core.match(/print-pdf/g)).toHaveLength(1);
     expect(core).toContain("Base → `base`");
     expect(core).not.toContain("without a `base` alias");
-    expect(doc).toContain("api find <query...>");
-    expect(doc).toContain("api show <symbol...>");
-    expect(slide).toContain("api find <query...>");
-    expect(slide).toContain("api show <symbol...>");
+    expect(doc).toContain("`api find` with API-name keywords or identifier fragments");
+    expect(doc).toContain("`api show` with exact symbols");
+    expect(slide).toContain("`api find` with API-name keywords or identifier fragments");
+    expect(slide).toContain("`api show` with exact symbols");
     expect(embed).toContain("Referencing another Unit's data from a Chart");
     expect(embed).toContain("IResourceRefChartDataSourceInput");
     expect(embed).toContain("newChart(...).setSource(ref)");
@@ -222,7 +237,7 @@ describe("Workspace CLI skills command", () => {
     const base = baseData[0]?.content;
     const board = firstContent(await runSkills(["skills", "get", "board", "--json"]));
 
-    expect(base).toContain("uvw inspect base");
+    expect(base).toContain("`inspect` with target `base`");
     expect(base).toContain("A new Base already contains");
     expect(base).toContain("BaseFieldType.Currency");
     expect(base).toContain("ICardLayoutConfig");
@@ -241,8 +256,8 @@ describe("Workspace CLI skills command", () => {
       ]),
     );
 
-    expect(board).toContain("uvw inspect board");
-    expect(board).toContain("inspect board-element id:<element-id>");
+    expect(board).toContain("`inspect` with target `board`");
+    expect(board).toContain("target `board-element` and one or more `id:<element-id>` selectors");
     expect(board).not.toContain("Native `inspect` is not supported");
   });
 
@@ -252,11 +267,11 @@ describe("Workspace CLI skills command", () => {
     const slide = firstContent(await runSkills(["skills", "get", "slide", "--json"]));
 
     expect(core).toContain("--worksheet name:<sheet-name>");
-    expect(sheet).toContain("inspect range A1:C9 --worksheet name:<sheet-name>");
+    expect(sheet).toContain("`inspect` with target `range`, range `A1:C9`, and worksheet selector `name:<sheet-name>`");
     expect(sheet).toContain("requires one explicit worksheet selector");
-    expect(slide).toContain("inspect slide index:N");
-    expect(slide).toContain("inspect slide id:<id>");
-    expect(slide).toContain("Use `inspect presentation` without a selector");
+    expect(slide).toContain("target `slide` and selector `index:N`");
+    expect(slide).toContain("selector `index:N` or `id:<id>`");
+    expect(slide).toContain("Use `inspect` with target `presentation` without a selector");
     expect(slide).not.toContain("inspect presentation --pages");
     expect(slide).not.toContain("`inspect --pages`");
   });
