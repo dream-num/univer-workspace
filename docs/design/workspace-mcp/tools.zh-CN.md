@@ -95,7 +95,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `search` | `search issues`、`search prs` | `kind`（`issues`、`prs`），其余同对应命令 | 是 | 否 | `read` |
 | `browse` | `browse` | `repo`、`number`、`unit` | 是 | 否 | `read` |
 | `space_browse` | `space browse` | `repo`、`parent`、`recursive`、`resource_kind`、`unit_type` | 是 | 否 | `read` |
-| `space_find` | `space find` | `space`、`query`、`resource_kind`、`unit_type` | 是 | 否 | `read` |
+| `space_find` | `space find` | `repo`、`query`、`resource_kind`、`unit_type` | 是 | 否 | `read` |
 | `unit_list` | `unit list` | `worktree` | 是 | 否 | `read` |
 | `unit_add` | `unit add` | `worktree`、`resource` | 否 | 否 | `write` |
 | `unit_create` | `unit create` | `worktree`、`space`、`type`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
@@ -114,7 +114,8 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 - `execute` 只接受 `code` 字符串，没有 `--script`。CLI 对代码长度的上限（10 MiB）保持不变。
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
-- `skills_read` 是 Skills 扩展的回退入口。不带 `name` 时列出名称和描述；带 `name` 时返回内容与资源路径；再带 `resource` 时读取单个文件。与扩展使用同一个静态 catalog，MCP 的 core 不同于 CLI core。
+- `inspect` 的 `worksheet` 参数只接受 `id:<id>`、`name:<name>` 或 `index:N`，`N` 从 1 开始。裸值被拒绝，错误明确指出 `worksheet`。
+- `skills_read` 是 Skills 扩展的回退入口。不带 `name` 时列出名称和描述；带 `name` 时直接返回顶层 `{ name, content, resources?, files? }`；再带 `resource` 时读取单个文件。与扩展使用同一个静态 catalog，MCP 的 core 不同于 CLI core。
 - `screenshot` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-screenshot-scope-required`，两者同时给出报 `workspace-argument-invalid`）。`pages`、`tile`、`region`、`elements` 沿用 `uvw screenshot` 的字符串写法，`contact_slide` 是布尔值，`padding`、`scale` 是数字。executor 加载 Unit 后用 `uvw screenshot` 自己的命令解析这些选项，所以按 Unit 类型的取舍和错误信息与 CLI 一致（例如 `--range is not supported for Slide`），渲染服务拒绝的输入（如无效 A1 范围）以 `workspace-render-input-invalid` 返回。
 - `screenshot` 的 `structuredContent` 列出 `unitId`、`unitType` 和每张图的 `name`、`width`、`height`、`size`，以及有则带上的 `page`、`pageId`、`range`、`sheetName`、`role`、`tiles` 等元数据。调用在同步预算内完成且所有图合计不超过 1 MiB 时，结果在文本行之后为每张 PNG 附一个 MCP `image` 内容块，条目不带下载链接；否则每个条目带 `download` 链接，没有图片内容块。超过同步预算返回任务，用 `job_get` 取结果，经 `job_get` 取到的结果一律是下载链接。`idempotency_key` 的规则与 `export` 相同。
 - `screenshot` 把每张图都写入暂存（计入 `export_bytes` 与每用户暂存配额），因为落入任务的结果必须能给出链接；同步返回图片内容的调用不暴露这些链接。渲染页数记入 `render_pages`。
@@ -148,8 +149,8 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - Markdown 编译和 `source_map` 输入错误返回 `workspace-markdown-invalid`，保留 CLI 错误消息与 `detail.diagnostics`。
 - `export_markdown` 与当前 CLI 一样，要求上次成功生成或回读的 `source_map` 和非空、去重的显式 `blocks`，不推断任意原生文档的整篇映射。
 - `export_markdown` 返回 `{markdown, sourceMap, assets}`。`assets` 是每个资源的下载链接，不内联字节。CLI 的 JSON 输出本来就不含资源字节（`apps/cli/src/features/markdown/export-command.ts:74`）。
-- `compile_typst` 的 bundle 目录打成 ZIP 上传，purpose 为 `typst-bundle`，根目录必须包含 `typst.json`。创建要求 `apply`、`worktree` 和 `space`。创建前生成幂等键，重试时复用相同键与内容。原生 ID 由 bundle 的固定 targetUnitId 与物化器的确定性随机种子重现，创建键按调用者和 `compile_typst` 工具名隔离。
-- `compile_svg` 的本地图片可通过 `svg-assets` ZIP 提供。`add` 要求 `page`；apply 要求 `page`、`worktree` 和 `unit`。不带 apply 时拒绝 Workspace 目标参数。它不接受幂等键，未知写入结果返回 `workspace-result-unknown`，先用 `inspect` 回读再决定是否重试。
+- `compile_typst` 的 bundle 目录打成 ZIP 上传，purpose 为 `typst-bundle`，根目录必须包含 `typst.json`。创建要求 `worktree` 和 `space`，可省略 `apply`。创建前生成幂等键，重试时复用相同键与内容。原生 ID 由 bundle 的固定 targetUnitId 与物化器的确定性随机种子重现，创建键按调用者和 `compile_typst` 工具名隔离。
+- `compile_svg` 的本地图片可通过 `svg-assets` ZIP 提供。`add` 要求 `page`；apply 要求 `page`、`worktree` 和 `unit`。省略 `apply` 时，`worktree` 或 `unit` 隐含 `apply: true`；显式 `apply: false` 仍拒绝这些目标参数。它不接受幂等键，未知写入结果返回 `workspace-result-unknown`，先用 `inspect` 回读再决定是否重试。
 - 两种 ZIP 共用 Markdown 的 256 entry、单文件 4 MiB、总解压 8 MiB、路径长度与碰撞限制。较大的资源也无法保证满足 900 KiB UnitData 创建上限或 8 MiB RPC 响应上限。
 - SVG 编译默认用实字体量度：executor 向 Client Core 的 SVG feature 注入文本量度 runtime，其 `measureText` 经渲染服务客户端调用渲染服务的 `measureText`（每个被量度的行一次 RPC），`close` 不做任何事。结果的 `textMeasure` 为 `univer-render-runtime`，不带估算 lint。传 `estimate_text_size: true` 时仍用 JavaScript 内置量字器，不访问渲染服务，并保留 CLI 的估算 lint。未配置渲染服务时返回不可重试的 `workspace-renderer-not-configured`；渲染服务故障沿用渲染服务客户端的错误码。
 - `print_pdf` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-print-pdf-scope-required`，两者同时给出报 `workspace-argument-invalid`）。executor 用 Client Core 的渲染 Unit 加载器取出 Unit，Base Unit 返回 CLI 的 `workspace-print-pdf-type-unsupported`（`Base Units do not support PDF printing.`），其余交给渲染服务。结果是 `{unitId, unitType, pageCount, download}`，`download` 是 PDF 的暂存下载链接，文件名是渲染服务给出的名称（Unit ID）加 `.pdf`。`print_pdf` 与 `export` 一样走长任务路径：超过同步预算返回任务，`idempotency_key` 规则相同；渲染页数记入 `render_pages`，PDF 字节记入 `export_bytes`。渲染服务的 PDF 结果上限为 128 MiB。
@@ -157,7 +158,8 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - Typst bundle 输入错误包含相对 bundle 的文件路径。子进程错误和诊断中的临时路径统一改写为 bundle 相对路径。Typst 与 SVG facade 输入错误分别映射为 `workspace-typst-invalid` 与 `workspace-svg-invalid`，保留 facade 消息及可用的 `detail.diagnostics`。
 - Typst 编译与物化在现有 job child 中运行。SVG 估算编译使用 JavaScript 内置量字器，不创建浏览器，可在 executor 中运行；apply 使用绑定的协同 runtime。仅编译时 Typst 报告 `executor: cold_start`，SVG 报告 `executor: none`（实字体量度的渲染成本在渲染服务内，不改变该字段）；两者均报告 `unit_type: null`、`repo: null`，消费的 ZIP 计入 upload_bytes，确认的创建或提交计入 committed_revisions。
 - Typst 的仅编译和 apply 均已接入第 7 节的长任务路径。仅编译可选幂等键；不提供时每次独立执行。SVG 保持 30 秒同步预算。
-- 不带 `apply` 的编译工具返回生成的 Facade 代码和诊断，不写入 Workspace。
+- 省略 `apply` 且提供仅 apply 使用的目标参数时，三个编译工具均按 `apply: true` 执行。Markdown 的目标参数为 `worktree`、`space`、`parent`、`unit`、`source_map`、`blocks` 和 `idempotency_key`；Typst 为 `worktree`、`space` 和 `parent`；SVG 为 `worktree` 和 `unit`。显式 `apply: false` 与这些参数组合仍报错，缺少必要目标参数也仍报错。
+- 无目标参数时编译工具仅返回 Facade 代码和诊断，不写入 Workspace。SVG 单独提供 `page`、Typst 单独提供 `idempotency_key` 仍仅编译。
 
 ### 3.3 `admin`
 

@@ -14,8 +14,9 @@ server in their MCP client. Never ask for a password.
 
 Load a Skill with `skills_read` and its name, or read
 `skill://univer-workspace/<name>/SKILL.md`. Without arguments, `skills_read` lists
-names and descriptions. With a name it returns content and resource paths. Read a
-reference or template with name and resource; full includes all supplemental files.
+names and descriptions. With a name it returns top-level name, content and optional
+resources. Read a reference or template with name and resource; full includes all
+supplemental files.
 For a truncated resource, repeat the same arguments with the returned cursor.
 
 The shared Skills describe operations such as `api show` and `compile-svg`.
@@ -112,6 +113,8 @@ toolset. An executor restriction can hide content tools even with all selected.
 Never interchange spaceId, nodeId, resourceId, unitId, Worktree id or pull request
 number. Take identities and confirmed revisions from tool results, never names.
 Content tools take the Worktree id returned by `pr_view`, not its number.
+`space_find` and `space_browse` take repo for a repository reference. Content creation
+tools such as unit_create, import and compile tools keep space for the destination.
 Use paths and names for discovery and disambiguation only. `space_find` and
 `space_browse` discover files before staging; `unit_list` lists only staged Units.
 The resources operations search an SVG catalog, not Workspace files.
@@ -268,6 +271,10 @@ for one hour after reservation. Never pass a local file path to a tool.
 - `print_pdf` has no paper, orientation, range or fit options. Content wider than
   the default page continues on the next page; tell the user rather than moving
   content unless they ask for that edit.
+
+The compile tools apply when destination arguments such as worktree, space or unit
+are present and apply is omitted; explicit apply: false with them is rejected.
+Without destination arguments they compile only.
 
 For a running job, poll `job_get` until succeeded or failed. Do not treat a job
 handle as completed output. Successful job results carry the original tool output;

@@ -274,12 +274,16 @@ describe("space, unit, repository admin, label and merge tools", () => {
       "/api/nodes/dir/children",
       "/api/nodes/dir/children",
     ]);
-    const found = await call("space_find", { space: "bob/team", query: "BL", resource_kind: "blob" });
+    const tools = await client.listTools();
+    expect(tools.tools.find(({ name }) => name === "space_find")?.inputSchema).toMatchObject({
+      required: expect.arrayContaining(["repo", "query"]),
+    });
+    const found = await call("space_find", { repo: "bob/team", query: "BL", resource_kind: "blob" });
     expect(found.structuredContent).toMatchObject({ nodes: [{ nodeId: "blob" }] });
     for (const bad of [
       { name: "space_browse", arguments: { repo: "team-1", resource_kind: "blob", unit_type: "sheet" } },
-      { name: "space_find", arguments: { space: "team-1", query: "x", resource_kind: "none", unit_type: "doc" } },
-      { name: "space_find", arguments: { space: "team-1", query: "  " } },
+      { name: "space_find", arguments: { repo: "team-1", query: "x", resource_kind: "none", unit_type: "doc" } },
+      { name: "space_find", arguments: { repo: "team-1", query: "  " } },
       { name: "space_browse", arguments: { repo: "team-1", unit_type: "pdf" } },
     ]) {
       expect(await client.callTool(bad)).toMatchObject({

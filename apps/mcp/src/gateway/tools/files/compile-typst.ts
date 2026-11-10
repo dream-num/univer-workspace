@@ -13,7 +13,7 @@ export const compileTypstTool = executorTool({
   scope: "write",
   title: "Compile a Typst bundle into a Doc",
   description:
-    "Compile a ready typst-bundle ZIP with typst.json at its root into Facade JavaScript and diagnostics. To create a Doc in a pull request, set apply, worktree and space. Generate an idempotency_key before creation and reuse it with identical inputs on retry. Expanded ZIP limits are 256 entries, 4 MiB per file and 8 MiB total; created UnitData must fit 900 KiB. If compilation outlasts the server's synchronous wait (30 seconds by default), returns {job_id,status: running}; poll job_get until succeeded or failed. Reusing a key with different arguments returns workspace-idempotency-conflict. Without a key, each compile-only call starts a new compilation. Check state before retrying an unknown write.",
+    "Compile a ready typst-bundle ZIP with typst.json at its root into Facade JavaScript and diagnostics. To create a Doc in a pull request, set worktree and space. Destination options imply apply: true when apply is omitted; explicit apply: false rejects them. Generate an idempotency_key before creation and reuse it with identical inputs on retry. Expanded ZIP limits are 256 entries, 4 MiB per file and 8 MiB total; created UnitData must fit 900 KiB. If compilation outlasts the server's synchronous wait (30 seconds by default), returns {job_id,status: running}; poll job_get until succeeded or failed. Reusing a key with different arguments returns workspace-idempotency-conflict. Without a key, each compile-only call starts a new compilation. Check state before retrying an unknown write.",
   annotations: writeAnnotations,
   inputSchema: z.object({
     bundle_upload_id: z.string().min(1),
@@ -27,7 +27,7 @@ export const compileTypstTool = executorTool({
   job: { tool: "compile_typst", key: (args) => args.idempotency_key },
   async request(args, context) {
     const input = typstCompileInput.parse({
-      apply: args.apply,
+      apply: args.apply ?? (args.worktree !== undefined || args.space !== undefined || args.parent !== undefined),
       worktreeId: args.worktree,
       spaceId: args.space,
       parentNodeId: args.parent,

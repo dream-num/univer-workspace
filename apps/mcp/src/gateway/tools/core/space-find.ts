@@ -7,7 +7,7 @@ import { spaceFeature } from "./pr-support.js";
 import { resourceKindInput, unitTypeInput, withNodeUrl } from "./space-support.js";
 
 const inputSchema = z.object({
-  space: repoInput,
+  repo: repoInput,
   query: z.string().describe("Part of the file name; case-insensitive."),
   resource_kind: resourceKindInput.optional(),
   unit_type: unitTypeInput.optional(),
@@ -23,12 +23,12 @@ export const spaceFindTool: ToolDefinition = {
   outputSchema: z.object({ nodes: z.array(nodeSchema) }),
   annotations: readOnlyAnnotations,
   async run(context, args) {
-    const { space, query, resource_kind, unit_type } = inputSchema.parse(args);
+    const { repo, query, resource_kind, unit_type } = inputSchema.parse(args);
     assertSpaceFilter({
       ...(resource_kind === undefined ? {} : { resourceKind: resource_kind }),
       ...(unit_type === undefined ? {} : { unitType: unit_type }),
     });
-    const spaceId = await resolveRepo(context, space);
+    const spaceId = await resolveRepo(context, repo);
     const nodes = await spaceFeature(context).find({
       query,
       spaceId,

@@ -15,7 +15,7 @@ export const compileMarkdownTool = executorTool({
   scope: "write",
   title: "Compile Markdown into a Doc",
   description:
-    "Compile Markdown without applying, or apply it to a pull request. To create, set apply, worktree and space. Generate an idempotency_key before creation and reuse it on retry. To update, set apply, worktree, unit, source_map and explicit blocks; replacement blocks must keep their IDs. Optional assets_upload_id is a ready markdown-assets ZIP with relative image paths. Compile-only returns Facade JavaScript. Save the returned sourceMap for updates and exports.",
+    "Compile Markdown without applying, or apply it to a pull request. Destination options imply apply: true when apply is omitted; explicit apply: false rejects them. To create, set worktree and space. Generate an idempotency_key before creation and reuse it on retry. To update, set worktree, unit, source_map and explicit blocks; replacement blocks must keep their IDs. Optional assets_upload_id is a ready markdown-assets ZIP with relative image paths. Compile-only returns Facade JavaScript. Save the returned sourceMap for updates and exports.",
   annotations: writeAnnotations,
   inputSchema: z.object({
     markdown: markdownCompileInput.shape.markdown,
@@ -36,7 +36,9 @@ export const compileMarkdownTool = executorTool({
     const input = markdownCompileInput.parse({
       markdown: args.markdown,
       title: args.title,
-      apply: args.apply,
+      apply: args.apply ?? [
+        args.worktree, args.space, args.parent, args.unit, args.source_map, args.blocks, args.idempotency_key,
+      ].some((value) => value !== undefined),
       worktreeId: args.worktree,
       spaceId: args.space,
       parentNodeId: args.parent,

@@ -233,19 +233,19 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |
-| `space_find` | Required `space`, `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
+| `space_find` | Required `repo`, `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
 | `file_upload_create` | Required `purpose` (`office-import`, `blob`, `html-view`, `markdown-assets`, `svg-assets`, `typst-bundle`), `file_name`, `media_type`; optional `size` (upper bound) | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
-| `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
+| `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` (`id:<id>`, `name:<name>`, `index:N`; bare values are rejected) | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
 | `screenshot` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `pages`, `contact_slide`, `tile`, `sheet`, `range`, `region`, `elements`, `padding`, `scale`, `idempotency_key` | `{ unitId, unitType, images: [{ name, width, height, size, page?, ... }] }`. Within the synchronous wait and at most 1 MiB in total, each PNG is also an MCP `image` content block after the text line and entries carry no link. Otherwise each entry carries a `download` link and there are no image blocks. A long render returns a job; `job_get` results always carry links. Options are the `uvw screenshot` flag values and are parsed with the CLI's own command, so rejections read like `uvw` (`workspace-argument-invalid`, or `workspace-render-input-invalid` from the renderer) |
 | `import` | Required `upload_id`, `worktree`, `space`, `idempotency_key`; optional `type` (`sheet`, `base`, `doc`, `slide`), `name`, `parent` | Bare CLI import result plus `url`; `sourcePath` is the staged file name |
 | `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
-| `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ skills: [{ name, content, resources?, files? }] }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
+| `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ name, content, resources?, files? }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
 
 `files` toolset:
 
@@ -258,7 +258,9 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
 | `blob_replace` | `resource`, `upload_id`, `etag`, `idempotency_key` | `{ replacement: { operationId, resourceId, etag } }`. Destructive, requires `publish` |
 | `asset_download` | `id`, `worktree` | `{ download: { url, expires_at, file_name, media_type, size } }` |
-| `compile_markdown` | `markdown`; optional `assets_upload_id`, `title`; target options require `apply` | CLI compile result with `committed`, `targetUnitId`, diagnostics and materialized `sourceMap`; compile-only also returns `javascript` |
+| `compile_markdown` | `markdown`; optional `assets_upload_id`, `title`; target options imply `apply: true` when omitted; explicit `false` rejects them | CLI compile result with `committed`, `targetUnitId`, diagnostics and materialized `sourceMap`; compile-only also returns `javascript` |
+| `compile_typst` | `bundle_upload_id`; optional `apply`, `worktree`, `space`, `parent`, `idempotency_key`; destination options imply `apply: true` when omitted; explicit `false` rejects them | Compile-only returns `javascript`, `diagnostics`, `previews`, `compiledTargetUnitId`, `committed: false`; apply returns `committed: true` and `unit`. May return a job handle |
+| `compile_svg` | `svg`; optional `assets_upload_id`, `estimate_text_size`, `page`, `add`, `apply`, `worktree`, `unit`; `worktree` or `unit` implies `apply: true` when omitted; explicit `false` rejects them | Facade `code`, lints, warnings, viewport and text measurement; apply adds `applied` commit fields |
 | `export_markdown` | `worktree`, `unit`, `source_map`, `blocks` | Current Markdown in Univer directive syntax (not GitHub Markdown), revision, source map, diagnostics and `assets: [{path, download}]`. `source_map` must come from the last `compile_markdown` or `export_markdown` of the Doc |
 | `print_pdf` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `idempotency_key` | `{ unitId, unitType, pageCount, download }`; the PDF link expires in 15 minutes. Base Units are rejected with the CLI's message. A long print returns a job, like `export`. Layout follows the renderer's default page; there are no paper, orientation, range or fit options |
 | `lint` | Required `unit`, `worktree`; optional `pages` (`1,3-5,cover` or `all`) | The bare `uvw lint --json` report `{ kind, unitId, unitType, coverage, findings }`. Slide Units only, otherwise the CLI's `workspace-unit-layout-lint-unit-type-unsupported` code and message; a bad `pages` is `workspace-argument-invalid`; no trunk, as in the CLI. Always synchronous |
@@ -321,7 +323,7 @@ The gateway loads that directory once at startup and never imports or reads `app
 Both the extension and `skills_read` serve the same catalog snapshot and bytes.
 
 For clients without the extension, call `skills_read` with name `core` first. Without arguments it
-lists the same ten names and descriptions. With a name it returns content and resource paths;
+lists the same ten names and descriptions. With a name it returns top-level `name`, `content` and optional `resources`;
 `full: true` includes all references and templates. With name and resource it reads one file.
 Long resources retain cursor paging, and oversized full results require individual resource reads.
 The MCP `core` maps shared operation names to tools and explains uploads and download links.
@@ -679,14 +681,18 @@ Runtime exports report worker observations. Consumed HTML uploads add `upload_by
 
 Enable the `files` toolset for `compile_markdown` and `export_markdown`.
 Compile-only takes Markdown text and returns JavaScript, diagnostics and a source map.
-Creation requires `apply: true`, `worktree` and `space`. Generate an `idempotency_key`
+Markdown destination options are `worktree`, `space`, `parent`, `unit`, `source_map`,
+`blocks` and the creation-only `idempotency_key`.
+Creation requires `worktree` and `space`. Destination options imply `apply: true`
+when `apply` is omitted; explicit `apply: false` with those options is rejected. Generate an `idempotency_key`
 before creation and reuse it with the same inputs on retry. Keys contain 16 to 200
 URL-safe letters, digits, underscores or hyphens. The executor scopes the key to the
 caller. The Core materializer seeds native identities from the compiled program.
 Creation runs in the existing job child because the standard headless factory imports
 the Rust formula engine. The child receives the runtime license.
 
-Updates require `apply: true`, `worktree`, `unit`, `source_map` and distinct `blocks`.
+Updates require `worktree`, `unit`, `source_map` and distinct `blocks`, with inferred
+or explicit `apply: true`.
 They reject creation options and use the caller-bound `executeAndCommit` runtime.
 Replacement blocks retain their explicit IDs. Save the returned materialized `sourceMap`.
 Like the CLI, export requires that map and explicit block IDs. It reads the current
@@ -724,7 +730,9 @@ usage, and confirmed creations and updates enter `committed_revisions`.
 The `files` toolset includes `compile_typst` and `compile_svg`, both requiring `write` scope.
 `compile_typst` accepts a ready `typst-bundle` ZIP with root `typst.json`. Compile-only
 returns `javascript`, `diagnostics`, `previews`, `compiledTargetUnitId` and `committed: false`.
-Creation requires `apply: true`, `worktree` and `space`; `parent` is optional.
+Creation requires `worktree` and `space`; `parent` is optional. Any of these destination
+options implies `apply: true` when `apply` is omitted. Explicit `apply: false` rejects them.
+An `idempotency_key` alone still allows compile-only.
 Generate an `idempotency_key` before creation and reuse identical inputs on retry.
 The caller-scoped key and deterministic native materialization reproduce the creation intent.
 The manifest's `targetUnitId` remains the compiled target; the returned `unit.unitId` is the
@@ -742,6 +750,8 @@ renderer faults map to the renderer client's errors (`workspace-renderer-unavail
 `-timeout`, `-busy`). The compile itself never starts a browser in the executor or loads the native
 formula engine. `page` is 1-based; `add` requires `page`.
 Apply requires `page`, `worktree` and an existing Slide `unit`, and uses the caller-bound runtime.
+`worktree` or `unit` implies `apply: true` when `apply` is omitted. Explicit `apply: false`
+with either is rejected. `page` alone still allows compile-only.
 SVG apply joins the executor FIFO shared with execute and inspect for the same user, scope
 and Unit. Compile-only bypasses that queue.
 Like `execute`, SVG apply has no idempotency key. After `workspace-result-unknown`, read back
