@@ -114,7 +114,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 - `execute` 只接受 `code` 字符串，没有 `--script`。CLI 对代码长度的上限（10 MiB）保持不变。
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
-- `skills_read` 不带 `name` 时等于 `skills list`；带 `name` 不带 `resource` 时等于 `skills get`。返回内容里的 `uvw skills read …` 改写成对应的工具调用说明。
+- `skills_read` 是 Skills 扩展的回退入口。不带 `name` 时列出名称和描述；带 `name` 时返回内容与资源路径；再带 `resource` 时读取单个文件。与扩展使用同一个静态 catalog，MCP 的 core 不同于 CLI core。
 - `screenshot` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-screenshot-scope-required`，两者同时给出报 `workspace-argument-invalid`）。`pages`、`tile`、`region`、`elements` 沿用 `uvw screenshot` 的字符串写法，`contact_slide` 是布尔值，`padding`、`scale` 是数字。executor 加载 Unit 后用 `uvw screenshot` 自己的命令解析这些选项，所以按 Unit 类型的取舍和错误信息与 CLI 一致（例如 `--range is not supported for Slide`），渲染服务拒绝的输入（如无效 A1 范围）以 `workspace-render-input-invalid` 返回。
 - `screenshot` 的 `structuredContent` 列出 `unitId`、`unitType` 和每张图的 `name`、`width`、`height`、`size`，以及有则带上的 `page`、`pageId`、`range`、`sheetName`、`role`、`tiles` 等元数据。调用在同步预算内完成且所有图合计不超过 1 MiB 时，结果在文本行之后为每张 PNG 附一个 MCP `image` 内容块，条目不带下载链接；否则每个条目带 `download` 链接，没有图片内容块。超过同步预算返回任务，用 `job_get` 取结果，经 `job_get` 取到的结果一律是下载链接。`idempotency_key` 的规则与 `export` 相同。
 - `screenshot` 把每张图都写入暂存（计入 `export_bytes` 与每用户暂存配额），因为落入任务的结果必须能给出链接；同步返回图片内容的调用不暴露这些链接。渲染页数记入 `render_pages`。
@@ -267,7 +267,15 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
 
 ## 8. skills 与 server instructions
 
-- `apps/cli/skill-data` 下的 10 个 skill 同时以 MCP resource 提供，URI 为 `uvw://skills/<name>/SKILL.md` 和 `uvw://skills/<name>/<resource>`。
+- MCP 使用官方 SDK 的 Skills 扩展（SEP-2640，`io.modelcontextprotocol/skills`）。构建时把
+  `apps/mcp/skills/core` 和 `apps/cli/skill-data` 下九个共享领域 Skill 组装到 `dist/skill-data`。
+  CLI core 只供 CLI 使用。MCP core 拥有工具映射、远程文件传输和 MCP 认证指引。
+- 网关启动时加载一次静态 catalog，每个请求的 McpServer 都 attach 同一个 catalog。
+  `skills/list` 返回十个 Skill，每个条目的 resources 数组包含文件 URI、SHA-256 digest 和大小。
+  URI 为 `skill://univer-workspace/<name>/SKILL.md` 与同目录的引用文件。
+  `resources/list` 列出十个入口文件，`resources/read` 可读取 catalog 中的任意文件。
+- 先读 `skill://univer-workspace/core/SKILL.md`。不支持扩展或资源读取的客户端用
+  `skills_read`，两条路径读取相同字节。回退工具保留 full 和资源 cursor 分页语义。
 - server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，然后标记 ready，把评审链接交给用户，合并留给用户。
   不支持 Skill 的客户端（ChatGPT、WorkBuddy）靠这段 instructions 获得规则。
 - 仓库里的发现入口 `skills/univer-workspace-cli/SKILL.md` 是面向 CLI 的安装说明，不变。MCP 的接入说明写在 `apps/mcp/README.md` 和 Workspace 的设置页里。

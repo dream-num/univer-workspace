@@ -32,7 +32,6 @@ function context(store: LocalStagingStore, budget = 1000): ToolContext {
     user,
     identityOrigin: http.origin,
     requestId: "conflict-test",
-    skillDataRoot: "unused",
     resources: () => {
       throw new Error("unused");
     },

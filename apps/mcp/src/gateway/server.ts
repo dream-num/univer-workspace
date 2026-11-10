@@ -1,7 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -9,8 +7,6 @@ import { fileURLToPath } from "node:url";
 import {
   createMcpHandler,
   McpServer,
-  ResourceNotFoundError,
-  ResourceTemplate,
   CLIENT_INFO_META_KEY,
   TRACEPARENT_META_KEY,
 } from "@modelcontextprotocol/server";
@@ -40,7 +36,7 @@ import { buildServerInstructions } from "./instructions.js";
 import { openResourceLibrary } from "./resources.js";
 import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { RESULT_LIMIT } from "./paging.js";
-import { listSkillFiles, skillMimeType, skillUri } from "./skills.js";
+import { loadWorkspaceSkills } from "./skill-catalog.js";
 import { translateToolError } from "./tool-error.js";
 import type { ToolContext, ToolDefinition, ToolScope, ToolResult } from "./tools/definition.js";
 import { selectTools, toolsets } from "./tools/registry.js";
@@ -82,7 +78,7 @@ export function createGateway(
     readonly logger?: Logger;
     readonly fetcher?: typeof fetch;
     readonly scopes?: ReadonlySet<ToolScope>;
-    // The build copies apps/cli/skill-data to dist/skill-data; tests point at the source directory.
+    // The build assembles MCP core and shared domain Skills; tests assemble the same sources.
     readonly skillDataRoot?: string;
     // Tests inject a library with a fake downloader; production opens the catalog lazily on first use.
     readonly resourceLibrary?: ResourceLibrary;
@@ -118,6 +114,7 @@ export function createGateway(
   });
   const skillDataRoot =
     options.skillDataRoot ?? fileURLToPath(new URL("../skill-data", import.meta.url));
+  const skills = loadWorkspaceSkills(skillDataRoot);
   let resourceLibrary = options.resourceLibrary;
   const resources = () =>
     (resourceLibrary ??= openResourceLibrary(config.MCP_RESOURCE_CACHE_DIRECTORY));
@@ -147,7 +144,7 @@ export function createGateway(
     (options.fetcher ?? fetch)(input, init);
   const authenticator = createAuthenticator(config, logger, upstream);
   const requests = new AsyncLocalStorage<RequestState>();
-  const mcp = createMcpHandler(({ era }) => {
+  const mcp = createMcpHandler(async ({ era }) => {
     const state = requests.getStore();
     if (!state) throw new Error("Missing authenticated request context");
     state.modern = era === "modern";
@@ -161,38 +158,7 @@ export function createGateway(
         ),
       },
     );
-    server.registerResource(
-      "skills",
-      new ResourceTemplate("uvw://skills/{name}/{+path}", {
-        list: async () => ({
-          resources: (await listSkillFiles(skillDataRoot)).map(({ name, path }) => ({
-            uri: skillUri(name, path),
-            name: `${name}/${path}`,
-            mimeType: skillMimeType(path),
-          })),
-        }),
-      }),
-      {
-        title: "Univer Workspace Skills",
-        description: "The operational Skills that teach the Workspace workflow.",
-      },
-      async (uri, { name, path }) => {
-        const wanted = { name: String(name), path: String(path) };
-        const files = await listSkillFiles(skillDataRoot);
-        if (!files.some((file) => file.name === wanted.name && file.path === wanted.path)) {
-          throw new ResourceNotFoundError(uri.href);
-        }
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: skillMimeType(wanted.path),
-              text: await readFile(join(skillDataRoot, wanted.name, wanted.path), "utf8"),
-            },
-          ],
-        };
-      },
-    );
+    (await skills).catalog.attach(server);
     for (const tool of state.selected) {
       server.registerTool(
         tool.name,
@@ -467,7 +433,7 @@ export function createGateway(
         user,
         requestId,
         identityOrigin: config.WORKSPACE_ORIGIN,
-        skillDataRoot,
+        skills,
         resources,
         staging,
         jobs,

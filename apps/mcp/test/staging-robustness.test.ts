@@ -9,7 +9,7 @@ import { pino } from "pino";
 import { afterEach, expect, it, vi } from "vitest";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
 import { defaultLimits } from "../src/gateway/staging/model.js";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { testStagingDirectory } from "./staging-directory.js";
 

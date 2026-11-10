@@ -8,7 +8,7 @@ import { pino } from "pino";
 import { afterEach, describe, expect, it } from "vitest";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
 import { defaultLimits, type UploadInput } from "../src/gateway/staging/model.js";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { testStagingDirectory } from "./staging-directory.js";
 

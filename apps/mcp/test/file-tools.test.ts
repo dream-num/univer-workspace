@@ -124,7 +124,6 @@ it.each([
           identityOrigin: "http://workspace.test",
           requestId: "file-tools",
           scopes: new Set(["publish"]),
-          skillDataRoot: "unused",
           resources: () => {
             throw new Error("Unused catalog");
           },
@@ -190,7 +189,6 @@ it.each([
       identityOrigin: "http://workspace.test",
       requestId: "asset-test",
       scopes: new Set<"read">(["read"]),
-      skillDataRoot: "unused",
       resources: () => {
         throw new Error("Unused");
       },

@@ -7,9 +7,9 @@
   ],
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/copy-skill-data.mjs && node scripts/copy-render-runtime.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/assemble-skills.mjs && node scripts/copy-render-runtime.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
-    "test": "vitest run"
+    "test": "node scripts/assemble-skills.mjs && vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "2.1.2",

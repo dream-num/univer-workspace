@@ -304,15 +304,26 @@ change existing permissions or migrate the old default cache.
 
 `@univer-cli/api-reference` 1.4.0 is the same offline Facade API index the CLI uses. The CLI's `api find` and
 `api show` print text and have no `--json`, so `api_find` and `api_show` return the library's own structured
-results, wrapped as `{ results }`. The gateway reads the CLI's Skills from `dist/skill-data`, which the build
-copies from `apps/cli/skill-data`; it never imports `apps/cli`. `skills_read` returns the CLI's `skills list`,
-`skills get` and `skills read` data. Skill text is unchanged, so it still names `uvw` commands: the tool with the
-same name in snake_case does the same thing when it appears in the connection's tool list. If no matching
-tool exists, that step is unavailable in this connection; tell the user instead of guessing. Admin tools
-require `?toolsets=admin` (alone or with other toolsets) or `?toolsets=all`.
+results, wrapped as `{ results }`.
 
-Every Skill file is also an MCP resource, in every toolset selection: `uvw://skills/<name>/SKILL.md` and
-`uvw://skills/<name>/references/<file>` (or `templates/<file>`), as `text/markdown`.
+The server declares the MCP Skills extension (SEP-2640), `io.modelcontextprotocol/skills`.
+`skills/list` returns ten Skills with static SHA-256 digests and resource URIs under
+`skill://univer-workspace/<name>/`. Read `skill://univer-workspace/core/SKILL.md` first.
+`resources/list` lists each Skill's entry file; the extension's `resources` arrays list all
+references and templates, readable through `resources/read`.
+
+The build assembles the MCP-specific `core` from `apps/mcp/skills/core` and nine shared domain
+Skills from `apps/cli/skill-data` into `dist/skill-data`. The CLI's `core` remains CLI-only.
+The gateway loads that directory once at startup and never imports or reads `apps/cli` at runtime.
+Both the extension and `skills_read` serve the same catalog snapshot and bytes.
+
+For clients without the extension, call `skills_read` with name `core` first. Without arguments it
+lists the same ten names and descriptions. With a name it returns content and resource paths;
+`full: true` includes all references and templates. With name and resource it reads one file.
+Long resources retain cursor paging, and oversized full results require individual resource reads.
+The MCP `core` maps shared operation names to tools and explains uploads and download links.
+If a named tool is absent from the connection's tool list, that step is unavailable; tell the user
+instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`.
 
 The server `instructions` carry the `core` Skill's workflow rules for clients without Skill support (ChatGPT,
 WorkBuddy): find the file, open a pull request, write, read back to verify, mark ready, hand the review link to

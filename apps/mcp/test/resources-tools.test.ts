@@ -10,7 +10,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { openResourceLibrary } from "../src/gateway/resources.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames } from "./tool-names.js";

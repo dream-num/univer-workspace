@@ -45,8 +45,8 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MC2 finds SVG resources against the CLI.
 - MC3 exports one and two SVG resources and compares the text with the files the CLI writes.
 - MC4 preserves unknown handles in `failed` and an unknown registry error against the CLI.
-- MR1 lists the Skills and gets one against the CLI.
-- MR2 reads a Skill resource through `skills_read` against the CLI and checks the rewritten read instruction.
+- MR1 lists the ten MCP Skills and compares shared get/full content with its source.
+- MR2 reads a shared Skill resource through `skills_read`, checks MCP read instructions, and confirms MCP core differs from CLI core.
 - MR3 and MR4 search and show Facade API symbols against the CLI and the reference library.
 - MR5 lists and reads Skill files as MCP resources against the CLI.
 - MR6 checks the server instructions in the initialize result in both protocols.
@@ -954,37 +954,43 @@ jq -e '.tool == "resources_find" and .outcome == "tool_error" and .error_code ==
 Pass when the failed handles equal the CLI's `failed` and the good handle is still returned in the MCP result, the unknown registry fails in
 MCP and CLI with the same code (`resource-registry-not-found`), and the event carries that code.
 
-**MR1. Skills list and get.** The CLI prints `{ success, data }`; the gateway wraps the same data in `skills`.
+**MR1. Skills list and get fallback.** MCP serves its own core and nine shared domain Skills.
 
 ```bash
 REF='const {createRequire}=require("node:module");const r=createRequire(process.cwd()+"/apps/mcp/package.json")("@univer-cli/api-reference").createStandardApiReference();'
 $V mcp mcp-skills-list skills_read
-$V cli mcp-skills-list-cli skills list --json
-diff <(jq -S '.skills' "$EVIDENCE/mcp-skills-list.out") <(jq -S '.data' "$EVIDENCE/mcp-skills-list-cli.out")
-jq -e 'map(.name) == ["base","blob","board","core","doc","embed","cross-unit-formula","html-view","sheet","slide"]' <(jq '.skills' "$EVIDENCE/mcp-skills-list.out")
+jq -e '[.skills[].name] == ["base","blob","board","core","cross-unit-formula","doc","embed","html-view","sheet","slide"] and all(.skills[]; (.description | length) > 0)' "$EVIDENCE/mcp-skills-list.out"
 $V mcp mcp-skills-get skills_read '{"name":"html-view"}'
-$V cli mcp-skills-get-cli skills get html-view --json
-diff <(jq -S '.skills' "$EVIDENCE/mcp-skills-get.out") \
-  <(jq -S '.data | map(if .resources then .resources |= map(.readCommand |= (capture("^uvw skills read (?<n>\\S+) (?<p>.+)$") | "Call skills_read with name \"\(.n)\" and resource \"\(.p)\".")) else . end)' "$EVIDENCE/mcp-skills-get-cli.out")
 $V mcp mcp-skills-full skills_read '{"name":"html-view","full":true}'
-$V cli mcp-skills-full-cli skills get html-view --full --json
-diff <(jq -S '.skills | map(.files)' "$EVIDENCE/mcp-skills-full.out") <(jq -S '.data | map(.files)' "$EVIDENCE/mcp-skills-full-cli.out")
+node --input-type=module - "$EVIDENCE/mcp-skills-full.out" <<'JS'
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const skill = JSON.parse(readFileSync(process.argv[2], 'utf8')).skills[0];
+const root = 'apps/cli/skill-data/html-view/';
+assert.equal(skill.content, readFileSync(root + 'SKILL.md', 'utf8'));
+assert.equal(skill.files.length, skill.resources.length);
+for (const file of skill.files) assert.equal(file.content, readFileSync(root + file.path, 'utf8'));
+JS
 ```
 
-Pass when every command exits 0, the three diffs are empty, and the list has the ten skills in the CLI order.
+Pass when all commands exit 0, the fallback lists ten names with descriptions, and get/full preserve the shared files.
 
-**MR2. Skill resource and the rewritten instruction.**
+**MR2. Skill resource and MCP core bindings.**
 
 ```bash
 $V mcp mcp-skills-read skills_read '{"name":"html-view","resource":"references/charts.md"}'
-$V cli mcp-skills-read-cli skills read html-view references/charts.md --json
-diff <(jq -S '.' "$EVIDENCE/mcp-skills-read.out") <(jq -S '.data' "$EVIDENCE/mcp-skills-read-cli.out")
+node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).content)' "$EVIDENCE/mcp-skills-read.out" > "$EVIDENCE/mcp-skills-read.md"
+cmp "$EVIDENCE/mcp-skills-read.md" apps/cli/skill-data/html-view/references/charts.md
 jq -e '.skills[0].resources | length > 0 and all(.[]; .readCommand | startswith("Call skills_read with name \"html-view\" and resource \"references/"))' "$EVIDENCE/mcp-skills-get.out"
-! jq -r '.skills[0].resources[].readCommand' "$EVIDENCE/mcp-skills-get.out" | grep -q 'uvw skills'
+$V mcp mcp-skills-core skills_read '{"name":"core"}'
+node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1])).skills[0].content)' "$EVIDENCE/mcp-skills-core.out" > "$EVIDENCE/mcp-skills-core.md"
+cmp "$EVIDENCE/mcp-skills-core.md" apps/mcp/skills/core/SKILL.md
+! cmp -s "$EVIDENCE/mcp-skills-core.md" apps/cli/skill-data/core/SKILL.md
+! rg -n '\buvw\b' "$EVIDENCE/mcp-skills-core.md"
 jq -e '.tool == "skills_read" and .outcome == "ok"' "$EVIDENCE/mcp-skills-read.event.json"
 ```
 
-Pass when both commands exit 0, the content equals the CLI `data`, and no `readCommand` still names `uvw skills`.
+Pass when the reference equals the shared source, read instructions name MCP calls, and MCP core equals its own source and differs from CLI core.
 
 **MR3. API find.** The CLI `api` commands print text and have no `--json`, so the reference library (the same package the CLI loads) is the structured oracle, and the CLI text is the cross-check.
 
@@ -1018,33 +1024,34 @@ grep -q 'Unknown symbol: NoSuchSymbolAnywhere' "$EVIDENCE/mcp-api-show-missing-c
 
 Pass when the result equals the library output, an unknown symbol is a `not-found` entry and not a tool error, the CLI text shows the same class and member, and the CLI exits 1 for the unknown symbol (the gateway reports it in the result instead).
 
-**MR5. Skill files as MCP resources.**
+**MR5. MCP Skills extension and file resources.**
 
 ```bash
+$V mcp-skills mcp-skills-extension
+jq -e '.supported and (.extensions | has("io.modelcontextprotocol/skills")) and (.skills | length == 10) and all(.skills[]; (.resources | type == "array") and all(.resources[]; (.uri | startswith("skill://univer-workspace/")) and (.digest | test("^sha256:[a-f0-9]{64}$"))))' "$EVIDENCE/mcp-skills-extension.out"
+diff <(jq -r '.skills[].frontmatter.name' "$EVIDENCE/mcp-skills-extension.out") <(jq -r '.skills[].name' "$EVIDENCE/mcp-skills-list.out")
 $V mcp-resources mcp-resources-list
-for n in $(jq -r '.data[].name' "$EVIDENCE/mcp-skills-list-cli.out"); do
-  $V cli "mcp-skills-get-$n-cli" skills get "$n" --json >/dev/null
-done
-{ for n in $(jq -r '.data[].name' "$EVIDENCE/mcp-skills-list-cli.out"); do
-    echo "uvw://skills/$n/SKILL.md"
-    jq -r --arg n "$n" '.data[0].resources[]? | "uvw://skills/\($n)/\(.path)"' "$EVIDENCE/mcp-skills-get-$n-cli.out"
-  done; } | sort > "$EVIDENCE/mcp-resources-expected.txt"
-diff <(jq -r '.[].uri' "$EVIDENCE/mcp-resources-list.out" | sort) "$EVIDENCE/mcp-resources-expected.txt"
+diff <(jq -r '.[].uri' "$EVIDENCE/mcp-resources-list.out" | sort) <(jq -r '.skills[].uri' "$EVIDENCE/mcp-skills-extension.out" | sort)
 jq -e 'all(.[]; .mimeType == "text/markdown")' "$EVIDENCE/mcp-resources-list.out"
-$V mcp-resource mcp-resource-core uvw://skills/core/SKILL.md
-$V cli mcp-skills-core-cli skills get core --json
-diff <(jq -r '.[0].text' "$EVIDENCE/mcp-resource-core.out") <(jq -r '.data[0].content' "$EVIDENCE/mcp-skills-core-cli.out")
-$V mcp-resource mcp-resource-ref uvw://skills/html-view/references/charts.md
+$V mcp-resource mcp-resource-core skill://univer-workspace/core/SKILL.md
+node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1]))[0].text)' "$EVIDENCE/mcp-resource-core.out" > "$EVIDENCE/mcp-resource-core.md"
+cmp "$EVIDENCE/mcp-resource-core.md" apps/mcp/skills/core/SKILL.md
+for n in base blob board cross-unit-formula doc embed html-view sheet slide; do
+  $V mcp-resource "mcp-resource-$n" "skill://univer-workspace/$n/SKILL.md"
+  node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1]))[0].text)' "$EVIDENCE/mcp-resource-$n.out" > "$EVIDENCE/mcp-resource-$n.md"
+  cmp "$EVIDENCE/mcp-resource-$n.md" "apps/cli/skill-data/$n/SKILL.md"
+done
+$V mcp-resource mcp-resource-ref skill://univer-workspace/html-view/references/charts.md
 diff <(jq -r '.[0].text' "$EVIDENCE/mcp-resource-ref.out") <(jq -r '.content' "$EVIDENCE/mcp-skills-read.out")
-$V mcp-resource --protocol 2025-11-25 mcp-resource-core-legacy uvw://skills/core/SKILL.md
+$V mcp-resource --protocol 2025-11-25 mcp-resource-core-legacy skill://univer-workspace/core/SKILL.md
 diff "$EVIDENCE/mcp-resource-core.out" "$EVIDENCE/mcp-resource-core-legacy.out"
 $V mcp-resources --toolsets admin mcp-resources-admin
 diff "$EVIDENCE/mcp-resources-list.out" "$EVIDENCE/mcp-resources-admin.out"
-$V mcp-resource mcp-resource-missing uvw://skills/core/references/missing.md
+$V mcp-resource mcp-resource-missing skill://univer-workspace/core/references/missing.md
 test $? -eq 3
 ```
 
-Pass when the resource URIs equal the CLI's skill files, every resource is `text/markdown`, the two read resources equal the CLI text in both protocols, the same resources are listed with `?toolsets=admin`, and an unknown resource exits 3 (protocol error). Resource calls have no event file.
+Pass when the extension declares ten static Skills, the resource entry points match the catalog, MCP core equals its own source, all nine shared Skills equal their sources, both protocols read the same core, and admin connections expose the same catalog. Unknown resources exit 3. Resource and extension calls have no tool event file.
 
 **MR6. Server instructions.**
 

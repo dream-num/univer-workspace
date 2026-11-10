@@ -5,7 +5,7 @@ import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { pino } from "pino";
 import { expect, it, vi } from "vitest";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { encodeFrame } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";

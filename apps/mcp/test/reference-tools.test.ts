@@ -1,18 +1,32 @@
 import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
+import { SkillsClient, SKILLS_EXTENSION_ID } from "@modelcontextprotocol/client/ext/skills";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createStandardApiReference } from "@univer-cli/api-reference";
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createGateway } from "../src/gateway/server.js";
-import { SKILL_NAMES } from "../src/gateway/skills.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 
 const cliSkillData = new URL("../../cli/skill-data/", import.meta.url).pathname;
+const mcpSkillData = new URL("../skills/", import.meta.url).pathname;
+const SKILL_NAMES = [
+  "base",
+  "blob",
+  "board",
+  "core",
+  "cross-unit-formula",
+  "doc",
+  "embed",
+  "html-view",
+  "sheet",
+  "slide",
+];
 const LIMIT = 100_000;
 const fetcher: typeof fetch = async () =>
   Response.json({ authenticated: true, user: { id: "user-1", displayName: "alice" } });
@@ -23,8 +37,9 @@ describe("API reference, Skills, resources and server instructions", () => {
   let url = "";
   let clients: Client[] = [];
   let scratch: string | undefined;
+  let sourceRoot: string;
 
-  async function start(skillDataRoot = cliSkillData) {
+  async function start(skillDataRoot = sourceRoot) {
     const socket = createServer();
     socket.listen(0, "127.0.0.1");
     await once(socket, "listening");
@@ -61,8 +76,14 @@ describe("API reference, Skills, resources and server instructions", () => {
     const result = await client.callTool({ name, arguments: args });
     return { ...result, structured: result.structuredContent as Record<string, any> };
   }
-  beforeEach(() => {
+  beforeEach(async () => {
     clients = [];
+    sourceRoot = await mkdtemp(join(tmpdir(), "mcp-source-skills-"));
+    for (const name of SKILL_NAMES) {
+      await cp(join(name === "core" ? mcpSkillData : cliSkillData, name), join(sourceRoot, name), {
+        recursive: true,
+      });
+    }
   });
   afterEach(async () => {
     await Promise.all(clients.map((client) => client.close()));
@@ -74,6 +95,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     }
     if (scratch) await rm(scratch, { recursive: true, force: true });
     scratch = undefined;
+    await rm(sourceRoot, { recursive: true, force: true });
   });
 
   it("maps api_find onto the reference library and wraps the array in results", async () => {
@@ -145,7 +167,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     });
   });
 
-  it("lists, gets and reads Skills with the CLI's data and a rewritten read instruction", async () => {
+  it("lists MCP core and shared Skills and preserves fallback get, full and resource reads", async () => {
     await start();
     const client = await connect();
     const listed = await call(client, "skills_read", {});
@@ -154,13 +176,13 @@ describe("API reference, Skills, resources and server instructions", () => {
     );
     expect(listed.structured["skills"][3]).toMatchObject({ name: "core" });
     expect(listed.structured["skills"][3].description).toContain(
-      "Operate remote Workspace Resources",
+      "Operate Univer Workspace through MCP tools",
     );
 
     const core = await call(client, "skills_read", { name: "core" });
     expect(core.structured).toEqual({
       skills: [
-        { name: "core", content: await readFile(join(cliSkillData, "core/SKILL.md"), "utf8") },
+        { name: "core", content: await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8") },
       ],
     });
 
@@ -270,42 +292,92 @@ describe("API reference, Skills, resources and server instructions", () => {
       for (const word of ["pull request", "ready", "review", "merg", "api_find", "skills_read"]) {
         expect(instructions).toContain(word);
       }
-      expect(instructions).toContain("no matching tool");
+      expect(instructions).toContain("not in this connection's tool list");
+      expect(instructions).not.toMatch(/\buvw\b/u);
+      expect(instructions).toContain("skill://univer-workspace/core/SKILL.md");
       expect(instructions).toContain("tell the user");
       expect(instructions).toContain("?toolsets=admin");
-      const listed = (await client.listResources()).resources;
-      const expected: string[] = [];
-      for (const name of SKILL_NAMES) {
-        expected.push(`uvw://skills/${name}/SKILL.md`);
+      expect(client.getServerCapabilities()?.extensions).toHaveProperty(SKILLS_EXTENSION_ID);
+      const extension = new SkillsClient(client);
+      expect(extension.supported).toBe(true);
+      const { skills: entries } = await extension.list();
+      expect(entries.map(({ frontmatter: { name } }) => name)).toEqual(SKILL_NAMES);
+      expect((await call(client, "skills_read", {})).structured["skills"]).toEqual(
+        entries.map(({ frontmatter: { name, description } }) => ({ name, description })),
+      );
+      for (const entry of entries) {
+        expect(entry.uri).toBe(`skill://univer-workspace/${entry.frontmatter.name}/SKILL.md`);
+        expect(Array.isArray(entry.resources)).toBe(true);
+        if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
+        const expectedFiles = ["SKILL.md"];
         for (const child of ["references", "templates"]) {
-          const files = await readdir(join(cliSkillData, name, child)).catch(() => []);
-          expected.push(...files.map((file) => `uvw://skills/${name}/${child}/${file}`));
+          const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
+            () => [],
+          );
+          expectedFiles.push(...files.map((file) => `${child}/${file}`));
         }
+        expect(entry.resources.map(({ uri }) => uri).sort()).toEqual(
+          expectedFiles
+            .map((path) => `skill://univer-workspace/${entry.frontmatter.name}/${path}`)
+            .sort(),
+        );
+        for (const resource of entry.resources) {
+          const path = resource.uri.slice(
+            `skill://univer-workspace/${entry.frontmatter.name}/`.length,
+          );
+          const bytes = await readFile(join(sourceRoot, entry.frontmatter.name, path));
+          expect(resource.digest).toBe(
+            `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+          );
+          const served = await extension.read(entry, path);
+          expect(served.verified).toBe(true);
+          expect(Buffer.from(served.bytes)).toEqual(bytes);
+        }
+        const fallback = await call(client, "skills_read", { name: entry.frontmatter.name });
+        expect(fallback.structured["skills"][0].content).toBe(
+          await readFile(join(sourceRoot, entry.frontmatter.name, "SKILL.md"), "utf8"),
+        );
       }
-      expect(listed.map((resource) => resource.uri).sort()).toEqual(expected.sort());
-      expect(listed.every((resource) => resource.mimeType === "text/markdown")).toBe(true);
-      const read = await client.readResource({ uri: "uvw://skills/core/SKILL.md" });
+      expect(await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8")).not.toBe(
+        await readFile(join(cliSkillData, "core/SKILL.md"), "utf8"),
+      );
+      const listed = (await client.listResources()).resources;
+      expect(listed.map(({ uri }) => uri).sort()).toEqual(entries.map(({ uri }) => uri).sort());
+      const read = await client.readResource({ uri: "skill://univer-workspace/core/SKILL.md" });
       expect(read.contents).toEqual([
         {
-          uri: "uvw://skills/core/SKILL.md",
+          uri: "skill://univer-workspace/core/SKILL.md",
           mimeType: "text/markdown",
-          text: await readFile(join(cliSkillData, "core/SKILL.md"), "utf8"),
+          text: await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8"),
         },
       ]);
       const reference = await client.readResource({
-        uri: "uvw://skills/board/references/board-spec.md",
+        uri: "skill://univer-workspace/board/references/board-spec.md",
       });
       expect(reference.contents[0]).toMatchObject({
         text: await readFile(join(cliSkillData, "board/references/board-spec.md"), "utf8"),
       });
       await expect(
-        client.readResource({ uri: "uvw://skills/core/references/missing.md" }),
+        client.readResource({ uri: "skill://univer-workspace/core/references/missing.md" }),
       ).rejects.toThrow();
       await expect(
-        client.readResource({ uri: "uvw://skills/core/../../package.json" }),
+        client.readResource({ uri: "skill://univer-workspace/core/../../package.json" }),
       ).rejects.toThrow();
     },
   );
+
+  it("keeps published digests and fallback bytes stable after source changes", async () => {
+    await start();
+    const client = await connect();
+    const extension = new SkillsClient(client);
+    const { skill } = await extension.get("skill://univer-workspace/core/SKILL.md");
+    const original = await readFile(join(sourceRoot, "core/SKILL.md"), "utf8");
+    await writeFile(join(sourceRoot, "core/SKILL.md"), `${original}\nChanged after startup.\n`);
+    expect((await extension.read(skill)).text).toBe(original);
+    expect(
+      (await call(client, "skills_read", { name: "core" })).structured["skills"][0].content,
+    ).toBe(original);
+  });
 
   it("keeps the gateway's Skill list in step with apps/cli/skill-data", async () => {
     const directories = (await readdir(cliSkillData, { withFileTypes: true }))

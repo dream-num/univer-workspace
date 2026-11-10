@@ -70,7 +70,7 @@ C1 的要求：`WorkspaceHttp` 内部继续以身份 origin 构造和校验所�
 - 构建上下文是仓库根目录，复用根目录的 `.dockerignore`。
 - 基础镜像 `ARG BASE_IMAGE=node:24-bookworm-slim`，与 Workspace 相同，满足根 `package.json` 的 `engines.node >=24`。
 - 构建阶段先复制根目录的 `package.json`、`pnpm-lock.yaml`、`pnpm-workspace.yaml`、`.npmrc`、`patches/`，以及 `apps/mcp/package.json` 和 `packages/client-core/package.json`。缺少 `patches/` 时，`pnpm install` 在应用 filter 之前就因为找不到补丁文件失败（实测）。
-- 然后执行 `pnpm install --frozen-lockfile --filter @univerjs/univer-workspace-mcp...`，再复制源码：根目录的 `tsconfig*.json`，`apps/mcp` 和 `packages/client-core` 的全部非忽略文件（包括 `render-runtime/`），以及 `apps/cli/skill-data`（构建时复制进 `dist/skill-data`，网关运行时不读取 `apps/cli`）。
+- 然后执行 `pnpm install --frozen-lockfile --filter @univerjs/univer-workspace-mcp...`，再复制源码：根目录的 `tsconfig*.json`，`apps/mcp` 和 `packages/client-core` 的全部非忽略文件（包括 `render-runtime/`），以及 `apps/cli/skill-data`（构建时把九个共享领域 Skill 与 `apps/mcp/skills/core` 组装进 `dist/skill-data`，CLI core 不进入 MCP 产物，网关运行时不读取 `apps/cli`）。
 - 然后执行 `pnpm --filter @univerjs/univer-workspace-mcp... build` 和 `pnpm --filter @univerjs/univer-workspace-mcp deploy --legacy --prod --config.allow-unused-patches=true`，与 Workspace 相同。原生绑定随 `deploy` 进入 `node_modules`，不单独处理（实测：`node:24-bookworm-slim` 中 `deploy` 出的 `client-core` 带 linux-arm64 绑定，可以正常导入）。
 - 上面列出的路径就是镜像的构建输入。`verify-uvw` 用同一份路径列表计算源码摘要（6.2 节）。修改 Dockerfile 的 `COPY` 时同步修改这份列表，`apps/mcp/AGENTS.md` 写明这条约束。
 - 运行阶段设置 `NODE_ENV=production`、`HOST=0.0.0.0`、`PORT=3000`，以 `node` 用户运行 `node dist/main.js`。阶段 A 不声明 `VOLUME`。

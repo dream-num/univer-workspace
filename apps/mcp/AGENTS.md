@@ -11,7 +11,11 @@ The [local verification specification](../../docs/design/workspace-mcp/local-ver
 - Keep the Dockerfile COPY inputs and the verify-uvw build-input list in specification section 3.1 synchronized.
   The inputs are root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, `patches/`, `tsconfig*.json`,
   all non-ignored files under `apps/mcp/` and `packages/client-core/`, including `render-runtime/`, and `apps/cli/skill-data/`
-  (the build copies it to `dist/skill-data`; the gateway never reads `apps/cli` at runtime).
+  (the build assembles its nine domain Skills with `apps/mcp/skills/core` into `dist/skill-data`;
+  the CLI core is CLI-only and the gateway never reads `apps/cli` at runtime).
+- Serve that static catalog through the official MCP Skills extension (`io.modelcontextprotocol/skills`)
+  and the `skills_read` fallback. Keep both paths on the same snapshot and use
+  `skill://univer-workspace/<name>/` URIs. MCP core owns tool bindings and remote file handling.
 - Development session passthrough must never reach SaaS. Production refuses any non-empty `MCP_DEV_SESSION_PASSTHROUGH`.
 - In production, the shared executor serves only allowlisted trusted users through `MCP_EXECUTOR_ALLOWED_USER_IDS`.
   Public executor access still requires Stage G.

@@ -12,7 +12,7 @@ import {
   workspaceRuntimeKey,
   type WorkspaceContentRuntime,
 } from "@univerjs/univer-workspace-client-core";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames, coreNames, destructiveNames, filesNames, writeNames } from "./tool-names.js";
 

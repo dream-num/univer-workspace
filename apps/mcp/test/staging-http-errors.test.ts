@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { Writable } from "node:stream";
 import { pino } from "pino";
 import { expect, it } from "vitest";
-import { createGateway } from "../src/gateway/server.js";
+import { createGateway } from "./gateway.js";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { testStagingDirectory } from "./staging-directory.js";
