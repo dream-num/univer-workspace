@@ -1,5 +1,9 @@
 # Space plugin for official DeepSeek Harness
 
+Space is a proof-of-concept plugin for Univer Workspace. It runs inside official DeepSeek Harness (DSH), connects to a Workspace service, and lets you browse your files, edit Univer Docs and Sheets, and chat with an AI alongside an open document.
+
+This preview targets DSH 0.2.2-rc.1. It is an optional way to use Workspace inside DSH, not a replacement for the separate Workspace Agent Desktop application. Use non-critical documents while evaluating it.
+
 Space-style content navigation, writable collaborative Univer Docs/Sheets,
 formal Slides/Canvas/Relational Table viewers and the shared Workspace HTML Viewer for Pages, and the
 native DSH Conversation in a floating overlay. DSH owns Session history, composer, model,
@@ -133,8 +137,7 @@ captured from Host state after inbox insertion, rather than at the send gesture.
 A selection update still in transit can therefore leave an earlier target in that
 message's snapshot. Generation ordering and the native sending phase do not close
 this window. Exact native send binding requires a supported per-attempt snapshot/admission API from DSH;
-composer blocks and pre-step hooks do not provide it. This remains a preview
-blocker. The separate **Ask for change** control captures its SDK selection at
+composer blocks and pre-step hooks do not provide it. This is a known POC risk: ordinary chat may act on an earlier document or selection. Check the target and the result when trying AI edits. The separate **Ask for change** control captures its SDK selection at
 activation and retains the existing target, content, permission and revision checks.
 Its model request separates the selected text from read-only surrounding paragraph
 text. The model returns a complete local fragment tied to that selection request.
@@ -261,7 +264,7 @@ Keep credentials outside the repository and generated evidence.
 
 ## Release candidate
 
-This package is a release candidate and is not certified for Public Preview.
+This package is a proof-of-concept preview for evaluation, not a production release.
 The target Host version is official DSH 0.2.2-rc.1.
 The navigation adapter recognizes the published Web build 0.2.2-rc.1 / c59d10a.
 Desktop 0.2.2-rc.1 installation and native return-flow acceptance remain pending.
