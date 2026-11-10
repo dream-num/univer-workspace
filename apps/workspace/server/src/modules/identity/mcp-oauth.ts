@@ -142,6 +142,18 @@ export function parseMcpScopes(raw: string): McpScope[] | null {
   return scopes.length === 0 || requested.size > 0 ? null : scopes;
 }
 
+/**
+ * Resolves a requested RFC 8707 `resource` to the configured MCP URL it names. Clients send the server URL they were
+ * given, and its query only selects toolsets on that server, so `https://host/mcp?toolsets=all` names `https://host/mcp`.
+ */
+export function resolveMcpResource(config: Pick<McpOAuthConfig, "resources">, requested: string): string | undefined {
+  if (config.resources.includes(requested)) return requested;
+  const queryAt = requested.indexOf("?");
+  if (queryAt < 0 || requested.includes("#")) return undefined;
+  const server = requested.slice(0, queryAt);
+  return config.resources.includes(server) ? server : undefined;
+}
+
 /** Parses `MCP_RESOURCE_URLS`: comma-separated absolute http(s) URLs without a fragment, kept verbatim. */
 export function parseMcpResourceUrls(raw: string): string[] {
   const resources = [...new Set(raw.split(",").map((value) => value.trim()).filter((value) => value !== ""))];

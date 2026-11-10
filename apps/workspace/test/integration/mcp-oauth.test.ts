@@ -276,6 +276,38 @@ describe("MCP OAuth", () => {
     expect((await exchange(origin, issued.access_token)).status).toBe(400);
   });
 
+  it("accepts the MCP URL with a toolsets query as the resource and binds the grant to the configured URL", async () => {
+    const origin = await start();
+    const clientId = await registeredClientId(origin);
+    const alice = await registerUser(origin, "alice");
+    const redirectUri = "http://127.0.0.1:53379/callback";
+    const queried = `${RESOURCE}?toolsets=core,files`;
+    const consentFor = (resource: string) =>
+      fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, resource })}`, {
+        headers: { cookie: alice },
+        redirect: "manual",
+      });
+    const page = await consentFor(queried);
+    expect(page.headers.get("location")).toBeNull();
+    expect(await page.text()).toContain(`Server: ${RESOURCE}.`);
+    const code = await authorizeCode(origin, alice, clientId, redirectUri, queried);
+    const issued = await token(origin, {
+      grant_type: "authorization_code", code, code_verifier: VERIFIER, redirect_uri: redirectUri, resource: queried, client_id: clientId,
+    });
+    expect(issued.status).toBe(200);
+    const grant = (await issued.json()) as { access_token: string; refresh_token: string };
+    expect((await exchange(origin, grant.access_token)).status).toBe(200);
+    const refreshed = await refresh(origin, clientId, grant.refresh_token, `${RESOURCE}?toolsets=all`);
+    expect(refreshed.status).toBe(200);
+    const rotated = (await refreshed.json()) as { access_token: string };
+    expect((await exchange(origin, rotated.access_token)).status).toBe(200);
+
+    for (const resource of [`${RESOURCE}x?toolsets=core`, `${RESOURCE}/?toolsets=core`, "https://other.example.test/mcp?toolsets=core"]) {
+      const rejected = await consentFor(resource);
+      expect(new URL(rejected.headers.get("location")!).searchParams.get("error")).toBe("invalid_target");
+    }
+  });
+
   it("returns verified-redirect errors to the client and rejects unverified clients and redirects in place", async () => {
     const origin = await start();
     const clientId = await registeredClientId(origin, {
@@ -601,8 +633,8 @@ function authorizeQuery(fields: Record<string, string | undefined>): URLSearchPa
   return query;
 }
 
-async function authorizeCode(origin: string, cookie: string, clientId: string, redirectUri: string): Promise<string> {
-  const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri })}`, {
+async function authorizeCode(origin: string, cookie: string, clientId: string, redirectUri: string, resource = RESOURCE): Promise<string> {
+  const consent = await fetch(`${origin}/api/auth/authorize/consent?${authorizeQuery({ client_id: clientId, redirect_uri: redirectUri, resource })}`, {
     headers: { cookie },
   });
   const allowed = await submitConsent(origin, cookie, consentTokenOf(await consent.text()), ALL_SCOPES.split(" "));
