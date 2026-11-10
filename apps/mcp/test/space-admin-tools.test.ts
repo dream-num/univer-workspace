@@ -6,6 +6,7 @@ import { pino } from "pino";
 import { afterEach, describe, expect, it } from "vitest";
 import { createGateway } from "./gateway.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
+import { worktreeSchema } from "../src/gateway/tools/schemas.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { toolScopes } from "./tool-names.js";
@@ -103,6 +104,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let clients: Client[] = [];
   let requests: { method: string; path: string; body: unknown; key: string | null }[] = [];
   let prState = "draft";
+  let prUnits = [unit()];
   let created: Record<string, unknown> = team;
 
   const fetcher: typeof fetch = async (input, init) => {
@@ -163,8 +165,8 @@ describe("space, unit, repository admin, label and merge tools", () => {
         trashedBy: { id: "user-1", username: "user-1", displayName: "user-1", avatarUrl: null },
       });
     }
-    if (at("GET", "/api/worktrees/wt-3")) return Response.json({ worktree: worktree(prState, [unit()]) });
-    if (at("GET", "/api/spaces/team-1/worktrees/3")) return Response.json({ worktree: worktree(prState) });
+    if (at("GET", "/api/worktrees/wt-3")) return Response.json({ worktree: worktree(prState, prUnits) });
+    if (at("GET", "/api/spaces/team-1/worktrees/3")) return Response.json({ worktree: worktree(prState, prUnits) });
     if (at("POST", "/api/worktrees/wt-3/units")) {
       const input = body as { source: string };
       return Response.json(
@@ -172,7 +174,10 @@ describe("space, unit, repository admin, label and merge tools", () => {
         { status: 201 },
       );
     }
-    if (at("POST", "/api/worktrees/wt-3/merge")) return Response.json({ worktree: worktree("merged") });
+    if (at("POST", "/api/worktrees/wt-3/merge")) {
+      prState = "merged";
+      return Response.json({ worktree: worktree("merged") });
+    }
     if (at("POST", "/api/worktrees/wt-3/discard")) return Response.json({ worktree: worktree("discarded") });
     const labels = [
       { id: "l1", name: "bug", color: "red", description: "", openIssueCount: 2 },
@@ -232,6 +237,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     }
     requests = [];
     prState = "draft";
+    prUnits = [unit()];
     if (gateway !== undefined) {
       await gateway.close();
       gateway.server.closeAllConnections();
@@ -454,6 +460,29 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(writesOf()).toEqual([]);
   });
 
+  it.each(["3", prUrl, "wt-3"])("returns the merged Units shown by pr_view for %s", async (number) => {
+    const client = await connect();
+    prState = "ready";
+    prUnits = [
+      unit(),
+      unit({ name: "Plan", unitId: "u-plan", nodeId: "n-plan", resourceId: "r-plan", source: "trunk", target: null, change: "modified" }),
+      unit({ name: "Old", unitId: "u-old", nodeId: "n-old", resourceId: "r-old", source: "trunk", target: null, change: "deleted" }),
+    ];
+    const viewed = await client.callTool({ name: "pr_view", arguments: { repo: "bob/team", number } });
+    const merged = await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number } });
+    expect(merged.isError).not.toBe(true);
+    expect(merged.structuredContent).toMatchObject({
+      id: "wt-3", state: "merged", url: prUrl,
+      units: [
+        { name: "Budget", unitId: "u-new", nodeId: "n-new", change: "added" },
+        { name: "Plan", unitId: "u-plan", nodeId: "n-plan", change: "modified" },
+        { name: "Old", unitId: "u-old", nodeId: "n-old", change: "deleted" },
+      ],
+    });
+    expect(worktreeSchema.parse(merged.structuredContent).units).toEqual(worktreeSchema.parse(viewed.structuredContent).units);
+    expect(writesOf()).toEqual([{ method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined }]);
+  });
+
   it("merges a ready pull request, discards a draft one and refuses an invalid transition", async () => {
     const client = await connect();
     const call = async (name: string, number = "3") =>
@@ -461,7 +490,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     prState = "ready";
     expect((await call("pr_merge")).structuredContent).toMatchObject({ id: "wt-3", state: "merged", url: prUrl });
     prState = "draft";
-    expect((await call("pr_discard", "#3")).structuredContent).toMatchObject({ state: "discarded", url: prUrl });
+    expect((await call("pr_discard", "#3")).structuredContent).toMatchObject({ state: "discarded", units: [], url: prUrl });
     expect(await call("pr_merge")).toMatchObject({
       isError: true,
       structuredContent: { code: "workspace-lifecycle-invalid" },

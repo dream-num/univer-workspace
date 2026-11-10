@@ -269,7 +269,7 @@ Every object with a Browser page carries `url`; a Node's `url` is its Browser pa
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
-| `pr_merge` | Required `repo`, `number` | Worktree, now `merged`. Only when the user asked |
+| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
