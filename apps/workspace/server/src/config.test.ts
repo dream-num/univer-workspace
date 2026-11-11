@@ -2,6 +2,24 @@ import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
 import { BUNDLED_UNIVER_LICENSE } from "./integrations/univer/univer-license.js";
 
+describe("public origin configuration", () => {
+  it("exposes the public origin even without MCP OAuth", () => {
+    const config = loadConfig({ PUBLIC_ORIGIN: "https://workspace.example/" });
+    expect(config.publicOrigin).toBe("https://workspace.example");
+    expect(config.mcpOAuth).toBeNull();
+    expect(loadConfig({}).publicOrigin).toBeNull();
+  });
+
+  it.each(["https://workspace.example/path", "javascript:alert(1)", "not a URL"])("rejects an invalid origin %s", (value) => {
+    expect(() => loadConfig({ PUBLIC_ORIGIN: value })).toThrow("PUBLIC_ORIGIN must be an http or https origin");
+  });
+
+  it("uses the same origin for MCP OAuth", () => {
+    expect(loadConfig({ PUBLIC_ORIGIN: "https://workspace.example/", MCP_RESOURCE_URLS: "https://workspace.example/mcp" }).mcpOAuth?.issuer).toBe("https://workspace.example");
+    expect(() => loadConfig({ MCP_RESOURCE_URLS: "https://workspace.example/mcp" })).toThrow("MCP_RESOURCE_URLS requires PUBLIC_ORIGIN");
+  });
+});
+
 describe("GitHub organization allowlist configuration", () => {
   it("normalizes and de-duplicates organization names", () => {
     const config = loadConfig({

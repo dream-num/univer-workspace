@@ -445,7 +445,7 @@ export function createWorkspaceApplication(
 
   const publicDirectory = resolve("dist/public");
   if (existsSync(publicDirectory)) {
-    app.use(createStaticSiteRouter(publicDirectory));
+    app.use(createStaticSiteRouter(publicDirectory, { nodes, publicOrigin: config.publicOrigin }));
   }
 
   app.use(notFoundHandler);
