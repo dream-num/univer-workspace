@@ -713,6 +713,14 @@ viewer access, even when a link grants editors access after sign-in. They cannot
 modify content, write comments, upload, manage permissions, or access Worktrees.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
 
+In production, `/nodes/<nodeId>` links (including `?view=immersive`) include the page's
+title and a short description in the HTML head for chat previews when anonymous access
+is allowed. HTML views omit `.univer.html` from the display title. Descriptions follow
+`Accept-Language` (English or Chinese); responses vary by that header and retain the
+app shell's revalidation policy. Set `PUBLIC_ORIGIN` to include an absolute `og:url`;
+otherwise it is omitted. Private, deleted and missing Nodes keep the generic app shell.
+The Vite development server does not generate these previews, and no preview image is provided.
+
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
 The public link uses the existing Node URL, including immersive-view parameters.
