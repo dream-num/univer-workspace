@@ -1,8 +1,9 @@
 import { ScanSearch } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBlocker } from "@tanstack/react-router";
 import { CollaborationStatus } from "@univerjs-pro/collaboration-client";
+import type { HtmlViewWriteMode } from "@univerjs/univer-workspace-html-viewer/engine";
 import { useQuery } from "@tanstack/react-query";
 import {
   WorkspaceHtmlViewer,
@@ -37,21 +38,27 @@ export function HtmlView({
     : session.data
       ? anonymousUser
       : null;
-  const native = useNativeUnitPreview(source, user?.id ?? "pending");
+  const writeModes = useMemo(() => new Map<string, HtmlViewWriteMode>(), [source, user?.id]);
+  const native = useNativeUnitPreview(source, user?.id ?? "pending", writeModes);
+  const [trial, setTrial] = useState(false);
+  useEffect(() => setTrial(false), [source, user?.id]);
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
   const [inspecting, setInspecting] = useState(false);
   const loadEngine = useCallback(
-    (unitId: string, signal: AbortSignal) => {
+    async (unitId: string, signal: AbortSignal) => {
       if (!user) throw new Error("Session is not ready.");
-      return createWorkspaceBindingEngine(unitId, user, signal, (code) =>
+      const engine = await createWorkspaceBindingEngine(unitId, user, signal, (code) =>
         translation.current(
           code === "signInRequired" ? "htmlViewSignInRequired" : "htmlViewEditPermissionRequired",
         ),
+        () => setTrial(true),
       );
+      writeModes.set(unitId, engine.writeMode);
+      return engine;
     },
-    [user?.id, user?.displayName, user?.avatarUrl],
+    [user?.id, user?.displayName, user?.avatarUrl, writeModes],
   );
   useEffect(() => {
     if (inspecting) native.close();
@@ -117,11 +124,14 @@ export function HtmlView({
             loadEngine={loadEngine}
             onError={setError}
             onStatus={(states) => {
-              unsynced.current = states.some((state) => state !== CollaborationStatus.SYNCED);
+              unsynced.current = states.some((state) => state !== CollaborationStatus.SYNCED && state !== CollaborationStatus.NOT_COLLAB);
             }}
           />
         ) : null}
       </div>
+      {trial && <p role="status" className="m-0 shrink-0 border-t border-border bg-amber-50 px-4 py-2 text-sm text-amber-950">
+        {t("htmlViewTrialNotice")}
+      </p>}
       {native.preview}
     </div>
   );

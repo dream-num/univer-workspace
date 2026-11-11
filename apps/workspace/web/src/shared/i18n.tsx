@@ -76,6 +76,7 @@ export const messages = {
     collapseVisitorBar: "收起注册栏",
     expandVisitorBar: "展开注册栏",
     htmlViewSignInRequired: "访客无法修改数据。欢迎通过页面底部的注册栏创建账号。",
+    htmlViewTrialNotice: "试算模式，改动不会保存。刷新页面恢复最新表格。",
     htmlViewEditPermissionRequired: "你没有此表格的编辑权限，请联系所有者申请权限。",
     layoutTheme: "页面主题",
     wikiTheme: "Wiki",
@@ -864,6 +865,7 @@ export const messages = {
     collapseVisitorBar: "Collapse sign-up bar",
     expandVisitorBar: "Expand sign-up bar",
     htmlViewSignInRequired: "Guests cannot change the data. You can create an account using the sign-up bar at the bottom of the page.",
+    htmlViewTrialNotice: "Trial mode. Changes are not saved; reload to see the latest Sheet.",
     htmlViewEditPermissionRequired:
       "You don’t have permission to edit this spreadsheet. Contact the owner to request access.",
     layoutTheme: "Page theme",

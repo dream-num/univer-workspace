@@ -1,7 +1,7 @@
 # Native Office previews in Workspace HTML
 
 Workspace Browser provides `window.univerWorkspace` inside its `.univer.html`
-files. This is an application navigation interface, separate from the SDK-owned
+files. This is a host interface for navigation and write disposition, separate from the SDK-owned
 `window.univerBinding` data API. It is not yet provided by Workspace Agent's Sidecar.
 Feature-detect it when authoring a page used in multiple hosts.
 
@@ -22,10 +22,21 @@ Feature-detect it when authoring a page used in multiple hosts.
 | API | Behavior |
 | --- | --- |
 | `version` | `1` |
-| `capabilities` | `native-preview`, `native-focus`, `share-link` |
+| `capabilities` | `native-preview`, `native-focus`, `share-link`, `write-mode` |
 | `showUnit(unitId, connectedElement, options?)` | Requests a live Sheet, Doc or Slides preview using the server-selected editor mode in the element's rectangle. Returns immediately; observe status events for the result. Only one native preview is mounted per HTML viewer. |
 | `hideUnit()` | Closes and disposes the current native frame; HTML bindings remain mounted. |
 | `share()` | Opens a host-owned link dialog for the current HTML file. It does not invite users or change permissions. |
+| `getWriteMode(unitId)` | Returns a Promise for an already-loaded binding source: `saved` for editors, `trial` for read-only users when the host enables local trials, or `rejected` when it does not. An unloaded source rejects; the call does not load or authorize a source. |
+
+Feature-detect `write-mode` before calling `getWriteMode`. The result describes how
+page writes will be handled; `saved` does not confirm that a particular edit has
+finished saving. Browser enables trials for read-only HTML bindings. On the first
+write, that source detaches from collaboration, and the real formula engine applies
+edits locally without sending or saving them. Further owner changes are not received
+until reload. The host displays a trial notice outside the iframe, and templates
+must label these edits as local trials. This mode does not grant source permissions
+or enable editing in the separate native Office preview. Agent does not provide this
+bridge and leaves the shared factory's trial option disabled.
 
 The slot supplies position and size; the host clips it to the HTML frame's viewport.
 Scrolling, resizing and layout shifts update placement. A hidden or disconnected
@@ -117,7 +128,8 @@ with a generic error and close control. Close and reopen to retry.
 The Browser-only DOM adapter discovers the renderer iframe inside the viewer's
 open DOM/shadow roots without SDK class names or private properties. Revalidate
 this adapter and the production browser fixture when upgrading the renderer.
-The generic shared HTML viewer and Agent consumer remain unchanged.
+The shared factory owns the opt-in trial runtime; Browser owns this bridge and notice.
+Agent retains its existing read-only write rejections.
 
 ## Live formula sources
 

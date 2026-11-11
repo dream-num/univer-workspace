@@ -1,4 +1,5 @@
 import { HTML_PREVIEW_CHANNEL } from "./native-preview-protocol";
+import type { HtmlViewWriteMode } from "@univerjs/univer-workspace-html-viewer/engine";
 
 /** Serialized into the untrusted template. This function must have no module closures. */
 function previewClient(channel: string, nonce: string) {
@@ -28,7 +29,25 @@ function previewClient(channel: string, nonce: string) {
   };
   const api = {
     version: 1,
-    capabilities: ["native-preview", "native-focus", "share-link"],
+    capabilities: ["native-preview", "native-focus", "share-link", "write-mode"],
+    getWriteMode(unitId: string): Promise<HtmlViewWriteMode> {
+      return new Promise((resolve, reject) => {
+        const id = crypto.randomUUID();
+        const receive = (event: MessageEvent) => {
+          const data = event.data;
+          if (event.source !== parent || data?.channel !== channel || data?.nonce !== nonce ||
+              data?.action !== "write-mode" || data?.requestId !== id) return;
+          clearTimeout(timer); removeEventListener("message", receive);
+          if (data.mode === "trial" || data.mode === "saved" || data.mode === "rejected") resolve(data.mode);
+          else reject(new Error("Load the source binding before requesting its write mode."));
+        };
+        const timer = setTimeout(() => {
+          removeEventListener("message", receive); reject(new Error("Write mode request timed out."));
+        }, 10_000);
+        addEventListener("message", receive);
+        parent.postMessage({ channel, nonce, action: "write-mode", unitId, requestId: id }, "*");
+      });
+    },
     showUnit(id: string, element: HTMLElement, options?: { focus?: unknown }) {
       if (!(element instanceof HTMLElement) || !element.isConnected) throw new Error("A connected preview slot is required.");
       clear(); slot = element; unitId = id; focus = options?.focus;

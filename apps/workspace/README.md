@@ -710,8 +710,18 @@ Anyone with a Node link can view its content when Link Sharing is enabled or its
 Space has public read enabled. Folder sharing includes current and future children;
 Space public read allows browsing that Space by URL. Anonymous visitors always have
 viewer access, even when a link grants editors access after sign-in. They cannot
-modify content, write comments, upload, manage permissions, or access Worktrees.
+modify source content, write comments, upload, manage permissions, or access Worktrees.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
+
+Workspace Browser enables local trial edits in bound HTML pages for anonymous and
+signed-in users without edit permission. Sources remain live until the first page
+write, which detaches that source from collaboration. The real formula engine
+recalculates in the visitor's browser; trial edits are never saved or sent. That
+source remains frozen against further owner updates until reload restores live data.
+The host displays a trial notice after the first edit, and pages can check
+`window.univerWorkspace.getWriteMode(unitId)` before labeling a write as saved.
+Native Office previews remain read-only for these users. Other hosts, including
+Workspace Agent, retain write rejections unless they explicitly enable HTML trials.
 
 In production, `/nodes/<nodeId>` links (including `?view=immersive`) include the page's
 title and a short description in the HTML head for chat previews when anonymous access

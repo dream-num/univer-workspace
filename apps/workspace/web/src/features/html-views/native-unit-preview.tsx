@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { HtmlViewWriteMode } from "@univerjs/univer-workspace-html-viewer/engine";
 import { Copy, Download, ExternalLink, X } from "lucide-react";
 import { useI18n } from "../../shared/i18n";
 import { Button, Dialog } from "../../shared/ui";
@@ -9,7 +10,7 @@ import { boundPreviewRect, findHtmlFrame, HTML_PREVIEW_CHANNEL, parsePreviewMess
 
 type Opened = Awaited<ReturnType<typeof openNativeUnit>>;
 
-export function useNativeUnitPreview(source: string, identityKey: string) {
+export function useNativeUnitPreview(source: string, identityKey: string, writeModes: ReadonlyMap<string, HtmlViewWriteMode>) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const viewerRoot = useRef<HTMLDivElement>(null);
@@ -40,6 +41,14 @@ export function useNativeUnitPreview(source: string, identityKey: string) {
       const frame = findHtmlFrame(viewerRoot.current);
       // Opaque sandbox origins are not identity. Pin the actual viewer Window and generation.
       if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data;
+      if (data?.channel === HTML_PREVIEW_CHANNEL && data?.nonce === nonce && data?.action === "write-mode" &&
+          typeof data.unitId === "string" && /^[\w-]{1,128}$/.test(data.unitId) &&
+          typeof data.requestId === "string" && /^[\w-]{1,128}$/.test(data.requestId)) {
+        frame.contentWindow?.postMessage({ channel: HTML_PREVIEW_CHANNEL, nonce, action: "write-mode",
+          requestId: data.requestId, mode: writeModes.get(data.unitId) ?? null }, "*");
+        return;
+      }
       const next = parsePreviewMessage(event.data, nonce);
       if (next === "close") setRequest(null);
       else if (next === "share") { setCopyState("idle"); setSharing(true); }
@@ -53,7 +62,7 @@ export function useNativeUnitPreview(source: string, identityKey: string) {
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [nonce]);
+  }, [nonce, writeModes]);
 
   useEffect(() => {
     setOpened(null); setError(false); setReady(false); setMissing(false);
