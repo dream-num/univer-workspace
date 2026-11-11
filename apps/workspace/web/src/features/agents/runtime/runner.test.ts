@@ -41,9 +41,8 @@ async function setup(options: {
     const url = input instanceof Request ? input.url : String(input);
     const body = String(init?.body ?? "");
     requests.push({ url, headers: [...new Headers(init?.headers).entries()], body });
-    if (url.startsWith("/api/auth/tokens")) {
-      return init?.method === "DELETE" ? new Response(null, { status: 204 })
-        : Response.json({ token: `mcp-token-${++minted}`, record: { id: `token-id-${minted}` } });
+    if (url === "/api/auth/agent-token") {
+      return Response.json({ token: `uvw_at_mcp-token-${++minted}`, expiresAt: Date.now() + 3_600_000 });
     }
     if (url.startsWith(mcpUrl)) {
       if (unauthorized-- > 0) return new Response("unauthorized", { status: 401 });
@@ -346,8 +345,8 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const test = await setup({ unauthorized: 1, resourceError: true });
     const started = await test.runner.start({ ...test.input, mode: "ask" });
     expect((await test.finished(started.id))?.status).toBe("idle");
-    expect(test.requests.filter((request) => request.url === "/api/auth/tokens")).toHaveLength(2);
-    expect(test.requests.filter((request) => request.url === "/api/auth/tokens").every((request) => request.body.includes('"scopes":["read"]'))).toBe(true);
+    expect(test.requests.filter((request) => request.url === "/api/auth/agent-token")).toHaveLength(2);
+    expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").every((request) => request.body.includes('"scopes":["read"]'))).toBe(true);
     expect(test.modelBodies[0]).toContain("Never call a write tool");
   });
 

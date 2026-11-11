@@ -6,7 +6,7 @@ export interface McpTokenSource {
   invalidate(): void;
   dispose(): Promise<void>;
 }
-const issuedSchema = z.object({ token: z.string().min(1), record: z.object({ id: z.string().min(1) }) });
+const issuedSchema = z.object({ token: z.string().startsWith("uvw_at_"), expiresAt: z.number().int() });
 export function createMcpTokenSource({ mode, fetch: request, now = Date.now }: {
   mode: AgentMode; fetch: typeof fetch; now?: () => number;
 }): McpTokenSource {
@@ -14,19 +14,16 @@ export function createMcpTokenSource({ mode, fetch: request, now = Date.now }: {
   let pending: Promise<void> | null = null;
   let disposed = false;
   let generation = 0;
-  const ids = new Set<string>();
   async function issue(): Promise<void> {
     const version = generation;
-    const expiresAt = now() + 60 * 60 * 1000;
-    const response = await request("/api/auth/tokens", {
+    const response = await request("/api/auth/agent-token", {
       method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: "Workspace Agents", scopes: mode === "ask" ? ["read"] : ["read", "write"], expiresAt }),
+      body: JSON.stringify({ scopes: mode === "ask" ? ["read"] : ["read", "write"] }),
     });
     if (!response.ok) throw new Error(`Could not obtain agent token (HTTP ${response.status})`);
     const issued = issuedSchema.parse(await response.json());
-    ids.add(issued.record.id);
     if (disposed) throw new Error("Agent token source is disposed");
-    if (version === generation) current = { token: issued.token, expiresAt };
+    if (version === generation) current = issued;
   }
   async function token(): Promise<string> {
     if (disposed) throw new Error("Agent token source is disposed");
@@ -38,17 +35,11 @@ export function createMcpTokenSource({ mode, fetch: request, now = Date.now }: {
   return {
     token,
     invalidate() { generation++; current = null; },
+    // Agent tokens live in memory only and expire on their own after an hour.
     async dispose() {
       disposed = true;
       current = null;
       await pending?.catch(() => undefined);
-      const results = await Promise.allSettled([...ids].map(async (id) => {
-        const response = await request(`/api/auth/tokens/${encodeURIComponent(id)}`, { method: "DELETE", credentials: "same-origin" });
-        if (!response.ok && response.status !== 404) throw new Error(`Could not revoke agent token (HTTP ${response.status})`);
-        ids.delete(id);
-      }));
-      const failure = results.find((result) => result.status === "rejected");
-      if (failure?.status === "rejected") throw failure.reason;
     },
   };
 }

@@ -2,56 +2,58 @@ import { describe, expect, it, vi } from "vitest";
 import { createMcpTokenSource } from "./mcp-token";
 import { deferred } from "./test-helpers";
 
+const HOUR = 3_600_000;
+
 describe("MCP tokens", () => {
-  it.each(["ask", "auto"] as const)("issues %s scopes and revokes every issued token", async (mode) => {
+  it.each(["ask", "auto"] as const)("requests %s scopes from the agent token endpoint and refreshes before expiry", async (mode) => {
     let time = 1000;
     let issued = 0;
-    const request = vi.fn<typeof fetch>(async (_url, init) => init?.method === "DELETE" ? new Response(null, { status: 204 })
-      : Response.json({ token: `token-${++issued}`, record: { id: `id-${issued}` } }));
+    const request = vi.fn<typeof fetch>(async () => Response.json({ token: `uvw_at_${++issued}`, expiresAt: time + HOUR }));
     const source = createMcpTokenSource({ mode, fetch: request, now: () => time });
-    expect(await source.token()).toBe("token-1");
-    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual({ name: "Workspace Agents", scopes: mode === "ask" ? ["read"] : ["read", "write"], expiresAt: 3_601_000 });
-    time += 3_539_999;
-    expect(await source.token()).toBe("token-1");
+    expect(await source.token()).toBe("uvw_at_1");
+    expect(request.mock.calls[0]?.[0]).toBe("/api/auth/agent-token");
+    expect(JSON.parse(String(request.mock.calls[0]?.[1]?.body))).toEqual({ scopes: mode === "ask" ? ["read"] : ["read", "write"] });
+    time += HOUR - 60_001;
+    expect(await source.token()).toBe("uvw_at_1");
     time++;
-    expect(await source.token()).toBe("token-2");
+    expect(await source.token()).toBe("uvw_at_2");
     source.invalidate();
-    expect(await source.token()).toBe("token-3");
-    time += 3_600_001;
-    expect(await source.token()).toBe("token-4");
+    expect(await source.token()).toBe("uvw_at_3");
     await source.dispose();
-    expect(request.mock.calls.filter((call) => call[1]?.method === "DELETE").map((call) => call[0]))
-      .toEqual(["/api/auth/tokens/id-1", "/api/auth/tokens/id-2", "/api/auth/tokens/id-3", "/api/auth/tokens/id-4"]);
+    expect(request).toHaveBeenCalledTimes(3);
     await expect(source.token()).rejects.toThrow("disposed");
+  });
+
+  it("reports a refused request without retrying", async () => {
+    const request = vi.fn<typeof fetch>(async () => new Response(null, { status: 503 }));
+    const source = createMcpTokenSource({ mode: "ask", fetch: request });
+    await expect(source.token()).rejects.toThrow("HTTP 503");
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   it("refreshes rather than caching a token invalidated while issuance is pending", async () => {
     const issued = deferred<Response>();
     const request = vi.fn<typeof fetch>()
       .mockImplementationOnce(() => issued.promise)
-      .mockResolvedValueOnce(Response.json({ token: "fresh", record: { id: "new" } }))
-      .mockResolvedValue(new Response(null, { status: 204 }));
+      .mockResolvedValueOnce(Response.json({ token: "uvw_at_fresh", expiresAt: Date.now() + HOUR }));
     const source = createMcpTokenSource({ mode: "ask", fetch: request });
     const pending = source.token();
     source.invalidate();
-    issued.resolve(Response.json({ token: "stale", record: { id: "old" } }));
-    expect(await pending).toBe("fresh");
-    expect(await source.token()).toBe("fresh");
+    issued.resolve(Response.json({ token: "uvw_at_stale", expiresAt: Date.now() + HOUR }));
+    expect(await pending).toBe("uvw_at_fresh");
+    expect(await source.token()).toBe("uvw_at_fresh");
     expect(request).toHaveBeenCalledTimes(2);
-    await source.dispose();
   });
 
-  it("shares concurrent requests and revokes a token issued during disposal", async () => {
+  it("shares concurrent requests and drops a token that arrives after disposal", async () => {
     const issued = deferred<Response>();
-    const request = vi.fn<typeof fetch>(async (_url, init) => init?.method === "DELETE" ? new Response(null, { status: 204 }) : issued.promise);
+    const request = vi.fn<typeof fetch>(() => issued.promise);
     const source = createMcpTokenSource({ mode: "auto", fetch: request });
-    const one = source.token();
-    const two = source.token();
-    const results = Promise.allSettled([one, two]);
+    const results = Promise.allSettled([source.token(), source.token()]);
     const disposed = source.dispose();
-    issued.resolve(Response.json({ token: "token", record: { id: "id" } }));
+    issued.resolve(Response.json({ token: "uvw_at_late", expiresAt: Date.now() + HOUR }));
     await disposed;
     expect((await results).every((result) => result.status === "rejected")).toBe(true);
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(1);
   });
 });
