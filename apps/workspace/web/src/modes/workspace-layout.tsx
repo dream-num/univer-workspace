@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
 import { sessionQueryOptions } from "../features/auth";
+import { VisitorBar } from "./visitor-bar";
 import { useModeDefinition } from "./registry";
 import type { WorkspaceShellProps as WorkspaceLayoutProps } from "./shell.types";
 import { useI18n } from "../shared/i18n";
@@ -52,13 +53,21 @@ function VisitorLayout({
         {headerActions}
         <Link
           to="/login"
-          search={{ oauthError: undefined, returnTo: location.href }}
+          search={{ mode: "register", oauthError: undefined, returnTo: location.href }}
           className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+        >
+          {t("signUp")}
+        </Link>
+        <Link
+          to="/login"
+          search={{ oauthError: undefined, returnTo: location.href }}
+          className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "no-underline")}
         >
           {t("signIn")}
         </Link>
       </header>
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+      <VisitorBar />
     </div>
   );
 }
