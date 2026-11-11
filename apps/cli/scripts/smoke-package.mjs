@@ -461,7 +461,10 @@ try {
     "--idempotency-key", "html-view-key", "--json",
   ], installRoot, smokeEnv)).stdout);
   if (htmlCreated.resourceId !== "resource-html" ||
-      htmlCreated.workspaceUrl !== `${workspaceFixture.origin}/nodes/node-html`) {
+      htmlCreated.workspaceUrl !== `${workspaceFixture.origin}/nodes/node-html` ||
+      htmlCreated.shareUrl !== `${workspaceFixture.origin}/nodes/node-html?view=immersive` ||
+      htmlCreated.repositoryVisibility !== "private" ||
+      JSON.stringify(htmlCreated.privateSourceUnitIds) !== JSON.stringify(["unit-1"])) {
     throw new Error("Installed HTML View creation did not return the published Blob URL");
   }
   const htmlRuntimeRequests = workspaceFixture.runtimeRequests.splice(htmlRuntimeStart);
@@ -548,7 +551,7 @@ try {
     authorizationExchanges: 2,
     whoami: 2,
     spaceList: 1,
-    spaceGet: 1,
+    spaceGet: 2,
     spaceBrowse: 1,
     worktreeList: 1,
     worktreeCreate: ["smoke-worktree"],
@@ -792,6 +795,29 @@ async function handleWorkspaceRequest(request, response, fixture) {
       name: "Personal",
       type: "personal",
       owner: { id: smokeUser.id, username: smokeUser.username },
+    });
+  }
+  if (request.method === "GET" && request.url === "/api/unit-resources/unit-1") {
+    return writeJson(response, 200, {
+      node: {
+        id: "node-unit-1",
+        spaceId: "00000000-0000-4000-8000-0000000000a1",
+        parentNodeId: null,
+        name: "Revenue",
+        accessRole: "owner",
+        hasChildren: false,
+        updatedAt: "2026-11-11T00:00:00.000Z",
+        capabilities: {
+          browseChildren: false, createChildren: false, rename: true, move: true, trash: true, share: true,
+        },
+        resource: {
+          id: "resource-1",
+          kind: "univer",
+          unitId: "unit-1",
+          unitType: "sheet",
+          capabilities: { downloadContent: true, editContent: true, openContent: true },
+        },
+      },
     });
   }
   if (request.method === "GET" && request.url === "/api/spaces/00000000-0000-4000-8000-0000000000a1/nodes") {
