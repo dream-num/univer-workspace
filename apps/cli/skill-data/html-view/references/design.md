@@ -3,7 +3,8 @@
 Unless the user already named a style, ask which style they want before reading Sheets
 in depth or authoring. Ask in the user's language, using all ten style names and their
 one-line moods in that language from this catalog, and say **Night Gauge (仪表夜航)
-is the default** (use the name in the user's language). Ask in your normal reply text,
+is the default** (use the name in the user's language). Say the ten styles are built-in
+starting points and the user may describe their own style instead. Ask in your normal reply text,
 then end your turn and wait for the answer. Do not rely on a client question or form tool, or validate
 or publish a page before the user answers. If the user leaves the choice to you
 ("you choose", "anything", "use the default"; 你来定, 随便, 默认就行), use
@@ -35,6 +36,14 @@ conversation (for example, 万 and 年/月 for Chinese users). Do not add i18n d
 or language switches. For a Chinese page, load the CJK fonts listed on the template header's
 `Chinese pages:` line and put them first in the font stacks. Keep the style's palette,
 layout and signature element.
+
+## Custom styles
+
+The catalog is a set of built-in starting points, not a limit. When the user describes their own
+style (brand colors, fonts, mood, a reference site), start from the template whose structure best
+fits their data, then replace its fonts, palette, density and signature element to match the
+description. Keep the template's bindings, write paths, states and the craft floor below. Use only
+`https://cdn.jsdelivr.net` assets.
 
 ## Apply the chosen style
 

@@ -9,13 +9,49 @@ HTML View 是 Agent 基于 Workspace repository 里已有表格数据构建的�
 ## 页面是怎么做出来的
 
 1. 你用自然语言向 Agent 提需求，例如"给投资人做一个页面，可以拖动增长率和月支出，看现金能撑多久"。
-2. 如果你没有指定风格，Agent 会先列出下面 10 种风格，问你想要哪一种。你让它决定时，它使用仪表夜航。
+2. 如果你没有指定风格，Agent 会先列出下面 10 种内置风格，问你想要哪一种，你也可以描述自己想要的风格。你让它决定时，它使用仪表夜航。
 3. Agent 从所选风格的模板开始，绑定到你的表格，用你正在使用的语言撰写页面，校验绑定后发布。
 4. Agent 返回分享链接，并说明谁能打开。把 repository 设为公开会立即公开库里的全部内容，所以它会先征求你的同意。
 
 CLI 用 `uvw html-view validate` 和 `uvw html-view create` 完成同样的流程。MCP 客户端使用 `html_view_validate` 和 `html_view_create`，需要在连接地址上加 `?toolsets=files` 或 `all`。
 
-## 10 种风格
+## 数据绑定如何工作
+
+HTML View 建立在 Univer 数据绑定 SDK 之上（`@univerjs-labs/html-view`、`html-view-renderer` 和 `binding-engine`）。页面就是普通的 HTML、CSS 和 JavaScript，从不保存数据副本。页面只声明每个元素显示或编辑哪些单元格，由 SDK 负责让这些元素和表格双向保持同步。
+
+```mermaid
+flowchart LR
+    subgraph Browser["每位访问者的浏览器"]
+        Page["HTML View 页面<br/>（沙箱 iframe）"]
+        Host["Binding Host<br/>（SDK 渲染器）"]
+        Engine["Binding Engine<br/>工作簿 + 公式引擎"]
+    end
+    Page -- "data-univer-* 绑定<br/>window.univerBinding 写入" --> Host
+    Host -- "单元格与区域更新" --> Page
+    Host <--> Engine
+    Engine -- "有编辑权限用户的修改" --> Collab["Workspace<br/>协同服务"]
+    Collab -- "所有人的实时变更" --> Engine
+    Collab <--> Sheet["表格编辑器"]
+    Collab <--> Others["其他打开着的页面"]
+    Collab <--> Agents["通过 CLI 和 MCP 操作的 Agent"]
+```
+
+- **声明每个元素显示或编辑什么。** `data-univer-cell-text` 显示一个单元格。`data-univer-cell-model` 把原生输入框、下拉框、滑块或复选框与单元格双向绑定。图表和自定义组件声明 `data-univer-cell-subscribe` 或 `data-univer-range-subscribe`，通过 `subscribeCellById()` 和 `subscribeRangeById()` 接收数据。按钮和表单用 `window.univerBinding.setCellValue()` 或 `insertRowsWithValues()` 写入，再调用 `flush()`。
+
+  ```html
+  <input type="range" min="0" max="0.12" step="0.005"
+         data-univer-cell-model="UNIT_ID:SHEET_ID:B4">
+  <strong data-univer-cell-text="UNIT_ID:SHEET_ID:E20"></strong>
+  ```
+
+- **页面到表格。** 有编辑权限的人拖动上面的滑块时，Binding Engine 把 B4 写入它的工作簿，公式引擎重算所有依赖单元格，修改随后发往协同服务。表格编辑器、其他打开着的页面和 Agent 很快就能看到。
+- **表格到页面。** 任何人修改表格时，无论是在表格编辑器里、在另一个页面上，还是通过 Agent，协同服务都会把变更推送到每个打开着的页面的引擎，订阅的元素原地更新，无需刷新。
+- **公式留在表格里。** 页面只显示计算结果，从不在页面里重写模型。上面的 E20 是一个公式结果，B4 一变它就跟着变。
+- **每个数据源按访问者单独授权。** 页面运行在不同源的沙箱 iframe 里，拿不到 Workspace 凭证。Workspace Browser 在加载每个来源表格前，都会按当前访问者授权。没有编辑权限的用户不能修改表格，他们在页面上的编辑只留在自己的引擎里，作为本地试算。
+
+## 10 种内置风格，也可以自定义
+
+这 10 种风格只是内置模板，是起点而不是限制。你也可以描述自己想要的风格，比如品牌色、字体或气质。Agent 会挑一个结构最贴合你数据的模板作为起点，再按你的描述重新设计外观。你也可以自己编写或上传使用同样绑定写法的 `.univer.html`。
 
 模板用英文编写。Agent 会把文案、单位和日期改成用户的语言和习惯，也可以把任何风格用到它原本不是为之设计的场景上。
 
@@ -76,9 +112,7 @@ CLI 用 `uvw html-view validate` 和 `uvw html-view create` 完成同样的流�
 
 ![中文的包豪斯色块城市报名热度页面](images/html-view/bauhaus-blocks-signup.png)
 
-## 实时数据与协同
-
-页面显示的是实时的表格数据，不是副本。有编辑权限的用户修改控件时，页面写入对应单元格；其他打开着的页面和表格编辑器无需刷新就会更新；在表格里做的修改也会实时反映到页面上。
+## 实测：页面与表格保持同步
 
 在这次验证中，一位 editor 角色的库成员把增长率滑块拖到了 11.5%。页面显示 "Saved to Sheet B4"，owner 在另一个会话里打开的表格编辑器同时显示了新值，所有公式行也已重新计算。
 

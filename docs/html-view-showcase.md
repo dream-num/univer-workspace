@@ -9,13 +9,49 @@ Most screenshots below show pages that an Agent (opencode with DeepSeek Flash, w
 ## How a page gets built
 
 1. You ask an Agent for a page in plain language, for example "a page for investors where they can drag the growth rate and monthly costs to see how long the cash lasts".
-2. Unless you already named a style, the Agent replies with the ten styles below and asks which one you want. If you leave the choice to it, it uses Night Gauge.
+2. Unless you already named a style, the Agent replies with the ten built-in styles below and asks which one you want, or you can describe your own. If you leave the choice to it, it uses Night Gauge.
 3. The Agent starts from that style's template, binds it to your Sheet, writes the page in the language you are using, validates the bindings and publishes it.
 4. It returns a share link and tells you who can open it. It asks before making a repository public, because that publishes everything in the repository.
 
 The CLI does the same with `uvw html-view validate` and `uvw html-view create`. MCP clients use `html_view_validate` and `html_view_create`, available with `?toolsets=files` or `all`.
 
-## Ten styles
+## How data binding works
+
+HTML Views are built on the Univer data-binding SDK (`@univerjs-labs/html-view`, `html-view-renderer` and `binding-engine`). The page is plain HTML, CSS and JavaScript. It never stores a copy of the data. It declares which cells each element shows or edits, and the SDK keeps those elements and the Sheet in sync in both directions.
+
+```mermaid
+flowchart LR
+    subgraph Browser["Each visitor's browser"]
+        Page["HTML View page<br/>(sandboxed iframe)"]
+        Host["Binding Host<br/>(SDK renderer)"]
+        Engine["Binding Engine<br/>workbook + formula engine"]
+    end
+    Page -- "data-univer-* bindings<br/>window.univerBinding writes" --> Host
+    Host -- "cell and range updates" --> Page
+    Host <--> Engine
+    Engine -- "edits from users with edit rights" --> Collab["Workspace<br/>collaboration service"]
+    Collab -- "live changes from everyone" --> Engine
+    Collab <--> Sheet["Sheet editor"]
+    Collab <--> Others["Other open pages"]
+    Collab <--> Agents["Agents via CLI and MCP"]
+```
+
+- **Declare what each element shows or edits.** `data-univer-cell-text` shows a cell. `data-univer-cell-model` binds a native input, select, slider or checkbox in both directions. Charts and custom components declare `data-univer-cell-subscribe` or `data-univer-range-subscribe` and receive values through `subscribeCellById()` and `subscribeRangeById()`. Buttons and forms write with `window.univerBinding.setCellValue()` or `insertRowsWithValues()`, followed by `flush()`.
+
+  ```html
+  <input type="range" min="0" max="0.12" step="0.005"
+         data-univer-cell-model="UNIT_ID:SHEET_ID:B4">
+  <strong data-univer-cell-text="UNIT_ID:SHEET_ID:E20"></strong>
+  ```
+
+- **Page to Sheet.** When someone with edit rights moves the slider above, the Binding Engine writes B4 into its workbook. The formula engine recalculates every dependent cell, and the change goes to the collaboration service. The Sheet editor, other open pages and Agents see it within moments.
+- **Sheet to page.** When anyone changes the Sheet, whether in the Sheet editor, on another page or through an Agent, the collaboration service pushes the change to every open page's engine. The subscribed elements update in place, without a reload.
+- **Formulas stay in the Sheet.** The page shows computed results; it never re-implements the model. Cell E20 above is a formula result that changes when B4 changes.
+- **Every source is authorized per visitor.** The page runs in an opaque-origin iframe with no Workspace credentials. Workspace Browser authorizes each source Sheet for the current visitor before loading it. Users without edit rights cannot change the Sheet. Their page edits stay in their own engine as a local trial.
+
+## Ten built-in styles, or your own
+
+These ten styles are built-in templates: starting points, not a limit. You can describe your own style instead, such as your brand colors, fonts or mood. The Agent then starts from the template whose structure best fits your data and restyles it to match. You can also write or upload your own `.univer.html` that uses the same bindings.
 
 The templates are written in English. The Agent adapts copy, units and dates to the user's language, and it can apply any style to a scenario the style was not designed for.
 
@@ -76,9 +112,7 @@ The same sign-up data in the Bauhaus Blocks style, which was designed for sales 
 
 ![Bauhaus Blocks city sign-up heat page in Chinese](images/html-view/bauhaus-blocks-signup.png)
 
-## Live data and collaboration
-
-Pages show live Sheet values, not copies. When a user with edit rights changes a control, the page writes the cell. Other open pages and the Sheet editor update without reloading, and edits made in the Sheet flow back into the page.
+## Page and Sheet in sync, in practice
 
 In this check, a repository member with the editor role moved the growth slider to 11.5%. The page reports "Saved to Sheet B4", and the owner's open Sheet editor shows the new value with every formula row recalculated.
 
