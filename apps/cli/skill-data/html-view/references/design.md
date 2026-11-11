@@ -68,6 +68,8 @@ Do not switch styles silently or flatten every choice into the same card grid.
   Latin display faces can use pinned `@fontsource` CSS; for Chinese pages, load the CJK fonts
   listed in the template header and put them first in the font stacks. Retain system fallbacks
   and keep fallback text visible.
+  Show Workspace videos, audio and images through `data-workspace-src`; see
+  [authoring.md](authoring.md#workspace-media).
 
 ## Interactions are the point
 

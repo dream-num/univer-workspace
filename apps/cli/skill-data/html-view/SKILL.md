@@ -88,6 +88,10 @@ Keep source Sheets in the same public repository as the page, or list the
 creation time; script-created references and later permission changes still need
 checking, and Workspace authorizes every visitor's requests.
 
+Media referenced with `data-workspace-src` appears only when the file itself is in a public
+repository or has link sharing on, for every visitor including signed-in members. Tell the user
+which referenced files are private instead of changing their sharing without asking.
+
 ## Revise an existing page
 
 Read the `blob` Skill. Download the existing Resource, edit the original HTML source, run `html-view validate`, then use `blob replace` with its downloaded ETag and a new

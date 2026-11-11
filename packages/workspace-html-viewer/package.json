@@ -20,10 +20,10 @@
     "react-dom": "18.3.1"
   },
   "peerDependencies": {
-    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
-    "@univerjs-labs/html-view-renderer": "1.0.0-dev.6518eb0",
+    "@univerjs-labs/html-view": "1.0.0-dev.0529939d",
+    "@univerjs-labs/html-view-renderer": "1.0.0-dev.0529939d",
     "react": ">=18 <20",
-    "@univerjs-labs/binding-engine": "1.0.0-dev.6518eb0",
+    "@univerjs-labs/binding-engine": "1.0.0-dev.0529939d",
     "@univerjs/core": "1.4.0",
     "@univerjs-pro/engine-formula": "1.4.0",
     "@univerjs/docs": "1.4.0",
