@@ -114,7 +114,7 @@ try {
   const htmlSkillRoot = JSON.parse(
     (await run(executable, ["skills", "path", "html-view", "--json"], installRoot, smokeEnv)).stdout,
   ).data.path;
-  if (htmlSkill.name !== "html-view" || htmlSkill.files.length !== 4) {
+  if (htmlSkill.name !== "html-view" || htmlSkill.files.length !== 9) {
     throw new Error("Packaged HTML View Skill or references are missing");
   }
   const htmlEntry = JSON.parse(

@@ -12,7 +12,9 @@ Use fine-grained declarations on the consuming elements so bindings are traceabl
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
 For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
 
-Prepare a complete HTML source. Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
+Before authoring, read [design.md](references/design.md), choose the matching starter in
+`templates/` yourself, and adapt that complete source instead of starting from a blank page.
+Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 
 ## Find the sources
 
