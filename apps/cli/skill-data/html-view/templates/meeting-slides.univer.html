@@ -1,0 +1,181 @@
+<!doctype html>
+<!-- Scenario: Weekly sales meeting, local region/channel filters and a live record target editor.
+Expected Sheet: row 1 headers A 月份, B 区域, C 渠道, D 实际销售额, E 目标销售额.
+Rows 2:201 contain up to 200 records; at least 201 rows and 5 columns. Amounts are numeric yuan; target is nonnegative. Region values 华东/华南/华北; channels 直销/渠道/线上.
+Replace EVERY REPLACE_UNIT_ID and REPLACE_SHEET_ID with actual IDs: URI-encoded in HTML attributes, raw in JavaScript. No other placeholders.
+Fixed-coordinate bindings; inspect worksheet bounds before adapting. Editing E replaces that cell's contents; use literal target cells. -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>2026Q3 销售周会 · 幻灯</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/900.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/700.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
+<style>
+:root{--bg:#14110f;--tx:#f4eee3;--dim:#b3a99a;--hot:#ff5a36;--gold:#e9c46a;--line:#3a332c;
+ --serif:"Noto Serif SC","Songti SC",serif;--sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box;margin:0}
+html{background:var(--bg);scroll-snap-type:y mandatory;scroll-behavior:smooth;color-scheme:dark}
+body{color:var(--tx);font:500 1.125rem/1.6 var(--sans);overflow-x:hidden}
+::selection{background:var(--hot);color:#fff}
+:focus-visible{outline:3px solid var(--gold);outline-offset:3px}
+button,select{font:inherit;color:inherit}
+.bar{position:fixed;inset:0 0 auto 0;height:48px;z-index:10;display:flex;align-items:center;gap:6px 18px;padding:0 clamp(12px,2.5vw,36px);background:#14110fe6;border-bottom:1px solid var(--line);overflow:hidden}
+.bar b{font-family:var(--serif);font-weight:900;font-size:1rem;white-space:nowrap}
+.rs{display:flex;gap:2px}
+.rs button{background:none;border:0;padding:6px 14px;cursor:pointer;font-weight:700;border-radius:2px;border-bottom:3px solid transparent}
+.rs button:hover{background:#2a241f}
+.rs button[aria-pressed=true]{border-bottom-color:var(--hot);color:#fff}
+select{background:#14110f;border:1px solid var(--line);padding:4px 8px;border-radius:2px}
+#status{margin-left:auto;font-size:.85rem;color:var(--dim);white-space:nowrap}
+#status.ok{color:#9ad9a8}#status.bad{color:var(--hot)}
+.hint{color:var(--dim);font-size:.8rem;white-space:nowrap}
+.dots{position:fixed;right:14px;top:50%;transform:translateY(-50%);display:flex;flex-direction:column;gap:6px;z-index:10}
+.dots button{width:12px;height:12px;border-radius:50%;border:2px solid var(--dim);background:none;cursor:pointer;padding:0}
+.dots button.on{background:var(--hot);border-color:var(--hot);transform:scale(1.25)}
+section.s{min-height:100vh;min-height:100dvh;scroll-snap-align:start;padding:76px clamp(20px,7vw,120px) 72px;display:flex;flex-direction:column;justify-content:center;gap:clamp(12px,2.4vh,28px);border-bottom:1px solid var(--line)}
+.k{font-family:var(--serif);font-weight:900;font-size:clamp(2.8rem,9vw,7.5rem);line-height:1.22;letter-spacing:-.03em;text-wrap:balance;font-variant-numeric:tabular-nums}
+.k.m{font-size:clamp(2.6rem,8vw,6.5rem)}
+mark{background:none;color:#fff;position:relative;white-space:nowrap;padding:0 .12em;z-index:0;display:inline-block;line-height:1.1}
+mark::before{content:"";position:absolute;inset:0;background:var(--hot);z-index:-1;clip-path:inset(0 100% 0 0);transition:clip-path .9s cubic-bezier(.16,1,.3,1) .15s}
+.in mark::before{clip-path:inset(0 0 0 0)}
+mark.neg::before{background:#c8381b}
+.p{font-size:clamp(1.1rem,2vw,1.6rem);color:var(--dim);max-width:30em}
+.p b{color:var(--tx);font-weight:700;font-variant-numeric:tabular-nums}
+#chart{height:min(46vh,420px);width:100%}
+.rows{display:grid;gap:14px;max-width:1000px}
+.row{display:grid;grid-template-columns:5.5em 1fr 7em;gap:14px;align-items:center;font-family:var(--serif);font-weight:900;font-size:clamp(1.3rem,2.6vw,2.2rem)}
+.row .tr{height:clamp(22px,4vh,38px);background:#2a241f;position:relative}
+.row .fl{position:absolute;inset:0 auto 0 0;background:var(--tx);width:0;transition:width 1s cubic-bezier(.16,1,.3,1)}
+.row .tg{position:absolute;top:-6px;bottom:-6px;width:4px;background:var(--gold)}
+.row .v{text-align:right;font-variant-numeric:tabular-nums}
+.row.bad .fl{background:var(--hot)}
+.tbl{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:1rem;font-variant-numeric:tabular-nums;min-width:520px}
+th{text-align:left;font-family:var(--serif);font-weight:900;color:var(--dim);padding:6px 10px;border-bottom:2px solid var(--tx)}
+td{padding:9px 10px;border-bottom:1px solid var(--line)}
+th.r,td.r{text-align:right}
+td.neg{color:#ff8a6c;font-weight:700}
+td.pos{color:var(--tx)}
+h3{font-family:var(--serif);font-weight:900;font-size:clamp(2rem,5vw,3.6rem);line-height:1.1}
+@media(max-width:760px){html{scroll-snap-type:y proximity}.dots,.hint{display:none}.bar b{display:none}.rs button{padding:6px 9px}
+ .row{grid-template-columns:3.6em 1fr 5em;gap:8px}#status{display:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+.editor{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.editor input,.editor select{font:inherit;color:inherit;background:transparent;border:1px solid currentColor;padding:5px;max-width:100%;min-width:0}.editor input{width:130px}.editor option{color:CanvasText;background:Canvas}.editor #write-state{width:100%;overflow-wrap:anywhere;font-size:.85em}#status{overflow-wrap:anywhere}
+.editor{padding:20px clamp(20px,7vw,120px) 72px} @media(max-width:760px){.bar{height:auto;min-height:48px;flex-wrap:wrap}.bar .hint:has(select){display:block}#status{display:block;white-space:normal;width:100%;font-size:12px}section.s{padding-top:150px}}
+</style>
+</head>
+<body>
+<div class="bar">
+ <b>Q3 周会</b>
+ <div class="rs" id="rs" role="group" aria-label="区域"></div>
+ <label class="hint">渠道 <select id="cs" aria-label="渠道"></select></label>
+ <span class="hint">↑↓ 翻页　←→ 换区域</span>
+ <span id="status" role="status" aria-live="polite">加载实时数据…</span>
+</div>
+<nav class="dots" id="dots" aria-label="章节"></nav>
+<section class="s" id="s0" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
+<section class="s" id="s1" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
+<section class="s" id="s2" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
+<section class="s" id="s3" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
+<section class="s" id="s4" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section><div id="editor" class="editor" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"><label for="record">调整记录目标</label> <select id="record" aria-label="销售记录"><option>加载中…</option></select> <label for="target">目标（元）</label> <input id="target" type="number" min="0" step="1" required disabled aria-describedby="write-state"><span id="write-state" role="status" aria-live="polite">加载中…</span></div>
+<script type="module">
+
+const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+let D=[],MON=[];
+const subscriptions=[],refreshers=[];
+let connected=false;
+const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！]+$/u,'');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function records(value){return value.map(([m,r,c,a,t],i)=>({m:esc(typeof m==='number'?new Date(Math.round((m-25569)*86400000)).toISOString().slice(0,7):m),r:esc(r),c:esc(c),a,t,row:i+1})).filter(x=>x.m&&x.r&&x.c&&typeof x.a==='number'&&Number.isFinite(x.a)&&typeof x.t==='number'&&Number.isFinite(x.t))}
+function status(text,bad=false){const s=document.getElementById('status');s.textContent=text;s.className=bad?'bad':'ok'}
+function render(){refreshers.forEach(fn=>fn())}
+async function watch(id,fn){
+ const update=()=>{const data=update.data;if(!data)return;D=data;MON=[...new Set(D.map(x=>x.m))].sort();fn()};
+ refreshers.push(update);
+ try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{update.data=records(value);update();if(!connected){connected=true;status('实时数据已连接')}}))}
+ catch(e){document.getElementById(id).textContent='无法加载数据：'+errorText(e);status('无法加载数据：'+errorText(e),true)}
+}
+const editor=document.getElementById('editor'),record=document.getElementById('record'),target=document.getElementById('target'),result=document.getElementById('write-state');
+let editorRows=[];
+function selectRecord(){const row=editorRows.find(x=>String(x.row)===record.value);if(!row)return;target.setAttribute('data-univer-cell-model',`${encodeURIComponent(unitId)}:${encodeURIComponent(sheetId)}:E${row.row+1}`);target.disabled=false;result.textContent='金额单位：元；修改目标后移开焦点保存'}
+record.addEventListener('change',selectRecord);
+target.addEventListener('change',async()=>{
+ if(!target.checkValidity())return;
+ result.textContent='正在写入表格…';status('正在写入表格…');record.disabled=true;
+ try{await binding.flush();result.textContent='已保存到表格';status('已保存到表格')}
+ catch(e){result.textContent=`${errorText(e)}。草稿已保留；按 Escape 恢复来源值。`;status(result.textContent,true)}
+ finally{record.disabled=false}
+});
+watch('editor',()=>{editorRows=D;const selected=record.value;record.innerHTML=D.map(x=>`<option value="${x.row}">${x.m} · ${x.r} · ${x.c}</option>`).join('');if(D.some(x=>String(x.row)===selected))record.value=selected;else selectRecord();if(!D.length){target.disabled=true;result.textContent='暂无销售记录'}});
+window.addEventListener('pagehide',()=>{subscriptions.forEach(s=>s.dispose());chart?.dispose();if(typeof io!=='undefined')io.disconnect()},{once:true});
+
+const REG=['全部','华东','华南','华北'],CH=['全部','直销','渠道','线上'];
+const st={r:'全部',c:'全部'};
+const wan=v=>(v/1e4).toFixed(1);
+const gp=(a,t)=>((t>0?a/t-1:NaN))*100;
+const pc=x=>Number.isFinite(x)?(x>=0?'+':'−')+Math.abs(x).toFixed(1)+'%':'—';
+const sum=f=>{let a=0,t=0;D.filter(f).forEach(x=>{a+=x.a;t+=x.t});return{a,t}};
+const rOk=x=>st.r==='全部'||x.r===st.r, cOk=x=>st.c==='全部'||x.c===st.c, ok=x=>rOk(x)&&cOk(x);
+function pick(k,v){st[k]=v;render()}
+const scopeName=()=>(st.r==='全部'?'全公司':st.r)+(st.c==='全部'?'':' '+st.c);
+function slide(i){
+
+ document.getElementById('rs').innerHTML=REG.map(r=>`<button aria-pressed="${st.r===r}" data-r="${r}">${r==='全部'?'全公司':r}</button>`).join('');
+ document.querySelectorAll('#rs button').forEach(b=>b.onclick=()=>pick('r',b.dataset.r));
+ const cs=document.getElementById('cs');cs.innerHTML=CH.map(c=>`<option ${c===st.c?'selected':''}>${c}</option>`).join('');cs.onchange=()=>pick('c',cs.value);
+ if(!D.some(ok)){document.getElementById('s'+i).textContent='当前筛选暂无销售记录';return}
+ const T=sum(ok),x=gp(T.a,T.t),ahead=T.a>=T.t,sn=scopeName();
+ if(i===0)document.getElementById('s0').innerHTML=`<p class="p">2026 年第三季度销售周会</p><h1 class="k">${sn}<br>三季度销售<br><mark class="${ahead?'':'neg'}">${wan(T.a)} 万</mark></h1><p class="p">按 ↓ 开始。顶部可切换区域和渠道，筛选仅在本页生效。</p>`;
+ if(i===1)document.getElementById('s1').innerHTML=`<h2 class="k">${sn}${ahead?'领先':'落后'}目标 <mark class="${ahead?'':'neg'}">${Number.isFinite(x)?Math.abs(x).toFixed(1)+'%':'—'}</mark></h2><p class="p">实际 <b>${wan(T.a)} 万</b>，目标 <b>${wan(T.t)} 万</b>，${ahead?'超出':'缺口'} <b>${wan(Math.abs(T.a-T.t))} 万</b>。</p>`;
+ const mo=MON.map(m=>({m,...sum(d=>d.m===m&&ok(d))}));const n=mo.filter(s=>s.a>=s.t).length;
+ const best=mo.reduce((p,c)=>gp(c.a,c.t)>gp(p.a,p.t)?c:p),worst=mo.reduce((p,c)=>gp(c.a,c.t)<gp(p.a,p.t)?c:p);
+ if(i===2){chart?.dispose();document.getElementById('s2').innerHTML=`<h2 class="k m">${MON.length}个月里 <mark class="${n===MON.length?'':'neg'}">${n} 个月</mark>达成目标</h2><div id="chart"></div><p class="p">最好是 <b>${+best.m.slice(5)}月 ${pc(gp(best.a,best.t))}</b>，最弱是 <b>${+worst.m.slice(5)}月 ${pc(gp(worst.a,worst.t))}</b>。金色标线是目标。</p>`;
+ draw(mo);}
+ const dim=st.c==='全部'?['直销','渠道','线上']:(st.r==='全部'?['华东','华南','华北']:[st.r]);
+ const key=st.c==='全部'?'c':'r';
+ const bd=dim.map(v=>({v,...sum(d=>d[key]===v&&ok(d))}));
+ const wr=bd.reduce((p,c)=>gp(c.a,c.t)<gp(p.a,p.t)?c:p),br=bd.reduce((p,c)=>gp(c.a,c.t)>gp(p.a,p.t)?c:p);
+ const neg=gp(wr.a,wr.t)<0,hl=neg?wr:br,mx=Math.max(...bd.map(b=>Math.max(b.a,b.t)));
+ if(i===3)document.getElementById('s3').innerHTML=`<h2 class="k m">${hl.v}${neg?'缺口最大':'领先最多'} <mark class="${neg?'neg':''}">${pc(gp(hl.a,hl.t))}</mark></h2><div class="rows">${bd.map(b=>`<div class="row ${b.a<b.t?'bad':''}"><span>${b.v}</span><span class="tr"><i class="fl" data-w="${b.a/mx*100}"></i><i class="tg" style="left:${b.t/mx*100}%"></i></span><span class="v">${pc(gp(b.a,b.t))}</span></div>`).join('')}</div><p class="p">按${st.c==='全部'?'渠道':'区域'}拆开。白条是实际，金色标线是目标，橙红条表示低于目标。</p>`;
+ const rows=D.filter(ok);
+ if(i===4)document.getElementById('s4').innerHTML=`<h3>明细表</h3><div class="tbl"><table><thead><tr><th>月份</th><th>区域</th><th>渠道</th><th class="r">实际(万)</th><th class="r">目标(万)</th><th class="r">差距</th></tr></thead><tbody>${rows.map(d=>{const p=gp(d.a,d.t);return `<tr><td>${d.m}</td><td>${d.r}</td><td>${d.c}</td><td class="r">${wan(d.a)}</td><td class="r">${wan(d.t)}</td><td class="r ${p<0?'neg':'pos'}">${pc(p)}</td></tr>`}).join('')}</tbody></table></div>`;
+ observe();
+}
+let chart;
+function draw(mo){
+ if(!window.echarts){document.getElementById('chart').textContent='图表加载失败，请刷新重试';return}
+ chart=echarts.getInstanceByDom(document.getElementById('chart'))||echarts.init(document.getElementById('chart'),null,{renderer:'svg'});
+ const big=innerWidth>760;
+ chart.setOption({animationDuration:700,animationEasing:'cubicOut',grid:{left:4,right:4,top:34,bottom:8,containLabel:true},
+  xAxis:{type:'category',data:mo.map(s=>+s.m.slice(5)+'月'),axisLine:{show:false},axisTick:{show:false},axisLabel:{fontFamily:'Noto Serif SC',fontWeight:900,fontSize:big?26:18,color:'#f4eee3'}},
+  yAxis:{type:'value',show:false,min:0},
+  tooltip:{trigger:'axis',backgroundColor:'#14110f',borderColor:'#3a332c',textStyle:{color:'#f4eee3'},valueFormatter:v=>wan(v)+' 万'},
+  series:[{name:'实际',type:'bar',barWidth:'42%',data:mo.map(s=>({value:s.a,itemStyle:{color:s.a>=s.t?'#f4eee3':'#ff5a36'}})),label:{show:true,position:'top',fontFamily:'Noto Serif SC',fontWeight:900,fontSize:big?26:18,color:'#f4eee3',formatter:p=>wan(p.value)}},
+   {name:'目标',type:'custom',z:5,data:mo.map((s,i)=>[i,s.t]),renderItem:(p,api)=>{const c=api.coord([api.value(0),api.value(1)]),w=api.size([1,0])[0]*.62;return{type:'line',shape:{x1:c[0]-w/2,x2:c[0]+w/2,y1:c[1],y2:c[1]},style:{stroke:'#e9c46a',lineWidth:5}}}}]},true);
+ chart.resize();
+}
+function observe(){
+ document.querySelectorAll('.row .fl').forEach(e=>requestAnimationFrame(()=>e.style.width=e.dataset.w+'%'));
+}
+const secs=[...document.querySelectorAll('section.s')];
+const dots=document.getElementById('dots');
+dots.innerHTML=secs.map((s,i)=>`<button aria-label="第 ${i+1} 页" data-i="${i}"></button>`).join('');
+dots.querySelectorAll('button').forEach(b=>b.onclick=()=>secs[b.dataset.i].scrollIntoView());
+const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');const i=secs.indexOf(e.target);dots.querySelectorAll('button').forEach((b,j)=>b.classList.toggle('on',i===j))}}),{threshold:.55});
+secs.forEach(s=>io.observe(s));
+const cur=()=>{const y=scrollY+innerHeight*.4;let i=0;secs.forEach((s,j)=>{if(s.offsetTop<=y)i=j});return i};
+addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey||['SELECT','INPUT','TEXTAREA'].includes(e.target.tagName))return;const i=cur();
+ const go=j=>{e.preventDefault();secs[Math.max(0,Math.min(secs.length-1,j))].scrollIntoView()};
+ if(e.key==='ArrowDown'||e.key==='PageDown'){if(i<secs.length-1)go(i+1)}
+ else if(e.key==='ArrowUp'||e.key==='PageUp'){if(i<secs.length-1||scrollY<=secs[i].offsetTop+4)go(i-1)}
+ else if(e.key==='ArrowRight'||e.key==='ArrowLeft'){e.preventDefault();const k=REG.indexOf(st.r),n=REG.length;pick('r',REG[(k+(e.key==='ArrowRight'?1:n-1))%n])}
+ else if(e.key==='Home')go(0)});
+addEventListener('resize',()=>chart&&chart.resize());
+for(let i=0;i<5;i++)watch('s'+i,()=>slide(i));
+</script>
+</body>
+</html>

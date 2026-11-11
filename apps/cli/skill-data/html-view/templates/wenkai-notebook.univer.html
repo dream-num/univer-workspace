@@ -1,0 +1,184 @@
+<!doctype html>
+<!-- Scenario: Customer implementation delivery tracker — 文楷手账.
+Expected Sheet: row 1 headers A 任务ID, B 任务, C 客户, D 负责人, E 状态 (待开始/进行中/已完成/阻塞), F 截止日期 (ISO date text or Sheet date serial).
+Bounds: A2:F201, at most 200 tasks; worksheet must have at least 201 rows and 6 columns. New records insert below row 1, shifting older records down. Task IDs must be unique.
+Replace EVERY REPLACE_UNIT_ID with the Unit ID and EVERY REPLACE_SHEET_ID with the worksheet ID. URI-encode IDs in HTML binding attributes; use raw IDs in JavaScript. No other placeholders.
+Writes re-read the range to locate each stable ID; concurrent structural edits between read and write are not atomic. -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>实施手账 · 客户实施</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css">
+<style>
+:root{
+  --paper:#f7f2e6; --rule:#cfdbe8; --margin:#e3a79a; --ink:#1f3a6b; --ink2:#4c628c; --ver:#c4361d; --ver-d:#a52b16;
+  --lh:36px;
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box}
+html{background:#ebe3d0}
+body{margin:0;color:var(--ink);font:400 18px/var(--lh) "LXGW WenKai",serif;min-height:100vh;padding-bottom:72px;overflow-x:hidden;
+  background:var(--paper);
+  background-image:linear-gradient(var(--rule) 1px,transparent 1px);background-size:100% var(--lh);background-position:0 calc(var(--lh) - 1px)}
+body::before{content:"";position:fixed;left:clamp(34px,6vw,92px);top:0;bottom:0;width:2px;background:var(--margin);opacity:.7;pointer-events:none}
+::selection{background:var(--ink);color:var(--paper)}
+:focus-visible{outline:2px dashed var(--ver);outline-offset:3px}
+.page{max-width:820px;margin:0 auto;padding:0 clamp(12px,3vw,24px) 0 clamp(46px,9vw,120px);position:relative}
+.num{font-variant-numeric:tabular-nums}
+header{padding-top:36px;position:relative}
+h1{margin:0;font-weight:700;font-size:clamp(36px,6vw,54px);line-height:72px;letter-spacing:.04em;position:relative;display:inline-block}
+h1 svg{position:absolute;left:-4px;right:0;bottom:6px;width:calc(100% + 8px);height:14px;color:var(--ver);pointer-events:none}
+.sub{margin:0;color:var(--ink2);line-height:var(--lh)}
+.sub b{color:var(--ver);font-weight:700}
+#save{position:absolute;right:0;top:44px;font-size:16px;color:var(--ink2);transform:rotate(-2deg);min-height:36px;display:flex;align-items:center;gap:6px}
+#save[data-s=saved]{color:var(--ink);animation:wr .5s var(--ease)}
+#save[data-s=error]{color:var(--ver);font-weight:700}
+@keyframes wr{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+@media (max-width:560px){#save{position:static;transform:none}}
+
+section{margin-top:var(--lh)}
+h2{margin:0;font-weight:700;font-size:23px;line-height:var(--lh);display:flex;align-items:baseline;gap:12px;color:var(--ink)}
+h2 .c{font-weight:400;font-size:16px;color:var(--ink2)}
+h2 .c em{font-style:normal;color:var(--ver)}
+ul{list-style:none;margin:0;padding:0}
+li.t{display:grid;grid-template-columns:44px minmax(0,1fr) auto;align-items:center;min-height:var(--lh);line-height:var(--lh);column-gap:6px}
+li.t .nm{display:flex;flex-wrap:wrap;column-gap:10px;align-items:baseline;min-width:0}
+li.t .ow{color:var(--ink2);font-size:16px}
+li.t .due{color:var(--ink2);font-size:16px;white-space:nowrap}
+li.t .tag{color:var(--ver);font-size:16px}
+li.t.done .nm .tn{color:var(--ink2);background:linear-gradient(var(--ink2),var(--ink2)) 0 55%/100% 1.5px no-repeat}
+li.t.block .tn{font-weight:700}
+li.t.block .nm{position:relative}
+li.t.late .due{color:var(--ver);font-weight:700}
+.st{width:44px;height:var(--lh);padding:0;border:0;background:none;cursor:pointer;display:grid;place-items:center;color:var(--ink)}
+.st svg{width:30px;height:30px;overflow:visible}
+.st svg *{stroke-linecap:round;stroke-linejoin:round;fill:none;stroke:currentColor;stroke-width:2}
+.st[data-s="已完成"]{color:var(--ink)}
+.st[data-s="阻塞"]{color:var(--ver)}
+.st[data-s="阻塞"] svg *{stroke-width:2.4}
+.st:hover svg{transform:rotate(-6deg) scale(1.1)}
+.st svg{transition:transform .18s var(--ease)}
+.st.pop svg{animation:stamp .4s var(--ease)}
+@keyframes stamp{0%{transform:scale(1.9) rotate(-14deg);opacity:0}100%{transform:scale(1) rotate(0);opacity:1}}
+.st path.draw{stroke-dasharray:60;stroke-dashoffset:0}
+.stamp-t{font:700 15px/1 "LXGW WenKai",serif;fill:currentColor;stroke:none!important}
+.hint{margin:0;color:var(--ink2);font-size:16px}
+
+form.new{margin-top:var(--lh);display:grid;grid-template-columns:44px minmax(0,1fr);align-items:center}
+form.new .pen{display:grid;place-items:center;color:var(--ver);height:var(--lh);font-size:26px;line-height:1}
+form.new .line{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;min-width:0}
+form.new input{flex:1 1 150px;min-width:0;height:var(--lh);border:0;background:transparent;font:400 18px/var(--lh) "LXGW WenKai",serif;color:var(--ink);padding:0;caret-color:var(--ver);outline:none}
+form.new input::placeholder{color:var(--ink2);opacity:.85}
+form.new .line:focus-within{background:linear-gradient(var(--ver),var(--ver)) 0 calc(100% - 1px)/100% 2px no-repeat}
+.opt{display:flex;gap:6px;flex-wrap:wrap;color:var(--ink2);font-size:16px;align-items:baseline;padding-left:44px;margin-top:0;grid-column:1/-1}
+.opt select,.opt input{font:400 16px "LXGW WenKai",serif;color:var(--ink);background:transparent;border:0;border-bottom:1px dashed var(--ink2);height:var(--lh);padding:0 2px;border-radius:0;cursor:pointer}
+.opt button{margin-left:auto;font:700 17px "LXGW WenKai",serif;background:none;border:2px solid var(--ver);color:var(--ver);padding:0 14px;height:30px;line-height:26px;cursor:pointer;border-radius:3px 9px 4px 10px/9px 4px 10px 3px;transform:rotate(-1.5deg);align-self:center}
+.opt button:hover{background:var(--ver);color:var(--paper)}
+.foot{margin:var(--lh) 0 0;color:var(--ink2);font-size:15px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.write-state:empty,[data-write-id]:empty{display:none}.write-state{display:block;font-size:16px;line-height:var(--lh);overflow-wrap:anywhere}.write-state[data-s=error]{color:var(--ver,var(--red))}#save[data-s=error]{position:static;max-width:100%;overflow-wrap:anywhere}#stamp{overflow-wrap:anywhere}.card .id{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>实施手账<svg viewBox="0 0 200 14" preserveAspectRatio="none" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M2 8c30-6 60 3 98-1s70 4 98-2"/></svg></h1>
+    <p class="sub" id="sub" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201"></p>
+    <div id="save" data-s="idle" role="status" aria-live="polite"></div>
+  </header>
+  <div id="book" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201">加载中…</div>
+  <form class="new" id="add" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201" autocomplete="off">
+    <span class="pen" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1-5L16 4l4 4L9 19z"/><path d="M14 6l4 4"/></svg></span>
+    <div class="line"><input name="name" required maxlength="20" aria-label="新任务名称" placeholder="接着写一行新任务，回车记下…"></div>
+    <div class="opt">
+      <span>给</span><select required name="cust" id="fc" aria-label="客户"></select>
+      <span>，</span><select required name="owner" id="fo" aria-label="负责人"></select>
+      <span>负责，</span><input type="date" name="due" id="fd" required aria-label="截止日期">
+      <span>前完成</span><button>记下</button>
+    </div>
+  <small class="write-state" style="grid-column:2/-1" id="add-state" role="status"></small></form>
+  <p class="foot">点每行前面的小标记换状态，新写的一行会插入到《客户实施任务》表。</p>
+</div>
+<script type="module">
+const STATUSES=["待开始","进行中","已完成","阻塞"];
+const z=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate());
+const TODAY=iso(new Date());
+const D=s=>Date.parse(s+'T00:00:00Z');
+const addDays=(s,n)=>new Date(D(s)+n*864e5).toISOString().slice(0,10);
+let tasks=[];
+let customers=[],owners=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const late=t=>t.status!=='已完成'&&t.due<TODAY;
+const md=d=>+d.slice(5,7)+'月'+(+d.slice(8))+'日';
+const MARK={
+ "待开始":'<svg viewBox="0 0 30 30"><path d="M7 8c4-3 12-3 16 1s2 11-3 14-12 1-14-5 0-8 3-11"/></svg>',
+ "进行中":'<svg viewBox="0 0 30 30"><path d="M7 8c4-3 12-3 16 1s2 11-3 14-12 1-14-5 0-8 3-11"/><path d="M9 21c-3-5-1-10 3-12 4-2 9 0 9 4M10 19l9-8M10 14l6-5M12 21l9-6" stroke-width="1.5"/></svg>',
+ "已完成":'<svg viewBox="0 0 30 30"><path d="M5 17c3 2 5 5 7 8C15 15 20 8 27 3" stroke-width="3"/></svg>',
+ "阻塞":'<svg viewBox="0 0 30 30"><path d="M4 7c8-3 18-3 23 0v12c-8 3-16 3-23 0z"/><text class="stamp-t" x="15" y="17.5" text-anchor="middle">阻</text></svg>'};
+
+
+const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+const source={unitId,sheetId,range:{startRow:1,endRow:200,startColumn:0,endColumn:5}};
+const subscriptions=[],drafts=new Map();
+let busy=false,pendingRecordId=null,formDraft=null;
+const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！?？]+$/u,'');
+const shortId=id=>id.length>12?id.slice(0,8):id;
+function records(value){return value.filter(r=>r[0]!=null&&r[0]!=='').map(([id,name,cust,owner,status,due])=>{
+  const date=typeof due==='number'?new Date(Date.UTC(1899,11,30)+due*864e5).toISOString().slice(0,10):String(due??'');
+  if(!STATUSES.includes(status)||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date)))throw new Error('请检查来源表的状态与截止日期');
+  return{id:String(id),name:String(name??''),cust:String(cust??''),owner:String(owner??''),status,due:date};
+})}
+function rememberForm(){const f=$('#add');if(f)formDraft=Object.fromEntries([...f.elements].filter(el=>el.name).map(el=>[el.name,el.value]))}
+function restoreForm(){const f=$('#add');if(!f)return;if(formDraft)for(const [name,value]of Object.entries(formDraft)){const el=f.elements.namedItem(name);if(el){if(el.tagName==='SELECT'&&value&&!Array.from(el.options).some(o=>o.value===value))el.add(new Option(value,value));if(el.tagName!=='SELECT'||value)el.value=value}}for(const el of f.querySelectorAll('input,select,button')){if(el.tagName==='BUTTON'){el.disabled=busy;el.textContent=pendingRecordId?'重试保存':'记下'}else if(el.tagName==='SELECT')el.disabled=busy||pendingRecordId!==null;else el.readOnly=busy||pendingRecordId!==null}}
+function choices(){customers=[...new Set(tasks.map(t=>t.cust))];owners=[...new Set(tasks.map(t=>t.owner))]}
+function fillChoices(){rememberForm();for(const [id,items]of [['fc',customers],['fo',owners]]){let el=$('#'+id);if(el){const old=el.value;if(!items.length&&el.tagName==='SELECT'){const input=document.createElement('input');for(const attr of el.attributes)input.setAttribute(attr.name,attr.value);input.maxLength=80;el.replaceWith(input);el=input}else if(items.length&&el.tagName==='SELECT'){el.replaceChildren(...items.map(s=>new Option(s,s)));if(old&&!items.includes(old))el.add(new Option(old,old));if(old)el.value=old}if(formDraft&&!formDraft[el.name])formDraft[el.name]=el.value}}restoreForm()}
+function draftHtml(id){const d=drafts.get(id);return d?`<small class="write-state" role="status" data-s="${d.state}">${esc(d.message)}</small>`:''}
+function refreshDrafts(){document.querySelectorAll('[data-write-id]').forEach(el=>{el.innerHTML=draftHtml(el.dataset.writeId)});document.querySelectorAll('.card select,.st,.chip').forEach(el=>el.disabled=busy);restoreForm()}
+async function saveStatus(id,to){
+  if(busy||!STATUSES.includes(to))return;const task=tasks.find(t=>t.id===id);if(!task)return;
+  busy=true;drafts.set(id,{to,state:'pending',message:'保存中…'});setSave('pending');refreshDrafts();
+  try{const latest=await binding.getRangeState(source);const row=latest.value.findIndex(r=>String(r[0])===id);if(row<0)throw new Error('任务已移出前 200 行，请到来源表核对');
+    await binding.setCellValue({unitId,sheetId,row:row+1,col:4},to);await binding.flush();
+    drafts.set(id,{to,state:'saved',message:'已保存到表格'});setSave('saved');
+  }catch(error){const message=`${errorText(error)}。已保留「${to}」草稿，请重试。`;drafts.set(id,{to,state:'error',message});setSave('error')}
+  finally{busy=false;const active=document.activeElement,focused=active?.closest('[data-id]')?.dataset.id;render(id);refreshDrafts();if(focused)for(const el of document.querySelectorAll('[data-id]'))if(el.dataset.id===focused)(el.matches('button')?el:el.querySelector('select'))?.focus({preventScroll:true})}
+}
+async function addTask(f){
+  if(busy)return;rememberForm();const v=formDraft;
+  if(!pendingRecordId&&(!v.name?.trim()||!v.cust?.trim()||!v.owner?.trim()||!v.due)){setAdd('error','请填写任务、客户、负责人和截止日期');return}
+  busy=true;setAdd('pending','保存中…');setSave('pending');restoreForm();
+  try{if(!pendingRecordId){const id=crypto.randomUUID();await binding.insertRowsWithValues({unitId,sheetId,startRow:1,rowCount:1,startColumn:0,values:[[id,v.name.trim(),v.cust.trim(),v.owner.trim(),v.status||'待开始',v.due]]});pendingRecordId=id}
+    await binding.flush();pendingRecordId=null;formDraft=null;$('#add').elements.namedItem('name').value='';setAdd('saved','已保存到表格');setSave('saved');
+  }catch(error){const message=pendingRecordId?`已插入，保存尚未确认：${errorText(error)}。请重试保存。`:`提交未确认：${errorText(error)}。草稿已保留，重新提交前请核对来源表。`;setAdd('error',message);setSave('error')}
+  finally{busy=false;restoreForm()}
+}
+function setAdd(state,text){const el=$('#add-state');if(el){el.dataset.s=state;el.textContent=text}}
+async function watch(id,callback){try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{try{callback(records(value))}catch(e){const el=$('#'+id);el.textContent=`加载失败：${errorText(e)}`;setSave('error')}}))}catch(e){$('#'+id).textContent=`加载失败：${errorText(e)}`;setSave('error')}}
+window.addEventListener('pagehide',()=>subscriptions.forEach(s=>s.dispose()),{once:true});
+
+function setSave(state){const el=$('#save');el.dataset.s=state;el.textContent={pending:'正在写进表格…',saved:'已保存到表格',error:'未保存'}[state]}
+function cycle(id){const t=tasks.find(t=>t.id===id);if(t)saveStatus(id,drafts.get(id)?.state==='error'?drafts.get(id).to:STATUSES[(STATUSES.indexOf(t.status)+1)%4])}
+$('#add').addEventListener('submit',e=>{e.preventDefault();addTask(e.target)});
+$('#fd').value=addDays(TODAY,7);
+function render(popId){
+
+  $('#book').innerHTML=customers.map(c=>{
+    const l=tasks.filter(t=>t.cust===c).sort((a,b)=>a.due.localeCompare(b.due)||a.id.localeCompare(b.id));
+    const d=l.filter(t=>t.status==='已完成').length,b=l.filter(t=>t.status==='阻塞').length;
+    return `<section><h2>${esc(c)}<span class="c num">${d}/${l.length} 已完成${b?` · <em>${b} 件卡住</em>`:''}</span></h2><ul>${l.map(t=>`
+     <li class="t ${t.status==='已完成'?'done':''} ${t.status==='阻塞'?'block':''} ${late(t)?'late':''}">
+      <button class="st ${popId===t.id?'pop':''}" data-id="${esc(t.id)}" data-s="${t.status}" aria-label="${esc(t.name)}，现在是${t.status}，点一下换下一个状态" title="${t.status}，点击切换">${MARK[t.status]}</button>
+      <span class="nm"><span class="tn">${esc(t.name)}</span><span class="ow">${esc(t.owner)}${t.status==='进行中'?' · 进行中':''}${t.status==='阻塞'?' · <span class="tag">卡住了</span>':''}</span></span>
+      <span class="due num">${late(t)?'逾期 · ':''}${md(t.due)}</span><span style="grid-column:2/-1" data-write-id="${esc(t.id)}">${draftHtml(t.id)}</span></li>`).join('')}</ul></section>`}).join('')||'<p class="hint">暂无任务，接着写第一行。</p>';refreshDrafts();
+}
+document.addEventListener('click',e=>{const b=e.target.closest('.st');if(b)cycle(b.dataset.id)});
+await watch('sub',tasks=>{  const lt=tasks.filter(late).length,bk=tasks.filter(t=>t.status==='阻塞').length,dn=tasks.filter(t=>t.status==='已完成').length;
+  $('#sub').innerHTML=`${md(TODAY)}，已划掉 <span class="num">${dn}</span> 件，卡住 <b class="num">${bk}</b> 件，逾期 <b class="num">${lt}</b> 件。`;});
+await watch('add',rows=>{tasks=rows;choices();fillChoices()});
+await watch('book',rows=>{tasks=rows;choices();render()});
+</script>
+</body>
+</html>

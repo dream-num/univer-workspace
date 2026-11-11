@@ -1,0 +1,223 @@
+<!doctype html>
+<!-- Scenario: Startup cash runway; live 36-month Sheet model.
+Expected Sheet: A1:B1 = 现金流假设, 数值. A2:B6 = 期初现金, 月收入,
+月收入增长率 (fraction), 月固定支出, 每月新增人力成本; labels A, numbers B.
+A7 = 起始月份; B7 = text YYYY-MM, e.g. 2026-12.
+A8:E8 = 月份, 期初现金, 收入, 支出, 期末现金.
+A9:E44 = 36 monthly formula rows; A = month index 1..36, B:E numeric formula results.
+At least 44 rows and 5 columns. Chart/answer read all 36 months; table shows first 12.
+Replace EVERY REPLACE_UNIT_ID and REPLACE_SHEET_ID with the actual IDs.
+HTML binding IDs are URI-encoded; JavaScript IDs are raw. No other placeholders.
+Controls write B4 and B5; formulas belong to the Sheet, never this page. -->
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>现金流模型 · 瑞士财报</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/archivo@5.3.0/latin-900.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/archivo@5.3.0/latin-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/chinese-simplified-900.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/chinese-simplified-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/chinese-simplified-400.css">
+<style>
+:root{--ink:#0a0a0a;--paper:#fff;--red:#e2001a;--mute:#5b5b5b;--hair:#0a0a0a;
+  --num:"Archivo","Helvetica Neue",Arial,sans-serif;--cn:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box;margin:0}
+html{background:var(--paper)}
+body{font:400 16px/1.55 var(--cn);color:var(--ink);background:var(--paper);overflow-x:hidden;
+  padding:0 clamp(16px,2.8vw,40px) 72px;max-width:1440px;margin:0 auto;font-variant-numeric:tabular-nums}
+::selection{background:var(--red);color:#fff}
+.g{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:24px}
+.g>*{grid-column:1/-1}
+.num{font-family:var(--num);font-weight:900;letter-spacing:-.03em;font-variant-numeric:lining-nums tabular-nums}
+.mast{border-top:10px solid var(--ink);padding:14px 0 12px;align-items:end;border-bottom:1px solid var(--ink)}
+.mast h1{font-weight:900;font-size:30px;line-height:1.1;grid-column:1/8;letter-spacing:-.01em}
+.mast p{grid-column:8/-1;font-size:13px;color:var(--mute);text-align:right;line-height:1.4}
+#st{font-weight:500;color:var(--ink)}
+#st[data-s=saving]{color:var(--mute)}
+#st[data-s=rejected]{color:var(--red)}
+.hero{padding:34px 0 26px;border-bottom:1px solid var(--ink)}
+.hero .pre{font-weight:900;font-size:clamp(26px,3.6vw,52px);line-height:1;letter-spacing:-.01em}
+.hero .big{font-weight:900;font-family:var(--num);font-size:clamp(52px,13.5vw,200px);line-height:.98;letter-spacing:-.05em;
+  color:var(--red);margin:10px 0 0 -.04em;white-space:nowrap;font-variant-numeric:lining-nums}
+.hero .big .cn{font-family:var(--cn);letter-spacing:-.02em;font-weight:900}
+.hero .big.calm{color:var(--ink)}
+.hero .sub{margin-top:22px;align-items:start;row-gap:6px}
+.hero .sub p{grid-column:1/7;font-size:18px;font-weight:500;line-height:1.5;max-width:34em}
+.hero .sub small{grid-column:8/-1;font-size:13px;color:var(--mute);line-height:1.6}
+.ctl{padding:22px 0 24px;border-bottom:1px solid var(--ink);row-gap:26px}
+.ctl>div{grid-column:span 6}
+.ctl label{display:flex;justify-content:space-between;align-items:baseline;font-weight:900;font-size:20px}
+.ctl label em{font-style:normal;font-weight:400;font-size:12px;color:var(--mute)}
+.val{font-size:clamp(44px,6vw,84px);line-height:1;margin:6px 0 14px;font-family:var(--num);font-weight:900;letter-spacing:-.04em}
+.val span{font-family:var(--cn);font-weight:900;font-size:.32em;letter-spacing:0;margin-left:.2em}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:36px;background:transparent;cursor:pointer;display:block}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--ink)}
+input[type=range]::-moz-range-track{height:1px;background:var(--ink)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:36px;background:var(--ink);border:0;border-radius:0;margin-top:-18px}
+input[type=range]::-moz-range-thumb{width:14px;height:36px;background:var(--ink);border:0;border-radius:0}
+input[type=range]:hover::-webkit-slider-thumb{background:var(--red)}
+input[type=range]:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.ticks{display:flex;justify-content:space-between;font-size:12px;color:var(--mute);font-family:var(--num);font-weight:500}
+.reset{grid-column:1/-1;justify-self:start;font:500 13px var(--cn);background:none;border:0;border-bottom:1px solid var(--ink);padding:0 0 1px;cursor:pointer;color:var(--ink)}
+.reset:hover{color:var(--red);border-color:var(--red)}
+.reset:focus-visible{outline:3px solid var(--red);outline-offset:3px}
+.chart{padding:22px 0 8px;border-bottom:1px solid var(--ink)}
+.chart h2,.tbl h2,.base h2{font-weight:900;font-size:20px;grid-column:1/7}
+.legend{grid-column:7/-1;display:flex;gap:18px;justify-content:flex-end;font-size:12px;color:var(--mute);flex-wrap:wrap;align-items:center}
+.legend i{display:inline-block;width:11px;height:11px;margin-right:6px;vertical-align:-1px}
+.l1{background:var(--ink)}.l2{border:1px solid var(--ink)}.l3{background:var(--red)}
+#svg{display:block;width:100%;height:auto;margin-top:12px}
+#svg text{font-family:var(--num);font-weight:500;font-size:12px;fill:var(--mute)}
+#svg .red{fill:var(--red);font-weight:900;font-family:var(--cn);font-size:13px}
+.base,.tbl{padding:22px 0 20px}
+.base .row{display:grid;grid-template-columns:repeat(5,1fr);gap:24px;margin-top:14px;grid-column:1/-1}
+.base .row div{border-top:1px solid var(--ink);padding-top:8px}
+.base .row dt{font-size:13px;color:var(--mute)}
+.base .row dd{font:900 26px/1.2 var(--num);letter-spacing:-.03em;margin:2px 0 0}
+.base .row dd s{text-decoration:none;font:500 13px var(--cn);margin-left:3px;letter-spacing:0}
+.tr{display:grid;grid-template-columns:1fr repeat(4,2fr);border-top:1px solid var(--ink);padding:7px 0;font-size:15px;font-family:var(--num);font-weight:500;grid-column:1/-1}
+.tr>*{text-align:right}.tr>:first-child{text-align:left}
+.tr.h{border-top:3px solid var(--ink);font:900 13px var(--cn);padding:8px 0}
+.tr.neg b{color:var(--red)}
+.tr b{font-weight:900}
+.fn{font-size:12px;color:var(--mute);margin-top:10px;grid-column:1/-1}
+@media(max-width:760px){
+  .g{column-gap:12px}.mast h1,.mast p{grid-column:1/-1;text-align:left}.mast p{margin-top:6px}
+  .hero .sub p,.hero .sub small{grid-column:1/-1}
+  .ctl>div{grid-column:1/-1}
+  .chart h2,.legend{grid-column:1/-1;justify-content:flex-start}
+  .base .row{grid-template-columns:1fr 1fr;gap:16px 16px}
+  .tr{font-size:13px}
+}
+#g-state,#f-state{font:400 12px/1.5 var(--cn,var(--serif));overflow-wrap:anywhere}
+#g-state[data-s=rejected],#f-state[data-s=rejected]{color:var(--neg,var(--red))}
+</style>
+</head>
+<body>
+<header class="mast g">
+  <h1>现金流模型</h1>
+  <p>投资人情景推演 · 假设取自表格 B2:B6<br><span id="st" data-s="idle" role="status" aria-live="polite">加载表格中…</span></p>
+</header>
+
+<section class="hero" aria-live="polite">
+  <div class="pre" id="pre">现金撑到</div>
+  <div class="big num" id="big" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A7:E44">—</div>
+  <div class="g sub"><p id="lead"></p><small id="side"></small></div>
+</section>
+
+<section class="ctl g">
+  <div>
+    <label for="g">月收入增长率<em>写入 B4</em></label>
+    <div class="val"><b id="gv">—</b><span>%</span></div>
+    <input id="g" disabled aria-describedby="g-state" data-univer-cell-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B4" type="range" min="0" max="12" step="0.5"><small id="g-state" role="status"></small>
+    <div class="ticks"><span>0%</span><span>6%</span><span>12%</span></div>
+  </div>
+  <div>
+    <label for="f">月固定支出<em>写入 B5</em></label>
+    <div class="val"><b id="fv">—</b><span>万元</span></div>
+    <input id="f" disabled aria-describedby="f-state" data-univer-cell-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B5" type="range" min="20" max="60" step="1"><small id="f-state" role="status"></small>
+    <div class="ticks"><span>20 万</span><span>40 万</span><span>60 万</span></div>
+  </div>
+  <button class="reset" id="rs">恢复表格里的数值</button>
+</section>
+
+<section class="chart g">
+  <h2>期末现金，36 个月</h2>
+  <div class="legend"><span><i class="l1"></i>模型前 12 个月</span><span><i class="l2"></i>表格公式后 24 个月</span><span><i class="l3"></i>现金为负</span></div>
+  <svg id="svg" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A7:E44" role="img" aria-label="未来 36 个月期末现金柱状图"></svg>
+</section>
+
+<section class="base g">
+  <h2>表格里固定的假设</h2>
+  <dl class="row" id="base" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B2:B6"></dl>
+</section>
+
+<section class="tbl g">
+  <h2 style="margin-bottom:14px">模型前 12 个月<span style="font-weight:400;font-size:13px;color:var(--mute);margin-left:10px;white-space:nowrap">单位：万元</span></h2>
+  <div class="tr h"><span>月份</span><span>期初现金</span><span>收入</span><span>支出</span><span>期末现金</span></div>
+  <div id="rows" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A9:E20" style="grid-column:1/-1"></div>
+  <p class="fn">第 1 个月取自表格 B7；36 个月均由表格公式计算：收入 = 月收入 × (1 + 增长率)^(月份 − 1)，支出 = 月固定支出 + 每月新增人力成本 × (月份 − 1)。</p>
+</section>
+
+<script type="module">
+const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+const $=id=>document.getElementById(id),subscriptions=[];
+const BASE={},p={};let START,ready=false;
+const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！]+$/u,'');
+function status(text,state='idle',cell){
+  $('st').textContent=cell?({saving:'保存中…',saved:'已保存',rejected:'未保存'}[state]||text):text;$('st').dataset.s=state;
+  if(cell){const el=$(cell==='B4'?'g-state':'f-state');el.textContent=text;el.dataset.s=state}
+}
+function ym(i){const t=START.y*12+START.m-1+i-1;return{y:Math.floor(t/12),m:t%12+1}}
+const W=v=>(v<0?'−':'')+Math.abs(v/1e4).toFixed(1);
+function cashAxis(r){
+  const high=Math.max(0,...r.map(x=>x.end));
+  const low=Math.min(0,...r.map(x=>x.end));
+  const span=high-low||1,rough=span/6,magnitude=10**Math.floor(Math.log10(rough));
+  const step=[1,2,5,10].find(n=>n*magnitude>=rough)*magnitude;
+  const min=low<0?Math.floor((low-span*.05)/step)*step:0;
+  const max=high>0?Math.ceil((high+span*.05)/step)*step:step;
+  const ticks=Array.from({length:Math.round((max-min)/step)+1},(_,i)=>min+i*step);
+  return {min,max,ticks};
+}
+function forecast(value){const month=value[0]?.[1];if(typeof month!=='string'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('B7 需要 YYYY-MM 起始月份');const [y,m]=month.split('-').map(Number);START={y,m};
+  const rows=value.slice(2).filter(row=>row.some(v=>v!==null&&v!==''));
+  if(!rows.length)return [];
+  if(rows.length!==36||rows.some(row=>row.length<5||row.some(v=>typeof v!=='number'||!Number.isFinite(v))))throw Error('等待表格 A9:E44 的 36 个月公式结果');
+  return rows.map(([i,start,inc,exp,end])=>({i,start,inc,exp,end}))}
+function renderTable(value){const rows=value.filter(row=>typeof row[0]==='number');$('rows').innerHTML=rows.length?rows.map(([i,start,inc,exp,end])=>`<div class="tr${end<0?' neg':''}"><span>${i}</span>${[start,inc,exp].map(v=>`<span>${typeof v==='number'?W(v):'—'}</span>`).join('')}<b>${typeof end==='number'?W(end):'—'}</b></div>`).join(''):'暂无月度数据'}
+async function watch(id,kind,render){try{subscriptions.push(await binding[kind](id,({value})=>{try{render(value)}catch(e){status(errorText(e),'rejected')}}))}catch(e){status('无法加载表格：'+errorText(e),'rejected');if($(id)&&['svg','rows','base'].includes(id))$(id).textContent='无法加载数据'}}
+const ref=cell=>({unitId,sheetId,row:cell==='B4'?3:4,col:1});
+const drafts=new Set();let writes=Promise.resolve();
+function touch(cell){const value=cell==='B4'?p.g:p.fixed;drafts.add(cell);status('保存中…','saving',cell);
+  writes=writes.then(async()=>{try{await binding.setCellValue(ref(cell),value);await binding.flush();if((cell==='B4'?p.g:p.fixed)===value)drafts.delete(cell);status('已保存到表格 '+cell,'saved',cell)}catch(e){status(errorText(e)+'。草稿已保留；可重试或恢复表格数值。','rejected',cell)}});return writes}
+function reset(){drafts.clear();p.g=BASE.g;p.fixed=BASE.fixed;syncControls();for(const id of ['g-state','f-state'])if($(id))$(id).textContent='';status('已恢复表格里的数值')}
+function facts(value){const v=value.map(row=>row[0]);if(v.some(x=>typeof x!=='number'||!Number.isFinite(x)))throw Error('暂无完整现金流假设');[BASE.cash,BASE.rev,BASE.g,BASE.fixed,BASE.hire]=v;
+  if(!drafts.has('B4'))p.g=BASE.g;if(!drafts.has('B5'))p.fixed=BASE.fixed;ready=true;syncControls();
+  const entries=[['期初现金',W(BASE.cash),'万元'],['月收入',W(BASE.rev),'万元'],['月收入增长率',(BASE.g*100).toFixed(1),'%'],['月固定支出',W(BASE.fixed),'万元'],['每月新增人力成本',W(BASE.hire),'万元']];
+  $('base').innerHTML=entries.map(([k,v,u])=>`<div><dt>${k}</dt><dd>${v}<s>${u}</s></dd></div>`).join('');
+}
+window.addEventListener('pagehide',()=>subscriptions.forEach(s=>s.dispose()),{once:true});
+let chartRows=[];
+function syncControls(){for(const [id,v] of [['g',p.g*100],['f',p.fixed/1e4]]){$(id).value=v;$(id).disabled=false} $('gv').textContent=(p.g*100).toFixed(1);$('fv').textContent=Math.round(p.fixed/1e4);if(chartRows.length)chart(chartRows,chartRows.find(x=>x.end<0))}
+function render(r){
+  const sheet=r.slice(0,12),out=r.find(x=>x.end<0);
+  const big=$('big');
+  if(out){const d=ym(out.i);big.className='big num';big.innerHTML=`${d.y}<span class="cn">年</span>${d.m}<span class="cn">月</span>`;$('pre').textContent='现金撑到';
+    $('lead').textContent=`从第 ${out.i} 个月起账上现金为负，当月期末为 ${W(out.end)} 万。`}
+  else{big.className='big num calm';big.innerHTML='36<span class="cn">个月以上</span>';$('pre').textContent='现金至少撑过';
+    $('lead').textContent=`36 个月内期末现金未转负，第 36 个月仍有 ${W(r[35].end)} 万。`}
+  const net=sheet.reduce((a,x)=>a+x.inc-x.exp,0)/12;
+  $('side').innerHTML=`表格 12 个月内月均净${net<0?'流出':'流入'} ${W(Math.abs(net))} 万。<br>${out&&out.i>12?'见底点在前 12 个月之后，来自表格后 24 个月公式。':''}`;
+}
+function chart(r,out){
+  const svg=$('svg'),w=svg.parentElement.clientWidth||900,mob=w<560,h=mob?260:300,padL=mob?30:44,padB=22,padT=26;
+  svg.setAttribute('viewBox',`0 0 ${w} ${h}`);
+  const {max:mx,min:mn,ticks}=cashAxis(r);
+  const y=v=>padT+(mx-v)/(mx-mn)*(h-padT-padB),bw=(w-padL)/36,y0=y(0);
+  let s='';
+  for(const x of r){const bx=padL+(x.i-1)*bw+1,ye=y(x.end),neg=x.end<0,col=neg?'var(--red)':'var(--ink)',top=Math.min(y0,ye),hh=Math.max(Math.abs(ye-y0),1);
+    s+=x.i<=12?`<rect x="${bx}" y="${top}" width="${bw-2}" height="${hh}" fill="${col}"/>`:`<rect x="${bx+.5}" y="${top+.5}" width="${bw-3}" height="${hh-1}" fill="#fff" stroke="${col}"/>`}
+  s+=`<line x1="${padL}" x2="${w}" y1="${y0}" y2="${y0}" stroke="#0a0a0a" stroke-width="2"/>`;
+  s+=`<text x="0" y="${y0+4}">0</text>`;
+  for(const v of ticks){if(v!==0)s+=`<text x="0" y="${y(v)+4}">${+(v/1e4).toPrecision(6)}</text>`}
+  for(const i of [1,6,12,18,24,30,36]){const d=ym(i);s+=`<text x="${padL+(i-.5)*bw}" y="${h-4}" text-anchor="middle">${i===1||i%12===0?d.y+'.'+d.m:''}</text>`}
+  s+=`<line x1="${padL+12*bw}" x2="${padL+12*bw}" y1="${padT-14}" y2="${h-padB}" stroke="#0a0a0a" stroke-width="1" stroke-dasharray="2 3"/>`;
+  s+=`<text x="${padL+12*bw-6}" y="${padT-10}" text-anchor="end">← 前 12 月</text><text x="${padL+12*bw+6}" y="${padT-10}">后 24 月 →</text>`;
+  if(out){const cx=padL+(out.i-.5)*bw;s+=`<line x1="${cx}" x2="${cx}" y1="${padT-14}" y2="${h-padB}" stroke="#e2001a" stroke-width="2"/><text class="red" x="${cx+(out.i>28?-6:6)}" y="${padT+2}" text-anchor="${out.i>28?'end':'start'}">第 ${out.i} 个月见底</text>`}
+  svg.innerHTML=s}
+$('g').oninput=e=>{p.g=e.target.value/100;drafts.add('B4');syncControls();status('待保存…','saving','B4')};
+$('f').oninput=e=>{p.fixed=e.target.value*1e4;drafts.add('B5');syncControls();status('待保存…','saving','B5')};
+$('g').onchange=()=>touch('B4');$('f').onchange=()=>touch('B5');
+$('rs').onclick=reset;
+await watch('base','subscribeRangeById',facts);
+for(const [id,key,cell] of [['g','g','B4'],['f','fixed','B5']])await watch(id,'subscribeCellById',value=>{if(typeof value==='number'){BASE[key]=value;if(!drafts.has(cell))p[key]=value;if(ready)syncControls()}});
+await watch('big','subscribeRangeById',value=>{const r=forecast(value);if(r.length)render(r);else {$('big').textContent='暂无月度数据';status('暂无月度数据','empty')}});
+await watch('svg','subscribeRangeById',value=>{chartRows=forecast(value);if(chartRows.length&&ready)chart(chartRows,chartRows.find(x=>x.end<0));else $('svg').textContent='暂无月度数据'});
+await watch('rows','subscribeRangeById',renderTable);
+addEventListener('resize',()=>{if(chartRows.length&&ready)chart(chartRows,chartRows.find(x=>x.end<0))});
+if($('st').dataset.s==='idle')status('与表格同步');
+</script>
+</body>
+</html>
