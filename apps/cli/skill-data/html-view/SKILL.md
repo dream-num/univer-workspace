@@ -5,6 +5,20 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 
 # Workspace HTML Views
 
+## Start with a style and live data
+
+1. Before authoring, read [design.md](references/design.md). Unless the user already named a
+   style, ask which style they want, listing the ten Chinese names and moods and saying
+   仪表夜航 (`night-gauge`) is the default. If they leave it to you or you cannot ask in a
+   non-interactive run, use 仪表夜航. Never silently choose another style.
+2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
+   a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
+3. Page controls write to Sheet cells or append rows; the page displays the recalculated
+   source values through live bindings. Never re-implement a Sheet formula in page code,
+   embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
+
+## Bind the page
+
 Use HTML, CSS and JavaScript to present or edit existing Sheet data in a Workspace page.
 Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
@@ -12,8 +26,6 @@ Use fine-grained declarations on the consuming elements so bindings are traceabl
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
 For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
 
-Before authoring, read [design.md](references/design.md), choose the matching starter in
-`templates/` yourself, and adapt that complete source instead of starting from a blank page.
 Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 
 ## Find the sources

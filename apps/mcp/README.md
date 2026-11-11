@@ -657,6 +657,14 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
+Read the `html-view` Skill before authoring. Its design reference lists ten styles;
+unless the user already named one, ask which they want and offer 仪表夜航 (`night-gauge`)
+as the default. Use that default when they leave it to the Agent or the run is
+non-interactive. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
+palette, density and signature element when adapting to another scenario. Controls write
+Sheet cells or append rows; display recalculated source values through live bindings,
+never page-side Sheet formulas, copied data or fallback numbers.
+
 The `files` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
 `html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`publish`).
 Each call requires exactly one of `html` or `html_upload_id`; both or neither return

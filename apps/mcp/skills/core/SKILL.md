@@ -283,7 +283,12 @@ screenshot job results carry download links. After an unknown creation result,
 retry only the same operation with its original upload and idempotency key.
 
 Read the `blob` Skill for original files and the `html-view` Skill for live HTML
-backed by Sheet data. Blob publication/replacement and HTML View creation write
+backed by Sheet data. Before authoring, ask the user for one of its ten styles unless
+already named, and say 仪表夜航 (`night-gauge`) is the default. Use it if they leave
+the choice to you or you cannot ask in a non-interactive run.
+Read design.md and start from that style's complete template. Controls write Sheet cells
+or append rows; show recalculated source values, never page-side Sheet formulas, copied
+data or fallback numbers. Blob publication/replacement and HTML View creation write
 directly without Worktree review; apply them only to the intended destination.
 `html_view_create` returns `shareUrl`, `repositoryVisibility` and sorted
 `privateSourceUnitIds`. Return the immersive `shareUrl` and explain that anyone
