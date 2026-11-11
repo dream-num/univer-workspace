@@ -1,28 +1,28 @@
 <!doctype html>
 <!-- Scenario: Startup cash runway; live 36-month Sheet model.
-Expected Sheet: A1:B1 = 现金流假设, 数值. A2:B6 = 期初现金, 月收入,
-月收入增长率 (fraction), 月固定支出, 每月新增人力成本; labels A, numbers B.
-A7 = 起始月份; B7 = text YYYY-MM, e.g. 2026-12.
-A8:E8 = 月份, 期初现金, 收入, 支出, 期末现金.
+Expected Sheet: A1:B1 = Cash flow assumptions, Value. A2:B6 = Opening cash, Monthly revenue,
+Monthly revenue growth (fraction), Fixed monthly costs, Added monthly payroll; labels A, numbers B.
+A7 = Start month; B7 = text YYYY-MM, e.g. 2026-12.
+A8:E8 = Month, Opening cash, Revenue, Costs, Closing cash.
 A9:E44 = 36 monthly formula rows; A = month index 1..36, B:E numeric formula results.
 At least 44 rows and 5 columns. Chart/answer read all 36 months; table shows first 12.
 Replace EVERY REPLACE_UNIT_ID and REPLACE_SHEET_ID with the actual IDs.
 HTML binding IDs are URI-encoded; JavaScript IDs are raw. No other placeholders.
-Controls write B4 and B5; formulas belong to the Sheet, never this page. -->
-<html lang="zh-CN">
+Controls write B4 and B5; formulas belong to the Sheet, never this page.
+Chinese pages: https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/chinese-simplified-900.css, https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/chinese-simplified-700.css, https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/chinese-simplified-400.css; font-family: "Noto Serif SC", "Songti SC", "STSong", "Source Han Serif SC", serif. -->
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>现金流模型 · 粉色报纸</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/chinese-simplified-900.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/chinese-simplified-700.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/chinese-simplified-400.css">
+<title>Cash Flow Model · Broadsheet</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.3.0/latin-900.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.3.0/latin-900-italic.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/playfair-display@5.3.0/latin-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-serif-4@5.2.8/latin-400.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-serif-4@5.2.8/latin-600.css">
 <style>
 :root{--paper:#f6d8c6;--paper2:#f1cdb8;--ink:#201814;--mute:#5e3d31;--red:#9c1a0a;
-  --serif:"Noto Serif SC","Songti SC","STSong","Source Han Serif SC",serif;--disp:"Playfair Display","Noto Serif SC",serif}
+  --serif:"Source Serif 4","Songti SC","STSong",serif;--disp:"Playfair Display","Songti SC","STSong",serif}
 *{box-sizing:border-box;margin:0}
 html{background:var(--paper)}
 body{font:400 17px/1.8 var(--serif);color:var(--ink);background:var(--paper);overflow-x:hidden;
@@ -30,18 +30,18 @@ body{font:400 17px/1.8 var(--serif);color:var(--ink);background:var(--paper);ove
   padding:0 clamp(16px,3vw,48px) 80px;max-width:1360px;margin:0 auto;font-variant-numeric:lining-nums}
 ::selection{background:var(--ink);color:var(--paper)}
 .np{text-align:center;border-bottom:4px double var(--ink);padding:18px 0 10px}
-.np h1{font-weight:900;font-size:clamp(40px,8vw,104px);line-height:1.05;letter-spacing:.06em;margin-right:-.06em}
-.dl{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:4px 0;font-size:13px;margin-top:10px;font-weight:700;flex-wrap:wrap}
+.np h1{font-family:var(--disp);font-weight:900;font-size:clamp(40px,8vw,104px);line-height:1.05;letter-spacing:.06em;margin-right:-.06em}
+.dl{display:flex;justify-content:space-between;gap:12px;border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);padding:4px 0;font-size:13px;margin-top:10px;font-weight:600;flex-wrap:wrap}
 #st{font-weight:400}
-#st[data-s=rejected]{color:var(--red);font-weight:700}
+#st[data-s=rejected]{color:var(--red);font-weight:600}
 .lead{padding:30px 0 26px;border-bottom:1px solid var(--ink);text-align:center}
-.lead h2{font-weight:900;font-size:clamp(26px,4vw,56px);line-height:1.35;max-width:22em;margin:0 auto;text-wrap:balance}
+.lead h2{font-family:var(--disp);font-weight:900;font-size:clamp(26px,4vw,56px);line-height:1.35;max-width:22em;margin:0 auto;text-wrap:balance}
 .lead .kick{font-style:italic;font-family:var(--disp);font-size:15px;margin-top:10px;color:var(--mute)}
-.sent{font-weight:700;font-size:clamp(22px,2.7vw,38px);line-height:2.05;max-width:26em;margin:24px auto 0;text-wrap:pretty}
+.sent{font-weight:600;font-size:clamp(22px,2.7vw,38px);line-height:2.05;max-width:26em;margin:24px auto 0;text-wrap:pretty}
 .ctl{display:inline-flex;align-items:center;vertical-align:baseline;border-bottom:3px solid var(--ink);margin:0 .12em;padding:0 .05em;white-space:nowrap;background:rgba(255,255,255,.35);touch-action:none;cursor:ew-resize}
 .ctl:focus-within{outline:3px solid var(--ink);outline-offset:3px}
 .ctl .v{font-family:var(--disp);font-weight:900;font-style:italic;font-size:1.15em;padding:0 .2em;outline:none;user-select:none;min-width:2.2em;text-align:center}
-.ctl button{font:700 .7em var(--serif);width:1.4em;height:1.4em;border:0;background:var(--ink);color:var(--paper);cursor:pointer;line-height:1}
+.ctl button{font:600 .7em var(--serif);width:1.4em;height:1.4em;border:0;background:var(--ink);color:var(--paper);cursor:pointer;line-height:1}
 .ctl button:hover{background:var(--red)}
 .ctl button:focus-visible{outline:2px solid var(--red);outline-offset:2px}
 .res{color:var(--paper);background:var(--ink);padding:0 .3em;font-family:var(--disp);font-weight:900;font-style:italic;white-space:nowrap}
@@ -50,26 +50,26 @@ body{font:400 17px/1.8 var(--serif);color:var(--ink);background:var(--paper);ove
 .hint{font-size:13px;color:var(--mute);margin-top:6px;font-style:italic}
 .cols{display:grid;grid-template-columns:1.9fr 1fr;gap:0;border-bottom:1px solid var(--ink)}
 .cols>*{padding:22px 28px}.cols>:first-child{padding-left:0;border-right:1px solid var(--ink)}.cols>:last-child{padding-right:0}
-h3{font-weight:900;font-size:22px;line-height:1.3;border-bottom:1px solid var(--ink);padding-bottom:6px;margin-bottom:10px}
+h3{font-family:var(--disp);font-weight:900;font-size:22px;line-height:1.3;border-bottom:1px solid var(--ink);padding-bottom:6px;margin-bottom:10px}
 h3 small{font-weight:400;font-size:12px;margin-left:8px;color:var(--mute)}
 #svg{display:block;width:100%;height:auto}
 #svg text{font-family:var(--disp);font-weight:500;font-size:12px;fill:var(--ink)}
-#svg .note{font-family:var(--serif);font-weight:700;font-size:14px}
+#svg .note{font-family:var(--serif);font-weight:600;font-size:14px}
 .cap{font-size:12px;color:var(--mute);line-height:1.6;margin-top:6px}
 .body{column-count:3;column-gap:32px;column-rule:1px solid rgba(32,24,20,.55);font-size:16px;line-height:1.85;text-align:justify;hyphens:auto;padding:22px 0 20px;border-bottom:1px solid var(--ink)}
 .body p{margin-bottom:.8em;text-indent:2em}
-.body p:first-child::first-letter{font-weight:900;font-size:3.6em;float:left;line-height:.85;margin:.06em .1em 0 0;font-family:var(--serif)}
-.body h4{font-weight:900;font-size:18px;column-span:none;margin:0 0 .5em;line-height:1.4;break-after:avoid}
+.body p:first-child::first-letter{font-weight:900;font-size:3.6em;float:left;line-height:.85;margin:.06em .1em 0 0;font-family:var(--disp)}
+.body h4{font-family:var(--disp);font-weight:900;font-size:18px;column-span:none;margin:0 0 .5em;line-height:1.4;break-after:avoid}
 .base{font-size:15px;line-height:1.7}
 .base div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dotted var(--ink);padding:5px 0}
 .base b{font-family:var(--disp);font-weight:900;white-space:nowrap}
 .tbl{padding:22px 0 8px}
 .tr{display:grid;grid-template-columns:.7fr repeat(4,1fr);gap:8px;font-size:14px;padding:3px 0;border-bottom:1px dotted rgba(32,24,20,.5);font-family:var(--disp);font-weight:500;line-height:1.5}
 .tr>*{text-align:right}.tr>:first-child{text-align:left;font-family:var(--serif)}
-.tr.h{font:700 13px var(--serif);border-bottom:2px solid var(--ink)}
+.tr.h{font:600 13px var(--serif);border-bottom:2px solid var(--ink)}
 .tr.neg b{color:var(--red)}
 .tr b{font-weight:900}
-.reset{font:700 14px var(--serif);background:none;border:1px solid var(--ink);padding:3px 14px;cursor:pointer;color:var(--ink);margin-top:12px}
+.reset{font:600 14px var(--serif);background:none;border:1px solid var(--ink);padding:3px 14px;cursor:pointer;color:var(--ink);margin-top:12px}
 .reset:hover{background:var(--ink);color:var(--paper)}
 .reset:focus-visible{outline:3px solid var(--red);outline-offset:2px}
 @media(max-width:900px){.cols{grid-template-columns:1fr}.cols>*{padding:18px 0}.cols>:first-child{border-right:0;border-bottom:1px solid var(--ink)}.body{column-count:2}}
@@ -81,35 +81,35 @@ h3 small{font-weight:400;font-size:12px;margin-left:8px;color:var(--mute)}
 </head>
 <body>
 <header class="np">
-  <h1>投资人快报</h1>
-  <div class="dl"><span>现金流模型 · 特别推演版</span><span id="date">—</span><span id="st" data-s="idle" role="status" aria-live="polite">加载表格中…</span></div>
+  <h1>Investor Ledger</h1>
+  <div class="dl"><span>Cash Flow Model · Scenario Edition</span><span id="date">—</span><span id="st" data-s="idle" role="status" aria-live="polite">Loading Sheet…</span></div>
 </header>
 
 <section class="lead">
   <h2 id="head">—</h2>
-  <p class="sent" id="sent" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A7:E44">如果月收入增长率是<span class="ctl" data-k="g"><button data-d="-1" aria-label="减少月收入增长率">−</button><span class="v" id="g" data-univer-cell-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B4" role="slider" tabindex="0" aria-label="月收入增长率">—</span><button data-d="1" aria-label="增加月收入增长率">＋</button></span>、每月固定支出是<span class="ctl" data-k="f"><button data-d="-1" aria-label="减少月固定支出">−</button><span class="v" id="f" data-univer-cell-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B5" role="slider" tabindex="0" aria-label="月固定支出">—</span><button data-d="1" aria-label="增加月固定支出">＋</button></span>，现金将在<span id="result">—</span><span id="result-tail"></span>。</p>
+  <p class="sent" id="sent" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A7:E44">With monthly revenue growth of <span class="ctl" data-k="g"><button data-d="-1" aria-label="Decrease monthly revenue growth">−</button><span class="v" id="g" data-univer-cell-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B4" role="slider" tabindex="0" aria-label="Monthly revenue growth">—</span><button data-d="1" aria-label="Increase monthly revenue growth">+</button></span> and fixed monthly costs of <span class="ctl" data-k="f"><button data-d="-1" aria-label="Decrease fixed monthly costs">−</button><span class="v" id="f" data-univer-cell-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B5" role="slider" tabindex="0" aria-label="Fixed monthly costs">—</span><button data-d="1" aria-label="Increase fixed monthly costs">+</button></span>, the runway reaches <span id="result">—</span><span id="result-tail"></span>.</p>
   <p class="hint" id="write-error" role="status"></p>
-  <p class="hint">拖动带下划线的数字，或点两侧的 − ＋，或聚焦后按方向键。</p>
+  <p class="hint">Drag the underlined values, use − / +, or focus a value and press the arrow keys.</p>
 </section>
 
 <section class="cols">
   <div>
-    <h3>现金余额走势图<small>单位：万元</small></h3>
-    <svg id="svg" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A7:E44" role="img" aria-label="36 个月期末现金面积图"></svg>
+    <h3>Cash balance forecast<small>Values in K</small></h3>
+    <svg id="svg" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A7:E44" role="img" aria-label="Closing cash over 36 months"></svg>
     <p class="cap" id="cap"></p>
   </div>
   <aside>
-    <h3>表格里的固定假设</h3>
+    <h3>Sheet assumptions</h3>
     <div class="base" id="base" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B2:B6"></div>
-    <button class="reset" id="rs">恢复表格里的数值</button>
+    <button class="reset" id="rs">Restore Sheet values</button>
   </aside>
 </section>
 
 <section class="body" id="body" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E44"></section>
 
 <section class="tbl">
-  <h3>模型前 12 个月<small>单位：万元</small></h3>
-  <div class="tr h"><span>月份</span><span>期初</span><span>收入</span><span>支出</span><span>期末</span></div>
+  <h3>First 12 months<small>Values in K</small></h3>
+  <div class="tr h"><span>Month</span><span>Opening</span><span>Revenue</span><span>Costs</span><span>Closing</span></div>
   <div id="rows" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A9:E20"></div>
 </section>
 
@@ -119,11 +119,11 @@ const $=id=>document.getElementById(id),subscriptions=[];
 const BASE={},p={};let START,ready=false;
 const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！]+$/u,'');
 function status(text,state='idle',cell){
-  $('st').textContent=cell&&state==='rejected'?'未保存':text;$('st').dataset.s=state;
+  $('st').textContent=cell&&state==='rejected'?'Not saved':text;$('st').dataset.s=state;
   $('write-error').textContent=cell&&state==='rejected'?text:'';$('write-error').dataset.s=state;
 }
 function ym(i){const t=START.y*12+START.m-1+i-1;return{y:Math.floor(t/12),m:t%12+1}}
-const W=v=>(v<0?'−':'')+Math.abs(v/1e4).toFixed(1);
+const W=v=>new Intl.NumberFormat('en-US',{minimumFractionDigits:1,maximumFractionDigits:1}).format(v/1e3);
 function cashAxis(r){
   const high=Math.max(0,...r.map(x=>x.end));
   const low=Math.min(0,...r.map(x=>x.end));
@@ -134,42 +134,42 @@ function cashAxis(r){
   const ticks=Array.from({length:Math.round((max-min)/step)+1},(_,i)=>min+i*step);
   return {min,max,ticks};
 }
-function forecast(value){const month=value[0]?.[1];if(typeof month!=='string'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('B7 需要 YYYY-MM 起始月份');const [y,m]=month.split('-').map(Number);START={y,m};
+function forecast(value){const month=value[0]?.[1];if(typeof month!=='string'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('B7 must contain a start month in YYYY-MM format');const [y,m]=month.split('-').map(Number);START={y,m};
   const rows=value.slice(2).filter(row=>row.some(v=>v!==null&&v!==''));
   if(!rows.length)return [];
-  if(rows.length!==36||rows.some(row=>row.length<5||row.some(v=>typeof v!=='number'||!Number.isFinite(v))))throw Error('等待表格 A9:E44 的 36 个月公式结果');
+  if(rows.length!==36||rows.some(row=>row.length<5||row.some(v=>typeof v!=='number'||!Number.isFinite(v))))throw Error('Waiting for 36 months of Sheet formula results in A9:E44');
   return rows.map(([i,start,inc,exp,end])=>({i,start,inc,exp,end}))}
-function renderTable(value){const rows=value.filter(row=>typeof row[0]==='number');$('rows').innerHTML=rows.length?rows.map(([i,start,inc,exp,end])=>`<div class="tr${end<0?' neg':''}"><span>${i}</span>${[start,inc,exp].map(v=>`<span>${typeof v==='number'?W(v):'—'}</span>`).join('')}<b>${typeof end==='number'?W(end):'—'}</b></div>`).join(''):'暂无月度数据'}
-async function watch(id,kind,render){try{subscriptions.push(await binding[kind](id,({value})=>{try{render(value)}catch(e){status(errorText(e),'rejected')}}))}catch(e){status('无法加载表格：'+errorText(e),'rejected');if($(id)&&['svg','rows','base'].includes(id))$(id).textContent='无法加载数据'}}
+function renderTable(value){const rows=value.filter(row=>typeof row[0]==='number');$('rows').innerHTML=rows.length?rows.map(([i,start,inc,exp,end])=>`<div class="tr${end<0?' neg':''}"><span>${i}</span>${[start,inc,exp].map(v=>`<span>${typeof v==='number'?W(v):'—'}</span>`).join('')}<b>${typeof end==='number'?W(end):'—'}</b></div>`).join(''):'No monthly data'}
+async function watch(id,kind,render){try{subscriptions.push(await binding[kind](id,({value})=>{try{render(value)}catch(e){status(errorText(e),'rejected')}}))}catch(e){status('Unable to load Sheet: '+errorText(e),'rejected');if($(id)&&['svg','rows','base'].includes(id))$(id).textContent='Unable to load data'}}
 const ref=cell=>({unitId,sheetId,row:cell==='B4'?3:4,col:1});
 const drafts=new Set();let writes=Promise.resolve();
-function touch(cell){const value=cell==='B4'?p.g:p.fixed;drafts.add(cell);status('保存中…','saving',cell);
-  writes=writes.then(async()=>{try{await binding.setCellValue(ref(cell),value);await binding.flush();if((cell==='B4'?p.g:p.fixed)===value)drafts.delete(cell);status('已保存到表格 '+cell,'saved',cell)}catch(e){status(errorText(e)+'。草稿已保留；可重试或恢复表格数值。','rejected',cell)}});return writes}
-function reset(){drafts.clear();p.g=BASE.g;p.fixed=BASE.fixed;syncControls();for(const id of ['g-state','f-state'])if($(id))$(id).textContent='';status('已恢复表格里的数值')}
-function facts(value){const v=value.map(row=>row[0]);if(v.some(x=>typeof x!=='number'||!Number.isFinite(x)))throw Error('暂无完整现金流假设');[BASE.cash,BASE.rev,BASE.g,BASE.fixed,BASE.hire]=v;
+function touch(cell){const value=cell==='B4'?p.g:p.fixed;drafts.add(cell);status('Saving…','saving',cell);
+  writes=writes.then(async()=>{try{await binding.setCellValue(ref(cell),value);await binding.flush();if((cell==='B4'?p.g:p.fixed)===value)drafts.delete(cell);status('Saved to Sheet '+cell,'saved',cell)}catch(e){status(errorText(e)+'. Draft kept; retry or restore Sheet values.','rejected',cell)}});return writes}
+function reset(){drafts.clear();p.g=BASE.g;p.fixed=BASE.fixed;syncControls();for(const id of ['g-state','f-state'])if($(id))$(id).textContent='';status('Sheet values restored')}
+function facts(value){const v=value.map(row=>row[0]);if(v.some(x=>typeof x!=='number'||!Number.isFinite(x)))throw Error('Cash flow assumptions are incomplete');[BASE.cash,BASE.rev,BASE.g,BASE.fixed,BASE.hire]=v;
   if(!drafts.has('B4'))p.g=BASE.g;if(!drafts.has('B5'))p.fixed=BASE.fixed;ready=true;syncControls();
-  const entries=[['期初现金',W(BASE.cash),'万元'],['月收入',W(BASE.rev),'万元'],['月收入增长率',(BASE.g*100).toFixed(1),'%'],['月固定支出',W(BASE.fixed),'万元'],['每月新增人力成本',W(BASE.hire),'万元']];
-  $('base').innerHTML=entries.map(([k,v,u])=>`<div><span>${k}</span><b>${v} ${u==='万元'?'万':u}</b></div>`).join('');
+  const entries=[['Opening cash',W(BASE.cash),'K'],['Monthly revenue',W(BASE.rev),'K'],['Monthly revenue growth',(BASE.g*100).toFixed(1),'%'],['Fixed monthly costs',W(BASE.fixed),'K'],['Added monthly payroll',W(BASE.hire),'K']];
+  $('base').innerHTML=entries.map(([k,v,u])=>`<div><span>${k}</span><b>${v} ${u}</b></div>`).join('');
 }
 window.addEventListener('pagehide',()=>subscriptions.forEach(s=>s.dispose()),{once:true});
 let chartRows=[];
-const CTL={g:{min:0,max:12,step:.5,fmt:v=>v.toFixed(1)+'%',cell:'B4',get:()=>p.g*100,set:v=>p.g=v/100,label:'月收入增长率'},
-  f:{min:20,max:60,step:1,fmt:v=>v+' 万',cell:'B5',get:()=>Math.round(p.fixed/1e4),set:v=>p.fixed=v*1e4,label:'月固定支出'}};
+const CTL={g:{min:0,max:12,step:.5,fmt:v=>v.toFixed(1)+'%',cell:'B4',get:()=>p.g*100,set:v=>p.g=v/100,label:'Monthly revenue growth'},
+  f:{min:20,max:60,step:1,fmt:v=>(v*10)+'K',cell:'B5',get:()=>Math.round(p.fixed/1e4),set:v=>p.fixed=v*1e4,label:'Fixed monthly costs'}};
 function syncControls(){for(const [k,c] of Object.entries(CTL)){const el=$(k);el.textContent=c.fmt(c.get());el.setAttribute('aria-valuemin',c.min);el.setAttribute('aria-valuemax',c.max);el.setAttribute('aria-valuenow',c.get());el.setAttribute('aria-valuetext',c.fmt(c.get()))}}
 function nudge(k,d){if(!ready)return;const c=CTL[k];let v=Math.min(c.max,Math.max(c.min,Math.round((c.get()+d*c.step)/c.step)*c.step));if(v===c.get())return;c.set(v);drafts.add(c.cell);syncControls();if(!drag)touch(c.cell);const el=document.querySelector(`.ctl[data-k=${k}] .v`);el&&el.focus({preventScroll:true})}
 function render(r){
   const sheet=r.slice(0,12),out=r.find(x=>x.end<0),d=out&&ym(out.i);
-  const res=out?`<span class="res">${d.y}<span class="cn"> 年 </span>${d.m}<span class="cn"> 月</span></span>`:`<span class="res ok">36 个月以后</span>`;
-  $('result').innerHTML=res;$('result-tail').textContent=out?'用完':'仍未见底';
-  $('head').textContent=out?`账上现金预计撑到 ${d.y} 年 ${d.m} 月，共 ${out.i-1} 个月`:`按当前假设，36 个月内现金不会见底`;
+  const res=out?`<span class="res">${d.y}-${String(d.m).padStart(2,'0')}</span>`:`<span class="res ok">beyond 36 months</span>`;
+  $('result').innerHTML=res;$('result-tail').textContent=out?'':'';
+  $('head').textContent=out?`Cash runway: ${out.i-1} months, until ${d.y}-${String(d.m).padStart(2,'0')}`:`Current assumptions keep cash positive for 36 months`;
 }
 function renderBody(r,base){const BASE=base,out=r.find(x=>x.end<0),sheet=r.slice(0,12);
   const net=sheet.reduce((a,x)=>a+x.inc-x.exp,0)/12,last=sheet[11],peak=r.reduce((a,x)=>x.end>a.end?x:a,r[0]);
   const hi=r.find(x=>x.inc>x.exp);
-  $('body').innerHTML=`<p>${out?`记者按表格里的公式推演，第 ${out.i} 个月期末现金为 ${W(out.end)} 万元，这是现金第一次转负。`:`按表格公式推演，未来 36 个月期末现金没有出现负数。`}期初现金 ${W(BASE.cash)} 万元，月收入 ${W(BASE.rev)} 万元，每月新增人力成本 ${W(BASE.hire)} 万元。</p>
-  <p>表格涵盖的 12 个月里，月均净${net<0?'流出':'流入'} ${W(Math.abs(net))} 万元，第 12 个月末现金为 ${W(last.end)} 万元。图中实线为前 12 个月，虚线为后 24 个月；全部读取表格公式结果。</p>
-  <p>${hi?`收入首次在第 ${hi.i} 个月超过支出。`:`在这组假设下，收入始终没有追上支出：人力成本每月递增，抵消了收入增长。`}${peak.i>1&&peak.end>BASE.cash?`现金在第 ${peak.i} 个月达到高点 ${W(peak.end)} 万元。`:`现金没有高于期初水平。`}</p>
-  <p>读者可以直接拖动头版句子里的数字，看增长率和固定支出怎样改变这一天。每次改动都会写回表格对应的单元格。</p>`;
+  $('body').innerHTML=`<p>${out?`The Sheet forecast first turns negative in month ${out.i}, closing at ${W(out.end)}K. `:`The Sheet forecast keeps closing cash positive for all 36 months. `}Opening cash is ${W(BASE.cash)}K, monthly revenue is ${W(BASE.rev)}K, and payroll rises by ${W(BASE.hire)}K each month.</p>
+  <p>In the first 12 months, average monthly net ${net<0?'outflow':'inflow'} is ${W(Math.abs(net))}K. Month 12 closes at ${W(last.end)}K. The solid line covers the first 12 months; the dashed line covers the next 24. Both read Sheet formula results.</p>
+  <p>${hi?`Revenue first exceeds costs in month ${hi.i}. `:`Revenue never catches costs under these assumptions: rising payroll offsets revenue growth. `}${peak.i>1&&peak.end>BASE.cash?`Cash peaks in month ${peak.i} at ${W(peak.end)}K.`:`Cash never exceeds its opening balance.`}</p>
+  <p>Drag the underlined figures in the headline sentence to explore how growth and fixed costs affect the runway. Each change writes to its source cell in the Sheet.</p>`;
 }
 function chart(r,out){
   const svg=$('svg'),w=svg.parentElement.clientWidth||800,h=w<500?300:380,L=34,B=24,T=40,R=8;
@@ -182,16 +182,16 @@ function chart(r,out){
   let s=`<defs><pattern id="h" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="5" stroke="#201814" stroke-width="1.2"/></pattern>
   <pattern id="hr" width="4" height="4" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#9c1a0a" stroke-width="1.6"/></pattern>
   <clipPath id="up"><rect x="0" y="0" width="${w}" height="${y0}"/></clipPath><clipPath id="dn"><rect x="0" y="${y0}" width="${w}" height="${h}"/></clipPath></defs>`;
-  for(const v of ticks){if(v===0)continue;s+=`<line x1="${L}" x2="${w-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#201814" stroke-opacity=".25" stroke-width="1"/><text x="0" y="${Y(v)+4}">${+(v/1e4).toPrecision(6)}</text>`}
+  for(const v of ticks){if(v===0)continue;s+=`<line x1="${L}" x2="${w-R}" y1="${Y(v)}" y2="${Y(v)}" stroke="#201814" stroke-opacity=".25" stroke-width="1"/><text x="0" y="${Y(v)+4}">${new Intl.NumberFormat('en-US',{notation:'compact',maximumFractionDigits:1}).format(v)}</text>`}
   s+=`<path d="${poly(pts)}" fill="url(#h)" clip-path="url(#up)"/><path d="${poly(pts)}" fill="url(#hr)" clip-path="url(#dn)"/>`;
   s+=`<path d="${path(pts.slice(0,12))}" fill="none" stroke="#201814" stroke-width="3.2" stroke-linejoin="round"/><path d="${path(pts.slice(11))}" fill="none" stroke="#201814" stroke-width="2.4" stroke-dasharray="7 5"/>`;
   s+=`<line x1="${L}" x2="${w-R}" y1="${y0}" y2="${y0}" stroke="#201814" stroke-width="2.4"/>`;
-  s+=`<line x1="${X(12.5)}" x2="${X(12.5)}" y1="${T-20}" y2="${h-B}" stroke="#201814" stroke-width="1" stroke-dasharray="1 3"/><text x="${X(12.5)-6}" y="${T-26}" text-anchor="end" class="note">前 12 月</text><text x="${X(12.5)+6}" y="${T-26}" class="note">后 24 月</text>`;
-  for(const i of [1,12,24,36]){const d=ym(i);s+=`<text x="${X(i)}" y="${h-6}" text-anchor="${i===1?'start':i===36?'end':'middle'}">${d.y}.${d.m}</text>`}
+  s+=`<line x1="${X(12.5)}" x2="${X(12.5)}" y1="${T-20}" y2="${h-B}" stroke="#201814" stroke-width="1" stroke-dasharray="1 3"/><text x="${X(12.5)-6}" y="${T-26}" text-anchor="end" class="note">First 12 months</text><text x="${X(12.5)+6}" y="${T-26}" class="note">Next 24 months</text>`;
+  for(const i of [1,12,24,36]){const d=ym(i);s+=`<text x="${X(i)}" y="${h-6}" text-anchor="${i===1?'start':i===36?'end':'middle'}">${d.y}-${String(d.m).padStart(2,'0')}</text>`}
   if(out){const x=X(out.i),a=x>w*.62?-1:1;
     s+=`<circle cx="${x}" cy="${y0}" r="7" fill="#201814" stroke="#f6d8c6" stroke-width="2"/>`;
     s+=`<path d="M${x},${y0-9}C${x+a*10},${y0-56} ${x+a*30},${y0-72} ${x+a*52},${y0-82}" fill="none" stroke="#201814" stroke-width="1.6"/><path d="M${x},${y0-9}l${a*-1},-8m0,8l${a*7},-3" stroke="#201814" stroke-width="1.6" fill="none"/>`;
-    s+=`<text class="note" x="${x+a*58}" y="${y0-84}" text-anchor="${a>0?'start':'end'}">现金在此用完</text>`}
+    s+=`<text class="note" x="${x+a*58}" y="${y0-84}" text-anchor="${a>0?'start':'end'}">Cash runs out here</text>`}
   svg.innerHTML=s}
 document.addEventListener('click',e=>{const b=e.target.closest('.ctl button');if(b)nudge(b.parentElement.dataset.k,+b.dataset.d)});
 document.addEventListener('keydown',e=>{const v=e.target.closest&&e.target.closest('.ctl .v');if(!v)return;const k=v.parentElement.dataset.k;
@@ -203,13 +203,13 @@ addEventListener('pointerup',()=>{if(drag)touch(CTL[drag.k].cell);drag=null;docu
 $('rs').onclick=reset;
 await watch('base','subscribeRangeById',facts);
 for(const [id,key,cell] of [['g','g','B4'],['f','fixed','B5']])await watch(id,'subscribeCellById',value=>{if(typeof value==='number'){BASE[key]=value;if(!drafts.has(cell))p[key]=value;if(ready)syncControls()}});
-await watch('sent','subscribeRangeById',value=>{const r=forecast(value);if(r.length)render(r);else {$('result').textContent='暂无月度数据';status('暂无月度数据','empty')}});
-await watch('body','subscribeRangeById',value=>{const r=forecast(value.slice(5)),v=value.slice(0,5).map(row=>row[1]);if(r.length)renderBody(r,{cash:v[0],rev:v[1],hire:v[4]});else $('body').textContent='暂无月度数据'});
-await watch('svg','subscribeRangeById',value=>{chartRows=forecast(value);if(chartRows.length){const out=chartRows.find(x=>x.end<0);chart(chartRows,out);$('cap').textContent='实线：表格前 12 个月。虚线：表格后 24 个月。'+(out?'黑色标记为现金首次转负的月份。':'')}else $('svg').textContent='暂无月度数据'});
-$('date').textContent=new Intl.DateTimeFormat('zh-CN',{dateStyle:'long'}).format(new Date());
+await watch('sent','subscribeRangeById',value=>{const r=forecast(value);if(r.length)render(r);else {$('result').textContent='No monthly data';status('No monthly data','empty')}});
+await watch('body','subscribeRangeById',value=>{const r=forecast(value.slice(5)),v=value.slice(0,5).map(row=>row[1]);if(r.length)renderBody(r,{cash:v[0],rev:v[1],hire:v[4]});else $('body').textContent='No monthly data'});
+await watch('svg','subscribeRangeById',value=>{chartRows=forecast(value);if(chartRows.length){const out=chartRows.find(x=>x.end<0);chart(chartRows,out);$('cap').textContent='Solid: first 12 months. Dashed: next 24 months. '+(out?'The black marker shows the first month of negative cash.':'')}else $('svg').textContent='No monthly data'});
+$('date').textContent=new Intl.DateTimeFormat('en-US',{dateStyle:'long'}).format(new Date());
 await watch('rows','subscribeRangeById',renderTable);
 addEventListener('resize',()=>{if(chartRows.length&&ready)chart(chartRows,chartRows.find(x=>x.end<0))});
-if($('st').dataset.s==='idle')status('与表格同步');
+if($('st').dataset.s==='idle')status('Synced with Sheet');
 </script>
 </body>
 </html>

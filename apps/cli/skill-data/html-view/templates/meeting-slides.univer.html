@@ -1,22 +1,23 @@
 <!doctype html>
 <!-- Scenario: Weekly sales meeting, local region/channel filters and a live record target editor.
-Expected Sheet: row 1 headers A 月份, B 区域, C 渠道, D 实际销售额, E 目标销售额.
-Rows 2:201 contain up to 200 records; at least 201 rows and 5 columns. Amounts are numeric yuan; target is nonnegative. Region values 华东/华南/华北; channels 直销/渠道/线上.
+Expected Sheet: row 1 headers A Month, B Region, C Channel, D Actual sales, E Sales target.
+Rows 2:201 contain up to 200 records; at least 201 rows and 5 columns. Amounts are numeric; target is nonnegative. Region values East/South/North; channels Direct/Partner/Online.
 Replace EVERY REPLACE_UNIT_ID and REPLACE_SHEET_ID with actual IDs: URI-encoded in HTML attributes, raw in JavaScript. No other placeholders.
+Chinese pages: https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/900.css https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/700.css https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/500.css https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/700.css; font-family: "Noto Serif SC", "Songti SC", "STSong", serif; "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif
 Fixed-coordinate bindings; inspect worksheet bounds before adapting. Editing E replaces that cell's contents; use literal target cells. -->
-<html lang="zh-CN">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>2026Q3 销售周会 · 幻灯</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/900.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-serif-sc@5.3.1/700.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/500.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/700.css">
+<title>Q3 2026 Sales · Meeting Slides</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/latin-700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/fraunces@5.3.0/latin-900.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.3.1/latin-500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.3.1/latin-700.css">
 <script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
 <style>
 :root{--bg:#14110f;--tx:#f4eee3;--dim:#b3a99a;--hot:#ff5a36;--gold:#e9c46a;--line:#3a332c;
- --serif:"Noto Serif SC","Songti SC",serif;--sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif}
+ --serif:"Fraunces","Songti SC","STSong",serif;--sans:"Source Sans 3","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
 *{box-sizing:border-box;margin:0}
 html{background:var(--bg);scroll-snap-type:y mandatory;scroll-behavior:smooth;color-scheme:dark}
 body{color:var(--tx);font:500 1.125rem/1.6 var(--sans);overflow-x:hidden}
@@ -24,7 +25,7 @@ body{color:var(--tx);font:500 1.125rem/1.6 var(--sans);overflow-x:hidden}
 :focus-visible{outline:3px solid var(--gold);outline-offset:3px}
 button,select{font:inherit;color:inherit}
 .bar{position:fixed;inset:0 0 auto 0;height:48px;z-index:10;display:flex;align-items:center;gap:6px 18px;padding:0 clamp(12px,2.5vw,36px);background:#14110fe6;border-bottom:1px solid var(--line);overflow:hidden}
-.bar b{font-family:var(--serif);font-weight:900;font-size:1rem;white-space:nowrap}
+.bar b{font-family:var(--sans);font-weight:700;font-size:1rem;white-space:nowrap}
 .rs{display:flex;gap:2px}
 .rs button{background:none;border:0;padding:6px 14px;cursor:pointer;font-weight:700;border-radius:2px;border-bottom:3px solid transparent}
 .rs button:hover{background:#2a241f}
@@ -55,7 +56,7 @@ mark.neg::before{background:#c8381b}
 .row.bad .fl{background:var(--hot)}
 .tbl{overflow-x:auto}
 table{width:100%;border-collapse:collapse;font-size:1rem;font-variant-numeric:tabular-nums;min-width:520px}
-th{text-align:left;font-family:var(--serif);font-weight:900;color:var(--dim);padding:6px 10px;border-bottom:2px solid var(--tx)}
+th{text-align:left;font-family:var(--sans);font-weight:700;color:var(--dim);padding:6px 10px;border-bottom:2px solid var(--tx)}
 td{padding:9px 10px;border-bottom:1px solid var(--line)}
 th.r,td.r{text-align:right}
 td.neg{color:#ff8a6c;font-weight:700}
@@ -70,18 +71,18 @@ h3{font-family:var(--serif);font-weight:900;font-size:clamp(2rem,5vw,3.6rem);lin
 </head>
 <body>
 <div class="bar">
- <b>Q3 周会</b>
- <div class="rs" id="rs" role="group" aria-label="区域"></div>
- <label class="hint">渠道 <select id="cs" aria-label="渠道"></select></label>
- <span class="hint">↑↓ 翻页　←→ 换区域</span>
- <span id="status" role="status" aria-live="polite">加载实时数据…</span>
+ <b>Q3 Review</b>
+ <div class="rs" id="rs" role="group" aria-label="Region"></div>
+ <label class="hint">Channel <select id="cs" aria-label="Channel"></select></label>
+ <span class="hint">↑↓ Slides · ←→ Regions</span>
+ <span id="status" role="status" aria-live="polite">Loading live data…</span>
 </div>
-<nav class="dots" id="dots" aria-label="章节"></nav>
+<nav class="dots" id="dots" aria-label="Slides"></nav>
 <section class="s" id="s0" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
 <section class="s" id="s1" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
 <section class="s" id="s2" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
 <section class="s" id="s3" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section>
-<section class="s" id="s4" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section><div id="editor" class="editor" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"><label for="record">调整记录目标</label> <select id="record" aria-label="销售记录"><option>加载中…</option></select> <label for="target">目标（元）</label> <input id="target" type="number" min="0" step="1" required disabled aria-describedby="write-state"><span id="write-state" role="status" aria-live="polite">加载中…</span></div>
+<section class="s" id="s4" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></section><div id="editor" class="editor" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"><label for="record">Edit record target</label> <select id="record" aria-label="Sales record"><option>Loading…</option></select> <label for="target">Target</label> <input id="target" type="number" min="0" step="1" required disabled aria-describedby="write-state"><span id="write-state" role="status" aria-live="polite">Loading…</span></div>
 <script type="module">
 
 const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
@@ -96,66 +97,68 @@ function render(){refreshers.forEach(fn=>fn())}
 async function watch(id,fn){
  const update=()=>{const data=update.data;if(!data)return;D=data;MON=[...new Set(D.map(x=>x.m))].sort();fn()};
  refreshers.push(update);
- try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{update.data=records(value);update();if(!connected){connected=true;status('实时数据已连接')}}))}
- catch(e){document.getElementById(id).textContent='无法加载数据：'+errorText(e);status('无法加载数据：'+errorText(e),true)}
+ try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{update.data=records(value);update();if(!connected){connected=true;status('Live data connected')}}))}
+ catch(e){document.getElementById(id).textContent='Unable to load data: '+errorText(e);status('Unable to load data: '+errorText(e),true)}
 }
 const editor=document.getElementById('editor'),record=document.getElementById('record'),target=document.getElementById('target'),result=document.getElementById('write-state');
 let editorRows=[];
-function selectRecord(){const row=editorRows.find(x=>String(x.row)===record.value);if(!row)return;target.setAttribute('data-univer-cell-model',`${encodeURIComponent(unitId)}:${encodeURIComponent(sheetId)}:E${row.row+1}`);target.disabled=false;result.textContent='金额单位：元；修改目标后移开焦点保存'}
+function selectRecord(){const row=editorRows.find(x=>String(x.row)===record.value);if(!row)return;target.setAttribute('data-univer-cell-model',`${encodeURIComponent(unitId)}:${encodeURIComponent(sheetId)}:E${row.row+1}`);target.disabled=false;result.textContent='Change the target, then leave the field to save.'}
 record.addEventListener('change',selectRecord);
 target.addEventListener('change',async()=>{
  if(!target.checkValidity())return;
- result.textContent='正在写入表格…';status('正在写入表格…');record.disabled=true;
- try{await binding.flush();result.textContent='已保存到表格';status('已保存到表格')}
- catch(e){result.textContent=`${errorText(e)}。草稿已保留；按 Escape 恢复来源值。`;status(result.textContent,true)}
+ result.textContent='Saving to Sheet…';status('Saving to Sheet…');record.disabled=true;
+ try{await binding.flush();result.textContent='Saved to Sheet';status('Saved to Sheet')}
+ catch(e){result.textContent=`${errorText(e)}. Draft kept. Press Escape to restore the source value.`;status(result.textContent,true)}
  finally{record.disabled=false}
 });
-watch('editor',()=>{editorRows=D;const selected=record.value;record.innerHTML=D.map(x=>`<option value="${x.row}">${x.m} · ${x.r} · ${x.c}</option>`).join('');if(D.some(x=>String(x.row)===selected))record.value=selected;else selectRecord();if(!D.length){target.disabled=true;result.textContent='暂无销售记录'}});
+watch('editor',()=>{editorRows=D;const selected=record.value;record.innerHTML=D.map(x=>`<option value="${x.row}">${x.m} · ${x.r} · ${x.c}</option>`).join('');if(D.some(x=>String(x.row)===selected))record.value=selected;else selectRecord();if(!D.length){target.disabled=true;result.textContent='No sales records'}});
 window.addEventListener('pagehide',()=>{subscriptions.forEach(s=>s.dispose());chart?.dispose();if(typeof io!=='undefined')io.disconnect()},{once:true});
 
-const REG=['全部','华东','华南','华北'],CH=['全部','直销','渠道','线上'];
-const st={r:'全部',c:'全部'};
-const wan=v=>(v/1e4).toFixed(1);
+const REG=['All','East','South','North'],CH=['All','Direct','Partner','Online'];
+const st={r:'All',c:'All'};
+const amountFormat=new Intl.NumberFormat('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const amount=v=>amountFormat.format(v/1e6);
+const monthLabel=m=>new Intl.DateTimeFormat('en-US',{month:'short',timeZone:'UTC'}).format(new Date(m.slice(0,7)+'-01T00:00:00Z'));
 const gp=(a,t)=>((t>0?a/t-1:NaN))*100;
 const pc=x=>Number.isFinite(x)?(x>=0?'+':'−')+Math.abs(x).toFixed(1)+'%':'—';
 const sum=f=>{let a=0,t=0;D.filter(f).forEach(x=>{a+=x.a;t+=x.t});return{a,t}};
-const rOk=x=>st.r==='全部'||x.r===st.r, cOk=x=>st.c==='全部'||x.c===st.c, ok=x=>rOk(x)&&cOk(x);
+const rOk=x=>st.r==='All'||x.r===st.r, cOk=x=>st.c==='All'||x.c===st.c, ok=x=>rOk(x)&&cOk(x);
 function pick(k,v){st[k]=v;render()}
-const scopeName=()=>(st.r==='全部'?'全公司':st.r)+(st.c==='全部'?'':' '+st.c);
+const scopeName=()=>(st.r==='All'?'Company':st.r)+(st.c==='All'?'':' '+st.c);
 function slide(i){
 
- document.getElementById('rs').innerHTML=REG.map(r=>`<button aria-pressed="${st.r===r}" data-r="${r}">${r==='全部'?'全公司':r}</button>`).join('');
+ document.getElementById('rs').innerHTML=REG.map(r=>`<button aria-pressed="${st.r===r}" data-r="${r}">${r==='All'?'Company':r}</button>`).join('');
  document.querySelectorAll('#rs button').forEach(b=>b.onclick=()=>pick('r',b.dataset.r));
  const cs=document.getElementById('cs');cs.innerHTML=CH.map(c=>`<option ${c===st.c?'selected':''}>${c}</option>`).join('');cs.onchange=()=>pick('c',cs.value);
- if(!D.some(ok)){document.getElementById('s'+i).textContent='当前筛选暂无销售记录';return}
+ if(!D.some(ok)){document.getElementById('s'+i).textContent='No sales records in this filter';return}
  const T=sum(ok),x=gp(T.a,T.t),ahead=T.a>=T.t,sn=scopeName();
- if(i===0)document.getElementById('s0').innerHTML=`<p class="p">2026 年第三季度销售周会</p><h1 class="k">${sn}<br>三季度销售<br><mark class="${ahead?'':'neg'}">${wan(T.a)} 万</mark></h1><p class="p">按 ↓ 开始。顶部可切换区域和渠道，筛选仅在本页生效。</p>`;
- if(i===1)document.getElementById('s1').innerHTML=`<h2 class="k">${sn}${ahead?'领先':'落后'}目标 <mark class="${ahead?'':'neg'}">${Number.isFinite(x)?Math.abs(x).toFixed(1)+'%':'—'}</mark></h2><p class="p">实际 <b>${wan(T.a)} 万</b>，目标 <b>${wan(T.t)} 万</b>，${ahead?'超出':'缺口'} <b>${wan(Math.abs(T.a-T.t))} 万</b>。</p>`;
+ if(i===0)document.getElementById('s0').innerHTML=`<p class="p">Q3 2026 Sales Review</p><h1 class="k">${sn}<br>Q3 sales<br><mark class="${ahead?'':'neg'}">${amount(T.a)} M</mark></h1><p class="p">Press ↓ to begin. Region and channel filters apply to this page only.</p>`;
+ if(i===1)document.getElementById('s1').innerHTML=`<h2 class="k">${sn} is ${ahead?'above':'below'} target <mark class="${ahead?'':'neg'}">${Number.isFinite(x)?Math.abs(x).toFixed(1)+'%':'—'}</mark></h2><p class="p">Actual <b>${amount(T.a)} M</b>, target <b>${amount(T.t)} M</b>, ${ahead?'ahead by':'short by'} <b>${amount(Math.abs(T.a-T.t))} M</b>.</p>`;
  const mo=MON.map(m=>({m,...sum(d=>d.m===m&&ok(d))}));const n=mo.filter(s=>s.a>=s.t).length;
  const best=mo.reduce((p,c)=>gp(c.a,c.t)>gp(p.a,p.t)?c:p),worst=mo.reduce((p,c)=>gp(c.a,c.t)<gp(p.a,p.t)?c:p);
- if(i===2){chart?.dispose();document.getElementById('s2').innerHTML=`<h2 class="k m">${MON.length}个月里 <mark class="${n===MON.length?'':'neg'}">${n} 个月</mark>达成目标</h2><div id="chart"></div><p class="p">最好是 <b>${+best.m.slice(5)}月 ${pc(gp(best.a,best.t))}</b>，最弱是 <b>${+worst.m.slice(5)}月 ${pc(gp(worst.a,worst.t))}</b>。金色标线是目标。</p>`;
+ if(i===2){chart?.dispose();document.getElementById('s2').innerHTML=`<h2 class="k m">In ${MON.length} months, <mark class="${n===MON.length?'':'neg'}">${n} hit target</mark></h2><div id="chart"></div><p class="p">Best: <b>${monthLabel(best.m)} ${pc(gp(best.a,best.t))}</b>. Weakest: <b>${monthLabel(worst.m)} ${pc(gp(worst.a,worst.t))}</b>. Gold lines mark targets.</p>`;
  draw(mo);}
- const dim=st.c==='全部'?['直销','渠道','线上']:(st.r==='全部'?['华东','华南','华北']:[st.r]);
- const key=st.c==='全部'?'c':'r';
+ const dim=st.c==='All'?['Direct','Partner','Online']:(st.r==='All'?['East','South','North']:[st.r]);
+ const key=st.c==='All'?'c':'r';
  const bd=dim.map(v=>({v,...sum(d=>d[key]===v&&ok(d))}));
  const wr=bd.reduce((p,c)=>gp(c.a,c.t)<gp(p.a,p.t)?c:p),br=bd.reduce((p,c)=>gp(c.a,c.t)>gp(p.a,p.t)?c:p);
  const neg=gp(wr.a,wr.t)<0,hl=neg?wr:br,mx=Math.max(...bd.map(b=>Math.max(b.a,b.t)));
- if(i===3)document.getElementById('s3').innerHTML=`<h2 class="k m">${hl.v}${neg?'缺口最大':'领先最多'} <mark class="${neg?'neg':''}">${pc(gp(hl.a,hl.t))}</mark></h2><div class="rows">${bd.map(b=>`<div class="row ${b.a<b.t?'bad':''}"><span>${b.v}</span><span class="tr"><i class="fl" data-w="${b.a/mx*100}"></i><i class="tg" style="left:${b.t/mx*100}%"></i></span><span class="v">${pc(gp(b.a,b.t))}</span></div>`).join('')}</div><p class="p">按${st.c==='全部'?'渠道':'区域'}拆开。白条是实际，金色标线是目标，橙红条表示低于目标。</p>`;
+ if(i===3)document.getElementById('s3').innerHTML=`<h2 class="k m">${hl.v} has the ${neg?'largest gap':'strongest lead'} <mark class="${neg?'neg':''}">${pc(gp(hl.a,hl.t))}</mark></h2><div class="rows">${bd.map(b=>`<div class="row ${b.a<b.t?'bad':''}"><span>${b.v}</span><span class="tr"><i class="fl" data-w="${b.a/mx*100}"></i><i class="tg" style="left:${b.t/mx*100}%"></i></span><span class="v">${pc(gp(b.a,b.t))}</span></div>`).join('')}</div><p class="p">By ${st.c==='All'?'channel':'region'}. White bars show actual sales, gold marks targets, and orange bars fall short.</p>`;
  const rows=D.filter(ok);
- if(i===4)document.getElementById('s4').innerHTML=`<h3>明细表</h3><div class="tbl"><table><thead><tr><th>月份</th><th>区域</th><th>渠道</th><th class="r">实际(万)</th><th class="r">目标(万)</th><th class="r">差距</th></tr></thead><tbody>${rows.map(d=>{const p=gp(d.a,d.t);return `<tr><td>${d.m}</td><td>${d.r}</td><td>${d.c}</td><td class="r">${wan(d.a)}</td><td class="r">${wan(d.t)}</td><td class="r ${p<0?'neg':'pos'}">${pc(p)}</td></tr>`}).join('')}</tbody></table></div>`;
+ if(i===4)document.getElementById('s4').innerHTML=`<h3>Sales detail</h3><div class="tbl"><table><thead><tr><th>Month</th><th>Region</th><th>Channel</th><th class="r">Actual(M)</th><th class="r">Target(M)</th><th class="r">Gap</th></tr></thead><tbody>${rows.map(d=>{const p=gp(d.a,d.t);return `<tr><td>${d.m}</td><td>${d.r}</td><td>${d.c}</td><td class="r">${amount(d.a)}</td><td class="r">${amount(d.t)}</td><td class="r ${p<0?'neg':'pos'}">${pc(p)}</td></tr>`}).join('')}</tbody></table></div>`;
  observe();
 }
 let chart;
 function draw(mo){
- if(!window.echarts){document.getElementById('chart').textContent='图表加载失败，请刷新重试';return}
+ if(!window.echarts){document.getElementById('chart').textContent='Chart unavailable. Refresh to retry.';return}
  chart=echarts.getInstanceByDom(document.getElementById('chart'))||echarts.init(document.getElementById('chart'),null,{renderer:'svg'});
  const big=innerWidth>760;
  chart.setOption({animationDuration:700,animationEasing:'cubicOut',grid:{left:4,right:4,top:34,bottom:8,containLabel:true},
-  xAxis:{type:'category',data:mo.map(s=>+s.m.slice(5)+'月'),axisLine:{show:false},axisTick:{show:false},axisLabel:{fontFamily:'Noto Serif SC',fontWeight:900,fontSize:big?26:18,color:'#f4eee3'}},
+  xAxis:{type:'category',data:mo.map(s=>monthLabel(s.m)),axisLine:{show:false},axisTick:{show:false},axisLabel:{fontFamily:'Fraunces, "Songti SC", "STSong", serif',fontWeight:900,fontSize:big?26:18,color:'#f4eee3'}},
   yAxis:{type:'value',show:false,min:0},
-  tooltip:{trigger:'axis',backgroundColor:'#14110f',borderColor:'#3a332c',textStyle:{color:'#f4eee3'},valueFormatter:v=>wan(v)+' 万'},
-  series:[{name:'实际',type:'bar',barWidth:'42%',data:mo.map(s=>({value:s.a,itemStyle:{color:s.a>=s.t?'#f4eee3':'#ff5a36'}})),label:{show:true,position:'top',fontFamily:'Noto Serif SC',fontWeight:900,fontSize:big?26:18,color:'#f4eee3',formatter:p=>wan(p.value)}},
-   {name:'目标',type:'custom',z:5,data:mo.map((s,i)=>[i,s.t]),renderItem:(p,api)=>{const c=api.coord([api.value(0),api.value(1)]),w=api.size([1,0])[0]*.62;return{type:'line',shape:{x1:c[0]-w/2,x2:c[0]+w/2,y1:c[1],y2:c[1]},style:{stroke:'#e9c46a',lineWidth:5}}}}]},true);
+  tooltip:{trigger:'axis',backgroundColor:'#14110f',borderColor:'#3a332c',textStyle:{color:'#f4eee3'},valueFormatter:v=>amount(v)+' M'},
+  series:[{name:'Actual',type:'bar',barWidth:'42%',data:mo.map(s=>({value:s.a,itemStyle:{color:s.a>=s.t?'#f4eee3':'#ff5a36'}})),label:{show:true,position:'top',fontFamily:'Fraunces, "Songti SC", "STSong", serif',fontWeight:900,fontSize:big?26:18,color:'#f4eee3',formatter:p=>amount(p.value)}},
+   {name:'Target',type:'custom',z:5,data:mo.map((s,i)=>[i,s.t]),renderItem:(p,api)=>{const c=api.coord([api.value(0),api.value(1)]),w=api.size([1,0])[0]*.62;return{type:'line',shape:{x1:c[0]-w/2,x2:c[0]+w/2,y1:c[1],y2:c[1]},style:{stroke:'#e9c46a',lineWidth:5}}}}]},true);
  chart.resize();
 }
 function observe(){
@@ -163,7 +166,7 @@ function observe(){
 }
 const secs=[...document.querySelectorAll('section.s')];
 const dots=document.getElementById('dots');
-dots.innerHTML=secs.map((s,i)=>`<button aria-label="第 ${i+1} 页" data-i="${i}"></button>`).join('');
+dots.innerHTML=secs.map((s,i)=>`<button aria-label="Slide ${i+1}" data-i="${i}"></button>`).join('');
 dots.querySelectorAll('button').forEach(b=>b.onclick=()=>secs[b.dataset.i].scrollIntoView());
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');const i=secs.indexOf(e.target);dots.querySelectorAll('button').forEach((b,j)=>b.classList.toggle('on',i===j))}}),{threshold:.55});
 secs.forEach(s=>io.observe(s));
