@@ -70,7 +70,12 @@ export const messages = {
     nativePreviewShareDescription:
       "复制链接给已有访问权限的同事。嵌入的 Office 文件和来源表格仍分别校验权限。",
     htmlViewInspect: "检查绑定",
-    htmlViewSignInRequired: "当前为访客模式，请登录后再操作",
+    madeWithWorkspace: "使用 Univer Workspace 制作",
+    signUpFree: "免费注册",
+    signUp: "注册",
+    collapseVisitorBar: "收起注册栏",
+    expandVisitorBar: "展开注册栏",
+    htmlViewSignInRequired: "访客无法修改数据。欢迎通过页面底部的注册栏创建账号。",
     htmlViewEditPermissionRequired: "你没有此表格的编辑权限，请联系所有者申请权限。",
     layoutTheme: "页面主题",
     wikiTheme: "Wiki",
@@ -853,7 +858,12 @@ export const messages = {
     nativePreviewShareDescription:
       "Copy the link for colleagues with access. Embedded Office files and source Sheets retain their own permissions.",
     htmlViewInspect: "Inspect bindings",
-    htmlViewSignInRequired: "You are browsing as a guest. Please sign in to continue.",
+    madeWithWorkspace: "Made with Univer Workspace",
+    signUpFree: "Sign up free",
+    signUp: "Sign up",
+    collapseVisitorBar: "Collapse sign-up bar",
+    expandVisitorBar: "Expand sign-up bar",
+    htmlViewSignInRequired: "Guests cannot change the data. You can create an account using the sign-up bar at the bottom of the page.",
     htmlViewEditPermissionRequired:
       "You don’t have permission to edit this spreadsheet. Contact the owner to request access.",
     layoutTheme: "Page theme",
