@@ -178,6 +178,12 @@ so save the relevant redacted facts before restarting. Run `user` again after ea
 Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
 
+`VERIFY_UVW_MCP_SAME_ORIGIN=1` at `up` serves the gateway at the web origin, as production does.
+`MCP_PUBLIC_URL` and the Workspace's `MCP_RESOURCE_URLS` become `http://127.0.0.1:<web port>/mcp`,
+Vite proxies `/mcp` to the gateway port, and `MCP_URL`, `mcp`, `mcp-oauth` and opencode use that URL.
+Use it when a browser page calls `/mcp`, such as the Agents module. The gateway still listens on
+its own port for `healthz` and `metrics`, but its `/mcp` answers 403 there because the Host differs.
+
 Two independent flags at `up` select the deployment shape and are saved in `run.env`:
 
 - `VERIFY_UVW_MCP_RENDERER=0` omits the renderer container and `MCP_RENDERER_URL` from the executor(s). Doctor verifies that no renderer exists and skips renderer probes. `renderer-call` and `renderer-restart` refuse this mode.
