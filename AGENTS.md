@@ -113,6 +113,12 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 - `apps/workspace/**` 的 schema、迁移、备份、升级和部署操作必须遵守
   `apps/workspace/AGENTS.md`。不得把 `db:reset` 用于正常启动、升级或生产恢复。
 
+## HTML View
+
+- HTML View 是绑定实时 Sheet 数据的小型应用，不是静态页面。渲染、分享和预览都基于实时数据，
+  不引入快照、静态导出或内联数据副本。
+- 访客权限跟随 repository 的文档权限。匿名访客和非成员只读，页面写入一律被拒绝。
+
 ## HTTP contract 与生成物
 
 - `apps/workspace/contracts/http` 是产品 HTTP contract 的源码。
