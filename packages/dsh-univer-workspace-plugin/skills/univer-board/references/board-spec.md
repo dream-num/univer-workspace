@@ -232,25 +232,10 @@ The native lane-size setter reallocates capacity from the following lane: prefli
 unlocked and unpinned lane, reserve cumulative growth at the last lane first, then expand earlier lanes in reverse
 order so no final lane shrinks below its original or required size.
 
-## Imported label constraints
+## Authored label constraints
 
-For an existing Archify document, inspect `FBoard.importArchify` and schema support in the installed API.
-Supported inputs are architecture v1, workflow v1/v2, sequence v1, dataflow v1, lifecycle v3, and
-ERD/class/tree/timeline/waterfall/explainer v1. Preserve native lanes, groups, ordered messages, compartments,
-semantic markers and source constraints; accepting these schemas does not establish free-layout quality.
-Pass the parsed document to that dedicated importer, retain its semantic ID mapping and report unsupported
-decorations. A rejected import must leave the Board unchanged. The importer creates editable native elements;
-verify their text, container membership and connector bindings, then run model and rendered checks. Archify IR
-and BoardSpec have different contracts: do not pass BoardSpec to this importer or send input to a shell renderer.
-
-For verified brand geometry, use the installed async `importArchifyWithAssets(input, { brandAssets })` and provide
-each asset as `{ svg, sha256, source? }`. The importer uses the current Board theme, validates exact UTF-8 SHA256
-and portable SVG paths with solid hex/currentColor fills, and performs no network fallback. Unsupported SVG features or
-an active-page change while awaiting assets reject the import atomically. Preserve synchronous import warnings
-when brand assets were not supplied; do not call that result exact brand fidelity.
-
-Imported source label pins stay fixed by default. When optimizing a newly generated copy is requested,
-retain each chosen label's original placement and source metadata before using `updateConnectorLabel` with
+Authored label pins stay fixed by default. When optimizing a newly generated copy is requested,
+retain each chosen label's original placement before using `updateConnectorLabel` with
 `placement: { mode: 'auto', anchor: 'auto', side: 'onPath', offset: null }`. Release only selected relative hints
 that still match their imported baseline; preserve absolute `labelAt` and user-edited pins. Obtain a fresh ready
 measured label plan, apply it, and check again. Lint and planning never relax pins implicitly. Keep import-only
