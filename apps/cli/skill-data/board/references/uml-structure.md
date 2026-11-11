@@ -118,11 +118,30 @@ explicit side-center `position: 0.5` projects to the native outline; the plain f
 because the glyph has internal padding. Check both stems at readable scale. A reversed-terminal diagnostic on an open stem is not an acceptable UML exception; report a runtime
 limitation if the installed version cannot bind it correctly, rather than replacing the binding with a free point.
 
-## Native symbol stroke scaling
+## Shape outline scaling
 
-Keep a new `BoardCustomShapeType.ComponentBox` symbol's native designed stroke width when setting its
-fill/stroke colors. Omit the generic `strokeWidth: 1.25` override for that reference-scaled glyph; the native
-geometry scales its body and component badge strokes with its transform. A nominal model width copied from
-ordinary rectangles can make its visible icon much thinner. Do not hardcode an inverse-scale formula, replace
-the icon geometry, or rewrite an authored symbol's width. Verify the actual painted body and badge at 100%
-for the final generated size, including long bilingual content.
+- **Ordinary shapes** keep the same stroke width when their frame is resized. Set the desired weight with
+  `shapeData.stroke.width` or the live shape handle. Omit `strokeReferenceSize` for ordinary diagram nodes.
+- **Native Board symbols** such as `Actor`, `ComponentBox`, and UML interface symbols carry their own outline
+  geometry and reference size. Choose the native preset and keep its designed stroke width. To recolor a
+  new symbol, use `shape.setStrokeColor(color)` so its stroke width and other stroke settings are preserved.
+  Review the visible outline and badge at 100% after final sizing.
+- **Authored icons with proportional outlines** use an explicit reference size. With a standard preset, set
+  `shapeData.strokeReferenceSize` to the dimensions at which the authored stroke width should render.
+  With authored paths, set `shapeData.isCustom: true` and put the reference on
+  `shapeData.customGeometry.strokeReferenceSize`.
+  Preserve the reference when editing an existing icon. Choose proportional strokes based on design intent,
+  independent of how small the shape appears.
+
+For example, this icon has a 2-unit outline at its 64 × 64 reference size and a 1-unit outline at 32 × 32.
+
+```js
+const icon = board.insertShape({
+  shapeType: api.Enum.ShapeTypeEnum.RoundRect,
+  transform: { left: 80, top: 80, width: 64, height: 64 },
+  shapeData: {
+    stroke: { width: 2 },
+    strokeReferenceSize: { width: 64, height: 64 },
+  },
+});
+```

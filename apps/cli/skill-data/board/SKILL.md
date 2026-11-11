@@ -56,7 +56,7 @@ Pass this code to `execute` for the Unit in its Worktree:
 ```js
 const shape = board.insertShape({
   shapeType: api.Enum.ShapeTypeEnum.RoundRect,
-  transform: { left: 80, top: 80, width: 180, height: 100 }
+  transform: { left: 80, top: 80, width: 180, height: 100 },
 });
 if (!shape) throw new Error("Cannot insert Board shape");
 shape.getText().setText("Review");
@@ -66,6 +66,10 @@ return { shapeId: shape.getId(), elements: board.describeElements() };
 `insertShape` takes geometry in `transform`, visual properties in `shapeData`, and text through the returned
 live handle—not top-level `id`, coordinates, or `text`. Retain generated IDs and map semantic IDs to them.
 Await asynchronous operations according to their installed signatures before dependent calls or readback.
+
+Ordinary shapes keep a fixed stroke width when resized. Use the stock outline for native symbols.
+Set `strokeReferenceSize` only when an authored icon needs a proportional outline. See
+[shape outline scaling](references/uml-structure.md#shape-outline-scaling) for the Facade fields.
 
 Create and arrange nodes before their connectors. Use element-bound endpoints; for ordinary automatic connections,
 start with `fromElementId` / `toElementId` and omit sides/routing overrides. Introduce explicit ports or routes for

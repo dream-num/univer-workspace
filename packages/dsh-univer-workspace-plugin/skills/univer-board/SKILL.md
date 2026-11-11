@@ -66,6 +66,10 @@ return { shapeId: shape.getId(), elements: board.describeElements() };
 live handle—not top-level `id`, coordinates, or `text`. Retain generated IDs and map semantic IDs to them.
 Await asynchronous operations according to their installed signatures before dependent calls or readback.
 
+Ordinary shapes keep a fixed stroke width when resized. Use the stock outline for native symbols.
+Set `strokeReferenceSize` only when an authored icon needs a proportional outline. See
+[shape outline scaling](references/uml-structure.md#shape-outline-scaling) for the Facade fields.
+
 Create and arrange nodes before their connectors. Use element-bound endpoints; for ordinary automatic connections,
 start with `fromElementId` / `toElementId` and omit sides/routing overrides. Introduce explicit ports or routes for
 diagram semantics or a diagnosed layout problem, not guessed pixel endpoints. Native map branches belong to their
