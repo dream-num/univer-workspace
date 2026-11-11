@@ -74,9 +74,7 @@ ready for you to review in the browser. Nothing is installed on your machine.
 | Toolsets   | `core` by default. Add `?toolsets=core,files` for Blob, Asset, Markdown, Typst, SVG, and HTML View tools, `admin` for repository and label management, or `all` |
 
 A client that cannot run OAuth can send a personal access token as `Authorization: Bearer <token>`. Create one
-from **Access tokens** in the Workspace account menu. On `space.univer.ai`, editing tools (`execute`, `inspect`,
-import, and export) are currently enabled only for invited accounts; every account can browse, search, and manage
-issues and pull requests.
+from **Access tokens** in the Workspace account menu.
 
 <details>
 <summary><b>Claude Code</b></summary>

@@ -69,8 +69,7 @@ Workspace 提供远程 [MCP](https://modelcontextprotocol.io) 服务。连上它
 | toolset  | 默认 `core`。加 `?toolsets=core,files` 启用 Blob、Asset、Markdown、Typst、SVG、HTML View 工具，`admin` 用于仓库与 Label 管理，`all` 启用全部 |
 
 不支持 OAuth 的客户端可以把个人访问令牌放在 `Authorization: Bearer <token>` 中发送，令牌在 Workspace 账号菜单的
-**访问令牌**里创建。`space.univer.ai` 目前只对受邀账号开放编辑类工具（`execute`、`inspect`、导入和导出），所有账号都可以浏览、
-搜索、管理 Issue 和 PR。
+**访问令牌**里创建。
 
 <details>
 <summary><b>Claude Code</b></summary>
