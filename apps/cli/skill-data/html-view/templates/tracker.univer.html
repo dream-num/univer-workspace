@@ -15,7 +15,7 @@ main{max-width:1280px;margin:auto;padding:48px 40px}h1,h2,p{margin:0}h1{font:var
 const binding=window.univerBinding, unitId='REPLACE_UNIT_ID', sheetId='REPLACE_SHEET_ID';
 const $=id=>document.getElementById(id), subscriptions=[];
 const message=(id,text,error=false)=>{const el=$(id);el.textContent=text;el.dataset.error=String(error)};
-const errorText=error=>error instanceof Error?error.message:String(error);
+const errorText=error=>(error instanceof Error?error.message:String(error)).replace(/[.。!！]+$/u,'');
 const ref=(row,col)=>({unitId,sheetId,row,col});
 const range=(endRow,endColumn)=>({unitId,sheetId,range:{startRow:1,endRow,startColumn:0,endColumn}});
 async function watch(id,kind,listener){try{subscriptions.push(await binding[kind](id,listener))}catch(error){message('load-state',`Could not load live data: ${errorText(error)}`,true)}}
