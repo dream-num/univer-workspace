@@ -60,6 +60,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1auth~1revoke
   /api/auth/tokens:
     $ref: ./paths/auth.yaml#/~1api~1auth~1tokens
+  /api/auth/agent-token:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1agent-token
   /api/auth/tokens/{id}:
     $ref: ./paths/auth.yaml#/~1api~1auth~1tokens~1{id}
   /api/auth/logout:

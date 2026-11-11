@@ -280,6 +280,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/agent-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a one-hour MCP access token for the browser Agents module.
+         * @description Requires an interactive login session. Sessions issued by token exchange
+         *     are rejected with 403. Accepts only [read] or [read, write], in either order,
+         *     without duplicates. Never grants publish or worktree:merge.
+         *     The token is bound to /mcp at PUBLIC_ORIGIN, resolved against MCP_RESOURCE_URLS,
+         *     and uses the first-party client univer-workspace-agents. No refresh token
+         *     is returned. This is an OAuth grant and does not appear in the PAT list.
+         *     All responses have Cache-Control: no-store.
+         */
+        post: operations["createAgentToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/tokens/{id}": {
         parameters: {
             query?: never;
@@ -2322,6 +2348,23 @@ export interface components {
             token: string;
             record: components["schemas"]["PersonalAccessToken"];
         };
+        /** @description Exactly [read] or [read, write], in either order, without duplicates. */
+        AgentTokenScopes: ("read" | "write")[];
+        AgentTokenCreate: {
+            scopes: components["schemas"]["AgentTokenScopes"];
+        };
+        AgentTokenCreated: {
+            /** @description MCP access token. No refresh token is returned. */
+            token: string;
+            /** @description Unix epoch milliseconds, one hour after issuance. */
+            expiresAt: number;
+            scopes: components["schemas"]["AgentTokenScopes"];
+            /**
+             * Format: uri
+             * @description The configured /mcp URL at PUBLIC_ORIGIN.
+             */
+            resource: string;
+        };
         PasswordRegistration: {
             username: string;
             displayName: string;
@@ -3656,6 +3699,43 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    createAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Created MCP access token. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTokenCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description OAUTH_CLIENT_UNAVAILABLE. MCP_RESOURCE_URLS must include /mcp at PUBLIC_ORIGIN; MCP OAuth may be unconfigured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     revokePersonalAccessToken: {

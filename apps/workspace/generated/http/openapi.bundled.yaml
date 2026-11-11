@@ -593,6 +593,50 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/auth/agent-token:
+    post:
+      tags:
+        - Authentication
+      operationId: createAgentToken
+      summary: Issue a one-hour MCP access token for the browser Agents module.
+      description: |
+        Requires an interactive login session. Sessions issued by token exchange
+        are rejected with 403. Accepts only [read] or [read, write], in either order,
+        without duplicates. Never grants publish or worktree:merge.
+        The token is bound to /mcp at PUBLIC_ORIGIN, resolved against MCP_RESOURCE_URLS,
+        and uses the first-party client univer-workspace-agents. No refresh token
+        is returned. This is an OAuth grant and does not appear in the PAT list.
+        All responses have Cache-Control: no-store.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentTokenCreate'
+      responses:
+        '201':
+          description: Created MCP access token.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentTokenCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          description: OAUTH_CLIENT_UNAVAILABLE. MCP_RESOURCE_URLS must include /mcp at PUBLIC_ORIGIN; MCP OAuth may be unconfigured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/tokens/{id}:
     delete:
       tags:
@@ -4577,6 +4621,48 @@ components:
           description: Plaintext token, shown once.
         record:
           $ref: '#/components/schemas/PersonalAccessToken'
+    AgentTokenScopes:
+      type: array
+      minItems: 1
+      maxItems: 2
+      uniqueItems: true
+      contains:
+        const: read
+      items:
+        type: string
+        enum:
+          - read
+          - write
+      description: Exactly [read] or [read, write], in either order, without duplicates.
+    AgentTokenCreate:
+      type: object
+      required:
+        - scopes
+      properties:
+        scopes:
+          $ref: '#/components/schemas/AgentTokenScopes'
+    AgentTokenCreated:
+      type: object
+      additionalProperties: false
+      required:
+        - token
+        - expiresAt
+        - scopes
+        - resource
+      properties:
+        token:
+          type: string
+          pattern: ^uvw_at_
+          description: MCP access token. No refresh token is returned.
+        expiresAt:
+          type: integer
+          description: Unix epoch milliseconds, one hour after issuance.
+        scopes:
+          $ref: '#/components/schemas/AgentTokenScopes'
+        resource:
+          type: string
+          format: uri
+          description: The configured /mcp URL at PUBLIC_ORIGIN.
     PasswordRegistration:
       type: object
       additionalProperties: false
