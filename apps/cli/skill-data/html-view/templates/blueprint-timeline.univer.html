@@ -1,0 +1,275 @@
+<!doctype html>
+<!-- Scenario: Customer implementation delivery tracker — Blueprint Timeline.
+Expected Sheet: row 1 headers A Task ID, B Task, C Customer, D Owner, E Status (Not started/In progress/Done/Blocked), F Due date (ISO date text or Sheet date serial).
+Bounds: A2:F201, at most 200 tasks; worksheet must have at least 201 rows and 6 columns. New records insert below row 1, shifting older records down. Task IDs must be unique.
+Replace EVERY REPLACE_UNIT_ID with the Unit ID and EVERY REPLACE_SHEET_ID with the worksheet ID. URI-encode IDs in HTML binding attributes; use raw IDs in JavaScript. No other placeholders.
+Chinese pages: https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/400.css, https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/500.css, https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/700.css, https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/500.css; font-family: "Noto Sans SC", system-ui, sans-serif; IDs and dates: "JetBrains Mono", ui-monospace, monospace.
+Writes re-read the range to locate each stable ID; concurrent structural edits between read and write are not atomic. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Blueprint Timeline · Customer delivery</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/barlow-semi-condensed@5.3.0/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/barlow-semi-condensed@5.3.0/700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.3.0/500.css">
+<style>
+:root{
+  --ground:#e6f0fb; --sheet:#f5f9ff; --ink:#0d2b4e; --ink2:#3d5a80; --line:rgba(31,95,191,.16); --blue:#1f5fbf; --blue-d:#164a96;
+  --red:#cf2c10; --done:#d6e4f5; --done-t:#4c6788;
+  --mono:"JetBrains Mono","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  --ease:cubic-bezier(.16,1,.3,1);
+  --lw:104px;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{min-height:100vh;color:var(--ink);font:500 16px/1.5 "Barlow Semi Condensed","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;padding-bottom:72px;overflow-x:hidden;
+  background-color:var(--ground);
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px),
+    linear-gradient(rgba(31,95,191,.26) 1px,transparent 1px),linear-gradient(90deg,rgba(31,95,191,.26) 1px,transparent 1px);
+  background-size:20px 20px,20px 20px,100px 100px,100px 100px}
+::selection{background:var(--blue);color:#fff}
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+.mono{font-family:var(--mono);font-weight:500;font-variant-numeric:tabular-nums}
+.shell{max-width:1440px;margin:0 auto;padding:24px clamp(12px,2.4vw,32px) 0;display:grid;grid-template-columns:minmax(0,1fr) 288px;gap:20px;align-items:start}
+@media (max-width:980px){.shell{grid-template-columns:1fr}}
+header{grid-column:1/-1;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;align-items:flex-end}
+h1{margin:0;font-weight:700;font-size:clamp(32px,5vw,52px);line-height:1.1;letter-spacing:-.02em}
+.lede{margin:8px 0 0;font-size:17px;color:var(--ink2)}
+.lede b{color:var(--ink);font-weight:700}
+.lede .bad{color:var(--red)}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:14px;color:var(--ink2);margin-top:10px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+#save{font-size:14px;color:var(--ink2);min-height:24px;display:flex;align-items:center;gap:8px}
+#save i{width:9px;height:9px;border:2px solid var(--ink2);border-radius:50%}
+#save[data-s=pending] i{border-color:var(--blue);border-top-color:transparent;animation:spin .8s linear infinite}
+#save[data-s=saved]{color:var(--blue-d)} #save[data-s=saved] i{background:var(--blue);border-color:var(--blue)}
+#save[data-s=error]{color:var(--red);font-weight:700} #save[data-s=error] i{background:var(--red);border-color:var(--red)}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.sheet{background:var(--sheet);border:2px solid var(--ink);overflow-x:auto;position:relative;min-width:0}
+.tl{position:relative;width:max-content;min-width:100%}
+.axis,.lane{display:grid;grid-template-columns:var(--lw) auto}
+.axis{border-bottom:2px solid var(--ink);background:var(--sheet);position:relative;z-index:6}
+.axis .corner{position:sticky;left:0;background:var(--sheet);z-index:7;padding:8px 10px;font-size:13px;color:var(--ink2);border-right:2px solid var(--ink)}
+.ticks{display:flex}
+.tick{width:var(--dw);flex:none;text-align:center;padding:5px 0 6px;font-size:11px;color:var(--ink2);line-height:1.25;border-left:1px solid var(--line)}
+.tick .mono{display:block;font-size:12px;color:var(--ink)}
+.tick.we{background:rgba(31,95,191,.07)}
+.tick.today{background:var(--ink);color:#cfe0f7}
+.tick.today .mono{color:#fff}
+.lane{border-bottom:1px solid rgba(13,43,78,.45)}
+.lane:last-child{border-bottom:0}
+.lh{position:sticky;left:0;z-index:5;background:#e9f1fb;border-right:2px solid var(--ink);padding:10px}
+.lh b{display:block;font-size:15px;line-height:1.25;font-weight:700}
+.lh small{display:block;margin-top:4px;font-size:12px;color:var(--ink2);line-height:1.35}
+.lh small em{color:var(--red);font-style:normal;font-weight:700}
+.track{position:relative;background-image:linear-gradient(90deg,var(--line) 1px,transparent 1px);background-size:var(--dw) 100%}
+.past{position:absolute;top:0;bottom:0;background:rgba(13,43,78,.045);pointer-events:none}
+.we-col{position:absolute;top:0;bottom:0;width:var(--dw);background:rgba(31,95,191,.06);pointer-events:none}
+.todayline{position:absolute;top:0;bottom:0;width:0;border-left:2px solid var(--ink);z-index:2;pointer-events:none}
+.todayline::before{content:"Today";position:absolute;top:-1px;left:-1px;background:var(--ink);color:#fff;font-size:11px;padding:0 5px;line-height:18px;transform:translateX(-50%);display:none}
+
+.chip{position:absolute;height:60px;width:calc(var(--dw)*1.92);padding:5px 7px 5px;text-align:left;font:inherit;cursor:pointer;color:var(--ink);
+  background:#fff;border:1.5px dashed var(--ink2);display:grid;grid-template-rows:auto auto auto;align-content:space-between;z-index:3;
+  transition:transform .15s var(--ease),box-shadow .15s var(--ease)}
+.chip:hover{transform:translateY(-2px);box-shadow:0 4px 8px rgba(13,43,78,.22)}
+.chip .r1{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--ink2)}
+.chip .nm{font-weight:700;font-size:14px;line-height:1.2;white-space:nowrap}
+.chip .ow{font-size:12px;color:var(--ink2);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip svg{flex:none}
+.chip[data-s="In progress"]{background:var(--blue);border:1.5px solid var(--blue-d);color:#fff}
+.chip[data-s="In progress"] .r1,.chip[data-s="In progress"] .ow{color:#d5e5ff}
+.chip[data-s="Done"]{background:var(--done);border:1.5px solid #a9c1de;color:var(--done-t)}
+.chip[data-s="Done"] .nm{text-decoration:line-through;font-weight:500}
+.chip[data-s="Done"] .r1,.chip[data-s="Done"] .ow{color:var(--done-t)}
+.chip[data-s="Blocked"]{background:repeating-linear-gradient(135deg,var(--red) 0 7px,#b52409 7px 14px);border:1.5px solid #7d1704;color:#fff;box-shadow:0 0 0 2px var(--sheet),0 0 0 4px var(--red)}
+.chip[data-s="Blocked"] .r1,.chip[data-s="Blocked"] .ow{color:#ffe3dd}
+.chip.late:not([data-s="Blocked"]){border:2px solid var(--red)}
+.chip .lt{white-space:nowrap;margin-left:auto;background:var(--red);color:#fff;padding:0 4px;font-weight:700;font-size:11px;line-height:16px}
+.chip[data-s="Blocked"] .lt{background:#fff;color:var(--red)}
+.bar{position:absolute;height:7px;background:repeating-linear-gradient(135deg,var(--red) 0 4px,transparent 4px 8px);border-right:3px solid var(--red);z-index:1;pointer-events:none}
+
+.pick{max-height:calc(100vh - 16px);overflow:auto;position:fixed;z-index:20;background:var(--sheet);border:2px solid var(--ink);box-shadow:0 10px 24px rgba(13,43,78,.28);width:208px;padding:8px;animation:in .18s var(--ease)}
+@keyframes in{from{opacity:0;transform:translateY(-6px)}}
+.pick h4{margin:2px 4px 8px;font-size:14px;font-weight:700;line-height:1.3}
+.pick button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;font:inherit;font-size:15px;background:none;border:1.5px solid transparent;padding:6px 8px;cursor:pointer;color:var(--ink)}
+.pick button:hover{background:#e3edf9}
+.pick button[aria-current=true]{border-color:var(--ink);background:#fff;font-weight:700}
+.pick kbd{margin-left:auto;font:500 12px var(--mono);color:var(--ink2)}
+
+.dock{background:var(--sheet);border:2px solid var(--ink);position:sticky;top:16px}
+@media (max-width:980px){.dock{position:static}}
+.dock h2{margin:0;padding:10px 14px;background:var(--ink);color:#fff;font-size:17px;font-weight:700}
+.dock form{display:grid;gap:12px;padding:14px}
+.dock label{display:grid;gap:4px;font-size:13px;color:var(--ink2);font-weight:500}
+.dock input,.dock select{width:100%;font:500 16px "Barlow Semi Condensed","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;color:var(--ink);background:#fff;border:1.5px solid var(--ink);padding:8px;border-radius:0;min-width:0}
+.dock input[type=date]{font-family:var(--mono);font-size:15px}
+.dock button{font:700 16px "Barlow Semi Condensed","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;background:var(--blue);color:#fff;border:2px solid var(--ink);padding:10px;cursor:pointer;transition:background .15s}
+.dock button:hover{background:var(--blue-d)}
+.dock p{margin:0;padding:0 14px 14px;font-size:13px;color:var(--ink2)}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.write-state:empty,[data-write-id]:empty{display:none}.write-state{display:block;font-size:13px;line-height:1.5;overflow-wrap:anywhere}.write-state[data-s=error]{color:var(--ver,var(--red))}#save[data-s=error]{position:static;max-width:100%;overflow-wrap:anywhere}#stamp{overflow-wrap:anywhere}.card .id{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header>
+    <div>
+      <h1>Delivery timeline</h1>
+      <p class="lede" id="lede" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201"></p>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div id="save" data-s="idle" role="status" aria-live="polite"><i></i><span>Click a task to change status</span></div>
+  </header>
+  <main class="sheet" id="sheet"><div class="tl" id="tl" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201">Loading…</div></main>
+  <aside class="dock">
+    <h2>New task</h2>
+    <form id="add" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201">
+      <label>Task name<input name="name" required maxlength="20" placeholder="e.g. Acceptance test"></label>
+      <label>Customer<select required name="cust" id="fc"></select></label>
+      <label>Owner<select required name="owner" id="fo"></select></label>
+      <label>Status<select name="status"><option>Not started</option><option>In progress</option><option>Done</option><option>Blocked</option></select></label>
+      <label>Due date<input type="date" name="due" id="fd" required></label>
+      <button>Add to timeline</button>
+    <small class="write-state" id="add-state" role="status"></small></form>
+    <p>New tasks are inserted below the header in the Customer delivery tasks Sheet.</p>
+  </aside>
+</div>
+<script type="module">
+const STATUSES=["Not started","In progress","Done","Blocked"];
+const z=n=>String(n).padStart(2,'0');
+const iso=d=>d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate());
+const TODAY=iso(new Date());
+const D=s=>Date.parse(s+'T00:00:00Z');
+const dd=(a,b)=>Math.round((D(b)-D(a))/864e5);
+const addDays=(s,n)=>new Date(D(s)+n*864e5).toISOString().slice(0,10);
+const WK=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+let tasks=[];
+let customers=[],owners=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const late=t=>t.status!=='Done'&&t.due<TODAY;
+
+const G={
+ "Not started":'<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="7" cy="7" r="5"/></svg>',
+ "In progress":'<svg width="14" height="14" viewBox="0 0 14 14" stroke="currentColor" stroke-width="1.8" fill="none"><circle cx="7" cy="7" r="5"/><path d="M7 2a5 5 0 0 1 0 10z" fill="currentColor"/></svg>',
+ "Done":'<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 7.5l3 3 6-7"/></svg>',
+ "Blocked":'<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="7" cy="7" r="5.2"/><path d="M3.5 10.5l7-7"/></svg>'};
+$('#legend').innerHTML=STATUSES.map(s=>`<span>${G[s]}${s}</span>`).join('')+'<span><svg width="26" height="8"><rect width="26" height="7" fill="#cf2c10" opacity=".85"/></svg>Days overdue</span>';
+$('#fc').innerHTML=customers.map(c=>`<option>${c}</option>`).join('');
+$('#fo').innerHTML=owners.map(c=>`<option>${c}</option>`).join('');
+$('#fd').value=addDays(TODAY,7);
+
+
+const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+async function isTrialWrite(){
+  try{if(window.univerWorkspace?.capabilities?.includes('write-mode'))return await window.univerWorkspace.getWriteMode(unitId)==='trial'}catch{}
+  return false;
+}
+const source={unitId,sheetId,range:{startRow:1,endRow:200,startColumn:0,endColumn:5}};
+const subscriptions=[],drafts=new Map();
+let busy=false,pendingRecordId=null,formDraft=null;
+const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！?？]+$/u,'');
+const shortId=id=>id.length>12?id.slice(0,8):id;
+function records(value){return value.filter(r=>r[0]!=null&&r[0]!=='').map(([id,name,cust,owner,status,due])=>{
+  const date=typeof due==='number'?new Date(Date.UTC(1899,11,30)+due*864e5).toISOString().slice(0,10):String(due??'');
+  if(!STATUSES.includes(status)||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date)))throw new Error('Check the source Sheet statuses and due dates');
+  return{id:String(id),name:String(name??''),cust:String(cust??''),owner:String(owner??''),status,due:date};
+})}
+function rememberForm(){const f=$('#add');if(f)formDraft=Object.fromEntries([...f.elements].filter(el=>el.name).map(el=>[el.name,el.value]))}
+function restoreForm(){const f=$('#add');if(!f)return;if(formDraft)for(const [name,value]of Object.entries(formDraft)){const el=f.elements.namedItem(name);if(el){if(el.tagName==='SELECT'&&value&&!Array.from(el.options).some(o=>o.value===value))el.add(new Option(value,value));if(el.tagName!=='SELECT'||value)el.value=value}}for(const el of f.querySelectorAll('input,select,button')){if(el.tagName==='BUTTON'){el.disabled=busy;el.textContent=pendingRecordId?'Retry save':'Add to timeline'}else if(el.tagName==='SELECT')el.disabled=busy||pendingRecordId!==null;else el.readOnly=busy||pendingRecordId!==null}}
+function choices(){customers=[...new Set(tasks.map(t=>t.cust))];owners=[...new Set(tasks.map(t=>t.owner))]}
+function fillChoices(){rememberForm();for(const [id,items]of [['fc',customers],['fo',owners]]){let el=$('#'+id);if(el){const old=el.value;if(!items.length&&el.tagName==='SELECT'){const input=document.createElement('input');for(const attr of el.attributes)input.setAttribute(attr.name,attr.value);input.maxLength=80;el.replaceWith(input);el=input}else if(items.length&&el.tagName==='SELECT'){el.replaceChildren(...items.map(s=>new Option(s,s)));if(old&&!items.includes(old))el.add(new Option(old,old));if(old)el.value=old}if(formDraft&&!formDraft[el.name])formDraft[el.name]=el.value}}restoreForm()}
+function draftHtml(id){const d=drafts.get(id);return d?`<small class="write-state" role="status" data-s="${d.state}">${esc(d.message)}</small>`:''}
+function refreshDrafts(){document.querySelectorAll('[data-write-id]').forEach(el=>{el.innerHTML=draftHtml(el.dataset.writeId)});document.querySelectorAll('.card select,.st,.chip,.pick button').forEach(el=>el.disabled=busy);if(open)open.el.querySelectorAll('[data-to]').forEach(el=>el.setAttribute('aria-current',String(el.dataset.to===tasks.find(t=>t.id===open.id)?.status)));restoreForm()}
+async function saveStatus(id,to){
+  if(busy||!STATUSES.includes(to))return;const task=tasks.find(t=>t.id===id);if(!task)return;
+  busy=true;drafts.set(id,{to,state:'pending',message:'Saving…'});setSave('pending');refreshDrafts();
+  try{const latest=await binding.getRangeState(source);const row=latest.value.findIndex(r=>String(r[0])===id);if(row<0)throw new Error('Task is outside the first 200 rows. Check the source Sheet');
+    await binding.setCellValue({unitId,sheetId,row:row+1,col:4},to);await binding.flush();
+    const trial=await isTrialWrite();drafts.set(id,{to,state:'saved',message:trial?'Trial only, not saved':'Saved to Sheet'});setSave('saved',trial);
+  }catch(error){const message=`${errorText(error)}. Your "${to}" draft is kept. Try again.`;drafts.set(id,{to,state:'error',message});setSave('error')}
+  finally{busy=false;const active=document.activeElement,focused=active?.closest('[data-id]')?.dataset.id;render(id);refreshDrafts();if(focused)for(const el of document.querySelectorAll('[data-id]'))if(el.dataset.id===focused)(el.matches('button')?el:el.querySelector('select'))?.focus({preventScroll:true})}
+}
+async function addTask(f){
+  if(busy)return;rememberForm();const v=formDraft;
+  if(!pendingRecordId&&(!v.name?.trim()||!v.cust?.trim()||!v.owner?.trim()||!v.due)){setAdd('error','Enter a task, customer, owner and due date');return}
+  busy=true;setAdd('pending','Saving…');setSave('pending');restoreForm();
+  try{if(!pendingRecordId){const id=crypto.randomUUID();await binding.insertRowsWithValues({unitId,sheetId,startRow:1,rowCount:1,startColumn:0,values:[[id,v.name.trim(),v.cust.trim(),v.owner.trim(),v.status||'Not started',v.due]]});pendingRecordId=id}
+    await binding.flush();pendingRecordId=null;formDraft=null;$('#add').elements.namedItem('name').value='';const trial=await isTrialWrite();setAdd('saved',trial?'Trial only, not saved':'Saved to Sheet');setSave('saved',trial);
+  }catch(error){const message=pendingRecordId?`Row inserted; save not confirmed: ${errorText(error)}. Retry saving.`:`Submission not confirmed: ${errorText(error)}. Draft kept. Check the source Sheet before resubmitting.`;setAdd('error',message);setSave('error')}
+  finally{busy=false;restoreForm()}
+}
+function setAdd(state,text){const el=$('#add-state');if(el){el.dataset.s=state;el.textContent=text}}
+async function watch(id,callback){try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{try{callback(records(value))}catch(e){const el=$('#'+id);el.textContent=`Could not load: ${errorText(e)}`;setSave('error')}}))}catch(e){$('#'+id).textContent=`Could not load: ${errorText(e)}`;setSave('error')}}
+window.addEventListener('pagehide',()=>subscriptions.forEach(s=>s.dispose()),{once:true});
+
+function setSave(state,trial=false){const el=$('#save');el.dataset.s=state;el.querySelector('span').textContent={pending:'Saving…',saved:trial?'Trial only, not saved':'Saved to Sheet',error:'Not saved'}[state]}
+const setStatus=saveStatus;
+$('#add').addEventListener('submit',e=>{e.preventDefault();addTask(e.target)});
+function render(){
+  if(!tasks.length){$('#tl').textContent='No tasks yet. Add one using the form.';return}
+  const dates=tasks.map(t=>t.due);
+  const start=[TODAY,...dates].sort()[0],end=[...dates].sort().pop(),n=dd(start,end)+1;
+  const avail=$('#sheet').clientWidth-(innerWidth<600?92:104);
+  const dw=Math.max(50,Math.floor(avail/n));
+  const tl=$('#tl');tl.style.setProperty('--dw',dw+'px');
+  document.documentElement.style.setProperty('--lw',innerWidth<600?'92px':'104px');
+  const ti=dd(start,TODAY),W=n*dw;
+  const days=[...Array(n)].map((_,i)=>addDays(start,i));
+  const weekend=i=>{const g=new Date(D(days[i])).getUTCDay();return g===0||g===6};
+
+  let html=`<div class="axis"><div class="corner">${innerWidth<600?'Customer':'Customer / due date'}</div><div class="ticks">${days.map((d,i)=>`<div class="tick ${weekend(i)?'we':''} ${i===ti?'today':''}"><span class="mono">${d.slice(5)}</span>${WK[new Date(D(d)).getUTCDay()]}</div>`).join('')}</div></div>`;
+  customers.forEach(c=>{
+    const list=tasks.filter(t=>t.cust===c).sort((a,b)=>a.due.localeCompare(b.due)||a.id.localeCompare(b.id));
+    const ends=[],pl=[];
+    list.forEach(t=>{const i=dd(start,t.due),need=Math.max(i+2,late(t)?ti+1:0);
+      let r=ends.findIndex(e=>e<=i);if(r<0){r=ends.length;ends.push(0)}ends[r]=need;pl.push([t,i,r])});
+    const rows=Math.max(1,ends.length),H=rows*74+14;
+    const lc=list.filter(late).length;
+    html+=`<div class="lane"><div class="lh"><b>${esc(c)}</b><small>${list.length} tasks${lc?` · <em>${lc} overdue</em>`:''}</small></div>
+      <div class="track" style="width:${W}px;height:${H}px">
+      ${days.map((_,i)=>weekend(i)?`<div class="we-col" style="left:${i*dw}px"></div>`:'').join('')}
+      <div class="past" style="left:0;width:${(ti+.5)*dw}px"></div>
+      ${pl.map(([t,i,r])=>{const top=8+r*74,lt=late(t);return (lt?`<div class="bar" style="left:${(i+.5)*dw}px;top:${top+62}px;width:${(ti-i)*dw}px"></div>`:'')+
+        `<button class="chip ${lt?'late':''}" data-id="${esc(t.id)}" data-s="${t.status}" style="left:${i*dw+3}px;top:${top}px" aria-label="${esc(t.id)} ${esc(t.name)} ${t.status}. Click to change status">
+          <span class="r1">${G[t.status]}<span class="mono">${esc(shortId(t.id).replace(/^IMP-/,''))}</span>${lt?`<span class="lt">${ti-i}d late</span>`:''}</span>
+          <span class="nm">${esc(t.name)}</span><span class="ow">${esc(t.owner)} · <span class="mono">${t.due.slice(5)}</span></span></button>`}).join('')}
+      </div></div>`;
+  });
+  html+=`<div class="todayline" style="left:calc(var(--lw) + ${(ti+.5)*dw}px)"></div>`;
+  tl.innerHTML=html;refreshDrafts();
+}
+let open=null;
+function closePick(){open?.el.remove();open=null}
+function openPick(chip){
+  closePick();const id=chip.dataset.id,t=tasks.find(x=>x.id===id);
+  const el=document.createElement('div');el.className='pick';el.setAttribute('role','menu');
+  el.innerHTML=`<h4><span class="mono">${esc(shortId(t.id))}</span> ${esc(t.name)}<br><span style="font-weight:500;color:var(--ink2)">${esc(t.cust)} · ${esc(t.owner)}</span></h4>`+
+    STATUSES.map((s,i)=>`<button role="menuitem" data-to="${s}" aria-current="${s===t.status}">${G[s]}${s}<kbd>${i+1}</kbd></button>`).join('');
+  el.insertAdjacentHTML('beforeend',`<span data-write-id="${esc(id)}">${draftHtml(id)}</span>`);document.body.appendChild(el);
+  const r=chip.getBoundingClientRect(),w=el.offsetWidth,h=el.offsetHeight;
+  el.style.left=Math.max(8,Math.min(innerWidth-w-8,r.left))+'px';
+  el.style.top=(r.bottom+h+8>innerHeight?Math.max(8,r.top-h-6):r.bottom+6)+'px';
+  open={el,id};el.querySelector('button[aria-current=true]').focus();
+}
+document.addEventListener('click',e=>{
+  const c=e.target.closest('.chip'),b=e.target.closest('.pick button');
+  if(b){setStatus(open.id,b.dataset.to)}
+  else if(c)openPick(c);else if(!e.target.closest('.pick'))closePick();
+});
+document.addEventListener('keydown',e=>{
+  if(!open)return;
+  if(e.key==='Escape')closePick();
+  if('1234'.includes(e.key)&&e.key){setStatus(open.id,STATUSES[+e.key-1])}
+});
+addEventListener('resize',()=>{closePick();render()});
+await watch('lede',tasks=>{  const late_n=tasks.filter(late).length,blk=tasks.filter(t=>t.status==='Blocked').length;
+  $('#lede').innerHTML=`Today <b class="mono">${TODAY.slice(5)}</b> · <b class="${late_n?'bad':''}">${late_n}</b> overdue · <b class="${blk?'bad':''}">${blk}</b> blocked · <b>${tasks.length}</b> tasks`;});
+await watch('add',rows=>{tasks=rows;choices();fillChoices()});
+let positioned=false;
+await watch('tl',rows=>{tasks=rows;choices();render();if(!positioned&&tasks.length){const first=tasks.filter(late).sort((a,b)=>a.due.localeCompare(b.due))[0]||tasks[0];const start=[TODAY,...tasks.map(t=>t.due)].sort()[0];$('#sheet').scrollLeft=Math.max(0,dd(start,first.due)*parseInt(getComputedStyle($('#tl')).getPropertyValue('--dw'))-3);positioned=true}});
+</script>
+</body>
+</html>

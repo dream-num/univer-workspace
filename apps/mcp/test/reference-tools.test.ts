@@ -201,18 +201,37 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(JSON.stringify(skill.resources)).not.toContain("uvw skills");
     expect(skill.files).toBeUndefined();
 
-    const full = await call(client, "skills_read", { name: "html-view", full: true });
-    expect(full.structured["files"]).toHaveLength(skill.resources.length);
+    const full = await call(client, "skills_read", { name: "core", full: true });
+    expect(full.structured).toEqual({ ...core.structured, files: [] });
+    const htmlFull = await call(client, "skills_read", { name: "html-view", full: true });
+    expect(htmlFull).toMatchObject({
+      isError: true,
+      structured: { code: "workspace-result-too-large" },
+    });
 
-    const template = await call(client, "skills_read", {
-      name: "html-view",
-      resource: "templates/planning.univer.html",
-    });
-    expect(template.structured).toEqual({
-      name: "html-view",
-      path: "templates/planning.univer.html",
-      content: await readFile(join(cliSkillData, "html-view/templates/planning.univer.html"), "utf8"),
-    });
+    const templates = [
+      "templates/bauhaus-blocks.univer.html",
+      "templates/blueprint-timeline.univer.html",
+      "templates/broadsheet.univer.html",
+      "templates/brutalist-board.univer.html",
+      "templates/citron-poster.univer.html",
+      "templates/meeting-slides.univer.html",
+      "templates/night-gauge.univer.html",
+      "templates/swiss-report.univer.html",
+      "templates/trading-desk.univer.html",
+      "templates/wenkai-notebook.univer.html",
+    ];
+    expect(skill.resources
+      .filter((resource: { path: string }) => resource.path.startsWith("templates/"))
+      .map((resource: { path: string }) => resource.path)).toEqual(templates);
+    for (const path of templates) {
+      const template = await call(client, "skills_read", { name: "html-view", resource: path });
+      expect(template.structured).toEqual({
+        name: "html-view",
+        path,
+        content: await readFile(join(cliSkillData, "html-view", path), "utf8"),
+      });
+    }
 
     const resource = await call(client, "skills_read", {
       name: "html-view",

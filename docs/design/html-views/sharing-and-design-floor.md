@@ -52,12 +52,12 @@ CLI 和 MCP 共用 `packages/client-core/src/html-view.ts` 的 `WorkspaceHtmlVie
 | MCP | `html_view_validate`（scope `read`）、`html_view_create`（scope `publish`） | 只在 `toolsets=files` 或 `all` 时出现；大文件先走 `file_upload_create` |
 | DSH Agent | `univer_html_view` 的 `validate` / `create` | 没有用 client-core，自己实现了一遍同样的流程 |
 
-创作指引在 `apps/cli/skill-data/html-view/`（`SKILL.md` 加四个 reference）。MCP 构建时由
+创作指引在 `apps/cli/skill-data/html-view/`（`SKILL.md`、五个 reference 与十个模板）。MCP 构建时由
 `apps/mcp/scripts/assemble-skills.mjs` 原样复制这份 Skill。DSH 插件在
 `packages/dsh-univer-workspace-plugin/skills/univer-html-view/` 维护一份手工同步的分叉，差异主要是工具名。
 
-这三份 Skill 讲的都是绑定机制，没有视觉设计内容。整个目录里唯一的样式值是图表容器的
-`style="width:100%;height:360px"`。Agent 也看不到自己的页面。MCP 的 `screenshot` 只支持
+CLI 与 MCP 的共享 Skill 现在包含风格目录、完整模板与视觉设计规则；DSH 的手工分叉暂不同步。
+Agent 仍不能用 Unit 截图工具查看 HTML View：MCP 的 `screenshot` 只支持
 `sheet | doc | slide | board | base`（`apps/mcp/src/shared/screenshot-schema.ts:4`）。
 
 ### 匿名只读已经能用
@@ -116,18 +116,32 @@ HTML View Skill 增加 “Share the page” 一节，要求 Agent 把 `shareUrl`
 
 ### 提高观感下限
 
-Agent 的页面不好看，是因为它没有好的起点，也没有设计规则。HTML View Skill 增加：
+HTML View Skill 用十种完整模板提供不同起点，所有风格都保留，场景只是模板原先的数据合同，不限制风格用途。
 
-- `references/design.md`。Agent 按场景和数据形状自己选模板，不询问用户。它规定基础质量要求（对比度、间距节奏、
-  字号层级、数字用 `tabular-nums`、主题化的选区、焦点和滚动条、各种状态、360px 到 1440px 的响应式），
-  列出让页面显得“机器生成”的常见做法并要求避开，规定同一用户的多个页面要变化强调色和布局，避免审美疲劳。
+- `references/design.md` 列出十种风格的 ID、英文名、中文名、英文气质、原始场景与英文标志元素：仪表夜航、瑞士财报、粉色报纸、
+  包豪斯色块、交易台、周会幻灯、新粗野看板、蓝图时间线、文楷手账、柠檬海报。
+  用户未指定风格时，Agent 在深入读取 Sheet 或创作前，用用户的语言列出十种风格在该语言中的名称和一句气质介绍，询问用户想用哪一种，
+  并说明默认是 **Night Gauge（`night-gauge`，仪表夜航）**，名称随询问语言显示。用正常回复文本询问，然后结束当前轮次，等待用户回答；
+  不依赖客户端的提问或表单工具，用户回答前不得验证或发布页面。只有用户让 Agent 决定（如“你来定”“随便”“默认就行”）
+  时才使用 Night Gauge（仪表夜航）；不能静默换成其他风格。
+- 从 `templates/<id>.univer.html` 的完整源码开始，不从空白页生成。用于不同场景时保留字体、配色、密度和标志元素，
+  用该模板已有组件重建数据需要的结构，保留实时绑定与写入。
+- 模板以英文编写，不内置 i18n 字典或语言切换。Agent 根据用户对话的语言和习惯生成实际 `.univer.html` 的全部可见文案、单位和日期格式，
+  例如中文页面使用 万、年/月；不添加 i18n 字典或语言切换。中文页面加载模板头部 `Chinese pages:` 列出的 CJK 字体并放在字体栈首位，
+  保留原风格的配色、布局与标志元素。
+- `SKILL.md` 在绑定细节之前先列出四条必读要求，顺序是询问风格与默认值、从对应模板开始、保持实时数据与 Sheet 计算、按用户语言生成页面。
+  页面控件写来源单元格或追加行，显示 Sheet 重算后的来源值；不在页面 JavaScript 重写 Sheet 公式，不嵌入数据副本或兜底数字。
+  这些要求不能只藏在 reference 中：一次 DeepSeek Flash 验收跳过了设计 reference 与模板，并在页面里重算公式、硬编码兜底数据。
+- MCP 的 `html_view_validate` 与 `html_view_create` 描述也提醒先读 Skill、在回复中询问未指定的风格并等待回答，
+  只有用户放权时才默认 Night Gauge（仪表夜航）、从模板开始；
+  MCP core Skill 和 README 使用同样流程。
+- `design.md` 保留对比度、间距节奏、字号层级、`tabular-nums`、选区、焦点、滚动条、加载/空/错误状态和
+  360px、390px、1440px 响应式要求，避免重复卡片网格、装饰性渐变文字等自动生成感。
   设计原则参考 [impeccable](https://github.com/pbakaus/impeccable)。
-- `references/templates/` 下四个风格完全不同的模板：带假设输入的财务或计划报告、带实时图表和筛选的运营看板、
-  可就地编辑和追加记录的跟踪工作台、适合手机截图转发的公开展示页（排行榜、活动结果或投票）。
-- 每个模板都展示数据绑定 SDK 的长处。页面控件直接修改来源单元格，页面其他部分通过订阅实时响应；
-  写入失败时在控件旁显示原因，只读访客照样能正常浏览。
+- 页面控件直接修改来源单元格，页面其他部分通过订阅实时响应；写入失败时在控件旁显示原因，只读访客照样能正常浏览。
 
-公开展示页专门为传播设计。它在手机上好看，并带一个会写回 Sheet 的互动（例如投票），访客点了会被引导注册。
+柠檬海报保留原 `showcase.univer.html` 的全部内容，只改文件名；原 planning、sales、tracker 模板移除。
+十种模板都随 CLI 打包，MCP 构建时复制同一目录，并通过 `skills_read` 发现和读取。
 
 ### CLI 与 MCP 的落点
 
@@ -143,7 +157,7 @@ DSH 插件的 Skill 分叉暂不同步，后续单独处理。
 
 在 `verify-uvw` 的隔离实例上开启 MCP，用 MCP 工具驱动，Browser 部分用 agent-browser 的全新无 cookie 会话：
 
-1. 用 MCP 建 repository 和 Sheet，写入数据。Agent 读 `design.md`，选模板，`html_view_validate` 后 `html_view_create`。
+1. 用 MCP 建 repository 和 Sheet，写入数据。Agent 先读 Skill 和 `design.md`，按上述风格流程在回复中询问并等待回答（用户已指定风格则直接使用，只有用户放权时才默认 Night Gauge（仪表夜航）），从对应模板开始，`html_view_validate` 后 `html_view_create`。
 2. 私有 repository：返回 `repositoryVisibility: private`；匿名会话打开 `shareUrl` 看不到页面。
 3. `repo_edit visibility=public` 后再建一个页面：返回 `public` 且 `privateSourceUnitIds` 为空；
    匿名会话打开 `shareUrl`，看到实时数据和底部注册条。
@@ -161,7 +175,7 @@ DSH 插件的 Skill 分叉暂不同步，后续单独处理。
 | --- | --- |
 | 访客注册引导 | Browser：底部注册条、`/login?mode=register`、访客写入提示 |
 | 分享信息 | client-core、CLI、MCP 的 `create` 返回字段，Skill 的分享一节 |
-| 设计指引与模板 | Skill 的 `design.md` 和四个模板，打包脚本带上 `templates/` |
+| 设计指引与模板 | Skill 的必读要求、`design.md` 十种风格目录和十个模板，打包脚本带上 `templates/` |
 | 链接预览 | Server：公开节点的 head meta |
 
 ## 后续可以考虑

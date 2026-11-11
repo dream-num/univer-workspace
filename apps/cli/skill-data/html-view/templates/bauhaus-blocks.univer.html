@@ -1,0 +1,205 @@
+<!doctype html>
+<!-- Scenario: Weekly sales meeting, local region/channel filters and a live record target editor.
+Expected Sheet: row 1 headers A Month, B Region, C Channel, D Actual sales, E Sales target.
+Rows 2:201 contain up to 200 records; at least 201 rows and 5 columns. Amounts are numeric; target is nonnegative. Region values East/South/North; channels Direct/Partner/Online.
+Replace EVERY REPLACE_UNIT_ID and REPLACE_SHEET_ID with actual IDs: URI-encoded in HTML attributes, raw in JavaScript. No other placeholders.
+Chinese pages: https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/900.css https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/500.css https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/700.css; font-family: "Noto Sans SC", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif
+Fixed-coordinate bindings; inspect worksheet bounds before adapting. Editing E replaces that cell's contents; use literal target cells. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Q3 2026 Sales Review</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.3.0/latin-700.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.3.0/latin-500.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
+<style>
+:root{--paper:#fbf9f3;--ink:#111;--red:#e4302a;--blue:#1c3fd6;--yellow:#ffc800;--accent:#111;--accent-ink:#fff;
+ --num:"Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;--cjk:"Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+*{box-sizing:border-box;margin:0}
+html{background:var(--paper)}
+body{font-family:var(--cjk);color:var(--ink);font-weight:500;line-height:1.5;padding-bottom:72px;overflow-x:hidden}
+::selection{background:var(--ink);color:var(--yellow)}
+:focus-visible{outline:4px solid var(--ink);outline-offset:3px}
+button,select{font:inherit;color:inherit}
+.num{font-family:var(--num);font-variant-numeric:tabular-nums;letter-spacing:-.04em}
+header{display:flex;flex-wrap:wrap;gap:12px 32px;align-items:flex-end;justify-content:space-between;padding:18px clamp(16px,3vw,40px) 14px}
+h1{font-weight:700;font-size:clamp(2rem,5vw,4rem);line-height:1;letter-spacing:-.02em}
+.ctl{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.seg{display:flex;border:3px solid var(--ink)}
+.seg button{background:none;border:0;padding:6px 14px;font-weight:700;cursor:pointer;border-right:3px solid var(--ink)}
+.seg button:last-child{border-right:0}
+.seg button:hover{background:#e9e4d6}
+.seg button[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+#status{font-size:.9rem;min-width:15em;font-weight:700}
+#status.pending{color:#5a5a5a}
+#status.bad{background:var(--red);color:#fff;padding:4px 10px}
+.field{display:grid;grid-template-columns:var(--cols,1fr 1fr 1fr);transition:grid-template-columns .5s cubic-bezier(.16,1,.3,1);min-height:clamp(260px,34vh,340px)}
+.blk{position:relative;border:0;text-align:left;cursor:pointer;padding:clamp(14px,2vw,28px);display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-width:0}
+.blk[data-r=East]{background:var(--red);color:#fff}
+.blk[data-r=South]{background:var(--blue);color:#fff}
+.blk[data-r=North]{background:var(--yellow);color:#111}
+.blk:hover .rn::after{transform:scaleX(1)}
+.blk[aria-pressed=true]::before{content:"";position:absolute;left:0;right:0;top:0;height:12px;background:var(--ink)}
+.rn{font-weight:700;font-size:clamp(1.8rem,3.4vw,3rem);line-height:1;position:relative;display:inline-block}
+.rn::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:5px;background:currentColor;transform:scaleX(0);transform-origin:left;transition:transform .4s cubic-bezier(.16,1,.3,1)}
+.blk[aria-pressed=true] .rn::after{transform:scaleX(1)}
+.big{font-family:var(--num);font-weight:700;font-size:clamp(4rem,9.5vw,8.5rem);line-height:.85;letter-spacing:-.06em;font-variant-numeric:tabular-nums;white-space:nowrap}
+.big small{font-size:.28em;letter-spacing:0;margin-left:.15em;font-family:var(--cjk);font-weight:700}
+.field.has .blk[aria-pressed=false] .big{font-size:clamp(2.6rem,5.6vw,5rem)}
+.big{transition:font-size .5s cubic-bezier(.16,1,.3,1)}
+.sub{display:flex;gap:6px 22px;flex-wrap:wrap;margin-top:14px;font-size:1rem;font-weight:700}
+.sub b{font-family:var(--num);font-size:1.4em;font-variant-numeric:tabular-nums}
+.all{display:flex;justify-content:space-between;align-items:center;width:100%;background:var(--ink);color:var(--paper);border:0;padding:14px clamp(16px,3vw,40px);cursor:pointer;font-weight:700;font-size:1.1rem;gap:12px;flex-wrap:wrap}
+.all[aria-pressed=true]{background:#000;box-shadow:inset 0 -10px 0 var(--yellow)}
+.all:hover{background:#2b2b2b}
+.all .num{font-weight:700;font-size:1.2rem}
+main{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px 48px;padding:24px clamp(16px,3vw,40px)}
+h2{font-weight:700;font-size:clamp(1.6rem,2.6vw,2.4rem);line-height:1.1;margin-bottom:6px}
+.cap{font-size:1rem;margin-bottom:12px;max-width:42em}
+#chart{height:340px;width:100%}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{font-weight:700;text-align:left;border-bottom:4px solid var(--ink);padding:6px 0}
+th.r,td.r{text-align:right}
+td{padding:11px 0;border-bottom:2px solid var(--ink);font-family:var(--num);font-weight:500;font-size:1.05rem}
+td:first-child{font-family:var(--cjk);font-weight:700}
+td .d{display:inline-block;padding:1px 8px;font-weight:700;background:var(--accent);color:var(--accent-ink)}
+td .d.neg{background:none;color:var(--ink);box-shadow:inset 0 0 0 3px var(--ink)}
+.legend{display:flex;gap:20px;font-weight:700;font-size:.9rem;margin-bottom:8px}
+.legend i{display:inline-block;width:18px;height:14px;vertical-align:-2px;margin-right:6px}
+@media(max-width:760px){
+ .field.has .blk[aria-pressed=false] .big{font-size:clamp(2.6rem,14vw,4rem)}
+ .field{grid-template-columns:1fr!important;grid-template-rows:var(--rows);min-height:0}
+ .blk{min-height:150px;flex-direction:row;align-items:flex-end;flex-wrap:wrap;gap:8px}
+ .blk[aria-pressed=true]{min-height:230px}
+ .big{font-size:clamp(3.6rem,22vw,6rem)}
+ main{grid-template-columns:1fr}
+ #chart{height:300px}
+ .rn{width:100%}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+.editor{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}.editor input,.editor select{font:inherit;color:inherit;background:transparent;border:1px solid currentColor;padding:5px;max-width:100%;min-width:0}.editor input{width:130px}.editor option{color:CanvasText;background:Canvas}.editor #write-state{width:100%;overflow-wrap:anywhere;font-size:.85em}#status{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+ <h1>Q3 2026 Sales Review</h1>
+ <div class="ctl">
+  <div class="seg" id="ch" role="group" aria-label="Channel"></div>
+  <span id="status" class="num" role="status" aria-live="polite">Loading live data…</span>
+ </div>
+</header>
+<section class="field" id="field" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201" aria-label="Region"></section>
+<button class="all" id="all" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201" aria-pressed="false"></button>
+<main>
+ <section>
+  <h2 id="ctitle"></h2>
+  <p class="cap">Solid bars show actual sales; outlined bars show targets. Select a region above.</p>
+  <div class="legend"><span><i id="lg" style="background:#111"></i>Actual</span><span><i style="box-shadow:inset 0 0 0 3px #111"></i>Target</span></div>
+  <div id="chart" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"></div>
+ </section>
+ <section>
+  <h2 id="ttitle"></h2>
+  <p class="cap">See the gap by channel.</p>
+  <table><thead><tr><th>Channel</th><th class="r">Actual (M)</th><th class="r">Target (M)</th><th class="r">Gap</th></tr></thead><tbody id="tb" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"><tr><td colspan="4">Loading…</td></tr></tbody></table><div id="editor" class="editor" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:E201"><label for="record">Edit record target</label> <select id="record" aria-label="Sales record"><option>Loading…</option></select> <label for="target">Target</label> <input id="target" type="number" min="0" step="1" required disabled aria-describedby="write-state"><span id="write-state" role="status" aria-live="polite">Loading…</span></div>
+ </section>
+</main>
+<script type="module">
+
+const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+async function isTrialWrite(){
+  try{if(window.univerWorkspace?.capabilities?.includes('write-mode'))return await window.univerWorkspace.getWriteMode(unitId)==='trial'}catch{}
+  return false;
+}
+let D=[],MON=[];
+const subscriptions=[],refreshers=[];
+let connected=false;
+const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！]+$/u,'');
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function records(value){return value.map(([m,r,c,a,t],i)=>({m:esc(typeof m==='number'?new Date(Math.round((m-25569)*86400000)).toISOString().slice(0,7):m),r:esc(r),c:esc(c),a,t,row:i+1})).filter(x=>x.m&&x.r&&x.c&&typeof x.a==='number'&&Number.isFinite(x.a)&&typeof x.t==='number'&&Number.isFinite(x.t))}
+function status(text,bad=false){const s=document.getElementById('status');s.textContent=text;s.className=bad?'bad':'ok'}
+function render(){refreshers.forEach(fn=>fn())}
+async function watch(id,fn){
+ const update=()=>{const data=update.data;if(!data)return;D=data;MON=[...new Set(D.map(x=>x.m))].sort();fn()};
+ refreshers.push(update);
+ try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{update.data=records(value);update();if(!connected){connected=true;status('Live data connected')}}))}
+ catch(e){document.getElementById(id).textContent='Unable to load data: '+errorText(e);status('Unable to load data: '+errorText(e),true)}
+}
+const editor=document.getElementById('editor'),record=document.getElementById('record'),target=document.getElementById('target'),result=document.getElementById('write-state');
+let editorRows=[];
+function selectRecord(){const row=editorRows.find(x=>String(x.row)===record.value);if(!row)return;target.setAttribute('data-univer-cell-model',`${encodeURIComponent(unitId)}:${encodeURIComponent(sheetId)}:E${row.row+1}`);target.disabled=false;result.textContent='Change the target, then leave the field to save.'}
+record.addEventListener('change',selectRecord);
+target.addEventListener('change',async()=>{
+ if(!target.checkValidity())return;
+ result.textContent='Saving to Sheet…';status('Saving to Sheet…');record.disabled=true;
+ try{await binding.flush();result.textContent=await isTrialWrite()?'Trial only, not saved':'Saved to Sheet';status(result.textContent)}
+ catch(e){result.textContent=`${errorText(e)}. Draft kept. Press Escape to restore the source value.`;status(result.textContent,true)}
+ finally{record.disabled=false}
+});
+watch('editor',()=>{editorRows=D;const selected=record.value;record.innerHTML=D.map(x=>`<option value="${x.row}">${x.m} · ${x.r} · ${x.c}</option>`).join('');if(D.some(x=>String(x.row)===selected))record.value=selected;else selectRecord();if(!D.length){target.disabled=true;result.textContent='No sales records'}});
+window.addEventListener('pagehide',()=>{subscriptions.forEach(s=>s.dispose());chart?.dispose();if(typeof io!=='undefined')io.disconnect()},{once:true});
+
+const REG=['East','South','North'],CH=['Direct','Partner','Online'];
+const COL={East:'#e4302a',South:'#1c3fd6',North:'#ffc800',All:'#111'};
+const st={r:'All',c:'All'};
+const amountFormat=new Intl.NumberFormat('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const amount=v=>amountFormat.format(v/1e6);
+const monthLabel=m=>new Intl.DateTimeFormat('en-US',{month:'short',timeZone:'UTC'}).format(new Date(m.slice(0,7)+'-01T00:00:00Z'));
+const pct=(a,t)=>{const p=(t>0?a/t-1:NaN)*100;return Number.isFinite(p)?(p>=0?'+':'−')+Math.abs(p).toFixed(1)+'%':'—'};
+const sum=f=>{let a=0,t=0;D.filter(f).forEach(x=>{a+=x.a;t+=x.t});return{a,t}};
+const chOk=x=>st.c==='All'||x.c===st.c;
+function pick(k,v){st[k]=v;render()}
+function controls(){
+ const chd=document.getElementById('ch');
+ chd.innerHTML=['All',...CH].map(c=>`<button aria-pressed="${st.c===c}" data-c="${c}">${c==='All'?'All channels':c}</button>`).join('');
+ chd.querySelectorAll('button').forEach(b=>b.onclick=()=>pick('c',b.dataset.c));
+}
+function blocks(){
+ const f=document.getElementById('field');
+ f.classList.toggle('has',st.r!=='All');f.style.setProperty('--cols',REG.map(r=>st.r===r?'1.7fr':'1fr').join(' '));
+ f.style.setProperty('--rows',REG.map(r=>st.r===r?'1.6fr':'1fr').join(' '));
+ f.innerHTML=REG.map(r=>{const s=sum(x=>x.r===r&&chOk(x));
+  return `<button class="blk" data-r="${r}" aria-pressed="${st.r===r}"><span class="rn">${r}</span><span><span class="big">${amount(s.a)}<small>M</small></span><span class="sub"><span>Target <b>${amount(s.t)}</b>M</span><span><b>${pct(s.a,s.t)}</b></span></span></span></button>`}).join('');
+ f.querySelectorAll('button').forEach(b=>b.onclick=()=>pick('r',st.r===b.dataset.r?'All':b.dataset.r));
+}
+function total(){
+ const T=sum(chOk);const al=document.getElementById('all');
+ al.setAttribute('aria-pressed',st.r==='All');
+ al.innerHTML=`<span>All regions</span><span class="num">${amount(T.a)} M / Target ${amount(T.t)} M / ${pct(T.a,T.t)}</span>`;
+ al.onclick=()=>pick('r','All');
+}
+function ledger(){
+ const col=COL[st.r],ink=st.r==='North'?'#111':'#fff';
+ document.documentElement.style.setProperty('--accent',col);document.documentElement.style.setProperty('--accent-ink',ink);
+ document.getElementById('lg').style.background=col;
+ const scope=(st.r==='All'?'All regions':st.r)+(st.c==='All'?'':' · '+st.c);
+ document.getElementById('ctitle').textContent=scope+' · Monthly sales vs target';
+ document.getElementById('ttitle').textContent=scope+' · Channel gaps';
+ document.getElementById('tb').innerHTML=CH.filter(c=>st.c==='All'||c===st.c).map(c=>{const s=sum(x=>(st.r==='All'||x.r===st.r)&&x.c===c);const neg=s.a<s.t;
+  return `<tr><td>${c}</td><td class="r">${amount(s.a)}</td><td class="r">${amount(s.t)}</td><td class="r"><span class="d ${neg?'neg':''}">${pct(s.a,s.t)}</span></td></tr>`}).join('');
+ if(!D.length)document.getElementById("tb").innerHTML='<tr><td colspan="4">No sales records</td></tr>';
+}
+let chart;
+function draw(){
+ const col=COL[st.r];
+ if(!window.echarts){document.getElementById('chart').textContent='Chart unavailable. Refresh to retry.';return}
+ if(!chart)chart=echarts.init(document.getElementById('chart'),null,{renderer:'svg'});
+ const rg=x=>st.r==='All'||x.r===st.r;
+ const A=MON.map(m=>sum(x=>x.m===m&&rg(x)&&chOk(x)));
+ chart.setOption({animationDuration:500,animationEasing:'cubicOut',
+  grid:{left:8,right:8,top:24,bottom:28,containLabel:true},
+  xAxis:{type:'category',data:MON.map(m=>monthLabel(m)),axisLine:{lineStyle:{color:'#111',width:4}},axisTick:{show:false},axisLabel:{fontFamily:'Space Grotesk, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',fontWeight:700,fontSize:16,color:'#111'}},
+  yAxis:{type:'value',axisLabel:{fontFamily:'Space Grotesk, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',fontSize:13,color:'#111',formatter:v=>amount(v)},splitLine:{lineStyle:{color:'#111',width:1,type:[2,5]}},name:'Amount (M)',nameTextStyle:{fontFamily:'Space Grotesk, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',color:'#111',align:'left'}},
+  tooltip:{trigger:'axis',axisPointer:{type:'shadow',shadowStyle:{color:'rgba(0,0,0,.06)'}},backgroundColor:'#111',borderWidth:0,textStyle:{color:'#fff',fontFamily:'Space Grotesk, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif'},valueFormatter:v=>amount(v)+' M'},
+  series:[
+   {name:'Actual',type:'bar',barWidth:'30%',barGap:'6%',data:A.map(s=>s.a),itemStyle:{color:col},label:{show:true,position:'top',fontFamily:'Space Grotesk, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif',fontWeight:700,fontSize:15,color:'#111',formatter:p=>amount(p.value)}},
+   {name:'Target',type:'bar',barWidth:'30%',data:A.map(s=>s.t),itemStyle:{color:'transparent',borderColor:'#111',borderWidth:3}}
+  ]},true);
+}
+addEventListener('resize',()=>chart&&chart.resize());
+controls();
+watch('field',blocks);watch('all',total);watch('tb',ledger);watch('chart',draw);
+refreshers.push(controls);
+</script>
+</body>
+</html>

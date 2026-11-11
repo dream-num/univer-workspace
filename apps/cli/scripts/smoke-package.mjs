@@ -114,8 +114,25 @@ try {
   const htmlSkillRoot = JSON.parse(
     (await run(executable, ["skills", "path", "html-view", "--json"], installRoot, smokeEnv)).stdout,
   ).data.path;
-  if (htmlSkill.name !== "html-view" || htmlSkill.files.length !== 9) {
+  if (htmlSkill.name !== "html-view" || htmlSkill.files.length !== 15) {
     throw new Error("Packaged HTML View Skill or references are missing");
+  }
+  const expectedHtmlTemplates = [
+    "templates/bauhaus-blocks.univer.html",
+    "templates/blueprint-timeline.univer.html",
+    "templates/broadsheet.univer.html",
+    "templates/brutalist-board.univer.html",
+    "templates/citron-poster.univer.html",
+    "templates/meeting-slides.univer.html",
+    "templates/night-gauge.univer.html",
+    "templates/swiss-report.univer.html",
+    "templates/trading-desk.univer.html",
+    "templates/wenkai-notebook.univer.html",
+  ];
+  const htmlTemplates = htmlSkill.files
+    .map((file) => file.path).filter((path) => path.startsWith("templates/")).sort();
+  if (JSON.stringify(htmlTemplates) !== JSON.stringify(expectedHtmlTemplates)) {
+    throw new Error("Packaged HTML View style catalog differs from the ten supported templates");
   }
   const htmlEntry = JSON.parse(
     (await run(executable, ["skills", "get", "html-view", "--json"], installRoot, smokeEnv)).stdout,

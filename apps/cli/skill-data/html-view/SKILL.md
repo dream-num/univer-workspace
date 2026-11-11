@@ -5,6 +5,27 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 
 # Workspace HTML Views
 
+## Start with a style and live data
+
+1. Read [design.md](references/design.md). Unless the user already named a style, ask which
+   style they want before reading Sheets in depth or authoring. Ask in the user's language,
+   listing the ten style names and their one-line moods in that language, and say
+   Night Gauge (`night-gauge`, 仪表夜航) is the default. Ask in your normal reply text,
+   then end your turn and wait for the answer; do not rely on a client question or form tool,
+   or validate or publish a page before the user answers. If they
+   leave the choice to you (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently choose
+   another style.
+2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
+   a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
+3. Page controls write to Sheet cells or append rows; the page displays the recalculated
+   source values through live bindings, and label host-provided visitor trials with `getWriteMode`
+   as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,
+   embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
+4. Write the page in the user's language as [design.md](references/design.md) describes;
+   templates are English starting points.
+
+## Bind the page
+
 Use HTML, CSS and JavaScript to present or edit existing Sheet data in a Workspace page.
 Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
@@ -12,8 +33,6 @@ Use fine-grained declarations on the consuming elements so bindings are traceabl
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
 For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
 
-Before authoring, read [design.md](references/design.md), choose the matching starter in
-`templates/` yourself, and adapt that complete source instead of starting from a blank page.
 Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 
 ## Find the sources

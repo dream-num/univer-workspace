@@ -77,16 +77,22 @@ describe("Workspace CLI skills command", () => {
       "references/charts.md",
       "references/design.md",
       "references/frontend-libraries.md",
-      "templates/planning.univer.html",
-      "templates/sales.univer.html",
-      "templates/showcase.univer.html",
-      "templates/tracker.univer.html",
+      "templates/bauhaus-blocks.univer.html",
+      "templates/blueprint-timeline.univer.html",
+      "templates/broadsheet.univer.html",
+      "templates/brutalist-board.univer.html",
+      "templates/citron-poster.univer.html",
+      "templates/meeting-slides.univer.html",
+      "templates/night-gauge.univer.html",
+      "templates/swiss-report.univer.html",
+      "templates/trading-desk.univer.html",
+      "templates/wenkai-notebook.univer.html",
     ]);
     const located = await runSkills(["skills", "path", "html-view", "--json"]);
     const root = (located.data as { path: string }).path;
     for (const file of [{ path: "SKILL.md", content: data.content }, ...files]) {
       expect(await readFile(join(root, file.path), "utf8")).toBe(file.content);
-      for (const link of file.content.matchAll(/\]\(([^)]+\.md)\)/g)) {
+      for (const link of file.content.matchAll(/\]\(([^)]+\.(?:md|html))\)/g)) {
         if (/^[a-z]+:/i.test(link[1]!)) continue;
         expect(await readFile(resolve(root, dirname(file.path), link[1]!), "utf8")).not.toBe("");
       }
@@ -102,7 +108,7 @@ describe("Workspace CLI skills command", () => {
       }>
     )[0]!;
     expect(data.files).toBeUndefined();
-    expect(data.resources).toHaveLength(9);
+    expect(data.resources).toHaveLength(15);
     const text = await runSkillsText(["skills", "get", "html-view"]);
     expect(text).not.toContain(skillRoot);
     for (const resource of data.resources) {
