@@ -59,8 +59,11 @@ export default defineConfig({
           ws: true,
         },
         // The gateway accepts browsers only when Host and Origin match MCP_PUBLIC_URL,
-        // so a local gateway must set MCP_PUBLIC_URL to this Vite origin plus /mcp.
-        "/mcp": `http://127.0.0.1:${process.env.WORKSPACE_DEV_MCP_PORT ?? "3000"}`,
+        // so keep the Vite Host and set the local gateway's MCP_PUBLIC_URL to this origin plus /mcp.
+        "/mcp": {
+          target: `http://127.0.0.1:${process.env.WORKSPACE_DEV_MCP_PORT ?? "3000"}`,
+          changeOrigin: false,
+        },
       };
     })(),
   },

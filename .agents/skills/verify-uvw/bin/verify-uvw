@@ -55,7 +55,8 @@ wait_http() { # url timeout-seconds
 uvw_raw() { node "$CLI_MAIN" "$@"; }
 
 mcp_digest() {
-  git -C "$REPO" ls-files -co --exclude-standard -z -- "${MCP_BUILD_INPUTS[@]}" | node -e '
+  local context="${MCP_BUILD_CONTEXT:-$REPO}"
+  git -C "$context" ls-files -co --exclude-standard -z -- "${MCP_BUILD_INPUTS[@]}" | node -e '
     const fs = require("node:fs"), crypto = require("node:crypto");
     process.chdir(process.argv[1]);
     const paths = [...new Set(fs.readFileSync(0, "utf8").split("\0").filter(Boolean))].sort();
@@ -65,7 +66,7 @@ mcp_digest() {
       hash.update(path).update("\0").update(fs.readFileSync(path)).update("\0");
     }
     console.log(hash.digest("hex"));
-  ' "$REPO"
+  ' "$context"
 }
 
 mcp_compose() {
@@ -106,8 +107,8 @@ mcp_up() {
   digest="$(mcp_digest)"
   node -e 'const fs=require("node:fs"); fs.writeFileSync(process.argv[1], JSON.stringify({started_at:new Date().toISOString(),git_head:process.argv[2],source_digest:process.argv[3],image_id:null},null,2)+"\n")' \
     "$RUN/mcp-build.json" "$GIT_HEAD" "$digest"
-  docker build -f "$REPO/apps/mcp/Dockerfile" -t "$MCP_IMAGE" \
-    --label "org.opencontainers.image.revision=$GIT_HEAD" --label "dev.univer.verify-uvw.run=$RUN_ID" "$REPO" \
+  docker build -f "${MCP_BUILD_CONTEXT:-$REPO}/apps/mcp/Dockerfile" -t "$MCP_IMAGE" \
+    --label "org.opencontainers.image.revision=$GIT_HEAD" --label "dev.univer.verify-uvw.run=$RUN_ID" "${MCP_BUILD_CONTEXT:-$REPO}" \
     >"$RUN/logs/mcp-build.log" 2>&1 \
     || { tail -n 40 "$RUN/logs/mcp-build.log" >&2; die "MCP build failed; run: verify-uvw down"; }
   MCP_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$MCP_IMAGE")"
@@ -490,6 +491,7 @@ EOF
     printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
     [[ ! -f "$run/executor-allowed-user-ids" ]] || unlink "$run/executor-allowed-user-ids"
     [[ "${VERIFY_UVW_MCP_PRODUCTION:-0}" != 1 ]] || printf 'verify-uvw-pending-user\n' >"$run/executor-allowed-user-ids"
+    [[ -z "${VERIFY_UVW_MCP_BUILD_CONTEXT:-}" ]] || printf 'MCP_BUILD_CONTEXT=%s\n' "$(cd "$VERIFY_UVW_MCP_BUILD_CONTEXT" && pwd)" >>"$run/run.env"
     printf 'MCP_PORT=%s\nMCP_PUBLIC_URL=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$mcp_public_url" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
   fi
   ln -sfn "$run" "$ROOT/current"

@@ -184,6 +184,13 @@ Vite proxies `/mcp` to the gateway port, and `MCP_URL`, `mcp`, `mcp-oauth` and o
 Use it when a browser page calls `/mcp`, such as the Agents module. The gateway still listens on
 its own port for `healthz` and `metrics`, but its `/mcp` answers 403 there because the Host differs.
 
+`VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` at `up` builds the MCP image from another checkout of this
+repository, and `doctor` checks the image against that checkout's source digest. Use it when this tree
+changes only inputs the gateway does not use, such as Web dependencies in `pnpm-lock.yaml`, and the
+network is too slow to reinstall the image's packages: a clean `git worktree` at `origin/main` reuses
+the cached install layer. The checkout's `apps/mcp`, `packages/client-core` and `apps/cli/skill-data`
+must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data`).
+
 Two independent flags at `up` select the deployment shape and are saved in `run.env`:
 
 - `VERIFY_UVW_MCP_RENDERER=0` omits the renderer container and `MCP_RENDERER_URL` from the executor(s). Doctor verifies that no renderer exists and skips renderer probes. `renderer-call` and `renderer-restart` refuse this mode.
