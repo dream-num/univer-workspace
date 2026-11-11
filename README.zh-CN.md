@@ -37,6 +37,7 @@ Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类�
 
 - Agent 可以生成基于电子表格的 Mini App，例如决策看板、交互式报告和业务看板。
 - 网页上的指标、图表和控件与单元格绑定，支持数据读取、写入和协同更新。
+- 查看 [HTML View 效果展示](docs/html-view-showcase.zh-CN.md)：10 种页面风格、实时编辑，以及支持访客试算的公开分享。
 
 [![Workspace Mini App 与其关联的电子表格并排显示，指标、图表和控件绑定到单元格](docs/images/workspace-mini-app.png)](https://youtu.be/4PBVltY_WEc)
 
