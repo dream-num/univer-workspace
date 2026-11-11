@@ -40,7 +40,7 @@ zero static bindings; runtime requests still require access to each source Unit.
 Blob write keys must be 16–200 ASCII letters, digits, underscores or hyphens; a UUID is a suitable key. This applies to both creation and replacement.
 
 `create` performs the same validation and uploads the validated HTML as a new Blob. It adds
-`.univer.html` to the name if missing and returns Blob identities plus `workspaceUrl`. The Space
+`.univer.html` to the name if missing and returns Blob identities plus `workspaceUrl`, `shareUrl`, `repositoryVisibility` and `privateSourceUnitIds`. The Space
 is explicit; the parent defaults to its root. Reuse an idempotency key only when retrying identical
 content, name and destination. Creation publishes immediately without a Unit Worktree and does
 not modify source cells.
@@ -48,6 +48,24 @@ not modify source cells.
 Review the template's structure, script syntax, referenced IDs, coordinates, loading/error states
 and intended write handlers. Template validation does not prove runtime rendering, interaction or
 synchronization; report which checks ran. Unit screenshot commands do not render HTML Views.
+
+## Share the page
+
+Return `shareUrl` (the immersive page link) to the user and say who can open it.
+When `repositoryVisibility` is `public` and `privateSourceUnitIds` is empty, anyone
+with the link can view the page and its declared sources. Otherwise, only signed-in
+people with access can open the page with all its data. A public page can open
+without its private source data. Signed-out visitors and signed-in non-members are
+read-only; page writes are rejected for them.
+
+If the user wants anyone with the link to open a private repository's page, ask
+before making the repository public: this immediately publishes everything in the
+repository. After approval, use CLI `repo edit <repo> --visibility public`, or MCP
+`repo_edit {repo, visibility: "public"}` in the `admin` toolset.
+Keep source Sheets in the same public repository as the page, or list the
+`privateSourceUnitIds` to the user. These fields describe declared sources at
+creation time; script-created references and later permission changes still need
+checking, and Workspace authorizes every visitor's requests.
 
 ## Revise an existing page
 

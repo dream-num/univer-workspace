@@ -5,6 +5,7 @@ import type { Handler, OpContext } from "../context.js";
 
 function htmlViewFeature(ctx: OpContext) {
   return new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => ctx.http(),
     blobs: {
       uploadBytes: async (input) => {
         ctx.signal.throwIfAborted();

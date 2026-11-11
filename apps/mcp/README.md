@@ -669,7 +669,13 @@ HTML is limited to 512 KiB of UTF-8 text at the tool and RPC input boundaries;
 the RPC frame limit is 4 MiB, including JSON escaping and credentials. Validation
 returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation immediately
 publishes a Blob without Worktree review and returns the CLI's bare upload fields
-with `workspaceUrl` using the identity origin. The executor uploads an in-memory copy
+with `workspaceUrl` and immersive `shareUrl` using the identity origin,
+`repositoryVisibility` (`public` or `private`, from destination `publicRead`), and
+sorted `privateSourceUnitIds` for declared Sheets in non-public repositories.
+Anyone with the link can view the page and its declared data when visibility is
+public and the private-source list is empty. Private sources remain inaccessible
+to signed-out visitors even on a public page. Signed-out visitors and signed-in
+non-members are read-only; page writes are rejected for them. The executor uploads an in-memory copy
 of the exact validated bytes through `uploadBytes`,
 with stable original filename `view.univer.html`. It creates no temporary HTML file.
 Validation and source-read failures before upload preserve their read error semantics;

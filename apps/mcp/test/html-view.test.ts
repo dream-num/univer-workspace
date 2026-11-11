@@ -19,7 +19,7 @@ import { htmlViewValidateTool } from "../src/gateway/tools/files/html-view-valid
 
 const html = '<output data-univer-cell-text="unit:budget:B2"></output>';
 const key = "html-retry-key-123";
-function setup(page = html) {
+function setup(page = html, publicRead = false, privateUnits: readonly string[] = []) {
   let completed = false;
   const resource = {
     id: "resource",
@@ -79,9 +79,14 @@ function setup(page = html) {
   });
   const fetcher = vi.fn<typeof fetch>(async (url, options) => {
     const request = new Request(url, options);
+    if (request.url.includes("/api/unit-resources/")) {
+      const unitId = decodeURIComponent(new URL(request.url).pathname.split("/").at(-1) ?? "");
+      return Response.json({ node: { ...node, spaceId: privateUnits.includes(unitId) ? "private" : "space", resource: { ...resource, kind: "univer", unitId, unitType: "sheet" } } });
+    }
+    if (request.url.endsWith("/api/spaces/private")) return Response.json({ id: "private", name: "Private", publicRead: false });
     if (request.url.endsWith("/api/spaces/space")) return Response.json({
       id: "space", name: "Team", type: "team", fullName: "owner/team", slug: "team",
-      owner: { id: "owner", username: "owner" }, accessRole: "owner", affiliation: "owner", publicRead: false,
+      owner: { id: "owner", username: "owner" }, accessRole: "owner", affiliation: "owner", publicRead,
     });
     if (request.method === "POST") {
       expect(request.headers.get("idempotency-key")).toBe(key);
@@ -325,4 +330,21 @@ it("advertises the html-view upload purpose and caps staged HTML at 512 KiB", as
   expect(upload.max_bytes).toBe(htmlViewMaxBytes);
   expect((await store.handle(new Request(upload.upload_url, { method: "PUT", body: Buffer.alloc(htmlViewMaxBytes + 1) }))).status).toBe(413);
   await expect(store.createUpload("owner", { purpose: "html-view", file_name: "view.zip", media_type: "application/zip" })).rejects.toMatchObject({ code: "workspace-upload-media-type-invalid" });
+});
+
+it.each([
+  { publicRead: true, privateUnits: [], visibility: "public", expected: [] },
+  { publicRead: false, privateUnits: [], visibility: "private", expected: ["unit"] },
+  { publicRead: true, privateUnits: ["unit"], visibility: "public", expected: ["unit"] },
+])("MCP returns sharing fields for $visibility with private sources $privateUnits", async ({ publicRead, privateUnits, visibility, expected }) => {
+  const f = setup(html, publicRead, privateUnits);
+  const { context } = uploadContext();
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
+    const { input } = z.object({ input: opSpecs["htmlView.create"].input }).parse(decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer())).header);
+    const result = await htmlViewCreate(f.ctx, input);
+    return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: f.ctx.usage })));
+  });
+  const result = await htmlViewCreateTool.run(context, { ...createArgs, html });
+  expect(result.output).toMatchObject({ shareUrl: "https://workspace.test/nodes/node?view=immersive", repositoryVisibility: visibility, privateSourceUnitIds: expected });
+  expect(opSpecs["htmlView.create"].output.parse(result.output)).toEqual(result.output);
 });
