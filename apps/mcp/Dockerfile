@@ -36,7 +36,7 @@ ENV HOST=0.0.0.0
 RUN if [ -n "${HTTP_PROXY}" ]; then \
       for source in /etc/apt/sources.list /etc/apt/sources.list.d/*; do \
         [ -f "$source" ] || continue; \
-        sed -i 's|deb.debian.org|mirrors.aliyun.com|g' "$source"; \
+        sed -i 's|deb.debian.org|mirrors.cloud.aliyuncs.com|g' "$source"; \
       done; \
       unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy NO_PROXY no_proxy; \
     fi \
