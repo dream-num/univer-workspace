@@ -190,9 +190,10 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(skill["skills"]).toBeUndefined();
     expect(skill["content"]).toBe(await readFile(join(cliSkillData, "html-view/SKILL.md"), "utf8"));
     expect(skill.resources.map((resource: { path: string }) => resource.path)).toEqual(
-      (await readdir(join(cliSkillData, "html-view/references")))
-        .sort((a, b) => a.localeCompare(b))
-        .map((file) => `references/${file}`),
+      [
+        ...(await readdir(join(cliSkillData, "html-view/references"))).map((file) => `references/${file}`),
+        ...(await readdir(join(cliSkillData, "html-view/templates"))).map((file) => `templates/${file}`),
+      ].sort((a, b) => a.localeCompare(b)),
     );
     expect(skill.resources[0].readCommand).toBe(
       `Call skills_read with name "html-view" and resource "${skill.resources[0].path}".`,
@@ -202,6 +203,16 @@ describe("API reference, Skills, resources and server instructions", () => {
 
     const full = await call(client, "skills_read", { name: "html-view", full: true });
     expect(full.structured["files"]).toHaveLength(skill.resources.length);
+
+    const template = await call(client, "skills_read", {
+      name: "html-view",
+      resource: "templates/planning.univer.html",
+    });
+    expect(template.structured).toEqual({
+      name: "html-view",
+      path: "templates/planning.univer.html",
+      content: await readFile(join(cliSkillData, "html-view/templates/planning.univer.html"), "utf8"),
+    });
 
     const resource = await call(client, "skills_read", {
       name: "html-view",

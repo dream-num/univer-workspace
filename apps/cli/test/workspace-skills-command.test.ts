@@ -75,7 +75,12 @@ describe("Workspace CLI skills command", () => {
       "references/adding-records.md",
       "references/authoring.md",
       "references/charts.md",
+      "references/design.md",
       "references/frontend-libraries.md",
+      "templates/planning.univer.html",
+      "templates/sales.univer.html",
+      "templates/showcase.univer.html",
+      "templates/tracker.univer.html",
     ]);
     const located = await runSkills(["skills", "path", "html-view", "--json"]);
     const root = (located.data as { path: string }).path;
@@ -97,7 +102,7 @@ describe("Workspace CLI skills command", () => {
       }>
     )[0]!;
     expect(data.files).toBeUndefined();
-    expect(data.resources).toHaveLength(4);
+    expect(data.resources).toHaveLength(9);
     const text = await runSkillsText(["skills", "get", "html-view"]);
     expect(text).not.toContain(skillRoot);
     for (const resource of data.resources) {
