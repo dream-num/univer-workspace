@@ -737,6 +737,7 @@ returns `javascript`, `diagnostics`, `previews`, `compiledTargetUnitId` and `com
 Creation requires `worktree` and `space`; `parent` is optional. Any of these destination
 options implies `apply: true` when `apply` is omitted. Explicit `apply: false` rejects them.
 An `idempotency_key` alone still allows compile-only.
+Apply rejects a manifest `targetUnitId` that matches an existing Unit in the destination Worktree with `workspace-argument-invalid` before creating a Doc; choose a new local compiler ID such as `report`.
 Generate an `idempotency_key` before creation and reuse identical inputs on retry.
 The caller-scoped key and deterministic native materialization reproduce the creation intent.
 The manifest's `targetUnitId` remains the compiled target; the returned `unit.unitId` is the

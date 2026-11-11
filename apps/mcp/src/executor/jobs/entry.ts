@@ -20,6 +20,9 @@ process.once("message", (message: JobRequest) => {
             },
           },
           units: {
+            list: async () => {
+              throw new Error("Compile-only job cannot list Units.");
+            },
             create: async () => {
               throw new Error("Compile-only job cannot create a Unit.");
             },

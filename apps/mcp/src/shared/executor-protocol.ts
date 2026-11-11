@@ -218,7 +218,7 @@ export const typstCompileInput = z
   });
 export const typstCompileOutput = z.object({
   committed: z.boolean(),
-  compiledTargetUnitId: z.string(),
+  compiledTargetUnitId: z.string().describe("The manifest's compiler validation ID, not a Workspace Unit ID. Use unit.unitId for the created Doc."),
   diagnostics: z.array(z.json()),
   previews: z.array(z.json()),
   javascript: z.string().optional(),

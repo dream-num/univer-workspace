@@ -183,7 +183,7 @@ describe("in-memory Typst bundle", () => {
     ],
     ["pages/one.typ", new TextEncoder().encode("= Hello\n\nWorld")],
   ]);
-  const dependencies = { materializer: { materialize: vi.fn() }, units: { create: vi.fn() } };
+  const dependencies = { materializer: { materialize: vi.fn() }, units: { list: vi.fn(), create: vi.fn() } };
 
   it("compiles exactly what the directory variant compiles", async () => {
     const root = await directory();

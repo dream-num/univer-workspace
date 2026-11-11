@@ -35,7 +35,8 @@ describe("Workspace Typst compilation", () => {
     const compile = vi.fn(async () => result);
     const materialize = vi.fn();
     const create = vi.fn();
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const list = vi.fn();
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list, create } });
 
     const operation = feature.execute({
       bundlePath: " exact/bundle path ",
@@ -48,6 +49,7 @@ describe("Workspace Typst compilation", () => {
     expect((await operation).previews).toBe(result.previews);
     expect(materialize).not.toHaveBeenCalled();
     expect(create).not.toHaveBeenCalled();
+    expect(list).not.toHaveBeenCalled();
   });
 
   it("returns compile-only errors and all compiler artifacts without side effects", async () => {
@@ -61,7 +63,7 @@ describe("Workspace Typst compilation", () => {
     const feature = createFeature({
       compile: vi.fn(async () => result),
       materializer: { materialize },
-      units: { create },
+      units: { list: async () => [], create },
     });
 
     await expect(feature.execute({ bundlePath: "paper" })).resolves.toEqual({
@@ -79,7 +81,7 @@ describe("Workspace Typst compilation", () => {
     });
     const materialize = vi.fn();
     const create = vi.fn();
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list: async () => [], create } });
 
     await expect(feature.execute({ bundlePath: "paper" })).rejects.toBe(failure);
     expect(compile).toHaveBeenCalledOnce();
@@ -94,7 +96,7 @@ describe("Workspace Typst compilation", () => {
     const compile = vi.fn(async () => ({ ...compiled, diagnostics: [warning, error1, error2] }));
     const materialize = vi.fn();
     const create = vi.fn();
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list: async () => [], create } });
 
     const failure = await feature
       .execute({
@@ -123,7 +125,7 @@ describe("Workspace Typst compilation", () => {
     };
     const materialize = vi.fn(async () => materialized);
     const create = vi.fn(async () => unit());
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list: async () => [], create } });
 
     await expect(
       feature.execute({
@@ -142,13 +144,47 @@ describe("Workspace Typst compilation", () => {
 });
 
 describe("Workspace Typst apply", () => {
+  it.each(["trunk", "worktree"] as const)("rejects a compiler ID belonging to a %s Unit before creating anything", async (source) => {
+    const list = vi.fn(async () => [{ ...unit(), source, unitId: compiled.targetUnitId }]);
+    const materialize = vi.fn(async () => ({ initialData: { id: compiled.targetUnitId } }));
+    const create = vi.fn(async () => unit());
+    const feature = createFeature({ materializer: { materialize }, units: { list, create } });
+
+    await expect(feature.execute({
+      bundlePath: "paper",
+      apply: { spaceId: "space-1", worktreeId: "wt-1" },
+    })).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: expect.stringMatching(/Typst compilation always creates a new Doc.*targetUnitId is only a local compiler ID.*report/),
+    });
+    expect(list).toHaveBeenCalledExactlyOnceWith("wt-1");
+    expect(materialize).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("propagates a membership read failure without materializing or creating", async () => {
+    const failure = new Error("Worktree is unavailable");
+    const list = vi.fn(async () => { throw failure; });
+    const materialize = vi.fn(async () => ({ initialData: { id: compiled.targetUnitId } }));
+    const create = vi.fn(async () => unit());
+    const feature = createFeature({ materializer: { materialize }, units: { list, create } });
+
+    await expect(feature.execute({
+      bundlePath: "paper",
+      apply: { spaceId: "space-1", worktreeId: "wt-1" },
+    })).rejects.toBe(failure);
+    expect(materialize).not.toHaveBeenCalled();
+    expect(create).not.toHaveBeenCalled();
+  });
+
   it("creates one staged Doc with exact materialized data and caller identity", async () => {
     const compile = vi.fn(async () => compiled);
     const initialData = { body: { dataStream: "content" }, id: "typst-doc", rev: 1 };
     const materialize = vi.fn(async () => ({ initialData, name: "  Materialized name  " }));
     const serverUnit = unit();
     const create = vi.fn(async (_input: CreateInput) => serverUnit);
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const list = vi.fn(async () => [{ ...unit(), unitId: "unrelated-unit", resourceId: compiled.targetUnitId }]);
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list, create } });
 
     await expect(
       feature.execute({
@@ -162,6 +198,7 @@ describe("Workspace Typst apply", () => {
       }),
     ).resolves.toEqual({ ...compiled, committed: true, unit: serverUnit });
     expect(compile).toHaveBeenCalledOnce();
+    expect(list).toHaveBeenCalledExactlyOnceWith(" worktree-1 ");
     expect(materialize).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledOnce();
     expect(create).toHaveBeenCalledWith({
@@ -181,7 +218,7 @@ describe("Workspace Typst apply", () => {
     const create = vi.fn(async (_input: CreateInput) => unit());
     const feature = createFeature({
       materializer: { materialize: async () => ({ initialData: { id: "typst-doc" } }) },
-      units: { create },
+      units: { list: async () => [], create },
     });
     await feature.execute({
       apply: { spaceId: "space-1", worktreeId: "wt-1" },
@@ -211,7 +248,7 @@ describe("Workspace Typst apply", () => {
     const create = vi.fn(async () => {
       throw failure;
     });
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list: async () => [], create } });
 
     await expect(
       feature.execute({
@@ -231,7 +268,7 @@ describe("Workspace Typst apply", () => {
       throw failure;
     });
     const create = vi.fn();
-    const feature = createFeature({ compile, materializer: { materialize }, units: { create } });
+    const feature = createFeature({ compile, materializer: { materialize }, units: { list: async () => [], create } });
 
     await expect(
       feature.execute({
@@ -251,7 +288,7 @@ function createFeature(
   return new WorkspaceCompileTypstFeature({
     compile: async () => compiled,
     materializer: { materialize: async () => ({ initialData: { id: "typst-doc" } }) },
-    units: { create: async () => unit() },
+    units: { list: async () => [], create: async () => unit() },
     ...overrides,
   });
 }

@@ -139,6 +139,31 @@ it("preserves Typst translation diagnostics through the child and creates no Uni
   });
   expect(fetcher).not.toHaveBeenCalled();
 }, 20000);
+it("rejects an existing Worktree Unit ID before materialization or creation", async () => {
+  const fetcher = vi.fn<typeof fetch>(async () => Response.json({
+    worktree: {
+      id: "wt", name: "Draft", state: "draft",
+      units: [{
+        unitId: "typst-test", resourceId: "resource", nodeId: "node", name: "Existing Doc",
+        source: "worktree", unitType: "doc", draftHeadRevision: 1, change: "added",
+        mergeResult: "pending", activationState: "waitingForMerge",
+        target: { spaceId: "space", parentNodeId: null },
+      }],
+    },
+  }));
+  const materialize = vi.fn();
+  const ctx = { ...context(fetcher), materializer: { materialize }, onCreateUnit: vi.fn() };
+  ctx.compileTypst = async () => ({ committed: false, javascript: "compiled()", title: "Report", targetUnitId: "typst-test", diagnostics: [], previews: [] });
+  await expect(typstCompile(ctx, { apply: true, worktreeId: "wt", spaceId: "space" }, bundle())).rejects.toMatchObject({
+    code: "workspace-argument-invalid",
+    message: expect.stringContaining("targetUnitId is only a local compiler ID"),
+  });
+  expect(fetcher).toHaveBeenCalledOnce();
+  expect(fetcher.mock.calls[0]![1]?.method).toBe("GET");
+  expect(materialize).not.toHaveBeenCalled();
+  expect(ctx.onCreateUnit).not.toHaveBeenCalled();
+  expect(ctx.usage.cost.committed_revisions).toBe(0);
+});
 it("materializes identical Typst create intents after a lost creation response", async () => {
   // Compilation is covered above; retry determinism needs two fresh native materializations.
   // Fixture is the real compiler output for bundle() with its default Hello/World source.
@@ -158,6 +183,8 @@ it("materializes identical Typst create intents after a lost creation response",
   const keys: (string | null)[] = [];
   let confirmed = false;
   const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+    if (options?.method === "GET")
+      return Response.json({ worktree: { id: "wt", name: "Draft", state: "draft", units: [] } });
     bodies.push(String(options?.body));
     keys.push(new Headers(options?.headers).get("idempotency-key"));
     if (!confirmed) throw new TypeError("lost response");

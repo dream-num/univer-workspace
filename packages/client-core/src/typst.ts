@@ -51,7 +51,7 @@ export interface WorkspaceCompileTypstDependencies {
     options?: CompileDocTypstBundleOptions,
   ) => Promise<CompileDocTypstBundleResult>;
   readonly materializer: WorkspaceTypstMaterializer;
-  readonly units: Pick<WorkspaceUnitFeature, "create">;
+  readonly units: Pick<WorkspaceUnitFeature, "create" | "list">;
 }
 
 /** Workspace orchestration: compile once, validate, materialize, then create one staged Doc. */
@@ -91,6 +91,13 @@ export class WorkspaceCompileTypstFeature {
         "workspace-typst-diagnostics",
         `Typst compilation contains ${String(errors.length)} error diagnostic(s); no Unit was created.`,
         { diagnostics: errors },
+      );
+    }
+    const units = await this.dependencies.units.list(input.apply.worktreeId);
+    if (units.some((unit) => unit.unitId === compiled.targetUnitId)) {
+      throw workspaceError(
+        "workspace-argument-invalid",
+        'Typst compilation always creates a new Doc; typst.json targetUnitId is only a local compiler ID and must not match an existing Unit in the destination Worktree. Choose a new one such as "report".',
       );
     }
     const materialized = await this.dependencies.materializer.materialize({

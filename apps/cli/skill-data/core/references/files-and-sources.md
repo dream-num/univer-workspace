@@ -119,7 +119,7 @@ uvw compile-typst paper/typst.json --apply --worktree <id> --space <space-id> \
 
 Build-only mode opens no mutation session and requires `--out`; unrequested outputs are not generated. `--diagnostics-out` writes diagnostics and `--preview-dir` writes direct Typst PNGs. Apply requires `--apply`, `--worktree`, and `--space`, with optional `--parent <node-id>` and `--idempotency-key <key>`.
 
-The manifest target is a compiler validation ID. JSON returns it as `compiledTargetUnitId` separately from server-allocated `unitId`, `resourceId`, and `nodeId`. Use only the returned Unit ID afterward. Errors block apply; warnings require comparison of the Typst PNG and final Workspace screenshot. Only the bundled `@univerjs-pro/doc-typst-native-binding` is supported, with no system `typst` fallback.
+The manifest target is a compiler validation ID. JSON returns it as `compiledTargetUnitId` separately from server-allocated `unitId`, `resourceId`, and `nodeId`. Use only the returned Unit ID afterward. Apply always creates a new Doc and rejects `targetUnitId` if it matches an existing Unit in the destination Worktree with `workspace-argument-invalid`; choose a new local compiler ID such as `report`. Errors block apply; warnings require comparison of the Typst PNG and final Workspace screenshot. Only the bundled `@univerjs-pro/doc-typst-native-binding` is supported, with no system `typst` fallback.
 
 ## Markdown and its assets
 
