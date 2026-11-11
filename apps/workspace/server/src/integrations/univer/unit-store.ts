@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
+import { availableParallelism } from "node:os";
 import type * as BoardsModule from "@univerjs-pro/boards";
 import type * as CommentDatabaseModule from "@univerjs-pro/collaboration-comment-database-sqlite";
 import type * as CommentServiceModule from "@univerjs-pro/collaboration-comment-service";
@@ -50,15 +51,24 @@ const { UniverCollabWorktreeService } = moduleRequire(
 ) as typeof WorktreeServiceModule;
 
 /**
- * SDK 1.1.0 runs the server-side Unit runtime (changeset application and
- * snapshot materialization) in a worker-thread pool that boots one SDK
- * instance per worker on first use, about a second each. Every runtime
- * consumer shares this configuration and the pools live as long as the
- * runtime: the materializer below is created once and reused, never per
- * request, so the boot cost is paid once per process.
+ * The server-side Unit runtime (changeset application and snapshot
+ * materialization) runs in worker-thread pools that boot one SDK instance per
+ * worker, about a second each. Worker counts are explicit so an SDK default
+ * change does not change this deployment's thread and memory footprint.
+ *
+ * The trunk Service and the materializer each get half the available CPUs; the
+ * materializer is created once and reused, never per request. Each Worktree has
+ * its own Draft Service, usually a few Units edited by a few users, so it gets
+ * one Worker.
  */
 const UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
-  execution: { mode: "worker" },
+  execution: {
+    mode: "worker",
+    workerCount: Math.max(1, Math.floor(availableParallelism() / 2)),
+  },
+};
+const WORKTREE_UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
+  execution: { mode: "worker", workerCount: 1 },
 };
 const { SQLiteWorktreeDatabaseAdapter } = moduleRequire(
   "@univerjs-pro/collaboration-worktree-database-sqlite"
@@ -167,7 +177,7 @@ export function createCollaborationRuntime(
       dbAdapter: database,
     },
     dbAdapter: worktreeDatabase,
-    runtime: UNIT_RUNTIME,
+    runtime: WORKTREE_UNIT_RUNTIME,
   });
   const unitStore: UnitStore = {
     async createUnit(input) {
