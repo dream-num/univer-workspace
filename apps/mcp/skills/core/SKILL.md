@@ -284,12 +284,15 @@ retry only the same operation with its original upload and idempotency key.
 
 Read the `blob` Skill for original files and the `html-view` Skill for live HTML
 backed by Sheet data. Unless the user already named a style, ask which style they want
-before reading Sheets in depth or authoring. List the ten Chinese names with their one-line
-moods from design.md and say 仪表夜航 (`night-gauge`) is the default. Ask in your normal
+before reading Sheets in depth or authoring. Ask in the user's language, using the ten
+style names and their one-line moods in that language from design.md, and say
+Night Gauge (`night-gauge`, 仪表夜航) is the default. Ask in your normal
 reply text, then end your turn and wait for the answer. Do not rely on a client question
 or form tool, or validate or publish a page before the user answers. If they leave the choice
-to you (你来定, 随便, 默认就行), use 仪表夜航. Never silently choose another style.
-Read design.md and start from that style's complete template. Controls write Sheet cells
+to you (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently choose another style.
+Read design.md and start from that style's complete template. Templates are English starting
+points; write the page in the language and conventions of the user's conversation as design.md
+describes, without i18n dictionaries or language switches. Controls write Sheet cells
 or append rows; show recalculated source values, never page-side Sheet formulas, copied
 data or fallback numbers. Blob publication/replacement and HTML View creation write
 directly without Worktree review; apply them only to the intended destination.

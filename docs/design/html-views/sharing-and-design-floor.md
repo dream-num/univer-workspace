@@ -118,19 +118,22 @@ HTML View Skill 增加 “Share the page” 一节，要求 Agent 把 `shareUrl`
 
 HTML View Skill 用十种完整模板提供不同起点，所有风格都保留，场景只是模板原先的数据合同，不限制风格用途。
 
-- `references/design.md` 列出十种风格的 ID、中文名、气质、原始场景与标志元素：仪表夜航、瑞士财报、粉色报纸、
+- `references/design.md` 列出十种风格的 ID、英文名、中文名、英文气质、原始场景与英文标志元素：仪表夜航、瑞士财报、粉色报纸、
   包豪斯色块、交易台、周会幻灯、新粗野看板、蓝图时间线、文楷手账、柠檬海报。
-  用户未指定风格时，Agent 在深入读取 Sheet 或创作前列出十种风格的中文名和一句气质介绍，询问用户想用哪一种，
-  并说明默认是 **仪表夜航（`night-gauge`）**。用正常回复文本询问，然后结束当前轮次，等待用户回答；
+  用户未指定风格时，Agent 在深入读取 Sheet 或创作前，用用户的语言列出十种风格在该语言中的名称和一句气质介绍，询问用户想用哪一种，
+  并说明默认是 **Night Gauge（`night-gauge`，仪表夜航）**，名称随询问语言显示。用正常回复文本询问，然后结束当前轮次，等待用户回答；
   不依赖客户端的提问或表单工具，用户回答前不得验证或发布页面。只有用户让 Agent 决定（如“你来定”“随便”“默认就行”）
-  时才使用仪表夜航；不能静默换成其他风格。
+  时才使用 Night Gauge（仪表夜航）；不能静默换成其他风格。
 - 从 `templates/<id>.univer.html` 的完整源码开始，不从空白页生成。用于不同场景时保留字体、配色、密度和标志元素，
   用该模板已有组件重建数据需要的结构，保留实时绑定与写入。
-- `SKILL.md` 在绑定细节之前先列出三条必读要求，顺序是询问风格与默认值、从对应模板开始、保持实时数据与 Sheet 计算。
+- 模板以英文编写，不内置 i18n 字典或语言切换。Agent 根据用户对话的语言和习惯生成实际 `.univer.html` 的全部可见文案、单位和日期格式，
+  例如中文页面使用 万、年/月；不添加 i18n 字典或语言切换。中文页面加载模板头部 `Chinese pages:` 列出的 CJK 字体并放在字体栈首位，
+  保留原风格的配色、布局与标志元素。
+- `SKILL.md` 在绑定细节之前先列出四条必读要求，顺序是询问风格与默认值、从对应模板开始、保持实时数据与 Sheet 计算、按用户语言生成页面。
   页面控件写来源单元格或追加行，显示 Sheet 重算后的来源值；不在页面 JavaScript 重写 Sheet 公式，不嵌入数据副本或兜底数字。
   这些要求不能只藏在 reference 中：一次 DeepSeek Flash 验收跳过了设计 reference 与模板，并在页面里重算公式、硬编码兜底数据。
 - MCP 的 `html_view_validate` 与 `html_view_create` 描述也提醒先读 Skill、在回复中询问未指定的风格并等待回答，
-  只有用户放权时才默认仪表夜航、从模板开始；
+  只有用户放权时才默认 Night Gauge（仪表夜航）、从模板开始；
   MCP core Skill 和 README 使用同样流程。
 - `design.md` 保留对比度、间距节奏、字号层级、`tabular-nums`、选区、焦点、滚动条、加载/空/错误状态和
   360px、390px、1440px 响应式要求，避免重复卡片网格、装饰性渐变文字等自动生成感。
@@ -154,7 +157,7 @@ DSH 插件的 Skill 分叉暂不同步，后续单独处理。
 
 在 `verify-uvw` 的隔离实例上开启 MCP，用 MCP 工具驱动，Browser 部分用 agent-browser 的全新无 cookie 会话：
 
-1. 用 MCP 建 repository 和 Sheet，写入数据。Agent 先读 Skill 和 `design.md`，按上述风格流程在回复中询问并等待回答（用户已指定风格则直接使用，只有用户放权时才默认仪表夜航），从对应模板开始，`html_view_validate` 后 `html_view_create`。
+1. 用 MCP 建 repository 和 Sheet，写入数据。Agent 先读 Skill 和 `design.md`，按上述风格流程在回复中询问并等待回答（用户已指定风格则直接使用，只有用户放权时才默认 Night Gauge（仪表夜航）），从对应模板开始，`html_view_validate` 后 `html_view_create`。
 2. 私有 repository：返回 `repositoryVisibility: private`；匿名会话打开 `shareUrl` 看不到页面。
 3. `repo_edit visibility=public` 后再建一个页面：返回 `public` 且 `privateSourceUnitIds` 为空；
    匿名会话打开 `shareUrl`，看到实时数据和底部注册条。

@@ -8,17 +8,20 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 ## Start with a style and live data
 
 1. Read [design.md](references/design.md). Unless the user already named a style, ask which
-   style they want before reading Sheets in depth or authoring. List the ten Chinese names
-   with their one-line moods and say 仪表夜航 (`night-gauge`) is the default. Ask in your
-   normal reply text, then end your turn and wait for the answer; do not rely on a client
-   question or form tool, or validate or publish a page before the user answers. If they
-   leave the choice to you (你来定, 随便, 默认就行), use 仪表夜航. Never silently choose
+   style they want before reading Sheets in depth or authoring. Ask in the user's language,
+   listing the ten style names and their one-line moods in that language, and say
+   Night Gauge (`night-gauge`, 仪表夜航) is the default. Ask in your normal reply text,
+   then end your turn and wait for the answer; do not rely on a client question or form tool,
+   or validate or publish a page before the user answers. If they
+   leave the choice to you (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently choose
    another style.
 2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
    a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
 3. Page controls write to Sheet cells or append rows; the page displays the recalculated
    source values through live bindings. Never re-implement a Sheet formula in page code,
    embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
+4. Write the page in the user's language as [design.md](references/design.md) describes;
+   templates are English starting points.
 
 ## Bind the page
 
