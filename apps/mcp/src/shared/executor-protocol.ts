@@ -296,6 +296,12 @@ export const opSpecs = {
         resourceId: z.string(),
         operationId: z.string(),
         workspaceUrl: z.url(),
+        shareUrl: z.url().describe("Immersive page link to share with the user."),
+        repositoryVisibility: z.enum(["public", "private"])
+          .describe("Destination repository visibility from publicRead."),
+        privateSourceUnitIds: z.array(z.string()).describe(
+          "Sorted declared source Unit IDs in non-public repositories; signed-out visitors cannot load them. Empty when all declared sources are public.",
+        ),
       })
       .catchall(z.json()),
     route: (input) => ({ scope: "htmlView.create", unitId: input.idempotencyKey }),

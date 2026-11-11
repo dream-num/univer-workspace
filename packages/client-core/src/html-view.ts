@@ -10,7 +10,10 @@ import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView } from "@univerjs
 import type { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
-import { workspaceError } from "./errors.js";
+import { WorkspaceApplicationError, workspaceError } from "./errors.js";
+import type { AuthenticatedWorkspaceHttp } from "./http.js";
+import { parseDetachedNode } from "./space-model.js";
+import { WorkspaceSpaceFeature } from "./space.js";
 
 export interface WorkspaceHtmlViewSource {
   readonly bytes: Uint8Array;
@@ -18,6 +21,7 @@ export interface WorkspaceHtmlViewSource {
 }
 
 export interface WorkspaceHtmlViewOptions {
+  readonly authenticatedHttp: AuthenticatedWorkspaceHttp;
   readonly blobs: Pick<WorkspaceBlobFeature, "upload"> | Pick<WorkspaceBlobFeature, "uploadBytes">;
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
   readonly resolveTrunkRuntimeTarget: (input: {
@@ -47,6 +51,33 @@ export class WorkspaceHtmlViewFeature {
     const { name, spaceId, idempotencyKey, parentNodeId } = normalizeHtmlViewDestination(input);
     const source = await this.readAndValidate(input.source);
     const origin = await this.options.configuredOrigin();
+    const http = await this.options.authenticatedHttp();
+    const spaces = new WorkspaceSpaceFeature(async () => http);
+    const destination = await spaces.get(spaceId);
+    const publicSpaces = new Map([[spaceId, destination.publicRead === true]]);
+    const privateSourceUnitIds: string[] = [];
+    for (const unitId of source.validation.unitIds) {
+      const body = await http.json(`/api/unit-resources/${encodeURIComponent(unitId)}`);
+      const node = parseDetachedNode(body["node"]);
+      if (node.resource?.kind !== "univer" || node.resource.unitId !== unitId) {
+        throw workspaceError(
+          "workspace-result-mismatch",
+          "HTML View source metadata does not match the requested Unit.",
+        );
+      }
+      if (!publicSpaces.has(node.spaceId)) {
+        try {
+          publicSpaces.set(node.spaceId, (await spaces.get(node.spaceId)).publicRead === true);
+        } catch (error) {
+          if (!(error instanceof WorkspaceApplicationError) || (error.detail as { status?: unknown } | undefined)?.status !== 404) {
+            throw error;
+          }
+          // A hidden Space cannot be public, but a node grant may still expose its Sheets.
+          publicSpaces.set(node.spaceId, false);
+        }
+      }
+      if (!publicSpaces.get(node.spaceId)) privateSourceUnitIds.push(unitId);
+    }
     const upload =
       "uploadBytes" in this.options.blobs
         ? await this.options.blobs.uploadBytes({
@@ -72,6 +103,9 @@ export class WorkspaceHtmlViewFeature {
     return {
       ...upload,
       workspaceUrl: new URL(`/nodes/${encodeURIComponent(upload["nodeId"])}`, origin).href,
+      shareUrl: new URL(`/nodes/${encodeURIComponent(upload["nodeId"])}?view=immersive`, origin).href,
+      repositoryVisibility: destination.publicRead === true ? ("public" as const) : ("private" as const),
+      privateSourceUnitIds: privateSourceUnitIds.sort(),
     };
   }
 

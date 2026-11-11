@@ -141,7 +141,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 说明：
 
-- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果及 `workspaceUrl`；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 或上传 ID 和目标重试，上传保留至一小时过期。
+- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果、`workspaceUrl`、沉浸式分享链接 `shareUrl`、目标仓库可见性 `repositoryVisibility`（由 `publicRead` 得到 `public` 或 `private`）和按序排列的 `privateSourceUnitIds`（未公开仓库内的声明源 Unit，匿名访客无法加载）。仓库公开且私有源列表为空时，任何持链接者均可查看页面及声明的数据；否则需登录并有权访问页面和全部源。匿名访客与已登录的非成员均只读，页面写入会被拒绝。修改仓库公开性前先询问用户，因为这会立即公开仓库内所有内容；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 或上传 ID 和目标重试，上传保留至一小时过期。
 - `blob_download`、`asset_download`、`print_pdf` 返回签名下载链接。`blob_download` 同时返回 ETag，因为 `blob_replace` 需要它。
 - `compile_markdown` 的 Markdown 正文以字符串传入。正文引用的本地图片打成 zip 上传，用 `assets_upload_id` 传入，zip 内路径对应 Markdown 里的相对路径。CLI 要求资源不能超出源文件目录（`packages/client-core/src/markdown-source.ts:31-47`），MCP 同样拒绝 zip 中越界的路径。
 - `compile_markdown` 的 ZIP 最多 256 个 entry，单个文件解压后最多 4 MiB，总解压大小最多 8 MiB。解压前拒绝超过 1,024 UTF-8 字节或 32 段的 entry 名称。拒绝路径穿越、大小写和 Unicode 规范化碰撞，以及文件与目录冲突。

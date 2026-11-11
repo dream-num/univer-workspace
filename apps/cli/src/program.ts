@@ -209,6 +209,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createBlobCommand(blobs),
     createHtmlViewCommand(
       new WorkspaceHtmlViewFeature({
+        authenticatedHttp,
         blobs,
         runtime: runtimeOperations,
         configuredOrigin: async () => await auth.configuredOrigin(),

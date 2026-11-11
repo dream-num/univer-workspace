@@ -285,6 +285,15 @@ retry only the same operation with its original upload and idempotency key.
 Read the `blob` Skill for original files and the `html-view` Skill for live HTML
 backed by Sheet data. Blob publication/replacement and HTML View creation write
 directly without Worktree review; apply them only to the intended destination.
+`html_view_create` returns `shareUrl`, `repositoryVisibility` and sorted
+`privateSourceUnitIds`. Return the immersive `shareUrl` and explain that anyone
+with the link can view the page and its declared sources only when visibility is
+`public` and the private-source list is empty; otherwise signed-in access is
+required for the page and all its data. Signed-out visitors and signed-in
+non-members are read-only; page writes are rejected for them. Follow the HTML View
+Skill's sharing guidance: ask before using admin `repo_edit` to make a repository
+public, which immediately publishes everything in it, and keep source Sheets in
+the same public repository or list the private sources.
 
 ## SVG resource catalog
 
