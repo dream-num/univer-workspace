@@ -46,17 +46,33 @@ Unavailable names use the SDK's `id: xxx` fallback.
   successful departure preparation.
 
 The `/engine` export owns the shared Univer runtime factory: base plugins, identity and
-license installation, read-only write enforcement, metadata from the loaded workbook,
+license installation, visitor trial isolation, metadata from the loaded workbook,
 and abort/load/disposal lifecycle. Consumers supply resolved permissions, collaboration
 endpoints, network configuration and `registerEmbed(univer)` for their referenced-Unit
 policy. SDK dependencies remain peers, using each consumer’s runtime.
 
-All binding writes first reject an anonymous identity (`user.anonymous`), then
-check source edit permission. `HtmlViewWriteError.code` identifies the reason;
-`translateError(code)` uses the host's current UI language to produce its message
-before the SDK serializes it for the iframe. Web and Agent own their Chinese and
-English dictionary entries. Translation callbacks read the current language without
-recreating the engine or losing pending edits when the UI language changes.
+`createWorkspaceHtmlEngine` defaults `enableReadOnlyTrial` to false. Without opt-in,
+anonymous writes reject with `signInRequired`, and signed-in read-only writes reject
+with `editPermissionRequired`. Browser enables trials; Agent and Space hosts do not.
+Opted-in hosts must make trial edits visible to users.
+
+With trials enabled, anonymous and non-editing users stay live and read-only until
+their first binding write. Before that write it disposes the source runtime's collaboration
+controller and sessions, then enables editing of the in-memory workbook. The existing
+formula engine and binding subscriptions continue running. That source stops receiving
+live changes until reload; trial edits are neither flushed nor cached for replay.
+Only these read-only trial sessions force `enableOfflineEditing: false`. Editors and
+hosts without trials retain the caller's collaboration configuration, including offline
+editing. Editors continue saving through collaboration. Server authorization is unchanged.
+
+The factory exposes `writeMode` (`saved` for editors, `trial` for opted-in read-only
+users, `rejected` for other read-only users) and `onTrialStarted` so hosts can label
+local edits. The mode describes write handling, not confirmation of a particular save.
+Browser exposes the mode of an already-loaded source through
+`await window.univerWorkspace.getWriteMode(unitId)` and displays a trial banner after
+the first trial write. This host bridge is not available in Agent. Templates must
+check the mode before claiming an edit was saved. `NOT_COLLAB` denotes the detached
+runtime. The factory passes a trial initializer only for opted-in read-only sessions.
 
 No HTTP requests, credential storage, DSH services or routes belong here.
 `workspace-ui` remains the owner of generic controls and icons.

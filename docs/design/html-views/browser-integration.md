@@ -18,7 +18,7 @@
 
 ## 页面与宿主连接
 
-[Web 适配组件](../../../apps/workspace/web/src/features/html-views/html-view.tsx) 在取得登录用户后，
+[Web 适配组件](../../../apps/workspace/web/src/features/html-views/html-view.tsx) 在取得会话身份（含匿名访客）后，
 挂载[共享页面组件](../../../packages/workspace-html-viewer/src/viewer.tsx)。共享组件给 SDK
 `renderHtmlView({ container, html, locale, loadEngine, policy, onError })` 提供一个 div。
 SDK 自身包含 iframe 程序，管理 iframe sandbox、CSP、握手与 MessagePort、订阅和释放。
@@ -46,7 +46,7 @@ SDK 自身包含 iframe 程序，管理 iframe sandbox、CSP、握手与 Message
 1. 通过 `GET /api/unit-resources/{unitId}` 解析来源资源。
 2. 通过 `POST /api/resources/{resourceId}/open` 获取当前用户的打开结果。
 3. 确认来源为 Sheet、返回的 Unit ID 与请求一致，读取 `editorMode`。
-4. 调用共享 `createWorkspaceHtmlEngine`，传入来源权限、用户、license、协同配置和引用 Provider 装配。
+4. 调用共享 `createWorkspaceHtmlEngine`，传入来源权限、用户、license、协同配置和引用 Provider 装配；Browser 显式设置 `enableReadOnlyTrial: true`。
 5. 共享工厂等待 `engine.load()`，为只读来源设置 Workbook 只读，再返回 Engine。
 
 `collaborationClientConfig` 接入 Workspace 同源的 `/universer-api` snapshot、changeset、
@@ -57,9 +57,15 @@ provider 均使用 trunk 上下文。
 Web 适配保留 snapshot override 和 referenced-Unit provider，并通过 `registerEmbed` 注入；
 SDK Engine 接管独立 Univer 的加载与释放。
 
-共享 `WorkspaceBindingEngine` 在写入前先检查访客身份并提示登录，再检查宿主传入的来源权限；已登录只读用户收到明确权限错误。
-这是产品权限适配：仅将 Workbook 设为只读时，底层 Facade 可能不写入但也不抛错，不能据此
-向页面报告写入成功。服务端仍负责实际请求的权限校验。
+共享工厂的 `enableReadOnlyTrial` 默认关闭。Agent 等未启用的宿主仍在写入前拒绝匿名访客
+（`signInRequired`）和已登录只读用户（`editPermissionRequired`），不把 Facade 的静默拒绝当作成功。
+Browser 启用后，只读来源在第一次页面写入前保持实时；第一次写入先释放该来源的协同 Controller
+和 Session，再启用本地编辑及插行。原有公式引擎和绑定订阅继续运行，页面不复制公式逻辑。
+试算不会保存或发送，来源此后不接收所有者更新，刷新才恢复实时数据。服务端权限校验保持不变。
+
+只有启用试算的只读来源设置 `enableOfflineEditing: false`，避免离线修改进入重放缓存；编辑者和
+未启用试算的宿主保留调用方协同配置。工厂返回 `writeMode`：编辑者为 `saved`，启用试算的
+只读用户为 `trial`，未启用的只读用户为 `rejected`。这个值表示写入方式，不是保存完成确认。
 
 加载过程使用 Host 提供的 `AbortSignal`。取消或失败时释放已创建的 Engine；成功返回后，
 由 Host 管理 Engine，应用不额外缓存或跨页面共享实例。
@@ -67,6 +73,10 @@ SDK Engine 接管独立 Univer 的加载与释放。
 ## 保存与离开
 
 Workspace 通过 `onStatus` 跟踪同步状态，供离开提醒使用；正常页面不显示独立保存或同步提示。
+第一次试算写入触发 `onTrialStarted`，Browser 在 iframe 外显示“试算模式，改动不会保存。
+刷新页面恢复最新表格。”页面可通过 `await window.univerWorkspace.getWriteMode(unitId)`
+查询已加载来源的写入方式，试算文案不得声称“已保存”。脱离协同后状态为 `NOT_COLLAB`，
+`flush()` 不提交修改，此状态不作为待保存内容触发离开提醒。
 路由的 `useBlocker` 在离开前执行 `await viewer.prepareToLeave()`：成功才允许导航，失败则展示错误并
 保留页面。草稿提交和协同确认由 SDK 完成。
 
@@ -77,7 +87,8 @@ Workspace 通过 `onStatus` 跟踪同步状态，供离开提醒使用；正常�
 ## 原生 Office 预览
 
 Workspace Browser 在模板中增加独立的 `window.univerWorkspace` 导航接口，用于在页面预留
-位置打开只读、实时的 Sheet / Doc / Slides。它不替代 SDK 的 `window.univerBinding`，不传递
+位置打开按服务端权限编辑或只读的实时 Sheet / Doc / Slides。原生预览不参与 HTML 本地试算。
+它不替代 SDK 的 `window.univerBinding`，不传递
 凭据或 Facade。`features/html-views` 拥有模板导航桥与预览布局；`/preview/$unitId` 在独立
 浏览上下文中重新鉴权，并复用标准 ResourceEditor。段落、单元格与页面定位由 Editor 的
 [预览导航入口](../../../apps/workspace/web/src/features/editor/preview.ts)约束。
