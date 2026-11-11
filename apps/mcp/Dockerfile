@@ -34,8 +34,11 @@ ENV HOST=0.0.0.0
 # Behind a build proxy, use the Aliyun Debian mirror and keep apt off the proxy, so an
 # HTTPS proxy does not need its CA trusted by the image.
 RUN if [ -n "${HTTP_PROXY}" ]; then \
-      sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources \
-      && unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy NO_PROXY no_proxy; \
+      for source in /etc/apt/sources.list /etc/apt/sources.list.d/*; do \
+        [ -f "$source" ] || continue; \
+        sed -i 's|deb.debian.org|mirrors.aliyun.com|g' "$source"; \
+      done; \
+      unset http_proxy https_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY all_proxy NO_PROXY no_proxy; \
     fi \
     && apt-get update \
     && apt-get install -y --no-install-recommends chromium fonts-noto-cjk fonts-liberation \
