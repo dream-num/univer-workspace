@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
@@ -10,7 +9,8 @@ import {
   MessageSquare,
   Terminal,
 } from "lucide-react";
-import { sessionQueryOptions } from "../../../features/auth";
+import { Suspense } from "react";
+import { HomeAgents } from "./agents";
 import { IssueLabelChip } from "../../../features/issues/issue-label";
 import { IssueStateIcon } from "../../../features/issues/issue-state";
 import { CLI_GUIDE_URL } from "../../../features/worktrees/worktree-onboarding";
@@ -28,7 +28,6 @@ import { spaceDisplayName } from "../space-name";
 
 export function RepositoryHomePage(_props: HomePageProps) {
   const { t } = useI18n();
-  const session = useQuery(sessionQueryOptions);
   const work = useHomeWork();
   if (work.status === "error") throw work.error;
   return (
@@ -38,6 +37,7 @@ export function RepositoryHomePage(_props: HomePageProps) {
         updatedBySpace={work.status === "success" ? work.data.updatedBySpace : undefined}
         openBySpace={work.status === "success" ? work.data.openBySpace : undefined}
       >
+        <Suspense fallback={<div className="rd-home-agent-placeholder" />}><HomeAgents /></Suspense>
         {work.status === "pending" ? (
           <p className="rd-home-empty" role="status">
             {t("dashboardLoading")}
@@ -45,11 +45,6 @@ export function RepositoryHomePage(_props: HomePageProps) {
         ) : (
           <>
             <HomeHeadline headline={work.data.headline} />
-            <p className="rd-welcome">
-              {t("dashboardGreeting", {
-                name: session.data?.authenticated ? session.data.user.displayName : "",
-              })}
-            </p>
             <LoadRanking items={work.data.ranking} />
             {!work.data.complete ? (
               <p className="rd-data-note">{t("repositoryHomePartial")}</p>

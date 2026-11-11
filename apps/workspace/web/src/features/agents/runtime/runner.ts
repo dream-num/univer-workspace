@@ -49,7 +49,7 @@ function contextPrompt(session: AgentSession): string {
     : session.scope.kind === "repository" && session.scope.baseWorktreeId
       ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(session.scope.baseWorktreeId)}.`
       : "Auto mode: put every write in one pull request. Call pr_create before the first write, and reuse that pull request for this session. Never merge; a person reviews and merges.";
-  return `${scope}\n${mode}\nSession pull request Worktree IDs: ${JSON.stringify(session.worktreeIds)}.\nTool errors arrive as results for you to handle.`;
+  return `${scope}\n${mode}\nSession pull request Worktree IDs: ${JSON.stringify(session.worktreeIds)}.\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
 }
 
 export function createAgentRunner(deps: AgentRunnerDependencies) {

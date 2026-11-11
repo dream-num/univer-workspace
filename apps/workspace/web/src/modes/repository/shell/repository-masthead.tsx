@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import {
   BookMarked,
+  Bot,
   CircleDot,
   CodeXml,
   Copy,
@@ -144,6 +145,10 @@ function Masthead({ space, tab }: { readonly space: Space; readonly tab: Reposit
           <GitPullRequest aria-hidden="true" />
           {t("repositoryPullRequests")}
           {count !== undefined ? <span className="rd-count">{count}</span> : null}
+        </CurrentLink>
+        <CurrentLink to="/spaces/$spaceId/agents" params={{ spaceId: space.id }} current={tab === "agents"}>
+          <Bot aria-hidden="true" />
+          {t("agents")}
         </CurrentLink>
         <CurrentLink
           to="/spaces/$spaceId"

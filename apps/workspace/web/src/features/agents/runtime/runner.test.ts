@@ -102,6 +102,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const request = test.modelBodies[0]!;
     expect(request).toContain("Server instructions");
     expect(request).toContain("Core skill instructions");
+    expect(request).toContain("Reply in the language of the user's latest message.");
     expect(request).toContain("pr_create before the first write");
     expect(JSON.parse(request).thinking).toEqual({ type: "disabled" });
   });

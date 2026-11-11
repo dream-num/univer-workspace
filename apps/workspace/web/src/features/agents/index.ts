@@ -6,3 +6,4 @@ export type { AgentRunner, AgentRunnerDependencies, StartAgentInput } from "./ru
 
 export function loadAgentStores() { return import("./stores"); }
 export function loadAgentRuntime() { return import("./runtime/runner"); }
+export function loadAgentsUi() { return import("./ui"); }

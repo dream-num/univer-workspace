@@ -91,6 +91,7 @@
     font-size: 13px;
     white-space: nowrap;
     flex: 0 1 auto;
+    max-width: min(24vw, 320px);
     overflow: hidden;
   }
   .rd-crumbs a {
@@ -107,7 +108,8 @@
     color: var(--rd-ink);
     font-weight: 600;
   }
-  .rd-crumb,
+  .rd-crumb { min-width: 0; flex: 0 1 auto; }
+  .rd-crumb > :last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .rd-crumb-repository,
   .rd-crumbs .rd-sep {
     flex: none;

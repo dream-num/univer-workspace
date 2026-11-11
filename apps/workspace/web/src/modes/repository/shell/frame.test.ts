@@ -5,14 +5,14 @@ import { resolveFrame, type Frame } from "./frame";
 const cases: readonly [string, WorkspaceShellProps, Frame][] = [
   ["home", { repositoryView: "home", selectedView: "home" }, { kind: "home" }],
   ["legacy home", { repositoryHome: true }, { kind: "home" }],
-  ...(["repositories", "worktrees", "issues", "recent", "apps"] as const).map(
+  ...(["repositories", "worktrees", "issues", "recent", "apps", "agents"] as const).map(
     (view): [string, WorkspaceShellProps, Frame] => [
       view,
       { repositoryView: view },
       { kind: "global", view },
     ],
   ),
-  ...(["files", "issues", "prs", "apps", "settings"] as const).map(
+  ...(["files", "issues", "prs", "apps", "agents", "settings"] as const).map(
     (tab): [string, WorkspaceShellProps, Frame] => [
       tab,
       { selectedSpaceId: "s", repositoryTab: tab },
