@@ -40,6 +40,7 @@ review. Humans can continue editing and stay in control of what gets merged.
 
 - Agents can generate spreadsheet-based mini-apps, such as decision-making dashboards, interactive reports, and business dashboards.
 - Metrics, charts, and controls on the web page are bound to cells, supporting data reads, writes, and collaborative updates.
+- See the [HTML View showcase](docs/html-view-showcase.md) for ten page styles, live editing, and public sharing with visitor trials.
 
 [![A Workspace mini-app beside its linked spreadsheet, with metrics, charts, and controls bound to cells](docs/images/workspace-mini-app.png)](https://youtu.be/4PBVltY_WEc)
 
