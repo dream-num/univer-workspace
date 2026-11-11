@@ -15,12 +15,15 @@ import { anonymousUser, sessionQueryOptions } from "../auth";
 import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
+import { resolveWorkspaceMedia, workspaceMediaSources } from "./workspace-media";
 
 const HTML_VIEW_ALLOWED_ORIGINS = ["https://cdn.jsdelivr.net"] as const;
+const HTML_VIEW_MEDIA_SOURCES = workspaceMediaSources(window.location.origin);
 
 export function HtmlView({
   source,
   allowedOrigins,
+  mediaSources,
   immersive,
   actionsContainer,
 }: {
@@ -28,6 +31,7 @@ export function HtmlView({
   immersive: boolean;
   actionsContainer: HTMLElement | null;
   allowedOrigins?: readonly string[];
+  mediaSources?: readonly string[];
 }) {
   const { t, language } = useI18n();
   const translation = useRef(t);
@@ -121,6 +125,7 @@ export function HtmlView({
             title={t("htmlViewTitle")}
             className="min-h-0 w-full flex-1 border-0"
             {...(allowedOrigins ? { allowedOrigins } : {})}
+            {...(mediaSources ? { mediaSources } : {})}
             loadEngine={loadEngine}
             onError={setError}
             onStatus={(states) => {
@@ -157,6 +162,7 @@ export function HtmlViewFile({
         if (!response.ok) throw new Error("HTML view could not be loaded.");
         return response.text();
       })
+      .then((content) => resolveWorkspaceMedia(content, window.location.origin, abort.signal))
       .then((content) => {
         if (!abort.signal.aborted) setSource(content);
       })
@@ -175,6 +181,7 @@ export function HtmlViewFile({
     <HtmlView
       source={source}
       allowedOrigins={HTML_VIEW_ALLOWED_ORIGINS}
+      mediaSources={HTML_VIEW_MEDIA_SOURCES}
       immersive={immersive}
       actionsContainer={actionsContainer}
     />

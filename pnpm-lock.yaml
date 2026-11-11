@@ -207,8 +207,8 @@ importers:
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d
       '@univerjs-pro/bases':
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
@@ -644,14 +644,14 @@ importers:
         specifier: workspace:*
         version: link:../../packages/unit-comparison-viewer
       '@univerjs-labs/binding-engine':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))
       '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d
       '@univerjs-labs/html-view-renderer':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))
       '@univerjs-pro/bases':
         specifier: 1.4.0
         version: 1.4.0(react@19.2.8)(rxjs@7.8.2)
@@ -1320,8 +1320,8 @@ importers:
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d
       '@univerjs-pro/collaboration':
         specifier: 1.4.0
         version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
@@ -1568,14 +1568,14 @@ importers:
         specifier: file:../unit-comparison-viewer
         version: file:packages/unit-comparison-viewer(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)(tailwindcss@4.3.0)
       '@univerjs-labs/binding-engine':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
       '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d
       '@univerjs-labs/html-view-renderer':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
       '@univerjs-pro/bases':
         specifier: 1.4.0
         version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
@@ -2208,8 +2208,8 @@ importers:
         specifier: 1.4.0
         version: 1.4.0(react@19.3.0)(rxjs@7.8.2)
       '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d
       '@univerjs-pro/collaboration':
         specifier: 1.4.0
         version: 1.4.0(@univerjs-pro/embed@1.4.0(react@19.3.0)(rxjs@7.8.2))(react@19.3.0)(rxjs@7.8.2)
@@ -2577,14 +2577,14 @@ importers:
   packages/workspace-html-viewer:
     dependencies:
       '@univerjs-labs/binding-engine':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
       '@univerjs-labs/html-view':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d
       '@univerjs-labs/html-view-renderer':
-        specifier: 1.0.0-dev.6518eb0
-        version: 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
+        specifier: 1.0.0-dev.0529939d
+        version: 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
       '@univerjs-pro/collaboration':
         specifier: 1.4.0
         version: 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
@@ -5437,8 +5437,8 @@ packages:
       react-dom: '>=18 <20'
       tailwindcss: '>=4'
 
-  '@univerjs-labs/binding-engine@1.0.0-dev.6518eb0':
-    resolution: {integrity: sha512-2pYPrOfiRBcpH0DZNtyaN+22VHybYOj4zSS5zMTpNQ62xbKaUeXGBqE7e9MEWInHL6cO3rvrgAW6Gyh9zOgbWQ==}
+  '@univerjs-labs/binding-engine@1.0.0-dev.0529939d':
+    resolution: {integrity: sha512-PM64WWsdPZ0BaRi9prYRrpamxg1WITW8RJgvJQiTuydt5cShz/LxLdZyPO50W1mLvzh4PmbKix5HmlcvMOfmbQ==}
     peerDependencies:
       '@univerjs-pro/collaboration': ^1.0.0-0
       '@univerjs-pro/collaboration-client': ^1.0.0-0
@@ -5453,11 +5453,11 @@ packages:
       '@univerjs/sheets': ^1.0.0-0
       '@univerjs/sheets-formula': ^1.0.0-0
 
-  '@univerjs-labs/html-view-renderer@1.0.0-dev.6518eb0':
-    resolution: {integrity: sha512-wke9NUVToQixrX/FSl7uiOKqjA11toUnXin7yzsNJZ33yTFr9sR7+E0L2SE0GNBKsuGC1m+tun7ZJofUPtch9g==}
+  '@univerjs-labs/html-view-renderer@1.0.0-dev.0529939d':
+    resolution: {integrity: sha512-rn5ojlCMMEUyrqIeD00Ni4FCa98Z0JiJ+4Uyvua6xOXbQ4u5ph3MBBMu5sk+jXFBv21+DJPF7QkojHvfDosfGw==}
 
-  '@univerjs-labs/html-view@1.0.0-dev.6518eb0':
-    resolution: {integrity: sha512-NNnNS/1aL3Ca3j09KpJ5iT1FjqgQNU/5dk18AP5SPifu7y6sBQw2UvO5KaxdJkTvpEhskeuaplh6QulzS/7bVw==}
+  '@univerjs-labs/html-view@1.0.0-dev.0529939d':
+    resolution: {integrity: sha512-CT8faNbO2OncCcCDD0Y99pRkUNMfE6GJzgWBbvMHtdqOJ3IDUeX8MZmpBHabSZfKcm+tHreXLBqLxuyvRtbpog==}
 
   '@univerjs-pro/bases-dashboard-ui@1.4.0':
     resolution: {integrity: sha512-+eFad2rI46qPYimXDUWzyIulhh+TAHaRoB3mVho342emPiJMcxiGwEwRU9NTUwSv3yGb77WQxgJ32wFFrR+WZw==, tarball: https://registry.npmjs.org/@univerjs-pro/bases-dashboard-ui/-/bases-dashboard-ui-1.4.0.tgz}
@@ -13563,7 +13563,7 @@ snapshots:
       - '@univerjs-pro/embed'
       - rxjs
 
-  '@univerjs-labs/binding-engine@1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))':
+  '@univerjs-labs/binding-engine@1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))':
     dependencies:
       '@univerjs-pro/collaboration': 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-client': 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
@@ -13578,7 +13578,7 @@ snapshots:
       '@univerjs/sheets': 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets-formula': 1.4.0(react@18.3.1)(rxjs@7.8.2)
 
-  '@univerjs-labs/binding-engine@1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))':
+  '@univerjs-labs/binding-engine@1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))':
     dependencies:
       '@univerjs-pro/collaboration': 1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
       '@univerjs-pro/collaboration-client': 1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
@@ -13593,10 +13593,10 @@ snapshots:
       '@univerjs/sheets': 1.4.0(react@19.2.8)(rxjs@7.8.2)
       '@univerjs/sheets-formula': 1.4.0(react@19.2.8)(rxjs@7.8.2)
 
-  '@univerjs-labs/html-view-renderer@1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))':
+  '@univerjs-labs/html-view-renderer@1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))':
     dependencies:
-      '@univerjs-labs/binding-engine': 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
-      '@univerjs-labs/html-view': 1.0.0-dev.6518eb0
+      '@univerjs-labs/binding-engine': 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@18.3.1)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@18.3.1)(rxjs@7.8.2))
+      '@univerjs-labs/html-view': 1.0.0-dev.0529939d
     transitivePeerDependencies:
       - '@univerjs-pro/collaboration'
       - '@univerjs-pro/collaboration-client'
@@ -13611,10 +13611,10 @@ snapshots:
       - '@univerjs/sheets'
       - '@univerjs/sheets-formula'
 
-  '@univerjs-labs/html-view-renderer@1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))':
+  '@univerjs-labs/html-view-renderer@1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))':
     dependencies:
-      '@univerjs-labs/binding-engine': 1.0.0-dev.6518eb0(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))
-      '@univerjs-labs/html-view': 1.0.0-dev.6518eb0
+      '@univerjs-labs/binding-engine': 1.0.0-dev.0529939d(@univerjs-pro/collaboration-client@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/collaboration@1.4.0(@univerjs-pro/embed@1.4.0(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs-pro/license@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/core@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/docs@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/engine-render@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/network@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/presets@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets-formula@1.4.0(react@19.2.8)(rxjs@7.8.2))(@univerjs/sheets@1.4.0(react@19.2.8)(rxjs@7.8.2))
+      '@univerjs-labs/html-view': 1.0.0-dev.0529939d
     transitivePeerDependencies:
       - '@univerjs-pro/collaboration'
       - '@univerjs-pro/collaboration-client'
@@ -13629,7 +13629,7 @@ snapshots:
       - '@univerjs/sheets'
       - '@univerjs/sheets-formula'
 
-  '@univerjs-labs/html-view@1.0.0-dev.6518eb0':
+  '@univerjs-labs/html-view@1.0.0-dev.0529939d':
     dependencies:
       parse5: 8.0.0
 

@@ -141,7 +141,7 @@
     "@univerjs-pro/exchange-node": "1.4.0",
     "@univerjs/protocol": "1.4.0",
     "@univerjs/core": "1.4.0",
-    "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
+    "@univerjs-labs/html-view": "1.0.0-dev.0529939d",
     "@univer-cli/svg-facade": "1.4.0",
     "@univer-cli/resource-library": "1.4.0",
     "@univer-cli/unit-layout-lint": "1.4.0",

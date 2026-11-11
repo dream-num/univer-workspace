@@ -38,6 +38,24 @@ SDK 自身包含 iframe 程序，管理 iframe sandbox、CSP、握手与 Message
 `https://cdn.jsdelivr.net`，用于按需加载 ECharts 等前端库。其他外部来源需要宿主显式配置。
 身份、授权和协同配置保留在宿主侧。
 
+### 引用 Workspace 中的媒体文件
+
+`<video>`、`<audio>`、`<source>` 与 `<img>` 可以写 `data-workspace-src="<nodeId>"` 引用
+同一 Workspace 的视频、音频或图片。`HtmlViewFile` 取得 HTML 后由
+[媒体解析](../../../apps/workspace/web/src/features/html-views/workspace-media.ts)以匿名身份
+（`credentials: "omit"`）查询每个 Node，只把已开启链接分享、就绪的媒体 Blob 替换为
+`<origin>/api/blob-resources/{resourceId}/content`；已有 `src` 的元素与无法解析的引用保持原样，
+不发请求。SDK 的 `policy.mediaSources` 只把 `<origin>/api/blob-resources/` 加入 `img-src` 与
+`media-src`，脚本、请求、frame 和 worker 仍只允许 `allowedOrigins`，因此页面可以边下边播，
+但不能 `fetch` 这些地址或访问其他 Workspace 路由。
+
+私有媒体即使当前读者有权限也不解析。能编辑 HTML 的人可能写入自己无权读取的 Node ID，
+若按读者权限解析，内容会被带出沙箱。iframe 是不透明 origin，媒体请求本身也不携带会话 Cookie。
+
+`policy.mediaSources` 由
+[dream-num/univer-data-binding-sdk#11](https://github.com/dream-num/univer-data-binding-sdk/pull/11)
+提供，自 `@univerjs-labs/html-view-renderer@1.0.0-dev.0529939d` 起可用。
+
 ## 来源授权与 Univer 装配
 
 [`createWorkspaceBindingEngine`](../../../apps/workspace/web/src/features/html-views/workspace-binding-engine.ts)
