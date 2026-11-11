@@ -12,9 +12,8 @@ import { renderUnitLoader } from "./scope.js";
 type Ctx = Parameters<Handler<"render.lint">>[0];
 
 /**
- * Builds the lint input by running the `uvw lint` command itself, so the page selector parsing,
- * the Slide-only check and their messages match the CLI. The command never lints: its lint
- * dependency only records the input it builds.
+ * Reuses the CLI page-selector parser for the MCP renderer's Slide-only contract.
+ * The command records the input without running lint.
  */
 export async function lintInput(
   ctx: Ctx,
@@ -25,11 +24,23 @@ export async function lintInput(
   },
 ): Promise<UnitLayoutLintInput> {
   // Only loadUnit is used; the runtime options of the feature serve its own lint(), which is not called here.
+  const loader = renderUnitLoader(ctx);
   const feature = new WorkspaceUnitLayoutLintFeature({
     renderPageRoot: "",
     license: "",
     env: {},
-    loader: renderUnitLoader(ctx),
+    loader: {
+      loadUnit: async (input) => {
+        const unit = await loader.loadUnit(input);
+        if (unit.unitType !== "slide") {
+          throw workspaceError(
+            "workspace-unit-layout-lint-unit-type-unsupported",
+            `Slide layout lint requires a Slide Unit; ${input.unitId} is ${unit.unitType}.`,
+          );
+        }
+        return unit;
+      },
+    },
   });
   let built: UnitLayoutLintInput | undefined;
   let loadError: unknown;

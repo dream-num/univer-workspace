@@ -313,7 +313,7 @@ describe("lint tool", () => {
     );
   });
 
-  it("requires a worktree and relays the CLI's rejection of a non-Slide Unit", async () => {
+  it("requires a worktree and relays the executor's rejection of a non-Slide Unit", async () => {
     const t = await start();
     const missing = await t.client.callTool({ name: "lint", arguments: { unit: "u" } });
     expect(missing.isError).toBe(true);

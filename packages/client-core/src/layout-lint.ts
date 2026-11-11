@@ -5,10 +5,6 @@ import {
   type UnitLayoutLintSource,
 } from "@univer-cli/unit-layout-lint";
 import {
-  createHeadlessBoardLayoutRuntime,
-  createStandardHeadlessUniverFactory,
-} from "@univer-cli/headless-univer";
-import {
   createUniverRenderRuntime,
   type UniverRenderRuntimeOptions,
 } from "@univer-cli/univer-render-runtime";
@@ -66,12 +62,7 @@ export class WorkspaceUnitLayoutLintFeature {
       lint: async (input) => {
         const modelRuntime =
           input.unitType === "board"
-            ? (this.options.createModelRuntime?.() ??
-              createHeadlessBoardLayoutRuntime({
-                createUniver: createStandardHeadlessUniverFactory({
-                  license: this.options.license,
-                }),
-              }))
+            ? (this.options.createModelRuntime?.() ?? (await this.#createModelRuntime()))
             : undefined;
         if (input.unitType === "board" && input.mode === "model") {
           return await createUnitLayoutLint(
@@ -94,5 +85,13 @@ export class WorkspaceUnitLayoutLintFeature {
         }
       },
     };
+  }
+
+  async #createModelRuntime(): Promise<NonNullable<UnitLayoutLintOptions["modelRuntime"]>> {
+    const { createHeadlessBoardLayoutRuntime, createStandardHeadlessUniverFactory } =
+      await import("@univer-cli/headless-univer");
+    return createHeadlessBoardLayoutRuntime({
+      createUniver: createStandardHeadlessUniverFactory({ license: this.options.license }),
+    });
   }
 }
