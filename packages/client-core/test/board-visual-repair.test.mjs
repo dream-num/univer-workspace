@@ -6,6 +6,7 @@ import {
   reserveGeneratedVisualCapacity,
   repairMeasuredVisualText,
   verifyRenderedLabelPlan,
+  planModelGraphLayout,
 } from "../scripts/board-visual-repair.mjs";
 import { realizeVisualFixture } from "../scripts/board-visual-fixtures.mjs";
 
@@ -137,7 +138,7 @@ describe("generated swimlane capacity preflight", () => {
         const api = createStandardHeadlessUniverFacade(univer);
         const board = api.createBoard({ id: "nested-capacity", name: "Nested activity" });
         const generated = realizeVisualFixture(board, api, "uml-activity", "business");
-        const initialPlan = board.planGraphLayout(generated.layoutOptions);
+        const initialPlan = planModelGraphLayout(board, generated.layoutOptions);
         expect(initialPlan.status).toBe("ready");
         expect(board.applyLayoutPlan(initialPlan)).toBe(true);
         const pool = board.getElement("visual-pool");
@@ -285,7 +286,7 @@ describe("native candidate driven generated pool capacity", () => {
   it("reserves the real global-rank main span before initial layout and preserves exact history/reopen", async () => {
     await withCapturedActivity(async (board, fixture, api) => {
       const before = snapshot(board),
-        plan = board.planGraphLayout(fixture.layoutOptions);
+        plan = planModelGraphLayout(board, fixture.layoutOptions);
       // Exact native76 counterexample: only2 requester members, but close is global rank5.
       expect(plan.status).toBe("incomplete");
       expect(
@@ -311,7 +312,7 @@ describe("native candidate driven generated pool capacity", () => {
         expect(board.getElement(id).transform.height).toBe(original.transform.height);
         expect(board.getElement(id).laneId).toBe(original.laneId);
       }
-      const ready = board.planGraphLayout(fixture.layoutOptions),
+      const ready = planModelGraphLayout(board, fixture.layoutOptions),
         capacityModel = snapshot(board);
       expect(ready.status).toBe("ready");
       expect(board.applyLayoutPlan(ready)).toBe(true);
@@ -325,14 +326,14 @@ describe("native candidate driven generated pool capacity", () => {
       api.disposeUnit(board.getId());
       const reopened = api.createBoard(laidOut);
       expect(snapshot(reopened)).toEqual(laidOut);
-      expect(reopened.planGraphLayout(fixture.layoutOptions).status).toBe("ready");
+      expect(planModelGraphLayout(reopened, fixture.layoutOptions).status).toBe("ready");
     });
   }, 20_000);
 
   it("uses the real102.3px diamond measurement and honors the native lane and pool demand", async () => {
     await withCapturedActivity(async (board, fixture) => {
       expect(reserveGeneratedVisualCapacity(board, fixture).status).toBe("ready");
-      expect(board.applyLayoutPlan(board.planGraphLayout(fixture.layoutOptions))).toBe(true);
+      expect(board.applyLayoutPlan(planModelGraphLayout(board, fixture.layoutOptions))).toBe(true);
       const original = board.getElement("visual-budget"),
         before = snapshot(board);
       let measurements = 0;
@@ -360,7 +361,7 @@ describe("native candidate driven generated pool capacity", () => {
         ),
       ).toBe(true);
       expect(board.getElement("visual-budget").shapeData).toEqual(original.shapeData);
-      expect(board.planGraphLayout(fixture.layoutOptions).status).toBe("ready");
+      expect(planModelGraphLayout(board, fixture.layoutOptions).status).toBe("ready");
       expect(snapshot(board)).not.toEqual(before);
       fixture.verify();
     });
@@ -383,7 +384,7 @@ describe("native candidate driven generated pool capacity", () => {
         const initial = snapshot(board),
           elements = structuredClone(board.getElements());
         const fixture = { ...original, expandableLanes: [] };
-        let plan = board.planGraphLayout(fixture.layoutOptions);
+        let plan = planModelGraphLayout(board, fixture.layoutOptions);
         if (mode === "unmarked-pool") fixture.expandablePools = [];
         if (mode === "fixed-pool") fixture.fixed = [...fixture.fixed, "visual-pool"];
         if (mode === "locked-pool") elements["visual-pool"].locked = true;
@@ -468,7 +469,7 @@ describe("public global-rank capacity repair regression", () => {
         verify() {},
       };
       const initial = snapshot(board),
-        initialPlan = board.planGraphLayout(fixture.layoutOptions);
+        initialPlan = planModelGraphLayout(board, fixture.layoutOptions);
       expect(initialPlan.status).toBe("incomplete");
       expect(
         initialPlan.diagnostics.some((item) => item.code === "swimlane-capacity-exceeded"),
@@ -490,7 +491,7 @@ describe("public global-rank capacity repair regression", () => {
       expect(board.getElement("visual-pool").transform.width).toBeGreaterThan(2100);
       expect(board.getElement("visual-budget").transform.height).toBe(293);
       expect(fixture.layoutOptions.layerGap).toBe(251);
-      expect(board.planGraphLayout(fixture.layoutOptions).status).toBe("ready");
+      expect(planModelGraphLayout(board, fixture.layoutOptions).status).toBe("ready");
       for (const id of fixture.nodes) {
         const original = Object.values(initial.pages)[0].elements[id],
           actual = board.getElement(id);

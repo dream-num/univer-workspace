@@ -7,6 +7,7 @@ import { UniverInstanceType } from "@univerjs/core";
 import {
   proposeMeasuredTextGrowth,
   repairMeasuredVisualText,
+  planModelGraphLayout,
 } from "../scripts/board-visual-repair.mjs";
 import { realizeVisualFixture } from "../scripts/board-visual-fixtures.mjs";
 
@@ -47,7 +48,7 @@ function measuredReport(board, fixture, mode = "ready") {
   const id = fixture.textPlanElementIds[0],
     element = board.getElement(id),
     overflow = element.transform.width === 200;
-  const envelope = board.planGraphLayout({ ...fixture.layoutOptions, maxNodes: 180 });
+  const envelope = planModelGraphLayout(board, { ...fixture.layoutOptions, maxNodes: 180 });
   expect(envelope.status).toBe("ready");
   return {
     analyses: [

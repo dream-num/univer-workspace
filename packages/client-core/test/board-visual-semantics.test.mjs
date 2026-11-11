@@ -1,3 +1,4 @@
+import { planModelGraphLayout } from "../scripts/board-visual-repair.mjs";
 import { describe, expect, it } from "vitest";
 import {
   realizeVisualFixture,
@@ -204,7 +205,7 @@ describe("Business diagram source semantics", () => {
         expect(relation.connectorData.start).toMatchObject(start);
         expect(relation.connectorData.waypoints).toEqual(waypoints);
         expect(relation.connectorData.routingMode).toBe("manual");
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });

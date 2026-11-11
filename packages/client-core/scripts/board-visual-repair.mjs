@@ -1,8 +1,27 @@
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
+import { planBoardGraphLayout, toBoardBridgeElementTransform } from "@univerjs-pro/boards";
 import { recordConnectorLabelEvidence } from "./board-visual-label-evidence.mjs";
 
 const snapshot = (board) => JSON.parse(JSON.stringify(board.save()));
+
+export function planModelGraphLayout(board, options) {
+  const { id, activePageId, pages } = board.getData();
+  const data = Object.fromEntries(
+    Object.values(pages[activePageId].elements).map((element) => [
+      element.id,
+      {
+        unitId: id,
+        subUnitId: activePageId,
+        elementId: element.id,
+        element,
+        transform: toBoardBridgeElementTransform(element.transform),
+        hidden: element.visible === false,
+      },
+    ]),
+  );
+  return planBoardGraphLayout(id, activePageId, data, options);
+}
 
 // Generation permission comes from the private fixture manifest, never from a loaded Board snapshot.
 // Use the public planner's candidate positions: duplicating its font/label/rank budgets goes stale.
@@ -206,7 +225,10 @@ export function reserveGeneratedVisualCapacity(board, fixture) {
   try {
     for (let iteration = 0; iteration < 3; iteration++) {
       const planning = snapshot(board);
-      plan = board.planGraphLayout({ ...fixture.layoutOptions, fixedElementIds: fixture.fixed });
+      plan = planModelGraphLayout(board, {
+        ...fixture.layoutOptions,
+        fixedElementIds: fixture.fixed,
+      });
       assert.deepEqual(snapshot(board), planning, "Capacity demand planning mutated content");
       if (plan.status === "ready")
         return { status: "ready", applications, steps, rolledBack: false };
@@ -220,7 +242,10 @@ export function reserveGeneratedVisualCapacity(board, fixture) {
     }
     // Never apply incomplete candidates or report a capacity warning as a clean layout.
     const planning = snapshot(board);
-    plan = board.planGraphLayout({ ...fixture.layoutOptions, fixedElementIds: fixture.fixed });
+    plan = planModelGraphLayout(board, {
+      ...fixture.layoutOptions,
+      fixedElementIds: fixture.fixed,
+    });
     assert.deepEqual(snapshot(board), planning);
     if (plan.status === "ready") return { status: "ready", applications, steps, rolledBack: false };
     assert.equal(board.applyLayoutPlan(plan), false, "Incomplete capacity plan accepted");
@@ -483,7 +508,7 @@ export async function repairMeasuredVisualText(board, lint, fixture) {
     if (!capacityPreparation.rolledBack)
       growthApplications.push(...capacityPreparation.applications);
     const grown = snapshot(board);
-    const plan = board.planGraphLayout({
+    const plan = planModelGraphLayout(board, {
       ...fixture.layoutOptions,
       fixedElementIds: fixture.fixed,
     });
@@ -672,7 +697,7 @@ export async function verifyRenderedLabelPlan(
       const error = new Error("Rendered plan rejected by the headless Facade");
       error.diagnostics = {
         report: before,
-        sourcePreconditions: board.planGraphLayout().preconditions,
+        sourcePreconditions: planModelGraphLayout(board).preconditions,
       };
       throw error;
     }

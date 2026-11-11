@@ -1,3 +1,4 @@
+import { planModelGraphLayout } from "../scripts/board-visual-repair.mjs";
 import { describe, expect, it } from "vitest";
 import {
   getVisualCase,
@@ -28,7 +29,7 @@ describe("generated nested business ownership", () => {
           .filter((node) => node.laneId === lane.id);
         expect(lane.size).toBe(Math.max(...members.map((node) => node.transform.width)) + 72);
       }
-      const plan = board.planGraphLayout({
+      const plan = planModelGraphLayout(board, {
         ...fixture.layoutOptions,
         fixedElementIds: fixture.fixed,
       });
@@ -84,7 +85,7 @@ describe("generated nested business ownership", () => {
       expect(JSON.parse(JSON.stringify(board.save()))).toEqual(beforeGrowth);
       expect(await board.redo()).toBe(true);
       expect(JSON.parse(JSON.stringify(board.save()))).toEqual(afterGrowth);
-      const enlarged = board.planGraphLayout({
+      const enlarged = planModelGraphLayout(board, {
         ...fixture.layoutOptions,
         fixedElementIds: fixture.fixed,
       });
@@ -146,7 +147,7 @@ describe("generated nested business ownership", () => {
         };
         check();
         const before = JSON.stringify(board.save());
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });

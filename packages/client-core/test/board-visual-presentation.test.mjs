@@ -1,3 +1,4 @@
+import { planModelGraphLayout } from "../scripts/board-visual-repair.mjs";
 import { describe, expect, it } from "vitest";
 import {
   realizeVisualFixture,
@@ -75,7 +76,7 @@ describe("Generated business presentation", () => {
         const pool = board.getElement("visual-pool");
         expect(pool.containerData.swimlane.orientation).toBe(fixture.spec.direction);
         const before = JSON.parse(JSON.stringify(board.save()));
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });
@@ -174,7 +175,7 @@ describe("Generated business presentation", () => {
     async (profile) => {
       await withBoard((board, api) => {
         const fixture = realizeVisualFixture(board, api, profile, "business");
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });
@@ -223,7 +224,7 @@ describe("Generated business presentation", () => {
     async (profile) => {
       await withBoard((board, api) => {
         const fixture = realizeVisualFixture(board, api, profile, "nested-dense");
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });
@@ -283,7 +284,7 @@ describe("Generated business presentation", () => {
         }
         fixture.verify();
         const before = JSON.parse(JSON.stringify(board.save()));
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });
@@ -308,7 +309,7 @@ describe("Generated business presentation", () => {
     async (profile, variant) => {
       await withBoard((board, api) => {
         const fixture = realizeVisualFixture(board, api, profile, variant);
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });

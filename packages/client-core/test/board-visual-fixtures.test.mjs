@@ -12,6 +12,7 @@ import { captureVisualEvidence, visualCaptureRegions } from "../scripts/board-vi
 import {
   proposeMeasuredTextGrowth,
   repairMeasuredVisualText,
+  planModelGraphLayout,
 } from "../scripts/board-visual-repair.mjs";
 import { elementProfiles, realizeElementFixture } from "../scripts/board-element-fixtures.mjs";
 import { insertCompactGeneratedMindMap } from "../scripts/board-generated-styles.mjs";
@@ -185,12 +186,13 @@ describe("Board measured text growth boundaries", () => {
     });
   });
   it("rolls back a measured growth whose fresh public graph plan is incomplete", async () => {
-    let value = { id: "board", pages: { p: { elements: { a: shape("a") } } } },
+    let value = { id: "board", activePageId: "p", pages: { p: { elements: { a: shape("a") } } } },
       undo,
       redo;
     const initial = structuredClone(value);
     const board = {
       save: () => value,
+      getData: () => value,
       getElement: (id) => value.pages.p.elements[id],
       setElementsTransform(patches) {
         undo = structuredClone(value);
@@ -207,17 +209,12 @@ describe("Board measured text growth boundaries", () => {
         value = structuredClone(redo);
         return true;
       },
-      planGraphLayout: () => ({
-        status: "incomplete",
-        patches: [],
-        diagnostics: [{ code: "swimlane-capacity-exceeded", elementIds: ["a"] }],
-      }),
       applyLayoutPlan: () => false,
     };
     const result = await repairMeasuredVisualText(
       board,
       { lint: async () => report(["a"]) },
-      fixture,
+      { ...fixture, layoutOptions: { elementIds: ["missing"] } },
     );
     expect(result.status).toBe("replan-incomplete");
     expect(result.attempts[0]).toMatchObject({
@@ -272,7 +269,7 @@ describe("Board public Facade business fixture preservation", () => {
           (item) => item.custom?.visualSource?.feedback,
         );
         expect(connector.connectorData).toMatchObject(authored);
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });
@@ -316,7 +313,7 @@ describe("Board public Facade business fixture preservation", () => {
           fixture.verify();
         };
         check();
-        const plan = board.planGraphLayout({
+        const plan = planModelGraphLayout(board, {
           ...fixture.layoutOptions,
           fixedElementIds: fixture.fixed,
         });
@@ -345,7 +342,7 @@ describe("Board public Facade business fixture preservation", () => {
         const api = createStandardHeadlessUniverFacade(univer),
           board = api.createBoard({ id: "activity-capacity", name: "Activity capacity" }),
           fixture = realizeVisualFixture(board, api, "uml-activity", "long-bilingual");
-        const initialPlan = board.planGraphLayout(fixture.layoutOptions);
+        const initialPlan = planModelGraphLayout(board, fixture.layoutOptions);
         expect(board.applyLayoutPlan(initialPlan)).toBe(true);
         const before = JSON.parse(JSON.stringify(board.save()));
         let measurements = 0;
@@ -357,7 +354,7 @@ describe("Board public Facade business fixture preservation", () => {
                 {
                   // The adapter boundary returns a native plan; graph preconditions use the live model.
                   textPlan: {
-                    ...board.planGraphLayout(fixture.layoutOptions),
+                    ...planModelGraphLayout(board, fixture.layoutOptions),
                     patches: measurements
                       ? []
                       : [
@@ -623,7 +620,7 @@ describe("Board public Facade business fixture preservation", () => {
           ),
         );
         const options = { ...fixture.layoutOptions, fixedElementIds: fixture.fixed };
-        const plan = board.planGraphLayout(options);
+        const plan = planModelGraphLayout(board, options);
         if (profile === "uml-activity") {
           expect(plan.status).toBe("ready");
           expect(
@@ -633,7 +630,7 @@ describe("Board public Facade business fixture preservation", () => {
           ).toBe(true);
         }
         expect(snapshot(board)).toEqual(initial);
-        expect(board.planGraphLayout(options)).toEqual(plan);
+        expect(planModelGraphLayout(board, options)).toEqual(plan);
         if (plan.status === "incomplete") {
           expect(board.applyLayoutPlan(plan)).toBe(false);
           expect(snapshot(board)).toEqual(initial);
@@ -1430,7 +1427,7 @@ describe("Board public element catalogue preservation", () => {
           for (const element of Object.values(board.getElements()))
             if (element.type === "container")
               expect(element.containerData.behavior.layoutOccupancy ?? "body").toBe("body");
-        const plan = board.planGraphLayout(fixture.layoutOptions);
+        const plan = planModelGraphLayout(board, fixture.layoutOptions);
         expect(plan.status).toBe("ready");
         expect(plan.patches).toEqual([]);
         expect(board.applyLayoutPlan(plan)).toBe(true);

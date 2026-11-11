@@ -17,6 +17,7 @@ import {
   repairMeasuredVisualText,
   verifyRenderedLabelPlan,
   verifyRenderedPortPlan,
+  planModelGraphLayout,
 } from "./board-visual-repair.mjs";
 
 // Keep SDK runtime notices intact on stderr so stdout remains one machine-readable summary.
@@ -138,11 +139,6 @@ try {
           : undefined;
         if (!values["fixtures-only"]) {
           assert.equal(
-            typeof board.planGraphLayout,
-            "function",
-            "Installed SDK lacks FBoard.planGraphLayout",
-          );
-          assert.equal(
             typeof board.applyLayoutPlan,
             "function",
             "Installed SDK lacks FBoard.applyLayoutPlan",
@@ -153,9 +149,13 @@ try {
             maxNodes: 100,
             ...fixture.layoutOptions,
           };
-          plan = board.planGraphLayout(options);
+          plan = planModelGraphLayout(board, options);
           assert.deepEqual(persistedSnapshot(board), initial, "Planning mutated the Board");
-          assert.deepEqual(board.planGraphLayout(options), plan, "Planning is not deterministic");
+          assert.deepEqual(
+            planModelGraphLayout(board, options),
+            plan,
+            "Planning is not deterministic",
+          );
           assert.ok(["ready", "incomplete"].includes(plan.status));
           if (
             !visualEvidence &&
@@ -175,7 +175,7 @@ try {
             );
           }
           if (profile === "flowchart" && variant === "fan-out") {
-            const overBudget = board.planGraphLayout({ maxNodes: 1 });
+            const overBudget = planModelGraphLayout(board, { maxNodes: 1 });
             assert.equal(overBudget.status, "incomplete", "Budget overflow reported as complete");
             assert.equal(board.applyLayoutPlan(overBudget), false, "Over-budget plan applied");
             assert.deepEqual(
@@ -258,7 +258,7 @@ try {
             graphApplication = { status: "unchanged-native", applied: true, changed: false };
           }
           if (fixture.fixed.length > 0) {
-            const current = board.planGraphLayout(options);
+            const current = planModelGraphLayout(board, options);
             const snapshot = persistedSnapshot(board);
             const elementId = fixture.fixed[0];
             const element = board.getElement(elementId);
