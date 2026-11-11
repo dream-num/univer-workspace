@@ -1,10 +1,12 @@
 # Choose a style before authoring
 
-Read the source Sheet to understand its data, formulas and writable cells. Unless the user
-already named a style, ask which style they want before authoring. List all ten Chinese
-names with their one-line moods from this catalog and say **仪表夜航 is the default**.
-If the user leaves the choice to you, or you cannot ask in a non-interactive run, use
-**仪表夜航 (`night-gauge`)**. Never silently choose a different style by scenario.
+Unless the user already named a style, ask which style they want before reading Sheets
+in depth or authoring. List all ten Chinese names with their one-line moods from this
+catalog and say **仪表夜航 is the default**. Ask in your normal reply text, then end your
+turn and wait for the answer. Do not rely on a client question or form tool, or validate
+or publish a page before the user answers. If the user leaves the choice to you
+(你来定, 随便, 默认就行), use **仪表夜航 (`night-gauge`)**. Never silently choose
+another style. Then read the source Sheet to understand its data, formulas and writable cells.
 
 ## Style catalog
 

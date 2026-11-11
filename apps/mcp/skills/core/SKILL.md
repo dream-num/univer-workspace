@@ -283,9 +283,12 @@ screenshot job results carry download links. After an unknown creation result,
 retry only the same operation with its original upload and idempotency key.
 
 Read the `blob` Skill for original files and the `html-view` Skill for live HTML
-backed by Sheet data. Before authoring, ask the user for one of its ten styles unless
-already named, and say 仪表夜航 (`night-gauge`) is the default. Use it if they leave
-the choice to you or you cannot ask in a non-interactive run.
+backed by Sheet data. Unless the user already named a style, ask which style they want
+before reading Sheets in depth or authoring. List the ten Chinese names with their one-line
+moods from design.md and say 仪表夜航 (`night-gauge`) is the default. Ask in your normal
+reply text, then end your turn and wait for the answer. Do not rely on a client question
+or form tool, or validate or publish a page before the user answers. If they leave the choice
+to you (你来定, 随便, 默认就行), use 仪表夜航. Never silently choose another style.
 Read design.md and start from that style's complete template. Controls write Sheet cells
 or append rows; show recalculated source values, never page-side Sheet formulas, copied
 data or fallback numbers. Blob publication/replacement and HTML View creation write

@@ -657,10 +657,13 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
-Read the `html-view` Skill before authoring. Its design reference lists ten styles;
-unless the user already named one, ask which they want and offer 仪表夜航 (`night-gauge`)
-as the default. Use that default when they leave it to the Agent or the run is
-non-interactive. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
+Read the `html-view` Skill. Unless the user already named a style, ask which style they
+want before reading Sheets in depth or authoring. List the ten Chinese names with their
+one-line moods from its design reference and say 仪表夜航 (`night-gauge`) is the default.
+Ask in your normal reply text, then end your turn and wait for the answer. Do not rely on
+a client question or form tool, or validate or publish a page before the user answers.
+If they leave the choice to the Agent (你来定, 随便, 默认就行), use 仪表夜航. Never silently
+choose another style. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
 palette, density and signature element when adapting to another scenario. Controls write
 Sheet cells or append rows; display recalculated source values through live bindings,
 never page-side Sheet formulas, copied data or fallback numbers.
