@@ -494,6 +494,11 @@ docker build -f apps/mcp/Dockerfile -t univer-workspace-mcp:local .
 The build uses the root `.npmrc` to reach the Univer package registry. It includes
 Client Core and its runtime dependencies. Override `BASE_IMAGE` with `--build-arg`
 when needed. The default is `node:24-bookworm-slim`.
+As in the Workspace image, `HTTP_PROXY` is passed to `pnpm install`, `PROXY_SSL`
+sets `NODE_EXTRA_CA_CERTS` to a proxy CA certificate, and `NODE_MAX_OLD_SPACE_SIZE`
+(default `4096`) sizes the build heap. When `HTTP_PROXY` is set, the runtime stage
+switches the Debian sources to the Aliyun mirror and keeps `apt-get` off the proxy,
+so an HTTPS proxy certificate is not needed for the Chromium and font install.
 
 For Docker Desktop, start a development gateway against an existing Workspace server:
 
