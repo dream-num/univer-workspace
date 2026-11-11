@@ -252,8 +252,8 @@ API key 只出现在浏览器到模型提供商的那条线上。Workspace 的�
 
 #### 3.3.3 连接 MCP 网关
 
-网关只接受同源请求：`Origin` 必须等于 `MCP_PUBLIC_URL` 的 origin，否则返回 403，也不处理 CORS 预检
-（`apps/mcp/src/gateway/server.ts:374-379`）。生产部署按设计是同源的，入口按路径把 `space.univer.ai/mcp` 转给网关，
+网关对浏览器只接受同源请求。`Host` 必须等于 `MCP_PUBLIC_URL` 的 host；请求带 `Origin` 头时，它必须等于 `MCP_PUBLIC_URL` 的 origin，否则返回 403（`apps/mcp/src/gateway/server.ts:374-379`）。
+不带 `Origin` 的请求不受这条限制，但浏览器发跨域 POST 时总会带 `Origin`。网关也不处理 CORS 预检。生产部署按设计是同源的，入口按路径把 `space.univer.ai/mcp` 转给网关，
 所以页面直接访问 `/mcp` 就行，网关不需要改。
 
 需要补的是本地开发：`apps/workspace/vite.config.ts` 的代理目前没有 `/mcp`，要加一条，并把开发环境的 `MCP_PUBLIC_URL` 设成 Vite 的 origin。
