@@ -18,7 +18,8 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
    a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
 3. Page controls write to Sheet cells or append rows; the page displays the recalculated
-   source values through live bindings. Never re-implement a Sheet formula in page code,
+   source values through live bindings, and label host-provided visitor trials with `getWriteMode`
+   as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,
    embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
 4. Write the page in the user's language as [design.md](references/design.md) describes;
    templates are English starting points.

@@ -107,6 +107,10 @@ td .d.neg{background:none;color:var(--ink);box-shadow:inset 0 0 0 3px var(--ink)
 <script type="module">
 
 const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+async function isTrialWrite(){
+  try{if(window.univerWorkspace?.capabilities?.includes('write-mode'))return await window.univerWorkspace.getWriteMode(unitId)==='trial'}catch{}
+  return false;
+}
 let D=[],MON=[];
 const subscriptions=[],refreshers=[];
 let connected=false;
@@ -128,7 +132,7 @@ record.addEventListener('change',selectRecord);
 target.addEventListener('change',async()=>{
  if(!target.checkValidity())return;
  result.textContent='Saving to Sheet…';status('Saving to Sheet…');record.disabled=true;
- try{await binding.flush();result.textContent='Saved to Sheet';status('Saved to Sheet')}
+ try{await binding.flush();result.textContent=await isTrialWrite()?'Trial only, not saved':'Saved to Sheet';status(result.textContent)}
  catch(e){result.textContent=`${errorText(e)}. Draft kept. Press Escape to restore the source value.`;status(result.textContent,true)}
  finally{record.disabled=false}
 });

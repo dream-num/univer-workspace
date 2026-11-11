@@ -78,7 +78,9 @@ Display recalculated source values; never calculate a replacement for a Sheet fo
 or embed copies of Sheet data or fallback numbers.
 
 Show pending and rejected writes next to the control, keep drafts on failure, and call `flush()`
-before claiming success. Viewers without edit rights and signed-out visitors can receive rejected
+before claiming success. Visitors without edit rights may receive a host-provided local trial, so label
+completed writes with `getWriteMode` as the templates do. Never build a page-side simulation, formula
+copy or fallback data for visitors. Viewers without edit rights and signed-out visitors can receive rejected
 writes; show the actual rejection inline and leave the readable page usable. Do not treat page
 access as source access. Record insertion follows [adding records](adding-records.md): insert and
 fill together, then retry only `flush()` after local insertion succeeds. Record-inserting templates
