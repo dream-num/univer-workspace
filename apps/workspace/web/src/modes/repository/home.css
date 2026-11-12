@@ -1,7 +1,7 @@
 :root[data-ui-mode="repository"] {
-  .rd-home-agent-placeholder { height: 258px; margin-bottom: 36px; }
+  .rd-home-agent-placeholder { height: 331px; margin-bottom: 36px; }
   @media (max-width: 600px) {
-    .rd-home-agent-placeholder { height: 288px; }
+    .rd-home-agent-placeholder { height: 378px; }
   }
   .rd-headline {
     font-size: 38px;

@@ -2,6 +2,7 @@ import { useI18n } from "../../../shared/i18n";
 
 export const agentMessages = {
   "en-US": {
+    greeting: (name?: string) => name ? `Hello, ${name}` : "Hello", greetingHint: "What can I help you with?",
     more: "Load more", agents: "Agents", prompt: "Let an agent handle a task", ask: "Ask", auto: "Auto",
     askHint: "Read only. Ask questions without changing files.", autoHint: "Changes go into a pull request for a person to review and merge.",
     model: "Model", thinking: "Thinking strength", off: "Off", high: "High", max: "Max",
@@ -24,6 +25,7 @@ export const agentMessages = {
     signOutHint: "Model keys are saved on this device. Choose whether to remove them when signing out.", loading: "Loading…",
   },
   "zh-CN": {
+    greeting: (name?: string) => name ? `你好，${name}` : "你好", greetingHint: "有什么可以帮你？",
     more: "加载更多", agents: "Agents", prompt: "让 Agent 处理一件事", ask: "提问", auto: "执行",
     askHint: "只读提问，不会更改文件。", autoHint: "更改写入 PR，由人审阅并合并。",
     model: "模型", thinking: "思考强度", off: "关闭", high: "高", max: "最高",

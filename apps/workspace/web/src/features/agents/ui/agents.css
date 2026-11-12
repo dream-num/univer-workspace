@@ -1,6 +1,6 @@
 html[data-ui-mode="repository"] .agent-page { padding: 28px 0; }
-html[data-ui-mode="repository"] .agent-home { min-height: 258px; margin-bottom: 36px; }
-html[data-ui-mode="repository"] .agent-composer { min-height: 258px; display: grid; align-content: start; gap: 12px; }
+html[data-ui-mode="repository"] .agent-home { min-height: 331px; margin-bottom: 36px; }
+html[data-ui-mode="repository"] .agent-composer { min-height: 331px; display: grid; align-content: start; gap: 12px; }
 html[data-ui-mode="repository"] .agent-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 html[data-ui-mode="repository"] .agent-controls > button { width: auto; }
 html[data-ui-mode="repository"] .agent-scope { display: flex; align-items: center; gap: 12px; font-size: 13px; }
@@ -38,22 +38,25 @@ html[data-ui-mode="repository"] .agent-page :is(button, a, summary):focus-visibl
   html[data-ui-mode="repository"] :is(.agent-directory, .agent-session-layout) { grid-template-columns: minmax(0, 1fr); gap: 20px; }
 }
 @media (max-width: 600px) {
-  html[data-ui-mode="repository"] .agent-composer { min-height: 288px; }
+  html[data-ui-mode="repository"] :is(.agent-home, .agent-composer) { min-height: 378px; }
   html[data-ui-mode="repository"] .agent-starters { grid-template-columns: minmax(0, 1fr); }
 }
 
-html[data-ui-mode="repository"] .agent-composer-box { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--rd-line-2); border-radius: 12px; background: var(--rd-panel); }
+html[data-ui-mode="repository"] .agent-composer-box { display: grid; gap: 12px; min-width: 0; padding: 16px 20px; border: 1px solid var(--rd-line-2); border-radius: 12px; background: var(--rd-panel); }
 html[data-ui-mode="repository"] .agent-composer-box:focus-within { border-color: var(--rd-accent); }
-html[data-ui-mode="repository"] .agent-composer-box textarea { border: 0; padding: 0; border-radius: 0; box-shadow: none; }
+html[data-ui-mode="repository"] .agent-composer-box textarea { border: 0; padding: 0; border-radius: 0; box-shadow: none; background: transparent; }
+html[data-ui-mode="repository"] .agent-composer-box textarea:focus-visible { outline: none; }
 html[data-ui-mode="repository"] .agent-composer-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
 html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; }
-html[data-ui-mode="repository"] .agent-model-controls > button { width: auto; flex: none; }
+html[data-ui-mode="repository"] .agent-model-controls > button { flex: none; }
+html[data-ui-mode="repository"] .agent-model-controls > [role="combobox"] { width: auto; }
 html[data-ui-mode="repository"] .agent-model-controls > .agent-model-select { min-width: 0; flex: 0 1 auto; }
-html[data-ui-mode="repository"] .agent-send { flex: none; margin-left: auto; }
+html[data-ui-mode="repository"] .agent-composer-controls > .agent-send { flex: none; margin-left: auto; }
 html[data-ui-mode="repository"] .agent-composer > .agent-note { margin: 0; }
-html[data-ui-mode="repository"] .agent-composer-footer { display: flex; min-width: 0; align-items: center; gap: 12px; }
-html[data-ui-mode="repository"] .agent-composer-footer > .agent-scope { flex: 1; min-width: 0; }
-html[data-ui-mode="repository"] .agent-composer-footer > button { margin-left: auto; flex: none; }
+html[data-ui-mode="repository"] .agent-composer > .agent-scope { min-width: 0; }
+html[data-ui-mode="repository"] .agent-composer .agent-greeting h2 { margin: 0 0 4px; font-size: 24px; font-weight: 600; }
+html[data-ui-mode="repository"] .agent-greeting p { margin: 0; font-size: 14px; color: var(--rd-ink-2); }
+html[data-ui-mode="repository"] .agent-send kbd { font-family: inherit; font-size: 11px; font-weight: 400; opacity: 0.65; }
 html[data-ui-mode="repository"] .agent-scope > span { flex: none; }
 html[data-ui-mode="repository"] .agent-starters svg { width: 20px; height: 20px; margin-bottom: 12px; color: var(--rd-ink-2); }
 html[data-ui-mode="repository"] .agent-starters strong { display: block; font-size: 14px; font-weight: 600; }
@@ -86,7 +89,7 @@ html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(5) { width: 1
 html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(6) { width: 128px; }
 html[data-ui-mode="repository"] .agent-session-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
-  html[data-ui-mode="repository"] .agent-send:has(svg) > span { display: none; }
+  html[data-ui-mode="repository"] .agent-send:has(svg) > :is(span, kbd) { display: none; }
   html[data-ui-mode="repository"] .agent-composer-box { padding: 12px; }
   html[data-ui-mode="repository"] .agent-model-controls { gap: 4px; }
 }
