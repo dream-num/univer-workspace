@@ -199,7 +199,6 @@ describe("Workspace CLI skills command", () => {
         data[0]?.content,
         ...(data[0]?.files ?? []).map((file) => file.content),
       ].join("\n");
-      expect(content).toEqual(expect.any(String));
       expect(content).toContain(contract.owner);
       expect(content).toContain(contract.insert);
       expect(content).toContain(contract.read);

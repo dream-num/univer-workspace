@@ -1,4 +1,5 @@
-process.once("message", (job) => {
+// Keep IPC referenced so invalid-result jobs wait for the parent's kill.
+process.on("message", (job) => {
   const stderr =
     "native conversion failed\nAuthorization: Bearer fixture-secret\nfixture-private-content\n";
   process.stderr.write(
