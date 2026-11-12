@@ -6,6 +6,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { expect, it, vi } from "vitest";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { encodeFrame } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";
@@ -57,33 +58,6 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
     );
   });
   const executorUrl = await listen(executor);
-  const reservation = createServer();
-  const origin = await listen(reservation);
-  await close(reservation);
-  const gateway = createGateway(
-    parseGatewayConfig({
-      MCP_DEV_SESSION_PASSTHROUGH: "1",
-      WORKSPACE_ORIGIN: "http://workspace.test",
-      MCP_PUBLIC_URL: `${origin}/mcp`,
-      MCP_STAGING_DIRECTORY: testStagingDirectory(),
-      MCP_EXECUTOR_URLS: executorUrl,
-      MCP_EXECUTOR_TOKEN: "t".repeat(32),
-      MCP_SYNC_BUDGET_MS: "5",
-    }),
-    {
-      fetcher: async () =>
-        Response.json({ authenticated: true, user: { id: "alice", displayName: "Alice" } }),
-      logger: pino(
-        {},
-        new Writable({
-          write(chunk, _encoding, callback) {
-            logs += chunk.toString();
-            callback();
-          },
-        }),
-      ),
-    },
-  );
   const client = new Client({ name: "jobs-test", version: "1" });
   const events = () =>
     logs
@@ -91,11 +65,38 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
       .split("\n")
       .map((line: string) => JSON.parse(line))
       .filter((line) => line.event === "mcp.tool_call");
+  let gateway: ReturnType<typeof createGateway> | undefined;
   try {
-    gateway.server.listen(Number(new URL(origin).port), "127.0.0.1");
-    await once(gateway.server, "listening");
+    const started = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          MCP_DEV_SESSION_PASSTHROUGH: "1",
+          WORKSPACE_ORIGIN: "http://workspace.test",
+          MCP_PUBLIC_URL: url,
+          MCP_STAGING_DIRECTORY: testStagingDirectory(),
+          MCP_EXECUTOR_URLS: executorUrl,
+          MCP_EXECUTOR_TOKEN: "t".repeat(32),
+          MCP_SYNC_BUDGET_MS: "5",
+        }),
+        {
+          fetcher: async () =>
+            Response.json({ authenticated: true, user: { id: "alice", displayName: "Alice" } }),
+          logger: pino(
+            {},
+            new Writable({
+              write(chunk, _encoding, callback) {
+                logs += chunk.toString();
+                callback();
+              },
+            }),
+          ),
+        },
+      ),
+    );
+    gateway = started.gateway;
+    const url = started.url;
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(`${origin}/mcp`), {
+      new StreamableHTTPClientTransport(new URL(url), {
         requestInit: { headers: { Authorization: "Bearer test-session" } },
       }),
     );
@@ -139,8 +140,10 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
   } finally {
     finish();
     await client.close();
-    await gateway.close();
-    await close(gateway.server);
+    if (gateway) {
+      await gateway.close();
+      await close(gateway.server);
+    }
     await close(executor);
   }
 });

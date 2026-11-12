@@ -115,7 +115,9 @@ apps/workspace/
 - Node 进程挂载产品 API、Collaboration Endpoint、API 文档和 Web 静态资源。
 - Docker 镜像只包含 production dependencies、`dist` 和数据库 schema。
 
-启动入口通过仅依赖 Node 内置模块的 `startup-logging.ts` 同步写出阶段 JSON 日志，并以动态 import 标记应用/SDK 模块加载。日志覆盖迁移与监听前初始化，字段与排障查询见应用 README 的 Startup diagnostics。
+启动入口通过 `logging/startup.ts` 写出阶段 JSON 日志，并以动态 import 标记应用/SDK 模块加载。
+阶段日志与应用、HTTP 日志共享 Pino 配置和 `LOG_LEVEL`，使用独立的同步输出保持阶段顺序并在阻塞操作前写出。
+普通应用和 HTTP 日志保持异步输出。日志覆盖迁移与监听前初始化，字段与排障查询见应用 README 的 Startup diagnostics。
 
 ## Web 应用
 

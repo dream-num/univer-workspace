@@ -1,8 +1,8 @@
-import { once } from "node:events";
 import { createServer } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGateway } from "../gateway.js";
+import { listenGateway } from "../listen-gateway.js";
 import { parseGatewayConfig } from "../../src/shared/config.js";
 import { testStagingDirectory } from "../staging-directory.js";
 import { closeServer, executorToken, listen, logger } from "./harness.js";
@@ -38,42 +38,40 @@ async function start(versions: number[]) {
     urls.push(await listen(server));
     cleanup.push(() => closeServer(server));
   }
-  const reservation = createServer();
-  const base = await listen(reservation);
-  await closeServer(reservation);
-  const gateway = createGateway(
-    parseGatewayConfig({
-      WORKSPACE_ORIGIN: "https://workspace.test",
-      MCP_PUBLIC_URL: `${base}/mcp`,
-      MCP_DEV_SESSION_PASSTHROUGH: "1",
-      MCP_STAGING_DIRECTORY: testStagingDirectory(),
-      MCP_EXECUTOR_URLS: urls.join(","),
-      MCP_EXECUTOR_TOKEN: executorToken,
-    }),
-    {
-      logger,
-      fetcher: async (url) =>
-        String(url).endsWith("/healthz")
-          ? new Response("ok")
-          : Response.json({
-              authenticated: true,
-              user: { id: "contract-user", displayName: "Contract" },
-            }),
-    },
+  const { gateway, url } = await listenGateway((url) =>
+    createGateway(
+      parseGatewayConfig({
+        WORKSPACE_ORIGIN: "https://workspace.test",
+        MCP_PUBLIC_URL: url,
+        MCP_DEV_SESSION_PASSTHROUGH: "1",
+        MCP_STAGING_DIRECTORY: testStagingDirectory(),
+        MCP_EXECUTOR_URLS: urls.join(","),
+        MCP_EXECUTOR_TOKEN: executorToken,
+      }),
+      {
+        logger,
+        fetcher: async (url) =>
+          String(url).endsWith("/healthz")
+            ? new Response("ok")
+            : Response.json({
+                authenticated: true,
+                user: { id: "contract-user", displayName: "Contract" },
+              }),
+      },
+    ),
   );
-  gateway.server.listen(Number(new URL(base).port), "127.0.0.1");
-  await once(gateway.server, "listening");
+  const base = new URL(url).origin;
   cleanup.push(async () => {
     await gateway.close();
     await closeServer(gateway.server);
   });
   const client = new Client({ name: "backend-contract", version: "1" });
+  cleanup.push(() => client.close());
   await client.connect(
     new StreamableHTTPClientTransport(new URL(`${base}/mcp`), {
       requestInit: { headers: { authorization: "Bearer contract-session" } },
     }),
   );
-  cleanup.push(() => client.close());
   const ready = async () => {
     const response = await fetch(`${base}/readyz`);
     return { status: response.status, body: await response.json() };

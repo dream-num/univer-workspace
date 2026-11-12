@@ -4,6 +4,7 @@ import { Client, StreamableHTTPClientTransport, ProtocolError } from "@modelcont
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { adminNames, coreNames, filesNames } from "./tool-names.js";
@@ -71,35 +72,32 @@ async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds
     urls.push(await listen(server));
     cleanup.push(() => close(server));
   }
-  const reservation = createServer();
-  const origin = await listen(reservation);
-  await close(reservation);
-  const gateway = createGateway(
-    parseGatewayConfig({
-      MCP_DEV_SESSION_PASSTHROUGH: "1",
-      WORKSPACE_ORIGIN: "https://workspace.test",
-      MCP_PUBLIC_URL: `${origin}/mcp`,
-      MCP_STAGING_DIRECTORY: testStagingDirectory(),
-      ...(allowedUserIds === undefined ? {} : { MCP_EXECUTOR_ALLOWED_USER_IDS: allowedUserIds }),
-      ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_EXECUTOR_TOKEN: token } : {}),
-    }),
-    {
-      logger: pino({ level: "silent" }),
-      fetcher: async (_url, init) =>
-        Response.json({
-          authenticated: true,
-          user: {
-            id:
-              new Headers(init?.headers).get("cookie") === "workspace_session=listed"
-                ? "listed"
-                : "user",
-            displayName: "User",
-          },
-        }),
-    },
+  const { gateway, url } = await listenGateway((url) =>
+    createGateway(
+      parseGatewayConfig({
+        MCP_DEV_SESSION_PASSTHROUGH: "1",
+        WORKSPACE_ORIGIN: "https://workspace.test",
+        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(),
+        ...(allowedUserIds === undefined ? {} : { MCP_EXECUTOR_ALLOWED_USER_IDS: allowedUserIds }),
+        ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_EXECUTOR_TOKEN: token } : {}),
+      }),
+      {
+        logger: pino({ level: "silent" }),
+        fetcher: async (_url, init) =>
+          Response.json({
+            authenticated: true,
+            user: {
+              id:
+                new Headers(init?.headers).get("cookie") === "workspace_session=listed"
+                  ? "listed"
+                  : "user",
+              displayName: "User",
+            },
+          }),
+      },
+    ),
   );
-  gateway.server.listen(Number(new URL(origin).port), "127.0.0.1");
-  await once(gateway.server, "listening");
   cleanup.push(async () => {
     await gateway.close();
     await close(gateway.server);
@@ -115,7 +113,7 @@ async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds
     );
     cleanup.push(() => client.close());
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(`${origin}/mcp${toolsets === undefined ? "" : `?toolsets=${toolsets}`}`), {
+      new StreamableHTTPClientTransport(new URL(`${url}${toolsets === undefined ? "" : `?toolsets=${toolsets}`}`), {
         requestInit: { headers: { authorization: `Bearer ${session}` } },
       }),
     );

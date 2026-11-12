@@ -78,9 +78,16 @@ test('malformed Content-Range never appends and checksum mismatch removes corrup
   assert.equal((await readdir(corrupt.directory)).length, 0);
 });
 test('stalled connections have bounded retries and remain retryable', async t => {
-  const f = await fixture(t, () => {});
-  await assert.rejects(downloadResumable({ ...f.options, idleTimeout: 20, retryDelays: [1] }));
-  assert.equal(f.requests.length, 2);
+  const f = await fixture(t);
+  const attempts = [], retries = [];
+  await assert.rejects(downloadResumable({ ...f.options, idleTimeout: 20, retryDelays: [1],
+    fetch: (_url, { signal }) => new Promise((_resolve, reject) => {
+      attempts.push(signal);
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+    }), onRetry: retry => retries.push(retry) }), { code: 'UPDATE_STALLED' });
+  assert.equal(attempts.length, 2);
+  assert.deepEqual(attempts.map(signal => signal.reason.code), ['UPDATE_STALLED', 'UPDATE_STALLED']);
+  assert.deepEqual(retries, [{ attempt: 1, seconds: 0.001, code: 'UPDATE_STALLED' }]);
 });
 test('completed cache avoids another network request and generic feed only serves verified asset', async t => {
   const f = await fixture(t);

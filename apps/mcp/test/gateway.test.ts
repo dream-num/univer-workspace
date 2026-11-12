@@ -13,6 +13,7 @@ import {
   type WorkspaceContentRuntime,
 } from "@univerjs/univer-workspace-client-core";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames, coreNames, destructiveNames, filesNames, writeNames } from "./tool-names.js";
 
@@ -125,7 +126,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       },
     ],
   };
-  let gateway: ReturnType<typeof createGateway>;
+  let gateway: ReturnType<typeof createGateway> | undefined;
   let url: string;
   let logs: string;
   let workspaceRequests: {
@@ -138,6 +139,7 @@ describe("gateway over real HTTP and the MCP client", () => {
   let missingRepoCode: string;
   beforeEach(async () => {
     clients = [];
+    gateway = undefined;
     ready = false;
     executeValue = "written";
     runtimeError = undefined;
@@ -274,31 +276,27 @@ describe("gateway over real HTTP and the MCP client", () => {
         callback();
       },
     });
-    // Reserve the actual socket first so public Host validation exercises its real address.
-    const socket = createServer();
-    const origin = await listen(socket);
-    await close(socket);
-    url = `${origin}/mcp`;
-    gateway = createGateway(
-      parseGatewayConfig({
-        MCP_DEV_SESSION_PASSTHROUGH: "1",
-        WORKSPACE_ORIGIN: identityOrigin,
-        WORKSPACE_TRANSPORT_URL: transportOrigin,
-        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
-        METRICS_TOKEN: "metrics-secret",
-        MCP_EXECUTOR_URLS: executorUrl,
-        MCP_EXECUTOR_TOKEN: executorToken,
-      }),
-      { logger: pino({}, logOutput) },
-    );
-    const port = new URL(origin).port;
-    gateway.server.listen(Number(port), "127.0.0.1");
-    await once(gateway.server, "listening");
+    ({ gateway, url } = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          MCP_DEV_SESSION_PASSTHROUGH: "1",
+          WORKSPACE_ORIGIN: identityOrigin,
+          WORKSPACE_TRANSPORT_URL: transportOrigin,
+          MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
+          METRICS_TOKEN: "metrics-secret",
+          MCP_EXECUTOR_URLS: executorUrl,
+          MCP_EXECUTOR_TOKEN: executorToken,
+        }),
+        { logger: pino({}, logOutput) },
+      ),
+    ));
   });
   afterEach(async () => {
     await Promise.all(clients.map((client) => client.close()));
-    await gateway.close();
-    await close(gateway.server);
+    if (gateway) {
+      await gateway.close();
+      await close(gateway.server);
+    }
     await close(workspace);
     await executor.close();
     expect(logs).not.toContain(session);

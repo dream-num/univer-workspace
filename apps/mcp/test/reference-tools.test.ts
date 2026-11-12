@@ -306,7 +306,7 @@ describe("API reference, Skills, resources and server instructions", () => {
   });
 
   it.each(["legacy", { pin: "2026-07-28" }] as const)(
-    "serves every Skill file as an MCP resource and the instructions in %j",
+    "advertises the Skill catalog and server instructions in %j",
     async (mode) => {
       await start();
       const client = await connect(mode);
@@ -330,39 +330,6 @@ describe("API reference, Skills, resources and server instructions", () => {
       expect((await call(client, "skills_read", {})).structured["skills"]).toEqual(
         entries.map(({ frontmatter: { name, description } }) => ({ name, description })),
       );
-      for (const entry of entries) {
-        expect(entry.uri).toBe(`skill://univer-workspace/${entry.frontmatter.name}/SKILL.md`);
-        expect(Array.isArray(entry.resources)).toBe(true);
-        if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
-        const expectedFiles = ["SKILL.md"];
-        for (const child of ["references", "templates"]) {
-          const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
-            () => [],
-          );
-          expectedFiles.push(...files.map((file) => `${child}/${file}`));
-        }
-        expect(entry.resources.map(({ uri }) => uri).sort()).toEqual(
-          expectedFiles
-            .map((path) => `skill://univer-workspace/${entry.frontmatter.name}/${path}`)
-            .sort(),
-        );
-        for (const resource of entry.resources) {
-          const path = resource.uri.slice(
-            `skill://univer-workspace/${entry.frontmatter.name}/`.length,
-          );
-          const bytes = await readFile(join(sourceRoot, entry.frontmatter.name, path));
-          expect(resource.digest).toBe(
-            `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
-          );
-          const served = await extension.read(entry, path);
-          expect(served.verified).toBe(true);
-          expect(Buffer.from(served.bytes)).toEqual(bytes);
-        }
-        const fallback = await call(client, "skills_read", { name: entry.frontmatter.name });
-        expect(fallback.structured["content"]).toBe(
-          await readFile(join(sourceRoot, entry.frontmatter.name, "SKILL.md"), "utf8"),
-        );
-      }
       expect(await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8")).not.toBe(
         await readFile(join(cliSkillData, "core/SKILL.md"), "utf8"),
       );
@@ -390,6 +357,49 @@ describe("API reference, Skills, resources and server instructions", () => {
       ).rejects.toThrow();
     },
   );
+
+  describe.each(["legacy", { pin: "2026-07-28" }] as const)("Skill files in %j", (mode) => {
+    it.each(SKILL_NAMES)("serves every file for %s with verified bytes and fallback content", async (name) => {
+      await start();
+      const client = await connect(mode);
+      const extension = new SkillsClient(client);
+      const { skills: entries } = await extension.list();
+      const entry = entries.find(({ frontmatter }) => frontmatter.name === name);
+      expect(entry).toBeDefined();
+      if (entry === undefined) throw new Error("Expected published Skill");
+      expect(entry.uri).toBe(`skill://univer-workspace/${entry.frontmatter.name}/SKILL.md`);
+      expect(Array.isArray(entry.resources)).toBe(true);
+      if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
+      const expectedFiles = ["SKILL.md"];
+      for (const child of ["references", "templates"]) {
+        const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
+          () => [],
+        );
+        expectedFiles.push(...files.map((file) => `${child}/${file}`));
+      }
+      expect(entry.resources.map(({ uri }) => uri).sort()).toEqual(
+        expectedFiles
+          .map((path) => `skill://univer-workspace/${entry.frontmatter.name}/${path}`)
+          .sort(),
+      );
+      for (const resource of entry.resources) {
+        const path = resource.uri.slice(
+          `skill://univer-workspace/${entry.frontmatter.name}/`.length,
+        );
+        const bytes = await readFile(join(sourceRoot, entry.frontmatter.name, path));
+        expect(resource.digest).toBe(
+          `sha256:${createHash("sha256").update(bytes).digest("hex")}`,
+        );
+        const served = await extension.read(entry, path);
+        expect(served.verified).toBe(true);
+        expect(Buffer.from(served.bytes)).toEqual(bytes);
+      }
+      const fallback = await call(client, "skills_read", { name: entry.frontmatter.name });
+      expect(fallback.structured["content"]).toBe(
+        await readFile(join(sourceRoot, entry.frontmatter.name, "SKILL.md"), "utf8"),
+      );
+    });
+  });
 
   it("keeps published digests and fallback bytes stable after source changes", async () => {
     await start();

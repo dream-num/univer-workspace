@@ -10,6 +10,7 @@ import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthenticator } from "../src/gateway/auth.js";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 
@@ -27,8 +28,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function listen(server: Server, port = 0): Promise<string> {
-  server.listen(port, "127.0.0.1");
+async function listen(server: Server): Promise<string> {
+  server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
   if (address === null || typeof address === "string") throw new Error("Expected TCP server");
@@ -44,7 +45,7 @@ async function close(server: Server): Promise<void> {
 describe("gateway authentication", () => {
   const cleanup: (() => Promise<void>)[] = [];
   afterEach(async () => {
-    await Promise.all(cleanup.splice(0).map((task) => task()));
+    for (const task of cleanup.splice(0).reverse()) await task();
     vi.restoreAllMocks();
   });
 
@@ -123,37 +124,35 @@ describe("gateway authentication", () => {
       }
     });
     const transport = await listen(workspace);
-    const probe = createServer();
-    const origin = await listen(probe);
-    await close(probe);
-    const url = `${origin}/mcp`;
-    const gateway = createGateway(
-      parseGatewayConfig({
-        WORKSPACE_ORIGIN: identityOrigin,
-        WORKSPACE_TRANSPORT_URL: transport,
-        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
-        ...env,
-        ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}),
-      }),
-      {
-        logger: pino(
-          {},
-          new Writable({
-            write(chunk, _encoding, callback) {
-              logs += chunk.toString();
-              callback();
-            },
-          }),
-        ),
-      },
+    cleanup.push(() => close(workspace));
+    const { gateway, url } = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          WORKSPACE_ORIGIN: identityOrigin,
+          WORKSPACE_TRANSPORT_URL: transport,
+          MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
+          ...env,
+          ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}),
+        }),
+        {
+          logger: pino(
+            {},
+            new Writable({
+              write(chunk, _encoding, callback) {
+                logs += chunk.toString();
+                callback();
+              },
+            }),
+          ),
+        },
+      ),
     );
-    await listen(gateway.server, Number(new URL(origin).port));
+    const origin = new URL(url).origin;
     const clients: Client[] = [];
     cleanup.push(async () => {
       await Promise.all(clients.map((client) => client.close()));
       await gateway.close();
       await close(gateway.server);
-      await close(workspace);
       for (const secret of [...Object.keys(tokens), clientSecret]) expect(logs).not.toContain(secret);
       expect(logs).not.toContain("downstream-session-");
     });
