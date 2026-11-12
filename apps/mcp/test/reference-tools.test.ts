@@ -3,6 +3,7 @@ import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/pr
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
+import { skillEntry } from "@modelcontextprotocol/server/ext/skills";
 import { SkillsClient, SKILLS_EXTENSION_ID } from "@modelcontextprotocol/client/ext/skills";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { createStandardApiReference } from "@univer-cli/api-reference";
@@ -28,9 +29,93 @@ const SKILL_NAMES = [
   "slide",
 ];
 const LIMIT = 100_000;
-const fetcher: typeof fetch = async () =>
-  Response.json({ authenticated: true, user: { id: "user-1", displayName: "alice" } });
+const fetcher: typeof fetch = async (input) => {
+  const path = new URL(String(input)).pathname;
+  if (path === "/api/session") return Response.json({ authenticated: true, user: { id: "user-1", displayName: "alice" } });
+  if (path === "/api/spaces") return Response.json({ spaces: [] });
+  return Response.json({ error: { code: "workspace-not-found", message: "Not found." } }, { status: 404 });
+};
 const json = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
+
+function skillWorkspace() {
+  const personal = { id: "personal", name: "Personal", type: "personal", affiliation: "owner", fullName: "alice/personal" };
+  const repository = { id: "team", name: "Team", type: "team", affiliation: "member", fullName: "bob/team" };
+  const spaces = [personal, repository];
+  type Node = ReturnType<typeof makeNode>;
+  function makeNode(id: string, name: string, spaceId: string, parentNodeId: string | null) {
+    return { id, name, spaceId, parentNodeId, accessRole: "owner", hasChildren: false,
+      updatedAt: "2026-09-29T00:00:00.000Z",
+      capabilities: { browseChildren: true, createChildren: true, move: true, rename: true, share: true, trash: true },
+      resource: null as null | { id: string; kind: "blob"; byteSize: number; mediaType: string; availability: string;
+        capabilities: { downloadContent: boolean; editContent: boolean; openContent: boolean } },
+    };
+  }
+  const nodes: Node[] = [];
+  const contents = new Map<string, Uint8Array>();
+  const requests: string[] = [];
+  function folder(spaceId: string, parentNodeId: string | null, name: string) {
+    const found = nodes.find((node) => node.spaceId === spaceId && node.parentNodeId === parentNodeId && node.name === name);
+    if (found) return found;
+    const node = makeNode(`n${nodes.length}`, name, spaceId, parentNodeId);
+    nodes.push(node);
+    if (parentNodeId) nodes.find((node) => node.id === parentNodeId)!.hasChildren = true;
+    return node;
+  }
+  function file(parent: Node, path: string, content: string | Uint8Array, overrides: Record<string, unknown> = {}) {
+    const parts = path.split("/");
+    for (const part of parts.slice(0, -1)) parent = folder(parent.spaceId, parent.id, part);
+    const node = makeNode(`n${nodes.length}`, parts.at(-1)!, parent.spaceId, parent.id);
+    const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
+    node.resource = { id: `r${nodes.length}`, kind: "blob", byteSize: bytes.byteLength, mediaType: "text/plain", availability: "ready",
+      capabilities: { downloadContent: true, editContent: false, openContent: true }, ...overrides };
+    nodes.push(node);
+    parent.hasChildren = true;
+    contents.set(node.resource.id, bytes);
+    return node;
+  }
+  function skill(spaceId: string, name: string, content = `---\nname: ${name}\ndescription: ${spaceId} description.\n---\nPrivate body\n`) {
+    const agents = folder(spaceId, null, ".agents");
+    const skills = folder(spaceId, agents.id, "skills");
+    const root = folder(spaceId, skills.id, name);
+    file(root, "SKILL.md", content);
+    return root;
+  }
+  const fetcher: typeof fetch = async (input, init) => {
+    const path = new URL(new Request(input, init).url).pathname;
+    requests.push(path);
+    if (path === "/api/session") return Response.json({ authenticated: true, user: { id: "user-1", displayName: "alice" } });
+    if (path === "/api/spaces") return Response.json({ spaces });
+    if (path === "/api/spaces/lookup") {
+      const params = new URL(new Request(input, init).url).searchParams;
+      const found = spaces.find((space) => space.fullName === `${params.get("owner")}/${params.get("slug")}`);
+      if (found) return Response.json(found);
+    }
+    const space = spaces.find((space) => path === `/api/spaces/${space.id}`);
+    if (space) return Response.json(space);
+    const root = path.match(/^\/api\/spaces\/([^/]+)\/nodes$/);
+    const child = path.match(/^\/api\/nodes\/([^/]+)\/children$/);
+    if (root || child) {
+      const parent = child ? nodes.find((node) => node.id === child[1]) : undefined;
+      const breadcrumbs: Node[] = [];
+      for (let node = parent; node; node = nodes.find((n) => n.id === node!.parentNodeId)) breadcrumbs.unshift(node);
+      const spaceId = parent?.spaceId ?? root![1];
+      return Response.json({ space: spaces.find((space) => space.id === spaceId), parentNode: parent ?? null,
+        breadcrumbs: breadcrumbs.map(({ id, name }) => ({ id, name })), navigationRootNodeId: null, nextCursor: null,
+        nodes: nodes.filter((node) => node.spaceId === spaceId && node.parentNodeId === (parent?.id ?? null)),
+      });
+    }
+    const resource = path.match(/^\/api\/resources\/([^/]+)$/);
+    const blob = resource ? nodes.find((node) => node.resource?.id === resource[1]) : undefined;
+    if (blob) return Response.json({ node: blob, resource: blob.resource });
+    const download = path.match(/^\/api\/blob-resources\/([^/]+)\/download$/);
+    if (download && contents.has(download[1]!)) {
+      const bytes = contents.get(download[1]!)!;
+      return new Response(new Uint8Array(bytes), { headers: { "content-type": "application/octet-stream", "content-length": String(bytes.byteLength), etag: '"v1"' } });
+    }
+    return Response.json({ error: { code: "workspace-not-found", message: "Not found." } }, { status: 404 });
+  };
+  return { personal, repository, spaces, nodes, contents, requests, folder, file, skill, fetcher };
+}
 
 describe("API reference, Skills, resources and server instructions", () => {
   let gateway: ReturnType<typeof createGateway> | undefined;
@@ -39,7 +124,7 @@ describe("API reference, Skills, resources and server instructions", () => {
   let scratch: string | undefined;
   let sourceRoot: string;
 
-  async function start(skillDataRoot = sourceRoot) {
+  async function start(skillDataRoot = sourceRoot, workspaceFetch = fetcher) {
     ({ gateway, url } = await listenGateway((url) =>
       createGateway(
         parseGatewayConfig({
@@ -47,7 +132,7 @@ describe("API reference, Skills, resources and server instructions", () => {
           WORKSPACE_ORIGIN: "https://workspace.example",
           MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
         }),
-        { logger: pino({ level: "silent" }), fetcher, skillDataRoot },
+        { logger: pino({ level: "silent" }), fetcher: workspaceFetch, skillDataRoot },
       ),
     ));
   }
@@ -88,6 +173,153 @@ describe("API reference, Skills, resources and server instructions", () => {
     if (scratch) await rm(scratch, { recursive: true, force: true });
     scratch = undefined;
     await rm(sourceRoot, { recursive: true, force: true });
+  });
+
+  it("preserves invocation controls in parsed Skill frontmatter", async () => {
+    const entry = await skillEntry("manual", { "SKILL.md": new TextEncoder().encode(
+      "---\nname: manual\ndescription: Manual skill.\ndisable-model-invocation: true\nuser-invocable: false\nargument-hint: '[week]'\n---\nPrivate body\n",
+    ) });
+    expect(entry.frontmatter).toMatchObject({
+      "disable-model-invocation": true, "user-invocable": false, "argument-hint": "[week]",
+    });
+  });
+
+  it("merges live built-in, user and repository skills and maps invocation controls", async () => {
+    const ws = skillWorkspace();
+    ws.skill("personal", "weekly", "---\nname: weekly\ndescription: Weekly.\ndisable-model-invocation: true\nuser-invocable: false\nargument-hint: '[week]'\n---\nPrivate body\n");
+    ws.skill("team", "ledger");
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    expect(listed.isError).toBeUndefined();
+    expect(listed.structured.repository).toBe("loaded");
+    expect(listed.structured.diagnostics).toEqual([]);
+    expect(listed.structured.skills.slice(0, SKILL_NAMES.length).map((s: { name: string }) => s.name)).toEqual(SKILL_NAMES);
+    expect(listed.structured.skills.slice(SKILL_NAMES.length)).toEqual([
+      { name: "weekly", description: "Weekly.", source: "user", path: ".agents/skills/weekly/SKILL.md", modelInvocable: false, userInvocable: false, argumentHint: "[week]" },
+      { name: "ledger", description: "team description.", source: "repository", path: ".agents/skills/ledger/SKILL.md", modelInvocable: true, userInvocable: true },
+    ]);
+    expect((await call(client, "skills_read", { name: "ledger", repo: "bob/team" })).structured).toMatchObject({ name: "ledger", source: "repository", content: expect.stringContaining("Private body") });
+    const userOnly = await call(client, "skills_read", {});
+    expect(userOnly.structured.repository).toBe("no-repository");
+    expect(userOnly.structured.skills.at(-1).name).toBe("weekly");
+    const skillNode = ws.nodes.find((node) => node.name === "SKILL.md" && node.spaceId === "personal")!;
+    ws.contents.set(skillNode.resource!.id, new TextEncoder().encode("---\nname: weekly\ndescription: Changed live.\n---\n"));
+    skillNode.resource!.byteSize = ws.contents.get(skillNode.resource!.id)!.byteLength;
+    expect((await call(client, "skills_read", {})).structured.skills.at(-1).description).toBe("Changed live.");
+    ws.requests.length = 0;
+    expect((await call(client, "skills_read", { name: "core" })).structured.source).toBe("builtin");
+    expect(ws.requests.filter((path) => path.startsWith("/api/spaces"))).toEqual([]);
+  });
+
+  it("shadows the user once and reserves built-in names", async () => {
+    const ws = skillWorkspace();
+    ws.skill("personal", "report");
+    ws.skill("personal", "sheet");
+    ws.skill("team", "report");
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    expect(listed.structured.skills.filter((s: { name: string }) => s.name === "report")).toEqual([
+      expect.objectContaining({ source: "repository" }),
+    ]);
+    expect(listed.structured.skills.find((s: { name: string }) => s.name === "sheet").source).toBe("builtin");
+    expect(listed.structured.diagnostics).toEqual([
+      { source: "user", path: ".agents/skills/sheet/SKILL.md", problem: "reserved-name" },
+      { source: "user", path: ".agents/skills/report/SKILL.md", problem: "shadowed" },
+    ]);
+    ws.requests.length = 0;
+    expect((await call(client, "skills_read", { name: "report", repo: "bob/team" })).structured.source).toBe("repository");
+    const personalFolder = ws.nodes.find((n) => n.name === "report" && n.spaceId === "personal")!;
+    expect(ws.requests).not.toContain(`/api/nodes/${personalFolder.id}/children`);
+  });
+
+  it("diagnoses invalid metadata, oversized and unavailable skill files without body text", async () => {
+    const ws = skillWorkspace();
+    ws.skill("personal", "bad-name", "---\nname: other\ndescription: Valid.\n---\nSECRET BODY\n");
+    ws.skill("personal", "missing", "---\nname: missing\n---\nSECRET BODY\n");
+    ws.skill("personal", "large", "x".repeat(64 * 1024 + 1));
+    ws.skill("personal", "quarantined");
+    ws.nodes.find((n) => n.parentNodeId === ws.nodes.find((n) => n.name === "quarantined")!.id)!.resource!.availability = "quarantined";
+    ws.skill("personal", "invalid-utf", new TextDecoder("latin1").decode(new Uint8Array([255])));
+    const utfNode = ws.nodes.at(-1)!;
+    ws.contents.set(utfNode.resource!.id, new Uint8Array([255]));
+    utfNode.resource!.byteSize = 1;
+    ws.skill("personal", "nul", "\0");
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", {});
+    expect(listed.structured.skills).toHaveLength(SKILL_NAMES.length);
+    expect(listed.structured.diagnostics).toHaveLength(6);
+    expect(listed.structured.diagnostics).toEqual(expect.arrayContaining([
+      expect.objectContaining({ path: ".agents/skills/bad-name/SKILL.md", problem: "invalid-skill", detail: expect.stringContaining("match") }),
+      expect.objectContaining({ path: ".agents/skills/missing/SKILL.md", problem: "invalid-skill", detail: expect.stringContaining("description") }),
+      { source: "user", path: ".agents/skills/large/SKILL.md", problem: "too-large" },
+    ]));
+    expect(JSON.stringify(listed.structured.diagnostics)).not.toContain("SECRET BODY");
+    for (const diagnostic of listed.structured.diagnostics) expect(diagnostic.detail?.length ?? 0).toBeLessThanOrEqual(300);
+    const large = ws.nodes.find((n) => n.parentNodeId === ws.nodes.find((n) => n.name === "large")!.id)!;
+    expect(ws.requests).not.toContain(`/api/resources/${large.resource!.id}`);
+    expect((await call(client, "skills_read", { name: "bad-name" })).isError).toBe(true);
+  });
+
+  it("skips non-members, propagates missing repositories and loads a personal repository once", async () => {
+    const ws = skillWorkspace();
+    ws.skill("team", "ledger");
+    ws.repository.affiliation = "none";
+    ws.skill("personal", "weekly");
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    expect(listed.structured.repository).toBe("not-member");
+    expect(listed.structured.skills.map((s: { name: string }) => s.name)).not.toContain("ledger");
+    expect((await call(client, "skills_read", { name: "ledger", repo: "bob/team" })).isError).toBe(true);
+    expect(ws.requests).not.toContain("/api/spaces/team/nodes");
+    expect((await call(client, "skills_read", { repo: "bob/missing" })).structured.code).toBe("workspace-not-found");
+    ws.requests.length = 0;
+    const personal = await call(client, "skills_read", { repo: "alice/personal" });
+    expect(personal.structured.skills.at(-1).source).toBe("repository");
+    expect(ws.requests.filter((path) => path === "/api/spaces/personal/nodes")).toHaveLength(1);
+  });
+
+  it("serves only manifest text, classifies PNG as binary and pages with repository-bound cursors", async () => {
+    const ws = skillWorkspace();
+    const root = ws.skill("team", "ledger");
+    ws.file(root, "references/guide.md", "Guide text");
+    ws.file(root, "scripts/run.js", "console.log('ok')");
+    ws.file(root, "image.png", new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, 0]), { mediaType: "image/png" });
+    const long = 'A line with "quotes" and 😀\n'.repeat(5000);
+    ws.file(root, "references/long.md", long);
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const args = { repo: "bob/team", name: "ledger" };
+    const read = await call(client, "skills_read", args);
+    expect(read.isError).toBeUndefined();
+    expect(read.structured.resources.map((r: { path: string }) => r.path)).toEqual(["references/guide.md", "references/long.md", "scripts/run.js"]);
+    expect(read.structured.resources[0].readCommand).toContain('repo "bob/team"');
+    expect(read.structured.binaryFiles).toEqual([{ path: "image.png", byteSize: 9, mediaType: "image/png" }]);
+    expect((await call(client, "skills_read", { ...args, resource: "references/guide.md" })).structured.content).toBe("Guide text");
+    for (const resource of ["../other/SKILL.md", "image.png", "/references/guide.md"]) {
+      expect((await call(client, "skills_read", { ...args, resource })).structured.code).toBe("workspace-argument-invalid");
+    }
+    expect((await call(client, "skills_read", { ...args, full: true })).structured.code).toBe("workspace-result-too-large");
+    let content = "";
+    let cursor: string | undefined;
+    let pages = 0;
+    do {
+      const page = await call(client, "skills_read", { ...args, resource: "references/long.md", ...(cursor ? { cursor } : {}) });
+      expect(page.isError).toBeUndefined();
+      expect(JSON.stringify(page.structured).length).toBeLessThanOrEqual(LIMIT);
+      content += page.structured.content;
+      cursor = page.structured.cursor;
+      if (pages === 0) {
+        expect(page.structured.truncated).toBe(true);
+        expect((await call(client, "skills_read", { ...args, repo: "https://workspace.example/spaces/team", resource: "references/long.md", cursor })).isError).toBe(true);
+      }
+      pages++;
+    } while (cursor);
+    expect(pages).toBeGreaterThan(1);
+    expect(content).toBe(long);
   });
 
   it("maps api_find onto the reference library and wraps the array in results", async () => {
@@ -173,7 +405,7 @@ describe("API reference, Skills, resources and server instructions", () => {
 
     const core = await call(client, "skills_read", { name: "core" });
     expect(core.structured).toEqual({
-      name: "core", content: await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8"),
+      name: "core", source: "builtin", content: await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8"),
     });
 
     const html = await call(client, "skills_read", { name: "html-view" });
@@ -219,6 +451,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       const template = await call(client, "skills_read", { name: "html-view", resource: path });
       expect(template.structured).toEqual({
         name: "html-view",
+        source: "builtin",
         path,
         content: await readFile(join(cliSkillData, "html-view", path), "utf8"),
       });
@@ -230,6 +463,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     });
     expect(resource.structured).toEqual({
       name: "html-view",
+      source: "builtin",
       path: "references/charts.md",
       content: await readFile(join(cliSkillData, "html-view/references/charts.md"), "utf8"),
     });
@@ -328,7 +562,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       const { skills: entries } = await extension.list();
       expect(entries.map(({ frontmatter: { name } }) => name)).toEqual(SKILL_NAMES);
       expect((await call(client, "skills_read", {})).structured["skills"]).toEqual(
-        entries.map(({ frontmatter: { name, description } }) => ({ name, description })),
+        entries.map(({ frontmatter: { name, description } }) => ({ name, description, source: "builtin", modelInvocable: true, userInvocable: true })),
       );
       expect(await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8")).not.toBe(
         await readFile(join(cliSkillData, "core/SKILL.md"), "utf8"),

@@ -1,9 +1,12 @@
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
+import { discoverSkills, customSkillFiles } from "../../custom-skills.js";
+import { repoInput } from "./issue-support.js";
 import { pageText, RESULT_LIMIT } from "../../paging.js";
 import { readOnlyAnnotations, type ToolDefinition } from "../definition.js";
 
 const inputSchema = z.object({
+  repo: repoInput.optional(),
   name: z.string().min(1).optional().describe("Skill name. Omit it to list every skill."),
   resource: z
     .string()
@@ -31,17 +34,30 @@ export const skillsReadTool: ToolDefinition = {
   scope: "read",
   title: "Read Skills",
   description:
-    "Read the version-matched operational Skills that teach the Workspace workflow. Without arguments it lists the skills. With name it returns {name, content, resources?} directly (with full: true also files containing its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
+    "Read built-in and custom operational Skills that teach the Workspace workflow. Without name it lists the skills, including live personal .agents/skills and member repository skills when repo is given. With name it returns {name, content, resources?} directly (with full: true also files containing its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
   inputSchema,
   outputSchema: z.object({
     skills: z
       .array(
         z.object({
           name: z.string(),
-          description: z.string().optional(),
+          description: z.string(),
+          source: z.enum(["builtin", "repository", "user"]),
+          path: z.string().optional(),
+          modelInvocable: z.boolean(),
+          userInvocable: z.boolean(),
+          argumentHint: z.string().optional(),
         }),
       )
       .optional(),
+    diagnostics: z.array(z.object({
+      source: z.enum(["repository", "user"]), path: z.string(),
+      problem: z.enum(["invalid-skill", "reserved-name", "shadowed", "too-large"]),
+      detail: z.string().optional(),
+    })).optional(),
+    repository: z.enum(["loaded", "not-member", "no-repository"]).optional(),
+    source: z.enum(["builtin", "repository", "user"]).optional(),
+    binaryFiles: z.array(z.object({ path: z.string(), byteSize: z.number(), mediaType: z.string() })).optional(),
     name: z.string().optional(),
     resources: z.array(z.object({ path: z.string(), readCommand: z.string() })).optional(),
     files: z.array(z.object({ path: z.string(), content: z.string() })).optional(),
@@ -52,30 +68,40 @@ export const skillsReadTool: ToolDefinition = {
   }),
   annotations: readOnlyAnnotations,
   async run(context, args) {
-    const { name, resource, full, cursor } = inputSchema.parse(args);
+    const { repo, name, resource, full, cursor } = inputSchema.parse(args);
     if (!context.skills) throw new Error("Missing Skill catalog");
-    const { catalog, read } = await context.skills;
+    const builtin = await context.skills;
     if (name === undefined) {
       if (resource !== undefined || full !== undefined || cursor !== undefined) {
         throw invalid("resource, full and cursor need a skill name.");
       }
+    }
+    const discovery = await discoverSkills(context, builtin, repo, name);
+    if (name === undefined) {
       return {
-        output: {
-          skills: catalog.entries.map(({ frontmatter: { name, description } }) => ({
-            name,
-            description,
-          })),
-        },
-        repo: null,
+        output: { skills: [...discovery.skills.values()], diagnostics: discovery.diagnostics, repository: discovery.repository },
+        repo: discovery.repo,
       };
     }
-    const entry = catalog.entries.find((skill) => skill.frontmatter.name === name);
+    const entry = discovery.skills.get(name);
     if (!entry)
       throw invalid(
         `Unknown skill: ${name}. Call skills_read without arguments to list the skills.`,
       );
-    if (!Array.isArray(entry.resources)) throw new Error("Static Skill resources are required");
-    const paths = entry.resources.map(({ uri }) => uri.slice(entry.uri.lastIndexOf("/") + 1));
+    let paths: string[];
+    let read: (name: string, path: string) => string;
+    let binaryFiles: { path: string; byteSize: number; mediaType: string }[] = [];
+    if (discovery.custom) {
+      const custom = await customSkillFiles(context, discovery.custom);
+      paths = [...custom.files.keys()];
+      read = (_name, path) => custom.files.get(path)!;
+      binaryFiles = custom.binaryFiles;
+    } else {
+      const staticEntry = builtin.catalog.entries.find((skill) => skill.frontmatter.name === name)!;
+      if (!Array.isArray(staticEntry.resources)) throw new Error("Static Skill resources are required");
+      paths = staticEntry.resources.map(({ uri }) => uri.slice(staticEntry.uri.lastIndexOf("/") + 1));
+      read = builtin.read;
+    }
     if (resource !== undefined) {
       if (full !== undefined) throw invalid("full applies only when resource is omitted.");
       if (!paths.includes(resource))
@@ -85,24 +111,26 @@ export const skillsReadTool: ToolDefinition = {
       return {
         output: pageText(
           "skills_read",
-          { name, resource },
+          { repo, name, resource },
           cursor,
           read(name, resource),
-          (content) => ({ name, path: resource, content }),
+          (content) => ({ name, source: entry.source, path: resource, content }),
         ),
-        repo: null,
+        repo: discovery.repo,
       };
     }
     if (cursor !== undefined) throw invalid("cursor applies only when resource is given.");
     const supplemental = paths.filter((path) => path !== "SKILL.md");
     const output = {
       name,
+      source: entry.source,
+      ...(binaryFiles.length ? { binaryFiles } : {}),
       content: read(name, "SKILL.md"),
       ...(supplemental.length
         ? {
             resources: supplemental.map((path) => ({
               path,
-              readCommand: `Call skills_read with name "${name}" and resource "${path}".`,
+              readCommand: `Call skills_read with name "${name}" and resource "${path}"${repo === undefined ? "" : ` and repo ${JSON.stringify(repo)}`}.`,
             })),
           }
         : {}),
@@ -116,6 +144,6 @@ export const skillsReadTool: ToolDefinition = {
         "Read the skill without full, then read each resource with name and resource. Long resources are paged; repeat with the returned cursor to continue.",
       );
     }
-    return { output, repo: null };
+    return { output, repo: discovery.repo };
   },
 };

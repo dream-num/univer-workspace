@@ -108,7 +108,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `job_get` | 无 | `job_id` | 是 | 否 | `read` |
 | `api_find` | `api find` | `terms`、`unit` | 是 | 否 | `read` |
 | `api_show` | `api show` | `symbols` | 是 | 否 | `read` |
-| `skills_read` | `skills list`、`skills get`、`skills read` | `name`、`resource`、`full` | 是 | 否 | `read` |
+| `skills_read` | `skills list`、`skills get`、`skills read` | `repo`、`name`、`resource`、`full`、`cursor` | 是 | 否 | `read` |
 | `html_view_validate` | `html-view validate` | `html` 或 `html_upload_id`（恰选一个） | 是 | 否 | `read` |
 | `html_view_create` | `html-view create` | `html` 或 `html_upload_id`（恰选一个）、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
 | `html_view_read` | 读取 HTML View | `resource` | 是 | 否 | `read` |
@@ -120,7 +120,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 - `execute` 只接受 `code` 字符串，没有 `--script`。CLI 对代码长度的上限（10 MiB）保持不变。
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
 - `inspect` 的 `worksheet` 参数只接受 `id:<id>`、`name:<name>` 或 `index:N`，`N` 从 1 开始。裸值被拒绝，错误明确指出 `worksheet`。
-- `skills_read` 是 Skills 扩展的回退入口。不带 `name` 时列出名称和描述；带 `name` 时直接返回顶层 `{ name, content, resources?, files? }`；再带 `resource` 时读取单个文件。与扩展使用同一个静态 catalog，MCP 的 core 不同于 CLI core。
+- `skills_read` 读取内置与实时自定义 Skill。不带 `name` 返回 `{ skills, diagnostics, repository }`，条目带来源、调用开关、可选路径和参数提示。自定义 Skill 来自个人空间的 `.agents/skills`，可用 `repo` 加载成员仓库，同名仓库 Skill 覆盖个人 Skill，内置名称保留。非成员返回 `not-member`。带 `name` 返回 `{ name, source, content, resources?, binaryFiles?, files? }`，只有文本进入 resources，二进制只返回元数据。`resource` 只接受清单内路径，`full` 包含全部文本，超限仍报错。资源 cursor 续读须保留 repo。只有内置 Skill 与扩展共享静态 catalog，MCP 的 core 不同于 CLI core。
 - `screenshot` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-screenshot-scope-required`，两者同时给出报 `workspace-argument-invalid`）。`pages`、`tile`、`region`、`elements` 沿用 `uvw screenshot` 的字符串写法，`contact_slide` 是布尔值，`padding`、`scale` 是数字。executor 加载 Unit 后用 `uvw screenshot` 自己的命令解析这些选项，所以按 Unit 类型的取舍和错误信息与 CLI 一致（例如 `--range is not supported for Slide`），渲染服务拒绝的输入（如无效 A1 范围）以 `workspace-render-input-invalid` 返回。
 - `screenshot` 的 `structuredContent` 列出 `unitId`、`unitType` 和每张图的 `name`、`width`、`height`、`size`，以及有则带上的 `page`、`pageId`、`range`、`sheetName`、`role`、`tiles` 等元数据。调用在同步预算内完成且所有图合计不超过 1 MiB 时，结果在文本行之后为每张 PNG 附一个 MCP `image` 内容块，条目不带下载链接；否则每个条目带 `download` 链接，没有图片内容块。超过同步预算返回任务，用 `job_get` 取结果，经 `job_get` 取到的结果一律是下载链接。`idempotency_key` 的规则与 `export` 相同。
 - `screenshot` 把每张图都写入暂存（计入 `export_bytes` 与每用户暂存配额），因为落入任务的结果必须能给出链接；同步返回图片内容的调用不暴露这些链接。渲染页数记入 `render_pages`。
@@ -281,7 +281,9 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
   URI 为 `skill://univer-workspace/<name>/SKILL.md` 与同目录的引用文件。
   `resources/list` 列出十个入口文件，`resources/read` 可读取 catalog 中的任意文件。
 - 先读 `skill://univer-workspace/core/SKILL.md`。不支持扩展或资源读取的客户端用
-  `skills_read`，两条路径读取相同字节。回退工具保留 full 和资源 cursor 分页语义。
+  `skills_read`，两条路径读取相同字节。回退工具保留 full 和资源 cursor 分页语义，自定义 Skill 仅由 `skills_read` 实时发现和读取，不进入扩展。
+  每层最多 100 个 Skill 文件夹，SKILL.md 上限 64 KiB，按名读取最多分类 100 个附属 Blob，文本上限 256 KiB。
+  文件须可下载、严格 UTF-8 且无 NUL。无效、超限、名称保留与覆盖产生诊断，其余 Workspace 错误透传。
 - server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，然后标记 ready，把评审链接交给用户，合并留给用户。
   不支持 Skill 的客户端（ChatGPT、WorkBuddy）靠这段 instructions 获得规则。
 - 仓库里的发现入口 `skills/univer-workspace-cli/SKILL.md` 是面向 CLI 的安装说明，不变。MCP 的接入说明写在 `apps/mcp/README.md` 和 Workspace 的设置页里。

@@ -121,7 +121,7 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
 that session. The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
 never beyond the session's `expires_in` minus 5 seconds). After revocation, `initialize`, `tools/list`,
-tools that make no Workspace request (`whoami`, `skills_read`, `api_*`), and resources may still succeed
+tools that make no Workspace request (`whoami`, `api_*`), and resources may still succeed
 from cache for up to 30 seconds. Every Workspace-backed call fails immediately because revocation deletes
 the downstream session. A downstream 401 evicts only the exact session that failed, preserving any
 pending exchange, newer session, and negative cache entry. If that session was obtained less than
@@ -249,7 +249,7 @@ and the matching owner/slug candidates when available.
 | `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
-| `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ name, content, resources?, files? }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
+| `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path` and `argumentHint`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
 | `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
 | `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
 | `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
@@ -327,12 +327,28 @@ references and templates, readable through `resources/read`.
 The build assembles the MCP-specific `core` from `apps/mcp/skills/core` and nine shared domain
 Skills from `apps/cli/skill-data` into `dist/skill-data`. The CLI's `core` remains CLI-only.
 The gateway loads that directory once at startup and never imports or reads `apps/cli` at runtime.
-Both the extension and `skills_read` serve the same catalog snapshot and bytes.
+The extension and `skills_read` serve the same built-in catalog snapshot and bytes.
+Custom Skills are available only through `skills_read`, never through `skill://` resources.
 
 For clients without the extension, call `skills_read` with name `core` first. Without arguments it
-lists the same ten names and descriptions. With a name it returns top-level `name`, `content` and optional `resources`;
-`full: true` includes all references and templates. With name and resource it reads one file.
-Long resources retain cursor paging, and oversized full results require individual resource reads.
+lists built-ins plus live custom Skills from the caller's Personal Space under `.agents/skills/<name>/SKILL.md`.
+Pass `repo` to include that repository's Skills when the caller is an owner or member.
+The repository layer replaces a personal Skill of the same name. Built-in names are reserved.
+When the repository is the Personal Space, it is loaded once as the repository layer.
+The result includes `diagnostics` for invalid, oversized, reserved or shadowed Skills and
+`repository` as `loaded`, `not-member` or `no-repository`. Missing or forbidden repositories
+and Workspace failures remain tool errors.
+
+Each entry includes `source` (`builtin`, `user` or `repository`), `modelInvocable` and
+`userInvocable`, plus a custom Skill's `path` and optional `argumentHint`.
+Discovery processes at most 100 Skill folders per layer. `SKILL.md` must be downloadable,
+valid UTF-8 without NUL, at most 64 KiB, and pass the SDK's frontmatter validation.
+With a name, the result includes `source`, `content` and optional text `resources`.
+Up to 100 additional Blob files are classified. Downloadable UTF-8 files without NUL up to
+256 KiB are text. Other files appear only as `binaryFiles` metadata with path, byte size and media type.
+`resource` accepts only a text path in that manifest. `full: true` includes every text file.
+Long resources retain cursor paging. Repeat `repo`, `name` and `resource` with the cursor.
+Oversized full results return `workspace-result-too-large` and require individual resource reads.
 The MCP `core` maps shared operation names to tools and explains uploads and download links.
 If a named tool is absent from the connection's tool list, that step is unavailable; tell the user
 instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`.

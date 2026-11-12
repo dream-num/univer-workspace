@@ -15,7 +15,10 @@ The [local verification specification](../../docs/design/workspace-mcp/local-ver
   the CLI core is CLI-only and the gateway never reads `apps/cli` at runtime).
 - Serve that static catalog through the official MCP Skills extension (`io.modelcontextprotocol/skills`)
   and the `skills_read` fallback. Keep both paths on the same snapshot and use
-  `skill://univer-workspace/<name>/` URIs. MCP core owns tool bindings and remote file handling.
+  `skill://univer-workspace/<name>/` URIs. This snapshot rule covers built-ins only.
+  `skills_read` also discovers live custom Skills from `.agents/skills` in the caller's Personal Space
+  and optional member repository (`repo`); custom Skills never enter the Skills extension.
+  MCP core owns tool bindings and remote file handling.
 - Development session passthrough must never reach SaaS. Production refuses any non-empty `MCP_DEV_SESSION_PASSTHROUGH`.
 - In production, the shared executor serves only allowlisted trusted users through `MCP_EXECUTOR_ALLOWED_USER_IDS`.
   Public executor access still requires Stage G.
