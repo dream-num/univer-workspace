@@ -27,6 +27,11 @@ hot module replacement, and proxies product API and WebSocket requests to port
 3020. Run both commands and open port 5173 for web development. Port 3020
 alone is sufficient for backend work or viewing the latest built web application.
 
+Vite also proxies `/mcp` to a local MCP gateway on `WORKSPACE_DEV_MCP_PORT`
+(default 3000), so the page reaches it same-origin as in production. The gateway
+accepts browser requests only when `Host` and `Origin` match its `MCP_PUBLIC_URL`,
+so start it with `MCP_PUBLIC_URL=http://127.0.0.1:5173/mcp`.
+
 Manage personal access tokens in the Browser account menu under **Access tokens**.
 
 API documentation is available at:

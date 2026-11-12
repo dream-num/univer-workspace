@@ -17,7 +17,7 @@ services:
       PORT: "3000"
       WORKSPACE_ORIGIN: ${VERIFY_UVW_ORIGIN:?}
       WORKSPACE_TRANSPORT_URL: http://host.docker.internal:${VERIFY_UVW_SERVER_PORT:?}
-      MCP_PUBLIC_URL: http://127.0.0.1:${VERIFY_UVW_MCP_PORT:?}/mcp
+      MCP_PUBLIC_URL: ${VERIFY_UVW_MCP_PUBLIC_URL:-http://127.0.0.1:${VERIFY_UVW_MCP_PORT:?}/mcp}
       METRICS_TOKEN: ${VERIFY_UVW_METRICS_TOKEN:?}
       LOG_LEVEL: info
     volumes:

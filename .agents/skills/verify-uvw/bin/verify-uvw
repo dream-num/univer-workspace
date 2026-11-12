@@ -28,6 +28,7 @@ load_run() {
   # shellcheck disable=SC1091
   source "$RUN/run.env"
   ORIGIN="http://127.0.0.1:$WEB_PORT"
+  MCP_URL="${MCP_PUBLIC_URL:-http://127.0.0.1:${MCP_PORT:-}/mcp}"
   export UNIVER_HOME="$RUN/home"
   export AGENT_BROWSER_SESSION="verify-uvw-$RUN_ID"
 }
@@ -54,7 +55,8 @@ wait_http() { # url timeout-seconds
 uvw_raw() { node "$CLI_MAIN" "$@"; }
 
 mcp_digest() {
-  git -C "$REPO" ls-files -co --exclude-standard -z -- "${MCP_BUILD_INPUTS[@]}" | node -e '
+  local context="${MCP_BUILD_CONTEXT:-$REPO}"
+  git -C "$context" ls-files -co --exclude-standard -z -- "${MCP_BUILD_INPUTS[@]}" | node -e '
     const fs = require("node:fs"), crypto = require("node:crypto");
     process.chdir(process.argv[1]);
     const paths = [...new Set(fs.readFileSync(0, "utf8").split("\0").filter(Boolean))].sort();
@@ -64,7 +66,7 @@ mcp_digest() {
       hash.update(path).update("\0").update(fs.readFileSync(path)).update("\0");
     }
     console.log(hash.digest("hex"));
-  ' "$REPO"
+  ' "$context"
 }
 
 mcp_compose() {
@@ -83,7 +85,7 @@ mcp_compose() {
   COMPOSE_PROFILES="$profiles" VERIFY_UVW_EXECUTOR_URLS="$executor_urls" MCP_SYNC_BUDGET_MS="${MCP_SYNC_BUDGET_MS:-30000}" \
   VERIFY_UVW_MCP_PROJECT="$MCP_PROJECT" VERIFY_UVW_MCP_IMAGE="$MCP_IMAGE" \
     VERIFY_UVW_ORIGIN="$ORIGIN" VERIFY_UVW_SERVER_PORT="$SERVER_PORT" \
-    VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
+    VERIFY_UVW_MCP_PORT="$MCP_PORT" VERIFY_UVW_MCP_PUBLIC_URL="$MCP_URL" VERIFY_UVW_METRICS_TOKEN="$(cat "$RUN/home/metrics-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_MCP_STAGING_DIRECTORY="$RUN/staging" \
     VERIFY_UVW_RENDERER_TOKEN="$(cat "$RUN/home/renderer-token" 2>/dev/null || echo removed)" \
     VERIFY_UVW_EXECUTOR_TOKEN="$(cat "$RUN/home/executor-token" 2>/dev/null || echo removed)" \
@@ -93,7 +95,7 @@ mcp_compose() {
 }
 
 mcp_client() {
-  node "$MCP_CALL" --repo "$REPO" --run "$RUN" --url "http://127.0.0.1:$MCP_PORT/mcp" \
+  node "$MCP_CALL" --repo "$REPO" --run "$RUN" --url "$MCP_URL" \
     --project "$MCP_PROJECT" --image "$MCP_IMAGE" --origin "$ORIGIN" --server-port "$SERVER_PORT" "$@"
 }
 
@@ -105,8 +107,8 @@ mcp_up() {
   digest="$(mcp_digest)"
   node -e 'const fs=require("node:fs"); fs.writeFileSync(process.argv[1], JSON.stringify({started_at:new Date().toISOString(),git_head:process.argv[2],source_digest:process.argv[3],image_id:null},null,2)+"\n")' \
     "$RUN/mcp-build.json" "$GIT_HEAD" "$digest"
-  docker build -f "$REPO/apps/mcp/Dockerfile" -t "$MCP_IMAGE" \
-    --label "org.opencontainers.image.revision=$GIT_HEAD" --label "dev.univer.verify-uvw.run=$RUN_ID" "$REPO" \
+  docker build -f "${MCP_BUILD_CONTEXT:-$REPO}/apps/mcp/Dockerfile" -t "$MCP_IMAGE" \
+    --label "org.opencontainers.image.revision=$GIT_HEAD" --label "dev.univer.verify-uvw.run=$RUN_ID" "${MCP_BUILD_CONTEXT:-$REPO}" \
     >"$RUN/logs/mcp-build.log" 2>&1 \
     || { tail -n 40 "$RUN/logs/mcp-build.log" >&2; die "MCP build failed; run: verify-uvw down"; }
   MCP_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "$MCP_IMAGE")"
@@ -200,14 +202,14 @@ JS
       cmd_mcp_allow_users "$user_id"
     fi
   fi
-  node --input-type=module - "$RUN" "$MCP_PORT" <<'JS'
+  node --input-type=module - "$RUN" "$MCP_URL" <<'JS'
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import {randomBytes} from 'node:crypto';
-const [run,port]=process.argv.slice(2);
+const [run,url]=process.argv.slice(2);
 const token=readFileSync(run+'/home/mcp-token','utf8').trim();
 const dir=run+'/home/opencode-'+randomBytes(4).toString('hex');
 mkdirSync(dir,{mode:0o700});
-writeFileSync(dir+'/opencode.json',JSON.stringify({$schema:'https://opencode.ai/config.json',mcp:{'verify-uvw':{type:'remote',url:`http://127.0.0.1:${port}/mcp`,enabled:true,headers:{Authorization:'Bearer '+token}}},permission:{edit:'deny',bash:'deny',webfetch:'deny'}},null,2)+'\n',{mode:0o600});
+writeFileSync(dir+'/opencode.json',JSON.stringify({$schema:'https://opencode.ai/config.json',mcp:{'verify-uvw':{type:'remote',url,enabled:true,headers:{Authorization:'Bearer '+token}}},permission:{edit:'deny',bash:'deny',webfetch:'deny'}},null,2)+'\n',{mode:0o600});
 writeFileSync(run+'/home/opencode-dir',dir+'\n',{mode:0o600});
 JS
 }
@@ -423,7 +425,7 @@ cmd_up() {
   [[ "${VERIFY_UVW_MCP_RENDERER:-1}" =~ ^[01]$ && "${VERIFY_UVW_MCP_PRODUCTION:-0}" =~ ^[01]$ ]] || die "MCP renderer and production flags must be 0 or 1"
   [[ "${VERIFY_UVW_MCP_EXECUTORS:-1}" =~ ^[12]$ ]] || die "VERIFY_UVW_MCP_EXECUTORS must be 1 or 2"
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
-  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" desktop
+  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" mcp_public_url desktop
   if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
     mcp_enabled=1
     [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "MCP run id must match ^[a-z0-9][a-z0-9_-]*$; choose VERIFY_UVW_RUN"
@@ -446,7 +448,10 @@ cmd_up() {
   mkdir -p "$run"/{data,home,logs,evidence}
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
-    server_oauth_env=("MCP_RESOURCE_URLS=http://127.0.0.1:$mcp_port/mcp" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port" "MCP_CIMD_ENABLED=${MCP_CIMD_ENABLED:-1}")
+    mcp_public_url="http://127.0.0.1:$mcp_port/mcp"
+    # Same-origin mode serves the gateway at the Vite origin, as production serves it beside the Browser.
+    [[ "${VERIFY_UVW_MCP_SAME_ORIGIN:-0}" != 1 ]] || mcp_public_url="http://127.0.0.1:$web_port/mcp"
+    server_oauth_env=("MCP_RESOURCE_URLS=$mcp_public_url" "PUBLIC_ORIGIN=http://127.0.0.1:$web_port" "MCP_CIMD_ENABLED=${MCP_CIMD_ENABLED:-1}")
     if node --input-type=module -e 'import { lookup } from "node:dns/promises"; const addresses = await lookup("claude.ai", {all:true}).catch(() => []); process.exit(addresses.some(({address}) => /^198\.(18|19)\./.test(address)) ? 0 : 1)'; then
       server_oauth_env+=("MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15")
       echo "CIMD: claude.ai resolves to fake-IP; Workspace Server only exempts 198.18.0.0/15"
@@ -467,7 +472,7 @@ console.log(clients.length ? JSON.stringify({clients}) : "")' "$run/home/mcp-oau
     BLOB_DIRECTORY="$run/data/blobs" \
     node --import tsx server/src/main.ts >"$run/logs/server.log" 2>&1) &
   local server_pid=$!
-  (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" WORKSPACE_DEV_API_PORT="$server_port" \
+  (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" WORKSPACE_DEV_API_PORT="$server_port" WORKSPACE_DEV_MCP_PORT="$mcp_port" \
     node node_modules/vite/bin/vite.js --host 127.0.0.1 --port "$web_port" --strictPort \
     >"$run/logs/web.log" 2>&1) &
   local web_pid=$!
@@ -486,7 +491,8 @@ EOF
     printf 'MCP_RENDERER=%s\nMCP_PRODUCTION=%s\nMCP_SYNC_BUDGET_MS=%s\n' "${VERIFY_UVW_MCP_RENDERER:-1}" "${VERIFY_UVW_MCP_PRODUCTION:-0}" "${MCP_SYNC_BUDGET_MS:-30000}" >>"$run/run.env"
     [[ ! -f "$run/executor-allowed-user-ids" ]] || unlink "$run/executor-allowed-user-ids"
     [[ "${VERIFY_UVW_MCP_PRODUCTION:-0}" != 1 ]] || printf 'verify-uvw-pending-user\n' >"$run/executor-allowed-user-ids"
-    printf 'MCP_PORT=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
+    [[ -z "${VERIFY_UVW_MCP_BUILD_CONTEXT:-}" ]] || printf 'MCP_BUILD_CONTEXT=%s\n' "$(cd "$VERIFY_UVW_MCP_BUILD_CONTEXT" && pwd)" >>"$run/run.env"
+    printf 'MCP_PORT=%s\nMCP_PUBLIC_URL=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$mcp_public_url" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
   fi
   ln -sfn "$run" "$ROOT/current"
 
@@ -498,7 +504,7 @@ EOF
   echo "run:      $id"
   echo "web:      http://127.0.0.1:$web_port"
   echo "server:   http://127.0.0.1:$server_port"
-  [[ "$mcp_enabled" != 1 ]] || echo "mcp:      http://127.0.0.1:$mcp_port/mcp"
+  [[ "$mcp_enabled" != 1 ]] || echo "mcp:      $mcp_public_url"
   echo "evidence: $run/evidence"
 }
 
@@ -570,7 +576,7 @@ cmd_mcp_oauth() {
   [[ -f "$RUN/user.env" ]] || die "no user; run: verify-uvw user"
   # shellcheck disable=SC1091
   source "$RUN/user.env"
-  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$REPO/.agents/skills/verify-uvw/bin/mcp-oauth.mjs" "$RUN" "$ORIGIN" "http://127.0.0.1:$MCP_PORT/mcp" "$USERNAME" "$@"
+  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$REPO/.agents/skills/verify-uvw/bin/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
 }
 
 cmd_env() {
@@ -584,7 +590,7 @@ export EVIDENCE=$RUN/evidence
 EOF
   if [[ "${MCP_ENABLED:-0}" == 1 ]]; then
     cat <<EOF
-export MCP_URL=http://127.0.0.1:$MCP_PORT/mcp
+export MCP_URL=$MCP_URL
 export MCP_PROJECT=$MCP_PROJECT
 export MCP_IMAGE=$MCP_IMAGE
 export MCP_OPENCODE_DIR=$(cat "$RUN/home/opencode-dir" 2>/dev/null || true)
