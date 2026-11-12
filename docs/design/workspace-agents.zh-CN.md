@@ -496,9 +496,13 @@ Web 的分层由 `test/unit/web-architecture.test.ts` 强制：`shared → featu
 选择器基于现有的 `SearchSelect`（`shared/ui/combobox.tsx`），数据复用 `spaceNodesQueryOptions` 和 Issue、Worktree 的查询。
 现有的 `IssueReferencesDialog` 是弹窗式的目录浏览器，适合“浏览后选择”，可以作为选择器里“浏览全部”的入口。
 
-**对地基的扩展。** 引用以 `UIMessage` 的自定义数据部件保存，只存 ID 和显示名，例如
-`{ type: "data-reference", data: { kind: "node", id, label } }`。发给模型时转成一行说明文字，
-agent 需要内容时自己调用工具读取。引用不把文件内容塞进消息，避免一次引用十个大表格就撑爆上下文。
+**对地基的扩展。** 引用只存 ID 和显示名，类型是 `agent.types.ts` 的 `AgentReference`。
+第一版只支持仓库、Issue、PR，只在新建会话的输入框里可用，文件和目录以后再加。
+`DirectChatTransport` 不转换自定义数据部件，所以引用不用 `data-reference` 部件，而是分两处保存：
+用户消息的 `metadata.agentReferences` 供界面显示标签；同一条消息里用户文字之后附一个 `<system-reminder>` text part，
+每个引用一行，写明用哪个工具读取（`repo_view`、`issue_view`、`pr_view`）。
+agent 需要内容时自己调用工具读取。引用不把内容塞进消息，避免一次引用十个大表格就撑爆上下文。
+引用只进用户消息，不进系统提示词，提示缓存的前缀不变。
 
 **验收。** 在 Agents tab 里 @ 两个文件并要求“对比这两张表的列名”，工具调用记录里出现这两个文件的读取，没有对其他文件的搜索。
 

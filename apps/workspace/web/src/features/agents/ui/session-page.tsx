@@ -10,6 +10,7 @@ import { agentSessionIdSchema, isSystemReminder, sessionTitle } from "../agent.t
 import type { AgentMode, AgentSession } from "../agent.types";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
+import { AgentReferenceChips, messageReferences } from "./references";
 import { useAgentMessages } from "./messages";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import { argumentSummary, cacheHitRate, durationLabel, pullRequestUrl, resultSummary, summarize } from "./summaries";
@@ -70,7 +71,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     <div className="agent-conversation">
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus status={session.status} /></header>
       <div className="agent-messages">{session.messages.map((message) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
-        {message.role === "user" ? <p>{message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n")}</p>
+        {message.role === "user" ? <><AgentReferenceChips references={messageReferences(message.metadata)} /><p>{message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n")}</p></>
           : message.parts.map((part, index) => <MessagePart key={index} part={part} session={session} />)}
       </article>)}</div>
       {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}

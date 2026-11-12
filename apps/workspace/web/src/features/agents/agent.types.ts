@@ -10,6 +10,15 @@ export const scopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("repository"), spaceId: z.string().min(1), baseWorktreeId: z.string().nullable() }),
 ]);
 export type AgentScope = z.infer<typeof scopeSchema>;
+export const agentReferenceSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("space"), spaceId: z.string().min(1), label: z.string() }),
+  z.object({ kind: z.literal("issue"), spaceId: z.string().min(1), number: z.number().int().positive(), label: z.string() }),
+  z.object({ kind: z.literal("pr"), spaceId: z.string().min(1), number: z.number().int().positive(), label: z.string() }),
+]);
+export type AgentReference = z.infer<typeof agentReferenceSchema>;
+export function agentReferenceKey(reference: AgentReference): string {
+  return JSON.stringify([reference.kind, reference.spaceId, reference.kind === "space" ? null : reference.number]);
+}
 export type AgentMode = "ask" | "auto";
 export type DeepSeekThinking = "off" | "high" | "max";
 export const modelSchema = z.object({

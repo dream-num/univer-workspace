@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { sessionLockName } from "../agent.types";
-import type { AgentSession, AgentSettings } from "../agent.types";
+import { isSystemReminder, sessionLockName, sessionTitle } from "../agent.types";
+import type { AgentReference, AgentSession, AgentSettings } from "../agent.types";
 import { createMcpTokenSource } from "../mcp-token";
 import { createProviders, deepSeekDefault } from "../providers";
 import { createSessionStore } from "../session-store";
 import { deferred, session, storageOptions } from "../test-helpers";
-import { AgentBusyError, createAgentRunner } from "./runner";
+import { AgentBusyError, createAgentRunner, referencesReminder } from "./runner";
 
 const mcpUrl = "https://workspace.test/mcp";
 const key = "test-provider-secret";
@@ -84,6 +84,56 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it("uses repo_view for repositories and adds no reminder for empty references", () => {
+    expect(referencesReminder([])).toBeNull();
+    const label = 'Reports\n"Q4"';
+    expect(referencesReminder([{ kind: "space", spaceId: "repo-1", label }])).toEqual({
+      type: "text", text: expect.stringContaining(`space ${JSON.stringify(label)}: repo_view {"repo":"repo-1"}`),
+    });
+  });
+
+  it("saves initial references as metadata and a reminder without changing the title", async () => {
+    const test = await setup({ model: () => modelStream() });
+    const references: AgentReference[] = [
+      { kind: "issue", spaceId: "repo-issue", number: 7, label: 'Fix "totals"\nplease' },
+      { kind: "pr", spaceId: "repo-pr", number: 12, label: "Quarterly report" },
+    ];
+    const started = await test.runner.start({ ...test.input, references });
+    const done = await test.finished(started.id);
+    const message = done?.messages[0];
+    expect(message?.metadata).toEqual({ agentContextPrompt: expect.any(String), agentReferences: references });
+    expect(message?.parts).toHaveLength(2);
+    expect(message?.parts[0]).toEqual({ type: "text", text: test.input.text });
+    const reminder = message?.parts[1];
+    expect(reminder && isSystemReminder(reminder)).toBe(true);
+    expect(reminder).toEqual({ type: "text", text: expect.stringContaining('issue_view {"repo":"repo-issue","number":7}') });
+    expect(reminder).toEqual({ type: "text", text: expect.stringContaining('pr_view {"repo":"repo-pr","number":12}') });
+    expect(reminder).toEqual({ type: "text", text: expect.stringContaining(JSON.stringify(references[0]!.label)) });
+    expect(sessionTitle(done!)).toBe(test.input.text);
+    expect((await createSessionStore(test.storage).get(started.id))?.messages[0]).toEqual(message);
+  });
+
+  it("keeps the system prompt identical with and without initial references", async () => {
+    const test = await setup({ model: () => modelStream() });
+    const plain = await test.runner.start(test.input);
+    await test.finished(plain.id);
+    const referenced = await test.runner.start({ ...test.input, references: [{ kind: "space", spaceId: "repo-1", label: "Reports" }] });
+    await test.finished(referenced.id);
+    const schema = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown() })) });
+    const first = schema.parse(JSON.parse(test.modelBodies[0]!)).messages.find((message) => message.role === "system");
+    const second = schema.parse(JSON.parse(test.modelBodies[1]!)).messages.find((message) => message.role === "system");
+    expect(first?.content).toEqual(expect.any(String));
+    expect(second?.content).toBe(first?.content);
+  });
+
+  it.each([undefined, []])("keeps the initial message shape without references (%s)", async (references) => {
+    const test = await setup({ model: () => modelStream() });
+    const started = await test.runner.start({ ...test.input, ...(references ? { references } : {}) });
+    const done = await test.finished(started.id);
+    expect(done?.messages[0]?.metadata).not.toHaveProperty("agentReferences");
+    expect(done?.messages[0]?.parts).toEqual([{ type: "text", text: test.input.text }]);
+  });
+
   it("keeps the system prompt identical after pr_create and a follow-up", async () => {
     const test = await setup();
     const started = await test.runner.start(test.input);
