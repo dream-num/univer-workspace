@@ -635,8 +635,12 @@ CLI.
 
 Startup emits synchronous JSON lines to stdout with `event: "workspace.startup"`,
 `startupId`, `stage`, and `status` (`started`, `completed`, or `failed`). These
-bounded diagnostics are always emitted, independently of `LOG_LEVEL`, so module
-loading and synchronous migration failures can be located even before HTTP starts.
+bounded diagnostics use the same Pino configuration and `LOG_LEVEL` as application
+and HTTP logs. Started and completed stages use `info`; failed stages use `error`.
+At `LOG_LEVEL=error`, only failed stages appear; `silent` suppresses all diagnostics.
+Startup stages use a dedicated synchronous destination to preserve their order and
+write before blocking work or abrupt exit. Ordinary application and HTTP logs use
+an asynchronous destination and can appear between startup records.
 Each line includes stage `elapsedMs`, process `uptimeMs`, `memory` (Node memory
 usage in bytes, including `rss`, `heapUsed`, `heapTotal`, `external`, and
 `arrayBuffers`) and V8 `heapSizeLimit` in bytes. Configuration values, document
