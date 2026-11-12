@@ -87,27 +87,63 @@ it("forks with an explicit environment and advanced binary serialization, then r
   }
 }, 20_000);
 
-it("reports a crashed conversion as a tool error before any write", async () => {
-  let crashed: unknown;
-  try {
-    await runConversionJob(
-      job,
-      credentials,
-      AbortSignal.timeout(5000),
-      new URL("./fixtures/job-crash.mjs", import.meta.url),
+it.each([
+  { fileName: "x.xlsx", exitCode: 7, signal: null },
+  { fileName: "signal.xlsx", exitCode: null, signal: "SIGTERM" },
+  { fileName: "large.xlsx", exitCode: 7, signal: null },
+  { fileName: "invalid.xlsx", exitCode: null, signal: "SIGKILL" },
+])(
+  "preserves internal crash diagnostics for $fileName without leaking them to tool callers",
+  async ({ fileName, exitCode, signal }) => {
+    let crashed: unknown;
+    try {
+      await runConversionJob(
+        { ...job, options: { ...job.options, fileName } },
+        credentials,
+        AbortSignal.timeout(5000),
+        new URL("./fixtures/job-crash.mjs", import.meta.url),
+      );
+    } catch (error) {
+      crashed = error;
+    }
+    expect(crashed).toBeInstanceOf(Error);
+    if (!(crashed instanceof Error)) throw new Error("Expected a conversion crash");
+    const diagnostics = z
+      .object({
+        jobKind: z.literal("import"),
+        exitCode: z.number().nullable(),
+        signal: z.string().nullable(),
+        stderrTail: z.string(),
+      })
+      .parse(crashed.cause);
+    expect(diagnostics).toMatchObject({ jobKind: "import", exitCode, signal });
+    expect(diagnostics.stderrTail).toContain("native conversion failed");
+    expect(diagnostics.stderrTail).toContain("fixture-secret");
+    expect(diagnostics.stderrTail.endsWith("fixture-private-content\n")).toBe(true);
+    expect(Buffer.byteLength(diagnostics.stderrTail)).toBeLessThanOrEqual(16 * 1024);
+    if (fileName === "large.xlsx") {
+      expect(Buffer.byteLength(diagnostics.stderrTail)).toBe(16 * 1024);
+      expect(diagnostics.stderrTail).not.toContain("discarded-prefix");
+    }
+    if (fileName === "invalid.xlsx") expect(crashed.message).toContain("invalid result");
+    expect(crashed.message).not.toContain("memory limit");
+    expect(Object.getOwnPropertyDescriptor(crashed, "cause")?.enumerable).toBe(false);
+    for (const effect of ["write", "read"] as const) {
+      const wire = mapRuntimeError(crashed, effect);
+      expect(wire).toMatchObject({
+        code: "workspace-job-crashed",
+        outcome: "tool_error",
+        detail: null,
+      });
+      expect(JSON.stringify(wire)).not.toMatch(
+        /native conversion failed|fixture-secret|fixture-private-content|stderrTail|exitCode|SIGTERM|SIGKILL/,
+      );
+    }
+    expect(JSON.stringify(crashed)).not.toMatch(
+      /fixture-secret|fixture-private-content|stderrTail/,
     );
-  } catch (error) {
-    crashed = error;
-  }
-  expect(mapRuntimeError(crashed, "write")).toMatchObject({
-    code: "workspace-job-crashed",
-    outcome: "tool_error",
-  });
-  expect(mapRuntimeError(crashed, "read")).toMatchObject({
-    code: "workspace-job-crashed",
-    outcome: "tool_error",
-  });
-});
+  },
+);
 
 it.each(["read", "write"] as const)(
   "kills a hung child at the remaining %s deadline",

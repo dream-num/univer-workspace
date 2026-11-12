@@ -592,6 +592,10 @@ The last three point at a private per-job temporary directory that is removed af
 It receives no session, grant, Workspace URL, internal token or inherited Node flags.
 The call's remaining deadline includes its wait for a conversion slot and kills the child.
 A conversion crash returns `workspace-job-crashed`, including a child killed by its heap cap.
+Its internal `Error.cause` retains the job kind, exit code, termination signal, a safe startup
+error code when available, and the final 16 KiB of stderr. Test failures can show this evidence.
+The cause is excluded from tool responses and production logs. Treat stderr as sensitive
+because a native converter can include document contents or credentials in its diagnostics.
 A deadline before Unit creation returns `workspace-executor-timeout` with
 `detail: { retryable: true, started: false }`. After creation starts, its result can be unknown.
 Import is never automatically rerun by MCP. Retry with the same upload and idempotency key,

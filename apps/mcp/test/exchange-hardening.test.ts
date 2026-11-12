@@ -278,7 +278,12 @@ it("reports a child killed by the configured heap cap as a conversion crash", as
     ),
   ).rejects.toMatchObject({
     code: "workspace-job-crashed",
-    message: expect.stringContaining("memory limit"),
+    message: "The conversion job exited without a result.",
+    cause: {
+      exitCode: null,
+      signal: "SIGABRT",
+      stderrTail: expect.stringContaining("JavaScript heap out of memory"),
+    },
   });
 }, 20_000);
 

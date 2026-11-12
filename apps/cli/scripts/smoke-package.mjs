@@ -651,11 +651,11 @@ async function run(command, args, cwd, env = process.env, input) {
     child.stdout.on("data", (chunk) => (stdout += chunk.toString("utf8")));
     child.stderr.on("data", (chunk) => (stderr += chunk.toString("utf8")));
     child.once("error", reject);
-    child.once("exit", (status) => resolve({ status, stderr, stdout }));
+    child.once("close", (status, signal) => resolve({ status, signal, stderr, stdout }));
   });
   if (result.status !== 0) {
     throw new Error(
-      `${command} ${args.join(" ")} failed:\n${result.stderr || result.stdout}`,
+      `${command} ${args.join(" ")} failed (exit code ${result.status}, signal ${result.signal}):\n${result.stderr || result.stdout}`,
     );
   }
   return result;
