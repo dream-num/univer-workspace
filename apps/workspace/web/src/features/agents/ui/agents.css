@@ -1,4 +1,7 @@
-html[data-ui-mode="repository"] .agent-page { padding: 28px 0; }
+html[data-ui-mode="repository"] .agent-page { padding: 28px 32px; }
+@media (max-width: 760px) {
+  html[data-ui-mode="repository"] .agent-page { padding: 22px 16px; }
+}
 html[data-ui-mode="repository"] .agent-home { margin-bottom: 36px; }
 html[data-ui-mode="repository"] .agent-composer { display: grid; align-content: start; gap: 12px; }
 html[data-ui-mode="repository"] .agent-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
