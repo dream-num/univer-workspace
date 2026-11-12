@@ -2709,6 +2709,53 @@ Pass when, for one SVG with Latin and Chinese text, left, centred and right-anch
   RPC per line, warm renderer) and the usage event stays `executor: none` with zero render cost.
 - Stop with `$V down` for the run, even on failure.
 
+### MR13 custom Skills
+
+Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
+Run MR13 after MR1 or on a fresh run: MR1 expects only the ten built-in Skills.
+The seeder creates missing folders and uploads files recursively. Re-runs skip existing
+Blob names and never delete or replace existing data. Use a new name to seed changed bytes.
+
+```bash
+eval "$($V env)"
+O="verify-$VERIFY_UVW_RUN"
+$V cli sk1-repo repo create sk1-skills --json
+mkdir -p "$EVIDENCE/sk1-user-source/references" "$EVIDENCE/sk1-repo-source/scripts"
+cat > "$EVIDENCE/sk1-user-source/SKILL.md" <<'SKILL'
+---
+name: weekly-report
+description: Write the weekly report from the current repository.
+---
+Read the source data before writing the report.
+SKILL
+cat > "$EVIDENCE/sk1-repo-source/SKILL.md" <<'SKILL'
+---
+name: reconcile-ledger
+description: Reconcile the repository ledger.
+---
+Read the ledger and report unmatched entries.
+SKILL
+printf 'Check every source.\n' > "$EVIDENCE/sk1-user-source/references/guide.md"
+printf 'export const ledger = true;\n' > "$EVIDENCE/sk1-repo-source/scripts/check.js"
+node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/personal" weekly-report "$EVIDENCE/sk1-user-source" > "$EVIDENCE/sk1-seed-user.json"
+node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repo.json"
+$V mcp sk1-list skills_read "{\"repo\":\"$O/sk1-skills\"}"
+jq -e '([.skills[].source] | unique) == ["builtin","repository","user"] and .repository == "loaded" and .diagnostics == []' "$EVIDENCE/sk1-list.out"
+jq -e --slurpfile repo "$EVIDENCE/sk1-repo.out" '.outcome == "ok" and .repo == $repo[0].id' "$EVIDENCE/sk1-list.event.json"
+$V mcp sk1-user-read skills_read '{"name":"weekly-report"}'
+jq -e '.source == "user" and [.resources[].path] == ["references/guide.md"]' "$EVIDENCE/sk1-user-read.out"
+$V mcp sk1-repo-read skills_read "{\"repo\":\"$O/sk1-skills\",\"name\":\"reconcile-ledger\"}"
+jq -e '.source == "repository" and [.resources[].path] == ["scripts/check.js"]' "$EVIDENCE/sk1-repo-read.out"
+node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repeat.json"
+jq -e '.uploaded == 0 and .skipped == 2' "$EVIDENCE/sk1-seed-repeat.json"
+```
+
+Pass when `sk1-list.out` contains `builtin`, `user` and `repository` sources,
+`repository` is `loaded`, and `diagnostics` is empty. Its event must have outcome `ok`
+and repo equal to `.id` in `sk1-repo.out`. By-name reads must return their source and
+text resource manifests. The repeated seed must skip both files without uploading.
+Dot-named nested folders and `blob upload --parent` are exercised by these uploads.
+
 ### Typst job verification
 
 After the default-budget journeys, run `down` and start a fresh stack with
@@ -2919,48 +2966,3 @@ and developer PIDs are unchanged or absent both times. Evidence and logs survive
   `opencode serve`, or use `--auto`. This adds an entry to local opencode session history.
 - Run `down` after failed launches too. It only removes this run's project resources
   and image tag, preserves BuildKit cache, and deletes disposable credentials.
-
-
-**MR13. Discover live custom Skills.**
-
-Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
-The seeder creates missing folders and uploads files recursively. Re-runs skip existing
-Blob names and never delete or replace existing data. Use a new name to seed changed bytes.
-
-```bash
-eval "$($V env)"
-O="verify-$VERIFY_UVW_RUN"
-$V cli sk1-repo repo create sk1-skills --json
-mkdir -p "$EVIDENCE/sk1-user-source/references" "$EVIDENCE/sk1-repo-source/scripts"
-cat > "$EVIDENCE/sk1-user-source/SKILL.md" <<'SKILL'
----
-name: weekly-report
-description: Write the weekly report from the current repository.
----
-Read the source data before writing the report.
-SKILL
-cat > "$EVIDENCE/sk1-repo-source/SKILL.md" <<'SKILL'
----
-name: reconcile-ledger
-description: Reconcile the repository ledger.
----
-Read the ledger and report unmatched entries.
-SKILL
-printf 'Check every source.\n' > "$EVIDENCE/sk1-user-source/references/guide.md"
-printf 'export const ledger = true;\n' > "$EVIDENCE/sk1-repo-source/scripts/check.js"
-node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/personal" weekly-report "$EVIDENCE/sk1-user-source" > "$EVIDENCE/sk1-seed-user.json"
-node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repo.json"
-$V mcp sk1-list skills_read "{\"repo\":\"$O/sk1-skills\"}"
-jq '{skills: [.skills[] | {name, source}], repository, diagnostics}' "$EVIDENCE/sk1-list.out"
-jq '{outcome, repo}' "$EVIDENCE/sk1-list.event.json"
-$V mcp sk1-user-read skills_read '{"name":"weekly-report"}'
-$V mcp sk1-repo-read skills_read "{\"repo\":\"$O/sk1-skills\",\"name\":\"reconcile-ledger\"}"
-node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repeat.json"
-jq -e '.uploaded == 0 and .skipped == 2' "$EVIDENCE/sk1-seed-repeat.json"
-```
-
-Pass when `sk1-list.out` contains `builtin`, `user` and `repository` sources,
-`repository` is `loaded`, and `diagnostics` is empty. Its event must have outcome `ok`
-and repo equal to `.id` in `sk1-repo.out`. By-name reads must return their source and
-text resource manifests. The repeated seed must skip both files without uploading.
-Dot-named nested folders and `blob upload --parent` are exercised by these uploads.

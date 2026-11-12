@@ -120,13 +120,12 @@ export async function discoverSkills(
   ]));
   const diagnostics: SkillDiagnostic[] = [];
   const spaceId = repo === undefined ? null : await resolveRepo(context, repo);
-  const result: { skills: Map<string, SkillEntry>; diagnostics: SkillDiagnostic[]; repository: RepositorySkills; repo: string | null; custom?: CustomSkill } = { skills, diagnostics, repository: "no-repository", repo: spaceId };
-  if (name !== undefined && skills.has(name)) return result;
-  const personal = (await spaces.list()).find((space) => space.type === "personal" && space.affiliation === "owner");
   const scoped = spaceId === null ? undefined : await spaces.get(spaceId);
   const repository: RepositorySkills = !scoped ? "no-repository"
     : scoped.affiliation === "owner" || scoped.affiliation === "member" ? "loaded" : "not-member";
-  result.repository = repository;
+  const result: { skills: Map<string, SkillEntry>; diagnostics: SkillDiagnostic[]; repository: RepositorySkills; repo: string | null; custom?: CustomSkill } = { skills, diagnostics, repository, repo: spaceId };
+  if (name !== undefined && skills.has(name)) return result;
+  const personal = (await spaces.list()).find((space) => space.type === "personal" && space.affiliation === "owner");
 
   async function loadLayer(layerSpaceId: string, source: CustomSource) {
     const folders = await skillFolders(spaces, layerSpaceId, name);
@@ -135,6 +134,9 @@ export async function discoverSkills(
       const node = (await spaces.browse({ spaceId: layerSpaceId, parentNodeId: folder.nodeId }))
         .find((node) => node.name === "SKILL.md" && node.resource?.kind === "blob");
       if (!node) return undefined;
+      if (folder.name === "." || folder.name === ".." || folder.name.includes("/")) {
+        return { source, path, problem: "invalid-skill", detail: "The folder name is not a valid skill name." } satisfies SkillDiagnostic;
+      }
       try {
         const content = await readText(blobs, node, 64 * 1024);
         const { frontmatter } = await skillEntry(folder.name, { "SKILL.md": new TextEncoder().encode(content) });

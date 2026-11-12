@@ -34,7 +34,7 @@ export const skillsReadTool: ToolDefinition = {
   scope: "read",
   title: "Read Skills",
   description:
-    "Read built-in and custom operational Skills that teach the Workspace workflow. Without name it lists the skills, including live personal .agents/skills and member repository skills when repo is given. With name it returns {name, content, resources?} directly (with full: true also files containing its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
+    "Read built-in and custom operational Skills that teach the Workspace workflow. Without name it lists the skills, including live personal .agents/skills and member repository skills when repo is given. With name it returns {name, source, content, resources?, binaryFiles?} directly (with full: true also files containing its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
   inputSchema,
   outputSchema: z.object({
     skills: z
@@ -76,6 +76,8 @@ export const skillsReadTool: ToolDefinition = {
         throw invalid("resource, full and cursor need a skill name.");
       }
     }
+    if (resource !== undefined && full !== undefined) throw invalid("full applies only when resource is omitted.");
+    if (resource === undefined && cursor !== undefined) throw invalid("cursor applies only when resource is given.");
     const discovery = await discoverSkills(context, builtin, repo, name);
     if (name === undefined) {
       return {
@@ -103,7 +105,6 @@ export const skillsReadTool: ToolDefinition = {
       read = builtin.read;
     }
     if (resource !== undefined) {
-      if (full !== undefined) throw invalid("full applies only when resource is omitted.");
       if (!paths.includes(resource))
         throw invalid(
           `Unknown resource for skill ${name}: ${resource}. Call skills_read with name "${name}" to list resources.`,
@@ -119,7 +120,6 @@ export const skillsReadTool: ToolDefinition = {
         repo: discovery.repo,
       };
     }
-    if (cursor !== undefined) throw invalid("cursor applies only when resource is given.");
     const supplemental = paths.filter((path) => path !== "SKILL.md");
     const output = {
       name,

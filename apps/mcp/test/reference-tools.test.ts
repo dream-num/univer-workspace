@@ -210,6 +210,21 @@ describe("API reference, Skills, resources and server instructions", () => {
     ws.requests.length = 0;
     expect((await call(client, "skills_read", { name: "core" })).structured.source).toBe("builtin");
     expect(ws.requests.filter((path) => path.startsWith("/api/spaces"))).toEqual([]);
+    expect((await call(client, "skills_read", { name: "core", repo: "00000000-0000-4000-8000-000000000000" })).structured.code).toBe("workspace-not-found");
+  });
+
+  it("diagnoses folder names that are not relative skill paths without failing the catalog", async () => {
+    const ws = skillWorkspace();
+    ws.skill("team", "ledger");
+    ws.skill("team", "..", "---\nname: ledger\ndescription: Dot dot.\n---\n");
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    expect(listed.isError).toBeUndefined();
+    expect(listed.structured.skills.at(-1)).toMatchObject({ name: "ledger", source: "repository" });
+    expect(listed.structured.diagnostics).toEqual([
+      { source: "repository", path: ".agents/skills/../SKILL.md", problem: "invalid-skill", detail: "The folder name is not a valid skill name." },
+    ]);
   });
 
   it("shadows the user once and reserves built-in names", async () => {
@@ -259,7 +274,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(JSON.stringify(listed.structured.diagnostics)).not.toContain("SECRET BODY");
     for (const diagnostic of listed.structured.diagnostics) expect(diagnostic.detail?.length ?? 0).toBeLessThanOrEqual(300);
     const large = ws.nodes.find((n) => n.parentNodeId === ws.nodes.find((n) => n.name === "large")!.id)!;
-    expect(ws.requests).not.toContain(`/api/resources/${large.resource!.id}`);
+    expect(ws.requests).not.toContain(`/api/blob-resources/${large.resource!.id}/download`);
     expect((await call(client, "skills_read", { name: "bad-name" })).isError).toBe(true);
   });
 
@@ -314,7 +329,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       cursor = page.structured.cursor;
       if (pages === 0) {
         expect(page.structured.truncated).toBe(true);
-        expect((await call(client, "skills_read", { ...args, repo: "https://workspace.example/spaces/team", resource: "references/long.md", cursor })).isError).toBe(true);
+        expect((await call(client, "skills_read", { ...args, repo: "https://workspace.example/spaces/team", resource: "references/long.md", cursor })).structured.code).toBe("workspace-argument-invalid");
       }
       pages++;
     } while (cursor);
