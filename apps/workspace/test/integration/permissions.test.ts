@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/index.js";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -108,7 +109,7 @@ describe("permissions", () => {
       enabled: true,
       role: "editor",
     });
-    application.nodes.update(owner, child.id, { parentNodeId: null });
+    application.nodes.update(interactivePrincipal(owner), child.id, { parentNodeId: null });
     expect(application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toBeNull();
     const trash = application.trash.trashNode(owner, root.id);
     expect(application.access.resolveNode(ANONYMOUS_USER_ID, root.id)).toBeNull();

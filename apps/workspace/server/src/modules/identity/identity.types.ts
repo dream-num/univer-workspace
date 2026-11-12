@@ -1,6 +1,7 @@
 import type { WriteSource } from "./write-source.js";
 
 export interface Principal {
+  readonly tokenIssued: boolean;
   readonly user: User;
   readonly writeSource: WriteSource | null;
 }

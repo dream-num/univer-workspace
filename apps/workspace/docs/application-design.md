@@ -472,4 +472,10 @@ private/no-store，不能作为第一方源 HTML 执行。
 发布和拒绝统一要求 `requireInteractiveSession`；Token 换出的 Session 只能提交和读取自己的
 草稿。发布重新检查实时目标权限和可用性；权限丢失、目标回收或父节点缺失保留 pending，
 仅基础 ETag 不匹配产生终态 conflicted 并释放字节。现有 Blob 维护 tick 先过期草稿再领取删除
-任务。客户端、预览 UI 与委托写入旁路限制在后续变更接入。
+任务。
+
+Token 换出的 Session 通过 Blob API 预留上传、完成上传或替换内容，以及通过 Node API 将 Blob
+重命名为页面时，统一检查 `.univer.html` 后缀，忽略大小写；上传与替换同时检查节点名和原始
+文件名。命中时返回 403 `HTML_VIEW_DRAFT_REQUIRED`，要求使用 `html_view_create` 或
+`html_view_replace` 提交草稿。浏览器与 CLI device login 的交互 Session、草稿发布和从回收站
+恢复已有页面不受此限制。

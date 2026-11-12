@@ -3,6 +3,7 @@ import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver, BlobResourceAccess } from "../access/index.js";
+import type { Principal } from "../identity/index.js";
 import { nodeSummary } from "../nodes/nodes.service.js";
 import type { ResourceCreateResponse } from "../resources/index.js";
 import {
@@ -15,6 +16,7 @@ import {
   type BlobUploadRow,
   type ReservedBlobUpload,
 } from "./blobs.repository.js";
+import { assertNotDelegatedPageWrite } from "./html-view-guard.js";
 import type {
   BlobReplacementResult,
   BlobUploadSessionEnvelope,
@@ -24,7 +26,7 @@ import type {
 
 export interface BlobsModule {
   replace(
-    userId: string,
+    actor: Principal,
     resourceId: string,
     idempotencyKey: unknown,
     ifMatch: unknown,
@@ -32,7 +34,7 @@ export interface BlobsModule {
     body: Readable,
   ): Promise<BlobReplacementResult>;
   createUpload(
-    userId: string,
+    actor: Principal,
     idempotencyKey: unknown,
     input: unknown
   ): { readonly status: 200 | 201; readonly body: BlobUploadSessionEnvelope };
@@ -43,7 +45,7 @@ export interface BlobsModule {
     contentLength: unknown,
     body: Readable
   ): Promise<void>;
-  complete(userId: string, uploadId: string): Promise<CompleteBlobUploadResult>;
+  complete(actor: Principal, uploadId: string): Promise<CompleteBlobUploadResult>;
   abort(userId: string, uploadId: string): void;
   openContent(
     userId: string,
@@ -119,7 +121,8 @@ export function createBlobsModule(options: {
   }
 
   return {
-    async replace(userId, resourceId, key, ifMatch, contentLength, body) {
+    async replace(actor, resourceId, key, ifMatch, contentLength, body) {
+      const userId = actor.user.id;
       const operationId = validOperationId(key);
       if (typeof ifMatch !== "string" || !/^"[^"\r\n]+"$/.test(ifMatch) || ifMatch.length > 200) {
         throw invalidInput("If-Match must contain one quoted strong ETag.", "If-Match");
@@ -137,6 +140,7 @@ export function createBlobsModule(options: {
       const requireWritable = () => {
         const access = requireBlobAccess(options.access, userId, resourceId);
         if (!access.capabilities.editContent) throw forbidden();
+        assertNotDelegatedPageWrite(actor, [access.node.name, access.originalFilename]);
         if (access.availability !== "ready")
           throw conflict("Blob content is not currently available.");
         return access;
@@ -187,10 +191,12 @@ export function createBlobsModule(options: {
       }
     },
 
-    createUpload(userId, keyValue, inputValue) {
+    createUpload(actor, keyValue, inputValue) {
+      const userId = actor.user.id;
       const operationId = validOperationId(keyValue);
       const intent = validIntent(inputValue, maxBlobBytes);
       validateTarget(userId, intent, options.access);
+      assertNotDelegatedPageWrite(actor, [intent.name, intent.originalFilename]);
       let reserved;
       try {
         reserved = options.repository.reserve({
@@ -263,8 +269,10 @@ export function createBlobsModule(options: {
       }
     },
 
-    async complete(userId, uploadId) {
+    async complete(actor, uploadId) {
+      const userId = actor.user.id;
       const value = reservation(userId, uploadId);
+      assertNotDelegatedPageWrite(actor, [value.payload.name, value.payload.originalFilename]);
       if (value.upload.state === "completed") return completed(value, 200);
       if (value.upload.state !== "uploaded") {
         throw conflict("Blob bytes must be uploaded before completion.");

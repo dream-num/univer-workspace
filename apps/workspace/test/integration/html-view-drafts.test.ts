@@ -1,4 +1,3 @@
-import { Readable } from "node:stream";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -44,6 +43,86 @@ async function harness() {
 }
 
 describe("HTML View draft HTTP API", () => {
+  it("requires drafts for delegated upload names and original filenames, ignoring case", async () => {
+    const c = await harness();
+    const tokenCookie = delegatedCookie(c);
+    for (const names of [
+      { name: "Page.univer.html", originalFilename: "source.txt" },
+      { name: "ordinary.txt", originalFilename: "Page.UnIvEr.HtMl" },
+      { name: "PAGE.UNIVER.HTML", originalFilename: "source.txt" },
+    ]) {
+      await expectDraftRequired(await reserveBlob(c, tokenCookie, names));
+      const interactive = await reserveBlob(c, c.cookie, names);
+      expect(interactive.status).toBe(201);
+    }
+  });
+
+  it("requires drafts for delegated replacement of either page filename", async () => {
+    const c = await harness();
+    const tokenCookie = delegatedCookie(c);
+    for (const names of [
+      { name: "PAGE.UNIVER.HTML", originalFilename: "source.txt" },
+      { name: "ordinary.txt", originalFilename: "Page.UnIvEr.HtMl" },
+    ]) {
+      const upload = await uploadBlob(c, c.cookie, names);
+      const replace = (cookie: string) => fetch(
+        `${c.origin}/api/blob-resources/${upload.resourceId}/content`,
+        {
+          method: "PUT",
+          headers: { cookie, "idempotency-key": crypto.randomUUID(), "if-match": upload.etag },
+          body: "revised",
+        },
+      );
+      await expectDraftRequired(await replace(tokenCookie));
+      expect((await replace(c.cookie)).status).toBe(200);
+    }
+  });
+
+  it("guards delegated Blob renames while allowing ordinary Blob writes and folder names", async () => {
+    const c = await harness();
+    const tokenCookie = delegatedCookie(c);
+    const upload = await uploadBlob(c, tokenCookie, { name: "notes.txt", originalFilename: "notes.txt" });
+    const replaced = await fetch(`${c.origin}/api/blob-resources/${upload.resourceId}/content`, {
+      method: "PUT",
+      headers: { cookie: tokenCookie, "idempotency-key": crypto.randomUUID(), "if-match": upload.etag },
+      body: "revised",
+    });
+    expect(replaced.status).toBe(200);
+    const rename = (nodeId: string, name: string, cookie = tokenCookie) => fetch(
+      `${c.origin}/api/nodes/${nodeId}`,
+      { method: "PATCH", headers: { cookie, "content-type": "application/json" }, body: JSON.stringify({ name }) },
+    );
+    expect((await rename(upload.nodeId, "renamed.txt")).status).toBe(200);
+    await expectDraftRequired(await rename(upload.nodeId, "Page.UnIvEr.HtMl"));
+    expect((await rename(upload.nodeId, "Page.UnIvEr.HtMl", c.cookie)).status).toBe(200);
+    const trashed = await fetch(`${c.origin}/api/nodes/${upload.nodeId}/trash`, {
+      method: "POST", headers: { cookie: tokenCookie },
+    });
+    expect(trashed.status).toBe(201);
+    const batch = await trashed.json();
+    expect((await fetch(`${c.origin}/api/trash-batches/${batch.id}/restore`, {
+      method: "POST", headers: { cookie: tokenCookie },
+    })).status).toBe(200);
+    const folder = c.application.nodes.create(c.userId, { spaceId: c.space.id, parentNodeId: null, name: "Folder" });
+    expect((await rename(folder.id, "Folder.univer.html")).status).toBe(200);
+  });
+
+  it("prevents delegated completion of an interactive page reservation", async () => {
+    const c = await harness();
+    const tokenCookie = delegatedCookie(c);
+    const reserved = await reserveBlob(c, c.cookie, { name: "Page.univer.html", originalFilename: "source.txt" });
+    const { upload } = await reserved.json();
+    expect((await fetch(`${c.origin}/api/blob-upload-sessions/${upload.id}/content`, {
+      method: "PUT", headers: { cookie: c.cookie }, body: html,
+    })).status).toBe(204);
+    const complete = (cookie: string) => fetch(`${c.origin}/api/blob-upload-sessions/${upload.id}/complete`, {
+      method: "POST", headers: { cookie },
+    });
+    await expectDraftRequired(await complete(tokenCookie));
+    expect(c.application.views.listHtmlViews(c.userId, {}).items).toHaveLength(0);
+    expect((await complete(c.cookie)).status).toBe(201);
+  });
+
   it("validates content, byte limits and quoted strong ETags before staging", async () => {
     const c = await harness();
     const body = {
@@ -199,7 +278,20 @@ describe("HTML View draft HTTP API", () => {
     });
     const tokenCookie = `${c.application.identity.cookieName}=${tokenSession.cookieValue}`;
     expect((await c.send(`/${draft.id}`, undefined, undefined, tokenCookie)).status).toBe(200);
-    expect((await c.send("", body, crypto.randomUUID(), tokenCookie)).status).toBe(201);
+    const submitted = await c.send("", body, crypto.randomUUID(), tokenCookie);
+    expect(submitted.status).toBe(201);
+    const delegatedDraft = (await submitted.json()).draft;
+    const published = await c.send(`/${delegatedDraft.id}/publish`, {});
+    expect(published.status).toBe(200);
+    const publishedDraft = (await published.json()).draft;
+    expect(publishedDraft.state).toBe("published");
+    const replacement = await c.send("", {
+      kind: "replace", resourceId: publishedDraft.published.resourceId,
+      etag: publishedDraft.published.etag, html: html.replace("Hello", "Revised"),
+    }, crypto.randomUUID(), tokenCookie);
+    expect(replacement.status).toBe(201);
+    const replacementDraft = (await replacement.json()).draft;
+    expect((await c.send(`/${replacementDraft.id}/publish`, {})).status).toBe(200);
     for (const action of ["publish", "reject"])
       expect((await c.send(`/${draft.id}/${action}`, {}, undefined, tokenCookie)).status).toBe(403);
     const other = await c.application.identity.registerWithPassword({
@@ -275,4 +367,56 @@ function closeServer(server: Server): Promise<void> {
   return new Promise((resolve, reject) => {
     server.close((error) => (error ? reject(error) : resolve()));
   });
+}
+
+function delegatedCookie(c: Awaited<ReturnType<typeof createHttpContext>>): string {
+  c.application.database.connection.prepare(
+    "INSERT INTO personal_access_tokens (id, user_id, name, token_hash, scopes, created_at) VALUES ('guard-pat', ?, 'Guard', 'guard-hash', 'read write publish', 1)",
+  ).run(c.userId);
+  const issued = c.application.identity.issueSession(c.application.identity.requireSession(c.cookie).user, "agent", {
+    issuedFor: { kind: "pat", id: "guard-pat" },
+  });
+  return `${c.application.identity.cookieName}=${issued.cookieValue}`;
+}
+
+async function expectDraftRequired(response: Response) {
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ error: {
+    code: "HTML_VIEW_DRAFT_REQUIRED",
+    message: "Pages (.univer.html) from Agents must go through html_view_create or html_view_replace drafts.",
+  } });
+}
+
+function reserveBlob(
+  c: Awaited<ReturnType<typeof createHttpContext>>,
+  cookie: string,
+  names: { name: string; originalFilename: string },
+) {
+  return fetch(`${c.origin}/api/blob-upload-sessions`, {
+    method: "POST",
+    headers: { cookie, "content-type": "application/json", "idempotency-key": crypto.randomUUID() },
+    body: JSON.stringify({ spaceId: c.space.id, parentNodeId: null, ...names, byteSize: Buffer.byteLength(html) }),
+  });
+}
+
+async function uploadBlob(
+  c: Awaited<ReturnType<typeof createHttpContext>>,
+  cookie: string,
+  names: { name: string; originalFilename: string },
+) {
+  const reserved = await reserveBlob(c, cookie, names);
+  expect(reserved.status).toBe(201);
+  const { upload } = await reserved.json();
+  expect((await fetch(`${c.origin}/api/blob-upload-sessions/${upload.id}/content`, {
+    method: "PUT", headers: { cookie }, body: html,
+  })).status).toBe(204);
+  expect((await fetch(`${c.origin}/api/blob-upload-sessions/${upload.id}/complete`, {
+    method: "POST", headers: { cookie },
+  })).status).toBe(201);
+  const content = await fetch(`${c.origin}/api/blob-resources/${upload.resourceId}/content`, { headers: { cookie } });
+  expect(content.status).toBe(200);
+  const etag = content.headers.get("etag");
+  await content.text();
+  if (!etag) throw new Error("Blob ETag is missing");
+  return { ...upload, etag };
 }

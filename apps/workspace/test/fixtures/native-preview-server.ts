@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
 import { createWorkspaceApplication } from "../../server/src/app.js";
+import { interactivePrincipal } from "./principal.js";
 const directory = mkdtempSync(join(tmpdir(), "workspace-native-preview-"));
 const application = createWorkspaceApplication({ host: "127.0.0.1", port: 3091,
   databaseFilename: join(directory, "product.sqlite"), collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
@@ -50,10 +51,10 @@ addEventListener('workspace-preview-status',e=>document.getElementById('status')
 addEventListener('workspace-preview-closed',()=>document.getElementById('status').textContent='closed');
 </script></body></html>`;
 const bytes = Buffer.from(html);
-const upload = application.blobs.createUpload(userId, randomUUID(), { spaceId: space.id, parentNodeId: null,
+const upload = application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), { spaceId: space.id, parentNodeId: null,
   name: "Connected workspace.univer.html", originalFilename: "Connected workspace.univer.html", byteSize: bytes.length, declaredMediaType: "text/html" });
 await application.blobs.upload(userId, upload.body.upload.id, String(bytes.length), Readable.from([bytes]));
-const result = await application.blobs.complete(userId, upload.body.upload.id);
+const result = await application.blobs.complete(interactivePrincipal(userId), upload.body.upload.id);
 application.permissions.updateNodeLinkSharing(userId, result.body.node!.id, { enabled: true, role: "viewer" });
 const info = { sheetId, origin: "http://127.0.0.1:3091", nodeId: result.body.node?.id, units,
   cookieName: application.identity.cookieName, cookieValue: issued.cookieValue, username: "preview-owner", password };
