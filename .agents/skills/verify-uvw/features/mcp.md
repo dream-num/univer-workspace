@@ -2209,7 +2209,7 @@ MH_S=$(jq -r .value.sheetId "$EVIDENCE/mh-data.out")
 $V cli mh-ready pr ready "$MH_N" -R "$O/personal" --json
 $V cli mh-merge pr merge "$MH_N" -R "$O/personal" --json
 printf '<!DOCTYPE html><html><head><title>Regional totals</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>Regional totals</h1><p>North: <output data-univer-cell-text="%s:%s:B2"></output></p></body></html>\n' "$MH_U" "$MH_S" > "$EVIDENCE/mh-view.univer.html"
-$V mcp --toolsets files --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html}')"
+$V mcp --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html}')"
 $V cli mh-validate-cli html-view validate --file "$EVIDENCE/mh-view.univer.html" --json
 diff <(jq -S . "$EVIDENCE/mh-validate.out") <(jq -S . "$EVIDENCE/mh-validate-cli.out")
 jq -e --arg unit "$MH_U" '.valid == true and .unitIds == [$unit] and .bindingCount == 1' "$EVIDENCE/mh-validate.out"
@@ -2221,7 +2221,7 @@ Pass when the Sheet is merged with data and MCP and CLI validation results match
 
 ```bash
 printf '<output data-univer-cell-text="missing-html-sheet:missing:A1"></output>\n' > "$EVIDENCE/mh-missing.univer.html"
-$V mcp --toolsets files mh-missing html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html}')"
+$V mcp mh-missing html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html}')"
 test $? -eq 1
 $V cli mh-missing-cli html-view validate --file "$EVIDENCE/mh-missing.univer.html" --json
 test $? -eq 1

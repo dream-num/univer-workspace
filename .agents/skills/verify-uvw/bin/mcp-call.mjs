@@ -191,7 +191,7 @@ function eventIssues(event) {
   if (event.auth_kind !== kind || event.client_id !== clientId) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
     const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_create', 'compile_markdown', 'compile_typst', 'compile_svg'].includes(tool)) ||
-      (key === 'export_bytes' && ['blob_download', 'asset_download', 'export', 'export_markdown'].includes(tool));
+      (key === 'export_bytes' && ['blob_download', 'asset_download', 'export', 'export_markdown', 'html_view_read'].includes(tool));
     if (typeof event.cost?.[key] !== 'number' || !Number.isFinite(event.cost[key]) || event.cost[key] < 0 || (event.executor === 'none' && !gatewayTransfer && event.cost[key] !== 0)) issues.push(`Invalid cost.${key}`);
   }
   for (const key of ['ts', 'request_id', 'user_id', 'tool', 'toolset']) {
@@ -205,7 +205,7 @@ function eventIssues(event) {
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
   const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_draft_get'].includes(tool) || (['execute', 'inspect', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_replace', 'html_view_draft_get'].includes(tool) || (['execute', 'inspect', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
   const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true && !['worktree', 'space', 'parent'].some((key) => args[key] !== undefined);
   const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
   const invalidUnitType = event.executor === 'none' || compileOnlyTypst
