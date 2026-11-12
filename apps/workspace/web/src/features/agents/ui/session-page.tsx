@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { useEffect, useState } from "react";
-import { CheckCircle2, CircleAlert, LoaderCircle } from "lucide-react";
+import { ArrowUp, CheckCircle2, CircleAlert, LoaderCircle } from "lucide-react";
 import { IssueMarkdown } from "../../issues/issue-markdown";
 import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
@@ -64,8 +64,8 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
         <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(text); } }} />
-        <div className="agent-controls"><Button type="submit" disabled={pending || !text.trim()}>{m.send}</Button>
+          onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(text); } }} />
+        <div className="agent-controls"><Button className="agent-send" type="submit" aria-label={m.send} aria-keyshortcuts="Shift+Enter" disabled={pending || !text.trim()}><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></Button>
           {session.status === "running" ? <Button variant="secondary" onClick={() => {
             setPending(true);
             void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));

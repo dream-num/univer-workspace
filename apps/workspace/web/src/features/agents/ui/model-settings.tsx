@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CircleCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
@@ -94,7 +95,7 @@ function ProviderForm({ provider, onSaved }: { readonly provider: ProviderConfig
         </div>
       </fieldset>
       {saved.error ? <Alert variant="destructive">{saved.error.message}</Alert> : null}
-      {notice ? <p role="status">{notice}</p> : null}
+      {notice ? <p role="status" className="flex items-center gap-2 text-success"><CircleCheck className="size-4" aria-hidden="true" />{notice}</p> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
     </form>
   );
