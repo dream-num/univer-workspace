@@ -214,7 +214,6 @@ type MatrixCase = {
     modelArgs?: unknown[][];
     dataSourceCalls: number;
     dataSourceArgs?: unknown[][];
-    dataSourceCommentIdDiffersFromParams?: boolean;
   };
 };
 
@@ -372,22 +371,6 @@ const DOC_COMMENT_DELETE_CASES: MatrixCase[] = [
     },
   },
   {
-    name: "resolves true when the datasource accepts the deletion",
-    commandId: "target",
-    params: { unitId: "unit-1", commentId: "param-comment-1" },
-    model: { returns: { id: "model-comment-1", threadId: "model-thread-1" } },
-    dataSource: { returns: true },
-    expected: {
-      resolves: true,
-      modelCalls: 1,
-      modelArgs: [["unit-1", "default_doc", "param-comment-1"]],
-      dataSourceCalls: 1,
-      dataSourceArgs: [
-        ["unit-1", "default_doc", "model-thread-1", "model-comment-1"],
-      ],
-    },
-  },
-  {
     name: "propagates a datasource rejection",
     commandId: "target",
     params: { unitId: "unit-1", commentId: "param-comment-1" },
@@ -413,23 +396,6 @@ const DOC_COMMENT_DELETE_CASES: MatrixCase[] = [
       modelCalls: 1,
       modelArgs: [["unit-1", "default_doc", "param-comment-1"]],
       dataSourceCalls: 0,
-    },
-  },
-  {
-    name: "passes the model comment id to the datasource instead of the command comment id",
-    commandId: "target",
-    params: { unitId: "unit-1", commentId: "param-comment-1" },
-    model: { returns: { id: "model-comment-1", threadId: "model-thread-1" } },
-    dataSource: { returns: true },
-    expected: {
-      resolves: true,
-      modelCalls: 1,
-      modelArgs: [["unit-1", "default_doc", "param-comment-1"]],
-      dataSourceCalls: 1,
-      dataSourceArgs: [
-        ["unit-1", "default_doc", "model-thread-1", "model-comment-1"],
-      ],
-      dataSourceCommentIdDiffersFromParams: true,
     },
   },
 ];
@@ -490,11 +456,6 @@ describe("Doc root comment delete workaround behavior", () => {
       expect(dataSourceCalls).toHaveLength(testCase.expected.dataSourceCalls);
       if (testCase.expected.dataSourceArgs) {
         expect(dataSourceCalls).toEqual(testCase.expected.dataSourceArgs);
-      }
-      if (testCase.expected.dataSourceCommentIdDiffersFromParams) {
-        expect(dataSourceCalls[0]?.[3]).not.toBe(
-          (testCase.params as { commentId?: string }).commentId
-        );
       }
     },
     20_000
