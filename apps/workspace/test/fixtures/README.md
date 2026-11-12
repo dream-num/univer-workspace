@@ -260,3 +260,7 @@ in-memory HTTP responses and the real sandbox renderer. It never contacts a prod
 Use `?draft=replace` for New/Current comparison, or `conflicted`, `expired`, `rejected`,
 `published`, and `missing` for terminal and not-found states. Publish and Reject affect
 only the current fixture page; reload resets it. Check desktop and narrow widths.
+
+Add `?agent` (or `?agent&draft=replace`) to render the production Agent tool row
+and its draft review card. Open the full-screen preview before Publish becomes available.
+The former `agent-approval.html` fixture was removed with the runner-side HTML approval path.

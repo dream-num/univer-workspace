@@ -54,8 +54,8 @@ function scopeLine({ scope }: AgentSettings): string {
 function modeLine({ scope, mode }: AgentSettings): string {
   return mode === "ask" ? "Ask mode: read only. Never call a write tool."
     : scope.kind === "repository" && scope.baseWorktreeId
-      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(scope.baseWorktreeId)} for file edits. Pages (.univer.html) publish outside pull requests after user approval.`
-      : "Auto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) publish outside pull requests after user approval. Never merge; a person reviews and merges.";
+      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(scope.baseWorktreeId)} for file edits. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.`
+      : "Auto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace. Never merge; a person reviews and merges.";
 }
 function contextPrompt(settings: AgentSettings): string {
   return `${scopeLine(settings)}\n${modeLine(settings)}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;

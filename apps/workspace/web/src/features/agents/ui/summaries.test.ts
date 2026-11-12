@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStepsGroup } from "./session-page";
 import { SessionStatus } from "./sessions";
+import { ApprovalCard } from "./approval-card";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, newestSessions, visibleSessions, messageBlocks, sessionStatus, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { session } from "../test-helpers";
@@ -12,11 +13,15 @@ import { agentMessages } from "./messages";
 
 const i18n = vi.hoisted((): { language: "en-US" | "zh-CN" } => ({ language: "en-US" }));
 vi.mock("../../../shared/i18n", () => ({ useI18n: () => i18n }));
+vi.mock("../../html-views/drafts/draft-review", () => ({
+  HtmlViewDraftReview: ({ draftId, presentation }: { draftId: string; presentation: string }) =>
+    createElement("section", { "data-draft-id": draftId, "data-presentation": presentation }),
+}));
 
 describe("Agent session status badges", () => {
   const request = { id: "approval-message", role: "assistant", parts: [{
-    type: "dynamic-tool", toolName: "html_view_create", toolCallId: "publish", state: "approval-requested",
-    input: { name: "Page", space: "repo", html: "<html/>" }, approval: { id: "approval" },
+    type: "dynamic-tool", toolName: "blob_upload", toolCallId: "publish", state: "approval-requested",
+    input: { name: "File", repo: "repo", upload_id: "upload" }, approval: { id: "approval" },
   }] } satisfies UIMessage;
 
   it.each(["en-US", "zh-CN"] as const)("shows pending approvals in %s", (language) => {
@@ -139,7 +144,7 @@ describe("Agent steps groups", () => {
     expect(toolStatus(pending, "stopped")).toBe("incomplete");
   });
   it.each(["en-US", "zh-CN"] as const)("shows rejected calls without a failure summary in %s", (language) => {
-    const denied = { type: "dynamic-tool", toolName: "html_view_create", toolCallId: "publish", state: "output-denied", input: {}, approval: { id: "approval", approved: false } } satisfies ToolPart;
+    const denied = { type: "dynamic-tool", toolName: "blob_upload", toolCallId: "publish", state: "output-denied", input: {}, approval: { id: "approval", approved: false } } satisfies ToolPart;
     i18n.language = language;
     try {
       const html = renderToStaticMarkup(createElement(AgentStepsGroup, { parts: [denied], session: session() }));
@@ -190,4 +195,50 @@ describe("Agent steps groups", () => {
     expect(html).not.toContain("<dl");
     expect(html).not.toContain("issue-markdown");
   });
+});
+
+
+describe("Agent page drafts", () => {
+  const output = { content: [], structuredContent: { draft: { id: "draft-1" } } };
+  function render(part: ToolPart) {
+    const saved = session({ messages: [{ id: "assistant", role: "assistant", parts: [part] }] });
+    return { saved, html: renderToStaticMarkup(createElement(AgentStepsGroup, { parts: saved.messages[0]!.parts.filter((part): part is ToolPart => "toolCallId" in part), session: saved })) };
+  }
+  it.each(["html_view_create", "html_view_replace"])("renders one review card for %s without waiting for approval or changing history", (toolName) => {
+    const part = { type: "dynamic-tool", toolName, toolCallId: "page", state: "output-available", input: {}, output } satisfies ToolPart;
+    const before = structuredClone(part);
+    const { saved, html } = render(part);
+    expect(html.match(/data-draft-id="draft-1"/g)).toHaveLength(1);
+    expect(html).toContain('data-presentation="card"');
+    expect(sessionStatus(saved)).toBe("idle");
+    expect(saved.messages).toEqual([{ id: "assistant", role: "assistant", parts: [before] }]);
+  });
+  it("reads static tool parts", () => {
+    expect(render({ type: "tool-html_view_replace", toolCallId: "page", state: "output-available", input: {}, output }).html)
+      .toContain('data-draft-id="draft-1"');
+  });
+  it.each([null, {}, { draft: { id: "draft-1" } }, { structuredContent: { draft: { id: "" } } },
+    { structuredContent: { draft: { id: 1 } } }, { ...output, isError: true }])("ignores malformed or error output %j", (output) => {
+    expect(render({ type: "dynamic-tool", toolName: "html_view_create", toolCallId: "page", state: "output-available", input: {}, output }).html)
+      .not.toContain("data-draft-id");
+  });
+  it("ignores failed calls and unrelated tools", () => {
+    expect(render({ type: "tool-html_view_create", toolCallId: "page", state: "output-error", input: {}, errorText: "Failed" }).html).not.toContain("data-draft-id");
+    expect(render({ type: "tool-browse", toolCallId: "page", state: "output-available", input: {}, output }).html).not.toContain("data-draft-id");
+  });
+});
+
+
+it("renders a generic publication approval without HTML preview controls", () => {
+  const html = renderToStaticMarkup(createElement(ApprovalCard, {
+    approval: { approvalId: "approval", toolCallId: "call", toolName: "blob_upload", action: { kind: "other", input: { upload_id: "upload-1" } } },
+    disabled: false, onDecide: () => {},
+  }));
+  expect(html).toContain("Approve publication");
+  expect(html).toContain("blob_upload");
+  expect(html).toContain("upload-1");
+  expect(html).toContain(">Publish</button>");
+  expect(html).toContain(">Reject</button>");
+  expect(html).not.toContain("preview");
+  expect(html).not.toContain("Source Sheets");
 });
