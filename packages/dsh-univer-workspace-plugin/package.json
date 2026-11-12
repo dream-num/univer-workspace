@@ -27,7 +27,7 @@
     "build": "node scripts/build.mjs",
     "clean": "rm -rf lib",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "pnpm --filter @univerjs/univer-workspace-agent-runtime build && vitest run --config vitest.config.ts",
+    "test": "pnpm --filter @univerjs/univer-workspace-agent-runtime build && node ../../scripts/test.mjs vitest run --config vitest.config.ts",
     "test:skills-package": "node scripts/smoke-skills.mjs",
     "prototype:worktree-card": "node prototypes/worktree-card/run.mjs"
   },

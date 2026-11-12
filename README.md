@@ -418,22 +418,55 @@ Read the [technical architecture](apps/workspace/docs/architecture.md),
 
 ## Development and verification
 
-Run the smallest relevant check while iterating, then use the repository-level suite
-before claiming a complete change:
+Run the smallest relevant check while iterating. Before opening a PR, run the same
+verification entry used by CI on Linux or macOS:
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm --filter @univerjs/univer-workspace test:production-import
-pnpm package:workspace-cli
+pnpm verify
+pnpm verify --stage test-mcp
 ```
 
-HTTP contract changes also require:
+The six stages are `static`, `test-workspace`, `test-cli`, `test-mcp`, `test-rest`
+and `package`. They include HTTP contract generation verification, typechecks,
+SDK dependency and type-identity checks against installed published packages,
+all workspace tests, builds, an isolated installation of the actual CLI tarball,
+and Workspace production import/migration checks. `pnpm check` remains the shorter
+typecheck/test loop.
+
+An existing installation can hide dependency-resolution problems. To verify a
+committed change with a fresh dependency graph and build state, use Node 24 and
+the pinned pnpm version in a separate worktree:
 
 ```bash
-pnpm --filter @univerjs/univer-workspace api:verify
+git worktree add --detach ../univer-ci-check HEAD
+cd ../univer-ci-check
+node scripts/verify.mjs --install
 ```
+
+`--install` records `pnpm install --frozen-lockfile` before verification. CI uses
+this entry in its fresh checkout. The worktree recipe checks `HEAD`; uncommitted
+changes in the original directory are not included. A normal local run records
+whether its source tree is dirty and does not claim a clean installation.
+
+Reports live in `.verification/`. Each invocation keeps separate command logs,
+process exit codes/signals, structured Vitest and node:test results, and a summary
+with commit, attempt, stage, file and test. A failed process remains a failure even
+if its test report is missing. CI uploads each stage under a distinct run/attempt
+artifact name for 30 days, including failed runs. Rerunning does not overwrite the
+first attempt. Setup failures before the verification entry and forcibly terminated
+runners may have incomplete artifacts; their workflow status still counts.
+
+With `gh` authenticated, inspect recent first-attempt outcomes and recurring
+failures:
+
+```bash
+pnpm ci:reliability --limit 20
+```
+
+The first-pass denominator excludes cancelled and unfinished first attempts.
+Signature analysis covers failed first attempts. Its coverage is reported separately
+because older or expired artifacts cannot identify individual failing tests. Reports can contain test fixture data;
+keep them within the repository's existing access boundary.
 
 Update every version-coupled Univer dependency and the lockfile with the repository
 script rather than editing individual manifests:

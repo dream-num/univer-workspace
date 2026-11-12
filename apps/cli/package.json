@@ -32,8 +32,8 @@
     "package": "node scripts/build-package.mjs",
     "package:smoke": "node scripts/smoke-package.mjs package-dist",
     "package:verify": "node scripts/verify-package.mjs package-dist",
-    "test": "pnpm --filter 'univer-workspace-cli^...' run build && pnpm build && pnpm test:package && vitest run --config vitest.config.ts",
-    "test:package": "node --test scripts/package-artifact.test.mjs",
+    "test": "pnpm --filter 'univer-workspace-cli^...' run build && pnpm build && pnpm test:package && node ../../scripts/test.mjs vitest run --config vitest.config.ts",
+    "test:package": "node ../../scripts/test.mjs node scripts/package-artifact.test.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {

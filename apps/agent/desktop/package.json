@@ -8,7 +8,7 @@
   "type": "module",
   "main": "src/main.cjs",
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node ../../../scripts/test.mjs node test/*.test.mjs",
     "prepare:runtime": "node scripts/prepare.mjs",
     "package": "electron-builder --config electron-builder.config.cjs --publish never",
     "start": "electron ."

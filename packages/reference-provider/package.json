@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "test": "vitest run --config vitest.config.ts",
+    "test": "node ../../scripts/test.mjs vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "peerDependencies": {
