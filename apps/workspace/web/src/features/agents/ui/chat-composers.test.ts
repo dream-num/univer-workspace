@@ -43,7 +43,10 @@ beforeEach(() => {
   let position = 76;
   Object.defineProperties(container, {
     scrollHeight: { get: () => contentHeight }, clientHeight: { value: 800 },
-    scrollTop: { get: () => position, set: (value: number) => { position = Math.max(0, Math.min(value, contentHeight - container.clientHeight)); } },
+    scrollTop: { get: () => position, set: (value: number) => {
+      position = Math.max(0, Math.min(value, contentHeight - container.clientHeight));
+      container.dispatchEvent(new Event("scroll"));
+    } },
   });
   root = createRoot(container);
 });
@@ -96,6 +99,19 @@ it("opens at the bottom and follows late-rendered content until a user scrolls a
   contentHeight = 5500;
   resize(); expect(container.scrollTop).toBe(4700);
   await act(async () => root.unmount()); expect(disconnect).toHaveBeenCalledOnce();
+});
+
+it("stops following after a small upward scroll within 48px of the bottom while running", async () => {
+  current = session({ status: "running" }); await renderSession();
+  expect(container.scrollTop).toBe(2447);
+  contentHeight = 4000;
+  resize(); expect(container.scrollTop).toBe(3200);
+  container.scrollTop -= 12;
+  contentHeight = 4500;
+  resize(); expect(container.scrollTop).toBe(3188);
+  container.scrollTop = contentHeight - container.clientHeight;
+  contentHeight = 5000;
+  resize(); expect(container.scrollTop).toBe(4200);
 });
 
 it("leaves scrolling alone when there is no repository viewport", async () => {

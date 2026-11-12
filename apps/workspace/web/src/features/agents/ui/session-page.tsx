@@ -57,7 +57,13 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     const viewport = content?.closest(".rd-viewport");
     if (!content || !viewport) return;
     let following = true;
-    const onScroll = () => { following = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < 48; };
+    let lastScrollTop = viewport.scrollTop;
+    const onScroll = () => {
+      const top = viewport.scrollTop;
+      const gap = viewport.scrollHeight - top - viewport.clientHeight;
+      following = top < lastScrollTop ? gap < 1 : following || gap < 48;
+      lastScrollTop = top;
+    };
     const scrollToBottom = () => { if (following) viewport.scrollTop = viewport.scrollHeight; };
     viewport.addEventListener("scroll", onScroll, { passive: true });
     const observer = new ResizeObserver(scrollToBottom);
