@@ -21,7 +21,7 @@ afterEach(async () => {
 });
 
 describe("browser agent tokens", () => {
-  it.each([["read"], ["read", "write"], ["write", "read"]].map((scopes) => ({ scopes })))("issues and exchanges $scopes", async ({ scopes }) => {
+  it.each([["read"], ["read", "write"], ["write", "read"], ["read", "publish"], ["publish", "read"]].map((scopes) => ({ scopes })))("issues and exchanges $scopes", async ({ scopes }) => {
     const origin = await start();
     const cookie = await register(origin);
     const before = Date.now();
@@ -34,7 +34,7 @@ describe("browser agent tokens", () => {
     expect(body.token).toMatch(/^uvw_at_/u);
     expect(body.expiresAt).toBeGreaterThanOrEqual(before + 3_600_000);
     expect(body.expiresAt).toBeLessThanOrEqual(after + 3_600_000);
-    expect(body.scopes).toEqual([...scopes].sort());
+    expect([...body.scopes].sort()).toEqual([...scopes].sort());
     expect(body.resource).toBe(RESOURCE);
 
     const exchanged = await exchange(origin, body.token, RESOURCE);
@@ -72,7 +72,7 @@ describe("browser agent tokens", () => {
     const cookie = await register(origin);
     for (const scopes of [
       undefined, [], ["read", "read"], ["read", "write", "write"], ["write"],
-      ["publish"], ["worktree:merge"], ["read", "publish"], ["read", "worktree:merge"],
+      ["publish"], ["worktree:merge"], ["read", "write", "publish"], ["read", "worktree:merge"],
       ["nope"], ["read", 1], ["READ"], "read", null, 1, {},
     ]) {
       const response = await post(origin, "/api/auth/agent-token", cookie, { scopes });

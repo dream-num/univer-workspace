@@ -1,15 +1,18 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import { Chat } from "@ai-sdk/react";
-import { DirectChatTransport, ToolLoopAgent, generateId, isToolUIPart, stepCountIs, validateUIMessages } from "ai";
-import type { ToolSet, UIMessage } from "ai";
+import { DirectChatTransport, ToolLoopAgent, generateId, isToolUIPart, lastAssistantMessageIsCompleteWithApprovalResponses, stepCountIs, validateUIMessages } from "ai";
+import type { UIMessage } from "ai";
+import { z } from "zod";
 import type { AgentReference, AgentMode, AgentScope, AgentSession, AgentSessionId, AgentSettings } from "../agent.types";
 import { agentReferenceToken, agentSessionIdSchema, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
-import type { McpTokenSource } from "../mcp-token";
+import type { McpGrant, McpTokenSource } from "../mcp-token";
 import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
 import type { SessionStore } from "../session-store";
 import { createModel } from "./model";
 import { redactMessages, repairInterruptedTools, withStructuredContent, worktreeExtractors } from "./messages";
+import { appendUserMessage, gateTools, settleApprovals } from "./approvals";
+import type { ApprovalSettlement } from "./approvals";
 
 type RuntimeMessage = UIMessage<unknown, never>;
 
@@ -19,7 +22,7 @@ export interface AgentRunnerDependencies {
   locks: LockManager;
   sessions: SessionStore;
   providers: Pick<Providers, "resolve">;
-  createTokenSource(mode: AgentMode): McpTokenSource;
+  createTokenSource(grant: McpGrant): McpTokenSource;
   mcpUrl: string;
 }
 export interface StartAgentInput {
@@ -51,8 +54,8 @@ function scopeLine({ scope }: AgentSettings): string {
 function modeLine({ scope, mode }: AgentSettings): string {
   return mode === "ask" ? "Ask mode: read only. Never call a write tool."
     : scope.kind === "repository" && scope.baseWorktreeId
-      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(scope.baseWorktreeId)}.`
-      : "Auto mode: put every write in one pull request. Call pr_create before the first write, and reuse that pull request for this session. Never merge; a person reviews and merges.";
+      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(scope.baseWorktreeId)} for file edits. Pages (.univer.html) publish outside pull requests after user approval.`
+      : "Auto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) publish outside pull requests after user approval. Never merge; a person reviews and merges.";
 }
 function contextPrompt(settings: AgentSettings): string {
   return `${scopeLine(settings)}\n${modeLine(settings)}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
@@ -91,6 +94,20 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
 
   function savedSession(run: ActiveRun): AgentSession {
     return structuredClone({ ...run.session, messages: redactMessages(run.session.messages, run.key) });
+  }
+
+  function authenticatedFetch(source: McpTokenSource, signal: AbortSignal): typeof fetch {
+    return async (input, init) => {
+      for (let attempt = 0; ; attempt++) {
+        const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+        headers.set("Authorization", `Bearer ${await source.token()}`);
+        const signals = [signal, ...(init?.signal ? [init.signal] : [])];
+        const response = await deps.fetch(input, { ...init, headers, credentials: "omit", redirect: "error", signal: AbortSignal.any(signals) });
+        if (response.status !== 401 || attempt === 1) return response;
+        await response.body?.cancel();
+        source.invalidate();
+      }
+    };
   }
 
   async function drive(run: ActiveRun, provider: ReturnType<Providers["resolve"]>) {
@@ -153,27 +170,26 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       if (run.stopped) return;
       const model = createModel(resolved, run.session.model, deps.fetch, mcpUrl.origin);
       token = deps.createTokenSource(run.session.mode);
-      const source = token;
-      const authenticatedFetch: typeof fetch = async (input, init) => {
-        for (let attempt = 0; ; attempt++) {
-          const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
-          headers.set("Authorization", `Bearer ${await source.token()}`);
-          const signals = [run.controller.signal, ...(init?.signal ? [init.signal] : [])];
-          const response = await deps.fetch(input, { ...init, headers, credentials: "omit", redirect: "error", signal: AbortSignal.any(signals) });
-          if (response.status !== 401 || attempt === 1) return response;
-          await response.body?.cancel();
-          source.invalidate();
+      client = await createMCPClient({ transport: { type: "http", url: mcpUrl.href, fetch: authenticatedFetch(token, run.controller.signal) } });
+      const gated = gateTools(withStructuredContent(await client.tools()), run.session.mode, async (name, input, signal) => {
+        const args = z.record(z.string(), z.unknown()).parse(input);
+        const publishToken = deps.createTokenSource("publish");
+        let publishClient: Awaited<ReturnType<typeof createMCPClient>> | undefined;
+        try {
+          publishClient = await createMCPClient({ transport: { type: "http", url: mcpUrl.href,
+            fetch: authenticatedFetch(publishToken, run.controller.signal) } });
+          return await publishClient.callTool({ name, arguments: args, options: signal ? { signal } : {} });
+        } finally {
+          try { await publishClient?.close(); } finally { await publishToken.dispose(); }
         }
-      };
-      client = await createMCPClient({ transport: { type: "http", url: mcpUrl.href, fetch: authenticatedFetch } });
-      const tools: ToolSet = withStructuredContent(await client.tools());
+      });
       let skill = "";
       try {
         const resource = await client.readResource({ uri: "skill://univer-workspace/core/SKILL.md" });
         skill = resource.contents.flatMap((content) => "text" in content ? [content.text] : []).join("\n");
       } catch { /* The core skill resource is optional on older gateways. */ }
       const agent = new ToolLoopAgent({
-        ...model, tools, stopWhen: stepCountIs(50),
+        ...model, ...gated, stopWhen: stepCountIs(50),
         onError({ error }) { streamError = new Error(redactProviderError(error, key)); },
         onStepEnd({ usage }) {
           const inputTokens = usage.inputTokens;
@@ -219,7 +235,9 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         streamError = undefined;
         steering = false;
         if (chat.messages.length) chat.messages = await validateUIMessages<RuntimeMessage>({ messages: repairInterruptedTools(chat.messages) });
-        await chat.sendMessage(next === undefined ? undefined : { text: next });
+        if (next !== undefined) chat.messages = await validateUIMessages<RuntimeMessage>({ messages: appendUserMessage(chat.messages,
+          { id: generateId(), role: "user", parts: [{ type: "text", text: next }] }) });
+        await chat.sendMessage();
         if (streamError) throw streamError;
         next = !run.stopped && run.queued.length ? run.queued.splice(0).join("\n\n") : undefined;
       } while (next !== undefined && !run.stopped);
@@ -239,8 +257,8 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       }
       if ((run.session.status === "failed" || run.session.status === "stopped") && run.queued.length) {
         const message: RuntimeMessage = { id: generateId(), role: "user", parts: [{ type: "text", text: run.queued.splice(0).join("\n\n") }] };
-        if (run.chat) run.chat.messages = [...run.chat.messages, message];
-        else run.session.messages = [...run.session.messages, message];
+        if (run.chat) run.chat.messages = await validateUIMessages<RuntimeMessage>({ messages: appendUserMessage(run.chat.messages, message) });
+        else run.session.messages = appendUserMessage(run.session.messages, message);
       }
       snapshot(redactMessages(run.chat?.messages ?? run.session.messages, key));
       persist();
@@ -248,19 +266,37 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
     }
   }
 
-  function launch(session: AgentSession, text: string, settings?: AgentSettings, references: AgentReference[] = []): Promise<AgentSession> {
+  function launch(session: AgentSession, action:
+    | { kind: "message"; text: string; settings?: AgentSettings; references?: AgentReference[] }
+    | Extract<ApprovalSettlement, { kind: "decide" }>,
+  ): Promise<AgentSession> {
     return new Promise((resolve, reject) => {
       const completion = deps.locks.request(sessionLockName(session.id), { ifAvailable: true }, async (lock) => {
         if (!lock) throw new AgentBusyError(session.id);
         session = await deps.sessions.get(session.id) ?? session;
+        if (action.kind === "decide") {
+          const messages = settleApprovals(session.messages, action);
+          const resuming = ["interrupted", "stopped", "failed"].includes(session.status) &&
+            session.messages.at(-1)?.parts.some((part) => isToolUIPart(part) && part.state === "approval-responded" &&
+              part.approval.id === action.approvalId && part.approval.approved === action.approved);
+          if (messages === session.messages && !resuming) { resolve(session); return; }
+          session = { ...session, messages, updatedAt: new Date().toISOString() };
+          if (!lastAssistantMessageIsCompleteWithApprovalResponses({ messages })) {
+            await deps.sessions.save(session);
+            resolve(session);
+            return;
+          }
+        }
+        const settings = action.kind === "message" ? action.settings : undefined;
+        const references = action.kind === "message" ? action.references ?? [] : [];
         const reminder = settings ? settingsReminder(session, settings) : null;
         const attached = referencesReminder(references);
         const message: RuntimeMessage = { id: generateId(), role: "user", metadata: { agentContextPrompt: initialContextPrompt(session), ...(references.length ? { agentReferences: references } : {}) },
-          parts: [{ type: "text", text }, ...(reminder ? [{ type: "text" as const, text: reminder }] : []), ...(attached ? [attached] : [])] };
+          parts: [{ type: "text", text: action.kind === "message" ? action.text : "" }, ...(reminder ? [{ type: "text" as const, text: reminder }] : []), ...(attached ? [attached] : [])] };
         const worktreeIds = [...session.worktreeIds];
         if (settings?.scope.kind === "repository" && settings.scope.baseWorktreeId && !worktreeIds.includes(settings.scope.baseWorktreeId)) worktreeIds.push(settings.scope.baseWorktreeId);
         const run: ActiveRun = { session: { ...session, ...(settings ? { scope: settings.scope, mode: settings.mode, model: settings.model } : {}), worktreeIds, status: transition(session.status, "send"), error: null,
-          messages: [...repairInterruptedTools(session.messages), message],
+          messages: action.kind === "message" ? appendUserMessage(repairInterruptedTools(session.messages), message) : repairInterruptedTools(session.messages),
           updatedAt: new Date().toISOString() }, chat: null, key: "",
           queued: [], stopped: false, controller: new AbortController(), completion: Promise.resolve() };
         active.set(session.id, run);
@@ -276,7 +312,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
             if (run.stopped || run.session.status !== "idle" || !run.queued.length) break;
             const text = run.queued.splice(0).join("\n\n");
             run.session = { ...run.session, status: transition(run.session.status, "send"), error: null,
-              messages: [...run.session.messages, { id: generateId(), role: "user", parts: [{ type: "text", text }] }] };
+              messages: appendUserMessage(run.session.messages, { id: generateId(), role: "user", parts: [{ type: "text", text }] }) };
             await deps.sessions.save(savedSession(run));
           } while (true);
         } finally { active.delete(session.id); }
@@ -291,7 +327,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         id: agentSessionIdSchema.parse(generateId()), userId: deps.userId, scope: input.scope, mode: input.mode, model: input.model,
         status: "idle", worktreeIds: input.scope.kind === "repository" && input.scope.baseWorktreeId ? [input.scope.baseWorktreeId] : [],
         messages: [], toolTimings: {}, cacheUsage: { inputTokens: 0, cacheReadTokens: 0, lastStep: null }, createdAt: now, updatedAt: now, error: null,
-      }, input.text, undefined, input.references);
+      }, { kind: "message", text: input.text, ...(input.references ? { references: input.references } : {}) });
     },
     async send(id: AgentSessionId, text: string, settings?: AgentSettings): Promise<AgentSession> {
       const running = active.get(id);
@@ -303,7 +339,13 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       if (running) await running.completion;
       const session = await deps.sessions.get(id);
       if (!session) throw new Error("Agent session not found");
-      return launch(session, text, settings);
+      return launch(session, { kind: "message", text, ...(settings ? { settings } : {}) });
+    },
+    async decide(id: AgentSessionId, approvalId: string, approved: boolean): Promise<AgentSession> {
+      if (active.has(id)) throw new AgentBusyError(id);
+      const session = await deps.sessions.get(id);
+      if (!session) throw new Error("Agent session not found");
+      return launch(session, { kind: "decide", approvalId, approved });
     },
     async stop(id: AgentSessionId): Promise<void> {
       const run = active.get(id);

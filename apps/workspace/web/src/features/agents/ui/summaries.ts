@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import { sessionTitle, type AgentSession } from "../agent.types";
+import { pendingApprovals } from "../approvals";
 
 export function summarize(value: unknown): string {
   if (value === undefined || value === null) return "—";
@@ -89,6 +90,10 @@ export function visibleSessions(sessions: AgentSession[], q: string, language: s
   return newestSessions(sessions).filter((session) => sessionTitle(session).toLocaleLowerCase(language).includes(term));
 }
 
+export function sessionStatus(session: AgentSession): AgentSession["status"] | "waitingApproval" {
+  return pendingApprovals(session).length ? "waitingApproval" : session.status;
+}
+
 export type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
 export type StepPart = Extract<UIMessage["parts"][number], { type: "reasoning" }> | ToolPart;
 type MessageBlock = { kind: "text"; part: Extract<UIMessage["parts"][number], { type: "text" }> } | { kind: "steps"; parts: StepPart[] };
@@ -104,9 +109,11 @@ export function messageBlocks(parts: UIMessage["parts"]): MessageBlock[] {
   }
   return blocks;
 }
-export function toolStatus(part: ToolPart, status: AgentSession["status"]): "failed" | "completed" | "running" | "incomplete" {
+export function toolStatus(part: ToolPart, status: AgentSession["status"]): "failed" | "completed" | "running" | "incomplete" | "approval" | "rejected" {
+  if (part.state === "approval-requested") return "approval";
+  if (part.state === "output-denied") return "rejected";
   const output = "output" in part ? part.output : undefined;
-  if (part.state === "output-error" || part.state === "output-denied" || Boolean(output && typeof output === "object" && "isError" in output && output.isError)) return "failed";
+  if (part.state === "output-error" || Boolean(output && typeof output === "object" && "isError" in output && output.isError)) return "failed";
   if (part.state === "output-available") return "completed";
   return status === "running" ? "running" : "incomplete";
 }

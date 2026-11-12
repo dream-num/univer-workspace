@@ -9,11 +9,11 @@ import { useI18n, type MessageKey } from "../../../shared/i18n";
 import { Alert } from "../../../shared/ui/alert";
 import { Badge } from "../../../shared/ui/badge";
 import { sessionTitle } from "../agent.types";
-import type { AgentSession, AgentSessionStatus } from "../agent.types";
+import type { AgentSession } from "../agent.types";
 import { useAgentClient } from "./client";
 import { AgentComposer } from "./composer";
 import { useAgentMessages } from "./messages";
-import { newestSessions, visibleSessions } from "./summaries";
+import { newestSessions, sessionStatus, visibleSessions } from "./summaries";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 export function useAgentSessions() {
   const client = useAgentClient();
@@ -40,7 +40,7 @@ export function HomeAgents() {
       <ul>{recent.map((session) => <li key={session.id}>
         <Link className="agent-recent-title" title={sessionTitle(session)} to="/agents/$sessionId" params={{ sessionId: session.id }}>{sessionTitle(session)}</Link>
         <div className="agent-recent-meta"><SessionScope session={session} /><time dateTime={session.updatedAt}>{formatRelativeDate(session.updatedAt, language)}</time></div>
-        <SessionStatus status={session.status} />
+        <SessionStatus session={session} />
       </li>)}</ul>
     </section> : null}
   </div>;
@@ -98,7 +98,7 @@ function SessionRow({ session, crossRepository }: { readonly session: AgentSessi
   return <tr>
     <td><Link className="agent-session-title" title={sessionTitle(session)} to="/agents/$sessionId" params={{ sessionId: session.id }}>{sessionTitle(session)}</Link></td>
     {crossRepository ? <td><SessionScope session={session} /></td> : null}
-    <td><SessionStatus status={session.status} /></td><td>{m[session.mode]}</td>
+    <td><SessionStatus session={session} /></td><td>{m[session.mode]}</td>
     <td>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}</td>
     <td><SessionModel model={session.model} /></td><td><time dateTime={session.createdAt}>{new Date(session.createdAt).toLocaleString(language)}</time></td>
   </tr>;
@@ -131,8 +131,9 @@ const stateLabels = {
   merged: "worktreeStateMerged", discarded: "worktreeStateDiscarded",
 } satisfies Record<string, MessageKey>;
 
-export function SessionStatus({ status }: { readonly status: AgentSessionStatus }) {
+export function SessionStatus({ session }: { readonly session: AgentSession }) {
   const m = useAgentMessages();
+  const status = sessionStatus(session);
   return <span className="agent-status" data-status={status}>{m[status]}</span>;
 }
 export function SessionModel({ model }: { readonly model: AgentSession["model"] }) {

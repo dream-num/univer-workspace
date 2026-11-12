@@ -2,13 +2,15 @@ import { isToolUIPart } from "ai";
 import type { ToolSet, UIMessage } from "ai";
 import { z } from "zod";
 
+export const INTERRUPTED_TOOL = "The run was interrupted before this tool returned a result. The tool may or may not have taken effect; check the current state before retrying it.";
+
 export function repairInterruptedTools(messages: UIMessage[]): UIMessage[] {
   return messages.map((message) => message.role !== "assistant" ? message : {
     ...message,
     parts: message.parts.map((part) => {
-      if (!isToolUIPart(part) || part.state === "output-available" || part.state === "output-error" || part.state === "output-denied") return part;
+      if (!isToolUIPart(part) || (part.state !== "input-streaming" && part.state !== "input-available")) return part;
       const { approval: _approval, ...rest } = part;
-      return { ...rest, input: part.input, state: "output-error" as const, errorText: "The run was interrupted before this tool returned a result. The tool may or may not have taken effect; check the current state before retrying it." };
+      return { ...rest, input: part.input, state: "output-error" as const, errorText: INTERRUPTED_TOOL };
     }),
   });
 }

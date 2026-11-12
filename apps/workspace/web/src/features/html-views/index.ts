@@ -1,1 +1,1 @@
-export { HtmlViewFile } from "./html-view";
+export { HtmlView, HtmlViewFile } from "./html-view";

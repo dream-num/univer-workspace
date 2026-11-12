@@ -292,8 +292,9 @@ export interface paths {
         /**
          * Issue a one-hour MCP access token for the browser Agents module.
          * @description Requires an interactive login session. Sessions issued by token exchange
-         *     are rejected with 403. Accepts only [read] or [read, write], in either order,
-         *     without duplicates. Never grants publish or worktree:merge.
+         *     are rejected with 403. Accepts only [read], [read, write], or [read, publish],
+         *     in either order, without duplicates. Never grants worktree:merge. The browser
+         *     requests [read, publish] only for one explicitly approved tool call.
          *     The token is bound to /mcp at PUBLIC_ORIGIN, resolved against MCP_RESOURCE_URLS,
          *     and uses the first-party client univer-workspace-agents. No refresh token
          *     is returned. This is an OAuth grant and does not appear in the PAT list.
@@ -2348,8 +2349,8 @@ export interface components {
             token: string;
             record: components["schemas"]["PersonalAccessToken"];
         };
-        /** @description Exactly [read] or [read, write], in either order, without duplicates. */
-        AgentTokenScopes: ("read" | "write")[];
+        /** @description Exactly [read], [read, write], or [read, publish], in either order, without duplicates. */
+        AgentTokenScopes: ("read" | "write" | "publish")[];
         AgentTokenCreate: {
             scopes: components["schemas"]["AgentTokenScopes"];
         };

@@ -16,6 +16,7 @@ export async function createWorkspaceBindingEngine(
   signal: AbortSignal,
   translateError: TranslateHtmlViewWriteError,
   onTrialStarted?: () => void,
+  draft = false,
 ) {
   signal.throwIfAborted();
   const resolved = await api.GET("/api/unit-resources/{unitId}", {
@@ -38,7 +39,7 @@ export async function createWorkspaceBindingEngine(
       enableReadOnlyTrial: true,
       ...(onTrialStarted ? { onTrialStarted } : {}),
       translateError,
-      canEdit: source.editorMode === "edit",
+      canEdit: !draft && source.editorMode === "edit",
       user,
       license: resolveUniverLicense(),
       collaborationClientConfig: {

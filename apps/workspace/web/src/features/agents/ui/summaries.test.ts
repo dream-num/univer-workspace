@@ -3,13 +3,41 @@ import type { UIMessage } from "ai";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStepsGroup } from "./session-page";
+import { SessionStatus } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
-import { argumentSummary, cacheHitRate, durationLabel, newestSessions, visibleSessions, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { argumentSummary, cacheHitRate, durationLabel, newestSessions, visibleSessions, messageBlocks, sessionStatus, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { session } from "../test-helpers";
 import { agentSessionIdSchema } from "../agent.types";
 import { agentMessages } from "./messages";
 
-vi.mock("../../../shared/i18n", () => ({ useI18n: () => ({ language: "en-US" }) }));
+const i18n = vi.hoisted((): { language: "en-US" | "zh-CN" } => ({ language: "en-US" }));
+vi.mock("../../../shared/i18n", () => ({ useI18n: () => i18n }));
+
+describe("Agent session status badges", () => {
+  const request = { id: "approval-message", role: "assistant", parts: [{
+    type: "dynamic-tool", toolName: "html_view_create", toolCallId: "publish", state: "approval-requested",
+    input: { name: "Page", space: "repo", html: "<html/>" }, approval: { id: "approval" },
+  }] } satisfies UIMessage;
+
+  it.each(["en-US", "zh-CN"] as const)("shows pending approvals in %s", (language) => {
+    const pending = session({ messages: [request] });
+    expect(sessionStatus(pending)).toBe("waitingApproval");
+    i18n.language = language;
+    try {
+      const html = renderToStaticMarkup(createElement(SessionStatus, { session: pending }));
+      expect(html).toContain(language === "en-US" ? "Waiting for approval" : "等待批准");
+      expect(html).toContain('data-status="waitingApproval"');
+      expect(html).not.toContain(agentMessages[language].idle);
+    } finally { i18n.language = "en-US"; }
+  });
+  it("preserves stored status when there is no open approval", () => {
+    for (const status of ["running", "idle", "interrupted", "stopped", "failed"] as const) {
+      expect(sessionStatus(session({ status }))).toBe(status);
+    }
+    expect(sessionStatus(session({ status: "running", messages: [request] }))).toBe("running");
+    expect(sessionStatus(session({ messages: [request, { id: "followup", role: "user", parts: [{ type: "text", text: "Change the page" }] }] }))).toBe("idle");
+  });
+});
 
 describe("Agent tool cards", () => {
   it("formats cache hit rates as whole percentages or a placeholder when unavailable", () => {
@@ -98,10 +126,23 @@ describe("Agent steps groups", () => {
     const tool = { ...pending, state: "output-available", output: {} } satisfies ToolPart;
     expect(toolStatus(tool, "idle")).toBe("completed");
     expect(toolStatus({ ...pending, state: "output-error", errorText: "Failed" }, "running")).toBe("failed");
-    expect(toolStatus({ ...pending, state: "output-denied", approval: { id: "approval-a", approved: false } }, "idle")).toBe("failed");
+    expect(toolStatus({ ...pending, state: "output-denied", approval: { id: "approval-a", approved: false } }, "idle")).toBe("rejected");
     expect(toolStatus({ ...tool, output: { isError: true } }, "idle")).toBe("failed");
     expect(toolStatus(pending, "running")).toBe("running");
     expect(toolStatus(pending, "stopped")).toBe("incomplete");
+  });
+  it.each(["en-US", "zh-CN"] as const)("shows rejected calls without a failure summary in %s", (language) => {
+    const denied = { type: "dynamic-tool", toolName: "html_view_create", toolCallId: "publish", state: "output-denied", input: {}, approval: { id: "approval", approved: false } } satisfies ToolPart;
+    i18n.language = language;
+    try {
+      const html = renderToStaticMarkup(createElement(AgentStepsGroup, { parts: [denied], session: session() }));
+      const label = language === "en-US" ? "Rejected" : "已拒绝";
+      expect(html).toContain('data-status="rejected"');
+      expect(html).toContain(`aria-label="${label}"`);
+      expect(html).toContain(`<span>${label}</span>`);
+      expect(html).not.toContain("agent-steps-failed");
+      expect(html).not.toContain('aria-label="' + agentMessages[language].toolFailed + '"');
+    } finally { i18n.language = "en-US"; }
   });
   it("shows working for the current group of a running session, including between model steps", () => {
     const tool = { type: "dynamic-tool", toolName: "browse", toolCallId: "call-a", state: "input-available", input: { query: "Sales" } } satisfies ToolPart;
@@ -118,10 +159,11 @@ describe("Agent steps groups", () => {
     const parts: StepPart[] = [
       { ...call, state: "output-error", errorText: "Failed" },
       { ...call, state: "output-available", output: { isError: true } },
+      { ...call, state: "output-denied", approval: { id: "approval", approved: false } },
       ...Array.from({ length: 5 }, (): StepPart => ({ type: "reasoning", text: "Plan", state: "done" })),
     ];
     const html = renderToStaticMarkup(createElement(AgentStepsGroup, { parts, session: session() }));
-    expect(html).toContain("5 thoughts · 2 tool calls");
+    expect(html).toContain("5 thoughts · 3 tool calls");
     expect(html).toContain("2 failed");
     expect(html).not.toContain("browse");
   });

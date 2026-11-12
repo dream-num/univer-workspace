@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { useEffect, useState } from "react";
-import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, LoaderCircle } from "lucide-react";
+import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle } from "lucide-react";
 import { IssueMarkdown } from "../../issues/issue-markdown";
 import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
@@ -12,6 +12,8 @@ import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./comp
 import { useAgentClient } from "./client";
 import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
+import { pendingApprovals, resumableApprovalResponse } from "../approvals";
+import { ApprovalCard } from "./approval-card";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
@@ -68,16 +70,28 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
       .catch((cause: unknown) => { if (!cancelled) setError(String(cause)); });
     return () => { cancelled = true; };
   }, [client, session.id, session.status]);
+  async function decide(approvalId: string, approved: boolean) {
+    setPending(true); setError("");
+    try { await (await client.runner()).decide(session.id, approvalId, approved); }
+    catch (cause) {
+      if (cause instanceof Error && "code" in cause && cause.code === "AGENT_BUSY") setBusyElsewhere(true);
+      else setError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setPending(false); }
+  }
+  const approvals = pendingApprovals(session);
+  const resumableApproval = resumableApprovalResponse(session.messages);
   const lastAssistant = session.messages.map((message) => message.role).lastIndexOf("assistant");
   return <div className="agent-session-layout">
     <div className="agent-conversation">
-      <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus status={session.status} /></header>
+      <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus session={session} /></header>
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
         {message.role === "user" ? <p>{splitReferenceText(message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n"), messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>
           : <AssistantMessage message={message} session={session} current={index === lastAssistant} />}
       </article>)}</div>
       {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
+      <div className="agent-approvals">{approvals.map((approval) => <ApprovalCard key={approval.approvalId} approval={approval}
+        disabled={pending || busyElsewhere} onDecide={(approved) => void decide(approval.approvalId, approved)} />)}</div>
       {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
         <div className="agent-composer-box">
           <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={3} onChange={(event) => setText(event.target.value)}
@@ -89,7 +103,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
             {session.status === "running" ? <Button variant="secondary" onClick={() => {
               setPending(true);
               void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));
-            }} disabled={pending}>{m.stop}</Button> : ["interrupted", "stopped", "failed"].includes(session.status) ? <Button variant="secondary" disabled={pending} onClick={() => void send(m.continue)}>{m.continue}</Button> : null}
+            }} disabled={pending}>{m.stop}</Button> : ["interrupted", "stopped", "failed"].includes(session.status) ? <Button variant="secondary" disabled={pending} onClick={() => resumableApproval ? void decide(resumableApproval.id, resumableApproval.approved) : void send(m.continue)}>{m.continue}</Button> : null}
             <Button className="agent-send" type="submit" aria-label={m.send} aria-keyshortcuts="Shift+Enter" disabled={pending || !text.trim()}><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></Button>
           </div>
         </div>
@@ -139,14 +153,15 @@ function StepRow({ part, session }: { readonly part: StepPart; readonly session:
   const [open, setOpen] = useState(false);
   const state = part.type === "reasoning" ? part.state === "streaming" ? session.status === "running" ? "running" : "incomplete" : "completed" : toolStatus(part, session.status);
   const running = state === "running";
-  const Icon = state === "failed" || state === "incomplete" ? CircleAlert : state === "completed" ? CheckCircle2 : LoaderCircle;
-  const status = state === "failed" ? m.toolFailed : state === "completed" ? m.toolDone : m[session.status];
+  const Icon = state === "rejected" ? CircleX : state === "failed" || state === "incomplete" ? CircleAlert : state === "completed" ? CheckCircle2 : LoaderCircle;
+  const status = state === "rejected" ? m.toolRejected : state === "approval" ? m.waitingApproval : state === "failed" ? m.toolFailed : state === "completed" ? m.toolDone : m[session.status];
   const timing = part.type !== "reasoning" ? session.toolTimings[part.toolCallId] : undefined;
   return <div className="agent-step" data-status={state}>
     <button type="button" className="agent-step-row" aria-expanded={open} onClick={() => setOpen(!open)}>
       <Icon className={running ? "agent-step-icon animate-spin" : "agent-step-icon"} role="img" aria-label={status} />
       <span className={part.type === "reasoning" ? "agent-step-label" : "agent-step-name"}>{part.type === "reasoning" ? running ? m.thinkingStep : m.thought : toolName(part)}</span>
       <span className="agent-step-preview">{part.type === "reasoning" ? part.text.trimStart().split(/\r?\n/, 1)[0] : argumentSummary(part.input)}</span>
+      {state === "approval" || state === "rejected" ? <span>{status}</span> : null}
       {part.type !== "reasoning" ? <span className="agent-step-duration">{timing ? durationLabel(timing.startedAt, timing.endedAt ?? (running ? new Date().toISOString() : null)) : "—"}</span> : null}
     </button>
     {open ? <div className="agent-step-body">{part.type === "reasoning" ? <IssueMarkdown text={part.text} /> : <ToolBody part={part} state={state} status={status} />}</div> : null}

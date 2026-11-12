@@ -3,7 +3,7 @@ import type { UIMessage } from "ai";
 import { expect, it } from "vitest";
 import { redactMessages, repairInterruptedTools, withStructuredContent } from "./messages";
 
-it("repairs every unfinished assistant tool state while preserving completed parts", () => {
+it("repairs interrupted tool inputs while preserving approvals and completed parts", () => {
   const messages: UIMessage[] = [{ id: "a", role: "assistant", parts: [
     { type: "dynamic-tool", toolName: "tool", toolCallId: "1", state: "input-streaming" },
     { type: "dynamic-tool", toolName: "tool", toolCallId: "2", state: "input-available", input: {} },
@@ -20,7 +20,8 @@ it("repairs every unfinished assistant tool state while preserving completed par
     expect.objectContaining({ toolCallId: "1", state: "output-error", errorText: expect.stringContaining("interrupted") }),
     expect.objectContaining({ toolCallId: "5", state: "output-error", errorText: expect.stringContaining("interrupted") }),
   ]));
-  for (const part of repaired[0]!.parts.slice(0, 5)) {
+  expect(repaired[0]?.parts.slice(2, 4)).toEqual(messages[0]?.parts.slice(2, 4));
+  for (const part of [repaired[0]!.parts[0], repaired[0]!.parts[1], repaired[0]!.parts[4]]) {
     expect(part).toMatchObject({ errorText: expect.stringContaining("may or may not have taken effect") });
     expect(part).toMatchObject({ errorText: expect.stringContaining("check the current state before retrying") });
   }
