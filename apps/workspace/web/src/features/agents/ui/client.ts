@@ -1,4 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
+import { api } from "../../../shared/api/client";
+import { apiError } from "../../../shared/api/errors";
 import { sessionQueryOptions } from "../../auth/auth.queries";
 import { loadAgentRuntime } from "../index";
 import { createSessionStore, createProviders, createMcpTokenSource } from "../stores";
@@ -35,6 +37,12 @@ function createClient(userId: string) {
     prewarm() { return runtime ??= loadAgentRuntime(); },
     runner() {
       return runner ??= (runtime ??= loadAgentRuntime()).then(({ createAgentRunner }) => createAgentRunner({
+        async getDraft(draftId) {
+          const { data, error, response } = await api.GET("/api/html-view-drafts/{draftId}", { params: { path: { draftId } } });
+          if (response.status === 404) return null;
+          if (error) throw apiError(error);
+          return data.draft;
+        },
         userId, fetch, locks: navigator.locks, sessions, providers,
         mcpUrl: `${location.origin}/mcp`, createTokenSource: (grant) => createMcpTokenSource({ grant, fetch }),
       }));

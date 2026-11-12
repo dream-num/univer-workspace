@@ -208,8 +208,8 @@ underscores or hyphens. After an unknown content commit, read back before retryi
 
 `html_view_create` and `html_view_replace` only save drafts. Give the user
 `draft.previewUrl`, say the page is not live until they publish it in Workspace,
-and end your turn. Before calling a page live, sharing its link or revising it again,
-call `html_view_draft_get` with the returned draft ID. Share `shareUrl` only when
+and end your turn. Before saying whether a page is live or still a draft, sharing its link or revising it,
+call `html_view_draft_get` with the returned draft ID. Users publish in Workspace without telling you. Share `shareUrl` only when
 `state` is `published`. On `rejected`, ask what to change. On `conflicted`, read the
 page again with `html_view_read` and draft again. On `expired`, draft again with a
 new idempotency_key. MCP cannot publish or reject a draft.
