@@ -6,7 +6,7 @@ import { apiError } from "../../../shared/api/errors";
 import { Button } from "../../../shared/ui/button";
 import { resourceOpenQueryOptions } from "../../resources";
 import { spaceQueryOptions } from "../../spaces";
-import type { PendingApproval } from "../runtime/approvals";
+import type { PendingApproval } from "../approvals";
 import { useAgentMessages } from "./messages";
 
 const DraftPreview = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftPreview })));

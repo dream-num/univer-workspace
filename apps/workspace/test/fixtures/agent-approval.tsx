@@ -8,7 +8,7 @@ import { sessionQueryKey } from "../../web/src/features/auth";
 import { spaceQueryOptions } from "../../web/src/features/spaces";
 import { resourceOpenQueryOptions } from "../../web/src/features/resources";
 import { ApprovalCard } from "../../web/src/features/agents/ui/approval-card";
-import type { ApprovalAction } from "../../web/src/features/agents/runtime/approvals";
+import type { ApprovalAction } from "../../web/src/features/agents/approvals";
 import "../../web/src/app/styles/global.css";
 import "../../web/src/modes/repository/theme.css";
 import "../../web/src/features/agents/ui/agents.css";

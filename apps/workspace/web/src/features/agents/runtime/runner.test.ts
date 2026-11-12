@@ -6,7 +6,8 @@ import { createMcpTokenSource } from "../mcp-token";
 import { createProviders, deepSeekDefault } from "../providers";
 import { createSessionStore } from "../session-store";
 import { deferred, session, storageOptions } from "../test-helpers";
-import { pendingApprovals, settleApprovals, SUPERSEDED_APPROVAL } from "./approvals";
+import { pendingApprovals } from "../approvals";
+import { settleApprovals, SUPERSEDED_APPROVAL } from "./approvals";
 import { AgentBusyError, createAgentRunner, referencesReminder } from "./runner";
 
 const mcpUrl = "https://workspace.test/mcp";

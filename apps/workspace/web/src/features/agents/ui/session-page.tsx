@@ -1,4 +1,3 @@
-import { isToolUIPart, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import type { UIMessage } from "ai";
 import { useEffect, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle } from "lucide-react";
@@ -13,7 +12,7 @@ import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./comp
 import { useAgentClient } from "./client";
 import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
-import { pendingApprovals } from "../runtime/approvals";
+import { pendingApprovals, resumableApprovalResponse } from "../approvals";
 import { ApprovalCard } from "./approval-card";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
@@ -80,8 +79,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     } finally { setPending(false); }
   }
   const approvals = pendingApprovals(session);
-  const resumableApproval = lastAssistantMessageIsCompleteWithApprovalResponses({ messages: session.messages })
-    ? session.messages.at(-1)?.parts.filter(isToolUIPart).find((part) => part.state === "approval-responded")?.approval : undefined;
+  const resumableApproval = resumableApprovalResponse(session.messages);
   const lastAssistant = session.messages.map((message) => message.role).lastIndexOf("assistant");
   return <div className="agent-session-layout">
     <div className="agent-conversation">

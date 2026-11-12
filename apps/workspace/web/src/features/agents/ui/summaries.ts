@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import { sessionTitle, type AgentSession } from "../agent.types";
-import { pendingApprovals } from "../runtime/approvals";
+import { pendingApprovals } from "../approvals";
 
 export function summarize(value: unknown): string {
   if (value === undefined || value === null) return "—";

@@ -1,8 +1,7 @@
 import { dynamicTool, jsonSchema } from "ai";
 import type { UIMessage } from "ai";
 import { describe, expect, it, vi } from "vitest";
-import { describeApproval, gateTools, pendingApprovals, settleApprovals, SUPERSEDED_APPROVAL } from "./approvals";
-import { session } from "../test-helpers";
+import { gateTools, settleApprovals, SUPERSEDED_APPROVAL } from "./approvals";
 
 const request: UIMessage = { id: "assistant", role: "assistant", parts: [
   { type: "dynamic-tool", toolName: "html_view_create", toolCallId: "call", state: "approval-requested", input: { name: "Page", space: "repo", html: "<html/>" }, approval: { id: "approval" } },
@@ -38,14 +37,6 @@ describe("scope-based tool approval", () => {
   });
 });
 
-it("derives pending requests only when the run is no longer running", () => {
-  expect(pendingApprovals(session({ messages: [request] }))).toEqual([{
-    approvalId: "approval", toolCallId: "call", toolName: "html_view_create",
-    action: { kind: "create", name: "Page", spaceId: "repo", html: "<html/>" },
-  }]);
-  expect(pendingApprovals(session({ status: "running", messages: [request] }))).toEqual([]);
-});
-
 it("settles one decision without mutating history and ignores stale IDs", () => {
   const messages = [request];
   expect(settleApprovals(messages, { kind: "decide", approvalId: "stale", approved: true })).toBe(messages);
@@ -62,10 +53,4 @@ it("denies open requests on a new message and interrupts approved calls without 
   expect(settleApprovals(approved, { kind: "user-message" })[0]?.parts[0]).toMatchObject({ state: "output-error", errorText: expect.stringContaining("may or may not have taken effect") });
   const denied = settleApprovals([request], { kind: "decide", approvalId: "approval", approved: false });
   expect(settleApprovals(denied, { kind: "user-message" })[0]?.parts[0]).toMatchObject({ state: "output-denied", approval: { approved: false } });
-});
-
-it("describes uploads, replacements and unfamiliar inputs without making policy", () => {
-  expect(describeApproval("html_view_create", { name: "Page", space: "s", html_upload_id: "upload" })).toMatchObject({ kind: "create", html: null });
-  expect(describeApproval("html_view_replace", { resource: "r", html: "draft", etag: "v1" })).toEqual({ kind: "replace", resourceId: "r", html: "draft", etag: "v1" });
-  expect(describeApproval("html_view_create", {})).toEqual({ kind: "other", input: {} });
 });
