@@ -12,7 +12,7 @@ it("validates persisted metadata and rejects old gateway payloads", () => {
 it("shortens the longest descriptions to fit while keeping every name and escaping markup", () => {
   const skills = Array.from({ length: 12 }, (_, index) => ({ name: `skill-${index}`, source: "repository" as const,
     modelInvocable: true, userInvocable: true, description: index ? "short" : "<".repeat(2000) }));
-  const reminder = skillsReminder({ ...catalog, skills }, null, { kind: "global" })!.text;
+  const reminder = skillsReminder({ ...catalog, skills }, null)!.text;
   expect(reminder.length).toBeLessThanOrEqual(8000);
   expect(reminder.match(/<\/system-reminder>/g)).toHaveLength(1);
   for (const skill of skills) expect(reminder).toContain(`- ${skill.name} (repository):`);
@@ -21,16 +21,24 @@ it("shortens the longest descriptions to fit while keeping every name and escapi
 });
 it("ignores hidden skills, paths and diagnostics when comparing the model-visible catalog", () => {
   const hidden = { name: "manual", description: "Manual", source: "user" as const, modelInvocable: false, userInvocable: true };
-  expect(skillsReminder({ ...catalog, skills: [hidden] }, null, { kind: "global" })).toBeNull();
+  expect(skillsReminder({ ...catalog, skills: [hidden] }, null)).toBeNull();
   const visible = { ...hidden, modelInvocable: true };
-  expect(skillsReminder({ ...catalog, skills: [{ ...visible, path: "changed" }], repository: "loaded" }, { ...catalog, skills: [visible] }, { kind: "global" })).toBeNull();
+  expect(skillsReminder({ ...catalog, skills: [{ ...visible, path: "changed" }], repository: "loaded" }, { ...catalog, skills: [visible] })).toBeNull();
 });
 
 it("fits a large catalog of equally long descriptions without dropping names", () => {
   const skills = Array.from({ length: 100 }, (_, index) => ({ name: `skill-${index}`, source: "user" as const,
     modelInvocable: true, userInvocable: true, description: "<".repeat(1024) }));
-  const reminder = skillsReminder({ ...catalog, skills }, null, { kind: "global" })!.text;
+  const reminder = skillsReminder({ ...catalog, skills }, null)!.text;
   expect(reminder.length).toBeLessThanOrEqual(8000);
   for (const skill of skills) expect(reminder).toContain(`- ${skill.name} (user):`);
   expect(reminder).not.toMatch(/\\u0{0,2}3?\n/);
+});
+
+it("cuts shortened descriptions on code point boundaries", () => {
+  const skills = Array.from({ length: 10 }, (_, index) => ({ name: `skill-${index}`, source: "user" as const, modelInvocable: true,
+    userInvocable: true, description: (index % 2 ? "a" : "") + "\u{1F600}".repeat(index % 2 ? 511 : 512) }));
+  const reminder = skillsReminder({ ...catalog, skills }, null)!.text;
+  expect(reminder.length).toBeLessThanOrEqual(8000);
+  expect(reminder).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
 });

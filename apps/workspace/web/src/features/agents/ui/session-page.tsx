@@ -186,7 +186,7 @@ function SessionSkills({ session }: { readonly session: AgentSession }) {
       {used.has(skill.name) ? <span className="agent-skill-used">{m.skillUsed}</span> : null}
     </li>)}</ul>}
     {hidden || catalog?.diagnostics.length ? <button type="button" className="agent-steps-window" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-      {expanded ? m.showFewerSkills : hidden ? m.showMoreSkills(hidden) : m.showSkillDiagnostics}
+      {expanded ? hidden ? m.showFewerSkills : m.hideSkillDiagnostics : hidden ? m.showMoreSkills(hidden) : m.showSkillDiagnostics}
     </button> : null}
     {expanded && catalog?.diagnostics.length ? <ul className="agent-skill-diagnostics">{catalog.diagnostics.map((diagnostic, index) => <li key={index}>
       {diagnostic.source === "repository" ? m.repository : m.personalSkill} · {m.skillProblems[diagnostic.problem]} · {diagnostic.path}{diagnostic.detail ? ` · ${diagnostic.detail}` : ""}

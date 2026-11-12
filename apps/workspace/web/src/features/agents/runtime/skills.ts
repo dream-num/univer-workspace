@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { skillCatalogSchema, skillEntrySchema, SYSTEM_REMINDER_START } from "../agent.types";
-import type { AgentScope, SkillCatalog } from "../agent.types";
+import type { SkillCatalog } from "../agent.types";
 
 export const gatewaySkillCatalogSchema = skillCatalogSchema.extend({
   skills: z.array(skillEntrySchema.extend({ source: z.enum(["builtin", "repository", "user"]) })),
@@ -8,7 +8,7 @@ export const gatewaySkillCatalogSchema = skillCatalogSchema.extend({
   ...catalog, skills: catalog.skills.flatMap((skill) => skill.source === "builtin" ? [] : [{ ...skill, source: skill.source }]),
 }));
 
-export function skillsReminder(catalog: SkillCatalog, previous: SkillCatalog | null, scope: AgentScope): { type: "text"; text: string } | null {
+export function skillsReminder(catalog: SkillCatalog, previous: SkillCatalog | null): { type: "text"; text: string } | null {
   const visible = (value: SkillCatalog | null) => value?.skills.filter((skill) => skill.modelInvocable)
     .map(({ name, source, description }) => ({ name, source, description })) ?? [];
   const skills = visible(catalog);
@@ -16,7 +16,7 @@ export function skillsReminder(catalog: SkillCatalog, previous: SkillCatalog | n
   const descriptions = skills.map((skill) => skill.description.replaceAll("<", "\\u003c"));
   const render = () => [`\n\n${SYSTEM_REMINDER_START}`,
     "Skills available in this session. This list replaces any earlier one.",
-    `Read a skill with skills_read {"name": "<name>"${scope.kind === "repository" ? `, "repo": ${JSON.stringify(scope.spaceId).replaceAll("<", "\\u003c")}` : ""}} before using it.`,
+    'Read a skill with skills_read {"name": "<name>"} before using it. In a repository scope, also pass the current Space ID as repo.',
     ...(skills.length ? skills.map((skill, index) => `- ${skill.name.replaceAll("<", "\\u003c")} (${skill.source}): ${descriptions[index]}`) : ["No skills are available now."]),
     "</system-reminder>"].join("\n");
   let text = render();
@@ -33,7 +33,7 @@ export function skillsReminder(catalog: SkillCatalog, previous: SkillCatalog | n
     }
     for (let index = 0; index < descriptions.length; index++) {
       const description = descriptions[index]!;
-      if (description.length > limit) descriptions[index] = description.slice(0, limit).replace(/\\(?:u0{0,2}3?)?$/, "");
+      if (description.length > limit) descriptions[index] = description.slice(0, limit).replace(/\\(?:u0{0,2}3?)?$/, "").replace(/[\uD800-\uDBFF]$/, "");
     }
     text = render();
   }

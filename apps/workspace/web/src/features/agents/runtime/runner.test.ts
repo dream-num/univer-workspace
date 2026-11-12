@@ -106,7 +106,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const first = (await test.finished(started.id))!;
     expect(messageSkills(first.messages[0]?.metadata)).toEqual(personalSkills);
     expect(first.messages[0]?.parts).toHaveLength(2);
-    expect(first.messages[0]?.parts[1]).toEqual({ type: "text", text: '\n\n<system-reminder>\nSkills available in this session. This list replaces any earlier one.\nRead a skill with skills_read {"name": "<name>"} before using it.\n- weekly-report (user): Write the weekly report.\n</system-reminder>' });
+    expect(first.messages[0]?.parts[1]).toEqual({ type: "text", text: '\n\n<system-reminder>\nSkills available in this session. This list replaces any earlier one.\nRead a skill with skills_read {"name": "<name>"} before using it. In a repository scope, also pass the current Space ID as repo.\n- weekly-report (user): Write the weekly report.\n</system-reminder>' });
     expect(test.saved.some((value) => value.status === "running" && messageSkills(value.messages[0]?.metadata)?.skills.length === 1)).toBe(true);
     const plainBody = JSON.parse(test.modelBodies[0]!);
     const firstBody = JSON.parse(test.modelBodies[1]!);
@@ -124,7 +124,8 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const thirdBody = JSON.parse(test.modelBodies[3]!);
     expect(thirdBody.messages.slice(0, secondBody.messages.length)).toEqual(secondBody.messages);
     expect(thirdBody.tools).toEqual(firstBody.tools);
-    expect(thirdBody.messages.at(-1).content).toContain('skills_read {"name": "<name>", "repo": "repo-2"}');
+    expect(thirdBody.messages.at(-1).content).toContain('Space ID is "repo-2"');
+    expect(thirdBody.messages.at(-1).content).not.toContain('"repo": "repo-2"');
     expect(thirdBody.messages.at(-1).content).toContain("weekly-report (repository): Repository report.");
     expect(third.messages.slice(0, second.messages.length)).toEqual(second.messages);
     expect(skills.mock.calls.at(-1)).toEqual([{ repo: "repo-2" }]);

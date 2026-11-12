@@ -10,7 +10,7 @@ if (!Number.isInteger(port) || port < 1 || port > 65535 || !values.script || !va
 }
 const script = JSON.parse(readFileSync(values.script, "utf8"));
 if (typeof script.model !== "string" || !script.model || !Array.isArray(script.steps) || script.steps.some((step) =>
-  !step || (typeof step.text !== "string" && !(step.tool && typeof step.tool.name === "string" &&
+  !step || (typeof step.text === "string") === (step.tool !== undefined) || (step.tool !== undefined && !(typeof step.tool.name === "string" && step.tool.name &&
     step.tool.arguments && typeof step.tool.arguments === "object" && !Array.isArray(step.tool.arguments))))) {
   throw new Error('Script needs {model: string, steps: [{text: string} | {tool: {name: string, arguments: object}}]}');
 }

@@ -204,7 +204,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
           .map((item) => messageSkills(item.metadata)).reverse().find((item) => item !== null) ?? null;
         const current = catalog ?? previous;
         if (current) {
-          const reminder = catalog ? skillsReminder(catalog, previous, run.session.scope) : null;
+          const reminder = catalog ? skillsReminder(catalog, previous) : null;
           message.metadata = { ...(message.metadata && typeof message.metadata === "object" ? message.metadata : {}), agentSkills: current };
           if (reminder) message.parts.push(reminder);
           persist();
