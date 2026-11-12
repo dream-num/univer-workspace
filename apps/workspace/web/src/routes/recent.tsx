@@ -4,6 +4,7 @@ import { useModeDefinition } from "../modes/registry";
 
 export const Route = createFileRoute("/recent")({
   validateSearch: (search: Readonly<Record<string, unknown>>) => ({
+    ...(search.tab === "sessions" ? { tab: "sessions" as const } : {}),
     ...(typeof search.q === "string" && search.q ? { q: search.q.slice(0, 200) } : {}),
   }),
   loader: ({ context, location }) =>

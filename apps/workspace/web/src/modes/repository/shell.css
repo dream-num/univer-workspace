@@ -246,7 +246,7 @@
   .rd-home {
     display: grid;
     flex: 1;
-    grid-template-columns: 272px minmax(0, 1fr) 300px;
+    grid-template-columns: 272px minmax(0, 1fr);
     min-height: 100%;
   }
   .rd-rail {
@@ -372,47 +372,8 @@
   .rd-all:hover {
     color: var(--rd-ink);
   }
-  .rd-agent-card {
-    margin-top: 26px;
-    padding: 20px 6px 0;
-    border-top: 1px solid var(--rd-line);
-  }
-  .rd-agent-card h3 {
-    font-size: 14.5px;
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    margin-bottom: 8px;
-    font-weight: 600;
-  }
-  .rd-agent-card h3 svg {
-    width: 14px;
-    height: 14px;
-  }
-  .rd-agent-card p {
-    color: var(--rd-ink-2);
-    font-size: 13px;
-    margin-bottom: 14px;
-  }
-  .rd-agent-card .repository-secondary-link {
-    width: 100%;
-    height: 34px;
-    padding-inline: 10px;
-    white-space: nowrap;
-    font-size: 13.5px;
-    font-weight: 600;
-  }
-  .rd-agent-card .repository-secondary-link svg {
-    width: 15px;
-    height: 15px;
-  }
   .rd-homemain {
     padding: 36px 44px 110px;
-    min-width: 0;
-  }
-  .rd-rightrail {
-    padding: 36px 28px 96px;
-    border-left: 1px solid var(--rd-line);
     min-width: 0;
   }
   .rd-masthead {
@@ -600,14 +561,6 @@
     .rd-home {
       grid-template-columns: 248px minmax(0, 1fr);
     }
-    .rd-rightrail {
-      grid-column: 2;
-      padding: 0 44px 110px;
-      border-left: 0;
-    }
-    .rd-homemain {
-      padding-bottom: 20px;
-    }
   }
   @media (max-width: 1080px) {
     .rd-top {
@@ -661,11 +614,6 @@
     }
     .rd-homemain {
       padding: 24px 16px 20px;
-    }
-    .rd-rightrail {
-      grid-column: auto;
-      order: 3;
-      padding: 0 16px 110px;
     }
     .rd-masthead {
       padding: 22px 16px 0;

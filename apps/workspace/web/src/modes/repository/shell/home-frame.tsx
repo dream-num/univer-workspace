@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, BookMarked, Bot, Download, LockKeyhole, Pin } from "lucide-react";
+import { ArrowRight, BookMarked, LockKeyhole, Pin } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { mySpacesQueryOptions, spacePinsQueryOptions } from "../../../features/spaces";
-import { AGENT_DOWNLOAD_URL } from "../../../features/worktrees/worktree-onboarding";
+import { HomeTools } from "./home-tools";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
 import type { HomeWork } from "../data";
@@ -14,12 +14,10 @@ import { spaceDisplayName } from "../space-name";
 
 export function HomeFrame({
   children,
-  rightRail,
   openBySpace,
   updatedBySpace,
 }: {
   readonly children: ReactNode;
-  readonly rightRail: ReactNode;
   readonly updatedBySpace: HomeWork["updatedBySpace"] | undefined;
   readonly openBySpace: HomeWork["openBySpace"] | undefined;
 }) {
@@ -27,7 +25,6 @@ export function HomeFrame({
     <div className="rd-home">
       <HomeRail openBySpace={openBySpace} updatedBySpace={updatedBySpace} />
       <div className="rd-homemain">{children}</div>
-      <aside className="rd-rightrail">{rightRail}</aside>
     </div>
   );
 }
@@ -102,7 +99,7 @@ function HomeRail({ openBySpace, updatedBySpace }: {
                       <span className="rd-rf">
                         {updatedAt
                           ? t("repositoryUpdated", { date: formatRelativeDate(updatedAt, language) })
-                          : t("repositoryNoActivity")}
+                          : t("repositoryNoActivityMeta")}
                       </span>
                     )}
                   </Link>
@@ -121,22 +118,7 @@ function HomeRail({ openBySpace, updatedBySpace }: {
           <ArrowRight aria-hidden="true" />
         </Link>
       </section>
-      <section className="rd-agent-card">
-        <h3>
-          <span className="rd-repo-ic"><Bot aria-hidden="true" /></span>
-          {t("dashboardAgentTitle")}
-        </h3>
-        <p>{t("dashboardAgentDescription")}</p>
-        <a
-          className="repository-secondary-link"
-          href={AGENT_DOWNLOAD_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Download aria-hidden="true" />
-          {t("onboardingDownload")}
-        </a>
-      </section>
+      <HomeTools />
     </aside>
   );
 }

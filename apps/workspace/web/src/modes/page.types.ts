@@ -10,6 +10,7 @@ export interface HomePageProps {
 }
 
 export interface RecentPageProps {
+  readonly tab?: "sessions";
   readonly q?: string;
 }
 

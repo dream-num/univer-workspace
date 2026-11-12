@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import type { AgentSession } from "../agent.types";
+import { sessionTitle, type AgentSession } from "../agent.types";
 
 export function summarize(value: unknown): string {
   if (value === undefined || value === null) return "—";
@@ -82,6 +82,11 @@ export function pullRequestUrl(value: unknown, origin: string): string | null {
 export function newestSessions(sessions: AgentSession[], spaceId?: string) {
   return sessions.filter((session) => !spaceId || session.scope.kind === "repository" && session.scope.spaceId === spaceId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export function visibleSessions(sessions: AgentSession[], q: string, language: string) {
+  const term = q.trim().toLocaleLowerCase(language);
+  return newestSessions(sessions).filter((session) => sessionTitle(session).toLocaleLowerCase(language).includes(term));
 }
 
 export type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;

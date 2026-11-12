@@ -1,13 +1,23 @@
 html[data-ui-mode="repository"] .agent-page { padding: 28px 0; }
-html[data-ui-mode="repository"] .agent-home { min-height: 331px; margin-bottom: 36px; }
-html[data-ui-mode="repository"] .agent-composer { min-height: 331px; display: grid; align-content: start; gap: 12px; }
+html[data-ui-mode="repository"] .agent-home { margin-bottom: 36px; }
+html[data-ui-mode="repository"] .agent-composer { display: grid; align-content: start; gap: 12px; }
 html[data-ui-mode="repository"] .agent-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 html[data-ui-mode="repository"] .agent-controls > button { width: auto; }
 html[data-ui-mode="repository"] .agent-scope { display: flex; align-items: center; gap: 12px; font-size: 13px; }
-html[data-ui-mode="repository"] .agent-scope > button { max-width: 360px; }
+html[data-ui-mode="repository"] .agent-scope > button { width: auto; max-width: 240px; }
 html[data-ui-mode="repository"] .agent-note { margin: 8px 0; font-size: 13px; color: var(--rd-ink-2); }
 html[data-ui-mode="repository"] .agent-recent { margin-top: 24px; }
-html[data-ui-mode="repository"] .agent-recent li { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--rd-line); }
+html[data-ui-mode="repository"] .agent-recent ul { overflow: hidden; margin: 0; padding: 0; list-style: none; border: 1px solid var(--rd-line); border-radius: 14px; background: var(--rd-panel); }
+html[data-ui-mode="repository"] .agent-recent li { display: flex; align-items: center; gap: 16px; padding: 13px 16px; }
+html[data-ui-mode="repository"] .agent-recent li + li { border-top: 1px solid var(--rd-line); }
+html[data-ui-mode="repository"] .agent-recent li:hover { background: var(--rd-panel-2); }
+html[data-ui-mode="repository"] .agent-recent-title { flex: 1; min-width: 0; font-weight: 600; }
+html[data-ui-mode="repository"] .agent-recent-meta { display: flex; align-items: center; min-width: 0; gap: 10px; color: var(--rd-ink-3); font-size: 12px; }
+html[data-ui-mode="repository"] .agent-recent-meta > a { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-recent-meta time { padding-left: 10px; border-left: 1px solid var(--rd-line-2); white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-recent .rd-home-sec-h h2 { margin: 0; }
+html[data-ui-mode="repository"] .agent-recent .agent-status[data-status="idle"] { padding: 0; color: var(--rd-ink-3); background: transparent; }
+html[data-ui-mode="repository"] .agent-recent .agent-status[data-status="idle"]::before { display: none; }
 html[data-ui-mode="repository"] .agent-recent li > a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-ui-mode="repository"] .agent-directory { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 36px; }
 html[data-ui-mode="repository"] .agent-nav-current { display: block; padding: 8px 10px; border-radius: 8px; color: var(--rd-accent-text); background: var(--rd-accent-soft); }
@@ -35,7 +45,6 @@ html[data-ui-mode="repository"] .agent-page :is(button, a, summary):focus-visibl
   html[data-ui-mode="repository"] :is(.agent-directory, .agent-session-layout) { grid-template-columns: minmax(0, 1fr); gap: 20px; }
 }
 @media (max-width: 600px) {
-  html[data-ui-mode="repository"] :is(.agent-home, .agent-composer) { min-height: 378px; }
   html[data-ui-mode="repository"] .agent-starters { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -44,7 +53,7 @@ html[data-ui-mode="repository"] .agent-composer-box:focus-within { border-color:
 html[data-ui-mode="repository"] .agent-composer-box textarea { border: 0; padding: 0; border-radius: 0; box-shadow: none; background: transparent; }
 html[data-ui-mode="repository"] .agent-composer-box textarea:focus-visible { outline: none; }
 html[data-ui-mode="repository"] .agent-composer-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
-html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; }
+html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex-wrap: wrap; flex: 1; min-width: 0; align-items: center; gap: 8px; }
 html[data-ui-mode="repository"] .agent-model-controls > button { flex: none; }
 html[data-ui-mode="repository"] .agent-model-controls > [role="combobox"] { width: auto; }
 html[data-ui-mode="repository"] .agent-model-controls > .agent-model-select { min-width: 0; flex: 0 1 auto; }
@@ -127,3 +136,20 @@ html[data-ui-mode="repository"] .agent-steps-failed { flex: none; }
 html[data-ui-mode="repository"] .agent-step-duration { margin-left: auto; flex: none; font-size: 12px; color: var(--rd-ink-3); font-variant-numeric: tabular-nums; }
 html[data-ui-mode="repository"] .agent-step-body { margin: 4px 0 8px 22px; padding: 8px 12px; border-left: 2px solid var(--rd-line); overflow-wrap: anywhere; }
 html[data-ui-mode="repository"] .agent-step-body dl { margin: 0; }
+
+html[data-ui-mode="repository"] .agent-model-controls .agent-scope { min-width: 0; max-width: 100%; gap: 6px; }
+html[data-ui-mode="repository"] .agent-send:disabled { opacity: 1; background: var(--rd-panel-2); color: var(--rd-ink-3); border: 1px solid var(--rd-line-2); }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table { min-width: 1040px; }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table :is(th, td):nth-child(2) { width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table :is(th, td):nth-child(3) { width: 128px; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table :is(th, td):nth-child(4) { width: 64px; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table :is(th, td):nth-child(5) { width: 20%; white-space: normal; }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table :is(th, td):nth-child(6) { width: 150px; overflow-wrap: anywhere; }
+html[data-ui-mode="repository"] .agent-recent-directory .agent-table :is(th, td):nth-child(7) { width: 128px; }
+html[data-ui-mode="repository"] .agent-table-scroll { border: 1px solid var(--rd-line); border-radius: 14px; background: var(--rd-panel); }
+html[data-ui-mode="repository"] .agent-table tbody tr:hover { background: var(--rd-panel-2); }
+@media (max-width: 900px) {
+  html[data-ui-mode="repository"] .agent-recent li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 12px; }
+  html[data-ui-mode="repository"] .agent-recent-title { grid-column: 1 / -1; }
+  html[data-ui-mode="repository"] .agent-recent-meta > a { max-width: 140px; }
+}

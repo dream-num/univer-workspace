@@ -68,10 +68,13 @@ vi.mock("./repository/pages/issues", () => ({
 }));
 
 
-it("provides both locales for Repository actor and draft-headline messages", () => {
+it("provides both locales for Repository actor, figure and tool messages", () => {
   const keys = [
     "repositoryActorPeople", "repositoryActorAgents", "repositoryActorAgent", "repositoryActorUnknown",
-    "repositoryHomeAgentsDraftedBefore", "repositoryHomeAgentsDraftedShare", "repositoryHomeAgentsDraftedAfter",
+    "repositoryHomePullsFigure", "repositoryHomeAgentsFigure", "repositoryHomeOfPulls",
+    "repositoryHomeIssuesFigure", "repositoryHomeTools", "repositoryHomeAgentDescription",
+    "repositoryHomeCliDescription", "repositoryHomeMcpDescription", "repositoryHomeSetupGuide",
+    "repositoryRecentHint", "repositoryAgentSessions",
   ] as const;
   for (const language of ["zh-CN", "en-US"] as const) {
     for (const key of keys) expect(messages[language][key].length).toBeGreaterThan(0);

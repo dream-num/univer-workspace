@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Settings } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { mySpacesQueryOptions } from "../../spaces/spaces.queries";
 import { useI18n } from "../../../shared/i18n";
 import { Alert } from "../../../shared/ui/alert";
@@ -27,7 +27,8 @@ export function useAgentModel(initial?: AgentSettings["model"]) {
   const selected = choices.find((choice) => choice.value === model) ?? choices.find((choice) => choice.modelId === choice.provider.defaultModel) ?? choices[0];
   return { providers, choices, selected, setModel, thinking, setThinking, settings, setSettings };
 }
-export function AgentModelControls({ mode, setMode, model, disabled }: {
+export function AgentModelControls({ mode, setMode, model, disabled, children }: {
+  readonly children?: ReactNode;
   readonly mode: AgentMode;
   readonly setMode: (mode: AgentMode) => void;
   readonly model: ReturnType<typeof useAgentModel>;
@@ -36,6 +37,7 @@ export function AgentModelControls({ mode, setMode, model, disabled }: {
   const m = useAgentMessages();
   return <>
     <div className="agent-model-controls">
+      {children}
       <Select aria-label={m.mode} value={mode} onValueChange={setMode} disabled={disabled} options={[{ value: "ask", label: m.ask }, { value: "auto", label: m.auto }]} />
       {model.selected ? <Select className="agent-model-select" aria-label={m.model} value={model.selected.value} onValueChange={model.setModel} options={model.choices} disabled={disabled} /> : null}
       {model.selected?.provider.kind === "deepseek" ? <Select aria-label={m.thinking} value={model.thinking} onValueChange={model.setThinking} disabled={disabled} options={[
@@ -56,8 +58,8 @@ export function AgentRepositorySelect({ repository, setRepository, disabled }: {
   const { t } = useI18n();
   const spaces = useQuery(mySpacesQueryOptions);
   return <>
-    <div className="agent-scope"><span>{m.repository}</span><Select aria-label={m.repository} value={repository} onValueChange={setRepository} disabled={disabled} options={[
-      { value: "", label: m.automatic }, ...(spaces.data?.spaces ?? []).map((item) => ({ value: item.id, label: item.type === "personal" ? item.owner?.username ?? t("personalSpace") : item.name })),
+    <div className="agent-scope"><Select aria-label={m.repository} value={repository || "auto"} onValueChange={(value) => setRepository(value === "auto" ? "" : value)} disabled={disabled} options={[
+      { value: "auto", label: m.choice(m.repository, m.automatic) }, ...(spaces.data?.spaces ?? []).map((item) => ({ value: item.id, label: m.choice(m.repository, item.type === "personal" ? item.owner?.username ?? t("personalSpace") : item.name) })),
     ]} /></div>
     {spaces.error ? <Alert variant="destructive">{spaces.error.message}</Alert> : null}
   </>;

@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ChartNoAxesCombined, FileCode, Sheet } from "lucide-react";
+import { ArrowRight, ChartNoAxesCombined, FileCode, Sheet } from "lucide-react";
 import { spaceQueryOptions, mySpacesQueryOptions } from "../../spaces/spaces.queries";
 import { worktreeQueryOptions } from "../../worktrees/worktrees.queries";
 import type { AgentPageHost } from "./host";
@@ -13,8 +13,8 @@ import type { AgentSession, AgentSessionStatus } from "../agent.types";
 import { useAgentClient } from "./client";
 import { AgentComposer } from "./composer";
 import { useAgentMessages } from "./messages";
-import { newestSessions } from "./summaries";
-
+import { newestSessions, visibleSessions } from "./summaries";
+import { formatRelativeDate } from "../../../shared/format-relative-date";
 export function useAgentSessions() {
   const client = useAgentClient();
   const queryClient = useQueryClient();
@@ -25,17 +25,24 @@ export function useAgentSessions() {
   }), [client, queryClient]);
   return query;
 }
+
 export function HomeAgents() {
   const m = useAgentMessages();
+  const { language } = useI18n();
   const sessions = useAgentSessions();
   const location = useLocation();
-  const recent = newestSessions(sessions.data ?? []).slice(0, 5);
+  const recent = newestSessions(sessions.data ?? []).slice(0, 3);
   return <div className="agent-home">
     <AgentComposer focus={location.hash === "agent-composer"} />
     {sessions.error ? <Alert variant="destructive">{sessions.error.message}</Alert> : null}
-    {recent.length ? <section className="agent-recent"><h2>{m.recent}</h2><ul>{recent.map((session) => <li key={session.id}>
-      <Link to="/agents/$sessionId" params={{ sessionId: session.id }}>{sessionTitle(session)}</Link><SessionStatus status={session.status} />
-    </li>)}</ul></section> : null}
+    {recent.length ? <section className="agent-recent">
+      <div className="rd-home-sec-h"><h2>{m.recent}</h2><Link to="/recent" search={{ tab: "sessions" }}>{m.allSessions}<ArrowRight aria-hidden="true" /></Link></div>
+      <ul>{recent.map((session) => <li key={session.id}>
+        <Link className="agent-recent-title" title={sessionTitle(session)} to="/agents/$sessionId" params={{ sessionId: session.id }}>{sessionTitle(session)}</Link>
+        <div className="agent-recent-meta"><SessionScope session={session} /><time dateTime={session.updatedAt}>{formatRelativeDate(session.updatedAt, language)}</time></div>
+        <SessionStatus status={session.status} />
+      </li>)}</ul>
+    </section> : null}
   </div>;
 }
 export function AgentsPage({ spaceId, renderPage }: AgentPageHost & { readonly spaceId: string }) {
@@ -58,20 +65,39 @@ export function AgentsPage({ spaceId, renderPage }: AgentPageHost & { readonly s
         </button>)}</div>
         <section id="agent-sessions"><h2>{m.sessions}</h2><p className="agent-note">{m.local}</p>
           {sessions.error ? <Alert variant="destructive">{sessions.error.message}</Alert> : null}
-          {sessions.isPending ? <p role="status">{m.loading}</p> : !items.length ? <p>{m.empty}</p> : <div className="agent-table-scroll"><table className="agent-table">
-            <thead><tr>{[m.title, m.status, m.mode, m.prs, m.model, m.started].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
-            <tbody>{items.map((session) => <SessionRow key={session.id} session={session} />)}</tbody>
-          </table></div>}
+          {sessions.isPending ? <p role="status">{m.loading}</p> : <AgentSessionsTable items={items} />}
         </section>
       </div>
     </div>
   </>, m.agents, spaceId);
 }
-function SessionRow({ session }: { readonly session: AgentSession }) {
+export function RecentAgentSessions({ q }: { readonly q: string }) {
+  const m = useAgentMessages();
+  const { language } = useI18n();
+  const sessions = useAgentSessions();
+  const items = visibleSessions(sessions.data ?? [], q, language);
+  return <section className="agent-recent-directory" aria-label={m.sessions}>
+    <p className="agent-note">{m.local}</p>
+    {sessions.error ? <Alert variant="destructive">{sessions.error.message}</Alert> : null}
+    {sessions.isPending ? <p role="status">{m.loading}</p> : <AgentSessionsTable items={items} crossRepository />}
+  </section>;
+}
+
+export function AgentSessionsTable({ items, crossRepository = false }: { readonly items: readonly AgentSession[]; readonly crossRepository?: boolean }) {
+  const m = useAgentMessages();
+  if (!items.length) return <p className="agent-note">{m.empty}</p>;
+  return <div className="agent-table-scroll"><table className="agent-table">
+    <thead><tr>{[m.title, ...(crossRepository ? [m.repository] : []), m.status, m.mode, m.prs, m.model, m.started].map((label) => <th key={label} scope="col">{label}</th>)}</tr></thead>
+    <tbody>{items.map((session) => <SessionRow key={session.id} session={session} crossRepository={crossRepository} />)}</tbody>
+  </table></div>;
+}
+
+function SessionRow({ session, crossRepository }: { readonly session: AgentSession; readonly crossRepository: boolean }) {
   const m = useAgentMessages();
   const { language } = useI18n();
   return <tr>
     <td><Link className="agent-session-title" title={sessionTitle(session)} to="/agents/$sessionId" params={{ sessionId: session.id }}>{sessionTitle(session)}</Link></td>
+    {crossRepository ? <td><SessionScope session={session} /></td> : null}
     <td><SessionStatus status={session.status} /></td><td>{m[session.mode]}</td>
     <td>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}</td>
     <td><SessionModel model={session.model} /></td><td><time dateTime={session.createdAt}>{new Date(session.createdAt).toLocaleString(language)}</time></td>
@@ -94,8 +120,10 @@ export function SessionPullRequest({ id }: { readonly id: string }) {
 }
 export function SessionScope({ session }: { readonly session: AgentSession }) {
   const m = useAgentMessages();
+  const { t } = useI18n();
   const space = useQuery(spaceQueryOptions(session.scope.kind === "repository" ? session.scope.spaceId : undefined));
-  return session.scope.kind === "repository" ? <Link to="/spaces/$spaceId/agents" params={{ spaceId: session.scope.spaceId }}>{space.data?.name ?? m.repository}</Link> : <span>{m.global}</span>;
+  const name = space.data?.type === "personal" ? space.data.owner?.username ?? t("personalSpace") : space.data?.name;
+  return session.scope.kind === "repository" ? <Link to="/spaces/$spaceId/agents" params={{ spaceId: session.scope.spaceId }}>{name ?? m.repository}</Link> : <span>{m.global}</span>;
 }
 
 const stateLabels = {

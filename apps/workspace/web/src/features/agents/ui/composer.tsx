@@ -58,7 +58,6 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
   return (
     <section className="agent-composer" aria-label={m.agents}>
       <header className="agent-greeting"><h2>{m.greeting(displayName)}</h2><p>{m.greetingHint}</p></header>
-      {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
       <div className="agent-composer-box">
         {picker ? <AgentReferencePicker spaceId={spaceId} onChoose={chooseReference} onClose={closePicker} /> : null}
         <ComposerEditor handle={input} label={m.prompt} busy={busy} {...(starter !== undefined ? { starter } : {})} {...(focus !== undefined ? { focus } : {})}
@@ -66,7 +65,9 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
           onFocus={() => { void client.prewarm().catch((cause: unknown) => setError(String(cause))); }} />
         <div className="agent-composer-controls">
           <Button variant="ghost" size="icon" aria-label={m.addContext} aria-expanded={picker !== null} disabled={busy} onClick={() => picker ? closePicker() : setPicker({ trigger: null })}><Plus aria-hidden="true" /></Button>
-          <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={busy} />
+          <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={busy}>
+            {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
+          </AgentModelControls>
           <Button className="agent-send" aria-keyshortcuts="Shift+Enter" aria-label={selected ? m.send : m.setup} disabled={busy || Boolean(selected && !text.trim())} onClick={() => void send()}>
             {selected ? <><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></> : m.setup}
           </Button>
@@ -86,7 +87,7 @@ function RepositoryBase({ spaceId, base, setBase }: { readonly spaceId: string; 
 function BaseChoices({ space, base, setBase }: { readonly space: components["schemas"]["SpaceView"]; readonly base: string; readonly setBase: (value: string) => void }) {
   const m = useAgentMessages();
   const pulls = useInfiniteQuery(worktreePagesQueryOptions(space.type === "team" ? { teamSpaceId: space.id } : { kind: "user" }));
-  return <div className="agent-scope"><span>{m.basedOn}</span><Select aria-label={m.basedOn} value={base} onValueChange={setBase} options={[
-    { value: "", label: m.newPr }, ...(pulls.data?.pages.flatMap((page) => page.items) ?? []).filter((pull) => pull.state === "draft" || pull.state === "ready").map((pull) => ({ value: pull.id, label: `#${pull.number} ${pull.name}` })),
+  return <div className="agent-scope"><Select aria-label={m.basedOn} value={base || "new"} onValueChange={(value) => setBase(value === "new" ? "" : value)} options={[
+    { value: "new", label: m.choice(m.basedOn, m.newPr) }, ...(pulls.data?.pages.flatMap((page) => page.items) ?? []).filter((pull) => pull.state === "draft" || pull.state === "ready").map((pull) => ({ value: pull.id, label: m.choice(m.basedOn, `#${pull.number} ${pull.name}`) })),
   ]} />{pulls.hasNextPage ? <Button variant="secondary" disabled={pulls.isFetchingNextPage} onClick={() => void pulls.fetchNextPage()}>{m.more}</Button> : null}{pulls.error ? <Alert variant="destructive">{pulls.error.message}</Alert> : null}</div>;
 }
