@@ -53,12 +53,6 @@ colors:
   actor-people: "#2F6FEB"
   actor-agents: "#DB2777"
 typography:
-  display:
-    fontFamily: "Plus Jakarta Sans Variable, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, system-ui, sans-serif"
-    fontSize: "38px"
-    fontWeight: 800
-    lineHeight: 1.12
-    letterSpacing: "-0.032em"
   headline:
     fontFamily: "Plus Jakarta Sans Variable, PingFang SC, Hiragino Sans GB, Microsoft YaHei, Noto Sans CJK SC, system-ui, sans-serif"
     fontSize: "24px"
@@ -208,7 +202,7 @@ components:
 
 This system governs the Workspace Browser's **Repository mode only**: every token and rule lives under `html[data-ui-mode="repository"]` (light on the root, dark under the nested `.dark` class). Wiki mode keeps its own look and is not part of this world. Repository mode keeps GitHub's habits (top bar search, Code / Issues / Pull requests / Pages / Settings tabs, file table, About panel, issue filters) and dresses them in an OpenRouter-style console: a near-white or near-black ground, hairline borders, one saturated accent, and live figures set in a monospace.
 
-A repository introduces itself with identity and numbers before files: name, copyable slug, Private badge and Star, an inline run of metadata (Members, Files, Last updated), the tabs, then a stacked daily activity chart above the file table. Home leads with a counted headline and a ranked bar list of open work per repository. Density is office-work density: 14px body, 50px file rows, 36px controls. Light is the default appearance, because the audience works in daylit offices; dark is the console variant with electric lime.
+A repository introduces itself with identity and numbers before files: name, copyable slug, Private badge and Star, an inline run of metadata (Members, Files, Last updated), the tabs, then a stacked daily activity chart above the file table. Home leads with the Agent composer and three recent sessions. One framed Open work card contains a figures row, attribution legend and ranked list, with no display headline. Density is office-work density: 14px body, 50px file rows, 36px controls. Light is the default appearance, because the audience works in daylit offices; dark is the console variant with electric lime.
 
 The system is flat, quiet and precise. Office content stays the hero; chrome is hairlines and fills one step off the ground.
 
@@ -234,7 +228,7 @@ A neutral ink-on-white (or ink-on-black) field with a single accent and a small,
 ### Tertiary
 - **State hues**: open green (open) for open Pull requests and Issues; amber (warn, warn-text on warn-soft) for Ready and Merging chips and the Star; red (danger, danger-text on danger-soft) for discarded, closed, deletions and the Danger zone.
 - **Content kinds**: sheet green, doc sky, slide orange, folder grey; Board reuses the accent and Base reuses merged teal.
-- **Reserved attribution pair**: people blue (actor-people) and agents pink (actor-agents), with soft and text steps and dark counterparts in `theme.css`. These are **reserved for a later people-versus-agents attribution feature and are currently unused**. Avatars and pending chips today use the neutral actor-unknown set, which equals ink-2 on panel-2.
+- **Attribution pair**: people blue (actor-people) and agents pink (actor-agents), with soft and text steps and dark counterparts in `theme.css`. Home ranking segments and the legend use these hues; the Agent-drafted figure uses agents pink. Unknown sources use the neutral actor-unknown set.
 
 ### Neutral
 - **Paper White / Console Black** (ground, ground-dark): page ground. Panels sit on the same value in light and one step up in dark.
@@ -248,7 +242,7 @@ A neutral ink-on-white (or ink-on-black) field with a single accent and a small,
 
 **The Kind Is a Tint Rule.** Content-kind colour appears only on the 26px icon tile: the hue as icon colour, 14% as fill, 26% as an inset ring. Rows, names and text never take the kind hue.
 
-**The Reserved Pair Rule.** People blue and agents pink are spent on nothing until attribution ships: not on charts, labels, avatars or decoration.
+**The Attribution Pair Rule.** People blue and agents pink identify who opened work. Use them for attribution, including Home ranking segments, legend keys and the Agent-drafted figure.
 
 **The Mark Owns Vermilion Rule.** Flask Vermilion appears in the OfficeLab mark and nowhere else.
 
@@ -261,7 +255,6 @@ A neutral ink-on-white (or ink-on-black) field with a single accent and a small,
 **Character:** One geometric humanist sans does all the talking, tightened at heading sizes; a mono with tabular figures does all the counting, like the readouts on a console.
 
 ### Hierarchy
-- **Display** (800, 38px, 1.12, -0.032em): the Home headline only ("3 open Pull requests across 3 repositories"), max 24ch, balanced wrap; the leading count takes accent-text. Chinese: 32px, -0.01em, keep-all. Under 720px: 28px (24px Chinese).
 - **Headline** (700, 24px, -0.025em to -0.03em): page and repository titles, settings heading. The Pull request detail title steps up to 28px.
 - **Title** (700, 18px): Home section heads (Pull requests, Continue working, Issues).
 - **Title small** (600, 14.5 to 16px): card titles at 15.5px, issue and home-issue titles at 14.5px, rail and panel heads at 14px 700.
@@ -279,7 +272,7 @@ A neutral ink-on-white (or ink-on-black) field with a single accent and a small,
 
 ## Layout
 
-The app is a fixed-height column: a 56px top bar, then a scrolling viewport. Global and repository frames centre at max 1312px with 32px side gutters (16px under 760px). Home is a three-column grid: 272px repository rail, fluid main column (36px 44px padding), 300px right rail for the CLI card; at 1240px the right rail drops under the main column and the left rail narrows to 248px; at 760px everything stacks with the rail after the main column. A repository's Code tab is a two-column grid (fluid main, 300px sticky About aside, 36px gap) that stacks at 1080px. Issues and Settings use a 216px sticky side nav beside the content (36px gap).
+The app is a fixed-height column: a 56px top bar, then a scrolling viewport. Global and repository frames centre at max 1312px with 32px side gutters (16px under 760px). Home is a two-column grid: 272px repository rail and a fluid main column (36px 44px padding). The rail holds repositories followed by Connect your tools, with stacked Workspace Agent, Workspace CLI and MCP entries. At 1240px the rail narrows to 248px; at 760px everything stacks with the rail after the main column. A repository's Code tab is a two-column grid (fluid main, 300px sticky About aside, 36px gap) that stacks at 1080px. Issues and Settings use a 216px sticky side nav beside the content (36px gap).
 
 The top bar carries brand, breadcrumbs, a 340px search with a Cmd-K hint, horizontal nav pushed right, and tools. Breadcrumbs hide at 1240px; at 1080px the nav wraps to a second, horizontally scrolling row with a fade mask. Horizontal scrollers (tabs, side navs on mobile) fade out their last 44 to 48px instead of showing scrollbars.
 
@@ -338,7 +331,7 @@ Compact and solid, never shadowed.
 - **Mobile:** navs become single horizontal scrollers with a trailing fade mask.
 
 ### Activity Chart (signature)
-The repository's stacked daily bar chart over 7 or 14 days: Pull requests opened in the accent, Issues opened in ink-3 grey, merged Pull requests as teal count pills riding above the day. Hairline gridlines with dashed day lanes, mono axis figures, a legend with mono totals and a note. Hovering or picking a day dims other columns to 28% opacity and shows a floating tooltip; a picked day filters the file table and shows an accent-soft day filter chip. Home repeats the series as a ranked list: rank number, name, a 12px stacked track (accent for Pull requests, grey for Issues), and figures.
+The repository's stacked daily bar chart over 7 or 14 days: Pull requests opened in the accent, Issues opened in ink-3 grey, merged Pull requests as teal count pills riding above the day. Hairline gridlines with dashed day lanes, mono axis figures, a legend with mono totals and a note. Hovering or picking a day dims other columns to 28% opacity and shows a floating tooltip; a picked day filters the file table and shows an accent-soft day filter chip. Home shows open Pull requests, Agent-drafted Pull requests as a share of the total, and open Issues in a three-figure row set in Geist Mono. The same framed card contains a legend and ranked list with rank number, repository name, a 12px stacked track by source (people blue, agents pink and unknown grey), and counts.
 
 ### Inline Metadata Run
 Facts in a row (repository metas, card meta, issue meta, row meta) are separated by a 1px line-2 vertical rule in a 20px column gap, never by dots or bullets.
@@ -354,7 +347,6 @@ Facts in a row (repository metas, card meta, issue meta, row meta) are separated
 - **Do** keep in-flow surfaces flat: hover is a fill step to panel-2 and a border step to line-2.
 
 ### Don't:
-- **Don't** use the people blue or agents pink series colours until the attribution feature ships; they are reserved and currently unused.
 - **Don't** show violet in dark or lime in light, or put white text on lime.
 - **Don't** add drop shadows to cards, list frames or the chart card; the float shadow is for tooltips, popovers, menus and dialogs only.
 - **Don't** set prose, labels or headings in the mono.

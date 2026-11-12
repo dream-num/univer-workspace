@@ -2,26 +2,21 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
   CircleDot,
-  Copy,
-  ExternalLink,
   GitPullRequest,
   History,
   MessageSquare,
-  Terminal,
 } from "lucide-react";
 import { Suspense } from "react";
 import { HomeAgents } from "./agents";
 import { IssueLabelChip } from "../../../features/issues/issue-label";
 import { IssueStateIcon } from "../../../features/issues/issue-state";
-import { CLI_GUIDE_URL } from "../../../features/worktrees/worktree-onboarding";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
-import { toast } from "../../../shared/ui";
 import type { HomePageProps } from "../../page.types";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { ACTOR_LABEL, ActorAvatar } from "../code/actor-avatar";
 import { TypeBadge } from "../code/repository-file-table";
-import { ACTOR_KINDS, actorOf, useHomeWork, type HomeHeadline as Headline, type HomeWork } from "../data";
+import { ACTOR_KINDS, actorOf, useHomeWork, type HomeWork } from "../data";
 import { PullRequestCard } from "../pull-request-card";
 import { HomeFrame } from "../shell/home-frame";
 import { spaceDisplayName } from "../space-name";
@@ -33,7 +28,6 @@ export function RepositoryHomePage(_props: HomePageProps) {
   return (
     <WorkspaceLayout repositoryView="home" selectedView="home" headerTitle={t("home")}>
       <HomeFrame
-        rightRail={<CliCard />}
         updatedBySpace={work.status === "success" ? work.data.updatedBySpace : undefined}
         openBySpace={work.status === "success" ? work.data.openBySpace : undefined}
       >
@@ -44,8 +38,7 @@ export function RepositoryHomePage(_props: HomePageProps) {
           </p>
         ) : (
           <>
-            <HomeHeadline headline={work.data.headline} />
-            <LoadRanking items={work.data.ranking} />
+            <LoadRanking items={work.data.ranking} totals={work.data.totals} />
             {!work.data.complete ? (
               <p className="rd-data-note">{t("repositoryHomePartial")}</p>
             ) : null}
@@ -95,29 +88,7 @@ export function RepositoryHomePage(_props: HomePageProps) {
   );
 }
 
-function HomeHeadline({ headline }: { readonly headline: Headline }) {
-  const { t } = useI18n();
-  return (
-    <h1 className="rd-headline" data-headline={headline.kind}>
-      {headline.kind === "quiet" ? (
-        t("repositoryHomeQuiet")
-      ) : headline.kind === "agents-drafted" ? (
-        <>
-          {t("repositoryHomeAgentsDraftedBefore", { count: headline.pulls })}
-          <em>{t("repositoryHomeAgentsDraftedShare", { agents: headline.agents, count: headline.pulls })}</em>
-          {t("repositoryHomeAgentsDraftedAfter", { count: headline.pulls })}
-        </>
-      ) : (
-        <>
-          <em>{headline.pulls}</em> {t("repositoryHomeOpenPulls", { count: headline.pulls })}{" "}
-          <span className="rd-headline-phrase">{t("repositoryHomeAcross", { count: headline.repositories })}</span>
-        </>
-      )}
-    </h1>
-  );
-}
-
-function LoadRanking({ items }: { readonly items: HomeWork["ranking"] }) {
+function LoadRanking({ items, totals }: { readonly items: HomeWork["ranking"]; readonly totals: HomeWork["totals"] }) {
   const { t } = useI18n();
   const maximum = Math.max(1, ...items.map((item) => item.total));
   const kinds = ACTOR_KINDS.filter((kind) => kind !== "unknown" || items.some((item) => item.segments.some((segment) => segment.key === kind)));
@@ -128,12 +99,17 @@ function LoadRanking({ items }: { readonly items: HomeWork["ranking"] }) {
         <p>{t("repositoryHomeRankingBasis")}</p>
         <div className="rd-home-key">
           {kinds.map((kind) => (
-            <span key={kind}>
+            <span key={kind} title={kind === "unknown" ? t("repositoryHomeUnknownSource") : undefined}>
               <i style={{ background: `var(--rd-actor-${kind})` }} />
               {t(ACTOR_LABEL[kind])}
             </span>
           ))}
         </div>
+      </div>
+      <div className="rd-work-figures">
+        <div><strong>{totals.pulls}</strong><span>{t("repositoryHomePullsFigure")}</span></div>
+        <div className="rd-agent-figure"><strong>{totals.agentPulls} <small>{t("repositoryHomeOfPulls", { count: totals.pulls })}</small></strong><span><i aria-hidden="true" />{t("repositoryHomeAgentsFigure")}</span></div>
+        <div><strong>{totals.issues}</strong><span>{t("repositoryHomeIssuesFigure")}</span></div>
       </div>
       {items.length ? (
         <ol className="rd-rank">
@@ -272,47 +248,5 @@ function IssueRows({ items }: { readonly items: HomeWork["issues"] }) {
         </li>
       ))}
     </ul>
-  );
-}
-
-const CLI_INSTALL = "npm install --global univer-workspace-cli@latest";
-
-function CliCard() {
-  const { t } = useI18n();
-  return (
-    <section className="rd-cli-card" aria-labelledby="home-cli-title">
-      <h2 id="home-cli-title">
-        <span className="rd-repo-ic">
-          <Terminal aria-hidden="true" />
-        </span>
-        {t("dashboardCliTitle")}
-      </h2>
-      <p>{t("dashboardCliDescription")}</p>
-      <div className="rd-cli-code">
-        <code>
-          <b aria-hidden="true">$ </b>
-          {CLI_INSTALL}
-        </code>
-        <button
-          className="rd-iconbtn"
-          type="button"
-          aria-label={t("repositoryHomeCopyCommand")}
-          onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(CLI_INSTALL);
-              toast.success(t("repositoryHomeCommandCopied"));
-            } catch {
-              toast.error(t("onboardingCopyFailed"));
-            }
-          }}
-        >
-          <Copy aria-hidden="true" />
-        </button>
-      </div>
-      <a className="rd-cli-guide" href={CLI_GUIDE_URL} target="_blank" rel="noopener noreferrer">
-        {t("onboardingCliLink")}
-        <ExternalLink aria-hidden="true" />
-      </a>
-    </section>
   );
 }

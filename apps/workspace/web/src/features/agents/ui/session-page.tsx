@@ -79,12 +79,13 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
       {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
-        <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={pending || session.status === "running"} />
         <div className="agent-composer-box">
           <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={3} onChange={(event) => setText(event.target.value)}
             onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(text); } }} />
           <div className="agent-composer-controls">
-            <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={pending || session.status === "running"} />
+            <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={pending || session.status === "running"}>
+              <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={pending || session.status === "running"} />
+            </AgentModelControls>
             {session.status === "running" ? <Button variant="secondary" onClick={() => {
               setPending(true);
               void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));

@@ -8,7 +8,6 @@ export type {
   DailySeries,
   DayKey,
   DayWindow,
-  HomeHeadline,
   HomeWork,
   IssueFacets,
   IssueRef,

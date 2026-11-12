@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AgentStepsGroup } from "./session-page";
 import type { StepPart, ToolPart } from "./summaries";
-import { argumentSummary, cacheHitRate, durationLabel, newestSessions, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { argumentSummary, cacheHitRate, durationLabel, newestSessions, visibleSessions, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { session } from "../test-helpers";
 import { agentSessionIdSchema } from "../agent.types";
 import { agentMessages } from "./messages";
@@ -66,6 +66,16 @@ describe("Agent tool cards", () => {
     expect(newestSessions(all).map((item) => item.id)).toEqual(["newer", "older", "other"]);
     expect(newestSessions(all, "space-a").map((item) => item.id)).toEqual(["newer"]);
     expect(all.map((item) => item.id)).toEqual(["older", "newer", "other"]);
+  });
+  it("searches session titles across scopes and statuses without changing newest-first order", () => {
+    const titled = (id: string, title: string) => session({ id: agentSessionIdSchema.parse(id), messages: [{ id: `message-${id}`, role: "user", parts: [{ type: "text", text: title }, { type: "text", text: "<system-reminder>hidden scope</system-reminder>" }] }] });
+    const older = titled("older", "Budget summary");
+    const newer = { ...titled("newer", "BUDGET formulas"), status: "failed", createdAt: "2026-11-12T01:00:00.000Z", scope: { kind: "repository", spaceId: "other", baseWorktreeId: null } } satisfies ReturnType<typeof session>;
+    const all = [older, titled("other", "Other work"), newer];
+    expect(visibleSessions(all, " budget ", "en-US").map((item) => item.id)).toEqual(["newer", "older"]);
+    expect(visibleSessions(all, "hidden scope", "en-US")).toEqual([]);
+    expect(visibleSessions(all, "", "en-US")).toHaveLength(3);
+    expect(all.map((item) => item.id)).toEqual(["older", "other", "newer"]);
   });
   it("provides the same translated labels in both languages", () => {
     expect(Object.keys(agentMessages["en-US"]).sort()).toEqual(Object.keys(agentMessages["zh-CN"]).sort());
