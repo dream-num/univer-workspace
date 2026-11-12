@@ -35,6 +35,7 @@ const messageSchema = z.object({
   role: z.enum(["user", "assistant", "system"]),
   parts: z.array(partSchema),
 }).passthrough();
+const cacheStepUsageSchema = z.object({ inputTokens: z.number().int().nonnegative(), cacheReadTokens: z.number().int().nonnegative() });
 export const sessionRecordSchema = z.object({
   id: agentSessionIdSchema,
   userId: z.string().min(1),
@@ -47,6 +48,8 @@ export const sessionRecordSchema = z.object({
     startedAt: z.iso.datetime(),
     endedAt: z.iso.datetime().nullable(),
   })).default({}),
+  cacheUsage: cacheStepUsageSchema.extend({ lastStep: cacheStepUsageSchema.nullable() })
+    .default({ inputTokens: 0, cacheReadTokens: 0, lastStep: null }),
   messages: z.array(messageSchema),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),

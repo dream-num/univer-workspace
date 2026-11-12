@@ -66,6 +66,9 @@ export function durationLabel(startedAt: string, endedAt: string | null): string
   if (!Number.isFinite(ms) || ms < 0) return "—";
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
 }
+export function cacheHitRate(usage: AgentSession["cacheUsage"]["lastStep"] | undefined): string {
+  return usage && usage.inputTokens > 0 ? `${Math.round(usage.cacheReadTokens / usage.inputTokens * 100)}%` : "—";
+}
 const linkSchema = z.object({ url: z.url() });
 export function pullRequestUrl(value: unknown, origin: string): string | null {
   const content = value && typeof value === "object" && "structuredContent" in value ? value.structuredContent : value;

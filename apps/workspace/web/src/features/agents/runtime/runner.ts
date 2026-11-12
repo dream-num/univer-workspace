@@ -49,7 +49,7 @@ function contextPrompt(session: AgentSession): string {
     : session.scope.kind === "repository" && session.scope.baseWorktreeId
       ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(session.scope.baseWorktreeId)}.`
       : "Auto mode: put every write in one pull request. Call pr_create before the first write, and reuse that pull request for this session. Never merge; a person reviews and merges.";
-  return `${scope}\n${mode}\nSession pull request Worktree IDs: ${JSON.stringify(session.worktreeIds)}.\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
+  return `${scope}\n${mode}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
 }
 
 export function createAgentRunner(deps: AgentRunnerDependencies) {
@@ -111,6 +111,16 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const agent = new ToolLoopAgent({
         ...model, tools, stopWhen: stepCountIs(50),
         onError({ error }) { streamError = new Error(redactProviderError(error, key)); },
+        onStepEnd({ usage }) {
+          const inputTokens = usage.inputTokens;
+          const cacheReadTokens = usage.inputTokenDetails.cacheReadTokens;
+          if (typeof inputTokens !== "number" || typeof cacheReadTokens !== "number") return;
+          run.session = { ...run.session, cacheUsage: {
+            inputTokens: run.session.cacheUsage.inputTokens + inputTokens,
+            cacheReadTokens: run.session.cacheUsage.cacheReadTokens + cacheReadTokens,
+            lastStep: { inputTokens, cacheReadTokens },
+          } };
+        },
         instructions: [client.instructions, skill, contextPrompt(run.session)].filter(Boolean).join("\n\n"),
       });
       run.session.messages = repairInterruptedTools(run.session.messages);
@@ -230,7 +240,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       return launch({
         id: agentSessionIdSchema.parse(generateId()), userId: deps.userId, scope: input.scope, mode: input.mode, model: input.model,
         status: "idle", worktreeIds: input.scope.kind === "repository" && input.scope.baseWorktreeId ? [input.scope.baseWorktreeId] : [],
-        messages: [], toolTimings: {}, createdAt: now, updatedAt: now, error: null,
+        messages: [], toolTimings: {}, cacheUsage: { inputTokens: 0, cacheReadTokens: 0, lastStep: null }, createdAt: now, updatedAt: now, error: null,
       }, input.text);
     },
     async send(id: AgentSessionId, text: string): Promise<AgentSession> {

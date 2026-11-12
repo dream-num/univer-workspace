@@ -11,7 +11,7 @@ import type { AgentSession } from "../agent.types";
 import { useAgentClient } from "./client";
 import { useAgentMessages } from "./messages";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
-import { argumentSummary, durationLabel, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { argumentSummary, cacheHitRate, durationLabel, pullRequestUrl, resultSummary, summarize } from "./summaries";
 
 export function AgentSessionPage({ sessionId, renderPage }: AgentPageHost & { readonly sessionId: string }) {
   const m = useAgentMessages();
@@ -76,6 +76,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     <aside className="agent-session-rail"><h2>{m.sessions}</h2><dl>
       <dt>{m.scope}</dt><dd><SessionScope session={session} /></dd>
       <dt>{m.mode}</dt><dd>{m[session.mode]}</dd><dt>{m.model}</dt><dd><SessionModel model={session.model} /></dd>
+      <dt>{m.cacheHitRate}</dt><dd>{m.cacheOverall} {cacheHitRate(session.cacheUsage)} · {m.cacheLastStep} {cacheHitRate(session.cacheUsage.lastStep)}</dd>
     </dl><h2>{m.prs}</h2>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}<p className="agent-note">{m.local}</p></aside>
   </div>;
 }

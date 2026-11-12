@@ -46,7 +46,7 @@ export function session(overrides: Partial<AgentSession> = {}): AgentSession {
   return {
     id: agentSessionIdSchema.parse("session-a"), userId: "user-a", scope: { kind: "global" }, mode: "auto",
     model: { providerId: deepSeekDefault.id, modelId: "deepseek-flash", thinking: "off" },
-    status: "idle", worktreeIds: [], messages: [], toolTimings: {}, error: null,
+    status: "idle", worktreeIds: [], messages: [], toolTimings: {}, cacheUsage: { inputTokens: 0, cacheReadTokens: 0, lastStep: null }, error: null,
     createdAt: "2026-11-11T00:00:00.000Z", updatedAt: "2026-11-11T00:00:00.000Z", ...overrides,
   };
 }
