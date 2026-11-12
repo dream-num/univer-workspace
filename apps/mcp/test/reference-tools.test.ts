@@ -1,7 +1,5 @@
 import { testStagingDirectory } from "./staging-directory.js";
-import { once } from "node:events";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
@@ -11,6 +9,7 @@ import { createStandardApiReference } from "@univer-cli/api-reference";
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 
@@ -41,24 +40,16 @@ describe("API reference, Skills, resources and server instructions", () => {
   let sourceRoot: string;
 
   async function start(skillDataRoot = sourceRoot) {
-    const socket = createServer();
-    socket.listen(0, "127.0.0.1");
-    await once(socket, "listening");
-    const address = socket.address();
-    if (address === null || typeof address === "string") throw new Error("Expected TCP server");
-    const port = address.port;
-    await new Promise((resolve) => socket.close(resolve));
-    url = `http://127.0.0.1:${String(port)}/mcp`;
-    gateway = createGateway(
-      parseGatewayConfig({
-        MCP_DEV_SESSION_PASSTHROUGH: "1",
-        WORKSPACE_ORIGIN: "https://workspace.example",
-        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
-      }),
-      { logger: pino({ level: "silent" }), fetcher, skillDataRoot },
-    );
-    gateway.server.listen(port, "127.0.0.1");
-    await once(gateway.server, "listening");
+    ({ gateway, url } = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          MCP_DEV_SESSION_PASSTHROUGH: "1",
+          WORKSPACE_ORIGIN: "https://workspace.example",
+          MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
+        }),
+        { logger: pino({ level: "silent" }), fetcher, skillDataRoot },
+      ),
+    ));
   }
   async function connect(mode: "legacy" | { pin: string } = { pin: "2026-07-28" }) {
     const client = new Client(

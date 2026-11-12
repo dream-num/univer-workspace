@@ -1,12 +1,11 @@
 import { testStagingDirectory } from "./staging-directory.js";
-import { once } from "node:events";
-import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { pino } from "pino";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { whoamiTool } from "../src/gateway/tools/core/whoami.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
@@ -192,24 +191,16 @@ describe("Issue tools and gateway infrastructure", () => {
         callback();
       },
     });
-    const socket = createServer();
-    socket.listen(0, "127.0.0.1");
-    await once(socket, "listening");
-    const address = socket.address();
-    if (address === null || typeof address === "string") throw new Error("Expected TCP server");
-    const port = address.port;
-    await new Promise((resolve) => socket.close(resolve));
-    url = `http://127.0.0.1:${String(port)}/mcp`;
-    gateway = createGateway(
-      parseGatewayConfig({
-        MCP_DEV_SESSION_PASSTHROUGH: "1",
-        WORKSPACE_ORIGIN: identityOrigin,
-        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
-      }),
-      { logger: pino({}, logOutput), fetcher, ...(scopes === undefined ? {} : { scopes }) },
-    );
-    gateway.server.listen(port, "127.0.0.1");
-    await once(gateway.server, "listening");
+    ({ gateway, url } = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          MCP_DEV_SESSION_PASSTHROUGH: "1",
+          WORKSPACE_ORIGIN: identityOrigin,
+          MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
+        }),
+        { logger: pino({}, logOutput), fetcher, ...(scopes === undefined ? {} : { scopes }) },
+      ),
+    ));
   }
   async function connect(suffix = "") {
     const client = new Client({ name: "tools-test", version: "1.0.0" });

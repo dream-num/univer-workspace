@@ -5,6 +5,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { afterEach, describe, expect, it } from "vitest";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import type { ToolScope } from "../src/gateway/tools/definition.js";
 import { worktreeSchema } from "../src/gateway/tools/schemas.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
@@ -191,14 +192,6 @@ describe("space, unit, repository admin, label and merge tools", () => {
   };
 
   async function connect(scopes?: ReadonlySet<ToolScope>) {
-    const socket = createServer();
-    socket.listen(0, "127.0.0.1");
-    await once(socket, "listening");
-    const address = socket.address();
-    if (address === null || typeof address === "string") throw new Error("Expected TCP server");
-    const port = address.port;
-    await new Promise((resolve) => socket.close(resolve));
-    url = `http://127.0.0.1:${String(port)}/mcp`;
     let executorUrl: string | undefined;
     if (scopes) {
       executor = createServer((request, response) => {
@@ -211,12 +204,12 @@ describe("space, unit, repository admin, label and merge tools", () => {
       if (!address || typeof address === "string") throw new Error("Expected TCP address");
       executorUrl = `http://127.0.0.1:${address.port}`;
     }
-    gateway = createGateway(
-      parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url, ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}) }),
-      { logger: pino({ level: "silent" }), fetcher, ...(scopes === undefined ? {} : { scopes }) },
-    );
-    gateway.server.listen(port, "127.0.0.1");
-    await once(gateway.server, "listening");
+    ({ gateway, url } = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({ MCP_DEV_SESSION_PASSTHROUGH: "1", WORKSPACE_ORIGIN: origin, MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url, ...(executorUrl ? { MCP_EXECUTOR_URLS: executorUrl, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}) }),
+        { logger: pino({ level: "silent" }), fetcher, ...(scopes === undefined ? {} : { scopes }) },
+      ),
+    ));
     const client = new Client({ name: "space-admin-test", version: "1.0.0" });
     clients.push(client);
     await client.connect(
