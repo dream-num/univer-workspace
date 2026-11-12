@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { getDocsEmptySnapshot, JSONX, TextXActionType, getBasesEmptySnapshot } from "@univerjs/core";
 import { getSlidesEmptySnapshot, PageTypeEnum, PageElementTypeEnum } from "@univerjs-pro/slides";
 import { getBoardsEmptySnapshot, BoardElementType } from "@univerjs-pro/boards";
@@ -217,7 +218,7 @@ describe("collaboration gateway", () => {
       } else if (policy === "space") {
         application.spaces.update(ownerId, space.id, { publicRead: false });
       } else if (policy === "move") {
-        application.nodes.update(ownerId, node.id, { parentNodeId: parent.id });
+        application.nodes.update(interactivePrincipal(ownerId), node.id, { parentNodeId: parent.id });
       } else if (policy === "trash") {
         application.trash.trashNode(ownerId, shared.id);
       } else {

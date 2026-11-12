@@ -33,7 +33,7 @@ export const spaceNodeTool: ToolDefinition = {
   scope: "publish",
   title: "Organize repository files",
   description:
-    "Takes effect immediately, without review. Create a folder, rename or move a file or folder (parent or root), or move a whole subtree to Trash (action trash). Files and folders inside a pull request are changed with the unit tools instead.",
+    "Takes effect immediately, without review. Create a folder, rename or move a file or folder (parent or root), or move a whole subtree to Trash (action trash). Files and folders inside a pull request are changed with the unit tools instead. .univer.html pages go through html_view_create / html_view_replace drafts.",
   inputSchema,
   outputSchema: z.object({
     node: nodeSummarySchema.optional(),

@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -42,12 +43,12 @@ it("previews only Nodes readable through anonymous public-repository and inherit
   if (!personal) throw new Error("Personal space is missing");
   const repository = workspace.spaces.createTeamSpace(userId, { name: "Public repository", publicRead: true });
   const content = Buffer.from("<!doctype html><title>HTML content is not the metadata source</title>");
-  const upload = workspace.blobs.createUpload(userId, crypto.randomUUID(), {
+  const upload = workspace.blobs.createUpload(interactivePrincipal(userId), crypto.randomUUID(), {
     spaceId: repository.id, parentNodeId: null, name: "Sales.univer.html",
     originalFilename: "Sales.univer.html", byteSize: content.length,
   }).body.upload;
   await workspace.blobs.upload(userId, upload.id, String(content.length), Readable.from([content]));
-  await workspace.blobs.complete(userId, upload.id);
+  await workspace.blobs.complete(interactivePrincipal(userId), upload.id);
   const parent = workspace.nodes.create(userId, { spaceId: personal.id, parentNodeId: null, name: "Shared folder" });
   const child = workspace.nodes.create(userId, { spaceId: personal.id, parentNodeId: parent.id, name: "Personal document" });
 
@@ -81,7 +82,7 @@ it("previews only Nodes readable through anonymous public-repository and inherit
   expect((await api(child.id)).status).toBe(404);
   expect(await (await page(child.id)).text()).toBe(indexHtml);
 
-  workspace.nodes.update(userId, upload.nodeId, { name: '<Sales & "growth">.univer.html' });
+  workspace.nodes.update(interactivePrincipal(userId), upload.nodeId, { name: '<Sales & "growth">.univer.html' });
   expect(await (await page(upload.nodeId)).text()).toContain("<title>&lt;Sales &amp; &quot;growth&quot;&gt; · Univer Workspace</title>");
   workspace.spaces.update(userId, repository.id, { publicRead: false });
   const revoked = await page(upload.nodeId, { "If-None-Match": publicResponse.headers.get("etag") ?? "" });

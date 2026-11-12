@@ -15,6 +15,7 @@ export type ApplicationErrorCode =
   | "USERNAME_TAKEN"
   | "SPACE_SLUG_TAKEN"
   | "FORBIDDEN"
+  | "HTML_VIEW_DRAFT_REQUIRED"
   | "CONFLICT"
   | "PRECONDITION_FAILED"
   | "NOT_FOUND"

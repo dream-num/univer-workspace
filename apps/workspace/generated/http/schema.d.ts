@@ -5303,7 +5303,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -5543,7 +5551,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
@@ -5654,7 +5670,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -5721,7 +5745,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             /** @description Content changed since the supplied ETag. Download and reconcile before retrying. */

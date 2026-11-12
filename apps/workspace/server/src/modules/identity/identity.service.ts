@@ -314,6 +314,7 @@ export function createIdentityModule(options: {
         avatarUrl: stored.avatarUrl,
       },
       writeSource: stored.writeSource,
+      tokenIssued: stored.tokenIssued,
     };
   }
 

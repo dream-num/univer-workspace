@@ -15,7 +15,7 @@ export const blobReplaceTool: ToolDefinition = {
   scope: "publish",
   title: "Replace an uploaded file",
   description:
-    "Replace a Blob immediately, preserving its identity. Supply a ready blob upload_id and the exact quoted ETag from blob_download. Generate an idempotency_key before replacing and reuse the same upload, ETag and key on retry. A stale ETag is refused.",
+    "Replace a Blob immediately, preserving its identity. Supply a ready blob upload_id and the exact quoted ETag from blob_download. Generate an idempotency_key before replacing and reuse the same upload, ETag and key on retry. A stale ETag is refused. .univer.html pages go through html_view_create / html_view_replace drafts.",
   inputSchema,
   outputSchema: z.object({
     replacement: z.object({ operationId: z.string(), resourceId: z.string(), etag: z.string() }),

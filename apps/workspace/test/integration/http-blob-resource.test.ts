@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { Readable } from "node:stream";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -179,7 +180,7 @@ describe("Blob replacement HTTP API", () => {
 async function publishedBlob() {
   const { application, cookie, space, origin, userId } = await createHttpContext();
   const content = Buffer.from("hello blob");
-  const { body } = application.blobs.createUpload(userId, "http-replace-setup-0001", {
+  const { body } = application.blobs.createUpload(interactivePrincipal(userId), "http-replace-setup-0001", {
     spaceId: space.id,
     parentNodeId: null,
     name: "file.txt",
@@ -192,7 +193,7 @@ async function publishedBlob() {
     String(content.length),
     Readable.from([content]),
   );
-  await application.blobs.complete(userId, body.upload.id);
+  await application.blobs.complete(interactivePrincipal(userId), body.upload.id);
   const contentUrl = `${origin}/api/blob-resources/${body.upload.resourceId}/content`;
   const response = await fetch(contentUrl, { headers: { cookie } });
   const etag = response.headers.get("etag")!;

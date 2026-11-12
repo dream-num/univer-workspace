@@ -18,7 +18,7 @@ export const blobUploadTool: ToolDefinition = {
   scope: "publish",
   title: "Publish an uploaded file",
   description:
-    "Publish a ready upload with purpose blob directly into a repository. Generate an idempotency_key before creating and reuse it with the same upload_id on retry. Uploads remain usable for one hour after reservation.",
+    "Publish a ready upload with purpose blob directly into a repository. Generate an idempotency_key before creating and reuse it with the same upload_id on retry. Uploads remain usable for one hour after reservation. .univer.html pages go through html_view_create / html_view_replace drafts.",
   inputSchema,
   outputSchema: z.object({
     upload: z.object({

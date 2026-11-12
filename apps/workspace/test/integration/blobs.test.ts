@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -33,7 +34,7 @@ describe("Blob Resources", () => {
     };
 
     const reserved = application.blobs.createUpload(
-      userId,
+      interactivePrincipal(userId),
       "blob-upload-idempotency-0001",
       intent
     );
@@ -46,7 +47,7 @@ describe("Blob Resources", () => {
       },
     });
     const replay = application.blobs.createUpload(
-      userId,
+      interactivePrincipal(userId),
       "blob-upload-idempotency-0001",
       intent
     );
@@ -73,7 +74,7 @@ describe("Blob Resources", () => {
     expect(count(application, "nodes")).toBe(0);
 
     const completed = await application.blobs.complete(
-      userId,
+      interactivePrincipal(userId),
       reserved.body.upload.id
     );
     expect(completed).toMatchObject({
@@ -98,7 +99,7 @@ describe("Blob Resources", () => {
         },
       },
     });
-    expect((await application.blobs.complete(userId, reserved.body.upload.id)).status).toBe(200);
+    expect((await application.blobs.complete(interactivePrincipal(userId), reserved.body.upload.id)).status).toBe(200);
     expect(count(application, "resources")).toBe(1);
     expect(count(application, "univer_resources")).toBe(0);
     expect(count(application, "blob_resources")).toBe(1);
@@ -196,7 +197,7 @@ describe("Blob Resources", () => {
     const space = application.spaces.list(userId).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const result = application.blobs.createUpload(
-      userId,
+      interactivePrincipal(userId),
       "blob-upload-idempotency-0002",
       {
         spaceId: space.id,
@@ -209,7 +210,7 @@ describe("Blob Resources", () => {
     );
 
     expect(() =>
-      application.blobs.createUpload(userId, "blob-upload-idempotency-0002", {
+      application.blobs.createUpload(interactivePrincipal(userId), "blob-upload-idempotency-0002", {
         spaceId: space.id,
         parentNodeId: null,
         name: "other.zip",
@@ -219,7 +220,7 @@ describe("Blob Resources", () => {
       })
     ).toThrowError(expect.objectContaining({ code: "CONFLICT" }));
     expect(() =>
-      application.blobs.createUpload(userId, "blob-upload-too-large-0001", {
+      application.blobs.createUpload(interactivePrincipal(userId), "blob-upload-too-large-0001", {
         spaceId: space.id,
         parentNodeId: null,
         name: "too-large.bin",
@@ -259,7 +260,7 @@ describe("Blob Resources", () => {
     const space = application.spaces.list(userId).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const reserved = application.blobs.createUpload(
-      userId,
+      interactivePrincipal(userId),
       "blob-upload-empty-0001",
       {
         spaceId: space.id,
@@ -276,7 +277,7 @@ describe("Blob Resources", () => {
       "0",
       Readable.from([])
     );
-    await application.blobs.complete(userId, reserved.body.upload.id);
+    await application.blobs.complete(interactivePrincipal(userId), reserved.body.upload.id);
     const opened = await application.blobs.openContent(
       userId,
       reserved.body.upload.resourceId,
@@ -313,7 +314,7 @@ describe("Blob Resources", () => {
     const space = first.spaces.list(userId).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const reserved = first.blobs.createUpload(
-      userId,
+      interactivePrincipal(userId),
       "blob-upload-restart-0001",
       {
         spaceId: space.id,
@@ -374,7 +375,7 @@ describe("Blob Resources", () => {
     expect(readdirSync(blobDirectory)).toHaveLength(0);
 
     const published = await uploadedBlob(application, userId, space.id, "delete.bin", "blob-cleanup-delete-0001");
-    await application.blobs.complete(userId, published.uploadId);
+    await application.blobs.complete(interactivePrincipal(userId), published.uploadId);
     const objectKey = (
       application.database.connection
         .prepare("SELECT object_key FROM blob_resources WHERE resource_id = ?")
@@ -404,11 +405,11 @@ describe("Blob content replacement", () => {
       "original.bin",
       "replacement-create-0001",
     );
-    await application.blobs.complete(user, blob.uploadId);
+    await application.blobs.complete(interactivePrincipal(user), blob.uploadId);
     const etag = await contentEtag(application, user, blob.resourceId);
     const originalNode = application.nodes.get(user, blob.nodeId);
     const first = await application.blobs.replace(
-      user,
+      interactivePrincipal(user),
       blob.resourceId,
       "replacement-request-0001",
       etag,
@@ -430,7 +431,7 @@ describe("Blob content replacement", () => {
     expect((await readAll(bytes.stream)).toString()).toBe("text");
     expect(
       await application.blobs.replace(
-        user,
+        interactivePrincipal(user),
         blob.resourceId,
         "replacement-request-0001",
         etag,
@@ -440,7 +441,7 @@ describe("Blob content replacement", () => {
     ).toEqual(first);
     await expect(
       application.blobs.replace(
-        user,
+        interactivePrincipal(user),
         blob.resourceId,
         "replacement-request-0002",
         etag,
@@ -449,7 +450,7 @@ describe("Blob content replacement", () => {
       ),
     ).rejects.toMatchObject({ status: 412 });
     const second = await application.blobs.replace(
-      user,
+      interactivePrincipal(user),
       blob.resourceId,
       "replacement-request-0003",
       first.etag,
@@ -459,7 +460,7 @@ describe("Blob content replacement", () => {
     expect(second.etag).not.toBe(first.etag);
     await expect(
       application.blobs.replace(
-        user,
+        interactivePrincipal(user),
         blob.resourceId,
         "replacement-request-0004",
         first.etag,
@@ -469,7 +470,7 @@ describe("Blob content replacement", () => {
     ).rejects.toMatchObject({ status: 412 });
     await expect(
       application.blobs.replace(
-        user,
+        interactivePrincipal(user),
         blob.resourceId,
         "replacement-request-0003",
         first.etag,
@@ -497,10 +498,10 @@ describe("Blob content replacement", () => {
       "race.bin",
       "replace-race-create-0001",
     );
-    await application.blobs.complete(user, blob.uploadId);
+    await application.blobs.complete(interactivePrincipal(user), blob.uploadId);
     const etag = await contentEtag(application, user, blob.resourceId);
     const replace = (key: string, body: Readable) =>
-      application.blobs.replace(user, blob.resourceId, key, etag, "4", body);
+      application.blobs.replace(interactivePrincipal(user), blob.resourceId, key, etag, "4", body);
     await expect(replace("replace-short-body-0001", Readable.from(["x"]))).rejects.toThrow();
     expect(application.operations.get(user, "replace-short-body-0001").state).toBe("failed");
     let release!: () => void;
@@ -529,7 +530,7 @@ describe("Blob content replacement", () => {
     const outsider = await register(application, "replace-outsider");
     await expect(
       application.blobs.replace(
-        outsider,
+        interactivePrincipal(outsider),
         blob.resourceId,
         "replace-denied-body-0001",
         fast.etag,
@@ -540,7 +541,7 @@ describe("Blob content replacement", () => {
     application.permissions.upsertNodeGrant(user, blob.nodeId, outsider, { role: "viewer" });
     await expect(
       application.blobs.replace(
-        outsider,
+        interactivePrincipal(outsider),
         blob.resourceId,
         "replace-viewer-body-0001",
         fast.etag,
@@ -557,7 +558,7 @@ describe("Blob content replacement", () => {
       unpause = resolve;
     });
     const trashed = application.blobs.replace(
-      user,
+      interactivePrincipal(user),
       blob.resourceId,
       "replace-trash-body-0001",
       fast.etag,
@@ -593,7 +594,7 @@ describe("Blob content replacement", () => {
       "original.bin",
       "replace-revoke-create-0001",
     );
-    await application.blobs.complete(owner, blob.uploadId);
+    await application.blobs.complete(interactivePrincipal(owner), blob.uploadId);
     application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "editor" });
     const etag = await contentEtag(application, editor, blob.resourceId);
     let release!: () => void;
@@ -606,7 +607,7 @@ describe("Blob content replacement", () => {
     });
     const operationId = "replace-revoke-request-0001";
     const pending = application.blobs.replace(
-      editor,
+      interactivePrincipal(editor),
       blob.resourceId,
       operationId,
       etag,
@@ -641,7 +642,7 @@ describe("Blob content replacement", () => {
       "old.bin",
       "replace-recovery-create-0001",
     );
-    await application.blobs.complete(user, blob.uploadId);
+    await application.blobs.complete(interactivePrincipal(user), blob.uploadId);
     const repository = new BlobsRepository(application.database);
     const operationId = "replace-interrupted-0001";
     const pending = repository.reserveReplacement(
@@ -714,7 +715,7 @@ async function uploadedBlob(
   idempotencyKey: string
 ): Promise<{ readonly uploadId: string; readonly nodeId: string; readonly resourceId: string }> {
   const content = Buffer.from([0, 1, 2, 3]);
-  const reserved = application.blobs.createUpload(userId, idempotencyKey, {
+  const reserved = application.blobs.createUpload(interactivePrincipal(userId), idempotencyKey, {
     spaceId,
     parentNodeId: null,
     name,

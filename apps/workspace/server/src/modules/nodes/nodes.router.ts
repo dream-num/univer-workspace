@@ -55,7 +55,7 @@ export function createNodesRouter(options: {
     const session = options.identity.requireSession(request.headers.cookie);
     response.json(
       options.nodes.update(
-        session.user.id,
+        session,
         requiredParameter(request.params.nodeId),
         request.body
       )
