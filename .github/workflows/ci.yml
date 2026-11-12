@@ -40,10 +40,14 @@ jobs:
             run: pnpm --filter @univerjs/univer-workspace test
           - stage: test-cli
             run: pnpm --filter univer-workspace-cli test
+          - stage: test-mcp
+            run: pnpm --filter @univerjs/univer-workspace-mcp test --maxWorkers=2
           - stage: test-rest
             run: >-
               pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm test:docker-inputs &&
-              pnpm -r --no-sort --filter '!@univerjs/univer-workspace' --filter '!univer-workspace-cli' test
+              VITEST_MAX_WORKERS=2 pnpm -r --no-sort --workspace-concurrency=2
+              --filter '!@univerjs/univer-workspace' --filter '!univer-workspace-cli'
+              --filter '!@univerjs/univer-workspace-mcp' test
           - stage: package
             run: >-
               pnpm build && pnpm package:workspace-cli &&
