@@ -100,13 +100,10 @@ html[data-ui-mode="repository"] .agent-session-title { display: -webkit-box; -we
   html[data-ui-mode="repository"] .agent-tool-status.animate-spin { animation: none; }
 }
 
-html[data-ui-mode="repository"] .agent-references { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
 html[data-ui-mode="repository"] .agent-reference { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 4px 8px; border: 1px solid var(--rd-line); border-radius: 6px; background: var(--rd-panel-2); font-size: 12px; }
 html[data-ui-mode="repository"] .agent-reference > a, html[data-ui-mode="repository"] .agent-reference-choice-label { display: flex; align-items: center; gap: 6px; min-width: 0; }
 html[data-ui-mode="repository"] .agent-reference svg, html[data-ui-mode="repository"] .agent-reference-choice svg { width: 14px; height: 14px; flex: none; color: var(--rd-ink-2); }
 html[data-ui-mode="repository"] .agent-reference span:not(.sr-only), html[data-ui-mode="repository"] .agent-reference-choice-label > span:not(.sr-only) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-html[data-ui-mode="repository"] .agent-reference > button { width: 20px; height: 20px; flex: none; }
-html[data-ui-mode="repository"] .agent-message-user > .agent-references { margin-bottom: 12px; }
 html[data-ui-mode="repository"] .agent-reference-picker { display: grid; gap: 8px; min-width: 0; }
 html[data-ui-mode="repository"] .agent-reference-picker-header { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; }
 html[data-ui-mode="repository"] .agent-reference-choice { display: grid; gap: 8px; min-width: 0; }
@@ -116,3 +113,11 @@ html[data-ui-mode="repository"] .agent-reference-group { color: var(--rd-ink-3);
   html[data-ui-mode="repository"] .agent-composer:not(.agent-followup) .agent-composer-controls { flex-wrap: wrap; }
   html[data-ui-mode="repository"] .agent-composer .agent-model-controls { order: 1; flex-basis: 100%; }
 }
+
+html[data-ui-mode="repository"] .agent-editor-container { position: relative; }
+html[data-ui-mode="repository"] .agent-editor { min-height: 72px; line-height: 24px; white-space: pre-wrap; overflow-wrap: anywhere; outline: none; }
+html[data-ui-mode="repository"] .agent-editor:focus-visible { outline: none; }
+html[data-ui-mode="repository"] .agent-editor > p { margin: 0; }
+html[data-ui-mode="repository"] .agent-editor[contenteditable="false"] { opacity: .5; }
+html[data-ui-mode="repository"] .agent-editor-placeholder { position: absolute; top: 0; left: 0; color: var(--rd-ink-3); pointer-events: none; }
+html[data-ui-mode="repository"] :is(.agent-editor, .agent-message-user) .agent-reference { vertical-align: baseline; padding: 0 6px; line-height: 22px; }

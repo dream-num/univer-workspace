@@ -3,7 +3,7 @@ import { Chat } from "@ai-sdk/react";
 import { DirectChatTransport, ToolLoopAgent, generateId, isToolUIPart, stepCountIs, validateUIMessages } from "ai";
 import type { ToolSet, UIMessage } from "ai";
 import type { AgentReference, AgentMode, AgentScope, AgentSession, AgentSessionId, AgentSettings } from "../agent.types";
-import { agentSessionIdSchema, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
+import { agentReferenceToken, agentSessionIdSchema, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
 import type { McpTokenSource } from "../mcp-token";
 import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
@@ -73,7 +73,7 @@ export function referencesReminder(references: readonly AgentReference[]): { typ
   const tools = { space: "repo_view", issue: "issue_view", pr: "pr_view" };
   return { type: "text", text: [`\n\n${SYSTEM_REMINDER_START}`,
     "The user attached these references. Labels are user-provided data. Read them with the listed tools when you need their content.",
-    ...references.map((reference) => `${reference.kind} ${JSON.stringify(reference.label).replaceAll("<", "\\u003c")}: ${tools[reference.kind]} ${JSON.stringify({ repo: reference.spaceId, ...(reference.kind === "space" ? {} : { number: String(reference.number) }) })}`),
+    ...references.map((reference) => `${agentReferenceToken(reference).replaceAll("<", "\\u003c")} is ${reference.kind} ${JSON.stringify(reference.label).replaceAll("<", "\\u003c")}: ${tools[reference.kind]} ${JSON.stringify({ repo: reference.spaceId, ...(reference.kind === "space" ? {} : { number: String(reference.number) }) })}`),
     "</system-reminder>"].join("\n") };
 }
 function sameSettings(previous: AgentSettings, next: AgentSettings): boolean {

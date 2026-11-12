@@ -6,11 +6,11 @@ import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
-import { agentSessionIdSchema, isSystemReminder, sessionTitle } from "../agent.types";
+import { agentSessionIdSchema, isSystemReminder, messageReferences, sessionTitle, splitReferenceText } from "../agent.types";
 import type { AgentMode, AgentSession } from "../agent.types";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
-import { AgentReferenceChips, messageReferences } from "./references";
+import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import { argumentSummary, cacheHitRate, durationLabel, pullRequestUrl, resultSummary, summarize } from "./summaries";
@@ -71,7 +71,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     <div className="agent-conversation">
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus status={session.status} /></header>
       <div className="agent-messages">{session.messages.map((message) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
-        {message.role === "user" ? <><AgentReferenceChips references={messageReferences(message.metadata)} /><p>{message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n")}</p></>
+        {message.role === "user" ? <p>{splitReferenceText(message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n"), messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>
           : message.parts.map((part, index) => <MessagePart key={index} part={part} session={session} />)}
       </article>)}</div>
       {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}

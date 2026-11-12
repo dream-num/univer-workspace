@@ -498,9 +498,12 @@ Web 的分层由 `test/unit/web-architecture.test.ts` 强制：`shared → featu
 
 **对地基的扩展。** 引用只存 ID 和显示名，类型是 `agent.types.ts` 的 `AgentReference`。
 第一版只支持仓库、Issue、PR，只在新建会话的输入框里可用，文件和目录以后再加。
+输入框是 Lexical 纯文本编辑器，引用是 `@` 位置上的行内原子标签，退格一次删除整个标签。
+发给模型的文字在标签原位置写入引用记号：Issue 和 PR 是 `@<owner/slug>#<编号>`，仓库是 `@<owner/slug>`。
+Team Space 的 Issue 和 PR 共用编号，所以记号唯一。
 `DirectChatTransport` 不转换自定义数据部件，所以引用不用 `data-reference` 部件，而是分两处保存：
-用户消息的 `metadata.agentReferences` 供界面显示标签；同一条消息里用户文字之后附一个 `<system-reminder>` text part，
-每个引用一行，写明用哪个工具读取（`repo_view`、`issue_view`、`pr_view`）。
+用户消息的 `metadata.agentReferences` 供会话页把记号还原成行内标签；同一条消息里用户文字之后附一个 `<system-reminder>` text part，
+每个记号一行，写明用哪个工具读取（`repo_view`、`issue_view`、`pr_view`）。
 agent 需要内容时自己调用工具读取。引用不把内容塞进消息，避免一次引用十个大表格就撑爆上下文。
 引用只进用户消息，不进系统提示词，提示缓存的前缀不变。
 

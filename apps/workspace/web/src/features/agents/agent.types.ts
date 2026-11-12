@@ -12,12 +12,29 @@ export const scopeSchema = z.discriminatedUnion("kind", [
 export type AgentScope = z.infer<typeof scopeSchema>;
 export const agentReferenceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("space"), spaceId: z.string().min(1), label: z.string() }),
-  z.object({ kind: z.literal("issue"), spaceId: z.string().min(1), number: z.number().int().positive(), label: z.string() }),
-  z.object({ kind: z.literal("pr"), spaceId: z.string().min(1), number: z.number().int().positive(), label: z.string() }),
+  z.object({ kind: z.literal("issue"), spaceId: z.string().min(1), repository: z.string(), number: z.number().int().positive(), label: z.string() }),
+  z.object({ kind: z.literal("pr"), spaceId: z.string().min(1), repository: z.string(), number: z.number().int().positive(), label: z.string() }),
 ]);
 export type AgentReference = z.infer<typeof agentReferenceSchema>;
 export function agentReferenceKey(reference: AgentReference): string {
   return JSON.stringify([reference.kind, reference.spaceId, reference.kind === "space" ? null : reference.number]);
+}
+export function agentReferenceLabel(reference: AgentReference): string {
+  return reference.kind === "space" ? reference.label : `#${reference.number} ${reference.label}`;
+}
+const referenceMetadataSchema = z.object({ agentReferences: z.array(agentReferenceSchema) });
+export function messageReferences(metadata: UIMessage["metadata"]): AgentReference[] {
+  const parsed = referenceMetadataSchema.safeParse(metadata);
+  return parsed.success ? parsed.data.agentReferences : [];
+}
+export function splitReferenceText(text: string, references: readonly AgentReference[]): (string | AgentReference)[] {
+  const tokens = new Map(references.map((reference) => [agentReferenceToken(reference), reference]));
+  if (!tokens.size) return [text];
+  const pattern = [...tokens.keys()].sort((a, b) => b.length - a.length).map((token) => token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+  return text.split(new RegExp(`(${pattern})`, "g")).filter(Boolean).map((part) => tokens.get(part) ?? part);
+}
+export function agentReferenceToken(reference: AgentReference): string {
+  return reference.kind === "space" ? `@${reference.label}` : `@${reference.repository}#${reference.number}`;
 }
 export type AgentMode = "ask" | "auto";
 export type DeepSeekThinking = "off" | "high" | "max";
@@ -88,6 +105,8 @@ export function sessionLockName(id: AgentSessionId): string {
   return `univer-workspace-agent-session:${id}`;
 }
 export function sessionTitle(session: AgentSession): string {
-  return session.messages.find((message) => message.role === "user")?.parts
-    .filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
+  const message = session.messages.find((item) => item.role === "user");
+  if (!message) return "";
+  const text = message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("");
+  return splitReferenceText(text, messageReferences(message.metadata)).map((part) => typeof part === "string" ? part : agentReferenceLabel(part)).join("");
 }

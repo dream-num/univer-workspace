@@ -2,28 +2,28 @@ import type { components } from "../../../../../generated/http/schema.js";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUp, Plus } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { sessionQueryOptions } from "../../auth";
 import { spaceQueryOptions } from "../../spaces/spaces.queries";
 import { worktreePagesQueryOptions } from "../../worktrees/worktrees.queries";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Select } from "../../../shared/ui/select";
-import { Textarea } from "../../../shared/ui/textarea";
-import { agentReferenceKey } from "../agent.types";
+import type { RangeSelection } from "lexical";
 import type { AgentReference, AgentMode } from "../agent.types";
 import { useAgentClient } from "./client";
 import { useAgentMessages } from "./messages";
-import { addReference, AgentReferenceChips, AgentReferencePicker, referenceTrigger } from "./references";
+import { AgentReferencePicker } from "./references";
+import { ComposerEditor, insertComposerReference } from "./composer-editor";
+import type { ComposerEditorHandle } from "./composer-editor";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 
 export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: string; readonly starter?: { readonly text: string } | null; readonly focus?: boolean }) {
   const m = useAgentMessages();
   const client = useAgentClient();
   const navigate = useNavigate();
-  const [text, setText] = useState("");
-  const [references, setReferences] = useState<AgentReference[]>([]);
-  const [picker, setPicker] = useState<{ trigger: number | null } | null>(null);
+  const [{ text, references }, setContent] = useState<{ text: string; references: AgentReference[] }>({ text: "", references: [] });
+  const [picker, setPicker] = useState<{ trigger: RangeSelection | null } | null>(null);
   const [mode, setMode] = useState<AgentMode>("ask");
   const [repository, setRepository] = useState("");
   const [base, setBase] = useState("");
@@ -31,21 +31,14 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
   const { selected, thinking } = model;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const input = useRef<HTMLElement>(null);
+  const input = useRef<ComposerEditorHandle | null>(null);
   const session = useQuery(sessionQueryOptions);
   const displayName = session.data?.authenticated ? session.data.user.displayName : undefined;
   const space = useQuery(spaceQueryOptions(spaceId));
-  useEffect(() => { if (starter) { setText(starter.text); input.current?.querySelector("textarea")?.focus(); } }, [starter]);
-  useEffect(() => { if (focus) input.current?.querySelector("textarea")?.focus(); }, [focus]);
-  function closePicker() { setPicker(null); input.current?.querySelector("textarea")?.focus(); }
+  function closePicker() { setPicker(null); input.current?.editor.focus(); }
   function chooseReference(reference: AgentReference) {
-    setReferences((previous) => addReference(previous, reference));
-    const trigger = picker?.trigger ?? null;
-    if (trigger === null || (text[trigger] !== "@" && text[trigger] !== "＠")) { closePicker(); return; }
+    if (input.current) insertComposerReference(input.current, reference, picker?.trigger ?? null);
     setPicker(null);
-    setText(text.slice(0, trigger) + text.slice(trigger + 1));
-    const textarea = input.current?.querySelector("textarea");
-    requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(trigger, trigger); });
   }
   async function send() {
     if (!selected) { model.setSettings(true); return; }
@@ -57,27 +50,20 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
           : repository ? { kind: "repository", spaceId: repository, baseWorktreeId: null } : { kind: "global" },
         references, mode, model: { providerId: selected.provider.id, modelId: selected.modelId, thinking: selected.provider.kind === "deepseek" ? thinking : null }, text: text.trim(),
       });
-      setReferences([]); setPicker(null);
+      setPicker(null);
       await navigate({ to: "/agents/$sessionId", params: { sessionId: session.id } });
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(false); }
   }
   return (
-    <section ref={input} className="agent-composer" aria-label={m.agents}>
+    <section className="agent-composer" aria-label={m.agents}>
       <header className="agent-greeting"><h2>{m.greeting(displayName)}</h2><p>{m.greetingHint}</p></header>
       {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
       <div className="agent-composer-box">
-        <AgentReferenceChips references={references} disabled={busy} onRemove={(reference) => setReferences((previous) => previous.filter((item) => agentReferenceKey(item) !== agentReferenceKey(reference)))} />
         {picker ? <AgentReferencePicker spaceId={spaceId} onChoose={chooseReference} onClose={closePicker} /> : null}
-        <Textarea id="agent-composer" aria-label={m.prompt} placeholder={m.prompt} value={text} disabled={busy} rows={3}
-          onFocus={() => { void client.prewarm().catch((cause: unknown) => setError(String(cause))); }}
-          onChange={(event) => {
-            const value = event.target.value;
-            const trigger = referenceTrigger(value, event.target.selectionStart);
-            setText(value);
-            if (!("isComposing" in event.nativeEvent && event.nativeEvent.isComposing) && value !== text && trigger !== null) setPicker({ trigger });
-          }}
-          onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); void send(); } }} />
+        <ComposerEditor handle={input} label={m.prompt} busy={busy} {...(starter !== undefined ? { starter } : {})} {...(focus !== undefined ? { focus } : {})}
+          onChange={setContent} onTrigger={(trigger) => setPicker({ trigger })} onSend={() => void send()}
+          onFocus={() => { void client.prewarm().catch((cause: unknown) => setError(String(cause))); }} />
         <div className="agent-composer-controls">
           <Button variant="ghost" size="icon" aria-label={m.addContext} aria-expanded={picker !== null} disabled={busy} onClick={() => picker ? closePicker() : setPicker({ trigger: null })}><Plus aria-hidden="true" /></Button>
           <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={busy} />
