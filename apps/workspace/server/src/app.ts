@@ -385,6 +385,7 @@ export function createWorkspaceApplication(
     createIdentityRouter({
       identity,
       accessTokens,
+      mcpOAuth: mcpOAuth ?? null,
       secureCookies: config.secureCookies,
       ...(config.discordBotApiKey
         ? { discordBotApiKey: config.discordBotApiKey }

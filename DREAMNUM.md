@@ -150,7 +150,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   plus the `login_sessions` columns that tie a session issued by token exchange to its token, through a backed-up
   V17 → V18 startup migration that backfills nothing. Workspace issues and stores these tokens itself; the
   database keeps only their hashes, and the plaintext is returned once at creation or issuance. Revoking a token
-  deletes the sessions issued for it.
+  deletes the sessions issued for it. `POST /api/auth/agent-token` issues the Browser Agents module, from an
+  interactive session cookie, a one-hour `uvw_at_` grant for the first-party `univer-workspace-agents` client bound to the
+  same-origin `/mcp` resource, with only `read` or `read write`, and returns no refresh token.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
