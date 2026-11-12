@@ -1,3 +1,6 @@
+import { htmlViewReadTool } from "../src/gateway/tools/core/html-view-read.js";
+import { htmlViewReplaceTool } from "../src/gateway/tools/core/html-view-replace.js";
+import { RESULT_LIMIT } from "../src/gateway/paging.js";
 import { z } from "zod";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
 import { defaultLimits, uploadLinkSchema, type UploadPurpose } from "../src/gateway/staging/model.js";
@@ -9,7 +12,7 @@ import { testStagingDirectory } from "./staging-directory.js";
 import { afterEach, expect, it, vi } from "vitest";
 import { WorkspaceContentSource } from "@univerjs/univer-workspace-client-core";
 import { WorkspaceHttp, workspaceError } from "@univerjs/univer-workspace-client-core/product";
-import { htmlViewCreate, htmlViewValidate } from "../src/executor/ops/html-view.js";
+import { htmlViewCreate, htmlViewValidate, htmlViewReplace } from "../src/executor/ops/html-view.js";
 import type { OpContext } from "../src/executor/context.js";
 import { htmlViewMaxBytes, opSpecs } from "../src/shared/executor-protocol.js";
 import { translateError } from "../src/shared/errors.js";
@@ -347,4 +350,111 @@ it.each([
   const result = await htmlViewCreateTool.run(context, { ...createArgs, html });
   expect(result.output).toMatchObject({ shareUrl: "https://workspace.test/nodes/node?view=immersive", repositoryVisibility: visibility, privateSourceUnitIds: expected });
   expect(opSpecs["htmlView.create"].output.parse(result.output)).toEqual(result.output);
+});
+
+function revisionSetup(page = html, name = "Dashboard.univer.html", stale = false) {
+  const f = setup(page, true, ["unit"]);
+  const original = f.fetcher.getMockImplementation();
+  if (!original) throw new Error("Expected product fetcher");
+  const writes: string[] = [];
+  const recorded = new Map<string, object>();
+  f.fetcher.mockImplementation(async (url, options) => {
+    const request = new Request(url, options);
+    if (request.url.endsWith("/download")) return new Response(page, { headers: {
+      "content-type": "text/html", "content-length": String(Buffer.byteLength(page)), etag: '"v1"',
+    } });
+    if (request.url.endsWith("/resources/resource")) {
+      const body = await (await original(url, options)).json();
+      return Response.json({ ...body, node: { ...body.node, name } });
+    }
+    if (request.url.endsWith("/content")) {
+      expect(request.headers.get("if-match")).toBe('"v1"');
+      const idempotencyKey = request.headers.get("idempotency-key") ?? "";
+      if (stale) return Response.json({ error: { code: "PRECONDITION_FAILED", message: "ETag conflict" } }, { status: 412 });
+      if (!recorded.has(idempotencyKey)) {
+        writes.push(await request.text());
+        recorded.set(idempotencyKey, { resourceId: "resource", operationId: idempotencyKey, etag: '"v2"' });
+      }
+      return Response.json(recorded.get(idempotencyKey));
+    }
+    return await original(url, options);
+  });
+  return { ...f, writes };
+}
+
+it("reads a page inline with a strong ETag and immersive link", async () => {
+  const { context } = uploadContext();
+  const f = revisionSetup();
+  const result = await htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { resource: "resource" });
+  expect(result).toEqual({ repo: "space", output: {
+    resource: "resource", node: "node", space: "space", name: "Dashboard.univer.html",
+    html, etag: '"v1"', shareUrl: "https://workspace.test/nodes/node?view=immersive",
+  } });
+  expect(htmlViewReadTool.outputSchema.parse(result.output)).toEqual(result.output);
+});
+
+it("refuses non-pages and oversize pages rather than returning partial HTML", async () => {
+  const { context } = uploadContext();
+  for (const [page, name, code] of [
+    [html, "page.html", "workspace-resource-kind-mismatch"],
+    ["x".repeat(RESULT_LIMIT), "Page.univer.html", "workspace-result-too-large"],
+    ['"'.repeat(RESULT_LIMIT / 2), "Page.univer.html", "workspace-result-too-large"],
+  ]) {
+    const f = revisionSetup(page, name);
+    await expect(htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { resource: "resource" })).rejects.toMatchObject({ code });
+  }
+});
+
+const replaceArgs = { resource: "resource", html, etag: '"v1"', idempotency_key: key };
+function connectReplacement(ctx: OpContext) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
+    const { input } = z.object({ input: opSpecs["htmlView.replace"].input }).parse(
+      decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer())).header,
+    );
+    try {
+      const result = await htmlViewReplace(ctx, input);
+      return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: ctx.usage })));
+    } catch (error) {
+      return new Response(new Uint8Array(encodeFrame({ ok: false, error: translateError(error), meta: ctx.usage })));
+    }
+  });
+}
+
+it("validates a replacement before writing and accepts inline HTML only", async () => {
+  const { context } = uploadContext();
+  const f = revisionSetup();
+  const executor = connectReplacement(f.ctx);
+  for (const args of [
+    { ...replaceArgs, html: undefined, html_upload_id: "upload" },
+    { ...replaceArgs, html_upload_id: "upload" },
+  ]) await expect(htmlViewReplaceTool.run(context, args)).rejects.toBeInstanceOf(z.ZodError);
+  expect(executor).not.toHaveBeenCalled();
+  await expect(htmlViewReplaceTool.run(context, {
+    ...replaceArgs, html: html.replace("budget", "missing"),
+  })).rejects.toMatchObject({ wire: { code: "workspace-html-view-source-invalid" } });
+  expect(f.writes).toEqual([]);
+});
+
+it("returns a stale ETag conflict to the model", async () => {
+  const { context } = uploadContext();
+  const f = revisionSetup(html, undefined, true);
+  connectReplacement(f.ctx);
+  await expect(htmlViewReplaceTool.run(context, replaceArgs)).rejects.toMatchObject({
+    wire: { code: "PRECONDITION_FAILED", detail: { status: 412 } },
+  });
+  expect(f.writes).toEqual([]);
+});
+
+it("returns the recorded replacement for a repeated key, including the access summary", async () => {
+  const { context } = uploadContext();
+  const f = revisionSetup();
+  connectReplacement(f.ctx);
+  const first = await htmlViewReplaceTool.run(context, replaceArgs);
+  expect(await htmlViewReplaceTool.run(context, replaceArgs)).toEqual(first);
+  expect(first.output).toMatchObject({
+    nodeId: "node", resourceId: "resource", operationId: key, etag: '"v2"',
+    shareUrl: "https://workspace.test/nodes/node?view=immersive", repositoryVisibility: "public", privateSourceUnitIds: ["unit"],
+  });
+  expect(f.writes).toEqual([html]);
+  expect(f.ctx.usage.repo).toBe("space");
 });

@@ -98,9 +98,12 @@ which referenced files are private instead of changing their sharing without ask
 
 ## Revise an existing page
 
-Read the `blob` Skill. Download the existing Resource, edit the original HTML source, run `html-view validate`, then use `blob replace` with its downloaded ETag and a new
-stable write key. Replacement preserves the existing page identity and URL. Reconcile ETag
-conflicts; create another Blob only when a separate page is wanted.
+Read the existing page's HTML and strong ETag, edit the original source, validate the
+complete HTML, then replace it with that ETag and a new stable write key. Use the
+`core` Skill's operation bindings for the connected product. With the CLI, read the
+`blob` Skill, download the Resource, run `html-view validate`, then use `blob replace`.
+Replacement preserves the existing page identity and URL. Reconcile ETag conflicts;
+create another Blob only when a separate page is wanted.
 
 Page access does not grant access to the source Sheets. Author validation uses the current authenticated
 identity; each viewer's source access is checked separately by Workspace at runtime.

@@ -1,6 +1,7 @@
 import { LocaleType } from "@univerjs/core";
 import { readFile } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
+import { WorkspaceBlobFeature } from "../src/blob.js";
 import { WorkspaceHttp } from "../src/http.js";
 import { WorkspaceHtmlViewFeature, type WorkspaceHtmlViewOptions } from "../src/html-view.js";
 
@@ -192,4 +193,115 @@ it("does not publish when source metadata cannot confirm the requested Unit", as
   json.mockImplementation(async (path) => path.startsWith("/api/spaces/") ? { id: "space", name: "Team" } : wrong);
   await expect(feature.create({ source: { bytes: Buffer.from('<output data-univer-cell-text="unit:budget:B2"></output>'), name: "view.univer.html" }, name: "View", spaceId: "space", idempotencyKey: "key" })).rejects.toMatchObject({ code: "workspace-result-mismatch" });
   expect(uploadBytes).not.toHaveBeenCalled();
+});
+
+function revisionFeature(options: { name?: string; page?: Uint8Array; etag?: string; conflict?: boolean; publicRead?: boolean } = {}) {
+  const page = options.page ?? Buffer.from('<output data-univer-cell-text="unit:budget:B2"></output>');
+  const resource = {
+    id: "resource", kind: "blob", availability: "ready", byteSize: page.length,
+    mediaType: "text/html", capabilities: { downloadContent: true, editContent: true, openContent: true },
+  };
+  const node = {
+    id: "node", spaceId: "space", parentNodeId: null, name: options.name ?? "Page.univer.html",
+    hasChildren: false, updatedAt: "now", accessRole: "owner", resource,
+    capabilities: { browseChildren: false, createChildren: false, rename: true, move: true, trash: true, share: true },
+  };
+  const recorded = new Map<string, { operationId: string; resourceId: string; etag: string }>();
+  const writes: string[] = [];
+  const sharing = sharingHttp(options.publicRead ?? true, ["unit"]);
+  const fetcher = vi.fn<typeof fetch>(async (url, init) => {
+    const request = new Request(url, init);
+    const path = new URL(request.url).pathname;
+    if (path === "/api/resources/resource") return Response.json({ node, resource });
+    if (path.endsWith("/download")) {
+      expect(request.headers.get("accept-encoding")).toBe("identity");
+      return new Response(new Uint8Array(page), { headers: {
+        "content-type": "text/html", "content-length": String(page.length), etag: options.etag ?? '"v1"',
+      } });
+    }
+    if (path.endsWith("/content")) {
+      const key = request.headers.get("idempotency-key") ?? "";
+      expect(request.headers.get("if-match")).toBe('"v1"');
+      if (options.conflict) return Response.json({ error: { code: "PRECONDITION_FAILED", message: "Changed" } }, { status: 412 });
+      if (!recorded.has(key)) {
+        writes.push(await request.text());
+        recorded.set(key, { operationId: key, resourceId: "resource", etag: '"v2"' });
+      }
+      return Response.json(recorded.get(key));
+    }
+    return Response.json(await sharing.json(path));
+  });
+  const http = new WorkspaceHttp({ origin: "https://workspace.test", role: "client", cookie: "session=test", fetcher });
+  const blobs = new WorkspaceBlobFeature(async () => http);
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => http,
+    blobs: {
+      uploadBytes: async () => ({ nodeId: "node" }),
+      get: (id) => blobs.get(id),
+      replaceBytes: (input) => blobs.replaceBytes(input),
+    },
+    configuredOrigin: async () => http.origin,
+    resolveTrunkRuntimeTarget: async ({ unitId }) => ({ origin: http.origin, unitId, unitType: "sheet", revision: 1, scope: { kind: "trunk" } }),
+    runtime: { exportUnitData: async () => ({
+      id: "unit", name: "Budget", appVersion: "1", locale: LocaleType.EN_US,
+      styles: {}, sheetOrder: ["budget"], sheets: { budget: { rowCount: 10, columnCount: 3 } },
+    }) },
+  });
+  return { feature, fetcher, writes };
+}
+
+it("reads the exact UTF-8 page including BOM with its strong ETag and identity", async () => {
+  const html = '\ufeff<p title="界">😀</p>\r\n';
+  const { feature } = revisionFeature({ page: Buffer.from(html) });
+  await expect(feature.read("resource", 1000)).resolves.toEqual({
+    resourceId: "resource", nodeId: "node", spaceId: "space", name: "Page.univer.html", html, etag: '"v1"',
+  });
+});
+
+it("rejects a non-page before downloading", async () => {
+  const { feature, fetcher } = revisionFeature({ name: "Page.html" });
+  await expect(feature.read("resource", 1000)).rejects.toMatchObject({ code: "workspace-resource-kind-mismatch" });
+  expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+it.each([Buffer.from("x".repeat(1001)), Buffer.from('"'.repeat(600))])("refuses oversized inline pages without truncation %#", async (page) => {
+  await expect(revisionFeature({ page }).feature.read("resource", 1000)).rejects.toMatchObject({ code: "workspace-result-too-large" });
+});
+
+it("rejects invalid UTF-8 and weak ETags", async () => {
+  await expect(revisionFeature({ page: new Uint8Array([0xc3, 0x28]) }).feature.read("resource", 1000)).rejects.toMatchObject({ code: "workspace-html-view-invalid" });
+  await expect(revisionFeature({ etag: 'W/"v1"' }).feature.read("resource", 1000)).rejects.toMatchObject({ code: "workspace-invalid-response" });
+});
+
+const replacement = {
+  resourceId: "resource", etag: '"v1"', idempotencyKey: "html-replace-key-123",
+  source: { name: "view.univer.html", bytes: Buffer.from('<output data-univer-cell-text="unit:budget:B2"></output>') },
+};
+
+it.each([true, false])("replaces conditionally and idempotently with the creation access summary (public %s)", async (publicRead) => {
+  const { feature, writes } = revisionFeature({ publicRead });
+  const created = await feature.create({ source: replacement.source, name: "Page", spaceId: "space", idempotencyKey: "create-key" });
+  const first = await feature.replace(replacement);
+  expect(first.repositoryVisibility).toBe(created.repositoryVisibility);
+  expect(first.privateSourceUnitIds).toEqual(created.privateSourceUnitIds);
+  expect(await feature.replace(replacement)).toEqual(first);
+  expect(first).toEqual({
+    resourceId: "resource", nodeId: "node", operationId: replacement.idempotencyKey, etag: '"v2"',
+    workspaceUrl: "https://workspace.test/nodes/node", shareUrl: "https://workspace.test/nodes/node?view=immersive",
+    repositoryVisibility: publicRead ? "public" : "private", privateSourceUnitIds: ["unit"],
+  });
+  expect(writes).toEqual([Buffer.from(replacement.source.bytes).toString()]);
+});
+
+it("validates replacement bindings and destination kind before any write", async () => {
+  const { feature, writes } = revisionFeature();
+  await expect(feature.replace({ ...replacement, source: { ...replacement.source, bytes: Buffer.from('<div data-univer-cell-text="unit:missing:B2"></div>') } })).rejects.toMatchObject({ code: "workspace-html-view-source-invalid" });
+  expect(writes).toEqual([]);
+  const nonPage = revisionFeature({ name: "plain.txt" });
+  await expect(nonPage.feature.replace(replacement)).rejects.toMatchObject({ code: "workspace-resource-kind-mismatch" });
+  expect(nonPage.writes).toEqual([]);
+});
+
+it("preserves a stale ETag failure for the caller to reconcile", async () => {
+  await expect(revisionFeature({ conflict: true }).feature.replace(replacement)).rejects.toMatchObject({ code: "PRECONDITION_FAILED", detail: { status: 412 } });
 });

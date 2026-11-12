@@ -20,7 +20,7 @@ export function buildServerInstructions(
         ]
       : []),
     ...(has("unit_add") ? ["Add existing files to it with unit_add."] : []),
-    ...(has("unit_create") ? ["Create new files inside the pull request with unit_create."] : []),
+    ...(has("unit_create") ? ["Create new Units inside the pull request with unit_create."] : []),
     "Make the change inside the pull request.",
     "Read the result back to verify it before you report success.",
     ...(has("pr_ready") ? ["Mark the pull request ready with pr_ready."] : []),
@@ -28,13 +28,19 @@ export function buildServerInstructions(
     "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
   ];
   const instructions = [
-    "This server operates a Univer Workspace on behalf of the signed-in user. Every change goes through a pull request (a Worktree), never straight into the shared files.",
+    "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
     ...(executorRestricted
       ? [
           "Editing document contents is not enabled for this account; ask the user to edit in the browser.",
         ]
       : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
+    has("html_view_create")
+      ? "A page is an HTML View (.univer.html) bound to live Sheets. It is not a Slide, Board or other Unit. HTML View tools publish immediately, outside pull requests; the client may ask the user to approve first. If the user rejects, ask what to change."
+      : "This connection cannot publish pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.",
+    ...(has("html_view_read") && has("html_view_replace")
+      ? ["Revise a page with html_view_read then html_view_replace."]
+      : []),
     "Never mix up spaceId, nodeId, resourceId, unitId, pull request number and Worktree id; take identifiers from tool results, not from display names. Never invent the user, the repository or a confirmed revision.",
     ...(has("api_find") && has("api_show")
       ? ["Before writing Facade API code, look the APIs up with api_find and api_show."]
@@ -56,7 +62,6 @@ export function buildServerInstructions(
       { tools: ["compile_markdown", "export_markdown"], label: "Markdown" },
       { tools: ["compile_typst"], label: "Typst" },
       { tools: ["compile_svg"], label: "SVG" },
-      { tools: ["html_view_create", "html_view_validate"], label: "HTML View" },
       { tools: ["blob_upload", "blob_download", "blob_get", "blob_replace"], label: "Blob" },
     ]
       .filter((capability) => capability.tools.some((name) => available.has(name)))

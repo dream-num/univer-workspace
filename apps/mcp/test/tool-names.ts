@@ -30,6 +30,10 @@ export const coreNames = [
   "api_find",
   "api_show",
   "skills_read",
+  "html_view_validate",
+  "html_view_create",
+  "html_view_read",
+  "html_view_replace",
 ];
 export const filesNames = [
   "blob_get",
@@ -37,8 +41,6 @@ export const filesNames = [
   "blob_download",
   "blob_replace",
   "asset_download",
-  "html_view_validate",
-  "html_view_create",
   "compile_markdown",
   "export_markdown",
   "compile_typst",
@@ -59,6 +61,7 @@ export const adminNames = [
   "resources_export",
 ];
 export const writeNames = [
+  "html_view_replace",
   "compile_typst",
   "compile_svg",
   "html_view_create",
@@ -85,6 +88,7 @@ export const writeNames = [
   "pr_discard",
 ];
 export const destructiveNames = [
+  "html_view_replace",
   "blob_replace",
   "repo_edit",
   "label_write",
@@ -111,6 +115,8 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   asset_download: "read",
   html_view_validate: "read",
   html_view_create: "publish",
+  html_view_read: "read",
+  html_view_replace: "publish",
   compile_markdown: "write",
   export_markdown: "read",
   compile_typst: "write",

@@ -7,6 +7,15 @@ function htmlViewFeature(ctx: OpContext) {
   return new WorkspaceHtmlViewFeature({
     authenticatedHttp: async () => ctx.http(),
     blobs: {
+      get: async (resourceId) => {
+        const view = await new WorkspaceBlobFeature(async () => ctx.http()).get(resourceId);
+        ctx.usage.repo = view.node.spaceId;
+        return view;
+      },
+      replaceBytes: async (input) => {
+        ctx.signal.throwIfAborted();
+        return await new WorkspaceBlobFeature(async () => ctx.http()).replaceBytes(input);
+      },
       uploadBytes: async (input) => {
         ctx.signal.throwIfAborted();
         ctx.onCreateUnit?.();
@@ -37,4 +46,12 @@ export const htmlViewCreate: Handler<"htmlView.create"> = async (
     source: { bytes: Buffer.from(html, "utf8"), name: "view.univer.html" },
   });
   return { output: opSpecs["htmlView.create"].output.parse(result) };
+};
+
+export const htmlViewReplace: Handler<"htmlView.replace"> = async (ctx, { html, ...input }) => {
+  const result = await htmlViewFeature(ctx).replace({
+    ...input,
+    source: { bytes: Buffer.from(html, "utf8"), name: "view.univer.html" },
+  });
+  return { output: opSpecs["htmlView.replace"].output.parse(result) };
 };
