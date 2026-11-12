@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { htmlViewDraftSchema } from "./html-view-draft.js";
 import { lintOutput, printPdfOutput } from "./pdf-lint-schema.js";
 import { screenshotOutput } from "./screenshot-schema.js";
 import { opMetaSchema } from "./usage.js";
@@ -277,58 +278,34 @@ export const opSpecs = {
     }),
     route: () => ({ scope: "htmlView.validate", unitId: null }),
   }),
-  "htmlView.create": defineOp({
-    name: "htmlView.create",
+  "htmlView.draft": defineOp({
+    name: "htmlView.draft",
     effect: "write",
     payload: "none",
     rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
-    input: z.object({
-      html: htmlViewInput,
-      spaceId: z.string().min(1),
-      name: z.string().min(1).max(255),
-      parentNodeId: z.string().min(1).optional(),
-      idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
-    }),
-    output: z
-      .object({
-        nodeId: z.string(),
-        resourceId: z.string(),
-        operationId: z.string(),
-        workspaceUrl: z.url(),
-        shareUrl: z.url().describe("Immersive page link to share with the user."),
-        repositoryVisibility: z.enum(["public", "private"])
-          .describe("Destination repository visibility from publicRead."),
-        privateSourceUnitIds: z.array(z.string()).describe(
-          "Sorted declared source Unit IDs in non-public repositories; signed-out visitors cannot load them. Empty when all declared sources are public.",
-        ),
-      })
-      .catchall(z.json()),
-    route: (input) => ({ scope: "htmlView.create", unitId: input.idempotencyKey }),
-  }),
-  "htmlView.replace": defineOp({
-    name: "htmlView.replace",
-    effect: "write",
-    payload: "none",
-    rerun: ["auth"],
-    limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
-    input: z.object({
-      html: htmlViewInput,
-      resourceId: z.string().min(1),
-      etag: z.string().min(1),
-      idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
-    }),
-    output: z.object({
-      nodeId: z.string(),
-      resourceId: z.string(),
-      operationId: z.string(),
-      etag: z.string(),
-      workspaceUrl: z.url(),
-      shareUrl: z.url(),
+    input: z.discriminatedUnion("kind", [
+      z.object({
+        kind: z.literal("create"),
+        html: htmlViewInput,
+        spaceId: z.string().min(1),
+        name: z.string().min(1).max(255),
+        parentNodeId: z.string().min(1).optional(),
+        idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
+      }),
+      z.object({
+        kind: z.literal("replace"),
+        html: htmlViewInput,
+        resourceId: z.string().min(1),
+        etag: z.string().min(1),
+        idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
+      }),
+    ]),
+    output: z.object({ draft: htmlViewDraftSchema.extend({
       repositoryVisibility: z.enum(["public", "private"]),
       privateSourceUnitIds: z.array(z.string()),
-    }),
-    route: (input) => ({ scope: "htmlView.replace", unitId: input.idempotencyKey }),
+    }) }),
+    route: (input) => ({ scope: "htmlView.draft", unitId: input.idempotencyKey }),
   }),
   "markdown.compile": defineOp({
     name: "markdown.compile",

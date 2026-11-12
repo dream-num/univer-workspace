@@ -91,7 +91,7 @@ export function createDispatcher(
       "markdown.compile",
       "typst.compile",
       "svg.compile",
-      "htmlView.create",
+      "htmlView.draft",
     ].includes(name);
     let effect = spec.effect;
     let queued = false;
@@ -309,7 +309,7 @@ export function createDispatcher(
             "markdown.compile",
             "typst.compile",
             "svg.compile",
-            "htmlView.create",
+            "htmlView.draft",
           ].includes(name)) &&
         !(
           error instanceof Error &&

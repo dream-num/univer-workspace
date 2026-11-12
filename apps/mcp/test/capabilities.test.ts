@@ -154,16 +154,17 @@ describe("capabilities through MCP tools/list and initialize", () => {
     expect((await client.listTools()).tools.map(({ name }) => name)).toEqual(coreNames);
     const text = client.getInstructions();
     expect(text).toContain("A page is an HTML View (.univer.html) bound to live Sheets.");
-    expect(text).toContain("It is not a Slide, Board or other Unit.");
-    expect(text).toContain("outside pull requests");
-    expect(text).toContain("approve first");
-    expect(text).toContain("If the user rejects, ask what to change.");
+    expect(text).toContain("It is not a Slide, Board or other Unit and does not go through pull requests.");
+    expect(text).toContain("only save a draft");
+    expect(text).toContain("give the user draft.previewUrl");
+    expect(text).toContain("call html_view_draft_get");
+    expect(text).toContain("On rejected, ask what to change.");
     expect(text).toContain("html_view_read then html_view_replace");
   });
 
   it("stops page requests when publishing is unavailable", async () => {
     const client = await (await start())(undefined);
-    expect(client.getInstructions()).toContain("This connection cannot publish pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.");
+    expect(client.getInstructions()).toContain("This connection cannot draft pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.");
   });
 
   it("lists the selector syntax for each inspect target", async () => {
@@ -371,4 +372,16 @@ describe("capabilities through MCP tools/list and initialize", () => {
       .poll(names)
       .toEqual(allNames.filter((name) => ![...executorTools, "job_get"].includes(name)));
   });
+});
+
+it("hides page writes from old executors and retains the HTTP-only status tool", async () => {
+  const old = replica([...allOperations.filter((name) => name !== "htmlView.draft"), "htmlView.create", "htmlView.replace"]);
+  const client = await (await start([old]))("core");
+  const names = (await client.listTools()).tools.map(({ name }) => name);
+  expect(names).not.toContain("html_view_create");
+  expect(names).not.toContain("html_view_replace");
+  expect(names).toContain("html_view_draft_get");
+  expect(Object.keys(opSpecs)).toContain("htmlView.draft");
+  expect(Object.keys(opSpecs)).not.toContain("htmlView.create");
+  expect(Object.keys(opSpecs)).not.toContain("htmlView.replace");
 });

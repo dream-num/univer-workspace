@@ -305,3 +305,44 @@ it("validates replacement bindings and destination kind before any write", async
 it("preserves a stale ETag failure for the caller to reconcile", async () => {
   await expect(revisionFeature({ conflict: true }).feature.replace(replacement)).rejects.toMatchObject({ code: "PRECONDITION_FAILED", detail: { status: 412 } });
 });
+
+it.each(["create", "replace"] as const)("saves a %s draft after validation while keeping Blob writes unused", async (kind) => {
+  const http = sharingHttp(true, ["unit"]);
+  const original = http.json.bind(http);
+  const requests: unknown[] = [];
+  const onWrite = vi.fn();
+  const json = vi.spyOn(http, "json").mockImplementation(async (path, options) => {
+    if (path === "/api/resources/resource") return { node: {
+      id: "node", spaceId: "space", parentNodeId: null, name: "Page.univer.html", hasChildren: false, updatedAt: "now", accessRole: "owner",
+      capabilities: { browseChildren: false, createChildren: false, rename: true, move: true, trash: true, share: true },
+      resource: { id: "resource", kind: "blob", availability: "ready", byteSize: 10, mediaType: "text/html",
+        capabilities: { downloadContent: true, editContent: true, openContent: true } },
+    }, resource: { id: "resource", kind: "blob", availability: "ready", byteSize: 10, mediaType: "text/html",
+      capabilities: { downloadContent: true, editContent: true, openContent: true } } };
+    if (path === "/api/html-view-drafts") {
+      expect(onWrite).toHaveBeenCalledOnce();
+      requests.push(options);
+      return { draft: { id: "draft/1", kind, state: "pending", spaceId: "space", name: "Page.univer.html",
+        targetResourceId: kind === "replace" ? "resource" : null, published: null, expiresAt: "later" } };
+    }
+    expect(onWrite).not.toHaveBeenCalled();
+    return original(path, options);
+  });
+  const uploadBytes = vi.fn();
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => http, blobs: { uploadBytes }, configuredOrigin: async () => http.origin, onWrite,
+    resolveTrunkRuntimeTarget: async ({ unitId }) => ({ origin: http.origin, unitId, unitType: "sheet", revision: 1, scope: { kind: "trunk" } }),
+    runtime: { exportUnitData: async () => ({ id: "unit", name: "Budget", appVersion: "1", locale: LocaleType.EN_US,
+      styles: {}, sheetOrder: ["budget"], sheets: { budget: { rowCount: 10, columnCount: 3 } } }) },
+  });
+  const intent = kind === "create" ? { kind, name: "Page", spaceId: "space", parentNodeId: "folder" }
+    : { kind, resourceId: "resource", etag: '"v1"' };
+  const result = await feature.draft({ ...intent, source: replacement.source, idempotencyKey: replacement.idempotencyKey });
+  expect(result).toMatchObject({ id: "draft/1", kind, status: { state: "pending" },
+    previewUrl: "https://workspace.test/drafts/draft%2F1", repositoryVisibility: "public", privateSourceUnitIds: ["unit"] });
+  expect(requests).toEqual([{ method: "POST", idempotencyKey: replacement.idempotencyKey, body: {
+    ...intent, ...(kind === "create" ? { name: "Page.univer.html" } : {}), html: Buffer.from(replacement.source.bytes).toString(),
+  } }]);
+  expect(uploadBytes).not.toHaveBeenCalled();
+  expect(json.mock.calls.some(([path]) => /blob-upload-sessions|blob-resources.*content/.test(path))).toBe(false);
+});
