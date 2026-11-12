@@ -9,7 +9,7 @@ import { spaceQueryOptions } from "../../spaces";
 import type { PendingApproval } from "../approvals";
 import { useAgentMessages } from "./messages";
 
-const DraftPreview = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftPreview })));
+const DraftPreview = lazy(() => import("../../html-views/drafts/draft-preview").then((module) => ({ default: module.DraftPreview })));
 
 export function ApprovalCard({ approval, disabled, onDecide }: {
   readonly approval: PendingApproval;

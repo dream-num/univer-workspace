@@ -250,3 +250,13 @@ storage and API fetch all blocked. Click its hash link and Replace URL button; b
 update the top-level URL. Repeat after `/fixture-login` to check isolation while signed in.
 Open the private entry before signing in: login `returnTo` must retain its query and fragment.
 The optional App should support its own direct FAQ/modal parameters without any host bridge.
+
+## HTML View draft review
+
+Run `pnpm --filter @univerjs/univer-workspace exec vite --config test/fixtures/html-view-drafts.vite.ts`,
+then open `http://127.0.0.1:5187/test/fixtures/html-view-drafts.html`.
+This fixture mounts the authenticated production `/drafts/$draftId` route with disposable
+in-memory HTTP responses and the real sandbox renderer. It never contacts a product backend.
+Use `?draft=replace` for New/Current comparison, or `conflicted`, `expired`, `rejected`,
+`published`, and `missing` for terminal and not-found states. Publish and Reject affect
+only the current fixture page; reload resets it. Check desktop and narrow widths.
