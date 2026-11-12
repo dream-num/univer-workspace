@@ -12,6 +12,8 @@ import type { StagingStore } from "../staging/model.js";
 import type { UsageAccumulator } from "../../shared/usage.js";
 import type { ExecutorLink } from "./executor-tool.js";
 
+export const TOOL_SCOPE_META = "univer.workspace/scope";
+
 export type ToolScope = "read" | "write" | "publish" | "worktree:merge";
 
 export interface ToolContext {

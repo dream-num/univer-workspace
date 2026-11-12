@@ -797,7 +797,7 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
 
 it("declares the rerun policy for every executor operation", () => {
   expect(Object.fromEntries(Object.entries(opSpecs).map(([name, spec]) => [name, spec.rerun]))).toEqual({
-    "htmlView.validate": ["auth"], "htmlView.create": ["auth"],
+    "htmlView.validate": ["auth"], "htmlView.create": ["auth"], "htmlView.replace": ["auth"],
     "markdown.compile": [], "markdown.export": ["auth"],
     "typst.compile": [], "svg.compile": ["auth"],
     "exchange.import": [], "exchange.export": ["auth"],

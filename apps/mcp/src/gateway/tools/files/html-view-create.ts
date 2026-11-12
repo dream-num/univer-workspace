@@ -7,11 +7,11 @@ import { repoInput, resolveRepo } from "../core/issue-support.js";
 
 export const htmlViewCreateTool = executorTool({
   name: "html_view_create",
-  toolset: "files",
+  toolset: "core",
   scope: "publish",
   title: "Publish an HTML View",
   description:
-    "Read the html-view Skill first. Unless already named, ask for a style in your reply and wait; default to night-gauge (Night Gauge) only when the user leaves it to you. Start from its template. Takes effect immediately, without review. Validate HTML against trunk Sheets, then publish the exact validated bytes as a Blob. Generate an idempotency_key before creation and reuse it with identical HTML and destination on retry, including result-unknown. Provide exactly one of html or html_upload_id (a ready html-view upload). Returns shareUrl (immersive link), repositoryVisibility (destination public/private), and privateSourceUnitIds (sorted declared sources in non-public repositories). Anyone with the link can view the page and its declared sources when visibility is public and that list is empty; otherwise access requires signing in with permission. Signed-out visitors and signed-in non-members are read-only. HTML is limited to 512 KiB of UTF-8 text; .univer.html is appended to name if missing.",
+    "Read the html-view Skill first. Unless already named, ask for a style in your reply and wait; default to night-gauge (Night Gauge) only when the user leaves it to you. Start from its template. Takes effect immediately outside pull requests; the client may ask the user to approve first. Validate HTML against trunk Sheets, then publish the exact validated bytes as a Blob. Generate an idempotency_key before creation and reuse it with identical HTML and destination on retry, including result-unknown. Provide exactly one of html or html_upload_id (a ready html-view upload). Returns shareUrl (immersive link), repositoryVisibility (destination public/private), and privateSourceUnitIds (sorted declared sources in non-public repositories). Anyone with the link can view the page and its declared sources when visibility is public and that list is empty; otherwise access requires signing in with permission. Signed-out visitors and signed-in non-members are read-only. HTML is limited to 512 KiB of UTF-8 text; .univer.html is appended to name if missing.",
   annotations: writeAnnotations,
   inputSchema: htmlViewSourceSchema.safeExtend({
     space: repoInput,

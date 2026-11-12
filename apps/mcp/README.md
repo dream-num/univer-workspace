@@ -42,7 +42,7 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
 `content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`,
-`htmlView.create`, `markdown.compile`, `markdown.export`, `typst.compile`, `svg.compile`,
+`htmlView.create`, `htmlView.replace`, `markdown.compile`, `markdown.export`, `typst.compile`, `svg.compile`,
 `render.screenshot`, `render.printPdf`, `render.lint` and internal `diagnostics.probe`.
 The resilience table below declares each operation's rerun policy.
 Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
@@ -250,13 +250,15 @@ and the matching owner/slug candidates when available.
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
 | `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ name, content, resources?, files? }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
+| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
+| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | Bare CLI upload fields plus `workspaceUrl`. Publishes validated bytes directly; reuse the same upload and key on retry |
+| `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
+| `html_view_replace` | Required `resource`, inline `html`, `etag`, `idempotency_key` | Validated conditional replacement with Blob identities, new ETag, URLs and access summary; requires `publish` |
 
 `files` toolset:
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
-| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | Bare CLI upload fields plus `workspaceUrl`. Publishes validated bytes directly; reuse the same upload and key on retry |
 | `blob_get` | Required `resource` | `{ node, resource }` |
 | `blob_upload` | Required `upload_id`, `space`, `idempotency_key`; optional `name` (defaults to uploaded file name), `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
 | `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
@@ -375,10 +377,10 @@ independent queues. Worktree inspect and execute share a scope; trunk inspect ha
 Queue wait counts against the original deadline. A call that times out while queued returns
 `workspace-executor-timeout` with `started: false`. Revision reruns remain a fallback for writes
 outside this queue; retries alone cannot resolve a race against continuous writes.
-`content.execute`, `content.inspect`, `exchange.export`, `markdown.export`, `htmlView.validate` and
-`htmlView.create` also recover once from a worker's Workspace 401 when that worker holds a
+`content.execute`, `content.inspect`, `exchange.export`, `markdown.export`, `htmlView.validate`,
+`htmlView.create` and `htmlView.replace` also recover once from a worker's Workspace 401 when that worker holds a
 different session from the current call. `htmlView.*` reads the Unit through the runtime
-before any Blob upload, so a 401 there never follows a write, and the upload is idempotent by key.
+before any Blob write, so a 401 there never follows a write, and Blob writes are idempotent by key.
 Replacement is limited to that worker; its rejected session's verifier
 entry is evicted. A revoked session also reads as HTTP 403 from trunk collaboration endpoints, so a 403 from a
 worker made for another session is treated as stale in the same way; a 403 for the call's own session is a real
@@ -402,7 +404,7 @@ export's auth recovery applies only to its parent-side runtime read.
 | `exchange.export` | `auth` | The parent reads before credential-free conversion. |
 | `render.screenshot` | `auth`, `revision` | Shares the same-user Unit queue with execute and inspect. The runtime reads precede the credential-free renderer call, so a rerun repeats no write. |
 | `render.printPdf`, `render.lint` | `auth`, `revision` | Same as `render.screenshot`. |
-| `htmlView.validate`, `htmlView.create` | `auth` | Runtime reads precede Blob uploads. |
+| `htmlView.validate`, `htmlView.create`, `htmlView.replace` | `auth` | Runtime reads precede Blob uploads or replacements. |
 | `markdown.compile` | None | Creation can write a Unit before a runtime rejection; block updates enter the write path before runtime execution. Do not replay the whole handler. |
 | `markdown.export` | `auth` | Native block and asset export only reads; a stale worker rejection cannot follow a write. |
 | `typst.compile` | None | Creation can write a Unit before a runtime rejection. Do not replay the whole handler. |
@@ -671,7 +673,7 @@ design.md describes, without i18n dictionaries or language switches. Controls wr
 Sheet cells or append rows; display recalculated source values through live bindings,
 never page-side Sheet formulas, copied data or fallback numbers.
 
-The `files` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
+The default `core` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
 `html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`publish`).
 Each call requires exactly one of `html` or `html_upload_id`; both or neither return
 `workspace-argument-invalid`. For a local page, reserve `file_upload_create` with purpose
@@ -679,7 +681,19 @@ Each call requires exactly one of `html` or `html_upload_id`; both or neither re
 `html_upload_id`. Uploads must be valid UTF-8 and at most 512 KiB, even if the staging
 limit is raised. Invalid UTF-8 or oversized ready uploads return `workspace-argument-invalid`.
 The upload remains available for retries until its one-hour expiry.
-Both run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
+
+The core toolset also includes gateway-only `html_view_read {resource}` (`read`),
+which returns `{resource, node, space, name, html, etag, shareUrl}` for a `.univer.html`
+Blob with a strong ETag. Inline results are capped below 100,000 serialized characters;
+oversized pages are refused without truncation. `html_view_replace {resource, html,
+etag, idempotency_key}` (`publish`) validates inline HTML in the executor before
+conditionally replacing the page. It preserves identity and URL, returns the new ETag
+and the same access summary as create, and reuses Blob replacement's idempotency and
+lost-response recovery. On a stale ETag conflict, read again and reconcile. Upload IDs
+are not accepted for replacement. Clients may require approval before publishing.
+Every `tools/list` entry advertises its declared scope in `_meta["univer.workspace/scope"]`.
+
+Validation, creation and replacement run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
 referenced trunk Sheet through the caller-bound `exportUnitData`. They validate
 declarative bindings without executing page JavaScript. The CLI retains file
 handling and calls the same feature.

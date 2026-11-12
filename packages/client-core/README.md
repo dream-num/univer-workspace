@@ -48,7 +48,7 @@
   `configureExchange`，每次导出随选项携带 license 与 licenseKey，供单进程服务多个调用方；导入不需要 license。
   一个 feature 实例只持有一组 license；服务多个 license 的宿主为每个 license 构造一个实例。
   两项均为空表示免费版；只给其中一项在构造时以 `workspace-exchange-license-incomplete` 拒绝。
-- 提供 source-neutral 的 HTML View 校验和发布（`WorkspaceHtmlViewFeature`，输入 `{bytes, name}`），复用 trunk Sheet 导出与 Blob 上传；CLI 自己处理文件路径和恢复信息。
+- 提供 source-neutral 的 HTML View 校验、发布、内联读取和条件替换（`WorkspaceHtmlViewFeature`，输入 `{bytes, name}`），复用 trunk Sheet 导出与 Blob 上传；CLI 自己处理文件路径和恢复信息。读取返回强 ETag 并限制内联结果大小；替换先校验，再复用 Blob 的 ETag 与幂等协议，返回与创建相同的可见性摘要。HTTP-only `readWorkspaceHtmlView` 从 `/product` 导出，供 gateway 使用。
 - 提供 Markdown 到原生 Modern Doc 的共享编译适配、资源边界校验、创建和按稳定 ID 的局部更新；沿用 SDK 默认排版。
 - 通过共享 SDK 只读程序把当前原生选中块反转换为 Markdown 和资源文件，返回同次 runtime 读取的 revision 与刷新后的 source map，支持编辑后安全局部更新。
 - 提供 Typst bundle 编译、确定性 Doc materialization，以及可选的 Worktree Unit apply workflow。

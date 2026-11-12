@@ -72,8 +72,10 @@ toolset. An executor restriction can hide content tools even with all selected.
 | `blob download`                                                                                              | `blob_download`        | Files; bytes and ETag                                      |
 | `blob replace`                                                                                               | `blob_replace`         | Files; conditional replacement                             |
 | `asset download`                                                                                             | `asset_download`       | Files; embedded image bytes                                |
-| `html-view validate`                                                                                         | `html_view_validate`   | Files; validate declarative bindings                       |
-| `html-view create`                                                                                           | `html_view_create`     | Files; publish HTML immediately                            |
+| `html-view validate`                                                                                         | `html_view_validate`   | Core; validate declarative bindings                        |
+| `html-view create`                                                                                           | `html_view_create`     | Core; publish HTML immediately                             |
+| Read HTML View HTML and ETag | `html_view_read` | Inline .univer.html source and strong ETag |
+| Replace HTML View | `html_view_replace` | Validate inline HTML and conditionally publish |
 | `compile-markdown`                                                                                           | `compile_markdown`     | Files; Markdown to Modern Doc                              |
 | `export-markdown`                                                                                            | `export_markdown`      | Files; selected native blocks to Markdown                  |
 | `compile-svg`                                                                                                | `compile_svg`          | Files; SVG to a Slide page                                 |
@@ -122,7 +124,8 @@ The resources operations search an SVG catalog, not Workspace files.
 
 ## Worktree rule
 
-Start every new editable-content task in a new Worktree. `pr_list` is diagnostic,
+Start every new editable Unit task in a new Worktree. HTML View pages publish
+outside Worktrees. `pr_list` is diagnostic,
 not permission to reuse another draft because its name or Unit looks suitable.
 Continue an existing Worktree only for rework of the same task, when this agent
 already worked in that known Worktree or the user supplies its identity for that
@@ -180,7 +183,17 @@ user-scoped Worktree for a private personal task, or that Team's Space-scoped
 Worktree when the task belongs to the team. Use Space visibility only when members
 should see the draft.
 
-For a new file, create the Worktree first. Use `unit_create` for an empty Unit,
+For a new page, dashboard or form backed by live Sheets, read the `html-view` Skill
+and use `html_view_create` to publish a `.univer.html` HTML View outside a Worktree.
+A page is not a Slide, Board or other Unit. If the connection cannot publish pages,
+say so and stop; never create a substitute Unit. The client may ask the user to
+approve publication. If rejected, ask what to change.
+Through MCP, revise a page with `html_view_read` then `html_view_replace` instead
+of `blob_download` and `blob_replace`. Edit the returned HTML, validate it, and
+replace with its strong ETag and a new idempotency key. On conflict, read again
+and reconcile. Replacement preserves the page identity and URL.
+
+For a new Unit file, create the Worktree first. Use `unit_create` for an empty Unit,
 `compile_markdown` to create a generated Modern Doc without a placeholder (read
 the `doc` Skill), `compile_typst` for a Typst Doc, or `import` for Office content.
 Choose the destination Space and stable parent nodeId deliberately. Do not add
@@ -240,6 +253,8 @@ for one hour after reservation. Never pass a local file path to a tool.
   html_upload_id. Reserve purpose html-view with media_type text/html for a local
   page, upload its bytes, then pass its upload_id as html_upload_id. HTML must be
   valid UTF-8 and at most 512 KiB. Reuse the upload and idempotency_key on creation retries.
+- `html_view_read` returns inline HTML and its strong ETag. `html_view_replace`
+  accepts inline html only, with that ETag and a new idempotency_key.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
 - `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at
@@ -294,9 +309,9 @@ Read design.md and start from that style's complete template. Templates are Engl
 points; write the page in the language and conventions of the user's conversation as design.md
 describes, without i18n dictionaries or language switches. Controls write Sheet cells
 or append rows; show recalculated source values, never page-side Sheet formulas, copied
-data or fallback numbers. Blob publication/replacement and HTML View creation write
+data or fallback numbers. Blob publication/replacement and HTML View creation/replacement write
 directly without Worktree review; apply them only to the intended destination.
-`html_view_create` returns `shareUrl`, `repositoryVisibility` and sorted
+`html_view_create` and `html_view_replace` return `shareUrl`, `repositoryVisibility` and sorted
 `privateSourceUnitIds`. Return the immersive `shareUrl` and explain that anyone
 with the link can view the page and its declared sources only when visibility is
 `public` and the private-source list is empty; otherwise signed-in access is

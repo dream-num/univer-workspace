@@ -258,7 +258,7 @@ describe("gateway authentication", () => {
 
   it("requires publish scope for html_view_create before executor dispatch", async () => {
     const gateway = await start(exchangeEnv, { executor: true });
-    const client = await gateway.connect("uvw_pat_readonly", "?toolsets=files");
+    const client = await gateway.connect("uvw_pat_readonly");
     expect(
       await client.callTool({
         name: "html_view_create",

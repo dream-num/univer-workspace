@@ -249,4 +249,7 @@ export {
   type WorkspaceHtmlViewSource,
   type WorkspaceHtmlViewOptions,
   type WorkspaceHtmlViewDestination,
+  type WorkspaceHtmlViewReplacement,
 } from "./html-view.js";
+
+export type { WorkspaceHtmlViewPage } from "./html-view-page.js";

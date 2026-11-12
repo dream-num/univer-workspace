@@ -5,7 +5,7 @@ import { executorTool } from "../executor-tool.js";
 
 export const htmlViewValidateTool = executorTool({
   name: "html_view_validate",
-  toolset: "files",
+  toolset: "core",
   scope: "read",
   title: "Validate an HTML View",
   description:
