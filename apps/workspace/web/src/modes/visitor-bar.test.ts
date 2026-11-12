@@ -75,12 +75,15 @@ function renderLayout(authenticated = false, immersive = true) {
 }
 
 describe("visitor sign-up bar", () => {
-  it("renders outside the iframe after the main area for signed-out immersive visitors", () => {
+  it("renders between the header and main area for signed-out immersive visitors", () => {
     const html = renderLayout();
     expect(html).toContain("Made with Univer Workspace");
     expect(html).toContain("Sign up free");
     expect(html).toContain("Copy link");
-    expect(html.indexOf("</main>")).toBeLessThan(html.indexOf("<footer"));
+    expect(html).toContain('<aside aria-label="Made with Univer Workspace"');
+    expect(html.indexOf("</header>")).toBeLessThan(html.indexOf("<aside"));
+    expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<main"));
+    expect(html).toContain("lucide-chevron-up");
     expect(html).toContain('aria-label="Collapse sign-up bar"');
     expect(html).toContain('aria-expanded="true"');
     expect(html).toContain(`href="/login?mode=register&amp;returnTo=${encodeURIComponent(href)}"`);
@@ -92,6 +95,7 @@ describe("visitor sign-up bar", () => {
     controls.get("Collapse sign-up bar")?.();
     expect([...storage.values()]).toEqual(["true"]);
     const collapsed = renderLayout();
+    expect(collapsed).toContain("lucide-chevron-down");
     expect(collapsed).toContain('aria-label="Expand sign-up bar"');
     expect(collapsed).not.toContain("Sign up free");
     controls.get("Expand sign-up bar")?.();
@@ -100,15 +104,18 @@ describe("visitor sign-up bar", () => {
   });
 
   it("offers both authentication links in the non-immersive header", () => {
-    const header = renderLayout(false, false).split("</header>")[0] ?? "";
+    const html = renderLayout(false, false);
+    const header = html.split("</header>")[0] ?? "";
     expect(header).toContain(">Sign up</a>");
     expect(header).toContain(">Sign in</a>");
     expect(header).toContain(`href="/login?mode=register&amp;returnTo=${encodeURIComponent(href)}"`);
+    expect(html).not.toContain("<aside");
+    expect(html).not.toContain("Sign up free");
   });
 
   it("never renders the bar for signed-in users", () => {
     expect(renderLayout(true)).toContain("Signed-in shell");
-    expect(renderLayout(true)).not.toContain("<footer");
+    expect(renderLayout(true)).not.toContain("<aside");
     expect(renderLayout(true)).not.toContain("Sign up free");
   });
 

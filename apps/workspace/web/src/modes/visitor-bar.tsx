@@ -40,10 +40,10 @@ export function VisitorBar() {
   }
 
   return (
-    <footer
+    <aside
       aria-label={t("madeWithWorkspace")}
       className={cn(
-        "shrink-0 border-t border-border bg-background px-3 py-1.5",
+        "shrink-0 border-b border-border bg-background px-3 py-1.5",
         collapsed ? "flex justify-end" : "grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-1 sm:flex sm:flex-wrap",
       )}
     >
@@ -84,12 +84,12 @@ export function VisitorBar() {
         onClick={toggleCollapsed}
       >
         {collapsed ? (
-          <><UniverCliIcon aria-hidden="true" />Univer Workspace<ChevronUp aria-hidden="true" /></>
-        ) : <ChevronDown aria-hidden="true" />}
+          <><UniverCliIcon aria-hidden="true" />Univer Workspace<ChevronDown aria-hidden="true" /></>
+        ) : <ChevronUp aria-hidden="true" />}
       </Button>
       <span role="status" className={cn("col-span-2 text-xs text-muted-foreground", (collapsed || copyState === "idle") && "sr-only")}>
         {!collapsed && copyState !== "idle" ? t(copyState === "copied" ? "linkCopied" : "copyLinkFailed") : null}
       </span>
-    </footer>
+    </aside>
   );
 }
