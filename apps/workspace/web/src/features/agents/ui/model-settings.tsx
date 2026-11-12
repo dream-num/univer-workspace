@@ -17,15 +17,16 @@ export function ModelSettingsDialog({ onClose }: { readonly onClose: () => void 
   const client = useAgentClient();
   const providers = useQuery({ queryKey: ["agent-providers", client.userId], queryFn: () => client.providers.list() });
   const [draft, setDraft] = useState<ProviderConfig | null>(null);
+  const savedProviders = providers.data ?? [];
+  const unsavedDraft = draft && !savedProviders.some((provider) => provider.id === draft.id) ? draft : null;
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }} title={m.settings} description={m.privacy} width="xl">
       <p className="mb-4 text-sm text-muted-foreground">{m.limit}</p>
       {providers.isPending ? <p role="status">{m.loading}</p> : null}
       {providers.error ? <Alert variant="destructive">{providers.error.message}</Alert> : null}
       <div className="grid gap-4">
-        {(providers.data ?? []).map((provider) => <ProviderForm key={provider.id} provider={provider} />)}
-        {draft ? <ProviderForm provider={draft} onSaved={() => setDraft(null)} /> : null}
-        <Button variant="secondary" disabled={draft !== null} onClick={() => setDraft({
+        {[...savedProviders, ...(unsavedDraft ? [unsavedDraft] : [])].map((provider) => <ProviderForm key={provider.id} provider={provider} />)}
+        <Button variant="secondary" disabled={unsavedDraft !== null} onClick={() => setDraft({
           id: providerIdSchema.parse(crypto.randomUUID()), kind: "openai-compatible", label: "", baseURL: "", models: [], defaultModel: "",
         })}>{m.add}</Button>
       </div>
@@ -33,7 +34,7 @@ export function ModelSettingsDialog({ onClose }: { readonly onClose: () => void 
   );
 }
 
-function ProviderForm({ provider, onSaved }: { readonly provider: ProviderConfig; readonly onSaved?: () => void }) {
+function ProviderForm({ provider }: { readonly provider: ProviderConfig }) {
   const m = useAgentMessages();
   const client = useAgentClient();
   const queryClient = useQueryClient();
@@ -70,7 +71,6 @@ function ProviderForm({ provider, onSaved }: { readonly provider: ProviderConfig
         setKey("");
       }
       await queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith("agent-") });
-      if (kind === "save") onSaved?.();
     } catch (cause) { setError(redactProviderError(cause, key.trim())); }
     finally { setBusy(false); }
   }
