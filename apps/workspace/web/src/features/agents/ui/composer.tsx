@@ -1,50 +1,40 @@
 import type { components } from "../../../../../generated/http/schema.js";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowUp, Settings } from "lucide-react";
+import { ArrowUp } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { sessionQueryOptions } from "../../auth";
-import { mySpacesQueryOptions, spaceQueryOptions } from "../../spaces/spaces.queries";
+import { spaceQueryOptions } from "../../spaces/spaces.queries";
 import { worktreePagesQueryOptions } from "../../worktrees/worktrees.queries";
-import { useI18n } from "../../../shared/i18n";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Select } from "../../../shared/ui/select";
 import { Textarea } from "../../../shared/ui/textarea";
-import { Tooltip } from "../../../shared/ui/tooltip";
-import type { AgentMode, DeepSeekThinking } from "../agent.types";
-import { useAgentClient, configuredProviders } from "./client";
+import type { AgentMode } from "../agent.types";
+import { useAgentClient } from "./client";
 import { useAgentMessages } from "./messages";
-import { ModelSettingsDialog } from "./model-settings";
+import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 
 export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: string; readonly starter?: { readonly text: string } | null; readonly focus?: boolean }) {
   const m = useAgentMessages();
-  const { t } = useI18n();
   const client = useAgentClient();
   const navigate = useNavigate();
   const [text, setText] = useState("");
   const [mode, setMode] = useState<AgentMode>("ask");
-  const [thinking, setThinking] = useState<DeepSeekThinking>("high");
   const [repository, setRepository] = useState("");
   const [base, setBase] = useState("");
-  const [model, setModel] = useState("");
-  const [settings, setSettings] = useState(false);
+  const model = useAgentModel();
+  const { selected, thinking } = model;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const input = useRef<HTMLElement>(null);
   const session = useQuery(sessionQueryOptions);
   const displayName = session.data?.authenticated ? session.data.user.displayName : undefined;
-  const spaces = useQuery({ ...mySpacesQueryOptions, enabled: !spaceId });
   const space = useQuery(spaceQueryOptions(spaceId));
-  const providers = useQuery({ queryKey: ["agent-configured-providers", client.userId], queryFn: () => configuredProviders(client) });
-  const choices = (providers.data ?? []).flatMap((provider) => provider.models.map((modelId) => ({
-    value: JSON.stringify([provider.id, modelId]), label: `${provider.label} · ${modelId}`, provider, modelId,
-  })));
-  const selected = choices.find((choice) => choice.value === model) ?? choices.find((choice) => choice.modelId === choice.provider.defaultModel) ?? choices[0];
   useEffect(() => { if (starter) { setText(starter.text); input.current?.querySelector("textarea")?.focus(); } }, [starter]);
   useEffect(() => { if (focus) input.current?.querySelector("textarea")?.focus(); }, [focus]);
   async function send() {
-    if (!selected) { setSettings(true); return; }
+    if (!selected) { model.setSettings(true); return; }
     if (!text.trim() || busy) return;
     setBusy(true); setError("");
     try {
@@ -60,34 +50,22 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
   return (
     <section ref={input} className="agent-composer" aria-label={m.agents}>
       <header className="agent-greeting"><h2>{m.greeting(displayName)}</h2><p>{m.greetingHint}</p></header>
-      {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <div className="agent-scope">
-        <span>{m.repository}</span><Select aria-label={m.repository} value={repository} onValueChange={setRepository} options={[
-          { value: "", label: m.automatic }, ...(spaces.data?.spaces ?? []).map((item) => ({ value: item.id, label: item.type === "personal" ? item.owner?.username ?? t("personalSpace") : item.name })),
-        ]} />
-      </div>}
+      {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
       <div className="agent-composer-box">
         <Textarea id="agent-composer" aria-label={m.prompt} placeholder={m.prompt} value={text} disabled={busy} rows={3}
           onFocus={() => { void client.prewarm().catch((cause: unknown) => setError(String(cause))); }}
           onChange={(event) => setText(event.target.value)}
           onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); void send(); } }} />
         <div className="agent-composer-controls">
-          <div className="agent-model-controls">
-            <Select aria-label={m.mode} value={mode} onValueChange={setMode} options={[{ value: "ask", label: m.ask }, { value: "auto", label: m.auto }]} />
-            {selected ? <Select className="agent-model-select" aria-label={m.model} value={selected.value} onValueChange={setModel} options={choices} /> : null}
-            {selected?.provider.kind === "deepseek" ? <Select aria-label={m.thinking} value={thinking} onValueChange={setThinking} options={[
-              { value: "off", label: m.off }, { value: "high", label: m.high }, { value: "max", label: m.max },
-            ]} /> : null}
-            <Tooltip content={m.settings}><Button variant="ghost" size="icon" aria-label={m.settings} onClick={() => setSettings(true)}><Settings /></Button></Tooltip>
-          </div>
+          <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={busy} />
           <Button className="agent-send" aria-keyshortcuts="Shift+Enter" aria-label={selected ? m.send : m.setup} disabled={busy || Boolean(selected && !text.trim())} onClick={() => void send()}>
             {selected ? <><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></> : m.setup}
           </Button>
         </div>
       </div>
       <p className="agent-note">{mode === "ask" ? m.askHint : m.autoHint}</p>
-      {space.error || spaces.error || providers.error ? <Alert variant="destructive">{(space.error ?? spaces.error ?? providers.error)?.message}</Alert> : null}
+      {space.error ? <Alert variant="destructive">{space.error.message}</Alert> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
-      {settings ? <ModelSettingsDialog onClose={() => { setSettings(false); void providers.refetch(); }} /> : null}
     </section>
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { agentSessionIdSchema, sessionLockName, sessionTitle, transition } from "./agent.types";
+import { agentSessionIdSchema, isSystemReminder, sessionLockName, sessionTitle, transition } from "./agent.types";
 import type { AgentEvent, AgentSessionStatus } from "./agent.types";
 import { openAgentDatabase } from "./database";
 import { createSessionStore } from "./session-store";
@@ -115,4 +115,15 @@ it("implements every allowed transition and rejects every other event", () => {
 
 it("derives the title from the first user message", () => {
   expect(sessionTitle(session({ messages: [{ id: "u", role: "user", parts: [{ type: "text", text: "First sentence" }] }] }))).toBe("First sentence");
+});
+
+it("hides system reminders from titles and identifies only reminder text parts", () => {
+  const reminder = { type: "text" as const, text: "\n\n<system-reminder>Changed settings</system-reminder>" };
+  expect(isSystemReminder(reminder)).toBe(true);
+  expect(isSystemReminder({ ...reminder, text: reminder.text.trimStart() })).toBe(true);
+  expect(isSystemReminder({ type: "text", text: "User mentions <system-reminder>" })).toBe(false);
+  expect(isSystemReminder({ type: "reasoning", text: reminder.text })).toBe(false);
+  expect(sessionTitle(session({ messages: [{ id: "u", role: "user", parts: [
+    { type: "text", text: "First sentence" }, reminder,
+  ] }] }))).toBe("First sentence");
 });
