@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import { useEffect, useState } from "react";
-import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle, Square } from "lucide-react";
 import { IssueMarkdown } from "../../issues/issue-markdown";
 import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
@@ -50,6 +50,27 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
   const [error, setError] = useState("");
   const [busyElsewhere, setBusyElsewhere] = useState(false);
   const [pending, setPending] = useState(false);
+  const action = session.status === "running" && !text.trim() ? "stop" : "send";
+  const conversation = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const content = conversation.current;
+    const viewport = content?.closest(".rd-viewport");
+    if (!content || !viewport) return;
+    let following = true;
+    let lastScrollTop = viewport.scrollTop;
+    const onScroll = () => {
+      const top = viewport.scrollTop;
+      const gap = viewport.scrollHeight - top - viewport.clientHeight;
+      following = top < lastScrollTop ? gap < 1 : following || gap < 48;
+      lastScrollTop = top;
+    };
+    const scrollToBottom = () => { if (following) viewport.scrollTop = viewport.scrollHeight; };
+    viewport.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(scrollToBottom);
+    observer.observe(content);
+    scrollToBottom();
+    return () => { observer.disconnect(); viewport.removeEventListener("scroll", onScroll); };
+  }, []);
   async function send(value: string) {
     if (!value.trim() || pending) return;
     if (!selected && session.status !== "running") { model.setSettings(true); return; }
@@ -89,33 +110,45 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     return blockIndex < 0 ? latest : { messageIndex, blockIndex };
   }, null);
   return <div className="agent-session-layout">
-    <div className="agent-conversation">
+    <div className="agent-conversation" ref={conversation}>
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus session={session} /></header>
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
         {message.role === "user" ? <p>{splitReferenceText(message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n"), messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>
           : <AssistantMessage message={message} session={session} current={index === lastAssistant} latestStepsIndex={latestSteps?.messageIndex === index ? latestSteps.blockIndex : -1} />}
       </article>)}</div>
-      {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
-      {error ? <Alert variant="destructive">{error}</Alert> : null}
-      <div className="agent-approvals">{approvals.map((approval) => <ApprovalCard key={approval.approvalId} approval={approval}
-        disabled={pending || busyElsewhere} onDecide={(approved) => void decide(approval.approvalId, approved)} />)}</div>
-      {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
-        <div className="agent-composer-box">
-          <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={3} onChange={(event) => setText(event.target.value)}
-            onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(text); } }} />
-          <div className="agent-composer-controls">
-            <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={pending || session.status === "running"}>
-              <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={pending || session.status === "running"} />
-            </AgentModelControls>
-            {session.status === "running" ? <Button variant="secondary" onClick={() => {
-              setPending(true);
-              void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));
-            }} disabled={pending}>{m.stop}</Button> : ["interrupted", "stopped", "failed"].includes(session.status) ? <Button variant="secondary" disabled={pending} onClick={() => resumableApproval ? void decide(resumableApproval.id, resumableApproval.approved) : void send(m.continue)}>{m.continue}</Button> : null}
-            <Button className="agent-send" type="submit" aria-label={m.send} aria-keyshortcuts="Shift+Enter" disabled={pending || !text.trim()}><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></Button>
+      <div className="agent-session-dock">
+        {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
+        {error ? <Alert variant="destructive">{error}</Alert> : null}
+        <div className="agent-approvals">{approvals.map((approval) => <ApprovalCard key={approval.approvalId} approval={approval}
+          disabled={pending || busyElsewhere} onDecide={(approved) => void decide(approval.approvalId, approved)} />)}</div>
+        {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
+          <div className="agent-composer-box">
+            <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={2} onChange={(event) => setText(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.nativeEvent.isComposing) return;
+                if (event.ctrlKey && event.key.toLowerCase() === "j") {
+                  event.preventDefault();
+                  const input = event.currentTarget;
+                  input.setRangeText("\n", input.selectionStart, input.selectionEnd, "end");
+                  setText(input.value);
+                } else if (event.key === "Enter" && (!event.shiftKey || event.ctrlKey || event.metaKey)) { event.preventDefault(); void send(text); }
+              }} />
+            <div className="agent-composer-controls">
+              <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={pending || session.status === "running"}>
+                <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={pending || session.status === "running"} />
+              </AgentModelControls>
+              {["interrupted", "stopped", "failed"].includes(session.status) ? <Button variant="secondary" disabled={pending} onClick={() => resumableApproval ? void decide(resumableApproval.id, resumableApproval.approved) : void send(m.continue)}>{m.continue}</Button> : null}
+              <Button className="agent-send" type={action === "stop" ? "button" : "submit"} aria-label={m[action]} aria-keyshortcuts={action === "send" ? "Enter" : undefined}
+                disabled={pending || (action === "send" && !text.trim())} onClick={action === "stop" ? () => {
+                  setPending(true);
+                  void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));
+                } : undefined}>
+                {action === "stop" ? <Square aria-hidden="true" /> : <ArrowUp aria-hidden="true" />}<span>{m[action]}</span>{action === "send" ? <kbd aria-hidden="true">↵</kbd> : null}
+              </Button>
+            </div>
           </div>
-        </div>
-        <p className="agent-note">{mode === "ask" ? m.askHint : m.autoHint}</p>
-      </form>}
+        </form>}
+      </div>
     </div>
     <aside className="agent-session-rail"><h2>{m.sessions}</h2><dl>
       <dt>{m.scope}</dt><dd><SessionScope session={session} /></dd>
