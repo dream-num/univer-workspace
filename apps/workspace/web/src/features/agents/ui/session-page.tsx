@@ -6,8 +6,9 @@ import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
-import { agentSessionIdSchema, sessionTitle } from "../agent.types";
-import type { AgentSession } from "../agent.types";
+import { agentSessionIdSchema, isSystemReminder, sessionTitle } from "../agent.types";
+import type { AgentMode, AgentSession } from "../agent.types";
+import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
 import { useAgentMessages } from "./messages";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
@@ -33,14 +34,26 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
   const m = useAgentMessages();
   const client = useAgentClient();
   const [text, setText] = useState("");
+  const [mode, setMode] = useState<AgentMode>(session.mode);
+  const sessionRepository = session.scope.kind === "repository" ? session.scope.spaceId : "";
+  const [repository, setRepository] = useState(sessionRepository);
+  const model = useAgentModel(session.model);
+  const { selected, thinking } = model;
+  useEffect(() => { setMode(session.mode); }, [session.mode]);
+  useEffect(() => { setRepository(sessionRepository); }, [sessionRepository]);
   const [error, setError] = useState("");
   const [busyElsewhere, setBusyElsewhere] = useState(false);
   const [pending, setPending] = useState(false);
   async function send(value: string) {
     if (!value.trim() || pending) return;
+    if (!selected && session.status !== "running") { model.setSettings(true); return; }
     setPending(true); setError("");
     try {
-      await (await client.runner()).send(agentSessionIdSchema.parse(session.id), value.trim());
+      await (await client.runner()).send(agentSessionIdSchema.parse(session.id), value.trim(), session.status === "running" || !selected ? session : {
+        mode, scope: repository ? { kind: "repository", spaceId: repository,
+          baseWorktreeId: session.scope.kind === "repository" && session.scope.spaceId === repository ? session.scope.baseWorktreeId : null } : { kind: "global" },
+        model: { providerId: selected.provider.id, modelId: selected.modelId, thinking: selected.provider.kind === "deepseek" ? thinking : null },
+      });
       setText("");
     } catch (cause) {
       if (cause instanceof Error && "code" in cause && cause.code === "AGENT_BUSY") setBusyElsewhere(true);
@@ -57,20 +70,26 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     <div className="agent-conversation">
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus status={session.status} /></header>
       <div className="agent-messages">{session.messages.map((message) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
-        {message.role === "user" ? <p>{message.parts.filter((part) => part.type === "text").map((part) => part.text).join("\n")}</p>
+        {message.role === "user" ? <p>{message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n")}</p>
           : message.parts.map((part, index) => <MessagePart key={index} part={part} session={session} />)}
       </article>)}</div>
       {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
       {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
-        <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(text); } }} />
-        <div className="agent-controls"><Button className="agent-send" type="submit" aria-label={m.send} aria-keyshortcuts="Shift+Enter" disabled={pending || !text.trim()}><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></Button>
-          {session.status === "running" ? <Button variant="secondary" onClick={() => {
-            setPending(true);
-            void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));
-          }} disabled={pending}>{m.stop}</Button> : ["interrupted", "stopped", "failed"].includes(session.status) ? <Button variant="secondary" disabled={pending} onClick={() => void send(m.continue)}>{m.continue}</Button> : null}
+        <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={pending || session.status === "running"} />
+        <div className="agent-composer-box">
+          <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={3} onChange={(event) => setText(event.target.value)}
+            onKeyDown={(event) => { if (!event.nativeEvent.isComposing && (event.shiftKey || event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); void send(text); } }} />
+          <div className="agent-composer-controls">
+            <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={pending || session.status === "running"} />
+            {session.status === "running" ? <Button variant="secondary" onClick={() => {
+              setPending(true);
+              void client.runner().then((runner) => runner.stop(session.id)).catch((cause: unknown) => setError(String(cause))).finally(() => setPending(false));
+            }} disabled={pending}>{m.stop}</Button> : ["interrupted", "stopped", "failed"].includes(session.status) ? <Button variant="secondary" disabled={pending} onClick={() => void send(m.continue)}>{m.continue}</Button> : null}
+            <Button className="agent-send" type="submit" aria-label={m.send} aria-keyshortcuts="Shift+Enter" disabled={pending || !text.trim()}><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></Button>
+          </div>
         </div>
+        <p className="agent-note">{mode === "ask" ? m.askHint : m.autoHint}</p>
       </form>}
     </div>
     <aside className="agent-session-rail"><h2>{m.sessions}</h2><dl>

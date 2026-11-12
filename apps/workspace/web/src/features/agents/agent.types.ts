@@ -57,6 +57,11 @@ export const sessionRecordSchema = z.object({
 });
 export type AgentSessionStatus = z.infer<typeof sessionRecordSchema>["status"];
 export type AgentSession = Omit<z.infer<typeof sessionRecordSchema>, "messages"> & { messages: UIMessage[] };
+export type AgentSettings = Pick<AgentSession, "scope" | "mode" | "model">;
+export const SYSTEM_REMINDER_START = "<system-reminder>";
+export function isSystemReminder(part: UIMessage["parts"][number]): boolean {
+  return part.type === "text" && part.text.trimStart().startsWith(SYSTEM_REMINDER_START);
+}
 export type AgentEvent = "send" | "finish" | "stop" | "fail" | "interrupt";
 export const statusTransitions: Record<AgentSessionStatus, Partial<Record<AgentEvent, AgentSessionStatus>>> = {
   running: { finish: "idle", stop: "stopped", fail: "failed", interrupt: "interrupted" },
@@ -75,5 +80,5 @@ export function sessionLockName(id: AgentSessionId): string {
 }
 export function sessionTitle(session: AgentSession): string {
   return session.messages.find((message) => message.role === "user")?.parts
-    .filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
+    .filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("") ?? "";
 }

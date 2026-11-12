@@ -126,7 +126,7 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 浏览器 Agents（`apps/workspace/web/src/features/agents`）每一步都会重发完整请求。模型服务商按前缀匹配缓存，前缀中任一 token 变化，其后的内容都要重新计算。
 
 - 一次会话内，工具列表、系统提示词和已发出的历史必须逐字不变。系统提示词只放会话创建时已确定的内容；运行中产生的状态（Worktree ID、计数、时间戳）留在历史的工具结果里，不写进系统提示词。
-- 历史消息只追加，不改写、截断或重排。会话中途不切换模型、thinking 参数或工具集合。
+- 历史消息只追加，不改写、截断或重排。工具集合保持不变。用户可以在两轮之间切换 mode、scope、模型和 thinking 参数；系统提示词与已发出的历史保持不变。mode 与 scope 的变化只通过追加在该轮用户消息末尾的 `<system-reminder>` 文本 part 告知模型；切换模型或 thinking 参数会产生一次缓存未命中，由用户自行选择。
 - `runtime/runner.test.ts` 断言新 PR 出现后系统提示词不变。修改提示词组装或消息转换时，保持该测试通过，并在会话页核对缓存命中率没有下降。
 
 ## HTTP contract 与生成物

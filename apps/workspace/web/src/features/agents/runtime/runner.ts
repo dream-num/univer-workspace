@@ -2,8 +2,8 @@ import { createMCPClient } from "@ai-sdk/mcp";
 import { Chat } from "@ai-sdk/react";
 import { DirectChatTransport, ToolLoopAgent, generateId, isToolUIPart, stepCountIs, validateUIMessages } from "ai";
 import type { ToolSet, UIMessage } from "ai";
-import type { AgentMode, AgentScope, AgentSession, AgentSessionId } from "../agent.types";
-import { agentSessionIdSchema, sessionLockName, transition } from "../agent.types";
+import type { AgentMode, AgentScope, AgentSession, AgentSessionId, AgentSettings } from "../agent.types";
+import { agentSessionIdSchema, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
 import type { McpTokenSource } from "../mcp-token";
 import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
@@ -41,15 +41,37 @@ interface ActiveRun {
   completion: Promise<void>;
 }
 
-function contextPrompt(session: AgentSession): string {
-  const scope = session.scope.kind === "global"
+function scopeLine({ scope }: AgentSettings): string {
+  return scope.kind === "global"
     ? "Global scope: find the target repository with repo_list or search."
-    : `Work only in the repository whose Space ID is ${JSON.stringify(session.scope.spaceId)}; tools accept this ID as repo.`;
-  const mode = session.mode === "ask" ? "Ask mode: read only. Never call a write tool."
-    : session.scope.kind === "repository" && session.scope.baseWorktreeId
-      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(session.scope.baseWorktreeId)}.`
+    : `Work only in the repository whose Space ID is ${JSON.stringify(scope.spaceId)}; tools accept this ID as repo.`;
+}
+function modeLine({ scope, mode }: AgentSettings): string {
+  return mode === "ask" ? "Ask mode: read only. Never call a write tool."
+    : scope.kind === "repository" && scope.baseWorktreeId
+      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(scope.baseWorktreeId)}.`
       : "Auto mode: put every write in one pull request. Call pr_create before the first write, and reuse that pull request for this session. Never merge; a person reviews and merges.";
-  return `${scope}\n${mode}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
+}
+function contextPrompt(settings: AgentSettings): string {
+  return `${scopeLine(settings)}\n${modeLine(settings)}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
+}
+function initialContextPrompt(session: AgentSession): string {
+  for (const { metadata } of session.messages) {
+    if (metadata && typeof metadata === "object" && "agentContextPrompt" in metadata && typeof metadata.agentContextPrompt === "string") return metadata.agentContextPrompt;
+  }
+  return contextPrompt(session);
+}
+export function settingsReminder(previous: AgentSettings, next: AgentSettings): string | null {
+  const changed = [scopeLine, modeLine].filter((line) => line(previous) !== line(next)).map((line) => line(next));
+  return changed.length ? [`\n\n${SYSTEM_REMINDER_START}`,
+    "The user changed the session settings. These lines replace the earlier scope and mode instructions.",
+    ...changed, "</system-reminder>"].join("\n") : null;
+}
+function sameSettings(previous: AgentSettings, next: AgentSettings): boolean {
+  return previous.mode === next.mode && previous.model.providerId === next.model.providerId &&
+    previous.model.modelId === next.model.modelId && previous.model.thinking === next.model.thinking &&
+    previous.scope.kind === next.scope.kind && (previous.scope.kind === "global" || next.scope.kind === "repository" &&
+      previous.scope.spaceId === next.scope.spaceId && previous.scope.baseWorktreeId === next.scope.baseWorktreeId);
 }
 
 export function createAgentRunner(deps: AgentRunnerDependencies) {
@@ -121,7 +143,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
             lastStep: { inputTokens, cacheReadTokens },
           } };
         },
-        instructions: [client.instructions, skill, contextPrompt(run.session)].filter(Boolean).join("\n\n"),
+        instructions: [client.instructions, skill, initialContextPrompt(run.session)].filter(Boolean).join("\n\n"),
       });
       run.session.messages = repairInterruptedTools(run.session.messages);
       const messages = run.session.messages.length
@@ -207,13 +229,18 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
     }
   }
 
-  function launch(session: AgentSession, text: string): Promise<AgentSession> {
+  function launch(session: AgentSession, text: string, settings?: AgentSettings): Promise<AgentSession> {
     return new Promise((resolve, reject) => {
       const completion = deps.locks.request(sessionLockName(session.id), { ifAvailable: true }, async (lock) => {
         if (!lock) throw new AgentBusyError(session.id);
         session = await deps.sessions.get(session.id) ?? session;
-        const run: ActiveRun = { session: { ...session, status: transition(session.status, "send"), error: null,
-          messages: [...repairInterruptedTools(session.messages), { id: generateId(), role: "user", parts: [{ type: "text", text }] }],
+        const reminder = settings ? settingsReminder(session, settings) : null;
+        const message: RuntimeMessage = { id: generateId(), role: "user", metadata: { agentContextPrompt: initialContextPrompt(session) },
+          parts: [{ type: "text", text }, ...(reminder ? [{ type: "text" as const, text: reminder }] : [])] };
+        const worktreeIds = [...session.worktreeIds];
+        if (settings?.scope.kind === "repository" && settings.scope.baseWorktreeId && !worktreeIds.includes(settings.scope.baseWorktreeId)) worktreeIds.push(settings.scope.baseWorktreeId);
+        const run: ActiveRun = { session: { ...session, ...(settings ? { scope: settings.scope, mode: settings.mode, model: settings.model } : {}), worktreeIds, status: transition(session.status, "send"), error: null,
+          messages: [...repairInterruptedTools(session.messages), message],
           updatedAt: new Date().toISOString() }, chat: null,
           queued: [], stopped: false, controller: new AbortController(), completion: Promise.resolve() };
         active.set(session.id, run);
@@ -243,16 +270,17 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         messages: [], toolTimings: {}, cacheUsage: { inputTokens: 0, cacheReadTokens: 0, lastStep: null }, createdAt: now, updatedAt: now, error: null,
       }, input.text);
     },
-    async send(id: AgentSessionId, text: string): Promise<AgentSession> {
+    async send(id: AgentSessionId, text: string, settings?: AgentSettings): Promise<AgentSession> {
       const running = active.get(id);
       if (running?.session.status === "running" && !running.stopped) {
+        if (settings && !sameSettings(running.session, settings)) throw new Error("Settings can change after the current run ends");
         running.queued.push(text);
         return structuredClone(running.session);
       }
       if (running) await running.completion;
       const session = await deps.sessions.get(id);
       if (!session) throw new Error("Agent session not found");
-      return launch(session, text);
+      return launch(session, text, settings);
     },
     async stop(id: AgentSessionId): Promise<void> {
       const run = active.get(id);

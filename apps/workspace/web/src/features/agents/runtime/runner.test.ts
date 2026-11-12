@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { sessionLockName } from "../agent.types";
-import type { AgentSession } from "../agent.types";
+import type { AgentSession, AgentSettings } from "../agent.types";
 import { createMcpTokenSource } from "../mcp-token";
 import { createProviders, deepSeekDefault } from "../providers";
 import { createSessionStore } from "../session-store";
@@ -96,6 +96,112 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const followup = requestSchema.parse(JSON.parse(test.modelBodies[followupIndex]!)).messages.find((message) => message.role === "system");
     expect(first?.content).toEqual(expect.any(String));
     expect(followup?.content).toBe(first?.content);
+  });
+
+  it("applies follow-up mode and scope through an appended reminder and preserves the request prefix", async () => {
+    const test = await setup({ model: () => modelStream() });
+    const started = await test.runner.start({ ...test.input, mode: "ask" });
+    const previous = await test.finished(started.id);
+    const settings: AgentSettings = { ...test.input, mode: "auto", scope: { kind: "repository", spaceId: "repo-2", baseWorktreeId: "base-2" } };
+    await test.runner.send(started.id, "Edit this repository", settings);
+    const done = await test.finished(started.id);
+    const schema = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown() })) });
+    const first = schema.parse(JSON.parse(test.modelBodies[0]!)).messages;
+    const second = schema.parse(JSON.parse(test.modelBodies[1]!)).messages;
+    expect(second.slice(0, first.length)).toEqual(first);
+    expect(second[0]).toEqual(first[0]);
+    const reminder = '\n\n<system-reminder>\nThe user changed the session settings. These lines replace the earlier scope and mode instructions.\nWork only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.\nAuto mode: write only in the base pull request Worktree "base-2".\n</system-reminder>';
+    expect(second.at(-1)).toEqual({ role: "user", content: `Edit this repository${reminder}` });
+    expect(done?.messages.slice(0, previous?.messages.length)).toEqual(previous?.messages);
+    expect(done?.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([
+      { type: "text", text: "Edit this repository" }, { type: "text", text: reminder },
+    ]);
+    expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").map((request) => JSON.parse(request.body).scopes)).toEqual([["read"], ["read", "write"]]);
+    expect(done).toMatchObject({ mode: "auto", scope: settings.scope, worktreeIds: ["base-2"], status: "idle" });
+    const reloaded = createAgentRunner({ ...test.deps, sessions: createSessionStore(test.storage) });
+    await reloaded.send(started.id, "Keep going", settings);
+    await vi.waitFor(() => expect(reloaded.isRunningHere(started.id)).toBe(false));
+    const third = schema.parse(JSON.parse(test.modelBodies[2]!)).messages;
+    expect(third.slice(0, second.length)).toEqual(second);
+    expect(third[0]).toEqual(first[0]);
+    expect((await createSessionStore(test.storage).get(started.id))?.worktreeIds).toEqual(["base-2"]);
+  });
+
+  it.each([
+    { previous: { scope: { kind: "global" as const }, mode: "ask" as const },
+      next: { scope: { kind: "repository" as const, spaceId: "repo-2", baseWorktreeId: null }, mode: "ask" as const },
+      line: 'Work only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.' },
+    { previous: { scope: { kind: "global" as const }, mode: "auto" as const },
+      next: { scope: { kind: "global" as const }, mode: "ask" as const },
+      line: "Ask mode: read only. Never call a write tool." },
+    { previous: { scope: { kind: "repository" as const, spaceId: "repo-1", baseWorktreeId: "base-1" }, mode: "auto" as const },
+      next: { scope: { kind: "repository" as const, spaceId: "repo-1", baseWorktreeId: "base-2" }, mode: "auto" as const },
+      line: 'Auto mode: write only in the base pull request Worktree "base-2".' },
+  ])("includes only the changed instruction line ($line)", async ({ previous, next, line }) => {
+    const test = await setup({ model: () => modelStream() });
+    const started = await test.runner.start({ ...test.input, ...previous });
+    await test.finished(started.id);
+    await test.runner.send(started.id, "Continue", { ...test.input, ...next });
+    const done = await test.finished(started.id);
+    expect(done?.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([
+      { type: "text", text: "Continue" },
+      { type: "text", text: `\n\n<system-reminder>\nThe user changed the session settings. These lines replace the earlier scope and mode instructions.\n${line}\n</system-reminder>` },
+    ]);
+    const schema = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown() })) });
+    const first = schema.parse(JSON.parse(test.modelBodies[0]!)).messages;
+    const second = schema.parse(JSON.parse(test.modelBodies[1]!)).messages;
+    expect(second.slice(0, first.length)).toEqual(first);
+  });
+
+  it("adds no reminder for unchanged follow-up settings", async () => {
+    const test = await setup({ model: () => modelStream() });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    await test.runner.send(started.id, "Continue", { scope: { kind: "global" }, mode: test.input.mode, model: { ...test.input.model } });
+    const done = await test.finished(started.id);
+    expect(done?.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([{ type: "text", text: "Continue" }]);
+  });
+
+  it.each([
+    { modelId: "deepseek-v4-pro", thinking: "off" as const },
+    { modelId: "deepseek-flash", thinking: "high" as const },
+  ])("uses changed model settings without a reminder ($modelId / $thinking)", async (model) => {
+    const test = await setup({ model: () => modelStream() });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    const settings = { ...test.input, model: { ...test.input.model, ...model } };
+    await test.runner.send(started.id, "Continue", settings);
+    const done = await test.finished(started.id);
+    expect(JSON.parse(test.modelBodies[1]!)).toMatchObject({ model: model.modelId,
+      ...(model.thinking === "off" ? { thinking: { type: "disabled" } } : { reasoning_effort: "high" }) });
+    expect(done?.model).toEqual(settings.model);
+    expect(done?.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([{ type: "text", text: "Continue" }]);
+  });
+
+  it("rejects changed settings during a run without queuing the text, and accepts identical settings", async () => {
+    const entered = deferred<void>();
+    const release = deferred<Response>();
+    const test = await setup({ model: async (index) => {
+      if (index !== 1) return modelStream();
+      entered.resolve();
+      return release.promise;
+    } });
+    const started = await test.runner.start(test.input);
+    try {
+      await entered.promise;
+      await expect(test.runner.send(started.id, "Rejected instruction", { ...test.input, mode: "ask" }))
+        .rejects.toThrow("Settings can change after the current run ends");
+      await test.runner.send(started.id, "Accepted steering", { ...test.input, scope: { kind: "global" }, model: { ...test.input.model } });
+      release.resolve(modelStream());
+      const done = await test.finished(started.id);
+      expect(JSON.stringify(done)).not.toContain("Rejected instruction");
+      expect(test.modelBodies.every((body) => !body.includes("Rejected instruction"))).toBe(true);
+      expect(done?.messages.some((message) => JSON.stringify(message).includes("Accepted steering"))).toBe(true);
+      expect(done?.mode).toBe("auto");
+    } finally {
+      release.resolve(modelStream());
+      await test.runner.stop(started.id);
+    }
   });
 
   it("sums reported cache usage, keeps the last step and persists across runs and reloads", async () => {

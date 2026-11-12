@@ -92,6 +92,8 @@ html[data-ui-mode="repository"] .agent-session-title { display: -webkit-box; -we
   html[data-ui-mode="repository"] .agent-send:has(svg) > :is(span, kbd) { display: none; }
   html[data-ui-mode="repository"] .agent-composer-box { padding: 12px; }
   html[data-ui-mode="repository"] .agent-model-controls { gap: 4px; }
+  html[data-ui-mode="repository"] .agent-followup .agent-composer-controls { flex-wrap: wrap; }
+  html[data-ui-mode="repository"] .agent-followup .agent-model-controls { flex-basis: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-ui-mode="repository"] .agent-status[data-status="running"]::before { animation: none; }
