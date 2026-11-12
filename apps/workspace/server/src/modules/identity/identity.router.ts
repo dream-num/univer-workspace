@@ -140,10 +140,10 @@ export function createIdentityRouter(options: {
     response.set("Cache-Control", "no-store");
     const { user } = identity.requireInteractiveSession(request.headers.cookie);
     const scopes: unknown = request.body?.scopes;
-    if (!Array.isArray(scopes) || !scopes.includes("read") ||
-      !scopes.every((scope) => scope === "read" || scope === "write") ||
+    if (!Array.isArray(scopes) || scopes.length > 2 || !scopes.includes("read") ||
+      !scopes.every((scope) => scope === "read" || scope === "write" || scope === "publish") ||
       new Set(scopes).size !== scopes.length) {
-      throw new ApplicationError("INVALID_INPUT", 400, "scopes must be [read] or [read, write], without duplicates.", "scopes");
+      throw new ApplicationError("INVALID_INPUT", 400, "scopes must be [read], [read, write], or [read, publish], without duplicates.", "scopes");
     }
     const resource = options.mcpOAuth
       ? resolveMcpResource(options.mcpOAuth, new URL("/mcp", options.mcpOAuth.issuer).href)

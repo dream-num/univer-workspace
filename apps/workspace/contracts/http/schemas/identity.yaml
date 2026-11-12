@@ -300,8 +300,8 @@ AgentTokenScopes:
     const: read
   items:
     type: string
-    enum: [read, write]
-  description: Exactly [read] or [read, write], in either order, without duplicates.
+    enum: [read, write, publish]
+  description: Exactly [read], [read, write], or [read, publish], in either order, without duplicates.
 
 AgentTokenCreate:
   type: object

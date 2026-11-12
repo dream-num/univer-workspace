@@ -36,7 +36,7 @@ function createClient(userId: string) {
     runner() {
       return runner ??= (runtime ??= loadAgentRuntime()).then(({ createAgentRunner }) => createAgentRunner({
         userId, fetch, locks: navigator.locks, sessions, providers,
-        mcpUrl: `${location.origin}/mcp`, createTokenSource: (mode) => createMcpTokenSource({ mode, fetch }),
+        mcpUrl: `${location.origin}/mcp`, createTokenSource: (grant) => createMcpTokenSource({ grant, fetch }),
       }));
     },
     async stopAll() {

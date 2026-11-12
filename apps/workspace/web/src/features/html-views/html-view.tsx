@@ -22,14 +22,16 @@ const HTML_VIEW_MEDIA_SOURCES = workspaceMediaSources(window.location.origin);
 
 export function HtmlView({
   source,
-  allowedOrigins,
-  mediaSources,
+  allowedOrigins = HTML_VIEW_ALLOWED_ORIGINS,
+  mediaSources = HTML_VIEW_MEDIA_SOURCES,
   immersive,
   actionsContainer,
+  draft = false,
 }: {
   source: string;
   immersive: boolean;
   actionsContainer: HTMLElement | null;
+  draft?: boolean;
   allowedOrigins?: readonly string[];
   mediaSources?: readonly string[];
 }) {
@@ -42,10 +44,10 @@ export function HtmlView({
     : session.data
       ? anonymousUser
       : null;
-  const writeModes = useMemo(() => new Map<string, HtmlViewWriteMode>(), [source, user?.id]);
-  const native = useNativeUnitPreview(source, user?.id ?? "pending", writeModes);
+  const writeModes = useMemo(() => new Map<string, HtmlViewWriteMode>(), [source, user?.id, draft]);
+  const native = useNativeUnitPreview(source, user?.id ?? "pending", writeModes, !draft);
   const [trial, setTrial] = useState(false);
-  useEffect(() => setTrial(false), [source, user?.id]);
+  useEffect(() => setTrial(false), [source, user?.id, draft]);
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
@@ -58,11 +60,12 @@ export function HtmlView({
           code === "signInRequired" ? "htmlViewSignInRequired" : "htmlViewEditPermissionRequired",
         ),
         () => setTrial(true),
+        draft,
       );
       writeModes.set(unitId, engine.writeMode);
       return engine;
     },
-    [user?.id, user?.displayName, user?.avatarUrl, writeModes],
+    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft],
   );
   useEffect(() => {
     if (inspecting) native.close();
@@ -110,6 +113,7 @@ export function HtmlView({
           </Button>,
           actionsContainer,
         )}
+      {draft && <p role="status" className="m-0 shrink-0 border-b border-border px-4 py-2 text-sm">{t("htmlViewDraftNotice")}</p>}
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}
@@ -137,7 +141,7 @@ export function HtmlView({
       {trial && <p role="status" className="m-0 shrink-0 border-t border-border bg-amber-50 px-4 py-2 text-sm text-amber-950">
         {t("htmlViewTrialNotice")}
       </p>}
-      {native.preview}
+      {!draft && native.preview}
     </div>
   );
 }
@@ -146,10 +150,12 @@ export function HtmlViewFile({
   resource,
   immersive,
   actionsContainer,
+  draft = false,
 }: {
   resource: { contentUrl: string; byteSize: number };
   immersive: boolean;
   actionsContainer: HTMLElement | null;
+  draft?: boolean;
 }) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -184,6 +190,7 @@ export function HtmlViewFile({
       mediaSources={HTML_VIEW_MEDIA_SOURCES}
       immersive={immersive}
       actionsContainer={actionsContainer}
+      draft={draft}
     />
   );
 }
