@@ -121,6 +121,14 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 - 没有编辑权限的用户（匿名访客，或已登录但只读）跟随 repository 的文档权限，不能更改源数据；宿主
   启用试算时，他们的页面编辑只在自己的浏览器中由真实公式引擎试算，不保存也不发送。
 
+## Workspace Agents 提示缓存
+
+浏览器 Agents（`apps/workspace/web/src/features/agents`）每一步都会重发完整请求。模型服务商按前缀匹配缓存，前缀中任一 token 变化，其后的内容都要重新计算。
+
+- 一次会话内，工具列表、系统提示词和已发出的历史必须逐字不变。系统提示词只放会话创建时已确定的内容；运行中产生的状态（Worktree ID、计数、时间戳）留在历史的工具结果里，不写进系统提示词。
+- 历史消息只追加，不改写、截断或重排。会话中途不切换模型、thinking 参数或工具集合。
+- `runtime/runner.test.ts` 断言新 PR 出现后系统提示词不变。修改提示词组装或消息转换时，保持该测试通过，并在会话页核对缓存命中率没有下降。
+
 ## HTTP contract 与生成物
 
 - `apps/workspace/contracts/http` 是产品 HTTP contract 的源码。

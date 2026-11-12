@@ -14,11 +14,11 @@ const rpcSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(), method: z.string(),
   params: z.object({ name: z.string().optional() }).passthrough().optional(),
 });
-function modelStream(toolName?: string, parallel = false): Response {
+function modelStream(toolName?: string, parallel = false, usage?: { prompt_tokens: number; prompt_cache_hit_tokens?: number; prompt_tokens_details?: { cached_tokens: number } }): Response {
   const delta = toolName ? { role: "assistant", tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: toolName, arguments: "{}" } }, ...(parallel ? [{ index: 1, id: "call-2", type: "function", function: { name: toolName, arguments: "{}" } }] : [])] }
     : { role: "assistant", content: "Done" };
   const chunk = (value: unknown, finish: string | null) => ({ id: "completion-1", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: value, finish_reason: finish }] });
-  return new Response([chunk(delta, null), chunk({}, toolName ? "tool_calls" : "stop")]
+  return new Response([chunk(delta, null), { ...chunk({}, toolName ? "tool_calls" : "stop"), ...(usage ? { usage: { completion_tokens: 1, total_tokens: usage.prompt_tokens + 1, ...usage } } : {}) }]
     .map((value) => `data: ${JSON.stringify(value)}\n\n`).join("") + "data: [DONE]\n\n", { headers: { "content-type": "text/event-stream" } });
 }
 
@@ -84,6 +84,53 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it("keeps the system prompt identical after pr_create and a follow-up", async () => {
+    const test = await setup();
+    const started = await test.runner.start(test.input);
+    expect((await test.finished(started.id))?.worktreeIds).toEqual(["worktree-1"]);
+    const followupIndex = test.modelBodies.length;
+    await test.runner.send(started.id, "Continue with that pull request");
+    expect((await test.finished(started.id))?.status).toBe("idle");
+    const requestSchema = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown() })) });
+    const first = requestSchema.parse(JSON.parse(test.modelBodies[0]!)).messages.find((message) => message.role === "system");
+    const followup = requestSchema.parse(JSON.parse(test.modelBodies[followupIndex]!)).messages.find((message) => message.role === "system");
+    expect(first?.content).toEqual(expect.any(String));
+    expect(followup?.content).toBe(first?.content);
+  });
+
+  it("sums reported cache usage, keeps the last step and persists across runs and reloads", async () => {
+    const test = await setup({ model: (index) => modelStream(index === 1 ? "pr_create" : undefined, false,
+      index === 1 ? { prompt_tokens: 100, prompt_cache_hit_tokens: 80 } : { prompt_tokens: 300, prompt_cache_hit_tokens: 270 }) });
+    const started = await test.runner.start(test.input);
+    expect(started.cacheUsage).toEqual({ inputTokens: 0, cacheReadTokens: 0, lastStep: null });
+    expect((await test.finished(started.id))?.cacheUsage).toEqual({
+      inputTokens: 400, cacheReadTokens: 350, lastStep: { inputTokens: 300, cacheReadTokens: 270 },
+    });
+    await test.runner.send(started.id, "Continue");
+    const expected = { inputTokens: 700, cacheReadTokens: 620, lastStep: { inputTokens: 300, cacheReadTokens: 270 } };
+    expect((await test.finished(started.id))?.cacheUsage).toEqual(expected);
+    expect((await createSessionStore(test.storage).get(started.id))?.cacheUsage).toEqual(expected);
+  });
+
+  it("skips steps without usage and preserves the last reported step", async () => {
+    const test = await setup({ model: (index) => modelStream(undefined, false,
+      index === 1 ? { prompt_tokens: 100, prompt_cache_hit_tokens: 80 } : undefined) });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    await test.runner.send(started.id, "Continue");
+    expect((await test.finished(started.id))?.cacheUsage).toEqual({
+      inputTokens: 100, cacheReadTokens: 80, lastStep: { inputTokens: 100, cacheReadTokens: 80 },
+    });
+  });
+
+  it("records a reported zero-token step", async () => {
+    const test = await setup({ model: () => modelStream(undefined, false, { prompt_tokens: 0, prompt_cache_hit_tokens: 0 }) });
+    const started = await test.runner.start(test.input);
+    expect((await test.finished(started.id))?.cacheUsage).toEqual({
+      inputTokens: 0, cacheReadTokens: 0, lastStep: { inputTokens: 0, cacheReadTokens: 0 },
+    });
+  });
+
   it("creates a PR, records its Worktree, streams updates and finishes idle", async () => {
     const test = await setup();
     const updates: AgentSession[] = [];
@@ -393,10 +440,13 @@ describe("agent runner with real SDK transports and offline fetch", () => {
   });
 
   it("runs an OpenAI-compatible provider without DeepSeek options", async () => {
-    const test = await setup({ model: () => modelStream() });
+    const test = await setup({ model: () => modelStream(undefined, false, { prompt_tokens: 100, prompt_tokens_details: { cached_tokens: 80 } }) });
     await test.deps.providers.save({ ...deepSeekDefault, kind: "openai-compatible" });
     const started = await test.runner.start({ ...test.input, model: { ...test.input.model, thinking: null } });
-    expect((await test.finished(started.id))?.status).toBe("idle");
+    const done = await test.finished(started.id);
+    expect(done?.status).toBe("idle");
+    expect(done?.cacheUsage).toEqual({ inputTokens: 100, cacheReadTokens: 80, lastStep: { inputTokens: 100, cacheReadTokens: 80 } });
+    expect(JSON.parse(test.modelBodies[0]!).stream_options).toEqual({ include_usage: true });
     expect(JSON.parse(test.modelBodies[0]!)).not.toHaveProperty("thinking");
     expect(JSON.parse(test.modelBodies[0]!)).not.toHaveProperty("reasoning_effort");
   });

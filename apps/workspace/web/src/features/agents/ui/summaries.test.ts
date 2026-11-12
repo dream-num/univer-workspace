@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { argumentSummary, durationLabel, newestSessions, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { argumentSummary, cacheHitRate, durationLabel, newestSessions, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { session } from "../test-helpers";
 import { agentSessionIdSchema } from "../agent.types";
 import { agentMessages } from "./messages";
 
 describe("Agent tool cards", () => {
+  it("formats cache hit rates as whole percentages or a placeholder when unavailable", () => {
+    expect(cacheHitRate(null)).toBe("—");
+    expect(cacheHitRate(undefined)).toBe("—");
+    expect(cacheHitRate({ inputTokens: 0, cacheReadTokens: 0 })).toBe("—");
+    expect(cacheHitRate({ inputTokens: 300, cacheReadTokens: 280 })).toBe("93%");
+    expect(cacheHitRate({ inputTokens: 100, cacheReadTokens: 0 })).toBe("0%");
+  });
   it("summarizes structured gateway results and bounds large arguments", () => {
     expect(resultSummary({ structuredContent: { number: 7 }, content: [] })).toBe("#7");
     expect(summarize({ file: "Budget.xlsx" })).toBe('{"file":"Budget.xlsx"}');

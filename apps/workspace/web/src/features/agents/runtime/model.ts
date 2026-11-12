@@ -6,7 +6,7 @@ import { validateProviderURL } from "../providers";
 
 const modelFactories: Record<ProviderKind, (provider: RunnableProvider, modelId: string, request: typeof fetch) => LanguageModel> = {
   deepseek: (provider, modelId, request) => createDeepSeek({ apiKey: provider.apiKey, baseURL: provider.baseURL, fetch: request })(modelId),
-  "openai-compatible": (provider, modelId, request) => createOpenAICompatible({ name: provider.id, apiKey: provider.apiKey, baseURL: provider.baseURL, fetch: request })(modelId),
+  "openai-compatible": (provider, modelId, request) => createOpenAICompatible({ name: provider.id, apiKey: provider.apiKey, baseURL: provider.baseURL, fetch: request, includeUsage: true })(modelId),
 };
 export function createModel(provider: RunnableProvider, model: AgentSession["model"], request: typeof fetch, workspaceOrigin: string) {
   validateProviderURL(provider.baseURL, workspaceOrigin);

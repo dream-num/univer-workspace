@@ -27,6 +27,15 @@ describe("agent session store", () => {
     expect((await store.list())[0]?.toolTimings).toEqual({});
   });
 
+  it("reads older sessions without cache usage as zero totals and no last step", async () => {
+    const options = storageOptions();
+    const { cacheUsage: _cacheUsage, ...legacy } = session();
+    await openAgentDatabase(options).request("sessions", "readwrite", (store) => store.put(legacy));
+    const store = createSessionStore(options);
+    expect((await store.get(legacy.id))?.cacheUsage).toEqual({ inputTokens: 0, cacheReadTokens: 0, lastStep: null });
+    expect((await store.list())[0]?.cacheUsage).toEqual({ inputTokens: 0, cacheReadTokens: 0, lastStep: null });
+  });
+
   it("recovers a running session without a lock and persists interruption", async () => {
     const options = storageOptions();
     const running = session({ status: "running" });
