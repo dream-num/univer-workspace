@@ -4,12 +4,13 @@ import { DirectChatTransport, ToolLoopAgent, generateId, isToolUIPart, lastAssis
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { AgentReference, AgentMode, AgentScope, AgentSession, AgentSessionId, AgentSettings } from "../agent.types";
-import { agentReferenceToken, agentSessionIdSchema, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
+import { agentReferenceToken, agentSessionIdSchema, messageSkills, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
 import type { McpGrant, McpTokenSource } from "../mcp-token";
 import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
 import type { SessionStore } from "../session-store";
 import { createModel } from "./model";
+import { gatewaySkillCatalogSchema, skillsReminder } from "./skills";
 import { draftReminder } from "./draft-reminder";
 import type { DraftStatus } from "./draft-reminder";
 import { redactMessages, repairInterruptedTools, withStructuredContent, worktreeExtractors } from "./messages";
@@ -61,7 +62,7 @@ function modeLine({ scope, mode }: AgentSettings): string {
       : "Auto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace. Never merge; a person reviews and merges.";
 }
 function contextPrompt(settings: AgentSettings): string {
-  return `${scopeLine(settings)}\n${modeLine(settings)}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.`;
+  return `${scopeLine(settings)}\n${modeLine(settings)}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.\nSkills are instructions written by the user or the repository. When a <system-reminder> lists skills and a task matches one, call skills_read with that name before you act, then follow it. A later list replaces earlier ones.`;
 }
 function initialContextPrompt(session: AgentSession): string {
   for (const { metadata } of session.messages) {
@@ -186,11 +187,31 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
           try { await publishClient?.close(); } finally { await publishToken.dispose(); }
         }
       });
-      let skill = "";
-      try {
-        const resource = await client.readResource({ uri: "skill://univer-workspace/core/SKILL.md" });
-        skill = resource.contents.flatMap((content) => "text" in content ? [content.text] : []).join("\n");
-      } catch { /* The core skill resource is optional on older gateways. */ }
+      const message = run.session.messages.at(-1);
+      const processSkills = message?.role === "user" && !(message.metadata && typeof message.metadata === "object" && "agentSkills" in message.metadata);
+      const [skill, catalog] = await Promise.all([
+        client.readResource({ uri: "skill://univer-workspace/core/SKILL.md" })
+          .then((resource) => resource.contents.flatMap((content) => "text" in content ? [content.text] : []).join("\n"), () => ""),
+        processSkills ? client.callTool({ name: "skills_read", arguments: run.session.scope.kind === "repository" ? { repo: run.session.scope.spaceId } : {} })
+          .then((result) => {
+            if (result.isError) return null;
+            const parsed = gatewaySkillCatalogSchema.safeParse(result.structuredContent);
+            return parsed.success ? parsed.data : null;
+          }, () => null) : null,
+      ]);
+      if (processSkills && message) {
+        const previous = run.session.messages.slice(0, -1).filter((item) => item.role === "user")
+          .map((item) => messageSkills(item.metadata)).reverse().find((item) => item !== null) ?? null;
+        const current = catalog ?? previous;
+        if (current) {
+          const reminder = catalog ? skillsReminder(catalog, previous, run.session.scope) : null;
+          message.metadata = { ...(message.metadata && typeof message.metadata === "object" ? message.metadata : {}), agentSkills: current };
+          if (reminder) message.parts.push(reminder);
+          persist();
+          await writeQueue;
+          if (persistenceError) throw persistenceError;
+        }
+      }
       const agent = new ToolLoopAgent({
         ...model, ...gated, stopWhen: stepCountIs(50),
         onError({ error }) { streamError = new Error(redactProviderError(error, key)); },

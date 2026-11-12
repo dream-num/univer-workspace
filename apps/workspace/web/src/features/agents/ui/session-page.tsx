@@ -7,7 +7,7 @@ import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
-import { agentSessionIdSchema, isSystemReminder, messageReferences, sessionTitle, splitReferenceText } from "../agent.types";
+import { agentSessionIdSchema, isSystemReminder, messageReferences, messageSkills, sessionTitle, splitReferenceText } from "../agent.types";
 import type { AgentMode, AgentSession } from "../agent.types";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
@@ -154,8 +154,44 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
       <dt>{m.scope}</dt><dd><SessionScope session={session} /></dd>
       <dt>{m.mode}</dt><dd>{m[session.mode]}</dd><dt>{m.model}</dt><dd><SessionModel model={session.model} /></dd>
       <dt>{m.cacheHitRate}</dt><dd>{m.cacheOverall} {cacheHitRate(session.cacheUsage)} · {m.cacheLastStep} {cacheHitRate(session.cacheUsage.lastStep)}</dd>
-    </dl><h2>{m.prs}</h2>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}<p className="agent-note">{m.local}</p></aside>
+    </dl><SessionSkills session={session} /><h2>{m.prs}</h2>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}<p className="agent-note">{m.local}</p></aside>
   </div>;
+}
+const skillReadInput = z.object({ name: z.string() });
+const skillReadOutput = z.object({ isError: z.boolean().optional() });
+function SessionSkills({ session }: { readonly session: AgentSession }) {
+  const m = useAgentMessages();
+  const [expanded, setExpanded] = useState(false);
+  const catalog = session.messages.filter((message) => message.role === "user").map((message) => messageSkills(message.metadata))
+    .reverse().find((value) => value !== null);
+  const used = new Map<string, number>();
+  for (const message of session.messages) {
+    for (const part of message.parts) {
+      if (part.type !== "dynamic-tool" || part.toolName !== "skills_read" || part.state !== "output-available") continue;
+      const input = skillReadInput.safeParse(part.input);
+      const output = skillReadOutput.safeParse(part.output);
+      if (input.success && output.success && !output.data.isError && !used.has(input.data.name)) used.set(input.data.name, used.size);
+    }
+  }
+  const skills = [...(catalog?.skills ?? [])].sort((a, b) => {
+    if (used.has(a.name) || used.has(b.name)) return (used.get(a.name) ?? Infinity) - (used.get(b.name) ?? Infinity);
+    return (a.source === b.source ? 0 : a.source === "repository" ? -1 : 1) || a.name.localeCompare(b.name);
+  });
+  const hidden = Math.max(0, skills.length - 3);
+  return <>
+    <h2>{m.skills}</h2>
+    {catalog?.repository === "not-member" ? <p className="agent-note">{m.skillsNotMember}</p> : null}
+    {!skills.length ? <p className="agent-note">{m.noSkills}</p> : <ul className="agent-skills">{skills.slice(0, expanded ? undefined : 3).map((skill) => <li key={skill.name} title={[skill.description, skill.path].filter(Boolean).join("\n")}>
+      <span className="agent-skill-name">{skill.name}</span><span className="agent-skill-source">{skill.source === "repository" ? m.repository : m.personalSkill}</span>
+      {used.has(skill.name) ? <span className="agent-skill-used">{m.skillUsed}</span> : null}
+    </li>)}</ul>}
+    {hidden || catalog?.diagnostics.length ? <button type="button" className="agent-steps-window" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
+      {expanded ? m.showFewerSkills : hidden ? m.showMoreSkills(hidden) : m.showSkillDiagnostics}
+    </button> : null}
+    {expanded && catalog?.diagnostics.length ? <ul className="agent-skill-diagnostics">{catalog.diagnostics.map((diagnostic, index) => <li key={index}>
+      {diagnostic.source === "repository" ? m.repository : m.personalSkill} · {m.skillProblems[diagnostic.problem]} · {diagnostic.path}{diagnostic.detail ? ` · ${diagnostic.detail}` : ""}
+    </li>)}</ul> : null}
+  </>;
 }
 function AssistantMessage({ message, session, current, latestStepsIndex }: { readonly message: UIMessage; readonly session: AgentSession; readonly current: boolean; readonly latestStepsIndex: number }) {
   const blocks = messageBlocks(message.parts);

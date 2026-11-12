@@ -27,6 +27,29 @@ export function messageReferences(metadata: UIMessage["metadata"]): AgentReferen
   const parsed = referenceMetadataSchema.safeParse(metadata);
   return parsed.success ? parsed.data.agentReferences : [];
 }
+export const skillEntrySchema = z.object({
+  name: z.string(), description: z.string(), source: z.enum(["repository", "user"]),
+  path: z.string().optional(), modelInvocable: z.boolean(), userInvocable: z.boolean(),
+  argumentHint: z.string().optional(),
+});
+export type SkillEntry = z.infer<typeof skillEntrySchema>;
+export const skillDiagnosticSchema = z.object({
+  source: z.enum(["repository", "user"]), path: z.string(),
+  problem: z.enum(["invalid-skill", "reserved-name", "shadowed", "too-large"]),
+  detail: z.string().optional(),
+});
+export type SkillDiagnostic = z.infer<typeof skillDiagnosticSchema>;
+export const repositorySkillsSchema = z.enum(["loaded", "not-member", "no-repository"]);
+export type RepositorySkills = z.infer<typeof repositorySkillsSchema>;
+export const skillCatalogSchema = z.object({
+  skills: z.array(skillEntrySchema), diagnostics: z.array(skillDiagnosticSchema), repository: repositorySkillsSchema,
+});
+export type SkillCatalog = z.infer<typeof skillCatalogSchema>;
+const skillsMetadataSchema = z.object({ agentSkills: skillCatalogSchema });
+export function messageSkills(metadata: UIMessage["metadata"]): SkillCatalog | null {
+  const parsed = skillsMetadataSchema.safeParse(metadata);
+  return parsed.success ? parsed.data.agentSkills : null;
+}
 export function splitReferenceText(text: string, references: readonly AgentReference[]): (string | AgentReference)[] {
   const tokens = new Map(references.map((reference) => [agentReferenceToken(reference), reference]));
   if (!tokens.size) return [text];

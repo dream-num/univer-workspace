@@ -71,6 +71,31 @@ user owns Personal Space `verify-<run-id>/personal`.
 The server does not reload. After changing server or CLI code: rebuild the CLI if needed,
 `$V down`, `$V up`, `$V user`. Web code under `apps/workspace/web` hot-reloads through Vite.
 
+## Browser Agent mock model
+
+Start the local OpenAI-compatible provider with a JSON script. Each completion consumes
+one step. A step returns text or one tool call; after the last step it returns `Done`.
+Usage chunks contain fixed synthetic counts, including 50 cached tokens out of 100 prompt
+tokens. These counts test the UI, not actual provider caching.
+
+```bash
+cat > /tmp/uvw-model-script.json <<'JSON'
+{"model":"mock-agent","steps":[{"tool":{"name":"skills_read","arguments":{"name":"weekly-report"}}},{"text":"Skill read."}]}
+JSON
+node .agents/skills/verify-uvw/bin/mock-provider.mjs \
+  --port 5984 --script /tmp/uvw-model-script.json --log /tmp/uvw-model-requests.jsonl
+```
+
+In the browser Agent's **Model settings**, add an **OpenAI-compatible provider**.
+Use Base URL `http://127.0.0.1:5984`, model and default model `mock-agent`, and any
+non-empty API key (for example `mock-key`). The Base URL must differ from the Workspace
+origin. Choose a free port and use an HTTP loopback Workspace for this local check.
+The provider supports CORS preflight, `GET /models` and streaming
+`POST /chat/completions`. Each request appends arrival time, method, URL and its full
+JSON body to the log, including OPTIONS and GET with a null body. Keep the log with
+local verification evidence; it contains full model requests. Stop the foreground
+process with Ctrl+C when finished.
+
 ## Doctor
 
 `$V doctor` checks the disposable instance. With MCP enabled after `user`, it creates or reuses a dedicated idempotent doctor Worktree and Sheet, then opens a worker through gateway inspection. Run it first, and again whenever anything looks off. It
