@@ -19,7 +19,7 @@ export function DraftPreview({ html, name, replacing, current, currentError, dis
   const [tab, setTab] = useState<"new" | "current">("new");
   useEffect(onOpened, [onOpened]);
   return <DialogRoot open onOpenChange={(open) => { if (!open) onClose(); }}>
-    <DialogContent hideClose className="agent-draft-preview" aria-describedby={undefined}>
+    <DialogContent hideClose className="inset-0 h-dvh max-h-none w-screen max-w-none translate-x-0 translate-y-0 rounded-none border-0 p-0" aria-describedby={undefined}>
       <header className="agent-draft-header">
         <DialogTitle>{name} · {m.draft}</DialogTitle>
         <div className="agent-approval-actions">

@@ -159,6 +159,5 @@ html[data-ui-mode="repository"] .agent-approval dl { display: grid; grid-templat
 html[data-ui-mode="repository"] .agent-approval dt { color: var(--rd-ink-2); }
 html[data-ui-mode="repository"] .agent-approval pre { max-height: 180px; overflow: auto; }
 .agent-approval-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-.agent-draft-preview { inset: 0; width: 100vw; height: 100dvh; max-width: none; max-height: none; padding: 0; border: 0; border-radius: 0; transform: none; translate: none; }
 .agent-draft-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--border); }
 .agent-draft-body { min-height: 0; flex: 1; }
