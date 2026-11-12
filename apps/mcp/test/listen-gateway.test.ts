@@ -35,3 +35,19 @@ it("retries with a new gateway and port when the reserved port is occupied", asy
     ));
   }
 });
+
+it("cleans up and propagates a bind error other than an occupied port without retrying", async () => {
+  const error = Object.assign(new Error("Bind denied"), { code: "EACCES" });
+  const server = createServer();
+  const close = vi.fn(async () => {});
+  const create = vi.fn(() => ({ server, close }));
+  const listen = vi.spyOn(server, "listen").mockImplementation(() => { throw error; });
+  try {
+    await expect(listenGateway(create)).rejects.toBe(error);
+    expect(create).toHaveBeenCalledTimes(1);
+    expect(close).toHaveBeenCalledTimes(1);
+    expect(server.listening).toBe(false);
+  } finally {
+    listen.mockRestore();
+  }
+});

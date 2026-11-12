@@ -7,6 +7,7 @@ import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jobHandleSchema, jobViewSchema } from "../src/gateway/jobs/model.js";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { decodeFrame, encodeFrame } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";
@@ -42,7 +43,7 @@ async function close(server: Server) {
 
 const cleanups: Array<() => Promise<void>> = [];
 afterEach(async () => {
-  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
 });
 
 async function start(options: { syncBudgetMs?: number } = {}) {
@@ -66,47 +67,44 @@ async function start(options: { syncBudgetMs?: number } = {}) {
     });
   });
   const executorUrl = await listen(executor);
-  const reservation = createServer();
-  const origin = await listen(reservation);
-  await close(reservation);
-  const gateway = createGateway(
-    parseGatewayConfig({
-      MCP_DEV_SESSION_PASSTHROUGH: "1",
-      WORKSPACE_ORIGIN: "http://workspace.test",
-      MCP_PUBLIC_URL: `${origin}/mcp`,
-      MCP_STAGING_DIRECTORY: testStagingDirectory(),
-      MCP_EXECUTOR_URLS: executorUrl,
-      MCP_EXECUTOR_TOKEN: "t".repeat(32),
-      MCP_SYNC_BUDGET_MS: String(options.syncBudgetMs ?? 30_000),
-    }),
-    {
-      fetcher: async () =>
-        Response.json({ authenticated: true, user: { id: "alice", displayName: "Alice" } }),
-      logger: pino(
-        {},
-        new Writable({
-          write(chunk, _encoding, callback) {
-            logs += chunk.toString();
-            callback();
-          },
-        }),
-      ),
-    },
+  cleanups.push(() => close(executor));
+  const { gateway, url } = await listenGateway((url) =>
+    createGateway(
+      parseGatewayConfig({
+        MCP_DEV_SESSION_PASSTHROUGH: "1",
+        WORKSPACE_ORIGIN: "http://workspace.test",
+        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(),
+        MCP_EXECUTOR_URLS: executorUrl,
+        MCP_EXECUTOR_TOKEN: "t".repeat(32),
+        MCP_SYNC_BUDGET_MS: String(options.syncBudgetMs ?? 30_000),
+      }),
+      {
+        fetcher: async () =>
+          Response.json({ authenticated: true, user: { id: "alice", displayName: "Alice" } }),
+        logger: pino(
+          {},
+          new Writable({
+            write(chunk, _encoding, callback) {
+              logs += chunk.toString();
+              callback();
+            },
+          }),
+        ),
+      },
+    ),
   );
   const client = new Client({ name: "screenshot-test", version: "1" });
-  gateway.server.listen(Number(new URL(origin).port), "127.0.0.1");
-  await once(gateway.server, "listening");
-  await client.connect(
-    new StreamableHTTPClientTransport(new URL(`${origin}/mcp?toolsets=all`), {
-      requestInit: { headers: { Authorization: "Bearer test-session" } },
-    }),
-  );
   cleanups.push(async () => {
     await client.close();
     await gateway.close();
     await close(gateway.server);
-    await close(executor);
   });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL(`${url}?toolsets=all`), {
+      requestInit: { headers: { Authorization: "Bearer test-session" } },
+    }),
+  );
   return {
     client,
     requests,
