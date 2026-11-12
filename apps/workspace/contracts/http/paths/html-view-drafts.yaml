@@ -1,0 +1,169 @@
+/api/html-view-drafts:
+  post:
+    tags: [Blobs]
+    operationId: submitHtmlViewDraft
+    summary: Stage an HTML View for interactive author approval.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/html-view-drafts.yaml#/SubmitHtmlViewDraft
+    responses:
+      "201":
+        description: New draft.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/html-view-drafts.yaml#/HtmlViewDraftEnvelope
+      "200":
+        description: Current draft or idempotent replay.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/html-view-drafts.yaml#/HtmlViewDraftEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+      "412":
+        description: The target ETag changed before intake.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "413":
+        $ref: ../schemas/common.yaml#/PayloadTooLarge
+/api/html-view-drafts/{draftId}:
+  parameters:
+    - name: draftId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Blobs]
+    operationId: getHtmlViewDraft
+    summary: Read an author-owned draft, deriving expiry and stale target state.
+    responses:
+      "200":
+        description: Current draft or idempotent replay.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/html-view-drafts.yaml#/HtmlViewDraftEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+/api/html-view-drafts/{draftId}/content:
+  parameters:
+    - name: draftId
+      in: path
+      required: true
+      schema:
+        type: string
+  get:
+    tags: [Blobs]
+    operationId: getHtmlViewDraftContent
+    summary: Read author-owned unpublished draft bytes as inert text.
+    responses:
+      "200":
+        description: Current draft or idempotent replay.
+        headers:
+          Content-Security-Policy:
+            schema:
+              type: string
+              const: sandbox
+          X-Content-Type-Options:
+            schema:
+              type: string
+              const: nosniff
+          Cache-Control:
+            schema:
+              type: string
+              const: private, no-store
+        content:
+          text/plain; charset=utf-8:
+            schema:
+              type: string
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+/api/html-view-drafts/{draftId}/publish:
+  parameters:
+    - name: draftId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Blobs]
+    operationId: publishHtmlViewDraft
+    summary: Publish a draft as its interactive author.
+    responses:
+      "200":
+        description: Current draft or idempotent replay.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/html-view-drafts.yaml#/HtmlViewDraftEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+/api/html-view-drafts/{draftId}/reject:
+  parameters:
+    - name: draftId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Blobs]
+    operationId: rejectHtmlViewDraft
+    summary: Reject a draft as its interactive author.
+    responses:
+      "200":
+        description: Current draft or idempotent replay.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/html-view-drafts.yaml#/HtmlViewDraftEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

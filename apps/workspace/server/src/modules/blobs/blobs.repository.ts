@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import { randomUUID } from "node:crypto";
 import type { BlobReplacementResult } from "./blobs.types.js";
 import type { StoredBlob } from "../../integrations/blob/blob-store.js";
@@ -152,38 +153,9 @@ export class BlobsRepository {
     now: number,
   ): BlobReplacementResult {
     return this._database.transaction((database) => {
-      const current = database
-        .prepare("SELECT object_key, etag FROM blob_resources WHERE resource_id = ?")
-        .get(intent.resourceId) as { object_key: string; etag: string } | undefined;
-      if (!current || current.etag !== intent.expectedEtag) {
-        throw new BlobReplacementConflictError("etag");
-      }
-      const etag = randomUUID();
-      database
-        .prepare(`UPDATE blob_resources SET object_key = ?, media_type = ?, byte_size = ?,
-        sha256 = ?, etag = ?, updated_at = ? WHERE resource_id = ? AND etag = ?`)
-        .run(
-          objectKey,
-          stored.mediaType,
-          stored.byteSize,
-          stored.sha256,
-          etag,
-          now,
-          intent.resourceId,
-          intent.expectedEtag,
-        );
-      database
-        .prepare("UPDATE resources SET updated_at = ? WHERE id = ?")
-        .run(now, intent.resourceId);
-      database
-        .prepare(
-          "UPDATE nodes SET updated_at = ? WHERE id = (SELECT node_id FROM resources WHERE id = ?)",
-        )
-        .run(now, intent.resourceId);
-      database
-        .prepare(`INSERT INTO object_deletion_jobs (id, object_key, reason, next_attempt_at, created_at, updated_at)
-        VALUES (?, ?, 'blob_content_replaced', ?, ?, ?) ON CONFLICT (object_key) DO NOTHING`)
-        .run(randomUUID(), current.object_key, now, now, now);
+      const swapped = swapBlobContent(database, { ...intent, objectKey, stored, now });
+      if (swapped === "etag-mismatch") throw new BlobReplacementConflictError("etag");
+      const { etag } = swapped;
       const result = { operationId, resourceId: intent.resourceId, etag: `"${etag}"` };
       database
         .prepare(`UPDATE operations SET state = 'completed', step = 'completed', result_json = ?,
@@ -392,39 +364,12 @@ export class BlobsRepository {
         `UPDATE blob_upload_sessions
          SET state = 'verifying', updated_at = ? WHERE id = ?`
       ).run(completedAt, uploadId);
-      database.prepare(
-        `INSERT INTO nodes
-          (id, space_id, parent_id, name, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        upload.node_id,
-        upload.target_space_id,
-        upload.target_parent_node_id,
-        upload.node_name,
-        upload.actor_user_id,
-        completedAt,
-        completedAt
-      );
-      database.prepare(
-        `INSERT INTO resources (id, node_id, kind, created_at, updated_at)
-         VALUES (?, ?, 'blob', ?, ?)`
-      ).run(upload.resource_id, upload.node_id, completedAt, completedAt);
-      database.prepare(
-        `INSERT INTO blob_resources
-          (resource_id, object_key, original_filename, media_type, byte_size,
-           sha256, etag, availability, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?)`
-      ).run(
-        upload.resource_id,
-        upload.object_key,
-        upload.original_filename,
-        upload.detected_media_type,
-        upload.byte_size,
-        upload.sha256,
-        upload.etag,
-        completedAt,
-        completedAt
-      );
+      insertReadyBlobResource(database, {
+        nodeId: upload.node_id, resourceId: upload.resource_id, spaceId: upload.target_space_id,
+        parentNodeId: upload.target_parent_node_id, name: upload.node_name, createdBy: upload.actor_user_id,
+        originalFilename: upload.original_filename, objectKey: upload.object_key, mediaType: upload.detected_media_type,
+        byteSize: upload.byte_size, sha256: upload.sha256, etag: upload.etag, now: completedAt,
+      });
       const result = JSON.stringify({
         nodeId: upload.node_id,
         resourceId: upload.resource_id,
@@ -621,4 +566,84 @@ export function blobOperationView(row: BlobOperationRow): OperationView {
       ? { code: row.last_error_code, message: row.last_error_message }
       : null,
   };
+}
+
+export function insertReadyBlobResource(database: DatabaseSync, input: {
+  nodeId: string; resourceId: string; spaceId: string; parentNodeId: string | null;
+  name: string; createdBy: string; originalFilename: string; objectKey: string;
+  mediaType: string; byteSize: number; sha256: string; etag: string; now: number;
+}): void {
+  database.prepare(
+    `INSERT INTO nodes
+      (id, space_id, parent_id, name, created_by, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`
+  ).run(
+    input.nodeId,
+    input.spaceId,
+    input.parentNodeId,
+    input.name,
+    input.createdBy,
+    input.now,
+    input.now
+  );
+  database.prepare(
+    `INSERT INTO resources (id, node_id, kind, created_at, updated_at)
+     VALUES (?, ?, 'blob', ?, ?)`
+  ).run(input.resourceId, input.nodeId, input.now, input.now);
+  database.prepare(
+    `INSERT INTO blob_resources
+      (resource_id, object_key, original_filename, media_type, byte_size,
+       sha256, etag, availability, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?)`
+  ).run(
+    input.resourceId,
+    input.objectKey,
+    input.originalFilename,
+    input.mediaType,
+    input.byteSize,
+    input.sha256,
+    input.etag,
+    input.now,
+    input.now
+  );
+}
+export function swapBlobContent(database: DatabaseSync, input: {
+  resourceId: string; expectedEtag: string; objectKey: string;
+  stored: Pick<StoredBlob, "mediaType" | "byteSize" | "sha256">; now: number;
+}): { etag: string } | "etag-mismatch" {
+  const current = database
+    .prepare("SELECT object_key, etag FROM blob_resources WHERE resource_id = ?")
+    .get(input.resourceId) as { object_key: string; etag: string } | undefined;
+  if (!current || current.etag !== input.expectedEtag) {
+    return "etag-mismatch";
+  }
+  const etag = randomUUID();
+  database
+    .prepare(`UPDATE blob_resources SET object_key = ?, media_type = ?, byte_size = ?,
+    sha256 = ?, etag = ?, updated_at = ? WHERE resource_id = ? AND etag = ?`)
+    .run(
+      input.objectKey,
+      input.stored.mediaType,
+      input.stored.byteSize,
+      input.stored.sha256,
+      etag,
+      input.now,
+      input.resourceId,
+      input.expectedEtag,
+    );
+  database
+    .prepare("UPDATE resources SET updated_at = ? WHERE id = ?")
+    .run(input.now, input.resourceId);
+  database
+    .prepare(
+      "UPDATE nodes SET updated_at = ? WHERE id = (SELECT node_id FROM resources WHERE id = ?)",
+    )
+    .run(input.now, input.resourceId);
+  enqueueObjectDeletion(database, current.object_key, "blob_content_replaced", input.now);
+  return { etag };
+}
+export function enqueueObjectDeletion(database: DatabaseSync, objectKey: string,
+  reason: "blob_upload_abandoned" | "blob_content_replaced", now: number): void {
+  database.prepare(`INSERT INTO object_deletion_jobs (id, object_key, reason, next_attempt_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT (object_key) DO NOTHING`).run(randomUUID(), objectKey, reason, now, now, now);
 }

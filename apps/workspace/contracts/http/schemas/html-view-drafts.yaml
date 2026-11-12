@@ -1,0 +1,85 @@
+HtmlViewDraft:
+  type: object
+  required: [id, kind, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published]
+  properties:
+    id:
+      type: string
+    kind:
+      type: string
+      enum: [create, replace]
+    state:
+      type: string
+      enum: [pending, published, rejected, expired, conflicted]
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+    name:
+      type: string
+    targetResourceId:
+      type: [string, "null"]
+    baseEtag:
+      type: [string, "null"]
+      description: Quoted strong ETag of the target at intake.
+    byteSize:
+      type: integer
+    createdAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+    decidedAt:
+      type: [string, "null"]
+      format: date-time
+    published:
+      type: [object, "null"]
+      required: [nodeId, resourceId, etag]
+      properties:
+        nodeId:
+          type: string
+        resourceId:
+          type: string
+        etag:
+          type: string
+          description: Quoted strong ETag of the published Blob.
+HtmlViewDraftEnvelope:
+  type: object
+  required: [draft]
+  properties:
+    draft:
+      $ref: '#/HtmlViewDraft'
+SubmitHtmlViewDraft:
+  oneOf:
+    - type: object
+      required: [kind, spaceId, name, html]
+      properties:
+        kind:
+          type: string
+          const: create
+        spaceId:
+          type: string
+        parentNodeId:
+          type: [string, "null"]
+        name:
+          type: string
+          description: Trimmed name; .univer.html is appended when absent.
+        html:
+          type: string
+          description: Structurally valid HTML View, at most 512 KiB UTF-8.
+    - type: object
+      required: [kind, resourceId, etag, html]
+      properties:
+        kind:
+          type: string
+          const: replace
+        resourceId:
+          type: string
+        etag:
+          type: string
+          description: One quoted strong ETag, as returned by Blob content.
+        html:
+          type: string
+          description: Structurally valid HTML View, at most 512 KiB UTF-8.
+  discriminator:
+    propertyName: kind

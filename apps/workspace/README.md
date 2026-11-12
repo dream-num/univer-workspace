@@ -455,7 +455,7 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V17 product databases to V18 automatically.
+backs up and migrates supported V0 through V17 product databases to V19 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
@@ -463,7 +463,7 @@ file. Stop the container before inspecting or copying `.data`.
 The Collaboration components are `core=3`, `worktree=3`, `history=2` and
 `comment=1`. SDK 1.0.0 brought `core=2`, `worktree=3` and `history=2`; SDK 1.4.0
 raises Core to v3, which stores protocol objects as MessagePack and inlines
-deletion state into `collaboration_units` instead of a tombstone table. Product V18 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
+deletion state into `collaboration_units` instead of a tombstone table. Product V19 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
 and Issue source columns without backfilling existing rows. V15 added ordered Space
 pins and a per-user stars index. V14 added Email identities and Email login codes;
 V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
@@ -473,7 +473,7 @@ application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V18,
+2. Start a single new instance. Startup first prepares the product database to V19,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -565,17 +565,17 @@ transaction rolls back; successful restarts do not repeat migration or backup. T
 back, stop V17 and restore the V16 backup. Never run V16 and V17 writers on the same
 SQLite file.
 
-V18 adds `oauth_clients`, `oauth_grants`, `oauth_refresh_history` and `personal_access_tokens`, which store
+V19 adds `oauth_clients`, `oauth_grants`, `oauth_refresh_history` and `personal_access_tokens`, which store
 dynamically registered OAuth clients, MCP OAuth grants (hashed access and rotating
 refresh tokens), the hashes of retired refresh tokens (reuse detection) and personal access tokens (hashed, revocable). It also appends
 nullable `login_sessions.issued_for_pat_id` and `issued_for_grant_id` columns that tie a
 downstream session to the token it was issued for. The migration only adds tables, indexes
 and columns, so existing sessions, expiries and logins are untouched. Stop every old
-instance, start one V18 instance, and wait for migration and health checks before
+instance, start one V19 instance, and wait for migration and health checks before
 restoring service. Startup validates V17, creates a readable `.v17-backup-…sqlite`
 backup, then migrates with foreign-key and integrity checks. A failed transaction rolls
-back; successful restarts do not repeat migration or backup. To roll back, stop V18 and
-restore the V17 backup. Never run V17 and V18 writers on the same SQLite file. The
+back; successful restarts do not repeat migration or backup. To roll back, stop V19 and
+restore the V17 backup. Never run V17 and V19 writers on the same SQLite file. The
 personal access token, MCP OAuth and token exchange routes described above use the new tables.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
@@ -762,3 +762,8 @@ Editors create protections; their creator and current Owner/Admin manage them. W
 inherit current Trunk policy and cannot manage bindings or collaborators. Content remains
 readable under the existing file permissions, including snapshots, history and exports.
 See [validation and release gate](docs/content-permissions-validation.md).
+
+HTML View 草稿由 `/api/html-view-drafts` 提交，只对作者可见。草稿内容最多 512 KiB，
+接收中一小时、待发布七天到期；发布和拒绝需要作者的交互式 Session。V18→V19 仅新增草稿表
+及索引。升级先停止旧实例，启动单个新实例完成自动迁移，确认成功后再恢复服务；回退必须
+停止新实例并恢复配套备份，不允许新旧版本同时写同一 SQLite 文件。

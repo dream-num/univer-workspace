@@ -6,6 +6,7 @@ export function startBlobMaintenance(
   blobs: BlobsModule,
   options: {
     readonly intervalMs?: number;
+    readonly drafts?: { expireDue(now: number, limit: number): number };
     readonly onError?: (error: unknown) => void;
   } = {}
 ): OperationRecovery {
@@ -17,8 +18,11 @@ export function startBlobMaintenance(
 
   const run = () => {
     if (disposed || running) return;
-    running = blobs
-      .runMaintenance(workerId)
+    running = Promise.resolve()
+      .then(() => {
+        options.drafts?.expireDue(Date.now(), 25);
+        return blobs.runMaintenance(workerId);
+      })
       .then(() => undefined)
       .catch(onError)
       .finally(() => {
