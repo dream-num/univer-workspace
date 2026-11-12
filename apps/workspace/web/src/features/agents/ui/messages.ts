@@ -1,0 +1,52 @@
+import { useI18n } from "../../../shared/i18n";
+
+export const agentMessages = {
+  "en-US": {
+    more: "Load more", agents: "Agents", prompt: "Let an agent handle a task", ask: "Ask", auto: "Auto",
+    askHint: "Read only. Ask questions without changing files.", autoHint: "Changes go into a pull request for a person to review and merge.",
+    model: "Model", thinking: "Thinking strength", off: "Off", high: "High", max: "Max",
+    repository: "Repository", automatic: "Auto", basedOn: "Based on", newPr: "New pull request",
+    setup: "Set up a model", settings: "Model settings", send: "Send", recent: "Recent sessions",
+    sessions: "Sessions", local: "Sessions are stored only in this browser. Teammates see the pull requests.",
+    empty: "No sessions yet.", title: "Title", status: "Status", mode: "Mode", prs: "Pull requests", started: "Started",
+    running: "Running", idle: "Done", interrupted: "Interrupted", stopped: "Stopped", failed: "Failed",
+    summarizeDescription: "Find the key figures and trends.", formulasDescription: "Locate broken formulas and explain the causes.", pageDescription: "Present the data as an interactive page.",
+    toolDone: "Completed", toolFailed: "Failed",
+    summarize: "Summarize this repository's sheets", formulas: "Check formulas for errors", page: "Turn this data into a Page",
+    reasoning: "Reasoning", arguments: "Arguments", result: "Result", duration: "Duration", pending: "Waiting",
+    scope: "Scope", global: "All repositories", review: "Review", followup: "Add an instruction", stop: "Stop", continue: "Continue",
+    busy: "This session is running in another tab. You can read it here.", missing: "This session is not stored in this browser for this account.",
+    privacy: "The key is stored only in this browser on this device; the Workspace server never receives it.",
+    limit: "Set a usage limit for the key in your provider's console. Scripts running on this page can access browser storage.",
+    add: "Add an OpenAI-compatible provider", label: "Provider name", baseURL: "Base URL", models: "Models (comma separated)", defaultModel: "Default model",
+    key: "API key", saved: "A key is saved", noKey: "No key saved", remember: "Remember on this device", test: "Test connection", connected: "Connected",
+    savedSettings: "Settings saved", save: "Save", removeKey: "Remove key", close: "Close", cancel: "Cancel", signOut: "Sign out", clearKeys: "Also remove model keys from this device",
+    signOutHint: "Model keys are saved on this device. Choose whether to remove them when signing out.", loading: "Loading…",
+  },
+  "zh-CN": {
+    more: "加载更多", agents: "Agents", prompt: "让 Agent 处理一件事", ask: "提问", auto: "执行",
+    askHint: "只读提问，不会更改文件。", autoHint: "更改写入 PR，由人审阅并合并。",
+    model: "模型", thinking: "思考强度", off: "关闭", high: "高", max: "最高",
+    repository: "仓库", automatic: "自动", basedOn: "基于", newPr: "新建 PR",
+    setup: "配置模型", settings: "模型设置", send: "发送", recent: "最近的会话",
+    sessions: "会话", local: "会话只保存在本浏览器中，团队成员看到的是产生的 PR。",
+    empty: "还没有会话。", title: "标题", status: "状态", mode: "模式", prs: "Pull requests", started: "开始时间",
+    running: "运行中", idle: "已完成", interrupted: "已中断", stopped: "已停止", failed: "失败",
+    summarizeDescription: "提炼关键数字与变化趋势。", formulasDescription: "定位公式错误并解释原因。", pageDescription: "将数据呈现为可交互的页面。",
+    toolDone: "已完成", toolFailed: "失败",
+    summarize: "汇总这个仓库的表格", formulas: "检查公式错误", page: "把这份数据做成一个 Page",
+    reasoning: "思考过程", arguments: "参数", result: "结果", duration: "耗时", pending: "等待中",
+    scope: "范围", global: "所有仓库", review: "去审阅", followup: "追加指令", stop: "停止", continue: "继续",
+    busy: "此会话正在另一个标签页运行，你可以在这里只读查看。", missing: "当前账号在本浏览器中没有此会话。",
+    privacy: "密钥只保存在这台设备的浏览器里，Workspace 服务器不会收到它。",
+    limit: "建议在提供商控制台为密钥设置用量上限。在此页面运行的脚本可以访问浏览器存储。",
+    add: "添加兼容 OpenAI 的提供商", label: "提供商名称", baseURL: "Base URL", models: "模型（用逗号分隔）", defaultModel: "默认模型",
+    key: "API 密钥", saved: "已保存密钥", noKey: "尚未保存密钥", remember: "在此设备上记住", test: "测试连接", connected: "连接成功",
+    savedSettings: "设置已保存", save: "保存", removeKey: "移除密钥", close: "关闭", cancel: "取消", signOut: "退出登录", clearKeys: "同时清除这台设备上的模型密钥",
+    signOutHint: "这台设备保存了模型密钥，请选择退出时是否清除。", loading: "加载中…",
+  },
+};
+export function useAgentMessages() {
+  const { language } = useI18n();
+  return agentMessages[language];
+}

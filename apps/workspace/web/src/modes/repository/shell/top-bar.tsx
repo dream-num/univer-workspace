@@ -3,7 +3,6 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { CircleDot, GitPullRequest, MessageCircle, Moon, Search, Sun } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { spaceQueryOptions } from "../../../features/spaces";
-import { workspaceHarnessOrigin } from "../../../shared/app-links";
 import { useI18n } from "../../../shared/i18n";
 import { useTheme } from "../../../shared/theme";
 import type { WorkspaceShellProps } from "../../shell.types";
@@ -53,6 +52,7 @@ export function TopBar({
         : frame.kind === "repository"
           ? (
               {
+                agents: undefined,
                 issues: "issues",
                 prs: "worktrees",
                 apps: "apps",
@@ -66,7 +66,6 @@ export function TopBar({
   const crumbs = [...(repositoryBreadcrumbs ?? [])];
   if (typeof headerTitle === "string" && crumbs.at(-1)?.label === headerTitle) crumbs.pop();
   const crumbTitle = frame.kind === "global" && crumbs.length === 0 ? undefined : headerTitle;
-  const harnessOrigin = workspaceHarnessOrigin();
 
   useEffect(() => {
     if (documentFrame) return;
@@ -205,17 +204,15 @@ export function TopBar({
         >
           {resolvedTheme === "dark" ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
         </button>
-        {harnessOrigin ? (
-          <button
-            className="rd-iconbtn rd-shortcut"
-            type="button"
-            aria-label={t("openChat")}
-            title={t("openChat")}
-            onClick={() => window.open(harnessOrigin, "_blank", "noopener,noreferrer")}
-          >
-            <MessageCircle aria-hidden="true" />
-          </button>
-        ) : null}
+        <button
+          className="rd-iconbtn rd-shortcut"
+          type="button"
+          aria-label={t("agents")}
+          title={t("agents")}
+          onClick={() => { void navigate({ to: "/home", hash: "agent-composer" }).then(() => document.getElementById("agent-composer")?.focus()); }}
+        >
+          <MessageCircle aria-hidden="true" />
+        </button>
         <div className="rd-me">{account}</div>
       </div>
     </header>

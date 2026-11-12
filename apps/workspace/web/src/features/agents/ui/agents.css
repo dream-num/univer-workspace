@@ -1,0 +1,96 @@
+html[data-ui-mode="repository"] .agent-page { padding: 28px 0; }
+html[data-ui-mode="repository"] .agent-home { min-height: 258px; margin-bottom: 36px; }
+html[data-ui-mode="repository"] .agent-composer { min-height: 258px; display: grid; align-content: start; gap: 12px; }
+html[data-ui-mode="repository"] .agent-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+html[data-ui-mode="repository"] .agent-controls > button { width: auto; }
+html[data-ui-mode="repository"] .agent-scope { display: flex; align-items: center; gap: 12px; font-size: 13px; }
+html[data-ui-mode="repository"] .agent-scope > button { max-width: 360px; }
+html[data-ui-mode="repository"] .agent-note { margin: 8px 0; font-size: 13px; color: var(--rd-ink-2); }
+html[data-ui-mode="repository"] .agent-recent { margin-top: 24px; }
+html[data-ui-mode="repository"] .agent-recent li { display: flex; justify-content: space-between; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--rd-line); }
+html[data-ui-mode="repository"] .agent-recent li > a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-directory { display: grid; grid-template-columns: 216px minmax(0, 1fr); gap: 36px; }
+html[data-ui-mode="repository"] .agent-nav-current { display: block; padding: 8px 10px; border-radius: 8px; color: var(--rd-accent-text); background: var(--rd-accent-soft); }
+html[data-ui-mode="repository"] .agent-starters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 24px 0 36px; }
+html[data-ui-mode="repository"] .agent-starters button { text-align: start; padding: 16px; border: 1px solid var(--rd-line); border-radius: 12px; background: var(--rd-panel); cursor: pointer; }
+html[data-ui-mode="repository"] .agent-starters button:hover { background: var(--rd-panel-2); }
+html[data-ui-mode="repository"] .agent-page :is(h1, h2), html[data-ui-mode="repository"] .agent-recent h2 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+html[data-ui-mode="repository"] .agent-table-scroll { overflow-x: auto; }
+html[data-ui-mode="repository"] .agent-table { width: 100%; min-width: 820px; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
+html[data-ui-mode="repository"] .agent-table :is(td, th) { text-align: start; padding: 12px; border-bottom: 1px solid var(--rd-line); vertical-align: top; }
+html[data-ui-mode="repository"] .agent-session-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; }
+html[data-ui-mode="repository"] .agent-conversation { min-width: 0; }
+html[data-ui-mode="repository"] .agent-messages { display: grid; gap: 24px; }
+html[data-ui-mode="repository"] .agent-message-user { padding: 16px; border-radius: 12px; background: var(--rd-panel-2); }
+html[data-ui-mode="repository"] .agent-session-rail { padding: 16px; border: 1px solid var(--rd-line); border-radius: 12px; overflow-wrap: anywhere; }
+html[data-ui-mode="repository"] .agent-tool { margin: 8px 0; border: 1px solid var(--rd-line); border-radius: 8px; background: var(--rd-sunken); overflow: hidden; }
+html[data-ui-mode="repository"] .agent-tool-name { font-weight: 600; flex: none; }
+html[data-ui-mode="repository"] :is(.agent-tool, .agent-session-rail) dt { margin-top: 8px; font-size: 12px; color: var(--rd-ink-2); }
+html[data-ui-mode="repository"] :is(.agent-tool, .agent-session-rail) dd { font-size: 13px; white-space: pre-wrap; }
+html[data-ui-mode="repository"] .agent-session-rail { align-self: start; }
+html[data-ui-mode="repository"] .agent-session-rail h2:not(:first-child) { margin-top: 24px; }
+html[data-ui-mode="repository"] .agent-pr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0; }
+html[data-ui-mode="repository"] .agent-followup { display: grid; gap: 12px; margin-top: 24px; }
+html[data-ui-mode="repository"] .agent-reasoning { color: var(--rd-ink-2); margin: 12px 0; }
+html[data-ui-mode="repository"] .agent-page a:hover { text-decoration: underline; }
+html[data-ui-mode="repository"] .agent-page :is(button, a, summary):focus-visible { outline: 2px solid var(--rd-accent); outline-offset: 3px; }
+@media (max-width: 900px) {
+  html[data-ui-mode="repository"] :is(.agent-directory, .agent-session-layout) { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+}
+@media (max-width: 600px) {
+  html[data-ui-mode="repository"] .agent-composer { min-height: 288px; }
+  html[data-ui-mode="repository"] .agent-starters { grid-template-columns: minmax(0, 1fr); }
+}
+
+html[data-ui-mode="repository"] .agent-composer-box { display: grid; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--rd-line-2); border-radius: 12px; background: var(--rd-panel); }
+html[data-ui-mode="repository"] .agent-composer-box:focus-within { border-color: var(--rd-accent); }
+html[data-ui-mode="repository"] .agent-composer-box textarea { border: 0; padding: 0; border-radius: 0; box-shadow: none; }
+html[data-ui-mode="repository"] .agent-composer-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
+html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex: 1; min-width: 0; align-items: center; gap: 8px; }
+html[data-ui-mode="repository"] .agent-model-controls > button { width: auto; flex: none; }
+html[data-ui-mode="repository"] .agent-model-controls > .agent-model-select { min-width: 0; flex: 0 1 auto; }
+html[data-ui-mode="repository"] .agent-send { flex: none; margin-left: auto; }
+html[data-ui-mode="repository"] .agent-composer > .agent-note { margin: 0; }
+html[data-ui-mode="repository"] .agent-composer-footer { display: flex; min-width: 0; align-items: center; gap: 12px; }
+html[data-ui-mode="repository"] .agent-composer-footer > .agent-scope { flex: 1; min-width: 0; }
+html[data-ui-mode="repository"] .agent-composer-footer > button { margin-left: auto; flex: none; }
+html[data-ui-mode="repository"] .agent-scope > span { flex: none; }
+html[data-ui-mode="repository"] .agent-starters svg { width: 20px; height: 20px; margin-bottom: 12px; color: var(--rd-ink-2); }
+html[data-ui-mode="repository"] .agent-starters strong { display: block; font-size: 14px; font-weight: 600; }
+html[data-ui-mode="repository"] .agent-starters button > span { display: block; margin-top: 6px; font-size: 12px; color: var(--rd-ink-2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+html[data-ui-mode="repository"] .agent-session-header { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; margin-bottom: 16px; }
+html[data-ui-mode="repository"] .agent-session-header h1 { flex: 1; min-width: 0; overflow-wrap: anywhere; margin-bottom: 0; }
+html[data-ui-mode="repository"] .agent-message-user > p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+html[data-ui-mode="repository"] .agent-tool > summary { display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; font-size: 13px; list-style: none; }
+html[data-ui-mode="repository"] .agent-tool > summary::-webkit-details-marker { display: none; }
+html[data-ui-mode="repository"] .agent-tool > summary::before { content: "▸"; color: var(--rd-ink-3); }
+html[data-ui-mode="repository"] .agent-tool[open] > summary::before { content: "▾"; }
+html[data-ui-mode="repository"] .agent-tool-arguments { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--rd-ink-2); }
+html[data-ui-mode="repository"] .agent-tool-status { width: 15px; height: 15px; flex: none; color: var(--rd-open); }
+html[data-ui-mode="repository"] .agent-tool-status.animate-spin { color: var(--rd-ink-2); }
+html[data-ui-mode="repository"] .agent-tool[data-failed] .agent-tool-status { color: var(--rd-danger); }
+html[data-ui-mode="repository"] .agent-tool-duration { flex: none; font-size: 12px; color: var(--rd-ink-3); font-variant-numeric: tabular-nums; }
+html[data-ui-mode="repository"] .agent-tool > dl { margin: 0; padding: 0 16px 16px; overflow-wrap: anywhere; }
+html[data-ui-mode="repository"] .agent-status { display: inline-flex; align-items: center; flex: none; gap: 6px; padding: 2px 8px; border-radius: 5px; font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--rd-ink-2); background: var(--rd-panel-2); }
+html[data-ui-mode="repository"] .agent-status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+html[data-ui-mode="repository"] .agent-status[data-status="running"] { color: var(--rd-accent-text); background: var(--rd-accent-soft); }
+html[data-ui-mode="repository"] .agent-status[data-status="running"]::before { animation: pulse 2s ease-in-out infinite; }
+html[data-ui-mode="repository"] .agent-status[data-status="idle"] { color: var(--rd-open); background: var(--rd-open-soft); }
+html[data-ui-mode="repository"] .agent-status[data-status="interrupted"] { color: var(--rd-warn-text); background: var(--rd-warn-soft); }
+html[data-ui-mode="repository"] .agent-status[data-status="failed"] { color: var(--rd-danger-text); background: var(--rd-danger-soft); }
+html[data-ui-mode="repository"] .agent-table :is(th, td):first-child { width: 28%; }
+html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(2) { width: 128px; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(3) { width: 64px; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(4) { width: 22%; }
+html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(5) { width: 150px; overflow-wrap: anywhere; }
+html[data-ui-mode="repository"] .agent-table :is(th, td):nth-child(6) { width: 128px; }
+html[data-ui-mode="repository"] .agent-session-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  html[data-ui-mode="repository"] .agent-send:has(svg) > span { display: none; }
+  html[data-ui-mode="repository"] .agent-composer-box { padding: 12px; }
+  html[data-ui-mode="repository"] .agent-model-controls { gap: 4px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui-mode="repository"] .agent-status[data-status="running"]::before { animation: none; }
+  html[data-ui-mode="repository"] .agent-tool-status.animate-spin { animation: none; }
+}

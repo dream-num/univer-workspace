@@ -4,6 +4,7 @@ import type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repositor
 export type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members" | "issues";
 export type RepositoryGlobalView =
   | "home"
+  | "agents"
   | "repositories"
   | "worktrees"
   | "issues"

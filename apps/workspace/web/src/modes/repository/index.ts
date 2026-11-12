@@ -7,6 +7,7 @@ import "./repo.css";
 import "./home.css";
 import "./issues.css";
 import "./components.css";
+import { RepositoryAgentsPage, RepositoryAgentSessionPage } from "./pages/agents";
 import { RepositoryDirectoryPage } from "./pages/repositories";
 import { RepositoryRecentPage } from "./pages/recent";
 import { RepositoryAppsPage } from "./pages/apps";
@@ -28,6 +29,8 @@ import { repositoryMessages } from "./messages";
 
 export const repositoryMode = {
   pages: {
+    agents: RepositoryAgentsPage,
+    agentSession: RepositoryAgentSessionPage,
     apps: RepositoryAppsPage,
     recent: RepositoryRecentPage,
     repositories: RepositoryDirectoryPage,

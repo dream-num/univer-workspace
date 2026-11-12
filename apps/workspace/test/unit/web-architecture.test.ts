@@ -130,6 +130,31 @@ function valueDependencies(source: ts.SourceFile): string[] {
   return imports;
 }
 
+function browserGlobalReferences(ast: ts.SourceFile): string[] {
+  const globals = new Set(["window", "document", "localStorage", "sessionStorage", "indexedDB", "navigator", "globalThis",
+    "fetch", "XMLHttpRequest", "WebSocket", "EventSource", "location", "self"]);
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true };
+  const host = ts.createCompilerHost(options);
+  host.getSourceFile = (name) => name === ast.fileName ? ast : undefined;
+  const checker = ts.createProgram([ast.fileName], options, host).getTypeChecker();
+  const violations: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) return;
+    const parent = node.parent;
+    const property = parent && (ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent) || ts.isPropertyAssignment(parent) ||
+      ts.isPropertyAccessExpression(parent) || ts.isMethodDeclaration(parent)) && parent.name === node ||
+      (parent && (ts.isBindingElement(parent) || ts.isImportSpecifier(parent)) && parent.propertyName === node);
+    if (ts.isIdentifier(node) && globals.has(node.text) && !property) {
+      const binding = parent && ts.isShorthandPropertyAssignment(parent)
+        ? checker.getShorthandAssignmentValueSymbol(parent) : checker.getSymbolAtLocation(node);
+      if (!binding) violations.push(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return violations;
+}
+
 const agentRuntime = "features/agents/runtime/";
 describe("Agents isolation", () => {
   it("only providers may import the provider key store", () => {
@@ -189,20 +214,31 @@ describe("Agents isolation", () => {
     expect(violations).toEqual([]);
   });
 
+  it("detects free browser network globals but accepts injected bindings and type positions", () => {
+    const ast = (text: string) => ts.createSourceFile("fixture.ts", text, ts.ScriptTarget.Latest, true);
+    expect(browserGlobalReferences(ast(`
+      fetch('/api'); new XMLHttpRequest(); new WebSocket('wss://example.test');
+      new EventSource('/events'); location.origin; self.fetch('/api');
+      const globalFetch = { fetch };
+    `))).toEqual(["fetch", "XMLHttpRequest", "WebSocket", "EventSource", "location", "self", "fetch"]);
+    expect(browserGlobalReferences(ast(`
+      type Request = typeof fetch; type Socket = WebSocket;
+      function injected({ fetch, location }: { fetch: Request; location: { origin: string } }) {
+        const options = { fetch }; fetch(location.origin); return options.fetch;
+      }
+      function local(self: { fetch: Request }) { return self.fetch; }
+      const init = { fetch: injected }; init.fetch;
+      function scoped() { const fetch = injected; return fetch; }
+      import { fetch as importedFetch } from 'injected'; importedFetch;
+    `))).toEqual([]);
+    expect(browserGlobalReferences(ast("function injected(fetch: unknown) { return { fetch }; } fetch('/outside');"))).toEqual(["fetch"]);
+  });
+
   it("agent code receives browser capabilities through dependencies", () => {
-    const globals = new Set(["window", "document", "localStorage", "sessionStorage", "indexedDB", "navigator", "globalThis"]);
     const violations: string[] = [];
     for (const { name, ast } of sources) {
-      if (!name.startsWith("features/agents/") || name.endsWith(".test.ts") || name === "features/agents/index.ts") continue;
-      const visit = (node: ts.Node) => {
-        const parent = node.parent;
-        const property = parent && (ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent) || ts.isPropertyAssignment(parent) ||
-          ts.isPropertyAccessExpression(parent)) && parent.name === node ||
-          (parent && ts.isBindingElement(parent) && parent.propertyName === node);
-        if (ts.isIdentifier(node) && globals.has(node.text) && !property) violations.push(`${name}: ${node.text}`);
-        ts.forEachChild(node, visit);
-      };
-      visit(ast);
+      if (!name.startsWith("features/agents/") || name.startsWith("features/agents/ui/") || name.endsWith(".test.ts") || name === "features/agents/index.ts") continue;
+      violations.push(...browserGlobalReferences(ast).map((identifier) => `${name}: ${identifier}`));
     }
     expect(violations).toEqual([]);
   });

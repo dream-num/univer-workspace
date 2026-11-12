@@ -33,6 +33,8 @@ export interface ModeDefinition {
     readonly folder: ComponentType<FolderPageProps>;
     readonly space: ComponentType<SpacePageProps>;
     readonly home: ComponentType<HomePageProps>;
+    readonly agents: ComponentType<{ readonly spaceId: string }>;
+    readonly agentSession: ComponentType<{ readonly sessionId: string }>;
   };
   readonly Shell: ComponentType<WorkspaceShellProps>;
   readonly label: MessageKey;
