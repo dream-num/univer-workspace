@@ -51,7 +51,7 @@ export function verifyV8Migration(
         ),
         before,
       );
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 18);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 19);
       assert.deepEqual(migrated.connection.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(
         migrated.connection.prepare("PRAGMA integrity_check").get()?.integrity_check,

@@ -42,6 +42,180 @@ tags:
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
 paths:
+  /api/html-view-drafts:
+    post:
+      tags:
+        - Blobs
+      operationId: submitHtmlViewDraft
+      summary: Stage an HTML View for interactive author approval.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitHtmlViewDraft'
+      responses:
+        '200':
+          description: Current draft or idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HtmlViewDraftEnvelope'
+        '201':
+          description: New draft.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HtmlViewDraftEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '412':
+          description: The target ETag changed before intake.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+  /api/html-view-drafts/{draftId}:
+    parameters:
+      - name: draftId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Blobs
+      operationId: getHtmlViewDraft
+      summary: Read an author-owned draft, deriving expiry and stale target state.
+      responses:
+        '200':
+          description: Current draft or idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HtmlViewDraftEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/html-view-drafts/{draftId}/content:
+    parameters:
+      - name: draftId
+        in: path
+        required: true
+        schema:
+          type: string
+    get:
+      tags:
+        - Blobs
+      operationId: getHtmlViewDraftContent
+      summary: Read author-owned unpublished draft bytes as inert text.
+      responses:
+        '200':
+          description: Current draft or idempotent replay.
+          headers:
+            Content-Security-Policy:
+              schema:
+                type: string
+                const: sandbox
+            X-Content-Type-Options:
+              schema:
+                type: string
+                const: nosniff
+            Cache-Control:
+              schema:
+                type: string
+                const: private, no-store
+          content:
+            text/plain; charset=utf-8:
+              schema:
+                type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/html-view-drafts/{draftId}/publish:
+    parameters:
+      - name: draftId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Blobs
+      operationId: publishHtmlViewDraft
+      summary: Publish a draft as its interactive author.
+      responses:
+        '200':
+          description: Current draft or idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HtmlViewDraftEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/html-view-drafts/{draftId}/reject:
+    parameters:
+      - name: draftId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Blobs
+      operationId: rejectHtmlViewDraft
+      summary: Reject a draft as its interactive author.
+      responses:
+        '200':
+          description: Current draft or idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HtmlViewDraftEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /apps/{nodeId}/run:
     get:
       tags:
@@ -4118,6 +4292,135 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/WorktreeUnit'
+    SubmitHtmlViewDraft:
+      oneOf:
+        - type: object
+          required:
+            - kind
+            - spaceId
+            - name
+            - html
+          properties:
+            kind:
+              type: string
+              const: create
+            spaceId:
+              type: string
+            parentNodeId:
+              type:
+                - string
+                - 'null'
+            name:
+              type: string
+              description: Trimmed name; .univer.html is appended when absent.
+            html:
+              type: string
+              description: Structurally valid HTML View, at most 512 KiB UTF-8.
+        - type: object
+          required:
+            - kind
+            - resourceId
+            - etag
+            - html
+          properties:
+            kind:
+              type: string
+              const: replace
+            resourceId:
+              type: string
+            etag:
+              type: string
+              description: One quoted strong ETag, as returned by Blob content.
+            html:
+              type: string
+              description: Structurally valid HTML View, at most 512 KiB UTF-8.
+      discriminator:
+        propertyName: kind
+    HtmlViewDraft:
+      type: object
+      required:
+        - id
+        - kind
+        - state
+        - spaceId
+        - parentNodeId
+        - name
+        - targetResourceId
+        - baseEtag
+        - byteSize
+        - createdAt
+        - expiresAt
+        - decidedAt
+        - published
+      properties:
+        id:
+          type: string
+        kind:
+          type: string
+          enum:
+            - create
+            - replace
+        state:
+          type: string
+          enum:
+            - pending
+            - published
+            - rejected
+            - expired
+            - conflicted
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+        name:
+          type: string
+        targetResourceId:
+          type:
+            - string
+            - 'null'
+        baseEtag:
+          type:
+            - string
+            - 'null'
+          description: Quoted strong ETag of the target at intake.
+        byteSize:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        decidedAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+        published:
+          type:
+            - object
+            - 'null'
+          required:
+            - nodeId
+            - resourceId
+            - etag
+          properties:
+            nodeId:
+              type: string
+            resourceId:
+              type: string
+            etag:
+              type: string
+              description: Quoted strong ETag of the published Blob.
+    HtmlViewDraftEnvelope:
+      type: object
+      required:
+        - draft
+      properties:
+        draft:
+          $ref: '#/components/schemas/HtmlViewDraft'
     AnonymousSession:
       type: object
       additionalProperties: false
@@ -6836,6 +7139,16 @@ components:
       $ref: '#/components/parameters/LimitParameter'
     IdempotencyKey:
       $ref: '#/components/parameters/IdempotencyKeyParameter'
+    IdempotencyKeyParameter:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Random opaque key representing one user intent.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 200
+        pattern: ^[A-Za-z0-9_-]+$
     CursorParameter:
       name: cursor
       in: query
@@ -6852,16 +7165,6 @@ components:
         minimum: 1
         maximum: 200
         default: 100
-    IdempotencyKeyParameter:
-      name: Idempotency-Key
-      in: header
-      required: true
-      description: Random opaque key representing one user intent.
-      schema:
-        type: string
-        minLength: 16
-        maxLength: 200
-        pattern: ^[A-Za-z0-9_-]+$
     BlobResourceId:
       name: resourceId
       in: path

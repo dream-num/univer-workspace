@@ -58,7 +58,7 @@ export function verifyV11Migration(
       original.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 18);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 19);
       // V12 adds NULL slug/number only; nothing is backfilled.
       assert.deepEqual(
         migrated.connection.prepare("SELECT slug FROM spaces").all().map((row) => row.slug),
@@ -99,7 +99,7 @@ export function verifyV11Migration(
       assert.equal(backup.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
       backup.close();
       const restarted = open(filename);
-      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 18);
+      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 19);
       restarted.close();
       assert.equal(backups().length, 1);
     }
@@ -110,7 +110,7 @@ export function verifyV11Migration(
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V11 to V18 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V11 to V19 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v11-backup-"))!,

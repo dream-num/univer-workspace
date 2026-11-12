@@ -5,6 +5,7 @@
  * row is untouched.
  */
 export const DROP_V18_SQL = `
+  DROP TABLE IF EXISTS html_view_drafts;
   DROP INDEX IF EXISTS login_sessions_pat;
   DROP INDEX IF EXISTS login_sessions_grant;
   ALTER TABLE login_sessions DROP COLUMN issued_for_grant_id;

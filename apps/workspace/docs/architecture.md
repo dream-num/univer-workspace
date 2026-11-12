@@ -287,10 +287,11 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V18 结构，`initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V18；V18 校验指纹；V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
+产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V19 结构，`initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V19；V19 校验指纹；V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
+V19 新增 `html_view_drafts` 及到期索引；发布在产品事务中接管草稿 BlobStore key，拒绝、过期和冲突复用对象删除任务。
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
 可空的 `issued_for_pat_id`、`issued_for_grant_id`；迁移只追加，不重建表。
 
@@ -316,7 +317,7 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V18 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V19 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 
