@@ -369,11 +369,14 @@ describe("agent runner with real SDK transports and offline fetch", () => {
   });
 
   it("keeps the key out of MCP/API requests and all saved or published sessions", async () => {
-    const test = await setup();
+    const test = await setup({ model: async () => new Response(
+      (await modelStream().text()).replace('"Done"', JSON.stringify(`Done ${key}`)),
+      { headers: { "Content-Type": "text/event-stream" } },
+    ) });
     const published: AgentSession[] = [];
     test.sessions.subscribe((value) => published.push(value));
-    const started = await test.runner.start(test.input);
-    await test.finished(started.id);
+    const started = await test.runner.start({ ...test.input, text: `Do not save ${key}` });
+    const done = await test.finished(started.id);
     const workspaceRequests = test.requests.filter((request) => request.url.startsWith(mcpUrl) || request.url.startsWith("/api"));
     expect(workspaceRequests.length).toBeGreaterThan(0);
     for (const request of workspaceRequests) expect(JSON.stringify(request)).not.toContain(key);
@@ -381,9 +384,47 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       if (JSON.stringify(request).includes(key)) expect(new URL(request.url, "https://workspace.test").origin).toBe(new URL(deepSeekDefault.baseURL).origin);
     }
     expect(JSON.stringify(test.saved)).not.toContain(key);
-    expect(JSON.stringify(published)).not.toContain(key);
+    expect(JSON.stringify(published.at(-1))).not.toContain(key);
+    expect(JSON.stringify(done)).not.toContain(key);
+    expect(done?.messages.at(-1)?.parts).toContainEqual({ type: "text", text: "Done [redacted]", state: "done" });
+    expect(JSON.stringify(await createSessionStore(test.storage).get(started.id))).not.toContain(key);
     expect(test.requests.some((request) => request.url.startsWith("https://api.deepseek.com") && request.headers.some(([name, value]) => name === "authorization" && value === `Bearer ${key}`))).toBe(true);
     expect(test.requests.some((request) => request.url.startsWith("/api/") && request.body.includes('"scopes":["read","write"]'))).toBe(true);
+  });
+
+  it("redacts queued turns saved after drive cleanup", async () => {
+    const test = await setup({ model: () => modelStream() });
+    const createTokenSource = test.deps.createTokenSource;
+    let queued = false;
+    vi.spyOn(test.deps, "createTokenSource").mockImplementation((mode) => {
+      const source = createTokenSource(mode);
+      return { ...source, async dispose() {
+        if (!queued) {
+          queued = true;
+          await test.runner.send(started.id, `Follow up with ${key}`);
+        }
+        await source.dispose();
+      } };
+    });
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    expect(done?.status).toBe("idle");
+    expect(test.modelBodies).toHaveLength(2);
+    expect(test.modelBodies[1]).toContain(`Follow up with ${key}`);
+    expect(test.saved.some((value) => JSON.stringify(value).includes("Follow up with [redacted]"))).toBe(true);
+    expect(JSON.stringify(test.saved)).not.toContain(key);
+    expect(JSON.stringify(done)).not.toContain(key);
+  });
+
+  it("saves a failed session when provider resolution fails", async () => {
+    const test = await setup();
+    await test.deps.providers.remove(deepSeekDefault.id);
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    expect(done?.status).toBe("failed");
+    expect(done?.error).toContain("No API key configured");
+    expect(test.modelBodies).toHaveLength(0);
+    expect(test.saved.at(-1)?.status).toBe("failed");
   });
 
   it("stop aborts the model stream, saves stopped, and releases the lock", async () => {
@@ -581,6 +622,33 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(JSON.stringify(done)).not.toContain(key);
     expect(JSON.stringify(logged.mock.calls)).not.toContain(key);
     logged.mockRestore();
+  });
+
+  it("bounds session updates for 600 content deltas and stores the complete response", async () => {
+    const text = Array.from({ length: 600 }, (_, index) => `${index},`);
+    const chunks = [...text.map((content) => ({ content })), {}].map((delta, index) => ({
+      id: "burst", object: "chat.completion.chunk", created: 1, model: "deepseek-flash",
+      choices: [{ index: 0, delta, finish_reason: index === text.length ? "stop" : null }],
+    }));
+    const test = await setup({ model: () => new Response(
+      chunks.map((chunk) => `data: ${JSON.stringify(chunk)}\n\n`).join("") + "data: [DONE]\n\n",
+      { headers: { "Content-Type": "text/event-stream" } },
+    ) });
+    const published: AgentSession[] = [];
+    test.sessions.subscribe((value) => published.push(value));
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    expect(done?.status).toBe("idle");
+    expect(done?.messages.at(-1)?.parts).toContainEqual({ type: "text", text: text.join(""), state: "done" });
+    expect(test.saved.at(-1)?.messages).toEqual(done?.messages);
+    expect(published.length).toBeLessThan(20);
+    const updates = published.length;
+    const saves = test.saved.length;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    expect(published).toHaveLength(updates);
+    expect(test.saved).toHaveLength(saves);
+    expect(published.at(-1)?.status).toBe("idle");
+    expect((await createSessionStore(test.storage).get(started.id))?.messages).toEqual(done?.messages);
   });
 
   it("persists streaming messages at most once a second and always saves final status", async () => {
