@@ -30,8 +30,10 @@ html[data-ui-mode="repository"] .agent-table { width: 100%; min-width: 820px; ta
 html[data-ui-mode="repository"] .agent-table :is(td, th) { text-align: start; padding: 12px; border-bottom: 1px solid var(--rd-line); vertical-align: top; }
 html[data-ui-mode="repository"] .agent-session-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; }
 html[data-ui-mode="repository"] .agent-conversation { min-width: 0; }
-html[data-ui-mode="repository"] .agent-page:has(.agent-session-dock) { padding-bottom: 0; }
-html[data-ui-mode="repository"] .agent-session-dock { position: sticky; bottom: 0; z-index: 10; display: flow-root; padding-bottom: 20px; background: var(--rd-bg); }
+html[data-ui-mode="repository"] .agent-page:has(.agent-session-dock) { display: flex; flex: 1; flex-direction: column; padding-bottom: 0; }
+html[data-ui-mode="repository"] .agent-page:has(.agent-session-dock) > .agent-session-layout { flex: 1; }
+html[data-ui-mode="repository"] .agent-conversation:has(> .agent-session-dock) { display: flex; flex-direction: column; }
+html[data-ui-mode="repository"] .agent-session-dock { position: sticky; bottom: 0; z-index: 10; display: flow-root; margin-top: auto; padding-bottom: 20px; background: var(--rd-bg); }
 html[data-ui-mode="repository"] .agent-messages { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 html[data-ui-mode="repository"] .agent-message-user { padding: 16px; border-radius: 12px; background: var(--rd-panel-2); }
 html[data-ui-mode="repository"] .agent-session-rail { padding: 16px; border: 1px solid var(--rd-line); border-radius: 12px; overflow-wrap: anywhere; }
@@ -45,6 +47,8 @@ html[data-ui-mode="repository"] .agent-page a:hover { text-decoration: underline
 html[data-ui-mode="repository"] .agent-page :is(button, a, summary):focus-visible { outline: 2px solid var(--rd-accent); outline-offset: 3px; }
 @media (max-width: 900px) {
   html[data-ui-mode="repository"] :is(.agent-directory, .agent-session-layout) { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  html[data-ui-mode="repository"] .agent-session-layout { grid-template-rows: auto 1fr; }
+  html[data-ui-mode="repository"] .agent-session-rail { order: -1; }
 }
 @media (max-width: 600px) {
   html[data-ui-mode="repository"] .agent-starters { grid-template-columns: minmax(0, 1fr); }
