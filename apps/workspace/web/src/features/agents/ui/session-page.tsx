@@ -81,12 +81,17 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
   const approvals = pendingApprovals(session);
   const resumableApproval = resumableApprovalResponse(session.messages);
   const lastAssistant = session.messages.map((message) => message.role).lastIndexOf("assistant");
+  const latestSteps = session.messages.reduce<{ messageIndex: number; blockIndex: number } | null>((latest, message, messageIndex) => {
+    if (message.role === "user") return latest;
+    const blockIndex = messageBlocks(message.parts).map((block) => block.kind).lastIndexOf("steps");
+    return blockIndex < 0 ? latest : { messageIndex, blockIndex };
+  }, null);
   return <div className="agent-session-layout">
     <div className="agent-conversation">
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus session={session} /></header>
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
         {message.role === "user" ? <p>{splitReferenceText(message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n"), messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>
-          : <AssistantMessage message={message} session={session} current={index === lastAssistant} />}
+          : <AssistantMessage message={message} session={session} current={index === lastAssistant} latestStepsIndex={latestSteps?.messageIndex === index ? latestSteps.blockIndex : -1} />}
       </article>)}</div>
       {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
       {error ? <Alert variant="destructive">{error}</Alert> : null}
@@ -117,15 +122,19 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     </dl><h2>{m.prs}</h2>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}<p className="agent-note">{m.local}</p></aside>
   </div>;
 }
-function AssistantMessage({ message, session, current }: { readonly message: UIMessage; readonly session: AgentSession; readonly current: boolean }) {
+function AssistantMessage({ message, session, current, latestStepsIndex }: { readonly message: UIMessage; readonly session: AgentSession; readonly current: boolean; readonly latestStepsIndex: number }) {
   const blocks = messageBlocks(message.parts);
-  return blocks.map((block, index) => block.kind === "text" ? <IssueMarkdown key={index} text={block.part.text} />
-    : <AgentStepsGroup key={index} parts={block.parts} session={session} current={current && index === blocks.length - 1} />);
+  return blocks.map((block, index) => {
+    const latest = index === latestStepsIndex;
+    // Remount the previous latest group collapsed when a newer group appears.
+    return block.kind === "text" ? <IssueMarkdown key={index} text={block.part.text} />
+      : <AgentStepsGroup key={`${index}:${latest}`} parts={block.parts} session={session} current={current && index === blocks.length - 1} latest={latest} />;
+  });
 }
 const RECENT_STEPS = 5;
-export function AgentStepsGroup({ parts, session, current = false }: { readonly parts: StepPart[]; readonly session: AgentSession; readonly current?: boolean }) {
+export function AgentStepsGroup({ parts, session, current = false, latest = true }: { readonly parts: StepPart[]; readonly session: AgentSession; readonly current?: boolean; readonly latest?: boolean }) {
   const m = useAgentMessages();
-  const [view, setView] = useState<"collapsed" | "recent" | "all">("recent");
+  const [view, setView] = useState<"collapsed" | "recent" | "all">(latest ? "recent" : "collapsed");
   const last = parts.at(-1);
   const working = current && session.status === "running";
   const thoughts = parts.filter((part) => part.type === "reasoning").length;

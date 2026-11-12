@@ -111,6 +111,13 @@ describe("Agent tool cards", () => {
 });
 
 describe("Agent steps groups", () => {
+  it.each([false, true, undefined])("defaults to expanded only for the latest group (%s)", (latest) => {
+    const parts: StepPart[] = [{ type: "reasoning", text: "Plan", state: "done" }];
+    const html = renderToStaticMarkup(createElement(AgentStepsGroup, { parts, session: session(), ...(latest === undefined ? {} : { latest }) }));
+    expect(html).toContain(`class="agent-steps-head" aria-expanded="${latest !== false}"`);
+    if (latest === false) expect(html).not.toContain('class="agent-steps-list"');
+    else expect(html).toContain('class="agent-steps-list"');
+  });
   it("keeps skipped parts inside a run and splits only on visible text", () => {
     const thought = { type: "reasoning", text: "Plan", state: "done" } satisfies UIMessage["parts"][number];
     const tool = { type: "dynamic-tool", toolName: "browse", toolCallId: "call-a", state: "output-available", input: {}, output: {} } satisfies UIMessage["parts"][number];
