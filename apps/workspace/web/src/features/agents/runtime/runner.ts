@@ -36,6 +36,7 @@ export class AgentBusyError extends Error {
 interface ActiveRun {
   session: AgentSession;
   chat: Chat<RuntimeMessage> | null;
+  key: string;
   queued: string[];
   stopped: boolean;
   controller: AbortController;
@@ -88,26 +89,58 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
   const mcpUrl = new URL(deps.mcpUrl);
   mcpUrl.searchParams.delete("toolsets");
 
-  async function drive(run: ActiveRun) {
+  function savedSession(run: ActiveRun): AgentSession {
+    return structuredClone({ ...run.session, messages: redactMessages(run.session.messages, run.key) });
+  }
+
+  async function drive(run: ActiveRun, provider: ReturnType<Providers["resolve"]>) {
     run.chat = null;
-    let key = "";
+    let key = run.key;
     let client: Awaited<ReturnType<typeof createMCPClient>> | null = null;
     let token: McpTokenSource | null = null;
     let unsubscribe: (() => void) | undefined;
     let writeQueue = Promise.resolve();
     let lastPersisted = Date.now();
-    let persistedCount = run.session.messages.length;
+    let observedCount = run.session.messages.length;
+    let closing = false;
     let persistenceError: unknown;
     let streamError: Error | undefined;
-    function snapshot() {
+    const outputs = new Set(run.session.messages.flatMap((message) => message.parts
+      .filter(isToolUIPart).filter((part) => ["output-available", "output-error", "output-denied"].includes(part.state))
+      .map((part) => JSON.stringify([message.id, part.toolCallId]))));
+    function snapshot(messages = run.chat?.messages ?? run.session.messages) {
+      let newOutput = false;
+      const now = new Date().toISOString();
+      for (const message of messages) {
+        for (const part of message.parts) {
+          if (!isToolUIPart(part)) continue;
+          const existing = Object.hasOwn(run.session.toolTimings, part.toolCallId)
+            ? run.session.toolTimings[part.toolCallId] : undefined;
+          const timing = existing ?? { startedAt: now, endedAt: null };
+          if (!existing) run.session.toolTimings = { ...run.session.toolTimings, [part.toolCallId]: timing };
+          if (!["output-available", "output-error", "output-denied"].includes(part.state)) continue;
+          if (timing.endedAt === null) timing.endedAt = now;
+          const callId = JSON.stringify([message.id, part.toolCallId]);
+          if (outputs.has(callId)) continue;
+          outputs.add(callId);
+          newOutput = true;
+          if (part.state === "output-available") {
+            const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
+            const id = worktreeExtractors.get(name)?.(part.output);
+            if (id && !run.session.worktreeIds.includes(id)) run.session.worktreeIds.push(id);
+          }
+        }
+      }
+
       run.session = {
         ...run.session, updatedAt: new Date().toISOString(),
-        messages: redactMessages(run.chat?.messages ?? run.session.messages, key),
+        messages,
       };
       deps.sessions.publish(run.session);
+      return newOutput;
     }
     function persist() {
-      const session = structuredClone(run.session);
+      const session = savedSession(run);
       lastPersisted = Date.now();
       writeQueue = writeQueue.then(() => deps.sessions.save(session)).catch((error: unknown) => {
         persistenceError = error;
@@ -115,10 +148,10 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       });
     }
     try {
-      const provider = await deps.providers.resolve(run.session.model.providerId);
-      key = provider.apiKey;
+      const resolved = await provider;
+      key = run.key = resolved.apiKey;
       if (run.stopped) return;
-      const model = createModel(provider, run.session.model, deps.fetch, mcpUrl.origin);
+      const model = createModel(resolved, run.session.model, deps.fetch, mcpUrl.origin);
       token = deps.createTokenSource(run.session.mode);
       const source = token;
       const authenticatedFetch: typeof fetch = async (input, init) => {
@@ -158,9 +191,6 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const messages = run.session.messages.length
         ? await validateUIMessages<RuntimeMessage>({ messages: run.session.messages }) : [];
       let steering = false;
-      const outputs = new Set(messages.flatMap((message) => message.parts
-        .filter(isToolUIPart).filter((part) => ["output-available", "output-error", "output-denied"].includes(part.state))
-        .map((part) => JSON.stringify([message.id, part.toolCallId]))));
       const chat = new Chat<RuntimeMessage>({
         id: run.session.id, messages, transport: new DirectChatTransport({ agent, onError: (error) => redactProviderError(error, key) }),
         onError(error) { streamError = error; },
@@ -170,40 +200,19 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       });
       run.chat = chat;
       unsubscribe = chat["~registerMessagesCallback"](() => {
-        let newOutput = false;
-        const now = new Date().toISOString();
-        for (const message of chat.messages) {
-          for (const part of message.parts) {
-            if (!isToolUIPart(part)) continue;
-            const existing = Object.hasOwn(run.session.toolTimings, part.toolCallId)
-              ? run.session.toolTimings[part.toolCallId] : undefined;
-            const timing = existing ?? { startedAt: now, endedAt: null };
-            if (!existing) run.session.toolTimings = { ...run.session.toolTimings, [part.toolCallId]: timing };
-            if (!["output-available", "output-error", "output-denied"].includes(part.state)) continue;
-            if (timing.endedAt === null) timing.endedAt = now;
-            const callId = JSON.stringify([message.id, part.toolCallId]);
-            if (outputs.has(callId)) continue;
-            outputs.add(callId);
-            newOutput = true;
-            if (part.state === "output-available") {
-              const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
-              const id = worktreeExtractors.get(name)?.(part.output);
-              if (id && !run.session.worktreeIds.includes(id)) run.session.worktreeIds.push(id);
-            }
-          }
-        }
-        const added = chat.messages.length !== persistedCount && chat.messages.at(-1)?.role === "user";
-        snapshot();
+        if (closing) return;
+        const added = chat.messages.slice(observedCount).some((message) => message.role === "user");
+        const newOutput = snapshot();
         // A steering instruction is user input; save it before the model answers.
         if (added || Date.now() - lastPersisted >= 1000) persist();
-        persistedCount = chat.messages.length;
+        observedCount = chat.messages.length;
         const pendingTools = chat.messages.at(-1)?.parts.some((part) => isToolUIPart(part) &&
           (part.state === "input-streaming" || part.state === "input-available"));
         if (newOutput && !pendingTools && run.queued.length && !steering && !run.stopped) {
           steering = true;
           void chat.stop();
         }
-      });
+      }, 100);
       if (run.stopped) return;
       let next: string | undefined;
       do {
@@ -219,6 +228,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         run.session = { ...run.session, status: transition(run.session.status, "fail"), error: redactProviderError(error, key) };
       }
     } finally {
+      closing = true;
       unsubscribe?.();
       const cleanup = await Promise.allSettled([run.chat?.dispose(), client?.close(), token?.dispose()]);
       const failure = cleanup.find((result) => result.status === "rejected");
@@ -232,7 +242,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         if (run.chat) run.chat.messages = [...run.chat.messages, message];
         else run.session.messages = [...run.session.messages, message];
       }
-      snapshot();
+      snapshot(redactMessages(run.chat?.messages ?? run.session.messages, key));
       persist();
       await writeQueue;
     }
@@ -251,20 +261,23 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         if (settings?.scope.kind === "repository" && settings.scope.baseWorktreeId && !worktreeIds.includes(settings.scope.baseWorktreeId)) worktreeIds.push(settings.scope.baseWorktreeId);
         const run: ActiveRun = { session: { ...session, ...(settings ? { scope: settings.scope, mode: settings.mode, model: settings.model } : {}), worktreeIds, status: transition(session.status, "send"), error: null,
           messages: [...repairInterruptedTools(session.messages), message],
-          updatedAt: new Date().toISOString() }, chat: null,
+          updatedAt: new Date().toISOString() }, chat: null, key: "",
           queued: [], stopped: false, controller: new AbortController(), completion: Promise.resolve() };
         active.set(session.id, run);
         try {
-          await deps.sessions.save(run.session);
+          const provider = deps.providers.resolve(run.session.model.providerId);
+          // drive reports resolution failures as failed sessions after the initial save.
+          run.key = await provider.then(({ apiKey }) => apiKey, () => "");
+          await deps.sessions.save(savedSession(run));
           run.completion = completion;
           resolve(structuredClone(run.session));
           do {
-            await drive(run);
+            await drive(run, provider);
             if (run.stopped || run.session.status !== "idle" || !run.queued.length) break;
             const text = run.queued.splice(0).join("\n\n");
             run.session = { ...run.session, status: transition(run.session.status, "send"), error: null,
               messages: [...run.session.messages, { id: generateId(), role: "user", parts: [{ type: "text", text }] }] };
-            await deps.sessions.save(run.session);
+            await deps.sessions.save(savedSession(run));
           } while (true);
         } finally { active.delete(session.id); }
       }).then(() => undefined);
