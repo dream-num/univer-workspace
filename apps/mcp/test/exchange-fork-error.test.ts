@@ -23,7 +23,16 @@ it("settles an EMFILE fork failure and removes the job directory", async () => {
       { license: "", licenseKey: "" },
       AbortSignal.timeout(1000),
     ),
-  ).rejects.toMatchObject({ code: "workspace-job-crashed" });
+  ).rejects.toMatchObject({
+    code: "workspace-job-crashed",
+    cause: {
+      jobKind: "import",
+      startupErrorCode: "EMFILE",
+      exitCode: null,
+      signal: null,
+      stderrTail: "",
+    },
+  });
   const directory = await vi.mocked(mkdtemp).mock.results[0]!.value;
   await expect(access(directory)).rejects.toThrow();
 });
@@ -42,7 +51,10 @@ it("settles an asynchronous spawn error even if close never follows", async () =
       { license: "", licenseKey: "" },
       AbortSignal.timeout(1000),
     ),
-  ).rejects.toMatchObject({ code: "workspace-job-crashed" });
+  ).rejects.toMatchObject({
+    code: "workspace-job-crashed",
+    cause: { startupErrorCode: "EMFILE", exitCode: null, signal: null, stderrTail: "" },
+  });
   const directory = await vi.mocked(mkdtemp).mock.results.at(-1)!.value;
   await expect(access(directory)).rejects.toThrow();
 });

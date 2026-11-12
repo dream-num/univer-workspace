@@ -10,3 +10,4 @@ coverage/
 *.tsbuildinfo
 skills-lock.json
 .gstack/
+.verification/

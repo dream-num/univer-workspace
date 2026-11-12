@@ -37,7 +37,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p render-runtime/tsconfig.json --noEmit && vite build --config render-runtime/vite.config.ts",
     "clean": "rm -rf dist *.tsbuildinfo",
-    "test": "vitest run --config vitest.config.ts",
+    "test": "node ../../scripts/test.mjs vitest run --config vitest.config.ts",
     "typecheck": "tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {

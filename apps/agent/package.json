@@ -48,7 +48,7 @@
     "clean": "rm -rf lib",
     "start:local": "node scripts/start-local.mjs --port 3080 --no-open --trusted-host 127.0.0.1",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "node ../../scripts/test.mjs vitest run --config vitest.config.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",
