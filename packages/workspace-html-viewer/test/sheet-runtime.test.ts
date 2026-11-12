@@ -1,16 +1,18 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { expect, it, vi } from "vitest";
 
-vi.stubGlobal("Path2D", class {});
-afterEach(() => vi.unstubAllGlobals());
+vi.hoisted(() => {
+  globalThis.Path2D ??= class {} as typeof Path2D;
+});
 
-it("registers data-validation mutations for HTML View source history replay", async () => {
-  const {
-    ICommandService, UniverInstanceType,
-    IAuthzIoService, AuthzIoLocalService,
-    IUndoRedoService, LocalUndoRedoService,
-    IMentionIOService, MentionIOLocalService,
-  } = await import("@univerjs/core");
-  const { createWorkspaceHtmlUniver } = await import("../src/engine.js");
+import {
+  ICommandService, UniverInstanceType,
+  IAuthzIoService, AuthzIoLocalService,
+  IUndoRedoService, LocalUndoRedoService,
+  IMentionIOService, MentionIOLocalService,
+} from "@univerjs/core";
+import { createWorkspaceHtmlUniver } from "../src/engine.js";
+
+it("registers data-validation mutations for HTML View source history replay", () => {
   const univer = createWorkspaceHtmlUniver("");
   try {
     // Use local services instead of starting collaboration transport in this model test.
@@ -25,4 +27,4 @@ it("registers data-validation mutations for HTML View source history replay", as
   } finally {
     univer.dispose();
   }
-}, 30_000);
+});
