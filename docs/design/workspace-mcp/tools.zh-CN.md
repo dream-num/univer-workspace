@@ -57,8 +57,8 @@
 
 | toolset | 工具数 | 默认启用 | 用途 |
 | --- | --- | --- | --- |
-| `core` | 31 | 是 | 查找、Issue、PR 生命周期、编辑、导入导出、截图、参考资料 |
-| `files` | 13 | 否 | Blob、Asset、HTML View、Markdown、Typst、SVG、PDF、lint |
+| `core` | 36 | 是 | 查找、Issue、PR 生命周期、编辑、导入导出、截图、参考资料 |
+| `files` | 11 | 否 | Blob、Asset、Markdown、Typst、SVG、PDF、lint |
 | `admin` | 10 | Team Space Owner 默认启用（D10） | 仓库与 Label 管理、目录组织、合并与丢弃、SVG 资源目录 |
 
 选择方式：
@@ -109,6 +109,11 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `api_find` | `api find` | `terms`、`unit` | 是 | 否 | `read` |
 | `api_show` | `api show` | `symbols` | 是 | 否 | `read` |
 | `skills_read` | `skills list`、`skills get`、`skills read` | `name`、`resource`、`full` | 是 | 否 | `read` |
+| `html_view_validate` | `html-view validate` | `html` 或 `html_upload_id`（恰选一个） | 是 | 否 | `read` |
+| `html_view_create` | `html-view create` | `html` 或 `html_upload_id`（恰选一个）、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
+| `html_view_read` | 读取 HTML View | `resource` | 是 | 否 | `read` |
+| `html_view_replace` | 修订 HTML View | `resource`、`html`、`etag`、`idempotency_key` | 否 | 否 | `write` |
+| `html_view_draft_get` | 读取草稿状态 | `draft` | 是 | 否 | `read` |
 
 说明：
 
@@ -130,8 +135,6 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `blob_download` | `blob download` | `resource` | 是 | 否 | `read` |
 | `blob_replace` | `blob replace` | `resource`、`upload_id`、`etag`、`idempotency_key` | 否 | 是 | `publish` |
 | `asset_download` | `asset download` | `id`、`worktree` | 是 | 否 | `read` |
-| `html_view_validate` | `html-view validate` | `html` 或 `html_upload_id`（恰选一个） | 是 | 否 | `read` |
-| `html_view_create` | `html-view create` | `html` 或 `html_upload_id`（恰选一个）、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `publish` |
 | `compile_markdown` | `compile-markdown` | `markdown`、`assets_upload_id`、`title`、`apply`、`worktree`、`space`、`parent`、`unit`、`source_map`、`blocks`、`idempotency_key` | 否 | 否 | `write` |
 | `export_markdown` | `export-markdown` | `worktree`、`unit`、`source_map`、`blocks` | 是 | 否 | `read` |
 | `compile_typst` | `compile-typst` | `bundle_upload_id`、`apply`、`worktree`、`space`、`parent`、`idempotency_key` | 否 | 否 | `write` |
@@ -141,7 +144,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 说明：
 
-- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果、`workspaceUrl`、沉浸式分享链接 `shareUrl`、目标仓库可见性 `repositoryVisibility`（由 `publicRead` 得到 `public` 或 `private`）和按序排列的 `privateSourceUnitIds`（未公开仓库内的声明源 Unit，匿名访客无法加载）。仓库公开且私有源列表为空时，任何持链接者均可查看页面及声明的数据；否则需登录并有权访问页面和全部源。匿名访客与已登录的非成员均只读，页面写入会被拒绝。修改仓库公开性前先询问用户，因为这会立即公开仓库内所有内容；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 或上传 ID 和目标重试，上传保留至一小时过期。
+- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建与修订在同一执行操作中校验原字节，再以幂等键向 `/api/html-view-drafts` 保存草稿。两者均为 `write` scope，返回 `{draft}`，包含 `previewUrl`、`expiresAt`、`repositoryVisibility` 和按序排列的 `privateSourceUnitIds`。把预览链接交给用户并结束本轮，页面在用户于 Workspace 预览并点击 Publish 后才生效。再次修订、称页面已上线或分享链接前，调用 HTTP-only 的 `html_view_draft_get`（`read`）。只有 `published` 返回最终沉浸式 `shareUrl`、`node`、`resource` 和带引号的强 ETag。`rejected` 时询问修改意见，`conflicted` 时重读页面后重新生成草稿，`expired` 时使用新幂等键重建。CLI 保持直接发布。公开页面且私有源列表为空时，持链接者可查看页面及数据，否则需要登录并有权访问全部源。修改仓库公开性前先询问用户。结果未知时以相同幂等键、HTML 或上传 ID 和目标重试。
 - `blob_download`、`asset_download`、`print_pdf` 返回签名下载链接。`blob_download` 同时返回 ETag，因为 `blob_replace` 需要它。
 - `compile_markdown` 的 Markdown 正文以字符串传入。正文引用的本地图片打成 zip 上传，用 `assets_upload_id` 传入，zip 内路径对应 Markdown 里的相对路径。CLI 要求资源不能超出源文件目录（`packages/client-core/src/markdown-source.ts:31-47`），MCP 同样拒绝 zip 中越界的路径。
 - `compile_markdown` 的 ZIP 最多 256 个 entry，单个文件解压后最多 4 MiB，总解压大小最多 8 MiB。解压前拒绝超过 1,024 UTF-8 字节或 32 段的 entry 名称。拒绝路径穿越、大小写和 Unicode 规范化碰撞，以及文件与目录冲突。

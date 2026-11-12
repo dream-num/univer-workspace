@@ -7,8 +7,9 @@ import {
   type IWorkbookData,
 } from "@univerjs/core";
 import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
-import type { WorkspaceBlobFeature } from "./blob.js";
+import { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
+import { parseHtmlViewDraft } from "./html-view-draft.js";
 import { readWorkspaceHtmlView, requireHtmlView, htmlViewUrls } from "./html-view-page.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
@@ -32,6 +33,7 @@ export interface WorkspaceHtmlViewOptions {
     readonly unitId: string;
   }) => Promise<WorkspaceRuntimeTarget>;
   readonly configuredOrigin: () => Promise<string>;
+  readonly onWrite?: () => void;
 }
 
 export interface WorkspaceHtmlViewDestination {
@@ -47,6 +49,10 @@ export interface WorkspaceHtmlViewReplacement {
   readonly idempotencyKey: string;
   readonly source: WorkspaceHtmlViewSource;
 }
+
+export type WorkspaceHtmlViewDraftRequest =
+  | (WorkspaceHtmlViewDestination & { readonly kind: "create"; readonly source: WorkspaceHtmlViewSource })
+  | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" });
 
 export class WorkspaceHtmlViewFeature {
   public constructor(private readonly options: WorkspaceHtmlViewOptions) {}
@@ -122,6 +128,32 @@ export class WorkspaceHtmlViewFeature {
       ...htmlViewUrls(origin, view.node.nodeId),
       ...access,
     };
+  }
+
+  public async draft(input: WorkspaceHtmlViewDraftRequest) {
+    const http = await this.options.authenticatedHttp();
+    const intent = input.kind === "create"
+      ? { kind: input.kind, ...normalizeHtmlViewDestination(input) }
+      : { kind: input.kind, resourceId: input.resourceId, etag: input.etag, idempotencyKey: input.idempotencyKey };
+    let spaceId: string;
+    if (intent.kind === "create") {
+      spaceId = intent.spaceId;
+    } else {
+      if (!/^"[^"\r\n]+"$/.test(intent.etag) || intent.etag.length > 200)
+        throw workspaceError("workspace-argument-invalid", "ETag must be the exact quoted strong ETag from html_view_read.");
+      const view = await new WorkspaceBlobFeature(async () => http).get(intent.resourceId);
+      requireHtmlView(view.node.name);
+      spaceId = view.node.spaceId;
+    }
+    const source = await this.readAndValidate(input.source);
+    const origin = await this.options.configuredOrigin();
+    const access = await this.describeAccess(spaceId, source.validation.unitIds);
+    const { idempotencyKey, ...body } = intent;
+    this.options.onWrite?.();
+    const response = await http.json("/api/html-view-drafts", {
+      method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8") },
+    });
+    return { ...parseHtmlViewDraft(response["draft"], origin), ...access };
   }
 
   private async describeAccess(spaceId: string, unitIds: readonly string[]) {

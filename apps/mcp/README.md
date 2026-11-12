@@ -251,9 +251,10 @@ and the matching owner/slug candidates when available.
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
 | `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ name, content, resources?, files? }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
 | `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
-| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | Bare CLI upload fields plus `workspaceUrl`. Publishes validated bytes directly; reuse the same upload and key on retry |
+| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
 | `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
-| `html_view_replace` | Required `resource`, inline `html`, `etag`, `idempotency_key` | Validated conditional replacement with Blob identities, new ETag, URLs and access summary; requires `publish` |
+| `html_view_replace` | Required `resource`, inline `html`, `etag`, `idempotency_key` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
+| `html_view_draft_get` | Required `draft` (Draft ID) | `{ draft: { id, kind, state, name, space, previewUrl, expiresAt, resource?, node?, etag?, shareUrl? } }`. Scope `read`, no executor; publication fields appear only when published |
 
 `files` toolset:
 
@@ -674,7 +675,7 @@ Sheet cells or append rows; display recalculated source values through live bind
 never page-side Sheet formulas, copied data or fallback numbers.
 
 The default `core` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
-`html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`publish`).
+`html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`write`).
 Each call requires exactly one of `html` or `html_upload_id`; both or neither return
 `workspace-argument-invalid`. For a local page, reserve `file_upload_create` with purpose
 `html-view` and media type `text/html`, PUT its bytes, then pass the ready upload ID as
@@ -686,11 +687,21 @@ The core toolset also includes gateway-only `html_view_read {resource}` (`read`)
 which returns `{resource, node, space, name, html, etag, shareUrl}` for a `.univer.html`
 Blob with a strong ETag. Inline results are capped below 100,000 serialized characters;
 oversized pages are refused without truncation. `html_view_replace {resource, html,
-etag, idempotency_key}` (`publish`) validates inline HTML in the executor before
-conditionally replacing the page. It preserves identity and URL, returns the new ETag
-and the same access summary as create, and reuses Blob replacement's idempotency and
-lost-response recovery. On a stale ETag conflict, read again and reconcile. Upload IDs
-are not accepted for replacement. Clients may require approval before publishing.
+etag, idempotency_key}` (`write`) validates inline HTML in the executor and saves a
+revision draft. Publishing it preserves identity and URL. On a stale ETag conflict,
+read again and reconcile. Upload IDs are not accepted for replacement.
+
+Both write tools return `{ draft }` with `id`, `kind`, `state`, `name`, `space`,
+`previewUrl`, `expiresAt`, `repositoryVisibility` and `privateSourceUnitIds`.
+A replacement also identifies the target `resource`. Give the user `draft.previewUrl`
+and end the turn. The page stays unchanged until the user previews it full screen
+in Workspace and clicks Publish. The user can also reject the draft.
+Call gateway-only `html_view_draft_get {draft}` (`read`) before calling it live,
+sharing its link or revising it again. It reports `pending`, `published`, `rejected`,
+`expired` or `conflicted`. Only a published draft returns the final `shareUrl`,
+`node`, `resource` and quoted `etag`. On rejected, ask what to change. On conflicted,
+read the page again and draft again. On expired, draft again with a new key.
+MCP has no tool to publish or reject drafts.
 Every `tools/list` entry advertises its declared scope in `_meta["univer.workspace/scope"]`.
 
 Validation, creation and replacement run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
@@ -700,25 +711,26 @@ handling and calls the same feature.
 
 HTML is limited to 512 KiB of UTF-8 text at the tool and RPC input boundaries;
 the RPC frame limit is 4 MiB, including JSON escaping and credentials. Validation
-returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation immediately
-publishes a Blob without Worktree review and returns the CLI's bare upload fields
-with `workspaceUrl` and immersive `shareUrl` using the identity origin,
-`repositoryVisibility` (`public` or `private`, from destination `publicRead`), and
-sorted `privateSourceUnitIds` for declared Sheets in non-public repositories.
-Anyone with the link can view the page and its declared data when visibility is
-public and the private-source list is empty. Private sources remain inaccessible
+returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation and replacement
+send the exact validated HTML in one `POST /api/html-view-drafts` with `Idempotency-Key`.
+The executor advertises one `htmlView.draft` operation for both intents. A gateway
+hides both write tools when an old executor lacks this operation. The preview URL
+and published immersive share URL use the identity origin.
+`repositoryVisibility` is `public` or `private`, from destination `publicRead`.
+Sorted `privateSourceUnitIds` identify declared Sheets in non-public repositories.
+Anyone with the published link can view the page and its declared data when visibility
+is public and the private-source list is empty. Private sources remain inaccessible
 to signed-out visitors even on a public page. Signed-out visitors and signed-in
-non-members are read-only; page writes are rejected for them. The executor uploads an in-memory copy
-of the exact validated bytes through `uploadBytes`,
-with stable original filename `view.univer.html`. It creates no temporary HTML file.
-Validation and source-read failures before upload preserve their read error semantics;
-a pre-upload deadline is retryable and never reports `workspace-result-unknown`.
+non-members are read-only; page writes are rejected for them.
+Validation and source-read failures before the draft POST preserve their read error
+semantics; a pre-write deadline is retryable and never reports `workspace-result-unknown`.
+The uvw CLI continues to publish directly through Client Core's `create` and `replace`.
 Generate a 16 to 200 character URL-safe idempotency key before creation and reuse it
 with identical HTML or the same upload ID and destination after `workspace-result-unknown`.
 
 Runtime exports report worker observations. Consumed HTML uploads add `upload_bytes` at the gateway; successful inline creation adds HTML UTF-8
 `upload_bytes`, including when a page has no bindings and
-`executor: none`; Blob publication creates no committed Unit revisions.
+`executor: none`; saving drafts creates no committed Unit revisions.
 
 ## Markdown tools
 

@@ -36,8 +36,8 @@ export function buildServerInstructions(
       : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
     has("html_view_create")
-      ? "A page is an HTML View (.univer.html) bound to live Sheets. It is not a Slide, Board or other Unit. HTML View tools publish immediately, outside pull requests; the client may ask the user to approve first. If the user rejects, ask what to change."
-      : "This connection cannot publish pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.",
+      ? "A page is an HTML View (.univer.html) bound to live Sheets. It is not a Slide, Board or other Unit and does not go through pull requests. html_view_create and html_view_replace only save a draft. After either returns, give the user draft.previewUrl, say the page is not live until they publish it in Workspace, and end your turn. Before calling a page live, sharing its link or revising it again, call html_view_draft_get. Share shareUrl only when state is published. On rejected, ask what to change. On conflicted, read the page again with html_view_read and draft again. On expired, draft again with a new idempotency_key."
+      : "This connection cannot draft pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.",
     ...(has("html_view_read") && has("html_view_replace")
       ? ["Revise a page with html_view_read then html_view_replace."]
       : []),

@@ -107,7 +107,7 @@ export const reuseExecutorWorker: NonNullable<
 
 // workaround: SDK 1.4 reports a ticket or collaboration HTTP status only in the message of a
 // COLLABORATION_UNAVAILABLE error. Affects runtime reads, executes and exports (content.execute,
-// content.inspect, exchange.export, htmlView.validate, htmlView.create). Remove once the SDK
+// content.inspect, exchange.export, htmlView.validate, htmlView.draft). Remove once the SDK
 // exports a structured HTTP status.
 function sdkHttpStatus(error: unknown): 401 | 403 | undefined {
   if (!(error instanceof Error && "code" in error && error.code === "COLLABORATION_UNAVAILABLE"))

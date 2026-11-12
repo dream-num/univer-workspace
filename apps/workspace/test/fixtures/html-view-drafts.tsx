@@ -1,7 +1,10 @@
+import type { UIMessage } from "ai";
+import { sessionRecordSchema } from "../../web/src/features/agents/agent.types";
 import type { components } from "../../generated/http/schema";
 import { createRoot } from "react-dom/client";
-import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
+import { createMemoryHistory, createRootRoute, createRouter, RouterProvider } from "@tanstack/react-router";
 import "../../web/src/app/styles/global.css";
+import "../../web/src/features/agents/ui/agents.css";
 
 const scenario = new URLSearchParams(location.search).get("draft") ?? "create";
 const state = scenario === "conflicted" || scenario === "expired" || scenario === "rejected" || scenario === "published" ? scenario : "pending";
@@ -38,4 +41,20 @@ queryClient.setQueryData(["session"], session);
 const router = createRouter({ routeTree, context: { queryClient }, history: createMemoryHistory({ initialEntries: [`/drafts/${scenario}`] }) });
 const root = document.getElementById("root");
 if (!root) throw new Error("Fixture root is missing");
-createRoot(root).render(<Providers><RouterProvider router={router} /></Providers>);
+if (new URLSearchParams(location.search).has("agent")) {
+  const { AgentStepsGroup } = await import("../../web/src/features/agents/ui/session-page");
+  const message: UIMessage = { id: "assistant", role: "assistant", parts: [{
+    type: "dynamic-tool", toolName: draft.kind === "replace" ? "html_view_replace" : "html_view_create", toolCallId: "page",
+    state: "output-available", input: { name: draft.name }, output: { content: [], structuredContent: { draft: { id: draft.id } } },
+  }] };
+  const agent = { ...sessionRecordSchema.parse({
+    id: "fixture-agent", userId: "fixture-owner", scope: { kind: "global" }, mode: "auto", status: "idle",
+    model: { providerId: "fixture", modelId: "fixture", thinking: null }, messages: [], worktreeIds: [],
+    createdAt: "2026-11-12T00:00:00Z", updatedAt: "2026-11-12T00:00:00Z", error: null,
+  }), messages: [message] };
+  const agentRoute = createRootRoute({ component: () => <main className="agent-page" style={{ maxWidth: 900, margin: "40px auto", padding: 20 }}>
+    <AgentStepsGroup parts={message.parts.filter((part) => "toolCallId" in part)} session={agent} />
+  </main> });
+  const agentRouter = createRouter({ routeTree: agentRoute, history: createMemoryHistory({ initialEntries: ["/"] }) });
+  createRoot(root).render(<Providers><RouterProvider router={agentRouter} /></Providers>);
+} else createRoot(root).render(<Providers><RouterProvider router={router} /></Providers>);

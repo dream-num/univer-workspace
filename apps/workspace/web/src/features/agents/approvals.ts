@@ -1,32 +1,14 @@
 import type { UIMessage } from "ai";
-import { z } from "zod";
 import type { AgentSession } from "./agent.types";
 
-export type ApprovalAction =
-  | { kind: "create"; name: string; spaceId: string; parentNodeId?: string; html: string | null }
-  | { kind: "replace"; resourceId: string; html: string; etag: string }
-  | { kind: "other"; input: unknown };
+export type ApprovalAction = { kind: "other"; input: unknown };
 export interface PendingApproval {
   readonly approvalId: string;
   readonly toolCallId: string;
   readonly toolName: string;
   readonly action: ApprovalAction;
 }
-const createInput = z.object({ name: z.string(), space: z.string(), parent: z.string().optional(), html: z.string().optional(), html_upload_id: z.string().optional() })
-  .refine((input) => input.html !== undefined || input.html_upload_id !== undefined);
-const replaceInput = z.object({ resource: z.string(), html: z.string(), etag: z.string() });
-
-// Tool names enrich presentation only; scope metadata owns approval and credentials.
-export function describeApproval(toolName: string, input: unknown): ApprovalAction {
-  if (toolName === "html_view_create") {
-    const parsed = createInput.safeParse(input);
-    if (parsed.success) return { kind: "create", name: parsed.data.name, spaceId: parsed.data.space,
-      ...(parsed.data.parent ? { parentNodeId: parsed.data.parent } : {}), html: parsed.data.html ?? null };
-  }
-  if (toolName === "html_view_replace") {
-    const parsed = replaceInput.safeParse(input);
-    if (parsed.success) return { kind: "replace", resourceId: parsed.data.resource, html: parsed.data.html, etag: parsed.data.etag };
-  }
+export function describeApproval(input: unknown): ApprovalAction {
   return { kind: "other", input };
 }
 
@@ -37,7 +19,7 @@ export function pendingApprovals(session: Pick<AgentSession, "messages" | "statu
   return message.parts.flatMap((part) => {
     if (!("toolCallId" in part) || part.state !== "approval-requested") return [];
     const toolName = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
-    return [{ approvalId: part.approval.id, toolCallId: part.toolCallId, toolName, action: describeApproval(toolName, part.input) }];
+    return [{ approvalId: part.approval.id, toolCallId: part.toolCallId, toolName, action: describeApproval(part.input) }];
   });
 }
 

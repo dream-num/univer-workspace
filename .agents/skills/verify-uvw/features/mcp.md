@@ -73,7 +73,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX16 returns `inspect` input errors in MCP words, without CLI flags, and requires exactly one scope.
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
 - MX7 and MX8 round-trip xlsx and docx through Office import and export.
-- MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and publish/retry/open the validated page.
+- MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and draft, preview, publish and read back the validated page.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - MR11 prints a Doc and a Sheet with an image to PDF in a Worktree and on trunk against `uvw print-pdf`, lints a Slide deck with layout problems against `uvw lint`, and returns the CLI's rejections.
@@ -2232,16 +2232,15 @@ jq -e --arg code "$MH_CODE" '.outcome == "tool_error" and .error_code == $code' 
 
 Pass when both clients preserve the same missing-source code.
 
-**MH3. Publish, retry and open the validated HTML View.**
+**MH3. Draft, preview, publish and read back the validated HTML View.**
 
 ```bash
 MH_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" --arg space "$MH_SPACE" --arg key "html-view-$VERIFY_UVW_RUN-$MH_U" '{html:$html,space:$space,name:"Regional totals",idempotency_key:$key}')
-$V mcp --toolsets files --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_create "$MH_ARGS"
-$V mcp --toolsets files mh-retry html_view_create "$MH_ARGS"
-diff <(jq -S '{nodeId,resourceId,operationId,workspaceUrl}' "$EVIDENCE/mh-create.out") <(jq -S '{nodeId,resourceId,operationId,workspaceUrl}' "$EVIDENCE/mh-retry.out")
-$V cli mh-blob-get blob get "$(jq -r .resourceId "$EVIDENCE/mh-create.out")" --json
-$V cli mh-blob-download blob download "$EVIDENCE/mh-published.univer.html" --force --resource "$(jq -r .resourceId "$EVIDENCE/mh-create.out")" --json
-cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-published.univer.html"
+$V mcp --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_create "$MH_ARGS"
+$V mcp mh-retry html_view_create "$MH_ARGS"
+diff <(jq -S .draft "$EVIDENCE/mh-create.out") <(jq -S .draft "$EVIDENCE/mh-retry.out")
+jq -e --arg origin "$ORIGIN" '.draft.state == "pending" and (.draft.previewUrl | startswith($origin + "/drafts/"))' "$EVIDENCE/mh-create.out"
+MH_D=$(jq -r .draft.id "$EVIDENCE/mh-create.out")
 agent-browser open "$ORIGIN/login"
 agent-browser wait 1500
 if agent-browser get url | grep -q '/login'; then
@@ -2250,16 +2249,26 @@ if agent-browser get url | grep -q '/login'; then
   agent-browser click 'form button[type=submit]'
   agent-browser wait --url '**/home'
 fi
-agent-browser open "$(jq -r .workspaceUrl "$EVIDENCE/mh-create.out")"
+agent-browser open "$(jq -r .draft.previewUrl "$EVIDENCE/mh-create.out")"
+agent-browser wait 3000
+agent-browser screenshot "$EVIDENCE/mh-draft.png"
+agent-browser find role button click --name Publish
+agent-browser wait --text 'Open page'
+$V mcp mh-draft-get html_view_draft_get "{\"draft\":\"$MH_D\"}"
+jq -e '.draft.state == "published" and (.draft.shareUrl | test("\\?view=immersive$"))' "$EVIDENCE/mh-draft-get.out"
+$V mcp mh-read html_view_read "{\"resource\":\"$(jq -r .draft.resource "$EVIDENCE/mh-draft-get.out")\"}"
+jq -j .html "$EVIDENCE/mh-read.out" > "$EVIDENCE/mh-published.univer.html"
+cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-published.univer.html"
+agent-browser open "$(jq -r .draft.shareUrl "$EVIDENCE/mh-draft-get.out")"
 agent-browser wait 3000
 agent-browser screenshot "$EVIDENCE/mh-published.png"
-agent-browser reload
-agent-browser wait 2000
-agent-browser screenshot "$EVIDENCE/mh-published-reloaded.png"
 ```
 
-Pass when both calls return the same Node, downloaded bytes equal the validated source,
-and the Browser screenshots show North and 42 before and after reload.
+Pass when both create calls return the same pending draft, the Space has no page before
+Publish, the draft screenshot shows North and 42 with a Publish button, `html_view_draft_get`
+reports `published` with an immersive `shareUrl`, the read-back bytes equal the validated
+source, and the published screenshot shows North and 42. Wait for the preview to load before
+clicking Publish; the preview's New and Current controls are buttons, not ARIA tabs.
 
 ### MR9 renderer role
 

@@ -760,19 +760,25 @@ it("queues SVG apply behind execute while compile-only bypasses the Unit FIFO", 
   }
 });
 
-it("keeps a missing Sheet publish failure and pre-upload deadline out of result-unknown", async () => {
+it("keeps a missing Sheet draft failure and pre-write deadline out of result-unknown", async () => {
   const instance = runtime();
   const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => String(url).endsWith("/api/session") ? identity() : Response.json({ error: { code: "NOT_FOUND", message: "Sheet not found" } }, { status: 404 }));
   try {
     const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
-    const input = { html: '<output data-univer-cell-text="missing:budget:B2"></output>', spaceId: "space", name: "View", idempotencyKey: "html-missing-123456" };
-    expect((await dispatch("htmlView.create", header(input), new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
-    const handler = vi.spyOn(handlers, "htmlView.create").mockImplementation(async (ctx) => {
+    const input = { kind: "create", html: '<output data-univer-cell-text="missing:budget:B2"></output>', spaceId: "space", name: "View", idempotencyKey: "html-missing-123456" };
+    expect((await dispatch("htmlView.draft", header(input), new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    const handler = vi.spyOn(handlers, "htmlView.draft").mockImplementation(async (ctx) => {
       await new Promise<never>((_resolve, reject) => ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true }));
       throw new Error("unreachable");
     });
     try {
-      expect((await dispatch("htmlView.create", { ...header(input), deadlineMs: 50 }, new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "workspace-executor-timeout", detail: { retryable: true, started: false } } });
+      expect((await dispatch("htmlView.draft", { ...header(input), deadlineMs: 50 }, new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "workspace-executor-timeout", detail: { retryable: true, started: false } } });
+      handler.mockImplementation(async (ctx) => {
+        ctx.onCreateUnit?.();
+        await new Promise<never>((_resolve, reject) => ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true }));
+        throw new Error("unreachable");
+      });
+      expect((await dispatch("htmlView.draft", { ...header(input), deadlineMs: 50 }, new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "workspace-result-unknown" } });
     } finally { handler.mockRestore(); }
   } finally { await instance.close(); fetcher.mockRestore(); }
 });

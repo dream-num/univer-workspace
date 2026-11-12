@@ -1,4 +1,5 @@
 import type { UIMessage } from "ai";
+import { z } from "zod";
 import { useEffect, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle } from "lucide-react";
 import { IssueMarkdown } from "../../issues/issue-markdown";
@@ -14,6 +15,7 @@ import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
 import { pendingApprovals, resumableApprovalResponse } from "../approvals";
 import { ApprovalCard } from "./approval-card";
+import { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
@@ -157,6 +159,10 @@ export function AgentStepsGroup({ parts, session, current = false, latest = true
 function toolName(part: ToolPart) {
   return part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
 }
+const pageDraftOutput = z.object({
+  isError: z.boolean().optional(),
+  structuredContent: z.object({ draft: z.object({ id: z.string().min(1) }) }),
+});
 function StepRow({ part, session }: { readonly part: StepPart; readonly session: AgentSession }) {
   const m = useAgentMessages();
   const [open, setOpen] = useState(false);
@@ -165,6 +171,9 @@ function StepRow({ part, session }: { readonly part: StepPart; readonly session:
   const Icon = state === "rejected" ? CircleX : state === "failed" || state === "incomplete" ? CircleAlert : state === "completed" ? CheckCircle2 : LoaderCircle;
   const status = state === "rejected" ? m.toolRejected : state === "approval" ? m.waitingApproval : state === "failed" ? m.toolFailed : state === "completed" ? m.toolDone : m[session.status];
   const timing = part.type !== "reasoning" ? session.toolTimings[part.toolCallId] : undefined;
+  const parsedDraft = part.type !== "reasoning" && part.state === "output-available" &&
+    ["html_view_create", "html_view_replace"].includes(toolName(part)) ? pageDraftOutput.safeParse(part.output) : null;
+  const draftId = parsedDraft?.success && !parsedDraft.data.isError ? parsedDraft.data.structuredContent.draft.id : null;
   return <div className="agent-step" data-status={state}>
     <button type="button" className="agent-step-row" aria-expanded={open} onClick={() => setOpen(!open)}>
       <Icon className={running ? "agent-step-icon animate-spin" : "agent-step-icon"} role="img" aria-label={status} />
@@ -173,6 +182,7 @@ function StepRow({ part, session }: { readonly part: StepPart; readonly session:
       {state === "approval" || state === "rejected" ? <span>{status}</span> : null}
       {part.type !== "reasoning" ? <span className="agent-step-duration">{timing ? durationLabel(timing.startedAt, timing.endedAt ?? (running ? new Date().toISOString() : null)) : "—"}</span> : null}
     </button>
+    {draftId && <HtmlViewDraftReview key={draftId} draftId={draftId} presentation="card" />}
     {open ? <div className="agent-step-body">{part.type === "reasoning" ? <IssueMarkdown text={part.text} /> : <ToolBody part={part} state={state} status={status} />}</div> : null}
   </div>;
 }

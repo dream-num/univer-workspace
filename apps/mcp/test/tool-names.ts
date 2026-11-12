@@ -34,6 +34,7 @@ export const coreNames = [
   "html_view_create",
   "html_view_read",
   "html_view_replace",
+  "html_view_draft_get",
 ];
 export const filesNames = [
   "blob_get",
@@ -88,7 +89,6 @@ export const writeNames = [
   "pr_discard",
 ];
 export const destructiveNames = [
-  "html_view_replace",
   "blob_replace",
   "repo_edit",
   "label_write",
@@ -114,9 +114,10 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   blob_download: "read",
   asset_download: "read",
   html_view_validate: "read",
-  html_view_create: "publish",
+  html_view_create: "write",
   html_view_read: "read",
-  html_view_replace: "publish",
+  html_view_draft_get: "read",
+  html_view_replace: "write",
   compile_markdown: "write",
   export_markdown: "read",
   compile_typst: "write",

@@ -30,6 +30,7 @@ async function setup(options: {
   unauthorized?: number;
   resourceError?: boolean;
   publish?: boolean;
+  pageTool?: "html_view_create" | "html_view_replace";
 } = {}) {
   const storage = storageOptions();
   const saved: AgentSession[] = [];
@@ -55,14 +56,14 @@ async function setup(options: {
       const respond = (result: unknown) => Response.json({ jsonrpc: "2.0", id: rpc.id, result }, { headers: { "mcp-session-id": "session" } });
       if (rpc.method === "initialize") return respond({ protocolVersion: "2025-11-25", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "fake-workspace", version: "1" }, instructions: "Server instructions" });
       if (rpc.method === "notifications/initialized") return new Response(null, { status: 202 });
-      if (rpc.method === "tools/list") return respond({ tools: [{ name: "pr_create", description: "Create a pull request", inputSchema: { type: "object", properties: {} }, ...(options.publish ? { _meta: { "univer.workspace/scope": "publish" } } : {}) }] });
+      if (rpc.method === "tools/list") return respond({ tools: [{ name: options.pageTool ?? "pr_create", description: "Create a draft or pull request", inputSchema: { type: "object", properties: {} }, ...(options.publish || options.pageTool ? { _meta: { "univer.workspace/scope": options.publish ? "publish" : "write" } } : {}) }] });
       if (rpc.method === "resources/read") {
         if (options.resourceError) return Response.json({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "No resource" } });
         return respond({ contents: [{ uri: "skill://univer-workspace/core/SKILL.md", mimeType: "text/markdown", text: "Core skill instructions" }] });
       }
       if (rpc.method === "tools/call") {
         await options.tool?.();
-        return respond({ content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
+        return respond({ content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: options.pageTool ? { draft: { id: "draft-1" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
       }
       if (rpc.method === "notifications/cancelled") return new Response(null, { status: 202 });
       throw new Error(`Unexpected MCP method ${rpc.method}`);
@@ -87,6 +88,26 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it.each(["html_view_create", "html_view_replace"] as const)("creates a page draft through %s with only the normal session token", async (pageTool) => {
+    const test = await setup({ pageTool, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    expect(done?.status).toBe("idle");
+    expect(pendingApprovals(done!)).toEqual([]);
+    expect(done?.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
+      toolName: pageTool, state: "output-available", output: expect.objectContaining({ structuredContent: { draft: { id: "draft-1" } } }),
+    }));
+    expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").map((request) => JSON.parse(request.body).scopes)).toEqual([["read", "write"]]);
+    const calls = test.requests.filter((request) => request.body.includes('"method":"tools/call"'));
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.headers).toContainEqual(["authorization", "Bearer uvw_at_mcp-token-1"]);
+    const before = JSON.parse(test.modelBodies[0]!);
+    const after = JSON.parse(test.modelBodies[1]!);
+    expect(after.tools).toEqual(before.tools);
+    expect(after.messages.slice(0, before.messages.length)).toEqual(before.messages);
+    expect(before.messages[0].content).toContain("Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.");
+  });
+
   it("pauses for approval, keeps it after reload, and executes on one isolated publish client", async () => {
     const test = await setup({ publish: true });
     const tokenSources: { grant: string; dispose: ReturnType<typeof vi.fn> }[] = [];
@@ -290,7 +311,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const second = schema.parse(JSON.parse(test.modelBodies[1]!)).messages;
     expect(second.slice(0, first.length)).toEqual(first);
     expect(second[0]).toEqual(first[0]);
-    const reminder = '\n\n<system-reminder>\nThe user changed the session settings. These lines replace the earlier scope and mode instructions.\nWork only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.\nAuto mode: write only in the base pull request Worktree "base-2" for file edits. Pages (.univer.html) publish outside pull requests after user approval.\n</system-reminder>';
+    const reminder = '\n\n<system-reminder>\nThe user changed the session settings. These lines replace the earlier scope and mode instructions.\nWork only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.\nAuto mode: write only in the base pull request Worktree "base-2" for file edits. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.\n</system-reminder>';
     expect(second.at(-1)).toEqual({ role: "user", content: `Edit this repository${reminder}` });
     expect(done?.messages.slice(0, previous?.messages.length)).toEqual(previous?.messages);
     expect(done?.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([
@@ -316,7 +337,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       line: "Ask mode: read only. Never call a write tool." },
     { previous: { scope: { kind: "repository" as const, spaceId: "repo-1", baseWorktreeId: "base-1" }, mode: "auto" as const },
       next: { scope: { kind: "repository" as const, spaceId: "repo-1", baseWorktreeId: "base-2" }, mode: "auto" as const },
-      line: 'Auto mode: write only in the base pull request Worktree "base-2" for file edits. Pages (.univer.html) publish outside pull requests after user approval.' },
+      line: 'Auto mode: write only in the base pull request Worktree "base-2" for file edits. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.' },
   ])("includes only the changed instruction line ($line)", async ({ previous, next, line }) => {
     const test = await setup({ model: () => modelStream() });
     const started = await test.runner.start({ ...test.input, ...previous });

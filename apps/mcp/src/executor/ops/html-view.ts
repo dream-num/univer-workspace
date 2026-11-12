@@ -1,30 +1,20 @@
 import { WorkspaceHtmlViewFeature } from "@univerjs/univer-workspace-client-core";
 import { WorkspaceBlobFeature } from "@univerjs/univer-workspace-client-core/product";
 import { opSpecs } from "../../shared/executor-protocol.js";
+import { htmlViewDraftResult } from "../../shared/html-view-draft.js";
 import type { Handler, OpContext } from "../context.js";
 
 function htmlViewFeature(ctx: OpContext) {
   return new WorkspaceHtmlViewFeature({
     authenticatedHttp: async () => ctx.http(),
-    blobs: {
-      get: async (resourceId) => {
-        const view = await new WorkspaceBlobFeature(async () => ctx.http()).get(resourceId);
-        ctx.usage.repo = view.node.spaceId;
-        return view;
-      },
-      replaceBytes: async (input) => {
-        ctx.signal.throwIfAborted();
-        return await new WorkspaceBlobFeature(async () => ctx.http()).replaceBytes(input);
-      },
-      uploadBytes: async (input) => {
-        ctx.signal.throwIfAborted();
-        ctx.onCreateUnit?.();
-        return await new WorkspaceBlobFeature(async () => ctx.http()).uploadBytes(input);
-      },
-    },
+    blobs: new WorkspaceBlobFeature(async () => ctx.http()),
     runtime: ctx.runtime,
     resolveTrunkRuntimeTarget: (input) => ctx.source().resolveTrunkRuntimeTarget(input),
     configuredOrigin: async () => ctx.http().origin,
+    onWrite: () => {
+      ctx.signal.throwIfAborted();
+      ctx.onCreateUnit?.();
+    },
   });
 }
 
@@ -35,23 +25,17 @@ export const htmlViewValidate: Handler<"htmlView.validate"> = async (ctx, input)
   }),
 });
 
-export const htmlViewCreate: Handler<"htmlView.create"> = async (
-  ctx,
-  { html, parentNodeId, ...input },
-) => {
-  ctx.usage.repo = input.spaceId;
-  const result = await htmlViewFeature(ctx).create({
-    ...input,
-    ...(parentNodeId === undefined ? {} : { parentNodeId }),
-    source: { bytes: Buffer.from(html, "utf8"), name: "view.univer.html" },
-  });
-  return { output: opSpecs["htmlView.create"].output.parse(result) };
-};
-
-export const htmlViewReplace: Handler<"htmlView.replace"> = async (ctx, { html, ...input }) => {
-  const result = await htmlViewFeature(ctx).replace({
-    ...input,
-    source: { bytes: Buffer.from(html, "utf8"), name: "view.univer.html" },
-  });
-  return { output: opSpecs["htmlView.replace"].output.parse(result) };
+export const htmlViewDraft: Handler<"htmlView.draft"> = async (ctx, input) => {
+  if (input.kind === "create") ctx.usage.repo = input.spaceId;
+  const source = { bytes: Buffer.from(input.html, "utf8"), name: "view.univer.html" };
+  const result = await htmlViewFeature(ctx).draft(input.kind === "create" ? {
+    kind: input.kind, name: input.name, spaceId: input.spaceId, idempotencyKey: input.idempotencyKey, source,
+    ...(input.parentNodeId === undefined ? {} : { parentNodeId: input.parentNodeId }),
+  } : { ...input, source });
+  ctx.usage.repo = result.spaceId;
+  return { output: opSpecs["htmlView.draft"].output.parse({ draft: {
+    ...(result.targetResourceId === null ? {} : { resource: result.targetResourceId }),
+    ...htmlViewDraftResult(result), repositoryVisibility: result.repositoryVisibility,
+    privateSourceUnitIds: result.privateSourceUnitIds,
+  } }) };
 };
