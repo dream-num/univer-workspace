@@ -59,7 +59,7 @@ html[data-ui-mode="repository"] .agent-page :is(button, a, summary):focus-visibl
 
 html[data-ui-mode="repository"] .agent-composer-box { display: grid; gap: 12px; min-width: 0; padding: 16px 20px; border: 1px solid var(--rd-line-2); border-radius: 12px; background: var(--rd-panel); }
 html[data-ui-mode="repository"] .agent-composer-box:focus-within { border-color: var(--rd-accent); }
-html[data-ui-mode="repository"] .agent-composer-box textarea { min-height: 0; max-height: 40vh; field-sizing: content; resize: none; border: 0; padding: 0; border-radius: 0; box-shadow: none; background: transparent; }
+html[data-ui-mode="repository"] .agent-composer-box textarea { min-height: 48px; max-height: 40vh; field-sizing: content; resize: none; border: 0; padding: 0; border-radius: 0; box-shadow: none; background: transparent; }
 html[data-ui-mode="repository"] .agent-composer-box textarea:focus-visible { outline: none; }
 html[data-ui-mode="repository"] .agent-composer-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
 html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex-wrap: wrap; flex: 1; min-width: 0; align-items: center; gap: 8px; }
@@ -97,8 +97,7 @@ html[data-ui-mode="repository"] .agent-session-title { display: -webkit-box; -we
   html[data-ui-mode="repository"] .agent-send:has(svg) > :is(span, kbd) { display: none; }
   html[data-ui-mode="repository"] .agent-composer-box { padding: 12px; }
   html[data-ui-mode="repository"] .agent-model-controls { gap: 4px; }
-  html[data-ui-mode="repository"] .agent-followup .agent-composer-controls { flex-wrap: wrap; }
-  html[data-ui-mode="repository"] .agent-followup .agent-model-controls { flex-basis: 100%; }
+  html[data-ui-mode="repository"] .agent-followup .agent-composer-controls { align-items: flex-end; }
 }
 @media (prefers-reduced-motion: reduce) {
   html[data-ui-mode="repository"] .agent-status[data-status="running"]::before { animation: none; }

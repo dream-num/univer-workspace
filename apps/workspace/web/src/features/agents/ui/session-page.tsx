@@ -123,7 +123,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
           disabled={pending || busyElsewhere} onDecide={(approved) => void decide(approval.approvalId, approved)} />)}</div>
         {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
           <div className="agent-composer-box">
-            <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={1} onChange={(event) => setText(event.target.value)}
+            <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={2} onChange={(event) => setText(event.target.value)}
               onKeyDown={(event) => {
                 if (event.nativeEvent.isComposing) return;
                 if (event.ctrlKey && event.key.toLowerCase() === "j") {

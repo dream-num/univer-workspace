@@ -139,7 +139,7 @@ it("offers one Stop action while running empty and Send for a queued follow-up",
 it("keeps Continue for resumable sessions and puts errors with the follow-up in the dock", async () => {
   current = session({ status: "failed", error: "Failed run" }); await renderSession();
   expect(container.querySelector(".agent-session-dock [role=alert]")?.textContent).toBe("Failed run");
-  expect(container.querySelector(".agent-session-dock textarea")?.getAttribute("rows")).toBe("1");
+  expect(container.querySelector(".agent-session-dock textarea")?.getAttribute("rows")).toBe("2");
   expect(container.querySelector(".agent-followup .agent-note")).toBeNull();
   const resume = [...container.querySelectorAll("button")].find((button) => button.textContent === "Continue");
   if (!resume) throw new Error("Missing Continue action");
