@@ -8,7 +8,6 @@ import {
 import type { BindingUnitMetadata } from "@univerjs-labs/html-view-renderer/render";
 import "@univerjs/sheets/facade";
 import { FUniver } from "@univerjs/core/facade";
-import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
 import {
   LocaleType,
   Univer,
@@ -17,10 +16,28 @@ import {
   IUndoRedoService,
   IMentionIOService,
   IPermissionService,
+  type Plugin,
+  type PluginCtor,
 } from "@univerjs/core";
 import { UniverDocsPlugin } from "@univerjs/docs";
 import { UniverSheetsPlugin, WorkbookInsertRowPermission } from "@univerjs/sheets";
+import { UniverSheetsConditionalFormattingPlugin } from "@univerjs/sheets-conditional-formatting";
+import { UniverSheetsDataValidationPlugin } from "@univerjs/sheets-data-validation";
+import { UniverSheetsDrawingPlugin } from "@univerjs/sheets-drawing";
+import { UniverSheetsFilterPlugin } from "@univerjs/sheets-filter";
 import { UniverSheetsFormulaPlugin } from "@univerjs/sheets-formula";
+import { UniverSheetsHyperLinkPlugin } from "@univerjs/sheets-hyper-link";
+import { UniverSheetsNotePlugin } from "@univerjs/sheets-note";
+import { UniverSheetsNumfmtPlugin } from "@univerjs/sheets-numfmt";
+import { UniverSheetsSortPlugin } from "@univerjs/sheets-sort";
+import { UniverSheetsTablePlugin } from "@univerjs/sheets-table";
+import { UniverSheetsThreadCommentPlugin } from "@univerjs/sheets-thread-comment";
+import { UniverProFormulaEnginePlugin } from "@univerjs-pro/engine-formula";
+import { UniverSheetsChartPlugin } from "@univerjs-pro/sheets-chart";
+import { UniverSheetsOutlinePlugin } from "@univerjs-pro/sheets-outline";
+import { UniverSheetsPivotTablePlugin } from "@univerjs-pro/sheets-pivot";
+import { UniverSheetsShapePlugin } from "@univerjs-pro/sheets-shape";
+import { UniverSheetSparklinePlugin } from "@univerjs-pro/sheets-sparkline";
 import { UniverRenderEnginePlugin } from "@univerjs/engine-render";
 import { UniverNetworkPlugin, ISocketService, WebSocketService } from "@univerjs/network";
 import { UniverCollaborationPlugin } from "@univerjs-pro/collaboration";
@@ -127,6 +144,51 @@ export interface WorkspaceHtmlEngineOptions {
   onTrialStarted?: () => void;
 }
 
+export function getHtmlViewSheetPlugins(): PluginCtor<Plugin>[] {
+  return [
+    UniverProFormulaEnginePlugin,
+    UniverSheetsPlugin,
+    UniverSheetsFormulaPlugin,
+    UniverSheetsNumfmtPlugin,
+    UniverSheetsDrawingPlugin,
+    UniverSheetsConditionalFormattingPlugin,
+    UniverSheetsDataValidationPlugin,
+    UniverSheetsFilterPlugin,
+    UniverSheetsHyperLinkPlugin,
+    UniverSheetsNotePlugin,
+    UniverSheetsSortPlugin,
+    UniverSheetsTablePlugin,
+    UniverSheetsThreadCommentPlugin,
+    UniverSheetsChartPlugin,
+    UniverSheetsOutlinePlugin,
+    UniverSheetsPivotTablePlugin,
+    UniverSheetsShapePlugin,
+    UniverSheetSparklinePlugin,
+  ];
+}
+
+export function createWorkspaceHtmlUniver(license: string): Univer {
+  const univer = new Univer({
+    locale: LocaleType.EN_US,
+    locales: { [LocaleType.EN_US]: {} },
+    override: [
+      [IAuthzIoService, null],
+      [IUndoRedoService, null],
+      [IMentionIOService, null],
+    ],
+  });
+  try {
+    univer.registerPlugin(UniverLicensePlugin, { license });
+    univer.registerPlugin(UniverRenderEnginePlugin);
+    univer.registerPlugin(UniverDocsPlugin);
+    for (const plugin of getHtmlViewSheetPlugins()) univer.registerPlugin(plugin);
+    return univer;
+  } catch (error) {
+    univer.dispose();
+    throw error;
+  }
+}
+
 /** Creates one isolated HTML source runtime; ownership transfers to Binding Host after load. */
 export async function createWorkspaceHtmlEngine(
   options: WorkspaceHtmlEngineOptions,
@@ -152,22 +214,8 @@ export async function createWorkspaceHtmlEngine(
         ...(writeMode === "trial" ? { enableOfflineEditing: false } : {}),
       },
       createUniver(config) {
-        const univer = new Univer({
-          locale: LocaleType.EN_US,
-          locales: { [LocaleType.EN_US]: {} },
-          override: [
-            [IAuthzIoService, null],
-            [IUndoRedoService, null],
-            [IMentionIOService, null],
-          ],
-        });
+        const univer = createWorkspaceHtmlUniver(options.license);
         try {
-          univer.registerPlugin(UniverLicensePlugin, { license: options.license });
-          univer.registerPlugin(UniverRenderEnginePlugin);
-          univer.registerPlugin(UniverDocsPlugin);
-          univer.registerPlugin(UniverSheetsPlugin);
-          univer.registerPlugin(UniverProFormulaEnginePlugin);
-          univer.registerPlugin(UniverSheetsFormulaPlugin);
           univer.registerPlugin(UniverNetworkPlugin, options.networkConfig);
           univer
             .__getInjector()

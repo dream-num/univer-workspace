@@ -2627,6 +2627,21 @@ importers:
       '@univerjs-pro/license':
         specifier: 1.4.0
         version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-chart':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-outline':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-pivot':
+        specifier: 1.4.0
+        version: 1.4.0(@univerjs-pro/embed@1.4.0(react@18.3.1)(rxjs@7.8.2))(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-shape':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs-pro/sheets-sparkline':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/core':
         specifier: 1.4.0
         version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
@@ -2642,7 +2657,37 @@ importers:
       '@univerjs/sheets':
         specifier: 1.4.0
         version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-conditional-formatting':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-data-validation':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-drawing':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-filter':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
       '@univerjs/sheets-formula':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-hyper-link':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-note':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-numfmt':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-sort':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-table':
+        specifier: 1.4.0
+        version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
+      '@univerjs/sheets-thread-comment':
         specifier: 1.4.0
         version: 1.4.0(react@18.3.1)(rxjs@7.8.2)
     devDependencies:

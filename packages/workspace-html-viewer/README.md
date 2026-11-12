@@ -49,7 +49,10 @@ The `/engine` export owns the shared Univer runtime factory: base plugins, ident
 license installation, visitor trial isolation, metadata from the loaded workbook,
 and abort/load/disposal lifecycle. Consumers supply resolved permissions, collaboration
 endpoints, network configuration and `registerEmbed(univer)` for their referenced-Unit
-policy. SDK dependencies remain peers, using each consumer’s runtime.
+policy. `getHtmlViewSheetPlugins()` matches the editor's ordered Sheet model plugin
+list, including data validation, with a drift test guarding parity. Direct SDK peer
+imports keep those plugins in each consumer's React and Redi dependency graph without
+crossing the React 19 editor-presets and React 18 Agent boundary.
 
 `createWorkspaceHtmlEngine` defaults `enableReadOnlyTrial` to false. Without opt-in,
 anonymous writes reject with `signInRequired`, and signed-in read-only writes reject

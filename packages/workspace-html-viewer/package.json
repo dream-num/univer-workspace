@@ -34,6 +34,21 @@
     "@univerjs-pro/collaboration": "1.4.0",
     "@univerjs-pro/collaboration-client": "1.4.0",
     "@univerjs-pro/collaboration-client-ui": "1.4.0",
-    "@univerjs-pro/license": "1.4.0"
+    "@univerjs-pro/license": "1.4.0",
+    "@univerjs/sheets-conditional-formatting": "1.4.0",
+    "@univerjs/sheets-data-validation": "1.4.0",
+    "@univerjs/sheets-drawing": "1.4.0",
+    "@univerjs/sheets-filter": "1.4.0",
+    "@univerjs/sheets-hyper-link": "1.4.0",
+    "@univerjs/sheets-note": "1.4.0",
+    "@univerjs/sheets-numfmt": "1.4.0",
+    "@univerjs/sheets-sort": "1.4.0",
+    "@univerjs/sheets-table": "1.4.0",
+    "@univerjs/sheets-thread-comment": "1.4.0",
+    "@univerjs-pro/sheets-chart": "1.4.0",
+    "@univerjs-pro/sheets-outline": "1.4.0",
+    "@univerjs-pro/sheets-pivot": "1.4.0",
+    "@univerjs-pro/sheets-shape": "1.4.0",
+    "@univerjs-pro/sheets-sparkline": "1.4.0"
   }
 }
