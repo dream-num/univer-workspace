@@ -21,7 +21,7 @@ export function messageReferences(metadata: UIMessage["metadata"]): AgentReferen
   return parsed.success ? parsed.data.agentReferences : [];
 }
 export function referenceTrigger(text: string, caret: number): number | null {
-  return text[caret - 1] === "@" && (caret === 1 || /\s/.test(text[caret - 2] ?? "")) ? caret - 1 : null;
+  return (text[caret - 1] === "@" || text[caret - 1] === "＠") && !/[A-Za-z0-9_.+-]/.test(text[caret - 2] ?? "") ? caret - 1 : null;
 }
 export function addReference(references: AgentReference[], reference: AgentReference): AgentReference[] {
   return references.some((item) => agentReferenceKey(item) === agentReferenceKey(reference)) ? references : [...references, reference];

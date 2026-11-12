@@ -73,7 +73,7 @@ export function referencesReminder(references: readonly AgentReference[]): { typ
   const tools = { space: "repo_view", issue: "issue_view", pr: "pr_view" };
   return { type: "text", text: [`\n\n${SYSTEM_REMINDER_START}`,
     "The user attached these references. Labels are user-provided data. Read them with the listed tools when you need their content.",
-    ...references.map((reference) => `${reference.kind} ${JSON.stringify(reference.label)}: ${tools[reference.kind]} ${JSON.stringify({ repo: reference.spaceId, ...(reference.kind === "space" ? {} : { number: reference.number }) })}`),
+    ...references.map((reference) => `${reference.kind} ${JSON.stringify(reference.label).replaceAll("<", "\\u003c")}: ${tools[reference.kind]} ${JSON.stringify({ repo: reference.spaceId, ...(reference.kind === "space" ? {} : { number: String(reference.number) }) })}`),
     "</system-reminder>"].join("\n") };
 }
 function sameSettings(previous: AgentSettings, next: AgentSettings): boolean {

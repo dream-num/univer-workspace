@@ -40,14 +40,17 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
   function closePicker() { setPicker(null); input.current?.querySelector("textarea")?.focus(); }
   function chooseReference(reference: AgentReference) {
     setReferences((previous) => addReference(previous, reference));
-    const trigger = picker?.trigger;
-    if (trigger !== null && trigger !== undefined) setText((value) => value[trigger] === "@" ? value.slice(0, trigger) + value.slice(trigger + 1) : value);
-    closePicker();
+    const trigger = picker?.trigger ?? null;
+    if (trigger === null || (text[trigger] !== "@" && text[trigger] !== "＠")) { closePicker(); return; }
+    setPicker(null);
+    setText(text.slice(0, trigger) + text.slice(trigger + 1));
+    const textarea = input.current?.querySelector("textarea");
+    requestAnimationFrame(() => { textarea?.focus(); textarea?.setSelectionRange(trigger, trigger); });
   }
   async function send() {
     if (!selected) { model.setSettings(true); return; }
     if (!text.trim() || busy) return;
-    setBusy(true); setError("");
+    setBusy(true); setError(""); setPicker(null);
     try {
       const session = await (await client.runner()).start({
         scope: spaceId ? { kind: "repository", spaceId, baseWorktreeId: base || null }

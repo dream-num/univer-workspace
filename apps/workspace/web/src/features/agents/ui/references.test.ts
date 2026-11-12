@@ -10,6 +10,8 @@ describe("Agent references", () => {
     expect(referenceTrigger("Read @ please", 6)).toBe(5);
     expect(referenceTrigger("Read\n@", 6)).toBe(5);
     expect(referenceTrigger("name@example.com", 5)).toBeNull();
+    expect(referenceTrigger("请看@", 3)).toBe(2);
+    expect(referenceTrigger("(＠", 2)).toBe(1);
     expect(referenceTrigger("@word", 5)).toBeNull();
     expect(referenceTrigger("", 0)).toBeNull();
   });
