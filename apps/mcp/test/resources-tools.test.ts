@@ -1,8 +1,6 @@
 import { testStagingDirectory } from "./staging-directory.js";
 import * as fs from "node:fs/promises";
-import { once } from "node:events";
 import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
-import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -11,6 +9,7 @@ import type { ResourceLibrary } from "@univer-cli/resource-library";
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { openResourceLibrary } from "../src/gateway/resources.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { adminNames } from "./tool-names.js";
@@ -44,36 +43,30 @@ describe("SVG resource tools", () => {
         return new Response(svg(padding), { headers: { "content-type": "image/svg+xml" } });
       },
     });
-    const socket = createServer();
-    socket.listen(0, "127.0.0.1");
-    await once(socket, "listening");
-    const address = socket.address();
-    if (address === null || typeof address === "string") throw new Error("Expected TCP server");
-    const port = address.port;
-    await new Promise((resolve) => socket.close(resolve));
-    const url = `http://127.0.0.1:${String(port)}/mcp`;
-    gateway = createGateway(
-      parseGatewayConfig({
-        MCP_DEV_SESSION_PASSTHROUGH: "1",
-        WORKSPACE_ORIGIN: "https://workspace.example",
-        MCP_STAGING_DIRECTORY: testStagingDirectory(),
-        MCP_PUBLIC_URL: url,
-      }),
-      {
-        logger: pino(
-          new Writable({
-            write(chunk, _encoding, callback) {
-              logs += String(chunk);
-              callback();
-            },
-          }),
-        ),
-        fetcher: authFetcher,
-        resourceLibrary: library,
-      },
+    const started = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          MCP_DEV_SESSION_PASSTHROUGH: "1",
+          WORKSPACE_ORIGIN: "https://workspace.example",
+          MCP_STAGING_DIRECTORY: testStagingDirectory(),
+          MCP_PUBLIC_URL: url,
+        }),
+        {
+          logger: pino(
+            new Writable({
+              write(chunk, _encoding, callback) {
+                logs += String(chunk);
+                callback();
+              },
+            }),
+          ),
+          fetcher: authFetcher,
+          resourceLibrary: library,
+        },
+      ),
     );
-    gateway.server.listen(port, "127.0.0.1");
-    await once(gateway.server, "listening");
+    gateway = started.gateway;
+    const url = started.url;
     client = new Client({ name: "resources-test", version: "1.0.0" });
     await client.connect(
       new StreamableHTTPClientTransport(new URL(`${url}?toolsets=all`), {
