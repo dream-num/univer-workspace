@@ -10,6 +10,8 @@ import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
 import type { SessionStore } from "../session-store";
 import { createModel } from "./model";
+import { draftReminder } from "./draft-reminder";
+import type { DraftStatus } from "./draft-reminder";
 import { redactMessages, repairInterruptedTools, withStructuredContent, worktreeExtractors } from "./messages";
 import { appendUserMessage, gateTools, settleApprovals } from "./approvals";
 import type { ApprovalSettlement } from "./approvals";
@@ -24,6 +26,7 @@ export interface AgentRunnerDependencies {
   providers: Pick<Providers, "resolve">;
   createTokenSource(grant: McpGrant): McpTokenSource;
   mcpUrl: string;
+  getDraft(id: string): Promise<DraftStatus | null>;
 }
 export interface StartAgentInput {
   scope: AgentScope;
@@ -291,8 +294,9 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         const references = action.kind === "message" ? action.references ?? [] : [];
         const reminder = settings ? settingsReminder(session, settings) : null;
         const attached = referencesReminder(references);
-        const message: RuntimeMessage = { id: generateId(), role: "user", metadata: { agentContextPrompt: initialContextPrompt(session), ...(references.length ? { agentReferences: references } : {}) },
-          parts: [{ type: "text", text: action.kind === "message" ? action.text : "" }, ...(reminder ? [{ type: "text" as const, text: reminder }] : []), ...(attached ? [attached] : [])] };
+        const drafts = action.kind === "message" ? await draftReminder(session.messages, deps.getDraft, mcpUrl.origin) : null;
+        const message: RuntimeMessage = { id: generateId(), role: "user", metadata: { agentContextPrompt: initialContextPrompt(session), ...(references.length ? { agentReferences: references } : {}), ...(drafts?.part ? { agentDraftStates: drafts.states } : {}) },
+          parts: [{ type: "text", text: action.kind === "message" ? action.text : "" }, ...(reminder ? [{ type: "text" as const, text: reminder }] : []), ...(attached ? [attached] : []), ...(drafts?.part ? [drafts.part] : [])] };
         const worktreeIds = [...session.worktreeIds];
         if (settings?.scope.kind === "repository" && settings.scope.baseWorktreeId && !worktreeIds.includes(settings.scope.baseWorktreeId)) worktreeIds.push(settings.scope.baseWorktreeId);
         const run: ActiveRun = { session: { ...session, ...(settings ? { scope: settings.scope, mode: settings.mode, model: settings.model } : {}), worktreeIds, status: transition(session.status, "send"), error: null,
