@@ -1,8 +1,15 @@
-import { describe, expect, it } from "vitest";
-import { argumentSummary, cacheHitRate, durationLabel, newestSessions, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { describe, expect, it, vi } from "vitest";
+import type { UIMessage } from "ai";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { AgentStepsGroup } from "./session-page";
+import type { StepPart, ToolPart } from "./summaries";
+import { argumentSummary, cacheHitRate, durationLabel, newestSessions, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 import { session } from "../test-helpers";
 import { agentSessionIdSchema } from "../agent.types";
 import { agentMessages } from "./messages";
+
+vi.mock("../../../shared/i18n", () => ({ useI18n: () => ({ language: "en-US" }) }));
 
 describe("Agent tool cards", () => {
   it("formats cache hit rates as whole percentages or a placeholder when unavailable", () => {
@@ -62,5 +69,66 @@ describe("Agent tool cards", () => {
   });
   it("provides the same translated labels in both languages", () => {
     expect(Object.keys(agentMessages["en-US"]).sort()).toEqual(Object.keys(agentMessages["zh-CN"]).sort());
+  });
+});
+
+describe("Agent steps groups", () => {
+  it("keeps skipped parts inside a run and splits only on visible text", () => {
+    const thought = { type: "reasoning", text: "Plan", state: "done" } satisfies UIMessage["parts"][number];
+    const tool = { type: "dynamic-tool", toolName: "browse", toolCallId: "call-a", state: "output-available", input: {}, output: {} } satisfies UIMessage["parts"][number];
+    const text = { type: "text", text: "Answer" } satisfies UIMessage["parts"][number];
+    expect(messageBlocks([thought, { type: "step-start" }, { type: "text", text: " \n " },
+      { type: "source-url", sourceId: "source-a", url: "https://space.test" },
+      { type: "file", mediaType: "text/plain", url: "https://space.test/file" }, tool, text, thought])).toEqual([
+      { kind: "steps", parts: [thought, tool] }, { kind: "text", part: text }, { kind: "steps", parts: [thought] },
+    ]);
+  });
+  it("classifies tool outcomes and spins only during a running session", () => {
+    const pending = { type: "dynamic-tool", toolName: "browse", toolCallId: "call-a", state: "input-available", input: {} } satisfies ToolPart;
+    const tool = { ...pending, state: "output-available", output: {} } satisfies ToolPart;
+    expect(toolStatus(tool, "idle")).toBe("completed");
+    expect(toolStatus({ ...pending, state: "output-error", errorText: "Failed" }, "running")).toBe("failed");
+    expect(toolStatus({ ...pending, state: "output-denied", approval: { id: "approval-a", approved: false } }, "idle")).toBe("failed");
+    expect(toolStatus({ ...tool, output: { isError: true } }, "idle")).toBe("failed");
+    expect(toolStatus(pending, "running")).toBe("running");
+    expect(toolStatus(pending, "stopped")).toBe("incomplete");
+  });
+  it("shows working for the current group of a running session, including between model steps", () => {
+    const tool = { type: "dynamic-tool", toolName: "browse", toolCallId: "call-a", state: "input-available", input: { query: "Sales" } } satisfies ToolPart;
+    const render = (parts: StepPart[], status: "running" | "stopped", current: boolean) => renderToStaticMarkup(createElement(AgentStepsGroup, { parts, session: session({ status }), current }));
+    expect(render([tool], "running", true)).toContain("Working");
+    expect(render([tool], "running", true)).toContain("browse query: Sales");
+    expect(render([tool], "running", false)).not.toContain("Working");
+    expect(render([tool], "stopped", true)).not.toContain("Working");
+    expect(render([{ ...tool, state: "output-available", output: {} }], "running", true)).toContain("Working");
+    expect(render([{ type: "reasoning", text: "Plan", state: "streaming" }], "running", true)).toContain("Thinking");
+  });
+  it("counts failures even when they are outside the recent window", () => {
+    const call = { type: "dynamic-tool", toolName: "browse", toolCallId: "call-a", state: "input-available", input: {} } satisfies ToolPart;
+    const parts: StepPart[] = [
+      { ...call, state: "output-error", errorText: "Failed" },
+      { ...call, state: "output-available", output: { isError: true } },
+      ...Array.from({ length: 5 }, (): StepPart => ({ type: "reasoning", text: "Plan", state: "done" })),
+    ];
+    const html = renderToStaticMarkup(createElement(AgentStepsGroup, { parts, session: session() }));
+    expect(html).toContain("5 thoughts · 2 tool calls");
+    expect(html).toContain("2 failed");
+    expect(html).not.toContain("browse");
+  });
+  it("renders only the latest five of eight steps without mounting closed bodies", () => {
+    const parts: StepPart[] = Array.from({ length: 8 }, (_, index) => index % 2 === 0
+      ? { type: "reasoning", state: "done", text: `Thought preview ${index}\nPRIVATE REASONING BODY ${index}` }
+      : { type: "dynamic-tool", toolName: `tool_${index}`, toolCallId: `call-${index}`, state: "output-available", input: { query: `query ${index}`, code: "PRIVATE ARGUMENT BODY" }, output: { text: "PRIVATE RESULT BODY" } });
+    const html = renderToStaticMarkup(createElement(AgentStepsGroup, { parts, session: session() }));
+    expect(html.match(/class="agent-step-row"/g)).toHaveLength(5);
+    expect(html).toContain("Show 3 earlier steps");
+    expect(html).toContain("4 thoughts · 4 tool calls");
+    expect(html).not.toContain("Thought preview 0");
+    expect(html).not.toContain("tool_1");
+    expect(html).not.toContain("Thought preview 2");
+    for (const label of ["tool_3", "Thought preview 4", "tool_5", "Thought preview 6", "tool_7"]) expect(html).toContain(label);
+    expect(html).not.toContain("PRIVATE");
+    expect(html).not.toContain("<dl");
+    expect(html).not.toContain("issue-markdown");
   });
 });

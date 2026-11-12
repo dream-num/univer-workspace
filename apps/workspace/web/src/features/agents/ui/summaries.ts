@@ -1,3 +1,4 @@
+import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { AgentSession } from "../agent.types";
 
@@ -81,4 +82,26 @@ export function pullRequestUrl(value: unknown, origin: string): string | null {
 export function newestSessions(sessions: AgentSession[], spaceId?: string) {
   return sessions.filter((session) => !spaceId || session.scope.kind === "repository" && session.scope.spaceId === spaceId)
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export type ToolPart = Extract<UIMessage["parts"][number], { toolCallId: string }>;
+export type StepPart = Extract<UIMessage["parts"][number], { type: "reasoning" }> | ToolPart;
+type MessageBlock = { kind: "text"; part: Extract<UIMessage["parts"][number], { type: "text" }> } | { kind: "steps"; parts: StepPart[] };
+export function messageBlocks(parts: UIMessage["parts"]): MessageBlock[] {
+  const blocks: MessageBlock[] = [];
+  for (const part of parts) {
+    if (part.type === "text" && part.text.trim()) blocks.push({ kind: "text", part });
+    else if (part.type === "reasoning" || "toolCallId" in part) {
+      const previous = blocks.at(-1);
+      if (previous?.kind === "steps") previous.parts.push(part);
+      else blocks.push({ kind: "steps", parts: [part] });
+    }
+  }
+  return blocks;
+}
+export function toolStatus(part: ToolPart, status: AgentSession["status"]): "failed" | "completed" | "running" | "incomplete" {
+  const output = "output" in part ? part.output : undefined;
+  if (part.state === "output-error" || part.state === "output-denied" || Boolean(output && typeof output === "object" && "isError" in output && output.isError)) return "failed";
+  if (part.state === "output-available") return "completed";
+  return status === "running" ? "running" : "incomplete";
 }
