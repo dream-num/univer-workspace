@@ -153,6 +153,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   deletes the sessions issued for it. `POST /api/auth/agent-token` issues the Browser Agents module, from an
   interactive session cookie, a one-hour `uvw_at_` grant for the first-party `univer-workspace-agents` client bound to the
   same-origin `/mcp` resource, with only `read` or `read write`, and returns no refresh token.
+- Product V19 adds HTML View drafts through a backed-up V18 → V19 startup migration that backfills nothing.
+  A draft is a `.univer.html` create or revision whose bytes wait in the BlobStore; only its author can publish
+  or reject it, from an interactive session, at `/api/html-view-drafts`. Publishing adopts the stored bytes in one
+  transaction; rejected, expired and stale drafts release them. Pending drafts expire after 7 days.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
