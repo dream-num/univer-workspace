@@ -7,10 +7,11 @@ import type { AgentPageHost } from "./host";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
-import { agentSessionIdSchema, isSystemReminder, messageReferences, messageSkills, sessionTitle, splitReferenceText } from "../agent.types";
+import { agentSessionIdSchema, isSystemReminder, messageReferences, messageSkills, messageSkillInvocation, sessionTitle, splitReferenceText } from "../agent.types";
 import type { AgentMode, AgentSession } from "../agent.types";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
+import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
 import { pendingApprovals, resumableApprovalResponse } from "../approvals";
@@ -50,6 +51,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
   const [error, setError] = useState("");
   const [busyElsewhere, setBusyElsewhere] = useState(false);
   const [pending, setPending] = useState(false);
+  const skillMenu = useSkillMenu(text, repository ? { kind: "repository", spaceId: repository, baseWorktreeId: null } : { kind: "global" }, pending || session.status === "running", setText);
   const action = session.status === "running" && !text.trim() ? "stop" : "send";
   const conversation = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -113,7 +115,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     <div className="agent-conversation" ref={conversation}>
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus session={session} /></header>
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
-        {message.role === "user" ? <p>{splitReferenceText(message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n"), messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>
+        {message.role === "user" ? <UserMessage message={message} />
           : <AssistantMessage message={message} session={session} current={index === lastAssistant} latestStepsIndex={latestSteps?.messageIndex === index ? latestSteps.blockIndex : -1} />}
       </article>)}</div>
       <div className="agent-session-dock">
@@ -123,9 +125,10 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
           disabled={pending || busyElsewhere} onDecide={(approved) => void decide(approval.approvalId, approved)} />)}</div>
         {busyElsewhere ? <Alert>{m.busy}</Alert> : <form className="agent-followup" onSubmit={(event) => { event.preventDefault(); void send(text); }}>
           <div className="agent-composer-box">
+            <SkillMenu menu={skillMenu} />
             <Textarea aria-label={m.followup} placeholder={m.followup} value={text} disabled={pending} rows={2} onChange={(event) => setText(event.target.value)}
               onKeyDown={(event) => {
-                if (event.nativeEvent.isComposing) return;
+                if (event.nativeEvent.isComposing || skillMenu.onKeyDown(event.nativeEvent)) return;
                 if (event.ctrlKey && event.key.toLowerCase() === "j") {
                   event.preventDefault();
                   const input = event.currentTarget;
@@ -157,6 +160,13 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     </dl><SessionSkills session={session} /><h2>{m.prs}</h2>{session.worktreeIds.map((id) => <SessionPullRequest key={id} id={id} />)}<p className="agent-note">{m.local}</p></aside>
   </div>;
 }
+function UserMessage({ message }: { readonly message: UIMessage }) {
+  let text = message.parts.filter((part) => !isSystemReminder(part)).filter((part) => part.type === "text").map((part) => part.text).join("\n");
+  const invocation = messageSkillInvocation(message.metadata);
+  const prefix = invocation && text.startsWith(`/${invocation.name}`) ? `/${invocation.name}` : null;
+  if (prefix) text = text.slice(prefix.length);
+  return <p>{prefix ? <span className="agent-reference agent-skill-invocation">{prefix}</span> : null}{splitReferenceText(text, messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>;
+}
 const skillReadInput = z.object({ name: z.string() });
 const skillReadOutput = z.object({ isError: z.boolean().optional() });
 function SessionSkills({ session }: { readonly session: AgentSession }) {
@@ -166,6 +176,8 @@ function SessionSkills({ session }: { readonly session: AgentSession }) {
     .reverse().find((value) => value !== null);
   const used = new Map<string, number>();
   for (const message of session.messages) {
+    const invocation = message.role === "user" ? messageSkillInvocation(message.metadata) : null;
+    if (invocation && !used.has(invocation.name)) used.set(invocation.name, used.size);
     for (const part of message.parts) {
       if (part.type !== "dynamic-tool" || part.toolName !== "skills_read" || part.state !== "output-available") continue;
       const input = skillReadInput.safeParse(part.input);

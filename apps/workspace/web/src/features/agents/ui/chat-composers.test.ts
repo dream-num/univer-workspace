@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { $getRoot, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../../shared/i18n";
 import { session } from "../test-helpers";
 import { ComposerEditor, type ComposerEditorHandle } from "./composer-editor";
+import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentSessionPage } from "./session-page";
 
-const runner = vi.hoisted(() => ({ send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
+const runner = vi.hoisted(() => ({ skills: vi.fn(), send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
 const client = { prewarm: async () => {}, runner: async () => runner };
 let current = session();
 vi.mock("./client", () => ({ useAgentClient: () => client }));
@@ -32,6 +33,11 @@ const disconnect = vi.fn();
 const observe = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks(); current = session();
+  runner.skills.mockResolvedValue({ repository: "loaded", diagnostics: [], skills: [
+    { name: "weekly-report", source: "repository", description: "Write a weekly report", argumentHint: "[week]", userInvocable: true, modelInvocable: false },
+    { name: "weekly-review", source: "user", description: "Review a week", userInvocable: true, modelInvocable: true },
+    { name: "hidden", source: "user", description: "Model only", userInvocable: false, modelInvocable: true },
+  ] });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: typeof resize) { resize = callback; }
@@ -248,4 +254,101 @@ it("shows empty and non-member guidance and can expand diagnostics without hidde
   expect(rail.textContent).toContain("个人 · 文件过大 · .agents/skills/big/SKILL.md");
   await act(async () => toggle.click());
   expect(rail.textContent).not.toContain(".agents/skills/big/SKILL.md");
+});
+
+
+it("filters follow-up skills, completes with arrows and Enter without sending, caches and dismisses until text changes", async () => {
+  await renderSession();
+  await type("/week");
+  const options = () => [...container.querySelectorAll('[role="option"]')];
+  expect(options().map((item) => item.textContent)).toEqual(["/weekly-reportRepositoryWrite a weekly report[week]", "/weekly-reviewPersonalReview a week"]);
+  expect(options()[0]?.getAttribute("aria-selected")).toBe("true");
+  await key(textarea(), { key: "ArrowDown" });
+  expect(options()[1]?.getAttribute("aria-selected")).toBe("true");
+  await key(textarea(), { key: "Enter" });
+  expect(textarea().value).toBe("/weekly-review ");
+  expect(runner.send).not.toHaveBeenCalled();
+  expect(options()).toHaveLength(0);
+  await type("/weekly-rep");
+  expect(options()).toHaveLength(1);
+  await key(textarea(), { key: "Escape" });
+  expect(textarea().value).toBe("/weekly-rep");
+  expect(options()).toHaveLength(0);
+  await key(textarea(), { key: "ArrowDown" });
+  expect(options()).toHaveLength(0);
+  await type("/weekly-re");
+  expect(options()).toHaveLength(2);
+  await key(textarea(), { key: "ArrowUp" });
+  await key(textarea(), { key: "Tab" });
+  expect(textarea().value).toBe("/weekly-review ");
+  expect(runner.skills).toHaveBeenCalledTimes(1);
+  await type("/weekly-report args");
+  expect(options()).toHaveLength(0);
+});
+
+it("hides the menu and does not fetch skills while running or after a lookup error", async () => {
+  current = session({ status: "running" });
+  await renderSession();
+  await type("/");
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+  expect(runner.skills).not.toHaveBeenCalled();
+  current = session({ status: "idle" });
+  runner.skills.mockRejectedValue(new Error("Unavailable"));
+  await renderSession();
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+  await type("/week");
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+});
+
+it("completes from the shared menu in the real Lexical composer before its send command", async () => {
+  const handle: { current: ComposerEditorHandle | null } = { current: null };
+  const onSend = vi.fn();
+  function Composer() {
+    const [text, setText] = useState("/");
+    const [starter, setStarter] = useState({ text: "/" });
+    const menu = useSkillMenu(text, { kind: "global" }, false, (value) => setStarter({ text: value }));
+    return createElement("div", null, createElement(SkillMenu, { menu }), createElement(ComposerEditor, {
+      handle, label: "Prompt", busy: false, starter, onSend, onMenuKey: menu.onKeyDown,
+      onChange: (content) => setText(content.text), onTrigger: vi.fn(), onFocus: vi.fn(),
+    }));
+  }
+  await act(async () => root.render(createElement(LanguageProvider, null, createElement(Composer))));
+  const editor = handle.current!.editor;
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  await act(async () => { editor.dispatchCommand(KEY_DOWN_COMMAND, new KeyboardEvent("keydown", { key: "ArrowDown" })); });
+  await act(async () => { editor.dispatchCommand(KEY_ENTER_COMMAND, new KeyboardEvent("keydown", { key: "Enter" })); });
+  expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toBe("/weekly-review ");
+  expect(onSend).not.toHaveBeenCalled();
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+});
+
+it("renders invocation pills and orders both invocation and tool use by first use", async () => {
+  const skills = ["invoked", "read"].map((name) => ({ name, source: "user", description: name, modelInvocable: true, userInvocable: true }));
+  current = session({ messages: [
+    { id: "user", role: "user", parts: [{ type: "text", text: "/invoked week" }], metadata: {
+      agentSkills: { skills, repository: "no-repository", diagnostics: [] }, agentSkillInvocation: { name: "invoked", source: "user", digest: "a".repeat(64) },
+    } },
+    { id: "assistant", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "skills_read", toolCallId: "read", state: "output-available", input: { name: "read" }, output: {} }] },
+  ] });
+  await renderSession();
+  expect(container.querySelector(".agent-skill-invocation")?.textContent).toBe("/invoked");
+  expect(container.querySelector(".agent-message-user p")?.textContent).toBe("/invoked week");
+  expect([...container.querySelectorAll(".agent-skill-name")].map((item) => item.textContent)).toEqual(["invoked", "read"]);
+  expect(container.querySelectorAll(".agent-skill-used")).toHaveLength(2);
+});
+
+
+it("caches menu catalogs separately for global scope and each repository", async () => {
+  await renderSession();
+  await type("/");
+  expect(runner.skills).toHaveBeenLastCalledWith({ kind: "global" });
+  for (const spaceId of ["repo-a", "repo-b", "repo-a"]) {
+    current = { ...current, scope: { kind: "repository", spaceId, baseWorktreeId: null } };
+    await renderSession();
+    expect(container.querySelector('[role="listbox"]')).not.toBeNull();
+  }
+  expect(runner.skills.mock.calls).toEqual([
+    [{ kind: "global" }], [{ kind: "repository", spaceId: "repo-a", baseWorktreeId: null }],
+    [{ kind: "repository", spaceId: "repo-b", baseWorktreeId: null }],
+  ]);
 });

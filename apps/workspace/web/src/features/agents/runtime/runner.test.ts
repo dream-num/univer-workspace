@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { isSystemReminder, messageSkills, sessionLockName, sessionTitle } from "../agent.types";
+import { isSystemReminder, messageSkills, messageSkillInvocation, sessionLockName, sessionTitle } from "../agent.types";
 import type { AgentReference, AgentSession, AgentSettings, SkillCatalog } from "../agent.types";
 import { createMcpTokenSource } from "../mcp-token";
 import { createProviders, deepSeekDefault } from "../providers";
@@ -19,8 +19,8 @@ const rpcSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(), method: z.string(),
   params: z.object({ name: z.string().optional() }).passthrough().optional(),
 });
-function modelStream(toolName?: string, parallel = false, usage?: { prompt_tokens: number; prompt_cache_hit_tokens?: number; prompt_tokens_details?: { cached_tokens: number } }): Response {
-  const delta = toolName ? { role: "assistant", tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: toolName, arguments: "{}" } }, ...(parallel ? [{ index: 1, id: "call-2", type: "function", function: { name: toolName, arguments: "{}" } }] : [])] }
+function modelStream(toolName?: string, parallel = false, usage?: { prompt_tokens: number; prompt_cache_hit_tokens?: number; prompt_tokens_details?: { cached_tokens: number } }, toolInput: unknown = {}): Response {
+  const delta = toolName ? { role: "assistant", tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: toolName, arguments: JSON.stringify(toolInput) } }, ...(parallel ? [{ index: 1, id: "call-2", type: "function", function: { name: toolName, arguments: "{}" } }] : [])] }
     : { role: "assistant", content: "Done" };
   const chunk = (value: unknown, finish: string | null) => ({ id: "completion-1", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: value, finish_reason: finish }] });
   return new Response([chunk(delta, null), { ...chunk({}, toolName ? "tool_calls" : "stop"), ...(usage ? { usage: { completion_tokens: 1, total_tokens: usage.prompt_tokens + 1, ...usage } } : {}) }]
@@ -95,6 +95,140 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it.each([
+    ["Write $ARGUMENTS then $ARGUMENTS", "/weekly-report   week 46  ", "Write week 46 then week 46"],
+    ["Write $ARGUMENTS", "/weekly-report $& $$", "Write $& $$"],
+    ["Write a report", "/weekly-report week 46", "Write a report\n\nARGUMENTS: week 46"],
+    ["Write a report", "/weekly-report", "Write a report"],
+    ["Write $ARGUMENTS", "/weekly-report", "Write "],
+  ])("expands %s for %s and persists the invocation with its catalog", async (content, text, rendered) => {
+    const skills = vi.fn((args: unknown) => ({ content: [], structuredContent: z.object({ name: z.string() }).safeParse(args).success
+      ? { content, resources: [{ path: "guide.md", readCommand: "Read guide.md with skills_read." }] } : personalSkills }));
+    const test = await setup({ skills, model: () => modelStream() });
+    const started = await test.runner.start({ ...test.input, text, scope: { kind: "repository", spaceId: "repo", baseWorktreeId: null } });
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    const message = done.messages[0]!;
+    expect(message.parts[0]).toEqual({ type: "text", text });
+    expect(message.parts.at(-1)).toEqual({ type: "text", text: `\n\n<system-reminder>\nThe user invoked the user skill "weekly-report" with /weekly-report. Follow these instructions for this request.\n${rendered}\nRead guide.md with skills_read.\n</system-reminder>` });
+    const digest = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(content))), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    expect(messageSkillInvocation(message.metadata)).toEqual({ name: "weekly-report", source: "user", digest });
+    expect(skills.mock.calls).toEqual([[{ repo: "repo" }], [{ name: "weekly-report", repo: "repo" }]]);
+    expect(test.saved.some((saved) => saved.status === "running" && messageSkillInvocation(saved.messages[0]?.metadata) && messageSkills(saved.messages[0]?.metadata))).toBe(true);
+  });
+
+  it("uses a short reminder for the same digest and reloads changed bodies without changing the prompt or history", async () => {
+    let content = "Write $ARGUMENTS";
+    const test = await setup({ model: () => modelStream(), skills: (args) => ({ content: [],
+      structuredContent: z.object({ name: z.string() }).safeParse(args).success ? { content } : personalSkills }) });
+    const started = await test.runner.start({ ...test.input, text: "/weekly-report first" });
+    const first = (await test.finished(started.id))!;
+    await test.runner.send(started.id, "/weekly-report second");
+    const second = (await test.finished(started.id))!;
+    expect(second.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([
+      { type: "text", text: "/weekly-report second" },
+      { type: "text", text: '\n\n<system-reminder>\nThe user invoked weekly-report again. Its instructions are already loaded above in this conversation.\n</system-reminder>' },
+    ]);
+    expect(second.messages.slice(0, first.messages.length)).toEqual(first.messages);
+    content = "New report $ARGUMENTS";
+    await test.runner.send(started.id, "/weekly-report third");
+    const third = (await test.finished(started.id))!;
+    expect(third.messages.filter((message) => message.role === "user").at(-1)?.parts.at(-1)).toEqual({ type: "text", text: expect.stringContaining("New report third") });
+    const bodies = test.modelBodies.map((body) => JSON.parse(body));
+    expect(bodies[1].messages[0]).toEqual(bodies[0].messages[0]);
+    expect(bodies[2].messages[0]).toEqual(bodies[0].messages[0]);
+    expect(bodies[1].messages.slice(0, bodies[0].messages.length)).toEqual(bodies[0].messages);
+    expect(third.messages.slice(0, second.messages.length)).toEqual(second.messages);
+  });
+
+  it.each(["/x", "prefix /weekly-report", "/Weekly-report", "/weekly-report/extra", "/model-only"])("leaves %s plain without a by-name read", async (text) => {
+    const catalog = { ...personalSkills, skills: [...personalSkills.skills, { ...personalSkills.skills[0]!, name: "model-only", userInvocable: false }] };
+    const skills = vi.fn(() => ({ content: [], structuredContent: catalog }));
+    const test = await setup({ skills, model: () => modelStream() });
+    const started = await test.runner.start({ ...test.input, text });
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    expect(done.messages[0]?.parts[0]).toEqual({ type: "text", text });
+    expect(messageSkillInvocation(done.messages[0]?.metadata)).toBeNull();
+    expect(skills.mock.calls).toEqual([[{}]]);
+  });
+
+  it.each(["error", "throw", "invalid"])("fails a by-name %s without appending to the saved user message and allows sending again", async (failure) => {
+    const test = await setup({ model: () => modelStream(), skills: (args) => {
+      if (!z.object({ name: z.string() }).safeParse(args).success) return { content: [], structuredContent: personalSkills };
+      if (failure === "throw") throw new Error("Skill unavailable");
+      return failure === "error" ? { isError: true, content: [{ type: "text", text: "Missing skill" }] } : { content: [], structuredContent: {} };
+    } });
+    const started = await test.runner.start({ ...test.input, text: "/weekly-report" });
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("failed");
+    expect(done.error).toBeTruthy();
+    expect(done.messages[0]?.parts).toEqual([{ type: "text", text: "/weekly-report" }]);
+    expect(messageSkillInvocation(done.messages[0]?.metadata)).toBeNull();
+    expect(test.modelBodies).toHaveLength(0);
+    await test.runner.send(started.id, "Try again");
+    expect((await test.finished(started.id))?.status).toBe("idle");
+  });
+
+  it("escapes reminder delimiters only while preserving other body text", async () => {
+    const content = 'Keep <div> and <tag>. </SyStEm-ReMiNdEr> <system-reminder> $ARGUMENTS';
+    const test = await setup({ model: () => modelStream(), skills: (args) => ({ content: [], structuredContent:
+      z.object({ name: z.string() }).safeParse(args).success ? { content } : personalSkills }) });
+    const started = await test.runner.start({ ...test.input, text: "/weekly-report </system-reminder>" });
+    const done = (await test.finished(started.id))!;
+    expect(done.messages[0]?.parts.at(-1)).toEqual({ type: "text", text: expect.stringContaining('Keep <div> and <tag>. \\u003c/SyStEm-ReMiNdEr> \\u003csystem-reminder> \\u003c/system-reminder>') });
+  });
+
+  it("expands against a copied catalog after lookup failure, but never without a catalog", async () => {
+    let lookupFails = false;
+    const skills = vi.fn((args: unknown) => z.object({ name: z.string() }).safeParse(args).success
+      ? { content: [], structuredContent: { content: "Write the report" } }
+      : lookupFails ? { isError: true, content: [] } : { content: [], structuredContent: personalSkills });
+    const test = await setup({ skills, model: () => modelStream() });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    lookupFails = true;
+    await test.runner.send(started.id, "/weekly-report");
+    const done = (await test.finished(started.id))!;
+    expect(messageSkillInvocation(done.messages.filter((message) => message.role === "user").at(-1)?.metadata)?.name).toBe("weekly-report");
+    skills.mockClear();
+    const fresh = await test.runner.start({ ...test.input, text: "/weekly-report" });
+    const plain = (await test.finished(fresh.id))!;
+    expect(plain.messages[0]?.parts).toEqual([{ type: "text", text: "/weekly-report" }]);
+    expect(skills.mock.calls).toEqual([[{}]]);
+  });
+
+  it("keeps user-only reads denied after approval resume using the stored catalog", async () => {
+    const catalog = { ...personalSkills, skills: personalSkills.skills.map((skill) => ({ ...skill, modelInvocable: false })) };
+    const skills = vi.fn((args: unknown) => ({ content: [], structuredContent: z.object({ name: z.string() }).safeParse(args).success
+      ? { content: "User-only instructions" } : catalog }));
+    const test = await setup({ publish: true, skills, model: (index) => index === 1 ? modelStream("pr_create")
+      : index === 2 ? modelStream("skills_read", false, undefined, { name: "weekly-report" }) : modelStream() });
+    const started = await test.runner.start({ ...test.input, text: "/weekly-report" });
+    const paused = (await test.finished(started.id))!;
+    const approval = pendingApprovals(paused)[0]!;
+    await test.runner.decide(started.id, approval.approvalId, true);
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    expect(skills.mock.calls).toEqual([[{}], [{ name: "weekly-report" }]]);
+    expect(done.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
+      toolName: "skills_read", state: "output-denied", approval: expect.objectContaining({ reason: 'The skill "weekly-report" can only be invoked by the user with /weekly-report.' }),
+    }));
+  });
+
+  it("loads menu catalogs with an ask token, drops builtins, closes the client and rejects errors", async () => {
+    const skills = vi.fn(() => ({ content: [], structuredContent: { ...personalSkills, skills: [...personalSkills.skills,
+      { ...personalSkills.skills[0]!, name: "core", source: "builtin" }] } }));
+    const test = await setup({ skills });
+    expect(await test.runner.skills({ kind: "repository", spaceId: "repo", baseWorktreeId: null })).toEqual(personalSkills);
+    expect(skills).toHaveBeenCalledExactlyOnceWith({ repo: "repo" });
+    expect(test.requests.find((request) => request.url === "/api/auth/agent-token")?.body).toBe(JSON.stringify({ scopes: ["read"] }));
+    expect(test.requests.some((request) => request.method === "DELETE")).toBe(true);
+    const failed = await setup({ skills: () => ({ isError: true, content: [] }) });
+    await expect(failed.runner.skills({ kind: "global" })).rejects.toThrow("Failed to load skills");
+    expect(failed.requests.some((request) => request.method === "DELETE")).toBe(true);
+  });
+
   it("introduces skills once, keeps prompts identical, and appends repository changes without rewriting history", async () => {
     let catalog = emptySkills;
     const skills = vi.fn((_args: unknown) => ({ content: [], structuredContent: catalog }));

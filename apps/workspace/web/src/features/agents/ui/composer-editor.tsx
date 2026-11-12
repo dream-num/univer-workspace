@@ -4,7 +4,7 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, $isTextNode, $setSelection, COMMAND_PRIORITY_HIGH, INSERT_LINE_BREAK_COMMAND, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
+import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, $isTextNode, $setSelection, COMMAND_PRIORITY_CRITICAL, COMMAND_PRIORITY_HIGH, INSERT_LINE_BREAK_COMMAND, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
 import type { LexicalEditor, RangeSelection } from "lexical";
 import { useEffect, useRef } from "react";
 import type { AgentReference } from "../agent.types";
@@ -14,6 +14,7 @@ import { referenceTrigger } from "./references";
 export type ComposerEditorHandle = { editor: LexicalEditor; selection: RangeSelection | null };
 type Props = {
   readonly handle: { current: ComposerEditorHandle | null }; readonly label: string; readonly busy: boolean;
+  readonly onMenuKey?: (event: KeyboardEvent) => boolean;
   readonly starter?: { readonly text: string } | null; readonly focus?: boolean;
   readonly onChange: (content: ReturnType<typeof $serializeComposer>) => void;
   readonly onTrigger: (selection: RangeSelection) => void; readonly onSend: () => void; readonly onFocus: () => void;
@@ -63,6 +64,14 @@ function EditorBehavior(props: Props) {
         latest.current.onTrigger(range);
       }
     }));
+    const unregisterMenu = editor.registerCommand(KEY_DOWN_COMMAND, (event) => {
+      if (editor.isComposing()) return false;
+      return latest.current.onMenuKey?.(event) ?? false;
+    }, COMMAND_PRIORITY_CRITICAL);
+    const unregisterMenuEnter = editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
+      if (!event || editor.isComposing()) return false;
+      return latest.current.onMenuKey?.(event) ?? false;
+    }, COMMAND_PRIORITY_CRITICAL);
     const unregisterEnter = editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
       if (!event || editor.isComposing() || event.isComposing || (event.shiftKey && !event.ctrlKey && !event.metaKey)) return false;
       event.preventDefault(); latest.current.onSend(); return true;
@@ -71,7 +80,7 @@ function EditorBehavior(props: Props) {
       if (editor.isComposing() || event.isComposing || !event.ctrlKey || event.key.toLowerCase() !== "j") return false;
       event.preventDefault(); editor.dispatchCommand(INSERT_LINE_BREAK_COMMAND, false); return true;
     }, COMMAND_PRIORITY_HIGH);
-    return () => { unregister(); unregisterEnter(); unregisterNewline(); latest.current.handle.current = null; };
+    return () => { unregister(); unregisterMenu(); unregisterMenuEnter(); unregisterEnter(); unregisterNewline(); latest.current.handle.current = null; };
   }, [editor]);
   useEffect(() => { editor.setEditable(!props.busy); }, [editor, props.busy]);
   useEffect(() => {

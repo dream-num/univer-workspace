@@ -50,6 +50,14 @@ export function messageSkills(metadata: UIMessage["metadata"]): SkillCatalog | n
   const parsed = skillsMetadataSchema.safeParse(metadata);
   return parsed.success ? parsed.data.agentSkills : null;
 }
+export const agentSkillInvocationSchema = z.object({
+  name: z.string(), source: z.enum(["repository", "user"]), digest: z.string().regex(/^[a-f0-9]{64}$/),
+});
+const skillInvocationMetadataSchema = z.object({ agentSkillInvocation: agentSkillInvocationSchema });
+export function messageSkillInvocation(metadata: UIMessage["metadata"]): z.infer<typeof agentSkillInvocationSchema> | null {
+  const parsed = skillInvocationMetadataSchema.safeParse(metadata);
+  return parsed.success ? parsed.data.agentSkillInvocation : null;
+}
 export function splitReferenceText(text: string, references: readonly AgentReference[]): (string | AgentReference)[] {
   const tokens = new Map(references.map((reference) => [agentReferenceToken(reference), reference]));
   if (!tokens.size) return [text];

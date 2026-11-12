@@ -11,6 +11,7 @@ type AgentToolApproval = Extract<ToolLoopAgentSettings<never, ToolSet>["toolAppr
 
 export function gateTools(tools: ToolSet, mode: AgentMode,
   callWithPublish: (name: string, input: unknown, signal?: AbortSignal) => Promise<unknown>,
+  userOnlySkills: ReadonlySet<string> = new Set(),
 ): { tools: ToolSet; toolApproval: AgentToolApproval } {
   const scopes = new Map(Object.entries(tools).map(([name, tool]) => {
     const parsed = scopeMetadata.safeParse(tool);
@@ -26,6 +27,10 @@ export function gateTools(tools: ToolSet, mode: AgentMode,
   return {
     tools: gated,
     toolApproval: ({ toolCall }) => {
+      const input = z.object({ name: z.string() }).safeParse(toolCall.input);
+      if (toolCall.toolName === "skills_read" && input.success && userOnlySkills.has(input.data.name)) {
+        return { type: "denied", reason: `The skill "${input.data.name}" can only be invoked by the user with /${input.data.name}.` };
+      }
       switch (scopes.get(toolCall.toolName)) {
         case "publish": return mode === "ask"
           ? { type: "denied", reason: "Ask mode is read-only; ask the user to switch to Auto to publish." }
