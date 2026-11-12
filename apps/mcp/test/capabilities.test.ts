@@ -155,6 +155,7 @@ describe("capabilities through MCP tools/list and initialize", () => {
     expect(text).toContain("It is not a Slide, Board or other Unit and does not go through pull requests.");
     expect(text).toContain("only save a draft");
     expect(text).toContain("give the user draft.previewUrl");
+    expect(text).toContain("Before saying whether a page is live or still a draft");
     expect(text).toContain("call html_view_draft_get");
     expect(text).toContain("On rejected, ask what to change.");
     expect(text).toContain("html_view_read then html_view_replace");
