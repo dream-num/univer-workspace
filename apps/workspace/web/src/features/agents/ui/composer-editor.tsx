@@ -4,7 +4,7 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, $isTextNode, $setSelection, COMMAND_PRIORITY_HIGH, KEY_ENTER_COMMAND } from "lexical";
+import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, $isTextNode, $setSelection, COMMAND_PRIORITY_HIGH, INSERT_LINE_BREAK_COMMAND, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
 import type { LexicalEditor, RangeSelection } from "lexical";
 import { useEffect, useRef } from "react";
 import type { AgentReference } from "../agent.types";
@@ -64,10 +64,14 @@ function EditorBehavior(props: Props) {
       }
     }));
     const unregisterEnter = editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
-      if (!event || editor.isComposing() || event.isComposing || !(event.shiftKey || event.ctrlKey || event.metaKey)) return false;
+      if (!event || editor.isComposing() || event.isComposing || (event.shiftKey && !event.ctrlKey && !event.metaKey)) return false;
       event.preventDefault(); latest.current.onSend(); return true;
     }, COMMAND_PRIORITY_HIGH);
-    return () => { unregister(); unregisterEnter(); latest.current.handle.current = null; };
+    const unregisterNewline = editor.registerCommand(KEY_DOWN_COMMAND, (event) => {
+      if (editor.isComposing() || event.isComposing || !event.ctrlKey || event.key.toLowerCase() !== "j") return false;
+      event.preventDefault(); editor.dispatchCommand(INSERT_LINE_BREAK_COMMAND, false); return true;
+    }, COMMAND_PRIORITY_HIGH);
+    return () => { unregister(); unregisterEnter(); unregisterNewline(); latest.current.handle.current = null; };
   }, [editor]);
   useEffect(() => { editor.setEditable(!props.busy); }, [editor, props.busy]);
   useEffect(() => {

@@ -30,6 +30,8 @@ html[data-ui-mode="repository"] .agent-table { width: 100%; min-width: 820px; ta
 html[data-ui-mode="repository"] .agent-table :is(td, th) { text-align: start; padding: 12px; border-bottom: 1px solid var(--rd-line); vertical-align: top; }
 html[data-ui-mode="repository"] .agent-session-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; }
 html[data-ui-mode="repository"] .agent-conversation { min-width: 0; }
+html[data-ui-mode="repository"] .agent-page:has(.agent-session-dock) { padding-bottom: 0; }
+html[data-ui-mode="repository"] .agent-session-dock { position: sticky; bottom: 0; z-index: 10; display: flow-root; padding-bottom: 20px; background: var(--rd-bg); }
 html[data-ui-mode="repository"] .agent-messages { display: grid; grid-template-columns: minmax(0, 1fr); gap: 24px; }
 html[data-ui-mode="repository"] .agent-message-user { padding: 16px; border-radius: 12px; background: var(--rd-panel-2); }
 html[data-ui-mode="repository"] .agent-session-rail { padding: 16px; border: 1px solid var(--rd-line); border-radius: 12px; overflow-wrap: anywhere; }
@@ -50,7 +52,7 @@ html[data-ui-mode="repository"] .agent-page :is(button, a, summary):focus-visibl
 
 html[data-ui-mode="repository"] .agent-composer-box { display: grid; gap: 12px; min-width: 0; padding: 16px 20px; border: 1px solid var(--rd-line-2); border-radius: 12px; background: var(--rd-panel); }
 html[data-ui-mode="repository"] .agent-composer-box:focus-within { border-color: var(--rd-accent); }
-html[data-ui-mode="repository"] .agent-composer-box textarea { border: 0; padding: 0; border-radius: 0; box-shadow: none; background: transparent; }
+html[data-ui-mode="repository"] .agent-composer-box textarea { min-height: 0; max-height: 40vh; field-sizing: content; resize: none; border: 0; padding: 0; border-radius: 0; box-shadow: none; background: transparent; }
 html[data-ui-mode="repository"] .agent-composer-box textarea:focus-visible { outline: none; }
 html[data-ui-mode="repository"] .agent-composer-controls { display: flex; align-items: center; gap: 12px; min-width: 0; }
 html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex-wrap: wrap; flex: 1; min-width: 0; align-items: center; gap: 8px; }
@@ -153,7 +155,7 @@ html[data-ui-mode="repository"] .agent-table tbody tr:hover { background: var(--
   html[data-ui-mode="repository"] .agent-recent-title { grid-column: 1 / -1; }
   html[data-ui-mode="repository"] .agent-recent-meta > a { max-width: 140px; }
 }
-html[data-ui-mode="repository"] .agent-approvals { position: sticky; bottom: 0; z-index: 10; display: grid; gap: 12px; }
+html[data-ui-mode="repository"] .agent-approvals { display: grid; gap: 12px; }
 html[data-ui-mode="repository"] .agent-approval { margin-top: 16px; padding: 20px; border: 1px solid var(--rd-line-2); border-radius: 12px; background: var(--rd-panel); overflow-wrap: anywhere; }
 html[data-ui-mode="repository"] .agent-approval dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 16px 0; font-size: 13px; }
 html[data-ui-mode="repository"] .agent-approval dt { color: var(--rd-ink-2); }

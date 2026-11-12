@@ -68,8 +68,8 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
           <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={busy}>
             {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
           </AgentModelControls>
-          <Button className="agent-send" aria-keyshortcuts="Shift+Enter" aria-label={selected ? m.send : m.setup} disabled={busy || Boolean(selected && !text.trim())} onClick={() => void send()}>
-            {selected ? <><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">⇧↵</kbd></> : m.setup}
+          <Button className="agent-send" aria-keyshortcuts="Enter" aria-label={selected ? m.send : m.setup} disabled={busy || Boolean(selected && !text.trim())} onClick={() => void send()}>
+            {selected ? <><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">↵</kbd></> : m.setup}
           </Button>
         </div>
       </div>
