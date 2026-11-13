@@ -1,4 +1,5 @@
 import { queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
+import { decodeSkillFile } from "./review-presentation";
 import { skillPreview } from "./review-model";
 import { api } from "../../shared/api/client";
 import { ApiError, apiError } from "../../shared/api/errors";
@@ -73,5 +74,23 @@ export function useSkillDraftDecision(draftId: string) {
       queries.setQueryData(skillDraftQueryOptions(draftId).queryKey, draft);
       for (const key of ["nodes", "resources"]) void queries.invalidateQueries({ queryKey: [key] });
     },
+  });
+}
+
+export function skillBaseFileQueryOptions(draftId: string, path: string) {
+  return queryOptions({
+    queryKey: ["skill-drafts", draftId, "base-file", path],
+    queryFn: async ({ signal }) => {
+      const { data, error, response } = await api.GET("/api/skill-drafts/{draftId}/content", {
+        params: { path: { draftId }, query: { path, version: "current" } },
+        parseAs: "arrayBuffer",
+        signal,
+      });
+      if (response.status === 404) return null;
+      if (error) throw apiError(error);
+      return decodeSkillFile(data);
+    },
+    retry: false,
+    gcTime: 0,
   });
 }

@@ -207,7 +207,7 @@ it("uses chat keys in the real Lexical composer, including line breaks and IME p
   expect(onSend).toHaveBeenCalledTimes(3);
 });
 
-it("shows used skills first, expands the remainder and diagnostics, and collapses again", async () => {
+it("shows used skills first and keeps diagnostics visible while expanding and collapsing skills", async () => {
   const skills = ["z-personal", "a-repo", "b-repo", "c-personal", "d-repo"].map((name) => ({
     name, source: name.endsWith("repo") ? "repository" as const : "user" as const,
     description: `Description ${name}`, path: `.agents/skills/${name}/SKILL.md`, modelInvocable: true, userInvocable: true,
@@ -228,9 +228,9 @@ it("shows used skills first, expands the remainder and diagnostics, and collapse
   expect(rail.textContent).toContain("Repository");
   expect(rail.textContent).toContain("Personal");
   expect(rail.querySelector(".agent-skills li")?.getAttribute("title")).toBe("Description c-personal\n.agents/skills/c-personal/SKILL.md");
-  const toggle = rail.querySelector<HTMLButtonElement>(".agent-steps-window")!;
-  expect(toggle.textContent).toBe("Show 2 more skills");
-  expect(rail.textContent).not.toContain("Missing description");
+  const toggle = rail.querySelector<HTMLButtonElement>(".agent-skills-more")!;
+  expect(toggle.textContent).toBe("Show 2 more Skills");
+  expect(rail.textContent).toContain("Missing description");
   await act(async () => toggle.click());
   expect(names()).toEqual(["c-personal", "z-personal", "a-repo", "b-repo", "d-repo"]);
   expect(rail.textContent).toContain("Missing description");
@@ -238,10 +238,10 @@ it("shows used skills first, expands the remainder and diagnostics, and collapse
   expect(toggle.getAttribute("aria-expanded")).toBe("true");
   await act(async () => toggle.click());
   expect(names()).toHaveLength(3);
-  expect(rail.textContent).not.toContain("Missing description");
+  expect(rail.textContent).toContain("Missing description");
 });
 
-it("shows empty and non-member guidance and can expand diagnostics without hidden skills", async () => {
+it("shows empty and non-member guidance with diagnostics visible without a toggle", async () => {
   window.localStorage.setItem("univer-workspace-language", "zh-CN");
   current = session({ messages: [{ id: "user", role: "user", parts: [{ type: "text", text: "Skills" }], metadata: {
     agentSkills: { skills: [], repository: "not-member", diagnostics: [{ source: "user", path: ".agents/skills/big/SKILL.md", problem: "too-large" }] },
@@ -250,12 +250,10 @@ it("shows empty and non-member guidance and can expand diagnostics without hidde
   const rail = container.querySelector(".agent-session-rail")!;
   expect(rail.textContent).toContain("你不是该仓库成员");
   expect(rail.textContent).toContain(".agents/skills/<name>/SKILL.md");
-  const toggle = rail.querySelector<HTMLButtonElement>(".agent-steps-window")!;
-  expect(toggle.textContent).toBe("显示 skill 诊断");
-  await act(async () => toggle.click());
-  expect(rail.textContent).toContain("个人 · 文件过大 · .agents/skills/big/SKILL.md");
-  await act(async () => toggle.click());
-  expect(rail.textContent).not.toContain(".agents/skills/big/SKILL.md");
+  expect(rail.querySelector(".agent-skills-more")).toBeNull();
+  expect(rail.querySelector(".agent-skill-attention h3")?.textContent).toBe("需要处理1");
+  expect(rail.querySelector(".agent-skill-problem")?.textContent).toBe("文件过大");
+  expect(rail.querySelector(".agent-skill-diagnostics code")?.textContent).toBe(".agents/skills/big/SKILL.md");
 });
 
 
@@ -337,8 +335,9 @@ it("renders invocation pills and orders both invocation and tool use by first us
     { id: "assistant", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "skills_read", toolCallId: "read", state: "output-available", input: { name: "read" }, output: {} }] },
   ] });
   await renderSession();
-  expect(container.querySelector(".agent-skill-invocation")?.textContent).toBe("/invoked");
-  expect(container.querySelector(".agent-message-user p")?.textContent).toBe("/invoked week");
+  expect(container.querySelector(".agent-skill-invocation code")?.textContent).toBe("/invoked");
+  expect(container.querySelector(".agent-skill-invocation .agent-skill-scope")?.textContent).toBe("Personal");
+  expect(container.querySelector(".agent-message-user p")?.textContent).toBe("/invokedPersonal week");
   expect([...container.querySelectorAll(".agent-skill-name")].map((item) => item.textContent)).toEqual(["invoked", "read"]);
   expect(container.querySelectorAll(".agent-skill-used")).toHaveLength(2);
 });

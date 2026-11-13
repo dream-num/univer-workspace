@@ -11,7 +11,9 @@ import { agentSessionIdSchema, isSystemReminder, messageReferences, messageSkill
 import type { AgentMode, AgentSession } from "../agent.types";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
-import { SkillSource } from "./skill-source";
+import { SkillDraftCard } from "../../skill-drafts/draft-card";
+import { skillDraftResultId } from "./skill-draft-result";
+import { SkillScopeBadge, SkillSource } from "./skill-source";
 import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
@@ -166,7 +168,7 @@ function UserMessage({ message }: { readonly message: UIMessage }) {
   const invocation = messageSkillInvocation(message.metadata);
   const prefix = invocation && text.startsWith(`/${invocation.name}`) ? `/${invocation.name}` : null;
   if (prefix) text = text.slice(prefix.length);
-  return <p>{prefix ? <span className="agent-reference agent-skill-invocation">{prefix}</span> : null}{splitReferenceText(text, messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>;
+  return <p>{prefix ? <span className="agent-skill-invocation"><code>{prefix}</code>{invocation && <SkillScopeBadge source={invocation.source} />}</span> : null}{splitReferenceText(text, messageReferences(message.metadata)).map((part, index) => typeof part === "string" ? part : <AgentReferencePill key={index} reference={part} linked />)}</p>;
 }
 const skillReadInput = z.object({ name: z.string() });
 const skillReadOutput = z.object({ isError: z.boolean().optional() });
@@ -196,16 +198,19 @@ function SessionSkills({ session }: { readonly session: AgentSession }) {
     <h2>{m.skills}</h2>
     {catalog?.repository === "not-member" ? <p className="agent-note">{m.skillsNotMember}</p> : null}
     {!skills.length ? <p className="agent-note">{m.noSkills}</p> : <ul className="agent-skills">{skills.slice(0, expanded ? undefined : 3).map((skill) => <li key={skill.name} title={[skill.description, skill.path].filter(Boolean).join("\n")}>
-      <span className="agent-skill-name">{skill.name}</span><span className="agent-skill-source">{skill.source === "builtin" ? m.builtinSkill : skill.source === "repository" ? m.repository : m.personalSkill}</span>
+      <span className="agent-skill-name">{skill.name}</span><SkillScopeBadge source={skill.source} />
       <SkillSource metadata={skill.metadata} />
       {used.has(skill.name) ? <span className="agent-skill-used">{m.skillUsed}</span> : null}
+      <span className="agent-skill-description">{skill.description}</span>
     </li>)}</ul>}
-    {hidden || catalog?.diagnostics.length ? <button type="button" className="agent-steps-window" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>
-      {expanded ? hidden ? m.showFewerSkills : m.hideSkillDiagnostics : hidden ? m.showMoreSkills(hidden) : m.showSkillDiagnostics}
-    </button> : null}
-    {expanded && catalog?.diagnostics.length ? <ul className="agent-skill-diagnostics">{catalog.diagnostics.map((diagnostic, index) => <li key={index}>
-      {diagnostic.source === "repository" ? m.repository : m.personalSkill} · {m.skillProblems[diagnostic.problem]} · {diagnostic.path}{diagnostic.detail ? ` · ${diagnostic.detail}` : ""}
-    </li>)}</ul> : null}
+    {hidden ? <button type="button" className="agent-skills-more" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>{expanded ? m.showFewerSkills : m.showMoreSkills(hidden)}</button> : null}
+    {catalog?.diagnostics.length ? <section className="agent-skill-attention" aria-label={m.skillsAttention}>
+      <h3><CircleAlert aria-hidden="true" />{m.skillsAttention}<span className="agent-skill-count">{catalog.diagnostics.length}</span></h3>
+      <ul className="agent-skill-diagnostics">{catalog.diagnostics.map((diagnostic, index) => <li key={index}>
+        <span className="agent-skill-problem">{m.skillProblems[diagnostic.problem]}</span><SkillScopeBadge source={diagnostic.source} />
+        <code>{diagnostic.path}</code>{diagnostic.detail ? <span>{diagnostic.detail}</span> : null}
+      </li>)}</ul>
+    </section> : null}
   </>;
 }
 function AssistantMessage({ message, session, current, latestStepsIndex }: { readonly message: UIMessage; readonly session: AgentSession; readonly current: boolean; readonly latestStepsIndex: number }) {
@@ -257,6 +262,7 @@ function StepRow({ part, session }: { readonly part: StepPart; readonly session:
   const timing = part.type !== "reasoning" ? session.toolTimings[part.toolCallId] : undefined;
   const parsedDraft = part.type !== "reasoning" && part.state === "output-available" &&
     ["html_view_create", "html_view_replace"].includes(toolName(part)) ? pageDraftOutput.safeParse(part.output) : null;
+  const skillDraftId = part.type !== "reasoning" && part.state === "output-available" ? skillDraftResultId(toolName(part), part.output) : null;
   const draftId = parsedDraft?.success && !parsedDraft.data.isError ? parsedDraft.data.structuredContent.draft.id : null;
   return <div className="agent-step" data-status={state}>
     <button type="button" className="agent-step-row" aria-expanded={open} onClick={() => setOpen(!open)}>
@@ -266,6 +272,7 @@ function StepRow({ part, session }: { readonly part: StepPart; readonly session:
       {state === "approval" || state === "rejected" ? <span>{status}</span> : null}
       {part.type !== "reasoning" ? <span className="agent-step-duration">{timing ? durationLabel(timing.startedAt, timing.endedAt ?? (running ? new Date().toISOString() : null)) : "—"}</span> : null}
     </button>
+    {skillDraftId && <SkillDraftCard draftId={skillDraftId} />}
     {draftId && <HtmlViewDraftReview key={draftId} draftId={draftId} presentation="card" />}
     {open ? <div className="agent-step-body">{part.type === "reasoning" ? <IssueMarkdown text={part.text} /> : <ToolBody part={part} state={state} status={status} />}</div> : null}
   </div>;
