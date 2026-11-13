@@ -67,6 +67,19 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   MO3 Claude Code/VS Code CIMD, SSRF refusals, anonymous no-fetch and the CIMD off switch,
   authentication, idempotency keys and `inspect` input errors, the executor, files, Office, renderer and
   compilers, the G0 production shape with the `*` allowlist, usage evidence, opencode, and cleanup.
+- [Read Sheet Units](./sheet-lens.md): SLC1-SLC10 cover `uvw outline`, `read` and `find` on the
+  seeded sales, ledger and Doc Units: zoom, continuations, typed JSON, large-sheet notes,
+  revisions, errors, trunk reads and access.
 - [MCP executor and renderer isolation](./mcp-security.md): stage G sandbox baseline, MG1-MG11
   checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
   configuration and renderer separation, each reported `contained` or `exposed`.
+
+## Helper scripts
+
+- [seed-sheets.mjs](../bin/seed-sheets.mjs) creates sales and elements workbooks,
+  30,000-row and 50,000-row ledgers, and a Doc in the run user's personal repository.
+  Run `eval "$($V env)"` then `node .agents/skills/verify-uvw/bin/seed-sheets.mjs`.
+  Requires `python3` with `openpyxl`. Each invocation creates a new draft Worktree and
+  new Units. The last stdout line is JSON with `sales`, `elements`, `ledger30k`,
+  `ledger50k`, `doc` Unit IDs, their `worktree` scope, `space`, and `repo`.
+  Read them with `--worktree <worktree> --unit <id>`.
