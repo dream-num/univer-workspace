@@ -42,3 +42,14 @@ it("cuts shortened descriptions on code point boundaries", () => {
   expect(reminder.length).toBeLessThanOrEqual(8000);
   expect(reminder).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
 });
+
+it("keeps provenance metadata and duplicate diagnostics from the gateway and persisted catalog", () => {
+  const metadata = { source: "https://example.com/skills", "source-commit": "abc123" };
+  const custom: SkillCatalog = { repository: "loaded", skills: [
+    { name: "imported", description: "Imported", source: "user", modelInvocable: true, userInvocable: true, metadata },
+    { name: "plain", description: "Plain", source: "repository", modelInvocable: true, userInvocable: true },
+  ], diagnostics: [{ source: "repository", path: ".agents/skills/report", problem: "duplicate" }] };
+  expect(gatewaySkillCatalogSchema.parse(custom)).toEqual(custom);
+  expect(messageSkills({ agentSkills: custom })).toEqual(custom);
+  expect(gatewaySkillCatalogSchema.safeParse({ ...custom, skills: [{ ...custom.skills[0], metadata: { source: 42 } }] }).success).toBe(false);
+});

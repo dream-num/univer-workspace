@@ -249,7 +249,7 @@ and the matching owner/slug candidates when available.
 | `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
-| `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path` and `argumentHint`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
+| `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path`, `argumentHint` and `metadata`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
 | `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
 | `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
 | `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
@@ -335,12 +335,18 @@ lists built-ins plus live custom Skills from the caller's Personal Space under `
 Pass `repo` to include that repository's Skills when the caller is an owner or member.
 The repository layer replaces a personal Skill of the same name. Built-in names are reserved.
 When the repository is the Personal Space, it is loaded once as the repository layer.
-The result includes `diagnostics` for invalid, oversized, reserved or shadowed Skills and
+The result includes `diagnostics` for invalid, oversized, reserved, shadowed or duplicate Skills and
 `repository` as `loaded`, `not-member` or `no-repository`. Missing or forbidden repositories
 and Workspace failures remain tool errors.
 
 Each entry includes `source` (`builtin`, `user` or `repository`), `modelInvocable` and
 `userInvocable`, plus a custom Skill's `path` and optional `argumentHint`.
+Optional `metadata` passes through the frontmatter's string-to-string map for custom and built-in Skills.
+Entries without frontmatter `metadata` omit the key.
+Duplicate `.agents` folders at the Space root, `skills` folders under `.agents`, Skill-name folders
+under `skills`, or `SKILL.md` Blobs in a Skill folder each produce one `duplicate` diagnostic
+with the layer's `source` and the ambiguous `path`. Discovery skips that ambiguous subtree
+regardless of API listing order. The other source layer still loads.
 Discovery processes at most 100 Skill folders per layer. `SKILL.md` must be downloadable,
 valid UTF-8 without NUL, at most 64 KiB, and pass the SDK's frontmatter validation.
 With a name, the result includes `source`, `content` and optional text `resources`.

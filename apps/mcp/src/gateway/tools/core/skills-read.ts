@@ -47,12 +47,13 @@ export const skillsReadTool: ToolDefinition = {
           modelInvocable: z.boolean(),
           userInvocable: z.boolean(),
           argumentHint: z.string().optional(),
+          metadata: z.record(z.string(), z.string()).optional(),
         }),
       )
       .optional(),
     diagnostics: z.array(z.object({
       source: z.enum(["repository", "user"]), path: z.string(),
-      problem: z.enum(["invalid-skill", "reserved-name", "shadowed", "too-large"]),
+      problem: z.enum(["invalid-skill", "reserved-name", "shadowed", "too-large", "duplicate"]),
       detail: z.string().optional(),
     })).optional(),
     repository: z.enum(["loaded", "not-member", "no-repository"]).optional(),

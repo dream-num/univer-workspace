@@ -31,11 +31,12 @@ export const skillEntrySchema = z.object({
   name: z.string(), description: z.string(), source: z.enum(["repository", "user"]),
   path: z.string().optional(), modelInvocable: z.boolean(), userInvocable: z.boolean(),
   argumentHint: z.string().optional(),
+  metadata: z.record(z.string(), z.string()).optional(),
 });
 export type SkillEntry = z.infer<typeof skillEntrySchema>;
 export const skillDiagnosticSchema = z.object({
   source: z.enum(["repository", "user"]), path: z.string(),
-  problem: z.enum(["invalid-skill", "reserved-name", "shadowed", "too-large"]),
+  problem: z.enum(["invalid-skill", "reserved-name", "shadowed", "too-large", "duplicate"]),
   detail: z.string().optional(),
 });
 export type SkillDiagnostic = z.infer<typeof skillDiagnosticSchema>;

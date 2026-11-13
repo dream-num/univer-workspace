@@ -4,9 +4,12 @@ import {
   WorkspaceSpaceFeature,
   type WorkspaceNode,
 } from "@univerjs/univer-workspace-client-core/product";
+import { z } from "zod";
 import type { WorkspaceSkills } from "./skill-catalog.js";
 import type { ToolContext } from "./tools/definition.js";
 import { resolveRepo } from "./tools/core/issue-support.js";
+
+const metadataSchema = z.record(z.string(), z.string());
 
 export type SkillSource = "builtin" | "repository" | "user";
 export interface SkillEntry {
@@ -17,8 +20,9 @@ export interface SkillEntry {
   modelInvocable: boolean;
   userInvocable: boolean;
   argumentHint?: string;
+  metadata?: Record<string, string>;
 }
-export type SkillProblem = "invalid-skill" | "reserved-name" | "shadowed" | "too-large";
+export type SkillProblem = "invalid-skill" | "reserved-name" | "shadowed" | "too-large" | "duplicate";
 export interface SkillDiagnostic {
   source: "repository" | "user";
   path: string;
@@ -88,22 +92,37 @@ async function readText(blobs: WorkspaceBlobFeature, node: WorkspaceNode, limit:
   }
 }
 
-async function skillFolders(spaces: WorkspaceSpaceFeature, spaceId: string, name?: string) {
+async function skillFolders(spaces: WorkspaceSpaceFeature, spaceId: string, source: CustomSource, diagnostics: SkillDiagnostic[], name?: string) {
   let parentNodeId: string | undefined;
+  const parts: string[] = [];
   for (const part of [".agents", "skills"]) {
+    parts.push(part);
     const children = await spaces.browse({ spaceId, ...(parentNodeId === undefined ? {} : { parentNodeId }) });
-    const folder = children.find((node) => node.name === part && node.resource === null);
+    const folders = children.filter((node) => node.name === part && node.resource === null);
+    if (folders.length > 1) {
+      diagnostics.push({ source, path: parts.join("/"), problem: "duplicate" });
+      return [];
+    }
+    const folder = folders[0];
     if (!folder) return [];
     parentNodeId = folder.nodeId;
   }
   const folders = (await spaces.browse({ spaceId, ...(parentNodeId === undefined ? {} : { parentNodeId }) }))
     .filter((node) => node.resource === null);
-  const seen = new Set<string>();
-  return folders.slice(0, 100).filter((folder) => {
-    if (seen.has(folder.name)) return false;
-    seen.add(folder.name);
-    return name === undefined || folder.name === name;
-  });
+  const byName = new Map<string, WorkspaceNode[]>();
+  for (const folder of folders) {
+    const group = byName.get(folder.name);
+    if (group) group.push(folder);
+    else byName.set(folder.name, [folder]);
+  }
+  const unique: WorkspaceNode[] = [];
+  for (const folderName of [...byName.keys()].sort().slice(0, 100)) {
+    if (name !== undefined && folderName !== name) continue;
+    const group = byName.get(folderName)!;
+    if (group.length > 1) diagnostics.push({ source, path: `.agents/skills/${folderName}`, problem: "duplicate" });
+    else unique.push(group[0]!);
+  }
+  return unique;
 }
 
 export async function discoverSkills(
@@ -116,7 +135,8 @@ export async function discoverSkills(
   const blobs = new WorkspaceBlobFeature(async () => context.http);
   const skills = new Map<string, SkillEntry>(builtin.catalog.entries.map(({ frontmatter }) => [
     frontmatter.name,
-    { name: frontmatter.name, description: frontmatter.description, source: "builtin", modelInvocable: true, userInvocable: true },
+    { name: frontmatter.name, description: frontmatter.description, source: "builtin", modelInvocable: true, userInvocable: true,
+      ...(frontmatter.metadata === undefined ? {} : { metadata: metadataSchema.parse(frontmatter.metadata) }) },
   ]));
   const diagnostics: SkillDiagnostic[] = [];
   const spaceId = repo === undefined ? null : await resolveRepo(context, repo);
@@ -128,11 +148,13 @@ export async function discoverSkills(
   const personal = (await spaces.list()).find((space) => space.type === "personal" && space.affiliation === "owner");
 
   async function loadLayer(layerSpaceId: string, source: CustomSource) {
-    const folders = await skillFolders(spaces, layerSpaceId, name);
+    const folders = await skillFolders(spaces, layerSpaceId, source, diagnostics, name);
     const loaded = await boundedMap(folders, async (folder): Promise<CustomSkill | SkillDiagnostic | undefined> => {
       const path = `.agents/skills/${folder.name}/SKILL.md`;
-      const node = (await spaces.browse({ spaceId: layerSpaceId, parentNodeId: folder.nodeId }))
-        .find((node) => node.name === "SKILL.md" && node.resource?.kind === "blob");
+      const nodes = (await spaces.browse({ spaceId: layerSpaceId, parentNodeId: folder.nodeId }))
+        .filter((node) => node.name === "SKILL.md" && node.resource?.kind === "blob");
+      if (nodes.length > 1) return { source, path, problem: "duplicate" } satisfies SkillDiagnostic;
+      const node = nodes[0];
       if (!node) return undefined;
       if (folder.name === "." || folder.name === ".." || folder.name.includes("/")) {
         return { source, path, problem: "invalid-skill", detail: "The folder name is not a valid skill name." } satisfies SkillDiagnostic;
@@ -142,6 +164,7 @@ export async function discoverSkills(
         const { frontmatter } = await skillEntry(folder.name, { "SKILL.md": new TextEncoder().encode(content) });
         const entry: SkillEntry = {
           name: frontmatter.name, description: frontmatter.description, source, path,
+          ...(frontmatter.metadata === undefined ? {} : { metadata: metadataSchema.parse(frontmatter.metadata) }),
           modelInvocable: frontmatter["disable-model-invocation"] !== true,
           userInvocable: frontmatter["user-invocable"] !== false,
           ...(typeof frontmatter["argument-hint"] === "string" ? { argumentHint: frontmatter["argument-hint"] } : {}),
