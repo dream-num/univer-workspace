@@ -53,6 +53,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR7 reads a long class through `api_show` cursors and compares the pages with the reference library.
 - MR8 rejects a cursor reused with other arguments and an unknown Skill.
 - MR13 seeds personal and repository custom Skills and checks discovery sources, metadata, duplicate diagnostics and repository event attribution.
+- MR14 creates a Skill draft through MCP, publishes through an interactive HTTP Session, and reads the new Skill.
 - MA1 calls the gateway with the default personal access token (PAT) and records `auth_kind: pat`.
 - MA2 reads the protected-resource metadata without credentials.
 - MA3 refuses a write tool to a read-only PAT.
@@ -2783,6 +2784,28 @@ Skill disappears while the personal Skill remains. Duplicate `.agents`, `skills`
 names follow the same rule at their respective paths and skip the ambiguous subtree.
 Dot-named nested folders and `blob upload --parent` are exercised by these uploads.
 Use a fresh run for the duplicate case because it intentionally leaves an ambiguous folder.
+
+### MR14 Skill draft authoring
+
+Start a fresh MCP-enabled run, then run `user` and `doctor`.
+MR14 follows MR13's live custom Skill discovery path.
+
+```bash
+eval "$($V env)"
+node .agents/skills/verify-uvw/bin/mcp-skill-draft.mjs
+```
+
+Pass when `mr14-create.out` and `mr14-retry.out` return the same pending draft and
+an absolute identity-origin preview URL. `mr14-pending.out` must say `pending`, and
+`mr14-before.out` must not list the Skill. The script signs in through the password
+login HTTP endpoint to obtain the author's interactive Session. It publishes with
+`POST /api/skill-drafts/{id}/publish`, saves status 200 and state `published` in
+`mr14-publish.json`, and signs that Session out. No credential is saved to evidence.
+`mr14-published.out` must say `published`. `mr14-list.out` must list the new Skill
+with source `user`, and `mr14-read.out` must return its exact `SKILL.md` text.
+The four draft call events must say `ok`, `executor: none`, and the destination
+Space ID, with no Skill content. `mr14-summary.json` records the asserted result.
+Run `$V down` afterward.
 
 ### Typst job verification
 

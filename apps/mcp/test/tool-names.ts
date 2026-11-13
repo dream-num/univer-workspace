@@ -30,6 +30,8 @@ export const coreNames = [
   "api_find",
   "api_show",
   "skills_read",
+  "skill_draft_create",
+  "skill_draft_get",
   "html_view_validate",
   "html_view_create",
   "html_view_read",
@@ -62,6 +64,7 @@ export const adminNames = [
   "resources_export",
 ];
 export const writeNames = [
+  "skill_draft_create",
   "html_view_replace",
   "compile_typst",
   "compile_svg",
@@ -97,6 +100,8 @@ export const destructiveNames = [
   "pr_discard",
 ];
 export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree:merge"> = {
+  skill_draft_create: "write",
+  skill_draft_get: "read",
   space_browse: "read",
   space_find: "read",
   unit_list: "read",

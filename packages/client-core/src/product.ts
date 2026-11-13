@@ -103,3 +103,5 @@ export { WorkspaceAssetFeature } from "./asset.js";
 export { readWorkspaceHtmlView, type WorkspaceHtmlViewPage } from "./html-view-page.js";
 
 export { readWorkspaceHtmlViewDraft, htmlViewDraftUrl, type WorkspaceHtmlViewDraft, type WorkspaceHtmlViewDraftStatus } from "./html-view-draft.js";
+
+export { WorkspaceSkillDraftFeature, type WorkspaceSkillDraftInput, type WorkspaceSkillReviewFinding } from "./skill-draft.js";

@@ -272,6 +272,25 @@ describe("gateway authentication", () => {
     expect(gateway.productCookies).toEqual([]);
   });
 
+  it("requires Auto for Skill draft creation with an Ask-style read-only PAT", async () => {
+    const gateway = await start(exchangeEnv);
+    const result = await (await gateway.connect("uvw_pat_readonly")).callTool({
+      name: "skill_draft_create",
+      arguments: {
+        name: "weekly-report", destination: { personal: true },
+        files: [{ path: "SKILL.md", text: "Private Skill content" }],
+        review: [], idempotency_key: "skill-draft-key-1234",
+      },
+    });
+    expect(result).toMatchObject({
+      isError: true,
+      structuredContent: { code: "workspace-scope-required", message: expect.stringContaining("switch to Auto"), detail: { required: "write" } },
+    });
+    expect(gateway.productCookies).toEqual([]);
+    expect(gateway.events()).toMatchObject([{ tool: "skill_draft_create", outcome: "tool_error", error_code: "workspace-scope-required" }]);
+    expect(JSON.stringify(gateway.events())).not.toContain("Private Skill content");
+  });
+
   it("requires write scope for html_view_create before executor dispatch", async () => {
     const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_pat_readonly");
