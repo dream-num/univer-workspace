@@ -226,6 +226,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "express": "^5.1.0",
+    "fflate": "0.8.3",
     "lexical": "0.53.0",
     "lucide-react": "^1.28.0",
     "nodemailer": "^10.3.1",

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ResolvedSource } from "./sources.types.js";
 
 export const reviewFindingSchema = z
   .object({
@@ -96,7 +97,7 @@ export interface SkillDraftView {
   removedPaths: string[];
   scan: ScanFinding[];
   review: VerifiedReviewFinding[];
-  source: null;
+  source: ResolvedSource | null;
   unverifiedReviewCount: number;
   compatibility: "ready" | "degraded" | "blocked";
   createdAt: string;

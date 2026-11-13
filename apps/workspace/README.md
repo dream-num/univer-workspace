@@ -167,6 +167,13 @@ commands load this file automatically. GitHub OAuth is enabled only when
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_CALLBACK_URL` are all
 configured.
 
+`GITHUB_TOKEN` is optional and unset by default. Skill source imports use this
+server token only for `api.github.com`, independently of GitHub OAuth. Without
+it, all imports share GitHub's 60 API requests per hour per server IP. A configured
+token uses its authenticated quota. Raw Skill bytes come from
+`raw.githubusercontent.com` without the token. If the API quota is exhausted,
+ask the user to download the Skill zip and upload it to Space instead.
+
 Create a GitHub OAuth App for each environment. GitHub OAuth Apps accept only
 one callback URL, so local development and production should not share the
 same app. For local development, use:
@@ -775,11 +782,34 @@ HTML View 草稿由 `/api/html-view-drafts` 提交，只对作者可见。草稿
 
 ### Skill drafts and product database V20
 
-`POST /api/skill-drafts` stages author-private Agent Skill text files. Agents can create and read drafts.
+`POST /api/skill-drafts` stages author-private Agent Skills from text `files` or a pinned `from` source.
+Agents can create and read drafts.
 Only the author's interactive Session can publish or reject them. The response includes a
 `previewPath` at `/drafts/skills/<id>` for the browser review page, which is implemented separately.
 File content and current-version content are available through the author-private content endpoint.
 The [HTTP contract](contracts/http/paths/skill-drafts.yaml) describes requests and responses.
+
+`POST /api/skill-sources/read` accepts GitHub repo, tree and blob URLs, skills.sh
+links and `npx skills add` commands, ClawHub owner links and `clawhub install`
+commands, or the node ID of a readable Space zip or folder. It returns a pinned
+source and candidate paths. Pass that source and a candidate `skill` path to
+inspect file metadata, `SKILL.md` and static findings, or add `path` to page a text
+file. A root Skill uses `.`. Repeat reads and draft imports use the resolved source
+object. Git sources pin a commit, ClawHub pins owner, slug and version, and Space
+pins the node ETag. A changed Space source returns 409.
+
+`from: { source, skill, overrides? }` copies text and binary bytes. Each override
+has `path` and `text`; `null` deletes the path. `files` and `from` are mutually
+exclusive. Imports stamp string-valued provenance into `SKILL.md` frontmatter
+`metadata` and return the resolved `source` in the draft view. Invalid upstream
+frontmatter requires a valid `SKILL.md` override matching the draft name.
+
+Each Skill allows 100 files and 20 MiB total, with `SKILL.md` capped at 64 KiB and
+binary files at 10 MiB. Text reads allow 256 KiB. Archives allow 1,000 entries,
+20 MiB per entry, 100 MiB total and a 100:1 expansion ratio per entry. The server
+rejects unsafe paths, symlinks, encryption, multipart and ZIP64 archives before
+extraction. Requests time out after 15 seconds and follow at most five redirects,
+only within `api.github.com`, `raw.githubusercontent.com` and `clawhub.ai`.
 
 Publication rescans stored bytes, checks the complete replacement base, and adopts all file objects
 into `.agents/skills/<name>/` in one SQLite transaction. Removed files move to Trash. Failed writes

@@ -2,7 +2,7 @@
   post:
     tags: [Blobs]
     operationId: submitSkillDraft
-    summary: Stage an Skill for interactive author approval.
+    summary: Stage a Skill for interactive author approval.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
     requestBody:
@@ -36,6 +36,24 @@
         $ref: ../schemas/common.yaml#/Conflict
       "413":
         $ref: ../schemas/common.yaml#/PayloadTooLarge
+      "422":
+        description: GitHub tree was truncated.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "429":
+        description: Source hub rate limit. Upload the Skill zip to Space instead.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "502":
+        description: Source hub could not be read.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 /api/skill-drafts/{draftId}:
   parameters:
     - name: draftId
@@ -175,3 +193,60 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+
+/api/skill-sources/read:
+  post:
+    tags: [Blobs]
+    operationId: readSkillSource
+    summary: Resolve a pinned external or readable Space source and list, scan or page its Skills.
+    description: >-
+      Source strings resolve GitHub and skills.sh to a commit, ClawHub to owner/slug/version,
+      and a Space zip or folder node to its ETag. Repeat with the returned source object to
+      stay on that version. skill is a candidate path, with . for a root Skill.
+      No skill lists candidates. skill reads all file metadata, SKILL.md and a static scan.
+      path pages a UTF-8 text file up to 256 KiB. Cursors bind the pinned source, skill,
+      path and content and use character offsets without splitting surrogate pairs.
+      GitHub rate limits return SKILL_SOURCE_RATE_LIMITED with zip-upload guidance.
+      ClawHub ambiguity returns SKILL_SOURCE_AMBIGUOUS and candidate owner handles in the message.
+      A truncated GitHub tree returns SKILL_SOURCE_TRUNCATED. Hub failures use SKILL_SOURCE_UNAVAILABLE.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/skill-drafts.yaml#/ReadSkillSource
+    responses:
+      "200":
+        description: Candidate list, inspected Skill, or one text page. Only the requested variant is returned.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/skill-drafts.yaml#/SkillSourceResult
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
+      "413":
+        $ref: ../schemas/common.yaml#/PayloadTooLarge
+      "422":
+        description: GitHub tree is truncated. Upload a smaller Skill zip to Space.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "429":
+        description: Hub rate limit or GitHub access restriction. Ask the user to download a zip and upload it to Space.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "502":
+        description: Hub response, redirect or request timeout prevented reading the source.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse

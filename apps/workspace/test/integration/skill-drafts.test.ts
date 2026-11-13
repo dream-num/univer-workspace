@@ -1,3 +1,7 @@
+import { Readable } from "node:stream";
+import { zipSync } from "fflate";
+import { interactivePrincipal } from "../fixtures/principal.js";
+import { skillEntry } from "@modelcontextprotocol/server/ext/skills";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -118,6 +122,7 @@ async function harness() {
     return `${application.identity.cookieName}=${issued.cookieValue}`;
   };
   return {
+    sourceRead: (body: unknown, session = cookie) => fetch(`${origin}/api/skill-sources/read`, { method: "POST", headers: { cookie: session, "content-type": "application/json" }, body: JSON.stringify(body) }),
     application,
     directory,
     userId,
@@ -454,5 +459,94 @@ describe("Skill draft HTTP and atomic publication", () => {
         .status,
     ).toBe(400);
     expect((await c.send(`/${draft.id}/content?path=../secret`)).status).toBe(400);
+  });
+});
+
+async function uploadSource(c: Awaited<ReturnType<typeof harness>>, name: string, bytes: Uint8Array, parentNodeId: string | null = null) {
+  const actor = interactivePrincipal(c.userId);
+  const reserved = c.application.blobs.createUpload(actor, crypto.randomUUID(), {
+    spaceId: c.space.id, parentNodeId, name, originalFilename: name, byteSize: bytes.byteLength,
+  });
+  await c.application.blobs.upload(c.userId, reserved.body.upload.id, String(bytes.byteLength), Readable.from([bytes]));
+  await c.application.blobs.complete(actor, reserved.body.upload.id);
+  return reserved.body.upload;
+}
+
+describe("Skill source HTTP and draft imports", () => {
+  it("lists, scans and imports a Space zip with binary bytes, text overrides, deletions and provenance", async () => {
+    const c = await harness();
+    const original = skill("Read [guide](references/guide.md).\n");
+    const binary = new Uint8Array([0, 255, 128, 50]);
+    const zip = zipSync({
+      "weekly-report/SKILL.md": Buffer.from(original),
+      "weekly-report/scripts/run.py": Buffer.from("print('hello')"),
+      "weekly-report/references/guide.md": Buffer.from("original guide"),
+      "weekly-report/assets/sample.png": binary,
+    });
+    const uploaded = await uploadSource(c, "source.zip", zip);
+    expect((await c.sourceRead({ source: uploaded.nodeId }, "")).status).toBe(401);
+    const listing = await c.sourceRead({ source: uploaded.nodeId });
+    expect(listing.status, await listing.clone().text()).toBe(200);
+    const { source, candidates } = await listing.json();
+    expect(candidates).toEqual([{ name: "weekly-report", description: "Build weekly reports.", path: "weekly-report", fileCount: 4, problems: [] }]);
+    expect(listing.headers.get("cache-control")).toBe("private, no-store");
+    const scanned = await c.sourceRead({ source, skill: "weekly-report" });
+    expect((await scanned.json()).scan).toContainEqual(expect.objectContaining({ rule: "script-file", path: "scripts/run.py" }));
+    const body = { name: "weekly-report", spaceId: c.space.id, from: { source, skill: "weekly-report", overrides: [
+      { path: "references/guide.md", text: "adapted guide" }, { path: "scripts/run.py", text: null },
+    ] }, review: [] };
+    const key = crypto.randomUUID();
+    const draft = await c.submit(body, key);
+    expect(draft.source).toEqual(source);
+    expect(draft.files.find((f) => f.path === "assets/sample.png")).toMatchObject({ kind: "binary", byteSize: 4 });
+    expect(draft.files.some((f) => f.path === "scripts/run.py")).toBe(false);
+    const content = await c.send(`/${draft.id}/content?path=SKILL.md`);
+    const stamped = await content.text();
+    expect(stamped.slice(stamped.indexOf("\n---\n") + 5)).toBe(original.slice(original.indexOf("\n---\n") + 5));
+    const parsed = await skillEntry("weekly-report", { "SKILL.md": stamped });
+    expect(parsed.frontmatter.metadata).toMatchObject({ source: "source.zip", "source-hub": "space", "imported-at": new Date().toISOString().slice(0, 10) });
+    expect(await (await c.send(`/${draft.id}/content?path=references/guide.md`)).text()).toBe("adapted guide");
+    expect(new Uint8Array(await (await c.send(`/${draft.id}/content?path=assets/sample.png`)).arrayBuffer())).toEqual(binary);
+    expect((await c.send("", { ...body, files: initialFiles() }, crypto.randomUUID())).status).toBe(400);
+    expect((await c.send("", { ...body, from: { ...body.from, overrides: [{ path: "../bad", text: "bad" }] } }, crypto.randomUUID())).status).toBe(400);
+    expect((await c.send("", { ...body, from: { ...body.from, overrides: [{ path: "SKILL.md", text: null }] } }, crypto.randomUUID())).status).toBe(400);
+    const actor = interactivePrincipal(c.userId);
+    const resource = c.application.access.resolveResource(c.userId, uploaded.resourceId);
+    if (!resource || resource.kind !== "blob") throw new Error("Missing source blob");
+    await c.application.blobs.replace(actor, resource.id, crypto.randomUUID(), `"${resource.etag}"`, "7", Readable.from([Buffer.from("changed")]));
+    expect((await c.sourceRead({ source })).status).toBe(409);
+    expect((await c.send("", body, crypto.randomUUID())).status).toBe(409);
+    const replay = await c.send("", body, key);
+    expect(replay.status).toBe(200);
+    expect((await replay.json()).draft.id).toBe(draft.id);
+    expect((await c.publish(draft)).status).toBe(200);
+    const adopted = c.application.database.connection.prepare("SELECT b.sha256 FROM blob_resources b JOIN resources r ON r.id=b.resource_id JOIN nodes n ON n.id=r.node_id WHERE n.name='sample.png'").get();
+    expect(adopted?.sha256).toBe(draft.files.find((f) => f.path === "assets/sample.png")!.sha256);
+  });
+  it("pins a folder manifest and pages text with source-bound cursors", async () => {
+    const c = await harness();
+    const folder = c.application.nodes.create(c.userId, { spaceId: c.space.id, name: "source-folder", parentNodeId: null });
+    await uploadSource(c, "SKILL.md", Buffer.from(skill()), folder.id);
+    const text = "😀\"\n".repeat(24000);
+    await uploadSource(c, "guide.txt", Buffer.from(text), folder.id);
+    const listing = await c.sourceRead({ source: folder.id });
+    expect(listing.status, await listing.clone().text()).toBe(200);
+    const { source } = await listing.json();
+    const page = await (await c.sourceRead({ source, skill: ".", path: "guide.txt" })).json();
+    expect(page.truncated).toBe(true);
+    expect(JSON.stringify(page).length).toBeLessThan(100000);
+    let joined = page.content;
+    let cursor: string | undefined = page.cursor;
+    while (cursor) {
+      const next = await (await c.sourceRead({ source, skill: ".", path: "guide.txt", cursor })).json();
+      joined += next.content;
+      cursor = next.cursor;
+    }
+    expect(joined).toBe(text);
+    expect((await c.sourceRead({ source, skill: ".", path: "SKILL.md", cursor: page.cursor })).status).toBe(400);
+    await uploadSource(c, "extra.md", Buffer.from("new"), folder.id);
+    expect((await c.sourceRead({ source, skill: "." })).status).toBe(409);
+    const outsider = await c.application.identity.registerWithPassword({ username: "source-outsider", displayName: "Other", password: "correct horse battery staple" });
+    expect((await c.sourceRead({ source: folder.id }, `${c.application.identity.cookieName}=${outsider.cookieValue}`)).status).toBe(404);
   });
 });

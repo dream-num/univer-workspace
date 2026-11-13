@@ -42,12 +42,60 @@ tags:
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
 paths:
+  /api/skill-sources/read:
+    post:
+      tags:
+        - Blobs
+      operationId: readSkillSource
+      summary: Resolve a pinned external or readable Space source and list, scan or page its Skills.
+      description: Source strings resolve GitHub and skills.sh to a commit, ClawHub to owner/slug/version, and a Space zip or folder node to its ETag. Repeat with the returned source object to stay on that version. skill is a candidate path, with . for a root Skill. No skill lists candidates. skill reads all file metadata, SKILL.md and a static scan. path pages a UTF-8 text file up to 256 KiB. Cursors bind the pinned source, skill, path and content and use character offsets without splitting surrogate pairs. GitHub rate limits return SKILL_SOURCE_RATE_LIMITED with zip-upload guidance. ClawHub ambiguity returns SKILL_SOURCE_AMBIGUOUS and candidate owner handles in the message. A truncated GitHub tree returns SKILL_SOURCE_TRUNCATED. Hub failures use SKILL_SOURCE_UNAVAILABLE.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReadSkillSource'
+      responses:
+        '200':
+          description: Candidate list, inspected Skill, or one text page. Only the requested variant is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SkillSourceResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '413':
+          $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          description: GitHub tree is truncated. Upload a smaller Skill zip to Space.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Hub rate limit or GitHub access restriction. Ask the user to download a zip and upload it to Space.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Hub response, redirect or request timeout prevented reading the source.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/skill-drafts:
     post:
       tags:
         - Blobs
       operationId: submitSkillDraft
-      summary: Stage an Skill for interactive author approval.
+      summary: Stage a Skill for interactive author approval.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:
@@ -81,6 +129,24 @@ paths:
           $ref: '#/components/responses/Conflict'
         '413':
           $ref: '#/components/responses/PayloadTooLarge'
+        '422':
+          description: GitHub tree was truncated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Source hub rate limit. Upload the Skill zip to Space instead.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: Source hub could not be read.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/skill-drafts/{draftId}:
     parameters:
       - name: draftId
@@ -4492,106 +4558,134 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/WorktreeUnit'
-    SkillReviewFinding:
+    ResolvedSkillSource:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - hub
+            - owner
+            - repo
+            - commit
+            - path
+            - pageUrl
+          properties:
+            kind:
+              type: string
+              const: git
+            hub:
+              type: string
+              enum:
+                - github
+                - skills-sh
+            owner:
+              type: string
+              pattern: ^[A-Za-z0-9_.-]+$
+              maxLength: 255
+            repo:
+              type: string
+              pattern: ^[A-Za-z0-9_.-]+$
+              maxLength: 255
+            commit:
+              type: string
+              pattern: ^[a-f0-9]{40}$
+            path:
+              type: string
+              maxLength: 1024
+              description: Repository-relative scope folder. Empty for the entire repository.
+            pageUrl:
+              type: string
+              maxLength: 2048
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - owner
+            - slug
+            - version
+            - pageUrl
+          properties:
+            kind:
+              type: string
+              const: clawhub
+            owner:
+              type: string
+              pattern: ^[A-Za-z0-9_.-]+$
+              maxLength: 255
+            slug:
+              type: string
+              pattern: ^[A-Za-z0-9_.-]+$
+              maxLength: 255
+            version:
+              type: string
+              pattern: ^[A-Za-z0-9_.+-]+$
+              maxLength: 255
+            pageUrl:
+              type: string
+              maxLength: 2048
+        - type: object
+          additionalProperties: false
+          required:
+            - kind
+            - nodeId
+            - etag
+          properties:
+            kind:
+              type: string
+              const: space
+            nodeId:
+              type: string
+              format: uuid
+            etag:
+              type: string
+              minLength: 1
+              maxLength: 100
+              description: Quoted Blob ETag or digest of the folder identity, paths and file ETags.
+    ReadSkillSource:
       type: object
+      additionalProperties: false
       required:
-        - rule
-        - path
-        - quote
-        - impact
-        - suggestion
+        - source
       properties:
-        rule:
+        source:
+          oneOf:
+            - type: string
+              minLength: 1
+              maxLength: 4096
+              description: GitHub repo/tree/blob URL, skills.sh URL, owner/repo/skill, npx skills add command, ClawHub owner URL/install command, or Space node UUID.
+            - $ref: '#/components/schemas/ResolvedSkillSource'
+        skill:
           type: string
-          enum:
-            - requires-shell
-            - requires-binary
-            - requires-local-io
-            - unavailable-tool
-            - suspicious-instruction
+          minLength: 1
+          maxLength: 1024
         path:
           type: string
           minLength: 1
           maxLength: 1024
-        quote:
+          description: Relative text path. Requires skill.
+        cursor:
           type: string
           minLength: 1
-          maxLength: 200
-          description: Verbatim file evidence. Quotes not found at path are dropped and counted.
-        impact:
-          type: string
-          minLength: 1
-          maxLength: 2000
-        suggestion:
-          type: string
-          minLength: 1
-          maxLength: 2000
-    SubmitSkillDraft:
-      type: object
-      additionalProperties: false
-      required:
-        - name
-        - spaceId
-        - files
-      properties:
-        name:
-          type: string
-          minLength: 1
-          maxLength: 64
-          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
-        spaceId:
-          type: string
-          description: Author-owned Personal Space or repository Space with root creation permission.
-        replace:
-          type: boolean
-          default: false
-          description: Capture every current file and ETag as the immutable replacement base.
-        files:
-          type: array
-          minItems: 1
-          maxItems: 100
-          description: UTF-8 text without NUL. SKILL.md is limited to 64 KiB; total bytes to 20 MiB. Auxiliary text over 256 KiB produces a warning.
-          items:
-            type: object
-            additionalProperties: false
-            required:
-              - path
-              - text
-            properties:
-              path:
-                type: string
-                maxLength: 1024
-              text:
-                type: string
-        keep:
-          type: array
-          default: []
-          uniqueItems: true
-          description: Base file paths to retain untouched. Must be absent from files.
-          items:
-            type: string
-        review:
-          type: array
-          maxItems: 500
-          default: []
-          items:
-            $ref: '#/components/schemas/SkillReviewFinding'
-            unevaluatedProperties: false
-    SkillBaseFile:
+          maxLength: 1024
+          description: Opaque continuation for the same pinned source, Skill and path. Requires path.
+    SkillSourceFileInfo:
       type: object
       required:
         - path
-        - resourceId
-        - etag
+        - byteSize
+        - kind
       properties:
         path:
           type: string
-        resourceId:
+        byteSize:
+          type: integer
+          minimum: 0
+        kind:
           type: string
-          description: Resource identity captured at intake. Current content also available via the draft content endpoint.
-        etag:
-          type: string
-          description: Quoted strong ETag captured at intake.
+          enum:
+            - text
+            - binary
     SkillScanFinding:
       type: object
       required:
@@ -4634,6 +4728,229 @@ components:
           minimum: 1
         message:
           type: string
+    SkillSourceResult:
+      oneOf:
+        - type: object
+          additionalProperties: false
+          required:
+            - source
+            - candidates
+          properties:
+            source:
+              $ref: '#/components/schemas/ResolvedSkillSource'
+            candidates:
+              type: array
+              items:
+                type: object
+                required:
+                  - name
+                  - description
+                  - path
+                  - fileCount
+                  - problems
+                properties:
+                  name:
+                    type: string
+                  description:
+                    type: string
+                  path:
+                    type: string
+                  fileCount:
+                    type: integer
+                    minimum: 1
+                  problems:
+                    type: array
+                    items:
+                      type: string
+        - type: object
+          additionalProperties: false
+          required:
+            - source
+            - skill
+            - scan
+          properties:
+            source:
+              $ref: '#/components/schemas/ResolvedSkillSource'
+            skill:
+              type: object
+              required:
+                - name
+                - description
+                - path
+                - files
+                - content
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                path:
+                  type: string
+                files:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/SkillSourceFileInfo'
+                content:
+                  type: string
+            scan:
+              type: array
+              items:
+                $ref: '#/components/schemas/SkillScanFinding'
+        - type: object
+          additionalProperties: false
+          required:
+            - path
+            - content
+          properties:
+            path:
+              type: string
+            content:
+              type: string
+            truncated:
+              type: boolean
+              const: true
+            cursor:
+              type: string
+    SkillDraftFrom:
+      type: object
+      additionalProperties: false
+      required:
+        - source
+        - skill
+      properties:
+        source:
+          $ref: '#/components/schemas/ResolvedSkillSource'
+        skill:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          description: Candidate path returned by source read. Use . for a root Skill.
+        overrides:
+          type: array
+          maxItems: 100
+          default: []
+          description: Replace or add UTF-8 text files; null deletes a path. Paths must be unique and safe. SKILL.md must remain valid and match name.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - path
+              - text
+            properties:
+              path:
+                type: string
+                minLength: 1
+                maxLength: 1024
+              text:
+                type:
+                  - string
+                  - 'null'
+    SkillReviewFinding:
+      type: object
+      required:
+        - rule
+        - path
+        - quote
+        - impact
+        - suggestion
+      properties:
+        rule:
+          type: string
+          enum:
+            - requires-shell
+            - requires-binary
+            - requires-local-io
+            - unavailable-tool
+            - suspicious-instruction
+        path:
+          type: string
+          minLength: 1
+          maxLength: 1024
+        quote:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: Verbatim file evidence. Quotes not found at path are dropped and counted.
+        impact:
+          type: string
+          minLength: 1
+          maxLength: 2000
+        suggestion:
+          type: string
+          minLength: 1
+          maxLength: 2000
+    SubmitSkillDraft:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - spaceId
+      oneOf:
+        - required:
+            - files
+        - required:
+            - from
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+        spaceId:
+          type: string
+          description: Author-owned Personal Space or repository Space with root creation permission.
+        replace:
+          type: boolean
+          default: false
+          description: Capture every current file and ETag as the immutable replacement base.
+        files:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: UTF-8 text without NUL. SKILL.md is limited to 64 KiB; total bytes to 20 MiB. Auxiliary text over 256 KiB produces a warning.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - path
+              - text
+            properties:
+              path:
+                type: string
+                maxLength: 1024
+              text:
+                type: string
+        from:
+          $ref: '#/components/schemas/SkillDraftFrom'
+        keep:
+          type: array
+          default: []
+          uniqueItems: true
+          description: Base file paths to retain untouched. Must be absent from files.
+          items:
+            type: string
+        review:
+          type: array
+          maxItems: 500
+          default: []
+          items:
+            $ref: '#/components/schemas/SkillReviewFinding'
+            unevaluatedProperties: false
+    SkillBaseFile:
+      type: object
+      required:
+        - path
+        - resourceId
+        - etag
+      properties:
+        path:
+          type: string
+        resourceId:
+          type: string
+          description: Resource identity captured at intake. Current content also available via the draft content endpoint.
+        etag:
+          type: string
+          description: Quoted strong ETag captured at intake.
     SkillVerifiedReviewFinding:
       allOf:
         - $ref: '#/components/schemas/SkillReviewFinding'
@@ -4744,8 +5061,10 @@ components:
           items:
             $ref: '#/components/schemas/SkillVerifiedReviewFinding'
         source:
-          type: 'null'
-          description: Reserved for source imports in SB5.
+          oneOf:
+            - $ref: '#/components/schemas/ResolvedSkillSource'
+            - type: 'null'
+          description: Exact source version reread at intake. Null for authored files.
         unverifiedReviewCount:
           type: integer
           minimum: 0

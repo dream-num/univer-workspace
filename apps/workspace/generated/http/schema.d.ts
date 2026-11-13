@@ -4,6 +4,26 @@
  */
 
 export interface paths {
+    "/api/skill-sources/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve a pinned external or readable Space source and list, scan or page its Skills.
+         * @description Source strings resolve GitHub and skills.sh to a commit, ClawHub to owner/slug/version, and a Space zip or folder node to its ETag. Repeat with the returned source object to stay on that version. skill is a candidate path, with . for a root Skill. No skill lists candidates. skill reads all file metadata, SKILL.md and a static scan. path pages a UTF-8 text file up to 256 KiB. Cursors bind the pinned source, skill, path and content and use character offsets without splitting surrogate pairs. GitHub rate limits return SKILL_SOURCE_RATE_LIMITED with zip-upload guidance. ClawHub ambiguity returns SKILL_SOURCE_AMBIGUOUS and candidate owner handles in the message. A truncated GitHub tree returns SKILL_SOURCE_TRUNCATED. Hub failures use SKILL_SOURCE_UNAVAILABLE.
+         */
+        post: operations["readSkillSource"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/skill-drafts": {
         parameters: {
             query?: never;
@@ -13,7 +33,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Stage an Skill for interactive author approval. */
+        /** Stage a Skill for interactive author approval. */
         post: operations["submitSkillDraft"];
         delete?: never;
         options?: never;
@@ -2340,6 +2360,94 @@ export interface components {
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
             units: components["schemas"]["WorktreeUnit"][];
         };
+        ResolvedSkillSource: {
+            /** @constant */
+            kind: "git";
+            /** @enum {string} */
+            hub: "github" | "skills-sh";
+            owner: string;
+            repo: string;
+            commit: string;
+            /** @description Repository-relative scope folder. Empty for the entire repository. */
+            path: string;
+            pageUrl: string;
+        } | {
+            /** @constant */
+            kind: "clawhub";
+            owner: string;
+            slug: string;
+            version: string;
+            pageUrl: string;
+        } | {
+            /** @constant */
+            kind: "space";
+            /** Format: uuid */
+            nodeId: string;
+            /** @description Quoted Blob ETag or digest of the folder identity, paths and file ETags. */
+            etag: string;
+        };
+        ReadSkillSource: {
+            source: string | components["schemas"]["ResolvedSkillSource"];
+            skill?: string;
+            /** @description Relative text path. Requires skill. */
+            path?: string;
+            /** @description Opaque continuation for the same pinned source, Skill and path. Requires path. */
+            cursor?: string;
+        };
+        SkillSourceFileInfo: {
+            path: string;
+            byteSize: number;
+            /** @enum {string} */
+            kind: "text" | "binary";
+        };
+        SkillScanFinding: {
+            /** @enum {string} */
+            rule: "frontmatter-invalid" | "reserved-name" | "size-limit" | "unsafe-path" | "text-too-large" | "script-file" | "facade-script" | "executable-binary" | "office-asset" | "media-asset" | "missing-reference" | "ignored-field" | "hidden-text" | "name-conflict" | "hub-verdict";
+            /** @enum {string} */
+            severity: "block" | "warn" | "info";
+            path: string;
+            line: number | null;
+            message: string;
+        };
+        SkillSourceResult: {
+            source: components["schemas"]["ResolvedSkillSource"];
+            candidates: {
+                name: string;
+                description: string;
+                path: string;
+                fileCount: number;
+                problems: string[];
+            }[];
+        } | {
+            source: components["schemas"]["ResolvedSkillSource"];
+            skill: {
+                name: string;
+                description: string;
+                path: string;
+                files: components["schemas"]["SkillSourceFileInfo"][];
+                content: string;
+            };
+            scan: components["schemas"]["SkillScanFinding"][];
+        } | {
+            path: string;
+            content: string;
+            /** @constant */
+            truncated?: true;
+            cursor?: string;
+        };
+        SkillDraftFrom: {
+            source: components["schemas"]["ResolvedSkillSource"];
+            /** @description Candidate path returned by source read. Use . for a root Skill. */
+            skill: string;
+            /**
+             * @description Replace or add UTF-8 text files; null deletes a path. Paths must be unique and safe. SKILL.md must remain valid and match name.
+             * @default []
+             */
+            overrides: {
+                path: string;
+                text: string | null;
+            }[];
+        };
         SkillReviewFinding: {
             /** @enum {string} */
             rule: "requires-shell" | "requires-binary" | "requires-local-io" | "unavailable-tool" | "suspicious-instruction";
@@ -2359,10 +2467,11 @@ export interface components {
              */
             replace: boolean;
             /** @description UTF-8 text without NUL. SKILL.md is limited to 64 KiB; total bytes to 20 MiB. Auxiliary text over 256 KiB produces a warning. */
-            files: {
+            files?: {
                 path: string;
                 text: string;
             }[];
+            from?: components["schemas"]["SkillDraftFrom"];
             /**
              * @description Base file paths to retain untouched. Must be absent from files.
              * @default []
@@ -2370,22 +2479,13 @@ export interface components {
             keep: string[];
             /** @default [] */
             review: components["schemas"]["SkillReviewFinding"][];
-        };
+        } & (unknown | unknown);
         SkillBaseFile: {
             path: string;
             /** @description Resource identity captured at intake. Current content also available via the draft content endpoint. */
             resourceId: string;
             /** @description Quoted strong ETag captured at intake. */
             etag: string;
-        };
-        SkillScanFinding: {
-            /** @enum {string} */
-            rule: "frontmatter-invalid" | "reserved-name" | "size-limit" | "unsafe-path" | "text-too-large" | "script-file" | "facade-script" | "executable-binary" | "office-asset" | "media-asset" | "missing-reference" | "ignored-field" | "hidden-text" | "name-conflict" | "hub-verdict";
-            /** @enum {string} */
-            severity: "block" | "warn" | "info";
-            path: string;
-            line: number | null;
-            message: string;
         };
         SkillVerifiedReviewFinding: components["schemas"]["SkillReviewFinding"] & {
             line: number;
@@ -2418,8 +2518,8 @@ export interface components {
             removedPaths: string[];
             scan: components["schemas"]["SkillScanFinding"][];
             review: components["schemas"]["SkillVerifiedReviewFinding"][];
-            /** @description Reserved for source imports in SB5. */
-            source: null;
+            /** @description Exact source version reread at intake. Null for authored files. */
+            source: components["schemas"]["ResolvedSkillSource"] | null;
             unverifiedReviewCount: number;
             /**
              * @description Blocked for static blocks; degraded for any warning or verified review; ready otherwise.
@@ -3612,6 +3712,62 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    readSkillSource: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReadSkillSource"];
+            };
+        };
+        responses: {
+            /** @description Candidate list, inspected Skill, or one text page. Only the requested variant is returned. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillSourceResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            /** @description GitHub tree is truncated. Upload a smaller Skill zip to Space. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Hub rate limit or GitHub access restriction. Ask the user to download a zip and upload it to Space. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Hub response, redirect or request timeout prevented reading the source. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     submitSkillDraft: {
         parameters: {
             query?: never;
@@ -3652,6 +3808,33 @@ export interface operations {
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
+            /** @description GitHub tree was truncated. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Source hub rate limit. Upload the Skill zip to Space instead. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Source hub could not be read. */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getSkillDraft: {

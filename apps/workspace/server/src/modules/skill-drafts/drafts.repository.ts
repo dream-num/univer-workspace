@@ -112,6 +112,7 @@ export class SkillDraftsRepository {
       | "scan"
       | "review"
       | "unverified_review_count"
+      | "source"
     >,
     now: number,
   ): { row: DraftRow; created: boolean } {
@@ -124,8 +125,8 @@ export class SkillDraftsRepository {
       }
       const id = randomUUID();
       db.prepare(`INSERT INTO skill_drafts (id, author_user_id, idempotency_key, intent_sha256, space_id, name,
-        target_folder_node_id, files, base, keep, scan, review, unverified_review_count, state, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?)`).run(
+        target_folder_node_id, files, base, keep, scan, review, unverified_review_count, source, state, expires_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?)`).run(
         id,
         input.author_user_id,
         input.idempotency_key,
@@ -139,6 +140,7 @@ export class SkillDraftsRepository {
         input.scan,
         input.review,
         input.unverified_review_count,
+        input.source,
         now + 3600000,
         now,
         now,

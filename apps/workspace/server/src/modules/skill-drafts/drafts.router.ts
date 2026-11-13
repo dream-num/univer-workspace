@@ -1,32 +1,23 @@
-import { json, Router } from "express";
+import { json, Router, type RequestHandler } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "../identity/index.js";
+import type { SkillSourcesModule } from "./sources.service.js";
 import type { SkillDraftsModule } from "./drafts.service.js";
 
 export function createSkillDraftsRouter(options: {
   identity: IdentityModule;
   drafts: SkillDraftsModule;
+  sources: SkillSourcesModule;
 }): Router {
   const router = Router();
-  const parseJson = json({ limit: "125mb" });
+  router.post("/skill-sources/read", parseBody("16kb"), async (request, response) => {
+    const actor = options.identity.requireSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "private, no-store");
+    response.json(await options.sources.read(actor.user.id, request.body));
+  });
   router.post(
     "/skill-drafts",
-    (request, response, next) =>
-      parseJson(request, response, (error: unknown) => {
-        if (!error) return next();
-        const tooLarge =
-          typeof error === "object" &&
-          error !== null &&
-          "type" in error &&
-          error.type === "entity.too.large";
-        next(
-          new ApplicationError(
-            tooLarge ? "PAYLOAD_TOO_LARGE" : "INVALID_INPUT",
-            tooLarge ? 413 : 400,
-            "Invalid draft JSON body.",
-          ),
-        );
-      }),
+    parseBody("125mb"),
     async (request, response) => {
       const actor = options.identity.requireSession(request.headers.cookie);
       const result = await options.drafts.submit(
@@ -69,4 +60,13 @@ export function createSkillDraftsRouter(options: {
     });
   }
   return router;
+}
+
+function parseBody(limit: string): RequestHandler {
+  const parse = json({ limit });
+  return (request, response, next) => parse(request, response, (error: unknown) => {
+    if (!error) return next();
+    const tooLarge = typeof error === "object" && error !== null && "type" in error && error.type === "entity.too.large";
+    next(new ApplicationError(tooLarge ? "PAYLOAD_TOO_LARGE" : "INVALID_INPUT", tooLarge ? 413 : 400, "Invalid Skill JSON body."));
+  });
 }
