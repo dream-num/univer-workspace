@@ -229,6 +229,7 @@ describe("screenshot target mapping", () => {
       { region: "0,1,20,30" },
       { kind: "board-content", region: { left: 0, top: 1, width: 20, height: 30 } },
     ],
+    ["board", { padding: 4 }, { kind: "board-content", padding: 4 }],
     ["doc", {}, undefined],
     ["base", {}, undefined],
   ])("maps %s options %j", async (unitType, options, target) => {
@@ -245,7 +246,7 @@ describe("screenshot target mapping", () => {
       { elements: "a", region: "0,0,1,1" },
       "--elements and --region cannot be used together",
     ],
-    ["board", { padding: 4 }, "--padding and --scale require --region or --elements"],
+    ["board", { scale: 2 }, "--scale requires --region or --elements"],
   ])("rejects %s options %j with the uvw message", async (unitType, options, message) => {
     await expect(screenshotTarget(unit(unitType), options)).rejects.toMatchObject({
       code: "workspace-argument-invalid",
