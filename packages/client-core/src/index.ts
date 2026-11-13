@@ -11,6 +11,13 @@ export {
 } from "./auth.js";
 export { WorkspaceBlobFeature } from "./blob.js";
 export {
+  WorkspaceSheetLensEngine,
+  type WorkspaceSheetLensEngineOptions,
+  type SheetLensRequest,
+  type SheetLensContinuation,
+  type SheetLensResult,
+} from "./sheet-lens.js";
+export {
   WorkspaceIssueFeature,
   type ListIssuesInput,
   type UpdateIssueInput,
