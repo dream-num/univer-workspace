@@ -22,7 +22,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   See the [CLI README](apps/cli/README.md).
 - The private Node-hosted Workspace Client Core under `packages/client-core`, including shared Workspace HTTP,
   error, storage-neutral authentication protocol, Space/Node model, remote workflow behavior, and worker-backed
-  content runtime lifecycle, including Office, Markdown, Typst, rendering, and SVG workflows. It is bundled into repository
+  content runtime lifecycle, including Office, Markdown, Typst, rendering, and SVG workflows, and the Sheet Lens
+  (outline, read and find) copied from uxl with its source commit recorded in `src/sheet-lens/README.md`. It is bundled into repository
   applications and is not a separately published SDK.
 - The private Browser reference-provider policy under `packages/reference-provider`. It is an internal module,
   not a separately provided application or a cross-repository SDK contract.
@@ -50,14 +51,14 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and [OpenAPI source](apps/workspace/contracts/http/openapi.yaml).
 - **Univer Workspace CLI** — the internally packaged `univer-workspace-cli` application (executables `uvw` and
   `univer-workspace-cli`, one program; gh-style `repo`/`issue`/`pr` commands addressing `owner/slug` and `#N`) for agent-driven remote
-  Workspace authoring, inspection, rendering, exchange, Worktree, and review workflows, including Blob
+  Workspace authoring, inspection, Sheet `outline`/`read`/`find`, rendering, exchange, Worktree, and review workflows, including Blob
   download, ETag-guarded content replacement, and HTML View validation/publication, with browser-approved
   passwordless CLI session handoff for password, Email-code, and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
 
 - **Univer Workspace MCP** — the private remote gateway under `apps/mcp`, built on Client Core.
-  It exposes identity, repository, Issue, pull request, Space, Unit, Blob, label, merge, Facade API reference, Skills,
-  and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
+  It exposes identity, repository, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
+  Facade API reference, Skills, and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
   them at Workspace for short-lived sessions; development session authentication is refused in production. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G.

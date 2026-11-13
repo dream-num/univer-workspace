@@ -327,11 +327,27 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 - 修订变化后缓存失效并读到新值。
 - 50 万阈值调到 800 万后，5 万行表输出完整的表格，建模 1.15 秒。
 
-未证实：
+交付后的实测（2026-11-13，SL1 至 SL4 合入为 #361、#364、#365、#370）：
 
-- 每格常驻内存。RSS 受 GC 影响，峰值约 700 MB，需要 SL1 和 SL4 用堆快照测定。
-- MCP 执行器上的耗时。原型只测了 CLI。
-- token 降幅。原型只测了单次调用的输出大小，没有做同题 Agent 对照。
+- 每格常驻内存。强制 GC 后，缓存项约为 UnitData JSON 字节数的 9.4 到 11.8 倍，引擎估算系数取 12。完整建模时，
+  75 万格常驻约 211 MiB，100 万格约 282 MiB，200 万格约 572 MiB，见 [大表阈值](large-sheets.zh-CN.md)。
+- 阈值。操作者看过测量后决定：CLI daemon 500 万格，MCP 执行器 100 万格，执行器缓存 512 MiB，CLI 缓存 512 MiB。
+  估算超过 512 MiB（约 150 万格以上的十列表）的表不进缓存，每次 `outline` 重新建模。
+- CLI 耗时（各 5 次中位数）。`inspect workbook` trunk 1,345 ms，head 1,334 ms；3 万行表缓存命中的 `outline` 1,270 ms，
+  同次 `uvw --help` 1,264 ms。
+- MCP 执行器耗时（网关事件 `duration_ms`，各 5 次中位数，负载 10 至 13）。`inspect` trunk 44.3 ms，head 42.4 ms；
+  3 万行表 `outline` 命中缓存 17.4 ms，未命中且 worker 已热 1,666 ms。
+- token。同一问题「Orders 表每列是什么」，opencode 加 `deepseek-flash`，两边各 3 次：未缓存输入 token 中位数 trunk 32,275、
+  head 24,914，总输入 trunk 319,891、head 126,229，工具调用 16 对 8，head 无工具报错。样本少，只证明没有退步。
+- Agent 行为（同一模型，SL3 最终 head 各 3 次）：先 `outline` 3/3，`find` 找 returned 3/3，5 万行表不写 `execute` 统计脚本 3/3。
+  只读工具描述、不读 skill 的会话仍会偶尔先用 `inspect`。
+
+仍未证实或留作后续：
+
+- lane 9 要求的 Claude Code 驱动 CLI。本机的模型网关不可达，只用 opencode 加 `deepseek-flash` 通过 bash 代替，3 次中 1 至 2 次先用 `uvw outline`。
+- 执行器上缓存未命中的建模阻塞事件循环，见 issue #369。
+- 执行器冷启动后首次读 5 万行表偶发 `COLLABORATION_UNAVAILABLE`，trunk 的 `inspect` 同样出现，重试成功，见 issue #376。
+- `read` 对约 2.5 万字符以上带引号的单元格加 `json: true` 时超过网关 10 万字符上限；超过约 300 个 sheet 的工作簿整本 `outline` 超限。
 
 ## Appendix B. Alternatives rejected
 
