@@ -771,3 +771,24 @@ HTML View 草稿由 `/api/html-view-drafts` 提交，只对作者可见。草稿
 接收中一小时、待发布七天到期；发布和拒绝需要作者的交互式 Session。V18→V19 仅新增草稿表
 及索引。升级先停止旧实例，启动单个新实例完成自动迁移，确认成功后再恢复服务；回退必须
 停止新实例并恢复配套备份，不允许新旧版本同时写同一 SQLite 文件。
+
+
+### Skill drafts and product database V20
+
+`POST /api/skill-drafts` stages author-private Agent Skill text files. Agents can create and read drafts.
+Only the author's interactive Session can publish or reject them. The response includes a
+`previewPath` at `/drafts/skills/<id>` for the browser review page, which is implemented separately.
+File content and current-version content are available through the author-private content endpoint.
+The [HTTP contract](contracts/http/paths/skill-drafts.yaml) describes requests and responses.
+
+Publication rescans stored bytes, checks the complete replacement base, and adopts all file objects
+into `.agents/skills/<name>/` in one SQLite transaction. Removed files move to Trash. Failed writes
+roll back together. No Operation or publication recovery step is added. Receiving drafts expire after
+one hour and pending drafts after seven days. Rejected, expired and conflicted drafts enqueue every
+file object for deletion through Blob maintenance.
+
+V19→V20 adds only `skill_drafts` and its expiry index. Stop every old instance, start one V20 instance,
+and wait for its consistent backup, migration and health checks before restoring service. Existing
+product rows, object keys and unfinished recovery state are preserved. Failed migration rolls back;
+successful restarts do not repeat migration or backup. To roll back, stop V20 and restore the V19
+backup. Never run V19 and V20 writers on the same SQLite file.

@@ -6,6 +6,7 @@ export function startBlobMaintenance(
   blobs: BlobsModule,
   options: {
     readonly intervalMs?: number;
+    readonly skillDrafts?: { expireDue(now: number, limit: number): number };
     readonly drafts?: { expireDue(now: number, limit: number): number };
     readonly onError?: (error: unknown) => void;
   } = {}
@@ -21,6 +22,7 @@ export function startBlobMaintenance(
     running = Promise.resolve()
       .then(() => {
         options.drafts?.expireDue(Date.now(), 25);
+        options.skillDrafts?.expireDue(Date.now(), 25);
         return blobs.runMaintenance(workerId);
       })
       .then(() => undefined)

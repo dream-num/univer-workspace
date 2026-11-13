@@ -42,6 +42,16 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /api/skill-drafts:
+    $ref: ./paths/skill-drafts.yaml#/~1api~1skill-drafts
+  /api/skill-drafts/{draftId}:
+    $ref: ./paths/skill-drafts.yaml#/~1api~1skill-drafts~1{draftId}
+  /api/skill-drafts/{draftId}/content:
+    $ref: ./paths/skill-drafts.yaml#/~1api~1skill-drafts~1{draftId}~1content
+  /api/skill-drafts/{draftId}/publish:
+    $ref: ./paths/skill-drafts.yaml#/~1api~1skill-drafts~1{draftId}~1publish
+  /api/skill-drafts/{draftId}/reject:
+    $ref: ./paths/skill-drafts.yaml#/~1api~1skill-drafts~1{draftId}~1reject
   /api/html-view-drafts:
     $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts
   /api/html-view-drafts/{draftId}:

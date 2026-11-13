@@ -4,6 +4,99 @@
  */
 
 export interface paths {
+    "/api/skill-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stage an Skill for interactive author approval. */
+        post: operations["submitSkillDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skill-drafts/{draftId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        /** Read an author-owned immutable Skill draft with review and removal metadata. */
+        get: operations["getSkillDraft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skill-drafts/{draftId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        /** Read draft or current Skill file content as inert text. */
+        get: operations["getSkillDraftContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skill-drafts/{draftId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rescan and publish all files atomically as the interactive author. */
+        post: operations["publishSkillDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/skill-drafts/{draftId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a draft as its interactive author. */
+        post: operations["rejectSkillDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/html-view-drafts": {
         parameters: {
             query?: never;
@@ -2247,6 +2340,105 @@ export interface components {
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
             units: components["schemas"]["WorktreeUnit"][];
         };
+        SkillReviewFinding: {
+            /** @enum {string} */
+            rule: "requires-shell" | "requires-binary" | "requires-local-io" | "unavailable-tool" | "suspicious-instruction";
+            path: string;
+            /** @description Verbatim file evidence. Quotes not found at path are dropped and counted. */
+            quote: string;
+            impact: string;
+            suggestion: string;
+        };
+        SubmitSkillDraft: {
+            name: string;
+            /** @description Author-owned Personal Space or repository Space with root creation permission. */
+            spaceId: string;
+            /**
+             * @description Capture every current file and ETag as the immutable replacement base.
+             * @default false
+             */
+            replace: boolean;
+            /** @description UTF-8 text without NUL. SKILL.md is limited to 64 KiB; total bytes to 20 MiB. Auxiliary text over 256 KiB produces a warning. */
+            files: {
+                path: string;
+                text: string;
+            }[];
+            /**
+             * @description Base file paths to retain untouched. Must be absent from files.
+             * @default []
+             */
+            keep: string[];
+            /** @default [] */
+            review: components["schemas"]["SkillReviewFinding"][];
+        };
+        SkillBaseFile: {
+            path: string;
+            /** @description Resource identity captured at intake. Current content also available via the draft content endpoint. */
+            resourceId: string;
+            /** @description Quoted strong ETag captured at intake. */
+            etag: string;
+        };
+        SkillScanFinding: {
+            /** @enum {string} */
+            rule: "frontmatter-invalid" | "reserved-name" | "size-limit" | "unsafe-path" | "text-too-large" | "script-file" | "facade-script" | "executable-binary" | "office-asset" | "media-asset" | "missing-reference" | "ignored-field" | "hidden-text" | "name-conflict" | "hub-verdict";
+            /** @enum {string} */
+            severity: "block" | "warn" | "info";
+            path: string;
+            line: number | null;
+            message: string;
+        };
+        SkillVerifiedReviewFinding: components["schemas"]["SkillReviewFinding"] & {
+            line: number;
+            /** @constant */
+            severity: "warn";
+        };
+        SkillDraft: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            kind: "create" | "replace";
+            /** @enum {string} */
+            state: "pending" | "published" | "rejected" | "expired" | "conflicted";
+            name: string;
+            spaceId: string;
+            /** @description Author-private browser route /drafts/skills/{id}. */
+            previewPath: string;
+            files: {
+                path: string;
+                byteSize: number;
+                sha256: string;
+                /** @enum {string} */
+                kind: "text" | "binary";
+                mediaType: string;
+            }[];
+            /** @description Null for create; complete replacement file manifest captured at intake otherwise. Original bytes are not snapshotted. */
+            base: components["schemas"]["SkillBaseFile"][] | null;
+            keep: string[];
+            /** @description Base paths publication would move to Trash. No permanent byte deletion. */
+            removedPaths: string[];
+            scan: components["schemas"]["SkillScanFinding"][];
+            review: components["schemas"]["SkillVerifiedReviewFinding"][];
+            /** @description Reserved for source imports in SB5. */
+            source: null;
+            unverifiedReviewCount: number;
+            /**
+             * @description Blocked for static blocks; degraded for any warning or verified review; ready otherwise.
+             * @enum {string}
+             */
+            compatibility: "ready" | "degraded" | "blocked";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            decidedAt: string | null;
+            published: {
+                folderNodeId: string;
+            } | null;
+        };
+        SkillDraftEnvelope: {
+            draft: components["schemas"]["SkillDraft"];
+        };
         SubmitHtmlViewDraft: {
             /** @constant */
             kind: "create";
@@ -3420,6 +3612,164 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    submitSkillDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitSkillDraft"];
+            };
+        };
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDraftEnvelope"];
+                };
+            };
+            /** @description New draft. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+        };
+    };
+    getSkillDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getSkillDraftContent: {
+        parameters: {
+            query: {
+                /** @description File path relative to the Skill folder. */
+                path: string;
+                /** @description Current reads recheck destination and file access. Draft bytes exist only while pending and unexpired. */
+                version?: "draft" | "current";
+            };
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    "Content-Security-Policy"?: "sandbox";
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain; charset=utf-8": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    publishSkillDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectSkillDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SkillDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     submitHtmlViewDraft: {
         parameters: {
             query?: never;

@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V19 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V20 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V19；
-- V19：校验 Schema 指纹；
-- V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V19；
-- V0：一致性备份后直接迁移到 V19；
+- Fresh：创建 V20；
+- V20：校验 Schema 指纹；
+- V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V20；
+- V0：一致性备份后直接迁移到 V20；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V19 Query。
+Worktree 等业务模块只编译和运行 V20 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -132,7 +132,7 @@ Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多
 （自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 3、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V19，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V20，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -479,3 +479,21 @@ Token 换出的 Session 通过 Blob API 预留上传、完成上传或替换内�
 文件名。命中时返回 403 `HTML_VIEW_DRAFT_REQUIRED`，要求使用 `html_view_create` 或
 `html_view_replace` 提交草稿。浏览器与 CLI device login 的交互 Session、草稿发布和从回收站
 恢复已有页面不受此限制。
+
+## Skill 草稿审批
+
+V20 的 `modules/skill-drafts` 提供 `/api/skill-drafts` 提交、作者读取、逐文件 content、publish 和 reject。
+提交支持 name、spaceId、replace、文本 files、keep 和 review。只允许作者拥有的个人空间或 ACL 允许根目录创建的仓库。
+同一作者与 Idempotency-Key 的相同意图返回原草稿，不同意图返回 409。草稿接收中对读取不可见。
+静态扫描接受字节清单，使用 gateway 同版本的 `skillEntry` 校验 frontmatter。审查 quote 最长 200 字符，
+服务端只保留文件中逐字存在的证据并补行号。审查只有 warn，静态 block 才阻止发布。
+
+读取返回 `/drafts/skills/<id>` 的 previewPath、文件元数据、基础 Resource ID 与 ETag、keep、removedPaths、
+扫描、已验证审查和 compatibility。content 的 path 参数选择相对路径；version=draft 读取待发布字节，
+version=current 重新检查实时权限并读取当前文件，供逐文件差异审阅。响应使用纯文本、CSP sandbox、nosniff 与 private/no-store。
+基础字节不做快照。当前文件不存在时返回 404，已过期或终态草稿字节返回 409。
+
+只有作者的交互式 Session 能发布或拒绝。发布从 BlobStore 重新扫描，然后在一个 SQLite 事务中重新检查实时 ACL、
+目标重名和完整基础版本，采用对象、替换文件、将移除文件送入 Trash 并记录结果。失败全部回滚，不创建 Operation。
+block 或目标重名保持 pending，基础冲突进入 conflicted。Blob 维护任务同时过期 Skill 草稿并处理对象删除任务。
+服务器事件和日志不包含 Skill 正文或审查原文。
