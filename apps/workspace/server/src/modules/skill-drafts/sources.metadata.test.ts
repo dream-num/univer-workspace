@@ -107,4 +107,20 @@ describe("import provenance", () => {
       original.replace(/metadata:[^\r\n]+/, "metadata: OMITTED"),
     );
   });
+
+  it("keeps a UTF-8 byte order mark", async () => {
+    const original = "\ufeff---\nname: report\ndescription: Make a report.\n---\nBody\n";
+    const [file] = await importSkillFiles({
+      files: [{ path: "SKILL.md", bytes: Buffer.from(original) }],
+      source: git,
+      label: "repo",
+      skill: "skills/report",
+      name: "report",
+      importedAt: fixedTime,
+      overrides: [],
+    });
+    const bytes = Buffer.from(file!.bytes);
+    expect(bytes.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+    expect(bytes.toString().replace(/\nmetadata:[^\n]+/, "")).toBe(original);
+  });
 });

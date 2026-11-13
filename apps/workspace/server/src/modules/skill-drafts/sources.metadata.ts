@@ -79,6 +79,10 @@ export async function importSkillFiles(options: {
       "Cannot stamp provenance into this frontmatter. Use a SKILL.md override with block-style YAML.",
     );
   }
-  files.set("SKILL.md", { path: "SKILL.md", bytes: Buffer.from(result, "utf8") });
+  const bom = Buffer.from(manifest!.bytes.subarray(0, 3)).equals(Buffer.from([0xef, 0xbb, 0xbf]));
+  files.set("SKILL.md", {
+    path: "SKILL.md",
+    bytes: Buffer.concat([bom ? Buffer.from([0xef, 0xbb, 0xbf]) : Buffer.alloc(0), Buffer.from(result, "utf8")]),
+  });
   return [...files.values()];
 }
