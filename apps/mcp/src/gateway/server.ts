@@ -174,7 +174,7 @@ export function createGateway(
             if (!state.context.scopes.has(tool.scope)) {
               throw workspaceError(
                 "workspace-scope-required",
-                `This connection is not authorized for ${tool.scope} access.`,
+                `This connection is not authorized for ${tool.scope} access.${tool.scope === "write" ? " In the Workspace Agent's Ask mode, switch to Auto and try again." : ""}`,
                 { required: tool.scope },
               );
             }

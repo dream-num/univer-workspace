@@ -116,3 +116,11 @@ test('OAuth transcript redaction preserves JSON strings with escaped quotes', ()
     assert.deepEqual(JSON.parse(result.stdout), { type: 'tool_use', input: { code: '[REDACTED]', state: '[REDACTED]' }, output: 'ok' });
   } finally { rmSync(run, { recursive: true, force: true }); }
 });
+
+for (const tool of ['skill_draft_create', 'skill_draft_get']) {
+  test(`${tool} attributes a resolved Space without a top-level repo argument`, () => {
+    const globals = { tool, args: tool === 'skill_draft_create' ? { destination: { personal: true } } : { draft: 'draft-1' } };
+    assert.equal(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: 'space-1' } }).length, 0);
+    assert.ok(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: null } }).includes('Unexpected repository or Unit identity'));
+  });
+}
