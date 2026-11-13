@@ -426,3 +426,28 @@ it("leaves Shift+Tab and Shift+Enter native and Ctrl+J inserts a newline with th
   expect(textarea().value).toBe("/week\n");
   expect(runner.send).not.toHaveBeenCalled();
 });
+
+it.each(["en-US", "zh-CN"])("labels an invocable builtin in the slash menu in %s", async (language) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  runner.skills.mockResolvedValue({ repository: "no-repository", diagnostics: [], skills: [
+    { name: "skill-creator", source: "builtin", description: "Create Skills", userInvocable: true, modelInvocable: true },
+  ] });
+  await renderSession();
+  await type("/skill");
+  const option = container.querySelector('[role="option"]');
+  expect(option?.textContent).toContain(language === "en-US" ? "Built-in" : "内置");
+  await key(textarea(), { key: "Enter" });
+  expect(textarea().value).toBe("/skill-creator ");
+});
+
+it("orders unused repository, personal and builtin skills consistently in the rail", async () => {
+  const skills = (["builtin", "user", "repository"] as const).map((source) => ({
+    name: `${source}-skill`, source, description: source, modelInvocable: true, userInvocable: true,
+  }));
+  current = session({ messages: [{ id: "catalog", role: "user", parts: [{ type: "text", text: "Skills" }],
+    metadata: { agentSkills: { skills, repository: "loaded", diagnostics: [] } } }] });
+  await renderSession();
+  expect([...container.querySelectorAll(".agent-skill-name")].map((item) => item.textContent))
+    .toEqual(["repository-skill", "user-skill", "builtin-skill"]);
+  expect(container.querySelector(".agent-skills")?.textContent).toContain("Built-in");
+});

@@ -13,7 +13,7 @@ function unknownTools(content: string) {
   for (const row of content.split("\n")) {
     if (!row.startsWith("|")) continue;
     const target = row.split("|")[2];
-    for (const match of target?.matchAll(/`([a-z][a-z0-9_]*)`/gu) ?? []) {
+    for (const match of target?.matchAll(/^\s*`([a-z][a-z0-9_]*)`\s*$/gu) ?? []) {
       mentioned.add(match[1]!);
     }
   }
@@ -59,5 +59,6 @@ describe("MCP core Skill tool bindings", () => {
       ["invented_tool", "invented"],
     );
     expect(unknownTools("Use `api_show`.\n| `inspect` | `inspect` | Read content |")).toEqual([]);
+    expect(unknownTools("| `user-invocable` | `false` hides it; `true` shows it. |")).toEqual([]);
   });
 });

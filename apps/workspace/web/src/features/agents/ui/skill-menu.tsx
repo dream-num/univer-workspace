@@ -62,7 +62,7 @@ export function SkillMenu({ menu }: { readonly menu: ReturnType<typeof useSkillM
     {menu.items.map((skill, index) => <button type="button" role="option" key={skill.name} id={menu.optionId(skill.name)} tabIndex={-1}
       ref={menu.selected === index ? selected : null} aria-selected={menu.selected === index}
       onMouseDown={(event) => event.preventDefault()} onClick={() => menu.choose(index)}>
-      <span className="agent-skill-menu-heading"><strong>/{skill.name}</strong><span>{skill.source === "repository" ? m.repository : m.personalSkill}</span></span>
+      <span className="agent-skill-menu-heading"><strong>/{skill.name}</strong><span>{skill.source === "builtin" ? m.builtinSkill : skill.source === "repository" ? m.repository : m.personalSkill}</span></span>
       <span className="agent-skill-menu-description">{skill.description}</span>
       {skill.argumentHint ? <span className="agent-skill-menu-hint">{skill.argumentHint}</span> : null}
     </button>)}

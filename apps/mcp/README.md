@@ -319,12 +319,12 @@ change existing permissions or migrate the old default cache.
 results, wrapped as `{ results }`.
 
 The server declares the MCP Skills extension (SEP-2640), `io.modelcontextprotocol/skills`.
-`skills/list` returns ten Skills with static SHA-256 digests and resource URIs under
+`skills/list` returns eleven Skills with static SHA-256 digests and resource URIs under
 `skill://univer-workspace/<name>/`. Read `skill://univer-workspace/core/SKILL.md` first.
 `resources/list` lists each Skill's entry file; the extension's `resources` arrays list all
 references and templates, readable through `resources/read`.
 
-The build assembles the MCP-specific `core` from `apps/mcp/skills/core` and nine shared domain
+The build assembles the MCP-specific `core` and `skill-creator` from `apps/mcp/skills` and nine shared domain
 Skills from `apps/cli/skill-data` into `dist/skill-data`. The CLI's `core` remains CLI-only.
 The gateway loads that directory once at startup and never imports or reads `apps/cli` at runtime.
 The extension and `skills_read` serve the same built-in catalog snapshot and bytes.
@@ -347,6 +347,11 @@ Duplicate `.agents` folders at the Space root, `skills` folders under `.agents`,
 under `skills`, or `SKILL.md` Blobs in a Skill folder each produce one `duplicate` diagnostic
 with the layer's `source` and the ambiguous `path`. Discovery skips that ambiguous subtree
 regardless of API listing order. The other source layer still loads.
+Built-ins are user-invocable only with explicit `user-invocable: true` frontmatter.
+`skill-creator` is the first such built-in. Invoke `/skill-creator <request>` in the browser
+Agent to create or edit a Skill draft for human publication. External import support is
+pending. Other built-ins stay out of the `/` menu. Every built-in stays out of the
+browser's catalog reminder, including user-invocable ones.
 Discovery processes at most 100 Skill folders per layer. `SKILL.md` must be downloadable,
 valid UTF-8 without NUL, at most 64 KiB, and pass the SDK's frontmatter validation.
 With a name, the result includes `source`, `content` and optional text `resources`.

@@ -185,16 +185,17 @@ function SessionSkills({ session }: { readonly session: AgentSession }) {
       if (input.success && output.success && !output.data.isError && !used.has(input.data.name)) used.set(input.data.name, used.size);
     }
   }
+  const sourceOrder = { repository: 0, user: 1, builtin: 2 };
   const skills = [...(catalog?.skills ?? [])].sort((a, b) => {
     if (used.has(a.name) || used.has(b.name)) return (used.get(a.name) ?? Infinity) - (used.get(b.name) ?? Infinity);
-    return (a.source === b.source ? 0 : a.source === "repository" ? -1 : 1) || a.name.localeCompare(b.name);
+    return sourceOrder[a.source] - sourceOrder[b.source] || a.name.localeCompare(b.name);
   });
   const hidden = Math.max(0, skills.length - 3);
   return <>
     <h2>{m.skills}</h2>
     {catalog?.repository === "not-member" ? <p className="agent-note">{m.skillsNotMember}</p> : null}
     {!skills.length ? <p className="agent-note">{m.noSkills}</p> : <ul className="agent-skills">{skills.slice(0, expanded ? undefined : 3).map((skill) => <li key={skill.name} title={[skill.description, skill.path].filter(Boolean).join("\n")}>
-      <span className="agent-skill-name">{skill.name}</span><span className="agent-skill-source">{skill.source === "repository" ? m.repository : m.personalSkill}</span>
+      <span className="agent-skill-name">{skill.name}</span><span className="agent-skill-source">{skill.source === "builtin" ? m.builtinSkill : skill.source === "repository" ? m.repository : m.personalSkill}</span>
       {used.has(skill.name) ? <span className="agent-skill-used">{m.skillUsed}</span> : null}
     </li>)}</ul>}
     {hidden || catalog?.diagnostics.length ? <button type="button" className="agent-steps-window" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>

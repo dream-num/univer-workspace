@@ -1,16 +1,14 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import { skillCatalogSchema, skillEntrySchema, messageSkillInvocation, SYSTEM_REMINDER_START } from "../agent.types";
+import { skillCatalogSchema, messageSkillInvocation, SYSTEM_REMINDER_START } from "../agent.types";
 import type { SkillCatalog } from "../agent.types";
 
-export const gatewaySkillCatalogSchema = skillCatalogSchema.extend({
-  skills: z.array(skillEntrySchema.extend({ source: z.enum(["builtin", "repository", "user"]) })),
-}).transform((catalog): SkillCatalog => ({
-  ...catalog, skills: catalog.skills.flatMap((skill) => skill.source === "builtin" ? [] : [{ ...skill, source: skill.source }]),
+export const gatewaySkillCatalogSchema = skillCatalogSchema.transform((catalog): SkillCatalog => ({
+  ...catalog, skills: catalog.skills.filter((skill) => skill.source !== "builtin" || skill.userInvocable),
 }));
 
 export function skillsReminder(catalog: SkillCatalog, previous: SkillCatalog | null): { type: "text"; text: string } | null {
-  const visible = (value: SkillCatalog | null) => value?.skills.filter((skill) => skill.modelInvocable)
+  const visible = (value: SkillCatalog | null) => value?.skills.filter((skill) => skill.source !== "builtin" && skill.modelInvocable)
     .map(({ name, source, description }) => ({ name, source, description })) ?? [];
   const skills = visible(catalog);
   if (JSON.stringify(skills) === JSON.stringify(visible(previous))) return null;

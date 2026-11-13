@@ -13,6 +13,7 @@ export const RESERVED_SKILL_NAMES = [
   "html-view",
   "sheet",
   "slide",
+  "skill-creator",
 ] as const;
 export interface ScanFile {
   path: string;
