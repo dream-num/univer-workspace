@@ -483,7 +483,7 @@ Token 换出的 Session 通过 Blob API 预留上传、完成上传或替换内�
 ## Skill 草稿审批
 
 V20 的 `modules/skill-drafts` 提供 `/api/skill-drafts` 提交、作者读取、逐文件 content、publish 和 reject。
-提交支持 name、spaceId、replace、文本 files、keep 和 review。只允许作者拥有的个人空间或 ACL 允许根目录创建的仓库。
+提交支持 name、spaceId、replace、文本 files 或固定来源 from、keep 和 review。只允许作者拥有的个人空间或 ACL 允许根目录创建的仓库。
 同一作者与 Idempotency-Key 的相同意图返回原草稿，不同意图返回 409。草稿接收中对读取不可见。
 静态扫描接受字节清单，使用 gateway 同版本的 `skillEntry` 校验 frontmatter。审查 quote 最长 200 字符，
 服务端只保留文件中逐字存在的证据并补行号。审查只有 warn，静态 block 才阻止发布。
@@ -497,3 +497,35 @@ version=current 重新检查实时权限并读取当前文件，供逐文件差�
 目标重名和完整基础版本，采用对象、替换文件、将移除文件送入 Trash 并记录结果。失败全部回滚，不创建 Operation。
 block 或目标重名保持 pending，基础冲突进入 conflicted。Blob 维护任务同时过期 Skill 草稿并处理对象删除任务。
 服务器事件和日志不包含 Skill 正文或审查原文。
+
+
+### Skill 固定来源与导入
+
+`POST /api/skill-sources/read` 由 Workspace Server 抓取来源。GitHub 仓库、tree 和 blob 链接先解析到
+commit SHA，再读取 recursive tree 和固定 SHA 的 raw 文件。skills.sh 链接、owner/repo/skill 和
+`npx skills add` 命令转成 GitHub 坐标，不执行命令。ClawHub 链接和 `clawhub install` 必须提供 owner，
+固定 owner、slug、version 后以 version 文件清单过滤下载 zip，并校验文件大小和 SHA-256。
+ClawHub moderation 和版本 security 的可疑或恶意状态生成 warn 级 hub-verdict，单纯警告生成 info。
+
+不带 skill 返回 source 和候选的 name、description、path、fileCount、problems。带 skill 返回文件元数据、
+SKILL.md 和静态 scan。skill 使用候选 path，根目录使用 `.`。再带 path 时只返回该文本文件的分页结果，
+cursor 绑定来源版本、skill、path 和内容。文本分页限制与 skills_read 一致，不切断 UTF-16 代理对。
+
+Space 来源使用调用者有权限读取的 zip Blob 或文件夹 node ID。文件夹的 ETag 由节点身份、名称、路径和
+文件 ETag 计算，读取前后都重新检查。源版本变化返回 409，不能用旧解析结果导入新字节。
+zip 使用 fflate，先检查 central directory 和 local header，再按块解压并累计实际字节。
+单个归档最多 1,000 条目、单条目 20 MiB、总展开 100 MiB、单条目压缩比 100:1。
+拒绝路径穿越、绝对路径、反斜线、符号链接、加密、多卷与 ZIP64。每个 Skill 仍受 100 文件、20 MiB 总量、
+64 KiB SKILL.md、10 MiB 二进制和 256 KiB 文本读取限制。
+
+`POST /api/skill-drafts` 的 files 与 from 互斥。from 接收固定 source、候选 skill 路径和少量 overrides，
+直接复制来源的文本与二进制字节。override 的 text 为 null 时删除文件，否则写入 UTF-8 文本。
+服务器只在 SKILL.md frontmatter 的 metadata 内写来源记录，保留其他字段和正文，数值形式的版本和 SHA
+也写为字符串。source JSON 存入现有 source 列并从草稿 view 返回，无数据库结构变更。
+已接收草稿的幂等重试返回原结果，不因 hub 离线或源后来变化而失败。尚在 receiving 的恢复仍重新读取固定来源。
+
+网络只允许 api.github.com、raw.githubusercontent.com 和 clawhub.ai，手动检查每个重定向，整次请求超时
+15 秒。GITHUB_TOKEN 默认为空，只发给 api.github.com，不转发用户凭据。
+GitHub 403 或 hub 429 返回 SKILL_SOURCE_RATE_LIMITED，提示下载 zip 后上传 Space。
+ClawHub 409 返回 SKILL_SOURCE_AMBIGUOUS 并列候选 owner；GitHub truncated tree 返回
+SKILL_SOURCE_TRUNCATED，不把不完整路径当成完整来源。日志不含来源文件内容。

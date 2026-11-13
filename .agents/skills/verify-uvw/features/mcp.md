@@ -2807,6 +2807,50 @@ The four draft call events must say `ok`, `executor: none`, and the destination
 Space ID, with no Skill content. `mr14-summary.json` records the asserted result.
 Run `$V down` afterward.
 
+### MR15 Import a pinned external Skill and publish after review
+
+Use a fresh MCP-enabled same-origin run, with live GitHub network access. Build the
+MCP image from this checkout. Check the chosen ports with `lsof` first.
+
+```bash
+export VERIFY_UVW_ROOT=/tmp/verify-uvw-sb5 VERIFY_UVW_RUN=mr15
+export VERIFY_UVW_SERVER_PORT=3932 VERIFY_UVW_WEB_PORT=5982 VERIFY_UVW_MCP_PORT=3942
+export VERIFY_UVW_MCP=1 VERIFY_UVW_MCP_SAME_ORIGIN=1
+V=.agents/skills/verify-uvw/bin/verify-uvw
+$V up
+$V user
+eval "$($V env)"
+$V doctor > "$EVIDENCE/mr15-doctor.txt"
+node .agents/skills/verify-uvw/bin/mcp-skill-import.mjs
+```
+
+Keep the launching shell alive between commands. The script reads the real pinned
+`anthropics/skills` PDF Skill, creates an as-is `from` draft with one verbatim review
+quote and one fabricated quote, signs into the browser, captures the review page,
+and presses Publish on that page. It then independently checks publication through
+`skill_draft_get` and `skills_read`. It never writes a shared Skill folder itself.
+The run must be fresh because publication creates `pdf` in the Personal Space.
+
+Pass when `mr15-source.out` includes `script-file`, `mr15-create.out` includes the
+pinned source, one verified review with its line and `unverifiedReviewCount: 1`, and
+`mr15-draft.png` shows those findings, the source link and script files. The script
+checks the rendered source link, quote, line and warning text before taking the
+screenshot. `mr15-published.png` and `mr15-published-status.out` show publication;
+`mr15-list.out` includes `pdf` with `metadata.source-hub: github` and its pinned
+commit. `mr15-ratelimit-before.json` and `mr15-ratelimit-after.json` preserve the real
+GitHub `x-ratelimit-remaining` headers. All per-call outputs, events and redacted logs
+are retained by the MCP helper. `mr15-summary.json` records the assertions.
+
+For the rail proof, follow AS1 in [Agent Skills](agent-skills.md) to configure the
+existing local scripted provider with one text acknowledgement. This scripts only
+the model response; source resolution, copying, scanning, publication and catalog
+reads use the real services and live GitHub. Send a new message from Home after
+publication. Verify `pdf` is first in the Skills rail and its `from GitHub` link
+is derived from `metadata.source` and its pinned `source-commit`. Save `mr15-rail.png` and `mr15-rail.txt`, reload and save
+`mr15-rail-reloaded.png` to check persistence. Switch the UI to Chinese and save
+`mr15-rail-zh.png` showing `来自 GitHub`. No real model credentials are required.
+Run `$V down` afterward and retain its cleanup output.
+
 ### Typst job verification
 
 After the default-budget journeys, run `down` and start a fresh stack with

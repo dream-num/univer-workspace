@@ -1,4 +1,5 @@
 import type { AuthenticatedWorkspaceHttp } from "./http.js";
+import type { WorkspaceResolvedSkillSource } from "./skill-source.js";
 
 export interface WorkspaceSkillReviewFinding {
   readonly rule: "requires-shell" | "requires-binary" | "requires-local-io" | "unavailable-tool" | "suspicious-instruction";
@@ -8,14 +9,20 @@ export interface WorkspaceSkillReviewFinding {
   readonly suggestion: string;
 }
 
-export interface WorkspaceSkillDraftInput {
+export type WorkspaceSkillDraftInput = {
   readonly name: string;
   readonly spaceId: string;
   readonly replace?: boolean;
-  readonly files: readonly { readonly path: string; readonly text: string }[];
   readonly keep?: readonly string[];
   readonly review: readonly WorkspaceSkillReviewFinding[];
-}
+} & (
+  | { readonly files: readonly { readonly path: string; readonly text: string }[]; readonly from?: never }
+  | { readonly files?: never; readonly from: {
+    readonly source: WorkspaceResolvedSkillSource;
+    readonly skill: string;
+    readonly overrides?: readonly { readonly path: string; readonly text: string | null }[] | undefined;
+  } }
+);
 
 /** HTTP-only draft intake and status. The client shell validates the returned draft. */
 export class WorkspaceSkillDraftFeature {

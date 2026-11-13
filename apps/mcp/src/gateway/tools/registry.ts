@@ -43,6 +43,7 @@ import { unitAddTool } from "./core/unit-add.js";
 import { unitCreateTool } from "./core/unit-create.js";
 import { apiFindTool } from "./core/api-find.js";
 import { apiShowTool } from "./core/api-show.js";
+import { skillSourceReadTool } from "./core/skill-source-read.js";
 import { skillDraftCreateTool } from "./core/skill-draft-create.js";
 import { skillDraftGetTool } from "./core/skill-draft-get.js";
 import { skillsReadTool } from "./core/skills-read.js";
@@ -92,6 +93,7 @@ export const tools: readonly ToolDefinition[] = [
   apiFindTool,
   apiShowTool,
   skillsReadTool,
+  skillSourceReadTool,
   skillDraftCreateTool,
   skillDraftGetTool,
   htmlViewValidateTool,

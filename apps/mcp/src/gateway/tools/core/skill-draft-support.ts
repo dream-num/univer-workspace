@@ -9,6 +9,18 @@ export const skillReviewFindingSchema = z.strictObject({
   suggestion: z.string().min(1).max(2000),
 });
 
+export const resolvedSkillSourceSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("git"), hub: z.enum(["github", "skills-sh"]), owner: z.string().min(1), repo: z.string().min(1), commit: z.string().regex(/^[a-f0-9]{40}$/), path: z.string().max(1024), pageUrl: z.string().max(2048) }),
+  z.strictObject({ kind: z.literal("clawhub"), owner: z.string().min(1), slug: z.string().min(1), version: z.string().min(1), pageUrl: z.string().max(2048) }),
+  z.strictObject({ kind: z.literal("space"), nodeId: z.uuid(), etag: z.string().min(1).max(100) }),
+]);
+
+export const skillScanSchema = z.array(z.object({
+    rule: z.enum(["frontmatter-invalid", "reserved-name", "size-limit", "unsafe-path", "text-too-large", "script-file", "facade-script", "executable-binary", "office-asset", "media-asset", "missing-reference", "ignored-field", "hidden-text", "name-conflict", "hub-verdict"]),
+    severity: z.enum(["block", "warn", "info"]), path: z.string(),
+    line: z.number().int().positive().nullable(), message: z.string(),
+  }));
+
 const draftSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(["create", "replace"]),
@@ -23,13 +35,9 @@ const draftSchema = z.object({
   base: z.array(z.object({ path: z.string(), resourceId: z.string(), etag: z.string() })).nullable(),
   keep: z.array(z.string()),
   removedPaths: z.array(z.string()),
-  scan: z.array(z.object({
-    rule: z.enum(["frontmatter-invalid", "reserved-name", "size-limit", "unsafe-path", "text-too-large", "script-file", "facade-script", "executable-binary", "office-asset", "media-asset", "missing-reference", "ignored-field", "hidden-text", "name-conflict", "hub-verdict"]),
-    severity: z.enum(["block", "warn", "info"]), path: z.string(),
-    line: z.number().int().positive().nullable(), message: z.string(),
-  })),
+  scan: skillScanSchema,
   review: z.array(skillReviewFindingSchema.extend({ line: z.number().int().positive(), severity: z.literal("warn") })),
-  source: z.null(),
+  source: resolvedSkillSourceSchema.nullable(),
   unverifiedReviewCount: z.number().int().nonnegative(),
   compatibility: z.enum(["ready", "degraded", "blocked"]),
   createdAt: z.string(),

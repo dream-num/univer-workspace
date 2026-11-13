@@ -2,6 +2,10 @@ import type { ErrorRequestHandler, RequestHandler } from "express";
 import { requestLogger } from "./logging.js";
 
 export type ApplicationErrorCode =
+  | "SKILL_SOURCE_UNAVAILABLE"
+  | "SKILL_SOURCE_RATE_LIMITED"
+  | "SKILL_SOURCE_TRUNCATED"
+  | "SKILL_SOURCE_AMBIGUOUS"
   | "INVALID_INPUT"
   | "INVALID_CREDENTIALS"
   | "INVALID_CURRENT_PASSWORD"

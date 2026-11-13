@@ -24,6 +24,7 @@ export interface WorkspaceConfig {
   readonly emailAuth: EmailConfig | null;
   readonly trialDeployment?: boolean;
   readonly discordBotApiKey?: string;
+  readonly githubToken?: string;
   readonly githubOAuth?: {
     readonly clientId: string;
     readonly clientSecret: string;
@@ -118,6 +119,7 @@ export function loadConfig(
     ),
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
     ...(metricsToken ? { metricsToken } : {}),
+    ...(environment.GITHUB_TOKEN?.trim() ? { githubToken: environment.GITHUB_TOKEN.trim() } : {}),
     githubOAuth,
     googleOAuth,
     discordOAuth,

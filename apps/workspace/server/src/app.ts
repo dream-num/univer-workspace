@@ -1,3 +1,4 @@
+import { createSkillSourcesModule } from "./modules/skill-drafts/sources.service.js";
 import { SkillDraftsRepository, createSkillDraftsModule, createSkillDraftsRouter, type SkillDraftsModule } from "./modules/skill-drafts/index.js";
 import { HtmlViewDraftsRepository, createHtmlViewDraftsModule, createHtmlViewDraftsRouter, type HtmlViewDraftsModule } from "./modules/html-view-drafts/index.js";
 import { createClientMetadataDocumentResolver, type FetchClientMetadataDocument } from "./modules/identity/client-metadata-document.js";
@@ -258,7 +259,8 @@ export function createWorkspaceApplication(
     new LocalBlobStore(
       config.blobDirectory ?? resolve(".data/univer-workspace-blobs")
     );
-  const skillDrafts = createSkillDraftsModule({ repository: new SkillDraftsRepository(database), access, store: blobStore });
+  const skillSources = createSkillSourcesModule({ access, nodes: new NodesRepository(database), store: blobStore, ...(config.githubToken ? { githubToken: config.githubToken } : {}) });
+  const skillDrafts = createSkillDraftsModule({ repository: new SkillDraftsRepository(database), access, store: blobStore, sources: skillSources });
   const htmlViewDrafts = createHtmlViewDraftsModule({ repository: new HtmlViewDraftsRepository(database), access, store: blobStore });
   const blobs = createBlobsModule({
     repository: new BlobsRepository(database),
@@ -387,7 +389,7 @@ export function createWorkspaceApplication(
     app.post("/api/auth/register", createMcpClientRegistrationHandler({ accessTokens, mcpOAuth }));
   }
   // Draft JSON needs escaping headroom before the other routers apply their 1 MiB parser.
-  app.use("/api", createSkillDraftsRouter({ identity, drafts: skillDrafts }));
+  app.use("/api", createSkillDraftsRouter({ identity, drafts: skillDrafts, sources: skillSources }));
   app.use("/api", createHtmlViewDraftsRouter({ identity, drafts: htmlViewDrafts }));
   app.use(
     "/api",

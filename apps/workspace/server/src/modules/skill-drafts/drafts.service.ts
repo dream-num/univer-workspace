@@ -24,6 +24,10 @@ import {
   type ScanFile,
 } from "./scan.js";
 
+import { fromSourceSchema } from "./sources.types.js";
+import { checkSkillLimits, type SkillSourcesModule } from "./sources.service.js";
+import { importSkillFiles } from "./sources.metadata.js";
+
 const requestSchema = z
   .object({
     name: z
@@ -35,11 +39,12 @@ const requestSchema = z
     replace: z.boolean().default(false),
     files: z
       .array(z.object({ path: z.string().min(1).max(1024), text: z.string() }).strict())
-      .min(1),
+      .min(1).optional(),
+    from: fromSourceSchema.optional(),
     keep: z.array(z.string().min(1).max(1024)).default([]),
     review: z.array(reviewFindingSchema).max(500).default([]),
   })
-  .strict();
+  .strict().refine((s) => (s.files !== undefined) !== (s.from !== undefined));
 const keySchema = z
   .string()
   .min(16)
@@ -51,6 +56,7 @@ export function createSkillDraftsModule(options: {
   repository: SkillDraftsRepository;
   access: AccessResolver;
   store: BlobStore;
+  sources: SkillSourcesModule;
   now?: () => number;
 }) {
   const { repository, access, store } = options;
@@ -110,7 +116,7 @@ export function createSkillDraftsModule(options: {
         .map((file) => file.path),
       scan,
       review,
-      source: null,
+      source: row.source === null ? null : JSON.parse(row.source),
       unverifiedReviewCount: row.unverified_review_count,
       compatibility: compatibility(scan, review),
       createdAt: new Date(row.created_at).toISOString(),
@@ -147,25 +153,26 @@ export function createSkillDraftsModule(options: {
           "Invalid Skill draft request or Idempotency-Key.",
         );
       const input = parsed.data;
-      const files = input.files
-        .map((file) => ({ path: file.path, bytes: Buffer.from(file.text, "utf8") }))
+      const existing = repository.findKey(userId, key.data);
+      const fromIntent = input.from ? hash(JSON.stringify({ ...input, keep: [...input.keep].sort(), from: {
+        ...input.from, overrides: [...input.from.overrides].sort((a, b) => a.path.localeCompare(b.path, "en")),
+      } })) : null;
+      if (existing && fromIntent) {
+        if (existing.intent_sha256 !== fromIntent) throw draftConflict("Idempotency-Key belongs to another draft intent.");
+        if (["receiving", "pending", "expired"].includes(existing.state) && existing.expires_at <= now())
+          throw draftConflict("Draft expired; use a new Idempotency-Key.");
+        if (existing.state !== "receiving") return { status: 200, draft: view(existing) };
+      }
+      if (input.from) authorize(userId, input.spaceId);
+      const imported = input.from ? await options.sources.intake(userId, input.from.source, input.from.skill) : null;
+      const receivedAt = existing?.created_at ?? now();
+      const files = (imported && input.from ? await importSkillFiles({
+        ...imported, skill: input.from.skill, name: input.name, importedAt: receivedAt, overrides: input.from.overrides,
+      }) : input.files!.map((file) => ({ path: file.path, bytes: Buffer.from(file.text, "utf8") })))
         .sort((a, b) => a.path.localeCompare(b.path, "en"));
-      if (
-        files.length > 100 ||
-        files.reduce((size, file) => size + file.bytes.length, 0) > 20 * 1024 * 1024 ||
-        files.some((file) => file.path === "SKILL.md" && file.bytes.length > 64 * 1024)
-      )
-        throw new ApplicationError(
-          "PAYLOAD_TOO_LARGE",
-          413,
-          "Skill exceeds the file count or byte limits.",
-        );
-      if (files.some((file) => decodeSkillText(file.bytes) === null))
-        throw new ApplicationError(
-          "INVALID_INPUT",
-          400,
-          "This endpoint accepts UTF-8 text without NUL bytes.",
-        );
+      checkSkillLimits(files);
+      if (!input.from && files.some((file) => decodeSkillText(file.bytes) === null))
+        throw new ApplicationError("INVALID_INPUT", 400, "This endpoint accepts UTF-8 text without NUL bytes.");
       if (
         new Set(input.keep).size !== input.keep.length ||
         input.keep.some((path) => !safeSkillPath(path) || files.some((file) => file.path === path))
@@ -175,7 +182,7 @@ export function createSkillDraftsModule(options: {
           400,
           "keep must contain unique base paths absent from files.",
         );
-      const intent = hash(
+      const intent = fromIntent ?? hash(
         JSON.stringify({
           ...input,
           files: files.map((file) => ({ path: file.path, sha256: hash(file.bytes) })),
@@ -202,6 +209,7 @@ export function createSkillDraftsModule(options: {
             "keep paths must belong to the replacement base.",
           );
         const scan = await scanSkill(input.name, files, {
+          ...imported?.context,
           nameConflict:
             (!input.replace && target.nonEmpty) ||
             repository.personalNameConflict(userId, input.spaceId, input.name),
@@ -220,9 +228,9 @@ export function createSkillDraftsModule(options: {
                 path: file.path,
                 byteSize: file.bytes.length,
                 sha256: hash(file.bytes),
-                kind: "text",
+                kind: decodeSkillText(file.bytes) === null ? "binary" : "text",
                 objectKey: randomUUID(),
-                mediaType: "text/plain; charset=utf-8",
+                mediaType: decodeSkillText(file.bytes) === null ? "application/octet-stream" : "text/plain; charset=utf-8",
               })),
             ),
             base: base === null ? null : JSON.stringify(base),
@@ -230,8 +238,9 @@ export function createSkillDraftsModule(options: {
             scan: JSON.stringify(scan),
             review: JSON.stringify(verified.review),
             unverified_review_count: verified.unverifiedReviewCount,
+            source: imported ? JSON.stringify(imported.source) : null,
           },
-          now(),
+          receivedAt,
         );
         row = reserved.row;
         created = reserved.created;

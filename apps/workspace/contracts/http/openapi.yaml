@@ -42,6 +42,8 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /api/skill-sources/read:
+    $ref: ./paths/skill-drafts.yaml#/~1api~1skill-sources~1read
   /api/skill-drafts:
     $ref: ./paths/skill-drafts.yaml#/~1api~1skill-drafts
   /api/skill-drafts/{draftId}:

@@ -286,7 +286,7 @@ Workspace Server 新增一个来源解析模块，只访问下表中的域名。
 | --- | --- | --- |
 | GitHub | 仓库、`tree`、`blob` 链接 | `git/trees/<commit>?recursive=1` 取路径，`raw.githubusercontent.com` 取文件 |
 | skills.sh | `skills.sh/<owner>/<repo>/<skill>`、`owner/repo/skill`、`npx skills add ...` | 翻译成 GitHub 坐标，走 GitHub。well-known 域名来源第一版不支持 |
-| ClawHub | `clawhub.ai/<owner>/<slug>`、`clawhub install ...` | 它的 `/api/v1/` REST API。它的审核结论转成 `hub-verdict` 发现 |
+| ClawHub | `clawhub.ai/<owner>/skills/<slug>`、`clawhub.ai/<owner>/<slug>`、`clawhub install owner/slug` | 它的 `/api/v1/` REST API。它的审核结论转成 `hub-verdict` 发现 |
 | anthropics/skills、huggingface/skills、Claude Code 插件仓库 | 仓库链接 | 走 GitHub，列出全部 `SKILL.md` 供选择 |
 | Space 中的 zip 或文件夹 | node ID，或 agent 用 `space_find` 找到的文件 | 读 Blob。zip 在服务端解压 |
 | LobeHub、Smithery、SkillsMP 等 | 下载 zip 后上传到 Space | 同上 |
@@ -300,7 +300,7 @@ Workspace Server 新增一个来源解析模块，只访问下表中的域名。
 - **GitHub 额度。** 未认证 API 每个 IP 每小时 60 次，而现在所有用户共用服务端的出口 IP。部署可以配置可选的
   `GITHUB_TOKEN`（认证后每小时 5000 次），写进 `apps/workspace/README.md` 的运行配置。没有配置且额度用完时，
   工具返回明确的错误，`skill-creator` 引导用户下载 zip 后上传到 Space。`raw.githubusercontent.com`
-  不计入 API 额度，这一点是推断，实现时确认。
+  不计入 core API 额度，已在 2026-11-13 的实时检查中确认。
 
 ### 静态扫描
 
@@ -389,8 +389,21 @@ metadata:
   source: github.com/anthropics/skills/skills/pdf
   source-commit: 0123abcd...
   source-hub: skills-sh
-  imported-at: 2026-11-13
+  imported-at: "2026-11-13"
 ```
+
+SB5 的 Server 部分已实现。`POST /api/skill-sources/read` 接受 source 字符串或 ResolvedSource，
+加 skill 选择候选 path，加 path 与 cursor 读取文本分页。根 Skill 的候选 path 为 `.`。
+`POST /api/skill-drafts` 支持 from，直接复制二进制和文本，应用 text 或 null overrides，保存并返回 source。
+来源记录只改 metadata，其余 frontmatter 与正文保持不变。日期、版本和 commit 都写成字符串。
+来源 frontmatter 不符合 skillEntry 时，调用者需提交有效的 SKILL.md override。
+MCP 的 skill_source_read、from 工具映射与 skill-creator 导入指引仍由后续工作完成。
+
+GitHub 每次解析调用一次 commits 和一次 recursive tree，后续固定来源读取只调用 tree 与 raw。
+truncated tree 返回明确错误。ClawHub 的 API 始终带 ownerHandle，下载只采用版本 files 清单内的路径并校验哈希。
+Space 文件夹对节点身份、名称、文件路径与 ETag 计算版本，zip 使用 Blob ETag，变化返回 409。
+归档限制为 1,000 条目、单条目 20 MiB、总展开 100 MiB、单条目压缩比 100:1，解压前及解压中都检查。
+GitHub 含斜线的 branch/tag 在 URL ref 段中需编码为 `%2F`，以便一次 commits 请求准确解析。
 
 来源跟着 skill 走，复制到 Claude Code 或 Codex 里也不会丢。以后「检查更新」只需要比对 commit。代价是改动了第三方文件的
 frontmatter。原样导入时，这是唯一的改动。
@@ -428,7 +441,7 @@ frontmatter。原样导入时，这是唯一的改动。
 | SB2 `feat(workspace)` | `skill_drafts` 表与迁移、HTTP contract、静态扫描、证据校验、发布流程、草稿审阅页 | main | 扫描规则逐条单测；发布事务回滚与重试、完整基础 ETag 冲突、目录复用及多文件原子发布都有测试；`api:verify` 通过；按 `verify-db-migration` 跑完迁移矩阵；浏览器旅程用 HTTP 建一个草稿，发布后 `/name` 能调用 |
 | SB3 `feat(mcp)` | `skill_draft_create`（`files` 形式）、`skill_draft_get` | SB2 | 工具单测；verify-uvw 旅程从 MCP 建草稿、发布、`skills_read` 能读到 |
 | SB4 `feat(mcp)` | 内置 `skill-creator`（复制、特化、`NOTICE.md`），内置 skill 的 `user-invocable`，浏览器 `/` 菜单显示内置条目，`core` 增加路由说明 | SB3 | `runner.test.ts` 断言系统提示词与目录提醒不变；mock provider 旅程覆盖 `/skill-creator`、访谈、建草稿、发布；真实模型手动跑一次创建和一次修改，附会话截图 |
-| SB5 `feat(workspace)` | 来源解析（GitHub、skills.sh、ClawHub、Space 中的 zip 和文件夹）、`skill_source_read`、`skill_draft_create` 的 `from` 形式、`skill-creator` 的 `importing.md` 和 `review.md` 定稿 | SB4 | 每种来源的解析有表驱动单测；抓取用录制的响应测试；压缩炸弹和路径穿越有测试；一条真实旅程从固定 commit 的公开仓库导入一个带脚本的 skill，草稿页显示 `script-file` 和通过校验的审查意见 |
+| SB5 `feat(workspace)` | Server HTTP、固定来源解析与 from 已实现；MCP 与内置指引待后续。来源解析（GitHub、skills.sh、ClawHub、Space 中的 zip 和文件夹）、`skill_source_read`、`skill_draft_create` 的 `from` 形式、`skill-creator` 的 `importing.md` 和 `review.md` 定稿 | SB4 | 每种来源的解析有表驱动单测；抓取用录制的响应测试；压缩炸弹和路径穿越有测试；一条真实旅程从固定 commit 的公开仓库导入一个带脚本的 skill，草稿页显示 `script-file` 和通过校验的审查意见 |
 
 顺序的理由：SB2 是所有路径共用的出口，先做。SB4 让「创建」和「修改」端到端可用，用户先拿到价值。导入放最后，
 因为它依赖前面全部能力，又有外部网络这个不确定因素。

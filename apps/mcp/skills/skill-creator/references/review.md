@@ -62,6 +62,14 @@ you save. Its `warn` and `info` findings, such as `script-file`, `office-asset` 
 `hidden-text`, appear on the draft page next to yours. You do not need to repeat them,
 but explain them to the user when they matter.
 
+For an import, use `skill_source_read` with the pinned `source`, selected `skill`
+and each text file's `path`; follow every returned `cursor`. The server copies
+unchanged files through `from`. Review the original text for an as-is import and
+the final overridden text for an adaptation. Do not override `SKILL.md` solely to
+add provenance; the server stamps `metadata` itself. Invalid upstream frontmatter,
+such as nested ClawHub metadata values, needs a valid `SKILL.md` override before
+the server can create the draft.
+
 Your findings never block publishing. They help the user decide.
 
 ## Telling the user

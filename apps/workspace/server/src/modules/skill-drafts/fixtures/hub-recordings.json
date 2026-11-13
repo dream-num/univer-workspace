@@ -1,0 +1,177 @@
+[
+  {
+    "url": "https://api.github.com/repos/anthropics/skills/commits/2c5958ecac7cee2b583967a2c4981d0f4a75c579",
+    "status": 200,
+    "json": {
+      "sha": "2c5958ecac7cee2b583967a2c4981d0f4a75c579"
+    }
+  },
+  {
+    "url": "https://api.github.com/repos/anthropics/skills/git/trees/2c5958ecac7cee2b583967a2c4981d0f4a75c579?recursive=1",
+    "status": 200,
+    "json": {
+      "sha": "2c5958ecac7cee2b583967a2c4981d0f4a75c579",
+      "url": "https://api.github.com/repos/anthropics/skills/git/trees/2c5958ecac7cee2b583967a2c4981d0f4a75c579",
+      "tree": [
+        {
+          "path": "skills/pdf/SKILL.md",
+          "mode": "100644",
+          "type": "blob",
+          "sha": "9f606f1cd68dcab9dabb75b548e90c1de028b8a2",
+          "size": 8058,
+          "url": "https://api.github.com/repos/anthropics/skills/git/blobs/9f606f1cd68dcab9dabb75b548e90c1de028b8a2"
+        }
+      ],
+      "truncated": false
+    }
+  },
+  {
+    "url": "https://raw.githubusercontent.com/anthropics/skills/2c5958ecac7cee2b583967a2c4981d0f4a75c579/skills/pdf/SKILL.md",
+    "status": 200,
+    "text": "---\nname: pdf\ndescription: Use this skill whenever the user wants to do anything with PDF files. This includes reading or extracting text/tables from PDFs, combining or merging multiple PDFs into one, splitting PDFs apart, rotating pages, adding watermarks, creating new PDFs, filling PDF forms, encrypting/decrypting PDFs, extracting images, and OCR on scanned PDFs to make them searchable. If the user mentions a .pdf file or asks to produce one, use this skill.\nlicense: Complete terms in LICENSE.txt\n---\n\n# PDF Processing Guide\n\n## Overview\n\nThis guide covers essential PDF processing operations using Python libraries and command-line tools. For advanced features, JavaScript libraries, and detailed examples, see REFERENCE.md. If you need to fill out a PDF form, read FORMS.md and follow its instructions.\n\n## Quick Start\n\n```python\nfrom pypdf import PdfReader, PdfWriter\n\n# Read a PDF\nreader = PdfReader(\"document.pdf\")\nprint(f\"Pages: {len(reader.pages)}\")\n\n# Extract text\ntext = \"\"\nfor page in reader.pages:\n    text += page.extract_text()\n```\n\n## Python Libraries\n\n### pypdf - Basic Operations\n\n#### Merge PDFs\n```python\nfrom pypdf import PdfWriter, PdfReader\n\nwriter = PdfWriter()\nfor pdf_file in [\"doc1.pdf\", \"doc2.pdf\", \"doc3.pdf\"]:\n    reader = PdfReader(pdf_file)\n    for page in reader.pages:\n        writer.add_page(page)\n\nwith open(\"merged.pdf\", \"wb\") as output:\n    writer.write(output)\n```\n\n#### Split PDF\n```python\nreader = PdfReader(\"input.pdf\")\nfor i, page in enumerate(reader.pages):\n    writer = PdfWriter()\n    writer.add_page(page)\n    with open(f\"page_{i+1}.pdf\", \"wb\") as output:\n        writer.write(output)\n```\n\n#### Extract Metadata\n```python\nreader = PdfReader(\"document.pdf\")\nmeta = reader.metadata\nprint(f\"Title: {meta.title}\")\nprint(f\"Author: {meta.author}\")\nprint(f\"Subject: {meta.subject}\")\nprint(f\"Creator: {meta.creator}\")\n```\n\n#### Rotate Pages\n```python\nreader = PdfReader(\"input.pdf\")\nwriter = PdfWriter()\n\npage = reader.pages[0]\npage.rotate(90)  # Rotate 90 degrees clockwise\nwriter.add_page(page)\n\nwith open(\"rotated.pdf\", \"wb\") as output:\n    writer.write(output)\n```\n\n### pdfplumber - Text and Table Extraction\n\n#### Extract Text with Layout\n```python\nimport pdfplumber\n\nwith pdfplumber.open(\"document.pdf\") as pdf:\n    for page in pdf.pages:\n        text = page.extract_text()\n        print(text)\n```\n\n#### Extract Tables\n```python\nwith pdfplumber.open(\"document.pdf\") as pdf:\n    for i, page in enumerate(pdf.pages):\n        tables = page.extract_tables()\n        for j, table in enumerate(tables):\n            print(f\"Table {j+1} on page {i+1}:\")\n            for row in table:\n                print(row)\n```\n\n#### Advanced Table Extraction\n```python\nimport pandas as pd\n\nwith pdfplumber.open(\"document.pdf\") as pdf:\n    all_tables = []\n    for page in pdf.pages:\n        tables = page.extract_tables()\n        for table in tables:\n            if table:  # Check if table is not empty\n                df = pd.DataFrame(table[1:], columns=table[0])\n                all_tables.append(df)\n\n# Combine all tables\nif all_tables:\n    combined_df = pd.concat(all_tables, ignore_index=True)\n    combined_df.to_excel(\"extracted_tables.xlsx\", index=False)\n```\n\n### reportlab - Create PDFs\n\n#### Basic PDF Creation\n```python\nfrom reportlab.lib.pagesizes import letter\nfrom reportlab.pdfgen import canvas\n\nc = canvas.Canvas(\"hello.pdf\", pagesize=letter)\nwidth, height = letter\n\n# Add text\nc.drawString(100, height - 100, \"Hello World!\")\nc.drawString(100, height - 120, \"This is a PDF created with reportlab\")\n\n# Add a line\nc.line(100, height - 140, 400, height - 140)\n\n# Save\nc.save()\n```\n\n#### Create PDF with Multiple Pages\n```python\nfrom reportlab.lib.pagesizes import letter\nfrom reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, PageBreak\nfrom reportlab.lib.styles import getSampleStyleSheet\n\ndoc = SimpleDocTemplate(\"report.pdf\", pagesize=letter)\nstyles = getSampleStyleSheet()\nstory = []\n\n# Add content\ntitle = Paragraph(\"Report Title\", styles['Title'])\nstory.append(title)\nstory.append(Spacer(1, 12))\n\nbody = Paragraph(\"This is the body of the report. \" * 20, styles['Normal'])\nstory.append(body)\nstory.append(PageBreak())\n\n# Page 2\nstory.append(Paragraph(\"Page 2\", styles['Heading1']))\nstory.append(Paragraph(\"Content for page 2\", styles['Normal']))\n\n# Build PDF\ndoc.build(story)\n```\n\n#### Subscripts and Superscripts\n\n**IMPORTANT**: Never use Unicode subscript/superscript characters (\u2080\u2081\u2082\u2083\u2084\u2085\u2086\u2087\u2088\u2089, \u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079) in ReportLab PDFs. The built-in fonts do not include these glyphs, causing them to render as solid black boxes.\n\nInstead, use ReportLab's XML markup tags in Paragraph objects:\n```python\nfrom reportlab.platypus import Paragraph\nfrom reportlab.lib.styles import getSampleStyleSheet\n\nstyles = getSampleStyleSheet()\n\n# Subscripts: use <sub> tag\nchemical = Paragraph(\"H<sub>2</sub>O\", styles['Normal'])\n\n# Superscripts: use <super> tag\nsquared = Paragraph(\"x<super>2</super> + y<super>2</super>\", styles['Normal'])\n```\n\nFor canvas-drawn text (not Paragraph objects), manually adjust font the size and position rather than using Unicode subscripts/superscripts.\n\n## Command-Line Tools\n\n### pdftotext (poppler-utils)\n```bash\n# Extract text\npdftotext input.pdf output.txt\n\n# Extract text preserving layout\npdftotext -layout input.pdf output.txt\n\n# Extract specific pages\npdftotext -f 1 -l 5 input.pdf output.txt  # Pages 1-5\n```\n\n### qpdf\n```bash\n# Merge PDFs\nqpdf --empty --pages file1.pdf file2.pdf -- merged.pdf\n\n# Split pages\nqpdf input.pdf --pages . 1-5 -- pages1-5.pdf\nqpdf input.pdf --pages . 6-10 -- pages6-10.pdf\n\n# Rotate pages\nqpdf input.pdf output.pdf --rotate=+90:1  # Rotate page 1 by 90 degrees\n\n# Remove password\nqpdf --password=mypassword --decrypt encrypted.pdf decrypted.pdf\n```\n\n### pdftk (if available)\n```bash\n# Merge\npdftk file1.pdf file2.pdf cat output merged.pdf\n\n# Split\npdftk input.pdf burst\n\n# Rotate\npdftk input.pdf rotate 1east output rotated.pdf\n```\n\n## Common Tasks\n\n### Extract Text from Scanned PDFs\n```python\n# Requires: pip install pytesseract pdf2image\nimport pytesseract\nfrom pdf2image import convert_from_path\n\n# Convert PDF to images\nimages = convert_from_path('scanned.pdf')\n\n# OCR each page\ntext = \"\"\nfor i, image in enumerate(images):\n    text += f\"Page {i+1}:\\n\"\n    text += pytesseract.image_to_string(image)\n    text += \"\\n\\n\"\n\nprint(text)\n```\n\n### Add Watermark\n```python\nfrom pypdf import PdfReader, PdfWriter\n\n# Create watermark (or load existing)\nwatermark = PdfReader(\"watermark.pdf\").pages[0]\n\n# Apply to all pages\nreader = PdfReader(\"document.pdf\")\nwriter = PdfWriter()\n\nfor page in reader.pages:\n    page.merge_page(watermark)\n    writer.add_page(page)\n\nwith open(\"watermarked.pdf\", \"wb\") as output:\n    writer.write(output)\n```\n\n### Extract Images\n```bash\n# Using pdfimages (poppler-utils)\npdfimages -j input.pdf output_prefix\n\n# This extracts all images as output_prefix-000.jpg, output_prefix-001.jpg, etc.\n```\n\n### Password Protection\n```python\nfrom pypdf import PdfReader, PdfWriter\n\nreader = PdfReader(\"input.pdf\")\nwriter = PdfWriter()\n\nfor page in reader.pages:\n    writer.add_page(page)\n\n# Add password\nwriter.encrypt(\"userpassword\", \"ownerpassword\")\n\nwith open(\"encrypted.pdf\", \"wb\") as output:\n    writer.write(output)\n```\n\n## Quick Reference\n\n| Task | Best Tool | Command/Code |\n|------|-----------|--------------|\n| Merge PDFs | pypdf | `writer.add_page(page)` |\n| Split PDFs | pypdf | One page per file |\n| Extract text | pdfplumber | `page.extract_text()` |\n| Extract tables | pdfplumber | `page.extract_tables()` |\n| Create PDFs | reportlab | Canvas or Platypus |\n| Command line merge | qpdf | `qpdf --empty --pages ...` |\n| OCR scanned PDFs | pytesseract | Convert to image first |\n| Fill PDF forms | pdf-lib or pypdf (see FORMS.md) | See FORMS.md |\n\n## Next Steps\n\n- For advanced pypdfium2 usage, see REFERENCE.md\n- For JavaScript libraries (pdf-lib), see REFERENCE.md\n- If you need to fill out a PDF form, follow the instructions in FORMS.md\n- For troubleshooting guides, see REFERENCE.md\n"
+  },
+  {
+    "url": "https://clawhub.ai/api/v1/skills/gifgrep?ownerHandle=steipete",
+    "status": 200,
+    "json": {
+      "skill": {
+        "slug": "gifgrep",
+        "displayName": "Gifgrep",
+        "summary": "Search GIF providers with CLI/TUI, download results, and extract stills/sheets.",
+        "icon": null,
+        "description": "---\nname: gifgrep\ndescription: Search GIF providers with CLI/TUI, download results, and extract stills/sheets.\nhomepage: https://gifgrep.com\nmetadata: {\"clawdbot\":{\"emoji\":\"\ud83e\uddf2\",\"requires\":{\"bins\":[\"gifgrep\"]},\"install\":[{\"id\":\"brew\",\"kind\":\"brew\",\"formula\":\"steipete/tap/gifgrep\",\"bins\":[\"gifgrep\"],\"label\":\"Install gifgrep (brew)\"},{\"id\":\"go\",\"kind\":\"go\",\"module\":\"github.com/steipete/gifgrep/cmd/gifgrep@latest\",\"bins\":[\"gifgrep\"],\"label\":\"Install gifgrep (go)\"}]}}\n---\n\n# gifgrep\n\nUse `gifgrep` to search GIF providers (Tenor/Giphy), browse in a TUI, download results, and extract stills or sheets.\n\nGIF-Grab (gifgrep workflow)\n- Search \u2192 preview \u2192 download \u2192 extract (still/sheet) for fast review and sharing.\n\nQuick start\n- `gifgrep cats --max 5`\n- `gifgrep cats --format url | head -n 5`\n- `gifgrep search --json cats | jq '.[0].url'`\n- `gifgrep tui \"office handshake\"`\n- `gifgrep cats --download --max 1 --format url`\n\nTUI + previews\n- TUI: `gifgrep tui \"query\"`\n- CLI still previews: `--thumbs` (Kitty/Ghostty only; still frame)\n\nDownload + reveal\n- `--download` saves to `~/Downloads`\n- `--reveal` shows the last download in Finder\n\nStills + sheets\n- `gifgrep still ./clip.gif --at 1.5s -o still.png`\n- `gifgrep sheet ./clip.gif --frames 9 --cols 3 -o sheet.png`\n- Sheets = single PNG grid of sampled frames (great for quick review, docs, PRs, chat).\n- Tune: `--frames` (count), `--cols` (grid width), `--padding` (spacing).\n\nProviders\n- `--source auto|tenor|giphy`\n- `GIPHY_API_KEY` required for `--source giphy`\n- `TENOR_API_KEY` optional (Tenor demo key used if unset)\n\nOutput\n- `--json` prints an array of results (`id`, `title`, `url`, `preview_url`, `tags`, `width`, `height`)\n- `--format` for pipe-friendly fields (e.g., `url`)\n\nEnvironment tweaks\n- `GIFGREP_SOFTWARE_ANIM=1` to force software animation\n- `GIFGREP_CELL_ASPECT=0.5` to tweak preview geometry\n",
+        "tags": {
+          "latest": "1.0.1"
+        },
+        "stats": {
+          "comments": 0,
+          "downloads": 22090,
+          "installs": 1238,
+          "stars": 7,
+          "versions": 2
+        },
+        "createdAt": 1767488226016,
+        "updatedAt": 1778485729679
+      },
+      "latestVersion": {
+        "version": "1.0.1",
+        "createdAt": 1767545342229,
+        "changelog": "",
+        "license": null
+      },
+      "metadata": {
+        "setup": [],
+        "os": null,
+        "systems": null
+      },
+      "owner": {
+        "handle": "steipete",
+        "userId": "s179zksw999xz8ms4cy7pb2fr183m5jq",
+        "displayName": "Peter Steinberger",
+        "image": "https://avatars.githubusercontent.com/u/58493?v=4"
+      },
+      "moderation": null
+    }
+  },
+  {
+    "url": "https://clawhub.ai/api/v1/skills/gifgrep/versions/1.0.1?ownerHandle=steipete",
+    "status": 200,
+    "json": {
+      "skill": {
+        "slug": "gifgrep",
+        "displayName": "Gifgrep"
+      },
+      "version": {
+        "version": "1.0.1",
+        "createdAt": 1767545342229,
+        "changelog": "",
+        "changelogSource": null,
+        "license": null,
+        "files": [
+          {
+            "path": "SKILL.md",
+            "size": 1882,
+            "sha256": "1cf64ee164ffffac317b7156d0c107cff8714abe4ae6438387cf27d4a513890c",
+            "contentType": "text/markdown"
+          },
+          {
+            "path": "skill-card.md",
+            "size": 2024,
+            "sha256": "a9fea1eaf2ebcc085abd2e775a904fd0c2e9bfc30e29ded8d605cbd9b2413723",
+            "contentType": "text/markdown"
+          }
+        ],
+        "security": {
+          "status": "clean",
+          "hasWarnings": true,
+          "checkedAt": 1789013570474,
+          "model": null,
+          "hasScanResult": true,
+          "sha256hash": "3e697f4792c6e44fbb1309a2c08a8c94dc60fc304e29d007883f2afd9f3f7865",
+          "scanners": {
+            "skillspector": {
+              "status": "clean",
+              "normalizedStatus": "clean",
+              "score": 0,
+              "severity": "LOW",
+              "recommendation": "SAFE",
+              "issueCount": 0,
+              "checkedAt": 1789013570474
+            },
+            "llm": {
+              "status": "clean",
+              "verdict": "benign",
+              "normalizedStatus": "clean",
+              "confidence": "high",
+              "summary": "This skill is a straightforward wrapper for a GIF search CLI, with a supply-chain caution around its unpinned third-party installer sources.",
+              "dimensions": [
+                {
+                  "detail": "Network access to GIF providers, optional API keys, and saving downloads to ~/Downloads are expected for GIF search and download workflows; no unrelated local data access is requested.",
+                  "label": "Credentials",
+                  "name": "environment_proportionality",
+                  "rating": "note"
+                },
+                {
+                  "detail": "The skill declares installation of an external gifgrep binary via a third-party Homebrew tap or a Go module using @latest, which is purpose-aligned but mutable and not pinned to a reviewed version.",
+                  "label": "Install Mechanism",
+                  "name": "install_mechanism",
+                  "rating": "note"
+                },
+                {
+                  "detail": "Runtime guidance consists of explicit user-invoked gifgrep commands and documented options; it does not attempt to override agent behavior, hide instructions, or run automatically.",
+                  "label": "Instruction Scope",
+                  "name": "instruction_scope",
+                  "rating": "ok"
+                },
+                {
+                  "detail": "Installing gifgrep creates a persistent local tool and downloads may persist in ~/Downloads, but the artifact shows no background services, privilege escalation, hooks, or cross-session agent modification.",
+                  "label": "Persistence & Privilege",
+                  "name": "persistence_privilege",
+                  "rating": "note"
+                },
+                {
+                  "detail": "The stated purpose is to use gifgrep for GIF search, preview, download, and still/sheet extraction, and the instructions stay within that purpose.",
+                  "label": "Purpose & Capability",
+                  "name": "purpose_capability",
+                  "rating": "ok"
+                }
+              ],
+              "guidance": "Before installing, consider pinning or independently verifying the gifgrep source you install, especially if using the Go @latest path or the third-party Homebrew tap. Run it with normal user privileges and only provide GIPHY or Tenor API keys if you are comfortable using them with this CLI.",
+              "findings": "[T08] expected: The static scan's unpinned third-party installation concern is supported by the metadata: brew uses steipete/tap/gifgrep and Go uses github.com/steipete/gifgrep/cmd/gifgrep@latest. This is a real supply-chain caution, but it is disclosed, purpose-aligned, and not evidence of malicious behavior in the skill artifact.",
+              "agenticRiskFindings": null,
+              "riskSummary": null,
+              "model": null,
+              "checkedAt": 1789013570474
+            }
+          }
+        }
+      }
+    }
+  },
+  {
+    "url": "https://clawhub.ai/api/v1/download?slug=gifgrep&version=1.0.1&ownerHandle=steipete",
+    "status": 200,
+    "body": "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",
+    "encoding": "base64"
+  }
+]

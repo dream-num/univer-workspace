@@ -1,7 +1,10 @@
 SubmitSkillDraft:
   type: object
   additionalProperties: false
-  required: [name, spaceId, files]
+  required: [name, spaceId]
+  oneOf:
+    - required: [files]
+    - required: [from]
   properties:
     name:
       type: string
@@ -30,6 +33,8 @@ SubmitSkillDraft:
             maxLength: 1024
           text:
             type: string
+    from:
+      $ref: '#/SkillDraftFrom'
     keep:
       type: array
       default: []
@@ -170,8 +175,10 @@ SkillDraft:
       items:
         $ref: '#/SkillVerifiedReviewFinding'
     source:
-      type: "null"
-      description: Reserved for source imports in SB5.
+      oneOf:
+        - $ref: '#/ResolvedSkillSource'
+        - type: "null"
+      description: Exact source version reread at intake. Null for authored files.
     unverifiedReviewCount:
       type: integer
       minimum: 0
@@ -200,3 +207,202 @@ SkillDraftEnvelope:
   properties:
     draft:
       $ref: '#/SkillDraft'
+ResolvedSkillSource:
+  oneOf:
+    - type: object
+      additionalProperties: false
+      required: [kind, hub, owner, repo, commit, path, pageUrl]
+      properties:
+        kind:
+          type: string
+          const: git
+        hub:
+          type: string
+          enum: [github, skills-sh]
+        owner:
+          type: string
+          pattern: '^[A-Za-z0-9_.-]+$'
+          maxLength: 255
+        repo:
+          type: string
+          pattern: '^[A-Za-z0-9_.-]+$'
+          maxLength: 255
+        commit:
+          type: string
+          pattern: '^[a-f0-9]{40}$'
+        path:
+          type: string
+          maxLength: 1024
+          description: Repository-relative scope folder. Empty for the entire repository.
+        pageUrl:
+          type: string
+          maxLength: 2048
+    - type: object
+      additionalProperties: false
+      required: [kind, owner, slug, version, pageUrl]
+      properties:
+        kind:
+          type: string
+          const: clawhub
+        owner:
+          type: string
+          pattern: '^[A-Za-z0-9_.-]+$'
+          maxLength: 255
+        slug:
+          type: string
+          pattern: '^[A-Za-z0-9_.-]+$'
+          maxLength: 255
+        version:
+          type: string
+          pattern: '^[A-Za-z0-9_.+-]+$'
+          maxLength: 255
+        pageUrl:
+          type: string
+          maxLength: 2048
+    - type: object
+      additionalProperties: false
+      required: [kind, nodeId, etag]
+      properties:
+        kind:
+          type: string
+          const: space
+        nodeId:
+          type: string
+          format: uuid
+        etag:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: Quoted Blob ETag or digest of the folder identity, paths and file ETags.
+SkillDraftFrom:
+  type: object
+  additionalProperties: false
+  required: [source, skill]
+  properties:
+    source:
+      $ref: '#/ResolvedSkillSource'
+    skill:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      description: Candidate path returned by source read. Use . for a root Skill.
+    overrides:
+      type: array
+      maxItems: 100
+      default: []
+      description: Replace or add UTF-8 text files; null deletes a path. Paths must be unique and safe. SKILL.md must remain valid and match name.
+      items:
+        type: object
+        additionalProperties: false
+        required: [path, text]
+        properties:
+          path:
+            type: string
+            minLength: 1
+            maxLength: 1024
+          text:
+            type: [string, "null"]
+ReadSkillSource:
+  type: object
+  additionalProperties: false
+  required: [source]
+  properties:
+    source:
+      oneOf:
+        - type: string
+          minLength: 1
+          maxLength: 4096
+          description: GitHub repo/tree/blob URL, skills.sh URL, owner/repo/skill, npx skills add command, ClawHub owner URL/install command, or Space node UUID.
+        - $ref: '#/ResolvedSkillSource'
+    skill:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    path:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      description: Relative text path. Requires skill.
+    cursor:
+      type: string
+      minLength: 1
+      maxLength: 1024
+      description: Opaque continuation for the same pinned source, Skill and path. Requires path.
+SkillSourceFileInfo:
+  type: object
+  required: [path, byteSize, kind]
+  properties:
+    path:
+      type: string
+    byteSize:
+      type: integer
+      minimum: 0
+    kind:
+      type: string
+      enum: [text, binary]
+SkillSourceResult:
+  oneOf:
+    - type: object
+      additionalProperties: false
+      required: [source, candidates]
+      properties:
+        source:
+          $ref: '#/ResolvedSkillSource'
+        candidates:
+          type: array
+          items:
+            type: object
+            required: [name, description, path, fileCount, problems]
+            properties:
+              name:
+                type: string
+              description:
+                type: string
+              path:
+                type: string
+              fileCount:
+                type: integer
+                minimum: 1
+              problems:
+                type: array
+                items:
+                  type: string
+    - type: object
+      additionalProperties: false
+      required: [source, skill, scan]
+      properties:
+        source:
+          $ref: '#/ResolvedSkillSource'
+        skill:
+          type: object
+          required: [name, description, path, files, content]
+          properties:
+            name:
+              type: string
+            description:
+              type: string
+            path:
+              type: string
+            files:
+              type: array
+              items:
+                $ref: '#/SkillSourceFileInfo'
+            content:
+              type: string
+        scan:
+          type: array
+          items:
+            $ref: '#/SkillScanFinding'
+    - type: object
+      additionalProperties: false
+      required: [path, content]
+      properties:
+        path:
+          type: string
+        content:
+          type: string
+        truncated:
+          type: boolean
+          const: true
+        cursor:
+          type: string
