@@ -243,9 +243,18 @@ $V mcp slm-outline outline "$(args "$SALES")"
   `$V mcp slm9-read read "$(args "$SALES" '{"range":"Summary!A3:I8","json":true}')"`, and
   `$V mcp slm9-find find "$(args "$SALES" '{"terms":["returned"]}')"`.
   Pass when all three succeed with `outcome: ok` using the read-only PAT.
-- SLM10. Run `$V mcp slm10 outline "$(args "$L50")"`.
-  Pass when `warnings` explains the large sheet, `text` contains a `note:` line,
-  and the event has `outcome: ok`.
+- SLM10. Run `$V mcp slm10 outline "$(args "$L50")"` twice. The 50,000-row ledger (500,010
+  cells) is under the executor's 1,000,000-cell limit. Pass when `text` shows a table with 10
+  columns, the second event has `cache: hit`, and both have `outcome: ok`. Then stretch the
+  ledger past the limit and call again:
+
+  ```bash
+  $V cli slm10-stretch execute --worktree "$W" --unit "$L50" \
+    -e 'const ws = workbook.getSheetByName("Ledger"); ws.setRowCount(100001); ws.getRange("J100001").setValue("end");'
+  $V mcp slm10-large outline "$(args "$L50")"
+  ```
+
+  Pass when `warnings` explains the large sheet and `text` contains a `note:` line.
 
 Run `$V down` after the journeys, including after failures. Keep only this run's
 results and redacted events. The `.event.json` cache and stage timing fields contain

@@ -179,7 +179,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
 | `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
-| `EXECUTOR_SHEET_LENS_CACHE_BYTES` | `134217728` (128 MiB) | Per-executor Sheet Lens cache budget in estimated bytes. Non-negative integer; `0` disables caching. Malformed values fail startup |
+| `EXECUTOR_SHEET_LENS_CACHE_BYTES` | `536870912` (512 MiB) | Per-executor Sheet Lens cache budget in estimated bytes. Non-negative integer; `0` disables caching. Malformed values fail startup |
 | `EXECUTOR_MAX_WORKERS` | `4` | Maximum cached Unit workers. Tune to the host's memory budget |
 | `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
@@ -281,11 +281,13 @@ user, origin, scope, Unit type, Unit ID and revision. Exports use the existing
 caller-bound runtime, including its grant, deadline and usage observer.
 `content.sheet-lens` uses the inspect route and FIFO, read effect, auth/revision
 reruns, and a 1 MiB RPC response cap. The gateway's normal result limit also applies.
-The cache's 128 MiB default is conservative because
-[`compose.verify.yml`](docker/compose.verify.yml) declares no executor memory limit.
-There is no declared container limit from which to compute half. Set this budget
-at or below half of the executor's deployed memory limit, leaving room for workers
-and transient exports. Oversized Units still return a result and an uncached warning.
+The 512 MiB default and the executor's 1,000,000-cell outline limit are operator
+decisions recorded in [large-sheets.zh-CN.md](../../docs/design/sheet-outline/large-sheets.zh-CN.md):
+a fully modelled 1,000,000-cell sheet keeps about 282 MiB of heap and is estimated at
+about 352 MB, so it fits the cache alone. Size the executor's container for the cache
+plus workers and transient exports; [`compose.verify.yml`](docker/compose.verify.yml)
+declares no executor memory limit. Oversized Units still return a result and an
+uncached warning. Modelling runs on the executor's main thread (issue #369).
 
 `files` toolset:
 

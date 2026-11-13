@@ -14,7 +14,7 @@ const environment = z.object({
   MCP_EXECUTOR_ALLOWED_USER_IDS: executorAllowedUserIds.optional(),
   EXECUTOR_MAX_JOBS: positive.default(2),
   EXECUTOR_JOB_HEAP_MB: positive.default(256),
-  EXECUTOR_SHEET_LENS_CACHE_BYTES: z.string().regex(/^\d+$/, "Expected non-negative integer bytes").transform(Number).pipe(z.int().nonnegative()).prefault(String(128 * 1024 * 1024)),
+  EXECUTOR_SHEET_LENS_CACHE_BYTES: z.string().regex(/^\d+$/, "Expected non-negative integer bytes").transform(Number).pipe(z.int().nonnegative()).prefault(String(512 * 1024 * 1024)),
   EXECUTOR_MAX_WORKERS: positive.default(4),
   EXECUTOR_IDLE_TTL_MS: positive.default(60_000),
   EXECUTOR_QUEUE_TIMEOUT_MS: positive.default(5_000),

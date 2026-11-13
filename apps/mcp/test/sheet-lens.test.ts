@@ -352,7 +352,7 @@ it("shares one engine across requests while keeping users and revisions separate
 
 it("fails startup on malformed cache budgets and accepts zero to disable caching", () => {
   const env = { WORKSPACE_ORIGIN: target.origin, MCP_EXECUTOR_TOKEN: "x".repeat(32) };
-  expect(parseExecutorConfig(env).EXECUTOR_SHEET_LENS_CACHE_BYTES).toBe(128 * 1024 * 1024);
+  expect(parseExecutorConfig(env).EXECUTOR_SHEET_LENS_CACHE_BYTES).toBe(512 * 1024 * 1024);
   expect(
     parseExecutorConfig({ ...env, EXECUTOR_SHEET_LENS_CACHE_BYTES: "0" })
       .EXECUTOR_SHEET_LENS_CACHE_BYTES,

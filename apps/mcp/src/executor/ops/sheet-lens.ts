@@ -11,6 +11,8 @@ export function createSheetLensHandler(maxCachedBytes: number): Handler<"content
   const runtimes = new WeakMap<WorkspaceRuntimeCaller, BoundRuntime>();
   const engine = new WorkspaceSheetLensEngine({
     maxCachedBytes,
+    // Operator decision recorded in docs/design/sheet-outline/large-sheets.zh-CN.md.
+    maxBoxCells: 1_000_000,
     exportUnitData: ({ target, caller }) => {
       const runtime = caller && runtimes.get(caller);
       if (!runtime) throw new Error("Sheet Lens caller has no bound runtime.");
