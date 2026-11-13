@@ -15,7 +15,7 @@ export const outlineTool = executorTool({
   scope: "read",
   title: "Outline a Sheet",
   description:
-    "Accepts only Sheet Units; use inspect for other Unit types. Map sheets, regions, tables and columns, zoom with at, and continue with next.arguments. budget limits text characters within each scope.",
+    "Accepts only Sheet Units; use inspect for other Unit types. Call outline first for any question about a Sheet. Map sheets, regions, tables and columns, zoom into a ref with at, and continue with next.arguments. budget limits text characters within each scope.",
   annotations: readOnlyAnnotations,
   inputSchema: sheetLensTarget.safeExtend({
     at: z.string().optional(),

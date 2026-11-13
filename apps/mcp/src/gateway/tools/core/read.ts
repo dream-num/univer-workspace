@@ -15,7 +15,7 @@ export const readTool = executorTool({
   scope: "read",
   title: "Read Sheet cells",
   description:
-    "Accepts only Sheet Units; use inspect for other Unit types. Read a range such as Summary!A3:I8, paging by whole rows with next.arguments. content selects both values and formulas (default), display, formula, style, or formula+style. max is at most 2,000 cells. json: true includes typed cells.",
+    "Accepts only Sheet Units; use inspect for other Unit types. Read a range with its sheet name, such as Orders!A1:J12, paging by whole rows with next.arguments. Use find to locate values instead of reading pages. content selects both values and formulas (default), display, formula, style, or formula+style. max is at most 2,000 cells. json: true includes typed cells.",
   annotations: readOnlyAnnotations,
   inputSchema: sheetLensTarget.safeExtend({
     range: z.string().min(1),
