@@ -1090,7 +1090,7 @@ jq -e '.instructions | contains("pull request") and contains("pr_create") and co
 
 Pass when both protocols return the same non-null `instructions` that name the workflow (find the file, open a pull request, verify by reading back, mark ready, hand over the review link, leave merging to the user) and tell the agent to generate a new idempotency key for each new operation.
 
-**MR7. Truncation with cursors.** `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` paging and `workspace-result-too-large` are covered by the gateway tests.
+**MR7. Truncation with cursors.** `FRange` is about 170,000 characters, so `api_show` pages it. No shipped skill file exceeds the limit, so `skills_read` resource paging is covered by the gateway tests. MR1 covers `workspace-result-too-large` with `html-view` full.
 
 ```bash
 CURSOR=""; I=0

@@ -78,6 +78,9 @@ mock() {
   kill -0 "$MODEL_PID"
 }
 shot() { agent-browser snapshot -c > "$EVIDENCE/$1.txt"; agent-browser screenshot "$EVIDENCE/$1.png"; }
+aria() {
+  agent-browser eval 'Array.from(document.querySelectorAll("[contenteditable=true],textarea")).map(e=>({role:e.getAttribute("role"),expanded:e.getAttribute("aria-expanded"),active:e.getAttribute("aria-activedescendant"),text:e.tagName === "TEXTAREA" ? e.value : e.textContent,options:Array.from(document.querySelectorAll("[role=option]")).map(o=>({id:o.id,selected:o.getAttribute("aria-selected"),text:o.textContent}))}))'
+}
 home() { agent-browser open "$ORIGIN/home"; agent-browser wait '[contenteditable=true]'; }
 repo() { agent-browser open "$ORIGIN/spaces/$SPACE/agents"; agent-browser wait '[contenteditable=true]'; }
 edit() { agent-browser click "$1"; agent-browser press Meta+a; agent-browser press Backspace; agent-browser fill "$1" "$2"; }
@@ -230,7 +233,7 @@ node "$A" prefix "$EVIDENCE/as7-requests.jsonl" 1 2 | tee "$EVIDENCE/as7-prefix.
 node "$A" system "$EVIDENCE/as7-requests.jsonl:1" "$EVIDENCE/as7-requests.jsonl:2" | tee "$EVIDENCE/as7-system.txt"
 ```
 
-Pass when request 1 lists only personal skills, request 2 adds repository skills
+Pass when request 1's reminder lists only `(user)` skills, request 2 adds repository skills
 including `as7-scope`, the system comparison prints `System messages match.`, and
 prefix exits 0. **Repository: Auto** on Home starts with global scope.
 
@@ -268,8 +271,19 @@ agent-browser find label Username fill "$O-outsider"
 agent-browser find label Password fill "$(cat "$RUN/home/as8.pw")"
 agent-browser click 'form button[type=submit]'
 agent-browser wait --url '**/home'
-repo
+agent-browser find role link click --name 'View all repositories' --exact
+agent-browser wait 1500
+agent-browser find role link click --name Explore --exact
+agent-browser wait 1500
+agent-browser find role link click --name "$O / as-skills" --exact
+agent-browser wait 1500
+agent-browser click "a[href=\"/spaces/$SPACE/agents\"]"
+agent-browser wait '[contenteditable=true]'
 ```
+
+Reach the Agents page through in-app links, not `repo`. A full page load right after a
+new user's first sign-in can leave Model settings stuck at **Loading…**
+([#358](https://github.com/dream-num/univer-workspace/issues/358)).
 
 Repeat AS1's provider form steps for this user's **AS mock** with the same Base URL
 and `mock-key`. Use fresh snapshot refs, wait for **Settings saved**, then close the dialog.
@@ -327,9 +341,6 @@ seed "$O/personal" as10-alpha 'AS10 alpha instructions.' > "$EVIDENCE/as10-seed-
 seed "$O/personal" as10-beta 'AS10 beta instructions.' > "$EVIDENCE/as10-seed-beta.json"
 mock as10 '[{"text":"AS10 follow-up ready."}]'
 home
-aria() {
-  agent-browser eval 'Array.from(document.querySelectorAll("[contenteditable=true],textarea")).map(e=>({role:e.getAttribute("role"),expanded:e.getAttribute("aria-expanded"),active:e.getAttribute("aria-activedescendant"),text:e.tagName === "TEXTAREA" ? e.value : e.textContent,options:Array.from(document.querySelectorAll("[role=option]")).map(o=>({id:o.id,selected:o.getAttribute("aria-selected"),text:o.textContent}))}))'
-}
 edit '[contenteditable=true]' /as10
 agent-browser wait '[role=listbox]'
 aria > "$EVIDENCE/as10-home-before.json"
@@ -470,7 +481,9 @@ node "$A" requests "$EVIDENCE/as15-requests.jsonl" | tee "$EVIDENCE/as15-request
 Pass when the running textarea has `aria-expanded=false`, no listbox appears, and the
 queued message arrives in a later request as plain `/as15-steer` without an invocation or
 catalog reminder. The tool-result request can arrive before steering is appended. The bubble stays plain text. The initial model skill read can still
-succeed; steering does not refresh the catalog or expand slash invocations.
+succeed. Text queued while a step runs joins that run without a catalog refresh or slash
+expansion. Text queued after a run ends starts a new run, which refreshes the catalog and
+expands `/name`.
 
 Finish by stopping only this shell's mock and this run.
 
@@ -481,6 +494,10 @@ $V down
 ```
 
 ## Gotchas
+
+- A brand-new user who loads a page by URL right after first sign-in can find Model settings stuck
+  at **Loading…** after Save, because the user's Agents database never finishes opening
+  ([#358](https://github.com/dream-num/univer-workspace/issues/358)). Navigate in-app after sign-in, as AS8 does.
 
 - Wait for **Settings saved** before closing Model settings. Use fresh snapshot refs
   for the new provider's key and Save button. Broad selectors can hit the DeepSeek
