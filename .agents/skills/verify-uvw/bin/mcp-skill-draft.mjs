@@ -14,7 +14,7 @@ const name = "draft-weekly-report";
 const content = `---\nname: ${name}\ndescription: Write a weekly report from Workspace sources.\n---\nRead source documents with MCP before writing the report.\n`;
 const args = {
   name, destination: { personal: true }, files: [{ path: "SKILL.md", text: content }],
-  review: [], idempotency_key: `mr14-${VERIFY_UVW_RUN}`,
+  review: [], idempotency_key: `mr14-skill-draft-${VERIFY_UVW_RUN}`,
 };
 function call(label, tool, input = {}) {
   execFileSync(helper, ["mcp", label, tool, JSON.stringify(input)], { stdio: "inherit" });
