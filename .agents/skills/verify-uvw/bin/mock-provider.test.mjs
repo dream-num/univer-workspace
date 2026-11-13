@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import { spawn, spawnSync } from "node:child_process";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { createServer } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { once } from "node:events";
+import { setTimeout } from "node:timers/promises";
+import { test } from "node:test";
+import { fileURLToPath } from "node:url";
+
+test("mock provider holds a slow step and rejects an invalid delay", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "mock-provider-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const script = join(dir, "script.json");
+  const log = join(dir, "requests.jsonl");
+  const entry = fileURLToPath(new URL("./mock-provider.mjs", import.meta.url));
+  const server = createServer();
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  const args = [entry, "--port", String(port), "--script", script, "--log", log];
+  writeFileSync(script, JSON.stringify({ model: "mock-agent", steps: [{ text: "Slow step complete", delayMs: -1 }] }));
+  assert.notEqual(spawnSync(process.execPath, args).status, 0);
+  writeFileSync(script, JSON.stringify({ model: "mock-agent", steps: [{ text: "Slow step complete", delayMs: 1000 }] }));
+  const child = spawn(process.execPath, args, { stdio: ["ignore", "pipe", "inherit"] });
+  t.after(() => child.kill());
+  await once(child.stdout, "data");
+  const body = fetch(`http://127.0.0.1:${port}/chat/completions`, { method: "POST", body: "{}" }).then((response) => response.text());
+  assert.equal(await Promise.race([body, setTimeout(50, "pending")]), "pending");
+  assert.match(await body, /Slow step complete/);
+});

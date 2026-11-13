@@ -76,25 +76,29 @@ The server does not reload. After changing server or CLI code: rebuild the CLI i
 Start the local OpenAI-compatible provider with a JSON script. Each completion consumes
 one step. A step returns text or one tool call; after the last step it returns `Done`.
 Usage chunks contain fixed synthetic counts, including 50 cached tokens out of 100 prompt
-tokens. These counts test the UI, not actual provider caching.
+tokens. These counts test the UI, not actual provider caching. A step can set `delayMs`
+to hold its response while you enter a steering message.
 
 ```bash
 cat > /tmp/uvw-model-script.json <<'JSON'
 {"model":"mock-agent","steps":[{"tool":{"name":"skills_read","arguments":{"name":"weekly-report"}}},{"text":"Skill read."}]}
 JSON
+MODEL_PORT=5986
+while lsof -nP -iTCP:"$MODEL_PORT" -sTCP:LISTEN >/dev/null; do MODEL_PORT=$((MODEL_PORT + 1)); done
 node .agents/skills/verify-uvw/bin/mock-provider.mjs \
-  --port 5984 --script /tmp/uvw-model-script.json --log /tmp/uvw-model-requests.jsonl
+  --port "$MODEL_PORT" --script /tmp/uvw-model-script.json --log /tmp/uvw-model-requests.jsonl
 ```
 
 In the browser Agent's **Model settings**, add an **OpenAI-compatible provider**.
-Use Base URL `http://127.0.0.1:5984`, model and default model `mock-agent`, and any
+Use Base URL `http://127.0.0.1:<MODEL_PORT>`, model and default model `mock-agent`, and any
 non-empty API key (for example `mock-key`). The Base URL must differ from the Workspace
 origin. Choose a free port and use an HTTP loopback Workspace for this local check.
 The provider supports CORS preflight, `GET /models` and streaming
 `POST /chat/completions`. Each request appends arrival time, method, URL and its full
 JSON body to the log, including OPTIONS and GET with a null body. Keep the log with
 local verification evidence; it contains full model requests. Stop the foreground
-process with Ctrl+C when finished.
+process with Ctrl+C when finished. Follow [Browser Agent skills](features/agent-skills.md)
+for the provider form, rail, slash menus, invocation gates, and request-prefix checks.
 
 ## Doctor
 
