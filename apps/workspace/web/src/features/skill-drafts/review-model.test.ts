@@ -4,7 +4,7 @@ import { compatibilityHeadline, groupFindings, lineDiff, skillPreview, type Skil
 describe("Skill draft review", () => {
   it("counts findings without claiming a review passed", () => {
     expect(compatibilityHeadline({ compatibility: "ready", scan: [], review: [] }, "en-US")).toBe(
-      "Available · No issues found",
+      "Ready to review · No issues found",
     );
     expect(
       compatibilityHeadline(
@@ -26,9 +26,9 @@ describe("Skill draft review", () => {
     ).toBe("无法发布 · 发现 1 个问题");
   });
   it.each([
-    [0, "Available · No issues found", "可用 · 未发现问题"],
-    [1, "Partially available · 1 issue found", "部分可用 · 发现 1 个问题"],
-    [2, "Partially available · 2 issues found", "部分可用 · 发现 2 个问题"],
+    [0, "Ready to review · No issues found", "可供审阅 · 未发现问题"],
+    [1, "Partly works in Workspace · 1 issue found", "在 Workspace 中部分可用 · 发现 1 个问题"],
+    [2, "Partly works in Workspace · 2 issues found", "在 Workspace 中部分可用 · 发现 2 个问题"],
   ])("formats %i findings in English and Chinese", (count, english, chinese) => {
     const scan = Array.from({ length: count }, () => ({ severity: "warn", rule: "script-file", path: "scripts/run.sh", line: null, message: "Script cannot run" } as const));
     const draft: Pick<SkillDraft, "compatibility" | "scan" | "review"> = { compatibility: count ? "degraded" : "ready", scan, review: [] };

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { AgentScope, SkillCatalog } from "../agent.types";
 import { useAgentClient } from "./client";
 import { useAgentMessages } from "./messages";
+import { SkillScopeBadge } from "./skill-source";
 
 type MenuKey = Pick<KeyboardEvent, "key" | "isComposing" | "shiftKey" | "ctrlKey" | "metaKey" | "altKey" | "preventDefault">;
 export function useSkillMenu(text: string, scope: AgentScope, disabled: boolean, onComplete: (text: string) => void) {
@@ -58,13 +59,14 @@ export function SkillMenu({ menu }: { readonly menu: ReturnType<typeof useSkillM
   const selected = useRef<HTMLButtonElement>(null);
   const activeId = menu.inputProps["aria-activedescendant"];
   useEffect(() => { selected.current?.scrollIntoView({ block: "nearest" }); }, [activeId]);
-  return menu.items.length ? <div id={menu.listboxId} className="agent-skill-menu" role="listbox" aria-label={m.invokeSkill}>
+  return menu.items.length ? <div className="agent-skill-menu"><div id={menu.listboxId} className="agent-skill-options" role="listbox" aria-label={m.invokeSkill}>
     {menu.items.map((skill, index) => <button type="button" role="option" key={skill.name} id={menu.optionId(skill.name)} tabIndex={-1}
       ref={menu.selected === index ? selected : null} aria-selected={menu.selected === index}
       onMouseDown={(event) => event.preventDefault()} onClick={() => menu.choose(index)}>
-      <span className="agent-skill-menu-heading"><strong>/{skill.name}</strong><span>{skill.source === "builtin" ? m.builtinSkill : skill.source === "repository" ? m.repository : m.personalSkill}</span></span>
+      <span className="agent-skill-menu-heading"><code>/{skill.name}</code><SkillScopeBadge source={skill.source} /></span>
       <span className="agent-skill-menu-description">{skill.description}</span>
       {skill.argumentHint ? <span className="agent-skill-menu-hint">{skill.argumentHint}</span> : null}
-    </button>)}
+    </button>)}</div>
+    <div className="agent-skill-menu-footer"><span><kbd>↑</kbd> <kbd>↓</kbd> {m.menuSelect}</span><span><kbd>Enter</kbd> {m.menuInsert}</span><span><kbd>Esc</kbd> {m.close}</span></div>
   </div> : null;
 }

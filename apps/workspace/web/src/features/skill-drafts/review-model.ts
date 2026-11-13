@@ -1,4 +1,5 @@
 import { skillEntry } from "@modelcontextprotocol/server/ext/skills";
+import { compatibilityStates } from "./review-presentation";
 import type { components } from "../../../../generated/http/schema";
 
 export type SkillDraft = components["schemas"]["SkillDraft"];
@@ -15,10 +16,6 @@ export function compatibilityHeadline(
   language: "en-US" | "zh-CN",
 ) {
   const count = draft.scan.length + draft.review.length;
-  const labels =
-    language === "zh-CN"
-      ? { ready: "可用", degraded: "部分可用", blocked: "无法发布" }
-      : { ready: "Available", degraded: "Partially available", blocked: "Cannot publish" };
   const findings =
     language === "zh-CN"
       ? count
@@ -27,7 +24,7 @@ export function compatibilityHeadline(
       : count
         ? `${count} ${count === 1 ? "issue" : "issues"} found`
         : "No issues found";
-  return `${labels[draft.compatibility]} · ${findings}`;
+  return `${compatibilityStates[draft.compatibility].label[language]} · ${findings}`;
 }
 
 export async function skillPreview(name: string, text: string) {

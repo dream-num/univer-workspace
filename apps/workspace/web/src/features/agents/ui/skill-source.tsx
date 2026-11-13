@@ -1,3 +1,4 @@
+import { ArrowUpRight } from "lucide-react";
 import type { SkillCatalog } from "../agent.types";
 import { useAgentMessages } from "./messages";
 
@@ -27,6 +28,12 @@ export function SkillSource({ metadata }: { readonly metadata: SkillCatalog["ski
   const source = skillProvenance(metadata);
   if (!source) return null;
   const label = m.skillFrom[source.hub];
-  return source.href ? <a className="agent-skill-source" href={source.href} target="_blank" rel="noreferrer">{label}</a>
+  return source.href ? <a className="agent-skill-source" href={source.href} target="_blank" rel="noreferrer">{label}<ArrowUpRight aria-hidden="true" /></a>
     : <span className="agent-skill-source">{label}</span>;
+}
+
+export function SkillScopeBadge({ source }: { readonly source: SkillCatalog["skills"][number]["source"] }) {
+  const m = useAgentMessages();
+  const labels = { builtin: m.builtinSkill, repository: m.repository, user: m.personalSkill };
+  return <span className="agent-skill-scope">{labels[source]}</span>;
 }
