@@ -91,6 +91,23 @@ describe("MCP core Skill tool bindings", () => {
     }
   });
 
+  it("assembles the shared Sheet reading workflow and reference", async () => {
+    const source = new URL("../../cli/skill-data/sheet/", import.meta.url);
+    const assembled = new URL("../dist/skill-data/sheet/", import.meta.url);
+    for (const path of ["SKILL.md", "references/reading.md"]) {
+      expect(await readFile(new URL(path, assembled), "utf8")).toBe(
+        await readFile(new URL(path, source), "utf8"),
+      );
+    }
+    const skill = await readFile(new URL("SKILL.md", assembled), "utf8");
+    expect(skill).toContain("## Read a sheet");
+    expect(skill).toContain("(references/reading.md)");
+    const reference = await readFile(new URL("references/reading.md", assembled), "utf8");
+    for (const operation of ["outline", "read", "find"]) {
+      expect(reference).toContain(`## ${operation}\n`);
+    }
+  });
+
   it("describes every tool without naming the CLI", () => {
     expect(
       tools.filter(({ description }) => /\buvw\b/u.test(description)).map(({ name }) => name),

@@ -57,6 +57,9 @@ toolset. An executor restriction can hide content tools even with all selected.
 | `unit add`                                                                                                   | `unit_add`             | Stage an existing Univer Resource                          |
 | `unit create`                                                                                                | `unit_create`          | Create an empty Worktree-local Unit                        |
 | `execute`                                                                                                    | `execute`              | Run Facade code and commit mutations                       |
+| `outline` | `outline` | Sheet only; unit and either trunk true or worktree; zoom with at, continue with from, limit depth and budget |
+| `read` | `read` | Sheet only; unit, scope, and range; content selects both, display, formula, style, or formula+style; max limits cells; json true returns typed values |
+| `find` | `find` | Sheet only; unit, scope, and terms; in selects values or formulas; case and sheets restrict matches; from and max page hits |
 | `inspect`                                                                                                    | `inspect`              | Read stored content                                        |
 | `screenshot`                                                                                                 | `screenshot`           | Render images                                              |
 | `import`                                                                                                     | `import`               | Create from uploaded Office bytes                          |
@@ -342,7 +345,7 @@ admin tools return SVG source for incorporation in the page or document.
 
 ## Verify and hand off
 
-1. Read stored content with `inspect` or read-only `execute`.
+1. Read Sheet values, types, and formulas with `read` and json true. Use `inspect` for other Unit types or raw cell metadata.
 2. Capture screenshots for Sheet layout, Doc pagination and every Slide page.
 3. Only mark the Worktree ready with `pr_ready` when the user explicitly says the
    work is finished or requests review. Otherwise, leave the verified changes in draft.

@@ -5,7 +5,25 @@ description: "Create, import, read, write, format, calculate, export, and verify
 
 # Workspace Sheet unit reference
 
-Every content operation targets one remote draft explicitly by Worktree and Unit ID. `execute` provides `univerAPI`, `api` (the same object), and `workbook` (an `FWorkbook` bound to the selected Unit). Obtain a worksheet with `workbook.getActiveSheet()` or `workbook.getSheetByName("…")`. Examples from `api show` use the already available `univerAPI` variable. Never redeclare these injected variables. `execute` is ESM and has no `require`.
+`outline`, `read`, and `find` accept only Sheet Units. Use `inspect` for Doc, Slide, Base, and Board Units.
+
+Reads target one remote Unit in either trunk or an explicit Worktree. Edits target a draft by Worktree and Unit ID. `execute` provides `univerAPI`, `api` (the same object), and `workbook` (an `FWorkbook` bound to the selected Unit). Obtain a worksheet with `workbook.getActiveSheet()` or `workbook.getSheetByName("…")`. Examples from `api show` use the already available `univerAPI` variable. Never redeclare these injected variables. `execute` is ESM and has no `require`.
+
+## Read a sheet
+
+1. Run `outline` on the Unit for a map of sheets, regions, headers, column types, formulas, errors, and objects.
+2. Zoom with `outline`, setting `at` to a returned ref such as `s2.t1`. Run `read` on its printed range for cells, or `find` with terms to locate values or formulas. Use these operations before screenshots or custom statistics scripts.
+3. Follow a continuation whenever output ends with one. Omitted is not absent. Never sum one page as if it were the whole range.
+4. Change cells with `execute` in the task's Worktree. Await calculation when formulas are involved.
+5. Read back only the cells the answer depends on. Use `read` JSON fields `type`, `value`, and `formula` for exact evidence, not display text.
+
+Region kinds and bounds are heuristics for where to read, not business meaning. Watch `subtotals:` to avoid double counting, `frozen`, `merged`, `errors`, and `via=name` for defined-name references.
+
+Refs are content-derived and bound to the revision on the first output line. Run `outline` again after structural edits. A large sheet appears as one `block` with a `note:` line. Read it in pages or locate cells with `find`.
+
+`uncached=N` means formulas lack stored results. Trigger calculation with `execute` using the recipe below, then read again. Reading does not calculate formulas.
+
+Read [Sheet reading operations](references/reading.md) for options, refs, continuations, and JSON fields. The `core` Skill binds these operations to your entry.
 
 ## Workspace target
 
@@ -54,14 +72,14 @@ Dates, percentages, and currencies are numbers plus number formats, not separate
 
 ## Reading evidence
 
-- Structured `inspect` with target `range` returns `{ v, t, displayValue, f }` per cell and is authoritative for values, types, and formulas. It omits `s` (style and number format) and `p` (rich text); read those with `getCellDatas()` or `getCellStyleData()` through `execute`.
-- Display-only inspection is not evidence of stored values. Use the `core` Skill to request structured output.
+- Use `read` JSON for stored values, types, and formulas. Each cell has `type`, `value`, and `display`, plus `formula` when present. Display text can round numbers or format dates and is not evidence of stored values.
+- Use `inspect` with target `range` only for raw `ICellData` fields such as `si` or `custom`. For full styles or rich text, read `getCellDatas()` through `execute`.
 
 ## Common APIs
 
 - Ranges: `sheet.getRange("A1:C9")` or `getRange(row, col, numRows, numCols)`. Rows and columns are zero-based; `"B3"` equals `getRange(2, 1)`.
 - Sheets: `getActiveSheet()`, `getSheetByName("Sheet1")`, `getSheets()`. Use `getSheetName()`; `FWorksheet` has no `getName()`.
-- Read: prefer `getCellData()` / `getCellDatas()` for authoritative `v/t/f/s`; use `getDisplayValues()` for visible text, `getFormula()` for formulas, and `getRawValues()` for stored values without trimming or normalization.
+- Read within an editing script: prefer `getCellData()` / `getCellDatas()` for authoritative `v/t/f/s`; use `getDisplayValues()` for visible text, `getFormula()` for formulas, and `getRawValues()` for stored values without trimming or normalization. For reading a Sheet, start with `outline`, `read`, and `find` above.
 - Write: `setValue(cell)`, `setValues(grid)`, `setFormula("=…")`, `clearContent()` for content only, and `clear()` for content plus formatting.
 - Style: `setBackgroundColor("#RRGGBB")`, `setFontColor("#RRGGBB")`. Dimensions: `getLastRow()`, `getLastColumn()`, and `setRowCount(n)` before out-of-range writes.
 - `setValues()` merges cell data. `{}` or `{ s }` does not clear existing `v/f/p`. Clear a cell explicitly with `{ v: null, f: null, p: null, si: null, custom: null }`. To replace a whole region, call `clearContent()` first, then `setValues()`.
@@ -125,8 +143,8 @@ text and computed cell values.
 - Write explicit `ICellData` and specify `t` for every written cell.
 - Do not use `getValue()` / `getValues()` for authoritative reads. Formatted dates and currencies become display strings and booleans become `1`/`0`. Use `getCellDatas()` for stored values and `getDisplayValues()` for display text.
 - Colors must be xlsx-safe: only `"#RRGGBB"` or `"rgb(r,g,b)"`. Invalid colors can make an exported `.xlsx` unreadable and cannot be repaired by later overwriting the color.
-- Sheet tab name, Unit display name, Unit id, and resource id are distinct. Use `inspect` with target `workbook` for
-  Sheet tab names. `inspect` with target `range` requires one explicit worksheet selector with a `name:`, `id:`,
+- Sheet tab name, Unit display name, Unit id, and resource id are distinct. Use `outline` for
+  Sheet tab names. Raw `inspect` with target `range` requires one explicit worksheet selector with a `name:`, `id:`,
   or 1-based `index:` prefix and accepts multiple A1 ranges within that worksheet.
 - Formulas do not trigger an implicit full recalculation. Follow the recalculation recipe above before reading calculated values or exporting.
 - Copy formatted cells with a deep copy of `getCellData()` or complete explicit `ICellData`, never `getValues()` followed by `setValues()`.
@@ -134,8 +152,9 @@ text and computed cell values.
 
 ## Verification
 
-- Values, types, and formulas: `inspect` with target `range`, range `A1:C9`, and worksheet selector `name:<sheet-name>` for the Sheet Unit in its Worktree.
-- Styles, number formats, and rich text: read back `getCellDatas()` through `execute` for the Sheet Unit in its Worktree.
+- Values, types, and formulas: run `read` with range `s1!A1:C9` and JSON output for the Sheet Unit in its Worktree. Check `type`, `value`, and `formula` after calculation.
+- Styles and number formats: use `read` with style content and JSON output. For borders, full styles, or rich text, read back `getCellDatas()` through `execute`.
+- Raw cell metadata such as `si` or `custom`: `inspect` with target `range`, range `A1:C9`, and worksheet selector `name:<sheet-name>` for the Sheet Unit in its Worktree.
 
 ## Rich text (when mixed styling inside one cell is required)
 
