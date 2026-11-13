@@ -11,6 +11,7 @@ import { agentSessionIdSchema, isSystemReminder, messageReferences, messageSkill
 import type { AgentMode, AgentSession } from "../agent.types";
 import { AgentModelControls, AgentRepositorySelect, useAgentModel } from "./composer-settings";
 import { useAgentClient } from "./client";
+import { SkillSource } from "./skill-source";
 import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentReferencePill } from "./references";
 import { useAgentMessages } from "./messages";
@@ -196,6 +197,7 @@ function SessionSkills({ session }: { readonly session: AgentSession }) {
     {catalog?.repository === "not-member" ? <p className="agent-note">{m.skillsNotMember}</p> : null}
     {!skills.length ? <p className="agent-note">{m.noSkills}</p> : <ul className="agent-skills">{skills.slice(0, expanded ? undefined : 3).map((skill) => <li key={skill.name} title={[skill.description, skill.path].filter(Boolean).join("\n")}>
       <span className="agent-skill-name">{skill.name}</span><span className="agent-skill-source">{skill.source === "builtin" ? m.builtinSkill : skill.source === "repository" ? m.repository : m.personalSkill}</span>
+      <SkillSource metadata={skill.metadata} />
       {used.has(skill.name) ? <span className="agent-skill-used">{m.skillUsed}</span> : null}
     </li>)}</ul>}
     {hidden || catalog?.diagnostics.length ? <button type="button" className="agent-steps-window" aria-expanded={expanded} onClick={() => setExpanded(!expanded)}>

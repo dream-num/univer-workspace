@@ -105,3 +105,5 @@ export { readWorkspaceHtmlView, type WorkspaceHtmlViewPage } from "./html-view-p
 export { readWorkspaceHtmlViewDraft, htmlViewDraftUrl, type WorkspaceHtmlViewDraft, type WorkspaceHtmlViewDraftStatus } from "./html-view-draft.js";
 
 export { WorkspaceSkillDraftFeature, type WorkspaceSkillDraftInput, type WorkspaceSkillReviewFinding } from "./skill-draft.js";
+
+export { WorkspaceSkillSourceFeature, type WorkspaceResolvedSkillSource, type WorkspaceSkillSourceReadInput } from "./skill-source.js";

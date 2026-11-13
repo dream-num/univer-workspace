@@ -1,7 +1,7 @@
 import { skillEntry } from "@modelcontextprotocol/server/ext/skills";
 import type { components } from "../../../../generated/http/schema";
 
-export type SkillDraft = Omit<components["schemas"]["SkillDraft"], "source">;
+export type SkillDraft = components["schemas"]["SkillDraft"];
 export type Finding = SkillDraft["scan"][number] | SkillDraft["review"][number];
 
 export function groupFindings(draft: Pick<SkillDraft, "scan" | "review">) {
@@ -78,4 +78,19 @@ export function lineDiff(current: string, proposed: string): DiffLine[] | null {
     }
   }
   return result;
+}
+
+export function draftProvenance(source: SkillDraft["source"]) {
+  if (!source) return null;
+  if (source.kind === "space") return { hub: "space" as const, href: `/nodes/${encodeURIComponent(source.nodeId)}`, detail: source.nodeId };
+  const hub = source.kind === "git" ? source.hub : "clawhub";
+  const detail = source.kind === "git" ? `${source.owner}/${source.repo} · ${source.commit} · ${source.path}`
+    : `${source.owner}/${source.slug} · ${source.version}`;
+  let href: string | undefined;
+  try {
+    const url = new URL(source.pageUrl);
+    if (url.protocol === "https:" && !url.username && !url.password && !url.port &&
+      ["github.com", "skills.sh", "clawhub.ai"].includes(url.hostname)) href = url.href;
+  } catch { /* A malformed source remains visible without a link. */ }
+  return { hub, href, detail } as const;
 }

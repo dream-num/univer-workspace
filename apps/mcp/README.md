@@ -249,6 +249,7 @@ and the matching owner/slug candidates when available.
 | `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
+| `skill_source_read` | `source`, optional `skill`, `path`, `cursor` | Resolves a pinned GitHub, skills.sh, ClawHub or Space zip/folder source; returns candidates, a Skill with scan findings, or a text page. Does not import or publish |
 | `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path`, `argumentHint` and `metadata`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
 | `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
 | `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
@@ -381,9 +382,9 @@ Other tools, uncommitted `execute`, and `skills_read` with `full` return `worksp
 limit. For `skills_read` with `full`, read the skill without `full`, then each resource with `resource`,
 following its cursor when paged. Other oversized results tell the agent to narrow the request.
 
-`skill_draft_create` (`core`, `write`) saves textual Skill files to a personal or repository
+`skill_draft_create` (`core`, `write`) saves textual Skill files or copies a pinned source through `from: { source, skill, overrides? }` to a personal or repository
 Space as an author-owned draft. Supply `name`, `destination: { personal: true }` or
-`destination: { repo: "owner/slug" }`, `files: [{ path, text }]`, `review` (possibly empty),
+`destination: { repo: "owner/slug" }`, exactly one of `files: [{ path, text }]` or `from`, `review` (possibly empty),
 and `idempotency_key`. Optional `replace` and `keep` preserve the server's replacement
 semantics. Reuse the key with identical input on retry. The returned `draft` includes
 an absolute identity-origin `previewUrl`, state, expiry, scan findings, verified review,
@@ -393,7 +394,7 @@ the draft page before the Skill exists. Ask-mode connections must switch to Auto
 with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown

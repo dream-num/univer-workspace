@@ -135,8 +135,8 @@ finding in plain words: what the text asks for and what will happen in Workspace
 Call `skill_draft_create` with:
 
 - `name` and `destination`.
-- `files` with the full text of every file. Import availability is described in
-  `references/importing.md`.
+- `files` with the full text of every file, or `from` for an import as described in
+  `references/importing.md`. Send exactly one of them.
 - For an edit, `replace: true`, and `keep` with every existing file you did not rewrite
   and still want, such as binary files. Publishing moves any other existing file to Trash.
 - `review` with your findings in the shape from `references/review.md`, or `[]`.

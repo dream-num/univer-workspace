@@ -30,6 +30,7 @@ export const coreNames = [
   "api_find",
   "api_show",
   "skills_read",
+  "skill_source_read",
   "skill_draft_create",
   "skill_draft_get",
   "html_view_validate",
@@ -102,6 +103,7 @@ export const destructiveNames = [
 export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree:merge"> = {
   skill_draft_create: "write",
   skill_draft_get: "read",
+  skill_source_read: "read",
   space_browse: "read",
   space_find: "read",
   unit_list: "read",

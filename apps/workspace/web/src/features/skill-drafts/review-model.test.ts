@@ -117,3 +117,13 @@ describe("Skill draft review", () => {
     expect(lineDiff("a\n".repeat(501), "b\n".repeat(501))).toBeNull();
   });
 });
+
+it("shows pinned draft provenance and keeps unsafe hub links inert", async () => {
+  const { draftProvenance } = await import("./review-model");
+  const source = { kind: "git", hub: "skills-sh", owner: "anthropics", repo: "skills", commit: "a".repeat(40), path: "skills/pdf", pageUrl: "https://github.com/anthropics/skills/tree/main/skills/pdf" } as const;
+  expect(draftProvenance(source)).toMatchObject({ hub: "skills-sh", href: source.pageUrl, detail: expect.stringContaining(source.commit) });
+  expect(draftProvenance({ kind: "clawhub", owner: "owner", slug: "pdf", version: "1.0.0", pageUrl: "https://clawhub.ai/owner/skills/pdf" })).toMatchObject({ hub: "clawhub", href: "https://clawhub.ai/owner/skills/pdf" });
+  expect(draftProvenance({ kind: "space", nodeId: "node-1", etag: "v1" })).toMatchObject({ hub: "space", href: "/nodes/node-1" });
+  expect(draftProvenance({ ...source, pageUrl: "javascript:alert(1)" })?.href).toBeUndefined();
+  expect(draftProvenance(null)).toBeNull();
+});

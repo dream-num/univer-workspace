@@ -34,7 +34,7 @@ It has the `core` toolset. Its main tools by job:
 | Look up the Facade API | `api_find`, `api_show` |
 | Pages backed by live Sheets | `html_view_create` (when available), `html_view_read`, `html_view_replace`, `html_view_draft_get` |
 | Issues and pull requests | `issue_list`, `issue_view`, `issue_create`, `issue_comment`, `pr_list`, `search` |
-| Skills | `skills_read`, `skill_draft_create`, `skill_draft_get` |
+| Skills | `skills_read`, `skill_source_read`, `skill_draft_create`, `skill_draft_get` |
 
 Check your own tool list before naming a tool; schemas define the arguments. External MCP
 clients may also have the `files` toolset (`blob_download`, `compile_markdown`,

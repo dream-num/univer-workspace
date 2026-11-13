@@ -14,6 +14,7 @@ import {
 import { useSkillDraftMessages } from "./messages";
 import {
   compatibilityHeadline,
+  draftProvenance,
   groupFindings,
   lineDiff,
   type skillPreview,
@@ -73,6 +74,7 @@ function Review({ draft }: { readonly draft: SkillDraft }) {
     draft.state === "pending" ? skillContent.data ?? undefined : undefined,
   ));
   const groups = groupFindings(draft);
+  const source = draftProvenance(draft.source);
   const blocked = groups.block.length > 0 || draft.compatibility === "blocked";
   return (
     <>
@@ -114,7 +116,10 @@ function Review({ draft }: { readonly draft: SkillDraft }) {
             .agents/skills/{draft.name}/
           </dd>
           <dt>{m.source}</dt>
-          <dd>{m.agent}</dd>
+          <dd className="min-w-0 break-all">{source ? <>
+            {source.href ? <a className="text-primary underline" href={source.href} target="_blank" rel="noreferrer">{m.sourceHub[source.hub]}</a> : m.sourceHub[source.hub]}
+            <span className="ml-2 text-muted-foreground">{source.detail}</span>
+          </> : m.agent}</dd>
         </dl>
         {destination.data?.type === "team" && <p className="text-sm">{m.memberNotice}</p>}
         {destination.error && <p role="alert">{destination.error.message}</p>}
