@@ -329,7 +329,7 @@ export function renderOutline(model: OutlineModel, o: OutlineOptions = {}): Outl
     if (!children(scope).some((ch) => ch.ref === o.from))
       throw new SheetLensError(
         "E_USAGE",
-        `'${o.from}' is not a child of the listed node; --from takes the 'from=' value of an elision line`,
+        `'${o.from}' is not a child of the listed node; from takes the 'from=' value of an elision line`,
       );
   }
   const lineCost = (n: OutlineNode, indent: number) =>

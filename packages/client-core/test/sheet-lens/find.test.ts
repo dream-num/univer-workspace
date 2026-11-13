@@ -158,11 +158,11 @@ describe("rendering", () => {
   test("nothing found: the title and a hint, and the hint points to the other search", () => {
     const a = run([{ cells: { 0: { 0: text("a") } } }], { terms: ["zzz"] });
     expect(a.text).toBe(
-      'find "zzz" [in=values, cells=0]\nno cell matches in the values of 1 sheet; try --in formulas, a shorter term, or run outline on this Unit\n',
+      'find "zzz" [in=values, cells=0]\nno cell matches in the values of 1 sheet; try searching formulas, a shorter term, or run outline on this Unit\n',
     );
     const b = run([{}, {}], { terms: ["zzz"], in: "formulas", caseSensitive: true });
     expect(b.text).toBe(
-      'find "zzz" [in=formulas, case, cells=0]\nno cell matches in the formulas of 2 sheets; try --in values, a shorter term, or run outline on this Unit\n',
+      'find "zzz" [in=formulas, case, cells=0]\nno cell matches in the formulas of 2 sheets; try searching values, a shorter term, or run outline on this Unit\n',
     );
   });
   test("JSON carries what the text carries, plus the stored value", () => {

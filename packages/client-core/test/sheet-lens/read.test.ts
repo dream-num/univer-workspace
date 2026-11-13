@@ -302,7 +302,7 @@ describe("pages", () => {
     const e = fail(() => readPage(data, sc, whole, "", { content: "both", maxCells: 2 }));
     expect([e.code, e.message]).toEqual([
       "workspace-sheet-lens-range-invalid",
-      "row 1 of Sheet1!A1:C10 has 3 cells, more than --max 2",
+      "row 1 of Sheet1!A1:C10 has 3 cells, more than the page limit of 2 cells",
     ]);
   });
 });

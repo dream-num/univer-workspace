@@ -349,8 +349,8 @@ export function readPage(
   if (columns > o.maxCells)
     throw new SheetLensError(
       "E_RANGE",
-      `row ${requested.r0 + 1} of ${sheetLabel(sc.name)}!${rectToA1(requested)} has ${columns} cells, more than --max ${o.maxCells}`,
-      { hint: "read fewer columns at a time, or raise --max" },
+      `row ${requested.r0 + 1} of ${sheetLabel(sc.name)}!${rectToA1(requested)} has ${columns} cells, more than the page limit of ${o.maxCells} cells`,
+      { hint: "read fewer columns at a time, or raise the page limit (max)" },
     );
   const total = requested.r1 - requested.r0 + 1;
   const rows = Math.min(total, Math.floor(o.maxCells / columns));

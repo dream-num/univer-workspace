@@ -90,7 +90,7 @@ export function renderFind(
   const lines = [`find ${o.terms.map(json).join(" ")} [${attrs.join(", ")}]`];
   if (result.total === 0) {
     const n = result.searched.sheets;
-    const other = o.in === "values" ? "--in formulas" : "--in values";
+    const other = o.in === "values" ? "searching formulas" : "searching values";
     lines.push(
       `no cell matches in the ${o.in} of ${n} sheet${n === 1 ? "" : "s"}; try ${other}, a shorter term, or run outline on this Unit`,
     );
