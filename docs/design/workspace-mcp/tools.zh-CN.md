@@ -50,6 +50,8 @@
 ### 1.6 写入安全
 
 - 内容写入必须显式给出 `worktree`。读取必须在 `trunk: true` 和 `worktree` 之间二选一，两者都没有时报错，与 CLI 的 `workspace-*-scope-required` 一致。
+- 2026-11-09 产品决定（[#261](https://github.com/dream-num/univer-workspace/issues/261)）：编辑并验证后默认保留 draft，只有用户明确表示工作完成或要求评审时才调用 `pr_ready` 标记 ready；每轮都返回 PR 链接。这个决定由 MCP server instructions 和 core Skill 共同落实，不改变 CLI 行为或 Client Core 的 draft 写入限制。
+- 同一任务继续使用已知 PR/Worktree：draft 直接继续；已经 ready 时，只在用户明确要求再次编辑后的第一次写入前调用 `pr_ready`，传 `undo: true` 撤回为 draft 一次。返工后仍保留 draft，直到用户再次明确要求完成或评审。只读操作（包括只读 `execute`）无需撤回 ready；不得自动重开，merged/discarded 仍不可复用。
 - 直接写入（不经 Worktree 评审）的工具在描述开头写明“立即生效，不经评审”。
 - `pr_merge`、`pr_discard` 的描述沿用 `core` skill 的规则：除非用户明确要求，否则交给用户在网页上完成。
 
@@ -284,8 +286,10 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
   `skills_read`，两条路径读取相同字节。回退工具保留 full 和资源 cursor 分页语义，自定义 Skill 仅由 `skills_read` 实时发现和读取，不进入扩展。
   每层最多 100 个 Skill 文件夹，SKILL.md 上限 64 KiB，按名读取最多分类 100 个附属 Blob，文本上限 256 KiB。
   文件须可下载、严格 UTF-8 且无 NUL。无效、超限、名称保留与覆盖产生诊断，其余 Workspace 错误透传。
-- server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，然后标记 ready，把评审链接交给用户，合并留给用户。
+- server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，默认保留 draft 并把 PR 链接交给用户；仅在用户明确表示工作完成或要求评审时才标记 ready，合并留给用户。这落实第 1.6 节的 2026-11-09 产品决定。
   不支持 Skill 的客户端（ChatGPT、WorkBuddy）靠这段 instructions 获得规则。
+- 普通两轮编辑：用户先要求新建 Sheet，再要求修改同一任务的格式，两轮都在同一个 draft PR/Worktree 中写入并回读验证，各自返回 PR 链接，不调用 `pr_ready`。
+- 用户随后明确要求评审时才调用一次 `pr_ready` 并确认 ready。此后的只读追问不改变状态；若用户要求再次编辑，则在第一次写入前用 `pr_ready` 的 `undo: true` 撤回一次，完成写入与验证后保留 draft 并返回链接，不自动再次 ready。新任务仍新建 Worktree，merged/discarded 不可复用。
 - 仓库里的发现入口 `skills/univer-workspace-cli/SKILL.md` 是面向 CLI 的安装说明，不变。MCP 的接入说明写在 `apps/mcp/README.md` 和 Workspace 的设置页里。
 
 D3 已实现 `file_upload_create`、`blob_upload`、`blob_download`、`blob_replace` 和 `asset_download`。
