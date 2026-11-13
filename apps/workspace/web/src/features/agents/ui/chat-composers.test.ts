@@ -198,3 +198,54 @@ it("uses chat keys in the real Lexical composer, including line breaks and IME p
   }
   expect(onSend).toHaveBeenCalledTimes(3);
 });
+
+it("shows used skills first, expands the remainder and diagnostics, and collapses again", async () => {
+  const skills = ["z-personal", "a-repo", "b-repo", "c-personal", "d-repo"].map((name) => ({
+    name, source: name.endsWith("repo") ? "repository" as const : "user" as const,
+    description: `Description ${name}`, path: `.agents/skills/${name}/SKILL.md`, modelInvocable: true, userInvocable: true,
+  }));
+  const read = (name: string, isError = false) => ({ type: "dynamic-tool" as const, toolName: "skills_read", toolCallId: name,
+    state: "output-available" as const, input: { name }, output: { isError, structuredContent: { content: "Read" } } });
+  current = session({ messages: [
+    { id: "user", role: "user", parts: [{ type: "text", text: "Skills" }], metadata: { agentSkills: { skills,
+      repository: "loaded", diagnostics: [{ source: "repository", path: ".agents/skills/bad/SKILL.md", problem: "invalid-skill", detail: "Missing description" }] } } },
+    { id: "assistant", role: "assistant", parts: [read("c-personal"), read("core"), read("a-repo", true), read("z-personal")] },
+    { id: "steering", role: "user", parts: [{ type: "text", text: "Continue" }] },
+  ] });
+  await renderSession();
+  const names = () => [...container.querySelectorAll(".agent-skill-name")].map((item) => item.textContent);
+  expect(names()).toEqual(["c-personal", "z-personal", "a-repo"]);
+  expect(container.querySelectorAll(".agent-skill-used")).toHaveLength(2);
+  const rail = container.querySelector(".agent-session-rail")!;
+  expect(rail.textContent).toContain("Repository");
+  expect(rail.textContent).toContain("Personal");
+  expect(rail.querySelector(".agent-skills li")?.getAttribute("title")).toBe("Description c-personal\n.agents/skills/c-personal/SKILL.md");
+  const toggle = rail.querySelector<HTMLButtonElement>(".agent-steps-window")!;
+  expect(toggle.textContent).toBe("Show 2 more skills");
+  expect(rail.textContent).not.toContain("Missing description");
+  await act(async () => toggle.click());
+  expect(names()).toEqual(["c-personal", "z-personal", "a-repo", "b-repo", "d-repo"]);
+  expect(rail.textContent).toContain("Missing description");
+  expect(rail.textContent).toContain(".agents/skills/bad/SKILL.md");
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  await act(async () => toggle.click());
+  expect(names()).toHaveLength(3);
+  expect(rail.textContent).not.toContain("Missing description");
+});
+
+it("shows empty and non-member guidance and can expand diagnostics without hidden skills", async () => {
+  window.localStorage.setItem("univer-workspace-language", "zh-CN");
+  current = session({ messages: [{ id: "user", role: "user", parts: [{ type: "text", text: "Skills" }], metadata: {
+    agentSkills: { skills: [], repository: "not-member", diagnostics: [{ source: "user", path: ".agents/skills/big/SKILL.md", problem: "too-large" }] },
+  } }] });
+  await renderSession();
+  const rail = container.querySelector(".agent-session-rail")!;
+  expect(rail.textContent).toContain("你不是该仓库成员");
+  expect(rail.textContent).toContain(".agents/skills/<name>/SKILL.md");
+  const toggle = rail.querySelector<HTMLButtonElement>(".agent-steps-window")!;
+  expect(toggle.textContent).toBe("显示 skill 诊断");
+  await act(async () => toggle.click());
+  expect(rail.textContent).toContain("个人 · 文件过大 · .agents/skills/big/SKILL.md");
+  await act(async () => toggle.click());
+  expect(rail.textContent).not.toContain(".agents/skills/big/SKILL.md");
+});

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { isSystemReminder, sessionLockName, sessionTitle } from "../agent.types";
-import type { AgentReference, AgentSession, AgentSettings } from "../agent.types";
+import { isSystemReminder, messageSkills, sessionLockName, sessionTitle } from "../agent.types";
+import type { AgentReference, AgentSession, AgentSettings, SkillCatalog } from "../agent.types";
 import { createMcpTokenSource } from "../mcp-token";
 import { createProviders, deepSeekDefault } from "../providers";
 import { createSessionStore } from "../session-store";
@@ -11,6 +11,8 @@ import { settleApprovals, SUPERSEDED_APPROVAL } from "./approvals";
 import { AgentBusyError, createAgentRunner, referencesReminder } from "./runner";
 import type { AgentRunnerDependencies } from "./runner";
 
+const emptySkills: SkillCatalog = { skills: [], diagnostics: [], repository: "no-repository" };
+const personalSkills: SkillCatalog = { ...emptySkills, skills: [{ name: "weekly-report", description: "Write the weekly report.", source: "user", path: ".agents/skills/weekly-report/SKILL.md", modelInvocable: true, userInvocable: true }] };
 const mcpUrl = "https://workspace.test/mcp";
 const key = "test-provider-secret";
 const rpcSchema = z.object({
@@ -28,6 +30,7 @@ function modelStream(toolName?: string, parallel = false, usage?: { prompt_token
 async function setup(options: {
   model?: (index: number, body: string, signal: AbortSignal | null | undefined) => Response | Promise<Response>;
   tool?: () => Promise<void>;
+  skills?: (args: unknown) => unknown | Promise<unknown>;
   unauthorized?: number;
   resourceError?: boolean;
   publish?: boolean;
@@ -58,12 +61,13 @@ async function setup(options: {
       const respond = (result: unknown) => Response.json({ jsonrpc: "2.0", id: rpc.id, result }, { headers: { "mcp-session-id": "session" } });
       if (rpc.method === "initialize") return respond({ protocolVersion: "2025-11-25", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "fake-workspace", version: "1" }, instructions: "Server instructions" });
       if (rpc.method === "notifications/initialized") return new Response(null, { status: 202 });
-      if (rpc.method === "tools/list") return respond({ tools: [{ name: options.pageTool ?? "pr_create", description: "Create a draft or pull request", inputSchema: { type: "object", properties: {} }, ...(options.publish || options.pageTool ? { _meta: { "univer.workspace/scope": options.publish ? "publish" : "write" } } : {}) }] });
+      if (rpc.method === "tools/list") return respond({ tools: [{ name: "skills_read", description: "Read skills", inputSchema: { type: "object", properties: { name: { type: "string" }, repo: { type: "string" } } } }, { name: options.pageTool ?? "pr_create", description: "Create a draft or pull request", inputSchema: { type: "object", properties: {} }, ...(options.publish || options.pageTool ? { _meta: { "univer.workspace/scope": options.publish ? "publish" : "write" } } : {}) }] });
       if (rpc.method === "resources/read") {
         if (options.resourceError) return Response.json({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "No resource" } });
         return respond({ contents: [{ uri: "skill://univer-workspace/core/SKILL.md", mimeType: "text/markdown", text: "Core skill instructions" }] });
       }
       if (rpc.method === "tools/call") {
+        if (rpc.params?.name === "skills_read") return respond(options.skills ? await options.skills(rpc.params.arguments) : { content: [], structuredContent: emptySkills });
         await options.tool?.();
         return respond({ content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: options.pageTool ? { draft: { id: "draft-1", state: "pending" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
       }
@@ -91,6 +95,112 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it("introduces skills once, keeps prompts identical, and appends repository changes without rewriting history", async () => {
+    let catalog = emptySkills;
+    const skills = vi.fn((_args: unknown) => ({ content: [], structuredContent: catalog }));
+    const test = await setup({ skills, model: () => modelStream() });
+    const plain = await test.runner.start(test.input);
+    await test.finished(plain.id);
+    catalog = personalSkills;
+    const started = await test.runner.start(test.input);
+    const first = (await test.finished(started.id))!;
+    expect(messageSkills(first.messages[0]?.metadata)).toEqual(personalSkills);
+    expect(first.messages[0]?.parts).toHaveLength(2);
+    expect(first.messages[0]?.parts[1]).toEqual({ type: "text", text: '\n\n<system-reminder>\nSkills available in this session. This list replaces any earlier one.\nRead a skill with skills_read {"name": "<name>"} before using it. In a repository scope, also pass the current Space ID as repo.\n- weekly-report (user): Write the weekly report.\n</system-reminder>' });
+    expect(test.saved.some((value) => value.status === "running" && messageSkills(value.messages[0]?.metadata)?.skills.length === 1)).toBe(true);
+    const plainBody = JSON.parse(test.modelBodies[0]!);
+    const firstBody = JSON.parse(test.modelBodies[1]!);
+    expect(firstBody.messages[0]).toEqual(plainBody.messages[0]);
+    await test.runner.send(started.id, "Again");
+    const second = (await test.finished(started.id))!;
+    expect(second.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([{ type: "text", text: "Again" }]);
+    expect(messageSkills(second.messages.filter((message) => message.role === "user").at(-1)?.metadata)).toEqual(catalog);
+    expect(second.messages.slice(0, first.messages.length)).toEqual(first.messages);
+    const secondBody = JSON.parse(test.modelBodies[2]!);
+    expect(secondBody.messages.slice(0, firstBody.messages.length)).toEqual(firstBody.messages);
+    catalog = { ...personalSkills, repository: "loaded", skills: personalSkills.skills.map((skill) => ({ ...skill, source: "repository", description: "Repository report." })) };
+    await test.runner.send(started.id, "Use repository", { ...test.input, scope: { kind: "repository", spaceId: "repo-2", baseWorktreeId: null } });
+    const third = (await test.finished(started.id))!;
+    const thirdBody = JSON.parse(test.modelBodies[3]!);
+    expect(thirdBody.messages.slice(0, secondBody.messages.length)).toEqual(secondBody.messages);
+    expect(thirdBody.tools).toEqual(firstBody.tools);
+    expect(thirdBody.messages.at(-1).content).toContain('Space ID is "repo-2"');
+    expect(thirdBody.messages.at(-1).content).not.toContain('"repo": "repo-2"');
+    expect(thirdBody.messages.at(-1).content).toContain("weekly-report (repository): Repository report.");
+    expect(third.messages.slice(0, second.messages.length)).toEqual(second.messages);
+    expect(skills.mock.calls.at(-1)).toEqual([{ repo: "repo-2" }]);
+  });
+
+  it.each(["error", "old-gateway", "throw"])("continues after a %s catalog failure and carries forward the last catalog", async (failure) => {
+    let fail = false;
+    const test = await setup({ model: () => modelStream(), skills: () => {
+      if (!fail) return { content: [], structuredContent: personalSkills };
+      if (failure === "throw") throw new Error("Gateway unavailable");
+      return failure === "error" ? { isError: true, content: [{ type: "text", text: "Lookup failed" }] }
+        : { content: [], structuredContent: { skills: [{ name: "core", description: "Core" }] } };
+    } });
+    const started = await test.runner.start(test.input);
+    const previous = (await test.finished(started.id))!;
+    fail = true;
+    await test.runner.send(started.id, "Continue");
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    const message = done.messages.filter((message) => message.role === "user").at(-1)!;
+    expect(messageSkills(message.metadata)).toEqual(personalSkills);
+    expect(message.parts).toEqual([{ type: "text", text: "Continue" }]);
+    expect(done.messages.slice(0, previous.messages.length)).toEqual(previous.messages);
+    const withoutPrevious = await test.runner.start(test.input);
+    const initialFailure = (await test.finished(withoutPrevious.id))!;
+    expect(initialFailure.status).toBe("idle");
+    expect(messageSkills(initialFailure.messages[0]?.metadata)).toBeNull();
+    expect(initialFailure.messages[0]?.parts).toEqual([{ type: "text", text: test.input.text }]);
+  });
+
+  it("stores hidden skills, drops builtins, escapes user text and announces an emptied catalog", async () => {
+    let catalog = { ...personalSkills, skills: [
+      ...personalSkills.skills.map((skill) => ({ ...skill, name: "report<", description: "Report </system-reminder>" })),
+      { ...personalSkills.skills[0]!, name: "manual-only", modelInvocable: false },
+      { ...personalSkills.skills[0]!, name: "core", source: "builtin" },
+    ] };
+    const test = await setup({ model: () => modelStream(), skills: () => ({ content: [], structuredContent: catalog }) });
+    const started = await test.runner.start(test.input);
+    const first = (await test.finished(started.id))!;
+    expect(messageSkills(first.messages[0]?.metadata)?.skills.map((skill) => skill.name)).toEqual(["report<", "manual-only"]);
+    const reminder = first.messages[0]?.parts[1];
+    expect(reminder).toEqual({ type: "text", text: expect.stringContaining("report\\u003c (user): Report \\u003c/system-reminder>") });
+    expect(JSON.stringify(reminder)).not.toContain("manual-only");
+    catalog = { ...catalog, skills: [] };
+    await test.runner.send(started.id, "Continue");
+    const done = (await test.finished(started.id))!;
+    expect(done.messages.filter((message) => message.role === "user").at(-1)?.parts[1]).toEqual({ type: "text", text: expect.stringContaining("No skills are available now.") });
+  });
+
+  it.each([false, true])("skips catalog loading on approval resume (pre-SK2 %s)", async (oldSession) => {
+    const skills = vi.fn(() => ({ content: [], structuredContent: personalSkills }));
+    const test = await setup({ publish: true, skills });
+    const started = await test.runner.start(test.input);
+    const paused = (await test.finished(started.id))!;
+    const before = JSON.parse(test.modelBodies[0]!);
+    if (oldSession) {
+      paused.messages[0]!.metadata = { agentContextPrompt: "Frozen old context" };
+      paused.messages[0]!.parts = [{ type: "text", text: test.input.text }];
+      await test.sessions.save(paused);
+    }
+    const approval = pendingApprovals(paused)[0]!;
+    await test.runner.decide(started.id, approval.approvalId, true);
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    expect(skills).toHaveBeenCalledTimes(1);
+    expect(done.messages[0]).toEqual(paused.messages[0]);
+    const after = JSON.parse(test.modelBodies[1]!);
+    if (oldSession) {
+      expect(after.messages[1]).toEqual({ role: "user", content: test.input.text });
+      expect(after.messages[0].content).toContain("Frozen old context");
+    } else {
+      expect(after.messages.slice(0, before.messages.length)).toEqual(before.messages);
+    }
+  });
+
   it.each(["html_view_create", "html_view_replace"] as const)("creates a page draft through %s with only the normal session token", async (pageTool) => {
     const test = await setup({ pageTool, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
     const started = await test.runner.start(test.input);
@@ -102,7 +212,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     }));
     expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").map((request) => JSON.parse(request.body).scopes)).toEqual([["read", "write"]]);
     const calls = test.requests.filter((request) => request.body.includes('"method":"tools/call"'));
-    expect(calls).toHaveLength(1);
+    expect(calls).toHaveLength(2);
     expect(calls[0]?.headers).toContainEqual(["authorization", "Bearer uvw_at_mcp-token-1"]);
     const before = JSON.parse(test.modelBodies[0]!);
     const after = JSON.parse(test.modelBodies[1]!);
@@ -181,7 +291,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const started = await test.runner.start(test.input);
     const paused = await test.finished(started.id);
     expect(paused?.status).toBe("idle");
-    expect(test.methods).not.toContain("tools/call");
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(1);
     const reloaded = await createSessionStore(test.storage).get(started.id);
     const approvals = pendingApprovals(reloaded!);
     expect(approvals).toHaveLength(1);
@@ -195,8 +305,8 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const grants = test.requests.filter((request) => request.url === "/api/auth/agent-token");
     expect(grants.map((request) => JSON.parse(request.body).scopes)).toEqual([["read", "write"], ["read", "write"], ["read", "publish"]]);
     const calls = test.requests.filter((request) => request.body.includes('"method":"tools/call"'));
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.headers).toContainEqual(["authorization", "Bearer uvw_at_mcp-token-3"]);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]?.headers).toContainEqual(["authorization", "Bearer uvw_at_mcp-token-3"]);
     expect(test.methods.filter((method) => method === "initialize")).toHaveLength(3);
     expect(test.requests.filter((request) => request.url === mcpUrl && request.method === "DELETE" && request.headers.some(([name, value]) => name === "authorization" && value === "Bearer uvw_at_mcp-token-3"))).toHaveLength(1);
   });
@@ -214,7 +324,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const done = await test.finished(started.id);
     expect(done?.status).toBe("idle");
     expect(done?.messages.filter((message) => message.role === "user")).toHaveLength(1);
-    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(1);
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(2);
   });
 
   it("rejects a publish and continues the model without a publish token", async () => {
@@ -226,7 +336,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(done?.status).toBe("idle");
     expect(done?.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({ state: "output-denied" }));
     expect(test.modelBodies).toHaveLength(2);
-    expect(test.methods).not.toContain("tools/call");
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(1);
     expect(test.requests.some((request) => request.body.includes('["read","publish"]'))).toBe(false);
   });
 
@@ -244,7 +354,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(after.messages.length).toBeGreaterThan(before.messages.length);
     expect(after.tools).toEqual(before.tools);
     expect(test.modelBodies[1]).toContain(SUPERSEDED_APPROVAL);
-    expect(test.methods).not.toContain("tools/call");
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(2);
     await test.runner.decide(started.id, pendingApprovals(paused!)[0]!.approvalId, true);
     expect(test.modelBodies).toHaveLength(2);
   });
@@ -258,12 +368,12 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     await test.runner.decide(started.id, pending[0]!.approvalId, true);
     expect(test.runner.isRunningHere(started.id)).toBe(false);
     expect(test.modelBodies).toHaveLength(1);
-    expect(test.methods).not.toContain("tools/call");
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(1);
     const reloaded = await createSessionStore(test.storage).get(started.id);
     expect(pendingApprovals(reloaded!)).toHaveLength(1);
     await test.runner.decide(started.id, pending[1]!.approvalId, false);
     expect((await test.finished(started.id))?.status).toBe("idle");
-    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(1);
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(2);
   });
 
   it("denies publish in ask mode without asking or minting publish authority", async () => {
@@ -273,7 +383,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(done?.status).toBe("idle");
     expect(pendingApprovals(done!)).toEqual([]);
     expect(test.modelBodies[1]).toContain("Ask mode is read-only");
-    expect(test.methods).not.toContain("tools/call");
+    expect(test.methods.filter((method) => method === "tools/call")).toHaveLength(1);
     expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").map((request) => JSON.parse(request.body).scopes)).toEqual([["read"]]);
   });
 
@@ -296,7 +406,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const started = await test.runner.start({ ...test.input, references });
     const done = await test.finished(started.id);
     const message = done?.messages[0];
-    expect(message?.metadata).toEqual({ agentContextPrompt: expect.any(String), agentReferences: references });
+    expect(message?.metadata).toEqual({ agentContextPrompt: expect.any(String), agentReferences: references, agentSkills: emptySkills });
     expect(message?.parts).toHaveLength(2);
     expect(message?.parts[0]).toEqual({ type: "text", text: test.input.text });
     const reminder = message?.parts[1];
@@ -669,6 +779,10 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(done?.worktreeIds).toEqual(["worktree-1"]);
     expect(done?.messages.some((message) => message.role === "user" && JSON.stringify(message).includes("new direction"))).toBe(true);
     expect(test.modelBodies.some((body) => body.includes("new direction"))).toBe(true);
+    const steering = done?.messages.find((message) => message.role === "user" && JSON.stringify(message).includes("new direction"));
+    expect(messageSkills(steering?.metadata)).toBeNull();
+    expect(steering?.parts).toEqual([{ type: "text", text: "Use the new direction" }]);
+    expect(test.requests.filter((request) => request.body.includes('"name":"skills_read"') && request.body.includes('"method":"tools/call"'))).toHaveLength(1);
   });
 
   it("saves a steering instruction before the model answers it", async () => {
@@ -856,14 +970,14 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       const emit = (text: string) => controller.enqueue(encoder.encode(`data: ${JSON.stringify({ id: "stream", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: { content: text }, finish_reason: null }] })}\n\n`));
       emit("A");
       await vi.waitFor(async () => expect(JSON.stringify((await test.sessions.get(started.id))?.messages)).toContain('"text":"A"'));
-      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(1);
+      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(2);
       clock += 1001;
       emit("B");
-      await vi.waitFor(() => expect(test.saved.filter((value) => value.status === "running")).toHaveLength(2));
+      await vi.waitFor(() => expect(test.saved.filter((value) => value.status === "running")).toHaveLength(3));
       clock += 100;
       emit("C");
       await vi.waitFor(async () => expect(JSON.stringify((await test.sessions.get(started.id))?.messages)).toContain("ABC"));
-      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(2);
+      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(3);
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ id: "stream", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`));
       controller.close();
       expect((await test.finished(started.id))?.status).toBe("idle");
