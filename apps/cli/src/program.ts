@@ -29,6 +29,8 @@ import {
   WorkspaceUnitExchangeFeature,
   WorkspaceUnitFeature,
   WorkspaceUnitLayoutLintFeature,
+  serializeWorkspaceRuntimeTarget,
+  type SheetLensResult,
 } from "@univerjs/univer-workspace-client-core";
 import type { Command } from "commander";
 import { resolveUniverLicense, resolveUniverLicenseKey } from "./config.js";
@@ -42,6 +44,7 @@ import { WorkspaceHtmlViewFeature } from "./features/html-view/html-view.js";
 import { createWorkspaceUnitLayoutLintCommand } from "./features/lint/command.js";
 import { createWorkspacePrintPdfCommand } from "./features/print-pdf/command.js";
 import { createWorkspaceScreenshotCommand } from "./features/screenshot/command.js";
+import { createSheetLensCommands } from "./features/sheet-lens/command.js";
 import { createSkillsCommand } from "./features/skills/command.js";
 import { createSpaceCommand } from "./features/space/command.js";
 import { createWorkspaceCompileSvgCommand } from "./features/svg/command.js";
@@ -226,6 +229,19 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createWorkspacePrintPdfCommand(printPdf),
     createWorkspaceUnitLayoutLintCommand(unitLayoutLint),
     createContentExecuteCommand(contentExecution),
+    ...createSheetLensCommands({
+      run: async ({ unitId, scope, request }) => {
+        const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
+        const target =
+          scope.kind === "trunk"
+            ? await source.resolveTrunkRuntimeTarget({ unitId })
+            : await source.resolveRuntimeTarget({ unitId, worktreeId: scope.worktreeId });
+        return (await daemon.request("sheet-lens.run", {
+          target: serializeWorkspaceRuntimeTarget(target),
+          request,
+        })) as unknown as SheetLensResult;
+      },
+    }),
     createWorkspaceCompileTypstCommand(compileTypst),
     createWorkspaceCompileMarkdownCommand(compileMarkdown),
     createWorkspaceExportMarkdownCommand(exportMarkdown),

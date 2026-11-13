@@ -180,7 +180,10 @@ test("the unchanged 500,000-cell threshold yields a block and preserves the Lens
   assert.ok(allNodes(root).some((node) => node.kind === "block"));
   assert.deepEqual(
     result.warnings.filter((w) => w.code === "sheet-lens-sheet-too-large"),
-    [{ code: "sheet-lens-sheet-too-large", message: "sheet s1 too large: rendered as one block" }],
+    [{
+      code: "sheet-lens-sheet-too-large",
+      message: "sheet s1 too large: rendered as one block; read it page by page with read, or locate cells with find",
+    }],
   );
 });
 

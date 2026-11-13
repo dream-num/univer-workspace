@@ -236,7 +236,9 @@ function runRequest(
               : message.includes("blank-rendering")
                 ? "sheet-lens-blank-cells"
                 : "sheet-lens-outline-note",
-            message,
+            message: message.includes("too large")
+              ? `${message}; read it page by page with read, or locate cells with find`
+              : message,
           });
         }
       }

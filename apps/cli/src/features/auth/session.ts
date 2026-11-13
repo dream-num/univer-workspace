@@ -218,7 +218,14 @@ export async function readWorkspaceCookie(input: {
   readonly origin: string;
   readonly sessionPath: string;
 }): Promise<string | undefined> {
-  return (await readSessions(input.sessionPath)).sessions[normalizeOrigin(input.origin)]?.cookie;
+  return (await readWorkspaceSession(input))?.cookie;
+}
+
+export async function readWorkspaceSession(input: {
+  readonly origin: string;
+  readonly sessionPath: string;
+}): Promise<StoredSession | undefined> {
+  return (await readSessions(input.sessionPath)).sessions[normalizeOrigin(input.origin)];
 }
 
 async function readSessions(path: string): Promise<StoredSessions> {
