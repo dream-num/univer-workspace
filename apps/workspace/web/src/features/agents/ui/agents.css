@@ -65,7 +65,7 @@ html[data-ui-mode="repository"] .agent-composer-controls { display: flex; align-
 html[data-ui-mode="repository"] .agent-model-controls { display: flex; flex-wrap: wrap; flex: 1; min-width: 0; align-items: center; gap: 8px; }
 html[data-ui-mode="repository"] .agent-model-controls > button { flex: none; }
 html[data-ui-mode="repository"] .agent-model-controls > [role="combobox"] { width: auto; }
-html[data-ui-mode="repository"] .agent-model-controls > .agent-model-select { min-width: 0; flex: 0 1 auto; }
+html[data-ui-mode="repository"] .agent-model-controls > .agent-model-select { min-width: 0; flex: 1 1 0; }
 html[data-ui-mode="repository"] .agent-composer-controls > .agent-send { flex: none; margin-left: auto; }
 html[data-ui-mode="repository"] .agent-composer > .agent-note { margin: 0; }
 html[data-ui-mode="repository"] .agent-composer > .agent-scope { min-width: 0; }
@@ -114,8 +114,8 @@ html[data-ui-mode="repository"] .agent-reference-choice { display: grid; gap: 8p
 html[data-ui-mode="repository"] .agent-reference-repository { color: var(--rd-ink-2); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html[data-ui-mode="repository"] .agent-reference-group { color: var(--rd-ink-3); font-size: 12px; font-weight: 600; }
 @media (max-width: 600px) {
-  html[data-ui-mode="repository"] .agent-composer:not(.agent-followup) .agent-composer-controls { flex-wrap: wrap; }
-  html[data-ui-mode="repository"] .agent-composer .agent-model-controls { order: 1; flex-basis: 100%; }
+  html[data-ui-mode="repository"] :is(.agent-composer, .agent-followup) .agent-composer-controls { flex-wrap: wrap; }
+  html[data-ui-mode="repository"] :is(.agent-composer, .agent-followup) .agent-model-controls { order: 1; flex-basis: 100%; }
 }
 
 html[data-ui-mode="repository"] .agent-editor-container { position: relative; }
