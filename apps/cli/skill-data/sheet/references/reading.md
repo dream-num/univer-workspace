@@ -25,7 +25,7 @@ Refs come from content and follow reading order:
 - `s1.t1` identifies a table. Region letters are `t` for table, `m` for matrix, `f` for form, `k` for KPI, `x` for text, and `b` for block.
 - `s1.t1.c3` identifies a column within a table.
 
-The first text line identifies the Unit, scope, and `rev=` revision. Refs belong to that revision.
+In text output the first line identifies the Unit, scope, and `rev=` revision; structured output carries it in `revision`. Refs belong to that revision.
 Structural edits can change refs. A new `outline` provides the current map.
 Region kinds and bounds are heuristics for where to read, not business meaning.
 
@@ -51,7 +51,7 @@ Each cell is a JSON token. Formula cells include display text and formula source
 | --- | --- |
 | `range` | An A1 rectangle, whole columns, or whole rows, such as `Sales!A1:F40`, `s2!B:B`, or `'Q1 Data'!3:5`. Whole columns and rows are clipped to the used range. Without a sheet prefix, the workbook must have exactly one sheet. |
 | Content mode | `both` for values and formulas, the default. `display` for displayed values, `formula` for formulas, `style` for styles, or `formula+style` for formulas and styles together. |
-| `max` | Maximum cells per page, default `500`. Use `1` to `2000` on either entry. Pages contain whole rows. A row wider than `max` requires a larger limit or a narrower range. |
+| `max` | Maximum cells per page, default `500`. Keep it at `2000` or less, the most every entry accepts. Pages contain whole rows. A row wider than `max` requires a larger limit or a narrower range. |
 | JSON | Includes typed cells and stored values in the result's `json` field. |
 
 A sheet prefix can be its exact name, a quoted name, or a ref such as `s2!`.
@@ -76,7 +76,7 @@ Cells without content are omitted, except cells included for style content.
 | `style` | Style summary when style content is selected and a style is present. |
 
 For exact values, use `type` and `value`, not parsed `display` text.
-A constant error has type `error`. The literal text `#N/A` has type `text`.
+A constant error has type `error`. A formula that returns an error keeps its `formula` and shows the error text, such as `#DIV/0!`, in `display`. The literal text `#N/A` has type `text`.
 A formula with `value: null` and type `empty` lacks a stored result. It is not a known zero.
 
 ## find
@@ -90,7 +90,7 @@ A formula with `value: null` and type `empty` lacks a stored result. It is not a
 | `case` | Enables case-sensitive matching. Matching is case-insensitive by default. |
 | Sheet selection | `sheets` in MCP, repeatable `sheet` in CLI. Accepts sheet names or refs such as `s2`. Omit it to search all sheets. |
 | `from` | The first cell to consider, inclusive, such as `Sales!A51`. Use the returned continuation position. |
-| `max` | Maximum hits per page, default `50`. Use `1` to `500` on either entry. |
+| `max` | Maximum hits per page, default `50`. Keep it at `500` or less, the most every entry accepts. |
 
 Hits identify the sheet and cell ref, display text, formula, and matched terms.
 JSON includes structured hits, search counts, and per-term counts. One cell can match several terms.

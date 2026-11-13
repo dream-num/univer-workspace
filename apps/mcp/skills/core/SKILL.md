@@ -59,7 +59,7 @@ toolset. An executor restriction can hide content tools even with all selected.
 | `execute`                                                                                                    | `execute`              | Run Facade code and commit mutations                       |
 | `outline` | `outline` | Sheet only; unit and either trunk true or worktree; zoom with at, continue with from, limit depth and budget |
 | `read` | `read` | Sheet only; unit, scope, and range; content selects both, display, formula, style, or formula+style; max limits cells; json true returns typed values |
-| `find` | `find` | Sheet only; unit, scope, and terms; in selects values or formulas; case and sheets restrict matches; from and max page hits |
+| `find` | `find` | Sheet only; unit, scope, and terms; in selects values or formulas; case makes matching case-sensitive; sheets limit the search; from and max page hits |
 | `inspect`                                                                                                    | `inspect`              | Read stored content                                        |
 | `screenshot`                                                                                                 | `screenshot`           | Render images                                              |
 | `import`                                                                                                     | `import`               | Create from uploaded Office bytes                          |

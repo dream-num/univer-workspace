@@ -15,13 +15,13 @@ Reads target one remote Unit in either trunk or an explicit Worktree. Edits targ
 2. Zoom with `outline`, setting `at` to a returned ref such as `s2.t1`. Run `read` on its printed range for cells, or `find` with terms to locate values or formulas. Use these operations before screenshots or custom statistics scripts.
 3. Follow a continuation whenever output ends with one. Omitted is not absent. Never sum one page as if it were the whole range.
 4. Change cells with `execute` in the task's Worktree. Await calculation when formulas are involved.
-5. Read back only the cells the answer depends on. Use `read` JSON fields `type`, `value`, and `formula` for exact evidence, not display text.
+5. Read back only the cells the answer depends on and that your `execute` script did not already return. Use `read` JSON fields `type`, `value`, and `formula` for exact evidence, not display text.
 
 Region kinds and bounds are heuristics for where to read, not business meaning. Watch `subtotals:` to avoid double counting, `frozen`, `merged`, `errors`, and `via=name` for defined-name references.
 
 Refs are content-derived and bound to the revision on the first output line. Run `outline` again after structural edits. A large sheet appears as one `block` with a `note:` line. Read it in pages or locate cells with `find`.
 
-`uncached=N` means formulas lack stored results. Trigger calculation with `execute` using the recipe below, then read again. Reading does not calculate formulas.
+`uncached=N` means formulas lack stored results. Trigger calculation with `execute` in a Worktree using the recipe below, then read that Worktree again; trunk shows the calculated values only after the Worktree is merged. Reading does not calculate formulas.
 
 Read [Sheet reading operations](references/reading.md) for options, refs, continuations, and JSON fields. The `core` Skill binds these operations to your entry.
 
