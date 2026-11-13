@@ -238,6 +238,21 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(ws.requests).not.toContain(`/api/blob-resources/${ws.nodes.find((node) => node.spaceId === spaceId && node.resource)?.resource?.id}/download`);
   });
 
+  it("caps distinct folder names in Workspace list order and reads a named Skill past the cap", async () => {
+    const ws = skillWorkspace();
+    const skills = ws.skill("team", "a-valid").parentNodeId!;
+    for (let index = 0; index < 100; index++) ws.skill("team", `z-${String(index).padStart(3, "0")}`);
+    ws.nodes.push({ ...ws.nodes.find((node) => node.id === skills)!, id: "late", name: "Late", parentNodeId: skills });
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    const names = listed.structured.skills.slice(SKILL_NAMES.length).map((skill: { name: string }) => skill.name);
+    expect(names).toContain("a-valid");
+    expect(names).toContain("z-098");
+    expect(names).not.toContain("z-099");
+    expect((await call(client, "skills_read", { repo: "bob/team", name: "z-099" })).structured.source).toBe("repository");
+  });
+
   it("passes string metadata through custom and built-in catalogs and omits absent metadata", async () => {
     const ws = skillWorkspace();
     const metadata = { source: "https://example.com/skills", "source-commit": "abc123" };

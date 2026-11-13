@@ -115,9 +115,9 @@ async function skillFolders(spaces: WorkspaceSpaceFeature, spaceId: string, sour
     if (group) group.push(folder);
     else byName.set(folder.name, [folder]);
   }
+  const names = [...byName.keys()];
   const unique: WorkspaceNode[] = [];
-  for (const folderName of [...byName.keys()].sort().slice(0, 100)) {
-    if (name !== undefined && folderName !== name) continue;
+  for (const folderName of name === undefined ? names.slice(0, 100) : names.filter((folderName) => folderName === name)) {
     const group = byName.get(folderName)!;
     if (group.length > 1) diagnostics.push({ source, path: `.agents/skills/${folderName}`, problem: "duplicate" });
     else unique.push(group[0]!);
