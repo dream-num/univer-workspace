@@ -171,24 +171,68 @@ $V mcp slm-outline outline "$(args "$SALES")"
   Feed each `structuredContent.next.arguments` into `$V mcp slm5-page2 find "$NEXT"`,
   then increment the label until no next remains. Pass when there are 61 hits with no repeats.
 - SLM6. Run `$V mcp slm6 outline "$(args "$DOC")"`.
-  Pass when it exits 1 with `workspace-sheet-lens-unit-type-unsupported`, its message
-  names `inspect`, and the event has `outcome: tool_error`.
-- SLM7. Run `$V mcp slm7-a outline "$(args "$SALES")"` twice with distinct labels.
-  Give a second user read access to the same Unit and Worktree, then use that user's
-  development session from a private file in this run. In a subshell, save the
-  first session, install the second, call the tool, and restore it on exit.
+  Pass when `$V mcp` exits 1 with `workspace-sheet-lens-unit-type-unsupported`, its
+  message names `inspect`, and the event has `outcome: tool_error`.
+- SLM7. Use a Team Space with a space-visible Worktree. A public Personal Space
+  does not grant another user Worktree access. Create and import a separate sales
+  fixture so the other journeys keep their original IDs.
 
   ```bash
+  $V cli slm7-team repo create "slm7-$VERIFY_UVW_RUN" --name 'Sheet Lens cache test' --json
+  TEAM=$(jq -r '.id' "$EVIDENCE/slm7-team.out")
+  $V cli slm7-pr pr create -R "$TEAM" -t 'Shared Sheet Lens fixture' --visibility space --json
+  TEAM_W=$(jq -r '.id' "$EVIDENCE/slm7-pr.out")
+  python3 .agents/skills/verify-uvw/bin/seed-sales.py "$EVIDENCE/slm7-sales.xlsx" 1000
+  $V cli slm7-import import --worktree "$TEAM_W" --space "$TEAM" \
+    --file "$EVIDENCE/slm7-sales.xlsx" --name sales.xlsx --json
+  TEAM_SALES=$(jq -r '.unitId' "$EVIDENCE/slm7-import.out")
+  TEAM_ARGS=$(node -e 'console.log(JSON.stringify({unit:process.argv[1],worktree:process.argv[2]}))' "$TEAM_SALES" "$TEAM_W")
+  ```
+
+  Register the second user, save its development session in a private file, and
+  add it to the Team Space as a viewer. This Node command reads the first user's
+  session from disk and never prints either credential.
+
+  ```bash
+  SECOND_MCP_SESSION_FILE="$UNIVER_HOME/slm7-second-session"
+  node --input-type=module - "$ORIGIN" "$UNIVER_HOME" "$VERIFY_UVW_RUN" "$TEAM" "$SECOND_MCP_SESSION_FILE" <<'JS'
+  import assert from 'node:assert/strict';
+  import { randomBytes } from 'node:crypto';
+  import { readFileSync, writeFileSync } from 'node:fs';
+  const [origin, home, run, team, sessionFile] = process.argv.slice(2);
+  const credentials = { username: `verify-${run}-slm7`, password: randomBytes(16).toString('hex') };
+  const registered = await fetch(origin + '/api/auth/password/register', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...credentials, displayName: 'Sheet Lens viewer' }),
+  });
+  assert(registered.ok, `Registration returned ${registered.status}`);
+  const { user } = await registered.json();
+  const login = await fetch(origin + '/api/auth/cli/password/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(credentials),
+  });
+  assert(login.ok, `Login returned ${login.status}`);
+  const session = login.headers.getSetCookie().map(c => /^workspace_session=([^;]+)/.exec(c)?.[1]).find(Boolean);
+  assert(session, 'Login must return a session cookie');
+  writeFileSync(sessionFile, session, { mode: 0o600 });
+  const membership = await fetch(`${origin}/api/team-spaces/${team}/members/${user.id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json',
+      cookie: 'workspace_session=' + readFileSync(home + '/mcp-session', 'utf8').trim() },
+    body: JSON.stringify({ role: 'viewer' }),
+  });
+  assert(membership.ok, `Membership returned ${membership.status}`);
+  JS
+  $V mcp --auth dev slm7-a outline "$TEAM_ARGS"
+  $V mcp --auth dev slm7-b outline "$TEAM_ARGS"
   (
     cp "$UNIVER_HOME/mcp-session" "$UNIVER_HOME/slm7-original-session"
     trap 'mv "$UNIVER_HOME/slm7-original-session" "$UNIVER_HOME/mcp-session"' EXIT
     cp "$SECOND_MCP_SESSION_FILE" "$UNIVER_HOME/mcp-session"
-    $V mcp --auth dev slm7-second-user outline "$(args "$SALES")"
+    $V mcp --auth dev slm7-second-user outline "$TEAM_ARGS"
   )
   ```
 
-  Pass when the first user's second event has `cache: hit` and the second user's first
-  has `cache: miss`. Never put either credential in evidence.
+  Pass when all three calls exit 0, the first user's second event has `cache: hit`,
+  and the second user's first has `cache: miss`. Never put either credential in evidence.
 - SLM8. With the same-origin flag, start the mock provider from the skill's
   Browser Agent recipe. Script a call to `outline` with the sales Unit and Worktree.
   Open a new Agents session and send two turns. Also run `$V mcp-tools slm8-before`
@@ -202,12 +246,6 @@ $V mcp slm-outline outline "$(args "$SALES")"
 - SLM10. Run `$V mcp slm10 outline "$(args "$L50")"`.
   Pass when `warnings` explains the large sheet, `text` contains a `note:` line,
   and the event has `outcome: ok`.
-
-The current `bin/mcp-call.mjs` identity validator does not recognize these three
-Worktree-scoped tools and assumes a call without a worker has no Unit type.
-It can exit 5 with `Unexpected repository or Unit identity` even when the result
-and event are correct. Check the saved result and matching event directly.
-The helper needs a separate update before its exit code can gate these journeys.
 
 Run `$V down` after the journeys, including after failures. Keep only this run's
 results and redacted events. The `.event.json` cache and stage timing fields contain

@@ -245,9 +245,9 @@ and the matching owner/slug candidates when available.
 | `file_upload_create` | Required `purpose` (`office-import`, `blob`, `html-view`, `markdown-assets`, `svg-assets`, `typst-bundle`), `file_name`, `media_type`; optional `size` (upper bound) | `{ upload: { upload_id, upload_url, page_url, expires_at, max_bytes } }`. Links last 10 minutes; ready uploads last one hour |
 | `execute` | Required `worktree`, `unit`, `code` (at most 10 MiB UTF-8) | Bare `uvw execute --json` result `{ committed, value?, revision?, status?, valueTruncated? }` |
 | `inspect` | Required `target`, `unit`, exactly one of `trunk: true` or `worktree`; optional `selectors`, `worksheet` (`id:<id>`, `name:<name>`, `index:N`; bare values are rejected) | Bare `uvw inspect --json` result `{ kind, unitId, ... }`. Targets match CLI, including `range`; selectors use CLI syntax such as `index:1`. No cursor; oversized results return `workspace-result-too-large` |
-| `outline` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `at`, `from`, `depth` (`0`, `1`, `2`), `budget` (positive characters) | Sheet-only map of sheets, regions, tables and columns. `{ unitId, scope, revision, text, json, warnings, next? }` |
-| `read` | Same Unit and scope; required `range`; optional `content` (`both` default, `display`, `formula`, `style`, `formula+style`), `max` (positive cells, default 500), `json` | Sheet-only cells with typed JSON values. Same result fields; pages end at whole rows |
-| `find` | Same Unit and scope; required non-empty `terms`; optional `in` (`values` default or `formulas`), `case`, `sheets`, `from`, `max` (positive hits, default 50) | Sheet-only hits. Same result fields |
+| `outline` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `at`, `from`, `depth` (`0`, `1`, `2`), `budget` (positive characters), `json` | Sheet-only map of sheets, regions, tables and columns. `{ unitId, scope, revision, text, warnings, next?, json? }` |
+| `read` | Same Unit and scope; required `range`; optional `content` (`both` default, `display`, `formula`, `style`, `formula+style`), `max` (1 to 2,000 cells, default 500), `json` | Sheet-only cells; `json: true` includes typed values. Same result fields; pages end at whole rows |
+| `find` | Same Unit and scope; required non-empty `terms`; optional `in` (`values` default or `formulas`), `case`, `sheets`, `from`, `max` (1 to 500 hits, default 50), `json` | Sheet-only hits. Same result fields |
 | `screenshot` | Required `unit` and exactly one of `trunk: true` or `worktree`; optional `pages`, `contact_slide`, `tile`, `sheet`, `range`, `region`, `elements`, `padding`, `scale`, `idempotency_key` | `{ unitId, unitType, images: [{ name, width, height, size, page?, ... }] }`. Within the synchronous wait and at most 1 MiB in total, each PNG is also an MCP `image` content block after the text line and entries carry no link. Otherwise each entry carries a `download` link and there are no image blocks. A long render returns a job; `job_get` results always carry links. Options are the `uvw screenshot` flag values and are parsed with the CLI's own command, so rejections read like `uvw` (`workspace-argument-invalid`, or `workspace-render-input-invalid` from the renderer) |
 | `import` | Required `upload_id`, `worktree`, `space`, `idempotency_key`; optional `type` (`sheet`, `base`, `doc`, `slide`), `name`, `parent` | Bare CLI import result plus `url`; `sourcePath` is the staged file name |
 | `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
@@ -265,8 +265,12 @@ and the matching owner/slug candidates when available.
 Their `text` starts with `unit <id> [trunk, rev=<n>]` or
 `unit <id> [worktree <id>, rev=<n>]`, followed by the trimmed body and one
 `note: <message>` line per warning. MCP text content contains this same text.
-`json` always contains the structured Lens result; `read` also accepts `json: true`
-for clients requesting typed cells explicitly.
+All three tools include the structured Lens result in `json` only with `json: true`,
+matching the CLI's `--json`. Without it, the result carries only `unitId`, `scope`,
+`revision`, `text`, `warnings` and optional `next`. `trunk: false` is accepted with
+`worktree`, as for `inspect`. `read.max` is at most 2,000 cells and `find.max` at most
+500 hits. These count limits do not guarantee a result fits the 100,000-character
+limit. Narrow the request or omit `json` if the result is too large.
 When more remains, `next` is `{ tool, arguments }`. Pass `arguments` unchanged to
 `tool`; it preserves the Unit, scope and original options with the new cursor.
 The final text line gives the same next call in neutral tool syntax.
@@ -430,20 +434,21 @@ violates a tool's output schema is an `internal_error`. A write whose outcome is
 `workspace-result-unknown`. Unconfirmed changeset submission and commit failures carry their cause in
 `detail.cause`; their outcome is `tool_error`, or `timeout` for timeouts. Definite rejections pass through
 as `WORKSPACE_RUNTIME_CONFLICT`, `WORKSPACE_RUNTIME_PULL_REQUIRED`, or `WORKSPACE_RUNTIME_COMMIT_INVALID`.
-The executor reruns `content.execute` once and `content.inspect` up to three times on a pull revision mismatch
+The executor reruns `content.execute` once, and reruns `content.inspect` and `content.sheet-lens`
+up to three times on a pull revision mismatch
 (`workspace-result-mismatch`) or a `workspace-runtime-target-stale` Unit draft-head change. Client
 Core raises both only while a worker opens or pulls, before the script runs and before any commit, so
 a rerun cannot repeat a write. Reads are idempotent and can encounter revision races from writes
 by other users, replicas, or routes outside the queue. Each read revision rerun waits a jittered 25 to 100 ms before resolving
 the target again. Writes keep one revision rerun without backoff.
-The executor puts `content.execute` and `content.inspect` in one FIFO queue per user, scope and Unit.
-Reads wait for earlier writes, so a continuous write stream from that user cannot race an inspect's
-selected revision. Reads also take turns with other reads. Different users, Units and scopes have
-independent queues. Worktree inspect and execute share a scope; trunk inspect has its own scope.
+The executor puts `content.execute`, `content.inspect` and `content.sheet-lens` in one FIFO queue per user, scope and Unit.
+Reads wait for earlier writes, so a continuous write stream from that user cannot race the
+revision selected by inspect or Sheet Lens. Reads also take turns with other reads. Different users, Units and scopes have
+independent queues. Worktree inspect, Sheet Lens and execute share a scope; trunk reads have their own scope.
 Queue wait counts against the original deadline. A call that times out while queued returns
 `workspace-executor-timeout` with `started: false`. Revision reruns remain a fallback for writes
 outside this queue; retries alone cannot resolve a race against continuous writes.
-`content.execute`, `content.inspect`, `exchange.export`, `markdown.export`, `htmlView.validate`,
+`content.execute`, `content.inspect`, `content.sheet-lens`, `exchange.export`, `markdown.export`, `htmlView.validate`,
 `htmlView.create` and `htmlView.replace` also recover once from a worker's Workspace 401 when that worker holds a
 different session from the current call. `htmlView.*` reads the Unit through the runtime
 before any Blob write, so a 401 there never follows a write, and Blob writes are idempotent by key.
@@ -466,7 +471,7 @@ export's auth recovery applies only to its parent-side runtime read.
 | Operation | Rerun reasons | Rationale |
 | --- | --- | --- |
 | `content.execute` | `revision`, `auth` | Runtime rejection precedes script execution and commit. |
-| `content.inspect` | `auth`, `revision` | Shares the same-user Unit queue with execute. Retries revision races from other routes up to three times with jittered backoff and replaces a stale worker once. |
+| `content.inspect`, `content.sheet-lens` | `auth`, `revision` | Shares the same-user Unit queue with execute. Retries revision races from other routes up to three times with jittered backoff and replaces a stale worker once. |
 | `exchange.export` | `auth` | The parent reads before credential-free conversion. |
 | `render.screenshot` | `auth`, `revision` | Shares the same-user Unit queue with execute and inspect. The runtime reads precede the credential-free renderer call, so a rerun repeats no write. |
 | `render.printPdf`, `render.lint` | `auth`, `revision` | Same as `render.screenshot`. |

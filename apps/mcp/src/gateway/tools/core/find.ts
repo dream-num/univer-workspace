@@ -15,7 +15,7 @@ export const findTool = executorTool({
   scope: "read",
   title: "Find Sheet cells",
   description:
-    "Accepts only Sheet Units; use inspect for other Unit types. Locate terms in values (default) or formulas. case enables case-sensitive matching, sheets restricts sheet names, and next.arguments continues the hits.",
+    "Accepts only Sheet Units; use inspect for other Unit types. Locate terms in values (default) or formulas. case enables case-sensitive matching, sheets restricts sheet names, and next.arguments continues the hits. max is at most 500 hits. json: true includes structured hits.",
   annotations: readOnlyAnnotations,
   inputSchema: sheetLensTarget.safeExtend({
     terms: z.array(z.string().min(1)).min(1),
@@ -23,11 +23,11 @@ export const findTool = executorTool({
     case: z.boolean().optional(),
     sheets: z.array(z.string()).optional(),
     from: z.string().optional(),
-    max: z.int().positive().optional(),
+    max: z.int().positive().max(500).optional().describe("Maximum hits per page, 1 to 500; default 50."),
   }),
   outputSchema: sheetLensToolOutput,
   op: opSpecs["content.sheet-lens"],
-  request: ({ unit, trunk, worktree, case: caseSensitive, ...options }) => ({
+  request: ({ unit, trunk, worktree, json: _json, case: caseSensitive, ...options }) => ({
     input: {
       unitId: unit,
       scope: sheetLensScope({ unit, trunk, worktree }),

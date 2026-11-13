@@ -25,7 +25,7 @@ export const outlineTool = executorTool({
   }),
   outputSchema: sheetLensToolOutput,
   op: opSpecs["content.sheet-lens"],
-  request: ({ unit, trunk, worktree, ...options }) => ({
+  request: ({ unit, trunk, worktree, json: _json, ...options }) => ({
     input: {
       unitId: unit,
       scope: sheetLensScope({ unit, trunk, worktree }),

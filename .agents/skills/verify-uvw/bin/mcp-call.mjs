@@ -205,11 +205,11 @@ function eventIssues(event) {
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
   const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_replace', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get'].includes(tool) || (['execute', 'inspect', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_replace', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get'].includes(tool) || (['execute', 'inspect', 'outline', 'read', 'find', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
   const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true && !['worktree', 'space', 'parent'].some((key) => args[key] !== undefined);
   const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
   const invalidUnitType = event.executor === 'none' || compileOnlyTypst
-    ? event.unit_type !== null
+    ? event.unit_type !== null && !(['outline', 'read', 'find'].includes(tool) && typeof event.unit_type === 'string')
     : typeof event.unit_type !== 'string' && !failedTypstWithoutUnit;
   if (invalidUnitType || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error' || event.outcome === 'timeout') {

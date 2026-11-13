@@ -5,8 +5,12 @@ import { worktreeInput } from "./space-support.js";
 export const sheetLensTarget = z
   .object({
     unit: z.string().min(1),
-    trunk: z.literal(true).optional(),
+    trunk: z.boolean().optional(),
     worktree: worktreeInput.optional(),
+    json: z
+      .boolean()
+      .optional()
+      .describe("Include the structured Lens result as json; omitted by default."),
   })
   .refine(
     ({ trunk, worktree }) => (trunk === true) !== (worktree !== undefined),
@@ -23,7 +27,7 @@ export function sheetLensScope(
     : { kind: "worktree", worktreeId: args.worktree };
 }
 
-export const sheetLensToolOutput = sheetLensOutput.omit({ next: true }).extend({
+export const sheetLensToolOutput = sheetLensOutput.omit({ next: true }).partial({ json: true }).extend({
   unitId: z.string(),
   scope: runtimeScope,
   next: z
@@ -69,7 +73,7 @@ export function sheetLensResponse(result: z.infer<typeof sheetLensOutput>, args:
       scope,
       revision: result.revision,
       text: lines.join("\n"),
-      json: result.json,
+      ...(args.json === true ? { json: result.json } : {}),
       warnings: result.warnings,
       ...(next ? { next } : {}),
     },
