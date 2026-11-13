@@ -223,6 +223,7 @@ async function withDaemon(
   test: (input: {
     client: DaemonClient;
     sessionPath: string;
+    data: IWorkbookData;
     exportUnitData: ReturnType<typeof vi.fn>;
   }) => Promise<void>,
 ) {
@@ -260,7 +261,7 @@ async function withDaemon(
   try {
     await writeSession(sessionPath, "alice");
     await server.listen();
-    await test({ client, sessionPath, exportUnitData });
+    await test({ client, sessionPath, data, exportUnitData });
   } finally {
     await server.close();
     await rm(directory, { recursive: true, force: true });
@@ -277,6 +278,35 @@ async function writeSession(path: string, subject: string) {
 }
 
 describe("Sheet Lens daemon RPC", () => {
+  it("fully detects a sparse 520,000-cell box and limits one above 750,000", async () => {
+    await withDaemon(async ({ client, data }) => {
+      const sheet = data.sheets["s1"];
+      if (!sheet) throw new Error("missing test sheet");
+      sheet.rowCount = 30000;
+      sheet.columnCount = 26;
+      sheet.cellData = {
+        0: { 0: { v: "start" } },
+        19999: { 25: { v: 1 } },
+      };
+      const payload = { target, request: { op: "outline", at: "s1", depth: 2 } } satisfies JsonValue;
+      const below = await client.request("sheet-lens.run", payload);
+      expect(below).toMatchObject({ warnings: [], cache: "miss" });
+      expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "hit" });
+      sheet.cellData = {
+        0: { 0: { v: "start" } },
+        28846: { 25: { v: 1 } },
+      };
+      const above = await client.request("sheet-lens.run", {
+        ...payload,
+        target: { ...target, revision: 8 },
+      });
+      expect(above).toMatchObject({
+        warnings: [expect.objectContaining({ code: "sheet-lens-sheet-too-large" })],
+        text: expect.stringContaining("block"),
+      });
+    });
+  });
+
   it("resolves legacy session subjects once per origin and cookie", async () => {
     const fetcher = vi.fn<typeof fetch>(async (input, init) => {
       const cookie = new Request(input, init).headers.get("cookie");

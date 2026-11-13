@@ -23,11 +23,13 @@ Mechanical differences are relative import relocation, `.js` import suffixes, Vi
 - `engine/formulas.ts` adapts only `uncachedFormulas` from uxl's `src/engine/formulas.ts` at `ab4070c`. Counts are keyed directly by sheet ID so equal sheet names cannot merge their counts. The engine never recalculates formulas.
 - `../sheet-lens.ts` adds `WorkspaceSheetLensEngine`. It reuses Lens pagination and JSON renderers. Prepared cell views are shared across `read`, `find`, and the lazily built outline model. Structure and model notes become `sheet-lens-*` warnings. Workspace replaces local file and format fields with target metadata supplied by each entry point.
 
-No algorithm, threshold, successful rendering, or parameterized test case changes. The five source test files contain 96 test declarations and 118 expanded cases. `read.test.ts` has 31 declarations and 53 cases because two declarations each contain 12 parameterized cases.
+- `sheetCellsOf`, `workbookFromData`, and `buildOutlineModel` accept `maxBoxCells`, defaulting to 500,000. The engine forwards its constructor option to preparation and model building. The limit counts the used bounding box, including empty cells between values. Prepare a workbook with the same limit passed to `buildOutlineModel`; a higher model limit cannot recover a feature grid already skipped during preparation. A lower model limit can restrict a prepared workbook without mutating it. The separate 8,000,000-cell detector grid guard is unchanged.
+
+No detection algorithm, successful rendering below the configured limit, or copied parameterized test case changes. The five source test files contain 96 test declarations and 118 expanded cases. `read.test.ts` has 31 declarations and 53 cases because two declarations each contain 12 parameterized cases.
 
 ## Engine contract
 
-`new WorkspaceSheetLensEngine({ exportUnitData, maxCachedBytes, bytesPerJsonByte? })` accepts the existing content runtime's `exportUnitData` function. `run(target, caller, request)` requires a resolved `WorkspaceRuntimeTarget` and `WorkspaceRuntimeCaller`, and forwards both to the exporter. Only Sheet targets are accepted. Other Unit types fail before export and suggest `inspect`.
+`new WorkspaceSheetLensEngine({ exportUnitData, maxCachedBytes, bytesPerJsonByte?, maxBoxCells? })` accepts the existing content runtime's `exportUnitData` function. `run(target, caller, request)` requires a resolved `WorkspaceRuntimeTarget` and `WorkspaceRuntimeCaller`, and forwards both to the exporter. `maxBoxCells` must be a positive safe integer when supplied. Only Sheet targets are accepted. Other Unit types fail before export and suggest `inspect`.
 
 The cache key combines `workspaceRuntimeKey(target, caller)` and `target.revision`. Caller grants remain opaque and do not enter the key. Concurrent misses for one key share one export and preparation, and a failed preparation can be retried. Inserting an entry removes cached older revisions of the same runtime key and releases their byte charges. Each entry holds UnitData, the display reader, per-sheet cell views, and the outline model after the first outline request. An access refreshes the entry's position in the byte-bounded LRU cache. Estimated entry bytes equal UTF-8 UnitData JSON bytes multiplied by `bytesPerJsonByte`, rounded up. The default factor is 12. `maxCachedBytes` is required, and zero disables caching. A Unit larger than the budget still returns its result with `sheet-lens-not-cached`.
 
@@ -54,3 +56,13 @@ Measured on 2026-11-13 with Node 24.19.0, Darwin arm64, and Vitest 4.1.11:
 | 50,000 | 14,570,120 | 9.3797 | 9.3300 | 9.3862 |
 
 The default factor of 12 rounds up the largest observed sample across all sizes. With a host budget of 512 MiB, these ledger entries are charged about 3.1, 99.2, and 166.7 MiB respectively. At the default factor, 512 MiB holds about five 30,000-row ledgers or three 50,000-row ledgers, and the CLI daemon keeps a 512 MiB budget. The host chooses its byte budget. This is a retained JavaScript heap estimate for these synthetic ledgers. It excludes worker memory, native allocations, and temporary export or preparation peaks. Other workbook contents and Node versions can have different factors. No throughput or latency claim follows from this measurement.
+
+## Large-sheet limit measurement
+
+`maxBoxCells` defaults to 500,000. The CLI daemon explicitly uses 750,000 with its 512 MiB cache budget. The forced-GC large-ledger measurement, machine details, results, and future MCP budget recommendations are in [the large-sheet limit report](../../../../docs/design/sheet-outline/large-sheets.zh-CN.md).
+
+```bash
+SHEET_LENS_LARGE_MEASURE=1 SHEET_LENS_EXTRA_CELLS=750000 pnpm --filter @univerjs/univer-workspace-client-core exec vitest run test/sheet-lens/large-measure.test.ts --pool=forks --execArgv=--expose-gc
+```
+
+This separate opt-in test fully models 100,000 through 2,000,000 cells, plus the candidate threshold. It discards one warm-up per size and reports three alternating-order samples, model and preparation times, retained heap, typed-array backing stores, and the existing byte estimate. Two GCs separated by an event-loop turn settle backing-store releases before each memory reading. Every sample asserts a complete ten-column table and a cache hit that can search every data row. The engine keeps the default cache factor of 12. The cell limit alone is not a hard memory cap for arbitrary text, styles, multiple sheets, or temporary peaks.

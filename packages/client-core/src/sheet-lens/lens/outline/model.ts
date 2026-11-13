@@ -672,6 +672,7 @@ const VIA_OF: Record<string, OutlineNode["via"]> = {
 const VIA_ORDER = ["label", "table", "autofilter", "definedName", "pivot"];
 
 export interface BuildOptions {
+  maxBoxCells?: number;
   cfg?: DetectConfig;
   /** Formula cells without a stored result, per sheet id, counted before the workbook was calculated. */
   uncached?: Record<string, number>;
@@ -689,7 +690,12 @@ export function buildOutlineModel(wb: Workbook, opts: BuildOptions = {}): Outlin
     regionsOnly: OutlineNode[];
   }[] = [];
 
-  for (const sc of wb.sheets) {
+  for (const sheet of wb.sheets) {
+    const used = sheet.used;
+    const sc =
+      used && (used.r1 - used.r0 + 1) * (used.c1 - used.c0 + 1) > (opts.maxBoxCells ?? 500_000)
+        ? { ...sheet, fs: { ...sheet.fs, tooLarge: true } }
+        : sheet;
     const st = wb.structure?.sheets.find((s) => s.id === sc.id);
     const ctx: BuildCtx = { sc, objects: st?.objects ?? [], cfg, order };
     const det = sc.fs.tooLarge ? { regions: [], notes: [] } : detectRegions(sc.fs, cfg);
