@@ -171,6 +171,8 @@ read the discussion before repeating it. Labels and assignees require triage
 rights; report a permission denial. Record follow-up work with `issue_create`
 when appropriate without expanding the requested task.
 
+When the user wants to create, edit or import an Agent Skill, read `skill-creator` with `skills_read` first.
+
 ## Start a task
 
 For an existing file, resolve the repository, then find its Resource Node with

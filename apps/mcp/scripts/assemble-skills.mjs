@@ -4,6 +4,7 @@ const target = new URL("../dist/skill-data/", import.meta.url);
 rmSync(target, { recursive: true, force: true });
 mkdirSync(target, { recursive: true });
 cpSync(new URL("../skills/core/", import.meta.url), new URL("core/", target), { recursive: true });
+cpSync(new URL("../skills/skill-creator/", import.meta.url), new URL("skill-creator/", target), { recursive: true });
 for (const name of [
   "base",
   "blob",

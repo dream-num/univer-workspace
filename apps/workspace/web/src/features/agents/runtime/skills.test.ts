@@ -53,3 +53,12 @@ it("keeps provenance metadata and duplicate diagnostics from the gateway and per
   expect(messageSkills({ agentSkills: custom })).toEqual(custom);
   expect(gatewaySkillCatalogSchema.safeParse({ ...custom, skills: [{ ...custom.skills[0], metadata: { source: 42 } }] }).success).toBe(false);
 });
+
+it("keeps only user-invocable builtins in browser catalogs and excludes all builtins from reminders", () => {
+  const builtin = { name: "skill-creator", description: "Create Skills", source: "builtin", modelInvocable: true, userInvocable: true } as const;
+  const parsed = gatewaySkillCatalogSchema.parse({ ...catalog, skills: [builtin, { ...builtin, name: "core", userInvocable: false }] });
+  expect(parsed.skills).toEqual([builtin]);
+  expect(messageSkills({ agentSkills: parsed })).toEqual(parsed);
+  expect(skillsReminder(parsed, null)).toBeNull();
+  expect(skillsReminder(catalog, parsed)).toBeNull();
+});

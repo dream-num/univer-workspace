@@ -21,6 +21,8 @@ and the model can read instructions on demand without changing earlier request p
 - AS13 permits explicit manual-only invocation and resource reads, but denies model invocation.
 - AS14 hides model-only skills from the menu while allowing model reads.
 - AS15 queues slash text as steering while a slow model step runs.
+- AS21 invokes the built-in skill-creator, interviews, creates a real draft in Auto and publishes it.
+- AS22 denies the same draft creation in Ask with the switch-to-Auto message.
 
 ## How to get to it (user POV)
 
@@ -593,3 +595,67 @@ $V down
 
 The helper asserts the AS19 draft is `published` and AS20 draft is `rejected`.
 Keep JSON readbacks, screenshots, mock JSONL and summary text with the run evidence.
+
+## Built-in Skill authoring
+
+Use the AS1 provider and shell helpers with an MCP image built from this checkout.
+Use free ports and a disposable run, for example server 3933, Vite 5983 and MCP 3943
+under `VERIFY_UVW_ROOT=/tmp/verify-uvw-sb4`. The provider's responses are scripted;
+draft creation, authorization, publication and discovery use the real services.
+
+**AS21. Built-in invocation and personal publication.**
+
+```bash
+mock as21 '[{"text":"Which sections should the weekly report include?"}]'
+home
+agent-browser find role combobox click --name Mode --exact
+agent-browser wait '[role=option]'
+agent-browser find role option click --name Auto --exact
+edit '[contenteditable=true]' /skill
+agent-browser wait '[role=listbox]'
+shot as21-builtin-menu
+send '/skill-creator make a weekly report skill'
+agent-browser wait --text 'Which sections should the weekly report include?'
+shot as21-interview
+```
+
+The menu must show `/skill-creator` as **Built-in** (**内置** in Chinese), without
+listing `core` or other built-ins. The first request's last user message must
+contain the shipped Skill body and `ARGUMENTS: make a weekly report skill`.
+Its catalog reminder must contain no built-in entry.
+
+Prepare a `skill_draft_create` input with a new idempotency key, name
+`as21-weekly`, `destination: { personal: true }`, `review: []`, and `files` with
+one `SKILL.md` containing valid frontmatter and `AS21_WEEKLY_BODY` instructions.
+Restart the mock with a tool step containing that input and then a text step
+`Draft created; I will share its preview next.` Send the interview answer
+`Summary, progress and next steps. Save in my Personal Space; skip the trial.`
+Capture `as21-created.png` and the request JSONL. Assert that the next model
+request's tool result contains a pending draft with an empty scan and the actual
+preview URL. Read that draft with `skill_draft_get` as a second view.
+
+The static mock cannot interpolate tool results. Restart it with one text step
+containing the observed preview URL and the instruction to publish there. Send
+`Share the draft preview link.` Capture `as21-preview-link.png`. Keep both mock
+scripts and logs, including the initial interview log, as evidence.
+
+Open that URL, capture `as21-draft.png`, click **Publish**, wait for **Published**,
+reload and capture `as21-published.png`. If this checkout lacks the draft page,
+record the missing route and publish through the public HTTP decision endpoint
+using the author's interactive Session, then read back the published state.
+Reload Home, type `/as21` and capture `as21-published-menu.png`. Its personal
+`/as21-weekly` option proves that publication entered live discovery.
+
+Use `agent-requests.mjs requests` on each JSONL and preserve the key last-user and
+tool-result lines. Use `agent-requests.mjs prefix` between requests of the same
+conversation to check unchanged system, tools and sent history. Mock cached-token
+counts are synthetic and do not measure a provider's actual cache.
+
+**AS22. Ask denies saving.** Start a fresh Home session in Ask. Restart the mock
+with the same `skill_draft_create` input as AS21 but a fresh idempotency key, then
+one text response acknowledging the denial. Send
+`/skill-creator make a weekly report skill`. Capture `as22-denied.png` and the
+request summary. The tool result must say `This connection is not authorized for
+write access. In the Workspace Agent's Ask mode, switch to Auto and try again.`
+No successful draft result may appear. Stop this
+run's mock and use `verify-uvw down` after collecting evidence.

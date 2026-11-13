@@ -26,6 +26,7 @@ const SKILL_NAMES = [
   "embed",
   "html-view",
   "sheet",
+  "skill-creator",
   "slide",
 ];
 const LIMIT = 100_000;
@@ -157,7 +158,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     clients = [];
     sourceRoot = await mkdtemp(join(tmpdir(), "mcp-source-skills-"));
     for (const name of SKILL_NAMES) {
-      await cp(join(name === "core" ? mcpSkillData : cliSkillData, name), join(sourceRoot, name), {
+      await cp(join(["core", "skill-creator"].includes(name) ? mcpSkillData : cliSkillData, name), join(sourceRoot, name), {
         recursive: true,
       });
     }
@@ -633,7 +634,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       const { skills: entries } = await extension.list();
       expect(entries.map(({ frontmatter: { name } }) => name)).toEqual(SKILL_NAMES);
       expect((await call(client, "skills_read", {})).structured["skills"]).toEqual(
-        entries.map(({ frontmatter: { name, description } }) => ({ name, description, source: "builtin", modelInvocable: true, userInvocable: true })),
+        entries.map(({ frontmatter: { name, description } }) => ({ name, description, source: "builtin", modelInvocable: true, userInvocable: name === "skill-creator" })),
       );
       expect(await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8")).not.toBe(
         await readFile(join(cliSkillData, "core/SKILL.md"), "utf8"),
@@ -675,7 +676,8 @@ describe("API reference, Skills, resources and server instructions", () => {
       expect(entry.uri).toBe(`skill://univer-workspace/${entry.frontmatter.name}/SKILL.md`);
       expect(Array.isArray(entry.resources)).toBe(true);
       if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
-      const expectedFiles = ["SKILL.md"];
+      const expectedFiles = (await readdir(join(sourceRoot, name), { withFileTypes: true }))
+        .filter((entry) => entry.isFile()).map((entry) => entry.name);
       for (const child of ["references", "templates"]) {
         const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
           () => [],
@@ -703,6 +705,14 @@ describe("API reference, Skills, resources and server instructions", () => {
       expect(fallback.structured["content"]).toBe(
         await readFile(join(sourceRoot, entry.frontmatter.name, "SKILL.md"), "utf8"),
       );
+      if (name === "skill-creator") {
+        for (const resource of ["authoring", "workspace", "review", "importing"]) {
+          const path = `references/${resource}.md`;
+          expect((await call(client, "skills_read", { name, resource: path })).structured).toMatchObject({
+            name, source: "builtin", path, content: await readFile(join(sourceRoot, name, path), "utf8"),
+          });
+        }
+      }
     });
   });
 
@@ -719,10 +729,12 @@ describe("API reference, Skills, resources and server instructions", () => {
     ).toBe(original);
   });
 
-  it("keeps the gateway's Skill list in step with apps/cli/skill-data", async () => {
+  it("keeps the gateway's Skill list in step with shared domain and MCP-specific Skills", async () => {
     const directories = (await readdir(cliSkillData, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory())
       .map((entry) => entry.name);
-    expect([...SKILL_NAMES].sort()).toEqual(directories.sort());
+    const mcp = (await readdir(mcpSkillData, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory()).map((entry) => entry.name);
+    expect([...SKILL_NAMES].sort()).toEqual([...new Set([...directories, ...mcp])].sort());
   });
 });

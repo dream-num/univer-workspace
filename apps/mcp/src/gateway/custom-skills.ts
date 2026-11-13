@@ -135,7 +135,7 @@ export async function discoverSkills(
   const blobs = new WorkspaceBlobFeature(async () => context.http);
   const skills = new Map<string, SkillEntry>(builtin.catalog.entries.map(({ frontmatter }) => [
     frontmatter.name,
-    { name: frontmatter.name, description: frontmatter.description, source: "builtin", modelInvocable: true, userInvocable: true,
+    { name: frontmatter.name, description: frontmatter.description, source: "builtin", modelInvocable: true, userInvocable: frontmatter["user-invocable"] === true,
       ...(frontmatter.metadata === undefined ? {} : { metadata: metadataSchema.parse(frontmatter.metadata) }) },
   ]));
   const diagnostics: SkillDiagnostic[] = [];

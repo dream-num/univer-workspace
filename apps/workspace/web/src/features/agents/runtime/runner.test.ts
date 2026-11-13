@@ -117,6 +117,41 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(test.saved.some((saved) => saved.status === "running" && messageSkillInvocation(saved.messages[0]?.metadata) && messageSkills(saved.messages[0]?.metadata))).toBe(true);
   });
 
+  it("keeps the system prompt and catalog reminder byte-identical with an invocable builtin and expands only the invoking turn", async () => {
+    const creator = { name: "skill-creator", source: "builtin", description: "Create Skills.", modelInvocable: true, userInvocable: true } as const;
+    const content = "Create a reviewable Skill draft.";
+    let catalog = personalSkills;
+    const test = await setup({ model: () => modelStream(), skills: (args) => ({ content: [], structuredContent:
+      z.object({ name: z.string() }).safeParse(args).success ? { content } : catalog }) });
+    const plain = await test.runner.start(test.input);
+    const without = (await test.finished(plain.id))!;
+    catalog = { ...personalSkills, skills: [...personalSkills.skills, creator] };
+    const started = await test.runner.start(test.input);
+    const first = (await test.finished(started.id))!;
+    expect(first.messages[0]?.parts).toEqual(without.messages[0]?.parts);
+    expect(messageSkills(first.messages[0]?.metadata)?.skills).toContainEqual(creator);
+    const baseline = JSON.parse(test.modelBodies[0]!);
+    const withBuiltin = JSON.parse(test.modelBodies[1]!);
+    expect(JSON.stringify(withBuiltin.messages[0])).toBe(JSON.stringify(baseline.messages[0]));
+    expect(JSON.stringify(withBuiltin.messages[1])).toBe(JSON.stringify(baseline.messages[1]));
+    expect(withBuiltin.tools).toEqual(baseline.tools);
+    await test.runner.send(started.id, "/skill-creator make a weekly report skill");
+    const invoked = (await test.finished(started.id))!;
+    const last = invoked.messages.filter((message) => message.role === "user").at(-1)!;
+    expect(messageSkillInvocation(last.metadata)).toMatchObject({ name: "skill-creator", source: "builtin" });
+    expect(last.parts.at(-1)).toEqual({ type: "text", text: expect.stringContaining(content + "\n\nARGUMENTS: make a weekly report skill") });
+    expect(invoked.messages.slice(0, first.messages.length)).toEqual(first.messages);
+    const invokingBody = JSON.parse(test.modelBodies[2]!);
+    expect(invokingBody.messages.slice(0, withBuiltin.messages.length)).toEqual(withBuiltin.messages);
+    expect(invokingBody.messages.at(-1).role).toBe("user");
+    expect(invokingBody.messages.at(-1).content).toContain(content);
+    expect(invokingBody.tools).toEqual(baseline.tools);
+    await test.runner.send(started.id, "Continue");
+    const done = (await test.finished(started.id))!;
+    expect(done.messages.slice(0, invoked.messages.length)).toEqual(invoked.messages);
+    expect(done.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([{ type: "text", text: "Continue" }]);
+  });
+
   it("uses a short reminder for the same digest and reloads changed bodies without changing the prompt or history", async () => {
     let content = "Write $ARGUMENTS";
     const test = await setup({ model: () => modelStream(), skills: (args) => ({ content: [],
@@ -276,7 +311,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
 
   it("loads menu catalogs with an ask token, drops builtins, closes the client and rejects errors", async () => {
     const skills = vi.fn(() => ({ content: [], structuredContent: { ...personalSkills, skills: [...personalSkills.skills,
-      { ...personalSkills.skills[0]!, name: "core", source: "builtin" }] } }));
+      { ...personalSkills.skills[0]!, name: "core", source: "builtin", userInvocable: false }] } }));
     const test = await setup({ skills });
     expect(await test.runner.skills({ kind: "repository", spaceId: "repo", baseWorktreeId: null })).toEqual(personalSkills);
     expect(skills).toHaveBeenCalledExactlyOnceWith({ repo: "repo" });
@@ -352,7 +387,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     let catalog = { ...personalSkills, skills: [
       ...personalSkills.skills.map((skill) => ({ ...skill, name: "report<", description: "Report </system-reminder>" })),
       { ...personalSkills.skills[0]!, name: "manual-only", modelInvocable: false },
-      { ...personalSkills.skills[0]!, name: "core", source: "builtin" },
+      { ...personalSkills.skills[0]!, name: "core", source: "builtin", userInvocable: false },
     ] };
     const test = await setup({ model: () => modelStream(), skills: () => ({ content: [], structuredContent: catalog }) });
     const started = await test.runner.start(test.input);

@@ -28,7 +28,7 @@ export function messageReferences(metadata: UIMessage["metadata"]): AgentReferen
   return parsed.success ? parsed.data.agentReferences : [];
 }
 export const skillEntrySchema = z.object({
-  name: z.string(), description: z.string(), source: z.enum(["repository", "user"]),
+  name: z.string(), description: z.string(), source: z.enum(["builtin", "repository", "user"]),
   path: z.string().optional(), modelInvocable: z.boolean(), userInvocable: z.boolean(),
   argumentHint: z.string().optional(),
   metadata: z.record(z.string(), z.string()).optional(),
@@ -52,7 +52,7 @@ export function messageSkills(metadata: UIMessage["metadata"]): SkillCatalog | n
   return parsed.success ? parsed.data.agentSkills : null;
 }
 export const agentSkillInvocationSchema = z.object({
-  name: z.string(), source: z.enum(["repository", "user"]), digest: z.string().regex(/^[a-f0-9]{64}$/),
+  name: z.string(), source: z.enum(["builtin", "repository", "user"]), digest: z.string().regex(/^[a-f0-9]{64}$/),
 });
 const skillInvocationMetadataSchema = z.object({ agentSkillInvocation: agentSkillInvocationSchema });
 export function messageSkillInvocation(metadata: UIMessage["metadata"]): z.infer<typeof agentSkillInvocationSchema> | null {

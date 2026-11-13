@@ -1,4 +1,5 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
+import { relative } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   compatibility,
@@ -287,4 +288,14 @@ describe("Skill review evidence", () => {
       compatibility([{ ...info, severity: "block" }], [{ ...review, line: 1, severity: "warn" }]),
     ).toBe("blocked");
   });
+});
+
+it("scans shipped skill-creator content without warnings or blocks other than its reserved identity", async () => {
+  const root = new URL("../../../../../mcp/skills/skill-creator/", import.meta.url);
+  const files = readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
+    .map((entry) => ({ path: relative(root.pathname, `${entry.parentPath}/${entry.name}`), bytes: readFileSync(`${entry.parentPath}/${entry.name}`) }));
+  const findings = await scanSkill("skill-creator", files);
+  expect(findings).toEqual([expect.objectContaining({ rule: "reserved-name", severity: "block" })]);
+  const copy = files.map((file) => file.path === "SKILL.md" ? { ...file, bytes: Buffer.from(file.bytes.toString().replace("name: skill-creator", "name: creator-copy")) } : file);
+  expect(await scanSkill("creator-copy", copy)).toEqual([]);
 });
