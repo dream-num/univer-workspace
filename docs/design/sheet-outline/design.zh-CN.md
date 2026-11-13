@@ -51,7 +51,7 @@ Agent 读一张远程 Sheet 时，不截图、不写统计脚本，用几百到�
 - **阈值改成 Lens 的参数。** 把 50 万提成 `buildOutlineModel` 的选项，Workspace 先传入同样的 50 万。
   这是对复制代码的第一处改动，记录在 `sheet-lens/README.md` 的差异清单里；是否在 uxl 一侧同步，由 uxl 作者决定。
   等用堆快照测出每格内存后，再单独提高，见计划里的 SL4。
-- **SL4 测量后的取值。** Lens 缺省仍是 50 万。SL4 实测后，CLI daemon 改用 75 万（单表常驻约 211 MiB，建模约 2.8 秒），见 [大表阈值](large-sheets.zh-CN.md)。
+- **SL4 测量后的取值。** Lens 缺省仍是 50 万。SL4 实测后由操作者决定：CLI daemon 用 500 万，MCP 执行器用 100 万，执行器缓存 512 MiB，见 [大表阈值](large-sheets.zh-CN.md)。
 - **大表也保留显式结构**（Excel 表格、筛选、名称）是 Lens 算法的改动，列入 uxl 的后续工作，不在本期。
 
 ### uxl 的分页读取能否迁移

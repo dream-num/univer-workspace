@@ -278,7 +278,7 @@ async function writeSession(path: string, subject: string) {
 }
 
 describe("Sheet Lens daemon RPC", () => {
-  it("fully detects a sparse 520,000-cell box and limits one above 750,000", async () => {
+  it("fully detects a sparse 520,000-cell box and limits one above 5,000,000", async () => {
     await withDaemon(async ({ client, data }) => {
       const sheet = data.sheets["s1"];
       if (!sheet) throw new Error("missing test sheet");
@@ -292,9 +292,10 @@ describe("Sheet Lens daemon RPC", () => {
       const below = await client.request("sheet-lens.run", payload);
       expect(below).toMatchObject({ warnings: [], cache: "miss" });
       expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "hit" });
+      sheet.rowCount = 200000;
       sheet.cellData = {
         0: { 0: { v: "start" } },
-        28846: { 25: { v: 1 } },
+        192307: { 25: { v: 1 } },
       };
       const above = await client.request("sheet-lens.run", {
         ...payload,

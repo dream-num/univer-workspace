@@ -60,7 +60,7 @@ The default factor of 12 rounds up the largest observed sample across all sizes.
 
 ## Large-sheet limit measurement
 
-`maxBoxCells` defaults to 500,000. The CLI daemon explicitly uses 750,000 with its 512 MiB cache budget. The forced-GC large-ledger measurement, machine details, results, and future MCP budget recommendations are in [the large-sheet limit report](../../../../docs/design/sheet-outline/large-sheets.zh-CN.md).
+`maxBoxCells` defaults to 500,000. The CLI daemon explicitly uses 5,000,000 with its 512 MiB cache budget, by operator decision; sheets whose estimate exceeds the budget are not cached. The forced-GC large-ledger measurement, machine details, results, and future MCP budget recommendations are in [the large-sheet limit report](../../../../docs/design/sheet-outline/large-sheets.zh-CN.md).
 
 ```bash
 SHEET_LENS_LARGE_MEASURE=1 SHEET_LENS_EXTRA_CELLS=750000 pnpm --filter @univerjs/univer-workspace-client-core exec vitest run test/sheet-lens/large-measure.test.ts --pool=forks --execArgv=--expose-gc
