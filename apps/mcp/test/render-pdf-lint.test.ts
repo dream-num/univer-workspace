@@ -191,14 +191,19 @@ describe("render.lint", () => {
     ).toBeUndefined();
   });
 
-  it("rejects a non-Slide Unit with the CLI's code and message", async () => {
-    const f = setup("sheet", lintOutput);
-    await expect(renderLint(f.ctx, { worktreeId: "wt-1", unitId: "unit" })).rejects.toMatchObject({
-      code: "workspace-unit-layout-lint-unit-type-unsupported",
-      message: "Slide layout lint requires a Slide Unit; unit is sheet.",
-    });
-    expect(f.rendererFetch).not.toHaveBeenCalled();
-  });
+  it.each(["sheet", "board"])(
+    "rejects a %s Unit before contacting the renderer",
+    async (unitType) => {
+      const f = setup(unitType, lintOutput);
+      await expect(renderLint(f.ctx, { worktreeId: "wt-1", unitId: "unit" })).rejects.toMatchObject(
+        {
+          code: "workspace-unit-layout-lint-unit-type-unsupported",
+          message: `Slide layout lint requires a Slide Unit; unit is ${unitType}.`,
+        },
+      );
+      expect(f.rendererFetch).not.toHaveBeenCalled();
+    },
+  );
 
   it("keeps the loader's own error code, upper case included", async () => {
     const f = setup("slide", lintOutput);

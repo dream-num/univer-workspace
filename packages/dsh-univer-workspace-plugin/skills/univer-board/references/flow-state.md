@@ -3,6 +3,11 @@
 Use native `ShapeTypeEnum.Flowchart*` shapes for flowcharts, `createSwimlane()` for responsibilities, and
 containers for composite states. Match control-flow meaning before choosing a visual layout.
 
+For a new activity, align responsibility lanes with the flow: use vertical lanes for a top-down flow and
+horizontal lanes for a left-to-right flow. Keep an existing Board's authored lane orientation. When calling
+`board.planLayout({ mode: 'graph' })`, pass known retry connector IDs in `feedbackConnectorIds` so a return does not push
+the entry after the decision. Keep every relation and label, then inspect the rendered arrows and reading order.
+
 For activity control flow, distinguish `fork` / `join` from `decision` / `merge` in `semanticRole`.
 A fork starts concurrent branches; the ordinary join waits for all incoming branches. A merge accepts alternative
 paths without synchronization. Use a merge for initial entry plus a retry path, not a join that waits for both.
@@ -10,6 +15,8 @@ Keep decision conditions on outgoing relations as semantic `condition` text and 
 These distinctions follow [OMG UML activity control nodes](https://www.omg.org/spec/UML/ISO/19505-2/PDF).
 
 Realize fork/join with native `BoardCustomShapeType.StateBar`, not sequence activation bars or a free thick line.
+For requested text inside a dark native glyph, preserve the caption and explicitly set a contrasting text fill,
+for example `shape.getText().setColor('#ffffff')`. Otherwise use an external caption. Verify contrast in the rendered image.
 Use the native initial/final symbols, diamonds for decision/merge, and action shapes for work. An unlabeled merge
 diamond is intentional. Bind each control-flow endpoint to its node; distribute independent branch ports along
 the bar and verify both incoming and outgoing arrows visually. A cross-lane bar can belong to the swimlane pool's

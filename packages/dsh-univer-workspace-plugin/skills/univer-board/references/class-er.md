@@ -45,3 +45,12 @@ Example relation between previously declared `order` and `line` nodes:
 
 Node content can use `{ kind: "structured-table", sections: [{ label: "Attributes", items: ["id: UUID"] },
 { label: "Operations", items: ["submit(): void"] }] }`. These are semantic payloads, not table insertion parameters.
+
+## Generated stroke weight and frame API boundary
+
+New generated class/ER relations can use `style: { strokeWidth: 1.25 }` while leaving the semantic helper's
+diamonds, inheritance arrows, crow-foot cardinalities, dashes and independent labels intact. This does not
+change authored relations or the native table preset's frame. The current public table Facade has cell-border
+operations but no outer-frame width setter; `setCellStyle()`/`setBorderPreset()` do not replace the resource's
+outer frame. Preserve that native preset frame and disclose the limitation. Do not handwrite table-resource
+`custom` data or pretend a Board host's `custom` field changes it.

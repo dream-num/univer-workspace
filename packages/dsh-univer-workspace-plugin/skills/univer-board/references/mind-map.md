@@ -37,7 +37,6 @@ This conceptual progression has stage-local details; the shared order value `1` 
 
 ```json
 {
-  "schemaVersion": 1,
   "diagramType": "timeline",
   "title": "Agent capability progression",
   "nodes": [
@@ -80,3 +79,34 @@ Retain semantic-to-generated ID mappings. Verify all nodes, parent/child ownersh
 after insertion. For large maps, inspect a readable branch as well as the overview; do not hide truncation by
 zooming out. When collapse/expand behavior is in scope, test it through the owning native API or UI and verify descendants.
 Do not normalize native map branches as ordinary connectors; their layout owner controls them.
+
+## Compact generated hierarchy
+
+Apply this only to a newly inserted map whose blueprint contains generated plain strings. Keep authored
+rich-text blueprints and existing maps unchanged. Native document sizes are points, not CSS pixels.
+
+```ts
+const rootId = map.getRootNode()?.getId();
+const theme = board.getThemeData();
+for (const node of map.getNodes()) {
+  const root = node.getId() === rootId;
+  const fontFamily = root ? theme.fontScheme?.heading : theme.fontScheme?.body;
+  const text = node.getText();
+  if (
+    !node.setStyle({
+      stroke: { width: 1.25 },
+      textStyle: { fontSize: root ? 12 : 10.5, ...(fontFamily ? { fontFamily } : {}) },
+    })
+  )
+    throw new Error("Cannot style generated node");
+  if (!root && !node.setIncomingConnectorStyle({ strokeWidth: 1.25 }))
+    throw new Error("Cannot style generated branch");
+  if (node.getText() !== text) throw new Error("Generated text changed");
+}
+```
+
+Use the same current-theme palette as the surrounding generated diagram when selecting colors. The owner
+operation recomputes intrinsic size and layout after each text-style patch. Preserve generated IDs, sibling
+order, branch side, collapse state and native min/max dimensions. Do not add an arrow or replace the managed
+branch with an ordinary connector. These calls are separate history operations; do not claim the entire
+creation is one undo step. Inspect a complete-text 100% detail after the final layout, then verify save/reopen.

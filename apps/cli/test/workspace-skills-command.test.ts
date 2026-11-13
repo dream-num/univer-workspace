@@ -268,7 +268,23 @@ describe("Workspace CLI skills command", () => {
 
     expect(board).toContain("`inspect` with target `board`");
     expect(board).toContain("target `board-element` and one or more `id:<element-id>` selectors");
+    expect(board).toContain("in `model` mode");
+    expect(board).toContain("`routes` plan in rendered mode");
+    expect(board).toContain("FBoard.planLayout");
+    expect(board).toContain("FBoard.applyLayoutPlan");
+    expect(board).toContain("analyses[].plan");
+    expect(board).toContain("analyses[].portPlan");
+    expect(board).toContain("incomplete");
     expect(board).not.toContain("Native `inspect` is not supported");
+
+    const cliReference = await runSkillsText([
+      "skills",
+      "read",
+      "core",
+      "references/files-and-sources.md",
+    ]);
+    expect(cliReference).toContain("--mode model --json");
+    expect(cliReference).toContain("--plan routes --plan-ids edge-a edge-b");
   });
 
   it("bundles inspection commands accepted by the current parser", async () => {
@@ -277,7 +293,9 @@ describe("Workspace CLI skills command", () => {
     const slide = firstContent(await runSkills(["skills", "get", "slide", "--json"]));
 
     expect(core).toContain("--worksheet name:<sheet-name>");
-    expect(sheet).toContain("`inspect` with target `range`, range `A1:C9`, and worksheet selector `name:<sheet-name>`");
+    expect(sheet).toContain(
+      "`inspect` with target `range`, range `A1:C9`, and worksheet selector `name:<sheet-name>`",
+    );
     expect(sheet).toContain("requires one explicit worksheet selector");
     expect(slide).toContain("target `slide` and selector `index:N`");
     expect(slide).toContain("selector `index:N` or `id:<id>`");

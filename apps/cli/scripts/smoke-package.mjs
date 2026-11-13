@@ -4,7 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { transformWorkbookDataToSnapshot } from "@univerjs-pro/collaboration";
 import { CmdRspCode, CombCmd, ErrorCode } from "@univerjs/protocol";
 
@@ -84,6 +84,20 @@ try {
   const version = await run(executable, ["--version"], installRoot, smokeEnv);
   const expectedVersion = `univer-workspace-cli ${packageManifest.version}`;
   const uvwExecutable = executable.replace(/univer-workspace-cli(\.cmd)?$/u, "uvw$1");
+  if (process.platform === "win32") {
+    for (const shim of [executable, uvwExecutable]) {
+      const launched = spawnSync(shim, ["--version"], {
+        cwd: installRoot,
+        env: smokeEnv,
+        encoding: "utf8",
+        shell: true,
+        windowsHide: true,
+      });
+      if (launched.status !== 0 || launched.stdout.trim() !== expectedVersion) {
+        throw new Error(`Installed command shim failed: ${shim}`);
+      }
+    }
+  }
   if (version.stdout.trim() !== expectedVersion) {
     throw new Error(
       `Installed CLI version mismatch: expected ${expectedVersion}, got ${version.stdout.trim()}`,
@@ -638,10 +652,23 @@ try {
 }
 
 async function run(command, args, cwd, env = process.env, input) {
-  const child = spawn(command, args, {
+  const installedCli =
+    process.platform === "win32"
+      ? /^(univer-workspace-cli|uvw)\.cmd$/u.exec(basename(command))?.[1]
+      : undefined;
+  // Exercise the installed Node entry with literal argv; cmd.exe strips quoted ETags and JSON.
+  const executable = installedCli ? process.execPath : command;
+  const executableArgs = installedCli
+    ? [
+        join(dirname(dirname(command)), "univer-workspace-cli", "bin", `${installedCli}.js`),
+        ...args,
+      ]
+    : args;
+  const child = spawn(executable, executableArgs, {
     cwd,
     env,
-    shell: process.platform === "win32",
+    shell: process.platform === "win32" && !installedCli,
+    windowsHide: true,
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stdin.end(input);

@@ -42,7 +42,6 @@ Use-case reuse and conditional extension remain semantic, without coordinates or
 
 ```json
 {
-  "schemaVersion": 1,
   "diagramType": "uml-use-case",
   "nodes": [
     {
@@ -75,7 +74,6 @@ orientation records ownership, not a call arrow. For example:
 
 ```json
 {
-  "schemaVersion": 1,
   "diagramType": "uml-component",
   "nodes": [
     {
@@ -119,3 +117,31 @@ Inspect the installed positioned-endpoint contract before connecting native inte
 explicit side-center `position: 0.5` projects to the native outline; the plain frame-side anchor may leave a gap
 because the glyph has internal padding. Check both stems at readable scale. A reversed-terminal diagnostic on an open stem is not an acceptable UML exception; report a runtime
 limitation if the installed version cannot bind it correctly, rather than replacing the binding with a free point.
+
+## Shape outline scaling
+
+- **Ordinary shapes** keep the same stroke width when their frame is resized. Set the desired weight with
+  `shapeData.stroke.width` or the live shape handle. Omit `strokeReferenceSize` for ordinary diagram nodes.
+- **Native Board symbols** such as `Actor`, `ComponentBox`, and UML interface symbols carry their own outline
+  geometry and reference size. Choose the native preset and keep its designed stroke width. To recolor a
+  new symbol, use `shape.setStrokeColor(color)` so its stroke width and other stroke settings are preserved.
+  Review the visible outline and badge at 100% after final sizing.
+- **Authored icons with proportional outlines** use an explicit reference size. With a standard preset, set
+  `shapeData.strokeReferenceSize` to the dimensions at which the authored stroke width should render.
+  With authored paths, set `shapeData.isCustom: true` and put the reference on
+  `shapeData.customGeometry.strokeReferenceSize`.
+  Preserve the reference when editing an existing icon. Choose proportional strokes based on design intent,
+  independent of how small the shape appears.
+
+For example, this icon has a 2-unit outline at its 64 × 64 reference size and a 1-unit outline at 32 × 32.
+
+```js
+const icon = board.insertShape({
+  shapeType: api.Enum.ShapeTypeEnum.RoundRect,
+  transform: { left: 80, top: 80, width: 64, height: 64 },
+  shapeData: {
+    stroke: { width: 2 },
+    strokeReferenceSize: { width: 64, height: 64 },
+  },
+});
+```
