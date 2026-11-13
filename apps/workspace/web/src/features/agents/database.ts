@@ -1,11 +1,14 @@
 export interface AgentDatabaseOptions {
   userId: string;
   indexedDB: IDBFactory;
+  locks: LockManager;
 }
 
-export function openAgentDatabase({ userId, indexedDB: factory }: AgentDatabaseOptions) {
-  const database = new Promise<IDBDatabase>((resolve, reject) => {
-    const request = factory.open(`univer-workspace-agents-${userId}`, 1);
+export function openAgentDatabase({ userId, indexedDB: factory, locks }: AgentDatabaseOptions) {
+  const name = `univer-workspace-agents-${userId}`;
+  // Prevent pending opens from being stranded in a frozen document.
+  const database = locks.request(name, () => new Promise<IDBDatabase>((resolve, reject) => {
+    const request = factory.open(name, 1);
     request.onupgradeneeded = () => {
       for (const [name, keyPath] of [["sessions", "id"], ["providers", "id"], ["keys", "providerId"]] as const) {
         request.result.createObjectStore(name, { keyPath });
@@ -14,7 +17,7 @@ export function openAgentDatabase({ userId, indexedDB: factory }: AgentDatabaseO
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
     request.onblocked = () => reject(new Error("Agent database upgrade blocked by another tab"));
-  });
+  }));
   return {
     async request(store: "sessions" | "providers" | "keys", mode: IDBTransactionMode,
       action: (store: IDBObjectStore) => IDBRequest): Promise<unknown> {
