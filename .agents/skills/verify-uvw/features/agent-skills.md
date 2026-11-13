@@ -441,13 +441,13 @@ Request 3's resource result contains `AS13_SUPPORTING_GUIDE`.
 
 ```bash
 seed "$O/personal" as14-model 'AS14_MODEL_BODY: model-only instructions.' 'user-invocable: false\n' > "$EVIDENCE/as14-seed.json"
+seed "$O/personal" as14-visible 'AS14 visible instructions.' > "$EVIDENCE/as14-seed-visible.json"
 mock as14 '[{"tool":{"name":"skills_read","arguments":{"name":"as14-model"}}},{"text":"AS14 complete."}]'
 home
-edit '[contenteditable=true]' /
-agent-browser wait '[role=listbox]'
 edit '[contenteditable=true]' /as14
-agent-browser wait --fn 'document.querySelector("[contenteditable=true]").getAttribute("aria-expanded") === "false"'
+agent-browser wait '[role=listbox]'
 aria > "$EVIDENCE/as14-menu.json"
+jq -e '.[0].options | map(.text) | any(contains("/as14-visible")) and (any(contains("/as14-model")) | not)' "$EVIDENCE/as14-menu.json"
 shot as14-menu
 send '/as14-model'
 agent-browser wait --text 'AS14 complete.'
@@ -455,7 +455,7 @@ shot as14
 node "$A" requests "$EVIDENCE/as14-requests.jsonl" | tee "$EVIDENCE/as14-requests.txt"
 ```
 
-Pass when `/as14-model` is absent from the menu, the bubble stays plain text, and
+Pass when the `/as14` menu lists `/as14-visible` but not `/as14-model`, the bubble stays plain text, and
 request 1 has a catalog entry but no explicit invocation reminder for it. Request 2's
 model tool result contains `AS14_MODEL_BODY`.
 
