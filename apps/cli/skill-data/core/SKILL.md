@@ -326,6 +326,14 @@ uvw pr ready <n> -R <owner>/<slug> --undo --json
 
 If it is `merged` or `discarded`, start a new Worktree and stage the current Space file again.
 
+## Read a Sheet
+
+To understand a Sheet Unit, run `uvw outline` first. Zoom into a region or table with
+`--at <ref>` from the map, locate values with `uvw find`, and read exact values with
+`uvw read --json`. Run every printed continuation until none is printed. Do not scan a
+Sheet with `execute` or treat one `read` page as the whole range. `uvw skills read sheet
+references/reading.md` lists every option.
+
 ## Edit one Unit
 
 Before writing Facade code, load the matching versioned Skill:
