@@ -978,18 +978,28 @@ $V mcp mcp-skills-list skills_read
 jq -e '[.skills[].name] == ["base","blob","board","core","cross-unit-formula","doc","embed","html-view","sheet","slide"] and all(.skills[]; (.description | length) > 0)' "$EVIDENCE/mcp-skills-list.out"
 $V mcp mcp-skills-get skills_read '{"name":"html-view"}'
 $V mcp mcp-skills-full skills_read '{"name":"html-view","full":true}'
-node --input-type=module - "$EVIDENCE/mcp-skills-full.out" <<'JS'
+test $? -eq 1
+jq -e '.code == "workspace-result-too-large"' "$EVIDENCE/mcp-skills-full.out"
+jq -e '.outcome == "tool_error" and .error_code == "workspace-result-too-large"' "$EVIDENCE/mcp-skills-full.event.json"
+$V mcp mcp-skills-board-full skills_read '{"name":"board","full":true}'
+node --input-type=module - "$EVIDENCE/mcp-skills-get.out" "$EVIDENCE/mcp-skills-board-full.out" <<'JS'
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-const skill = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-const root = 'apps/cli/skill-data/html-view/';
+const get = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+assert.equal(get.content, readFileSync('apps/cli/skill-data/html-view/SKILL.md', 'utf8'));
+const skill = JSON.parse(readFileSync(process.argv[3], 'utf8'));
+const root = 'apps/cli/skill-data/board/';
 assert.equal(skill.content, readFileSync(root + 'SKILL.md', 'utf8'));
+assert.ok(skill.files.length > 0);
 assert.equal(skill.files.length, skill.resources.length);
 for (const file of skill.files) assert.equal(file.content, readFileSync(root + file.path, 'utf8'));
 JS
 ```
 
-Pass when all commands exit 0, the fallback lists ten names with descriptions, and get/full preserve the shared files.
+Pass when the fallback lists ten names with descriptions, `html-view` get preserves
+its source, and `html-view` full exits 1 with `workspace-result-too-large` in the result
+and event. Board full must exit 0 and preserve every shared file. HTML View's combined
+full result exceeds the 100,000-character result limit.
 
 **MR2. Skill resource and MCP core bindings.**
 

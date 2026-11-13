@@ -10,9 +10,9 @@ if (!Number.isInteger(port) || port < 1 || port > 65535 || !values.script || !va
 }
 const script = JSON.parse(readFileSync(values.script, "utf8"));
 if (typeof script.model !== "string" || !script.model || !Array.isArray(script.steps) || script.steps.some((step) =>
-  !step || (typeof step.text === "string") === (step.tool !== undefined) || (step.tool !== undefined && !(typeof step.tool.name === "string" && step.tool.name &&
+  !step || (step.delayMs !== undefined && (!Number.isFinite(step.delayMs) || step.delayMs < 0)) || (typeof step.text === "string") === (step.tool !== undefined) || (step.tool !== undefined && !(typeof step.tool.name === "string" && step.tool.name &&
     step.tool.arguments && typeof step.tool.arguments === "object" && !Array.isArray(step.tool.arguments))))) {
-  throw new Error('Script needs {model: string, steps: [{text: string} | {tool: {name: string, arguments: object}}]}');
+  throw new Error('Script needs {model: string, steps: [{text: string} | {tool: {name: string, arguments: object}}]}, with optional non-negative delayMs per step');
 }
 let next = 0;
 const server = http.createServer(async (req, res) => {
@@ -48,6 +48,7 @@ const server = http.createServer(async (req, res) => {
     const chunks = [chunk(delta, null), chunk({}, step.tool ? "tool_calls" : "stop"),
       { ...chunk({}, null), choices: [], usage: { prompt_tokens: 100, completion_tokens: 1, total_tokens: 101, prompt_tokens_details: { cached_tokens: 50 } } }];
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
+    if (step.delayMs) await new Promise((resolve) => setTimeout(resolve, step.delayMs));
     for (const value of chunks) {
       if (closed) return;
       res.write(`data: ${JSON.stringify(value)}\n\n`);

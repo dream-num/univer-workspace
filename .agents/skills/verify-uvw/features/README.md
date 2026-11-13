@@ -50,6 +50,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 
 ## Features
 
+- [Browser Agent skills](./agent-skills.md): AS1-AS15 cover the mock provider, catalog
+  reminders, rail, slash menus in both composers, invocation gates, and stable request prefixes.
 - [Accounts and sign-in](./auth.md): browser registration, browser password sign-in,
   uvw password login and status.
 - [Create and edit a document](./create-document.md): New menu in the browser, Spreadsheet
