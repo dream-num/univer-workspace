@@ -8,6 +8,21 @@ const request: UIMessage = { id: "assistant", role: "assistant", parts: [
 ] };
 
 describe("scope-based tool approval", () => {
+  it.each([
+    ["skills_read", { name: "manual", full: true, repo: "other" }, true],
+    ["skills_read", { name: "manual" }, true],
+    ["skills_read", { name: "manual", resource: "guide.md" }, false],
+    ["skills_read", { name: "manual", resource: "guide.md", full: true }, false],
+    ["skills_read", { name: "automatic" }, false],
+    ["skills_read", {}, false],
+    ["inspect", { name: "manual" }, false],
+  ])("gates %s %j by user-only skill name", async (toolName, input, denied) => {
+    const gated = gateTools({}, "auto", vi.fn(), new Set(["manual"]));
+    expect(await gated.toolApproval({ toolCall: { type: "tool-call", toolCallId: "skill", toolName, input },
+      tools: gated.tools, toolsContext: undefined as never, runtimeContext: undefined as never, messages: [] }))
+      .toEqual(denied ? { type: "denied", reason: 'The skill "manual" can only be invoked by the user with /manual.' } : "not-applicable");
+  });
+
   it.each(["ask", "auto"] as const)("gates blob uploads in %s by publish scope", async (mode) => {
     const execute = vi.fn(async () => "original");
     const publish = vi.fn(async () => "published");

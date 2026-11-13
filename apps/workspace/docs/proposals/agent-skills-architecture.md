@@ -1,8 +1,8 @@
 # Workspace Agents Skill 机制架构
 
-状态：gateway 发现和浏览器目录注入、右侧栏展示已实现；显式调用和门禁为后续目标。产品语义和决定见 [agent-skills.md](./agent-skills.md)，分期执行见
+状态：gateway 发现、浏览器目录注入、显式调用、门禁、输入框菜单和右侧栏展示已实现。产品语义和决定见 [agent-skills.md](./agent-skills.md)，分期执行见
 [agent-skills-plan.md](./agent-skills-plan.md)。本文写给实现者，说明每个模块拥有什么、数据怎么流动、
-哪些不变量不能破坏。文中的文件路径和函数名以 2026-11-12 的 `main`（`c05ab2fc`）为准。
+哪些不变量不能破坏。文中的文件路径和函数名以 SK1 至 SK3 的实现为准。
 
 ## 模块和职责
 
@@ -14,7 +14,7 @@ skill 机制跨两个应用。gateway 拥有发现、校验、合并和读取。
 | skill 目录加载 | `apps/mcp/src/gateway/`（新文件，如 `custom-skills.ts`） | 在个人空间和作用域仓库里找 `.agents/skills`，校验 `SKILL.md`，合并，产出诊断，读取文本附属文件 | 内置 skill 的静态快照（仍由 `skill-catalog.ts` 负责） |
 | `skills_read` | `apps/mcp/src/gateway/tools/core/skills-read.ts` | 输入解析，三层名字解析，分页，`ToolResult.repo` 归属 | 模型何时调用 |
 | runner | `apps/workspace/web/src/features/agents/runtime/runner.ts` | 每次运行开始时比对目录、追加提醒、展开 `/name`、写会话元数据，以及给输入框用的 `skills(scope)` | skill 内容本身 |
-| 工具门禁 | `runtime/approvals.ts` 的 `gateTools` | 拒绝模型读取 `disable-model-invocation` 的 skill | 权限和 token scope |
+| 工具门禁 | `runtime/approvals.ts` 的 `gateTools` | 拒绝模型加载 `disable-model-invocation` 的 skill 指令，允许读取其附属文件 | 权限和 token scope |
 | 输入框菜单 | `ui/composer.tsx`、`ui/composer-editor.tsx`、`ui/session-page.tsx` 的追加输入框 | `/` 菜单、过滤、键盘选择 | 解析和展开（在 runner） |
 | 右侧栏和消息标签 | `ui/session-page.tsx`、`ui/messages.ts`、`ui/agents.css` | 从会话元数据渲染 skill 列表、诊断和 `/name` 标签 | 数据获取（右侧栏不发请求） |
 
@@ -62,14 +62,14 @@ type SkillFile =
 	| { path: string; kind: "binary"; byteSize: number; mediaType: string };
 ```
 
-会话在用户消息的 `metadata` 上新增 `agentSkills`；`agentSkillInvocation` 是 SK3 目标，尚未实现。
+会话在用户消息的 `metadata` 上保存 `agentSkills` 和匹配成功时的 `agentSkillInvocation`。
 字段与已有的 `agentContextPrompt`、
 `agentReferences` 并列。`messages` 的 schema 是 `.passthrough()`，IndexedDB 不需要升级版本。
 
 | 字段 | 形状 | 写入时机 | 读者 |
 | --- | --- | --- | --- |
 | `agentSkills` | `SkillCatalog`，去掉 `builtin` | `drive` 处理这条消息时，无论目录是否变化 | 下一次比对、右侧栏 |
-| `agentSkillInvocation`（SK3 目标） | `{ name, source, digest }`，`digest` 是渲染前正文的 SHA-256 | 消息开头的 `/name` 匹配成功时 | 消息标签、右侧栏「已使用」、重复调用判断 |
+| `agentSkillInvocation` | `{ name, source, digest }`，`digest` 是渲染前正文的 SHA-256 | 消息开头的 `/name` 匹配成功时 | 消息标签、右侧栏「已使用」、重复调用判断 |
 
 `agentSkills` 同时是「这条消息已处理」的标记，见「每次运行的流程」。
 
@@ -149,38 +149,58 @@ gateway 用 agent token 通过 RFC 8693 换到的用户会话访问产品 API。
 
 ## 显式调用
 
-以下为 SK3 后续目标，当前尚未实现。
+**展开。** 只处理 `drive` 中 SK2 目录步骤处理的用户消息；运行中的引导消息不展开，审批恢复不重写历史。
+在本次新目录已知后（目录查询失败时使用复制的上一份目录），对消息自身的第一个文本 part 匹配
+`^/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\s+([\s\S]*))?$`。没有目录或匹配不到 `userInvocable` 的条目时保持普通文本，不按名字读取。
+参数是名字后第一个空白之后的全部文字，去除两端空白；空字符串表示没有参数。
 
-**展开。** 调用 `skills_read { name, repo }`，对正文计算 `digest`。如果之前已有同名、
-同 `digest` 的 `agentSkillInvocation`，只追加一句「该 skill 已加载」。否则做参数替换：`$ARGUMENTS`
-换成 `/name` 之后的全部文字；正文没有 `$ARGUMENTS` 而用户写了参数时，在末尾追加 `ARGUMENTS: <参数>`。
-渲染结果连同附属文件的读取指令，放进这条消息末尾的 `<system-reminder>`。读取失败时本次运行以错误结束，
-错误进入会话，消息保留。
+调用 `skills_read { name, repo? }`，只有仓库作用域才带 `repo`。gateway 返回的 `content` 是完整的
+`SKILL.md`；在参数替换前用 `crypto.subtle` 计算十六进制 SHA-256，记录为 `digest`。
+如果更早的用户消息已有同名、同 `digest` 的 `agentSkillInvocation`，追加说明用户再次调用、指令已经加载的短提醒。
+用户提供新参数时，短提醒也包含 `ARGUMENTS: <参数>`，不重复正文。
+否则将所有 `$ARGUMENTS` 替换成参数；没有占位符且有参数时，在正文末尾追加 `\n\nARGUMENTS: <参数>`。
 
-**输入框目录。** runner 新增 `skills(scope)`。它仿照 `drive` 里发布审批的短时 client，用
-`deps.createTokenSource("ask")` 取只读 token，创建 client 调用 `skills_read` 后关闭。输入框按作用域缓存结果，
-打开菜单时请求。
+渲染结果放进一个独立文本 part，开头为 `\n\n<system-reminder>`，说明用户通过 `/name` 调用了哪个来源的 skill，
+随后是正文、每个附属文件的 `readCommand` 和结束标签。正文中只有开始 `system-reminder` 或
+`/system-reminder` 的 `<`（忽略大小写）转义成六个字符 `\u003c`，其余内容保持原样。
+同名同摘要的短提醒也保存 `agentSkillInvocation`。该元数据与 SK2 的 `agentSkills` 一次保存。
+按名字读取返回 `isError`、抛错或正文解析失败时，运行以错误结束，消息保留，不追加目录或调用提醒。
 
-**输入框。** 首页的 `ComposerEditor` 是 Lexical，Enter 默认发送，Shift+Enter 换行，Ctrl 或 Meta 加 Enter 也发送
-（`KEY_ENTER_COMMAND`）。菜单打开时，方向键、Enter、Tab 和 Esc 必须以高于 `COMMAND_PRIORITY_HIGH`
-的优先级注册，或者在菜单打开期间绕过现有处理。会话页的追加输入框是普通 `Textarea`，在
-`onKeyDown` 里处理。两处共用一个菜单组件，触发条件只是「文本以 `/` 开头且会话没有在运行」，不需要光标定位。
+**输入框目录。** `createAgentRunner` 中的 `skills(scope)` 用 `deps.createTokenSource("ask")`、
+`authenticatedFetch(token, controller.signal)` 和短时 MCP client 调用一次 `skills_read { repo? }`。
+整个调用与 15 秒超时竞争，包括获取 agent token、MCP 初始化、读取和清理。
+用 `gatewaySkillCatalogSchema` 解析并去除内置项；错误向调用方抛出。完成或超时都关闭 client 并释放 token。
+超时会关闭 MCP 传输，清理仍在后台完成，不让等待中的 token 请求延长调用；超时后才创建成功的 client 也会关闭。
 
-**门禁。** `gateTools` 增加一个参数：本次目录中 `modelInvocable` 为 false 的名字集合。模型以这些名字调用
-`skills_read` 时，按名字和输入返回 `{ type: "denied", reason }`。现有门禁按工具的
-`_meta["univer.workspace/scope"]` 判断，按名字判断是新增的一类规则。
+**输入框。** `ui/skill-menu.tsx` 的 hook 和列表由首页 Lexical `ComposerEditor` 与会话追加 `Textarea` 共用。
+只有整个输入匹配 `^/[^\s]*$` 且会话未运行才触发；按全局或 Space ID 在页面存活期间缓存目录，首次打开才查询。失败不显示，并删除该缓存项，下次打开重试；成功结果继续按作用域缓存。
+列表仅包含 `userInvocable` 且名字匹配输入前缀的条目，显示 `/name`、来源、单行描述和 `argumentHint`。
+只有不带 Shift、Ctrl、Meta 或 Alt 的方向键、Enter、Tab 和 Escape 由菜单处理。
+方向键移动，Enter 或 Tab 补全为 `/name `；空格使菜单关闭。Escape 保留文字并关闭，直到输入变化才重新打开。
+带修饰键的事件交给原有输入框处理，Shift+Tab 保持焦点移动，Ctrl+J 继续换行。菜单打开时，普通 Enter 只补全，不发送。
+Lexical 菜单命令注册为 `COMMAND_PRIORITY_CRITICAL`，高于原有 Enter 发送命令；Textarea 在原有键盘处理前调用菜单处理。
+列表使用 `role="listbox"`，由 `useId` 生成唯一 ID；每个选项使用稳定的唯一 ID、`role="option"`、`aria-selected` 和 `tabIndex={-1}`。
+两个输入框使用 `role="combobox"`、`aria-expanded` 和 `aria-autocomplete="list"`。打开时，`aria-controls` 指向列表，
+`aria-activedescendant` 指向选中选项；关闭时 `aria-expanded="false"`，不保留活动选项。
+选中项变化时调用 `scrollIntoView({ block: "nearest" })`。
+
+**门禁。** 目录步骤之后，从最近一条带有效 `agentSkills` 的用户消息取 `modelInvocable: false` 的名字集合，传给 `gateTools`。
+排队或引导消息没有目录时继续向前查找，与目录比对使用的上一份目录查找规则一致；审批恢复跳过目录步骤时也如此。
+模型以这些名字调用 `skills_read` 且没有 `resource` 时，包括普通读取和 `full` 读取，返回
+`{ type: "denied", reason: 'The skill "<name>" can only be invoked by the user with /<name>.' }`。
+带 `resource` 的附属文件读取允许通过，供模型按显式调用提醒中的 `readCommand` 使用。其他工具和名字沿用原有 scope 门禁。
 
 ## 展示
 
 右侧栏只读会话元数据，不发请求：
 
 - 取最新一条带有效 `agentSkills` 的用户消息。「已使用」来自历史里 `skills_read` dynamic-tool part，
-  必须 `state === "output-available"`、结果非错误，且 `input.name` 在当前目录中。按首次使用顺序排在前面，
+  必须 `state === "output-available"`、结果非错误，且 `input.name` 在当前目录中；也计入用户消息的 `agentSkillInvocation`。两种使用按消息时间的首次使用顺序排在前面，
   其余先仓库后个人，同层按名字排序。
 - 默认显示前三条。按钮复用 `agent-steps-window`，展开其余条目和带路径的诊断，可再次收起。
   只有诊断没有隐藏条目时也有展开按钮。无 skills 显示存放路径，`not-member` 显示未加载原因。
 - 每项显示名字、来源和已使用标记，悬停显示描述和路径。文案加在 `ui/messages.ts` 的中英两个字典里。
-- `/name` 消息标签和显式调用的已使用状态属于 SK3，尚未实现。
+- 用户消息有有效 `agentSkillInvocation` 且文字以对应 `/name` 开头时，该前缀复用 `AgentReferencePill` 的样式显示为标签，剩余文字照常显示。
 
 ## 不变量
 
@@ -203,8 +223,9 @@ gateway 用 agent token 通过 RFC 8693 换到的用户会话访问产品 API。
 | 非成员仓库 | `repository: "not-member"`，右侧栏说明原因 |
 | `SKILL.md` 校验失败、超限、被隔离 | 跳过，产出诊断 |
 | 运行开始时列目录返回 `isError: true`、抛错或 zod 解析失败（含旧 gateway） | 不追加提醒；复制上一份目录到本条用户消息，没有上一份时不写；本次运行继续 |
-| `/name` 展开时读取失败（SK3 目标） | 本次运行以错误结束，消息保留 |
-| 模型读取 `disable-model-invocation` 的 skill（SK3 门禁目标） | 门禁拒绝，模型收到拒绝原因 |
+| `/name` 展开时读取失败 | 本次运行以错误结束，消息保留 |
+| 模型读取 `disable-model-invocation` 的 skill 指令（无 `resource`，含 `full`） | 门禁拒绝，模型收到拒绝原因 |
+| 模型读取该 skill 的附属文件（带 `resource`） | 允许通过门禁，仍由 gateway 校验读取权限与路径 |
 | 模型读取已被删除的 skill | 工具错误，模型按普通工具错误处理 |
 
 ## 需要同步更新的文档

@@ -174,3 +174,10 @@ html[data-ui-mode="repository"] .agent-skill-name { overflow-wrap: anywhere; }
 html[data-ui-mode="repository"] .agent-skill-source { color: var(--rd-ink-3); font-size: 12px; }
 html[data-ui-mode="repository"] .agent-skill-used { color: var(--rd-ink-2); font-size: 12px; }
 html[data-ui-mode="repository"] .agent-skill-diagnostics { padding-left: 16px; font-size: 12px; color: var(--rd-ink-2); overflow-wrap: anywhere; }
+
+html[data-ui-mode="repository"] .agent-skill-menu { display: grid; max-height: 260px; overflow-y: auto; border: 1px solid var(--rd-line); border-radius: 8px; background: var(--rd-panel); }
+html[data-ui-mode="repository"] .agent-skill-menu button { display: grid; gap: 4px; min-width: 0; padding: 8px 12px; text-align: left; border: 0; background: transparent; cursor: pointer; }
+html[data-ui-mode="repository"] .agent-skill-menu button[aria-selected="true"], html[data-ui-mode="repository"] .agent-skill-menu button:hover { background: var(--rd-panel-2); }
+html[data-ui-mode="repository"] .agent-skill-menu-heading { display: flex; justify-content: space-between; gap: 12px; }
+html[data-ui-mode="repository"] .agent-skill-menu-description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html[data-ui-mode="repository"] .agent-skill-menu-hint, html[data-ui-mode="repository"] .agent-skill-menu-heading > span { color: var(--rd-ink-2); font-size: 12px; }

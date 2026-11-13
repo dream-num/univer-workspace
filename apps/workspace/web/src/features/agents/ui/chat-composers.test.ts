@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 import { $getRoot, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../../shared/i18n";
 import { session } from "../test-helpers";
 import { ComposerEditor, type ComposerEditorHandle } from "./composer-editor";
+import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentSessionPage } from "./session-page";
 
-const runner = vi.hoisted(() => ({ send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
+const runner = vi.hoisted(() => ({ skills: vi.fn(), send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
 const client = { prewarm: async () => {}, runner: async () => runner };
 let current = session();
 vi.mock("./client", () => ({ useAgentClient: () => client }));
@@ -30,8 +31,15 @@ let resize: () => void;
 let contentHeight: number;
 const disconnect = vi.fn();
 const observe = vi.fn();
+const scrollIntoView = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks(); current = session();
+  Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
+  runner.skills.mockResolvedValue({ repository: "loaded", diagnostics: [], skills: [
+    { name: "weekly-report", source: "repository", description: "Write a weekly report", argumentHint: "[week]", userInvocable: true, modelInvocable: false },
+    { name: "weekly-review", source: "user", description: "Review a week", userInvocable: true, modelInvocable: true },
+    { name: "hidden", source: "user", description: "Model only", userInvocable: false, modelInvocable: true },
+  ] });
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   vi.stubGlobal("ResizeObserver", class {
     constructor(callback: typeof resize) { resize = callback; }
@@ -248,4 +256,173 @@ it("shows empty and non-member guidance and can expand diagnostics without hidde
   expect(rail.textContent).toContain("个人 · 文件过大 · .agents/skills/big/SKILL.md");
   await act(async () => toggle.click());
   expect(rail.textContent).not.toContain(".agents/skills/big/SKILL.md");
+});
+
+
+it("filters follow-up skills, completes with arrows and Enter without sending, caches and dismisses until text changes", async () => {
+  await renderSession();
+  await type("/week");
+  const options = () => [...container.querySelectorAll('[role="option"]')];
+  expect(options().map((item) => item.textContent)).toEqual(["/weekly-reportRepositoryWrite a weekly report[week]", "/weekly-reviewPersonalReview a week"]);
+  expect(options()[0]?.getAttribute("aria-selected")).toBe("true");
+  await key(textarea(), { key: "ArrowDown" });
+  expect(options()[1]?.getAttribute("aria-selected")).toBe("true");
+  await key(textarea(), { key: "Enter" });
+  expect(textarea().value).toBe("/weekly-review ");
+  expect(runner.send).not.toHaveBeenCalled();
+  expect(options()).toHaveLength(0);
+  await type("/weekly-rep");
+  expect(options()).toHaveLength(1);
+  await key(textarea(), { key: "Escape" });
+  expect(textarea().value).toBe("/weekly-rep");
+  expect(options()).toHaveLength(0);
+  await key(textarea(), { key: "ArrowDown" });
+  expect(options()).toHaveLength(0);
+  await type("/weekly-re");
+  expect(options()).toHaveLength(2);
+  await key(textarea(), { key: "ArrowUp" });
+  await key(textarea(), { key: "Tab" });
+  expect(textarea().value).toBe("/weekly-review ");
+  expect(runner.skills).toHaveBeenCalledTimes(1);
+  await type("/weekly-report args");
+  expect(options()).toHaveLength(0);
+});
+
+it("hides the menu and does not fetch skills while running or after a lookup error", async () => {
+  current = session({ status: "running" });
+  await renderSession();
+  await type("/");
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+  expect(runner.skills).not.toHaveBeenCalled();
+  current = session({ status: "idle" });
+  runner.skills.mockRejectedValue(new Error("Unavailable"));
+  await renderSession();
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+  await type("/week");
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+});
+
+it("completes from the shared menu in the real Lexical composer before its send command", async () => {
+  const handle: { current: ComposerEditorHandle | null } = { current: null };
+  const onSend = vi.fn();
+  function Composer() {
+    const [text, setText] = useState("/");
+    const [starter, setStarter] = useState({ text: "/" });
+    const menu = useSkillMenu(text, { kind: "global" }, false, (value) => setStarter({ text: value }));
+    return createElement("div", null, createElement(SkillMenu, { menu }), createElement(ComposerEditor, {
+      handle, label: "Prompt", busy: false, starter, onSend, onMenuKey: menu.onKeyDown, menuInput: menu.inputProps,
+      onChange: (content) => setText(content.text), onTrigger: vi.fn(), onFocus: vi.fn(),
+    }));
+  }
+  await act(async () => root.render(createElement(LanguageProvider, null, createElement(Composer))));
+  const editor = handle.current!.editor;
+  const input = editor.getRootElement()!;
+  assertCombobox(input);
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  await act(async () => { editor.dispatchCommand(KEY_DOWN_COMMAND, new KeyboardEvent("keydown", { key: "ArrowDown" })); });
+  await act(async () => { editor.dispatchCommand(KEY_ENTER_COMMAND, new KeyboardEvent("keydown", { key: "Enter" })); });
+  expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toBe("/weekly-review ");
+  expect(onSend).not.toHaveBeenCalled();
+  expect(input.getAttribute("aria-expanded")).toBe("false");
+  expect(input.hasAttribute("aria-activedescendant")).toBe(false);
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+});
+
+it("renders invocation pills and orders both invocation and tool use by first use", async () => {
+  const skills = ["invoked", "read"].map((name) => ({ name, source: "user", description: name, modelInvocable: true, userInvocable: true }));
+  current = session({ messages: [
+    { id: "user", role: "user", parts: [{ type: "text", text: "/invoked week" }], metadata: {
+      agentSkills: { skills, repository: "no-repository", diagnostics: [] }, agentSkillInvocation: { name: "invoked", source: "user", digest: "a".repeat(64) },
+    } },
+    { id: "assistant", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "skills_read", toolCallId: "read", state: "output-available", input: { name: "read" }, output: {} }] },
+  ] });
+  await renderSession();
+  expect(container.querySelector(".agent-skill-invocation")?.textContent).toBe("/invoked");
+  expect(container.querySelector(".agent-message-user p")?.textContent).toBe("/invoked week");
+  expect([...container.querySelectorAll(".agent-skill-name")].map((item) => item.textContent)).toEqual(["invoked", "read"]);
+  expect(container.querySelectorAll(".agent-skill-used")).toHaveLength(2);
+});
+
+
+it("caches menu catalogs separately for global scope and each repository", async () => {
+  await renderSession();
+  await type("/");
+  expect(runner.skills).toHaveBeenLastCalledWith({ kind: "global" });
+  for (const spaceId of ["repo-a", "repo-b", "repo-a"]) {
+    current = { ...current, scope: { kind: "repository", spaceId, baseWorktreeId: null } };
+    await renderSession();
+    expect(container.querySelector('[role="listbox"]')).not.toBeNull();
+  }
+  expect(runner.skills.mock.calls).toEqual([
+    [{ kind: "global" }], [{ kind: "repository", spaceId: "repo-a", baseWorktreeId: null }],
+    [{ kind: "repository", spaceId: "repo-b", baseWorktreeId: null }],
+  ]);
+});
+
+function assertCombobox(input: HTMLElement) {
+  const list = container.querySelector('[role="listbox"]')!;
+  const selected = list.querySelector('[aria-selected="true"]')!;
+  expect(input.getAttribute("role")).toBe("combobox");
+  expect(input.getAttribute("aria-expanded")).toBe("true");
+  expect(input.getAttribute("aria-autocomplete")).toBe("list");
+  expect(list.id).not.toBe("");
+  expect(input.getAttribute("aria-controls")).toBe(list.id);
+  expect(selected.id).not.toBe("");
+  expect(input.getAttribute("aria-activedescendant")).toBe(selected.id);
+  const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(new Set(options.map((option) => option.id)).size).toBe(options.length);
+  expect(options.every((option) => option.tabIndex === -1)).toBe(true);
+}
+
+it("connects the follow-up combobox to stable options and scrolls the selection", async () => {
+  await renderSession();
+  expect(textarea().getAttribute("aria-expanded")).toBe("false");
+  expect(textarea().hasAttribute("aria-activedescendant")).toBe(false);
+  await type("/week");
+  assertCombobox(textarea());
+  const ids = [...container.querySelectorAll('[role="option"]')].map((option) => option.id);
+  scrollIntoView.mockClear();
+  await key(textarea(), { key: "ArrowDown" });
+  assertCombobox(textarea());
+  expect(textarea().getAttribute("aria-activedescendant")).toBe(ids[1]);
+  expect([...container.querySelectorAll('[role="option"]')].map((option) => option.id)).toEqual(ids);
+  expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: "nearest" });
+  expect(scrollIntoView.mock.contexts[0]).toBe(container.querySelector('[aria-selected="true"]'));
+  await key(textarea(), { key: "Escape" });
+  expect(textarea().getAttribute("aria-expanded")).toBe("false");
+  expect(textarea().hasAttribute("aria-activedescendant")).toBe(false);
+});
+
+it("retries failed lookups on the next open and caches the successful result", async () => {
+  runner.skills.mockRejectedValueOnce(new Error("Temporary failure"));
+  await renderSession(); await type("/week");
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+  await type(""); await type("/week");
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  await type(""); await type("/week");
+  expect(runner.skills).toHaveBeenCalledTimes(2);
+});
+
+it.each(["shiftKey", "ctrlKey", "metaKey", "altKey"] as const)("passes all menu keys through untouched with %s", async (modifier) => {
+  function Menu() {
+    const menu = useSkillMenu("/week", { kind: "global" }, false, vi.fn());
+    return createElement("div", null, createElement(SkillMenu, { menu }),
+      createElement("textarea", { onKeyDown: (event) => menu.onKeyDown(event.nativeEvent) }));
+  }
+  await act(async () => root.render(createElement(LanguageProvider, null, createElement(Menu))));
+  for (const name of ["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"]) {
+    expect((await key(textarea(), { key: name, [modifier]: true })).defaultPrevented).toBe(false);
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+    expect(container.querySelector('[role="option"]')?.getAttribute("aria-selected")).toBe("true");
+  }
+});
+
+it("leaves Shift+Tab and Shift+Enter native and Ctrl+J inserts a newline with the menu open", async () => {
+  await renderSession(); await type("/week");
+  for (const name of ["Tab", "Enter"]) expect((await key(textarea(), { key: name, shiftKey: true })).defaultPrevented).toBe(false);
+  expect(textarea().value).toBe("/week");
+  textarea().setSelectionRange(5, 5);
+  await key(textarea(), { key: "j", ctrlKey: true });
+  expect(textarea().value).toBe("/week\n");
+  expect(runner.send).not.toHaveBeenCalled();
 });

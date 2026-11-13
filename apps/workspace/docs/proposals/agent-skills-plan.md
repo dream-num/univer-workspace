@@ -258,12 +258,21 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 
 ## Appendix A. Prototype evidence
 
-本计划没有运行原型。设计阶段靠阅读代码和官方文档定案，依据见设计文档的「参考来源」。下列问题没有实证，由对应 PR 的第一个盒子验证：
+本计划没有运行原型。设计阶段的未证实项已在执行中验证：
 
-- `skillEntry` 的 YAML 子集能否解析 `disable-model-invocation` 等布尔和字符串字段（SK1）。
-- `uvw blob upload --parent` 能否把 `SKILL.md` 放进点开头的嵌套目录，以及界面能否创建 `.agents` 目录（SK1 的 `seed-skills.mjs`）。
-- 浏览器到 127.0.0.1 上 mock provider 的跨端口请求是否被 CSP 拦截。之前的会话用 `Access-Control-Allow-Origin: *` 跑通过，但没有提交脚本（SK2）。
-- 三个 PR 的性能预算都是估计值，首次测量后记录实测值。
+- `skillEntry`（`@modelcontextprotocol/server@2.4.0`）把 `disable-model-invocation`、`user-invocable` 保留为布尔值，`argument-hint` 保留为字符串（SK1 单测）。
+- `uvw space node create --parent` 和 `uvw blob upload --parent` 能在 `.agents/skills/<name>/` 这样点开头的嵌套目录里建目录和上传文件。名为 `..` 的目录也能创建，gateway 对它产出 `invalid-skill` 诊断（SK1 MR13 和修复验证）。
+- 浏览器到 `127.0.0.1` 上 mock provider 的跨端口请求没有被拦截。SPA 没有 CSP，mock 需要应答 `authorization, content-type` 的预检（SK2）。
+
+性能实测值。机器同时运行其他验证任务，以下是本地开发实例上的中位数：
+
+| PR | 指标 | trunk | head | 预算 |
+| --- | --- | --- | --- | --- |
+| SK1 | `skills_read` 列目录，无自定义 Skill（gateway `duration_ms`，各 20 次） | 3.9 ms | 16.9 ms | trunk 加 150 ms |
+| SK1 | 同上，10 个个人级加 10 个仓库级 Skill | 无 | 41.3 ms | 800 ms |
+| SK2 | 点击发送到 mock 收到第一个模型请求，head 带 10 加 10 个 Skill（各 10 次） | 188 ms | 322 ms | trunk 加 500 ms |
+| SK3 | 同上，普通消息 / `/weekly-report` 调用（各 10 次） | 205.5 ms | 205.5 ms / 210.5 ms | 普通消息加 300 ms |
+| SK3 | 首次打开 `/` 菜单到出现选项（每次重新加载页面，10 次） | 无 | 56 ms | 800 ms |
 
 ## Appendix B. Alternatives rejected
 

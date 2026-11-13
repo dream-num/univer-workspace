@@ -134,6 +134,15 @@ apps/workspace/
 渲染 Markdown。共享包拥有 GFM、源码切换、链接策略和样式；宿主负责内容请求、认证、取消和下载。
 两端继续使用各自的 React runtime。Markdown 读取完整文件，预览与源码均展示全文，不设置预览大小截断。
 
+`features/agents` 的浏览器 Agent 支持 Skill。gateway 的 `skills_read` 实时发现个人空间和成员仓库根目录的
+`.agents/skills/<name>/SKILL.md`，与内置 Skill 合并并给出诊断。每次运行开始时，`drive` 读取目录并写入
+用户消息的 `metadata.agentSkills`；模型可见部分变化时才在这条消息末尾追加 `<system-reminder>`，
+系统提示词和已发出的历史不变。会话页右侧栏从会话数据展示目录、已使用标记和诊断。输入框开头的 `/name`
+展开该 Skill 正文并记录 `agentSkillInvocation`；`disable-model-invocation` 的 Skill 不能被模型读取正文。
+设计、架构与执行记录见 [agent-skills.md](./proposals/agent-skills.md)、
+[agent-skills-architecture.md](./proposals/agent-skills-architecture.md) 和
+[agent-skills-plan.md](./proposals/agent-skills-plan.md)。
+
 `routes` 解析 URL、查询参数与 loader 权限，页面呈现交给 `modes`；`features` 按用户能力组织，
 `shared` 保存无业务归属的基础代码。箭头表示高层可使用左侧低层能力：
 

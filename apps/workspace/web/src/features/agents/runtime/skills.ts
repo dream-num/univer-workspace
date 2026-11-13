@@ -1,5 +1,6 @@
+import type { UIMessage } from "ai";
 import { z } from "zod";
-import { skillCatalogSchema, skillEntrySchema, SYSTEM_REMINDER_START } from "../agent.types";
+import { skillCatalogSchema, skillEntrySchema, messageSkillInvocation, SYSTEM_REMINDER_START } from "../agent.types";
 import type { SkillCatalog } from "../agent.types";
 
 export const gatewaySkillCatalogSchema = skillCatalogSchema.extend({
@@ -38,4 +39,37 @@ export function skillsReminder(catalog: SkillCatalog, previous: SkillCatalog | n
     text = render();
   }
   return { type: "text", text };
+}
+
+const gatewaySkillBodySchema = z.object({
+  content: z.string(), resources: z.array(z.object({ path: z.string(), readCommand: z.string() })).optional(),
+});
+
+export async function skillInvocation(message: UIMessage, catalog: SkillCatalog, previous: UIMessage[],
+  read: (name: string) => Promise<unknown>,
+) {
+  const text = message.parts.find((part) => part.type === "text")?.text;
+  const match = text?.match(/^\/([a-z0-9]+(?:-[a-z0-9]+)*)(?:\s+([\s\S]*))?$/);
+  if (!match) return null;
+  const skill = catalog.skills.find((item) => item.name === match[1] && item.userInvocable);
+  if (!skill) return null;
+  const body = gatewaySkillBodySchema.parse(await read(skill.name));
+  const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(body.content));
+  const digest = Array.from(new Uint8Array(hash), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const invocation = { name: skill.name, source: skill.source, digest };
+  const repeated = previous.some((item) => {
+    const earlier = item.role === "user" ? messageSkillInvocation(item.metadata) : null;
+    return earlier?.name === skill.name && earlier.digest === digest;
+  });
+  const args = match[2]?.trim() ?? "";
+  const rendered = body.content.includes("$ARGUMENTS") ? body.content.replaceAll("$ARGUMENTS", () => args)
+    : body.content + (args ? `\n\nARGUMENTS: ${args}` : "");
+  const escape = (value: string) => value.replace(/<(?=\/?system-reminder)/gi, "\\u003c");
+  return { invocation, part: { type: "text" as const, text: [
+    `\n\n${SYSTEM_REMINDER_START}`,
+    repeated ? `The user invoked ${skill.name} again. Its instructions are already loaded above in this conversation.`
+      : `The user invoked the ${skill.source} skill "${skill.name}" with /${skill.name}. Follow these instructions for this request.`,
+    ...(repeated ? (args ? [escape(`ARGUMENTS: ${args}`)] : []) : [escape(rendered), ...(body.resources ?? []).map((resource) => escape(resource.readCommand))]),
+    "</system-reminder>",
+  ].join("\n") } };
 }

@@ -4,16 +4,19 @@ import { ContentEditable } from "@lexical/react/LexicalContentEditable";
 import { LexicalErrorBoundary } from "@lexical/react/LexicalErrorBoundary";
 import { HistoryPlugin } from "@lexical/react/LexicalHistoryPlugin";
 import { PlainTextPlugin } from "@lexical/react/LexicalPlainTextPlugin";
-import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, $isTextNode, $setSelection, COMMAND_PRIORITY_HIGH, INSERT_LINE_BREAK_COMMAND, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
+import { $createParagraphNode, $createTextNode, $getRoot, $getSelection, $isRangeSelection, $isTextNode, $setSelection, COMMAND_PRIORITY_CRITICAL, COMMAND_PRIORITY_HIGH, INSERT_LINE_BREAK_COMMAND, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
 import type { LexicalEditor, RangeSelection } from "lexical";
 import { useEffect, useRef } from "react";
 import type { AgentReference } from "../agent.types";
 import { $createReferenceNode, $serializeComposer, ReferenceNode } from "./reference-node";
 import { referenceTrigger } from "./references";
+import type { useSkillMenu } from "./skill-menu";
 
 export type ComposerEditorHandle = { editor: LexicalEditor; selection: RangeSelection | null };
 type Props = {
   readonly handle: { current: ComposerEditorHandle | null }; readonly label: string; readonly busy: boolean;
+  readonly menuInput?: ReturnType<typeof useSkillMenu>["inputProps"];
+  readonly onMenuKey?: (event: KeyboardEvent) => boolean;
   readonly starter?: { readonly text: string } | null; readonly focus?: boolean;
   readonly onChange: (content: ReturnType<typeof $serializeComposer>) => void;
   readonly onTrigger: (selection: RangeSelection) => void; readonly onSend: () => void; readonly onFocus: () => void;
@@ -34,7 +37,7 @@ export function insertComposerReference(handle: ComposerEditorHandle, reference:
 export function ComposerEditor(props: Props) {
   return <LexicalComposer initialConfig={{ namespace: "agent-composer", nodes: [ReferenceNode], onError: (error) => { throw error; } }}>
     <div className="agent-editor-container"><PlainTextPlugin ErrorBoundary={LexicalErrorBoundary}
-      contentEditable={<ContentEditable id="agent-composer" className="agent-editor" aria-label={props.label} aria-multiline="true" onFocus={props.onFocus} />}
+      contentEditable={<ContentEditable {...props.menuInput} id="agent-composer" className="agent-editor" aria-label={props.label} aria-multiline="true" onFocus={props.onFocus} />}
       placeholder={<span className="agent-editor-placeholder">{props.label}</span>} /></div>
     <HistoryPlugin />
     <EditorBehavior {...props} />
@@ -63,6 +66,14 @@ function EditorBehavior(props: Props) {
         latest.current.onTrigger(range);
       }
     }));
+    const unregisterMenu = editor.registerCommand(KEY_DOWN_COMMAND, (event) => {
+      if (editor.isComposing()) return false;
+      return latest.current.onMenuKey?.(event) ?? false;
+    }, COMMAND_PRIORITY_CRITICAL);
+    const unregisterMenuEnter = editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
+      if (!event || editor.isComposing()) return false;
+      return latest.current.onMenuKey?.(event) ?? false;
+    }, COMMAND_PRIORITY_CRITICAL);
     const unregisterEnter = editor.registerCommand(KEY_ENTER_COMMAND, (event) => {
       if (!event || editor.isComposing() || event.isComposing || (event.shiftKey && !event.ctrlKey && !event.metaKey)) return false;
       event.preventDefault(); latest.current.onSend(); return true;
@@ -71,7 +82,7 @@ function EditorBehavior(props: Props) {
       if (editor.isComposing() || event.isComposing || !event.ctrlKey || event.key.toLowerCase() !== "j") return false;
       event.preventDefault(); editor.dispatchCommand(INSERT_LINE_BREAK_COMMAND, false); return true;
     }, COMMAND_PRIORITY_HIGH);
-    return () => { unregister(); unregisterEnter(); unregisterNewline(); latest.current.handle.current = null; };
+    return () => { unregister(); unregisterMenu(); unregisterMenuEnter(); unregisterEnter(); unregisterNewline(); latest.current.handle.current = null; };
   }, [editor]);
   useEffect(() => { editor.setEditable(!props.busy); }, [editor, props.busy]);
   useEffect(() => {

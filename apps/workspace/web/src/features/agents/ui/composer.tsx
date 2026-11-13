@@ -9,6 +9,8 @@ import { worktreePagesQueryOptions } from "../../worktrees/worktrees.queries";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Select } from "../../../shared/ui/select";
+import { $createParagraphNode, $createTextNode, $getRoot } from "lexical";
+import { SkillMenu, useSkillMenu } from "./skill-menu";
 import type { RangeSelection } from "lexical";
 import type { AgentReference, AgentMode } from "../agent.types";
 import { useAgentClient } from "./client";
@@ -32,6 +34,12 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const input = useRef<ComposerEditorHandle | null>(null);
+  const skillMenu = useSkillMenu(text, spaceId || repository ? { kind: "repository", spaceId: spaceId || repository, baseWorktreeId: null } : { kind: "global" }, busy, (value) => {
+    input.current?.editor.update(() => {
+      const root = $getRoot(); root.clear(); root.append($createParagraphNode().append($createTextNode(value))); root.selectEnd();
+    });
+    input.current?.editor.focus();
+  });
   const session = useQuery(sessionQueryOptions);
   const displayName = session.data?.authenticated ? session.data.user.displayName : undefined;
   const space = useQuery(spaceQueryOptions(spaceId));
@@ -60,7 +68,8 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
       <header className="agent-greeting"><h2>{m.greeting(displayName)}</h2><p>{m.greetingHint}</p></header>
       <div className="agent-composer-box">
         {picker ? <AgentReferencePicker spaceId={spaceId} onChoose={chooseReference} onClose={closePicker} /> : null}
-        <ComposerEditor handle={input} label={m.prompt} busy={busy} {...(starter !== undefined ? { starter } : {})} {...(focus !== undefined ? { focus } : {})}
+        <SkillMenu menu={skillMenu} />
+        <ComposerEditor menuInput={skillMenu.inputProps} onMenuKey={skillMenu.onKeyDown} handle={input} label={m.prompt} busy={busy} {...(starter !== undefined ? { starter } : {})} {...(focus !== undefined ? { focus } : {})}
           onChange={setContent} onTrigger={(trigger) => setPicker({ trigger })} onSend={() => void send()}
           onFocus={() => { void client.prewarm().catch((cause: unknown) => setError(String(cause))); }} />
         <div className="agent-composer-controls">
