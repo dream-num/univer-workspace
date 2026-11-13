@@ -52,7 +52,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR6 checks the server instructions in the initialize result in both protocols, including the new-key-per-operation rule.
 - MR7 reads a long class through `api_show` cursors and compares the pages with the reference library.
 - MR8 rejects a cursor reused with other arguments and an unknown Skill.
-- MR13 seeds personal and repository custom Skills and checks discovery sources and repository event attribution.
+- MR13 seeds personal and repository custom Skills and checks discovery sources, metadata, duplicate diagnostics and repository event attribution.
 - MA1 calls the gateway with the default personal access token (PAT) and records `auth_kind: pat`.
 - MA2 reads the protected-resource metadata without credentials.
 - MA3 refuses a write tool to a read-only PAT.
@@ -2742,6 +2742,9 @@ cat > "$EVIDENCE/sk1-repo-source/SKILL.md" <<'SKILL'
 ---
 name: reconcile-ledger
 description: Reconcile the repository ledger.
+metadata:
+  source: https://example.com/skills/reconcile-ledger
+  source-commit: abc123
 ---
 Read the ledger and report unmatched entries.
 SKILL
@@ -2758,13 +2761,28 @@ $V mcp sk1-repo-read skills_read "{\"repo\":\"$O/sk1-skills\",\"name\":\"reconci
 jq -e '.source == "repository" and [.resources[].path] == ["scripts/check.js"]' "$EVIDENCE/sk1-repo-read.out"
 node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repeat.json"
 jq -e '.uploaded == 0 and .skipped == 2' "$EVIDENCE/sk1-seed-repeat.json"
+jq -e '.skills[] | select(.name == "reconcile-ledger") | .metadata == {source: "https://example.com/skills/reconcile-ledger", "source-commit": "abc123"}' "$EVIDENCE/sk1-list.out"
+jq -e '.skills[] | select(.name == "weekly-report") | has("metadata") | not' "$EVIDENCE/sk1-list.out"
+$V cli sk1-repo-agents space browse "$O/sk1-skills" --json
+AGENTS=$(jq -r '.nodes[] | select(.name == ".agents") | .nodeId' "$EVIDENCE/sk1-repo-agents.out")
+$V cli sk1-repo-skills space browse "$O/sk1-skills" --parent "$AGENTS" --json
+SKILLS=$(jq -r '.nodes[] | select(.name == "skills") | .nodeId' "$EVIDENCE/sk1-repo-skills.out")
+$V cli sk1-duplicate-create space node create "$O/sk1-skills" --parent "$SKILLS" --name reconcile-ledger --json
+$V mcp sk1-duplicate skills_read "{\"repo\":\"$O/sk1-skills\"}"
+jq -e '.diagnostics == [{source: "repository", path: ".agents/skills/reconcile-ledger", problem: "duplicate"}] and ([.skills[] | select(.name == "reconcile-ledger")] | length == 0) and any(.skills[]; .name == "weekly-report" and .source == "user")' "$EVIDENCE/sk1-duplicate.out"
 ```
 
 Pass when `sk1-list.out` contains `builtin`, `user` and `repository` sources,
 `repository` is `loaded`, and `diagnostics` is empty. Its event must have outcome `ok`
 and repo equal to `.id` in `sk1-repo.out`. By-name reads must return their source and
 text resource manifests. The repeated seed must skip both files without uploading.
+The repository entry must preserve the frontmatter `metadata` string map, and the personal entry
+must omit `metadata`. Creating the second `reconcile-ledger` folder must produce exactly one
+`duplicate` diagnostic with repository source and the ambiguous folder path. The repository
+Skill disappears while the personal Skill remains. Duplicate `.agents`, `skills` and `SKILL.md`
+names follow the same rule at their respective paths and skip the ambiguous subtree.
 Dot-named nested folders and `blob upload --parent` are exercised by these uploads.
+Use a fresh run for the duplicate case because it intentionally leaves an ambiguous folder.
 
 ### Typst job verification
 

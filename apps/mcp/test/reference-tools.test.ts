@@ -213,6 +213,62 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect((await call(client, "skills_read", { name: "core", repo: "00000000-0000-4000-8000-000000000000" })).structured.code).toBe("workspace-not-found");
   });
 
+  it.each([".agents", "skills", "report", "SKILL.md"].flatMap((level) =>
+    ["personal", "team"].flatMap((spaceId) => [false, true].map((reverse) => ({ level, spaceId, reverse }))),
+  ))("diagnoses duplicate $level in $spaceId with reverse=$reverse", async ({ level, spaceId, reverse }) => {
+    const ws = skillWorkspace();
+    ws.skill("personal", "report");
+    ws.skill("team", "report");
+    const node = ws.nodes.find((node) => node.spaceId === spaceId && node.name === level)!;
+    ws.nodes.push({ ...node, id: "duplicate-node" });
+    if (reverse) ws.nodes.reverse();
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    expect(listed.isError).toBeUndefined();
+    const source = spaceId === "personal" ? "user" : "repository";
+    const otherSource = spaceId === "personal" ? "repository" : "user";
+    const path = [".agents", "skills", "report", "SKILL.md"].slice(0,
+      [".agents", "skills", "report", "SKILL.md"].indexOf(level) + 1).join("/");
+    expect(listed.structured.diagnostics).toEqual([{ source, path, problem: "duplicate" }]);
+    expect(listed.structured.skills.slice(SKILL_NAMES.length)).toEqual([
+      expect.objectContaining({ name: "report", source: otherSource }),
+    ]);
+    expect((await call(client, "skills_read", { repo: "bob/team", name: "report" })).structured.source).toBe(otherSource);
+    expect(ws.requests).not.toContain(`/api/blob-resources/${ws.nodes.find((node) => node.spaceId === spaceId && node.resource)?.resource?.id}/download`);
+  });
+
+  it("caps distinct folder names in Workspace list order and reads a named Skill past the cap", async () => {
+    const ws = skillWorkspace();
+    const skills = ws.skill("team", "a-valid").parentNodeId!;
+    for (let index = 0; index < 100; index++) ws.skill("team", `z-${String(index).padStart(3, "0")}`);
+    ws.nodes.push({ ...ws.nodes.find((node) => node.id === skills)!, id: "late", name: "Late", parentNodeId: skills });
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    const names = listed.structured.skills.slice(SKILL_NAMES.length).map((skill: { name: string }) => skill.name);
+    expect(names).toContain("a-valid");
+    expect(names).toContain("z-098");
+    expect(names).not.toContain("z-099");
+    expect((await call(client, "skills_read", { repo: "bob/team", name: "z-099" })).structured.source).toBe("repository");
+  });
+
+  it("passes string metadata through custom and built-in catalogs and omits absent metadata", async () => {
+    const ws = skillWorkspace();
+    const metadata = { source: "https://example.com/skills", "source-commit": "abc123" };
+    ws.skill("personal", "imported", `---\nname: imported\ndescription: Imported.\nmetadata:\n  source: ${metadata.source}\n  source-commit: ${metadata["source-commit"]}\n---\nPrivate body\n`);
+    ws.skill("team", "plain");
+    const corePath = join(sourceRoot, "core/SKILL.md");
+    await writeFile(corePath, (await readFile(corePath, "utf8")).replace("---\n", "---\nmetadata:\n  source: builtin-source\n"));
+    await start(sourceRoot, ws.fetcher);
+    const client = await connect();
+    const listed = await call(client, "skills_read", { repo: "bob/team" });
+    expect(listed.isError).toBeUndefined();
+    expect(listed.structured.skills.find((skill: { name: string }) => skill.name === "imported").metadata).toEqual(metadata);
+    expect(listed.structured.skills.find((skill: { name: string }) => skill.name === "core").metadata).toEqual({ source: "builtin-source" });
+    expect(listed.structured.skills.find((skill: { name: string }) => skill.name === "plain")).not.toHaveProperty("metadata");
+  });
+
   it("diagnoses folder names that are not relative skill paths without failing the catalog", async () => {
     const ws = skillWorkspace();
     ws.skill("team", "ledger");
