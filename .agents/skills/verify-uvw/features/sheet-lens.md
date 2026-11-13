@@ -132,3 +132,131 @@ Terminal screenshots: open `$EVIDENCE/<label>.out` with `agent-browser` and capt
 - The shell is zsh. An unquoted `$args` does not split into words; quote arrays explicitly.
 - The daemon caches per user and revision. After a rebuild, run `uvw daemon stop` so a stale
   daemon does not answer.
+
+## MCP Sheet reading (SL2)
+
+Start a separate instance with `VERIFY_UVW_MCP=1` and, for SLM8,
+`VERIFY_UVW_MCP_SAME_ORIGIN=1`. Use the free-port recipe above, then run `$V user`,
+`eval "$($V env)"` and `seed-sheets.mjs` as above. Keep `W`, `SALES`, `L50` and `DOC`
+from that seed. Each call saves its result and correlated `.event.json` in `$EVIDENCE`.
+The following helper prints JSON arguments without shell quoting ambiguities.
+
+```bash
+args() { node -e 'console.log(JSON.stringify({unit:process.argv[1],worktree:process.argv[2],...JSON.parse(process.argv[3]||"{}")}))' "$1" "$W" "${2:-}"; }
+$V mcp-tools slm-tools
+$V mcp slm-outline outline "$(args "$SALES")"
+```
+
+- SLM1. Regression against the base. In separate base and head instances, run
+  `$V mcp-tools slm1-tools` and
+  `$V mcp slm1-inspect inspect "$(args "$SALES" '{"target":"workbook"}')"`.
+  Pass when inspect results match and only `outline`, `read` and `find` are added.
+- SLM2. Run `$V mcp slm2 outline "$(args "$SALES" '{"at":"s2.t1"}')"` and
+  `$V cli slm2-cli outline --unit "$SALES" --worktree "$W" --at s2.t1`.
+  Pass when MCP `structuredContent.text` and the CLI text are byte-identical after
+  removing their final continuation lines. Both first lines contain the same `rev=`.
+- SLM3. Run `$V mcp slm3-page1 outline "$(args "$SALES" '{"at":"s2.t1","budget":300}')"`.
+  Continue with the returned arguments.
+
+  ```bash
+  NEXT=$(jq -c '.structuredContent.next.arguments' "$EVIDENCE/slm3-page1.result.json")
+  $V mcp slm3-page2 outline "$NEXT"
+  ```
+
+  Repeat until `next` is absent. Pass when `next.tool` is `outline`, budget and
+  scope survive each call, and the complete chain lists ten distinct column refs.
+- SLM4. Run `$V mcp slm4 read "$(args "$SALES" '{"range":"Summary!A3:I8","json":true}')"`.
+  Pass when formula cells in `structuredContent.json` have numeric `value` fields.
+- SLM5. Run `$V mcp slm5-page1 find "$(args "$SALES" '{"terms":["returned"],"max":10}')"`.
+  Feed each `structuredContent.next.arguments` into `$V mcp slm5-page2 find "$NEXT"`,
+  then increment the label until no next remains. Pass when there are 61 hits with no repeats.
+- SLM6. Run `$V mcp slm6 outline "$(args "$DOC")"`.
+  Pass when `$V mcp` exits 1 with `workspace-sheet-lens-unit-type-unsupported`, its
+  message names `inspect`, and the event has `outcome: tool_error`.
+- SLM7. Use a Team Space with a space-visible Worktree. A public Personal Space
+  does not grant another user Worktree access. Create and import a separate sales
+  fixture so the other journeys keep their original IDs.
+
+  ```bash
+  $V cli slm7-team repo create "slm7-$VERIFY_UVW_RUN" --name 'Sheet Lens cache test' --json
+  TEAM=$(jq -r '.id' "$EVIDENCE/slm7-team.out")
+  $V cli slm7-pr pr create -R "$TEAM" -t 'Shared Sheet Lens fixture' --visibility space --json
+  TEAM_W=$(jq -r '.id' "$EVIDENCE/slm7-pr.out")
+  python3 .agents/skills/verify-uvw/bin/seed-sales.py "$EVIDENCE/slm7-sales.xlsx" 1000
+  $V cli slm7-import import --worktree "$TEAM_W" --space "$TEAM" \
+    --file "$EVIDENCE/slm7-sales.xlsx" --name sales.xlsx --json
+  TEAM_SALES=$(jq -r '.unitId' "$EVIDENCE/slm7-import.out")
+  TEAM_ARGS=$(node -e 'console.log(JSON.stringify({unit:process.argv[1],worktree:process.argv[2]}))' "$TEAM_SALES" "$TEAM_W")
+  ```
+
+  Register the second user, save its development session in a private file, and
+  add it to the Team Space as a viewer. This Node command reads the first user's
+  session from disk and never prints either credential.
+
+  ```bash
+  SECOND_MCP_SESSION_FILE="$UNIVER_HOME/slm7-second-session"
+  node --input-type=module - "$ORIGIN" "$UNIVER_HOME" "$VERIFY_UVW_RUN" "$TEAM" "$SECOND_MCP_SESSION_FILE" <<'JS'
+  import assert from 'node:assert/strict';
+  import { randomBytes } from 'node:crypto';
+  import { readFileSync, writeFileSync } from 'node:fs';
+  const [origin, home, run, team, sessionFile] = process.argv.slice(2);
+  const credentials = { username: `verify-${run}-slm7`, password: randomBytes(16).toString('hex') };
+  const registered = await fetch(origin + '/api/auth/password/register', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ ...credentials, displayName: 'Sheet Lens viewer' }),
+  });
+  assert(registered.ok, `Registration returned ${registered.status}`);
+  const { user } = await registered.json();
+  const login = await fetch(origin + '/api/auth/cli/password/login', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(credentials),
+  });
+  assert(login.ok, `Login returned ${login.status}`);
+  const session = login.headers.getSetCookie().map(c => /^workspace_session=([^;]+)/.exec(c)?.[1]).find(Boolean);
+  assert(session, 'Login must return a session cookie');
+  writeFileSync(sessionFile, session, { mode: 0o600 });
+  const membership = await fetch(`${origin}/api/team-spaces/${team}/members/${user.id}`, {
+    method: 'PUT', headers: { 'content-type': 'application/json',
+      cookie: 'workspace_session=' + readFileSync(home + '/mcp-session', 'utf8').trim() },
+    body: JSON.stringify({ role: 'viewer' }),
+  });
+  assert(membership.ok, `Membership returned ${membership.status}`);
+  JS
+  $V mcp --auth dev slm7-a outline "$TEAM_ARGS"
+  $V mcp --auth dev slm7-b outline "$TEAM_ARGS"
+  (
+    cp "$UNIVER_HOME/mcp-session" "$UNIVER_HOME/slm7-original-session"
+    trap 'mv "$UNIVER_HOME/slm7-original-session" "$UNIVER_HOME/mcp-session"' EXIT
+    cp "$SECOND_MCP_SESSION_FILE" "$UNIVER_HOME/mcp-session"
+    $V mcp --auth dev slm7-second-user outline "$TEAM_ARGS"
+  )
+  ```
+
+  Pass when all three calls exit 0, the first user's second event has `cache: hit`,
+  and the second user's first has `cache: miss`. Never put either credential in evidence.
+- SLM8. With the same-origin flag, start the mock provider from the skill's
+  Browser Agent recipe. Script a call to `outline` with the sales Unit and Worktree.
+  Open a new Agents session and send two turns. Also run `$V mcp-tools slm8-before`
+  and `$V mcp-tools slm8-after` around them. Pass when the outline card displays its
+  revision-stamped output and the session's request tool lists are byte-identical.
+- SLM9. Run `$V mcp-token --scopes read`, then
+  `$V mcp slm9-outline outline "$(args "$SALES")"`,
+  `$V mcp slm9-read read "$(args "$SALES" '{"range":"Summary!A3:I8","json":true}')"`, and
+  `$V mcp slm9-find find "$(args "$SALES" '{"terms":["returned"]}')"`.
+  Pass when all three succeed with `outcome: ok` using the read-only PAT.
+- SLM10. Run `$V mcp slm10 outline "$(args "$L50")"` twice. The 50,000-row ledger (500,010
+  cells) is under the executor's 1,000,000-cell limit. Pass when `text` shows a `table` line with
+  `rows=50000`, the second event has `cache: hit`, and both have `outcome: ok`. Then call
+  `outline` with `"$(args "$L50" '{"at":"s1.t1"}')"`; pass when it lists 10 `col` lines. Then stretch the
+  ledger past the limit and call again:
+
+  ```bash
+  $V cli slm10-stretch execute --worktree "$W" --unit "$L50" \
+    -e 'const ws = workbook.getSheetByName("Ledger"); ws.setRowCount(100001); ws.getRange("J100001").setValue("end");'
+  $V mcp slm10-large outline "$(args "$L50")"
+  ```
+
+  Pass when `warnings` explains the large sheet and `text` contains a `note:` line.
+
+Run `$V down` after the journeys, including after failures. Keep only this run's
+results and redacted events. The `.event.json` cache and stage timing fields contain
+no document text or arguments.

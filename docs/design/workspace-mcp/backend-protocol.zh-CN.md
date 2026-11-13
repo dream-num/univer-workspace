@@ -54,6 +54,7 @@
 | `exchange.export` | 读 | response | auth | 64 KiB | 128 MiB | 240 秒 | `<worktree>`，`unitId` | 否 |
 | `content.execute` | 写 | none | revision、auth | 12 MiB | 8 MiB | 30 秒 | `<worktree>`，`unitId` | 是 |
 | `content.inspect` | 读 | none | auth、revision | 256 KiB | 8 MiB | 30 秒 | `trunk` 或 `<worktree>`，`unitId` | 是 |
+| `content.sheet-lens` | 读 | none | auth、revision | 256 KiB | 1 MiB | 30 秒 | `trunk` 或 `<worktree>`，`unitId` | 是 |
 | `render.screenshot` | 读 | response | auth、revision | 256 KiB | 64 MiB | 240 秒 | `trunk` 或 `<worktree>`，`unitId` | 是 |
 | `render.printPdf` | 读 | response | auth、revision | 64 KiB | 128 MiB | 240 秒 | `trunk` 或 `<worktree>`，`unitId` | 是 |
 | `render.lint` | 读 | none | auth、revision | 64 KiB | 8 MiB | 30 秒 | `<worktree>`，`unitId` | 是 |
@@ -146,6 +147,7 @@ Schema 是 `requestHeaderSchema` 和 `rendererRequestHeaderSchema`。（已实�
 - 只有 `payload: "response"` 的操作在响应里带负载。其他操作的响应带负载时，网关按无效响应处理，返回 `workspace-internal-error`。（已实现）
 - 只有 `payload: "request"` 的操作接受请求负载。其他操作的请求带负载时，被调用方返回 400。渲染服务的操作都不接受请求负载。（已实现）
 - `meta` 按 `opMetaSchema`（`apps/mcp/src/shared/usage.ts`）解析。`executor` 为 `cold_start`、`warm` 或 `none`；`cost` 有 `worker_cpu_ms`、`worker_peak_rss_mb`、`render_pages`、`export_bytes`、`upload_bytes`、`committed_revisions` 六项；`repo`、`unitType` 可选。`executor` 为 `none` 时六项必须全为 0。失败的响应同样带 `meta`，网关据此记录失败调用的 worker 成本。（已实现）
+- `content.sheet-lens` 的 `meta` 还可带 `cache`（`hit` 或 `miss`）和 `timings`（非负毫秒数的键值表）。当前阶段名为 `exportMs`、`prepareMs`、`operationMs`、`totalMs`；命中缓存时导出与准备耗时为 0。两字段缺省时省略，不含文档内容或参数原文。缓存命中不需要 worker 时，`executor` 可为 `none`，`unitType` 仍是 `sheet`。（已实现）
 
 ### 4.5 大小上限
 

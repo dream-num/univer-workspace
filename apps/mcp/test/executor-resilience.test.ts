@@ -772,6 +772,7 @@ it("keeps a missing Sheet draft failure and pre-write deadline out of result-unk
       throw new Error("unreachable");
     });
     try {
+      const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
       expect((await dispatch("htmlView.draft", { ...header(input), deadlineMs: 50 }, new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "workspace-executor-timeout", detail: { retryable: true, started: false } } });
       handler.mockImplementation(async (ctx) => {
         ctx.onCreateUnit?.();

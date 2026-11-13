@@ -72,6 +72,18 @@ test('successful event requires a null error_code', () => {
   assert.ok(validateErrorCode('ok', undefined, 'NOT_FOUND').includes('Unexpected event error_code'));
 });
 
+for (const tool of ['outline', 'read', 'find']) {
+  for (const executor of ['none', 'warm']) {
+    test(`${tool} accepts Worktree identity with ${executor} for success and tool errors`, () => {
+      const globals = { tool, args: { worktree: 'wt-1', unit: 'unit-1' } };
+      const event = { tool, repo: 'team-1', unit_type: 'sheet', executor };
+      assert.equal(validateErrorCode('ok', undefined, null, { globals, event }).length, 0);
+      assert.equal(validateErrorCode('tool_error', 'workspace-sheet-lens-unit-type-unsupported',
+        'workspace-sheet-lens-unit-type-unsupported', { globals, event }).length, 0);
+    });
+  }
+}
+
 test('event authentication must match the chosen --auth mode', () => {
   const globals = { auth: 'pat', patId: 'pat-1' };
   assert.ok(validateErrorCode('ok', undefined, null, { globals }).includes('Event authentication differs from --auth pat'));

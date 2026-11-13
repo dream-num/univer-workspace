@@ -103,6 +103,9 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `unit_create` | `unit create` | `worktree`、`space`、`type`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
 | `execute` | `execute` | `worktree`、`unit`、`code` | 否 | 否 | `write` |
 | `inspect` | `inspect` | `target`（workbook、worksheet、range、document、paragraph、presentation、slide、base、board、board-element）、`selectors`、`unit`、`worksheet`、`trunk` 或 `worktree`、`cursor` | 是 | 否 | `read` |
+| `outline` | `outline` | Sheet 专用。`unit` 与 `trunk: true` 或 `worktree` 二选一；可选 `at`、`from`、`depth`、`budget` | 是 | 否 | `read` |
+| `read` | `read` | 同上 scope；必填 `range`，可选 `content`（`both`、`display`、`formula`、`style`、`formula+style`）、`max`、`json` | 是 | 否 | `read` |
+| `find` | `find` | 同上 scope；必填 `terms`，可选 `in`（`values` 或 `formulas`）、`case`、`sheets`、`from`、`max` | 是 | 否 | `read` |
 | `screenshot` | `screenshot` | `unit`、`trunk` 或 `worktree`、`pages`、`contact_slide`、`tile`、`sheet`、`range`、`region`、`elements`、`padding`、`scale` | 是 | 否 | `read` |
 | `import` | `import` | `upload_id` 或 `file`（ChatGPT 文件参数）、`worktree`、`space`、`type`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
 | `export` | `export` | `worktree`、`unit`、`format`（`xlsx`、`docx`、`pptx`）、`idempotency_key` | 是 | 否 | `read` |
@@ -120,6 +123,9 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 说明：
 
 - `execute` 只接受 `code` 字符串，没有 `--script`。CLI 对代码长度的上限（10 MiB）保持不变。
+- `outline`、`read`、`find` 仅接受 Sheet，其他 Unit 返回 `workspace-sheet-lens-unit-type-unsupported` 并指向 `inspect`。
+- 三者返回 `{ unitId, scope, revision, text, json, warnings, next? }`。`text` 首行为 Unit、scope 和权威修订号，正文末尾每条警告一行 `note:`。`read` 的 `json` 保留数值和类型，并按整行分页。
+- `next` 为 `{ tool, arguments }`，把 `arguments` 原样交给 `tool` 即可续读，原始选项会保留。文本续读行不含 CLI 命令。
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
 - `inspect` 的 `worksheet` 参数只接受 `id:<id>`、`name:<name>` 或 `index:N`，`N` 从 1 开始。裸值被拒绝，错误明确指出 `worksheet`。
 - `skills_read` 读取内置与实时自定义 Skill。不带 `name` 返回 `{ skills, diagnostics, repository }`，条目带来源、调用开关、可选路径和参数提示。自定义 Skill 来自个人空间的 `.agents/skills`，可用 `repo` 加载成员仓库，同名仓库 Skill 覆盖个人 Skill，内置名称保留。非成员返回 `not-member`。带 `name` 返回 `{ name, source, content, resources?, binaryFiles?, files? }`，只有文本进入 resources，二进制只返回元数据。`resource` 只接受清单内路径，`full` 包含全部文本，超限仍报错。资源 cursor 续读须保留 repo。只有内置 Skill 与扩展共享静态 catalog，MCP 的 core 不同于 CLI core。

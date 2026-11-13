@@ -23,11 +23,15 @@ export const opMetaSchema = z
     cost: costSchema,
     repo: z.string().nullable().optional(),
     unitType: z.string().nullable().optional(),
+    cache: z.enum(["hit", "miss"]).optional(),
+    timings: z.record(z.string(), z.number().nonnegative()).optional(),
   })
   .refine((meta) => meta.executor !== "none" || Object.values(meta.cost).every((v) => v === 0));
 export type OpMeta = z.infer<typeof opMetaSchema>;
 
 export class UsageAccumulator {
+  private cache?: OpMeta["cache"];
+  private timings?: OpMeta["timings"];
   private executor: OpMeta["executor"] = "none";
   private cost = { ...zeroCost };
   private repo: string | null = null;
@@ -41,6 +45,8 @@ export class UsageAccumulator {
           ? Math.max(this.cost[key], meta.cost[key])
           : this.cost[key] + meta.cost[key];
     }
+    this.cache = meta.cache ?? this.cache;
+    this.timings = meta.timings ?? this.timings;
     this.repo = meta.repo ?? this.repo;
     this.unitType = meta.unitType ?? this.unitType;
   }
@@ -51,6 +57,8 @@ export class UsageAccumulator {
 
   snapshot(): OpMeta {
     return {
+      ...(this.cache === undefined ? {} : { cache: this.cache }),
+      ...(this.timings === undefined ? {} : { timings: this.timings }),
       executor: this.executor,
       cost: { ...this.cost },
       repo: this.repo,
