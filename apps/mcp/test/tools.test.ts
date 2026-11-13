@@ -241,7 +241,7 @@ describe("Issue tools and gateway infrastructure", () => {
     await start();
     const core = await (await connect("?toolsets=core")).listTools();
     expect(core.tools.map((tool) => tool.name)).toEqual(
-      coreNames.filter((name) => !["execute", "inspect", "screenshot", "import", "export", "job_get", "html_view_validate", "html_view_create", "html_view_replace"].includes(name)),
+      coreNames.filter((name) => !["execute", "inspect", "outline", "read", "find", "screenshot", "import", "export", "job_get", "html_view_validate", "html_view_create", "html_view_replace"].includes(name)),
     );
     const list = core.tools.find((tool) => tool.name === "issue_list")!;
     expect(list.inputSchema).toMatchObject({

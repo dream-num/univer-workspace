@@ -132,3 +132,83 @@ Terminal screenshots: open `$EVIDENCE/<label>.out` with `agent-browser` and capt
 - The shell is zsh. An unquoted `$args` does not split into words; quote arrays explicitly.
 - The daemon caches per user and revision. After a rebuild, run `uvw daemon stop` so a stale
   daemon does not answer.
+
+## MCP Sheet reading (SL2)
+
+Start a separate instance with `VERIFY_UVW_MCP=1` and, for SLM8,
+`VERIFY_UVW_MCP_SAME_ORIGIN=1`. Use the free-port recipe above, then run `$V user`,
+`eval "$($V env)"` and `seed-sheets.mjs` as above. Keep `W`, `SALES`, `L50` and `DOC`
+from that seed. Each call saves its result and correlated `.event.json` in `$EVIDENCE`.
+The following helper prints JSON arguments without shell quoting ambiguities.
+
+```bash
+args() { node -e 'console.log(JSON.stringify({unit:process.argv[1],worktree:process.argv[2],...JSON.parse(process.argv[3]||"{}")}))' "$1" "$W" "${2:-}"; }
+$V mcp-tools slm-tools
+$V mcp slm-outline outline "$(args "$SALES")"
+```
+
+- SLM1. Regression against the base. In separate base and head instances, run
+  `$V mcp-tools slm1-tools` and
+  `$V mcp slm1-inspect inspect "$(args "$SALES" '{"target":"workbook"}')"`.
+  Pass when inspect results match and only `outline`, `read` and `find` are added.
+- SLM2. Run `$V mcp slm2 outline "$(args "$SALES" '{"at":"s2.t1"}')"` and
+  `$V cli slm2-cli outline --unit "$SALES" --worktree "$W" --at s2.t1`.
+  Pass when MCP `structuredContent.text` and the CLI text are byte-identical after
+  removing their final continuation lines. Both first lines contain the same `rev=`.
+- SLM3. Run `$V mcp slm3-page1 outline "$(args "$SALES" '{"at":"s2.t1","budget":300}')"`.
+  Continue with the returned arguments.
+
+  ```bash
+  NEXT=$(jq -c '.structuredContent.next.arguments' "$EVIDENCE/slm3-page1.result.json")
+  $V mcp slm3-page2 outline "$NEXT"
+  ```
+
+  Repeat until `next` is absent. Pass when `next.tool` is `outline`, budget and
+  scope survive each call, and the complete chain lists ten distinct column refs.
+- SLM4. Run `$V mcp slm4 read "$(args "$SALES" '{"range":"Summary!A3:I8","json":true}')"`.
+  Pass when formula cells in `structuredContent.json` have numeric `value` fields.
+- SLM5. Run `$V mcp slm5-page1 find "$(args "$SALES" '{"terms":["returned"],"max":10}')"`.
+  Feed each `structuredContent.next.arguments` into `$V mcp slm5-page2 find "$NEXT"`,
+  then increment the label until no next remains. Pass when there are 61 hits with no repeats.
+- SLM6. Run `$V mcp slm6 outline "$(args "$DOC")"`.
+  Pass when it exits 1 with `workspace-sheet-lens-unit-type-unsupported`, its message
+  names `inspect`, and the event has `outcome: tool_error`.
+- SLM7. Run `$V mcp slm7-a outline "$(args "$SALES")"` twice with distinct labels.
+  Give a second user read access to the same Unit and Worktree, then use that user's
+  development session from a private file in this run. In a subshell, save the
+  first session, install the second, call the tool, and restore it on exit.
+
+  ```bash
+  (
+    cp "$UNIVER_HOME/mcp-session" "$UNIVER_HOME/slm7-original-session"
+    trap 'mv "$UNIVER_HOME/slm7-original-session" "$UNIVER_HOME/mcp-session"' EXIT
+    cp "$SECOND_MCP_SESSION_FILE" "$UNIVER_HOME/mcp-session"
+    $V mcp --auth dev slm7-second-user outline "$(args "$SALES")"
+  )
+  ```
+
+  Pass when the first user's second event has `cache: hit` and the second user's first
+  has `cache: miss`. Never put either credential in evidence.
+- SLM8. With the same-origin flag, start the mock provider from the skill's
+  Browser Agent recipe. Script a call to `outline` with the sales Unit and Worktree.
+  Open a new Agents session and send two turns. Also run `$V mcp-tools slm8-before`
+  and `$V mcp-tools slm8-after` around them. Pass when the outline card displays its
+  revision-stamped output and the session's request tool lists are byte-identical.
+- SLM9. Run `$V mcp-token --scopes read`, then
+  `$V mcp slm9-outline outline "$(args "$SALES")"`,
+  `$V mcp slm9-read read "$(args "$SALES" '{"range":"Summary!A3:I8","json":true}')"`, and
+  `$V mcp slm9-find find "$(args "$SALES" '{"terms":["returned"]}')"`.
+  Pass when all three succeed with `outcome: ok` using the read-only PAT.
+- SLM10. Run `$V mcp slm10 outline "$(args "$L50")"`.
+  Pass when `warnings` explains the large sheet, `text` contains a `note:` line,
+  and the event has `outcome: ok`.
+
+The current `bin/mcp-call.mjs` identity validator does not recognize these three
+Worktree-scoped tools and assumes a call without a worker has no Unit type.
+It can exit 5 with `Unexpected repository or Unit identity` even when the result
+and event are correct. Check the saved result and matching event directly.
+The helper needs a separate update before its exit code can gate these journeys.
+
+Run `$V down` after the journeys, including after failures. Keep only this run's
+results and redacted events. The `.event.json` cache and stage timing fields contain
+no document text or arguments.

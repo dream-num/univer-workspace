@@ -263,7 +263,57 @@ export const svgCompileOutput = z.object({
     .optional(),
 });
 
+export const sheetLensRequest = z.discriminatedUnion("op", [
+  z.object({
+    op: z.literal("outline"),
+    at: z.string().optional(),
+    from: z.string().optional(),
+    depth: z.union([z.literal(0), z.literal(1), z.literal(2)]).optional(),
+    budget: z.int().positive().optional(),
+  }),
+  z.object({
+    op: z.literal("read"),
+    range: z.string().min(1),
+    content: z.enum(["both", "display", "formula", "style", "formula+style"]),
+    max: z.int().positive().optional(),
+  }),
+  z.object({
+    op: z.literal("find"),
+    terms: z.array(z.string().min(1)).min(1),
+    in: z.enum(["values", "formulas"]),
+    caseSensitive: z.boolean(),
+    sheets: z.array(z.string()).optional(),
+    from: z.string().optional(),
+    max: z.int().positive().optional(),
+  }),
+]);
+export const sheetLensOutput = z.object({
+  text: z.string(),
+  json: z.json(),
+  revision: z.int().nonnegative(),
+  warnings: z.array(z.object({ code: z.string(), message: z.string() })),
+  next: z.discriminatedUnion("op", [
+    z.object({ op: z.literal("outline"), at: z.string(), from: z.string().optional(), remaining: z.int().nonnegative(), unit: z.string() }),
+    z.object({ op: z.literal("read"), range: z.string(), remaining: z.int().nonnegative() }),
+    z.object({ op: z.literal("find"), from: z.string(), remaining: z.int().nonnegative() }),
+  ]).optional(),
+});
+
 export const opSpecs = {
+  "content.sheet-lens": defineOp({
+    queueFor: () => true,
+    name: "content.sheet-lens",
+    effect: "read",
+    payload: "none",
+    rerun: ["auth", "revision"],
+    limits: { requestBytes: 256 * 1024, responseBytes: MiB, budgetMs: 30_000 },
+    input: z.object({ scope: runtimeScope, unitId: z.string().min(1), request: sheetLensRequest }),
+    output: sheetLensOutput,
+    route: (input) => ({
+      scope: input.scope.kind === "trunk" ? "trunk" : `worktree:${input.scope.worktreeId}`,
+      unitId: input.unitId,
+    }),
+  }),
   "htmlView.validate": defineOp({
     name: "htmlView.validate",
     effect: "read",

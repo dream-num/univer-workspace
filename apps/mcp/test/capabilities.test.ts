@@ -19,6 +19,9 @@ const renderTools = ["screenshot", "print_pdf", "lint"];
 const executorTools = [
   "execute",
   "inspect",
+  "outline",
+  "read",
+  "find",
   "screenshot",
   "import",
   "export",
@@ -227,7 +230,7 @@ describe("capabilities through MCP tools/list and initialize", () => {
           } else {
             expect(unlisted.getInstructions()).toContain(notice);
             for (const name of [...executorTools, "job_get"])
-              expect(unlisted.getInstructions()).not.toMatch(new RegExp(`\\b${name}\\b`));
+              expect(unlisted.getInstructions()).not.toMatch(new RegExp(name === "read" ? "\\b(?:call|tool) read\\b" : `\\b${name}\\b`));
             if (toolset === "all") {
               const unknown = await callError(unlisted, "unknown");
               const hidden = await callError(unlisted, "execute");
@@ -281,7 +284,7 @@ describe("capabilities through MCP tools/list and initialize", () => {
           );
           const instructions = client.getInstructions()!;
           for (const name of allNames.filter((name) => !names.includes(name))) {
-            expect(instructions).not.toMatch(new RegExp(`\\b${name}\\b`));
+            expect(instructions).not.toMatch(new RegExp(name === "read" ? "\\b(?:call|tool) read\\b" : `\\b${name}\\b`));
           }
           if (combination === "core,admin") {
             expect(instructions).toContain("?toolsets=files");

@@ -18,7 +18,7 @@ import { zeroCost, type OpMeta } from "../shared/usage.js";
 import type { Handler, OpContext } from "./context.js";
 import { createGrantVerifier, grantCookie, resolveGrant } from "./credentials.js";
 import { mapRuntimeError, timeoutError } from "./errors.js";
-import { handlers } from "./ops/index.js";
+import { createHandlers } from "./ops/index.js";
 import { createRendererClient } from "./renderer-client.js";
 import { bindRuntime, getRuntimeRerun } from "./runtime.js";
 import { ConversionJobQueue } from "./jobs/queue.js";
@@ -66,7 +66,7 @@ export function createDispatcher(
 ) {
   const jobs = new ConversionJobQueue(config.EXECUTOR_MAX_JOBS);
   const verifyGrant = createGrantVerifier(config);
-  const dispatchers: { [K in OpName]: Handler<K> } = handlers;
+  const dispatchers: { [K in OpName]: Handler<K> } = createHandlers(config.EXECUTOR_SHEET_LENS_CACHE_BYTES);
   const metrics = new Registry();
   const enterUnitQueue = createUnitQueue();
   const reruns = new Counter({

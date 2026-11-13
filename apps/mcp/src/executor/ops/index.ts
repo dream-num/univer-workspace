@@ -1,6 +1,7 @@
 import type { OpName } from "../../shared/executor-protocol.js";
 import type { Handler } from "../context.js";
 import { contentExecute } from "./content-execute.js";
+import { createSheetLensHandler } from "./sheet-lens.js";
 import { contentInspect } from "./content-inspect.js";
 import { diagnosticsProbe } from "./diagnostics-probe.js";
 
@@ -31,4 +32,11 @@ export const handlers = {
   "render.printPdf": renderPrintPdf,
   "render.lint": renderLint,
   "diagnostics.probe": diagnosticsProbe,
-} satisfies { [K in OpName]: Handler<K> };
+} satisfies { [K in Exclude<OpName, "content.sheet-lens">]: Handler<K> };
+
+export function createHandlers(maxCachedBytes: number) {
+  return {
+    ...handlers,
+    "content.sheet-lens": createSheetLensHandler(maxCachedBytes),
+  } satisfies { [K in OpName]: Handler<K> };
+}

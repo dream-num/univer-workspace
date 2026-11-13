@@ -214,7 +214,13 @@ export function createGateway(
                           "status" in structuredContent &&
                           structuredContent.status === "running"
                         ? `${tool.name} is running. Poll job_get with job_id.`
-                        : `${tool.name} completed.`,
+                        : ["outline", "read", "find"].includes(tool.name) &&
+                            typeof structuredContent === "object" &&
+                            structuredContent !== null &&
+                            "text" in structuredContent &&
+                            typeof structuredContent.text === "string"
+                          ? structuredContent.text
+                          : `${tool.name} completed.`,
                 },
                 ...delivered.content,
               ],
@@ -508,6 +514,8 @@ export function createGateway(
               duration_ms: elapsed,
               executor: usage.executor,
               cost: usage.cost,
+              ...(usage.cache === undefined ? {} : { cache: usage.cache }),
+              ...(usage.timings === undefined ? {} : { timings: usage.timings }),
             });
             calls.inc({
               tool: tool?.name ?? "unknown",

@@ -18,6 +18,9 @@ import { executeTool } from "./core/execute.js";
 import { importTool } from "./core/import.js";
 import { jobGetTool } from "./core/job-get.js";
 import { exportTool } from "./core/export.js";
+import { outlineTool } from "./core/outline.js";
+import { readTool } from "./core/read.js";
+import { findTool } from "./core/find.js";
 import { inspectTool } from "./core/inspect.js";
 import { screenshotTool } from "./core/screenshot.js";
 import { whoamiTool } from "./core/whoami.js";
@@ -85,6 +88,9 @@ export const tools: readonly ToolDefinition[] = [
   fileUploadCreateTool,
   executeTool,
   inspectTool,
+  outlineTool,
+  readTool,
+  findTool,
   screenshotTool,
   importTool,
   exportTool,

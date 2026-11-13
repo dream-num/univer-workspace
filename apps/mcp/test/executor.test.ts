@@ -24,7 +24,7 @@ import { bindRuntime, workerEnvironment, reuseExecutorWorker } from "../src/exec
 import { createGrantVerifier, grantCookie, resolveGrant } from "../src/executor/credentials.js";
 import { mapRuntimeError } from "../src/executor/errors.js";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
-import { handlers } from "../src/executor/ops/index.js";
+import { handlers, createHandlers } from "../src/executor/ops/index.js";
 import { createExecutor } from "../src/executor/server.js";
 import {
   classifyFetchFailure,
@@ -54,7 +54,7 @@ describe("executor protocol boundaries", () => {
     });
     for (const invalid of [Buffer.alloc(0), Buffer.alloc(3), Buffer.from([0, 0, 0, 50, 123])])
       expect(() => decodeFrame(invalid)).toThrow();
-    expect(Object.keys(handlers)).toEqual(Object.keys(opSpecs));
+    expect(Object.keys(createHandlers(0)).sort()).toEqual(Object.keys(opSpecs).sort());
     for (const [name, spec] of Object.entries(opSpecs)) expect(spec.name).toBe(name);
     expect(opSpecs["content.execute"].rerun).toEqual(["revision", "auth"]);
     expect(opSpecs["content.inspect"].rerun).toEqual(["auth", "revision"]);
@@ -802,6 +802,7 @@ it("declares the rerun policy for every executor operation", () => {
     "typst.compile": [], "svg.compile": ["auth"],
     "exchange.import": [], "exchange.export": ["auth"],
     "content.execute": ["revision", "auth"], "content.inspect": ["auth", "revision"],
+    "content.sheet-lens": ["auth", "revision"],
     "render.screenshot": ["auth", "revision"],
     "render.printPdf": ["auth", "revision"], "render.lint": ["auth", "revision"],
     "diagnostics.probe": [],
