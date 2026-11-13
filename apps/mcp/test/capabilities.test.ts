@@ -4,10 +4,12 @@ import { Client, StreamableHTTPClientTransport, ProtocolError } from "@modelcont
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { adminNames, coreNames, filesNames } from "./tool-names.js";
 import { testStagingDirectory } from "./staging-directory.js";
+import { TOOL_SCOPE_META } from "../src/gateway/tools/definition.js";
 import { tools } from "../src/gateway/tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 
@@ -22,6 +24,7 @@ const executorTools = [
   "export",
   "html_view_validate",
   "html_view_create",
+  "html_view_replace",
   "compile_markdown",
   "export_markdown",
   "compile_typst",
@@ -69,41 +72,38 @@ async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds
     urls.push(await listen(server));
     cleanup.push(() => close(server));
   }
-  const reservation = createServer();
-  const origin = await listen(reservation);
-  await close(reservation);
-  const gateway = createGateway(
-    parseGatewayConfig({
-      MCP_DEV_SESSION_PASSTHROUGH: "1",
-      WORKSPACE_ORIGIN: "https://workspace.test",
-      MCP_PUBLIC_URL: `${origin}/mcp`,
-      MCP_STAGING_DIRECTORY: testStagingDirectory(),
-      ...(allowedUserIds === undefined ? {} : { MCP_EXECUTOR_ALLOWED_USER_IDS: allowedUserIds }),
-      ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_EXECUTOR_TOKEN: token } : {}),
-    }),
-    {
-      logger: pino({ level: "silent" }),
-      fetcher: async (_url, init) =>
-        Response.json({
-          authenticated: true,
-          user: {
-            id:
-              new Headers(init?.headers).get("cookie") === "workspace_session=listed"
-                ? "listed"
-                : "user",
-            displayName: "User",
-          },
-        }),
-    },
+  const { gateway, url } = await listenGateway((url) =>
+    createGateway(
+      parseGatewayConfig({
+        MCP_DEV_SESSION_PASSTHROUGH: "1",
+        WORKSPACE_ORIGIN: "https://workspace.test",
+        MCP_PUBLIC_URL: url,
+        MCP_STAGING_DIRECTORY: testStagingDirectory(),
+        ...(allowedUserIds === undefined ? {} : { MCP_EXECUTOR_ALLOWED_USER_IDS: allowedUserIds }),
+        ...(urls.length ? { MCP_EXECUTOR_URLS: urls.join(","), MCP_EXECUTOR_TOKEN: token } : {}),
+      }),
+      {
+        logger: pino({ level: "silent" }),
+        fetcher: async (_url, init) =>
+          Response.json({
+            authenticated: true,
+            user: {
+              id:
+                new Headers(init?.headers).get("cookie") === "workspace_session=listed"
+                  ? "listed"
+                  : "user",
+              displayName: "User",
+            },
+          }),
+      },
+    ),
   );
-  gateway.server.listen(Number(new URL(origin).port), "127.0.0.1");
-  await once(gateway.server, "listening");
   cleanup.push(async () => {
     await gateway.close();
     await close(gateway.server);
   });
   return async (
-    toolsets: string,
+    toolsets: string | undefined,
     mode: "legacy" | { pin: string } = { pin: "2026-07-28" },
     session = "session",
   ) => {
@@ -113,7 +113,7 @@ async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds
     );
     cleanup.push(() => client.close());
     await client.connect(
-      new StreamableHTTPClientTransport(new URL(`${origin}/mcp?toolsets=${toolsets}`), {
+      new StreamableHTTPClientTransport(new URL(`${url}${toolsets === undefined ? "" : `?toolsets=${toolsets}`}`), {
         requestInit: { headers: { authorization: `Bearer ${session}` } },
       }),
     );
@@ -139,6 +139,33 @@ async function callError(client: Client, name: string) {
 }
 
 describe("capabilities through MCP tools/list and initialize", () => {
+  it.each(["legacy", { pin: "2026-07-28" }] as const)("advertises every registered scope in tools/list (%j)", async (mode) => {
+    const client = await (await start([replica()]))("all", mode);
+    const listed = (await client.listTools()).tools;
+    for (const tool of tools) {
+      expect(listed.find(({ name }) => name === tool.name)?._meta?.[TOOL_SCOPE_META], tool.name).toBe(tool.scope);
+    }
+  });
+
+  it("offers page creation and revision on a connection without a toolsets query", async () => {
+    const client = await (await start([replica()]))(undefined);
+    expect((await client.listTools()).tools.map(({ name }) => name)).toEqual(coreNames);
+    const text = client.getInstructions();
+    expect(text).toContain("A page is an HTML View (.univer.html) bound to live Sheets.");
+    expect(text).toContain("It is not a Slide, Board or other Unit and does not go through pull requests.");
+    expect(text).toContain("only save a draft");
+    expect(text).toContain("give the user draft.previewUrl");
+    expect(text).toContain("Before saying whether a page is live or still a draft");
+    expect(text).toContain("call html_view_draft_get");
+    expect(text).toContain("On rejected, ask what to change.");
+    expect(text).toContain("html_view_read then html_view_replace");
+  });
+
+  it("stops page requests when publishing is unavailable", async () => {
+    const client = await (await start())(undefined);
+    expect(client.getInstructions()).toContain("This connection cannot draft pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.");
+  });
+
   it("lists the selector syntax for each inspect target", async () => {
     const connect = await start([replica()]);
     const client = await connect("core");
@@ -259,10 +286,10 @@ describe("capabilities through MCP tools/list and initialize", () => {
           if (combination === "core,admin") {
             expect(instructions).toContain("?toolsets=files");
             if (deployment === "full")
-              expect(instructions).toContain("PDF, Markdown, Typst, SVG, HTML View, Blob");
+              expect(instructions).toContain("PDF, Markdown, Typst, SVG, Blob");
             if (deployment === "no-renderer") {
               expect(instructions).not.toContain("PDF");
-              expect(instructions).toContain("Markdown, Typst, SVG, HTML View, Blob");
+              expect(instructions).toContain("Markdown, Typst, SVG, Blob");
             }
           }
         }
@@ -344,4 +371,16 @@ describe("capabilities through MCP tools/list and initialize", () => {
       .poll(names)
       .toEqual(allNames.filter((name) => ![...executorTools, "job_get"].includes(name)));
   });
+});
+
+it("hides page writes from old executors and retains the HTTP-only status tool", async () => {
+  const old = replica([...allOperations.filter((name) => name !== "htmlView.draft"), "htmlView.create", "htmlView.replace"]);
+  const client = await (await start([old]))("core");
+  const names = (await client.listTools()).tools.map(({ name }) => name);
+  expect(names).not.toContain("html_view_create");
+  expect(names).not.toContain("html_view_replace");
+  expect(names).toContain("html_view_draft_get");
+  expect(Object.keys(opSpecs)).toContain("htmlView.draft");
+  expect(Object.keys(opSpecs)).not.toContain("htmlView.create");
+  expect(Object.keys(opSpecs)).not.toContain("htmlView.replace");
 });

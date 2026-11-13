@@ -14,7 +14,7 @@
   },
   "scripts": {
     "clean": "rm -rf dist *.tsbuildinfo",
-    "test": "vitest run",
+    "test": "node ../../scripts/test.mjs vitest run",
     "typecheck": "tsc -p tsconfig.test.json --noEmit --pretty false"
   },
   "dependencies": {

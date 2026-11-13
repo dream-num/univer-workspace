@@ -39,10 +39,11 @@ const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/u;
 const CODE_PATTERN = /^[0-9]{6}$/u;
 
 export function AuthCard(props: {
+  readonly initialMode?: "register";
   readonly oauthError?: string;
   readonly returnTo?: string;
 }) {
-  const [mode, setMode] = useState<AuthMode>("email");
+  const [mode, setMode] = useState<AuthMode>(props.initialMode ?? "email");
   const [username, setUsername] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");

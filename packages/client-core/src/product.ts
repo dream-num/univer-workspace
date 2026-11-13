@@ -99,3 +99,7 @@ export { WorkspaceWorktreeFeature } from "./worktree.js";
 export type { WorkspaceUnit, WorkspaceWorktree, WorkspaceWorktreeState } from "./worktree-model.js";
 
 export { WorkspaceAssetFeature } from "./asset.js";
+
+export { readWorkspaceHtmlView, type WorkspaceHtmlViewPage } from "./html-view-page.js";
+
+export { readWorkspaceHtmlViewDraft, htmlViewDraftUrl, type WorkspaceHtmlViewDraft, type WorkspaceHtmlViewDraftStatus } from "./html-view-draft.js";

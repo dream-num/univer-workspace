@@ -12,6 +12,8 @@ export interface WorkspaceHtmlViewerProps extends HtmlViewHostOptions {
   readonly locale?: "zh-CN" | "en-US";
   readonly title: string;
   readonly allowedOrigins?: readonly string[];
+  /** URL prefixes the page may load images and audio/video from; no other requests. */
+  readonly mediaSources?: readonly string[];
   readonly className?: string | undefined;
   readonly style?: CSSProperties;
 }
@@ -54,6 +56,7 @@ export const WorkspaceHtmlViewer = forwardRef<WorkspaceHtmlViewerHandle, Workspa
           source: props.source,
           ...(callbacks.current.locale ? { locale: callbacks.current.locale } : {}),
           ...(props.allowedOrigins ? { allowedOrigins: props.allowedOrigins } : {}),
+          ...(props.mediaSources ? { mediaSources: props.mediaSources } : {}),
           loadEngine: props.loadEngine,
           onError: (message) => callbacks.current.onError?.(message),
           onStatus: (states) => callbacks.current.onStatus?.(states),
@@ -69,7 +72,7 @@ export const WorkspaceHtmlViewer = forwardRef<WorkspaceHtmlViewerHandle, Workspa
         container.current.replaceChildren();
         callbacks.current.onError?.(error instanceof Error ? error.message : String(error));
       }
-    }, [props.source, props.allowedOrigins, props.loadEngine]);
+    }, [props.source, props.allowedOrigins, props.mediaSources, props.loadEngine]);
     return (
       <div
         ref={container}

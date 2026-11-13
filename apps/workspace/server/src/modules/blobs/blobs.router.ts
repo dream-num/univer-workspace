@@ -12,7 +12,7 @@ export function createBlobsRouter(options: {
 
   router.put("/blob-resources/:resourceId/content", async (request, response) => {
     const result = await options.blobs.replace(
-      session(request.headers.cookie),
+      options.identity.requireSession(request.headers.cookie),
       required(request.params.resourceId),
       request.headers["idempotency-key"],
       request.headers["if-match"],
@@ -28,7 +28,7 @@ export function createBlobsRouter(options: {
     json({ limit: "1mb" }),
     (request, response) => {
       const result = options.blobs.createUpload(
-        session(request.headers.cookie),
+        options.identity.requireSession(request.headers.cookie),
         request.headers["idempotency-key"],
         request.body
       );
@@ -59,7 +59,7 @@ export function createBlobsRouter(options: {
     "/blob-upload-sessions/:uploadId/complete",
     async (request, response) => {
       const result = await options.blobs.complete(
-        session(request.headers.cookie),
+        options.identity.requireSession(request.headers.cookie),
         required(request.params.uploadId)
       );
       response.status(result.status).json(result.body);

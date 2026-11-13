@@ -75,13 +75,24 @@ describe("Workspace CLI skills command", () => {
       "references/adding-records.md",
       "references/authoring.md",
       "references/charts.md",
+      "references/design.md",
       "references/frontend-libraries.md",
+      "templates/bauhaus-blocks.univer.html",
+      "templates/blueprint-timeline.univer.html",
+      "templates/broadsheet.univer.html",
+      "templates/brutalist-board.univer.html",
+      "templates/citron-poster.univer.html",
+      "templates/meeting-slides.univer.html",
+      "templates/night-gauge.univer.html",
+      "templates/swiss-report.univer.html",
+      "templates/trading-desk.univer.html",
+      "templates/wenkai-notebook.univer.html",
     ]);
     const located = await runSkills(["skills", "path", "html-view", "--json"]);
     const root = (located.data as { path: string }).path;
     for (const file of [{ path: "SKILL.md", content: data.content }, ...files]) {
       expect(await readFile(join(root, file.path), "utf8")).toBe(file.content);
-      for (const link of file.content.matchAll(/\]\(([^)]+\.md)\)/g)) {
+      for (const link of file.content.matchAll(/\]\(([^)]+\.(?:md|html))\)/g)) {
         if (/^[a-z]+:/i.test(link[1]!)) continue;
         expect(await readFile(resolve(root, dirname(file.path), link[1]!), "utf8")).not.toBe("");
       }
@@ -97,7 +108,7 @@ describe("Workspace CLI skills command", () => {
       }>
     )[0]!;
     expect(data.files).toBeUndefined();
-    expect(data.resources).toHaveLength(4);
+    expect(data.resources).toHaveLength(15);
     const text = await runSkillsText(["skills", "get", "html-view"]);
     expect(text).not.toContain(skillRoot);
     for (const resource of data.resources) {
@@ -188,7 +199,6 @@ describe("Workspace CLI skills command", () => {
         data[0]?.content,
         ...(data[0]?.files ?? []).map((file) => file.content),
       ].join("\n");
-      expect(content).toEqual(expect.any(String));
       expect(content).toContain(contract.owner);
       expect(content).toContain(contract.insert);
       expect(content).toContain(contract.read);

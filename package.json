@@ -6,11 +6,11 @@
   "scripts": {
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "test": "pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm test:docker-inputs && pnpm -r test",
-    "test:sdk-dependencies": "node --test scripts/update-sdk-dependencies.test.mjs scripts/sdk-type-identity.test.mjs",
-    "test:univer-license": "node --test scripts/update-univer-license.test.mjs",
-    "test:release": "node --test scripts/release/*.test.mjs",
-    "test:docker-inputs": "node --test scripts/docker-inputs.test.mjs",
+    "test": "pnpm test:ci && pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm test:docker-inputs && pnpm -r test",
+    "test:sdk-dependencies": "node scripts/test.mjs node scripts/update-sdk-dependencies.test.mjs scripts/sdk-type-identity.test.mjs",
+    "test:univer-license": "node scripts/test.mjs node scripts/update-univer-license.test.mjs",
+    "test:release": "node scripts/test.mjs node scripts/release/*.test.mjs",
+    "test:docker-inputs": "node scripts/test.mjs node scripts/docker-inputs.test.mjs",
     "check": "pnpm typecheck && pnpm test",
     "format": "oxfmt",
     "format:check": "oxfmt --check",
@@ -24,7 +24,10 @@
     "unlink:workspace-cli": "node scripts/unlink-workspace-cli.mjs",
     "workspace:dev:web": "pnpm --filter @univerjs/univer-workspace dev:web",
     "workspace:dev:server": "pnpm --filter @univerjs/univer-workspace dev:server",
-    "workspace:start": "pnpm --filter @univerjs/univer-workspace start"
+    "workspace:start": "pnpm --filter @univerjs/univer-workspace start",
+    "verify": "node scripts/verify.mjs",
+    "test:ci": "node scripts/test.mjs node scripts/verify.test.mjs scripts/ci-reliability.test.mjs",
+    "ci:reliability": "node scripts/ci-reliability.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

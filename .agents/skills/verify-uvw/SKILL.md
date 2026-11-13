@@ -71,6 +71,31 @@ user owns Personal Space `verify-<run-id>/personal`.
 The server does not reload. After changing server or CLI code: rebuild the CLI if needed,
 `$V down`, `$V up`, `$V user`. Web code under `apps/workspace/web` hot-reloads through Vite.
 
+## Browser Agent mock model
+
+Start the local OpenAI-compatible provider with a JSON script. Each completion consumes
+one step. A step returns text or one tool call; after the last step it returns `Done`.
+Usage chunks contain fixed synthetic counts, including 50 cached tokens out of 100 prompt
+tokens. These counts test the UI, not actual provider caching.
+
+```bash
+cat > /tmp/uvw-model-script.json <<'JSON'
+{"model":"mock-agent","steps":[{"tool":{"name":"skills_read","arguments":{"name":"weekly-report"}}},{"text":"Skill read."}]}
+JSON
+node .agents/skills/verify-uvw/bin/mock-provider.mjs \
+  --port 5984 --script /tmp/uvw-model-script.json --log /tmp/uvw-model-requests.jsonl
+```
+
+In the browser Agent's **Model settings**, add an **OpenAI-compatible provider**.
+Use Base URL `http://127.0.0.1:5984`, model and default model `mock-agent`, and any
+non-empty API key (for example `mock-key`). The Base URL must differ from the Workspace
+origin. Choose a free port and use an HTTP loopback Workspace for this local check.
+The provider supports CORS preflight, `GET /models` and streaming
+`POST /chat/completions`. Each request appends arrival time, method, URL and its full
+JSON body to the log, including OPTIONS and GET with a null body. Keep the log with
+local verification evidence; it contains full model requests. Stop the foreground
+process with Ctrl+C when finished.
+
 ## Doctor
 
 `$V doctor` checks the disposable instance. With MCP enabled after `user`, it creates or reuses a dedicated idempotent doctor Worktree and Sheet, then opens a worker through gateway inspection. Run it first, and again whenever anything looks off. It
@@ -177,6 +202,19 @@ with the same explicit run ID and ports. Reuse requires that `down` removed `dat
 so save the relevant redacted facts before restarting. Run `user` again after each restart.
 Without opt-in, existing commands
 keep their behavior and output, including runs created before MCP support.
+
+`VERIFY_UVW_MCP_SAME_ORIGIN=1` at `up` serves the gateway at the web origin, as production does.
+`MCP_PUBLIC_URL` and the Workspace's `MCP_RESOURCE_URLS` become `http://127.0.0.1:<web port>/mcp`,
+Vite proxies `/mcp` to the gateway port, and `MCP_URL`, `mcp`, `mcp-oauth` and opencode use that URL.
+Use it when a browser page calls `/mcp`, such as the Agents module. The gateway still listens on
+its own port for `healthz` and `metrics`, but its `/mcp` answers 403 there because the Host differs.
+
+`VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` at `up` builds the MCP image from another checkout of this
+repository, and `doctor` checks the image against that checkout's source digest. Use it when this tree
+changes only inputs the gateway does not use, such as Web dependencies in `pnpm-lock.yaml`, and the
+network is too slow to reinstall the image's packages: a clean `git worktree` at `origin/main` reuses
+the cached install layer. The checkout's `apps/mcp`, `packages/client-core` and `apps/cli/skill-data`
+must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data`).
 
 Two independent flags at `up` select the deployment shape and are saved in `run.env`:
 

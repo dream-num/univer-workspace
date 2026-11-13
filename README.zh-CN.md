@@ -37,6 +37,7 @@ Agent 在隔离的 Worktree 中工作、验证修改，再把结果交给人类�
 
 - Agent 可以生成基于电子表格的 Mini App，例如决策看板、交互式报告和业务看板。
 - 网页上的指标、图表和控件与单元格绑定，支持数据读取、写入和协同更新。
+- 查看 [HTML View 效果展示](docs/html-view-showcase.zh-CN.md)：10 种页面风格、实时编辑，以及支持访客试算的公开分享。
 
 [![Workspace Mini App 与其关联的电子表格并排显示，指标、图表和控件绑定到单元格](docs/images/workspace-mini-app.png)](https://youtu.be/4PBVltY_WEc)
 
@@ -383,23 +384,46 @@ SVG 编译/测量/apply workflow；reference-provider package 仍只供 Browser 
 
 ## 开发与验证
 
-开发过程中先运行最小相关检查；在宣称完整变更前，运行合适的仓库级验证：
+迭代时先运行最小相关检查。提交 PR 前，在 Linux 或 macOS 使用与 CI 相同的验证入口：
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
-pnpm --filter @univerjs/univer-workspace test:production-import
-pnpm package:workspace-cli
+pnpm verify
+pnpm verify --stage test-mcp
 ```
 
-修改 HTTP contract 时还需要运行：
+六个阶段为 `static`、`test-workspace`、`test-cli`、`test-mcp`、`test-rest` 和 `package`。
+它们覆盖 HTTP contract 生成校验、类型检查、已安装 SDK 的依赖与类型身份检查、workspace 测试、
+构建、真实 CLI tarball 的隔离安装 smoke，以及 Workspace 生产导入与迁移检查。
+`pnpm check` 仍是较短的类型检查与测试循环。
+
+已有安装可能掩盖依赖解析问题。验证已提交代码时，使用 Node 24 和仓库固定的 pnpm 版本，
+在独立 worktree 中重新安装，避免复用 node_modules 和 TypeScript 构建状态：
 
 ```bash
-pnpm --filter @univerjs/univer-workspace api:verify
+git worktree add --detach ../univer-ci-check HEAD
+cd ../univer-ci-check
+node scripts/verify.mjs --install
 ```
 
-升级 Univer SDK 时使用仓库脚本一次性更新所有版本耦合依赖与 lockfile，不要单独编辑 manifest：
+`--install` 会先执行并记录 `pnpm install --frozen-lockfile`。CI 在干净 checkout 中调用相同入口。
+此 worktree 检查 `HEAD`，不包含原目录的未提交改动。普通本地运行会记录源码是否有未提交改动，
+但不代表依赖图来自干净安装。
+
+`.verification/` 按每次调用分别保存命令日志、退出码和信号、Vitest 与 node:test 结构化结果，
+以及带提交、执行次数、阶段、文件和测试名称的摘要。进程失败时，即使没有测试报告也不会判绿。
+CI 按运行、执行次数和阶段分别上传 artifact，保留 30 天；重跑不会覆盖首次结果。
+验证入口之前的 setup 失败或 runner 被强制终止可能没有完整 artifact，统计仍会读取 workflow 状态。
+
+`gh` 登录后，可以查看近期首次通过率与重复失败：
+
+```bash
+pnpm ci:reliability --limit 20
+```
+
+首次通过率的分母排除首次执行被取消或尚未结束的运行。失败签名只分析首次失败的执行，并另列证据覆盖率。
+旧运行或过期 artifact 无法还原具体失败测试。报告可能含测试 fixture 数据，应保持仓库现有的访问边界。
+
+使用仓库脚本统一更新 Univer SDK 版本与 lockfile：
 
 ```bash
 pnpm update:univer-sdk --sdk_version <exact-sdk-version>

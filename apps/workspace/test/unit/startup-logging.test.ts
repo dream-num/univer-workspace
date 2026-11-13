@@ -1,9 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { it, expect } from "vitest";
 
-it.each(["info", "error", "silent"])(
-  "uses the shared logger at %s and preserves diagnostics on abrupt exit",
-  (level) => {
+it.each(
+  ["info", "error", "silent"].flatMap((level) => [
+    { level, deferWrites: false },
+    { level, deferWrites: true },
+  ]),
+)(
+  "preserves ordered diagnostics at $level on abrupt exit with deferred writes $deferWrites",
+  ({ level, deferWrites }) => {
     const child = spawnSync(
       process.execPath,
       [
@@ -13,10 +18,19 @@ it.each(["info", "error", "silent"])(
         "-e",
         `
     import assert from "node:assert/strict";
+    import fs from "node:fs";
     import { startupStage, startupStageAsync } from "./server/src/logging/startup.ts";
     const { logger } = await import("./server/src/logging/logger.ts");
     const { requestLogger } = await import("./server/src/middleware/logging.ts");
     assert.equal(logger, requestLogger({}));
+    const write = fs.write;
+    const pending = [];
+    if (${deferWrites}) {
+      fs.write = function(fd, ...args) {
+        if (fd !== 1) return write.call(this, fd, ...args);
+        pending.push(() => write.call(this, fd, ...args));
+      };
+    }
     logger.info({ event: "application.test" }, "shared logger");
     const value = {};
     assert.equal(startupStage("sync", () => value), value);
@@ -24,6 +38,9 @@ it.each(["info", "error", "silent"])(
     const error = new Error("migration failed", { cause: new Error("database unavailable") });
     assert.throws(() => startupStage("sync.failure", () => { throw error; }), e => e === error);
     await assert.rejects(startupStageAsync("async.failure", async () => { throw error; }), e => e === error);
+    fs.write = write;
+    for (const operation of pending) operation();
+    await new Promise((resolve, reject) => logger.flush(error => error ? reject(error) : resolve()));
     startupStage("abrupt", () => process.exit(23));
   `,
       ],

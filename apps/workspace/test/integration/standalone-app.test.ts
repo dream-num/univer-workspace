@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { Readable } from "node:stream";
 import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
@@ -73,12 +74,12 @@ describe("standalone HTML Apps", () => {
 
 async function publish(ctx: Awaited<ReturnType<typeof createHttpContext>>, html: string, filename = 'example.univer.html') {
   const content = Buffer.from(html);
-  const { body } = ctx.application.blobs.createUpload(ctx.userId, crypto.randomUUID(), {
+  const { body } = ctx.application.blobs.createUpload(interactivePrincipal(ctx.userId), crypto.randomUUID(), {
     spaceId: ctx.space.id, parentNodeId: null, name: filename,
     originalFilename: filename, byteSize: content.length,
   });
   await ctx.application.blobs.upload(ctx.userId, body.upload.id, String(content.length), Readable.from([content]));
-  await ctx.application.blobs.complete(ctx.userId, body.upload.id);
+  await ctx.application.blobs.complete(interactivePrincipal(ctx.userId), body.upload.id);
   return {nodeId: body.upload.nodeId, resourceId: body.upload.resourceId};
 }
 

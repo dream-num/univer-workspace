@@ -1,6 +1,6 @@
 # Univer Workspace 应用层设计
 
-本文定义产品 HTTP、Univer Collaboration Endpoint 与 V18 Node/Resource/Asset 数据模型之间的
+本文定义产品 HTTP、Univer Collaboration Endpoint 与 V19 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
 ## 模块
@@ -41,14 +41,14 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 `db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
 `db/migrations` 准备阶段：
 
-- Fresh：创建 V18；
-- V18：校验 Schema 指纹；
-- V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V18；
-- V0：一致性备份后直接迁移到 V18；
+- Fresh：创建 V19；
+- V19：校验 Schema 指纹；
+- V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1：一致性备份后逐版本迁移到 V19；
+- V0：一致性备份后直接迁移到 V19；
 - 其他状态：拒绝启动。
 
 旧表读取只允许存在于这个可整体删除的迁移包中。Identity、Node、Resource、权限、
-Worktree 等业务模块只编译和运行 V18 Query。
+Worktree 等业务模块只编译和运行 V19 Query。
 
 V7 扩展 Operation 和 Object Deletion Job 枚举；V8 仅新增内容权限对象与协作者表；V9 仅新增 Issue 相关表，均不改写现有业务表。
 
@@ -107,7 +107,7 @@ CLI password 路由与 Browser password 路由使用相同凭据及响应，额�
 
 V17 允许 `univer_resources` 与 `worktree_node_intents` 的 `unit_type` 取 `pdf`：SQLite 不能修改 CHECK，两张表在同一事务内重建，保留全部行、`univer_resources_kind_guard` 触发器与 `content_permission_objects` 的入向外键，沿用备份（`.v16-backup-…sqlite`）、回滚、指纹、外键和完整性检查流程。
 
-V18 为 MCP 远程接入持久化 OAuth Grant、动态注册 Client 与 Personal Access Token（`oauth_grants`、`oauth_refresh_history`、`oauth_clients`、`personal_access_tokens`），并在 `login_sessions` 追加可空的 `issued_for_pat_id`、`issued_for_grant_id`，标记下游登录 Session 由哪个 Token 换取、Token 吊销时一并删除。迁移只追加表与列，不重建表，沿用备份（`.v17-backup-…sqlite`）、回滚、指纹、外键和完整性检查流程。Refresh Token 轮换时退役的哈希进入 `oauth_refresh_history`：60 秒宽限期内出示只失败不吊销，之后出示则吊销整个 Grant；OAuth Token 必须绑定 `resource`。Token 服务（`modules/identity/access-tokens.ts`）通过两组 HTTP 入口使用：登录用户用 `GET`/`POST /api/auth/tokens` 与 `DELETE /api/auth/tokens/:id` 管理自己的 PAT（明文只在创建时返回；由 token exchange 换出的 Session 不能创建 PAT、批准 CLI 登录、完成 OAuth 授权或关联外部身份，统一由 `requireInteractiveSession` 返回 403，避免产生比 Token 活得更久的访问）；机密网关 Client 在 `OAUTH_CLIENTS_JSON` 中设置 `tokenExchange: true` 后，可在 `POST /api/auth/token` 以 RFC 8693 `token-exchange` 把 PAT 或 MCP OAuth access token（须带与 Grant 一致的 `resource`）换成最长 10 分钟的下游登录 Session（不超过 Token 剩余有效期与部署 Session 时长）。吊销检查与 Session 写入在同一个数据库事务内完成，吊销 Token 会删除其下游 Session。现有 Browser、CLI 与 Agent 登录以及 `authorization_code` 授权的行为不变。设置 `MCP_RESOURCE_URLS`（并以 `PUBLIC_ORIGIN` 作为 issuer）后，MCP Client 走标准 OAuth：`GET /.well-known/oauth-authorization-server` 发现元数据，`POST /api/auth/register` 动态注册公共 Client（只接受 loopback http、https 与反向域名私有 scheme 的回调，不签发 secret，总数达到 `MCP_MAX_REGISTERED_CLIENTS` 后返回 503），授权时必须带 PKCE `S256` 与 `MCP_RESOURCE_URLS` 中的 `resource`，loopback 回调忽略端口匹配；同意页逐项列出四个 MCP scope，默认全选、可取消；`POST /api/auth/token` 的 `authorization_code` 与 `refresh_token` 签发、轮换绑定该 `resource` 的 Grant，`POST /api/auth/revoke` 吊销 Grant 及其下游 Session。授权码只能尝试一次，重放已兑换的授权码会吊销它签发的 Grant。未设置时这些入口都不存在，静态 Client 在两种情况下都保持原有规则。
+V18 为 MCP 远程接入持久化 OAuth Grant、动态注册 Client 与 Personal Access Token（`oauth_grants`、`oauth_refresh_history`、`oauth_clients`、`personal_access_tokens`），并在 `login_sessions` 追加可空的 `issued_for_pat_id`、`issued_for_grant_id`，标记下游登录 Session 由哪个 Token 换取、Token 吊销时一并删除。迁移只追加表与列，不重建表，沿用备份（`.v17-backup-…sqlite`）、回滚、指纹、外键和完整性检查流程。Refresh Token 轮换时退役的哈希进入 `oauth_refresh_history`：60 秒宽限期内出示只失败不吊销，之后出示则吊销整个 Grant；OAuth Token 必须绑定 `resource`。Token 服务（`modules/identity/access-tokens.ts`）通过两组 HTTP 入口使用：登录用户用 `GET`/`POST /api/auth/tokens` 与 `DELETE /api/auth/tokens/:id` 管理自己的 PAT（明文只在创建时返回；由 token exchange 换出的 Session 不能创建 PAT、批准 CLI 登录、完成 OAuth 授权或关联外部身份，统一由 `requireInteractiveSession` 返回 403，避免产生比 Token 活得更久的访问）；机密网关 Client 在 `OAUTH_CLIENTS_JSON` 中设置 `tokenExchange: true` 后，可在 `POST /api/auth/token` 以 RFC 8693 `token-exchange` 把 PAT 或 MCP OAuth access token（须带与 Grant 一致的 `resource`）换成最长 10 分钟的下游登录 Session（不超过 Token 剩余有效期与部署 Session 时长）。吊销检查与 Session 写入在同一个数据库事务内完成，吊销 Token 会删除其下游 Session。现有 Browser、CLI 与 Agent 登录以及 `authorization_code` 授权的行为不变。设置 `MCP_RESOURCE_URLS`（并以 `PUBLIC_ORIGIN` 作为 issuer）后，MCP Client 走标准 OAuth：`GET /.well-known/oauth-authorization-server` 发现元数据，`POST /api/auth/register` 动态注册公共 Client（只接受 loopback http、https 与反向域名私有 scheme 的回调，不签发 secret，总数达到 `MCP_MAX_REGISTERED_CLIENTS` 后返回 503），授权时必须带 PKCE `S256` 与 `MCP_RESOURCE_URLS` 中的 `resource`，loopback 回调忽略端口匹配；同意页逐项列出四个 MCP scope，默认全选、可取消；`POST /api/auth/token` 的 `authorization_code` 与 `refresh_token` 签发、轮换绑定该 `resource` 的 Grant，`POST /api/auth/revoke` 吊销 Grant 及其下游 Session。授权码只能尝试一次，重放已兑换的授权码会吊销它签发的 Grant。未设置时这些入口都不存在，静态 Client 在两种情况下都保持原有规则。第一方 `POST /api/auth/agent-token` 仅接受交互式 Cookie Session，以 `univer-workspace-agents` 身份签发一小时的 `uvw_at_`，只允许无重复且顺序不限的 `[read]` 或 `[read, write]`，绑定经 `MCP_RESOURCE_URLS` 校验的 `PUBLIC_ORIGIN` 下 `/mcp`，返回 `201 { token, expiresAt, scopes, resource }` 与 `Cache-Control: no-store`，不返回 Refresh Token、不进入 PAT 列表，匿名、Token 换出的 Session、非法 scopes 和未配置的同源 MCP resource 分别返回 401、403、400 和 503，网关交换流程与 V18 Schema 不变。
 
 PAT 或 MCP OAuth Grant 吊销、登录退出及 Session 到期都会以 1008 关闭该 Session
 已打开的协同和 Worktree change-feed WebSocket。同一用户其他登录 Session 的连接继续使用。
@@ -132,7 +132,7 @@ Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多
 （自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 3、Worktree 3、History 2；
-Comment 1 不变。产品数据库先准备到 V18，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
+Comment 1 不变。产品数据库先准备到 V19，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。
 当前版本重复启动只读取组件版本，不再次执行协同库完整性与外键全库扫描、迁移或备份；迁移前仍校验源库，迁移后仍校验副本。History 的事件订阅、分段和读取时追赶由 SDK 自行管理，
 不再从产品 Resource 查询执行旧 History backfill。升级与回退步骤见应用 README。
 
@@ -460,3 +460,22 @@ Trunk / Worktree mapping / merge-preview policy 选择数据，Source 本地内�
 不会因为显示嵌入而加入新的 Source 写入房间。
 
 支持范围、生命周期、SDK 边界及复验方法见 [嵌入运行时说明](embed-runtime.md)。
+
+## HTML View 草稿审批
+
+V19 的 `modules/html-view-drafts` 提供提交、作者读取、纯文本 content、publish 与 reject API。
+提交接受最多 512 KiB UTF-8 HTML，执行结构校验，并将字节写入 BlobStore；相同作者与 key 的
+相同目标和内容重试返回原草稿，不同意图返回 409。create 名称缺少 `.univer.html` 时自动追加。
+接收中状态对读取不可见。content 使用 `text/plain; charset=utf-8`、CSP sandbox、nosniff 与
+private/no-store，不能作为第一方源 HTML 执行。
+
+发布和拒绝统一要求 `requireInteractiveSession`；Token 换出的 Session 只能提交和读取自己的
+草稿。发布重新检查实时目标权限和可用性；权限丢失、目标回收或父节点缺失保留 pending，
+仅基础 ETag 不匹配产生终态 conflicted 并释放字节。现有 Blob 维护 tick 先过期草稿再领取删除
+任务。
+
+Token 换出的 Session 通过 Blob API 预留上传、完成上传或替换内容，以及通过 Node API 将 Blob
+重命名为页面时，统一检查 `.univer.html` 后缀，忽略大小写；上传与替换同时检查节点名和原始
+文件名。命中时返回 403 `HTML_VIEW_DRAFT_REQUIRED`，要求使用 `html_view_create` 或
+`html_view_replace` 提交草稿。浏览器与 CLI device login 的交互 Session、草稿发布和从回收站
+恢复已有页面不受此限制。

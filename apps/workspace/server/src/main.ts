@@ -29,7 +29,7 @@ await startupStageAsync("database.collaboration.prepare", () =>
 const application = startupStage("application.create", () => createWorkspaceApplication(config));
 await startupStageAsync("application.initialize", () => application.initialize());
 const operationRecovery = startOperationRecovery(application.resources);
-const blobMaintenance = startBlobMaintenance(application.blobs);
+const blobMaintenance = startBlobMaintenance(application.blobs, { drafts: application.htmlViewDrafts });
 const background = {
   async dispose() {
     await Promise.all([operationRecovery.dispose(), blobMaintenance.dispose()]);

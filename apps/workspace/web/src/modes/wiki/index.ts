@@ -1,3 +1,4 @@
+import { WikiAgentsPage } from "./pages/agents";
 import { WikiIssueLayout, WikiIssueListPage, WikiIssueDetailPage } from "./pages/issues";
 import { WikiWorktreesPage } from "./pages/worktrees";
 import { WikiSpaceTrashPage } from "./pages/trash";
@@ -13,6 +14,8 @@ import type { ModeDefinition } from "../registry";
 
 export const wikiMode = {
   pages: {
+    agents: WikiAgentsPage,
+    agentSession: WikiAgentsPage,
     apps: HtmlAppPage,
     recent: WikiRepositoriesPage,
     repositories: WikiRepositoriesPage,

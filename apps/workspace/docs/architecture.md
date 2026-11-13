@@ -115,7 +115,9 @@ apps/workspace/
 - Node 进程挂载产品 API、Collaboration Endpoint、API 文档和 Web 静态资源。
 - Docker 镜像只包含 production dependencies、`dist` 和数据库 schema。
 
-启动入口通过仅依赖 Node 内置模块的 `startup-logging.ts` 同步写出阶段 JSON 日志，并以动态 import 标记应用/SDK 模块加载。日志覆盖迁移与监听前初始化，字段与排障查询见应用 README 的 Startup diagnostics。
+启动入口通过 `logging/startup.ts` 写出阶段 JSON 日志，并以动态 import 标记应用/SDK 模块加载。
+阶段日志与应用、HTTP 日志共享 Pino 配置和 `LOG_LEVEL`，使用独立的同步输出保持阶段顺序并在阻塞操作前写出。
+普通应用和 HTTP 日志保持异步输出。日志覆盖迁移与监听前初始化，字段与排障查询见应用 README 的 Startup diagnostics。
 
 ## Web 应用
 
@@ -131,6 +133,15 @@ apps/workspace/
 `features/blobs` 与 Agent 的远程 Blob 预览使用 private `workspace-markdown-viewer`
 渲染 Markdown。共享包拥有 GFM、源码切换、链接策略和样式；宿主负责内容请求、认证、取消和下载。
 两端继续使用各自的 React runtime。Markdown 读取完整文件，预览与源码均展示全文，不设置预览大小截断。
+
+`features/agents` 的浏览器 Agent 支持 Skill。gateway 的 `skills_read` 实时发现个人空间和成员仓库根目录的
+`.agents/skills/<name>/SKILL.md`，与内置 Skill 合并并给出诊断。每次运行开始时，`drive` 读取目录并写入
+用户消息的 `metadata.agentSkills`；模型可见部分变化时才在这条消息末尾追加 `<system-reminder>`，
+系统提示词和已发出的历史不变。会话页右侧栏从会话数据展示目录、已使用标记和诊断。输入框开头的 `/name`
+展开该 Skill 正文并记录 `agentSkillInvocation`；`disable-model-invocation` 的 Skill 不能被模型读取正文。
+设计、架构与执行记录见 [agent-skills.md](./proposals/agent-skills.md)、
+[agent-skills-architecture.md](./proposals/agent-skills-architecture.md) 和
+[agent-skills-plan.md](./proposals/agent-skills-plan.md)。
 
 `routes` 解析 URL、查询参数与 loader 权限，页面呈现交给 `modes`；`features` 按用户能力组织，
 `shared` 保存无业务归属的基础代码。箭头表示高层可使用左侧低层能力：
@@ -287,10 +298,11 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V18 结构，`initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V18；V18 校验指纹；V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
+产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V19 结构，`initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V19；V19 校验指纹；V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
+V19 新增 `html_view_drafts` 及到期索引；发布在产品事务中接管草稿 BlobStore key，拒绝、过期和冲突复用对象删除任务。
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
 可空的 `issued_for_pat_id`、`issued_for_grant_id`；迁移只追加，不重建表。
 
@@ -316,7 +328,7 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V18 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V19 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 

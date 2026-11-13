@@ -4,6 +4,99 @@
  */
 
 export interface paths {
+    "/api/html-view-drafts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stage an HTML View for interactive author approval. */
+        post: operations["submitHtmlViewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/html-view-drafts/{draftId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        /** Read an author-owned draft, deriving expiry and stale target state. */
+        get: operations["getHtmlViewDraft"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/html-view-drafts/{draftId}/content": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        /** Read author-owned unpublished draft bytes as inert text. */
+        get: operations["getHtmlViewDraftContent"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/html-view-drafts/{draftId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Publish a draft as its interactive author. */
+        post: operations["publishHtmlViewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/html-view-drafts/{draftId}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reject a draft as its interactive author. */
+        post: operations["rejectHtmlViewDraft"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/apps/{nodeId}/run": {
         parameters: {
             query?: never;
@@ -274,6 +367,33 @@ export interface paths {
          *     was itself issued by token exchange cannot create tokens.
          */
         post: operations["createPersonalAccessToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/agent-token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a one-hour MCP access token for the browser Agents module.
+         * @description Requires an interactive login session. Sessions issued by token exchange
+         *     are rejected with 403. Accepts only [read], [read, write], or [read, publish],
+         *     in either order, without duplicates. Never grants worktree:merge. The browser
+         *     requests [read, publish] only for one explicitly approved tool call.
+         *     The token is bound to /mcp at PUBLIC_ORIGIN, resolved against MCP_RESOURCE_URLS,
+         *     and uses the first-party client univer-workspace-agents. No refresh token
+         *     is returned. This is an OAuth grant and does not appear in the PAT list.
+         *     All responses have Cache-Control: no-store.
+         */
+        post: operations["createAgentToken"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2127,6 +2247,53 @@ export interface components {
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
             units: components["schemas"]["WorktreeUnit"][];
         };
+        SubmitHtmlViewDraft: {
+            /** @constant */
+            kind: "create";
+            spaceId: string;
+            parentNodeId?: string | null;
+            /** @description Trimmed name; .univer.html is appended when absent. */
+            name: string;
+            /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
+            html: string;
+        } | {
+            /** @constant */
+            kind: "replace";
+            resourceId: string;
+            /** @description One quoted strong ETag, as returned by Blob content. */
+            etag: string;
+            /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
+            html: string;
+        };
+        HtmlViewDraft: {
+            id: string;
+            /** @enum {string} */
+            kind: "create" | "replace";
+            /** @enum {string} */
+            state: "pending" | "published" | "rejected" | "expired" | "conflicted";
+            spaceId: string;
+            parentNodeId: string | null;
+            name: string;
+            targetResourceId: string | null;
+            /** @description Quoted strong ETag of the target at intake. */
+            baseEtag: string | null;
+            byteSize: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            decidedAt: string | null;
+            published: {
+                nodeId: string;
+                resourceId: string;
+                /** @description Quoted strong ETag of the published Blob. */
+                etag: string;
+            } | null;
+        };
+        HtmlViewDraftEnvelope: {
+            draft: components["schemas"]["HtmlViewDraft"];
+        };
         AnonymousSession: {
             /** @constant */
             authenticated: false;
@@ -2321,6 +2488,23 @@ export interface components {
             /** @description Plaintext token, shown once. */
             token: string;
             record: components["schemas"]["PersonalAccessToken"];
+        };
+        /** @description Exactly [read], [read, write], or [read, publish], in either order, without duplicates. */
+        AgentTokenScopes: ("read" | "write" | "publish")[];
+        AgentTokenCreate: {
+            scopes: components["schemas"]["AgentTokenScopes"];
+        };
+        AgentTokenCreated: {
+            /** @description MCP access token. No refresh token is returned. */
+            token: string;
+            /** @description Unix epoch milliseconds, one hour after issuance. */
+            expiresAt: number;
+            scopes: components["schemas"]["AgentTokenScopes"];
+            /**
+             * Format: uri
+             * @description The configured /mcp URL at PUBLIC_ORIGIN.
+             */
+            resource: string;
         };
         PasswordRegistration: {
             username: string;
@@ -3207,11 +3391,11 @@ export interface components {
         Cursor: string;
         Limit: string;
         IdempotencyKey: string;
+        /** @description Random opaque key representing one user intent. */
+        IdempotencyKeyParameter: string;
         /** @description Opaque cursor returned by the previous page. */
         CursorParameter: string;
         LimitParameter: number;
-        /** @description Random opaque key representing one user intent. */
-        IdempotencyKeyParameter: string;
         BlobResourceId: string;
         /** @description A single RFC 9110 bytes range. */
         Range: string;
@@ -3236,6 +3420,168 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    submitHtmlViewDraft: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitHtmlViewDraft"];
+            };
+        };
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HtmlViewDraftEnvelope"];
+                };
+            };
+            /** @description New draft. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HtmlViewDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            /** @description The target ETag changed before intake. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            413: components["responses"]["PayloadTooLarge"];
+        };
+    };
+    getHtmlViewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HtmlViewDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getHtmlViewDraftContent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    "Content-Security-Policy"?: "sandbox";
+                    "X-Content-Type-Options"?: "nosniff";
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain; charset=utf-8": string;
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    publishHtmlViewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HtmlViewDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    rejectHtmlViewDraft: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                draftId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current draft or idempotent replay. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HtmlViewDraftEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     runStandaloneHtmlApp: {
         parameters: {
             query?: never;
@@ -3656,6 +4002,43 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    createAgentToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentTokenCreate"];
+            };
+        };
+        responses: {
+            /** @description Created MCP access token. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentTokenCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description OAUTH_CLIENT_UNAVAILABLE. MCP_RESOURCE_URLS must include /mcp at PUBLIC_ORIGIN; MCP OAuth may be unconfigured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     revokePersonalAccessToken: {
@@ -4920,7 +5303,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -5160,7 +5551,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             413: components["responses"]["PayloadTooLarge"];
@@ -5271,7 +5670,15 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -5338,7 +5745,15 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            403: components["responses"]["Forbidden"];
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
             /** @description Content changed since the supplied ETag. Download and reconcile before retrying. */

@@ -80,7 +80,6 @@ describe("Workspace standard Thread Comment plugins", () => {
     );
 
     expect(normalSource).not.toContain("DeleteDocCommentComment");
-    expect(workaroundSource).toContain("SDK workaround");
     expect(workaroundSource).toContain("DeleteDocCommentComment");
   });
 });

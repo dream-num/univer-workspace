@@ -1,4 +1,7 @@
+import { decodeFrame, encodeFrame } from "../src/shared/frame.js";
+import { zeroCost } from "../src/shared/usage.js";
 import { testStagingDirectory } from "./staging-directory.js";
+import { z } from "zod";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -7,6 +10,7 @@ import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthenticator } from "../src/gateway/auth.js";
 import { createGateway } from "./gateway.js";
+import { listenGateway } from "./listen-gateway.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 
@@ -24,8 +28,8 @@ function deferred() {
   return { promise, resolve };
 }
 
-async function listen(server: Server, port = 0): Promise<string> {
-  server.listen(port, "127.0.0.1");
+async function listen(server: Server): Promise<string> {
+  server.listen(0, "127.0.0.1");
   await once(server, "listening");
   const address = server.address();
   if (address === null || typeof address === "string") throw new Error("Expected TCP server");
@@ -41,7 +45,7 @@ async function close(server: Server): Promise<void> {
 describe("gateway authentication", () => {
   const cleanup: (() => Promise<void>)[] = [];
   afterEach(async () => {
-    await Promise.all(cleanup.splice(0).map((task) => task()));
+    for (const task of cleanup.splice(0).reverse()) await task();
     vi.restoreAllMocks();
   });
 
@@ -64,6 +68,20 @@ describe("gateway authentication", () => {
       response.setHeader("Content-Type", "application/json");
       if (path === "/rpc/v1/capabilities") {
         response.end(JSON.stringify({ v: PROTOCOL_VERSION, operations: Object.keys(opSpecs) }));
+        return;
+      }
+      if (path === "/rpc/v1/htmlView.draft") {
+        const chunks: Buffer[] = [];
+        for await (const chunk of request) chunks.push(Buffer.from(chunk));
+        const frame = decodeFrame(Buffer.concat(chunks));
+        const header = z.object({ input: opSpecs["htmlView.draft"].input }).parse(frame.header);
+        const input = header.input;
+        response.setHeader("Content-Type", "application/octet-stream");
+        response.end(encodeFrame({ ok: true, output: { draft: {
+          id: "draft-1", kind: input.kind, state: "pending", name: "Page.univer.html", space: "space",
+          previewUrl: `${identityOrigin}/drafts/draft-1`, expiresAt: "2026-11-19T00:00:00Z",
+          repositoryVisibility: "private", privateSourceUnitIds: [],
+        } }, meta: { executor: "none", cost: zeroCost } }));
         return;
       }
       if (path === "/api/auth/token") {
@@ -106,37 +124,35 @@ describe("gateway authentication", () => {
       }
     });
     const transport = await listen(workspace);
-    const probe = createServer();
-    const origin = await listen(probe);
-    await close(probe);
-    const url = `${origin}/mcp`;
-    const gateway = createGateway(
-      parseGatewayConfig({
-        WORKSPACE_ORIGIN: identityOrigin,
-        WORKSPACE_TRANSPORT_URL: transport,
-        MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
-        ...env,
-        ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}),
-      }),
-      {
-        logger: pino(
-          {},
-          new Writable({
-            write(chunk, _encoding, callback) {
-              logs += chunk.toString();
-              callback();
-            },
-          }),
-        ),
-      },
+    cleanup.push(() => close(workspace));
+    const { gateway, url } = await listenGateway((url) =>
+      createGateway(
+        parseGatewayConfig({
+          WORKSPACE_ORIGIN: identityOrigin,
+          WORKSPACE_TRANSPORT_URL: transport,
+          MCP_STAGING_DIRECTORY: testStagingDirectory(), MCP_PUBLIC_URL: url,
+          ...env,
+          ...(behavior.executor ? { MCP_EXECUTOR_URLS: transport, MCP_EXECUTOR_TOKEN: "t".repeat(32) } : {}),
+        }),
+        {
+          logger: pino(
+            {},
+            new Writable({
+              write(chunk, _encoding, callback) {
+                logs += chunk.toString();
+                callback();
+              },
+            }),
+          ),
+        },
+      ),
     );
-    await listen(gateway.server, Number(new URL(origin).port));
+    const origin = new URL(url).origin;
     const clients: Client[] = [];
     cleanup.push(async () => {
       await Promise.all(clients.map((client) => client.close()));
       await gateway.close();
       await close(gateway.server);
-      await close(workspace);
       for (const secret of [...Object.keys(tokens), clientSecret]) expect(logs).not.toContain(secret);
       expect(logs).not.toContain("downstream-session-");
     });
@@ -256,9 +272,9 @@ describe("gateway authentication", () => {
     expect(gateway.productCookies).toEqual([]);
   });
 
-  it("requires publish scope for html_view_create before executor dispatch", async () => {
+  it("requires write scope for html_view_create before executor dispatch", async () => {
     const gateway = await start(exchangeEnv, { executor: true });
-    const client = await gateway.connect("uvw_pat_readonly", "?toolsets=files");
+    const client = await gateway.connect("uvw_pat_readonly");
     expect(
       await client.callTool({
         name: "html_view_create",
@@ -271,9 +287,27 @@ describe("gateway authentication", () => {
       }),
     ).toMatchObject({
       isError: true,
-      structuredContent: { code: "workspace-scope-required", detail: { required: "publish" } },
+      structuredContent: { code: "workspace-scope-required", detail: { required: "write" } },
     });
     expect(gateway.productCookies).toEqual([]);
+  });
+
+  it("lists non-destructive page drafts and calls both with only read and write scopes", async () => {
+    const gateway = await start(exchangeEnv, { executor: true });
+    const client = await gateway.connect("uvw_at_oauth");
+    const listed = (await client.listTools()).tools;
+    for (const name of ["html_view_create", "html_view_replace"]) {
+      expect(listed.find((tool) => tool.name === name)).toMatchObject({
+        _meta: { "univer.workspace/scope": "write" },
+        annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
+      });
+      const result = await client.callTool({ name, arguments: {
+        html: "<h1>Page</h1>", idempotency_key: "html-draft-key-123",
+        ...(name === "html_view_create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { resource: "resource", etag: '"v1"' }),
+      } });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({ draft: { id: "draft-1", state: "pending" } });
+    }
   });
 
   it("re-exchanges a dead downstream session and lets the client retry the same valid token", async () => {

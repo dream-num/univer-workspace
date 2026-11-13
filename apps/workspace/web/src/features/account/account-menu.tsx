@@ -1,8 +1,11 @@
-import { ChevronDown, KeyRound, Lock, LogOut, User } from "lucide-react";
-import type { ReactNode } from "react";
+import { ChevronDown, KeyRound, Lock, LogOut, Settings, User } from "lucide-react";
+import { lazy, Suspense, useState, type ReactNode } from "react";
+import { loadAgentsUi } from "../agents";
 import { useI18n } from "../../shared/i18n";
 import { Avatar, MenuContent, MenuGroup, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "../../shared/ui";
 import type { components } from "../../../../generated/http/schema.js";
+
+const AgentAccount = lazy(() => loadAgentsUi().then((ui) => ({ default: ui.AgentAccountDialog })));
 
 export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTokens, extraItems, logoutPending, onLogout }: {
   readonly currentSession: components["schemas"]["AuthenticatedSession"];
@@ -14,6 +17,7 @@ export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTok
   readonly onLogout: () => void;
 }) {
   const { t } = useI18n();
+  const [agentAction, setAgentAction] = useState<"settings" | "logout" | null>(null);
   return (
     <MenuRoot>
       <MenuTrigger
@@ -57,18 +61,27 @@ export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTok
             <KeyRound />
             {t("accessTokens")}
           </MenuItem>
+          <MenuItem onClick={() => setAgentAction("settings")}>
+            <Settings />
+            {t("modelSettings")}
+          </MenuItem>
           {extraItems}
         </MenuGroup>
         <MenuSeparator />
         <MenuItem
           className="text-destructive data-highlighted:bg-destructive-soft data-highlighted:text-destructive [&_svg]:text-destructive"
           disabled={logoutPending}
-          onClick={() => onLogout()}
+          onClick={() => { void loadAgentsUi().then(() => setAgentAction("logout")).catch(() => onLogout()); }}
         >
           <LogOut />
           {t("signOut")}
         </MenuItem>
       </MenuContent>
+      {agentAction ? (
+        <Suspense fallback={null}>
+          <AgentAccount action={agentAction} onClose={() => setAgentAction(null)} onLogout={onLogout} />
+        </Suspense>
+      ) : null}
     </MenuRoot>
   );
 }

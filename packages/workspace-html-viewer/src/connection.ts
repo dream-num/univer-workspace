@@ -25,6 +25,7 @@ export function connectHtmlView(
     source: string;
     locale?: HtmlViewLocale;
     allowedOrigins?: readonly string[];
+    mediaSources?: readonly string[];
   },
 ) {
   const engines = new Map<string, Promise<HtmlViewEngine>>();
@@ -32,7 +33,10 @@ export function connectHtmlView(
     container,
     html: options.source,
     ...(options.locale ? { locale: options.locale } : {}),
-    ...(options.allowedOrigins ? { policy: { allowedOrigins: options.allowedOrigins } } : {}),
+    policy: {
+      ...(options.allowedOrigins ? { allowedOrigins: options.allowedOrigins } : {}),
+      ...(options.mediaSources ? { mediaSources: options.mediaSources } : {}),
+    },
     loadEngine(unitId, signal) {
       const loading = options.loadEngine(unitId, signal);
       engines.set(unitId, loading);

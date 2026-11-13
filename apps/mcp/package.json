@@ -9,7 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json && node scripts/assemble-skills.mjs && node scripts/copy-render-runtime.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
-    "test": "node scripts/assemble-skills.mjs && vitest run"
+    "test": "node scripts/assemble-skills.mjs && node ../../scripts/test.mjs vitest run"
   },
   "dependencies": {
     "@modelcontextprotocol/node": "2.1.2",

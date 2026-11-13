@@ -33,22 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - stage: static
-            run: pnpm --filter @univerjs/univer-workspace api:verify && pnpm typecheck
-          - stage: test-workspace
-            run: pnpm --filter @univerjs/univer-workspace test
-          - stage: test-cli
-            run: pnpm --filter univer-workspace-cli test
-          - stage: test-rest
-            run: >-
-              pnpm test:sdk-dependencies && pnpm test:univer-license && pnpm test:release && pnpm test:docker-inputs &&
-              pnpm -r --no-sort --filter '!@univerjs/univer-workspace' --filter '!univer-workspace-cli' test
-          - stage: package
-            run: >-
-              pnpm build && pnpm package:workspace-cli &&
-              pnpm --filter univer-workspace-cli package:smoke &&
-              pnpm --filter @univerjs/univer-workspace test:production-import
+        stage: [static, test-workspace, test-cli, test-mcp, test-rest, package]
     name: verify (${{ matrix.stage }})
     runs-on: ubuntu-latest
     steps:
@@ -58,5 +43,16 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: ${{ matrix.run }}
+      - name: Verify ${{ matrix.stage }}
+        run: node scripts/verify.mjs --stage ${{ matrix.stage }} --install
+        env:
+          UVW_VERIFY_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Upload verification evidence
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: verification-${{ github.run_id }}-attempt-${{ github.run_attempt }}-${{ matrix.stage }}
+          path: .verification/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 30

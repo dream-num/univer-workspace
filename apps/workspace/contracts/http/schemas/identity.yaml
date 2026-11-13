@@ -291,6 +291,44 @@ McpScope:
   type: string
   enum: [read, write, publish, "worktree:merge"]
 
+AgentTokenScopes:
+  type: array
+  minItems: 1
+  maxItems: 2
+  uniqueItems: true
+  contains:
+    const: read
+  items:
+    type: string
+    enum: [read, write, publish]
+  description: Exactly [read], [read, write], or [read, publish], in either order, without duplicates.
+
+AgentTokenCreate:
+  type: object
+  required: [scopes]
+  properties:
+    scopes:
+      $ref: "#/AgentTokenScopes"
+
+AgentTokenCreated:
+  type: object
+  additionalProperties: false
+  required: [token, expiresAt, scopes, resource]
+  properties:
+    token:
+      type: string
+      pattern: "^uvw_at_"
+      description: MCP access token. No refresh token is returned.
+    expiresAt:
+      type: integer
+      description: Unix epoch milliseconds, one hour after issuance.
+    scopes:
+      $ref: "#/AgentTokenScopes"
+    resource:
+      type: string
+      format: uri
+      description: The configured /mcp URL at PUBLIC_ORIGIN.
+
 PersonalAccessToken:
   type: object
   additionalProperties: false

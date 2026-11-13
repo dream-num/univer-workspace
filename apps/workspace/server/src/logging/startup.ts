@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getHeapStatistics } from "node:v8";
-import { flushLogs, logger } from "./logger.js";
+import { startupLogger as baseStartupLogger } from "./logger.js";
 
-const startupLogger = logger.child({ event: "workspace.startup", startupId: randomUUID() });
+const startupLogger = baseStartupLogger.child({ event: "workspace.startup", startupId: randomUUID() });
 
 export function beginStartupStage(stage: string) {
   const started = performance.now();
@@ -25,7 +25,6 @@ export function beginStartupStage(stage: string) {
         },
         `Workspace startup ${stage} ${status}`,
       );
-      flushLogs();
     } catch {
       // 日志输出失败不能替换原始异常或改变迁移结果。
     }

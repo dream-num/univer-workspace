@@ -1,3 +1,4 @@
+import { HtmlViewDraftsRepository, createHtmlViewDraftsModule, createHtmlViewDraftsRouter, type HtmlViewDraftsModule } from "./modules/html-view-drafts/index.js";
 import { createClientMetadataDocumentResolver, type FetchClientMetadataDocument } from "./modules/identity/client-metadata-document.js";
 import { createActivityModule, createActivityRouter } from "./modules/activity/index.js";
 import { createStandaloneAppRouter } from "./modules/views/standalone-app.router.js";
@@ -150,6 +151,7 @@ export interface WorkspaceApplication {
   readonly worktrees: WorktreesModule;
   readonly operations: OperationsModule;
   readonly blobs: BlobsModule;
+  readonly htmlViewDrafts: HtmlViewDraftsModule;
   readonly univerAssets: UniverAssetsModule;
   readonly exchange: ExchangeModule;
   initialize(): Promise<void>;
@@ -254,6 +256,7 @@ export function createWorkspaceApplication(
     new LocalBlobStore(
       config.blobDirectory ?? resolve(".data/univer-workspace-blobs")
     );
+  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: new HtmlViewDraftsRepository(database), access, store: blobStore });
   const blobs = createBlobsModule({
     repository: new BlobsRepository(database),
     access,
@@ -380,11 +383,14 @@ export function createWorkspaceApplication(
   if (mcpOAuth) {
     app.post("/api/auth/register", createMcpClientRegistrationHandler({ accessTokens, mcpOAuth }));
   }
+  // Draft JSON needs escaping headroom before the other routers apply their 1 MiB parser.
+  app.use("/api", createHtmlViewDraftsRouter({ identity, drafts: htmlViewDrafts }));
   app.use(
     "/api",
     createIdentityRouter({
       identity,
       accessTokens,
+      mcpOAuth: mcpOAuth ?? null,
       secureCookies: config.secureCookies,
       ...(config.discordBotApiKey
         ? { discordBotApiKey: config.discordBotApiKey }
@@ -445,7 +451,7 @@ export function createWorkspaceApplication(
 
   const publicDirectory = resolve("dist/public");
   if (existsSync(publicDirectory)) {
-    app.use(createStaticSiteRouter(publicDirectory));
+    app.use(createStaticSiteRouter(publicDirectory, { nodes, publicOrigin: config.publicOrigin }));
   }
 
   app.use(notFoundHandler);
@@ -466,6 +472,7 @@ export function createWorkspaceApplication(
     worktrees,
     operations,
     blobs,
+    htmlViewDrafts,
     univerAssets,
     exchange,
     // Retain the application startup hook; SDK History now owns its catch-up.

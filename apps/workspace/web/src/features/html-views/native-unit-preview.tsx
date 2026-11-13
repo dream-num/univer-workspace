@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import type { HtmlViewWriteMode } from "@univerjs/univer-workspace-html-viewer/engine";
 import { Copy, Download, ExternalLink, X } from "lucide-react";
 import { useI18n } from "../../shared/i18n";
 import { Button, Dialog } from "../../shared/ui";
@@ -9,13 +10,13 @@ import { boundPreviewRect, findHtmlFrame, HTML_PREVIEW_CHANNEL, parsePreviewMess
 
 type Opened = Awaited<ReturnType<typeof openNativeUnit>>;
 
-export function useNativeUnitPreview(source: string, identityKey: string) {
+export function useNativeUnitPreview(source: string, identityKey: string, writeModes: ReadonlyMap<string, HtmlViewWriteMode>, enabled = true) {
   const { t } = useI18n();
   const root = useRef<HTMLDivElement>(null);
   const viewerRoot = useRef<HTMLDivElement>(null);
   const nativeFrame = useRef<HTMLIFrameElement>(null);
   const nonce = useMemo(() => crypto.randomUUID(), [source, identityKey]);
-  const html = useMemo(() => withNativePreviewClient(source, nonce), [source, nonce]);
+  const html = useMemo(() => enabled ? withNativePreviewClient(source, nonce) : source, [source, nonce, enabled]);
   const [request, setRequest] = useState<(PreviewRequest & { generation: string }) | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [error, setError] = useState(false);
@@ -36,10 +37,19 @@ export function useNativeUnitPreview(source: string, identityKey: string) {
 
   useEffect(() => {
     setRequest(null); setSharing(false);
+    if (!enabled) return;
     const receive = (event: MessageEvent) => {
       const frame = findHtmlFrame(viewerRoot.current);
       // Opaque sandbox origins are not identity. Pin the actual viewer Window and generation.
       if (!frame || event.source !== frame.contentWindow) return;
+      const data = event.data;
+      if (data?.channel === HTML_PREVIEW_CHANNEL && data?.nonce === nonce && data?.action === "write-mode" &&
+          typeof data.unitId === "string" && /^[\w-]{1,128}$/.test(data.unitId) &&
+          typeof data.requestId === "string" && /^[\w-]{1,128}$/.test(data.requestId)) {
+        frame.contentWindow?.postMessage({ channel: HTML_PREVIEW_CHANNEL, nonce, action: "write-mode",
+          requestId: data.requestId, mode: writeModes.get(data.unitId) ?? null }, "*");
+        return;
+      }
       const next = parsePreviewMessage(event.data, nonce);
       if (next === "close") setRequest(null);
       else if (next === "share") { setCopyState("idle"); setSharing(true); }
@@ -53,18 +63,18 @@ export function useNativeUnitPreview(source: string, identityKey: string) {
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [nonce]);
+  }, [nonce, writeModes, enabled]);
 
   useEffect(() => {
     setOpened(null); setError(false); setReady(false); setMissing(false);
     setCanDownload(false); setDownloadState("idle"); downloadRequest.current = null;
-    if (!request || request.generation !== nonce) return;
+    if (!enabled || !request || request.generation !== nonce) return;
     const abort = new AbortController();
     void openNativeUnit(request.unitId, abort.signal).then(result => {
       if (!abort.signal.aborted) setOpened(result);
     }).catch(() => { if (!abort.signal.aborted) setError(true); });
     return () => abort.abort();
-  }, [nonce, request?.unitId]);
+  }, [nonce, request?.unitId, enabled]);
 
   useEffect(() => {
     if (!opened) return;
@@ -73,6 +83,7 @@ export function useNativeUnitPreview(source: string, identityKey: string) {
   }, [opened, ready]);
 
   useEffect(() => {
+    if (!enabled) return;
     const receive = (event: MessageEvent) => {
       if (event.source !== nativeFrame.current?.contentWindow || event.origin !== location.origin ||
           event.data?.channel !== NATIVE_PREVIEW_CHANNEL || event.data?.token !== token ||
@@ -94,7 +105,7 @@ export function useNativeUnitPreview(source: string, identityKey: string) {
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
-  }, [nonce, token]);
+  }, [nonce, token, enabled]);
 
   useEffect(() => {
     setMissing(false);

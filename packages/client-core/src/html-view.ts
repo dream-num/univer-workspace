@@ -7,10 +7,15 @@ import {
   type IWorkbookData,
 } from "@univerjs/core";
 import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
-import type { WorkspaceBlobFeature } from "./blob.js";
+import { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
+import { parseHtmlViewDraft } from "./html-view-draft.js";
+import { readWorkspaceHtmlView, requireHtmlView, htmlViewUrls } from "./html-view-page.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
-import { workspaceError } from "./errors.js";
+import { WorkspaceApplicationError, workspaceError } from "./errors.js";
+import type { AuthenticatedWorkspaceHttp } from "./http.js";
+import { parseDetachedNode } from "./space-model.js";
+import { WorkspaceSpaceFeature } from "./space.js";
 
 export interface WorkspaceHtmlViewSource {
   readonly bytes: Uint8Array;
@@ -18,12 +23,17 @@ export interface WorkspaceHtmlViewSource {
 }
 
 export interface WorkspaceHtmlViewOptions {
-  readonly blobs: Pick<WorkspaceBlobFeature, "upload"> | Pick<WorkspaceBlobFeature, "uploadBytes">;
+  readonly authenticatedHttp: AuthenticatedWorkspaceHttp;
+  readonly blobs:
+    | Pick<WorkspaceBlobFeature, "upload">
+    | Pick<WorkspaceBlobFeature, "uploadBytes">
+    | Pick<WorkspaceBlobFeature, "get" | "uploadBytes" | "replaceBytes">;
   readonly runtime: Pick<WorkspaceContentRuntimeOperations, "exportUnitData">;
   readonly resolveTrunkRuntimeTarget: (input: {
     readonly unitId: string;
   }) => Promise<WorkspaceRuntimeTarget>;
   readonly configuredOrigin: () => Promise<string>;
+  readonly onWrite?: () => void;
 }
 
 export interface WorkspaceHtmlViewDestination {
@@ -32,6 +42,17 @@ export interface WorkspaceHtmlViewDestination {
   readonly parentNodeId?: string;
   readonly idempotencyKey: string;
 }
+
+export interface WorkspaceHtmlViewReplacement {
+  readonly resourceId: string;
+  readonly etag: string;
+  readonly idempotencyKey: string;
+  readonly source: WorkspaceHtmlViewSource;
+}
+
+export type WorkspaceHtmlViewDraftRequest =
+  | (WorkspaceHtmlViewDestination & { readonly kind: "create"; readonly source: WorkspaceHtmlViewSource })
+  | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" });
 
 export class WorkspaceHtmlViewFeature {
   public constructor(private readonly options: WorkspaceHtmlViewOptions) {}
@@ -47,6 +68,7 @@ export class WorkspaceHtmlViewFeature {
     const { name, spaceId, idempotencyKey, parentNodeId } = normalizeHtmlViewDestination(input);
     const source = await this.readAndValidate(input.source);
     const origin = await this.options.configuredOrigin();
+    const access = await this.describeAccess(spaceId, source.validation.unitIds);
     const upload =
       "uploadBytes" in this.options.blobs
         ? await this.options.blobs.uploadBytes({
@@ -71,7 +93,100 @@ export class WorkspaceHtmlViewFeature {
     }
     return {
       ...upload,
-      workspaceUrl: new URL(`/nodes/${encodeURIComponent(upload["nodeId"])}`, origin).href,
+      ...htmlViewUrls(origin, upload["nodeId"]),
+      ...access,
+    };
+  }
+
+  public async read(resourceId: string, maxChars: number) {
+    return await readWorkspaceHtmlView(this.options.authenticatedHttp, resourceId, maxChars);
+  }
+
+  public async replace(input: WorkspaceHtmlViewReplacement) {
+    const blobs = this.options.blobs;
+    if (!("get" in blobs) || !("replaceBytes" in blobs)) {
+      throw workspaceError(
+        "workspace-server-capability-missing",
+        "HTML View replacement requires Blob read and replacement capabilities.",
+      );
+    }
+    const view = await blobs.get(input.resourceId);
+    requireHtmlView(view.node.name);
+    const source = await this.readAndValidate(input.source);
+    const origin = await this.options.configuredOrigin();
+    const access = await this.describeAccess(view.node.spaceId, source.validation.unitIds);
+    const replacement = await blobs.replaceBytes({
+      resourceId: input.resourceId,
+      etag: input.etag,
+      idempotencyKey: input.idempotencyKey,
+      bytes: source.bytes,
+      fileName: view.node.name,
+    });
+    return {
+      ...replacement,
+      nodeId: view.node.nodeId,
+      ...htmlViewUrls(origin, view.node.nodeId),
+      ...access,
+    };
+  }
+
+  public async draft(input: WorkspaceHtmlViewDraftRequest) {
+    const http = await this.options.authenticatedHttp();
+    const intent = input.kind === "create"
+      ? { kind: input.kind, ...normalizeHtmlViewDestination(input) }
+      : { kind: input.kind, resourceId: input.resourceId, etag: input.etag, idempotencyKey: input.idempotencyKey };
+    let spaceId: string;
+    if (intent.kind === "create") {
+      spaceId = intent.spaceId;
+    } else {
+      if (!/^"[^"\r\n]+"$/.test(intent.etag) || intent.etag.length > 200)
+        throw workspaceError("workspace-argument-invalid", "ETag must be the exact quoted strong ETag from html_view_read.");
+      const view = await new WorkspaceBlobFeature(async () => http).get(intent.resourceId);
+      requireHtmlView(view.node.name);
+      spaceId = view.node.spaceId;
+    }
+    const source = await this.readAndValidate(input.source);
+    const origin = await this.options.configuredOrigin();
+    const access = await this.describeAccess(spaceId, source.validation.unitIds);
+    const { idempotencyKey, ...body } = intent;
+    this.options.onWrite?.();
+    const response = await http.json("/api/html-view-drafts", {
+      method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8") },
+    });
+    return { ...parseHtmlViewDraft(response["draft"], origin), ...access };
+  }
+
+  private async describeAccess(spaceId: string, unitIds: readonly string[]) {
+    const http = await this.options.authenticatedHttp();
+    const spaces = new WorkspaceSpaceFeature(async () => http);
+    const destination = await spaces.get(spaceId);
+    const publicSpaces = new Map([[spaceId, destination.publicRead === true]]);
+    const privateSourceUnitIds: string[] = [];
+    for (const unitId of unitIds) {
+      const body = await http.json(`/api/unit-resources/${encodeURIComponent(unitId)}`);
+      const node = parseDetachedNode(body["node"]);
+      if (node.resource?.kind !== "univer" || node.resource.unitId !== unitId) {
+        throw workspaceError(
+          "workspace-result-mismatch",
+          "HTML View source metadata does not match the requested Unit.",
+        );
+      }
+      if (!publicSpaces.has(node.spaceId)) {
+        try {
+          publicSpaces.set(node.spaceId, (await spaces.get(node.spaceId)).publicRead === true);
+        } catch (error) {
+          if (!(error instanceof WorkspaceApplicationError) || (error.detail as { status?: unknown } | undefined)?.status !== 404) {
+            throw error;
+          }
+          // A hidden Space cannot be public, but a node grant may still expose its Sheets.
+          publicSpaces.set(node.spaceId, false);
+        }
+      }
+      if (!publicSpaces.get(node.spaceId)) privateSourceUnitIds.push(unitId);
+    }
+    return {
+      repositoryVisibility: destination.publicRead === true ? ("public" as const) : ("private" as const),
+      privateSourceUnitIds: privateSourceUnitIds.sort(),
     };
   }
 

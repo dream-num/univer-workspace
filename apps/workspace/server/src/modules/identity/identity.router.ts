@@ -3,10 +3,14 @@ import { json, Router, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
 import type { IdentityModule } from "./identity.service.js";
+import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
+
+const WORKSPACE_AGENTS_CLIENT_ID = "univer-workspace-agents";
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
   readonly accessTokens: AccessTokenService;
+  readonly mcpOAuth: McpOAuthConfig | null;
   readonly secureCookies: boolean;
   readonly discordBotApiKey?: string;
 }): Router {
@@ -130,6 +134,30 @@ export function createIdentityRouter(options: {
     response.set("Cache-Control", "no-store");
     const { user } = identity.requireSession(request.headers.cookie);
     response.json({ tokens: options.accessTokens.listPersonalTokens(user.id).map(toTokenView) });
+  });
+
+  router.post("/auth/agent-token", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const { user } = identity.requireInteractiveSession(request.headers.cookie);
+    const scopes: unknown = request.body?.scopes;
+    if (!Array.isArray(scopes) || scopes.length > 2 || !scopes.includes("read") ||
+      !scopes.every((scope) => scope === "read" || scope === "write" || scope === "publish") ||
+      new Set(scopes).size !== scopes.length) {
+      throw new ApplicationError("INVALID_INPUT", 400, "scopes must be [read], [read, write], or [read, publish], without duplicates.", "scopes");
+    }
+    const resource = options.mcpOAuth
+      ? resolveMcpResource(options.mcpOAuth, new URL("/mcp", options.mcpOAuth.issuer).href)
+      : undefined;
+    if (!resource) {
+      throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", 503, "MCP_RESOURCE_URLS must include the /mcp URL at PUBLIC_ORIGIN to issue agent tokens.");
+    }
+    const issued = options.accessTokens.issueGrant({ userId: user.id, clientId: WORKSPACE_AGENTS_CLIENT_ID, scopes, resource });
+    response.status(201).json({
+      token: issued.accessToken,
+      expiresAt: issued.grant.accessExpiresAt,
+      scopes: issued.grant.scopes,
+      resource: issued.grant.resource,
+    });
   });
 
   router.post("/auth/tokens", (request, response) => {

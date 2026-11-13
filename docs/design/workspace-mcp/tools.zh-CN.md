@@ -57,8 +57,8 @@
 
 | toolset | 工具数 | 默认启用 | 用途 |
 | --- | --- | --- | --- |
-| `core` | 31 | 是 | 查找、Issue、PR 生命周期、编辑、导入导出、截图、参考资料 |
-| `files` | 13 | 否 | Blob、Asset、HTML View、Markdown、Typst、SVG、PDF、lint |
+| `core` | 36 | 是 | 查找、Issue、PR 生命周期、编辑、导入导出、截图、参考资料 |
+| `files` | 11 | 否 | Blob、Asset、Markdown、Typst、SVG、PDF、lint |
 | `admin` | 10 | Team Space Owner 默认启用（D10） | 仓库与 Label 管理、目录组织、合并与丢弃、SVG 资源目录 |
 
 选择方式：
@@ -108,14 +108,19 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `job_get` | 无 | `job_id` | 是 | 否 | `read` |
 | `api_find` | `api find` | `terms`、`unit` | 是 | 否 | `read` |
 | `api_show` | `api show` | `symbols` | 是 | 否 | `read` |
-| `skills_read` | `skills list`、`skills get`、`skills read` | `name`、`resource`、`full` | 是 | 否 | `read` |
+| `skills_read` | `skills list`、`skills get`、`skills read` | `repo`、`name`、`resource`、`full`、`cursor` | 是 | 否 | `read` |
+| `html_view_validate` | `html-view validate` | `html` 或 `html_upload_id`（恰选一个） | 是 | 否 | `read` |
+| `html_view_create` | `html-view create` | `html` 或 `html_upload_id`（恰选一个）、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
+| `html_view_read` | 读取 HTML View | `resource` | 是 | 否 | `read` |
+| `html_view_replace` | 修订 HTML View | `resource`、`html`、`etag`、`idempotency_key` | 否 | 否 | `write` |
+| `html_view_draft_get` | 读取草稿状态 | `draft` | 是 | 否 | `read` |
 
 说明：
 
 - `execute` 只接受 `code` 字符串，没有 `--script`。CLI 对代码长度的上限（10 MiB）保持不变。
 - `inspect` 的结果可能很大，按第 5 节分页。`cursor` 是 MCP 新增的分页参数。
 - `inspect` 的 `worksheet` 参数只接受 `id:<id>`、`name:<name>` 或 `index:N`，`N` 从 1 开始。裸值被拒绝，错误明确指出 `worksheet`。
-- `skills_read` 是 Skills 扩展的回退入口。不带 `name` 时列出名称和描述；带 `name` 时直接返回顶层 `{ name, content, resources?, files? }`；再带 `resource` 时读取单个文件。与扩展使用同一个静态 catalog，MCP 的 core 不同于 CLI core。
+- `skills_read` 读取内置与实时自定义 Skill。不带 `name` 返回 `{ skills, diagnostics, repository }`，条目带来源、调用开关、可选路径和参数提示。自定义 Skill 来自个人空间的 `.agents/skills`，可用 `repo` 加载成员仓库，同名仓库 Skill 覆盖个人 Skill，内置名称保留。非成员返回 `not-member`。带 `name` 返回 `{ name, source, content, resources?, binaryFiles?, files? }`，只有文本进入 resources，二进制只返回元数据。`resource` 只接受清单内路径，`full` 包含全部文本，超限仍报错。资源 cursor 续读须保留 repo。只有内置 Skill 与扩展共享静态 catalog，MCP 的 core 不同于 CLI core。
 - `screenshot` 必须给出 `trunk: true` 或 `worktree`（缺省报 `workspace-screenshot-scope-required`，两者同时给出报 `workspace-argument-invalid`）。`pages`、`tile`、`region`、`elements` 沿用 `uvw screenshot` 的字符串写法，`contact_slide` 是布尔值，`padding`、`scale` 是数字。executor 加载 Unit 后用 `uvw screenshot` 自己的命令解析这些选项，所以按 Unit 类型的取舍和错误信息与 CLI 一致（例如 `--range is not supported for Slide`），渲染服务拒绝的输入（如无效 A1 范围）以 `workspace-render-input-invalid` 返回。
 - `screenshot` 的 `structuredContent` 列出 `unitId`、`unitType` 和每张图的 `name`、`width`、`height`、`size`，以及有则带上的 `page`、`pageId`、`range`、`sheetName`、`role`、`tiles` 等元数据。调用在同步预算内完成且所有图合计不超过 1 MiB 时，结果在文本行之后为每张 PNG 附一个 MCP `image` 内容块，条目不带下载链接；否则每个条目带 `download` 链接，没有图片内容块。超过同步预算返回任务，用 `job_get` 取结果，经 `job_get` 取到的结果一律是下载链接。`idempotency_key` 的规则与 `export` 相同。
 - `screenshot` 把每张图都写入暂存（计入 `export_bytes` 与每用户暂存配额），因为落入任务的结果必须能给出链接；同步返回图片内容的调用不暴露这些链接。渲染页数记入 `render_pages`。
@@ -130,8 +135,6 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `blob_download` | `blob download` | `resource` | 是 | 否 | `read` |
 | `blob_replace` | `blob replace` | `resource`、`upload_id`、`etag`、`idempotency_key` | 否 | 是 | `publish` |
 | `asset_download` | `asset download` | `id`、`worktree` | 是 | 否 | `read` |
-| `html_view_validate` | `html-view validate` | `html` 或 `html_upload_id`（恰选一个） | 是 | 否 | `read` |
-| `html_view_create` | `html-view create` | `html` 或 `html_upload_id`（恰选一个）、`space`、`name`、`parent`、`idempotency_key` | 否 | 否 | `publish` |
 | `compile_markdown` | `compile-markdown` | `markdown`、`assets_upload_id`、`title`、`apply`、`worktree`、`space`、`parent`、`unit`、`source_map`、`blocks`、`idempotency_key` | 否 | 否 | `write` |
 | `export_markdown` | `export-markdown` | `worktree`、`unit`、`source_map`、`blocks` | 是 | 否 | `read` |
 | `compile_typst` | `compile-typst` | `bundle_upload_id`、`apply`、`worktree`、`space`、`parent`、`idempotency_key` | 否 | 否 | `write` |
@@ -141,7 +144,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 
 说明：
 
-- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建在同一执行操作中校验并上传原字节，返回 CLI 的裸结果及 `workspaceUrl`；必填幂等键为 16 到 200 个 URL-safe 字符，结果未知时复用相同键、HTML 或上传 ID 和目标重试，上传保留至一小时过期。
+- `html_view_validate` 与 `html_view_create` 恰选 `html` 或 `html_upload_id`，同时传入或均不传入返回 `workspace-argument-invalid`。上传 ID 必须属于调用者、已就绪且 purpose 为 `html-view`（`text/html`）。两种入口接受最多 512 KiB 的合法 UTF-8 HTML，上传非 UTF-8 同样返回 `workspace-argument-invalid`；提高暂存上限也不放宽工具上限。超限返回 `workspace-argument-invalid` 和明确上限。两者在执行层复用 Client Core，按调用者身份导出所绑定的 trunk Sheets。创建与修订在同一执行操作中校验原字节，再以幂等键向 `/api/html-view-drafts` 保存草稿。两者均为 `write` scope，返回 `{draft}`，包含 `previewUrl`、`expiresAt`、`repositoryVisibility` 和按序排列的 `privateSourceUnitIds`。把预览链接交给用户并结束本轮，页面在用户于 Workspace 预览并点击 Publish 后才生效。再次修订、称页面已上线或分享链接前，调用 HTTP-only 的 `html_view_draft_get`（`read`）。只有 `published` 返回最终沉浸式 `shareUrl`、`node`、`resource` 和带引号的强 ETag。`rejected` 时询问修改意见，`conflicted` 时重读页面后重新生成草稿，`expired` 时使用新幂等键重建。CLI 保持直接发布。公开页面且私有源列表为空时，持链接者可查看页面及数据，否则需要登录并有权访问全部源。修改仓库公开性前先询问用户。结果未知时以相同幂等键、HTML 或上传 ID 和目标重试。
 - `blob_download`、`asset_download`、`print_pdf` 返回签名下载链接。`blob_download` 同时返回 ETag，因为 `blob_replace` 需要它。
 - `compile_markdown` 的 Markdown 正文以字符串传入。正文引用的本地图片打成 zip 上传，用 `assets_upload_id` 传入，zip 内路径对应 Markdown 里的相对路径。CLI 要求资源不能超出源文件目录（`packages/client-core/src/markdown-source.ts:31-47`），MCP 同样拒绝 zip 中越界的路径。
 - `compile_markdown` 的 ZIP 最多 256 个 entry，单个文件解压后最多 4 MiB，总解压大小最多 8 MiB。解压前拒绝超过 1,024 UTF-8 字节或 32 段的 entry 名称。拒绝路径穿越、大小写和 Unicode 规范化碰撞，以及文件与目录冲突。
@@ -278,7 +281,9 @@ MCP 的 Tasks 扩展目前只有 Claude Code CLI 支持。2026-07-28 版还去�
   URI 为 `skill://univer-workspace/<name>/SKILL.md` 与同目录的引用文件。
   `resources/list` 列出十个入口文件，`resources/read` 可读取 catalog 中的任意文件。
 - 先读 `skill://univer-workspace/core/SKILL.md`。不支持扩展或资源读取的客户端用
-  `skills_read`，两条路径读取相同字节。回退工具保留 full 和资源 cursor 分页语义。
+  `skills_read`，两条路径读取相同字节。回退工具保留 full 和资源 cursor 分页语义，自定义 Skill 仅由 `skills_read` 实时发现和读取，不进入扩展。
+  每层最多 100 个 Skill 文件夹，SKILL.md 上限 64 KiB，按名读取最多分类 100 个附属 Blob，文本上限 256 KiB。
+  文件须可下载、严格 UTF-8 且无 NUL。无效、超限、名称保留与覆盖产生诊断，其余 Workspace 错误透传。
 - server instructions 写入 `core` skill 的工作流规则：先找文件，再开 Worktree，写入后读回或截图验证，然后标记 ready，把评审链接交给用户，合并留给用户。
   不支持 Skill 的客户端（ChatGPT、WorkBuddy）靠这段 instructions 获得规则。
 - 仓库里的发现入口 `skills/univer-workspace-cli/SKILL.md` 是面向 CLI 的安装说明，不变。MCP 的接入说明写在 `apps/mcp/README.md` 和 Workspace 的设置页里。

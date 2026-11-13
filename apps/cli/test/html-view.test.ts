@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { Command } from "commander";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_WORKSHEET_ROW_COUNT } from "@univerjs/core";
+import { WorkspaceHttp } from "@univerjs/univer-workspace-client-core";
 import type { WorkspaceRuntimeTarget } from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "../src/errors.js";
 import { createHtmlViewCommand } from "../src/features/html-view/command.js";
@@ -18,7 +19,7 @@ afterEach(async () => {
 const binding = (unit = "unit", sheet = "budget", cell = "B2") =>
   `<output data-univer-cell-text="${encodeURIComponent(unit)}:${encodeURIComponent(sheet)}:${cell}"></output>`;
 const result = { nodeId: "node/1", resourceId: "blob", operationId: "create-key" };
-async function setup(html = binding()) {
+async function setup(html = binding(), publicRead = false, privateUnits: readonly string[] = []) {
   const directory = await mkdtemp(join(tmpdir(), "cli-html-view-test-"));
   directories.push(directory);
   const filePath = join(directory, "view.univer.html");
@@ -46,6 +47,7 @@ async function setup(html = binding()) {
   );
   const upload = vi.fn(async (_input: { filePath: string }) => result);
   const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => sharingHttp(publicRead, privateUnits),
     blobs: { upload },
     runtime: { exportUnitData } as unknown as ConstructorParameters<
       typeof WorkspaceHtmlViewFeature
@@ -169,6 +171,9 @@ describe("HTML View workflow", () => {
     await expect(f.feature.create({ ...f.create, parentNodeId: "folder" })).resolves.toEqual({
       ...result,
       workspaceUrl: "https://workspace.test/nodes/node%2F1",
+      shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
+      repositoryVisibility: "private" as const,
+      privateSourceUnitIds: ["unit"],
     });
     expect(await readFile(f.filePath, "utf8")).toBe("changed during remote validation");
     await expect(stat(dirname(staged))).rejects.toMatchObject({ code: "ENOENT" });
@@ -285,7 +290,7 @@ describe("HTML View workflow", () => {
 });
 
 describe("HTML View commands", () => {
-  async function run(args: string[]) {
+  async function run(args: string[], repositoryVisibility: "public" | "private" = "private", privateSourceUnitIds = ["unit"]) {
     const validate = vi.fn(async () => ({
       valid: true as const,
       unitIds: ["unit"],
@@ -294,6 +299,9 @@ describe("HTML View commands", () => {
     const create = vi.fn(async () => ({
       ...result,
       workspaceUrl: "https://workspace.test/nodes/node%2F1",
+      shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive",
+      repositoryVisibility,
+      privateSourceUnitIds,
     }));
     let output = "";
     const command = createHtmlViewCommand({ validate, create });
@@ -335,6 +343,16 @@ describe("HTML View commands", () => {
     });
     expect(creation.output.workspaceUrl).toBe("https://workspace.test/nodes/node%2F1");
   });
+  it.each([
+    { visibility: "public" as const, privateUnits: [] },
+    { visibility: "private" as const, privateUnits: ["unit"] },
+    { visibility: "public" as const, privateUnits: ["unit"] },
+  ])("prints sharing fields for $visibility with private sources $privateUnits", async ({ visibility, privateUnits }) => {
+    for (const mode of [[], ["--json"]]) {
+      const creation = await run(["create", "--file", "view.univer.html", "--space", "space", "--name", "View", "--idempotency-key", "key", ...mode], visibility, privateUnits);
+      expect(creation.output).toMatchObject({ shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive", repositoryVisibility: visibility, privateSourceUnitIds: privateUnits });
+    }
+  });
   it.each(["--file", "--space", "--name", "--idempotency-key"])(
     "requires %s for creation",
     async (missing) => {
@@ -349,4 +367,36 @@ describe("HTML View commands", () => {
       ).rejects.toMatchObject({ code: "commander.missingMandatoryOptionValue" });
     },
   );
+});
+
+function sharingHttp(publicRead = false, privateUnits: readonly string[] = []) {
+  return new WorkspaceHttp({
+    origin: "https://workspace.test",
+    role: "client",
+    cookie: "workspace_session=test",
+    fetcher: async (url) => {
+      const path = new URL(String(url)).pathname;
+      if (path.startsWith("/api/spaces/")) {
+        const id = path.split("/").at(-1);
+        return Response.json({ id, name: "Team", publicRead: id === "private" ? false : publicRead });
+      }
+      const unitId = decodeURIComponent(path.split("/").at(-1) ?? "");
+      return Response.json({ node: {
+        id: "source-node", spaceId: privateUnits.includes(unitId) ? "private" : "space",
+        parentNodeId: null, name: "Sheet", hasChildren: false, updatedAt: "now", accessRole: "owner",
+        capabilities: { browseChildren: false, createChildren: false, rename: true, move: true, trash: true, share: true },
+        resource: { id: "sheet-resource", kind: "univer", unitId, unitType: "sheet",
+          capabilities: { downloadContent: true, editContent: true, openContent: true } },
+      } });
+    },
+  });
+}
+
+it.each([
+  { publicRead: true, privateUnits: [], visibility: "public", expected: [] },
+  { publicRead: false, privateUnits: [], visibility: "private", expected: ["unit"] },
+  { publicRead: true, privateUnits: ["unit"], visibility: "public", expected: ["unit"] },
+])("CLI workflow reports sharing for $visibility with private sources $privateUnits", async ({ publicRead, privateUnits, visibility, expected }) => {
+  const f = await setup(binding(), publicRead, privateUnits);
+  await expect(f.feature.create(f.create)).resolves.toMatchObject({ shareUrl: "https://workspace.test/nodes/node%2F1?view=immersive", repositoryVisibility: visibility, privateSourceUnitIds: expected });
 });

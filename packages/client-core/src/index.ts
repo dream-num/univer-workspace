@@ -249,4 +249,10 @@ export {
   type WorkspaceHtmlViewSource,
   type WorkspaceHtmlViewOptions,
   type WorkspaceHtmlViewDestination,
+  type WorkspaceHtmlViewReplacement,
+  type WorkspaceHtmlViewDraftRequest,
 } from "./html-view.js";
+
+export type { WorkspaceHtmlViewPage } from "./html-view-page.js";
+
+export { readWorkspaceHtmlViewDraft, htmlViewDraftUrl, type WorkspaceHtmlViewDraft, type WorkspaceHtmlViewDraftStatus } from "./html-view-draft.js";

@@ -1,0 +1,202 @@
+<!doctype html>
+<!-- Scenario: Customer implementation delivery tracker — Brutalist Board.
+Expected Sheet: row 1 headers A Task ID, B Task, C Customer, D Owner, E Status (Not started/In progress/Done/Blocked), F Due date (ISO date text or Sheet date serial).
+Bounds: A2:F201, at most 200 tasks; worksheet must have at least 201 rows and 6 columns. New records insert below row 1, shifting older records down. Task IDs must be unique.
+Replace EVERY REPLACE_UNIT_ID with the Unit ID and EVERY REPLACE_SHEET_ID with the worksheet ID. URI-encode IDs in HTML binding attributes; use raw IDs in JavaScript. No other placeholders.
+Chinese pages: https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/500.css, https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/700.css, https://cdn.jsdelivr.net/npm/@fontsource/noto-sans-sc@5.3.1/900.css, https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.3.0/700.css; font-family: "Noto Sans SC", system-ui, sans-serif; numbers: "Space Grotesk", "Noto Sans SC", sans-serif.
+Writes re-read the range to locate each stable ID; concurrent structural edits between read and write are not atomic. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Delivery board · Customer delivery</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/bricolage-grotesque@5.2.8/800.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.3.0/500.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/space-grotesk@5.3.0/700.css">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.7/Sortable.min.js"></script>
+<style>
+:root{
+  --ink:#0a0a0a; --yellow:#ffd400; --blue:#2447f5; --red:#ff3d2e; --green:#17c26b; --paper:#fff;
+  --sh:6px 6px 0 var(--ink);
+  --ease:cubic-bezier(.16,1,.3,1);
+}
+*{box-sizing:border-box}
+html{background:var(--yellow)}
+body{margin:0;min-height:100vh;background:var(--yellow);color:var(--ink);
+  font:500 16px/1.5 "Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;padding-bottom:72px;overflow-x:hidden}
+::selection{background:var(--ink);color:var(--yellow)}
+:focus-visible{outline:4px solid var(--ink);outline-offset:3px}
+.num{font-family:"Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-variant-numeric:tabular-nums}
+.wrap{max-width:1440px;margin:0 auto;padding:28px clamp(14px,3vw,40px) 0}
+
+header{display:flex;gap:24px;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;margin-bottom:28px}
+h1{margin:0;font-family:"Bricolage Grotesque","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-weight:800;font-size:clamp(46px,8vw,96px);line-height:1;letter-spacing:-.03em}
+h1 span{display:inline-block;background:var(--ink);color:var(--yellow);padding:0 .14em .04em;margin-right:.1em;transform:rotate(-1.5deg)}
+.lede{margin:14px 0 0;font-size:clamp(17px,2vw,22px);font-weight:700;max-width:36em}
+.lede mark{background:var(--red);color:var(--ink);padding:0 .25em;font-weight:700;border:3px solid var(--ink)}
+.lede mark.late{background:var(--paper)}
+.stamp{border:4px solid var(--ink);background:var(--ink);color:#fff;font-weight:700;font-size:18px;
+  padding:10px 18px;transform:rotate(2.5deg);box-shadow:var(--sh);min-width:11em;text-align:center;box-shadow:6px 6px 0 #fff}
+.stamp[data-s=pending]{background:var(--paper);color:var(--ink);box-shadow:6px 6px 0 var(--ink)}
+.stamp[data-s=saved]{background:var(--green);color:var(--ink);box-shadow:6px 6px 0 var(--ink);animation:pop .5s var(--ease)}
+.stamp[data-s=error]{background:var(--red);color:var(--ink);box-shadow:6px 6px 0 var(--ink);animation:pop .5s var(--ease)}
+@keyframes pop{from{transform:rotate(2.5deg) scale(.7)}to{transform:rotate(2.5deg) scale(1)}}
+
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;align-items:start}
+@media (max-width:1100px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){.board{grid-template-columns:1fr}}
+.col{background:var(--paper);border:4px solid var(--ink);box-shadow:var(--sh);min-width:0}
+.col>h2{margin:0;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:4px solid var(--ink);
+  font-family:"Bricolage Grotesque","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-weight:800;font-size:28px;line-height:1.1}
+.col>h2 .n{font-size:34px}
+.col[data-status="Not started"]>h2{background:var(--paper)}
+.col[data-status="In progress"]>h2{background:var(--blue);color:#fff}
+.col[data-status="Done"]>h2{background:var(--green)}
+.col[data-status="Blocked"]>h2{background:var(--red)}
+.list{list-style:none;margin:0;padding:14px;display:grid;gap:14px;min-height:96px;transition:background .2s var(--ease)}
+.list.over{background:repeating-linear-gradient(45deg,#fff 0 10px,#f3f3f3 10px 20px)}
+.empty{border:3px dashed var(--ink);padding:18px;text-align:center;font-weight:700}
+
+.card{background:var(--paper);border:3px solid var(--ink);padding:10px 12px 10px;cursor:grab;box-shadow:4px 4px 0 var(--ink);
+  transition:transform .18s var(--ease),box-shadow .18s var(--ease)}
+.card:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+.card .top{display:flex;justify-content:space-between;gap:8px;align-items:center}
+.card .id{font-weight:700;font-size:14px}
+.card h3{margin:6px 0 8px;font-family:"Bricolage Grotesque","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-weight:800;font-size:22px;line-height:1.2}
+.cust{border:2px solid var(--ink);padding:0 8px;font-weight:700;font-size:14px;line-height:22px}
+.cust[data-c="Stellar Mfg"]{background:var(--yellow)}
+.cust[data-c="Cloud Retail"]{background:#a9c3ff}
+.cust[data-c="Green Tech"]{background:#ffb1a8}
+.cust:not([data-c="Stellar Mfg"]):not([data-c="Cloud Retail"]):not([data-c="Green Tech"]){background:#e5e5e5}
+.meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:700;font-size:15px}
+.meta .due{margin-left:auto}
+.late{background:var(--red);padding:0 6px;border:2px solid var(--ink);font-weight:700}
+.card select{font:700 13px "Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;border:2px solid var(--ink);background:var(--paper);padding:2px 4px;cursor:pointer;color:var(--ink)}
+.col[data-status="Done"] .card h3{text-decoration:line-through;text-decoration-thickness:4px}
+.col[data-status="Blocked"] .card{background:#fff1f0}
+.sortable-ghost{opacity:1;background:var(--yellow)!important;border-style:dashed}
+.sortable-ghost>*{opacity:0}
+.sortable-fallback{transform:rotate(4deg)!important;box-shadow:12px 12px 0 var(--ink)!important;opacity:1!important;cursor:grabbing;z-index:50}
+
+form.add{display:grid;grid-template-columns:1fr 1fr;gap:10px;background:var(--yellow);border:3px solid var(--ink);padding:12px;margin:14px 14px 0}
+form.add h3{grid-column:1/-1;margin:0;font-family:"Bricolage Grotesque","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-weight:800;font-size:20px}
+form.add label{display:grid;gap:2px;font-weight:700;font-size:14px;min-width:0}
+form.add .wide{grid-column:1/-1}
+form.add input,form.add select{width:100%;font:700 16px "Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;border:3px solid var(--ink);background:var(--paper);padding:7px 8px;color:var(--ink);border-radius:0;min-width:0}
+form.add input::placeholder{color:#555}
+form.add button{grid-column:1/-1;font:700 20px "Space Grotesk","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;border:3px solid var(--ink);background:var(--ink);color:var(--yellow);padding:10px;cursor:pointer;box-shadow:4px 4px 0 var(--blue);transition:transform .15s var(--ease),box-shadow .15s var(--ease)}
+form.add button:hover{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--blue)}
+form.add button:active{transform:translate(3px,3px);box-shadow:1px 1px 0 var(--blue)}
+.note{margin:18px 0 0;font-weight:700;font-size:15px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+.write-state:empty,[data-write-id]:empty{display:none}.write-state{display:block;font-size:13px;line-height:1.5;overflow-wrap:anywhere}.write-state[data-s=error]{color:var(--ver,var(--red))}#save[data-s=error]{position:static;max-width:100%;overflow-wrap:anywhere}#stamp{overflow-wrap:anywhere}.card .id{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1><span>Delivery</span>board</h1>
+      <p class="lede" id="lede" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201"></p>
+    </div>
+    <div class="stamp" id="stamp" data-s="idle" role="status" aria-live="polite">Drag to update status</div>
+  </header>
+  <main class="board" id="board" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A2:F201">Loading…</main>
+  <p class="note">Drag cards between columns or choose Move to. Changes save to the Customer delivery tasks Sheet.</p>
+</div>
+<script type="module">
+const STATUSES=["Not started","In progress","Done","Blocked"];
+const iso=d=>{const z=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+z(d.getMonth()+1)+'-'+z(d.getDate())};
+const TODAY=iso(new Date());
+const dayDiff=(a,b)=>Math.round((Date.parse(b)-Date.parse(a))/864e5);
+let tasks=[];
+let customers=[],owners=[];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const md=d=>new Intl.DateTimeFormat('en-US',{month:'short',day:'numeric',timeZone:'UTC'}).format(new Date(d+'T00:00:00Z'));
+const isLate=t=>t.status!=='Done'&&t.due<TODAY;
+
+
+const binding=window.univerBinding,unitId='REPLACE_UNIT_ID',sheetId='REPLACE_SHEET_ID';
+async function isTrialWrite(){
+  try{if(window.univerWorkspace?.capabilities?.includes('write-mode'))return await window.univerWorkspace.getWriteMode(unitId)==='trial'}catch{}
+  return false;
+}
+const source={unitId,sheetId,range:{startRow:1,endRow:200,startColumn:0,endColumn:5}};
+const subscriptions=[],drafts=new Map();
+let busy=false,pendingRecordId=null,formDraft=null;
+const errorText=e=>(e instanceof Error?e.message:String(e)).replace(/[.。!！?？]+$/u,'');
+const shortId=id=>id.length>12?id.slice(0,8):id;
+function records(value){return value.filter(r=>r[0]!=null&&r[0]!=='').map(([id,name,cust,owner,status,due])=>{
+  const date=typeof due==='number'?new Date(Date.UTC(1899,11,30)+due*864e5).toISOString().slice(0,10):String(due??'');
+  if(!STATUSES.includes(status)||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date)))throw new Error('Check the source Sheet statuses and due dates');
+  return{id:String(id),name:String(name??''),cust:String(cust??''),owner:String(owner??''),status,due:date};
+})}
+function rememberForm(){const f=$('#add');if(f)formDraft=Object.fromEntries([...f.elements].filter(el=>el.name).map(el=>[el.name,el.value]))}
+function restoreForm(){const f=$('#add');if(!f)return;if(formDraft)for(const [name,value]of Object.entries(formDraft)){const el=f.elements.namedItem(name);if(el){if(el.tagName==='SELECT'&&value&&!Array.from(el.options).some(o=>o.value===value))el.add(new Option(value,value));if(el.tagName!=='SELECT'||value)el.value=value}}for(const el of f.querySelectorAll('input,select,button')){if(el.tagName==='BUTTON'){el.disabled=busy;el.textContent=pendingRecordId?'Retry save':'Add task +'}else if(el.tagName==='SELECT')el.disabled=busy||pendingRecordId!==null;else el.readOnly=busy||pendingRecordId!==null}}
+function choices(){customers=[...new Set(tasks.map(t=>t.cust))];owners=[...new Set(tasks.map(t=>t.owner))]}
+function fillChoices(){rememberForm();for(const [id,items]of [['fc',customers],['fo',owners]]){let el=$('#'+id);if(el){const old=el.value;if(!items.length&&el.tagName==='SELECT'){const input=document.createElement('input');for(const attr of el.attributes)input.setAttribute(attr.name,attr.value);input.maxLength=80;el.replaceWith(input);el=input}else if(items.length&&el.tagName==='SELECT'){el.replaceChildren(...items.map(s=>new Option(s,s)));if(old&&!items.includes(old))el.add(new Option(old,old));if(old)el.value=old}if(formDraft&&!formDraft[el.name])formDraft[el.name]=el.value}}restoreForm()}
+function draftHtml(id){const d=drafts.get(id);return d?`<small class="write-state" role="status" data-s="${d.state}">${esc(d.message)}</small>`:''}
+function refreshDrafts(){document.querySelectorAll('[data-write-id]').forEach(el=>{el.innerHTML=draftHtml(el.dataset.writeId)});document.querySelectorAll('.card select,.st,.chip').forEach(el=>el.disabled=busy);restoreForm()}
+async function saveStatus(id,to){
+  if(busy||!STATUSES.includes(to))return;const task=tasks.find(t=>t.id===id);if(!task)return;
+  busy=true;drafts.set(id,{to,state:'pending',message:'Saving…'});setSave('pending');refreshDrafts();
+  try{const latest=await binding.getRangeState(source);const row=latest.value.findIndex(r=>String(r[0])===id);if(row<0)throw new Error('Task is outside the first 200 rows. Check the source Sheet');
+    await binding.setCellValue({unitId,sheetId,row:row+1,col:4},to);await binding.flush();
+    const trial=await isTrialWrite();drafts.set(id,{to,state:'saved',message:trial?'Trial only, not saved':'Saved to Sheet'});setSave('saved',trial);
+  }catch(error){const message=`${errorText(error)}. Your "${to}" draft is kept. Try again.`;drafts.set(id,{to,state:'error',message});setSave('error')}
+  finally{busy=false;const active=document.activeElement,focused=active?.closest('[data-id]')?.dataset.id;render(id);refreshDrafts();if(focused)for(const el of document.querySelectorAll('[data-id]'))if(el.dataset.id===focused)(el.matches('button')?el:el.querySelector('select'))?.focus({preventScroll:true})}
+}
+async function addTask(f){
+  if(busy)return;rememberForm();const v=formDraft;
+  if(!pendingRecordId&&(!v.name?.trim()||!v.cust?.trim()||!v.owner?.trim()||!v.due)){setAdd('error','Enter a task, customer, owner and due date');return}
+  busy=true;setAdd('pending','Saving…');setSave('pending');restoreForm();
+  try{if(!pendingRecordId){const id=crypto.randomUUID();await binding.insertRowsWithValues({unitId,sheetId,startRow:1,rowCount:1,startColumn:0,values:[[id,v.name.trim(),v.cust.trim(),v.owner.trim(),v.status||'Not started',v.due]]});pendingRecordId=id}
+    await binding.flush();pendingRecordId=null;formDraft=null;$('#add').elements.namedItem('name').value='';const trial=await isTrialWrite();setAdd('saved',trial?'Trial only, not saved':'Saved to Sheet');setSave('saved',trial);
+  }catch(error){const message=pendingRecordId?`Row inserted; save not confirmed: ${errorText(error)}. Retry saving.`:`Submission not confirmed: ${errorText(error)}. Draft kept. Check the source Sheet before resubmitting.`;setAdd('error',message);setSave('error')}
+  finally{busy=false;restoreForm()}
+}
+function setAdd(state,text){const el=$('#add-state');if(el){el.dataset.s=state;el.textContent=text}}
+async function watch(id,callback){try{subscriptions.push(await binding.subscribeRangeById(id,({value})=>{try{callback(records(value))}catch(e){const el=$('#'+id);el.textContent=`Could not load: ${errorText(e)}`;setSave('error')}}))}catch(e){$('#'+id).textContent=`Could not load: ${errorText(e)}`;setSave('error')}}
+window.addEventListener('pagehide',()=>subscriptions.forEach(s=>s.dispose()),{once:true});
+
+function setSave(state,trial=false){const el=$('#stamp');el.dataset.s=state;el.textContent={pending:'Saving…',saved:trial?'Trial only, not saved':'Saved to Sheet',error:'Not saved'}[state]}
+const move=saveStatus;
+function card(t){
+  return `<li class="card" data-id="${esc(t.id)}"><div class="top"><span class="id num" title="${esc(t.id)}">${esc(shortId(t.id))}</span><span class="cust" data-c="${esc(t.cust)}">${esc(t.cust)}</span></div>
+  <h3>${esc(t.name)}</h3>
+  <div class="meta"><span>${esc(t.owner)}</span>
+   <span class="due num ${isLate(t)?'late':''}">${isLate(t)?dayDiff(t.due,TODAY)+'d overdue · ':''}${md(t.due)}</span>
+   <select aria-label="Move to ${esc(t.id)}">${['Move to…',...STATUSES.filter(s=>s!==t.status)].map((s,i)=>`<option ${i?'':'value=""'} ${drafts.get(t.id)?.state==='error'&&drafts.get(t.id).to===s?'selected':''}>${s}</option>`).join('')}</select></div><span data-write-id="${esc(t.id)}">${draftHtml(t.id)}</span></li>`;
+}
+function formHtml(){
+  const d=new Date(TODAY+'T00:00');d.setDate(d.getDate()+7);
+  return `<form class="add" id="add"><h3>Add a task</h3>
+   <label class="wide">Task name<input name="name" required maxlength="20" placeholder="e.g. Acceptance test"></label>
+   <label>Customer<select required name="cust" id="fc">${customers.map(c=>`<option>${esc(c)}</option>`).join('')}</select></label>
+   <label>Owner<select required name="owner" id="fo">${owners.map(c=>`<option>${esc(c)}</option>`).join('')}</select></label>
+   <label class="wide">Due date<input type="date" name="due" required value="${iso(d)}"></label>
+   <button>Add task +</button><small class="wide write-state" id="add-state" role="status"></small></form>`;
+}
+function render(){
+  rememberForm();const addMessage=$('#add-state')?.textContent,addState=$('#add-state')?.dataset.s;
+  $('#board').querySelectorAll('.list').forEach(el=>globalThis.Sortable?.get(el)?.destroy());
+
+  $('#board').innerHTML=STATUSES.map(s=>{
+    const list=tasks.filter(t=>t.status===s).sort((a,b)=>a.due.localeCompare(b.due)||a.id.localeCompare(b.id));
+    return `<section class="col" data-status="${s}"><h2>${s}<span class="n num">${list.length}</span></h2>${s==='Not started'?formHtml():''}
+     <ul class="list" data-status="${s}">${list.map(card).join('')||'<li class="empty">No tasks. Drop one here.</li>'}</ul></section>`}).join('');
+  restoreForm();fillChoices();if(addMessage)setAdd(addState,addMessage);refreshDrafts();
+  if(typeof Sortable==='undefined'){setSave('error');return}
+  document.querySelectorAll('.list').forEach(el=>Sortable.create(el,{group:'k',animation:180,filter:'select,.empty',preventOnFilter:false,
+    forceFallback:true,delay:150,delayOnTouchOnly:true,ghostClass:'sortable-ghost',
+    onMove:e=>{document.querySelectorAll('.list').forEach(l=>l.classList.toggle('over',l===e.to&&l!==e.from))},
+    onEnd:e=>{document.querySelectorAll('.list').forEach(l=>l.classList.remove('over'));move(e.item.dataset.id,e.to.dataset.status)}}));
+}
+document.addEventListener('change',e=>{const s=e.target.closest('.card select');if(s&&s.value)move(s.closest('.card').dataset.id,s.value)});
+document.addEventListener('submit',e=>{if(e.target.id==='add'){e.preventDefault();addTask(e.target)}});
+await watch('lede',tasks=>{const late=tasks.filter(isLate).length,block=tasks.filter(t=>t.status==='Blocked').length;$('#lede').innerHTML=`<span class="num">${tasks.length}</span> tasks · <mark>${block} blocked</mark> · <mark class="late">${late} overdue</mark>`;});
+await watch('board',rows=>{tasks=rows;choices();render()});
+</script>
+</body>
+</html>

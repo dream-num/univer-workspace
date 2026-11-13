@@ -1,3 +1,4 @@
+import { interactivePrincipal } from "../fixtures/principal.js";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   createWorkspaceApplication,
@@ -137,7 +138,7 @@ describe("spaces and Nodes", () => {
     });
 
     expect(() =>
-      application.nodes.update(bob, sharedRoot.id, {
+      application.nodes.update(interactivePrincipal(bob), sharedRoot.id, {
         parentNodeId: null,
       })
     ).toThrowError(
@@ -191,7 +192,7 @@ describe("spaces and Nodes", () => {
     });
 
     expect(() =>
-      application.nodes.update(userId, parent.id, {
+      application.nodes.update(interactivePrincipal(userId), parent.id, {
         parentNodeId: child.id,
       })
     ).toThrowError(

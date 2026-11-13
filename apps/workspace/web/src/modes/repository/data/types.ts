@@ -79,12 +79,8 @@ export interface RepositoryLoad {
   readonly segments: readonly Segment[];
   readonly total: number;
 }
-export type HomeHeadline =
-  | { readonly kind: "agents-drafted"; readonly agents: number; readonly pulls: number }
-  | { readonly kind: "open-work"; readonly pulls: number; readonly repositories: number }
-  | { readonly kind: "quiet" };
 export interface HomeWork {
-  readonly headline: HomeHeadline;
+  readonly totals: { readonly pulls: number; readonly agentPulls: number; readonly issues: number };
   readonly ranking: readonly RepositoryLoad[];
   readonly updatedBySpace: ReadonlyMap<string, string>;
   readonly openBySpace: ReadonlyMap<string, { readonly pulls: number; readonly issues: number }>;

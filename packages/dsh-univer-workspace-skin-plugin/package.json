@@ -26,7 +26,7 @@
     "build": "node scripts/build.mjs",
     "clean": "rm -rf lib",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "node ../../scripts/test.mjs vitest run --config vitest.config.ts"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "4.0.2",

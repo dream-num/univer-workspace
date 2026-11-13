@@ -50,11 +50,7 @@ export function buildHomeWork(
   const agents = tally(openPulls.map((item) => item.createdVia)).agents;
   return {
     updatedBySpace,
-    headline: agents > 0
-      ? { kind: "agents-drafted", agents, pulls: openPulls.length }
-      : openPulls.length || openIssues.length
-      ? { kind: "open-work", pulls: openPulls.length, repositories: loads.size + (unmappedPersonal ? 1 : 0) }
-      : { kind: "quiet" },
+    totals: { pulls: openPulls.length, agentPulls: agents, issues: openIssues.length },
     ranking: ranking.slice(0, 5),
     openBySpace: new Map([...loads].map(([id, { pulls, issues }]) => [id, { pulls, issues }])),
     pulls: [...openPulls].sort(byUpdated).slice(0, 4).map((item) => ({

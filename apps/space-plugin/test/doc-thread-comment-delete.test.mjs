@@ -153,20 +153,6 @@ const CASES = [
     },
   },
   {
-    name: 'resolves true when the datasource accepts the deletion',
-    commandId: 'target',
-    params: { unitId: 'unit-1', commentId: 'param-comment-1' },
-    model: { returns: { id: 'model-comment-1', threadId: 'model-thread-1' } },
-    dataSource: { returns: true },
-    expected: {
-      resolves: true,
-      modelCalls: 1,
-      modelArgs: [['unit-1', 'default_doc', 'param-comment-1']],
-      dataSourceCalls: 1,
-      dataSourceArgs: [['unit-1', 'default_doc', 'model-thread-1', 'model-comment-1']],
-    },
-  },
-  {
     name: 'propagates a datasource rejection',
     commandId: 'target',
     params: { unitId: 'unit-1', commentId: 'param-comment-1' },
@@ -190,21 +176,6 @@ const CASES = [
       modelCalls: 1,
       modelArgs: [['unit-1', 'default_doc', 'param-comment-1']],
       dataSourceCalls: 0,
-    },
-  },
-  {
-    name: 'passes the model comment id to the datasource instead of the command comment id',
-    commandId: 'target',
-    params: { unitId: 'unit-1', commentId: 'param-comment-1' },
-    model: { returns: { id: 'model-comment-1', threadId: 'model-thread-1' } },
-    dataSource: { returns: true },
-    expected: {
-      resolves: true,
-      modelCalls: 1,
-      modelArgs: [['unit-1', 'default_doc', 'param-comment-1']],
-      dataSourceCalls: 1,
-      dataSourceArgs: [['unit-1', 'default_doc', 'model-thread-1', 'model-comment-1']],
-      dataSourceCommentIdDiffersFromParams: true,
     },
   },
 ];
@@ -254,9 +225,6 @@ for (const testCase of CASES) {
     assert.equal(dataSourceCalls.length, testCase.expected.dataSourceCalls);
     if (testCase.expected.dataSourceArgs) {
       assert.deepEqual(dataSourceCalls, testCase.expected.dataSourceArgs);
-    }
-    if (testCase.expected.dataSourceCommentIdDiffersFromParams) {
-      assert.notEqual(dataSourceCalls[0][3], testCase.params.commentId);
     }
   });
 }

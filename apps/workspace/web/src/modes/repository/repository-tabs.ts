@@ -3,7 +3,7 @@
  * repository pass this instead of `selectedView` so the shell keeps its
  * repository chrome (breadcrumb, tabs) after leaving the repository root.
  */
-export type RepositoryTab = "files" | "issues" | "prs" | "apps" | "settings";
+export type RepositoryTab = "files" | "agents" | "issues" | "prs" | "apps" | "settings";
 
 export type RepositoryBreadcrumb = {
   readonly label: string;

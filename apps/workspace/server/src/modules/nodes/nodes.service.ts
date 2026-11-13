@@ -6,6 +6,8 @@ import type {
   SpaceAccess,
 } from "../access/index.js";
 import { resourceCapabilities } from "../access/access.service.js";
+import { assertNotDelegatedPageWrite } from "../blobs/html-view-guard.js";
+import type { Principal } from "../identity/index.js";
 import {
   NodesRepository,
   type BreadcrumbRow,
@@ -37,7 +39,7 @@ export interface NodesModule {
     page: PageRequest
   ): NodePage;
   create(userId: string, input: unknown): NodeSummary;
-  update(userId: string, nodeId: string, input: unknown): NodeSummary;
+  update(actor: Principal, nodeId: string, input: unknown): NodeSummary;
 }
 
 export function createNodesModule(options: {
@@ -143,12 +145,16 @@ export function createNodesModule(options: {
       return nodeSummary(access);
     },
 
-    update(userId, nodeId, inputValue) {
+    update(actor, nodeId, inputValue) {
+      const userId = actor.user.id;
       const patch = validPatch(inputValue);
       const source = options.access.resolveNode(userId, nodeId);
       if (!source) throw notFound();
       if (patch.name !== undefined && !source.capabilities.rename) {
         throw forbidden();
+      }
+      if (patch.name !== undefined && source.resourceKind === "blob") {
+        assertNotDelegatedPageWrite(actor, [patch.name]);
       }
       if (patch.parentNodeId !== undefined) {
         if (!source.capabilities.move) throw forbidden();

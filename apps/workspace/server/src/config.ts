@@ -11,6 +11,7 @@ import {
 export interface WorkspaceConfig {
   readonly host: string;
   readonly port: number;
+  readonly publicOrigin?: string | null;
   readonly metricsToken?: string;
   readonly databaseFilename: string;
   readonly collaborationDatabaseFilename: string;
@@ -75,12 +76,14 @@ export function loadConfig(
     "DISCORD_BOT_API_KEY"
   );
   const metricsToken = optionalSecret(environment.METRICS_TOKEN, "METRICS_TOKEN");
+  const publicOrigin = configuredPublicOrigin(environment.PUBLIC_ORIGIN);
   if (metricsToken && !/^[a-zA-Z0-9._~+/-]+=*$/.test(metricsToken)) {
     throw new Error("METRICS_TOKEN must be a valid Bearer token without whitespace");
   }
   return {
     host: environment.HOST ?? "127.0.0.1",
     port: integer(environment.PORT, 3020, "PORT"),
+    publicOrigin,
     databaseFilename: resolve(
       environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite"
     ),
@@ -119,7 +122,7 @@ export function loadConfig(
     googleOAuth,
     discordOAuth,
     oauthClients: oauthClientsConfig,
-    mcpOAuth: mcpOAuthConfig(environment),
+    mcpOAuth: mcpOAuthConfig(environment, publicOrigin),
     univerLicense: resolveUniverLicense(environment),
   };
 }
@@ -188,21 +191,24 @@ function oauthClientConfig(
   };
 }
 
-function mcpOAuthConfig(environment: NodeJS.ProcessEnv): McpOAuthConfig | null {
+function configuredPublicOrigin(value: string | undefined): string | null {
+  if (value === undefined || value === "") return null;
+  const url = URL.canParse(value) ? new URL(value) : null;
+  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== value.replace(/\/$/u, "")) {
+    throw new Error("PUBLIC_ORIGIN must be an http or https origin without a path, for example https://space.example.com");
+  }
+  return url.origin;
+}
+
+function mcpOAuthConfig(environment: NodeJS.ProcessEnv, publicOrigin: string | null): McpOAuthConfig | null {
   const raw = environment.MCP_RESOURCE_URLS;
   if (raw === undefined || raw.trim() === "") return null;
   const resources = parseMcpResourceUrls(raw);
-  const publicOrigin = environment.PUBLIC_ORIGIN;
-  if (publicOrigin === undefined || publicOrigin === "") {
+  if (publicOrigin === null) {
     throw new Error("MCP_RESOURCE_URLS requires PUBLIC_ORIGIN, the Workspace origin MCP clients reach");
   }
-  const url = URL.canParse(publicOrigin) ? new URL(publicOrigin) : null;
-  if (!url || (url.protocol !== "https:" && url.protocol !== "http:") || url.origin !== publicOrigin.replace(/\/$/u, "")) {
-    throw new Error("PUBLIC_ORIGIN must be an http or https origin without a path, for example https://space.example.com");
-  }
-  const issuer = url.origin;
   return {
-    issuer,
+    issuer: publicOrigin,
     resources,
     maxRegisteredClients: integer(environment.MCP_MAX_REGISTERED_CLIENTS, 10_000, "MCP_MAX_REGISTERED_CLIENTS"),
     cimdEnabled: environment.MCP_CIMD_ENABLED !== "0",

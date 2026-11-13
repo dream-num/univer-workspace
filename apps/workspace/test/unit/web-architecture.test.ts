@@ -96,3 +96,150 @@ describe("Web 分层边界", () => {
     expect(violations).toEqual([]);
   });
 });
+
+function agentTarget(path: string, specifier: string): string {
+  return ((specifier.startsWith(".") || specifier.startsWith("/"))
+    ? relative(webRoot, resolve(dirname(path), specifier))
+    : specifier.replace(/^@\//, ""))
+    .replaceAll("\\", "/").replace(/\.[jt]sx?$/, "");
+}
+
+function valueDependencies(source: ts.SourceFile): string[] {
+  const imports: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
+      const clause = node.importClause;
+      const bindings = clause?.namedBindings;
+      const typeOnly = clause?.isTypeOnly || (!clause?.name && bindings && ts.isNamedImports(bindings) &&
+        bindings.elements.length > 0 && bindings.elements.every((binding) => binding.isTypeOnly));
+      if (!typeOnly) imports.push(node.moduleSpecifier.text);
+    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
+      const typeOnly = node.isTypeOnly || (node.exportClause && ts.isNamedExports(node.exportClause) &&
+        node.exportClause.elements.length > 0 && node.exportClause.elements.every((binding) => binding.isTypeOnly));
+      if (!typeOnly) imports.push(node.moduleSpecifier.text);
+    } else if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly && ts.isExternalModuleReference(node.moduleReference) &&
+      node.moduleReference.expression && ts.isStringLiteral(node.moduleReference.expression)) {
+      imports.push(node.moduleReference.expression.text);
+    } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "require" &&
+      node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) {
+      imports.push(node.arguments[0].text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return imports;
+}
+
+function browserGlobalReferences(ast: ts.SourceFile): string[] {
+  const globals = new Set(["window", "document", "localStorage", "sessionStorage", "indexedDB", "navigator", "globalThis",
+    "fetch", "XMLHttpRequest", "WebSocket", "EventSource", "location", "self"]);
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true };
+  const host = ts.createCompilerHost(options);
+  host.getSourceFile = (name) => name === ast.fileName ? ast : undefined;
+  const checker = ts.createProgram([ast.fileName], options, host).getTypeChecker();
+  const violations: string[] = [];
+  const visit = (node: ts.Node) => {
+    if (ts.isTypeNode(node)) return;
+    const parent = node.parent;
+    const property = parent && (ts.isPropertySignature(parent) || ts.isPropertyDeclaration(parent) || ts.isPropertyAssignment(parent) ||
+      ts.isPropertyAccessExpression(parent) || ts.isMethodDeclaration(parent)) && parent.name === node ||
+      (parent && (ts.isBindingElement(parent) || ts.isImportSpecifier(parent)) && parent.propertyName === node);
+    if (ts.isIdentifier(node) && globals.has(node.text) && !property) {
+      const binding = parent && ts.isShorthandPropertyAssignment(parent)
+        ? checker.getShorthandAssignmentValueSymbol(parent) : checker.getSymbolAtLocation(node);
+      if (!binding) violations.push(node.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  return violations;
+}
+
+const agentRuntime = "features/agents/runtime/";
+describe("Agents isolation", () => {
+  it("only providers may import the provider key store", () => {
+    const violations: string[] = [];
+    for (const { path, name, ast } of sources) {
+      if (name === "features/agents/providers.ts") continue;
+      const allDependencies = dependencies(ast);
+      const visit = (node: ts.Node) => {
+        if (ts.isExternalModuleReference(node) && node.expression && ts.isStringLiteral(node.expression)) allDependencies.push(node.expression.text);
+        ts.forEachChild(node, visit);
+      };
+      visit(ast);
+      for (const specifier of allDependencies) {
+        if (agentTarget(path, specifier) === "features/agents/provider-keys") violations.push(`${name} → ${specifier}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("only the Agents entry point is statically reachable and it loads implementation dynamically", () => {
+    const violations: string[] = [];
+    const agentRoot = "features/agents/";
+    for (const { path, name, ast } of sources) {
+      const imports = valueDependencies(ast);
+      if (name === `${agentRoot}index.ts`) {
+        for (const specifier of imports) violations.push(`${name} → ${specifier}`);
+      } else if (!name.startsWith(agentRoot)) {
+        for (const specifier of imports) {
+          const target = agentTarget(path, specifier);
+          if (target.startsWith(agentRoot) && target !== `${agentRoot}index`) violations.push(`${name} → ${specifier}`);
+        }
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("AI SDK value imports stay inside the lazy runtime", () => {
+    const violations: string[] = [];
+    for (const { name, ast } of sources) {
+      if (name.startsWith(agentRuntime)) continue;
+      for (const specifier of valueDependencies(ast)) {
+        if (specifier === "ai" || specifier.startsWith("@ai-sdk/")) violations.push(`${name} → ${specifier}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("only dynamic imports and type imports cross into the runtime", () => {
+    const violations: string[] = [];
+    for (const { path, name, ast } of sources) {
+      if (name.startsWith(agentRuntime)) continue;
+      for (const specifier of valueDependencies(ast)) {
+        const target = agentTarget(path, specifier);
+        if (target === agentRuntime.slice(0, -1) || target.startsWith(agentRuntime)) violations.push(`${name} → ${specifier}`);
+      }
+    }
+    expect(violations).toEqual([]);
+  });
+
+  it("detects free browser network globals but accepts injected bindings and type positions", () => {
+    const ast = (text: string) => ts.createSourceFile("fixture.ts", text, ts.ScriptTarget.Latest, true);
+    expect(browserGlobalReferences(ast(`
+      fetch('/api'); new XMLHttpRequest(); new WebSocket('wss://example.test');
+      new EventSource('/events'); location.origin; self.fetch('/api');
+      const globalFetch = { fetch };
+    `))).toEqual(["fetch", "XMLHttpRequest", "WebSocket", "EventSource", "location", "self", "fetch"]);
+    expect(browserGlobalReferences(ast(`
+      type Request = typeof fetch; type Socket = WebSocket;
+      function injected({ fetch, location }: { fetch: Request; location: { origin: string } }) {
+        const options = { fetch }; fetch(location.origin); return options.fetch;
+      }
+      function local(self: { fetch: Request }) { return self.fetch; }
+      const init = { fetch: injected }; init.fetch;
+      function scoped() { const fetch = injected; return fetch; }
+      import { fetch as importedFetch } from 'injected'; importedFetch;
+    `))).toEqual([]);
+    expect(browserGlobalReferences(ast("function injected(fetch: unknown) { return { fetch }; } fetch('/outside');"))).toEqual(["fetch"]);
+  });
+
+  it("agent code receives browser capabilities through dependencies", () => {
+    const violations: string[] = [];
+    for (const { name, ast } of sources) {
+      if (!name.startsWith("features/agents/") || name.startsWith("features/agents/ui/") || name.endsWith(".test.ts") || name === "features/agents/index.ts") continue;
+      violations.push(...browserGlobalReferences(ast).map((identifier) => `${name}: ${identifier}`));
+    }
+    expect(violations).toEqual([]);
+  });
+});

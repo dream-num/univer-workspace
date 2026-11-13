@@ -42,6 +42,16 @@ tags:
 security:
   - sessionCookie: []
 paths:
+  /api/html-view-drafts:
+    $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts
+  /api/html-view-drafts/{draftId}:
+    $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts~1{draftId}
+  /api/html-view-drafts/{draftId}/content:
+    $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts~1{draftId}~1content
+  /api/html-view-drafts/{draftId}/publish:
+    $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts~1{draftId}~1publish
+  /api/html-view-drafts/{draftId}/reject:
+    $ref: ./paths/html-view-drafts.yaml#/~1api~1html-view-drafts~1{draftId}~1reject
   /apps/{nodeId}/run:
     $ref: ./paths/views.yaml#/~1apps~1{nodeId}~1run
   /api/session:
@@ -60,6 +70,8 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1auth~1revoke
   /api/auth/tokens:
     $ref: ./paths/auth.yaml#/~1api~1auth~1tokens
+  /api/auth/agent-token:
+    $ref: ./paths/auth.yaml#/~1api~1auth~1agent-token
   /api/auth/tokens/{id}:
     $ref: ./paths/auth.yaml#/~1api~1auth~1tokens~1{id}
   /api/auth/logout:

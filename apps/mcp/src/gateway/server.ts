@@ -38,7 +38,13 @@ import { truncateCommittedExecute } from "../shared/execute-result.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { loadWorkspaceSkills } from "./skill-catalog.js";
 import { translateToolError } from "./tool-error.js";
-import type { ToolContext, ToolDefinition, ToolScope, ToolResult } from "./tools/definition.js";
+import {
+  TOOL_SCOPE_META,
+  type ToolContext,
+  type ToolDefinition,
+  type ToolScope,
+  type ToolResult,
+} from "./tools/definition.js";
 import { selectTools, toolsets } from "./tools/registry.js";
 
 const callEnvelope = z.object({
@@ -162,7 +168,7 @@ export function createGateway(
     for (const tool of state.selected) {
       server.registerTool(
         tool.name,
-        { ...tool, inputSchema: advertiseOnly(tool.inputSchema) },
+        { ...tool, _meta: { [TOOL_SCOPE_META]: tool.scope }, inputSchema: advertiseOnly(tool.inputSchema) },
         async (args) => {
           try {
             if (!state.context.scopes.has(tool.scope)) {

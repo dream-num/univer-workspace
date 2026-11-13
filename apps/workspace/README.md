@@ -27,6 +27,11 @@ hot module replacement, and proxies product API and WebSocket requests to port
 3020. Run both commands and open port 5173 for web development. Port 3020
 alone is sufficient for backend work or viewing the latest built web application.
 
+Vite also proxies `/mcp` to a local MCP gateway on `WORKSPACE_DEV_MCP_PORT`
+(default 3000), so the page reaches it same-origin as in production. The gateway
+accepts browser requests only when `Host` and `Origin` match its `MCP_PUBLIC_URL`,
+so start it with `MCP_PUBLIC_URL=http://127.0.0.1:5173/mcp`.
+
 Manage personal access tokens in the Browser account menu under **Access tokens**.
 
 API documentation is available at:
@@ -334,6 +339,8 @@ A confidential client with `"tokenExchange": true` (for example the MCP gateway)
 
 MCP clients such as opencode, Claude and ChatGPT obtain their tokens through standard OAuth once `MCP_RESOURCE_URLS` lists the MCP server URLs they may request (comma-separated, for example `https://space.example.com/mcp`). A requested resource must equal one of them, or equal one after its query is removed, so clients configured with `https://space.example.com/mcp?toolsets=all` are bound to `https://space.example.com/mcp`. It requires `PUBLIC_ORIGIN`, the Workspace origin those clients reach (for example `https://space.example.com`), which becomes the issuer of `GET /.well-known/oauth-authorization-server` (RFC 8414). Clients register themselves with `POST /api/auth/register` (RFC 7591, public clients only: loopback `http` or `https` redirect URIs, or reverse-domain or allowlisted private-use schemes (currently `cursor`), no secret; registration stops with `503` at `MCP_MAX_REGISTERED_CLIENTS`, default 10,000), then use `GET /api/auth/authorize` with PKCE `S256` and `resource`. A loopback redirect URI matches with any port. The user always sees a consent page listing `read`, `write`, `publish` and `worktree:merge`, each of which can be unchecked. `POST /api/auth/token` then returns a one-hour `uvw_at_` access token bound to that resource and a rotating 30-day `uvw_rt_` refresh token, and `POST /api/auth/revoke` (RFC 7009) revokes the grant. Without `MCP_RESOURCE_URLS` none of this is served and static clients behave as before; with it, static clients keep their exact rules. In development set `PUBLIC_ORIGIN=http://127.0.0.1:5173`; the Vite server proxies `/.well-known` to the API.
 
+`POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
+
 HTTPS `client_id` URLs can identify public MCP clients through Client ID Metadata Documents
 (CIMD), without dynamic registration or a row in `oauth_clients`. With MCP OAuth enabled,
 CIMD is on by default and discovery advertises `client_id_metadata_document_supported`
@@ -448,7 +455,7 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V17 product databases to V18 automatically.
+backs up and migrates supported V0 through V17 product databases to V19 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
@@ -456,7 +463,7 @@ file. Stop the container before inspecting or copying `.data`.
 The Collaboration components are `core=3`, `worktree=3`, `history=2` and
 `comment=1`. SDK 1.0.0 brought `core=2`, `worktree=3` and `history=2`; SDK 1.4.0
 raises Core to v3, which stores protocol objects as MessagePack and inlines
-deletion state into `collaboration_units` instead of a tombstone table. Product V18 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
+deletion state into `collaboration_units` instead of a tombstone table. Product V19 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
 and Issue source columns without backfilling existing rows. V15 added ordered Space
 pins and a per-user stars index. V14 added Email identities and Email login codes;
 V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
@@ -466,7 +473,7 @@ application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V18,
+2. Start a single new instance. Startup first prepares the product database to V19,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -558,17 +565,17 @@ transaction rolls back; successful restarts do not repeat migration or backup. T
 back, stop V17 and restore the V16 backup. Never run V16 and V17 writers on the same
 SQLite file.
 
-V18 adds `oauth_clients`, `oauth_grants`, `oauth_refresh_history` and `personal_access_tokens`, which store
+V19 adds `oauth_clients`, `oauth_grants`, `oauth_refresh_history` and `personal_access_tokens`, which store
 dynamically registered OAuth clients, MCP OAuth grants (hashed access and rotating
 refresh tokens), the hashes of retired refresh tokens (reuse detection) and personal access tokens (hashed, revocable). It also appends
 nullable `login_sessions.issued_for_pat_id` and `issued_for_grant_id` columns that tie a
 downstream session to the token it was issued for. The migration only adds tables, indexes
 and columns, so existing sessions, expiries and logins are untouched. Stop every old
-instance, start one V18 instance, and wait for migration and health checks before
+instance, start one V19 instance, and wait for migration and health checks before
 restoring service. Startup validates V17, creates a readable `.v17-backup-…sqlite`
 backup, then migrates with foreign-key and integrity checks. A failed transaction rolls
-back; successful restarts do not repeat migration or backup. To roll back, stop V18 and
-restore the V17 backup. Never run V17 and V18 writers on the same SQLite file. The
+back; successful restarts do not repeat migration or backup. To roll back, stop V19 and
+restore the V17 backup. Never run V17 and V19 writers on the same SQLite file. The
 personal access token, MCP OAuth and token exchange routes described above use the new tables.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
@@ -628,8 +635,12 @@ CLI.
 
 Startup emits synchronous JSON lines to stdout with `event: "workspace.startup"`,
 `startupId`, `stage`, and `status` (`started`, `completed`, or `failed`). These
-bounded diagnostics are always emitted, independently of `LOG_LEVEL`, so module
-loading and synchronous migration failures can be located even before HTTP starts.
+bounded diagnostics use the same Pino configuration and `LOG_LEVEL` as application
+and HTTP logs. Started and completed stages use `info`; failed stages use `error`.
+At `LOG_LEVEL=error`, only failed stages appear; `silent` suppresses all diagnostics.
+Startup stages use a dedicated synchronous destination to preserve their order and
+write before blocking work or abrupt exit. Ordinary application and HTTP logs use
+an asynchronous destination and can appear between startup records.
 Each line includes stage `elapsedMs`, process `uptimeMs`, `memory` (Node memory
 usage in bytes, including `rss`, `heapUsed`, `heapTotal`, `external`, and
 `arrayBuffers`) and V8 `heapSizeLimit` in bytes. Configuration values, document
@@ -710,8 +721,26 @@ Anyone with a Node link can view its content when Link Sharing is enabled or its
 Space has public read enabled. Folder sharing includes current and future children;
 Space public read allows browsing that Space by URL. Anonymous visitors always have
 viewer access, even when a link grants editors access after sign-in. They cannot
-modify content, write comments, upload, manage permissions, or access Worktrees.
+modify source content, write comments, upload, manage permissions, or access Worktrees.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
+
+Workspace Browser enables local trial edits in bound HTML pages for anonymous and
+signed-in users without edit permission. Sources remain live until the first page
+write, which detaches that source from collaboration. The real formula engine
+recalculates in the visitor's browser; trial edits are never saved or sent. That
+source remains frozen against further owner updates until reload restores live data.
+The host displays a trial notice after the first edit, and pages can check
+`window.univerWorkspace.getWriteMode(unitId)` before labeling a write as saved.
+Native Office previews remain read-only for these users. Other hosts, including
+Workspace Agent, retain write rejections unless they explicitly enable HTML trials.
+
+In production, `/nodes/<nodeId>` links (including `?view=immersive`) include the page's
+title and a short description in the HTML head for chat previews when anonymous access
+is allowed. HTML views omit `.univer.html` from the display title. Descriptions follow
+`Accept-Language` (English or Chinese); responses vary by that header and retain the
+app shell's revalidation policy. Set `PUBLIC_ORIGIN` to include an absolute `og:url`;
+otherwise it is omitted. Private, deleted and missing Nodes keep the generic app shell.
+The Vite development server does not generate these previews, and no preview image is provided.
 
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
@@ -737,3 +766,8 @@ Editors create protections; their creator and current Owner/Admin manage them. W
 inherit current Trunk policy and cannot manage bindings or collaborators. Content remains
 readable under the existing file permissions, including snapshots, history and exports.
 See [validation and release gate](docs/content-permissions-validation.md).
+
+HTML View 草稿由 `/api/html-view-drafts` 提交，只对作者可见。草稿内容最多 512 KiB，
+接收中一小时、待发布七天到期；发布和拒绝需要作者的交互式 Session。V18→V19 仅新增草稿表
+及索引。升级先停止旧实例，启动单个新实例完成自动迁移，确认成功后再恢复服务；回退必须
+停止新实例并恢复配套备份，不允许新旧版本同时写同一 SQLite 文件。

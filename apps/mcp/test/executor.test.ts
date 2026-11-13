@@ -60,7 +60,7 @@ describe("executor protocol boundaries", () => {
     expect(opSpecs["content.inspect"].rerun).toEqual(["auth", "revision"]);
     expect(opSpecs["exchange.import"].rerun).toEqual([]);
     expect(opSpecs["htmlView.validate"].rerun).toEqual(["auth"]);
-    expect(opSpecs["htmlView.create"].rerun).toEqual(["auth"]);
+    expect(opSpecs["htmlView.draft"].rerun).toEqual(["auth"]);
   });
 
   it("checks bearer digests and production/configuration guards", () => {
@@ -797,7 +797,7 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
 
 it("declares the rerun policy for every executor operation", () => {
   expect(Object.fromEntries(Object.entries(opSpecs).map(([name, spec]) => [name, spec.rerun]))).toEqual({
-    "htmlView.validate": ["auth"], "htmlView.create": ["auth"],
+    "htmlView.validate": ["auth"], "htmlView.draft": ["auth"],
     "markdown.compile": [], "markdown.export": ["auth"],
     "typst.compile": [], "svg.compile": ["auth"],
     "exchange.import": [], "exchange.export": ["auth"],

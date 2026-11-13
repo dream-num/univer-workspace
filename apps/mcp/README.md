@@ -42,7 +42,7 @@ The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 the UTF-8 header, then optional payload bytes. The operation table owns schemas,
 effect, limits, routing keys, budget and rerun policy. The initial operations are
 `content.execute`, `content.inspect`, `exchange.import`, `exchange.export`, `htmlView.validate`,
-`htmlView.create`, `markdown.compile`, `markdown.export`, `typst.compile`, `svg.compile`,
+`htmlView.create`, `htmlView.replace`, `markdown.compile`, `markdown.export`, `typst.compile`, `svg.compile`,
 `render.screenshot`, `render.printPdf`, `render.lint` and internal `diagnostics.probe`.
 The resilience table below declares each operation's rerun policy.
 Application failures use HTTP 200 with `{ok:false,error:{code,message,detail,outcome}}`.
@@ -121,7 +121,7 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
 that session. The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
 never beyond the session's `expires_in` minus 5 seconds). After revocation, `initialize`, `tools/list`,
-tools that make no Workspace request (`whoami`, `skills_read`, `api_*`), and resources may still succeed
+tools that make no Workspace request (`whoami`, `api_*`), and resources may still succeed
 from cache for up to 30 seconds. Every Workspace-backed call fails immediately because revocation deletes
 the downstream session. A downstream 401 evicts only the exact session that failed, preserving any
 pending exchange, newer session, and negative cache entry. If that session was obtained less than
@@ -249,14 +249,17 @@ and the matching owner/slug candidates when available.
 | `export` | Required `worktree`, `unit`, `format` (`xlsx`, `docx`, `pptx`) | `{ download, type }`; download expires in 15 minutes |
 | `api_find` | Required `terms` (searched independently); optional `unit` (`sheet`, `slide`, `doc`, `base`, `board`) | `{ results: [{ term, matches, totalMatches }] }` from `@univer-cli/api-reference` |
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
-| `skills_read` | Optional `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills: [{ name, description }] }`. With `name`: `{ name, content, resources?, files? }`. With `name` and `resource`: `{ name, path, content }`. Each `resources[].readCommand` is the instruction to call `skills_read` with that `name` and `resource` |
+| `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path` and `argumentHint`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
+| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
+| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
+| `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
+| `html_view_replace` | Required `resource`, inline `html`, `etag`, `idempotency_key` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
+| `html_view_draft_get` | Required `draft` (Draft ID) | `{ draft: { id, kind, state, name, space, previewUrl, expiresAt, resource?, node?, etag?, shareUrl? } }`. Scope `read`, no executor; publication fields appear only when published |
 
 `files` toolset:
 
 | Tool | Arguments | Structured result |
 | --- | --- | --- |
-| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
-| `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | Bare CLI upload fields plus `workspaceUrl`. Publishes validated bytes directly; reuse the same upload and key on retry |
 | `blob_get` | Required `resource` | `{ node, resource }` |
 | `blob_upload` | Required `upload_id`, `space`, `idempotency_key`; optional `name` (defaults to uploaded file name), `parent`, `media_type` | CLI `{ upload }` shape plus `upload.url`. Publishes directly, requires `publish` |
 | `blob_download` | `resource` | `{ download: { url, expires_at, file_name, media_type, size }, etag }` |
@@ -324,12 +327,28 @@ references and templates, readable through `resources/read`.
 The build assembles the MCP-specific `core` from `apps/mcp/skills/core` and nine shared domain
 Skills from `apps/cli/skill-data` into `dist/skill-data`. The CLI's `core` remains CLI-only.
 The gateway loads that directory once at startup and never imports or reads `apps/cli` at runtime.
-Both the extension and `skills_read` serve the same catalog snapshot and bytes.
+The extension and `skills_read` serve the same built-in catalog snapshot and bytes.
+Custom Skills are available only through `skills_read`, never through `skill://` resources.
 
 For clients without the extension, call `skills_read` with name `core` first. Without arguments it
-lists the same ten names and descriptions. With a name it returns top-level `name`, `content` and optional `resources`;
-`full: true` includes all references and templates. With name and resource it reads one file.
-Long resources retain cursor paging, and oversized full results require individual resource reads.
+lists built-ins plus live custom Skills from the caller's Personal Space under `.agents/skills/<name>/SKILL.md`.
+Pass `repo` to include that repository's Skills when the caller is an owner or member.
+The repository layer replaces a personal Skill of the same name. Built-in names are reserved.
+When the repository is the Personal Space, it is loaded once as the repository layer.
+The result includes `diagnostics` for invalid, oversized, reserved or shadowed Skills and
+`repository` as `loaded`, `not-member` or `no-repository`. Missing or forbidden repositories
+and Workspace failures remain tool errors.
+
+Each entry includes `source` (`builtin`, `user` or `repository`), `modelInvocable` and
+`userInvocable`, plus a custom Skill's `path` and optional `argumentHint`.
+Discovery processes at most 100 Skill folders per layer. `SKILL.md` must be downloadable,
+valid UTF-8 without NUL, at most 64 KiB, and pass the SDK's frontmatter validation.
+With a name, the result includes `source`, `content` and optional text `resources`.
+Up to 100 additional Blob files are classified. Downloadable UTF-8 files without NUL up to
+256 KiB are text. Other files appear only as `binaryFiles` metadata with path, byte size and media type.
+`resource` accepts only a text path in that manifest. `full: true` includes every text file.
+Long resources retain cursor paging. Repeat `repo`, `name` and `resource` with the cursor.
+Oversized full results return `workspace-result-too-large` and require individual resource reads.
 The MCP `core` maps shared operation names to tools and explains uploads and download links.
 If a named tool is absent from the connection's tool list, that step is unavailable; tell the user
 instead of guessing. Admin tools require `?toolsets=admin` or `?toolsets=all`.
@@ -375,10 +394,10 @@ independent queues. Worktree inspect and execute share a scope; trunk inspect ha
 Queue wait counts against the original deadline. A call that times out while queued returns
 `workspace-executor-timeout` with `started: false`. Revision reruns remain a fallback for writes
 outside this queue; retries alone cannot resolve a race against continuous writes.
-`content.execute`, `content.inspect`, `exchange.export`, `markdown.export`, `htmlView.validate` and
-`htmlView.create` also recover once from a worker's Workspace 401 when that worker holds a
+`content.execute`, `content.inspect`, `exchange.export`, `markdown.export`, `htmlView.validate`,
+`htmlView.create` and `htmlView.replace` also recover once from a worker's Workspace 401 when that worker holds a
 different session from the current call. `htmlView.*` reads the Unit through the runtime
-before any Blob upload, so a 401 there never follows a write, and the upload is idempotent by key.
+before any Blob write, so a 401 there never follows a write, and Blob writes are idempotent by key.
 Replacement is limited to that worker; its rejected session's verifier
 entry is evicted. A revoked session also reads as HTTP 403 from trunk collaboration endpoints, so a 403 from a
 worker made for another session is treated as stale in the same way; a 403 for the call's own session is a real
@@ -402,7 +421,7 @@ export's auth recovery applies only to its parent-side runtime read.
 | `exchange.export` | `auth` | The parent reads before credential-free conversion. |
 | `render.screenshot` | `auth`, `revision` | Shares the same-user Unit queue with execute and inspect. The runtime reads precede the credential-free renderer call, so a rerun repeats no write. |
 | `render.printPdf`, `render.lint` | `auth`, `revision` | Same as `render.screenshot`. |
-| `htmlView.validate`, `htmlView.create` | `auth` | Runtime reads precede Blob uploads. |
+| `htmlView.validate`, `htmlView.create`, `htmlView.replace` | `auth` | Runtime reads precede Blob uploads or replacements. |
 | `markdown.compile` | None | Creation can write a Unit before a runtime rejection; block updates enter the write path before runtime execution. Do not replay the whole handler. |
 | `markdown.export` | `auth` | Native block and asset export only reads; a stale worker rejection cannot follow a write. |
 | `typst.compile` | None | Creation can write a Unit before a runtime rejection. Do not replay the whole handler. |
@@ -494,6 +513,11 @@ docker build -f apps/mcp/Dockerfile -t univer-workspace-mcp:local .
 The build uses the root `.npmrc` to reach the Univer package registry. It includes
 Client Core and its runtime dependencies. Override `BASE_IMAGE` with `--build-arg`
 when needed. The default is `node:24-bookworm-slim`.
+As in the Workspace image, `HTTP_PROXY` is passed to `pnpm install`, `PROXY_SSL`
+sets `NODE_EXTRA_CA_CERTS` to a proxy CA certificate, and `NODE_MAX_OLD_SPACE_SIZE`
+(default `4096`) sizes the build heap. When `HTTP_PROXY` is set, the runtime stage
+switches the Debian sources to the Aliyun mirror and keeps `apt-get` off the proxy,
+so an HTTPS proxy certificate is not needed for the Chromium and font install.
 
 For Docker Desktop, start a development gateway against an existing Workspace server:
 
@@ -584,6 +608,10 @@ The last three point at a private per-job temporary directory that is removed af
 It receives no session, grant, Workspace URL, internal token or inherited Node flags.
 The call's remaining deadline includes its wait for a conversion slot and kills the child.
 A conversion crash returns `workspace-job-crashed`, including a child killed by its heap cap.
+Its internal `Error.cause` retains the job kind, exit code, termination signal, a safe startup
+error code when available, and the final 16 KiB of stderr. Test failures can show this evidence.
+The cause is excluded from tool responses and production logs. Treat stderr as sensitive
+because a native converter can include document contents or credentials in its diagnostics.
 A deadline before Unit creation returns `workspace-executor-timeout` with
 `detail: { retryable: true, started: false }`. After creation starts, its result can be unknown.
 Import is never automatically rerun by MCP. Retry with the same upload and idempotency key,
@@ -652,34 +680,77 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
-The `files` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
-`html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`publish`).
+Read the `html-view` Skill. Unless the user already named a style, ask which style they
+want before reading Sheets in depth or authoring. Ask in the user's language, using the ten
+style names and their one-line moods in that language from its design reference, and say
+Night Gauge (`night-gauge`, 仪表夜航) is the default.
+Ask in your normal reply text, then end your turn and wait for the answer. Do not rely on
+a client question or form tool, or validate or publish a page before the user answers.
+If they leave the choice to the Agent (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently
+choose another style. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
+palette, density and signature element when adapting to another scenario. Templates are English
+starting points; write the page in the language and conventions of the user's conversation as
+design.md describes, without i18n dictionaries or language switches. Controls write
+Sheet cells or append rows; display recalculated source values through live bindings,
+never page-side Sheet formulas, copied data or fallback numbers.
+
+The default `core` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
+`html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`write`).
 Each call requires exactly one of `html` or `html_upload_id`; both or neither return
 `workspace-argument-invalid`. For a local page, reserve `file_upload_create` with purpose
 `html-view` and media type `text/html`, PUT its bytes, then pass the ready upload ID as
 `html_upload_id`. Uploads must be valid UTF-8 and at most 512 KiB, even if the staging
 limit is raised. Invalid UTF-8 or oversized ready uploads return `workspace-argument-invalid`.
 The upload remains available for retries until its one-hour expiry.
-Both run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
+
+The core toolset also includes gateway-only `html_view_read {resource}` (`read`),
+which returns `{resource, node, space, name, html, etag, shareUrl}` for a `.univer.html`
+Blob with a strong ETag. Inline results are capped below 100,000 serialized characters;
+oversized pages are refused without truncation. `html_view_replace {resource, html,
+etag, idempotency_key}` (`write`) validates inline HTML in the executor and saves a
+revision draft. Publishing it preserves identity and URL. On a stale ETag conflict,
+read again and reconcile. Upload IDs are not accepted for replacement.
+
+Both write tools return `{ draft }` with `id`, `kind`, `state`, `name`, `space`,
+`previewUrl`, `expiresAt`, `repositoryVisibility` and `privateSourceUnitIds`.
+A replacement also identifies the target `resource`. Give the user `draft.previewUrl`
+and end the turn. The page stays unchanged until the user previews it full screen
+in Workspace and clicks Publish. The user can also reject the draft.
+Call gateway-only `html_view_draft_get {draft}` (`read`) before calling it live,
+sharing its link or revising it again. It reports `pending`, `published`, `rejected`,
+`expired` or `conflicted`. Only a published draft returns the final `shareUrl`,
+`node`, `resource` and quoted `etag`. On rejected, ask what to change. On conflicted,
+read the page again and draft again. On expired, draft again with a new key.
+MCP has no tool to publish or reject drafts.
+Every `tools/list` entry advertises its declared scope in `_meta["univer.workspace/scope"]`.
+
+Validation, creation and replacement run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
 referenced trunk Sheet through the caller-bound `exportUnitData`. They validate
 declarative bindings without executing page JavaScript. The CLI retains file
 handling and calls the same feature.
 
 HTML is limited to 512 KiB of UTF-8 text at the tool and RPC input boundaries;
 the RPC frame limit is 4 MiB, including JSON escaping and credentials. Validation
-returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation immediately
-publishes a Blob without Worktree review and returns the CLI's bare upload fields
-with `workspaceUrl` using the identity origin. The executor uploads an in-memory copy
-of the exact validated bytes through `uploadBytes`,
-with stable original filename `view.univer.html`. It creates no temporary HTML file.
-Validation and source-read failures before upload preserve their read error semantics;
-a pre-upload deadline is retryable and never reports `workspace-result-unknown`.
+returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation and replacement
+send the exact validated HTML in one `POST /api/html-view-drafts` with `Idempotency-Key`.
+The executor advertises one `htmlView.draft` operation for both intents. A gateway
+hides both write tools when an old executor lacks this operation. The preview URL
+and published immersive share URL use the identity origin.
+`repositoryVisibility` is `public` or `private`, from destination `publicRead`.
+Sorted `privateSourceUnitIds` identify declared Sheets in non-public repositories.
+Anyone with the published link can view the page and its declared data when visibility
+is public and the private-source list is empty. Private sources remain inaccessible
+to signed-out visitors even on a public page. Signed-out visitors and signed-in
+non-members are read-only; page writes are rejected for them.
+Validation and source-read failures before the draft POST preserve their read error
+semantics; a pre-write deadline is retryable and never reports `workspace-result-unknown`.
+The uvw CLI continues to publish directly through Client Core's `create` and `replace`.
 Generate a 16 to 200 character URL-safe idempotency key before creation and reuse it
 with identical HTML or the same upload ID and destination after `workspace-result-unknown`.
 
 Runtime exports report worker observations. Consumed HTML uploads add `upload_bytes` at the gateway; successful inline creation adds HTML UTF-8
 `upload_bytes`, including when a page has no bindings and
-`executor: none`; Blob publication creates no committed Unit revisions.
+`executor: none`; saving drafts creates no committed Unit revisions.
 
 ## Markdown tools
 

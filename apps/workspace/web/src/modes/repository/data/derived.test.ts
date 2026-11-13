@@ -148,7 +148,7 @@ describe("Repository Home and issue facets", () => {
     const result = buildHomeWork(page([pull(), pull({ id: "beta-pull", teamSpace: beta, updatedAt: at(5) }), pull({ id: "merged", state: "merged" })]), page([issue({ space: beta })]), []);
     expect(result.ranking.map((row) => [row.space.id, row.total])).toEqual([["beta", 2], [space.id, 1]]);
     expect(result.ranking[0]?.segments).toEqual([{ key: "people", value: 0 }, { key: "agents", value: 0 }, { key: "unknown", value: 2 }]);
-    expect(result.headline).toEqual({ kind: "open-work", pulls: 2, repositories: 2 });
+    expect(result.totals).toEqual({ pulls: 2, agentPulls: 0, issues: 1 });
     expect(result.openBySpace.get("beta")).toEqual({ pulls: 1, issues: 1 });
     expect(result.pulls.map((item) => item.pull.id)).toEqual(["pull", "beta-pull"]);
     const ties = buildHomeWork(page([pull({ teamSpace: beta }), pull()]), page([]), []);
@@ -164,13 +164,13 @@ describe("Repository Home and issue facets", () => {
       pull({ createdVia: "agent" }), pull({ id: "legacy", createdVia: "unknown" }),
       pull({ id: "human", createdVia: "browser" }), pull({ id: "merged", createdVia: "agent", state: "merged" }),
     ]), page([issue({ createdVia: "agent" }), issue({ id: "closed", state: "closed", createdVia: "browser" })]), []);
-    expect(result.headline).toEqual({ kind: "agents-drafted", agents: 1, pulls: 3 });
+    expect(result.totals).toEqual({ pulls: 3, agentPulls: 1, issues: 1 });
     expect(result.ranking[0]?.segments).toEqual([{ key: "people", value: 1 }, { key: "agents", value: 2 }, { key: "unknown", value: 1 }]);
     expect(result.ranking[0]?.total).toBe(4);
     expect(result.pulls.map((item) => item.actor.kind)).toEqual(["agents", "unknown", "people"]);
     expect(result.issues[0]?.author.kind).toBe("agents");
-    expect(buildHomeWork(page([pull({ createdVia: "browser" })]), page([issue({ createdVia: "agent" })]), []).headline).toEqual({ kind: "open-work", pulls: 1, repositories: 1 });
-    expect(buildHomeWork(page([pull({ createdVia: "agent" })]), page([]), []).headline).toEqual({ kind: "agents-drafted", agents: 1, pulls: 1 });
+    expect(buildHomeWork(page([pull({ createdVia: "browser" })]), page([issue({ createdVia: "agent" })]), []).totals).toEqual({ pulls: 1, agentPulls: 0, issues: 1 });
+    expect(buildHomeWork(page([pull({ createdVia: "agent" })]), page([]), []).totals).toEqual({ pulls: 1, agentPulls: 1, issues: 0 });
     expect(buildPendingIndex(space.id, [detail({ createdVia: "agent" })], ancestry, true).byNode.get("file")?.[0]?.actor.kind).toBe("agents");
   });
 
@@ -188,9 +188,9 @@ describe("Repository Home and issue facets", () => {
     expect(result.updatedBySpace.has("unknown")).toBe(false);
   });
 
-  it("handles quiet and issue-only headlines, partial lists, personal identity and bounded cards", () => {
-    expect(buildHomeWork(page([]), page([]), []).headline).toEqual({ kind: "quiet" });
-    expect(buildHomeWork(page([]), page([issue()]), []).headline).toEqual({ kind: "open-work", pulls: 0, repositories: 1 });
+  it("handles zero and issue-only totals, partial lists, personal identity and bounded cards", () => {
+    expect(buildHomeWork(page([]), page([]), []).totals).toEqual({ pulls: 0, agentPulls: 0, issues: 0 });
+    expect(buildHomeWork(page([]), page([issue()]), []).totals).toEqual({ pulls: 0, agentPulls: 0, issues: 1 });
     const personal = { id: "personal", name: "Personal" };
     const userPulls = page([pull({ kind: "user", teamSpace: null })]);
     expect(buildHomeWork(userPulls, page([]), []).complete).toBe(false);

@@ -52,6 +52,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR6 checks the server instructions in the initialize result in both protocols, including the new-key-per-operation rule.
 - MR7 reads a long class through `api_show` cursors and compares the pages with the reference library.
 - MR8 rejects a cursor reused with other arguments and an unknown Skill.
+- MR13 seeds personal and repository custom Skills and checks discovery sources and repository event attribution.
 - MA1 calls the gateway with the default personal access token (PAT) and records `auth_kind: pat`.
 - MA2 reads the protected-resource metadata without credentials.
 - MA3 refuses a write tool to a read-only PAT.
@@ -73,7 +74,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX16 returns `inspect` input errors in MCP words, without CLI flags, and requires exactly one scope.
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
 - MX7 and MX8 round-trip xlsx and docx through Office import and export.
-- MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and publish/retry/open the validated page.
+- MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and draft, preview, publish and read back the validated page.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - MR11 prints a Doc and a Sheet with an image to PDF in a Worktree and on trunk against `uvw print-pdf`, lints a Slide deck with layout problems against `uvw lint`, and returns the CLI's rejections.
@@ -2209,7 +2210,7 @@ MH_S=$(jq -r .value.sheetId "$EVIDENCE/mh-data.out")
 $V cli mh-ready pr ready "$MH_N" -R "$O/personal" --json
 $V cli mh-merge pr merge "$MH_N" -R "$O/personal" --json
 printf '<!DOCTYPE html><html><head><title>Regional totals</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>Regional totals</h1><p>North: <output data-univer-cell-text="%s:%s:B2"></output></p></body></html>\n' "$MH_U" "$MH_S" > "$EVIDENCE/mh-view.univer.html"
-$V mcp --toolsets files --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html}')"
+$V mcp --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html}')"
 $V cli mh-validate-cli html-view validate --file "$EVIDENCE/mh-view.univer.html" --json
 diff <(jq -S . "$EVIDENCE/mh-validate.out") <(jq -S . "$EVIDENCE/mh-validate-cli.out")
 jq -e --arg unit "$MH_U" '.valid == true and .unitIds == [$unit] and .bindingCount == 1' "$EVIDENCE/mh-validate.out"
@@ -2221,7 +2222,7 @@ Pass when the Sheet is merged with data and MCP and CLI validation results match
 
 ```bash
 printf '<output data-univer-cell-text="missing-html-sheet:missing:A1"></output>\n' > "$EVIDENCE/mh-missing.univer.html"
-$V mcp --toolsets files mh-missing html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html}')"
+$V mcp mh-missing html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html}')"
 test $? -eq 1
 $V cli mh-missing-cli html-view validate --file "$EVIDENCE/mh-missing.univer.html" --json
 test $? -eq 1
@@ -2232,16 +2233,15 @@ jq -e --arg code "$MH_CODE" '.outcome == "tool_error" and .error_code == $code' 
 
 Pass when both clients preserve the same missing-source code.
 
-**MH3. Publish, retry and open the validated HTML View.**
+**MH3. Draft, preview, publish and read back the validated HTML View.**
 
 ```bash
 MH_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" --arg space "$MH_SPACE" --arg key "html-view-$VERIFY_UVW_RUN-$MH_U" '{html:$html,space:$space,name:"Regional totals",idempotency_key:$key}')
-$V mcp --toolsets files --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_create "$MH_ARGS"
-$V mcp --toolsets files mh-retry html_view_create "$MH_ARGS"
-diff <(jq -S '{nodeId,resourceId,operationId,workspaceUrl}' "$EVIDENCE/mh-create.out") <(jq -S '{nodeId,resourceId,operationId,workspaceUrl}' "$EVIDENCE/mh-retry.out")
-$V cli mh-blob-get blob get "$(jq -r .resourceId "$EVIDENCE/mh-create.out")" --json
-$V cli mh-blob-download blob download "$EVIDENCE/mh-published.univer.html" --force --resource "$(jq -r .resourceId "$EVIDENCE/mh-create.out")" --json
-cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-published.univer.html"
+$V mcp --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_create "$MH_ARGS"
+$V mcp mh-retry html_view_create "$MH_ARGS"
+diff <(jq -S .draft "$EVIDENCE/mh-create.out") <(jq -S .draft "$EVIDENCE/mh-retry.out")
+jq -e --arg origin "$ORIGIN" '.draft.state == "pending" and (.draft.previewUrl | startswith($origin + "/drafts/"))' "$EVIDENCE/mh-create.out"
+MH_D=$(jq -r .draft.id "$EVIDENCE/mh-create.out")
 agent-browser open "$ORIGIN/login"
 agent-browser wait 1500
 if agent-browser get url | grep -q '/login'; then
@@ -2250,16 +2250,26 @@ if agent-browser get url | grep -q '/login'; then
   agent-browser click 'form button[type=submit]'
   agent-browser wait --url '**/home'
 fi
-agent-browser open "$(jq -r .workspaceUrl "$EVIDENCE/mh-create.out")"
+agent-browser open "$(jq -r .draft.previewUrl "$EVIDENCE/mh-create.out")"
+agent-browser wait 3000
+agent-browser screenshot "$EVIDENCE/mh-draft.png"
+agent-browser find role button click --name Publish
+agent-browser wait --text 'Open page'
+$V mcp mh-draft-get html_view_draft_get "{\"draft\":\"$MH_D\"}"
+jq -e '.draft.state == "published" and (.draft.shareUrl | test("\\?view=immersive$"))' "$EVIDENCE/mh-draft-get.out"
+$V mcp mh-read html_view_read "{\"resource\":\"$(jq -r .draft.resource "$EVIDENCE/mh-draft-get.out")\"}"
+jq -j .html "$EVIDENCE/mh-read.out" > "$EVIDENCE/mh-published.univer.html"
+cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-published.univer.html"
+agent-browser open "$(jq -r .draft.shareUrl "$EVIDENCE/mh-draft-get.out")"
 agent-browser wait 3000
 agent-browser screenshot "$EVIDENCE/mh-published.png"
-agent-browser reload
-agent-browser wait 2000
-agent-browser screenshot "$EVIDENCE/mh-published-reloaded.png"
 ```
 
-Pass when both calls return the same Node, downloaded bytes equal the validated source,
-and the Browser screenshots show North and 42 before and after reload.
+Pass when both create calls return the same pending draft, the Space has no page before
+Publish, the draft screenshot shows North and 42 with a Publish button, `html_view_draft_get`
+reports `published` with an immersive `shareUrl`, the read-back bytes equal the validated
+source, and the published screenshot shows North and 42. Wait for the preview to load before
+clicking Publish; the preview's New and Current controls are buttons, not ARIA tabs.
 
 ### MR9 renderer role
 
@@ -2698,6 +2708,53 @@ Pass when, for one SVG with Latin and Chinese text, left, centred and right-anch
 - The journey prints the wall time of a 55-line compile (`mcp-svg-real-50.wall-ms`, one renderer
   RPC per line, warm renderer) and the usage event stays `executor: none` with zero render cost.
 - Stop with `$V down` for the run, even on failure.
+
+### MR13 custom Skills
+
+Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
+Run MR13 after MR1 or on a fresh run: MR1 expects only the ten built-in Skills.
+The seeder creates missing folders and uploads files recursively. Re-runs skip existing
+Blob names and never delete or replace existing data. Use a new name to seed changed bytes.
+
+```bash
+eval "$($V env)"
+O="verify-$VERIFY_UVW_RUN"
+$V cli sk1-repo repo create sk1-skills --json
+mkdir -p "$EVIDENCE/sk1-user-source/references" "$EVIDENCE/sk1-repo-source/scripts"
+cat > "$EVIDENCE/sk1-user-source/SKILL.md" <<'SKILL'
+---
+name: weekly-report
+description: Write the weekly report from the current repository.
+---
+Read the source data before writing the report.
+SKILL
+cat > "$EVIDENCE/sk1-repo-source/SKILL.md" <<'SKILL'
+---
+name: reconcile-ledger
+description: Reconcile the repository ledger.
+---
+Read the ledger and report unmatched entries.
+SKILL
+printf 'Check every source.\n' > "$EVIDENCE/sk1-user-source/references/guide.md"
+printf 'export const ledger = true;\n' > "$EVIDENCE/sk1-repo-source/scripts/check.js"
+node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/personal" weekly-report "$EVIDENCE/sk1-user-source" > "$EVIDENCE/sk1-seed-user.json"
+node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repo.json"
+$V mcp sk1-list skills_read "{\"repo\":\"$O/sk1-skills\"}"
+jq -e '([.skills[].source] | unique) == ["builtin","repository","user"] and .repository == "loaded" and .diagnostics == []' "$EVIDENCE/sk1-list.out"
+jq -e --slurpfile repo "$EVIDENCE/sk1-repo.out" '.outcome == "ok" and .repo == $repo[0].id' "$EVIDENCE/sk1-list.event.json"
+$V mcp sk1-user-read skills_read '{"name":"weekly-report"}'
+jq -e '.source == "user" and [.resources[].path] == ["references/guide.md"]' "$EVIDENCE/sk1-user-read.out"
+$V mcp sk1-repo-read skills_read "{\"repo\":\"$O/sk1-skills\",\"name\":\"reconcile-ledger\"}"
+jq -e '.source == "repository" and [.resources[].path] == ["scripts/check.js"]' "$EVIDENCE/sk1-repo-read.out"
+node .agents/skills/verify-uvw/bin/seed-skills.mjs "$O/sk1-skills" reconcile-ledger "$EVIDENCE/sk1-repo-source" > "$EVIDENCE/sk1-seed-repeat.json"
+jq -e '.uploaded == 0 and .skipped == 2' "$EVIDENCE/sk1-seed-repeat.json"
+```
+
+Pass when `sk1-list.out` contains `builtin`, `user` and `repository` sources,
+`repository` is `loaded`, and `diagnostics` is empty. Its event must have outcome `ok`
+and repo equal to `.id` in `sk1-repo.out`. By-name reads must return their source and
+text resource manifests. The repeated seed must skip both files without uploading.
+Dot-named nested folders and `blob upload --parent` are exercised by these uploads.
 
 ### Typst job verification
 

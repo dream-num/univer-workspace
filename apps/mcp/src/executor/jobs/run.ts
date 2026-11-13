@@ -4,7 +4,10 @@ import { fork } from "node:child_process";
 import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
+import {
+  WorkspaceApplicationError,
+  workspaceError,
+} from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { conversionError, rewriteJobPaths } from "./errors.js";
 import type { ConversionJob, JobCredentials } from "./protocol.js";
@@ -70,6 +73,27 @@ export async function runConversionJob(
 > {
   signal.throwIfAborted();
   const directory = await mkdtemp(join(tmpdir(), `univer-mcp-job-${process.pid}-`));
+  const diagnostics: Error & {
+    jobKind: ConversionJob["kind"];
+    exitCode: number | null;
+    signal: NodeJS.Signals | null;
+    stderrTail: string;
+    startupErrorCode?: string;
+  } = Object.assign(new Error("Conversion child process failed."), {
+    jobKind: job.kind,
+    exitCode: null,
+    signal: null,
+    stderrTail: "",
+  });
+  const crashed = (message: string, startupError?: unknown) => {
+    const parsed = z
+      .object({ code: z.string().regex(/^E[A-Z0-9_]{1,63}$/) })
+      .safeParse(startupError);
+    if (parsed.success) diagnostics.startupErrorCode = parsed.data.code;
+    return new WorkspaceApplicationError("workspace-job-crashed", message, undefined, {
+      cause: diagnostics,
+    });
+  };
   try {
     const directories = [...new Set([await realpath(directory), directory])];
     signal.throwIfAborted();
@@ -79,7 +103,11 @@ export async function runConversionJob(
         env: jobEnvironment(directory),
         execArgv: [`--max-old-space-size=${heapMb}`],
         cwd: directory,
-        stdio: ["ignore", "ignore", "ignore", "ipc"],
+        stdio: ["ignore", "ignore", "pipe", "ipc"],
+      });
+      let stderrTail = Buffer.alloc(0);
+      child.stderr?.on("data", (chunk: Buffer) => {
+        stderrTail = Buffer.concat([stderrTail, chunk]).subarray(-16 * 1024);
       });
       let reply: z.infer<typeof replySchema> | undefined;
       let failure: unknown;
@@ -88,11 +116,8 @@ export async function runConversionJob(
         child.kill("SIGKILL");
       };
       signal.addEventListener("abort", abort, { once: true });
-      child.once("error", () => {
-        failure = workspaceError(
-          "workspace-job-crashed",
-          "The conversion job could not start or communicate.",
-        );
+      child.once("error", (error) => {
+        failure = crashed("The conversion job could not start or communicate.", error);
         if (child.pid === undefined) {
           signal.removeEventListener("abort", abort);
           reject(failure);
@@ -101,18 +126,19 @@ export async function runConversionJob(
       child.once("message", (message: unknown) => {
         const parsed = replySchema.safeParse(message);
         if (parsed.success) reply = parsed.data;
-        else child.kill("SIGKILL");
+        else {
+          failure = crashed("The conversion job returned an invalid result.");
+          child.kill("SIGKILL");
+        }
       });
-      child.once("close", (code) => {
+      child.once("close", (code, terminationSignal) => {
         signal.removeEventListener("abort", abort);
+        diagnostics.exitCode = code;
+        diagnostics.signal = terminationSignal;
+        diagnostics.stderrTail = stderrTail.toString("utf8");
         if (failure) reject(failure);
         else if (code !== 0 || !reply)
-          reject(
-            workspaceError(
-              "workspace-job-crashed",
-              "The conversion job exited without a result, possibly exceeding its memory limit. Reduce the file or ask the operator to review EXECUTOR_JOB_HEAP_MB.",
-            ),
-          );
+          reject(crashed("The conversion job exited without a result."));
         else if (!reply.ok) {
           const sanitized = replySchema.parse(rewriteJobPaths(reply, directories));
           if (!sanitized.ok) {
@@ -120,12 +146,7 @@ export async function runConversionJob(
             reject(workspaceError(error.code, error.message, sanitized.error.detail));
           }
         } else if ((job.kind === "export") !== reply.value instanceof Uint8Array)
-          reject(
-            workspaceError(
-              "workspace-job-crashed",
-              "The conversion job returned an invalid result.",
-            ),
-          );
+          reject(crashed("The conversion job returned an invalid result."));
         else if (job.kind === "typst.compile" && !(reply.value instanceof Uint8Array)) {
           const compiled = z
             .object({
@@ -146,7 +167,7 @@ export async function runConversionJob(
               previews: rewriteJobPaths(reply.value["previews"], directories),
             });
           if (compiled.success) resolve(compiled.data as WorkspaceCompileTypstResult);
-          else reject(workspaceError("workspace-job-crashed", "Invalid Typst compilation result."));
+          else reject(crashed("Invalid Typst compilation result."));
         } else if (job.kind === "markdown.materialize") {
           const materialized = z
             .object({
@@ -156,15 +177,12 @@ export async function runConversionJob(
             })
             .safeParse(reply.value);
           if (materialized.success) resolve(materialized.data);
-          else reject(workspaceError("workspace-job-crashed", "Invalid materialized document."));
+          else reject(crashed("Invalid materialized document."));
         } else resolve(reply.value);
       });
       child.send(job.kind === "import" ? job : { ...job, ...credentials }, (error) => {
         if (error) {
-          failure = workspaceError(
-            "workspace-job-crashed",
-            "The conversion job could not start or communicate.",
-          );
+          failure = crashed("The conversion job could not start or communicate.", error);
           child.kill("SIGKILL");
         }
       });
@@ -173,10 +191,7 @@ export async function runConversionJob(
   } catch (error) {
     if (signal.aborted) throw signal.reason;
     if (error instanceof Error && "syscall" in error)
-      throw workspaceError(
-        "workspace-job-crashed",
-        "The conversion job could not start or communicate.",
-      );
+      throw crashed("The conversion job could not start or communicate.", error);
     throw error;
   } finally {
     await rm(directory, { recursive: true, force: true });

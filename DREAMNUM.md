@@ -127,7 +127,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   old and new SDK writers must never share the file. History segment indexing and catch-up belong to the SDK.
 - Uploaded Resource bytes and embedded Univer Asset bytes are stored by the configured BlobStore. Database rows
   retain their identities, metadata, and recovery state. Blob content replacement preserves Resource identity
-  and publishes directly; it does not use Worktree review.
+  and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
+  cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
@@ -150,10 +151,20 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   plus the `login_sessions` columns that tie a session issued by token exchange to its token, through a backed-up
   V17 → V18 startup migration that backfills nothing. Workspace issues and stores these tokens itself; the
   database keeps only their hashes, and the plaintext is returned once at creation or issuance. Revoking a token
-  deletes the sessions issued for it.
+  deletes the sessions issued for it. `POST /api/auth/agent-token` issues the Browser Agents module, from an
+  interactive session cookie, a one-hour `uvw_at_` grant for the first-party `univer-workspace-agents` client bound to the
+  same-origin `/mcp` resource, with only `read` or `read write`, and returns no refresh token.
+- Product V19 adds HTML View drafts through a backed-up V18 → V19 startup migration that backfills nothing.
+  A draft is a `.univer.html` create or revision whose bytes wait in the BlobStore; only its author can publish
+  or reject it, from an interactive session, at `/api/html-view-drafts`. Publishing adopts the stored bytes in one
+  transaction; rejected, expired and stale drafts release them. Pending drafts expire after 7 days.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
+- The Browser Agents module keeps agent session records, which include document content returned by tools, and
+  user-supplied model provider keys only in the user's browser: IndexedDB per Workspace user, or `sessionStorage` for a
+  key the user chooses not to remember. Model requests go from the browser straight to the provider; no Workspace
+  endpoint, log, URL, or session record receives the key.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are

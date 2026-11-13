@@ -72,8 +72,11 @@ toolset. An executor restriction can hide content tools even with all selected.
 | `blob download`                                                                                              | `blob_download`        | Files; bytes and ETag                                      |
 | `blob replace`                                                                                               | `blob_replace`         | Files; conditional replacement                             |
 | `asset download`                                                                                             | `asset_download`       | Files; embedded image bytes                                |
-| `html-view validate`                                                                                         | `html_view_validate`   | Files; validate declarative bindings                       |
-| `html-view create`                                                                                           | `html_view_create`     | Files; publish HTML immediately                            |
+| `html-view validate`                                                                                         | `html_view_validate`   | Core; validate declarative bindings                        |
+| `html-view create`                                                                                           | `html_view_create`     | Core; save a page draft                                    |
+| Read HTML View HTML and ETag | `html_view_read` | Inline .univer.html source and strong ETag |
+| Replace HTML View | `html_view_replace` | Validate inline HTML and save a revision draft |
+| Read HTML View draft status | `html_view_draft_get` | HTTP-only; share the page only when published |
 | `compile-markdown`                                                                                           | `compile_markdown`     | Files; Markdown to Modern Doc                              |
 | `export-markdown`                                                                                            | `export_markdown`      | Files; selected native blocks to Markdown                  |
 | `compile-svg`                                                                                                | `compile_svg`          | Files; SVG to a Slide page                                 |
@@ -122,7 +125,8 @@ The resources operations search an SVG catalog, not Workspace files.
 
 ## Worktree rule
 
-Start every new editable-content task in a new Worktree. `pr_list` is diagnostic,
+Start every new editable Unit task in a new Worktree. HTML View pages publish
+outside Worktrees. `pr_list` is diagnostic,
 not permission to reuse another draft because its name or Unit looks suitable.
 Continue an existing Worktree only for rework of the same task, when this agent
 already worked in that known Worktree or the user supplies its identity for that
@@ -180,7 +184,15 @@ user-scoped Worktree for a private personal task, or that Team's Space-scoped
 Worktree when the task belongs to the team. Use Space visibility only when members
 should see the draft.
 
-For a new file, create the Worktree first. Use `unit_create` for an empty Unit,
+For a new page, dashboard or form backed by live Sheets, read the `html-view` Skill
+and use `html_view_create` to save a `.univer.html` draft outside a Worktree.
+A page is not a Slide, Board or other Unit. If the connection cannot draft pages,
+say so and stop; never create a substitute Unit.
+Revise a page with `html_view_read` then `html_view_replace`. Edit the returned HTML
+and draft with its strong ETag and a new idempotency key. On conflict, read again
+and reconcile. Publishing a revision preserves the page identity and URL.
+
+For a new Unit file, create the Worktree first. Use `unit_create` for an empty Unit,
 `compile_markdown` to create a generated Modern Doc without a placeholder (read
 the `doc` Skill), `compile_typst` for a Typst Doc, or `import` for Office content.
 Choose the destination Space and stable parent nodeId deliberately. Do not add
@@ -191,6 +203,16 @@ as a UUID, for each new operation. Reuse it only to retry the same call with
 identical arguments. Never derive it from names or reuse a key from earlier work.
 Where a schema requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
 underscores or hyphens. After an unknown content commit, read back before retrying.
+
+## Pages
+
+`html_view_create` and `html_view_replace` only save drafts. Give the user
+`draft.previewUrl`, say the page is not live until they publish it in Workspace,
+and end your turn. Before saying whether a page is live or still a draft, sharing its link or revising it,
+call `html_view_draft_get` with the returned draft ID. Users publish in Workspace without telling you. Share `shareUrl` only when
+`state` is `published`. On `rejected`, ask what to change. On `conflicted`, read the
+page again with `html_view_read` and draft again. On `expired`, draft again with a
+new idempotency_key. MCP cannot publish or reject a draft.
 
 ## Edit one Unit
 
@@ -240,6 +262,8 @@ for one hour after reservation. Never pass a local file path to a tool.
   html_upload_id. Reserve purpose html-view with media_type text/html for a local
   page, upload its bytes, then pass its upload_id as html_upload_id. HTML must be
   valid UTF-8 and at most 512 KiB. Reuse the upload and idempotency_key on creation retries.
+- `html_view_read` returns inline HTML and its strong ETag. `html_view_replace`
+  accepts inline html only, with that ETag and a new idempotency_key.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
 - `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at
@@ -283,8 +307,29 @@ screenshot job results carry download links. After an unknown creation result,
 retry only the same operation with its original upload and idempotency key.
 
 Read the `blob` Skill for original files and the `html-view` Skill for live HTML
-backed by Sheet data. Blob publication/replacement and HTML View creation write
-directly without Worktree review; apply them only to the intended destination.
+backed by Sheet data. Unless the user already named a style, ask which style they want
+before reading Sheets in depth or authoring. Ask in the user's language, using the ten
+style names and their one-line moods in that language from design.md, and say
+Night Gauge (`night-gauge`, 仪表夜航) is the default. Ask in your normal
+reply text, then end your turn and wait for the answer. Do not rely on a client question
+or form tool, or validate or publish a page before the user answers. If they leave the choice
+to you (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently choose another style.
+Read design.md and start from that style's complete template. Templates are English starting
+points; write the page in the language and conventions of the user's conversation as design.md
+describes, without i18n dictionaries or language switches. Controls write Sheet cells
+or append rows; show recalculated source values, never page-side Sheet formulas, copied
+data or fallback numbers. Blob publication and replacement write directly without Worktree
+review; apply them only to the intended destination.
+`html_view_create` and `html_view_replace` return a `draft` with `previewUrl`,
+`repositoryVisibility` and sorted `privateSourceUnitIds`. Once `html_view_draft_get`
+confirms `published`, return its immersive `shareUrl` and explain that anyone
+with the link can view the page and its declared sources only when visibility is
+`public` and the private-source list is empty; otherwise signed-in access is
+required for the page and all its data. Signed-out visitors and signed-in
+non-members are read-only; page writes are rejected for them. Follow the HTML View
+Skill's sharing guidance: ask before using admin `repo_edit` to make a repository
+public, which immediately publishes everything in it, and keep source Sheets in
+the same public repository or list the private sources.
 
 ## SVG resource catalog
 

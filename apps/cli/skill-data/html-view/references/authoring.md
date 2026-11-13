@@ -182,3 +182,25 @@ allows the CDN origin, not individual npm packages. Load only the libraries the 
 For fixed-version URLs, browser entry points and binding integration, read
 [frontend libraries](frontend-libraries.md). For an ECharts chart driven by
 `subscribeRangeById`, read [charts](charts.md).
+
+## Workspace media
+
+Show a video, audio file or image stored in Workspace by referencing its Node ID instead of
+writing a URL:
+
+```html
+<video controls data-workspace-src="NODE_ID"></video>
+<audio controls><source data-workspace-src="NODE_ID"></audio>
+<img alt="Product photo" data-workspace-src="NODE_ID">
+```
+
+Only `video`, `audio`, `source` and `img` are resolved. Upload the file with the `blob` Skill and use the returned `nodeId`. Before the page loads,
+Workspace replaces each reference with the file's content URL, so playback streams and seeks
+normally. Elements that already have `src` are left alone.
+
+A reference resolves only when anyone could read the file: it is in a public repository or has
+link sharing on, and it is a ready video, audio or image Blob. A private file is never shown, even
+to a viewer who can open it, because whoever edits the page could otherwise make viewers load
+files the editor cannot read. An unresolved element stays empty and issues no request, so give it
+a visible fallback such as a caption or poster text. The page cannot `fetch` these URLs or draw
+them into a readable canvas; it can only display them.
