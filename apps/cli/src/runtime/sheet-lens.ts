@@ -15,10 +15,11 @@ export function createSheetLensHandler(options: {
   readonly sessionPath: string;
 }): DaemonRequestHandler {
   const engine = new WorkspaceSheetLensEngine({
-    // The daemon serves one session, so workers stay shared with inspect and execute; the caller only keys the cache.
+    // Drop the caller so Lens shares the daemon worker pool with inspect and execute; the caller only keys the Lens cache.
     exportUnitData: ({ target }) => options.runtime.exportUnitData({ target }),
     maxCachedBytes: 512 * 1024 * 1024,
   });
+  const subjects = new Map<string, string>();
   return async (payload) => {
     if (!isWorkspaceRecord(payload) || !isSheetLensRequest(payload["request"])) {
       throw workspaceError("workspace-argument-invalid", "Invalid Sheet Lens request.");
@@ -33,9 +34,10 @@ export function createSheetLensHandler(options: {
         "workspace-authentication-required",
         "Log in to the current Workspace origin first.",
       );
-    const userId =
-      session.subject ??
-      (
+    const sessionKey = JSON.stringify([target.origin, session.cookie]);
+    let userId = session.subject ?? subjects.get(sessionKey);
+    if (userId === undefined) {
+      userId = (
         await whoami(
           new WorkspaceHttp({
             origin: target.origin,
@@ -44,12 +46,10 @@ export function createSheetLensHandler(options: {
           }),
         )
       ).subject.id;
+      subjects.set(sessionKey, userId);
+    }
     try {
-      const result = await engine.run(
-        target,
-        { userId, grant: session.cookie },
-        payload["request"],
-      );
+      const result = await engine.run(target, { userId }, payload["request"]);
       return result as unknown as JsonValue;
     } catch (error) {
       // The daemon protocol transports code and message, but drops structured error detail.

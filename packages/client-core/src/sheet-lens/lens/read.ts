@@ -101,7 +101,7 @@ export function sheetIndexOf(data: Snapshot, key: string | undefined, range: str
   if (ref && Number(ref[1]) <= names.length) return Number(ref[1]) - 1;
   throw new SheetLensError(
     "E_SHEET_NOT_FOUND",
-    `no sheet '${key}' in this file (sheets: ${nameList(names)})`,
+    `no sheet '${key}' in this Unit (sheets: ${nameList(names)})`,
   );
 }
 

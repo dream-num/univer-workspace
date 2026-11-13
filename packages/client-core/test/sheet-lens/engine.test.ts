@@ -41,6 +41,98 @@ function setup(data = ledger(), maxCachedBytes = 1_000_000) {
   return { engine, exportUnitData };
 }
 
+test.each([
+  [
+    "blank-cells",
+    snapshot({ cells: { 0: { 0: text("item") }, 1: { 0: { f: '=IF(TRUE,"",1)', v: "" } } } }),
+  ],
+  [
+    "sheet-too-large",
+    snapshot({
+      cells: { 0: { 0: text("start") }, 50000: { 9: num(1) } },
+      extra: { rowCount: 50001, columnCount: 10 },
+    }),
+  ],
+] as const)("outline %s warnings never leak into read or find", async (code, data) => {
+  data.resources = [{ name: "SHEET_DRAWING_PLUGIN", data: "{" }];
+  const { engine } = setup(data);
+  const beforeRead = await engine.run(target, caller, read);
+  const beforeFind = await engine.run(target, caller, find);
+  const outlined = await engine.run(target, caller, { op: "outline" });
+  assert.ok(outlined.warnings.some((warning) => warning.code === `sheet-lens-${code}`));
+  assert.ok(
+    beforeRead.warnings.some((warning) => warning.code === "sheet-lens-structure-unreadable"),
+  );
+  assert.deepEqual((await engine.run(target, caller, read)).warnings, beforeRead.warnings);
+  assert.deepEqual((await engine.run(target, caller, find)).warnings, beforeFind.warnings);
+  assert.deepEqual(
+    (await engine.run(target, caller, { op: "outline" })).warnings,
+    outlined.warnings,
+  );
+});
+
+test("concurrent misses share one export and preparation", async () => {
+  const data = ledger();
+  const sheet = data.sheets.id0;
+  assert.ok(sheet);
+  const cells = sheet.cellData;
+  let accesses = 0;
+  Object.defineProperty(sheet, "cellData", {
+    enumerable: true,
+    get: () => {
+      accesses++;
+      return cells;
+    },
+  });
+  await setup(data).engine.run(target, caller, read);
+  const singlePrepareAccesses = accesses;
+  accesses = 0;
+  const { engine, exportUnitData } = setup(data);
+  const results = await Promise.all(
+    Array.from({ length: 5 }, () => engine.run(target, caller, read)),
+  );
+  assert.equal(exportUnitData.mock.calls.length, 1);
+  assert.equal(accesses, singlePrepareAccesses);
+  for (const result of results) assert.deepEqual(result.json, results[0]?.json);
+  assert.equal((await engine.run(target, caller, read)).cache, "hit");
+});
+
+test("a failed shared prepare is removed so a later request can retry", async () => {
+  const { engine, exportUnitData } = setup();
+  exportUnitData.mockRejectedValueOnce(new Error("export unavailable"));
+  const failed = await Promise.allSettled([
+    engine.run(target, caller, read),
+    engine.run(target, caller, find),
+  ]);
+  assert.ok(failed.every((result) => result.status === "rejected"));
+  assert.equal(exportUnitData.mock.calls.length, 1);
+  assert.equal((await engine.run(target, caller, read)).cache, "miss");
+  assert.equal((await engine.run(target, caller, read)).cache, "hit");
+  assert.equal(exportUnitData.mock.calls.length, 2);
+});
+
+test("a successful uncached prepare is shared only while in flight", async () => {
+  const { engine, exportUnitData } = setup(ledger(), 0);
+  await Promise.all([engine.run(target, caller, read), engine.run(target, caller, find)]);
+  assert.equal(exportUnitData.mock.calls.length, 1);
+  assert.equal((await engine.run(target, caller, read)).cache, "miss");
+  assert.equal(exportUnitData.mock.calls.length, 2);
+});
+
+test("inserting a newer revision frees the old revision bytes without evicting another Unit", async () => {
+  const data = ledger();
+  const { engine, exportUnitData } = setup(data, Buffer.byteLength(JSON.stringify(data)) * 2);
+  const other = { ...target, unitId: "other" };
+  await engine.run(target, caller, read);
+  await engine.run(other, caller, read);
+  await engine.run(target, caller, read);
+  for (const revision of [2, 3, 4]) {
+    assert.equal((await engine.run({ ...target, revision }, caller, read)).cache, "miss");
+    assert.equal((await engine.run(other, caller, read)).cache, "hit");
+  }
+  assert.equal(exportUnitData.mock.calls.length, 5);
+});
+
 test("same caller and revision hit without exporting; new revision misses and caller is passed intact", async () => {
   const { engine, exportUnitData } = setup();
   const first = await engine.run(target, caller, read);

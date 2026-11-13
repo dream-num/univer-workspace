@@ -258,14 +258,14 @@ function resolveScope(model: OutlineModel, o: OutlineOptions): OutlineNode {
     if (!hit)
       throw new SheetLensError(
         "E_REF_NOT_FOUND",
-        `no region or sheet with ref '${o.ref}' in this file`,
+        `no region or sheet with ref '${o.ref}' in this Unit`,
       );
     return hit;
   }
   if (o.sheet !== undefined) {
     const hit = model.byRef.get(o.sheet) ?? model.root.children?.find((s) => s.name === o.sheet);
     if (hit?.kind !== "sheet")
-      throw new SheetLensError("E_REF_NOT_FOUND", `no sheet '${o.sheet}' in this file`, {
+      throw new SheetLensError("E_REF_NOT_FOUND", `no sheet '${o.sheet}' in this Unit`, {
         hint: "sheet names are case-sensitive; refs look like s1, s2",
       });
     return hit;
@@ -324,7 +324,7 @@ export function renderOutline(model: OutlineModel, o: OutlineOptions = {}): Outl
     if (isWorkbook)
       throw new SheetLensError(
         "E_USAGE",
-        "--from needs --sheet or --at: it continues the listing of one sheet or region",
+        "from needs at: it continues the listing of one sheet or region",
       );
     if (!children(scope).some((ch) => ch.ref === o.from))
       throw new SheetLensError(

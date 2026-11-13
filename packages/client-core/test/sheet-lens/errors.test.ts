@@ -12,6 +12,7 @@ test.each([
   expect(error).toBeInstanceOf(WorkspaceApplicationError);
   expect(error.code).toBe(expected);
   expect(error.hint).not.toMatch(/\buxl\b/);
+  if (code === "E_USAGE") expect(error.hint).toBe("check the command's options and try again");
   expect(error.detail).toEqual({ hint: error.hint, details: [] });
 });
 

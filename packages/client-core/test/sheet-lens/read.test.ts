@@ -181,7 +181,7 @@ describe("the sheet of a range", () => {
     const e = fail(() => sheetIndexOf(many, "Nope", "x"));
     expect(e.code).toBe("workspace-sheet-lens-sheet-not-found");
     expect(e.message).toBe(
-      "no sheet 'Nope' in this file (sheets: T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, …+3)",
+      "no sheet 'Nope' in this Unit (sheets: T0, T1, T2, T3, T4, T5, T6, T7, T8, T9, …+3)",
     );
     expect(fail(() => sheetIndexOf(many, "s14", "x")).code).toBe(
       "workspace-sheet-lens-sheet-not-found",

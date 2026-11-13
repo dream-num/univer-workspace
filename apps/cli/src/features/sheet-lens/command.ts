@@ -102,7 +102,10 @@ export function createSheetLensCommands(application: {
     });
     const next = result.next ? continuation(command, options, request, result.next) : undefined;
     const scopeText = scope.kind === "trunk" ? "trunk" : `worktree ${scope.worktreeId}`;
-    const lines = [`unit ${options.unit} [${scopeText}, rev=${result.revision}]`, result.text];
+    const lines = [
+      `unit ${options.unit} [${scopeText}, rev=${result.revision}]`,
+      result.text.replace(/\n+$/, ""),
+    ];
     lines.push(...result.warnings.map((warning) => `note: ${warning.message}`));
     if (result.next && next) {
       const label =

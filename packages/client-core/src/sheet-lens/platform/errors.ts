@@ -15,7 +15,7 @@ const ERRORS = {
   },
   E_USAGE: {
     code: "workspace-argument-invalid",
-    hint: "check the outline options and try again",
+    hint: "check the command's options and try again",
   },
 } as const;
 

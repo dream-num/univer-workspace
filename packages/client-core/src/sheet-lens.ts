@@ -67,6 +67,8 @@ export interface WorkspaceSheetLensEngineOptions {
 }
 
 interface PreparedWorkbook {
+  runtimeKey: string;
+  revision: number;
   snapshot: Snapshot;
   display: Awaited<ReturnType<typeof createDisplayReader>>;
   workbook: Workbook;
@@ -81,6 +83,7 @@ const DEFAULT_BYTES_PER_JSON_BYTE = 12;
 
 export class WorkspaceSheetLensEngine {
   private readonly entries = new Map<string, PreparedWorkbook>();
+  private readonly preparing = new Map<string, Promise<PreparedWorkbook>>();
   private cachedBytes = 0;
   private readonly bytesPerJsonByte: number;
 
@@ -118,65 +121,12 @@ export class WorkspaceSheetLensEngine {
       this.entries.delete(key);
       this.entries.set(key, entry);
     } else {
-      const exported = await this.options.exportUnitData({ target, caller });
-      timings.exportMs = performance.now() - start;
-      if (!("sheetOrder" in exported) || !("sheets" in exported))
-        throw workspaceError(
-          "workspace-sheet-lens-unit-type-unsupported",
-          "Expected Sheet Unit data; use inspect for this Unit",
-        );
-      const preparedAt = performance.now();
-      const estimatedBytes = Math.ceil(
-        Buffer.byteLength(JSON.stringify(exported)) * this.bytesPerJsonByte,
-      );
-      const display = await createDisplayReader(exported);
-      const { structure, notes } = structureOf(exported);
-      const uncached = uncachedFormulas(exported);
-      const warnings: SheetLensResult["warnings"] = notes.map((message) => ({
-        code: "sheet-lens-structure-unreadable",
-        message,
-      }));
-      for (const [id, count] of Object.entries(uncached))
-        warnings.push({
-          code: "sheet-lens-uncached-formulas",
-          message: `sheet ${exported.sheets[id]?.name ?? id} has ${count} formula cells without cached values; use execute to trigger calculation`,
-        });
-      entry = {
-        snapshot: exported,
-        display,
-        workbook: {
-          name: exported.name || target.unitId,
-          file: target.unitId,
-          sheets: exported.sheetOrder.map((_, index) =>
-            sheetCellsOf(exported, target.unitId, index, display),
-          ),
-          structure,
-        },
-        uncached,
-        warnings,
-        estimatedBytes,
-      };
-      if (estimatedBytes > this.options.maxCachedBytes) {
-        warnings.push({
-          code: "sheet-lens-not-cached",
-          message: `Unit estimated at ${estimatedBytes} bytes exceeds the ${this.options.maxCachedBytes}-byte cache budget; result is not cached`,
-        });
-      } else {
-        const previous = this.entries.get(key);
-        if (previous) {
-          this.cachedBytes -= previous.estimatedBytes;
-          this.entries.delete(key);
-        }
-        while (this.cachedBytes + estimatedBytes > this.options.maxCachedBytes) {
-          const oldest = this.entries.entries().next().value;
-          if (!oldest) break;
-          this.entries.delete(oldest[0]);
-          this.cachedBytes -= oldest[1].estimatedBytes;
-        }
-        this.entries.set(key, entry);
-        this.cachedBytes += estimatedBytes;
+      let pending = this.preparing.get(key);
+      if (!pending) {
+        pending = this.prepare(target, caller, timings).finally(() => this.preparing.delete(key));
+        this.preparing.set(key, pending);
       }
-      timings.prepareMs = performance.now() - preparedAt;
+      entry = await pending;
     }
     const operationAt = performance.now();
     const body = runRequest(entry, request);
@@ -184,11 +134,84 @@ export class WorkspaceSheetLensEngine {
     timings.totalMs = performance.now() - start;
     return {
       ...body,
-      warnings: entry.warnings.map((warning) => ({ ...warning })),
+      warnings: [...entry.warnings, ...(body.warnings ?? [])].map((warning) => ({ ...warning })),
       revision: target.revision,
       timings,
       cache,
     };
+  }
+
+  private async prepare(
+    target: WorkspaceRuntimeTarget,
+    caller: WorkspaceRuntimeCaller,
+    timings: SheetLensResult["timings"],
+  ): Promise<PreparedWorkbook> {
+    const exportAt = performance.now();
+    const runtimeKey = workspaceRuntimeKey(target, caller);
+    const key = `${runtimeKey}:revision:${target.revision}`;
+    const exported = await this.options.exportUnitData({ target, caller });
+    timings.exportMs = performance.now() - exportAt;
+    if (!("sheetOrder" in exported) || !("sheets" in exported))
+      throw workspaceError(
+        "workspace-sheet-lens-unit-type-unsupported",
+        "Expected Sheet Unit data; use inspect for this Unit",
+      );
+    const preparedAt = performance.now();
+    const estimatedBytes = Math.ceil(
+      Buffer.byteLength(JSON.stringify(exported)) * this.bytesPerJsonByte,
+    );
+    const display = await createDisplayReader(exported);
+    const { structure, notes } = structureOf(exported);
+    const uncached = uncachedFormulas(exported);
+    const warnings: SheetLensResult["warnings"] = notes.map((message) => ({
+      code: "sheet-lens-structure-unreadable",
+      message,
+    }));
+    for (const [id, count] of Object.entries(uncached))
+      warnings.push({
+        code: "sheet-lens-uncached-formulas",
+        message: `sheet ${exported.sheets[id]?.name ?? id} has ${count} formula cells without cached values; use execute to trigger calculation`,
+      });
+    const entry: PreparedWorkbook = {
+      runtimeKey,
+      revision: target.revision,
+      snapshot: exported,
+      display,
+      workbook: {
+        name: exported.name || target.unitId,
+        file: target.unitId,
+        sheets: exported.sheetOrder.map((_, index) =>
+          sheetCellsOf(exported, target.unitId, index, display),
+        ),
+        structure,
+      },
+      uncached,
+      warnings,
+      estimatedBytes,
+    };
+    if (estimatedBytes > this.options.maxCachedBytes) {
+      warnings.push({
+        code: "sheet-lens-not-cached",
+        message: `Unit estimated at ${estimatedBytes} bytes exceeds the ${this.options.maxCachedBytes}-byte cache budget; result is not cached`,
+      });
+    } else {
+      for (const [cachedKey, previous] of this.entries) {
+        if (previous.runtimeKey === runtimeKey && previous.revision < target.revision) {
+          this.entries.delete(cachedKey);
+          this.cachedBytes -= previous.estimatedBytes;
+        }
+      }
+      while (this.cachedBytes + estimatedBytes > this.options.maxCachedBytes) {
+        const oldest = this.entries.entries().next().value;
+        if (!oldest) break;
+        this.entries.delete(oldest[0]);
+        this.cachedBytes -= oldest[1].estimatedBytes;
+      }
+      this.entries.set(key, entry);
+      this.cachedBytes += estimatedBytes;
+    }
+    timings.prepareMs = performance.now() - preparedAt;
+    return entry;
   }
 }
 
@@ -222,25 +245,24 @@ function firstCut(root: OutlineNode): OutlineNode | undefined {
 function runRequest(
   entry: PreparedWorkbook,
   request: SheetLensRequest,
-): Pick<SheetLensResult, "text" | "json" | "next"> {
+): Pick<SheetLensResult, "text" | "json" | "next"> & Partial<Pick<SheetLensResult, "warnings">> {
   const snapshot = entry.snapshot;
   switch (request.op) {
     case "outline": {
-      if (!entry.model) {
-        entry.model = buildOutlineModel(entry.workbook, { uncached: entry.uncached });
-        for (const message of entry.model.notes) {
-          if (message === "empty sheet" || message.endsWith(": empty sheet")) continue;
-          entry.warnings.push({
-            code: message.includes("too large")
-              ? "sheet-lens-sheet-too-large"
-              : message.includes("blank-rendering")
-                ? "sheet-lens-blank-cells"
-                : "sheet-lens-outline-note",
-            message: message.includes("too large")
-              ? `${message}; read it page by page with read, or locate cells with find`
-              : message,
-          });
-        }
+      entry.model ??= buildOutlineModel(entry.workbook, { uncached: entry.uncached });
+      const warnings: SheetLensResult["warnings"] = [];
+      for (const message of entry.model.notes) {
+        if (message === "empty sheet" || message.endsWith(": empty sheet")) continue;
+        warnings.push({
+          code: message.includes("too large")
+            ? "sheet-lens-sheet-too-large"
+            : message.includes("blank-rendering")
+              ? "sheet-lens-blank-cells"
+              : "sheet-lens-outline-note",
+          message: message.includes("too large")
+            ? `${message}; read it page by page with read, or locate cells with find`
+            : message,
+        });
       }
       const rendered = renderOutline(entry.model, {
         ref: request.at,
@@ -270,7 +292,7 @@ function runRequest(
             unit: elisionLabel(cut),
           };
       }
-      return result;
+      return { ...result, warnings };
     }
     case "read": {
       const spec = parseRange(request.range);

@@ -197,7 +197,15 @@ test("from works on columns of a region, and is rejected where it makes no sense
   assert.deepEqual(cols, ["s1.t1.c2"]);
   assert.equal(allNodes(page.json).find((n) => n.elided)!.elided!.from, "s1.t1.c3");
   assert.throws(() => renderOutline(model, { ref: "s1.t1", from: "s1.t9" }), /not a child/);
-  assert.throws(() => renderOutline(model, { from: "s1.t1" }), /from/);
+  assert.throws(() => renderOutline(model, { from: "s1.t1" }), {
+    message: "from needs at: it continues the listing of one sheet or region",
+  });
+  assert.throws(() => renderOutline(model, { ref: "s9.t1" }), {
+    message: "no region or sheet with ref 's9.t1' in this Unit",
+  });
+  assert.throws(() => renderOutline(model, { sheet: "Nope" }), {
+    message: "no sheet 'Nope' in this Unit",
+  });
 });
 
 test("a workbook too large for one response is listed as sheets only, each with its region count", () => {

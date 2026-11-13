@@ -154,7 +154,7 @@ describe("Sheet Lens commands", () => {
 
   it("prints revision, body, warnings and the runnable footer in order", async () => {
     const next = { op: "find", from: "Sheet1!B2", remaining: 2 } as const;
-    const { program, stdout } = programWith(async () => ({ ...result, next }));
+    const { program, stdout } = programWith(async () => ({ ...result, text: "body\n\n", next }));
     await program.parseAsync(["find", "needle", "--unit", "book-1", "--trunk", "--max", "1"], {
       from: "user",
     });
@@ -172,6 +172,14 @@ describe("Sheet Lens commands", () => {
       from: "user",
     });
     expect(stdout.join("").split("\n")[0]).toBe("unit book-1 [worktree wt-1, rev=7]");
+  });
+
+  it("preserves engine trailing newlines in JSON text", async () => {
+    const { program, stdout } = programWith(async () => ({ ...result, text: "body\n\n" }));
+    await program.parseAsync(["outline", "--unit", "book-1", "--trunk", "--json"], {
+      from: "user",
+    });
+    expect(JSON.parse(stdout.join("")).text).toBe("body\n\n");
   });
 
   it("omits next when complete and never exposes cache or timings", async () => {
@@ -269,6 +277,46 @@ async function writeSession(path: string, subject: string) {
 }
 
 describe("Sheet Lens daemon RPC", () => {
+  it("resolves legacy session subjects once per origin and cookie", async () => {
+    const fetcher = vi.fn<typeof fetch>(async (input, init) => {
+      const cookie = new Request(input, init).headers.get("cookie");
+      return Response.json({ authenticated: true, user: { id: cookie, displayName: "Lens user" } });
+    });
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      await withDaemon(async ({ client, sessionPath }) => {
+        const payload = { target, request: { op: "outline" } } satisfies JsonValue;
+        const legacySession = async (cookie: string, origins = [target.origin]) =>
+          writeFile(
+            sessionPath,
+            JSON.stringify({
+              sessions: Object.fromEntries(origins.map((origin) => [origin, { cookie }])),
+            }),
+          );
+        await legacySession("workspace_session=alice");
+        expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "miss" });
+        expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "hit" });
+        expect(fetcher).toHaveBeenCalledTimes(1);
+        await legacySession("workspace_session=bob");
+        expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "miss" });
+        expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "hit" });
+        expect(fetcher).toHaveBeenCalledTimes(2);
+        const otherOrigin = "https://other.test";
+        await legacySession("workspace_session=bob", [target.origin, otherOrigin]);
+        await client.request("sheet-lens.run", {
+          ...payload,
+          target: { ...target, origin: otherOrigin },
+        });
+        expect(fetcher).toHaveBeenCalledTimes(3);
+        await legacySession("workspace_session=alice");
+        expect(await client.request("sheet-lens.run", payload)).toMatchObject({ cache: "hit" });
+        expect(fetcher).toHaveBeenCalledTimes(3);
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("reuses its engine by revision and isolates the user read from the credential session", async () => {
     await withDaemon(async ({ client, sessionPath, exportUnitData }) => {
       const payload = { target, request: { op: "outline" } } satisfies JsonValue;
