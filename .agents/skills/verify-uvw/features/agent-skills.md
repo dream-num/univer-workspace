@@ -281,10 +281,6 @@ agent-browser click "a[href=\"/spaces/$SPACE/agents\"]"
 agent-browser wait '[contenteditable=true]'
 ```
 
-Reach the Agents page through in-app links, not `repo`. A full page load right after a
-new user's first sign-in can leave Model settings stuck at **Loading…**
-([#358](https://github.com/dream-num/univer-workspace/issues/358)).
-
 Repeat AS1's provider form steps for this user's **AS mock** with the same Base URL
 and `mock-key`. Use fresh snapshot refs, wait for **Settings saved**, then close the dialog.
 Do not restart the mock or overwrite AS1's evidence.
@@ -494,10 +490,6 @@ $V down
 ```
 
 ## Gotchas
-
-- A brand-new user who loads a page by URL right after first sign-in can find Model settings stuck
-  at **Loading…** after Save, because the user's Agents database never finishes opening
-  ([#358](https://github.com/dream-num/univer-workspace/issues/358)). Navigate in-app after sign-in, as AS8 does.
 
 - Wait for **Settings saved** before closing Model settings. Use fresh snapshot refs
   for the new provider's key and Save button. Broad selectors can hit the DeepSeek
