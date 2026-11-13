@@ -9,6 +9,14 @@ Use `uvw` for remote Workspace content. If it is unavailable, stop and report th
 the Workspace CLI is not installed. Do not substitute a local office writer because that bypasses
 the remote Worktree and review lifecycle.
 
+## Read a Sheet
+
+To understand a Sheet Unit, run `uvw outline` first. Zoom into a region or table with
+`--at <ref>` from the map, locate values with `uvw find`, and read exact values with
+`uvw read --json`. Run every printed continuation until none is printed. Do not scan a
+Sheet with `execute` or treat one `read` page as the whole range. `uvw skills read sheet
+references/reading.md` lists every option.
+
 ## Bind shared operations to the CLI
 
 Other Skills name operations without `uvw`. Each is the `uvw` command of the same name, with flags defined by `uvw <command> --help`. Load a Skill with `uvw skills get <name>` and a reference with `uvw skills read <name> <path>`. Use `uvw skills get <name> --full` only when all references are needed; `uvw skills path <name> --json` locates installed files.
@@ -325,14 +333,6 @@ uvw pr ready <n> -R <owner>/<slug> --undo --json
 ```
 
 If it is `merged` or `discarded`, start a new Worktree and stage the current Space file again.
-
-## Read a Sheet
-
-To understand a Sheet Unit, run `uvw outline` first. Zoom into a region or table with
-`--at <ref>` from the map, locate values with `uvw find`, and read exact values with
-`uvw read --json`. Run every printed continuation until none is printed. Do not scan a
-Sheet with `execute` or treat one `read` page as the whole range. `uvw skills read sheet
-references/reading.md` lists every option.
 
 ## Edit one Unit
 

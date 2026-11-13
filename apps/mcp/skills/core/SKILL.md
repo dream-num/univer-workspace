@@ -10,6 +10,14 @@ first, then the matching domain Skill. Tool schemas define arguments and results
 When authentication is required, ask the user to reconnect or re-authorize this
 server in their MCP client. Never ask for a password.
 
+## Read a Sheet
+
+To understand a Sheet Unit, call `outline` first. Zoom into a region or table by
+calling `outline` again with `at` set to a ref from the map, locate values with
+`find`, and read exact values with `read` and json true. Follow `next` until it is
+absent. Do not scan a Sheet with `execute` or treat one `read` page as the whole
+range. The `sheet` Skill's `references/reading.md` lists every option.
+
 ## Skills and operation bindings
 
 Load a Skill with `skills_read` and its name, or read
@@ -219,14 +227,6 @@ call `html_view_draft_get` with the returned draft ID. Users publish in Workspac
 `state` is `published`. On `rejected`, ask what to change. On `conflicted`, read the
 page again with `html_view_read` and draft again. On `expired`, draft again with a
 new idempotency_key. MCP cannot publish or reject a draft.
-
-## Read a Sheet
-
-To understand a Sheet Unit, call `outline` first. Zoom into a region or table by
-calling `outline` again with `at` set to a ref from the map, locate values with
-`find`, and read exact values with `read` and json true. Follow `next` until it is
-absent. Do not scan a Sheet with `execute` or treat one `read` page as the whole
-range. The `sheet` Skill's `references/reading.md` lists every option.
 
 ## Edit one Unit
 
