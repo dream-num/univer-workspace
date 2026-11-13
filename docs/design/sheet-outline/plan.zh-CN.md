@@ -111,7 +111,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 
 - [ ] Lane 1. Regression lane against trunk. 在 trunk 和 head 各跑 `inspect workbook` 和 `inspect range A1:C9 --worksheet name:Orders --json`。trunk 没有 `outline`，记录这一点，并在 head 上跑 `outline`。Save `sl1-regression.png`。Pass when 两侧 `inspect` 输出逐字节相同，head 的 `outline` 退出码为 0 且第一行带 `rev=`。
 - [ ] Lane 2. 对 sales 工作簿跑整本 `outline` 和 `--at s2.t1`。Save `sl1-zoom.png`。Pass when 输出有 10 个 `col`，Amount 列含 `f=F{r}*G{r} ×1000` 和 `cf="cellIs gt 3000"`，Status 列含 `dv="list: open,shipped,returned"`。
-- [ ] Lane 3. 把 `--budget 300` 加到整本 `outline` 上，执行输出的续读行。Save `sl1-continue.png`。Pass when 第一次输出末尾有 `… N more`，执行续读行后得到剩余的节点，两次输出的 ref 无重复。
+- [ ] Lane 3. 对 sales 工作簿跑 `outline --at s2.t1 --budget 300`，依次执行输出的续读行直到没有续读。Save `sl1-continue.png`。Pass when 第一次输出末尾有 `… N more`，整条续读链列出全部 10 个 `col` ref，各出现一次。预算按单个 scope 计算，整本 `--budget 300` 时 sales 每张表都短于预算，不会出现续读。
 - [ ] Lane 4. 对 3 万行表 `read 'Ledger!A1:J200'`，然后执行续读行。Save `sl1-read-page.png`。Pass when 第一页按整行截断并以 `… N more rows: uvw read` 结尾，续读页从下一行开始。
 - [ ] Lane 5. 对 sales 工作簿 `read 'Summary!A3:I8' --json`。Save `sl1-read-json.png`。Pass when 每个公式单元格有 `type`、`value`、`display`、`formula`，`value` 是数字而不是显示字符串。
 - [ ] Lane 6. `find returned --max 10`，执行续读行，再 `find SUMIFS --in formulas`。Save `sl1-find.png`。Pass when 两页命中合计 61 处且无重复，公式搜索命中 Summary 的 16 个单元格。
