@@ -131,26 +131,26 @@
     "build": "node scripts/build.mjs"
   },
   "dependencies": {
-    "@univer-cli/content-execution": "1.4.0",
-    "@univer-cli/content-inspection": "1.4.0",
-    "@univer-cli/headless-univer": "1.4.0",
-    "@univer-cli/univer-collaboration-runtime": "1.4.0",
-    "@univer-cli/univer-collaboration-runtime-pool": "1.4.0",
-    "@univerjs-pro/collaboration": "1.4.0",
-    "@univerjs-pro/engine-formula-rust": "1.4.0",
-    "@univerjs-pro/exchange-node": "1.4.0",
-    "@univerjs/protocol": "1.4.0",
-    "@univerjs/core": "1.4.0",
+    "@univer-cli/content-execution": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/content-inspection": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/headless-univer": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/univer-collaboration-runtime": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/univer-collaboration-runtime-pool": "1.4.0-insiders.20261111-e492f8d",
+    "@univerjs-pro/collaboration": "1.4.0-insiders.20261111-e492f8d",
+    "@univerjs-pro/engine-formula-rust": "1.4.0-insiders.20261111-e492f8d",
+    "@univerjs-pro/exchange-node": "1.4.0-insiders.20261111-e492f8d",
+    "@univerjs/protocol": "1.4.0-insiders.20261111-e492f8d",
+    "@univerjs/core": "1.4.0-insiders.20261111-e492f8d",
     "@univerjs-labs/html-view": "1.0.0-dev.6518eb0",
-    "@univer-cli/svg-facade": "1.4.0",
-    "@univer-cli/resource-library": "1.4.0",
-    "@univer-cli/unit-layout-lint": "1.4.0",
-    "@univer-cli/unit-screenshot": "1.4.0",
-    "@univer-cli/univer-render-runtime": "1.4.0",
-    "@univer-cli/doc-markdown-facade": "1.4.0"
+    "@univer-cli/svg-facade": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/resource-library": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/unit-layout-lint": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/unit-screenshot": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/univer-render-runtime": "1.4.0-insiders.20261111-e492f8d",
+    "@univer-cli/doc-markdown-facade": "1.4.0-insiders.20261111-e492f8d"
   },
   "devDependencies": {
-    "@univer-cli/api-reference": "1.4.0",
+    "@univer-cli/api-reference": "1.4.0-insiders.20261111-e492f8d",
     "esbuild": "0.27.7"
   }
 }
