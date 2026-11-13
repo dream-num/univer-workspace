@@ -49,7 +49,7 @@ toolset. An executor restriction can hide content tools even with all selected.
 | `pr view`, `worktree view`                                                                                   | `pr_view`              | Resolve Worktree id and state                              |
 | `pr create`, `worktree create`                                                                               | `pr_create`            | Start a task                                               |
 | `pr edit`, `worktree edit`                                                                                   | `pr_edit`              | Update task metadata                                       |
-| `pr ready`, `worktree ready`                                                                                 | `pr_ready`             | Undo true returns ready to draft                           |
+| `pr ready`, `worktree ready`                                                                                 | `pr_ready`             | Ready only on explicit user completion/review request; undo true returns ready to draft |
 | `pr merge`, `worktree merge`                                                                                 | `pr_merge`             | Admin; explicit user request only                          |
 | `pr discard`, `worktree discard`                                                                             | `pr_discard`           | Admin; irreversible, explicit user request only            |
 | `browse`                                                                                                     | `browse`               | Generate a review URL                                      |
@@ -133,8 +133,9 @@ already worked in that known Worktree or the user supplies its identity for that
 rework, and its state is draft or ready. If identity is uncertain, start a new one.
 Continue draft directly. Only writes need draft: reading tools such as `inspect`,
 read-only `execute`, `screenshot`, `export`, `export_markdown` and `print_pdf` work
-on a ready Worktree unchanged. Before the first write of a rework, return ready to
-draft once with `pr_ready` and undo true; mark it ready once when the rework is done.
+on a ready Worktree unchanged. Before the first write of an explicitly requested
+rework, return ready to draft once with `pr_ready` and undo true. Leave the rework
+in draft until a new explicit user completion or review request.
 Never reuse merged or discarded Worktrees; stage the current file anew.
 
 ## Manage Space Nodes
@@ -341,11 +342,13 @@ admin tools return SVG source for incorporation in the page or document.
 
 1. Read stored content with `inspect` or read-only `execute`.
 2. Capture screenshots for Sheet layout, Doc pagination and every Slide page.
-3. Mark the Worktree ready with `pr_ready`.
-4. Read it with `pr_view` and confirm ready.
+3. Only mark the Worktree ready with `pr_ready` when the user explicitly says the
+   work is finished or requests review. Otherwise, leave the verified changes in draft.
+4. Read it with `pr_view` and confirm draft, or ready if explicitly requested.
 5. Generate the edited Unit's review URL with `browse`.
 6. Return the review URL, pull request number, Worktree id and Unit id to the user.
 
 Do not merge or discard unless explicitly requested. Discard is irreversible.
-To resume same-task rework, return ready to draft with `pr_ready` and undo true.
+To resume same-task rework, continue draft directly; return ready to draft with
+`pr_ready` and undo true only before an explicitly requested write.
 There is no separate close or reopen tool for a pull request.

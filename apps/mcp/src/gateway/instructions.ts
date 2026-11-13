@@ -23,7 +23,11 @@ export function buildServerInstructions(
     ...(has("unit_create") ? ["Create new Units inside the pull request with unit_create."] : []),
     "Make the change inside the pull request.",
     "Read the result back to verify it before you report success.",
-    ...(has("pr_ready") ? ["Mark the pull request ready with pr_ready."] : []),
+    ...(has("pr_ready")
+      ? [
+          "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+        ]
+      : []),
     "Give the user the pull request link so they can review it.",
     "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
   ];

@@ -21,6 +21,49 @@ function unknownTools(content: string) {
 }
 
 describe("MCP core Skill tool bindings", () => {
+  it("keeps verified edits in draft until the user requests completion or review", async () => {
+    for (const path of ["../skills/core/SKILL.md", "../dist/skill-data/core/SKILL.md"]) {
+      const content = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
+      expect(content, path).toContain(
+        "Ready only on explicit user completion/review request; undo true returns ready to draft",
+      );
+      expect(content, path).toContain("Continue draft directly. Only writes need draft");
+      expect(content, path).toContain(
+        "read-only `execute`, `screenshot`, `export`, `export_markdown` and `print_pdf` work on a ready Worktree unchanged.",
+      );
+      expect(content, path).toContain(
+        "Before the first write of an explicitly requested rework, return ready to draft once with `pr_ready` and undo true.",
+      );
+      expect(content, path).toContain(
+        "Leave the rework in draft until a new explicit user completion or review request.",
+      );
+      expect(content, path).toContain("Read stored content with `inspect` or read-only `execute`.");
+      expect(content, path).toContain(
+        "Only mark the Worktree ready with `pr_ready` when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+      );
+      expect(content, path).toContain(
+        "Read it with `pr_view` and confirm draft, or ready if explicitly requested.",
+      );
+      expect(content, path).toContain(
+        "Return the review URL, pull request number, Worktree id and Unit id to the user.",
+      );
+      expect(content, path).not.toContain("3. Mark the Worktree ready with `pr_ready`.");
+      expect(content, path).not.toContain("4. Read it with `pr_view` and confirm ready.");
+      expect(content, path).not.toContain("mark it ready once when the rework is done");
+    }
+    const description = tools.find(({ name }) => name === "execute")!.description;
+    expect(description).toContain("Content writes require a draft Worktree");
+    expect(description).toContain(
+      "before writing to an already-ready pull request, use pr_ready with undo: true",
+    );
+    expect(description).toContain("Read-only code does not require reopening");
+    expect(description).toContain("Read back with inspect to verify changes");
+    expect(description).toContain(
+      "leave them in draft unless the user explicitly requests completion or review",
+    );
+    expect(description).not.toContain("Read back with inspect before marking ready.");
+  });
+
   it("states the shared idempotency key rule", async () => {
     const content = await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8");
     expect(content.replace(/\s+/gu, " ")).toContain(IDEMPOTENCY_KEY_DESCRIPTION);
