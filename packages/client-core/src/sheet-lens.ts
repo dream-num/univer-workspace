@@ -21,10 +21,10 @@ import {
   renderGrid,
   renderOutline,
   resolveRect,
-  sheetCellsOf,
   sheetIndexOf,
   sheetLabel,
   structureOf,
+  workbookFromData,
   type Content,
   type OutlineModel,
   type OutlineNode,
@@ -64,6 +64,7 @@ export interface WorkspaceSheetLensEngineOptions {
   exportUnitData: WorkspaceContentRuntimeOperations["exportUnitData"];
   maxCachedBytes: number;
   bytesPerJsonByte?: number;
+  maxBoxCells?: number;
 }
 
 interface PreparedWorkbook {
@@ -93,6 +94,14 @@ export class WorkspaceSheetLensEngine {
       throw workspaceError(
         "workspace-argument-invalid",
         "maxCachedBytes must be finite and non-negative",
+      );
+    if (
+      options.maxBoxCells !== undefined &&
+      (!Number.isSafeInteger(options.maxBoxCells) || options.maxBoxCells <= 0)
+    )
+      throw workspaceError(
+        "workspace-argument-invalid",
+        "maxBoxCells must be a positive safe integer",
       );
     if (!Number.isFinite(this.bytesPerJsonByte) || this.bytesPerJsonByte <= 0)
       throw workspaceError(
@@ -129,7 +138,7 @@ export class WorkspaceSheetLensEngine {
       entry = await pending;
     }
     const operationAt = performance.now();
-    const body = runRequest(entry, request);
+    const body = runRequest(entry, request, this.options.maxBoxCells);
     timings.operationMs = performance.now() - operationAt;
     timings.totalMs = performance.now() - start;
     return {
@@ -177,14 +186,9 @@ export class WorkspaceSheetLensEngine {
       revision: target.revision,
       snapshot: exported,
       display,
-      workbook: {
-        name: exported.name || target.unitId,
-        file: target.unitId,
-        sheets: exported.sheetOrder.map((_, index) =>
-          sheetCellsOf(exported, target.unitId, index, display),
-        ),
-        structure,
-      },
+      workbook: workbookFromData(exported, target.unitId, display, structure, {
+        maxBoxCells: this.options.maxBoxCells ?? 500_000,
+      }),
       uncached,
       warnings,
       estimatedBytes,
@@ -245,11 +249,12 @@ function firstCut(root: OutlineNode): OutlineNode | undefined {
 function runRequest(
   entry: PreparedWorkbook,
   request: SheetLensRequest,
+  maxBoxCells = 500_000,
 ): Pick<SheetLensResult, "text" | "json" | "next"> & Partial<Pick<SheetLensResult, "warnings">> {
   const snapshot = entry.snapshot;
   switch (request.op) {
     case "outline": {
-      entry.model ??= buildOutlineModel(entry.workbook, { uncached: entry.uncached });
+      entry.model ??= buildOutlineModel(entry.workbook, { uncached: entry.uncached, maxBoxCells });
       const warnings: SheetLensResult["warnings"] = [];
       for (const message of entry.model.notes) {
         if (message === "empty sheet" || message.endsWith(": empty sheet")) continue;

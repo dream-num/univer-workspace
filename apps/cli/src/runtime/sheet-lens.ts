@@ -18,6 +18,7 @@ export function createSheetLensHandler(options: {
     // Drop the caller so Lens shares the daemon worker pool with inspect and execute; the caller only keys the Lens cache.
     exportUnitData: ({ target }) => options.runtime.exportUnitData({ target }),
     maxCachedBytes: 512 * 1024 * 1024,
+    maxBoxCells: 5_000_000,
   });
   const subjects = new Map<string, string>();
   return async (payload) => {

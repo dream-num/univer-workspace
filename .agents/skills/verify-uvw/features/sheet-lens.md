@@ -15,7 +15,8 @@ runnable `uvw` continuation. Other Unit types are refused and pointed to `inspec
 - SLC4 pages `read` on the 30,000-row ledger by whole rows.
 - SLC5 reads typed values through `read --json`.
 - SLC6 pages `find` hits and searches formulas.
-- SLC7 renders the 50,000-row ledger as one `block` with a `note:` line.
+- SLC7 models the 50,000-row ledger fully under the CLI's 5,000,000-cell limit, then renders it as one
+  `block` with a `note:` line once its used range passes the limit.
 - SLC8 keeps the revision across repeated calls and moves it after a write.
 - SLC9 reports the three Sheet Lens errors.
 - SLC10 reads trunk after merge and refuses a user without access.
@@ -68,8 +69,20 @@ Before you compare two outputs, check that both files are non-empty.
 - SLC6. `find returned --max 10`, follow every continuation, then `find SUMIFS --in formulas`.
   Pass when the pages total 61 hits with no repeat and the formula search hits the 16 Summary
   cells.
-- SLC7. `outline` and `outline --at s1` on `$L50`. Pass when the sheet is one `block` followed by
-  a `note:` line that says the sheet is too large and names `read` and `find`, with exit 0.
+- SLC7. Run `outline --at s1` on `$L50` (500,010 cells). Then stretch its used range past the CLI
+  daemon's 5,000,000-cell limit and run `outline` and `outline --at s1` again:
+
+  ```bash
+  $V cli slc7-full outline --unit "$L50" --worktree "$W" --at s1
+  $V cli slc7-stretch execute --worktree "$W" --unit "$L50" \
+    -e 'const ws = workbook.getSheetByName("Ledger"); ws.setRowCount(500001); ws.getRange("J500001").setValue("end");'
+  $V cli slc7-large outline --unit "$L50" --worktree "$W"
+  $V cli slc7-large-at outline --unit "$L50" --worktree "$W" --at s1
+  ```
+
+  Pass when the first output has a table with 10 `col` lines, and the last two show the sheet as
+  one `block` followed by a `note:` line that says the sheet is too large and names `read` and
+  `find`, all with exit 0.
 - SLC8. Run `outline --at s2.t1` twice on the sales Unit, then change the Status cell:
 
   ```bash

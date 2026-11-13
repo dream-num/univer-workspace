@@ -218,6 +218,7 @@ export function sheetCellsOf(
   file: string,
   index: number,
   display: DisplayReader,
+  { maxBoxCells = 500_000 }: { maxBoxCells?: number } = {},
 ): SheetCells {
   const id = data.sheetOrder[index];
   const s = id === undefined ? undefined : data.sheets[id];
@@ -344,7 +345,7 @@ export function sheetCellsOf(
         .map(([k]) => Number(k)),
     ),
     fs:
-      used && (used.r1 - used.r0 + 1) * (used.c1 - used.c0 + 1) > 500_000
+      used && (used.r1 - used.r0 + 1) * (used.c1 - used.c0 + 1) > maxBoxCells
         ? { ...emptyFeatureSheet({ key: id, file, index, name: s.name ?? id }), tooLarge: true }
         : featureSheetOf(data, file, index),
   };
@@ -355,11 +356,12 @@ export function workbookFromData(
   file: string,
   display: DisplayReader,
   structure: WorkbookStructure | null = null,
+  opts: { maxBoxCells?: number } = {},
 ): Workbook {
   return {
     name: data.name || file,
     file,
-    sheets: data.sheetOrder.map((_, i) => sheetCellsOf(data, file, i, display)),
+    sheets: data.sheetOrder.map((_, i) => sheetCellsOf(data, file, i, display, opts)),
     structure,
   };
 }
