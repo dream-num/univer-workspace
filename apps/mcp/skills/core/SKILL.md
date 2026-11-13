@@ -10,6 +10,14 @@ first, then the matching domain Skill. Tool schemas define arguments and results
 When authentication is required, ask the user to reconnect or re-authorize this
 server in their MCP client. Never ask for a password.
 
+## Read a Sheet
+
+To understand a Sheet Unit, call `outline` first. Zoom into a region or table by
+calling `outline` again with `at` set to a ref from the map, locate values with
+`find`, and read exact values with `read` and json true. Follow `next` until it is
+absent. Do not scan a Sheet with `execute` or treat one `read` page as the whole
+range. The `sheet` Skill's `references/reading.md` lists every option.
+
 ## Skills and operation bindings
 
 Load a Skill with `skills_read` and its name, or read
@@ -57,6 +65,9 @@ toolset. An executor restriction can hide content tools even with all selected.
 | `unit add`                                                                                                   | `unit_add`             | Stage an existing Univer Resource                          |
 | `unit create`                                                                                                | `unit_create`          | Create an empty Worktree-local Unit                        |
 | `execute`                                                                                                    | `execute`              | Run Facade code and commit mutations                       |
+| `outline` | `outline` | Sheet only; unit and either trunk true or worktree; zoom with at, continue with from, limit depth and budget |
+| `read` | `read` | Sheet only; unit, scope, and range; content selects both, display, formula, style, or formula+style; max limits cells; json true returns typed values |
+| `find` | `find` | Sheet only; unit, scope, and terms; in selects values or formulas; case makes matching case-sensitive; sheets limit the search; from and max page hits |
 | `inspect`                                                                                                    | `inspect`              | Read stored content                                        |
 | `screenshot`                                                                                                 | `screenshot`           | Render images                                              |
 | `import`                                                                                                     | `import`               | Create from uploaded Office bytes                          |
@@ -342,7 +353,7 @@ admin tools return SVG source for incorporation in the page or document.
 
 ## Verify and hand off
 
-1. Read stored content with `inspect` or read-only `execute`.
+1. Read Sheet values, types, and formulas with `read` and json true. Read stored content with `inspect` or read-only `execute` for other Unit types or raw cell metadata.
 2. Capture screenshots for Sheet layout, Doc pagination and every Slide page.
 3. Only mark the Worktree ready with `pr_ready` when the user explicitly says the
    work is finished or requests review. Otherwise, leave the verified changes in draft.

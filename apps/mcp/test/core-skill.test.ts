@@ -37,7 +37,12 @@ describe("MCP core Skill tool bindings", () => {
       expect(content, path).toContain(
         "Leave the rework in draft until a new explicit user completion or review request.",
       );
-      expect(content, path).toContain("Read stored content with `inspect` or read-only `execute`.");
+      expect(content, path).toContain(
+        "Read Sheet values, types, and formulas with `read` and json true.",
+      );
+      expect(content, path).toContain(
+        "Read stored content with `inspect` or read-only `execute` for other Unit types",
+      );
       expect(content, path).toContain(
         "Only mark the Worktree ready with `pr_ready` when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
       );
@@ -88,6 +93,23 @@ describe("MCP core Skill tool bindings", () => {
       if (!entry.isFile()) continue;
       const path = join(entry.parentPath, entry.name);
       expect(await readFile(path, "utf8"), path).not.toMatch(/\buvw\b/u);
+    }
+  });
+
+  it("assembles the shared Sheet reading workflow and reference", async () => {
+    const source = new URL("../../cli/skill-data/sheet/", import.meta.url);
+    const assembled = new URL("../dist/skill-data/sheet/", import.meta.url);
+    for (const path of ["SKILL.md", "references/reading.md"]) {
+      expect(await readFile(new URL(path, assembled), "utf8")).toBe(
+        await readFile(new URL(path, source), "utf8"),
+      );
+    }
+    const skill = await readFile(new URL("SKILL.md", assembled), "utf8");
+    expect(skill).toContain("## Read a sheet");
+    expect(skill).toContain("(references/reading.md)");
+    const reference = await readFile(new URL("references/reading.md", assembled), "utf8");
+    for (const operation of ["outline", "read", "find"]) {
+      expect(reference).toContain(`## ${operation}\n`);
     }
   });
 

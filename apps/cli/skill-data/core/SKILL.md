@@ -9,9 +9,19 @@ Use `uvw` for remote Workspace content. If it is unavailable, stop and report th
 the Workspace CLI is not installed. Do not substitute a local office writer because that bypasses
 the remote Worktree and review lifecycle.
 
+## Read a Sheet
+
+To understand a Sheet Unit, run `uvw outline` first. Zoom into a region or table with
+`--at <ref>` from the map, locate values with `uvw find`, and read exact values with
+`uvw read --json`. Run every printed continuation until none is printed. Do not scan a
+Sheet with `execute` or treat one `read` page as the whole range. `uvw skills read sheet
+references/reading.md` lists every option.
+
 ## Bind shared operations to the CLI
 
 Other Skills name operations without `uvw`. Each is the `uvw` command of the same name, with flags defined by `uvw <command> --help`. Load a Skill with `uvw skills get <name>` and a reference with `uvw skills read <name> <path>`. Use `uvw skills get <name> --full` only when all references are needed; `uvw skills path <name> --json` locates installed files.
+
+For Sheet `read`, the shared content modes map to CLI options. Omit content flags for `both`, use `--values` for `display`, `--formulas` for `formula`, `--styles` for `style`, and `--formulas --styles` for `formula+style`. Request typed stored values with `--json`. For `find`, repeat `--sheet <name>` for multiple sheets.
 
 For local inputs, output paths, structured JSON, overwrite controls, browser setup, and file-backed sources, read [CLI files and sources](references/files-and-sources.md). It covers Office exchange, screenshots and PDFs, Slide SVG assets and resources, Typst bundles, Markdown maps and assets, Blob transfer, and HTML View sources.
 
@@ -352,6 +362,13 @@ Every content command requires the full remote address:
 ```bash
 uvw execute \
   --worktree <worktree-id> --unit <unit-id> -e '…' --json
+uvw read 's1!A1:C9' \
+  --worktree <worktree-id> --unit <unit-id> --json
+```
+
+For raw Sheet cell metadata such as `si` or `custom`:
+
+```bash
 uvw inspect range A1:C9 \
   --worksheet name:<sheet-name> \
   --worktree <worktree-id> --unit <unit-id> --json
@@ -402,7 +419,7 @@ Never redeclare these bindings. Sheet execution never uses the active Workbook.
 
 After mutations:
 
-1. Verify stored content with `inspect` or a read-only `execute`.
+1. Verify Sheet values, types, and formulas with `read --json`. Use `inspect` for other Unit types or raw cell metadata.
 2. Capture screenshots for Sheet layout, Doc pagination, and every Slide page.
 3. Mark the Worktree ready.
 4. Read it back and confirm state `ready`.
@@ -424,6 +441,7 @@ same-task correction follows the rework flow above.
 
 Use `uvw <command> --help` as the syntax authority. `-R <owner>/<slug>` (or `UVW_REPO`) selects the
 repository; there is no stored default repository.
+`outline`, `read`, and `find` accept only Sheet Units. They can use `--trunk` instead of `--worktree <id>` for shared content. Use `inspect` for other Unit types.
 
 | Intent                    | Commands                                                                    |
 | ------------------------- | --------------------------------------------------------------------------- |
@@ -435,6 +453,9 @@ repository; there is no stored default repository.
 | Start a task              | `pr create`, `unit create`, `unit add`                                                               |
 | Inspect a known task      | `pr view`, `pr list`, `unit list`                                                                    |
 | Continue same-task rework | `pr ready <n> --undo`                                                                                |
+| Map a Sheet Unit          | `uvw outline --unit <id> --worktree <id> [--at <ref>] [--from <ref>] [--depth <0\|1\|2>] [--budget <chars>]` (Sheet only) |
+| Read Sheet cells          | `uvw read <range> --unit <id> --worktree <id> [--json]` (Sheet only) |
+| Find Sheet cells          | `uvw find <terms...> --unit <id> --worktree <id> [--in values\|formulas] [--from <cell>] [--max <hits>]` (Sheet only) |
 | Write                     | `execute`, `compile-markdown`, `compile-svg`, `compile-typst`, import                                |
 | Verify                    | `inspect`, `screenshot`                                                                              |
 | Deliver output            | `export`, `print-pdf`                                                                                |
