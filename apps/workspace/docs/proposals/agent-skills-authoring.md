@@ -1,6 +1,6 @@
 # Workspace Agents 的 Skill 创作与导入（设计）
 
-状态：设计稿，2026-11-13。尚未实现。建立在 [agent-skills.md](./agent-skills.md) 的 SK1 至 SK3 之上。
+状态：设计稿，2026-11-13。SB2 服务端已实现，Browser 与其余步骤尚未完成。建立在 [agent-skills.md](./agent-skills.md) 的 SK1 至 SK3 之上。
 范围包括三处：MCP gateway（`apps/mcp`）、Workspace Server 与 Browser（`apps/workspace`），以及浏览器
 Workspace Agents（`apps/workspace/web/src/features/agents`）。
 
@@ -276,7 +276,7 @@ interface SkillDraftRecord {
 否则是 `ready`。这是一个纯函数。
 
 字节存在 `BlobStore`，`skill_drafts` 表只存身份、元数据和状态。这条遵守根 `AGENTS.md` 的数据边界。
-`files`、`scan` 和 `review` 存成表中的 JSON 列还是拆成子表，由执行者对照 `html_view_drafts` 的做法决定。
+V20 的 `skill_drafts` 用 JSON 文本列保存 `files`、`base`、`keep`、`scan`、`review` 与可空的 `source`。草稿接收后不可编辑。
 
 ### 外部来源
 
@@ -314,13 +314,13 @@ Workspace Server 新增一个来源解析模块，只访问下表中的域名。
 | `size-limit` | block | `SKILL.md` 超 64 KiB，或文件数超 100 |
 | `unsafe-path` | block | 绝对路径、`..`、符号链接 |
 | `text-too-large` | warn | 附属文本文件超 256 KiB，模型读不到 |
-| `script-file` | warn | `scripts/` 下的文件、脚本扩展名（`.py`、`.sh`、`.ps1`、`.bat`、`.rb`、`.pl` 等），或首行是 `#!` |
-| `facade-script` | info | `.js` 或 `.ts` 文件包含 `univerAPI`，可以交给 `execute` |
+| `script-file` | warn | `scripts/` 下的文件、脚本扩展名（`.py`、`.sh`、`.ps1`、`.bat`、`.rb`、`.pl` 等），或首行是 `#!`；含 `univerAPI` 的 `.js`、`.ts` 文件除外 |
+| `facade-script` | info | `.js` 或 `.ts` 文件包含 `univerAPI`，可以交给 `execute`，只报此 info，不报 `script-file` |
 | `executable-binary` | warn | `.exe`、`.dll`、`.so`、`.dylib`、`.wasm`、`.jar`、`.whl`、归档文件，或 ELF、Mach-O、PE 文件头 |
 | `office-asset` | warn | `.xlsx`、`.docx`、`.pptx` 等二进制模板，当前不能导入为 Unit |
 | `media-asset` | info | 图片、字体，模型看不到内容 |
-| `missing-reference` | warn | `SKILL.md` 中的相对链接或反引号路径在文件清单里不存在 |
-| `ignored-field` | info | `allowed-tools`、`context`、`model`、`hooks`、`paths` 等 Workspace 会忽略的字段 |
+| `missing-reference` | warn | `SKILL.md` 中看起来是文件的相对链接或反引号路径在清单里不存在；忽略 `/` 结尾的目录及含 `<`、`>` 的占位路径 |
+| `ignored-field` | info | `allowed-tools`、`context`、`model`、`hooks`、`paths`、`agent` 等 Workspace 会忽略的字段；`disable-model-invocation` 和 `argument-hint` 已支持，不报此项 |
 | `hidden-text` | warn | 双向控制字符、零宽字符、HTML 注释 |
 | `name-conflict` | warn | 目标位置已有同名 skill 但没有 `replace`，或者仓库级会覆盖同名个人级 |
 | `hub-verdict` | warn 或 info | 来源 hub 给出了审核结论，例如 ClawHub 的 `isSuspicious`、`isMalwareBlocked` |
@@ -352,8 +352,7 @@ agent 审查不是一次单独的模型调用，而是 `skill-creator` 的一个
 
 ### 草稿审阅页
 
-`/drafts/$draftId` 现在只渲染 HTML View 草稿。改为按草稿类型分派，skill 草稿渲染一个新组件。路由怎么区分两种
-草稿（id 前缀、查询两张表，或者统一的草稿入口），由执行者比较后决定。页面内容如下：
+HTML View 草稿保留 `/drafts/$draftId`。Skill 草稿使用独立的 `/drafts/skills/$draftId`，渲染新的审阅组件。页面内容如下：
 
 - 顶部一行写兼容性结论，例如「部分可用：3 个脚本在 Workspace 中不会运行」，旁边是保存位置和来源。
 - `SKILL.md` 用现有的 Markdown 预览渲染。其他文本文件可以展开。二进制文件只列出名字、大小和类型。
@@ -366,18 +365,20 @@ agent 审查不是一次单独的模型调用，而是 `skill-creator` 的一个
 
 ### 发布
 
-只有作者的交互式 Session 可以发布或拒绝，与 HTML View 草稿相同。服务端按以下顺序执行：
+只有作者的交互式 Session 可以发布或拒绝，与 HTML View 草稿相同。
+接收时每个文件写入一个 BlobStore 对象，草稿从 `receiving` 转为 `pending`。
 
-1. **复核。** 重新运行静态扫描。有 `block` 就停止。
-2. **检查冲突。** 有 `base` 时，逐个比对目标文件当前的 ETag。不一致就把草稿置为 `conflicted` 并停止。
-3. **定位目录。** 在目标 Space 根目录逐层查找或创建 `.agents`、`skills`、`<name>`。已存在就复用，所以重试不会建出重复目录。
-4. **写附属文件。** 已存在的同路径文件按 ETag 替换，新文件新建。
-5. **最后写 `SKILL.md`。** gateway 以 `SKILL.md` 的存在判定一个 skill。最后写它，读取方就不会看到一个引用了尚未写入文件的 skill。
-6. **清理。** `replace` 时，目标目录中有、草稿中没有、也不在 `keep` 里的文件移入 Trash。草稿页事先列出这些文件。
-7. **记录结果。** 置为 `published`，保存目录节点 ID。
+发布先读取存储字节并重新扫描。有 `block` 就返回 409，草稿保持 `pending`。
+其余步骤在一个 SQLite 事务中完成：
 
-产品数据库和 BlobStore 之间没有跨系统事务。每一步都是查找优先或带幂等键的写入，中途失败后重新发布会收敛到同一结果。
-执行者参照 HTML View 草稿发布的 Operation 和恢复语义实现，不另起一套。
+1. **检查目标。** 重新检查权限与基础文件清单。基础 ETag 改变、文件消失或新增文件时置为 `conflicted`，不写文件。
+   新建时同名目录非空也置为 `conflicted`。任一目标目录层重名或存在两个 `SKILL.md` 时返回 409，保持 `pending`。
+2. **定位目录。** 查找或创建 `.agents`、`skills`、`<name>` 与子目录。已有目录复用。
+3. **采用对象。** 用草稿对象创建 Blob Resource，同路径文件按 ETag 交换内容。`replace` 时，草稿和 `keep` 均未包含的基础文件移入 Trash。
+4. **记录结果。** 置为 `published`，保存目录节点 ID。所有文件一起可见，不依赖 `SKILL.md` 的写入顺序。
+
+事务中途失败时全部回滚，原草稿仍可重试。不创建 Operation，不增加恢复步骤。
+拒绝、过期或冲突的草稿为每个文件对象创建 `object_deletion_jobs`。
 
 ### 来源记录
 
@@ -424,7 +425,7 @@ frontmatter。原样导入时，这是唯一的改动。
 | PR | 内容 | 依赖 | 完成标准 |
 | --- | --- | --- | --- |
 | SB1 `feat(mcp)` | `duplicate` 诊断，透传 `metadata` | main | 三层重名的单测；verify-uvw MR13 增加重名用例 |
-| SB2 `feat(workspace)` | `skill_drafts` 表与迁移、HTTP contract、静态扫描、证据校验、发布流程、草稿审阅页 | main | 扫描规则逐条单测；发布的中断重试、ETag 冲突、`SKILL.md` 最后写入都有测试；`api:verify` 通过；按 `verify-db-migration` 跑完迁移矩阵；浏览器旅程用 HTTP 建一个草稿，发布后 `/name` 能调用 |
+| SB2 `feat(workspace)` | `skill_drafts` 表与迁移、HTTP contract、静态扫描、证据校验、发布流程、草稿审阅页 | main | 扫描规则逐条单测；发布事务回滚与重试、完整基础 ETag 冲突、目录复用及多文件原子发布都有测试；`api:verify` 通过；按 `verify-db-migration` 跑完迁移矩阵；浏览器旅程用 HTTP 建一个草稿，发布后 `/name` 能调用 |
 | SB3 `feat(mcp)` | `skill_draft_create`（`files` 形式）、`skill_draft_get` | SB2 | 工具单测；verify-uvw 旅程从 MCP 建草稿、发布、`skills_read` 能读到 |
 | SB4 `feat(mcp)` | 内置 `skill-creator`（复制、特化、`NOTICE.md`），内置 skill 的 `user-invocable`，浏览器 `/` 菜单显示内置条目，`core` 增加路由说明 | SB3 | `runner.test.ts` 断言系统提示词与目录提醒不变；mock provider 旅程覆盖 `/skill-creator`、访谈、建草稿、发布；真实模型手动跑一次创建和一次修改，附会话截图 |
 | SB5 `feat(workspace)` | 来源解析（GitHub、skills.sh、ClawHub、Space 中的 zip 和文件夹）、`skill_source_read`、`skill_draft_create` 的 `from` 形式、`skill-creator` 的 `importing.md` 和 `review.md` 定稿 | SB4 | 每种来源的解析有表驱动单测；抓取用录制的响应测试；压缩炸弹和路径穿越有测试；一条真实旅程从固定 commit 的公开仓库导入一个带脚本的 skill，草稿页显示 `script-file` 和通过校验的审查意见 |

@@ -514,3 +514,82 @@ $V down
   `agent-requests prefix` proves the actual message, system, and tool invariants.
 - Requests include full prompts and tool output. Keep the JSONL logs in local evidence.
   Never add real provider credentials to a mock script or evidence.
+
+## Skill draft review and publication
+
+- AS16 reviews a valid HTTP draft with Markdown, an expandable reference, a verified quote and an omitted fake quote.
+- AS17 blocks publication for invalid frontmatter and explains why.
+- AS18 compares a replacement against current files and lists files moved to Trash.
+- AS19 publishes through the browser, discovers the Skill in the slash menu and verifies its invocation body in the mock request.
+- AS20 rejects through the browser and reads back the rejected state.
+
+Run with MCP and the same-origin proxy enabled, as for AS1. Choose free ports with
+`lsof` and keep one persistent shell for the instance and mock provider. Use the
+Vite web URL. The built SPA fallback cannot serve nested routes from checkouts
+under dotted directories on this Mac.
+
+After `up`, `user`, `doctor` and browser sign-in, create the fixtures through the
+public HTTP API. The helper signs in with the disposable user's interactive
+Session, checks the evidence and stores draft envelopes under `$EVIDENCE`.
+
+```bash
+eval "$($V env)"
+node "$B/skill-drafts.mjs" create | tee "$EVIDENCE/sb2-create.txt"
+```
+
+**AS16. Review evidence.** Open `draft.previewPath` from `sb2-draft.json` at
+`$ORIGIN`. Wait for **Partially available**, rendered **Browser draft** and
+**1 unverified**. Expand `references/guide.md` and capture `sb2-review.png`.
+The verified finding links to `SKILL.md:9`, quotes the real instruction and gives
+its impact and suggestion. Click that link. Source lines expand and line 9 gains
+focus. Save `sb2-finding-line.png`. The Skill description appears under the page title. Preview starts at the Markdown
+body, without YAML frontmatter. Click **Source** and verify it retains the original
+frontmatter; the source line numbers and replacement diff also use the raw text.
+The English headline uses **1 issue found** for one finding.
+The fake quote is absent, the destination is
+`.agents/skills/sb2-review/`, and **Publish** is enabled.
+
+**AS17. Invalid frontmatter.** Open the path in `sb2-invalid.json`. Capture
+`sb2-invalid.png`. **Blocking** lists `frontmatter-invalid`, **Publish** is disabled,
+and **Resolve the blocking findings before publishing.** explains the disabled
+control. No files have been published.
+
+**AS19. Publish and invoke.** Return to the AS16 draft and click **Publish**.
+Wait for **Published**, reload and capture `sb2-published.png`. Click **Agents**
+on Home, configure the AS1 mock provider with one text step, then reload Home.
+Type `/sb2` into the composer and capture `sb2-slash-menu.png`. The menu lists
+`/sb2-review` as personal. Send `/sb2-review some args`, wait for the mock reply
+and capture `sb2-invoked.png`.
+
+```bash
+node "$A" requests "$EVIDENCE/sb2-requests.jsonl" | tee "$EVIDENCE/sb2-requests.txt"
+```
+
+The request's last user reminder contains `SB2_SKILL_BODY: summarize some args.`.
+The invocation has no model `skills_read` tool call. Synthetic mock token counts
+only verify usage display.
+
+**AS18. Replacement.** After AS19 publishes the Skill, create a replacement.
+
+```bash
+node "$B/skill-drafts.mjs" replace | tee "$EVIDENCE/sb2-replace.txt"
+```
+
+Open the path from `sb2-replace.json` and capture `sb2-replace.png`. The `SKILL.md`
+Changes section shows `- SB2_SKILL_BODY` and `+ SB2_REVISED_BODY`.
+**Files moved to Trash on publish** lists `references/guide.md`. The helper checks
+that the complete replacement base contains two files. Leave this draft pending.
+
+**AS20. Reject.** Open the path in `sb2-reject.json`, click **Reject**, wait for
+**Rejected**, reload and capture `sb2-rejected.png`. Read both decisions back
+through HTTP, then stop the mock and run `down`.
+
+```bash
+node "$B/skill-drafts.mjs" check | tee "$EVIDENCE/sb2-readback.txt"
+kill "$MODEL_PID"
+wait "$MODEL_PID" || true
+$V down
+```
+
+The helper asserts the AS19 draft is `published` and AS20 draft is `rejected`.
+Keep JSON readbacks, screenshots, mock JSONL and summary text with the run evidence.

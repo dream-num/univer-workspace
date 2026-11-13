@@ -755,7 +755,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 19;
+PRAGMA user_version = 20;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>
@@ -787,3 +787,32 @@ CREATE TABLE IF NOT EXISTS html_view_drafts (
 );
 CREATE INDEX IF NOT EXISTS html_view_drafts_due
   ON html_view_drafts(expires_at, id) WHERE state IN ('receiving', 'pending');
+
+CREATE TABLE IF NOT EXISTS skill_drafts (
+  id TEXT PRIMARY KEY,
+  author_user_id TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  intent_sha256 TEXT NOT NULL CHECK (length(intent_sha256) = 64),
+  space_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  target_folder_node_id TEXT,
+  files TEXT NOT NULL CHECK (json_valid(files)),
+  base TEXT CHECK (base IS NULL OR json_valid(base)),
+  keep TEXT NOT NULL CHECK (json_valid(keep)),
+  scan TEXT NOT NULL CHECK (json_valid(scan)),
+  review TEXT NOT NULL CHECK (json_valid(review)),
+  source TEXT CHECK (source IS NULL OR json_valid(source)),
+  unverified_review_count INTEGER NOT NULL CHECK (unverified_review_count >= 0),
+  state TEXT NOT NULL CHECK (state IN
+    ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted')),
+  result_folder_node_id TEXT,
+  decided_by TEXT, decided_at INTEGER,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  UNIQUE (author_user_id, idempotency_key),
+  CHECK ((base IS NULL) = (target_folder_node_id IS NULL)),
+  CHECK ((state = 'published') = (result_folder_node_id IS NOT NULL)),
+  FOREIGN KEY (author_user_id) REFERENCES users(id) ON DELETE RESTRICT
+);
+CREATE INDEX IF NOT EXISTS skill_drafts_due
+  ON skill_drafts(expires_at, id) WHERE state IN ('receiving', 'pending');

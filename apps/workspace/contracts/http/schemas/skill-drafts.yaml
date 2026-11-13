@@ -1,0 +1,202 @@
+SubmitSkillDraft:
+  type: object
+  additionalProperties: false
+  required: [name, spaceId, files]
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 64
+      pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+    spaceId:
+      type: string
+      description: Author-owned Personal Space or repository Space with root creation permission.
+    replace:
+      type: boolean
+      default: false
+      description: Capture every current file and ETag as the immutable replacement base.
+    files:
+      type: array
+      minItems: 1
+      maxItems: 100
+      description: UTF-8 text without NUL. SKILL.md is limited to 64 KiB; total bytes to 20 MiB. Auxiliary text over 256 KiB produces a warning.
+      items:
+        type: object
+        additionalProperties: false
+        required: [path, text]
+        properties:
+          path:
+            type: string
+            maxLength: 1024
+          text:
+            type: string
+    keep:
+      type: array
+      default: []
+      uniqueItems: true
+      description: Base file paths to retain untouched. Must be absent from files.
+      items:
+        type: string
+    review:
+      type: array
+      maxItems: 500
+      default: []
+      items:
+        $ref: '#/SkillReviewFinding'
+        unevaluatedProperties: false
+SkillReviewFinding:
+  type: object
+  required: [rule, path, quote, impact, suggestion]
+  properties:
+    rule:
+      type: string
+      enum: [requires-shell, requires-binary, requires-local-io, unavailable-tool, suspicious-instruction]
+    path:
+      type: string
+      minLength: 1
+      maxLength: 1024
+    quote:
+      type: string
+      minLength: 1
+      maxLength: 200
+      description: Verbatim file evidence. Quotes not found at path are dropped and counted.
+    impact:
+      type: string
+      minLength: 1
+      maxLength: 2000
+    suggestion:
+      type: string
+      minLength: 1
+      maxLength: 2000
+SkillVerifiedReviewFinding:
+  allOf:
+    - $ref: '#/SkillReviewFinding'
+    - type: object
+      required: [line, severity]
+      properties:
+        line:
+          type: integer
+          minimum: 1
+        severity:
+          type: string
+          const: warn
+SkillScanFinding:
+  type: object
+  required: [rule, severity, path, line, message]
+  properties:
+    rule:
+      type: string
+      enum: [frontmatter-invalid, reserved-name, size-limit, unsafe-path, text-too-large, script-file, facade-script, executable-binary, office-asset, media-asset, missing-reference, ignored-field, hidden-text, name-conflict, hub-verdict]
+    severity:
+      type: string
+      enum: [block, warn, info]
+    path:
+      type: string
+    line:
+      type: [integer, "null"]
+      minimum: 1
+    message:
+      type: string
+SkillBaseFile:
+  type: object
+  required: [path, resourceId, etag]
+  properties:
+    path:
+      type: string
+    resourceId:
+      type: string
+      description: Resource identity captured at intake. Current content also available via the draft content endpoint.
+    etag:
+      type: string
+      description: Quoted strong ETag captured at intake.
+SkillDraft:
+  type: object
+  required: [id, kind, state, name, spaceId, previewPath, files, base, keep, removedPaths, scan, review, source, unverifiedReviewCount, compatibility, createdAt, expiresAt, decidedAt, published]
+  properties:
+    id:
+      type: string
+      format: uuid
+    kind:
+      type: string
+      enum: [create, replace]
+    state:
+      type: string
+      enum: [pending, published, rejected, expired, conflicted]
+    name:
+      type: string
+    spaceId:
+      type: string
+    previewPath:
+      type: string
+      description: Author-private browser route /drafts/skills/{id}.
+    files:
+      type: array
+      items:
+        type: object
+        required: [path, byteSize, sha256, kind, mediaType]
+        properties:
+          path:
+            type: string
+          byteSize:
+            type: integer
+            minimum: 0
+          sha256:
+            type: string
+          kind:
+            type: string
+            enum: [text, binary]
+          mediaType:
+            type: string
+    base:
+      type: [array, "null"]
+      description: Null for create; complete replacement file manifest captured at intake otherwise. Original bytes are not snapshotted.
+      items:
+        $ref: '#/SkillBaseFile'
+    keep:
+      type: array
+      items:
+        type: string
+    removedPaths:
+      type: array
+      description: Base paths publication would move to Trash. No permanent byte deletion.
+      items:
+        type: string
+    scan:
+      type: array
+      items:
+        $ref: '#/SkillScanFinding'
+    review:
+      type: array
+      items:
+        $ref: '#/SkillVerifiedReviewFinding'
+    source:
+      type: "null"
+      description: Reserved for source imports in SB5.
+    unverifiedReviewCount:
+      type: integer
+      minimum: 0
+    compatibility:
+      type: string
+      enum: [ready, degraded, blocked]
+      description: Blocked for static blocks; degraded for any warning or verified review; ready otherwise.
+    createdAt:
+      type: string
+      format: date-time
+    expiresAt:
+      type: string
+      format: date-time
+    decidedAt:
+      type: [string, "null"]
+      format: date-time
+    published:
+      type: [object, "null"]
+      required: [folderNodeId]
+      properties:
+        folderNodeId:
+          type: string
+SkillDraftEnvelope:
+  type: object
+  required: [draft]
+  properties:
+    draft:
+      $ref: '#/SkillDraft'

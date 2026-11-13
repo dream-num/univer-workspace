@@ -54,7 +54,7 @@ export function verifyV17Migration(
       const migrated = open(filename);
       const db = migrated.connection;
       assert.deepEqual(rows(db), before);
-      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 19);
+      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 20);
       assert.deepEqual(sessionColumns(db), [...SESSION_COLUMNS, "issued_for_pat_id", "issued_for_grant_id"]);
       for (const table of NEW_TABLES) {
         assert.ok(tableNames(db).includes(table));
@@ -109,7 +109,7 @@ export function verifyV17Migration(
       assert.equal(backup.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
       backup.close();
       const restarted = open(filename);
-      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 19);
+      assert.equal(restarted.connection.prepare("PRAGMA user_version").get()?.user_version, 20);
       restarted.close();
       assert.equal(backups().length, 1);
     }
@@ -117,7 +117,7 @@ export function verifyV17Migration(
     const broken = createV17(filename);
     broken.exec("PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)");
     broken.close();
-    assert.throws(() => open(filename), /V17 to V19 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V17 to V20 migration failed.*rolled back.*backup/);
     for (const name of ["rollback.sqlite", readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v17-backup-"))!]) {
       const preserved = new DatabaseSync(join(root, name), { readOnly: true });
       assert.equal(preserved.prepare("PRAGMA user_version").get()?.user_version, 17);
