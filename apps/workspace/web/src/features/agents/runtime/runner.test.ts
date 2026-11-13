@@ -44,6 +44,10 @@ async function setup(options: {
   const requests: { url: string; method: string | undefined; headers: [string, string][]; body: string }[] = [];
   const modelBodies: string[] = [];
   const methods: string[] = [];
+  const gateway = {
+    instructions: "Server instructions", skill: "Core skill instructions",
+    tools: [{ name: "skills_read", description: "Read skills", inputSchema: { type: "object", properties: { name: { type: "string" }, repo: { type: "string" } } } }, { name: options.pageTool ?? "pr_create", description: "Create a draft or pull request", inputSchema: { type: "object", properties: {} }, ...(options.publish || options.pageTool ? { _meta: { "univer.workspace/scope": options.publish ? "publish" : "write" } } : {}) }],
+  };
   let minted = 0;
   let unauthorized = options.unauthorized ?? 0;
   const request: typeof fetch = vi.fn<typeof fetch>(async (input, init) => {
@@ -59,14 +63,15 @@ async function setup(options: {
       const rpc = rpcSchema.parse(JSON.parse(body));
       methods.push(rpc.method);
       const respond = (result: unknown) => Response.json({ jsonrpc: "2.0", id: rpc.id, result }, { headers: { "mcp-session-id": "session" } });
-      if (rpc.method === "initialize") return respond({ protocolVersion: "2025-11-25", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "fake-workspace", version: "1" }, instructions: "Server instructions" });
+      if (rpc.method === "initialize") return respond({ protocolVersion: "2025-11-25", capabilities: { tools: {}, resources: {} }, serverInfo: { name: "fake-workspace", version: "1" }, instructions: gateway.instructions });
       if (rpc.method === "notifications/initialized") return new Response(null, { status: 202 });
-      if (rpc.method === "tools/list") return respond({ tools: [{ name: "skills_read", description: "Read skills", inputSchema: { type: "object", properties: { name: { type: "string" }, repo: { type: "string" } } } }, { name: options.pageTool ?? "pr_create", description: "Create a draft or pull request", inputSchema: { type: "object", properties: {} }, ...(options.publish || options.pageTool ? { _meta: { "univer.workspace/scope": options.publish ? "publish" : "write" } } : {}) }] });
+      if (rpc.method === "tools/list") return respond({ tools: gateway.tools });
       if (rpc.method === "resources/read") {
         if (options.resourceError) return Response.json({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: "No resource" } });
-        return respond({ contents: [{ uri: "skill://univer-workspace/core/SKILL.md", mimeType: "text/markdown", text: "Core skill instructions" }] });
+        return respond({ contents: [{ uri: "skill://univer-workspace/core/SKILL.md", mimeType: "text/markdown", text: gateway.skill }] });
       }
       if (rpc.method === "tools/call") {
+        if (!gateway.tools.some((tool) => tool.name === rpc.params?.name)) return Response.json({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: `Unknown tool: ${rpc.params?.name}` } });
         if (rpc.params?.name === "skills_read") return respond(options.skills ? await options.skills(rpc.params.arguments) : { content: [], structuredContent: emptySkills });
         await options.tool?.();
         return respond({ content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: options.pageTool ? { draft: { id: "draft-1", state: "pending" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
@@ -91,10 +96,81 @@ async function setup(options: {
     await vi.waitFor(() => expect(runner.isRunningHere(id)).toBe(false));
     return sessions.get(id);
   }
-  return { storage, sessions, saved, requests, modelBodies, methods, runner, input, finished, deps };
+  return { storage, sessions, saved, requests, modelBodies, methods, runner, input, finished, deps, gateway };
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it("freezes the system message and tool definitions across gateway releases and reloads", async () => {
+    const test = await setup({ model: () => modelStream() });
+    const started = await test.runner.start(test.input);
+    const saved = (await test.finished(started.id))!;
+    const sent = JSON.parse(test.modelBodies[0]!);
+    expect(saved.modelSnapshot?.system).toBe(sent.messages[0].content);
+    expect(saved.modelSnapshot?.tools.map(({ name, description, inputSchema }) => ({
+      type: "function", function: { name, description, parameters: inputSchema },
+    }))).toEqual(sent.tools);
+    test.gateway.instructions = "New server instructions";
+    test.gateway.skill = "New core skill instructions";
+    test.gateway.tools[0]!.description = "Changed description";
+    test.gateway.tools.push({ name: "new_tool", description: "New tool", inputSchema: { type: "object", properties: {} } });
+    const sessions = createSessionStore(test.storage);
+    const runner = createAgentRunner({ ...test.deps, sessions });
+    await runner.send(started.id, "After the gateway release");
+    await vi.waitFor(() => expect(runner.isRunningHere(started.id)).toBe(false));
+    const [first, second] = test.modelBodies.map((body) => JSON.parse(body));
+    expect(JSON.stringify(second.messages[0])).toBe(JSON.stringify(first.messages[0]));
+    expect(JSON.stringify(second.tools)).toBe(JSON.stringify(first.tools));
+    expect(second.messages.slice(0, first.messages.length)).toEqual(first.messages);
+    const fresh = await test.runner.start(test.input);
+    await test.finished(fresh.id);
+    const latest = JSON.parse(test.modelBodies[2]!);
+    expect(latest.messages[0].content).toContain("New server instructions");
+    expect(latest.messages[0].content).toContain("New core skill instructions");
+    expect(latest.tools[0].function.description).toBe("Changed description");
+    expect(latest.tools.at(-1).function.name).toBe("new_tool");
+  });
+
+  it("loads a legacy session and persists its first model snapshot before sending, then reuses it", async () => {
+    const test = await setup({ model: () => {
+      expect(test.saved.at(-1)).toHaveProperty("modelSnapshot");
+      return modelStream();
+    } });
+    const legacy = session({ messages: [{ id: "old-user", role: "user", parts: [{ type: "text", text: "Earlier message" }] }] });
+    await test.sessions.save(legacy);
+    expect(await createSessionStore(test.storage).get(legacy.id)).toEqual(legacy);
+    await test.runner.send(legacy.id, "First turn after upgrade");
+    const first = (await test.finished(legacy.id))!;
+    expect(first).toHaveProperty("modelSnapshot");
+    test.gateway.instructions = "Updated server";
+    test.gateway.skill = "Updated core";
+    test.gateway.tools = [];
+    await test.runner.send(legacy.id, "Next turn after upgrade");
+    const next = (await test.finished(legacy.id))!;
+    expect(next.status).toBe("idle");
+    expect(next.modelSnapshot).toEqual(first.modelSnapshot);
+    expect(test.saved.filter((value) => value.modelSnapshot).every((value) => JSON.stringify(value.modelSnapshot) === JSON.stringify(first.modelSnapshot))).toBe(true);
+    expect(test.methods.filter((method) => method === "tools/list")).toHaveLength(1);
+    expect(test.methods.filter((method) => method === "resources/read")).toHaveLength(1);
+  });
+
+  it("executes frozen tools on the live gateway and reports a removed tool to the model", async () => {
+    const tool = vi.fn(async () => {});
+    const test = await setup({ tool, model: (index) => modelStream(index === 2 || index === 4 ? "pr_create" : undefined) });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    test.gateway.tools[1]!.description = "Released implementation";
+    await test.runner.send(started.id, "Call the frozen tool");
+    expect((await test.finished(started.id))?.status).toBe("idle");
+    expect(tool).toHaveBeenCalledTimes(1);
+    test.gateway.tools = test.gateway.tools.filter((item) => item.name !== "pr_create");
+    await test.runner.send(started.id, "Call the removed tool");
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    expect(tool).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(test.modelBodies[4]!).messages).toContainEqual(expect.objectContaining({ role: "tool", content: expect.stringContaining("Unknown tool: pr_create") }));
+    expect(done.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({ toolName: "pr_create", state: "output-error", errorText: expect.stringContaining("Unknown tool: pr_create") }));
+  });
+
   it.each([
     ["Write $ARGUMENTS then $ARGUMENTS", "/weekly-report   week 46  ", "Write week 46 then week 46"],
     ["Write $ARGUMENTS", "/weekly-report $& $$", "Write $& $$"],
@@ -374,6 +450,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const paused = (await test.finished(started.id))!;
     const before = JSON.parse(test.modelBodies[0]!);
     if (oldSession) {
+      delete paused.modelSnapshot;
       paused.messages[0]!.metadata = { agentContextPrompt: "Frozen old context" };
       paused.messages[0]!.parts = [{ type: "text", text: test.input.text }];
       await test.sessions.save(paused);
@@ -1162,14 +1239,14 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       const emit = (text: string) => controller.enqueue(encoder.encode(`data: ${JSON.stringify({ id: "stream", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: { content: text }, finish_reason: null }] })}\n\n`));
       emit("A");
       await vi.waitFor(async () => expect(JSON.stringify((await test.sessions.get(started.id))?.messages)).toContain('"text":"A"'));
-      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(2);
+      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(3);
       clock += 1001;
       emit("B");
-      await vi.waitFor(() => expect(test.saved.filter((value) => value.status === "running")).toHaveLength(3));
+      await vi.waitFor(() => expect(test.saved.filter((value) => value.status === "running")).toHaveLength(4));
       clock += 100;
       emit("C");
       await vi.waitFor(async () => expect(JSON.stringify((await test.sessions.get(started.id))?.messages)).toContain("ABC"));
-      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(3);
+      expect(test.saved.filter((value) => value.status === "running")).toHaveLength(4);
       controller.enqueue(encoder.encode(`data: ${JSON.stringify({ id: "stream", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`));
       controller.close();
       expect((await test.finished(started.id))?.status).toBe("idle");
@@ -1192,7 +1269,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(JSON.parse(test.modelBodies[0]!)).not.toHaveProperty("reasoning_effort");
   });
 
-  it("starts repository sessions with the base Worktree and rediscovers tools on a new run", async () => {
+  it("starts repository sessions with the base Worktree and reuses tools on a new run", async () => {
     const test = await setup({ model: () => modelStream() });
     const started = await test.runner.start({ ...test.input, scope: { kind: "repository", spaceId: "repo-1", baseWorktreeId: "base-1" }, model: { ...test.input.model, thinking: "max" } });
     expect((await test.finished(started.id))?.worktreeIds).toEqual(["base-1"]);
@@ -1201,6 +1278,6 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(JSON.parse(test.modelBodies[0]!).reasoning_effort).toBe("max");
     await test.runner.send(started.id, "One more turn");
     await test.finished(started.id);
-    expect(test.methods.filter((method) => method === "tools/list")).toHaveLength(2);
+    expect(test.methods.filter((method) => method === "tools/list")).toHaveLength(1);
   });
 });

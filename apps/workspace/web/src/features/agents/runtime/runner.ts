@@ -1,10 +1,10 @@
 import { createMCPClient } from "@ai-sdk/mcp";
 import { Chat } from "@ai-sdk/react";
-import { DirectChatTransport, ToolLoopAgent, generateId, isToolUIPart, lastAssistantMessageIsCompleteWithApprovalResponses, stepCountIs, validateUIMessages } from "ai";
+import { DirectChatTransport, ToolLoopAgent, asSchema, generateId, isToolUIPart, jsonSchema, lastAssistantMessageIsCompleteWithApprovalResponses, stepCountIs, validateUIMessages } from "ai";
 import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { AgentReference, AgentMode, AgentScope, AgentSession, AgentSessionId, AgentSettings, SkillCatalog } from "../agent.types";
-import { agentReferenceToken, agentSessionIdSchema, messageSkills, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
+import { agentReferenceToken, agentSessionIdSchema, messageSkills, modelSnapshotSchema, SYSTEM_REMINDER_START, sessionLockName, transition } from "../agent.types";
 import type { McpGrant, McpTokenSource } from "../mcp-token";
 import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
@@ -178,7 +178,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const message = run.session.messages.at(-1);
       const processSkills = message?.role === "user" && !(message.metadata && typeof message.metadata === "object" && "agentSkills" in message.metadata);
       const [skill, catalog] = await Promise.all([
-        client.readResource({ uri: "skill://univer-workspace/core/SKILL.md" })
+        run.session.modelSnapshot ? "" : client.readResource({ uri: "skill://univer-workspace/core/SKILL.md" })
           .then((resource) => resource.contents.flatMap((content) => "text" in content ? [content.text] : []).join("\n"), () => ""),
         processSkills ? client.callTool({ name: "skills_read", arguments: run.session.scope.kind === "repository" ? { repo: run.session.scope.spaceId } : {} })
           .then((result) => {
@@ -207,10 +207,27 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
           if (persistenceError) throw persistenceError;
         }
       }
+      if (!run.session.modelSnapshot) {
+        const tools = await client.tools();
+        run.session.modelSnapshot = modelSnapshotSchema.parse({
+          system: [client.instructions, skill, initialContextPrompt(run.session)].filter(Boolean).join("\n\n"),
+          tools: await Promise.all(Object.entries(tools).map(async ([name, tool]) => ({
+            name, description: tool.description, inputSchema: await asSchema(tool.inputSchema).jsonSchema, _meta: tool._meta,
+          }))),
+        });
+        persist();
+        await writeQueue;
+        if (persistenceError) throw persistenceError;
+      }
+      const tools = client.toolsFromDefinitions({ tools: run.session.modelSnapshot.tools });
+      // MCP reconstruction applies schema defaults; the model must receive the saved schema verbatim.
+      for (const definition of run.session.modelSnapshot.tools) {
+        tools[definition.name]!.inputSchema = jsonSchema(definition.inputSchema);
+      }
       const latestCatalog = run.session.messages.filter((item) => item.role === "user")
         .map((item) => messageSkills(item.metadata)).reverse().find((item) => item !== null);
       const userOnlySkills = new Set(latestCatalog?.skills.filter((item) => !item.modelInvocable).map((item) => item.name));
-      const gated = gateTools(withStructuredContent(await client.tools()), run.session.mode, async (name, input, signal) => {
+      const gated = gateTools(withStructuredContent(tools), run.session.mode, async (name, input, signal) => {
         const args = z.record(z.string(), z.unknown()).parse(input);
         const publishToken = deps.createTokenSource("publish");
         let publishClient: Awaited<ReturnType<typeof createMCPClient>> | undefined;
@@ -235,7 +252,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
             lastStep: { inputTokens, cacheReadTokens },
           } };
         },
-        instructions: [client.instructions, skill, initialContextPrompt(run.session)].filter(Boolean).join("\n\n"),
+        instructions: run.session.modelSnapshot.system,
       });
       run.session.messages = repairInterruptedTools(run.session.messages);
       const messages = run.session.messages.length
