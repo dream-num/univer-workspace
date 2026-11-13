@@ -71,7 +71,7 @@ MCP Server 不连接任何数据库（D12）。它保存的状态只有三类，
 | `--file` 输入、`--out` 输出 | 暂存存储加签名 URL | 见第 5 节和[工具规格](tools.zh-CN.md) |
 | 资源缓存、Chromium 二进制、render-runtime 页面 | 打进镜像，只读共享 | 不区分用户 |
 | `@univer-cli/api-reference`（约 7.3 MB） | 网关进程内加载 | 作为库复用 |
-| MCP core 与九个共享领域 Skill | 网关的工具和 MCP resource | 构建时组装 MCP core 与共享领域 Skill，通过 Skills 扩展和 skills_read 读取同一静态 catalog |
+| MCP core 与九个共享领域 Skill | 网关的工具和 MCP resource | 构建时组装 MCP core 与共享领域 Skill，通过 Skills 扩展和 skills_read 读取同一内置静态 catalog；skills_read 另加载实时自定义 Skill |
 | CLI 的 license 解析 | 各角色由环境变量注入 | 宿主注入机制已经存在（`apps/cli/src/runtime/daemon.ts:21`、`apps/cli/src/program.ts:126`）。license 没有授权限制（D7） |
 
 ## 3. 部署拓扑
@@ -603,6 +603,10 @@ apps/mcp/
   它声明 SEP-2640 的 `io.modelcontextprotocol/skills` 扩展，URI 前缀为 `skill://univer-workspace/`。
   `skills/list` 列出带资源摘要的 Skill，`resources/read` 读取文件；`skills_read` 是同一 catalog 的
   回退入口，保留 full 和 cursor 分页。MCP core 负责操作到工具的绑定和远程文件处理说明。
+- `custom-skills.ts` 通过 Client Core 的 Space browse 和 Blob 下载实时发现个人空间与可选成员仓库的
+  `.agents/skills`，用官方 `skillEntry` 校验，在内置、个人、仓库的顺序中合并并输出诊断。
+  非成员仓库不加载，自定义 Skill 不进入 Skills 扩展。`skills_read` 返回来源和调用开关，
+  附属文本支持清单内读取与分页，二进制只返回元数据，带 repo 时用解析后的 Space ID 记录用量事件。
 
 内部工具与请求失败仅记录错误类名及安全的 code、syscall 和 request ID，不记录错误消息、堆栈、路径或参数。客户端中止只记录一次 info 级失败。下载的 Workspace 媒体类型无法解析时使用 application/octet-stream；数据与 sidecar 大小不一致属于内部完整性错误。
 
