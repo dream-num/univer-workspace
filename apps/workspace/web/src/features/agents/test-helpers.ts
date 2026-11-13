@@ -11,6 +11,7 @@ export function deferred<T>() {
 }
 export class TestLocks implements LockManager {
   readonly held = new Set<string>();
+  private readonly pending = new Map<string, Promise<unknown>>();
   async query(): Promise<LockManagerSnapshot> {
     return { held: [...this.held].map((name) => ({ name, mode: "exclusive", clientId: "test" })), pending: [] };
   }
@@ -19,15 +20,20 @@ export class TestLocks implements LockManager {
   request<T>(name: string, options: LockOptions | LockGrantedCallback<T>, callback?: LockGrantedCallback<T>): Promise<T> {
     const handler = typeof options === "function" ? options : callback;
     if (!handler) return Promise.reject(new Error("Lock callback missing"));
-    return new Promise<T>((resolve, reject) => {
-      queueMicrotask(() => {
-        const busy = this.held.has(name);
-        if (busy && typeof options !== "function" && !options.ifAvailable) { reject(new Error("Test lock is busy")); return; }
-        if (!busy) this.held.add(name);
-        Promise.resolve().then(() => handler(busy ? null : { name, mode: "exclusive" }))
-          .then(resolve, reject).finally(() => { if (!busy) this.held.delete(name); });
-      });
+    const ifAvailable = typeof options !== "function" && options.ifAvailable;
+    const previous = ifAvailable ? undefined : this.pending.get(name);
+    const result = Promise.resolve(previous).catch(() => undefined).then(async () => {
+      const busy = this.held.has(name);
+      if (busy && !ifAvailable) throw new Error("Test lock is busy");
+      if (!busy) this.held.add(name);
+      try { return await handler(busy ? null : { name, mode: "exclusive" }); }
+      finally {
+        if (!busy) this.held.delete(name);
+        if (this.pending.get(name) === result) this.pending.delete(name);
+      }
     });
+    if (!ifAvailable) this.pending.set(name, result);
+    return result;
   }
 }
 export class TestStorage implements Storage {

@@ -12,7 +12,7 @@ export interface SessionStore {
   subscribe(listener: (session: AgentSession) => void): () => void;
 }
 
-export function createSessionStore(options: AgentDatabaseOptions & { locks: LockManager }): SessionStore {
+export function createSessionStore(options: AgentDatabaseOptions): SessionStore {
   const database = openAgentDatabase(options);
   const memory = new Map<AgentSessionId, AgentSession>();
   const listeners = new Set<(session: AgentSession) => void>();

@@ -10,7 +10,7 @@ import { createSessionStore, createProviders, createMcpTokenSource } from "../st
 function createClient(userId: string) {
   const fetch = window.fetch.bind(window);
   const sessions = createSessionStore({ userId, indexedDB, locks: navigator.locks });
-  const providers = createProviders({ userId, indexedDB, storage: sessionStorage, fetch, workspaceOrigin: location.origin });
+  const providers = createProviders({ userId, indexedDB, locks: navigator.locks, storage: sessionStorage, fetch, workspaceOrigin: location.origin });
   let runtime: ReturnType<typeof loadAgentRuntime> | undefined;
   let runner: Promise<ReturnType<Awaited<ReturnType<typeof loadAgentRuntime>>["createAgentRunner"]>> | undefined;
   const running = new Set<string>();
