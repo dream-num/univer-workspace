@@ -37,7 +37,12 @@ describe("MCP core Skill tool bindings", () => {
       expect(content, path).toContain(
         "Leave the rework in draft until a new explicit user completion or review request.",
       );
-      expect(content, path).toContain("Read stored content with `inspect` or read-only `execute`.");
+      expect(content, path).toContain(
+        "Read Sheet values, types, and formulas with `read` and json true.",
+      );
+      expect(content, path).toContain(
+        "Read stored content with `inspect` or read-only `execute` for other Unit types",
+      );
       expect(content, path).toContain(
         "Only mark the Worktree ready with `pr_ready` when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
       );

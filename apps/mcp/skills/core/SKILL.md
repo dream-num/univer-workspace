@@ -353,7 +353,7 @@ admin tools return SVG source for incorporation in the page or document.
 
 ## Verify and hand off
 
-1. Read Sheet values, types, and formulas with `read` and json true. Use `inspect` for other Unit types or raw cell metadata.
+1. Read Sheet values, types, and formulas with `read` and json true. Read stored content with `inspect` or read-only `execute` for other Unit types or raw cell metadata.
 2. Capture screenshots for Sheet layout, Doc pagination and every Slide page.
 3. Only mark the Worktree ready with `pr_ready` when the user explicitly says the
    work is finished or requests review. Otherwise, leave the verified changes in draft.
