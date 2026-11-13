@@ -1,0 +1,1107 @@
+<!doctype html><meta charset="utf-8"><title>uvw outline 原型：接入 Lens 前后对比</title>
+<style>
+body{font:14px/1.5 -apple-system,system-ui,"PingFang SC",sans-serif;margin:24px;color:#1f2328;max-width:1600px}
+h1{font-size:22px}h2{font-size:18px;margin-top:40px;border-bottom:1px solid #d0d7de;padding-bottom:6px}h2 small{color:#656d76;font-weight:400}
+.cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}.obs{background:#fff8c5;border:1px solid #d4a72c;border-radius:6px;padding:8px 12px;margin:8px 0}.card{border:1px solid #d0d7de;border-radius:6px;padding:10px;margin-bottom:12px}
+.card.before{background:#fff8f5}.card.after{background:#f5fbff}.meta{margin-bottom:4px}.tag{background:#ddf4ff;border-radius:10px;padding:1px 8px;font-size:12px}
+.cmd{display:block;font-size:12px;color:#57606a;word-break:break-all;margin-bottom:6px}.nums span{margin-right:14px}.phases{font-size:12px;color:#57606a;font-family:ui-monospace,monospace}
+pre{background:#f6f8fa;padding:8px;overflow:auto;max-height:420px;font-size:12px;white-space:pre}.cut{color:#cf222e}
+table{border-collapse:collapse;margin:8px 0}td,th{border:1px solid #d0d7de;padding:4px 8px}.n{text-align:right;font-variant-numeric:tabular-nums}.note{color:#57606a;font-size:12px}
+</style>
+<h1>uvw outline 原型：接入 Lens 前后对比</h1>
+<p>同一 Workspace 实例、同一批 Unit。token 用 o200k_base 估算；耗时是 5 次运行的中位数（括号内为范围），含 uvw 进程启动约 1318 ms。失败次数：0。</p>
+<h2>汇总</h2>
+<table><tr><th>任务</th><th></th><th>命令</th><th>输出 tokens</th><th>脚本 tokens</th><th>A2 / 前 ms</th><th>A1 ms</th></tr><tr><td>T1</td><td>前</td><td>inspect workbook</td><td class="n">364</td><td class="n"></td><td class="n">1466</td><td class="n"></td></tr><tr><td>T1</td><td>后</td><td>outline</td><td class="n">399</td><td class="n"></td><td class="n">1384</td><td class="n">1569</td></tr><tr><td>T2</td><td>前</td><td>inspect range 前 20 行（抽样）</td><td class="n">624</td><td class="n"></td><td class="n">1502</td><td class="n"></td></tr><tr><td>T2</td><td>前</td><td>inspect range 全表 --json（skill 推荐的权威读法）</td><td class="n">375,372</td><td class="n"></td><td class="n">1461</td><td class="n"></td></tr><tr><td>T2</td><td>前</td><td>execute 统计脚本</td><td class="n">644</td><td class="n">128</td><td class="n">1487</td><td class="n"></td></tr><tr><td>T2</td><td>后</td><td>outline --at s2.t1</td><td class="n">761</td><td class="n"></td><td class="n">1395</td><td class="n">1521</td></tr><tr><td>T3</td><td>前</td><td>execute 扫描脚本</td><td class="n">266</td><td class="n">96</td><td class="n">1391</td><td class="n"></td></tr><tr><td>T3</td><td>后</td><td>find returned</td><td class="n">836</td><td class="n"></td><td class="n">1391</td><td class="n">1542</td></tr><tr><td>T4</td><td>前</td><td>inspect range A3:I8 --json</td><td class="n">2,923</td><td class="n"></td><td class="n">1443</td><td class="n"></td></tr><tr><td>T4</td><td>后</td><td>read Summary!A3:I8</td><td class="n">1,517</td><td class="n"></td><td class="n">1358</td><td class="n">1433</td></tr><tr><td>T5</td><td>前</td><td>inspect workbook</td><td class="n">134</td><td class="n"></td><td class="n">1706</td><td class="n"></td></tr><tr><td>T5</td><td>前</td><td>inspect range 前 20 行（抽样）</td><td class="n">652</td><td class="n"></td><td class="n">1642</td><td class="n"></td></tr><tr><td>T5</td><td>前</td><td>execute 统计脚本</td><td class="n">646</td><td class="n">128</td><td class="n">1667</td><td class="n"></td></tr><tr><td>T5</td><td>后</td><td>outline</td><td class="n">110</td><td class="n"></td><td class="n">1346</td><td class="n">3681</td></tr><tr><td>T5</td><td>后</td><td>outline --at s1.t1</td><td class="n">598</td><td class="n"></td><td class="n">1428</td><td class="n">3864</td></tr><tr><td>T6</td><td>前</td><td>inspect workbook</td><td class="n">130</td><td class="n"></td><td class="n">1970</td><td class="n"></td></tr><tr><td>T6</td><td>后</td><td>outline</td><td class="n">104</td><td class="n"></td><td class="n">1356</td><td class="n">5709</td></tr></table>
+<h3>冷启动（daemon stop 后第一次调用）</h3>
+<table><tr><th>命令</th><th>ms</th><th>阶段</th></tr><tr><td>inspect workbook sales-1000</td><td class="n">3616</td><td></td></tr><tr><td>outline sales-1000</td><td class="n">3569</td><td>resolve=17 · export=943 · display=0 · structure=1 · model=75 · render=1 · unitDataBytes=964321 · cache=miss</td></tr><tr><td>inspect workbook ledger-30k</td><td class="n">5428</td><td></td></tr><tr><td>outline ledger-30k</td><td class="n">6436</td><td>resolve=13 · export=3031 · display=1 · structure=4 · model=793 · render=1 · unitDataBytes=8694174 · cache=miss</td></tr><tr><td>inspect workbook ledger-50k</td><td class="n">6439</td><td></td></tr><tr><td>outline ledger-50k</td><td class="n">7431</td><td>resolve=12 · export=4215 · display=2 · structure=0 · model=554 · render=1 · unitDataBytes=14496110 · cache=miss</td></tr></table>
+
+<section>
+  <h2>T1 整本工作簿是什么 <small>sales-1000</small></h2>
+  <div class="obs">两者大小相近。inspect 只说哪里有数据（values/formulas/styles 的 used range），outline 说出数据是什么：Inputs 里有带名字的 KPI（TaxRate 8.0%），Orders 是 1000 行的 OrdersTbl，Summary 有标题、带合计行的表。</div>
+  <div class="cols">
+    <div><h3>接入前</h3>
+<div class="card before">
+  <div class="meta"><b>inspect workbook</b></div>
+  <code class="cmd">uvw inspect workbook --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>364</b> tokens</span><span>916 字符</span><span>1466 ms <small>(1400–1782)</small></span></div>
+
+
+  <pre>workbook sales-1000 (9505ab85-0096-44a2-9350-88a981686a27)
+worksheet [1] uni1 Inputs (150x26)
+  values: A1, A3:B6
+  formulas: none
+  styles: A1, B3:B6
+  merged: none
+  conditional formatting: 0
+  data validation: 0
+  drawings: 0 (charts 0, images 0, shapes 0)
+worksheet [2] uni2 Orders (1002x26)
+  values: A1:J1001
+  formulas: H2:I1001
+  styles: A1:J1001
+  merged: none
+  tables: OrdersTbl(A1:J1001)
+  conditional formatting: 1
+  data validation: 1
+  drawings: 0 (charts 0, images 0, shapes 0)
+worksheet [3] uni3 Summary (150x26)
+  values: A1, A3:F8, H3:I5
+  formulas: I3:I5, B4:F8
+  styles: A1, B3:F7, I5, A8:F8
+  merged: A1:F1
+  conditional formatting: 0
+  data validation: 0
+  drawings: 0 (charts 0, images 0, shapes 0)
+worksheet [4] uni4 Notes (150x26)
+  values: A1, A3:B4
+  formulas: none
+  styles: B4
+  merged: none
+  conditional formatting: 0
+  data validation: 0
+  drawings: 0 (charts 0, images 0, shapes 0)
+</pre>
+</div></div>
+    <div><h3>接入后</h3>
+<div class="card after">
+  <div class="meta"><b>outline</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw outline --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>399</b> tokens</span><span>913 字符</span><span>1384 ms <small>(1352–1642)</small></span></div>
+  <div class="phases">resolve=16 · render=0 · unitDataBytes=964321 · cache=hit</div>
+
+  <pre>unit 9505ab85-0096-44a2-9350-88a981686a27 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=1]
+- workbook "sales-1000" [sheets=4]
+  - sheet "Inputs" [ref=s1, used=A1:B6]
+    - text "Assumptions" [ref=s1.x1, A1]
+    - text "Tax rate" [ref=s1.x2, A3]
+    - kpi "TaxRate" [ref=s1.k1, B3, percent 0.0%, via=name]: 8.0%
+    - table [ref=s1.t1, A4:B6, rows=3, header=0r]
+    - objects [name=1]
+  - sheet "Orders" [ref=s2, used=A1:J1001, frozen=1r, formulas=2000]
+    - table "OrdersTbl" [ref=s2.t1, A1:J1001, rows=1000, via=table]
+    - objects [table=1, cf=1, dv=1]
+  - sheet "Summary" [ref=s3, used=A1:I8, formulas=28]
+    - text "Sales Summary 2026" [ref=s3.x1, A1:F1, span=A1:F1]
+    - table [ref=s3.t1, A3:I8, rows=4, totals=8]
+    - objects [merged=1]
+  - sheet "Notes" [ref=s4, used=A1:B4]
+    - text "Data is synthetic. Amount = Qty x Unit …" [ref=s4.x1, A1]
+    - table [ref=s4.t1, A3:B4, rows=2, header=0r]
+</pre>
+</div>
+      <p class="note">A1（Lens 在 CLI 进程）输出相同，耗时：outline 1569 ms</p></div>
+  </div>
+</section>
+<section>
+  <h2>T2 Orders 表每列是什么、取值范围 <small>sales-1000</small></h2>
+  <div class="obs">抽样的文本输出截掉了 Tax、Status 两列（… 2 columns omitted）。全表 --json 有 37.5 万 tokens，放不进上下文。Agent 自写的统计脚本里，getValues() 对带格式的 Unit Price、Amount、Tax 返回的不是 number，min/max 全是 null，需要再来一轮才能发现。outline --at 一次给出每列类型、格式、范围、去重值、公式模式、CF 和 DV。</div>
+  <div class="cols">
+    <div><h3>接入前</h3>
+<div class="card before">
+  <div class="meta"><b>inspect range 前 20 行（抽样）</b></div>
+  <code class="cmd">uvw inspect range A1:J21 --worksheet name:Orders --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>624</b> tokens</span><span>1,123 字符</span><span>1502 ms <small>(1390–1636)</small></span></div>
+
+
+  <pre>Orders!A1:J21
+"Order ID"	"Date"	"Region"	"Rep"	"Product"	"Qty"	"Unit Price"	"Amount"	… 2 columns omitted
+"SO-100002"	"2026-06-15"	"West"	"Dee"	"Widget"	"5"	"99.09"	"495.45"	… 2 columns omitted
+"SO-100003"	"2026-10-26"	"East"	"Eli"	"Gadget"	"3"	"13.06"	"39.18"	… 2 columns omitted
+"SO-100004"	"2026-05-04"	"East"	"Eli"	"Doohickey"	"4"	"99.74"	"398.96"	… 2 columns omitted
+"SO-100005"	"2026-04-25"	"East"	"Eli"	"Sprocket"	"26"	"8.80"	"228.80"	… 2 columns omitted
+"SO-100006"	"2026-10-13"	"West"	"Chen"	"Doohickey"	"10"	"66.26"	"662.60"	… 2 columns omitted
+"SO-100007"	"2026-10-14"	"West"	"Ana"	"Sprocket"	"37"	"77.75"	"2,876.75"	… 2 columns omitted
+"SO-100008"	"2026-10-08"	"East"	"Eli"	"Widget"	"40"	"27.10"	"1,084.00"	… 2 columns omitted
+"SO-100009"	"2026-08-07"	"North"	"Dee"	"Sprocket"	"30"	"45.31"	"1,359.30"	… 2 columns omitted
+"SO-100010"	"2026-04-03"	"West"	"Ana"	"Sprocket"	"20"	"64.45"	"1,289.00"	… 2 columns omitted
+"SO-100011"	"2026-08-18"	"North"	"Eli"	"Widget"	"8"	"62.90"	"503.20"	… 2 columns omitted
+"SO-100012"	"2026-06-25"	"West"	"Dee"	"Doohickey"	"3"	"115.56"	"346.68"	… 2 columns omitted
+… 9 rows omitted
+</pre>
+</div>
+<div class="card before">
+  <div class="meta"><b>inspect range 全表 --json（skill 推荐的权威读法）</b></div>
+  <code class="cmd">uvw inspect range A1:J1001 --worksheet name:Orders --json --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>375,372</b> tokens</span><span>1,290,519 字符</span><span>1461 ms <small>(1428–2367)</small></span></div>
+
+
+  <pre>{
+  "kind": "worksheet-range",
+  "unitId": "9505ab85-0096-44a2-9350-88a981686a27",
+  "ranges": [
+    {
+      "worksheet": {
+        "id": "uni2",
+        "index": 1,
+        "name": "Orders"
+      },
+      "requestedRange": "A1:J1001",
+      "resolvedRange": "A1:J1001",
+      "clipped": false,
+      "cellData": [
+        [
+          {
+            "v": "Order ID",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Date",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Region",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Rep",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Product",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Qty",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Unit Price",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Amount",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Tax",
+            "t": 1,
+            "s": "R12"
+          },
+          {
+            "v": "Status",
+            "t": 1,
+            "s": "R12"
+          }
+        ],
+        [
+          {
+            "v": "SO-100002",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "46188",
+            "t": 2,
+            "s": "R14"
+          },
+          {
+            "v": "West",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "Dee",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "Widget",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "5",
+            "t": 2,
+            "s": "R13"
+          },
+          {
+            "v": "99.09",
+            "t": 2,
+            "s": "R15"
+          },
+          {
+            "v": 495.45,
+            "t": 2,
+            "f": "=F2*G2",
+            "ft": 0,
+            "s": "R15"
+          },
+          {
+            "v": "39.636",
+            "t": 2,
+            "f": "=H2*TaxRate",
+            "ft": 0,
+            "s": "R15"
+          },
+          {
+            "v": "open",
+            "t": 1,
+            "s": "R13"
+          }
+        ],
+        [
+          {
+            "v": "SO-100003",
+            "t": 1,
+            "s": "R16"
+          },
+          {
+            "v": "46321",
+            "t": 2,
+            "s": "R17"
+          },
+          {
+            "v": "East",
+            "t": 1,
+            "s": "R16"
+          },
+          {
+            "v": "Eli",
+            "t": 1,
+            "s": "R16"
+          },
+          {
+            "v": "Gadget",
+            "t": 1,
+            "s": "R16"
+          },
+          {
+            "v": "3",
+            "t": 2,
+            "s": "R16"
+          },
+          {
+            "v": "13.06",
+            "t": 2,
+            "s": "R18"
+          },
+          {
+            "v": "39.18",
+            "t": 2,
+            "f": "=F3*G3",
+            "ft": 0,
+            "s": "R18"
+          },
+          {
+            "v": "3.1344",
+            "t": 2,
+            "f": "=H3*TaxRate",
+            "ft": 0,
+            "s": "R18"
+          },
+          {
+            "v": "shipped",
+            "t": 1,
+            "s": "R16"
+          }
+        ],
+        [
+          {
+            "v": "SO-100004",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "46146",
+            "t": 2,
+            "s": "R14"
+          },
+          {
+            "v": "East",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "Eli",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "Doohickey",
+            "t": 1,
+            "s": "R13"
+          },
+          {
+            "v": "4",
+            "t": 2,
+            "s": "R13"
+          },
+          {
+
+<span class="cut">… 其余 1,286,519 字符未显示（共 1,290,519 字符）</span></pre>
+</div>
+<div class="card before">
+  <div class="meta"><b>execute 统计脚本</b></div>
+  <code class="cmd">uvw execute --unit $U --worktree $W --script /tmp/sheet-lens-proto/scripts/exec/orders-stats.js</code>
+  <div class="nums"><span>输出 <b>644</b> tokens</span><span>脚本 <b>128</b> tokens</span><span>1,781 字符</span><span>1487 ms <small>(1408–2278)</small></span></div>
+
+  <details><summary>Agent 需要写的脚本</summary><pre>const ws = workbook.getSheetByName("Orders");
+const [header, ...rows] = ws.getRange("A1:J1001").getValues();
+return header.map((name, c) =&gt; {
+  const col = rows.map((r) =&gt; r[c]);
+  const nums = col.filter((x) =&gt; typeof x === "number");
+  const distinct = new Set(col);
+  return { name, distinct: distinct.size, sample: [...distinct].slice(0, 5), min: nums.length ? Math.min(...nums) : null, max: nums.length ? Math.max(...nums) : null };
+});
+</pre></details>
+  <pre>[
+  {
+    "name": "Order ID",
+    "distinct": 1000,
+    "sample": [
+      "SO-100002",
+      "SO-100003",
+      "SO-100004",
+      "SO-100005",
+      "SO-100006"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Date",
+    "distinct": 345,
+    "sample": [
+      "2026-06-15",
+      "2026-10-26",
+      "2026-05-04",
+      "2026-04-25",
+      "2026-10-13"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Region",
+    "distinct": 4,
+    "sample": [
+      "West",
+      "East",
+      "North",
+      "South"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Rep",
+    "distinct": 6,
+    "sample": [
+      "Dee",
+      "Eli",
+      "Chen",
+      "Ana",
+      "Bo"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Product",
+    "distinct": 5,
+    "sample": [
+      "Widget",
+      "Gadget",
+      "Doohickey",
+      "Sprocket",
+      "Gizmo"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Qty",
+    "distinct": 40,
+    "sample": [
+      5,
+      3,
+      4,
+      26,
+      10
+    ],
+    "min": 1,
+    "max": 40
+  },
+  {
+    "name": "Unit Price",
+    "distinct": 954,
+    "sample": [
+      "99.09",
+      "13.06",
+      "99.74",
+      "8.80",
+      "66.26"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Amount",
+    "distinct": 993,
+    "sample": [
+      "495.45",
+      "39.18",
+      "398.96",
+      "228.80",
+      "662.60"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Tax",
+    "distinct": 973,
+    "sample": [
+      "39.64",
+      "3.13",
+      "31.92",
+      "18.30",
+      "53.01"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Status",
+    "distinct": 3,
+    "sample": [
+      "open",
+      "shipped",
+      "returned"
+    ],
+    "min": null,
+    "max": null
+  }
+]
+</pre>
+</div></div>
+    <div><h3>接入后</h3>
+<div class="card after">
+  <div class="meta"><b>outline --at s2.t1</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw outline --unit $U --worktree $W --at s2.t1</code>
+  <div class="nums"><span>输出 <b>761</b> tokens</span><span>1,768 字符</span><span>1395 ms <small>(1366–1415)</small></span></div>
+  <div class="phases">resolve=13 · render=0 · unitDataBytes=964321 · cache=hit</div>
+
+  <pre>unit 9505ab85-0096-44a2-9350-88a981686a27 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=1]
+- table "OrdersTbl" [ref=s2.t1, A1:J1001, rows=1000, data=A2:J1001, header-range=A1:J1, header-source=table, via=table]
+  - col "Order ID" [ref=s2.t1.c1, A, text unique, data=A2:A1001, header-range=A1, header-source=table]
+  - col "Date" [ref=s2.t1.c2, B, date yyyy-mm-dd, 2026-01-01..2026-12-31, data=B2:B1001, header-range=B1, header-source=table]
+  - col "Region" [ref=s2.t1.c3, C, text, 4 distinct: West|East|South|North, data=C2:C1001, header-range=C1, header-source=table]
+  - col "Rep" [ref=s2.t1.c4, D, text, 6 distinct: Dee|Chen|Bo…, data=D2:D1001, header-range=D1, header-source=table]
+  - col "Product" [ref=s2.t1.c5, E, text, 5 distinct: Gizmo|Gadget|Widget|Doohickey|Sprocket, data=E2:E1001, header-range=E1, header-source=table]
+  - col "Qty" [ref=s2.t1.c6, F, number, 1..40, data=F2:F1001, header-range=F1, header-source=table]
+  - col "Unit Price" [ref=s2.t1.c7, G, number #,##0.00, 3.02..119.99, data=G2:G1001, header-range=G1, header-source=table]
+  - col "Amount" [ref=s2.t1.c8, H, number #,##0.00, 10.08..4,632.80, f=F{r}*G{r} ×1000, cf="cellIs gt 3000", data=H2:H1001, header-range=H1, header-source=table]
+  - col "Tax" [ref=s2.t1.c9, I, number #,##0.00, 0.81..370.62, f=H{r}*TaxRate ×1000, data=I2:I1001, header-range=I1, header-source=table]
+  - col "Status" [ref=s2.t1.c10, J, text, 3 distinct: shipped|open|returned, dv="list: open,shipped,returned", data=J2:J1001, header-range=J1, header-source=table]
+  - obj table [ref=obj:table/uni2rId1, A1:J1001, OrdersTbl]
+  - obj cf [ref=obj:cf/b64_WyJ1bmkyIiwicnVzdC1jZi0wIl0, H2:H1001, "cellIs gt 3000"]
+  - obj dv [ref=obj:dv/b64_WyJ1bmkyIiwicnVzdC1kdi0wIl0, J2:J1001, "list: open,shipped,returned"]
+</pre>
+</div>
+      <p class="note">A1（Lens 在 CLI 进程）输出相同，耗时：outline --at s2.t1 1521 ms</p></div>
+  </div>
+</section>
+<section>
+  <h2>T3 找出所有 returned 订单 <small>sales-1000</small></h2>
+  <div class="obs">find 无需写脚本，命中带显示值并给出续读命令；它也命中了 Summary!H4 的 'Returned'（不区分大小写），所以共 61 处，脚本只扫了 Orders 得到 60 处。</div>
+  <div class="cols">
+    <div><h3>接入前</h3>
+<div class="card before">
+  <div class="meta"><b>execute 扫描脚本</b></div>
+  <code class="cmd">uvw execute --unit $U --worktree $W --script /tmp/sheet-lens-proto/scripts/exec/orders-find.js</code>
+  <div class="nums"><span>输出 <b>266</b> tokens</span><span>脚本 <b>96</b> tokens</span><span>625 字符</span><span>1391 ms <small>(1364–1430)</small></span></div>
+
+  <details><summary>Agent 需要写的脚本</summary><pre>const values = workbook.getSheetByName("Orders").getRange("A1:J1001").getValues();
+const hits = [];
+values.forEach((row, r) =&gt; row.forEach((x, c) =&gt; { if (String(x).toLowerCase().includes("returned")) hits.push(String.fromCharCode(65 + c) + (r + 1)); }));
+return { total: hits.length, first: hits.slice(0, 50) };
+</pre></details>
+  <pre>{
+  "total": 60,
+  "first": [
+    "J18",
+    "J28",
+    "J31",
+    "J39",
+    "J69",
+    "J72",
+    "J76",
+    "J83",
+    "J88",
+    "J89",
+    "J107",
+    "J127",
+    "J133",
+    "J135",
+    "J139",
+    "J155",
+    "J164",
+    "J179",
+    "J181",
+    "J222",
+    "J223",
+    "J241",
+    "J283",
+    "J311",
+    "J324",
+    "J358",
+    "J365",
+    "J428",
+    "J432",
+    "J457",
+    "J474",
+    "J505",
+    "J518",
+    "J577",
+    "J579",
+    "J594",
+    "J596",
+    "J597",
+    "J599",
+    "J602",
+    "J660",
+    "J699",
+    "J703",
+    "J705",
+    "J710",
+    "J743",
+    "J763",
+    "J765",
+    "J766",
+    "J804"
+  ]
+}
+</pre>
+</div></div>
+    <div><h3>接入后</h3>
+<div class="card after">
+  <div class="meta"><b>find returned</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw find --unit $U --worktree $W returned</code>
+  <div class="nums"><span>输出 <b>836</b> tokens</span><span>2,253 字符</span><span>1391 ms <small>(1357–1883)</small></span></div>
+  <div class="phases">resolve=13 · find=28 · render=0 · unitDataBytes=964321 · cache=hit</div>
+
+  <pre>unit 9505ab85-0096-44a2-9350-88a981686a27 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=1]
+find "returned" [in=values, cells=61]
+ref	display	formula	terms
+Orders!J18	"returned"	""	["returned"]
+Orders!J28	"returned"	""	["returned"]
+Orders!J31	"returned"	""	["returned"]
+Orders!J39	"returned"	""	["returned"]
+Orders!J69	"returned"	""	["returned"]
+Orders!J72	"returned"	""	["returned"]
+Orders!J76	"returned"	""	["returned"]
+Orders!J83	"returned"	""	["returned"]
+Orders!J88	"returned"	""	["returned"]
+Orders!J89	"returned"	""	["returned"]
+Orders!J107	"returned"	""	["returned"]
+Orders!J127	"returned"	""	["returned"]
+Orders!J133	"returned"	""	["returned"]
+Orders!J135	"returned"	""	["returned"]
+Orders!J139	"returned"	""	["returned"]
+Orders!J155	"returned"	""	["returned"]
+Orders!J164	"returned"	""	["returned"]
+Orders!J179	"returned"	""	["returned"]
+Orders!J181	"returned"	""	["returned"]
+Orders!J222	"returned"	""	["returned"]
+Orders!J223	"returned"	""	["returned"]
+Orders!J241	"returned"	""	["returned"]
+Orders!J283	"returned"	""	["returned"]
+Orders!J311	"returned"	""	["returned"]
+Orders!J324	"returned"	""	["returned"]
+Orders!J358	"returned"	""	["returned"]
+Orders!J365	"returned"	""	["returned"]
+Orders!J428	"returned"	""	["returned"]
+Orders!J432	"returned"	""	["returned"]
+Orders!J457	"returned"	""	["returned"]
+Orders!J474	"returned"	""	["returned"]
+Orders!J505	"returned"	""	["returned"]
+Orders!J518	"returned"	""	["returned"]
+Orders!J577	"returned"	""	["returned"]
+Orders!J579	"returned"	""	["returned"]
+Orders!J594	"returned"	""	["returned"]
+Orders!J596	"returned"	""	["returned"]
+Orders!J597	"returned"	""	["returned"]
+Orders!J599	"returned"	""	["returned"]
+Orders!J602	"returned"	""	["returned"]
+Orders!J660	"returned"	""	["returned"]
+Orders!J699	"returned"	""	["returned"]
+Orders!J703	"returned"	""	["returned"]
+Orders!J705	"returned"	""	["returned"]
+Orders!J710	"returned"	""	["returned"]
+Orders!J743	"returned"	""	["returned"]
+Orders!J763	"returned"	""	["returned"]
+Orders!J765	"returned"	""	["returned"]
+Orders!J766	"returned"	""	["returned"]
+Orders!J804	"returned"	""	["returned"]
+… 11 more matches: uvw find --unit 9505ab85-0096-44a2-9350-88a981686a27 --worktree f5885296-c263-42ef-b90a-535d086bd78e "returned" --from 'Orders!J822'
+</pre>
+</div>
+      <p class="note">A1（Lens 在 CLI 进程）输出相同，耗时：find returned 1542 ms</p></div>
+  </div>
+</section>
+<section>
+  <h2>T4 读 Summary 的汇总块 <small>sales-1000</small></h2>
+  <div class="obs">同一块数据，read 的 A1 网格比 inspect --json 少约一半 token，公式和显示值同格给出。</div>
+  <div class="cols">
+    <div><h3>接入前</h3>
+<div class="card before">
+  <div class="meta"><b>inspect range A3:I8 --json</b></div>
+  <code class="cmd">uvw inspect range A3:I8 --worksheet name:Summary --json --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>2,923</b> tokens</span><span>8,624 字符</span><span>1443 ms <small>(1417–1515)</small></span></div>
+
+
+  <pre>{
+  "kind": "worksheet-range",
+  "unitId": "9505ab85-0096-44a2-9350-88a981686a27",
+  "ranges": [
+    {
+      "worksheet": {
+        "id": "uni3",
+        "index": 2,
+        "name": "Summary"
+      },
+      "requestedRange": "A3:I8",
+      "resolvedRange": "A3:I8",
+      "clipped": false,
+      "cellData": [
+        [
+          {
+            "v": "Region",
+            "t": 1
+          },
+          {
+            "v": "Q1",
+            "t": 1,
+            "s": "R10"
+          },
+          {
+            "v": "Q2",
+            "t": 1,
+            "s": "R10"
+          },
+          {
+            "v": "Q3",
+            "t": 1,
+            "s": "R10"
+          },
+          {
+            "v": "Q4",
+            "t": 1,
+            "s": "R10"
+          },
+          {
+            "v": "Total",
+            "t": 1,
+            "s": "R10"
+          },
+          null,
+          {
+            "v": "Orders",
+            "t": 1
+          },
+          {
+            "v": "1000",
+            "t": 2,
+            "f": "=COUNTA(Orders!A2:A1001)",
+            "ft": 0
+          }
+        ],
+        [
+          {
+            "v": "East",
+            "t": 1
+          },
+          {
+            "v": "80187.68",
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,1,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,4,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 90606.67,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,4,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,7,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 63435.88,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,7,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,10,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 67870.05,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,10,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2027,1,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": "302100.28",
+            "t": 2,
+            "f": "=SUM(B4:E4)",
+            "ft": 0,
+            "s": "R11"
+          },
+          null,
+          {
+            "v": "Returned",
+            "t": 1
+          },
+          {
+            "v": "60",
+            "t": 2,
+            "f": "=COUNTIF(Orders!J:J,\"returned\")",
+            "ft": 0
+          }
+        ],
+        [
+          {
+            "v": "West",
+            "t": 1
+          },
+          {
+            "v": 57717.83,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,1,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,4,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 86801.16,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,4,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,7,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 75817.18,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,7,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,10,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 114846.3,
+            "t": 2,
+            "f": "=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,10,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2027,1,1))",
+            "ft": 0,
+            "s": "R11"
+          },
+          {
+            "v": 335182.47,
+            "t": 2,
+            "f": "=SUM(B5:E5)",
+            "ft": 0,
+            "s": "R11"
+          },
+          null,
+          {
+            "v": "Avg order",
+            "t": 1
+          },
+          {
+            "v": "1168.49637",
+            "t": 2,
+            "f": "=AVERAGE(Orders!H:H)",
+            "ft": 0,
+            "s": "R8"
+          }
+        ],
+
+<span class="cut">… 其余 4,624 字符未显示（共 8,624 字符）</span></pre>
+</div></div>
+    <div><h3>接入后</h3>
+<div class="card after">
+  <div class="meta"><b>read Summary!A3:I8</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw read --unit $U --worktree $W Summary!A3:I8</code>
+  <div class="nums"><span>输出 <b>1,517</b> tokens</span><span>3,164 字符</span><span>1358 ms <small>(1345–1441)</small></span></div>
+  <div class="phases">resolve=21 · read=0 · render=0 · unitDataBytes=964321 · cache=hit</div>
+
+  <pre>unit 9505ab85-0096-44a2-9350-88a981686a27 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=1]
+read Summary!A3:I8 [ref=s3, both]
+row	A	B	C	D	E	F	G	H	I
+3	"Region"	"Q1"	"Q2"	"Q3"	"Q4"	"Total"	""	"Orders"	{"display":"1000","formula":"=COUNTA(Orders!A2:A1001)"}
+4	"East"	{"display":"80,188","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,1,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,4,1))"}	{"display":"90,607","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,4,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,7,1))"}	{"display":"63,436","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,7,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,10,1))"}	{"display":"67,870","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A4,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,10,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2027,1,1))"}	{"display":"302,100","formula":"=SUM(B4:E4)"}	""	"Returned"	{"display":"60","formula":"=COUNTIF(Orders!J:J,\"returned\")"}
+5	"West"	{"display":"57,718","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,1,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,4,1))"}	{"display":"86,801","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,4,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,7,1))"}	{"display":"75,817","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,7,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,10,1))"}	{"display":"114,846","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A5,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,10,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2027,1,1))"}	{"display":"335,182","formula":"=SUM(B5:E5)"}	""	"Avg order"	{"display":"1,168.50","formula":"=AVERAGE(Orders!H:H)"}
+6	"North"	{"display":"72,117","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A6,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,1,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,4,1))"}	{"display":"47,212","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A6,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,4,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,7,1))"}	{"display":"75,632","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A6,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,7,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,10,1))"}	{"display":"67,580","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A6,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,10,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2027,1,1))"}	{"display":"262,540","formula":"=SUM(B6:E6)"}	""	""	""
+7	"South"	{"display":"58,713","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A7,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,1,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,4,1))"}	{"display":"71,217","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A7,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,4,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,7,1))"}	{"display":"84,046","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A7,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,7,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2026,10,1))"}	{"display":"54,698","formula":"=SUMIFS(Orders!$H:$H,Orders!$C:$C,$A7,Orders!$B:$B,\"&gt;=\"&amp;DATE(2026,10,1),Orders!$B:$B,\"&lt;\"&amp;DATE(2027,1,1))"}	{"display":"268,673","formula":"=SUM(B7:E7)"}	""	""	""
+8	"Total"	{"display":"268,735","formula":"=SUM(B4:B7)"}	{"display":"295,837","formula":"=SUM(C4:C7)"}	{"display":"298,930","formula":"=SUM(D4:D7)"}	{"display":"304,994","formula":"=SUM(E4:E7)"}	{"display":"1,168,496","formula":"=SUM(F4:F7)"}	""	""	""
+</pre>
+</div>
+      <p class="note">A1（Lens 在 CLI 进程）输出相同，耗时：read Summary!A3:I8 1433 ms</p></div>
+  </div>
+</section>
+<section>
+  <h2>T5 3 万行流水：结构与列 <small>ledger-30k</small></h2>
+  <div class="obs">3 万行流水：outline 两步共约 700 tokens 得到全部列语义；A1 每次要把 8.7 MB UnitData 搬到 CLI 进程（export 约 1.1 s）再建模（约 0.7 s），A2 缓存命中后只剩进程启动和 resolve。</div>
+  <div class="cols">
+    <div><h3>接入前</h3>
+<div class="card before">
+  <div class="meta"><b>inspect workbook</b></div>
+  <code class="cmd">uvw inspect workbook --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>134</b> tokens</span><span>305 字符</span><span>1706 ms <small>(1653–1801)</small></span></div>
+
+
+  <pre>workbook ledger-30k (58f64324-ea0b-4960-b6bc-ade9e1e059a9)
+worksheet [1] 8b7fb8d5-7e12-4bd8-a313-041de141f0a5 Ledger (30001x20)
+  values: A1:J30001
+  formulas: none
+  styles: B2:B30001, G2:H30001
+  merged: none
+  conditional formatting: 0
+  data validation: 0
+  drawings: 0 (charts 0, images 0, shapes 0)
+</pre>
+</div>
+<div class="card before">
+  <div class="meta"><b>inspect range 前 20 行（抽样）</b></div>
+  <code class="cmd">uvw inspect range A1:J21 --worksheet name:Ledger --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>652</b> tokens</span><span>1,227 字符</span><span>1642 ms <small>(1570–1798)</small></span></div>
+
+
+  <pre>Ledger!A1:J21
+"Txn ID"	"Date"	"Region"	"Account"	"Category"	"Qty"	"Unit Price"	"Amount"	… 2 columns omitted
+"T-1000001"	"2026-02-14"	"North"	"4000-Sales"	"Shipping"	"12"	"24.72"	"296.64"	… 2 columns omitted
+"T-1000002"	"2026-03-15"	"North"	"5000-COGS"	"Software"	"39"	"118.21"	"4,610.19"	… 2 columns omitted
+"T-1000003"	"2026-12-17"	"East"	"4200-Licenses"	"Support"	"17"	"92.98"	"1,580.66"	… 2 columns omitted
+"T-1000004"	"2026-09-18"	"East"	"4200-Licenses"	"Hardware"	"21"	"18.78"	"394.38"	… 2 columns omitted
+"T-1000005"	"2026-03-28"	"East"	"4000-Sales"	"Support"	"13"	"102.97"	"1,338.61"	… 2 columns omitted
+"T-1000006"	"2026-09-21"	"North"	"5000-COGS"	"Shipping"	"37"	"25.38"	"939.06"	… 2 columns omitted
+"T-1000007"	"2026-03-08"	"South"	"4000-Sales"	"Training"	"17"	"96.93"	"1,647.81"	… 2 columns omitted
+"T-1000008"	"2026-12-21"	"West"	"4000-Sales"	"Software"	"23"	"26.56"	"610.88"	… 2 columns omitted
+"T-1000009"	"2026-06-13"	"North"	"4000-Sales"	"Hardware"	"16"	"16.41"	"262.56"	… 2 columns omitted
+"T-1000010"	"2026-08-31"	"West"	"4200-Licenses"	"Support"	"27"	"78.66"	"2,123.82"	… 2 columns omitted
+"T-1000011"	"2026-02-16"	"South"	"4200-Licenses"	"Training"	"7"	"41.25"	"288.75"	… 2 columns omitted
+… 9 rows omitted
+</pre>
+</div>
+<div class="card before">
+  <div class="meta"><b>execute 统计脚本</b></div>
+  <code class="cmd">uvw execute --unit $U --worktree $W --script /tmp/sheet-lens-proto/scripts/exec/ledger-stats.js</code>
+  <div class="nums"><span>输出 <b>646</b> tokens</span><span>脚本 <b>128</b> tokens</span><span>1,810 字符</span><span>1667 ms <small>(1633–1694)</small></span></div>
+
+  <details><summary>Agent 需要写的脚本</summary><pre>const ws = workbook.getSheetByName("Ledger");
+const [header, ...rows] = ws.getRange("A1:J30001").getValues();
+return header.map((name, c) =&gt; {
+  const col = rows.map((r) =&gt; r[c]);
+  const nums = col.filter((x) =&gt; typeof x === "number");
+  const distinct = new Set(col);
+  return { name, distinct: distinct.size, sample: [...distinct].slice(0, 5), min: nums.length ? Math.min(...nums) : null, max: nums.length ? Math.max(...nums) : null };
+});
+</pre></details>
+  <pre>[
+  {
+    "name": "Txn ID",
+    "distinct": 30000,
+    "sample": [
+      "T-1000001",
+      "T-1000002",
+      "T-1000003",
+      "T-1000004",
+      "T-1000005"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Date",
+    "distinct": 365,
+    "sample": [
+      "2026-02-14",
+      "2026-03-15",
+      "2026-12-17",
+      "2026-09-18",
+      "2026-03-28"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Region",
+    "distinct": 4,
+    "sample": [
+      "North",
+      "East",
+      "South",
+      "West"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Account",
+    "distinct": 4,
+    "sample": [
+      "4000-Sales",
+      "5000-COGS",
+      "4200-Licenses",
+      "4100-Services"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Category",
+    "distinct": 5,
+    "sample": [
+      "Shipping",
+      "Software",
+      "Support",
+      "Hardware",
+      "Training"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Qty",
+    "distinct": 40,
+    "sample": [
+      12,
+      39,
+      17,
+      21,
+      13
+    ],
+    "min": 1,
+    "max": 40
+  },
+  {
+    "name": "Unit Price",
+    "distinct": 7123,
+    "sample": [
+      "24.72",
+      "118.21",
+      "92.98",
+      "18.78",
+      "102.97"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Amount",
+    "distinct": 10516,
+    "sample": [
+      "296.64",
+      "4,610.19",
+      "1,580.66",
+      "394.38",
+      "1,338.61"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Currency",
+    "distinct": 3,
+    "sample": [
+      "CNY",
+      "USD",
+      "EUR"
+    ],
+    "min": null,
+    "max": null
+  },
+  {
+    "name": "Status",
+    "distinct": 4,
+    "sample": [
+      "disputed",
+      "posted",
+      "pending",
+      "void"
+    ],
+    "min": null,
+    "max": null
+  }
+]
+</pre>
+</div></div>
+    <div><h3>接入后</h3>
+<div class="card after">
+  <div class="meta"><b>outline</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw outline --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>110</b> tokens</span><span>234 字符</span><span>1346 ms <small>(1340–1897)</small></span></div>
+  <div class="phases">resolve=19 · render=0 · unitDataBytes=8694174 · cache=hit</div>
+
+  <pre>unit 58f64324-ea0b-4960-b6bc-ade9e1e059a9 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=5]
+- workbook "ledger-30k" [sheets=1]
+  - sheet "Ledger" [ref=s1, used=A1:J30001, frozen=1r]
+    - table [ref=s1.t1, A1:J30001, rows=30000]
+</pre>
+</div>
+<div class="card after">
+  <div class="meta"><b>outline --at s1.t1</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw outline --unit $U --worktree $W --at s1.t1</code>
+  <div class="nums"><span>输出 <b>598</b> tokens</span><span>1,509 字符</span><span>1428 ms <small>(1329–1790)</small></span></div>
+  <div class="phases">resolve=17 · render=0 · unitDataBytes=8694174 · cache=hit</div>
+
+  <pre>unit 58f64324-ea0b-4960-b6bc-ade9e1e059a9 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=5]
+- table [ref=s1.t1, A1:J30001, rows=30000, data=A2:J30001, header-range=A1:J1, header-source=inferred]
+  - col "Txn ID" [ref=s1.t1.c1, A, text unique, data=A2:A30001, header-range=A1, header-source=inferred]
+  - col "Date" [ref=s1.t1.c2, B, date yyyy-mm-dd, 2026-01-01..2026-12-31, data=B2:B30001, header-range=B1, header-source=inferred]
+  - col "Region" [ref=s1.t1.c3, C, text, 4 distinct: East|West|South|North, data=C2:C30001, header-range=C1, header-source=inferred]
+  - col "Account" [ref=s1.t1.c4, D, text, 4 distinct: 4000-Sales|4100-Services|5000-COGS|4200-Licenses, data=D2:D30001, header-range=D1, header-source=inferred]
+  - col "Category" [ref=s1.t1.c5, E, text, 5 distinct: Software|Support|Hardware|Shipping|Training, data=E2:E30001, header-range=E1, header-source=inferred]
+  - col "Qty" [ref=s1.t1.c6, F, number, 1..40, data=F2:F30001, header-range=F1, header-source=inferred]
+  - col "Unit Price" [ref=s1.t1.c7, G, number #,##0.00, 3.00..120.00, data=G2:G30001, header-range=G1, header-source=inferred]
+  - col "Amount" [ref=s1.t1.c8, H, number #,##0.00, 3.29..4,796.00, data=H2:H30001, header-range=H1, header-source=inferred]
+  - col "Currency" [ref=s1.t1.c9, I, text, 3 distinct: USD|EUR|CNY, data=I2:I30001, header-range=I1, header-source=inferred]
+  - col "Status" [ref=s1.t1.c10, J, text, 4 distinct: posted|void|pending|disputed, data=J2:J30001, header-range=J1, header-source=inferred]
+</pre>
+</div>
+      <p class="note">A1（Lens 在 CLI 进程）输出相同，耗时：outline 3681 ms，outline --at s1.t1 3864 ms</p></div>
+  </div>
+</section>
+<section>
+  <h2>T6 5 万行流水（超过 50 万格） <small>ledger-50k</small></h2>
+  <div class="obs">5 万行 × 10 列 = 500,010 格，超过 Lens 的 50 万格阈值，只输出一个 block，不做区域和列分析。这是 Lens 本身的上限。</div>
+  <div class="cols">
+    <div><h3>接入前</h3>
+<div class="card before">
+  <div class="meta"><b>inspect workbook</b></div>
+  <code class="cmd">uvw inspect workbook --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>130</b> tokens</span><span>305 字符</span><span>1970 ms <small>(1896–2122)</small></span></div>
+
+
+  <pre>workbook ledger-50k (05af3e12-ba04-40a0-9c92-fbe954a4d339)
+worksheet [1] 310ad42a-69d6-4585-a1a3-cd485e211e71 Ledger (50001x20)
+  values: A1:J50001
+  formulas: none
+  styles: B2:B50001, G2:H50001
+  merged: none
+  conditional formatting: 0
+  data validation: 0
+  drawings: 0 (charts 0, images 0, shapes 0)
+</pre>
+</div></div>
+    <div><h3>接入后</h3>
+<div class="card after">
+  <div class="meta"><b>outline</b> <span class="tag">A2 daemon+缓存</span></div>
+  <code class="cmd">uvw outline --unit $U --worktree $W</code>
+  <div class="nums"><span>输出 <b>104</b> tokens</span><span>222 字符</span><span>1356 ms <small>(1312–1370)</small></span></div>
+  <div class="phases">resolve=17 · render=0 · unitDataBytes=14496110 · cache=hit</div>
+
+  <pre>unit 05af3e12-ba04-40a0-9c92-fbe954a4d339 [worktree f5885296-c263-42ef-b90a-535d086bd78e, rev=6]
+- workbook "ledger-50k" [sheets=1]
+  - sheet "Ledger" [ref=s1, used=A1:J50001, frozen=1r]
+    - block [ref=s1.b1, A1:J50001]
+</pre>
+</div>
+      <p class="note">A1（Lens 在 CLI 进程）输出相同，耗时：outline 5709 ms</p></div>
+  </div>
+</section>
