@@ -127,7 +127,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const second = (await test.finished(started.id))!;
     expect(second.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([
       { type: "text", text: "/weekly-report second" },
-      { type: "text", text: '\n\n<system-reminder>\nThe user invoked weekly-report again. Its instructions are already loaded above in this conversation.\n</system-reminder>' },
+      { type: "text", text: '\n\n<system-reminder>\nThe user invoked weekly-report again. Its instructions are already loaded above in this conversation.\nARGUMENTS: second\n</system-reminder>' },
     ]);
     expect(second.messages.slice(0, first.messages.length)).toEqual(first.messages);
     content = "New report $ARGUMENTS";
@@ -214,6 +214,64 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(done.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
       toolName: "skills_read", state: "output-denied", approval: expect.objectContaining({ reason: 'The skill "weekly-report" can only be invoked by the user with /weekly-report.' }),
     }));
+  });
+
+  it("keeps user-only instructions denied after queued steering and approval resume", async () => {
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const catalog = { ...personalSkills, skills: personalSkills.skills.map((skill) => ({ ...skill, modelInvocable: false })) };
+    const skills = vi.fn((args: unknown) => ({ content: [], structuredContent: z.object({ name: z.string() }).safeParse(args).success
+      ? { content: "User-only instructions" } : catalog }));
+    const test = await setup({ publish: true, skills, model: async (index) => {
+      if (index === 1) { entered.resolve(); await release.promise; return modelStream(); }
+      if (index === 2) return modelStream("pr_create");
+      if (index === 3) return modelStream("skills_read", false, undefined, { name: "weekly-report" });
+      return modelStream();
+    } });
+    const started = await test.runner.start(test.input);
+    await entered.promise;
+    await test.runner.send(started.id, "Follow up");
+    release.resolve();
+    const paused = (await test.finished(started.id))!;
+    const users = paused.messages.filter((message) => message.role === "user");
+    expect(users).toHaveLength(2);
+    expect(messageSkills(users[1]?.metadata)).toBeNull();
+    await test.runner.decide(started.id, pendingApprovals(paused)[0]!.approvalId, true);
+    const done = (await test.finished(started.id))!;
+    expect(done.status).toBe("idle");
+    expect(done.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
+      toolName: "skills_read", state: "output-denied",
+    }));
+    expect(skills.mock.calls).toEqual([[{}]]);
+  });
+
+  it.each(["token", "tool"] as const)("bounds menu lookup including a hung %s and releases its resources", async (hang) => {
+    const release = deferred<Response>();
+    const entered = deferred<void>();
+    const test = await setup();
+    const request: typeof fetch = async (input, init) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (hang === "token" && url === "/api/auth/agent-token" || hang === "tool" && String(init?.body).includes('"tools/call"')) {
+        entered.resolve(); return release.promise;
+      }
+      return test.deps.fetch(input, init);
+    };
+    const token = createMcpTokenSource({ grant: "ask", fetch: request });
+    const dispose = vi.spyOn(token, "dispose");
+    const runner = createAgentRunner({ ...test.deps, fetch: request, createTokenSource: () => token });
+    vi.useFakeTimers();
+    try {
+      const outcome = runner.skills({ kind: "global" }).then(() => "resolved", () => "rejected");
+      await entered.promise;
+      await vi.advanceTimersByTimeAsync(15_000);
+      expect(await Promise.race([outcome, Promise.resolve("pending")])).toBe("rejected");
+      expect(dispose).toHaveBeenCalled();
+      if (hang === "tool") expect(test.requests.some((request) => request.method === "DELETE")).toBe(true);
+    } finally {
+      release.resolve(Response.json({ token: "uvw_at_late", expiresAt: Date.now() + 3_600_000 }));
+      await vi.advanceTimersByTimeAsync(0);
+      vi.useRealTimers();
+    }
   });
 
   it("loads menu catalogs with an ask token, drops builtins, closes the client and rejects errors", async () => {

@@ -10,10 +10,12 @@ import { useEffect, useRef } from "react";
 import type { AgentReference } from "../agent.types";
 import { $createReferenceNode, $serializeComposer, ReferenceNode } from "./reference-node";
 import { referenceTrigger } from "./references";
+import type { useSkillMenu } from "./skill-menu";
 
 export type ComposerEditorHandle = { editor: LexicalEditor; selection: RangeSelection | null };
 type Props = {
   readonly handle: { current: ComposerEditorHandle | null }; readonly label: string; readonly busy: boolean;
+  readonly menuInput?: ReturnType<typeof useSkillMenu>["inputProps"];
   readonly onMenuKey?: (event: KeyboardEvent) => boolean;
   readonly starter?: { readonly text: string } | null; readonly focus?: boolean;
   readonly onChange: (content: ReturnType<typeof $serializeComposer>) => void;
@@ -35,7 +37,7 @@ export function insertComposerReference(handle: ComposerEditorHandle, reference:
 export function ComposerEditor(props: Props) {
   return <LexicalComposer initialConfig={{ namespace: "agent-composer", nodes: [ReferenceNode], onError: (error) => { throw error; } }}>
     <div className="agent-editor-container"><PlainTextPlugin ErrorBoundary={LexicalErrorBoundary}
-      contentEditable={<ContentEditable id="agent-composer" className="agent-editor" aria-label={props.label} aria-multiline="true" onFocus={props.onFocus} />}
+      contentEditable={<ContentEditable {...props.menuInput} id="agent-composer" className="agent-editor" aria-label={props.label} aria-multiline="true" onFocus={props.onFocus} />}
       placeholder={<span className="agent-editor-placeholder">{props.label}</span>} /></div>
     <HistoryPlugin />
     <EditorBehavior {...props} />

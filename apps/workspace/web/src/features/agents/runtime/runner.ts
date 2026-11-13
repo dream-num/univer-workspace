@@ -207,8 +207,9 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
           if (persistenceError) throw persistenceError;
         }
       }
-      const latestUser = run.session.messages.filter((item) => item.role === "user").at(-1);
-      const userOnlySkills = new Set(messageSkills(latestUser?.metadata)?.skills.filter((item) => !item.modelInvocable).map((item) => item.name));
+      const latestCatalog = run.session.messages.filter((item) => item.role === "user")
+        .map((item) => messageSkills(item.metadata)).reverse().find((item) => item !== null);
+      const userOnlySkills = new Set(latestCatalog?.skills.filter((item) => !item.modelInvocable).map((item) => item.name));
       const gated = gateTools(withStructuredContent(await client.tools()), run.session.mode, async (name, input, signal) => {
         const args = z.record(z.string(), z.unknown()).parse(input);
         const publishToken = deps.createTokenSource("publish");
@@ -357,15 +358,39 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
   return {
     async skills(scope: AgentScope): Promise<SkillCatalog> {
       const token = deps.createTokenSource("ask");
+      const controller = new AbortController();
       let client: Awaited<ReturnType<typeof createMCPClient>> | undefined;
-      try {
-        client = await createMCPClient({ transport: { type: "http", url: mcpUrl.href,
-          fetch: authenticatedFetch(token, AbortSignal.timeout(15_000)) } });
-        const result = await client.callTool({ name: "skills_read", arguments: scope.kind === "repository" ? { repo: scope.spaceId } : {} });
-        if (result.isError) throw new Error("Failed to load skills.");
-        return gatewaySkillCatalogSchema.parse(result.structuredContent);
-      } finally {
-        try { await client?.close(); } finally { await token.dispose(); }
+      let cleanup: Promise<void> | undefined;
+      let expired = false;
+      function dispose() {
+        return cleanup ??= (async () => {
+          try { await client?.close(); }
+          finally { controller.abort(); await token.dispose(); }
+        })();
+      }
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      const deadline = new Promise<never>((_, reject) => {
+        timeout = setTimeout(() => {
+          const error = new Error("Skill lookup timed out after 15 seconds.");
+          expired = true;
+          reject(error);
+        }, 15_000);
+      });
+      const lookup = (async () => {
+        try {
+          client = await createMCPClient({ transport: { type: "http", url: mcpUrl.href,
+            fetch: authenticatedFetch(token, controller.signal) } });
+          if (expired) { await client.close(); throw new Error("Skill lookup timed out after 15 seconds."); }
+          const result = await client.callTool({ name: "skills_read", arguments: scope.kind === "repository" ? { repo: scope.spaceId } : {} });
+          if (result.isError) throw new Error("Failed to load skills.");
+          return gatewaySkillCatalogSchema.parse(result.structuredContent);
+        } finally { await dispose(); }
+      })();
+      try { return await Promise.race([lookup, deadline]); }
+      finally {
+        clearTimeout(timeout);
+        // Token disposal can wait on a hung issuer, so cleanup must not extend the deadline.
+        void dispose().catch(() => undefined);
       }
     },
     async start(input: StartAgentInput): Promise<AgentSession> {

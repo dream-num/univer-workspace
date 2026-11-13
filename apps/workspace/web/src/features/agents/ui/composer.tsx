@@ -69,7 +69,7 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
       <div className="agent-composer-box">
         {picker ? <AgentReferencePicker spaceId={spaceId} onChoose={chooseReference} onClose={closePicker} /> : null}
         <SkillMenu menu={skillMenu} />
-        <ComposerEditor onMenuKey={skillMenu.onKeyDown} handle={input} label={m.prompt} busy={busy} {...(starter !== undefined ? { starter } : {})} {...(focus !== undefined ? { focus } : {})}
+        <ComposerEditor menuInput={skillMenu.inputProps} onMenuKey={skillMenu.onKeyDown} handle={input} label={m.prompt} busy={busy} {...(starter !== undefined ? { starter } : {})} {...(focus !== undefined ? { focus } : {})}
           onChange={setContent} onTrigger={(trigger) => setPicker({ trigger })} onSend={() => void send()}
           onFocus={() => { void client.prewarm().catch((cause: unknown) => setError(String(cause))); }} />
         <div className="agent-composer-controls">

@@ -31,8 +31,10 @@ let resize: () => void;
 let contentHeight: number;
 const disconnect = vi.fn();
 const observe = vi.fn();
+const scrollIntoView = vi.fn();
 beforeEach(() => {
   vi.clearAllMocks(); current = session();
+  Object.defineProperty(Element.prototype, "scrollIntoView", { configurable: true, value: scrollIntoView });
   runner.skills.mockResolvedValue({ repository: "loaded", diagnostics: [], skills: [
     { name: "weekly-report", source: "repository", description: "Write a weekly report", argumentHint: "[week]", userInvocable: true, modelInvocable: false },
     { name: "weekly-review", source: "user", description: "Review a week", userInvocable: true, modelInvocable: true },
@@ -308,17 +310,21 @@ it("completes from the shared menu in the real Lexical composer before its send 
     const [starter, setStarter] = useState({ text: "/" });
     const menu = useSkillMenu(text, { kind: "global" }, false, (value) => setStarter({ text: value }));
     return createElement("div", null, createElement(SkillMenu, { menu }), createElement(ComposerEditor, {
-      handle, label: "Prompt", busy: false, starter, onSend, onMenuKey: menu.onKeyDown,
+      handle, label: "Prompt", busy: false, starter, onSend, onMenuKey: menu.onKeyDown, menuInput: menu.inputProps,
       onChange: (content) => setText(content.text), onTrigger: vi.fn(), onFocus: vi.fn(),
     }));
   }
   await act(async () => root.render(createElement(LanguageProvider, null, createElement(Composer))));
   const editor = handle.current!.editor;
+  const input = editor.getRootElement()!;
+  assertCombobox(input);
   expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
   await act(async () => { editor.dispatchCommand(KEY_DOWN_COMMAND, new KeyboardEvent("keydown", { key: "ArrowDown" })); });
   await act(async () => { editor.dispatchCommand(KEY_ENTER_COMMAND, new KeyboardEvent("keydown", { key: "Enter" })); });
   expect(editor.getEditorState().read(() => $getRoot().getTextContent())).toBe("/weekly-review ");
   expect(onSend).not.toHaveBeenCalled();
+  expect(input.getAttribute("aria-expanded")).toBe("false");
+  expect(input.hasAttribute("aria-activedescendant")).toBe(false);
   expect(container.querySelector('[role="listbox"]')).toBeNull();
 });
 
@@ -351,4 +357,72 @@ it("caches menu catalogs separately for global scope and each repository", async
     [{ kind: "global" }], [{ kind: "repository", spaceId: "repo-a", baseWorktreeId: null }],
     [{ kind: "repository", spaceId: "repo-b", baseWorktreeId: null }],
   ]);
+});
+
+function assertCombobox(input: HTMLElement) {
+  const list = container.querySelector('[role="listbox"]')!;
+  const selected = list.querySelector('[aria-selected="true"]')!;
+  expect(input.getAttribute("role")).toBe("combobox");
+  expect(input.getAttribute("aria-expanded")).toBe("true");
+  expect(input.getAttribute("aria-autocomplete")).toBe("list");
+  expect(list.id).not.toBe("");
+  expect(input.getAttribute("aria-controls")).toBe(list.id);
+  expect(selected.id).not.toBe("");
+  expect(input.getAttribute("aria-activedescendant")).toBe(selected.id);
+  const options = [...list.querySelectorAll<HTMLElement>('[role="option"]')];
+  expect(new Set(options.map((option) => option.id)).size).toBe(options.length);
+  expect(options.every((option) => option.tabIndex === -1)).toBe(true);
+}
+
+it("connects the follow-up combobox to stable options and scrolls the selection", async () => {
+  await renderSession();
+  expect(textarea().getAttribute("aria-expanded")).toBe("false");
+  expect(textarea().hasAttribute("aria-activedescendant")).toBe(false);
+  await type("/week");
+  assertCombobox(textarea());
+  const ids = [...container.querySelectorAll('[role="option"]')].map((option) => option.id);
+  scrollIntoView.mockClear();
+  await key(textarea(), { key: "ArrowDown" });
+  assertCombobox(textarea());
+  expect(textarea().getAttribute("aria-activedescendant")).toBe(ids[1]);
+  expect([...container.querySelectorAll('[role="option"]')].map((option) => option.id)).toEqual(ids);
+  expect(scrollIntoView).toHaveBeenCalledExactlyOnceWith({ block: "nearest" });
+  expect(scrollIntoView.mock.contexts[0]).toBe(container.querySelector('[aria-selected="true"]'));
+  await key(textarea(), { key: "Escape" });
+  expect(textarea().getAttribute("aria-expanded")).toBe("false");
+  expect(textarea().hasAttribute("aria-activedescendant")).toBe(false);
+});
+
+it("retries failed lookups on the next open and caches the successful result", async () => {
+  runner.skills.mockRejectedValueOnce(new Error("Temporary failure"));
+  await renderSession(); await type("/week");
+  expect(container.querySelector('[role="listbox"]')).toBeNull();
+  await type(""); await type("/week");
+  expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+  await type(""); await type("/week");
+  expect(runner.skills).toHaveBeenCalledTimes(2);
+});
+
+it.each(["shiftKey", "ctrlKey", "metaKey", "altKey"] as const)("passes all menu keys through untouched with %s", async (modifier) => {
+  function Menu() {
+    const menu = useSkillMenu("/week", { kind: "global" }, false, vi.fn());
+    return createElement("div", null, createElement(SkillMenu, { menu }),
+      createElement("textarea", { onKeyDown: (event) => menu.onKeyDown(event.nativeEvent) }));
+  }
+  await act(async () => root.render(createElement(LanguageProvider, null, createElement(Menu))));
+  for (const name of ["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"]) {
+    expect((await key(textarea(), { key: name, [modifier]: true })).defaultPrevented).toBe(false);
+    expect(container.querySelectorAll('[role="option"]')).toHaveLength(2);
+    expect(container.querySelector('[role="option"]')?.getAttribute("aria-selected")).toBe("true");
+  }
+});
+
+it("leaves Shift+Tab and Shift+Enter native and Ctrl+J inserts a newline with the menu open", async () => {
+  await renderSession(); await type("/week");
+  for (const name of ["Tab", "Enter"]) expect((await key(textarea(), { key: name, shiftKey: true })).defaultPrevented).toBe(false);
+  expect(textarea().value).toBe("/week");
+  textarea().setSelectionRange(5, 5);
+  await key(textarea(), { key: "j", ctrlKey: true });
+  expect(textarea().value).toBe("/week\n");
+  expect(runner.send).not.toHaveBeenCalled();
 });

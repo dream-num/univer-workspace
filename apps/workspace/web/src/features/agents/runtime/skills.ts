@@ -69,7 +69,7 @@ export async function skillInvocation(message: UIMessage, catalog: SkillCatalog,
     `\n\n${SYSTEM_REMINDER_START}`,
     repeated ? `The user invoked ${skill.name} again. Its instructions are already loaded above in this conversation.`
       : `The user invoked the ${skill.source} skill "${skill.name}" with /${skill.name}. Follow these instructions for this request.`,
-    ...(repeated ? [] : [escape(rendered), ...(body.resources ?? []).map((resource) => escape(resource.readCommand))]),
+    ...(repeated ? (args ? [escape(`ARGUMENTS: ${args}`)] : []) : [escape(rendered), ...(body.resources ?? []).map((resource) => escape(resource.readCommand))]),
     "</system-reminder>",
   ].join("\n") } };
 }

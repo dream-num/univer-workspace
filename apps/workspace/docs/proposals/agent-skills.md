@@ -1,6 +1,6 @@
 # Workspace Agents 的 Skill 机制（初期设计）
 
-状态：设计已对齐，未实现。2026-11-12 确认了「已确认的决定」中的 6 项。范围是浏览器 Workspace Agents
+状态：SK1 至 SK3 已实现 gateway 发现、目录提醒与右侧栏、`/name` 显式调用。2026-11-12 确认了「已确认的决定」中的 6 项。范围是浏览器 Workspace Agents
 （`apps/workspace/web/src/features/agents`）和它依赖的 MCP gateway（`apps/mcp`）。
 
 ## 目标
@@ -216,8 +216,9 @@ Read a skill with skills_read {"name": "<name>", "repo": "<spaceId>"} before usi
 模型调用 `skills_read {name, repo}`，拿到正文后照做。模型读到的是当前 trunk 上的内容。如果 skill
 在目录下发之后被删除，工具会返回错误，模型按普通工具错误处理。
 
-`disable-model-invocation: true` 的 skill 不进目录提醒。模型如果仍然用这个名字调用 `skills_read`，
-浏览器在 `gateTools` 这一层拒绝，与 Claude Code 拦截这类调用的行为一致。这条限制只在浏览器端执行，
+`disable-model-invocation: true` 的 skill 不进目录提醒。模型如果仍然用这个名字调用 `skills_read` 且没有 `resource`，
+浏览器在 `gateTools` 这一层拒绝，包括普通读取和 `full` 读取。带 `resource` 的附属文件读取允许通过，
+供模型按用户显式调用提醒中的读取指令使用。这条限制只在浏览器端执行，
 外部 MCP 客户端有自己的 skill 机制，gateway 不区分调用者。
 
 「已使用」从历史推导，不新增状态。来源有两个：模型的 `skills_read` 调用，以及用户的 `/` 调用。
@@ -255,7 +256,7 @@ Read a skill with skills_read {"name": "<name>", "repo": "<spaceId>"} before usi
    渲染成标签，右侧栏用它标记「已使用」。
 
 正文随历史保留，后续轮次不重新读取，与 Claude Code 一致。同一会话里再次调用同一个 skill 时，
-如果 `digest` 没变，只追加一句「该 skill 已加载」，不重复正文。内容变了就追加新的全文。
+如果 `digest` 没变，追加「该 skill 已加载」的短提醒；用户提供参数时也包含 `ARGUMENTS: <参数>`，不重复正文。内容变了就追加新的全文。
 这两条同样对齐 Claude Code。
 
 开头是 `/` 但不匹配任何 skill 时，按普通文本发送，因为用户可能就是在写一个路径。读取失败

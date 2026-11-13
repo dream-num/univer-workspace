@@ -10,7 +10,9 @@ const request: UIMessage = { id: "assistant", role: "assistant", parts: [
 describe("scope-based tool approval", () => {
   it.each([
     ["skills_read", { name: "manual", full: true, repo: "other" }, true],
-    ["skills_read", { name: "manual", resource: "guide.md" }, true],
+    ["skills_read", { name: "manual" }, true],
+    ["skills_read", { name: "manual", resource: "guide.md" }, false],
+    ["skills_read", { name: "manual", resource: "guide.md", full: true }, false],
     ["skills_read", { name: "automatic" }, false],
     ["skills_read", {}, false],
     ["inspect", { name: "manual" }, false],

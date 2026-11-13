@@ -14,7 +14,7 @@ skill 机制跨两个应用。gateway 拥有发现、校验、合并和读取。
 | skill 目录加载 | `apps/mcp/src/gateway/`（新文件，如 `custom-skills.ts`） | 在个人空间和作用域仓库里找 `.agents/skills`，校验 `SKILL.md`，合并，产出诊断，读取文本附属文件 | 内置 skill 的静态快照（仍由 `skill-catalog.ts` 负责） |
 | `skills_read` | `apps/mcp/src/gateway/tools/core/skills-read.ts` | 输入解析，三层名字解析，分页，`ToolResult.repo` 归属 | 模型何时调用 |
 | runner | `apps/workspace/web/src/features/agents/runtime/runner.ts` | 每次运行开始时比对目录、追加提醒、展开 `/name`、写会话元数据，以及给输入框用的 `skills(scope)` | skill 内容本身 |
-| 工具门禁 | `runtime/approvals.ts` 的 `gateTools` | 拒绝模型读取 `disable-model-invocation` 的 skill | 权限和 token scope |
+| 工具门禁 | `runtime/approvals.ts` 的 `gateTools` | 拒绝模型加载 `disable-model-invocation` 的 skill 指令，允许读取其附属文件 | 权限和 token scope |
 | 输入框菜单 | `ui/composer.tsx`、`ui/composer-editor.tsx`、`ui/session-page.tsx` 的追加输入框 | `/` 菜单、过滤、键盘选择 | 解析和展开（在 runner） |
 | 右侧栏和消息标签 | `ui/session-page.tsx`、`ui/messages.ts`、`ui/agents.css` | 从会话元数据渲染 skill 列表、诊断和 `/name` 标签 | 数据获取（右侧栏不发请求） |
 
@@ -156,7 +156,8 @@ gateway 用 agent token 通过 RFC 8693 换到的用户会话访问产品 API。
 
 调用 `skills_read { name, repo? }`，只有仓库作用域才带 `repo`。gateway 返回的 `content` 是完整的
 `SKILL.md`；在参数替换前用 `crypto.subtle` 计算十六进制 SHA-256，记录为 `digest`。
-如果更早的用户消息已有同名、同 `digest` 的 `agentSkillInvocation`，只追加一句说明用户再次调用、指令已经加载的提醒。
+如果更早的用户消息已有同名、同 `digest` 的 `agentSkillInvocation`，追加说明用户再次调用、指令已经加载的短提醒。
+用户提供新参数时，短提醒也包含 `ARGUMENTS: <参数>`，不重复正文。
 否则将所有 `$ARGUMENTS` 替换成参数；没有占位符且有参数时，在正文末尾追加 `\n\nARGUMENTS: <参数>`。
 
 渲染结果放进一个独立文本 part，开头为 `\n\n<system-reminder>`，说明用户通过 `/name` 调用了哪个来源的 skill，
@@ -166,20 +167,28 @@ gateway 用 agent token 通过 RFC 8693 换到的用户会话访问产品 API。
 按名字读取返回 `isError`、抛错或正文解析失败时，运行以错误结束，消息保留，不追加目录或调用提醒。
 
 **输入框目录。** `createAgentRunner` 中的 `skills(scope)` 用 `deps.createTokenSource("ask")`、
-`authenticatedFetch(token, AbortSignal.timeout(15_000))` 和短时 MCP client 调用一次 `skills_read { repo? }`。
-用 `gatewaySkillCatalogSchema` 解析并去除内置项；错误向调用方抛出。`finally` 关闭 client 并释放 token。
+`authenticatedFetch(token, controller.signal)` 和短时 MCP client 调用一次 `skills_read { repo? }`。
+整个调用与 15 秒超时竞争，包括获取 agent token、MCP 初始化、读取和清理。
+用 `gatewaySkillCatalogSchema` 解析并去除内置项；错误向调用方抛出。完成或超时都关闭 client 并释放 token。
+超时会关闭 MCP 传输，清理仍在后台完成，不让等待中的 token 请求延长调用；超时后才创建成功的 client 也会关闭。
 
 **输入框。** `ui/skill-menu.tsx` 的 hook 和列表由首页 Lexical `ComposerEditor` 与会话追加 `Textarea` 共用。
-只有整个输入匹配 `^/[^\s]*$` 且会话未运行才触发；按全局或 Space ID 在页面存活期间缓存目录，首次打开才查询，失败不显示。
+只有整个输入匹配 `^/[^\s]*$` 且会话未运行才触发；按全局或 Space ID 在页面存活期间缓存目录，首次打开才查询。失败不显示，并删除该缓存项，下次打开重试；成功结果继续按作用域缓存。
 列表仅包含 `userInvocable` 且名字匹配输入前缀的条目，显示 `/name`、来源、单行描述和 `argumentHint`。
+只有不带 Shift、Ctrl、Meta 或 Alt 的方向键、Enter、Tab 和 Escape 由菜单处理。
 方向键移动，Enter 或 Tab 补全为 `/name `；空格使菜单关闭。Escape 保留文字并关闭，直到输入变化才重新打开。
+带修饰键的事件交给原有输入框处理，Shift+Tab 保持焦点移动，Ctrl+J 继续换行。菜单打开时，普通 Enter 只补全，不发送。
 Lexical 菜单命令注册为 `COMMAND_PRIORITY_CRITICAL`，高于原有 Enter 发送命令；Textarea 在原有键盘处理前调用菜单处理。
-列表使用 `role="listbox"`，选项使用 `role="option"` 和 `aria-selected`。
+列表使用 `role="listbox"`，由 `useId` 生成唯一 ID；每个选项使用稳定的唯一 ID、`role="option"`、`aria-selected` 和 `tabIndex={-1}`。
+两个输入框使用 `role="combobox"`、`aria-expanded` 和 `aria-autocomplete="list"`。打开时，`aria-controls` 指向列表，
+`aria-activedescendant` 指向选中选项；关闭时 `aria-expanded="false"`，不保留活动选项。
+选中项变化时调用 `scrollIntoView({ block: "nearest" })`。
 
-**门禁。** 目录步骤之后，从最新用户消息保存的 `agentSkills` 取 `modelInvocable: false` 的名字集合，传给 `gateTools`。
-审批恢复跳过目录步骤时同样读取该元数据。模型以这些名字调用 `skills_read` 时，不论其他参数，均返回
+**门禁。** 目录步骤之后，从最近一条带有效 `agentSkills` 的用户消息取 `modelInvocable: false` 的名字集合，传给 `gateTools`。
+排队或引导消息没有目录时继续向前查找，与目录比对使用的上一份目录查找规则一致；审批恢复跳过目录步骤时也如此。
+模型以这些名字调用 `skills_read` 且没有 `resource` 时，包括普通读取和 `full` 读取，返回
 `{ type: "denied", reason: 'The skill "<name>" can only be invoked by the user with /<name>.' }`。
-其他工具和名字沿用原有 scope 门禁。
+带 `resource` 的附属文件读取允许通过，供模型按显式调用提醒中的 `readCommand` 使用。其他工具和名字沿用原有 scope 门禁。
 
 ## 展示
 
@@ -215,7 +224,8 @@ Lexical 菜单命令注册为 `COMMAND_PRIORITY_CRITICAL`，高于原有 Enter �
 | `SKILL.md` 校验失败、超限、被隔离 | 跳过，产出诊断 |
 | 运行开始时列目录返回 `isError: true`、抛错或 zod 解析失败（含旧 gateway） | 不追加提醒；复制上一份目录到本条用户消息，没有上一份时不写；本次运行继续 |
 | `/name` 展开时读取失败 | 本次运行以错误结束，消息保留 |
-| 模型读取 `disable-model-invocation` 的 skill | 门禁拒绝，模型收到拒绝原因 |
+| 模型读取 `disable-model-invocation` 的 skill 指令（无 `resource`，含 `full`） | 门禁拒绝，模型收到拒绝原因 |
+| 模型读取该 skill 的附属文件（带 `resource`） | 允许通过门禁，仍由 gateway 校验读取权限与路径 |
 | 模型读取已被删除的 skill | 工具错误，模型按普通工具错误处理 |
 
 ## 需要同步更新的文档

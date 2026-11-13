@@ -27,8 +27,8 @@ export function gateTools(tools: ToolSet, mode: AgentMode,
   return {
     tools: gated,
     toolApproval: ({ toolCall }) => {
-      const input = z.object({ name: z.string() }).safeParse(toolCall.input);
-      if (toolCall.toolName === "skills_read" && input.success && userOnlySkills.has(input.data.name)) {
+      const input = z.object({ name: z.string(), resource: z.string().optional() }).safeParse(toolCall.input);
+      if (toolCall.toolName === "skills_read" && input.success && input.data.resource === undefined && userOnlySkills.has(input.data.name)) {
         return { type: "denied", reason: `The skill "${input.data.name}" can only be invoked by the user with /${input.data.name}.` };
       }
       switch (scopes.get(toolCall.toolName)) {
