@@ -244,8 +244,9 @@ $V mcp slm-outline outline "$(args "$SALES")"
   `$V mcp slm9-find find "$(args "$SALES" '{"terms":["returned"]}')"`.
   Pass when all three succeed with `outcome: ok` using the read-only PAT.
 - SLM10. Run `$V mcp slm10 outline "$(args "$L50")"` twice. The 50,000-row ledger (500,010
-  cells) is under the executor's 1,000,000-cell limit. Pass when `text` shows a table with 10
-  columns, the second event has `cache: hit`, and both have `outcome: ok`. Then stretch the
+  cells) is under the executor's 1,000,000-cell limit. Pass when `text` shows a `table` line with
+  `rows=50000`, the second event has `cache: hit`, and both have `outcome: ok`. Then call
+  `outline` with `"$(args "$L50" '{"at":"s1.t1"}')"`; pass when it lists 10 `col` lines. Then stretch the
   ledger past the limit and call again:
 
   ```bash
