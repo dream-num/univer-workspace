@@ -1,5 +1,10 @@
 #!/usr/bin/env node
-import { createDaemonServer, DAEMON_SOCKET_ENV, type JsonValue } from "@univer-cli/daemon";
+import {
+  createDaemonServer,
+  DAEMON_SOCKET_ENV,
+  type DaemonRequestHandler,
+  type JsonValue,
+} from "@univer-cli/daemon";
 import type {
   WorkspaceContentRuntime,
   WorkspaceRuntimeTarget,
@@ -46,6 +51,16 @@ const daemon = createDaemonServer({
     const session = await contentSession?.catch(() => undefined);
     if (session) await session.runtime.close();
   },
+});
+
+let sheetLens: DaemonRequestHandler | undefined;
+daemon.handle("sheet-lens.run", async (payload) => {
+  const { runtime } = await getContentSession();
+  sheetLens ??= (await import("./sheet-lens.js")).createSheetLensHandler({
+    runtime,
+    sessionPath: workspaceSessionPath(process.env),
+  });
+  return await sheetLens(payload);
 });
 
 daemon.handle("runtime.execute-read", async (payload) => {
