@@ -94,6 +94,14 @@ const messageSchema = z.object({
   parts: z.array(partSchema),
 }).passthrough();
 const cacheStepUsageSchema = z.object({ inputTokens: z.number().int().nonnegative(), cacheReadTokens: z.number().int().nonnegative() });
+export const modelSnapshotSchema = z.object({
+  system: z.string(),
+  tools: z.array(z.object({
+    name: z.string(), description: z.string().optional(),
+    inputSchema: z.record(z.string(), z.unknown()),
+    _meta: z.record(z.string(), z.unknown()).optional(),
+  })),
+});
 export const sessionRecordSchema = z.object({
   id: agentSessionIdSchema,
   userId: z.string().min(1),
@@ -108,6 +116,7 @@ export const sessionRecordSchema = z.object({
   })).default({}),
   cacheUsage: cacheStepUsageSchema.extend({ lastStep: cacheStepUsageSchema.nullable() })
     .default({ inputTokens: 0, cacheReadTokens: 0, lastStep: null }),
+  modelSnapshot: modelSnapshotSchema.optional(),
   messages: z.array(messageSchema),
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
