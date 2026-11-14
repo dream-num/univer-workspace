@@ -41,6 +41,23 @@ clients may also have the `files` toolset (`blob_download`, `compile_markdown`,
 `compile_typst`, `print_pdf` and others). If a skill needs one of those, say in its body
 that the step needs that toolset, so the browser agent tells the user instead of guessing.
 
+## What the agent cannot get
+
+Two kinds of input are out of reach in the browser, and no tool in any toolset closes the
+gap for it:
+
+- **Anything on the web.** No tool fetches a URL, calls an outside API or reads a web
+  page, so a skill cannot pull data from a link the user gives.
+- **The content of an uploaded file** (a Blob) such as HTML, JSON, CSV or PDF. `blob_get`
+  returns only its name, size and type. `blob_download` returns a link that only an
+  external MCP client can open. Office files are the exception: the agent reserves an
+  upload with `file_upload_create`, gives the user its page link, and `import` turns the
+  file into a Sheet, Doc or Slide that the agent reads with `inspect`.
+
+When a skill needs such input, design it around what the agent can read: the user pastes
+the text into the conversation, or the data lives in a Sheet or Doc that the skill reads
+with `inspect`. Do not suggest adding the `files` toolset as the way out.
+
 For any change to a Sheet, Doc, Slide, Base or Board, tell the skill to follow the `core`
 Skill: work in a new Worktree, verify, mark it ready and hand the review link to the
 user. A skill should also tell the agent to read the matching domain Skill (`sheet`,
