@@ -15,6 +15,7 @@ import { AgentComposer } from "./composer";
 import { useAgentMessages } from "./messages";
 import { newestSessions, sessionStatus, visibleSessions } from "./summaries";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
+import { htmlViewCreatorLink } from "../../html-views/creator-link";
 export function useAgentSessions() {
   const client = useAgentClient();
   const queryClient = useQueryClient();
@@ -45,22 +46,24 @@ export function HomeAgents() {
     </section> : null}
   </div>;
 }
-export function AgentsPage({ spaceId, renderPage }: AgentPageHost & { readonly spaceId: string }) {
+export function AgentsPage({ spaceId, prompt, renderPage }: AgentPageHost & { readonly spaceId: string; readonly prompt?: string | undefined }) {
   const m = useAgentMessages();
+  const { t } = useI18n();
   const sessions = useAgentSessions();
   const [starter, setStarter] = useState<{ readonly text: string } | null>(null);
+  useEffect(() => setStarter(prompt === undefined ? null : { text: prompt }), [prompt]);
   const items = newestSessions(sessions.data ?? [], spaceId);
   const starters = [
-    { title: m.summarize, description: m.summarizeDescription, Icon: ChartNoAxesCombined },
-    { title: m.formulas, description: m.formulasDescription, Icon: Sheet },
-    { title: m.page, description: m.pageDescription, Icon: FileCode },
+    { title: m.summarize, description: m.summarizeDescription, text: m.summarize, Icon: ChartNoAxesCombined },
+    { title: m.formulas, description: m.formulasDescription, text: m.formulas, Icon: Sheet },
+    { title: m.page, description: m.pageDescription, text: htmlViewCreatorLink(spaceId, { kind: "new" }, t).search.prompt, Icon: FileCode },
   ];
   return renderPage(<>
     <div className="agent-page agent-directory">
       <nav aria-label={m.agents}><a className="agent-nav-current" href="#agent-sessions" aria-current="page">{m.sessions}</a></nav>
       <div className="min-w-0">
         <AgentComposer spaceId={spaceId} starter={starter} />
-        <div className="agent-starters">{starters.map(({ title, description, Icon }) => <button type="button" key={title} onClick={() => setStarter({ text: title })}>
+        <div className="agent-starters">{starters.map(({ title, description, text, Icon }) => <button type="button" key={title} onClick={() => setStarter({ text })}>
           <Icon aria-hidden="true" /><strong>{title}</strong><span title={description}>{description}</span>
         </button>)}</div>
         <section id="agent-sessions"><h2>{m.sessions}</h2><p className="agent-note">{m.local}</p>

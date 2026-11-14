@@ -1,11 +1,15 @@
 import { ExternalLink } from "lucide-react";
 import { Link } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { resourceShareUrl } from "../../../../features/resource-view/resource-view";
 import { formatRelativeDate } from "../../../../shared/format-relative-date";
 import { useI18n } from "../../../../shared/i18n";
 import { toast } from "../../../../shared/ui";
 import type { RepositoryApp } from "./types";
 import { displayAppName } from "./display-app-name";
+import { sessionQueryOptions } from "../../../../features/auth";
+import { htmlViewCreatorLink } from "../../../../features/html-views/creator-link";
+import { useUiMode } from "../../../../shared/ui-mode";
 
 export function AppsView({
   spaceId,
@@ -19,6 +23,13 @@ export function AppsView({
   readonly onSelectApp: (nodeId: string) => void;
 }) {
   const { language, t } = useI18n();
+  const { mode } = useUiMode();
+  const session = useQuery(sessionQueryOptions);
+  const newPage = mode === "repository" && session.data?.authenticated ? (
+    <Link {...htmlViewCreatorLink(spaceId, { kind: "new" }, t)} className="repository-pages-action shrink-0">
+      {t("htmlViewNewPage")}
+    </Link>
+  ) : null;
   const defaultPageUrl = selectedApp
     ? resourceShareUrl(window.location.origin, selectedApp.node.id, "immersive")
     : undefined;
@@ -34,12 +45,15 @@ export function AppsView({
   return (
     <section aria-labelledby="repository-pages-heading">
       <div>
-        <h1
-          id="repository-pages-heading"
-          className="m-0 mb-4 border-b border-border pb-[0.3em] text-[2em] leading-[1.25] font-semibold"
-        >
-          {t("apps")}
-        </h1>
+        <div className="mb-4 flex items-center justify-between gap-4 border-b border-border pb-[0.3em]">
+          <h1
+            id="repository-pages-heading"
+            className="m-0 text-[2em] leading-[1.25] font-semibold"
+          >
+            {t("apps")}
+          </h1>
+          {newPage}
+        </div>
         <p className="m-0 mb-4">{t("repositoryAppsSummary", { count: apps.length })}</p>
       </div>
       {selectedApp ? (
@@ -122,6 +136,7 @@ export function AppsView({
           </h2>
           <p className="m-0 mb-4">{t("appsEmptyDescription")}</p>
           <p className="m-0 mb-4">{t("appsEmptyHint")}</p>
+          {newPage}
         </div>
       )}
     </section>
