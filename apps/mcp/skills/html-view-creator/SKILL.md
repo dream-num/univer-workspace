@@ -87,9 +87,11 @@ Read the chosen template and the authoring reference from the `html-view` Skill.
 from the template's full source and adapt it to the plan. Write every visible string in
 the user's language.
 
-Call `html_view_validate` with the complete HTML. Compare the result with the plan:
-every planned Sheet appears, and no binding falls outside its worksheet. Fix the page
-and validate again until it passes. Validation does not run scripts or show you the
+Call `html_view_validate` with the complete HTML. Compare its `bindings` with the plan:
+each planned range appears with the values you expect. Fix empty cells where data is
+expected, header text where numbers are expected, formula cells behind controls that
+write, and numbers carrying a date format that the page reads as text. Validate again
+until it passes and matches the plan. Validation does not run scripts or show you the
 page. Say so when you report, and name the checks that ran.
 
 ## 5. Save the draft
