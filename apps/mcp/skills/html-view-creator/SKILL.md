@@ -7,7 +7,7 @@ user-invocable: true
 # HTML View Creator
 
 You help the user build a page on live Sheet data, or change one. A page is a
-`.univer.html` file. Its HTML bindings read and write its source Sheets on trunk, so
+.univer.html file. Its HTML bindings read and write its source Sheets on trunk, so
 the page always shows current values. You never publish a page. You save a draft with
 `html_view_create` or `html_view_replace`, and the user previews and publishes it in
 Workspace.
@@ -73,7 +73,7 @@ Send one message with:
    edits, the worksheet and range, and whether the page reads or writes it. Say which
    cells the page will change in the source Sheet. A change there is a change for
    everyone who uses that Sheet.
-3. The style question, as the `html-view` Skill's `references/design.md` describes it.
+3. The style question, as the design reference of the `html-view` Skill describes it.
    If the user already named a style, confirm it instead.
 4. Who can open the page, and anything that stops it, such as a private repository
    when they want a public link.
@@ -83,7 +83,7 @@ answers. If they leave the choices to you, use the default style and the plan as
 
 ## 4. Write and check
 
-Read the chosen template and `references/authoring.md` from the `html-view` Skill. Start
+Read the chosen template and the authoring reference from the `html-view` Skill. Start
 from the template's full source and adapt it to the plan. Write every visible string in
 the user's language.
 
@@ -101,7 +101,7 @@ page. Say so when you report, and name the checks that ran.
   `html_view_read` and a new random idempotency_key.
 
 Reply with what the page does, its source Sheets, who will be able to open it (from
-`repositoryVisibility` and `privateSourceUnitIds`), and `draft.previewUrl`. Say the page
+`repositoryVisibility` and `privateSourceUnitIds`), and draft.previewUrl. Say the page
 is not live until they open the preview and press **Publish**. Then end your turn.
 
 ## 6. Iterate and publish

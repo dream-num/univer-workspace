@@ -12,7 +12,7 @@ What a skill can rely on when the Workspace Agent runs it.
 - A repository skill overrides a personal skill with the same name in that repository's
   sessions.
 - Built-in skills (`core`, `sheet`, `doc`, `slide`, `base`, `board`, `embed`,
-  `cross-unit-formula`, `blob`, `html-view`, `skill-creator`) reserve their names.
+  `cross-unit-formula`, `blob`, `html-view`, `html-view-creator`, `skill-creator`) reserve their names.
 - Skills are read from trunk. A published change takes effect at the start of the next
   agent run, without a pull request.
 - Agents of non-members never load a repository's skills.

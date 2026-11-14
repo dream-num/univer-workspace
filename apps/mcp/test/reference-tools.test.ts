@@ -16,19 +16,20 @@ import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
 
 const cliSkillData = new URL("../../cli/skill-data/", import.meta.url).pathname;
 const mcpSkillData = new URL("../skills/", import.meta.url).pathname;
+const MCP_SKILL_NAMES = ["core", "html-view-creator", "skill-creator"];
+// The Skills extension orders entry-file paths, including the slash after each name.
 const SKILL_NAMES = [
+  ...MCP_SKILL_NAMES,
   "base",
   "blob",
   "board",
-  "core",
   "cross-unit-formula",
   "doc",
   "embed",
   "html-view",
   "sheet",
-  "skill-creator",
   "slide",
-];
+].sort((a, b) => `${a}/SKILL.md` < `${b}/SKILL.md` ? -1 : 1);
 const LIMIT = 100_000;
 const fetcher: typeof fetch = async (input) => {
   const path = new URL(String(input)).pathname;
@@ -158,7 +159,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     clients = [];
     sourceRoot = await mkdtemp(join(tmpdir(), "mcp-source-skills-"));
     for (const name of SKILL_NAMES) {
-      await cp(join(["core", "skill-creator"].includes(name) ? mcpSkillData : cliSkillData, name), join(sourceRoot, name), {
+      await cp(join(MCP_SKILL_NAMES.includes(name) ? mcpSkillData : cliSkillData, name), join(sourceRoot, name), {
         recursive: true,
       });
     }
@@ -640,7 +641,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       const { skills: entries } = await extension.list();
       expect(entries.map(({ frontmatter: { name } }) => name)).toEqual(SKILL_NAMES);
       expect((await call(client, "skills_read", {})).structured["skills"]).toEqual(
-        entries.map(({ frontmatter: { name, description } }) => ({ name, description, source: "builtin", modelInvocable: true, userInvocable: name === "skill-creator" })),
+        entries.map(({ frontmatter: { name, description } }) => ({ name, description, source: "builtin", modelInvocable: true, userInvocable: ["html-view-creator", "skill-creator"].includes(name) })),
       );
       expect(await readFile(join(mcpSkillData, "core/SKILL.md"), "utf8")).not.toBe(
         await readFile(join(cliSkillData, "core/SKILL.md"), "utf8"),

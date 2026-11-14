@@ -353,12 +353,12 @@ change existing permissions or migrate the old default cache.
 results, wrapped as `{ results }`.
 
 The server declares the MCP Skills extension (SEP-2640), `io.modelcontextprotocol/skills`.
-`skills/list` returns eleven Skills with static SHA-256 digests and resource URIs under
+`skills/list` returns twelve Skills with static SHA-256 digests and resource URIs under
 `skill://univer-workspace/<name>/`. Read `skill://univer-workspace/core/SKILL.md` first.
 `resources/list` lists each Skill's entry file; the extension's `resources` arrays list all
 references and templates, readable through `resources/read`.
 
-The build assembles the MCP-specific `core` and `skill-creator` from `apps/mcp/skills` and nine shared domain
+The build assembles the MCP-specific `core`, `html-view-creator` and `skill-creator` from `apps/mcp/skills` and nine shared domain
 Skills from `apps/cli/skill-data` into `dist/skill-data`. The CLI's `core` remains CLI-only.
 The gateway loads that directory once at startup and never imports or reads `apps/cli` at runtime.
 The extension and `skills_read` serve the same built-in catalog snapshot and bytes.
@@ -382,8 +382,9 @@ under `skills`, or `SKILL.md` Blobs in a Skill folder each produce one `duplicat
 with the layer's `source` and the ambiguous `path`. Discovery skips that ambiguous subtree
 regardless of API listing order. The other source layer still loads.
 Built-ins are user-invocable only with explicit `user-invocable: true` frontmatter.
-`skill-creator` is the first such built-in. Invoke `/skill-creator <request>` in the browser
-Agent to create or edit a Skill draft for human publication. External import support is
+`skill-creator` and `html-view-creator` are user-invocable. Invoke `/skill-creator <request>` in the browser
+Agent to create or edit a Skill draft for human publication, or `/html-view-creator <request>`
+to build or change a live Sheet-backed page draft for human publication. External Skill import support is
 pending. Other built-ins stay out of the `/` menu. Every built-in stays out of the
 browser's catalog reminder, including user-invocable ones.
 Discovery processes at most 100 Skill folders per layer. `SKILL.md` must be downloadable,
