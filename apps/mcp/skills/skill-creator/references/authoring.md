@@ -26,7 +26,7 @@ description: "Write the weekly report in the finance team's format from the Expe
 
 | Field | Rule |
 | --- | --- |
-| `name` | Required. 1 to 64 lowercase letters, digits and single hyphens. Must equal the folder name. Cannot be a built-in skill name such as `core`, `sheet` or `skill-creator`. Keep it unchanged when editing. |
+| `name` | Required. 1 to 64 lowercase letters, digits and single hyphens. Must equal the folder name. Cannot be a built-in skill name such as `core`, `sheet`, `html-view-creator` or `skill-creator`. Keep it unchanged when editing. |
 | `description` | Required. 1 to 1024 characters. See below. |
 | `argument-hint` | Optional. Shown next to `/name` in the menu, such as `[week number]`. |
 | `user-invocable` | Optional, default true. `false` hides the skill from the `/` menu. |

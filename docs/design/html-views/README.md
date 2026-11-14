@@ -68,6 +68,7 @@ flowchart LR
 - [Browser 集成](browser-integration.md)：构建、页面加载、来源授权、Univer 装配和保存释放。
 - [Agent 集成](agent-integration.md)：页面生成指引、验证与发布、交付检查。
 - [分享与观感改进方案](sharing-and-design-floor.md)：匿名分享、访客注册引导、链接预览与设计模板。
+- [html-view-creator](html-view-creator.zh-CN.md)：内置的页面创作流程、Browser 入口与后续改进。
 
 ## SDK 文档
 

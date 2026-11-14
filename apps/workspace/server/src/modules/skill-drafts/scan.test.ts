@@ -290,12 +290,12 @@ describe("Skill review evidence", () => {
   });
 });
 
-it("scans shipped skill-creator content without warnings or blocks other than its reserved identity", async () => {
-  const root = new URL("../../../../../mcp/skills/skill-creator/", import.meta.url);
+it.each(["skill-creator", "html-view-creator"])("scans shipped %s content without warnings or blocks other than its reserved identity", async (name) => {
+  const root = new URL(`../../../../../mcp/skills/${name}/`, import.meta.url);
   const files = readdirSync(root, { recursive: true, withFileTypes: true }).filter((entry) => entry.isFile())
     .map((entry) => ({ path: relative(root.pathname, `${entry.parentPath}/${entry.name}`), bytes: readFileSync(`${entry.parentPath}/${entry.name}`) }));
-  const findings = await scanSkill("skill-creator", files);
+  const findings = await scanSkill(name, files);
   expect(findings).toEqual([expect.objectContaining({ rule: "reserved-name", severity: "block" })]);
-  const copy = files.map((file) => file.path === "SKILL.md" ? { ...file, bytes: Buffer.from(file.bytes.toString().replace("name: skill-creator", "name: creator-copy")) } : file);
+  const copy = files.map((file) => file.path === "SKILL.md" ? { ...file, bytes: Buffer.from(file.bytes.toString().replace(`name: ${name}`, "name: creator-copy")) } : file);
   expect(await scanSkill("creator-copy", copy)).toEqual([]);
 });

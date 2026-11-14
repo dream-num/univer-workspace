@@ -1,15 +1,16 @@
 # Choose a style before authoring
 
-Unless the user already named a style, ask which style they want before reading Sheets
-in depth or authoring. Ask in the user's language, using all ten style names and their
-one-line moods in that language from this catalog, and say **Night Gauge (仪表夜航)
-is the default** (use the name in the user's language). Say the ten styles are built-in
-starting points and the user may describe their own style instead. Ask in your normal reply text,
-then end your turn and wait for the answer. Do not rely on a client question or form tool, or validate
-or publish a page before the user answers. If the user leaves the choice to you
-("you choose", "anything", "use the default"; 你来定, 随便, 默认就行), use
-**Night Gauge (`night-gauge`, 仪表夜航)**. Never silently choose
-another style. Then read the source Sheet to understand its data, formulas and writable cells.
+Read the source Sheet first to understand its data, formulas and writable cells. Then,
+unless the user already named a style, ask which style they want in the same message as
+your plan for the page, so the user answers both at once. Ask in the user's language,
+using all ten style names and their one-line moods in that language from this catalog,
+and say **Night Gauge (仪表夜航) is the default** (use the name in the user's language).
+Say the ten styles are built-in starting points and the user may describe their own style
+instead. Ask in your normal reply text, then end your turn and wait for the answer. Do not
+rely on a client question or form tool, or write, validate or publish a page before the
+user answers. If the user leaves the choice to you ("you choose", "anything", "use the
+default"; 你来定, 随便, 默认就行), use **Night Gauge (`night-gauge`, 仪表夜航)**. Never
+silently choose another style.
 
 ## Style catalog
 

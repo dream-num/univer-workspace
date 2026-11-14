@@ -353,12 +353,12 @@ change existing permissions or migrate the old default cache.
 results, wrapped as `{ results }`.
 
 The server declares the MCP Skills extension (SEP-2640), `io.modelcontextprotocol/skills`.
-`skills/list` returns eleven Skills with static SHA-256 digests and resource URIs under
+`skills/list` returns twelve Skills with static SHA-256 digests and resource URIs under
 `skill://univer-workspace/<name>/`. Read `skill://univer-workspace/core/SKILL.md` first.
 `resources/list` lists each Skill's entry file; the extension's `resources` arrays list all
 references and templates, readable through `resources/read`.
 
-The build assembles the MCP-specific `core` and `skill-creator` from `apps/mcp/skills` and nine shared domain
+The build assembles the MCP-specific `core`, `html-view-creator` and `skill-creator` from `apps/mcp/skills` and nine shared domain
 Skills from `apps/cli/skill-data` into `dist/skill-data`. The CLI's `core` remains CLI-only.
 The gateway loads that directory once at startup and never imports or reads `apps/cli` at runtime.
 The extension and `skills_read` serve the same built-in catalog snapshot and bytes.
@@ -382,8 +382,9 @@ under `skills`, or `SKILL.md` Blobs in a Skill folder each produce one `duplicat
 with the layer's `source` and the ambiguous `path`. Discovery skips that ambiguous subtree
 regardless of API listing order. The other source layer still loads.
 Built-ins are user-invocable only with explicit `user-invocable: true` frontmatter.
-`skill-creator` is the first such built-in. Invoke `/skill-creator <request>` in the browser
-Agent to create or edit a Skill draft for human publication. External import support is
+`skill-creator` and `html-view-creator` are user-invocable. Invoke `/skill-creator <request>` in the browser
+Agent to create or edit a Skill draft for human publication, or `/html-view-creator <request>`
+to build or change a live Sheet-backed page draft for human publication. External Skill import support is
 pending. Other built-ins stay out of the `/` menu. Every built-in stays out of the
 browser's catalog reminder, including user-invocable ones.
 Discovery processes at most 100 Skill folders per layer. `SKILL.md` must be downloadable,
@@ -739,12 +740,13 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
-Read the `html-view` Skill. Unless the user already named a style, ask which style they
-want before reading Sheets in depth or authoring. Ask in the user's language, using the ten
-style names and their one-line moods in that language from its design reference, and say
-Night Gauge (`night-gauge`, 仪表夜航) is the default.
+Read the `html-view-creator` Skill, which sets the order of page work, and the `html-view`
+Skill, which says how to write the page. Read the source Sheet, then, unless the user already
+named a style, ask which style they want in the same message as the plan for the page. Ask in
+the user's language, using the ten style names and their one-line moods in that language from
+its design reference, and say Night Gauge (`night-gauge`, 仪表夜航) is the default.
 Ask in your normal reply text, then end your turn and wait for the answer. Do not rely on
-a client question or form tool, or validate or publish a page before the user answers.
+a client question or form tool, or write, validate or publish a page before the user answers.
 If they leave the choice to the Agent (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently
 choose another style. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
 palette, density and signature element when adapting to another scenario. Templates are English

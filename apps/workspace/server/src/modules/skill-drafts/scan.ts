@@ -11,6 +11,7 @@ export const RESERVED_SKILL_NAMES = [
   "doc",
   "embed",
   "html-view",
+  "html-view-creator",
   "sheet",
   "slide",
   "skill-creator",
