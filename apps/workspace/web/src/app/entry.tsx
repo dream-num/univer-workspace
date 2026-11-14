@@ -3,6 +3,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { routeTree } from "../routeTree.gen";
 import { Providers, queryClient } from "./providers";
+import { HtmlViewRenderCheckHost } from "../features/html-views/render-check-host";
 
 import "@fontsource-variable/inter";
 import "./styles/global.css";
@@ -11,6 +12,7 @@ const router = createRouter({
   routeTree,
   context: { queryClient },
   defaultPreload: "intent",
+  InnerWrap: HtmlViewRenderCheckHost,
 });
 
 declare module "@tanstack/react-router" {

@@ -94,7 +94,8 @@ each planned range appears with the values you expect. Fix empty cells where dat
 expected, header text where numbers are expected, formula cells behind controls that
 write, and numbers carrying a date format that the page reads as text. Validate again
 until it passes and matches the plan. Validation does not run scripts or show you the
-page. Say so when you report, and name the checks that ran.
+page. In Workspace, the saved draft result also carries a browser `renderCheck` (step 5).
+Elsewhere, say that scripts were not run when you report, and name the checks that ran.
 
 ## 5. Save the draft
 
@@ -103,6 +104,10 @@ page. Say so when you report, and name the checks that ran.
   language, and a new random idempotency_key such as a UUID.
 - Change: call `html_view_replace` with the page resource, the HTML, the ETag from
   `html_view_read` and a new random idempotency_key.
+
+If `renderCheck` lists issues, fix them, validate again, and save a new draft with the
+same name and space as step 6 describes. Mention the check in your reply only when it
+found issues or could not run.
 
 Reply with what the page does, its source Sheets, who will be able to open it (from
 `repositoryVisibility` and `privateSourceUnitIds`), and draft.previewUrl. Say the page

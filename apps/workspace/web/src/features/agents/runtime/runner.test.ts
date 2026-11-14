@@ -41,6 +41,8 @@ async function setup(options: {
   publish?: boolean;
   pageTool?: "html_view_create" | "html_view_replace";
   getDraft?: AgentRunnerDependencies["getDraft"];
+  checkHtmlViewDraft?: AgentRunnerDependencies["checkHtmlViewDraft"];
+  toolOutput?: unknown;
   trajectory?: (store: AgentRunnerDependencies["trajectory"]) => AgentRunnerDependencies["trajectory"];
 } = {}) {
   const storage = storageOptions();
@@ -91,7 +93,7 @@ async function setup(options: {
         if (!gateway.tools.some((tool) => tool.name === rpc.params?.name)) return Response.json({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: `Unknown tool: ${rpc.params?.name}` } });
         if (rpc.params?.name === "skills_read") return respond(options.skills ? await options.skills(rpc.params.arguments) : { content: [], structuredContent: emptySkills });
         await options.tool?.();
-        return respond({ content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: options.pageTool ? { draft: { id: "draft-1", state: "pending" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
+        return respond(options.toolOutput ?? { content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: options.pageTool ? { draft: { id: "draft-1", state: "pending" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
       }
       if (rpc.method === "notifications/cancelled") return new Response(null, { status: 202 });
       throw new Error(`Unexpected MCP method ${rpc.method}`);
@@ -106,6 +108,7 @@ async function setup(options: {
   await providers.setKey(deepSeekDefault.id, key);
   const deps = { userId: storage.userId, locks: storage.locks, fetch: request, providers, sessions, trajectory,
     getDraft: options.getDraft ?? vi.fn(async () => null),
+    ...(options.checkHtmlViewDraft ? { checkHtmlViewDraft: options.checkHtmlViewDraft } : {}),
     mcpUrl, createTokenSource: (mode: "ask" | "auto" | "publish") => createMcpTokenSource({ grant: mode, fetch: request }) };
   const runner = createAgentRunner(deps);
   const input = { scope: { kind: "global" as const }, mode: "auto" as const, model: session().model, text: "Make a pull request" };
@@ -122,6 +125,70 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it.each(["html_view_create", "html_view_replace"] as const)("checks successful %s results in Ask and Auto before persisting and sending them to the model", async (pageTool) => {
+    for (const mode of ["ask", "auto"] as const) {
+      const renderCheck = { status: "issues" as const, issues: [{ kind: "page-error" as const, message: "B7 must contain a start month" }], durationMs: 1250 };
+      const checkHtmlViewDraft = vi.fn(async () => renderCheck);
+      const test = await setup({ pageTool, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+      const started = await test.runner.start({ ...test.input, mode });
+      const done = await test.finished(started.id);
+      expect(checkHtmlViewDraft).toHaveBeenCalledWith("draft-1", expect.any(AbortSignal));
+      expect(done?.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
+        state: "output-available", output: expect.objectContaining({ structuredContent: { draft: { id: "draft-1", state: "pending" }, renderCheck } }),
+      }));
+      expect(test.modelBodies[1]).toContain("B7 must contain a start month");
+      const before = JSON.parse(test.modelBodies[0]!);
+      const after = JSON.parse(test.modelBodies[1]!);
+      expect(after.messages.slice(0, before.messages.length)).toEqual(before.messages);
+      expect(after.tools).toEqual(before.tools);
+    }
+  });
+
+  it.each(["html_view_create", "html_view_replace"] as const)("checks %s after gateTools replaces execution", async (pageTool) => {
+    const checkHtmlViewDraft = vi.fn(async () => ({ status: "passed" as const, issues: [], durationMs: 1000 }));
+    const test = await setup({ pageTool, publish: true, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+    const started = await test.runner.start(test.input);
+    const waiting = await test.finished(started.id);
+    expect(checkHtmlViewDraft).not.toHaveBeenCalled();
+    await test.runner.decide(started.id, pendingApprovals(waiting!)[0]!.approvalId, true);
+    const done = await test.finished(started.id);
+    expect(checkHtmlViewDraft).toHaveBeenCalledOnce();
+    expect(JSON.stringify(done)).toContain('"renderCheck":{"status":"passed"');
+    expect(test.modelBodies.at(-1)).toContain("renderCheck");
+  });
+
+  it.each([
+    { isError: true, content: [{ type: "text", text: "Save failed" }], structuredContent: { draft: { id: "draft-1" } } },
+    { content: [], structuredContent: { draft: { state: "pending" } } },
+  ])("leaves an error or draftless result unchanged", async (toolOutput) => {
+    const checkHtmlViewDraft = vi.fn();
+    const test = await setup({ pageTool: "html_view_create", toolOutput, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_create" : undefined) });
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    expect(checkHtmlViewDraft).not.toHaveBeenCalled();
+    expect(done?.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({ state: "output-available", output: expect.objectContaining(toolOutput) }));
+  });
+
+  it.each(["failure", "timeout", "abort"])("keeps the saved draft when its check ends in %s", async (outcome) => {
+    const entered = deferred<void>();
+    const checkHtmlViewDraft: NonNullable<AgentRunnerDependencies["checkHtmlViewDraft"]> = async (_, signal) => {
+      entered.resolve();
+      if (outcome === "failure") throw new Error("Cannot mount viewer");
+      if (outcome === "abort") await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
+      return { status: outcome === "timeout" ? "timed-out" : "failed", issues: [], durationMs: 20000, reason: outcome };
+    };
+    const test = await setup({ pageTool: "html_view_create", checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_create" : undefined) });
+    const started = await test.runner.start(test.input);
+    await entered.promise;
+    if (outcome === "abort") await test.runner.stop(started.id);
+    const done = await test.finished(started.id);
+    if (outcome === "abort") expect(done?.status).not.toBe("running");
+    else expect(done?.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
+      state: "output-available", output: expect.objectContaining({ structuredContent: expect.objectContaining({ draft: { id: "draft-1", state: "pending" },
+        renderCheck: expect.objectContaining({ status: outcome === "timeout" ? "timed-out" : "failed" }) }) }),
+    }));
+  });
+
   it("records each provider request byte for byte and ends model calls before tool execution", async () => {
     const test = await setup();
     const started = await test.runner.start(test.input);

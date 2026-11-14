@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { api } from "../../../shared/api/client";
 import { apiError } from "../../../shared/api/errors";
 import { sessionQueryOptions } from "../../auth/auth.queries";
+import { checkHtmlViewDraft } from "../../html-views/render-check-host";
 import { loadAgentRuntime } from "../index";
 import { createSessionStore, createProviders, createMcpTokenSource, createTrajectoryStore } from "../stores";
 
@@ -44,7 +45,7 @@ function createClient(userId: string) {
           if (error) throw apiError(error);
           return data.draft;
         },
-        userId, fetch, locks: navigator.locks, sessions, providers, trajectory,
+        userId, fetch, locks: navigator.locks, sessions, providers, trajectory, checkHtmlViewDraft,
         mcpUrl: `${location.origin}/mcp`, createTokenSource: (grant) => createMcpTokenSource({ grant, fetch }),
       }));
     },

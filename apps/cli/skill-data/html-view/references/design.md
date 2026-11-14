@@ -72,6 +72,7 @@ Do not switch styles silently or flatten every choice into the same card grid.
   explicit labels, hover affordances and disabled controls during pending writes.
 - Retain loading placeholders, useful empty states and inline errors. Library failure must leave
   the data readable, for example through a bound data table. Never announce a failed write as saved.
+  Show load and write failures as visible text in an element with `role="alert"` or `data-s="rejected"`, so Workspace can report them.
 - Check at 360px, 390px and 1440px: collapse columns, wrap long names and keep charts sized.
   Use scrolling only for genuinely wide tabular content. Do not shrink the entire page to fit.
 - Fonts and libraries may load only from `https://cdn.jsdelivr.net`. Pin exact package versions.
