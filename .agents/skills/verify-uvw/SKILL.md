@@ -164,6 +164,28 @@ $V cli pr-create pr create -R verify-<run-id>/personal -t "Title" --json
 The feature map in [`features/README.md`](features/README.md) lists the journeys and the
 exact commands. Use it as the recipe.
 
+## Regenerate HTML View style thumbnails
+
+Rerun `bin/html-view-style-thumbnails.mjs` after changing a built-in HTML View template.
+Use a disposable instance with `up` and `user` completed, then run from the repository root:
+
+```bash
+export VERIFY_UVW_ROOT=/tmp/verify-uvw-thumbs VERIFY_UVW_SERVER_PORT=4040 VERIFY_UVW_WEB_PORT=6040
+V=.claude/skills/verify-uvw/bin/verify-uvw
+eval "$($V env)"
+node .claude/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --self-test
+node .claude/skills/verify-uvw/bin/html-view-style-thumbnails.mjs
+```
+
+The generator discovers templates, checks their `Expected Sheet` headers, seeds four live
+Sheets, and merges their disposable fixture PR. It validates and publishes each page with
+the source-built CLI, waits for bound values and charts, captures a 1280×800 immersive
+viewport with agent-browser, and uses `cwebp` to write 640×400 WebPs under
+`apps/workspace/web/src/features/html-views/style-thumbnails/`. It rejects unknown layouts
+and files of 60,000 bytes or more. Each run creates new disposable sources. Full screenshots,
+trunk readbacks, validation results, and the page manifest stay in
+`$EVIDENCE/style-thumbnails/`. Inspect every WebP, then run `$V down`.
+
 ## Evidence
 
 Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which survives `down`:
