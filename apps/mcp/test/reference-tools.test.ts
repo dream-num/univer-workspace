@@ -13,6 +13,7 @@ import { createGateway } from "./gateway.js";
 import { listenGateway } from "./listen-gateway.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
+import { htmlViewStylesSchema } from "../src/gateway/tools/core/html-view-styles.js";
 
 const cliSkillData = new URL("../../cli/skill-data/", import.meta.url).pathname;
 const mcpSkillData = new URL("../skills/", import.meta.url).pathname;
@@ -462,6 +463,32 @@ describe("API reference, Skills, resources and server instructions", () => {
       isError: true,
       structured: { code: "workspace-argument-invalid" },
     });
+  });
+
+  it("returns the ten bilingual HTML View styles from the frozen built-in snapshot on a default connection", async () => {
+    await start();
+    const client = await connect();
+    const result = await call(client, "html_view_styles", {});
+    expect(result.isError).not.toBe(true);
+    const output = htmlViewStylesSchema.parse(result.structured);
+    const templateIds = (await readdir(join(cliSkillData, "html-view/templates")))
+      .filter((file) => file.endsWith(".univer.html")).map((file) => file.replace(/\.univer\.html$/u, ""));
+    expect(output.styles).toHaveLength(10);
+    expect(output.styles.map(({ id }) => id).sort()).toEqual(templateIds.sort());
+    expect(output.default).toBe("night-gauge");
+    expect(output.styles[0]?.name).toEqual({ en: "Night Gauge", zh: "仪表夜航" });
+    for (const style of output.styles) {
+      for (const text of [style.name.en, style.name.zh, style.mood.en, style.mood.zh]) {
+        expect(text.trim().length).toBeGreaterThan(0);
+      }
+    }
+    const design = await call(client, "skills_read", { name: "html-view", resource: "references/design.md" });
+    const content = String(design.structured.content);
+    expect(output.styles.map(({ id }) => id)).toEqual(
+      [...content.matchAll(/^\| \[([^\]]+)\]/gmu)].map((match) => match[1]),
+    );
+    await writeFile(join(sourceRoot, "html-view/references/design.md"), content.replace("Night Gauge (default)", "Changed on disk (default)"));
+    expect((await call(client, "html_view_styles", {})).structured).toEqual(output);
   });
 
   it("lists MCP core and shared Skills and preserves fallback get, full and resource reads", async () => {
