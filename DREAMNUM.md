@@ -162,10 +162,11 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
-- The Browser Agents module keeps agent session records, which include document content returned by tools, and
+- The Browser Agents module keeps agent session records and model request records, which include document content returned by tools, and
   user-supplied model provider keys only in the user's browser: IndexedDB per Workspace user, or `sessionStorage` for a
   key the user chooses not to remember. Model requests go from the browser straight to the provider; no Workspace
-  endpoint, log, URL, or session record receives the key.
+  endpoint, log, URL, session record, or model request record receives the key. Model request records use a separate
+  browser IndexedDB database per Workspace user and redact the provider key before storage.
 - Short-lived pending CLI browser authorizations are bounded process-local state; approval issues a separate normal
   persisted login session and does not pass a browser cookie, password, or OAuth access token through the agent.
 - OAuth secrets, trusted Bot credentials, registry credentials, production licenses, and deployment credentials are

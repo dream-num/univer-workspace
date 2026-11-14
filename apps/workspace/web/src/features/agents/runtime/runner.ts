@@ -10,6 +10,9 @@ import type { Providers } from "../providers";
 import { redactProviderError } from "../providers";
 import type { SessionStore } from "../session-store";
 import { createModel } from "./model";
+import { createCallRecorder } from "../trajectory/recorder";
+import { expandRequests } from "../trajectory/record";
+import type { TrajectoryStore } from "../trajectory/store";
 import { gatewaySkillCatalogSchema, skillInvocation, skillsReminder } from "./skills";
 import { draftReminder } from "./draft-reminder";
 import type { DraftStatus } from "./draft-reminder";
@@ -24,6 +27,7 @@ export interface AgentRunnerDependencies {
   fetch: typeof fetch;
   locks: LockManager;
   sessions: SessionStore;
+  trajectory: TrajectoryStore;
   providers: Pick<Providers, "resolve">;
   createTokenSource(grant: McpGrant): McpTokenSource;
   mcpUrl: string;
@@ -126,21 +130,16 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
     let closing = false;
     let persistenceError: unknown;
     let streamError: Error | undefined;
+    let recorder: ReturnType<typeof createCallRecorder> | undefined;
     const outputs = new Set(run.session.messages.flatMap((message) => message.parts
       .filter(isToolUIPart).filter((part) => ["output-available", "output-error", "output-denied"].includes(part.state))
       .map((part) => JSON.stringify([message.id, part.toolCallId]))));
     function snapshot(messages = run.chat?.messages ?? run.session.messages) {
       let newOutput = false;
-      const now = new Date().toISOString();
       for (const message of messages) {
         for (const part of message.parts) {
           if (!isToolUIPart(part)) continue;
-          const existing = Object.hasOwn(run.session.toolTimings, part.toolCallId)
-            ? run.session.toolTimings[part.toolCallId] : undefined;
-          const timing = existing ?? { startedAt: now, endedAt: null };
-          if (!existing) run.session.toolTimings = { ...run.session.toolTimings, [part.toolCallId]: timing };
           if (!["output-available", "output-error", "output-denied"].includes(part.state)) continue;
-          if (timing.endedAt === null) timing.endedAt = now;
           const callId = JSON.stringify([message.id, part.toolCallId]);
           if (outputs.has(callId)) continue;
           outputs.add(callId);
@@ -172,7 +171,25 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const resolved = await provider;
       key = run.key = resolved.apiKey;
       if (run.stopped) return;
-      const model = createModel(resolved, run.session.model, deps.fetch, mcpUrl.origin);
+      let previous: { seq: number; body: string } | null | undefined;
+      try {
+        const last = expandRequests((await deps.trajectory.list(run.session.id)).records).at(-1);
+        previous = last ? { seq: last.record.seq, body: last.body } : null;
+      }
+      catch (error) { console.error("Failed to read agent model requests", error); }
+      const escaped = JSON.stringify(key).slice(1, -1);
+      recorder = createCallRecorder({ sessionId: run.session.id, store: deps.trajectory, fetch: deps.fetch,
+        previous,
+        redact: (body) => key ? body.replaceAll(escaped, "[redacted]").replaceAll(key, "[redacted]") : body,
+        onToolExecutionStart({ toolCall }) {
+          run.session.toolTimings = { ...run.session.toolTimings, [toolCall.toolCallId]: { startedAt: new Date().toISOString(), endedAt: null } };
+        },
+        onToolExecutionEnd({ toolCall }) {
+          const timing = run.session.toolTimings[toolCall.toolCallId];
+          if (timing) timing.endedAt = new Date().toISOString();
+        },
+      });
+      const model = createModel(resolved, run.session.model, recorder.fetch, mcpUrl.origin);
       token = deps.createTokenSource(run.session.mode);
       client = await createMCPClient({ transport: { type: "http", url: mcpUrl.href, fetch: authenticatedFetch(token, run.controller.signal) } });
       const message = run.session.messages.at(-1);
@@ -240,7 +257,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         }
       }, userOnlySkills);
       const agent = new ToolLoopAgent({
-        ...model, ...gated, stopWhen: stepCountIs(50),
+        ...model, ...gated, ...recorder.callbacks, stopWhen: stepCountIs(50),
         onError({ error }) { streamError = new Error(redactProviderError(error, key)); },
         onStepEnd({ usage }) {
           const inputTokens = usage.inputTokens;
@@ -297,6 +314,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         run.session = { ...run.session, status: transition(run.session.status, "fail"), error: redactProviderError(error, key) };
       }
     } finally {
+      recorder?.finish();
       closing = true;
       unsubscribe?.();
       const cleanup = await Promise.allSettled([run.chat?.dispose(), client?.close(), token?.dispose()]);
