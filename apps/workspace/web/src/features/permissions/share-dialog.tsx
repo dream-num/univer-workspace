@@ -19,6 +19,7 @@ import {
   userSearchQueryOptions,
 } from "./permissions.queries";
 import { RoleBadge } from "./role-badge";
+import { SourceSheets } from "./source-sheets";
 
 import { defaultSharedView, resourceShareUrl, type ResourceView } from "../resource-view/resource-view";
 
@@ -221,7 +222,7 @@ export function ShareDialog(props: {
       <h3 className="m-0 mb-2 text-sm font-semibold">
         {t("linkSharing")}
       </h3>
-      <div className="overflow-hidden rounded-xl border border-primary/15 bg-primary/5">
+      <div className="shrink-0 overflow-hidden rounded-xl border border-primary/15 bg-primary/5">
         <div className="flex flex-wrap items-center gap-3 p-4">
           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
             <Globe2 className="size-5" />
@@ -341,6 +342,7 @@ export function ShareDialog(props: {
         <LockKeyhole className="size-3.5 shrink-0" />
         {t("linkSharingPrivacyNote")}
       </p>
+      {defaultView === "immersive" && <SourceSheets key={nodeId} nodeId={nodeId} linkSharingEnabled={linkSharingEnabled} />}
     </Dialog>
   );
 }
