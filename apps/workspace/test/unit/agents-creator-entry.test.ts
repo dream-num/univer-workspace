@@ -4,28 +4,28 @@ import { createMemoryHistory, createRootRouteWithContext, createRouter, RouterPr
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { LanguageProvider } from "../../../shared/i18n";
-import { Route } from "../../../routes/spaces_.$spaceId.agents";
-import { AgentsPage } from "./sessions";
+import { LanguageProvider } from "../../web/src/shared/i18n";
+import { Route } from "../../web/src/routes/spaces_.$spaceId.agents";
+import { AgentsPage } from "../../web/src/features/agents/ui/sessions";
 
 const { start } = vi.hoisted(() => ({ start: vi.fn() }));
-vi.mock("../../auth", () => ({
+vi.mock("../../web/src/features/auth", () => ({
   requireAuthenticatedSession: async () => ({ authenticated: true }),
   sessionQueryOptions: { queryKey: ["session"], queryFn: async () => ({ authenticated: false }) },
 }));
-vi.mock("../../spaces", () => ({ ensureSpace: async () => ({ id: "repo" }) }));
-vi.mock("../../../modes/registry", () => ({ useModeDefinition: () => ({
+vi.mock("../../web/src/features/spaces", () => ({ ensureSpace: async () => ({ id: "repo" }) }));
+vi.mock("../../web/src/modes/registry", () => ({ useModeDefinition: () => ({
   pages: { agents: TestAgentsPage },
 }) }));
-vi.mock("./client", () => ({ useAgentClient: () => ({
+vi.mock("../../web/src/features/agents/ui/client", () => ({ useAgentClient: () => ({
   userId: "user", sessions: { list: async () => [], subscribe: () => () => {} },
   prewarm: async () => {}, runner: async () => ({ start }),
 }) }));
-vi.mock("./composer-settings", () => ({
+vi.mock("../../web/src/features/agents/ui/composer-settings", () => ({
   useAgentModel: () => ({ selected: { provider: { id: "provider", kind: "openai" }, modelId: "model" }, setSettings: vi.fn() }),
   AgentModelControls: () => null, AgentRepositorySelect: () => null,
 }));
-vi.mock("./references", () => ({ AgentReferencePicker: () => null, AgentReferencePill: () => null, referenceTrigger: () => null }));
+vi.mock("../../web/src/features/agents/ui/references", () => ({ AgentReferencePicker: () => null, AgentReferencePill: () => null, referenceTrigger: () => null }));
 
 function TestAgentsPage(props: { spaceId: string; prompt?: string }) {
   return createElement(AgentsPage, { ...props, renderPage: (content) => content });

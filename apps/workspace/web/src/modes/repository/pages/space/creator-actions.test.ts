@@ -2,15 +2,15 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement, type ComponentProps, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, expect, it, vi } from "vitest";
-import { ResourceActions } from "../nodes/resource-header";
-import { AppsView } from "../../modes/repository/pages/space/apps-view";
-import { recent } from "../../modes/repository/data/fixtures.test-support";
-import { LanguageProvider } from "../../shared/i18n";
-import { UiModeProvider } from "../../shared/ui-mode";
+import { ResourceActions } from "../../../../features/nodes/resource-header";
+import { AppsView } from "./apps-view";
+import { recent } from "../../data/fixtures.test-support";
+import { LanguageProvider } from "../../../../shared/i18n";
+import { UiModeProvider } from "../../../../shared/ui-mode";
 
-vi.mock("../editor", () => ({ CollaboratorAvatars: () => null }));
-vi.mock("../permissions", () => ({ ShareDialog: () => null }));
-vi.mock("../../shared/resizable-sidebar", () => ({ useMediaQuery: () => false }));
+vi.mock("../../../../features/editor", () => ({ CollaboratorAvatars: () => null }));
+vi.mock("../../../../features/permissions", () => ({ ShareDialog: () => null }));
+vi.mock("../../../../shared/resizable-sidebar", () => ({ useMediaQuery: () => false }));
 vi.mock("@tanstack/react-router", () => ({
   Link: ({ to, params = {}, search, children, ...props }: { to: string; params?: Record<string, string>; search?: unknown; children: ReactNode }) => createElement("a", {
     ...props, href: to.replace(/\$(\w+)/g, (_, key: string) => params[key] ?? ""), "data-search": JSON.stringify(search),
