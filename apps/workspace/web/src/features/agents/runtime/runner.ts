@@ -19,6 +19,8 @@ import type { DraftStatus } from "./draft-reminder";
 import { redactMessages, repairInterruptedTools, withStructuredContent, worktreeExtractors } from "./messages";
 import { appendUserMessage, gateTools, settleApprovals } from "./approvals";
 import type { ApprovalSettlement } from "./approvals";
+import { withRenderCheck } from "./render-check";
+import type { CheckHtmlViewDraft } from "../../html-views/render-check";
 
 type RuntimeMessage = UIMessage<unknown, never>;
 
@@ -32,6 +34,7 @@ export interface AgentRunnerDependencies {
   createTokenSource(grant: McpGrant): McpTokenSource;
   mcpUrl: string;
   getDraft(id: string): Promise<DraftStatus | null>;
+  checkHtmlViewDraft?: CheckHtmlViewDraft;
 }
 export interface StartAgentInput {
   scope: AgentScope;
@@ -257,7 +260,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         }
       }, userOnlySkills);
       const agent = new ToolLoopAgent({
-        ...model, ...gated, ...recorder.callbacks, stopWhen: stepCountIs(50),
+        ...model, ...gated, tools: withRenderCheck(gated.tools, deps.checkHtmlViewDraft), ...recorder.callbacks, stopWhen: stepCountIs(50),
         onError({ error }) { streamError = new Error(redactProviderError(error, key)); },
         onStepEnd({ usage }) {
           const inputTokens = usage.inputTokens;

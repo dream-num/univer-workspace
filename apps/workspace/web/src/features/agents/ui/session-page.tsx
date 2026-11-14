@@ -27,6 +27,7 @@ import { replacedDraftIds } from "../replaced-drafts";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
+import { renderCheckSchema } from "../../html-views/render-check";
 
 type DraftFeedback = { readonly disabled: boolean; readonly send: (message: string) => void; readonly fill: (text: string) => void };
 
@@ -306,6 +307,7 @@ const pageDraftOutput = z.object({
   isError: z.boolean().optional(),
   structuredContent: z.object({ draft: z.object({ id: z.string().min(1) }) }),
 });
+const checkedOutput = z.object({ structuredContent: z.object({ renderCheck: renderCheckSchema }) });
 function StepRow({ part, session, replaced, feedback }: {
   readonly part: StepPart; readonly session: AgentSession; readonly replaced: ReadonlySet<string>; readonly feedback: DraftFeedback | undefined;
 }) {
@@ -342,6 +344,9 @@ function ToolBody({ part, state, status }: { readonly part: ToolPart; readonly s
   const url = pullRequestUrl(output, window.location.origin);
   const error = "errorText" in part ? part.errorText : undefined;
   const completed = state === "completed" || state === "failed";
+  const checked = checkedOutput.safeParse(output);
   return <dl><dt>{m.arguments}</dt><dd>{summarize(part.input)}</dd>
-    <dt>{m.result}</dt><dd>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{resultSummary(output, status, part.input)}</a> : error ? resultSummary(error, status) : completed ? resultSummary(output, status, part.input) : state === "running" ? m.pending : status}</dd></dl>;
+    <dt>{m.result}</dt><dd>{url ? <a href={url} target="_blank" rel="noopener noreferrer">{resultSummary(output, status, part.input)}</a> : error ? resultSummary(error, status) : completed ? resultSummary(output, status, part.input) : state === "running" ? m.pending : status}</dd>
+    {checked.success && <><dt>{m.renderCheck}</dt><dd><pre>{JSON.stringify(checked.data.structuredContent.renderCheck, null, 2)}</pre></dd></>}
+  </dl>;
 }

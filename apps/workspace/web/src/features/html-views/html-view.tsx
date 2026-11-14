@@ -27,11 +27,13 @@ export function HtmlView({
   immersive,
   actionsContainer,
   draft = false,
+  onSourceLoaded,
 }: {
   source: string;
   immersive: boolean;
   actionsContainer: HTMLElement | null;
   draft?: boolean;
+  onSourceLoaded?: (unitId: string) => void;
   allowedOrigins?: readonly string[];
   mediaSources?: readonly string[];
 }) {
@@ -67,9 +69,10 @@ export function HtmlView({
         throw error;
       });
       writeModes.set(unitId, engine.writeMode);
+      onSourceLoaded?.(unitId);
       return engine;
     },
-    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft],
+    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft, onSourceLoaded],
   );
   useEffect(() => {
     if (inspecting) native.close();
