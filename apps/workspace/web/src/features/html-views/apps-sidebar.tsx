@@ -68,13 +68,13 @@ export function AppsSidebarSection(props: { readonly storageScope: string }) {
   };
 
   return (
-    <section className="mt-1 min-w-0" aria-label={t("apps")}>
+    <section className="mt-1 min-w-0" aria-label={t("pages")}>
       <div className="flex min-h-11 items-center rounded-md pr-0.5 pl-1.5 md:min-h-8">
         <button
           type="button"
           className="grid size-9 shrink-0 place-items-center rounded-sm text-subtle-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 md:size-3.5"
           aria-expanded={sectionExpanded}
-          aria-label={t(sectionExpanded ? "collapseSection" : "expandSection", { name: t("apps") })}
+          aria-label={t(sectionExpanded ? "collapseSection" : "expandSection", { name: t("pages") })}
           onClick={() => setSectionExpanded(!sectionExpanded)}
         >
           <ChevronRightIcon
@@ -90,12 +90,12 @@ export function AppsSidebarSection(props: { readonly storageScope: string }) {
           className="ml-[5px] flex h-11 min-w-0 flex-1 items-center truncate text-xs font-semibold text-subtle-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/40 md:h-8"
           onClick={() => setSectionExpanded(true)}
         >
-          {t("apps")}
+          {t("pages")}
         </Link>
       </div>
       {sectionExpanded ? (
         query.isPending ? null : tree.length === 0 ? (
-          <p className="m-0 py-1.5 pl-2.5 text-xs text-subtle-foreground">{t("appsEmpty")}</p>
+          <p className="m-0 py-1.5 pl-2.5 text-xs text-subtle-foreground">{t("pagesEmpty")}</p>
         ) : tree.length === 1 ? (
           <AppTreeFolders
             folders={tree[0]?.folders ?? []}

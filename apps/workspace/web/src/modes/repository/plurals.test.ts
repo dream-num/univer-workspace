@@ -22,7 +22,7 @@ describe("Repository count messages", () => {
     ["repositoryAboutStars", "star", "stars"],
     ["repositoryHomePullDescription", "Lin&#x27;s Pull request contains 1 file in Plans.", "Lin&#x27;s Pull request contains 2 files in Plans."],
     ["dashboardResults", "1 repository found", "2 repositories found"],
-    ["repositoryAppsSummary", "1 page. Choose it as the default page.", "2 pages. Choose one as the default page."],
+    ["repositoryPagesSummary", "1 page. Choose it as the default page.", "2 pages. Choose one as the default page."],
     ["issueCommentCount", "1 comment", "2 comments"],
     ["issueReferenceCount", "1 linked file", "2 linked files"],
   ] satisfies readonly [MessageKey, string, string][])("pluralizes %s with mode overrides", (key, one, other) => {

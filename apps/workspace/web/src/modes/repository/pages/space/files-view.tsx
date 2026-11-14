@@ -114,7 +114,7 @@ export function CodeTab({
                 </div>
               ) : (
                 <h2 className="m-0 min-w-0 truncate py-2.5 text-sm font-semibold">
-                  {selectedApp ? displayAppName(selectedApp.node.name) : t("apps")}
+                  {selectedApp ? displayAppName(selectedApp.node.name) : t("pages")}
                 </h2>
               )}
               {selectedApp ? (
@@ -147,12 +147,12 @@ export function CodeTab({
               </div>
             ) : (
               <Empty
-                title={t("repositoryNoApps")}
+                title={t("repositoryNoPages")}
                 description={
                   <>
-                    {t("appsEmptyDescription")}
+                    {t("pagesEmptyDescription")}
                     <br />
-                    {t("appsEmptyHint")}
+                    {t("pagesEmptyHint")}
                   </>
                 }
               />

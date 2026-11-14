@@ -125,8 +125,8 @@ function RepositoryPagesDirectory({ spaceId, q = "" }: AppsPageProps) {
               ) : (
                 <div className="repository-empty">
                   <Globe aria-hidden="true" />
-                  <h2>{t(q ? "noMatchingResources" : "appsEmpty")}</h2>
-                  {!q ? <p className="max-w-lg leading-6">{t("appsEmptyHint")}</p> : null}
+                  <h2>{t(q ? "noMatchingResources" : "pagesEmpty")}</h2>
+                  {!q ? <p className="max-w-lg leading-6">{t("pagesEmptyHint")}</p> : null}
                 </div>
               )}
             </RepositoryQueryState>
