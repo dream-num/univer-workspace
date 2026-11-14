@@ -238,7 +238,7 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 
 执行中新发现的事实。
 
-- `ai@7.0.166` 只在消费方继续读取流时触发 `onAbort`。引导消息在模型回复中途打断调用时会触发 `onAbort`，记录为 `aborted`。引导消息在 provider 回复之前打断时，SDK 不触发任何结束事件，这条记录会一直停在 `running`。这与设计假设不符，已报告操作者，等待决定。
+- `ai@7.0.166` 只在消费方继续读取流时触发 `onAbort`。引导消息在模型回复中途打断调用时会触发 `onAbort`，记录为 `aborted`。引导消息在 provider 回复之前打断时，SDK 不触发任何结束事件，这条记录会一直停在 `running`。这与设计假设不符，报告操作者后按其决定修复：下一个 `onStepStart` 把仍为 `running` 的上一个调用记为 `aborted`。实机复现两次引导取消，空闲后没有 `running` 记录，被打断的调用显示为红色 Aborted 行。
 - 浏览器引导消息无法附带 reference，只有新会话的输入框能附带。TR1 Lane 3 和 TR2 Lane 4 改为在新会话的第一条消息里附带。
 - verify-uvw 没有「HTML View 草稿流程」，原因见上面审批一条。
 

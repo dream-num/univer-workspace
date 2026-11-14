@@ -41,15 +41,18 @@ Trajectory 展示的每条消息都是它发给模型时的样子。这条规则
 
 | 事件 | 记录内容 |
 |---|---|
-| `onStepStart` | 新建当前调用，记 `startedAt`，写入一条 `running` 记录 |
+| `onStepStart` | 上一个调用仍为 `running` 时先记为 `aborted`，再新建当前调用，记 `startedAt`，写入一条 `running` 记录 |
 | `onLanguageModelCallStart` | 给当前调用加一次 attempt，记 attempt 的 `startedAt` |
 | provider fetch | 把请求体和 HTTP 状态填进当前 attempt。第一次 attempt 的请求体作为记录的请求体。非 2xx 响应读取最多 64 KB 错误正文 |
 | `onLanguageModelCallEnd` | 记 `endedAt`、`usage`、`performance`、`finishReason` 和 `content`（模型返回的 text、reasoning、tool-call） |
 | `onStepError` | 当前调用记为 `error`，附错误信息 |
+| `onAbort` | 当前调用记为 `aborted` |
 | runner 的 `finally` | 仍为 `running` 的调用记为 `aborted` |
-| `onToolExecutionStart`、`onToolExecutionEnd` | 写 `session.toolTimings[toolCallId]`，取代 `snapshot()` 里按 part 出现时间记的写法 |
+| `onToolExecutionStart`、`onToolExecutionEnd` | 写 `session.toolTimings[toolCallId]`，取代 `snapshot()` 里按 part 出现时间记的写法。回调里不发布会话，计时随下一次消息更新发布，避免每个工具多两次重渲染 |
 
 调用边界用 `onStepStart`，不用事件里的 `callId`。`ai@7.0.166` 的 `callId` 在每次 `streamText` 调用时生成一次（`dist/index.js` 第 9798 行），同一次 run 的所有步骤共用它。SDK 的重试包在 `streamLanguageModelCall` 外面，每次重试都会再次触发 `onLanguageModelCallStart`，而 step start 在一个步骤内只通知一次。所以一个步骤是一条记录，步骤内每次 `onLanguageModelCallStart` 是一次 attempt。
+
+`ai@7.0.166` 只在消费方继续读取流时触发 `onAbort`。引导消息在 provider 回复之前取消流时，这个步骤收不到任何结束事件。同一会话的调用是串行的，所以下一个 `onStepStart` 到来时，仍为 `running` 的上一个调用已经结束，记为 `aborted`。
 
 同一会话的模型调用是串行的，所以记录器用一个「当前调用」变量把 fetch 归到调用上，不需要锁。
 
@@ -132,7 +135,7 @@ type Step =
 3. 遇到 `user` 消息就开始新 Turn，生成 user step，`sentAt` 取首次包含它的调用的 `startedAt`。这条规则同时覆盖首条消息和运行中追加的引导消息。
 4. 遇到 `assistant` 消息就把它作为上一次调用的 `replay`，并与该调用的 `response` 比较文本和工具调用 id，不一致时设置 `replayMismatch`。
 5. 遇到 `tool` 消息就按 `tool_call_id` 填到对应的 tool step。
-6. 每次调用本身生成一个 assistant step，它的 `response` 里每个工具调用生成一个 tool step，`parentStep` 指向它。最后一次调用没有下一次请求，tool step 的 `message` 为 `null`，状态为 `unsent`。
+6. 每次调用本身生成一个 assistant step，它的 `response` 里每个工具调用生成一个 tool step，`parentStep` 指向它。最后一次调用没有下一次请求，tool step 的 `message` 为 `null`，状态为 `unsent`。失败或中断的调用没有子行，但如果下一次请求回放了它的工具调用（例如中断后补上的工具结果），按回放生成 tool step，模型收到的工具消息不会从树里消失。
 7. 工具耗时取 `session.toolTimings`。工具的错误状态和 `mcpOutput` 按 `toolCallId` 从 `session.messages` 的 tool part 取。
 8. step 编号在 Turn 内从 1 开始，按上面生成顺序递增。
 9. 会话有消息但没有任何记录时，`unrecorded` 为 `true`。
@@ -158,7 +161,7 @@ type Step =
 
 ### 会话页
 
-打开 Debug mode 后，会话页顶部出现「对话」和「Trajectory」两个标签。标签状态是组件内状态，不进 URL。Trajectory 标签占满会话页宽度，替换对话列和右侧栏，不显示输入框。
+打开 Debug mode 后，会话页顶部出现「对话」和「Trajectory」两个标签。标签状态是组件内状态，不进 URL。Trajectory 标签占满会话页宽度，替换对话列和右侧栏，不显示输入框。切换标签时对话面板保持挂载，输入框里的草稿不丢。打开 Debug mode 后就预先加载 Trajectory 视图模块，点击标签时不经过 Suspense；关闭时不加载。
 
 工具栏依次显示 Turn 数、模型调用数、工具调用数、输入和输出 token、缓存命中率、错误数、history rewrite 次数，然后是「只看错误」、「全部展开或折叠」和搜索框。搜索覆盖全部发送内容和 MCP 原始结果。
 
@@ -169,7 +172,7 @@ type Step =
 - Turn 下依次是 USER、ASSISTANT 和工具行。ASSISTANT 行标题取回复文本或 reasoning 的第一行，没有文本时显示工具调用数。瀑布条标出首个输出 token 的时间点。
 - 工具行缩进在发起它的 ASSISTANT 下，显示工具名和发送内容的第一行。
 - 失败、中断和 history rewrite 的行用红色标出，并在行尾写原因。
-- 运行中的会话每秒刷新一次，正在进行的调用显示持续增长的瀑布条。
+- 运行中的会话每秒刷新一次，正在进行的调用显示持续增长的瀑布条。运行中的 Turn 按已用时间向上取整到 10 秒缩放，已结束的 Turn 按实际时长缩放。
 - `unrecorded` 为真时，树的位置显示「此会话创建于 trajectory 记录上线之前，没有模型请求记录。」
 
 ### 详情面板
