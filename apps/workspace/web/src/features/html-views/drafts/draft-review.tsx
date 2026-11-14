@@ -1,8 +1,6 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
-import { useQueries, useQuery } from "@tanstack/react-query";
-import { getHtmlViewUnitIds, parseHtmlView } from "@univerjs-labs/html-view";
-import { api } from "../../../shared/api/client";
-import { ApiError, apiError } from "../../../shared/api/errors";
+import { lazy, Suspense, useCallback, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { ApiError } from "../../../shared/api/errors";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
 import { nodeQueryOptions } from "../../nodes/nodes.queries";
@@ -10,6 +8,7 @@ import { resourceOpenQueryOptions } from "../../resources/resources.queries";
 import { spaceQueryOptions } from "../../spaces/spaces.queries";
 import { draftContentQueryOptions, htmlViewDraftQueryOptions, usePublishDraft, useRejectDraft, type HtmlViewDraft } from "./draft-queries";
 import { useDraftMessages } from "./messages";
+import { useHtmlViewSources } from "../use-html-view-sources";
 
 const DraftPreview = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftPreview })));
 const DraftVersions = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftVersions })));
@@ -57,18 +56,7 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   const [seen, setSeen] = useState(false);
   const [changes, setChanges] = useState<string | null>(null);
   const markSeen = useCallback(() => setSeen(true), []);
-  const sourceIds = useMemo(() => {
-    if (content.data === undefined) return null;
-    try { return getHtmlViewUnitIds(parseHtmlView(content.data)); } catch { return null; }
-  }, [content.data]);
-  const sources = useQueries({ queries: (sourceIds ?? []).map((unitId) => ({
-    queryKey: ["unit-resources", unitId],
-    queryFn: async ({ signal }: { signal: AbortSignal }) => {
-      const { data, error } = await api.GET("/api/unit-resources/{unitId}", { params: { path: { unitId } }, signal });
-      if (error) throw apiError(error);
-      return data;
-    },
-  })) });
+  const { sourceIds, sources } = useHtmlViewSources(content.data);
   const disabled = publish.isPending || reject.isPending;
   const error = publish.error ?? reject.error ?? content.error;
   const decide = (approved: boolean) => {

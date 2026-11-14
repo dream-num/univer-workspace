@@ -73,6 +73,7 @@ beforeEach(() => {
       draft = { ...draft, state: "rejected" };
     }
     if (path.startsWith("/api/html-view-drafts/")) return notFound ? Response.json({ error: { message: "Missing" } }, { status: 404 }) : Response.json({ draft });
+    if (path === "/api/unit-resources/source-unit") return Response.json({ node: { id: "source-node", name: "Source Sheet" } });
     if (path === "/api/spaces/sales") return Response.json({ fullName: "alice/sales", publicRead: false });
     if (path === "/api/nodes/folder-1") return Response.json({ node: { name: "Reports" } });
     if (path === "/api/nodes/media-1") return Response.json({ node: { resource: { id: "media-resource", kind: "blob", availability: "ready", mediaType: "image/png" } } });
@@ -311,4 +312,12 @@ it("uses Chinese review strings when Chinese is selected", async () => {
   await waitFor(() => expect(container.textContent).toContain("等待审阅"));
   expect(button("发布").disabled).toBe(false);
   expect(container.textContent).toContain("目标位置");
+});
+
+
+it("lists bound source Sheet names through the shared source loader", async () => {
+  html = '<!doctype html><html><body><p data-univer-cell-text="source-unit:sheet-1:A1"></p></body></html>';
+  await render("card");
+  await waitFor(() => expect(container.textContent).toContain("Source Sheet"));
+  expect(count("/source-unit")).toBe(1);
 });
