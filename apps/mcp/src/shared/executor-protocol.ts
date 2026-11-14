@@ -106,6 +106,32 @@ export const htmlViewInput = z
     "HTML exceeds the 512 KiB UTF-8 limit.",
   );
 
+const htmlViewCellSample = z.object({
+  value: z.union([z.string(), z.number(), z.boolean(), z.null()])
+    .describe("Raw cell value, null for empty. Strings over 80 characters are cut to 80 plus a trailing ellipsis."),
+  formula: z.literal(true).optional().describe("Present when the cell has a formula."),
+  format: z.string().optional().describe("Number format pattern, excluding empty and General."),
+});
+const htmlViewBindingSource = z.object({
+  unitId: z.string(),
+  sheet: z.string().describe("Worksheet name, or ID when unnamed."),
+  ref: z.string().describe("A1 cell or range reference, such as B7 or A8:E44."),
+});
+const htmlViewBindingSample = z.discriminatedUnion("kind", [
+  htmlViewBindingSource.extend({
+    kind: z.enum(["text", "model", "cell"]), cell: htmlViewCellSample,
+  }),
+  htmlViewBindingSource.extend({
+    kind: z.literal("range"),
+    range: z.object({
+      rows: z.int().positive(), columns: z.int().positive(),
+      filledRows: z.int().nonnegative().describe("Rows with at least one non-empty value in the range."),
+      head: z.array(z.array(htmlViewCellSample).max(8)).max(3)
+        .describe("Samples for at most the first 3 rows and first 8 columns."),
+    }),
+  }),
+]);
+
 // Source maps are SDK-owned JSON. The executor parses them with the SDK before use.
 export const markdownSourceMap = z.array(z.json());
 export const markdownBlocks = z
@@ -319,12 +345,14 @@ export const opSpecs = {
     effect: "read",
     payload: "none",
     rerun: ["auth"],
-    limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    limits: { requestBytes: 4 * MiB, responseBytes: MiB, budgetMs: 30_000 },
     input: z.object({ html: htmlViewInput }),
     output: z.object({
       valid: z.literal(true),
       unitIds: z.array(z.string()),
       bindingCount: z.int().nonnegative(),
+      bindings: z.array(htmlViewBindingSample).max(60).describe("Binding samples in document order. Compare with the page plan."),
+      truncated: z.literal(true).optional().describe("Present when more than 60 bindings exist."),
     }),
     route: () => ({ scope: "htmlView.validate", unitId: null }),
   }),

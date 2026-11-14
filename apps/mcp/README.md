@@ -255,7 +255,7 @@ and the matching owner/slug candidates when available.
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
 | `skill_source_read` | `source`, optional `skill`, `path`, `cursor` | Resolves a pinned GitHub, skills.sh, ClawHub or Space zip/folder source; returns candidates, a Skill with scan findings, or a text page. Does not import or publish |
 | `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path`, `argumentHint` and `metadata`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
-| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount }`. Up to 512 KiB of valid UTF-8 HTML |
+| `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount, bindings, truncated? }`. Up to 512 KiB of valid UTF-8 HTML |
 | `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
 | `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
 | `html_view_replace` | Required `resource`, inline `html`, `etag`, `idempotency_key` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
@@ -792,7 +792,9 @@ handling and calls the same feature.
 
 HTML is limited to 512 KiB of UTF-8 text at the tool and RPC input boundaries;
 the RPC frame limit is 4 MiB, including JSON escaping and credentials. Validation
-returns the CLI's bare `{valid, unitIds, bindingCount}`. Creation and replacement
+returns the CLI's bare `{valid, unitIds, bindingCount, bindings, truncated?}`, with at most 60 binding samples of cell values and range summaries in document order (`truncated: true` when more exist).
+Compare `bindings` with the page plan for empty cells where data is expected, header text where numbers are expected, formula cells behind controls that write, and numbers carrying a date format.
+Creation and replacement
 send the exact validated HTML in one `POST /api/html-view-drafts` with `Idempotency-Key`.
 The executor advertises one `htmlView.draft` operation for both intents. A gateway
 hides both write tools when an old executor lacks this operation. The preview URL

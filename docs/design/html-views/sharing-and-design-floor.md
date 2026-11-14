@@ -41,7 +41,9 @@ HTML view 是一个普通 Blob，文件名以 `.univer.html` 结尾。系统只�
 CLI 和 MCP 共用 `packages/client-core/src/html-view.ts` 的 `WorkspaceHtmlViewFeature`：
 
 - `validate` 用 `parseHtmlView()` 解析声明式引用，再通过 trunk runtime 的 `exportUnitData` 检查子表存在、
-  坐标不越界，返回 `{ valid, unitIds, bindingCount }`。它不执行脚本，也不渲染页面。
+  坐标不越界，返回 `{ valid, unitIds, bindingCount, bindings, truncated? }`。`bindings` 按文档顺序最多返回 60 条样本，
+  超过时返回 `truncated: true`；样本含原始值、公式标记和数字格式，范围含行列数、非空行数和最多 3 行 8 列的 `head`。
+  它不执行脚本，也不渲染页面。
 - `create` 做同样的校验，把校验过的字节上传为 Blob，返回 `workspaceUrl`，形如 `<origin>/nodes/<nodeId>`。
 
 入口如下：

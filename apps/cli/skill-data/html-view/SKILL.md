@@ -56,8 +56,9 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 Run `html-view validate` with the complete HTML source. Then run `html-view create` with the same source, destination Space, name `Dashboard`, stable idempotency key, and optional parent Node. Follow the `core` Skill for source handling.
 
 `validate` parses declarative HTML bindings, reads accessible trunk Sheet data, and checks
-worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount }`. It does not
-execute JavaScript or discover references created by scripts. A JavaScript-only page may report
+worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount, bindings, truncated? }`, with at most 60 binding samples of cell values and range summaries in document order (`truncated: true` when more exist).
+Compare `bindings` with the page plan for empty cells where data is expected, header text where numbers are expected, formula cells behind controls that write, and numbers carrying a date format.
+It does not execute JavaScript or discover references created by scripts. A JavaScript-only page may report
 zero static bindings; runtime requests still require access to each source Unit.
 
 Blob write keys must be 16–200 ASCII letters, digits, underscores or hyphens; a UUID is a suitable key. This applies to both creation and replacement.

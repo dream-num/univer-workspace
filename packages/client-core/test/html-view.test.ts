@@ -1,4 +1,4 @@
-import { LocaleType } from "@univerjs/core";
+import { LocaleType, type IWorkbookData } from "@univerjs/core";
 import { readFile } from "node:fs/promises";
 import { expect, it, vi } from "vitest";
 import { WorkspaceBlobFeature } from "../src/blob.js";
@@ -345,4 +345,104 @@ it.each(["create", "replace"] as const)("saves a %s draft after validation while
   } }]);
   expect(uploadBytes).not.toHaveBeenCalled();
   expect(json.mock.calls.some(([path]) => /blob-upload-sessions|blob-resources.*content/.test(path))).toBe(false);
+});
+
+function samplingFeature(workbook: IWorkbookData) {
+  const exportUnitData = vi.fn<WorkspaceHtmlViewOptions["runtime"]["exportUnitData"]>(async ({ target }) => ({ ...workbook, id: target.unitId }));
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: vi.fn(), blobs: { uploadBytes: vi.fn() }, configuredOrigin: vi.fn(),
+    resolveTrunkRuntimeTarget: async ({ unitId }) => ({
+      origin: "https://workspace.test", scope: { kind: "trunk" }, unitId, unitType: "sheet", revision: 1,
+    }),
+    runtime: { exportUnitData },
+  });
+  return { feature, exportUnitData };
+}
+
+const sampleWorkbook: IWorkbookData = {
+  id: "unit", name: "Budget", appVersion: "1", locale: LocaleType.EN_US,
+  styles: { date: { n: { pattern: "yyyy-mm" } }, general: { n: { pattern: "General" } } },
+  sheetOrder: ["budget"],
+  sheets: { budget: {
+    name: "Budget", rowCount: 100, columnCount: 30,
+    cellData: {
+      6: { 1: { v: 46357, s: "date" }, 2: { v: 42, f: "=SUM(A1:A6)", s: "general" } },
+      7: { 0: { v: "Header" }, 1: { v: "x".repeat(81) }, 8: { v: "ninth column" } },
+      8: { 1: { v: 0, s: { n: { pattern: "0.00" } } }, 2: { v: false } },
+      9: { 0: { v: "" }, 1: { s: "date" } },
+      10: { 8: { v: "outside head" } },
+      11: { 9: { v: "outside range" } },
+      12: { 0: { v: null } },
+      13: { 0: { si: "shared", v: 7 } },
+    },
+  }, unnamed: { rowCount: 100, columnCount: 30 } },
+};
+
+it("samples cells, formulas, empty values and ranges in document order from each existing export", async () => {
+  const { feature, exportUnitData } = samplingFeature(sampleWorkbook);
+  const result = await feature.validate({ name: "view.univer.html", bytes: Buffer.from(`
+    <output data-univer-cell-text="unit:budget:B7"></output>
+    <input data-univer-cell-model="other:budget:C7">
+    <div data-univer-cell-subscribe="unit:unnamed:AA2"></div>
+    <div data-univer-range-subscribe="other:budget:A8:I14"></div>
+  `) });
+  expect(result).toEqual({
+    valid: true, unitIds: ["unit", "other"], bindingCount: 4,
+    bindings: [
+      { kind: "text", unitId: "unit", sheet: "Budget", ref: "B7", cell: { value: 46357, format: "yyyy-mm" } },
+      { kind: "model", unitId: "other", sheet: "Budget", ref: "C7", cell: { value: 42, formula: true } },
+      { kind: "cell", unitId: "unit", sheet: "unnamed", ref: "AA2", cell: { value: null } },
+      { kind: "range", unitId: "other", sheet: "Budget", ref: "A8:I14", range: {
+        rows: 7, columns: 9, filledRows: 4,
+        head: [
+          [{ value: "Header" }, { value: "x".repeat(80) + "…" }, ...Array.from({ length: 6 }, () => ({ value: null }))],
+          [{ value: null }, { value: 0, format: "0.00" }, { value: false }, ...Array.from({ length: 5 }, () => ({ value: null }))],
+          [{ value: null }, { value: null, format: "yyyy-mm" }, ...Array.from({ length: 6 }, () => ({ value: null }))],
+        ],
+      } },
+    ],
+  });
+  expect(exportUnitData).toHaveBeenCalledTimes(2);
+});
+
+it("keeps short strings, omits empty formats, and marks shared formulas", async () => {
+  const { feature } = samplingFeature({ ...sampleWorkbook, sheets: { budget: {
+    rowCount: 100, columnCount: 30,
+    cellData: { 0: {
+      0: { v: "x".repeat(80), s: { n: { pattern: "" } } },
+      1: { v: null, si: "shared" },
+      2: { p: { id: "rich", documentStyle: {}, body: { dataStream: "Rich text\r\n" } } },
+      3: { v: "😀".repeat(80) },
+      4: { v: "😀".repeat(81) },
+    } },
+  } } });
+  const result = await feature.validate({ name: "view.univer.html", bytes: Buffer.from(
+    '<div data-univer-range-subscribe="unit:budget:A1:E1"></div>',
+  ) });
+  expect(result.bindings).toEqual([
+    { kind: "range", unitId: "unit", sheet: "budget", ref: "A1:E1", range: {
+      rows: 1, columns: 5, filledRows: 1,
+      head: [[{ value: "x".repeat(80) }, { value: null, formula: true }, { value: "Rich text" }, { value: "😀".repeat(80) }, { value: "😀".repeat(80) + "…" }]],
+    } },
+  ]);
+});
+
+it.each([0, 60, 61])("caps samples at 60 without losing the binding count (%s)", async (count) => {
+  const { feature } = samplingFeature(sampleWorkbook);
+  const result = await feature.validate({ name: "view.univer.html", bytes: Buffer.from(
+    Array.from({ length: count }, (_, row) => `<output data-univer-cell-text="unit:budget:A${row + 1}"></output>`).join(""),
+  ) });
+  expect(result.bindingCount).toBe(count);
+  expect(result.bindings).toHaveLength(Math.min(count, 60));
+  if (count > 60) expect(result).toHaveProperty("truncated", true);
+  else expect(result).not.toHaveProperty("truncated");
+  if (count) expect(result.bindings.at(-1)?.ref).toBe(`A${Math.min(count, 60)}`);
+});
+
+it("still validates bindings beyond the sample cap", async () => {
+  const { feature } = samplingFeature(sampleWorkbook);
+  await expect(feature.validate({ name: "view.univer.html", bytes: Buffer.from(
+    '<output data-univer-cell-text="unit:budget:A1"></output>'.repeat(60) +
+    '<output data-univer-cell-text="unit:missing:A1"></output>',
+  ) })).rejects.toMatchObject({ code: "workspace-html-view-source-invalid" });
 });

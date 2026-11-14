@@ -258,6 +258,9 @@ export {
   type WorkspaceHtmlViewDestination,
   type WorkspaceHtmlViewReplacement,
   type WorkspaceHtmlViewDraftRequest,
+  type WorkspaceHtmlViewCellSample,
+  type WorkspaceHtmlViewBindingSample,
+  type WorkspaceHtmlViewValidation,
 } from "./html-view.js";
 
 export type { WorkspaceHtmlViewPage } from "./html-view-page.js";
