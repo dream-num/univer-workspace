@@ -739,12 +739,13 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
-Read the `html-view` Skill. Unless the user already named a style, ask which style they
-want before reading Sheets in depth or authoring. Ask in the user's language, using the ten
-style names and their one-line moods in that language from its design reference, and say
-Night Gauge (`night-gauge`, 仪表夜航) is the default.
+Read the `html-view-creator` Skill, which sets the order of page work, and the `html-view`
+Skill, which says how to write the page. Read the source Sheet, then, unless the user already
+named a style, ask which style they want in the same message as the plan for the page. Ask in
+the user's language, using the ten style names and their one-line moods in that language from
+its design reference, and say Night Gauge (`night-gauge`, 仪表夜航) is the default.
 Ask in your normal reply text, then end your turn and wait for the answer. Do not rely on
-a client question or form tool, or validate or publish a page before the user answers.
+a client question or form tool, or write, validate or publish a page before the user answers.
 If they leave the choice to the Agent (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently
 choose another style. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
 palette, density and signature element when adapting to another scenario. Templates are English

@@ -1,6 +1,8 @@
 # 浏览器 Agents 把「页面」做成了 Slide 或 Board：原因与修复方案
 
-状态：已对齐，采用方案 A2（发布前由用户在会话里批准，全屏草稿预览，第一版支持修订页面）。实现见同一 PR stack。
+状态：已实现，机制与下文 5.2.1 不同。HTML View 工具已并入 `core` 工具集，`html_view_create` 和
+`html_view_replace` 只用 `write` scope 在服务端保存草稿（`apps/workspace/server/src/modules/html-view-drafts/`），
+用户在会话卡片或 `/drafts/{id}` 预览后发布，不签发一次性 `publish` 令牌。下文保留当时的分析与方案。
 
 ## 1. 结论
 

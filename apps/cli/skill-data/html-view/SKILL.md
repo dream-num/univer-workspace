@@ -10,16 +10,11 @@ creation and replacement save a draft the user publishes in Workspace. Follow th
 
 ## Start with a style and live data
 
-1. Read [design.md](references/design.md). Unless the user already named a style, ask which
-   style they want before reading Sheets in depth or authoring. Ask in the user's language,
-   listing the ten style names and their one-line moods in that language, and say
-   Night Gauge (`night-gauge`, 仪表夜航) is the default. Say these are built-in starting
-   points and the user may describe their own style instead (brand colors, fonts, mood).
-   Ask in your normal reply text,
-   then end your turn and wait for the answer; do not rely on a client question or form tool,
-   or validate or publish a page before the user answers. If they
-   leave the choice to you (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently choose
-   another style.
+1. Read [design.md](references/design.md). Read the source Sheet, then, unless the user
+   already named a style, ask which style they want as design.md describes, in the same
+   message as your plan for the page. End your turn and wait for the answer before you write,
+   validate or publish a page. If they leave the choice to you (你来定, 随便, 默认就行), use
+   Night Gauge (`night-gauge`, 仪表夜航). Never silently choose another style.
 2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
    a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
    For a style the user describes, start from the template whose structure best fits the data and

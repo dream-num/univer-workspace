@@ -14,6 +14,13 @@ Workspace Agent 通过能力插件的 `univer_html_view` 工具验证和发布�
 各自声明所需范围，使 DOM 可以追踪元素与来源的绑定关系；样式使用 CSS。工具和 Skill 随 Agent 插件交付，示例必须匹配插件与 Browser 消费的 SDK 版本。
 SDK 完整语法与接口引用[上游文档](README.md#sdk-文档)。
 
+## 浏览器 Agents 与 MCP
+
+浏览器 Agents 和其他 MCP 客户端不直接发布页面。`html_view_create` 和 `html_view_replace` 校验后在服务端保存草稿，
+用户在会话卡片或 `/drafts/{id}` 预览后发布或拒绝；`html_view_draft_get` 读取草稿状态。创作顺序由内置的
+[`html-view-creator`](../../../apps/mcp/skills/html-view-creator/SKILL.md) 决定，写法仍由 HTML View Skill 决定，
+见 [html-view-creator 设计](html-view-creator.zh-CN.md)。下文描述的是 DSH Agent 的能力插件，它仍然直接发布。
+
 ## 工具与 Workspace 的边界
 
 [工具实现](../../../packages/dsh-univer-workspace-plugin/src/tools/html-view.ts)
