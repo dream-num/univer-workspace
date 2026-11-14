@@ -74,3 +74,31 @@ it.each([
     }
   } finally { error.mockRestore(); }
 });
+
+
+it("round4 closes a running call before the next step when no SDK end event arrives", async () => {
+  const saved = new Map<number, ModelCallRecord>();
+  const writes: ModelCallRecord[] = [];
+  const bodies = ['{"model":"mock","messages":["first"]}', '{"model":"mock","messages":["first","second"]}'];
+  const recorder = createCallRecorder({ sessionId: session().id,
+    store: { async put(record) { writes.push(structuredClone(record)); saved.set(record.seq, record); },
+      async list() { return { records: [...saved.values()], skippedRecords: 0 }; } },
+    redact: (value) => value, previous: null, fetch: async () => new Response("ok"), onToolExecutionStart() {}, onToolExecutionEnd() {},
+  });
+  for (const body of bodies) {
+    recorder.callbacks.onStepStart({ callId: "run-1" });
+    recorder.callbacks.onLanguageModelCallStart();
+    await recorder.fetch("https://provider.test", { method: "POST", body });
+  }
+  recorder.finish();
+  await vi.waitFor(() => expect(saved.get(1)?.outcome.kind).toBe("aborted"));
+  const records = [...saved.values()];
+  expect(records.map((record) => record.outcome.kind)).toEqual(["aborted", "aborted"]);
+  expect(records.every((record) => record.endedAt !== null && record.attempts.at(-1)?.endedAt !== null)).toBe(true);
+  expect(records[0]?.attempts.at(-1)?.endedAt).toBe(records[0]?.endedAt);
+  expect(Date.parse(records[0]!.endedAt!)).toBeLessThanOrEqual(Date.parse(records[1]!.startedAt));
+  expect(expandRequests(records).map((call) => call.body)).toEqual(bodies);
+  expect(writes.map((record) => [record.seq, record.outcome.kind])).toEqual([
+    [0, "running"], [0, "running"], [0, "aborted"], [1, "running"], [1, "running"], [1, "aborted"],
+  ]);
+});

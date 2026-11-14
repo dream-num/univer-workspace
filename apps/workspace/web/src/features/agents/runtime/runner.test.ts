@@ -47,7 +47,15 @@ async function setup(options: {
   const saved: AgentSession[] = [];
   vi.stubGlobal("IDBKeyRange", IDBKeyRange);
   const store = createTrajectoryStore(storage);
-  const trajectory = options.trajectory ? options.trajectory(store) : store;
+  const recording = options.trajectory ? options.trajectory(store) : store;
+  // Debug writes never delay a run, so tests wait for the recorder's write chain to drain.
+  const puts = new Set<Promise<void>>();
+  const trajectory: AgentRunnerDependencies["trajectory"] = { ...recording, put(record) {
+    const put = recording.put(record);
+    puts.add(put);
+    void put.catch(() => undefined).finally(() => puts.delete(put));
+    return put;
+  } };
   const backing = createSessionStore(storage);
   const sessions = { ...backing, async save(value: AgentSession) { saved.push(structuredClone(value)); await backing.save(value); } };
   const requests: { url: string; method: string | undefined; headers: [string, string][]; body: string }[] = [];
@@ -103,6 +111,11 @@ async function setup(options: {
   const input = { scope: { kind: "global" as const }, mode: "auto" as const, model: session().model, text: "Make a pull request" };
   async function finished(id: AgentSession["id"]) {
     await vi.waitFor(() => expect(runner.isRunningHere(id)).toBe(false));
+    await vi.waitFor(async () => {
+      await Promise.allSettled(puts);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(puts.size).toBe(0);
+    });
     return sessions.get(id);
   }
   return { storage, sessions, saved, requests, modelBodies, methods, runner, input, finished, deps, gateway, trajectory };
@@ -253,6 +266,38 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     } finally { release.resolve(); await test.runner.stop(started.id); }
   });
 
+  it.each(["fetch", "stream"] as const)("round4 closes every steered call before provider output (%s)", async (boundary) => {
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const aborted = deferred<void>();
+    const test = await setup({ tool: async () => { entered.resolve(); await release.promise; }, model: (index, _body, signal) => {
+      if (index === 1) return modelStream("pr_create");
+      if (index !== 2) return modelStream();
+      const waitForAbort = (reject: (error: DOMException) => void) => {
+        const abort = () => { aborted.resolve(); reject(new DOMException("Steering", "AbortError")); };
+        if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
+      };
+      return boundary === "fetch"
+        ? new Promise<Response>((_resolve, reject) => { waitForAbort((error) => queueMicrotask(() => reject(error))); })
+        : new Response(new ReadableStream<Uint8Array>({ start(controller) { waitForAbort((error) => controller.error(error)); } }),
+          { headers: { "content-type": "text/event-stream" } });
+    } });
+    const started = await test.runner.start(test.input);
+    try {
+      await entered.promise;
+      await test.runner.send(started.id, "Use the new direction before any provider output");
+      release.resolve();
+      expect((await test.finished(started.id))?.status).toBe("idle");
+      await aborted.promise;
+      const { records } = await test.trajectory.list(started.id);
+      expect(records.map((record) => record.seq)).toEqual([0, 1, 2]);
+      expect(records.every((record) => record.outcome.kind !== "running" && record.endedAt !== null)).toBe(true);
+      expect(records[1]?.outcome.kind).toBe("aborted");
+      expect(records[1]?.attempts.at(-1)?.endedAt).not.toBeNull();
+      expect(expandRequests(records).map((call) => call.body)).toEqual(test.modelBodies);
+    } finally { release.resolve(); await test.runner.stop(started.id); }
+  });
+
   it("round2 skips recording after a failed initial list without overwriting stored calls or losing tool timings", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     try {
@@ -330,10 +375,14 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const pending = deferred<void>();
     const test = await setup({ model: () => modelStream(), trajectory: (store) => ({ ...store, put: async (record) => { await pending.promise; await store.put(record); } }) });
     const started = await test.runner.start(test.input);
+    const ran = async () => {
+      await vi.waitFor(() => expect(test.runner.isRunningHere(started.id)).toBe(false));
+      return test.sessions.get(started.id);
+    };
     try {
-      expect((await test.finished(started.id))?.status).toBe("idle");
+      expect((await ran())?.status).toBe("idle");
       await test.runner.send(started.id, "Another turn before the writes finish");
-      expect((await test.finished(started.id))?.status).toBe("idle");
+      expect((await ran())?.status).toBe("idle");
     } finally { pending.resolve(); }
     await vi.waitFor(async () => expect((await test.trajectory.list(started.id)).records).toHaveLength(2));
     const { records } = await test.trajectory.list(started.id);

@@ -58,6 +58,8 @@ export function createCallRecorder({ sessionId, store, redact, previous, fetch: 
   const callbacks = {
     onStepStart({ callId }: { callId: string }) {
       if (!state) return;
+      // A cancelled stream may never deliver its terminal SDK event.
+      end({ kind: "aborted" });
       reads = [];
       capture = { body: null, raw: false };
       current = { sessionId, seq: ++state.seq, runId: callId, startedAt: now(), endedAt: null,
