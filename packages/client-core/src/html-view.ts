@@ -5,8 +5,10 @@ import {
   DEFAULT_WORKSHEET_COLUMN_COUNT,
   DEFAULT_WORKSHEET_ROW_COUNT,
   type IWorkbookData,
+  type IWorksheetData,
+  type ICellData,
 } from "@univerjs/core";
-import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
+import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewBinding } from "@univerjs-labs/html-view";
 import { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
 import { parseHtmlViewDraft } from "./html-view-draft.js";
@@ -16,6 +18,7 @@ import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp } from "./http.js";
 import { parseDetachedNode } from "./space-model.js";
 import { WorkspaceSpaceFeature } from "./space.js";
+import { colName } from "./sheet-lens/lens/ranges.js";
 
 export interface WorkspaceHtmlViewSource {
   readonly bytes: Uint8Array;
@@ -53,6 +56,34 @@ export interface WorkspaceHtmlViewReplacement {
 export type WorkspaceHtmlViewDraftRequest =
   | (WorkspaceHtmlViewDestination & { readonly kind: "create"; readonly source: WorkspaceHtmlViewSource })
   | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" });
+
+export interface WorkspaceHtmlViewCellSample {
+  readonly value: string | number | boolean | null;
+  readonly formula?: true;
+  readonly format?: string;
+}
+
+export type WorkspaceHtmlViewBindingSample = {
+  readonly unitId: string;
+  readonly sheet: string;
+  readonly ref: string;
+} & (
+  | { readonly kind: "text" | "model" | "cell"; readonly cell: WorkspaceHtmlViewCellSample }
+  | { readonly kind: "range"; readonly range: {
+      readonly rows: number;
+      readonly columns: number;
+      readonly filledRows: number;
+      readonly head: WorkspaceHtmlViewCellSample[][];
+    } }
+);
+
+export interface WorkspaceHtmlViewValidation {
+  readonly valid: true;
+  readonly unitIds: string[];
+  readonly bindingCount: number;
+  readonly bindings: WorkspaceHtmlViewBindingSample[];
+  readonly truncated?: true;
+}
 
 export class WorkspaceHtmlViewFeature {
   public constructor(private readonly options: WorkspaceHtmlViewOptions) {}
@@ -223,6 +254,7 @@ export class WorkspaceHtmlViewFeature {
       );
     }
     const unitIds = getHtmlViewUnitIds(parsed);
+    const bindings: WorkspaceHtmlViewBindingSample[] = [];
     for (const unitId of unitIds) {
       const target = await this.options.resolveTrunkRuntimeTarget({ unitId });
       if (target.unitId !== unitId || target.scope.kind !== "trunk") {
@@ -247,9 +279,8 @@ export class WorkspaceHtmlViewFeature {
           { unitId },
         );
       }
-      for (const binding of parsed.bindings.filter(
-        (binding) => binding.reference.unitId === unitId,
-      )) {
+      for (const [index, binding] of parsed.bindings.entries()) {
+        if (binding.reference.unitId !== unitId) continue;
         const { reference } = binding;
         const sheet = Object.hasOwn(workbook.sheets, reference.sheetId)
           ? workbook.sheets[reference.sheetId]
@@ -272,14 +303,65 @@ export class WorkspaceHtmlViewFeature {
             { reference },
           );
         }
+        if (index < 60) bindings[index] = sampleBinding(binding, workbook, sheet);
       }
     }
+    const validation: WorkspaceHtmlViewValidation = {
+      valid: true, unitIds, bindingCount: parsed.bindings.length, bindings,
+      ...(parsed.bindings.length > 60 ? { truncated: true } : {}),
+    };
     return {
       filePath,
       bytes,
-      validation: { valid: true as const, unitIds, bindingCount: parsed.bindings.length },
+      validation,
     };
   }
+}
+
+function sampleBinding(
+  binding: HtmlViewBinding,
+  workbook: IWorkbookData,
+  sheet: Partial<IWorksheetData>,
+): WorkspaceHtmlViewBindingSample {
+  const source = { unitId: binding.reference.unitId, sheet: sheet.name || binding.reference.sheetId };
+  if (binding.kind !== "range") {
+    const { row, col } = binding.reference;
+    return { ...source, kind: binding.kind, ref: `${colName(col)}${row + 1}`,
+      cell: sampleCell(sheet.cellData?.[row]?.[col], workbook) };
+  }
+  const { startRow, endRow, startColumn, endColumn } = binding.reference.range;
+  const rows = endRow - startRow + 1;
+  const columns = endColumn - startColumn + 1;
+  const cellData = sheet.cellData ?? {};
+  const filledRows = Object.keys(cellData).map(Number).filter((row) =>
+    row >= startRow && row <= endRow && Object.keys(cellData[row] ?? {}).map(Number).some((col) =>
+      col >= startColumn && col <= endColumn && cellValue(cellData[row]?.[col]) !== null,
+    ),
+  ).length;
+  const head = Array.from({ length: Math.min(rows, 3) }, (_, row) =>
+    Array.from({ length: Math.min(columns, 8) }, (_, col) =>
+      sampleCell(cellData[startRow + row]?.[startColumn + col], workbook),
+    ),
+  );
+  return { ...source, kind: "range", ref: `${colName(startColumn)}${startRow + 1}:${colName(endColumn)}${endRow + 1}`,
+    range: { rows, columns, filledRows, head } };
+}
+
+function cellValue(cell: ICellData | null | undefined): WorkspaceHtmlViewCellSample["value"] {
+  const value = cell?.v ?? cell?.p?.body?.dataStream?.replace(/\r\n?$/, "") ?? null;
+  return value === "" ? null : value;
+}
+
+function sampleCell(cell: ICellData | null | undefined, workbook: IWorkbookData): WorkspaceHtmlViewCellSample {
+  const value = cellValue(cell);
+  const characters = typeof value === "string" ? Array.from(value) : undefined;
+  const style = typeof cell?.s === "string" ? workbook.styles?.[cell.s] : cell?.s;
+  const format = style?.n?.pattern;
+  return {
+    value: characters && characters.length > 80 ? `${characters.slice(0, 80).join("")}…` : value,
+    ...(cell?.f || cell?.si ? { formula: true } : {}),
+    ...(format?.trim() && format !== "General" ? { format } : {}),
+  };
 }
 
 export function normalizeHtmlViewDestination(input: WorkspaceHtmlViewDestination) {

@@ -107,13 +107,43 @@ function setup(page = html, publicRead = false, privateUnits: readonly string[] 
 
 it("validates a page through the executor's bound trunk export", async () => {
   const f = setup();
-  expect(await htmlViewValidate(f.ctx, { html })).toEqual({
-    output: { valid: true, unitIds: ["unit"], bindingCount: 1 },
+  const result = await htmlViewValidate(f.ctx, { html });
+  expect(opSpecs["htmlView.validate"].output.parse(result.output)).toEqual(result.output);
+  expect(result).toEqual({
+    output: { valid: true, unitIds: ["unit"], bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] },
   });
   expect(f.exportUnitData).toHaveBeenCalledWith({
     target: expect.objectContaining({ scope: { kind: "trunk" }, revision: 3 }),
   });
   expect(f.fetcher).not.toHaveBeenCalled();
+});
+
+it("preserves capped range samples and their metadata within the RPC response budget", async () => {
+  const f = setup();
+  const workbook = await f.exportUnitData({ target: await f.resolve({ unitId: "unit" }) });
+  if (!("sheets" in workbook)) throw new Error("Expected a Sheet workbook");
+  f.exportUnitData.mockResolvedValue({ ...workbook, sheets: { budget: {
+    name: "Budget", rowCount: 10, columnCount: 8,
+    cellData: Object.fromEntries(Array.from({ length: 3 }, (_, row) => [row,
+      Object.fromEntries(Array.from({ length: 8 }, (_, col) => [col,
+        { v: "x".repeat(81), f: "=A4", s: { n: { pattern: "yyyy-mm" } } },
+      ])),
+    ])),
+  } } });
+  const { output } = await htmlViewValidate(f.ctx, {
+    html: '<div data-univer-range-subscribe="unit:budget:A1:H3"></div>'.repeat(61),
+  });
+  expect(opSpecs["htmlView.validate"].output.parse(output)).toEqual(output);
+  expect(output).toMatchObject({ bindingCount: 61, truncated: true });
+  expect(output.bindings).toHaveLength(60);
+  expect(output.bindings[0]).toEqual({ kind: "range", unitId: "unit", sheet: "Budget", ref: "A1:H3",
+    range: { rows: 3, columns: 8, filledRows: 3, head: Array.from({ length: 3 }, () =>
+      Array.from({ length: 8 }, () => ({ value: "x".repeat(80) + "…", formula: true, format: "yyyy-mm" })),
+    ) },
+  });
+  const bytes = Buffer.byteLength(JSON.stringify(output));
+  expect(bytes).toBeGreaterThan(64 * 1024);
+  expect(bytes).toBeLessThan(opSpecs["htmlView.validate"].limits.responseBytes);
 });
 
 it("preserves missing Sheet errors and rejects missing worksheets and out-of-bounds ranges", async () => {
@@ -283,7 +313,7 @@ it("validates and drafts uploaded UTF-8 bytes unchanged, including BOM, across r
     return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: f.ctx.usage })));
   });
   const html_upload_id = await upload(store, Buffer.from(page));
-  expect((await htmlViewValidateTool.run(context, { html_upload_id })).output).toEqual({ valid: true, unitIds: ["unit"], bindingCount: 1 });
+  expect((await htmlViewValidateTool.run(context, { html_upload_id })).output).toEqual({ valid: true, unitIds: ["unit"], bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] });
   const first = await htmlViewCreateTool.run(context, { ...createArgs, html_upload_id });
   expect(await htmlViewCreateTool.run(context, { ...createArgs, html_upload_id })).toEqual(first);
   expect(first.output).toMatchObject({ draft: { id: "draft-1", previewUrl: "https://workspace.test/drafts/draft-1" } });

@@ -52,6 +52,11 @@ Workspace CLI 通过 `html-view validate/create` 组合相同版本的解析包�
 临时副本，避免验证期间源文件变化导致发布未验证内容；完成或失败后清理副本，恢复信息指向原文件。
 来源只读取 trunk；创建不写来源单元格。修改现有页面使用 `blob download → html-view validate → blob replace`。
 
+CLI 与 MCP 的 `html_view_validate` 共用 Client Core，返回 `{ valid, unitIds, bindingCount, bindings, truncated? }`。
+`bindings` 按文档顺序最多包含 60 条样本，超过时返回 `truncated: true`；每条给出绑定类型、Unit、子表名（缺失时用 ID）和 A1 引用，
+以及单元格原始值、公式标记、数字格式，或范围行列数、非空行数和最多 3 行 8 列的 `head`。
+字符串超过 80 字符时截取前 80 字符并追加 `…`。上表的 DSH 插件验证结果保持原样。
+
 详细操作与创作指引随独立 [HTML View Skill](../../../apps/cli/skill-data/html-view/SKILL.md) 交付。
 CLI 不装配 Browser Renderer 或 Binding Engine；页面通过 Workspace Browser 或 Agent Sidecar 运行。
 

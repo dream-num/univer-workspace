@@ -73,6 +73,7 @@ describe("HTML View workflow", () => {
       valid: true,
       unitIds: ["unit", "other"],
       bindingCount: 3,
+      bindings: ["unit", "other", "unit"].map((unitId) => ({ kind: "text", unitId, sheet: "Budget", ref: "B2", cell: { value: null } })),
     });
     expect(f.resolveTrunkRuntimeTarget.mock.calls).toEqual([
       [{ unitId: "unit" }],
@@ -93,6 +94,16 @@ describe("HTML View workflow", () => {
       valid: true,
       unitIds: ["unit", "other"],
       bindingCount: 3,
+      bindings: [
+        { kind: "cell", unitId: "unit", sheet: "Budget", ref: "B2", cell: { value: null } },
+        { kind: "range", unitId: "other", sheet: "Budget", ref: "A1:C10", range: {
+          rows: 10, columns: 3, filledRows: 0,
+          head: Array.from({ length: 3 }, () => Array.from({ length: 3 }, () => ({ value: null }))),
+        } },
+        { kind: "range", unitId: "other", sheet: "Budget", ref: "B2:B2", range: {
+          rows: 1, columns: 1, filledRows: 0, head: [[{ value: null }]],
+        } },
+      ],
     });
     expect(f.exportUnitData).toHaveBeenCalledTimes(2);
     expect(f.upload).not.toHaveBeenCalled();
@@ -143,6 +154,7 @@ describe("HTML View workflow", () => {
       valid: true,
       unitIds: [],
       bindingCount: 0,
+      bindings: [],
     });
     expect(f.resolveTrunkRuntimeTarget).not.toHaveBeenCalled();
   });
@@ -295,6 +307,7 @@ describe("HTML View commands", () => {
       valid: true as const,
       unitIds: ["unit"],
       bindingCount: 1,
+      bindings: [{ kind: "text" as const, unitId: "unit", sheet: "Budget", ref: "B2", cell: { value: 46357, format: "yyyy-mm" } }],
     }));
     const create = vi.fn(async () => ({
       ...result,
@@ -319,7 +332,9 @@ describe("HTML View commands", () => {
   it("maps file validation and explicit creation metadata", async () => {
     const validation = await run(["validate", "--file", "view.univer.html", "--json"]);
     expect(validation.validate).toHaveBeenCalledWith("view.univer.html");
-    expect(validation.output).toEqual({ valid: true, unitIds: ["unit"], bindingCount: 1 });
+    expect(validation.output).toEqual({ valid: true, unitIds: ["unit"], bindingCount: 1,
+      bindings: [{ kind: "text", unitId: "unit", sheet: "Budget", ref: "B2", cell: { value: 46357, format: "yyyy-mm" } }],
+    });
     const creation = await run([
       "create",
       "--file",
