@@ -111,11 +111,20 @@ is not live until they open the preview and press **Publish**. Then end your tur
 When the user comes back, call `html_view_draft_get` with the draft ID before you say
 anything about the draft.
 
-- `pending`: they have not decided. If they ask for changes, apply them to your last
-  HTML and save a new draft as in step 5 with a new key. Point them to the newest draft.
+- `pending` or `rejected`, and the user says what to change: revise the draft as below.
+  When Workspace sends a change request with a rejected draft, the reason is in that
+  message, so do not ask for it again.
+- `pending` with no change requested: they have not decided. Point them to the preview.
+- `rejected` with no reason: ask what to change.
 - `published`: share `shareUrl` and say who can open it. Later changes start again from
   step 1 as a change.
-- `rejected`: ask what to change, then return to step 3 or 4.
 - `conflicted`: someone changed the page after you read it. Read it again with
   `html_view_read`, reapply the change and save a new draft.
 - `expired`: a draft lasts one hour. Save it again with a new key.
+
+To revise a draft, start from your last HTML and keep its `name` and `space` unless the
+user asks for a new name. Workspace treats a draft with the same name and space as the
+newer version and retires the older one, so a renamed draft leaves a stale one the user
+could still publish. Go back to step 4: validate the full HTML again and compare its
+`bindings` with the plan. Then save as in step 5 with a new key and point the user to
+the newest draft.
