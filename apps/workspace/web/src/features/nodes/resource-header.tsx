@@ -21,6 +21,8 @@ import {
   toast,
 } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
+import { useUiMode } from "../../shared/ui-mode";
+import { htmlViewCreatorLink } from "../html-views/creator-link";
 
 type Node = components["schemas"]["NodeSummary"];
 
@@ -64,12 +66,26 @@ export function ResourceActions({
   readonly htmlActionsRef: (element: HTMLSpanElement | null) => void;
 }) {
   const { t } = useI18n();
+  const { mode } = useUiMode();
   const [shareOpen, setShareOpen] = useState(false);
   const compactViewport = useMediaQuery("(max-width: 720px)");
   const isEditing = authenticated && resource.kind === "univer" && resource.editorMode === "edit";
   const modeLabel = isEditing ? t("editingMode") : t("readOnlyMode");
+  const creatorRequest = resource.kind === "univer" && resource.unitType === "sheet"
+    ? { kind: "sheet", name: node.name, resourceId: resource.id } as const
+    : resource.kind === "blob" && isHtmlViewFilename(resource.originalFilename)
+      ? { kind: "change", name: node.name, resourceId: resource.id } as const
+      : null;
   return (
     <>
+      {mode === "repository" && authenticated && creatorRequest ? (
+        <Link
+          {...htmlViewCreatorLink(node.spaceId, creatorRequest, t)}
+          className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "no-underline")}
+        >
+          {t(creatorRequest.kind === "sheet" ? "htmlViewMakePage" : "htmlViewChangeWithAgent")}
+        </Link>
+      ) : null}
       {resource.kind === "blob" && isHtmlViewFilename(resource.originalFilename) ? (
         <>
           <span ref={htmlActionsRef} className="contents" />
