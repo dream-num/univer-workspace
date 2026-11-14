@@ -10,6 +10,8 @@ import { withWorkspaceSnapshotServerOverride, resolveUniverLicense } from "../ed
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 
+export class HtmlViewSourceSheetRequiredError extends Error {}
+
 export async function createWorkspaceBindingEngine(
   unitId: string,
   user: { id: string; displayName: string; avatarUrl?: string | null; anonymous?: boolean },
@@ -31,7 +33,7 @@ export async function createWorkspaceBindingEngine(
   if (opened.error) throw apiError(opened.error);
   const source = opened.data.resource;
   if (source.kind !== "univer" || source.unitType !== "sheet" || source.unitId !== unitId)
-    throw new Error("来源必须是可访问的 Sheet。");
+    throw new HtmlViewSourceSheetRequiredError();
   signal.throwIfAborted();
   return createWorkspaceHtmlEngine(
     {

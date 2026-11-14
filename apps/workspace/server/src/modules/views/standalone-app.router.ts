@@ -68,7 +68,7 @@ export function createStandaloneAppRouter(options: {
       throw new ApplicationError("INVALID_INPUT", 400, "The App contains invalid HTML binding declarations.");
     }
     if (hasBindings) {
-      response.status(400).type("html").send(`<!doctype html><title>Open in Workspace</title><p>This App uses live Sheet bindings. Open it in Workspace to connect its data.</p><a href="/nodes/${encodeURIComponent(node.id)}?view=immersive">Open in Workspace</a>`);
+      response.redirect(302, `/nodes/${encodeURIComponent(node.id)}?view=immersive`);
       return;
     }
     response.type("html").send(html);

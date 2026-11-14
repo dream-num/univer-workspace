@@ -223,9 +223,9 @@ export interface paths {
          *     open link-shared Apps. Other anonymous requests receive a trusted login handoff
          *     that preserves the full pathname, query and fragment. Signed-in unauthorized
          *     readers receive 404. Only ready .univer.html Blobs up to 5 MiB are supported.
-         *     Declarative Sheet bindings require the embedded Workspace viewer; standalone
-         *     Apps have no Binding Host, cookies, storage or Workspace API access. Query and
-         *     fragment belong to the App and are not interpreted by Workspace.
+         *     Apps with declarative Sheet bindings redirect to /nodes/{nodeId}?view=immersive.
+         *     Standalone Apps have no Binding Host, cookies, storage or Workspace API access.
+         *     Query and fragment belong to the App and are not interpreted by Workspace.
          */
         get: operations["runStandaloneHtmlApp"];
         put?: never;
@@ -4138,13 +4138,22 @@ export interface operations {
                     "text/html": string;
                 };
             };
-            /** @description Invalid bindings return JSON; live Sheet bindings return HTML with the embedded Node entry. */
+            /** @description Apps with live Sheet bindings redirect to the immersive Workspace viewer. */
+            302: {
+                headers: {
+                    /** @description /nodes/{URI-encoded nodeId}?view=immersive */
+                    Location?: string;
+                    "Cache-Control"?: "private, no-store";
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid HTML binding declarations. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "text/html": string;
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };

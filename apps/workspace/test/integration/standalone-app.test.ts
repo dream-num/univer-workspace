@@ -56,14 +56,18 @@ describe("standalone HTML Apps", () => {
     expect(ctx.application.access.resolveNode(ctx.userId, published.nodeId)?.resourceId).toBe(published.resourceId);
   });
 
-  it("does not execute ordinary uploads or live-bound Apps and rejects oversized documents", async () => {
+  it("redirects live-bound Apps and rejects ordinary uploads, invalid bindings and oversized documents", async () => {
     const ctx = await createHttpContext();
     const text = await publish(ctx, '<script>alert(1)</script>', 'ordinary.html');
     expect((await fetch(`${ctx.origin}/apps/${text.nodeId}/run`, {headers: {cookie: ctx.cookie}})).status).toBe(404);
     const bound = await publish(ctx, '<p data-univer-cell-text="book:sheet:A1">value</p>');
-    const response = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {headers: {cookie: ctx.cookie}});
-    expect(response.status).toBe(400);
-    expect(await response.text()).toContain(`/nodes/${bound.nodeId}?view=immersive`);
+    const response = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {headers: {cookie: ctx.cookie}, redirect: "manual"});
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe(`/nodes/${encodeURIComponent(bound.nodeId)}?view=immersive`);
+    ctx.application.permissions.updateNodeLinkSharing(ctx.userId, bound.nodeId, {enabled: true, role: 'viewer'});
+    const publicEntry = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {redirect: "manual"});
+    expect(publicEntry.status).toBe(302);
+    expect(publicEntry.headers.get("location")).toBe(response.headers.get("location"));
     const invalid = await publish(ctx, '<p data-univer-cell-text="invalid">value</p>');
     expect((await fetch(`${ctx.origin}/apps/${invalid.nodeId}/run`, {headers: {cookie: ctx.cookie}})).status).toBe(400);
     const large = await publish(ctx, ' '.repeat(5 * 1024 * 1024 + 1));
