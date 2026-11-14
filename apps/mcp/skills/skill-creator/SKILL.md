@@ -77,6 +77,13 @@ When the user names a Sheet or Doc, read it before you ask about it. Find it wit
 and output formats, success criteria and dependencies. Come prepared so the user has
 less to explain.
 
+Then check that Workspace can get the skill's input. Read `references/workspace.md`,
+section "What the agent cannot get". When the skill depends on a web link, an outside
+API or the content of an uploaded non-Office file, tell the user now which part cannot
+work here and propose a shape that can, such as pasting the content into the
+conversation or keeping the data in a Sheet. Draft after the user agrees. A draft built
+on a step that cannot run only moves the bad news to the draft page.
+
 ## 3. Draft
 
 Read `references/authoring.md` and `references/workspace.md`, then write the `SKILL.md` entry.

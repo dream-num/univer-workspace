@@ -1,3 +1,4 @@
+import { isBuiltin } from "node:module";
 import { posix } from "node:path";
 import { skillEntry } from "@modelcontextprotocol/server/ext/skills";
 import type { ReviewFinding, ScanFinding, VerifiedReviewFinding } from "./drafts.types.js";
@@ -109,7 +110,14 @@ export async function scanSkill(
       add("size-limit", "block", path, "SKILL.md is limited to 64 KiB and binary files to 10 MiB.");
     if (path !== "SKILL.md" && text !== null && bytes.byteLength > 256 * 1024)
       add("text-too-large", "warn", path, "The model cannot read text files larger than 256 KiB.");
-    const facadeScript = [".js", ".ts"].includes(extension) && text?.includes("univerAPI");
+    const facadeScript =
+      [".js", ".ts"].includes(extension) &&
+      text !== null &&
+      /(?<![\p{ID_Continue}$./])(?:univerAPI|api|workbook|doc|presentation|base|board)\s*\./u.test(text) &&
+      !/\b(?:require\s*\(|process\s*\.|fetch\s*\()/.test(text) &&
+      ![...text.matchAll(/\b(?:from\s*|import\s*(?:\(\s*)?)["']([^"']+)["']/g)].some(
+        (match) => match[1]!.startsWith("node:") || isBuiltin(match[1]!),
+      );
     if (facadeScript) add("facade-script", "info", path, "Facade code can be passed to execute.");
     else if (
       path.startsWith("scripts/") ||

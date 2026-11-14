@@ -24,7 +24,7 @@ export const skillDraftMessages = {
     readySummary: "Review the instructions and files, then publish to make this Skill available.",
     degradedSummary: "Some instructions need adapting to Workspace. Review the findings before publishing.",
     blockedSummary: (count: number) => `${count} blocking ${count === 1 ? "finding" : "findings"}. Ask the Agent to revise the draft.`,
-    scriptsSummary: (count: number) => `${count} scripts will not run in Workspace. Review the remaining instructions below.`,
+    scriptsSummary: (count: number) => `${count} ${count === 1 ? "script" : "scripts"} will not run in Workspace. Review the remaining instructions below.`,
     invokeHint: { before: "Use", after: "in Agents to invoke this Skill." },
     noIssues: "No issues found",
     impact: "Impact",
