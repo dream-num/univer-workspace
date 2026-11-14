@@ -21,12 +21,14 @@ import { useAgentMessages } from "./messages";
 import { pendingApprovals, resumableApprovalResponse } from "../approvals";
 import { ApprovalCard } from "./approval-card";
 import { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
+import { HtmlViewStyleGallery } from "../../html-views/style-gallery";
+import { htmlViewStylesResult } from "../../html-views/style-result";
 import { replacedDraftIds } from "../replaced-drafts";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
 
-type DraftFeedback = { readonly disabled: boolean; readonly send: (message: string) => void };
+type DraftFeedback = { readonly disabled: boolean; readonly send: (message: string) => void; readonly fill: (text: string) => void };
 
 function SessionTabs({ session }: { readonly session: AgentSession }) {
   const [debug] = useDebugMode();
@@ -96,6 +98,12 @@ function SessionContent({ session, hidden }: { readonly session: AgentSession; r
   const skillMenu = useSkillMenu(text, repository ? { kind: "repository", spaceId: repository, baseWorktreeId: null } : { kind: "global" }, pending || session.status === "running", setText);
   const action = session.status === "running" && !text.trim() ? "stop" : "send";
   const conversation = useRef<HTMLDivElement>(null);
+  function fill(value: string) {
+    const input = conversation.current?.querySelector<HTMLTextAreaElement>(".agent-followup textarea");
+    if (hidden || pending || busyElsewhere || !input) return;
+    setText(value);
+    requestAnimationFrame(() => { input.focus(); input.setSelectionRange(value.length, value.length); });
+  }
   useEffect(() => {
     const content = conversation.current;
     const viewport = content?.closest(".rd-viewport");
@@ -160,7 +168,7 @@ function SessionContent({ session, hidden }: { readonly session: AgentSession; r
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
         {message.role === "user" ? <UserMessage message={message} />
           : <AssistantMessage message={message} session={session} current={index === lastAssistant} latestStepsIndex={latestSteps?.messageIndex === index ? latestSteps.blockIndex : -1}
-            feedback={{ disabled: pending || busyElsewhere || session.status === "running", send: (value) => void send(value) }} />}
+            feedback={{ disabled: hidden || pending || busyElsewhere || session.status === "running", send: (value) => void send(value), fill }} />}
       </article>)}</div>
       <div className="agent-session-dock">
         {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
@@ -312,6 +320,7 @@ function StepRow({ part, session, replaced, feedback }: {
     ["html_view_create", "html_view_replace"].includes(toolName(part)) ? pageDraftOutput.safeParse(part.output) : null;
   const skillDraftId = part.type !== "reasoning" && part.state === "output-available" ? skillDraftResultId(toolName(part), part.output) : null;
   const draftId = parsedDraft?.success && !parsedDraft.data.isError ? parsedDraft.data.structuredContent.draft.id : null;
+  const styles = part.type !== "reasoning" && part.state === "output-available" ? htmlViewStylesResult(toolName(part), part.output) : null;
   return <div className="agent-step" data-status={state}>
     <button type="button" className="agent-step-row" aria-expanded={open} onClick={() => setOpen(!open)}>
       <Icon className={running ? "agent-step-icon animate-spin" : "agent-step-icon"} role="img" aria-label={status} />
@@ -321,6 +330,7 @@ function StepRow({ part, session, replaced, feedback }: {
       {part.type !== "reasoning" ? <span className="agent-step-duration">{timing ? durationLabel(timing.startedAt, timing.endedAt ?? (running ? new Date().toISOString() : null)) : "—"}</span> : null}
     </button>
     {skillDraftId && <SkillDraftCard draftId={skillDraftId} />}
+    {styles && <HtmlViewStyleGallery catalog={styles} onFill={feedback?.fill} disabled={feedback?.disabled ?? true} />}
     {draftId && <HtmlViewDraftReview key={draftId} draftId={draftId} presentation="card" replaced={replaced.has(draftId)}
       onRequestChanges={feedback?.send} requestChangesDisabled={feedback?.disabled ?? session.status === "running"} />}
     {open ? <div className="agent-step-body">{part.type === "reasoning" ? <IssueMarkdown text={part.text} /> : <ToolBody part={part} state={state} status={status} />}</div> : null}
