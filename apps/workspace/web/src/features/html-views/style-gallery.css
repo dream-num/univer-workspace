@@ -1,0 +1,9 @@
+.html-style-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 12px; margin: 12px 0; }
+.html-style-card { display: flex; flex-direction: column; gap: 10px; min-width: 0; padding: 12px; border: 1px solid var(--rd-line); border-radius: 12px; background: var(--rd-panel); color: var(--rd-ink); font: inherit; text-align: start; overflow-wrap: anywhere; cursor: pointer; }
+.html-style-card:hover:not(:disabled) { background: var(--rd-panel-2); border-color: var(--rd-accent-text); }
+.html-style-card:focus-visible { outline: 2px solid var(--rd-accent-text); outline-offset: 2px; }
+.html-style-card:disabled { opacity: .5; cursor: not-allowed; }
+.html-style-card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; border-radius: 6px; }
+.html-style-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; font-size: 14px; }
+.html-style-default { padding: 2px 6px; border-radius: 4px; color: var(--rd-accent-text); background: var(--rd-accent-soft); font-size: 11px; }
+.html-style-mood { color: var(--rd-ink-2); font-size: 12px; line-height: 1.6; }

@@ -11,7 +11,7 @@ import { AgentSessionPage } from "./session-page";
 import type { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
 
 const trajectoryLoaded = vi.hoisted(() => vi.fn());
-const runner = vi.hoisted(() => ({ skills: vi.fn(), send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
+const runner = vi.hoisted(() => ({ skills: vi.fn(), send: vi.fn(), stop: vi.fn(), isRunningHere: (): boolean => true }));
 const client = { prewarm: async () => {}, runner: async () => runner };
 let current = session();
 vi.mock("./trajectory-view", () => { trajectoryLoaded(); return { TrajectoryView: () => createElement("div", { className: "trajectory-fixture" }, "Trajectory fixture") }; });
@@ -115,6 +115,37 @@ it("sends draft feedback through the existing session send path and disables it 
   expect(feedback().disabled).toBe(true);
   await act(async () => feedback().click());
   expect(runner.send).toHaveBeenCalledTimes(1);
+});
+
+it.each(["en-US", "zh-CN"])("fills and focuses a style reply without sending or rewriting history in %s", async (language) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => window.setTimeout(() => callback(0), 0));
+  current = session({ messages: [{ id: "styles", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "html_view_styles", toolCallId: "styles",
+    state: "output-available", input: {}, output: { structuredContent: { default: "night-gauge", styles: [
+      { id: "night-gauge", name: { en: "Night Gauge", zh: "仪表夜航" }, mood: { en: "Calm cockpit", zh: "沉稳驾驶舱" } },
+    ] } } }] }] });
+  const before = structuredClone(current);
+  await renderSession();
+  await type("Replace this text");
+  const style = () => container.querySelector<HTMLButtonElement>(".html-style-card")!;
+  await act(async () => { style().click(); await new Promise((resolve) => window.setTimeout(resolve, 10)); });
+  const expected = language === "zh-CN" ? "用「仪表夜航」" : "Use Night Gauge";
+  expect(textarea().value).toBe(expected);
+  expect(document.activeElement).toBe(textarea());
+  expect(textarea().selectionStart).toBe(expected.length);
+  expect(textarea().selectionEnd).toBe(expected.length);
+  expect(runner.send).not.toHaveBeenCalled();
+  expect(current).toEqual(before);
+  current = { ...current, status: "running" };
+  await renderSession();
+  expect(style().disabled).toBe(true);
+  const elsewhere = vi.spyOn(runner, "isRunningHere").mockReturnValue(false);
+  try {
+    await act(async () => root.unmount()); root = createRoot(container);
+    await renderSession();
+    expect(container.querySelector(".agent-followup")).toBeNull();
+    expect(style().disabled).toBe(true);
+  } finally { elsewhere.mockRestore(); }
 });
 
 it("opens at the bottom and follows late-rendered content until a user scrolls away, then resumes at the bottom", async () => {
