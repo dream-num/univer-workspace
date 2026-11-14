@@ -14,8 +14,8 @@ import { agentMessages } from "./messages";
 const i18n = vi.hoisted((): { language: "en-US" | "zh-CN" } => ({ language: "en-US" }));
 vi.mock("../../../shared/i18n", () => ({ useI18n: () => i18n }));
 vi.mock("../../html-views/drafts/draft-review", () => ({
-  HtmlViewDraftReview: ({ draftId, presentation }: { draftId: string; presentation: string }) =>
-    createElement("section", { "data-draft-id": draftId, "data-presentation": presentation }),
+  HtmlViewDraftReview: ({ draftId, presentation, replaced }: { draftId: string; presentation: string; replaced: boolean }) =>
+    createElement("section", { "data-draft-id": draftId, "data-presentation": presentation, "data-replaced": replaced }),
 }));
 
 describe("Agent session status badges", () => {
@@ -216,6 +216,16 @@ describe("Agent page drafts", () => {
   it("reads static tool parts", () => {
     expect(render({ type: "tool-html_view_replace", toolCallId: "page", state: "output-available", input: {}, output }).html)
       .toContain('data-draft-id="draft-1"');
+  });
+  it("marks an older card using later drafts elsewhere in the session without changing history", () => {
+    const parts = ["old", "new"].map((id) => ({ type: "dynamic-tool", toolName: "html_view_create", toolCallId: id, state: "output-available",
+      input: { space: "sales", name: "Report" }, output: { structuredContent: { draft: { id } } } } satisfies ToolPart));
+    const saved = session({ messages: parts.map((part, index) => ({ id: `assistant-${index}`, role: "assistant", parts: [part] })) });
+    const before = structuredClone(saved.messages);
+    const html = parts.map((part) => renderToStaticMarkup(createElement(AgentStepsGroup, { parts: [part], session: saved }))).join("");
+    expect(html).toContain('data-draft-id="old" data-presentation="card" data-replaced="true"');
+    expect(html).toContain('data-draft-id="new" data-presentation="card" data-replaced="false"');
+    expect(saved.messages).toEqual(before);
   });
   it.each([null, {}, { draft: { id: "draft-1" } }, { structuredContent: { draft: { id: "" } } },
     { structuredContent: { draft: { id: 1 } } }, { ...output, isError: true }])("ignores malformed or error output %j", (output) => {

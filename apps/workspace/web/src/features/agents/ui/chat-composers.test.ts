@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { $getRoot, KEY_DOWN_COMMAND, KEY_ENTER_COMMAND } from "lexical";
-import { act, createElement, useState } from "react";
+import { act, createElement, useState, type ComponentProps } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../../shared/i18n";
@@ -8,6 +8,7 @@ import { session } from "../test-helpers";
 import { ComposerEditor, type ComposerEditorHandle } from "./composer-editor";
 import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentSessionPage } from "./session-page";
+import type { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
 
 const runner = vi.hoisted(() => ({ skills: vi.fn(), send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
 const client = { prewarm: async () => {}, runner: async () => runner };
@@ -22,7 +23,12 @@ vi.mock("./composer-settings", () => ({
   AgentModelControls: () => null, AgentRepositorySelect: () => null,
 }));
 vi.mock("./references", () => ({ AgentReferencePill: () => null, referenceTrigger: () => null }));
-vi.mock("../../html-views/drafts/draft-review", () => ({ HtmlViewDraftReview: () => null }));
+vi.mock("../../html-views/drafts/draft-review", () => ({
+  HtmlViewDraftReview: ({ onRequestChanges, requestChangesDisabled }: ComponentProps<typeof HtmlViewDraftReview>) => createElement("button", {
+    "data-draft-feedback": true, disabled: requestChangesDisabled,
+    onClick: () => onRequestChanges?.("Revise draft “Sales”: Make the chart larger"),
+  }, "Request draft changes"),
+}));
 vi.mock("../../issues/issue-markdown", () => ({ IssueMarkdown: ({ text }: { text: string }) => createElement("p", null, text) }));
 
 let container: HTMLDivElement;
@@ -88,6 +94,25 @@ async function key(input: HTMLElement, init: KeyboardEventInit) {
   await act(async () => { input.dispatchEvent(event); });
   return event;
 }
+
+it("sends draft feedback through the existing session send path and disables it while running", async () => {
+  current = session({ messages: [{ id: "draft", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "html_view_create", toolCallId: "draft",
+    state: "output-available", input: { space: "sales", name: "Sales" }, output: { structuredContent: { draft: { id: "draft-1" } } } }] }] });
+  const before = structuredClone(current.messages);
+  await renderSession();
+  const feedback = () => container.querySelector<HTMLButtonElement>("[data-draft-feedback]")!;
+  expect(feedback().disabled).toBe(false);
+  await act(async () => feedback().click());
+  expect(runner.send).toHaveBeenCalledExactlyOnceWith(current.id, "Revise draft “Sales”: Make the chart larger", {
+    mode: "auto", scope: { kind: "global" }, model: { providerId: "provider", modelId: "model", thinking: null },
+  });
+  expect(current.messages).toEqual(before);
+  current = { ...current, status: "running" };
+  await renderSession();
+  expect(feedback().disabled).toBe(true);
+  await act(async () => feedback().click());
+  expect(runner.send).toHaveBeenCalledTimes(1);
+});
 
 it("opens at the bottom and follows late-rendered content until a user scrolls away, then resumes at the bottom", async () => {
   current = session({ scope: { kind: "repository", spaceId: "repo", baseWorktreeId: null } });

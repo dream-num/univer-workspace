@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle, Square } from "lucide-react";
 import { IssueMarkdown } from "../../issues/issue-markdown";
 import type { AgentPageHost } from "./host";
@@ -20,9 +20,12 @@ import { useAgentMessages } from "./messages";
 import { pendingApprovals, resumableApprovalResponse } from "../approvals";
 import { ApprovalCard } from "./approval-card";
 import { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
+import { replacedDraftIds } from "../replaced-drafts";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
+
+type DraftFeedback = { readonly disabled: boolean; readonly send: (message: string) => void };
 
 export function AgentSessionPage({ sessionId, renderPage }: AgentPageHost & { readonly sessionId: string }) {
   const m = useAgentMessages();
@@ -119,7 +122,8 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus session={session} /></header>
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>
         {message.role === "user" ? <UserMessage message={message} />
-          : <AssistantMessage message={message} session={session} current={index === lastAssistant} latestStepsIndex={latestSteps?.messageIndex === index ? latestSteps.blockIndex : -1} />}
+          : <AssistantMessage message={message} session={session} current={index === lastAssistant} latestStepsIndex={latestSteps?.messageIndex === index ? latestSteps.blockIndex : -1}
+            feedback={{ disabled: pending || busyElsewhere || session.status === "running", send: (value) => void send(value) }} />}
       </article>)}</div>
       <div className="agent-session-dock">
         {session.error ? <Alert variant="destructive">{session.error}</Alert> : null}
@@ -213,18 +217,23 @@ function SessionSkills({ session }: { readonly session: AgentSession }) {
     </section> : null}
   </>;
 }
-function AssistantMessage({ message, session, current, latestStepsIndex }: { readonly message: UIMessage; readonly session: AgentSession; readonly current: boolean; readonly latestStepsIndex: number }) {
+function AssistantMessage({ message, session, current, latestStepsIndex, feedback }: {
+  readonly message: UIMessage; readonly session: AgentSession; readonly current: boolean; readonly latestStepsIndex: number; readonly feedback: DraftFeedback;
+}) {
   const blocks = messageBlocks(message.parts);
   return blocks.map((block, index) => {
     const latest = index === latestStepsIndex;
     // Remount the previous latest group collapsed when a newer group appears.
     return block.kind === "text" ? <IssueMarkdown key={index} text={block.part.text} />
-      : <AgentStepsGroup key={`${index}:${latest}`} parts={block.parts} session={session} current={current && index === blocks.length - 1} latest={latest} />;
+      : <AgentStepsGroup key={`${index}:${latest}`} parts={block.parts} session={session} current={current && index === blocks.length - 1} latest={latest} feedback={feedback} />;
   });
 }
 const RECENT_STEPS = 5;
-export function AgentStepsGroup({ parts, session, current = false, latest = true }: { readonly parts: StepPart[]; readonly session: AgentSession; readonly current?: boolean; readonly latest?: boolean }) {
+export function AgentStepsGroup({ parts, session, current = false, latest = true, feedback }: {
+  readonly parts: StepPart[]; readonly session: AgentSession; readonly current?: boolean; readonly latest?: boolean; readonly feedback?: DraftFeedback;
+}) {
   const m = useAgentMessages();
+  const replaced = useMemo(() => replacedDraftIds(session.messages), [session.messages]);
   const [view, setView] = useState<"collapsed" | "recent" | "all">(latest ? "recent" : "collapsed");
   const last = parts.at(-1);
   const working = current && session.status === "running";
@@ -241,7 +250,7 @@ export function AgentStepsGroup({ parts, session, current = false, latest = true
     </button>
     {view !== "collapsed" ? <div className="agent-steps-list">
       {parts.length > RECENT_STEPS ? <button type="button" className="agent-steps-window" onClick={() => setView(view === "all" ? "recent" : "all")}>{view === "all" ? m.showLatestSteps(RECENT_STEPS) : m.showEarlierSteps(parts.length - RECENT_STEPS)}</button> : null}
-      {parts.slice(start).map((part, index) => <StepRow key={start + index} part={part} session={session} />)}
+      {parts.slice(start).map((part, index) => <StepRow key={start + index} part={part} session={session} replaced={replaced} feedback={feedback} />)}
     </div> : null}
   </div>;
 }
@@ -252,7 +261,9 @@ const pageDraftOutput = z.object({
   isError: z.boolean().optional(),
   structuredContent: z.object({ draft: z.object({ id: z.string().min(1) }) }),
 });
-function StepRow({ part, session }: { readonly part: StepPart; readonly session: AgentSession }) {
+function StepRow({ part, session, replaced, feedback }: {
+  readonly part: StepPart; readonly session: AgentSession; readonly replaced: ReadonlySet<string>; readonly feedback: DraftFeedback | undefined;
+}) {
   const m = useAgentMessages();
   const [open, setOpen] = useState(false);
   const state = part.type === "reasoning" ? part.state === "streaming" ? session.status === "running" ? "running" : "incomplete" : "completed" : toolStatus(part, session.status);
@@ -273,7 +284,8 @@ function StepRow({ part, session }: { readonly part: StepPart; readonly session:
       {part.type !== "reasoning" ? <span className="agent-step-duration">{timing ? durationLabel(timing.startedAt, timing.endedAt ?? (running ? new Date().toISOString() : null)) : "—"}</span> : null}
     </button>
     {skillDraftId && <SkillDraftCard draftId={skillDraftId} />}
-    {draftId && <HtmlViewDraftReview key={draftId} draftId={draftId} presentation="card" />}
+    {draftId && <HtmlViewDraftReview key={draftId} draftId={draftId} presentation="card" replaced={replaced.has(draftId)}
+      onRequestChanges={feedback?.send} requestChangesDisabled={feedback?.disabled ?? session.status === "running"} />}
     {open ? <div className="agent-step-body">{part.type === "reasoning" ? <IssueMarkdown text={part.text} /> : <ToolBody part={part} state={state} status={status} />}</div> : null}
   </div>;
 }

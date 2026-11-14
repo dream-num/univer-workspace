@@ -3,6 +3,7 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { components } from "../../../../../generated/http/schema";
 import { SYSTEM_REMINDER_START } from "../agent.types";
+import { replacedDraftIds } from "../replaced-drafts";
 
 type Draft = components["schemas"]["HtmlViewDraft"];
 export type DraftStatus = Pick<Draft, "state" | "name" | "published">;
@@ -29,7 +30,8 @@ export async function draftReminder(messages: readonly UIMessage[], getDraft: (i
       if (output.success && !output.data.isError) known.set(output.data.structuredContent.draft.id, output.data.structuredContent.draft.state);
     }
   }
-  const updates = await Promise.all([...known].filter(([, state]) => state === "pending").map(async ([id]) => {
+  const replaced = replacedDraftIds(messages);
+  const updates = await Promise.all([...known].filter(([id, state]) => state === "pending" && !replaced.has(id)).map(async ([id]) => {
     try {
       const draft = await getDraft(id);
       if (!draft || draft.state === "pending") return null;
