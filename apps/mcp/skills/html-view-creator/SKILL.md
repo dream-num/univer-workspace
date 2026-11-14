@@ -127,7 +127,8 @@ anything about the draft.
   step 1 as a change.
 - `conflicted`: someone changed the page after you read it. Read it again with
   `html_view_read`, reapply the change and save a new draft.
-- `expired`: a draft lasts one hour. Save it again with a new key.
+- `expired`: the draft passed its `expiresAt`, seven days after it was saved. Save it
+  again with a new key.
 
 To revise a draft, start from your last HTML and keep its `name` and `space` unless the
 user asks for a new name. Workspace treats a draft with the same name and space as the
