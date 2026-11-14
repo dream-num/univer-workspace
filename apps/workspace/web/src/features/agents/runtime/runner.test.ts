@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { ToolLoopAgent } from "ai";
+import { createModel } from "./model";
+import { IDBKeyRange } from "fake-indexeddb";
+import { createTrajectoryStore } from "../trajectory/store";
+import { expandRequests } from "../trajectory/record";
 import { isSystemReminder, messageSkills, messageSkillInvocation, sessionLockName, sessionTitle } from "../agent.types";
 import type { AgentReference, AgentSession, AgentSettings, SkillCatalog } from "../agent.types";
 import { createMcpTokenSource } from "../mcp-token";
@@ -36,9 +41,13 @@ async function setup(options: {
   publish?: boolean;
   pageTool?: "html_view_create" | "html_view_replace";
   getDraft?: AgentRunnerDependencies["getDraft"];
+  trajectory?: (store: AgentRunnerDependencies["trajectory"]) => AgentRunnerDependencies["trajectory"];
 } = {}) {
   const storage = storageOptions();
   const saved: AgentSession[] = [];
+  vi.stubGlobal("IDBKeyRange", IDBKeyRange);
+  const store = createTrajectoryStore(storage);
+  const trajectory = options.trajectory ? options.trajectory(store) : store;
   const backing = createSessionStore(storage);
   const sessions = { ...backing, async save(value: AgentSession) { saved.push(structuredClone(value)); await backing.save(value); } };
   const requests: { url: string; method: string | undefined; headers: [string, string][]; body: string }[] = [];
@@ -87,7 +96,7 @@ async function setup(options: {
   });
   const providers = createProviders({ ...storage, fetch: request, workspaceOrigin: "https://workspace.test" });
   await providers.setKey(deepSeekDefault.id, key);
-  const deps = { userId: storage.userId, locks: storage.locks, fetch: request, providers, sessions,
+  const deps = { userId: storage.userId, locks: storage.locks, fetch: request, providers, sessions, trajectory,
     getDraft: options.getDraft ?? vi.fn(async () => null),
     mcpUrl, createTokenSource: (mode: "ask" | "auto" | "publish") => createMcpTokenSource({ grant: mode, fetch: request }) };
   const runner = createAgentRunner(deps);
@@ -96,10 +105,204 @@ async function setup(options: {
     await vi.waitFor(() => expect(runner.isRunningHere(id)).toBe(false));
     return sessions.get(id);
   }
-  return { storage, sessions, saved, requests, modelBodies, methods, runner, input, finished, deps, gateway };
+  return { storage, sessions, saved, requests, modelBodies, methods, runner, input, finished, deps, gateway, trajectory };
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
+  it("records each provider request byte for byte and ends model calls before tool execution", async () => {
+    const test = await setup();
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    const expanded = expandRequests(records);
+    expect(expanded.map((call) => call.body)).toEqual(test.modelBodies);
+    expect(records.map((call) => call.outcome.kind)).toEqual(["ok", "ok"]);
+    expect(records[0]?.endedAt).not.toBeNull();
+    expect(Date.parse(done!.toolTimings["call-1"]!.startedAt)).toBeGreaterThanOrEqual(Date.parse(records[0]!.endedAt!));
+    expect(records[0]?.runId).toBe(records[1]?.runId);
+  });
+
+  it("observes the designed SDK event order around provider fetch and tool execution", async () => {
+    const events: string[] = [];
+    const test = await setup({ model: (index) => {
+      events.push("fetch");
+      return modelStream(index === 1 ? "pr_create" : undefined);
+    } });
+    const agent = new ToolLoopAgent({
+      ...createModel(await test.deps.providers.resolve(test.input.model.providerId), test.input.model, test.deps.fetch, "https://workspace.test"),
+      tools: { pr_create: { inputSchema: z.object({}), execute: async () => { events.push("execute"); return "done"; } } },
+      onStepStart() { events.push("step-start"); },
+      onLanguageModelCallStart() { events.push("attempt-start"); },
+      onLanguageModelCallEnd() { events.push("model-end"); },
+      onToolExecutionStart() { events.push("tool-start"); },
+      onToolExecutionEnd() { events.push("tool-end"); },
+    });
+    await (await agent.stream({ prompt: "Create a pull request" })).consumeStream();
+    expect(events).toEqual(["step-start", "attempt-start", "fetch", "model-end", "tool-start", "execute", "tool-end",
+      "step-start", "attempt-start", "fetch", "model-end"]);
+  });
+
+  it("records model response content, token usage, and streaming performance", async () => {
+    const test = await setup({ model: () => modelStream(undefined, false, { prompt_tokens: 100, prompt_cache_hit_tokens: 50 }) });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    expect(records[0]?.response).toContainEqual(expect.objectContaining({ type: "text", text: "Done" }));
+    expect(records[0]?.usage).toEqual({ inputTokens: 100, cacheReadTokens: 50, outputTokens: 1, reasoningTokens: 0 });
+    expect(records[0]?.performance).toEqual({ responseTimeMs: expect.any(Number), timeToFirstOutputMs: expect.any(Number) });
+  });
+
+  it("caps the captured error body at 64 KB and preserves provider failure", async () => {
+    const body = "x".repeat(65536) + "tail";
+    const test = await setup({ model: () => new Response(body, { status: 401 }) });
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    expect(records[0]?.attempts[0]?.errorBody).toBe("x".repeat(65536));
+    expect(done?.status).toBe("failed");
+  });
+
+  it("continues sequence and request prefixes across two turns and a fresh runner", async () => {
+    const test = await setup();
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    const reloaded = createAgentRunner({ ...test.deps, trajectory: createTrajectoryStore(test.storage) });
+    await reloaded.send(started.id, "Next turn");
+    await vi.waitFor(() => expect(reloaded.isRunningHere(started.id)).toBe(false));
+    const { records } = await test.trajectory.list(started.id);
+    const expanded = expandRequests(records);
+    expect(records.map((call) => call.seq)).toEqual([0, 1, 2]);
+    expect(expanded.map((call) => call.body)).toEqual(test.modelBodies);
+    expect(expanded.every((call) => !call.rewrite)).toBe(true);
+    expect(expanded[2]?.base).toBe(expanded[1]?.request?.messages.length);
+    expect(records[0]?.runId).not.toBe(records[2]?.runId);
+  });
+
+  it("keeps a 500 retry in one call with both attempts and the original error body", async () => {
+    const test = await setup({ model: (index) => index === 1 ? new Response("overloaded", { status: 500 }) : modelStream() });
+    const started = await test.runner.start(test.input);
+    await vi.waitFor(() => expect(test.runner.isRunningHere(started.id)).toBe(false), { timeout: 8000 });
+    expect((await test.finished(started.id))?.status).toBe("idle");
+    const { records } = await test.trajectory.list(started.id);
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({ outcome: { kind: "ok" }, attempts: [{ status: 500, errorBody: "overloaded" }, { status: 200 }] });
+    expect(records[0]?.attempts.every((attempt) => attempt.endedAt !== null)).toBe(true);
+    expect(expandRequests(records)[0]?.body).toBe(test.modelBodies[0]);
+    expect(test.modelBodies[1]).toBe(test.modelBodies[0]);
+  }, 10000);
+
+  it("records persistent provider failure as error and uses its request as the next base", async () => {
+    let failing = true;
+    const test = await setup({ model: () => failing ? new Response("still overloaded", { status: 500 }) : modelStream() });
+    const started = await test.runner.start(test.input);
+    await vi.waitFor(() => expect(test.runner.isRunningHere(started.id)).toBe(false), { timeout: 12000 });
+    expect((await test.sessions.get(started.id))?.status).toBe("failed");
+    const failed = (await test.trajectory.list(started.id)).records;
+    expect(failed).toHaveLength(1);
+    expect(failed[0]?.outcome.kind).toBe("error");
+    expect(failed[0]?.attempts.map((attempt) => [attempt.status, attempt.errorBody])).toEqual([[500, "still overloaded"], [500, "still overloaded"], [500, "still overloaded"]]);
+    failing = false;
+    await test.runner.send(started.id, "Try again");
+    await test.finished(started.id);
+    const expanded = expandRequests((await test.trajectory.list(started.id)).records);
+    expect(expanded[1]?.base).toBe(expanded[0]?.request?.messages.length);
+    expect(expanded[1]?.rewrite).toBe(false);
+  }, 15000);
+
+  it("marks a stopped model call aborted with a finished attempt", async () => {
+    const entered = deferred<void>();
+    const test = await setup({ model: (_index, _body, signal) => new Promise<Response>((_resolve, reject) => {
+      entered.resolve();
+      signal?.addEventListener("abort", () => reject(new DOMException("Stopped", "AbortError")), { once: true });
+    }) });
+    const started = await test.runner.start(test.input);
+    await entered.promise;
+    await test.runner.stop(started.id);
+    await vi.waitFor(async () => expect((await test.trajectory.list(started.id)).records[0]?.outcome.kind).toBe("aborted"));
+    const { records } = await test.trajectory.list(started.id);
+    expect((await test.sessions.get(started.id))?.status).toBe("stopped");
+    expect(records).toHaveLength(1);
+    expect(records[0]?.outcome.kind).toBe("aborted");
+    expect(records[0]?.endedAt).not.toBeNull();
+    expect(records[0]?.attempts[0]?.endedAt).not.toBeNull();
+  });
+
+  it("redacts a provider key in the stored request and error response without changing the wire", async () => {
+    const test = await setup({ model: () => new Response(`rejected ${key}`, { status: 401 }) });
+    const started = await test.runner.start({ ...test.input, text: `My key is ${key}` });
+    await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    expect(test.modelBodies[0]).toContain(key);
+    expect(expandRequests(records)[0]?.body).toBe(test.modelBodies[0]?.replaceAll(key, "[redacted]"));
+    expect(records[0]?.attempts[0]?.errorBody).toBe("rejected [redacted]");
+    expect(JSON.stringify(records)).not.toContain(key);
+  });
+
+  it("redacts provider keys in model response content", async () => {
+    const test = await setup({ model: async () => {
+      const response = modelStream();
+      return new Response((await response.text()).replace("Done", key), { headers: response.headers });
+    } });
+    const started = await test.runner.start(test.input);
+    await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    expect(records[0]?.response).toContainEqual(expect.objectContaining({ type: "text", text: "[redacted]" }));
+    expect(JSON.stringify(records)).not.toContain(key);
+  });
+
+  it.each(["put", "list"] as const)("finishes the session when trajectory %s throws", async (operation) => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const test = await setup({ model: () => modelStream(), trajectory: (store) => ({ ...store, [operation]: () => { throw new Error("Trajectory unavailable"); } }) });
+      const started = await test.runner.start(test.input);
+      expect((await test.finished(started.id))?.status).toBe("idle");
+      expect(error).toHaveBeenCalled();
+    } finally { error.mockRestore(); }
+  });
+
+  it("continues turns without waiting for a stuck trajectory write", async () => {
+    const pending = deferred<void>();
+    const test = await setup({ model: () => modelStream(), trajectory: (store) => ({ ...store, put: async (record) => { await pending.promise; await store.put(record); } }) });
+    const started = await test.runner.start(test.input);
+    try {
+      expect((await test.finished(started.id))?.status).toBe("idle");
+      await test.runner.send(started.id, "Another turn before the writes finish");
+      expect((await test.finished(started.id))?.status).toBe("idle");
+    } finally { pending.resolve(); }
+    await vi.waitFor(async () => expect((await test.trajectory.list(started.id)).records).toHaveLength(2));
+    const { records } = await test.trajectory.list(started.id);
+    expect(records.map((record) => record.seq)).toEqual([0, 1]);
+    const expanded = expandRequests(records);
+    expect(expanded.map((call) => call.body)).toEqual(test.modelBodies);
+    expect(expanded[1]?.base).toBe(expanded[0]?.request?.messages.length);
+    expect(expanded[1]?.rewrite).toBe(false);
+  });
+
+  it("records execution timings for parallel tools after the issuing model call", async () => {
+    const test = await setup({ model: (index) => modelStream(index === 1 ? "pr_create" : undefined, index === 1) });
+    const started = await test.runner.start(test.input);
+    const done = await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    for (const id of ["call-1", "call-2"]) {
+      const timing = done!.toolTimings[id]!;
+      expect(Date.parse(timing.startedAt)).toBeGreaterThanOrEqual(Date.parse(records[0]!.endedAt!));
+      expect(timing.endedAt).not.toBeNull();
+    }
+  });
+
+  it.each(["pr_create", "html_view_create"] as const)("records approved %s execution through the gated publish client", async (name) => {
+    const test = await setup({ publish: true, ...(name === "html_view_create" ? { pageTool: name } : {}), model: (index) => modelStream(index === 1 ? name : undefined) });
+    const started = await test.runner.start(test.input);
+    const paused = (await test.finished(started.id))!;
+    expect(paused.toolTimings["call-1"]).toBeUndefined();
+    await test.runner.decide(started.id, pendingApprovals(paused)[0]!.approvalId, true);
+    const done = (await test.finished(started.id))!;
+    expect(done.toolTimings["call-1"]).toEqual({ startedAt: expect.any(String), endedAt: expect.any(String) });
+    const { records } = await test.trajectory.list(started.id);
+    expect(records.map((record) => record.seq)).toEqual([0, 1]);
+    expect(expandRequests(records).map((call) => call.body)).toEqual(test.modelBodies);
+  });
+
   it("freezes the system message and tool definitions across gateway releases and reloads", async () => {
     const test = await setup({ model: () => modelStream() });
     const started = await test.runner.start(test.input);
@@ -934,7 +1137,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(JSON.parse(request).thinking).toEqual({ type: "disabled" });
   });
 
-  it("records tool timing on first appearance and output, and preserves it across continuation", async () => {
+  it("records tool timing on execution events, and preserves it across continuation", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-11T01:00:00.000Z"));
     const entered = deferred<void>();

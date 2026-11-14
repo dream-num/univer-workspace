@@ -74,10 +74,14 @@ The server does not reload. After changing server or CLI code: rebuild the CLI i
 ## Browser Agent mock model
 
 Start the local OpenAI-compatible provider with a JSON script. Each completion consumes
-one step. A step returns text or one tool call; after the last step it returns `Done`.
+one step. A step returns text, one tool call, parallel tool calls, or an HTTP error.
+After the last step it returns `Done`.
 Usage chunks contain fixed synthetic counts, including 50 cached tokens out of 100 prompt
 tokens. These counts test the UI, not actual provider caching. A step can set `delayMs`
-to hold its response while you enter a steering message.
+to hold its response while you enter a steering message. `delayMs` works with every shape.
+Use `{"error":{"status":500,"body":"overloaded"}}` to exercise provider retries and
+`{"tools":[{"name":"repo_list","arguments":{}},{"name":"search","arguments":{"query":"budget"}}]}`
+for parallel tool calls in one response.
 
 ```bash
 cat > /tmp/uvw-model-script.json <<'JSON'
@@ -94,11 +98,23 @@ Use Base URL `http://127.0.0.1:<MODEL_PORT>`, model and default model `mock-agen
 non-empty API key (for example `mock-key`). The Base URL must differ from the Workspace
 origin. Choose a free port and use an HTTP loopback Workspace for this local check.
 The provider supports CORS preflight, `GET /models` and streaming
-`POST /chat/completions`. Each request appends arrival time, method, URL and its full
-JSON body to the log, including OPTIONS and GET with a null body. Keep the log with
+`POST /chat/completions`. Each request appends arrival time, method, URL, parsed JSON
+`body`, and exact request body string `raw` to the log. OPTIONS and GET have a null
+`body` and empty `raw`. Keep the log with
 local verification evidence; it contains full model requests. Stop the foreground
 process with Ctrl+C when finished. Follow [Browser Agent skills](features/agent-skills.md)
 for the provider form, rail, slash menus, invocation gates, and request-prefix checks.
+
+On a signed-in Vite dev page at `/agents/<id>`, inspect the stored model requests with:
+
+```bash
+agent-browser eval "$(cat .agents/skills/verify-uvw/bin/trajectory-dump.js)"
+```
+
+The result contains `skippedRecords` and a `records` array with `seq`, `outcome`,
+`attempts`, `base`, `rewrite`, and the expanded request string `body`. Compare each
+`body` byte for byte with the corresponding mock log's `raw`. A provider key pasted
+into a message is replaced with `[redacted]` in the stored request.
 
 ## Doctor
 

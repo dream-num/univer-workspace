@@ -3,13 +3,14 @@ import { api } from "../../../shared/api/client";
 import { apiError } from "../../../shared/api/errors";
 import { sessionQueryOptions } from "../../auth/auth.queries";
 import { loadAgentRuntime } from "../index";
-import { createSessionStore, createProviders, createMcpTokenSource } from "../stores";
+import { createSessionStore, createProviders, createMcpTokenSource, createTrajectoryStore } from "../stores";
 
 
 
 function createClient(userId: string) {
   const fetch = window.fetch.bind(window);
   const sessions = createSessionStore({ userId, indexedDB, locks: navigator.locks });
+  const trajectory = createTrajectoryStore({ userId, indexedDB, locks: navigator.locks });
   const providers = createProviders({ userId, indexedDB, locks: navigator.locks, storage: sessionStorage, fetch, workspaceOrigin: location.origin });
   let runtime: ReturnType<typeof loadAgentRuntime> | undefined;
   let runner: Promise<ReturnType<Awaited<ReturnType<typeof loadAgentRuntime>>["createAgentRunner"]>> | undefined;
@@ -43,7 +44,7 @@ function createClient(userId: string) {
           if (error) throw apiError(error);
           return data.draft;
         },
-        userId, fetch, locks: navigator.locks, sessions, providers,
+        userId, fetch, locks: navigator.locks, sessions, providers, trajectory,
         mcpUrl: `${location.origin}/mcp`, createTokenSource: (grant) => createMcpTokenSource({ grant, fetch }),
       }));
     },

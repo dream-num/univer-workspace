@@ -136,6 +136,8 @@ apps/workspace/
 
 `features/agents` 的浏览器 Agent 在首次运行时将完整系统消息和模型工具定义保存到 IndexedDB 会话记录的可选 `modelSnapshot`，后续运行只复用；旧记录在首次缺少快照的运行中补写一次。工具调用仍按名称交给实时 MCP 网关，已删除的工具以工具错误结果返回模型。
 
+浏览器 Agent 始终将 provider 实际发送的模型请求记录在独立的 `univer-workspace-agent-trajectory-<userId>` IndexedDB 数据库中，仅保存在当前浏览器。请求按相邻调用的共同消息前缀增量编码，无法逐字还原时保存原始正文；共同前缀短于上一次历史时标为 history rewrite。记录包含重试、响应、用量和耗时，写入前移除当前 provider key，存储失败不影响会话。
+
 `features/agents` 的浏览器 Agent 支持 Skill。gateway 的 `skills_read` 实时发现个人空间和成员仓库根目录的
 `.agents/skills/<name>/SKILL.md`，与内置 Skill 合并并给出诊断。每次运行开始时，`drive` 读取目录并写入
 用户消息的 `metadata.agentSkills`；模型可见部分变化时才在这条消息末尾追加 `<system-reminder>`，

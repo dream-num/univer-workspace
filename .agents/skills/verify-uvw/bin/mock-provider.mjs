@@ -9,10 +9,16 @@ if (!Number.isInteger(port) || port < 1 || port > 65535 || !values.script || !va
   throw new Error("Usage: mock-provider.mjs --port <1-65535> --script <json-file> --log <jsonl-file>");
 }
 const script = JSON.parse(readFileSync(values.script, "utf8"));
-if (typeof script.model !== "string" || !script.model || !Array.isArray(script.steps) || script.steps.some((step) =>
-  !step || (step.delayMs !== undefined && (!Number.isFinite(step.delayMs) || step.delayMs < 0)) || (typeof step.text === "string") === (step.tool !== undefined) || (step.tool !== undefined && !(typeof step.tool.name === "string" && step.tool.name &&
-    step.tool.arguments && typeof step.tool.arguments === "object" && !Array.isArray(step.tool.arguments))))) {
-  throw new Error('Script needs {model: string, steps: [{text: string} | {tool: {name: string, arguments: object}}]}, with optional non-negative delayMs per step');
+const validTool = (tool) => tool && typeof tool.name === "string" && tool.name && tool.arguments && typeof tool.arguments === "object" && !Array.isArray(tool.arguments);
+if (typeof script.model !== "string" || !script.model || !Array.isArray(script.steps) || script.steps.some((step) => {
+  if (!step || (step.delayMs !== undefined && (!Number.isFinite(step.delayMs) || step.delayMs < 0))) return true;
+  if (["text", "tool", "tools", "error"].filter((key) => Object.hasOwn(step, key)).length !== 1) return true;
+  if (Object.hasOwn(step, "text")) return typeof step.text !== "string";
+  if (Object.hasOwn(step, "tool")) return !validTool(step.tool);
+  if (Object.hasOwn(step, "tools")) return !Array.isArray(step.tools) || !step.tools.length || !step.tools.every(validTool);
+  return !step.error || !Number.isInteger(step.error.status) || step.error.status < 400 || step.error.status > 599 || typeof step.error.body !== "string";
+})) {
+  throw new Error('Script needs {model: string, steps: [{text: string} | {tool: {name: string, arguments: object}} | {tools: [{name: string, arguments: object}]} | {error: {status: 400-599, body: string}}]}, with optional non-negative delayMs per step');
 }
 let next = 0;
 const server = http.createServer(async (req, res) => {
@@ -28,11 +34,11 @@ const server = http.createServer(async (req, res) => {
     let body = null;
     try { body = raw ? JSON.parse(raw) : null; }
     catch {
-      appendFileSync(values.log, JSON.stringify({ arrivedAt, method: req.method, url: req.url, body: raw }) + "\n");
+      appendFileSync(values.log, JSON.stringify({ arrivedAt, method: req.method, url: req.url, raw, body: raw }) + "\n");
       res.writeHead(400).end("Invalid JSON");
       return;
     }
-    appendFileSync(values.log, JSON.stringify({ arrivedAt, method: req.method, url: req.url, body }) + "\n");
+    appendFileSync(values.log, JSON.stringify({ arrivedAt, method: req.method, url: req.url, raw, body }) + "\n");
     if (req.method === "OPTIONS") { res.writeHead(204).end(); return; }
     if (req.method === "GET" && req.url === "/models") {
       res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ object: "list", data: [{ id: script.model, object: "model", created: 0, owned_by: "mock" }] }));
@@ -41,14 +47,17 @@ const server = http.createServer(async (req, res) => {
     if (req.method !== "POST" || req.url !== "/chat/completions") { res.writeHead(404).end(); return; }
     const index = next++;
     const step = script.steps[index] ?? { text: "Done" };
+    if (step.delayMs) await new Promise((resolve) => setTimeout(resolve, step.delayMs));
+    if (closed) return;
+    if (step.error) { res.writeHead(step.error.status).end(step.error.body); return; }
+    const tools = step.tools ?? (step.tool ? [step.tool] : null);
     const chunk = (delta, finish_reason) => ({ id: `mock-${index}`, object: "chat.completion.chunk", created: Math.floor(Date.now() / 1000), model: script.model,
       choices: [{ index: 0, delta, finish_reason }] });
-    const delta = step.tool ? { role: "assistant", tool_calls: [{ index: 0, id: `call-${index}`, type: "function", function: { name: step.tool.name, arguments: JSON.stringify(step.tool.arguments) } }] }
+    const delta = tools ? { role: "assistant", tool_calls: tools.map((tool, toolIndex) => ({ index: toolIndex, id: toolIndex === 0 ? `call-${index}` : `call-${index}-${toolIndex}`, type: "function", function: { name: tool.name, arguments: JSON.stringify(tool.arguments) } })) }
       : { role: "assistant", content: step.text };
-    const chunks = [chunk(delta, null), chunk({}, step.tool ? "tool_calls" : "stop"),
+    const chunks = [chunk(delta, null), chunk({}, tools ? "tool_calls" : "stop"),
       { ...chunk({}, null), choices: [], usage: { prompt_tokens: 100, completion_tokens: 1, total_tokens: 101, prompt_tokens_details: { cached_tokens: 50 } } }];
     res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
-    if (step.delayMs) await new Promise((resolve) => setTimeout(resolve, step.delayMs));
     for (const value of chunks) {
       if (closed) return;
       res.write(`data: ${JSON.stringify(value)}\n\n`);
