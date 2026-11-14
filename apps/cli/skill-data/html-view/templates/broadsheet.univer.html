@@ -2,7 +2,7 @@
 <!-- Scenario: Startup cash runway; live 36-month Sheet model.
 Expected Sheet: A1:B1 = Cash flow assumptions, Value. A2:B6 = Opening cash, Monthly revenue,
 Monthly revenue growth (fraction), Fixed monthly costs, Added monthly payroll; labels A, numbers B.
-A7 = Start month; B7 = text YYYY-MM, e.g. 2026-12.
+A7 = Start month; B7 = YYYY-MM text (e.g. 2026-12) or a spreadsheet date (1899-12-30 epoch).
 A8:E8 = Month, Opening cash, Revenue, Costs, Closing cash.
 A9:E44 = 36 monthly formula rows; A = month index 1..36, B:E numeric formula results.
 At least 44 rows and 5 columns. Chart/answer read all 36 months; table shows first 12.
@@ -138,7 +138,7 @@ function cashAxis(r){
   const ticks=Array.from({length:Math.round((max-min)/step)+1},(_,i)=>min+i*step);
   return {min,max,ticks};
 }
-function forecast(value){const month=value[0]?.[1];if(typeof month!=='string'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('B7 must contain a start month in YYYY-MM format');const [y,m]=month.split('-').map(Number);START={y,m};
+function forecast(value){let month=value[0]?.[1];if(typeof month==='number'&&Number.isFinite(month)){const date=new Date(Date.UTC(1899,11,30)+Math.floor(month)*864e5);if(Number.isFinite(date.getTime()))month=date.toISOString().slice(0,7)}if(typeof month!=='string'||!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('B7 must contain a start month as YYYY-MM text or a spreadsheet date');const [y,m]=month.split('-').map(Number);START={y,m};
   const rows=value.slice(2).filter(row=>row.some(v=>v!==null&&v!==''));
   if(!rows.length)return [];
   if(rows.length!==36||rows.some(row=>row.length<5||row.some(v=>typeof v!=='number'||!Number.isFinite(v))))throw Error('Waiting for 36 months of Sheet formula results in A9:E44');
