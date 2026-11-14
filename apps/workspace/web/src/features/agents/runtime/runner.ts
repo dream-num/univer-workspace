@@ -171,13 +171,16 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const resolved = await provider;
       key = run.key = resolved.apiKey;
       if (run.stopped) return;
-      let previous = null;
-      try { previous = expandRequests((await deps.trajectory.list(run.session.id)).records).at(-1) ?? null; }
+      let previous: { seq: number; body: string } | null | undefined;
+      try {
+        const last = expandRequests((await deps.trajectory.list(run.session.id)).records).at(-1);
+        previous = last ? { seq: last.record.seq, body: last.body } : null;
+      }
       catch (error) { console.error("Failed to read agent model requests", error); }
       const escaped = JSON.stringify(key).slice(1, -1);
       recorder = createCallRecorder({ sessionId: run.session.id, store: deps.trajectory, fetch: deps.fetch,
-        previous: previous ? { seq: previous.record.seq, body: previous.body } : null,
-        redact: (body) => key ? body.replaceAll(escaped, "[redacted]") : body,
+        previous,
+        redact: (body) => key ? body.replaceAll(escaped, "[redacted]").replaceAll(key, "[redacted]") : body,
         onToolExecutionStart({ toolCall }) {
           run.session.toolTimings = { ...run.session.toolTimings, [toolCall.toolCallId]: { startedAt: new Date().toISOString(), endedAt: null } };
           snapshot();

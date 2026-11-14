@@ -227,6 +227,72 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(records[0]?.attempts[0]?.endedAt).not.toBeNull();
   });
 
+  it("round2 closes the model call aborted by steering before the next call starts", async () => {
+    const entered = deferred<void>();
+    const release = deferred<void>();
+    const test = await setup({ tool: async () => { entered.resolve(); await release.promise; }, model: (index, _body, signal) => {
+      if (index === 1) return modelStream("pr_create");
+      if (index === 2) return new Promise<Response>((_resolve, reject) => {
+        const abort = () => reject(new DOMException("Steering", "AbortError"));
+        if (signal?.aborted) abort(); else signal?.addEventListener("abort", abort, { once: true });
+      });
+      return modelStream();
+    } });
+    const started = await test.runner.start(test.input);
+    try {
+      await entered.promise;
+      await test.runner.send(started.id, "Use the new direction");
+      release.resolve();
+      expect((await test.finished(started.id))?.status).toBe("idle");
+      const { records } = await test.trajectory.list(started.id);
+      expect(records.map((record) => record.seq)).toEqual([0, 1, 2]);
+      expect(records[1]?.outcome.kind).toBe("aborted");
+      expect(records[1]?.endedAt).not.toBeNull();
+      expect(records[1]?.attempts.at(-1)?.endedAt).not.toBeNull();
+      expect(expandRequests(records).map((call) => call.body)).toEqual(test.modelBodies);
+    } finally { release.resolve(); await test.runner.stop(started.id); }
+  });
+
+  it("round2 skips recording after a failed initial list without overwriting stored calls or losing tool timings", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const test = await setup({ model: (index) => modelStream(index === 2 ? "pr_create" : undefined) });
+      const started = await test.runner.start(test.input);
+      await test.finished(started.id);
+      const before = await test.trajectory.list(started.id);
+      const put = vi.fn(test.trajectory.put);
+      const runner = createAgentRunner({ ...test.deps, trajectory: { put, async list() { throw new Error("Read unavailable"); } } });
+      await runner.send(started.id, "Next turn after reload");
+      await vi.waitFor(() => expect(runner.isRunningHere(started.id)).toBe(false));
+      const done = await test.sessions.get(started.id);
+      expect(done?.status).toBe("idle");
+      expect(done?.toolTimings["call-1"]).toEqual({ startedAt: expect.any(String), endedAt: expect.any(String) });
+      expect(test.modelBodies).toHaveLength(3);
+      expect(put).not.toHaveBeenCalled();
+      expect(await test.trajectory.list(started.id)).toEqual(before);
+    } finally { error.mockRestore(); }
+  });
+
+  it.each(["http", "throw"] as const)("round2 redacts escaped provider keys from plain %s failures and JSON captures", async (failure) => {
+    const secret = String.raw`sk-a"b\c`;
+    const test = await setup({ model: () => {
+      if (failure === "throw") throw new Error(`rejected ${secret}`);
+      return new Response(`rejected ${secret}`, { status: 401 });
+    } });
+    await test.deps.providers.setKey(deepSeekDefault.id, secret);
+    const started = await test.runner.start({ ...test.input, text: `My key is ${secret}` });
+    await test.finished(started.id);
+    const { records } = await test.trajectory.list(started.id);
+    expect(records).toHaveLength(1);
+    const stored = records[0]!;
+    expect(stored.outcome.kind).toBe("error");
+    if (failure === "http") expect(stored.attempts[0]?.errorBody).toBe("rejected [redacted]");
+    else expect(stored.outcome).toEqual({ kind: "error", message: "rejected [redacted]" });
+    const expanded = expandRequests(records)[0]!;
+    expect(expanded.body).toBe(test.modelBodies[0]?.replaceAll(JSON.stringify(secret).slice(1, -1), "[redacted]"));
+    expect(JSON.stringify(stored)).not.toContain(JSON.stringify(secret).slice(1, -1));
+  });
+
   it("redacts a provider key in the stored request and error response without changing the wire", async () => {
     const test = await setup({ model: () => new Response(`rejected ${key}`, { status: 401 }) });
     const started = await test.runner.start({ ...test.input, text: `My key is ${key}` });

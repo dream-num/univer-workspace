@@ -29,8 +29,9 @@ const server = http.createServer(async (req, res) => {
   let closed = false;
   res.on("close", () => { closed = true; });
   try {
-    let raw = "";
-    for await (const chunk of req) raw += chunk;
+    const buffers = [];
+    for await (const chunk of req) buffers.push(chunk);
+    const raw = Buffer.concat(buffers).toString("utf8");
     let body = null;
     try { body = raw ? JSON.parse(raw) : null; }
     catch {

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { createServer } from "node:net";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
@@ -72,4 +73,36 @@ test("mock provider records exact raw requests and supports delayed errors and p
   const rows = readFileSync(log, "utf8").trim().split("\n").map((line) => JSON.parse(line));
   assert.deepEqual(rows.map((row) => row.raw), [raw, raw]);
   assert.deepEqual(rows.map((row) => row.body), [JSON.parse(raw), JSON.parse(raw)]);
+});
+
+
+test("round2 mock provider preserves UTF-8 split across request chunks", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "mock-provider-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const script = join(dir, "script.json");
+  const log = join(dir, "requests.jsonl");
+  writeFileSync(script, JSON.stringify({ model: "mock-agent", steps: [] }));
+  const server = createServer();
+  server.listen(0, "127.0.0.1");
+  await once(server, "listening");
+  const port = server.address().port;
+  await new Promise((resolve) => server.close(resolve));
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./mock-provider.mjs", import.meta.url)), "--port", String(port), "--script", script, "--log", log], { stdio: ["ignore", "pipe", "inherit"] });
+  t.after(() => child.kill());
+  await once(child.stdout, "data");
+  const sent = JSON.stringify({ messages: [{ role: "user", content: "你好😀".repeat(100) }] });
+  const bytes = Buffer.from(sent);
+  const split = bytes.indexOf(Buffer.from("你")) + 1;
+  const request = httpRequest(`http://127.0.0.1:${port}/chat/completions`, { method: "POST" });
+  const response = once(request, "response").then(async ([response]) => {
+    for await (const _chunk of response) {}
+    return response.statusCode;
+  });
+  request.write(bytes.subarray(0, split));
+  await setTimeout(30);
+  request.end(bytes.subarray(split));
+  assert.equal(await response, 200);
+  const row = JSON.parse(readFileSync(log, "utf8").trim());
+  assert.equal(row.raw, sent);
+  assert.deepEqual(row.body, JSON.parse(sent));
 });
