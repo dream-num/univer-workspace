@@ -1,0 +1,37 @@
+.trajectory-view { width: 100%; min-width: 0; padding-top: 16px; color: var(--rd-ink, var(--color-foreground)); }
+.trajectory-toolbar, .trajectory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 12px; }
+.trajectory-toolbar dl { display: flex; flex-wrap: wrap; gap: 16px; width: 100%; margin: 0; }
+.trajectory-toolbar dt { font-size: 11px; opacity: .7; }
+.trajectory-toolbar dd { font-variant-numeric: tabular-nums; margin: 0; font-weight: 600; }
+.trajectory-view button { cursor: pointer; }
+.trajectory-toolbar button, .trajectory-actions button, .trajectory-detail [role="tab"] { padding: 5px 8px; border: 1px solid var(--rd-line, var(--color-border)); border-radius: 5px; }
+.trajectory-view button:focus-visible, .trajectory-view input:focus-visible { outline: 2px solid var(--rd-accent, #6875d9); outline-offset: 2px; }
+.trajectory-view [aria-selected="true"], .trajectory-view [aria-pressed="true"] { background: var(--rd-panel-2, var(--color-muted)); font-weight: 600; }
+.trajectory-toolbar input[type="search"] { flex: 1; min-width: 180px; border: 1px solid var(--rd-line, var(--color-border)); border-radius: 5px; padding: 6px 10px; background: transparent; }
+.trajectory-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+.trajectory-has-detail { grid-template-columns: minmax(0, 1fr) minmax(320px, 45%); }
+.trajectory-tree { min-width: 0; overflow-x: auto; }
+.trajectory-row { display: grid; grid-template-columns: minmax(200px, 1fr) minmax(80px, 22%) 88px 90px; gap: 10px; align-items: center; text-align: left; width: 100%; min-width: 520px; padding: 10px 6px; border-bottom: 1px solid var(--rd-line, var(--color-border)); font-size: 12px; }
+.trajectory-row > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trajectory-row small { opacity: .6; }
+.trajectory-row em { display: block; white-space: normal; }
+.trajectory-user > span:first-child, .trajectory-assistant > span:first-child { padding-left: 16px; }
+.trajectory-tool > span:first-child { padding-left: 36px; }
+.trajectory-head, .trajectory-turn-row { font-weight: 600; background: var(--rd-panel-2, var(--color-muted)); }
+.trajectory-error { color: var(--rd-danger, var(--color-destructive)); }
+.trajectory-waterfall { position: relative; height: 16px; border-radius: 3px; background: color-mix(in srgb, currentColor 5%, transparent); overflow: hidden; }
+.trajectory-waterfall i { position: absolute; height: 10px; top: 3px; border-radius: 2px; background: var(--rd-accent, #6875d9); }
+.trajectory-tool .trajectory-waterfall i { background: var(--rd-merged, var(--color-success)); }
+.trajectory-error .trajectory-waterfall i { background: currentColor; }
+.trajectory-waterfall b { position: absolute; width: 2px; height: 16px; background: currentColor; }
+.trajectory-detail { background: var(--rd-panel, var(--color-background)); min-width: 0; border: 1px solid var(--rd-line, var(--color-border)); border-radius: 6px; padding: 12px; align-self: start; position: sticky; top: 12px; max-height: 85vh; overflow: auto; }
+.trajectory-detail header { display: flex; gap: 12px; justify-content: space-between; margin-bottom: 12px; font-size: 13px; }
+.trajectory-detail [role="tablist"] { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 16px; }
+.trajectory-detail pre { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: monospace; margin: 6px 0; }
+.trajectory-detail meter { width: 70%; }
+.trajectory-json-node { padding-left: 12px; border-left: 1px solid var(--rd-line, var(--color-border)); overflow-wrap: anywhere; font: 12px monospace; margin: 5px 0; }
+.trajectory-json-node button { text-align: left; }
+.trajectory-reminder { border-left: 3px solid var(--rd-accent, #6875d9); padding-left: 10px; }
+.trajectory-reminder small, .trajectory-notice { color: var(--rd-ink-2, var(--color-muted-foreground)); }
+.trajectory-context-message { margin: 10px 0; overflow-wrap: anywhere; }
+@media (max-width: 1050px) { .trajectory-has-detail { grid-template-columns: minmax(0, 1fr); } .trajectory-detail { position: static; max-height: none; } }

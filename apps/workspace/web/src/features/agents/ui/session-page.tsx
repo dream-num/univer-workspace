@@ -1,9 +1,10 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { ArrowUp, ChevronDown, ChevronRight, CheckCircle2, CircleAlert, CircleX, LoaderCircle, Square } from "lucide-react";
 import { IssueMarkdown } from "../../issues/issue-markdown";
 import type { AgentPageHost } from "./host";
+import { useDebugMode } from "../../../shared/debug-mode";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
@@ -27,6 +28,41 @@ import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus
 
 type DraftFeedback = { readonly disabled: boolean; readonly send: (message: string) => void };
 
+function SessionTabs({ session }: { readonly session: AgentSession }) {
+  const [debug] = useDebugMode();
+  const [tab, setTab] = useState("conversation");
+  const activeTab = debug ? tab : "conversation";
+  const [trajectoryModule, setTrajectoryModule] = useState<{ View: typeof import("./trajectory-view").TrajectoryView } | { error: unknown } | null>(null);
+  useEffect(() => {
+    if (!debug || trajectoryModule) return;
+    let cancelled = false;
+    void import("./trajectory-view").then(
+      (module) => { if (!cancelled) setTrajectoryModule({ View: module.TrajectoryView }); },
+      (error: unknown) => { if (!cancelled) setTrajectoryModule({ error }); },
+    );
+    return () => { cancelled = true; };
+  }, [debug, trajectoryModule]);
+  const TrajectoryView = trajectoryModule && "View" in trajectoryModule ? trajectoryModule.View : null;
+  const viewport = useRef<Element | null>(null);
+  const conversationScroll = useRef(0);
+  useLayoutEffect(() => {
+    if (viewport.current) viewport.current.scrollTop = activeTab === "conversation" ? conversationScroll.current : 0;
+  }, [activeTab]);
+  const m = useAgentMessages();
+  if (activeTab === "trajectory" && trajectoryModule && "error" in trajectoryModule) throw trajectoryModule.error;
+  return <>
+    {debug ? <div className="flex gap-2 border-b border-border pb-2" role="tablist" aria-label={m.trajectory}>
+      {[{ id: "conversation", label: m.conversation }, { id: "trajectory", label: m.trajectory }].map((item) =>
+        <Button key={item.id} role="tab" aria-selected={tab === item.id} variant={tab === item.id ? "secondary" : "ghost"} onClick={(event) => {
+          viewport.current = event.currentTarget.closest(".rd-viewport");
+          if (activeTab === "conversation") conversationScroll.current = viewport.current?.scrollTop ?? 0;
+          setTab(item.id);
+        }}>{item.label}</Button>)}
+    </div> : null}
+    <SessionContent session={session} hidden={activeTab === "trajectory"} />
+    {activeTab === "trajectory" ? TrajectoryView ? <TrajectoryView session={session} /> : <p role="status">{m.loading}</p> : null}
+  </>;
+}
 export function AgentSessionPage({ sessionId, renderPage }: AgentPageHost & { readonly sessionId: string }) {
   const m = useAgentMessages();
   const client = useAgentClient();
@@ -39,11 +75,11 @@ export function AgentSessionPage({ sessionId, renderPage }: AgentPageHost & { re
     <div className="agent-page">
       {runtimeError ? <Alert variant="destructive">{runtimeError}</Alert> : null}
       {sessions.error ? <Alert variant="destructive">{sessions.error.message}</Alert> : null}
-      {session ? <SessionContent key={session.id} session={session} /> : <p role="status">{sessions.isPending ? m.loading : m.missing}</p>}
+      {session ? <SessionTabs key={session.id} session={session} /> : <p role="status">{sessions.isPending ? m.loading : m.missing}</p>}
     </div>
   </>, session ? sessionTitle(session) : m.agents, spaceId);
 }
-function SessionContent({ session }: { readonly session: AgentSession }) {
+function SessionContent({ session, hidden }: { readonly session: AgentSession; readonly hidden: boolean }) {
   const m = useAgentMessages();
   const client = useAgentClient();
   const [text, setText] = useState("");
@@ -67,12 +103,13 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     let following = true;
     let lastScrollTop = viewport.scrollTop;
     const onScroll = () => {
+      if (content.closest("[hidden]")) return;
       const top = viewport.scrollTop;
       const gap = viewport.scrollHeight - top - viewport.clientHeight;
       following = top < lastScrollTop ? gap < 1 : following || gap < 48;
       lastScrollTop = top;
     };
-    const scrollToBottom = () => { if (following) viewport.scrollTop = viewport.scrollHeight; };
+    const scrollToBottom = () => { if (following && !content.closest("[hidden]")) viewport.scrollTop = viewport.scrollHeight; };
     viewport.addEventListener("scroll", onScroll, { passive: true });
     const observer = new ResizeObserver(scrollToBottom);
     observer.observe(content);
@@ -117,7 +154,7 @@ function SessionContent({ session }: { readonly session: AgentSession }) {
     const blockIndex = messageBlocks(message.parts).map((block) => block.kind).lastIndexOf("steps");
     return blockIndex < 0 ? latest : { messageIndex, blockIndex };
   }, null);
-  return <div className="agent-session-layout">
+  return <div className="agent-session-layout" hidden={hidden}>
     <div className="agent-conversation" ref={conversation}>
       <header className="agent-session-header"><h1>{sessionTitle(session)}</h1><SessionStatus session={session} /></header>
       <div className="agent-messages">{session.messages.map((message, index) => <article key={message.id} className={`agent-message agent-message-${message.role}`}>

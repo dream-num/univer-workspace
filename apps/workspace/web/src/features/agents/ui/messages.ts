@@ -2,6 +2,20 @@ import { useI18n } from "../../../shared/i18n";
 
 export const agentMessages = {
   "en-US": {
+    conversation: "Conversation", trajectory: "Trajectory",
+    tr: {
+      turns: "Turns", calls: "Model calls", tools: "Tool calls", input: "Input tokens", output: "Output tokens", errors: "Errors", rewrites: "History rewrites", paramsChanged: "Parameter changes",
+      errorsOnly: "Only errors", expandAll: "Expand all", collapseAll: "Collapse all", search: "Search all sent content and MCP results", noResults: "No matching rows.",
+      span: "Span", waterfall: "Waterfall", duration: "Duration", tokens: "Tokens in / out", turn: "Turn", step: "Step",
+      unrecorded: "This session predates trajectory recording. No model requests were recorded.", skipped: "Skipped invalid records", unparsed: "Unparsed request", rewrite: "History rewritten", mismatch: "Replay differs from response", params: "Request params",
+      system: "System prompt", toolsTab: "Tools", asSent: "As sent", raw: "Raw", tree: "Tree", copy: "Copy", copied: "Copied", copyRequest: "Copy request JSON", copyFailed: "Copy failed",
+      response: "Response", context: "Context sent", replay: "Replayed as", usage: "Usage & timing", arguments: "Arguments", mcp: "MCP result", timing: "Timing", schema: "Schema",
+      mcpNotice: "This is the MCP gateway's raw return, not what the model received.", unsent: "Not sent to the model", noReplay: "No later request replayed this response.", unavailable: "Not recorded", close: "Close details",
+      new: "NEW", rewritten: "REWRITTEN", hit: "Cache hit", miss: "Cache miss", started: "Started", firstOutput: "First output", attempts: "Attempts", jsonString: "JSON string", expand: "Expand", collapse: "Collapse", lines: "lines", items: "items", keys: "keys",
+      sources: { catalog: "Skill catalog", invocation: "Skill invocation", references: "References", settings: "Settings change", drafts: "Draft states", reminder: "Reminder" },
+      statuses: { ok: "Completed", error: "Failed", denied: "Denied", running: "Running", unsent: "Unsent", aborted: "Aborted" },
+    },
+
     greeting: (name?: string) => name ? `Hello, ${name}` : "Hello", greetingHint: "What can I help you with?",
     more: "Load more", agents: "Agents", prompt: "Let an agent handle a task", ask: "Ask", auto: "Auto",
     askHint: "Ask is read only. It answers questions without changing files.", autoHint: "Changes go into a pull request for a person to review and merge. Pages are drafts you preview and publish in Workspace.",
@@ -40,6 +54,20 @@ export const agentMessages = {
     signOutHint: "Model keys are saved on this device. Choose whether to remove them when signing out.", loading: "Loading…",
   },
   "zh-CN": {
+    conversation: "对话", trajectory: "Trajectory",
+    tr: {
+      turns: "轮次", calls: "模型调用", tools: "工具调用", input: "输入 token", output: "输出 token", errors: "错误", rewrites: "历史改写", paramsChanged: "参数变化",
+      errorsOnly: "只看错误", expandAll: "全部展开", collapseAll: "全部折叠", search: "搜索全部发送内容和 MCP 结果", noResults: "没有匹配的行。",
+      span: "Span", waterfall: "瀑布图", duration: "耗时", tokens: "输入 / 输出 token", turn: "Turn", step: "Step",
+      unrecorded: "此会话创建于 trajectory 记录上线之前，没有模型请求记录。", skipped: "已跳过无效记录", unparsed: "无法解析请求", rewrite: "历史已改写", mismatch: "回传与响应不同", params: "请求参数",
+      system: "系统提示词", toolsTab: "工具定义", asSent: "发送原文", raw: "Raw", tree: "树", copy: "复制", copied: "已复制", copyRequest: "复制请求 JSON", copyFailed: "复制失败",
+      response: "响应", context: "Context sent", replay: "Replayed as", usage: "用量与耗时", arguments: "参数", mcp: "MCP result", timing: "耗时", schema: "Schema",
+      mcpNotice: "这是 MCP 网关的原始返回，不是模型收到的内容。", unsent: "未发送给模型", noReplay: "没有后续请求回传此响应。", unavailable: "未记录", close: "关闭详情",
+      new: "NEW", rewritten: "REWRITTEN", hit: "缓存命中", miss: "缓存未命中", started: "开始时间", firstOutput: "首个输出", attempts: "请求尝试", jsonString: "JSON string", expand: "展开", collapse: "折叠", lines: "行", items: "项", keys: "键",
+      sources: { catalog: "Skill catalog", invocation: "Skill invocation", references: "References", settings: "Settings change", drafts: "Draft states", reminder: "Reminder" },
+      statuses: { ok: "已完成", error: "失败", denied: "已拒绝", running: "运行中", unsent: "未发送", aborted: "已中断" },
+    },
+
     greeting: (name?: string) => name ? `你好，${name}` : "你好", greetingHint: "有什么可以帮你？",
     more: "加载更多", agents: "Agents", prompt: "让 Agent 处理一件事", ask: "提问", auto: "执行",
     askHint: "提问模式只读，不会更改文件。", autoHint: "更改写入 PR，由人审阅并合并；页面保存为草稿，由你在 Workspace 中预览并发布。",

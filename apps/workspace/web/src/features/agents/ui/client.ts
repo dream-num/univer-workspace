@@ -34,7 +34,7 @@ function createClient(userId: string) {
     markTitle();
   });
   return {
-    userId, sessions, providers,
+    userId, sessions, providers, trajectory,
     prewarm() { return runtime ??= loadAgentRuntime(); },
     runner() {
       return runner ??= (runtime ??= loadAgentRuntime()).then(({ createAgentRunner }) => createAgentRunner({

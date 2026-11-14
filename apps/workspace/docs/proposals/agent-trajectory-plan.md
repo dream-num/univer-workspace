@@ -229,12 +229,24 @@ Each live lane runs on its own cloud VM at the PR head. Drive through `control-u
 - `onLanguageModelCallStart` 在 `doStream`（即 provider fetch）之前触发（`ai` 的 `dist/index.js` 第 8549 至 8557 行）。
 - 重试包在 `streamLanguageModelCall` 外面（第 10097 行），每次重试都再次触发 `onLanguageModelCallStart`。`callId` 在每次 `streamText` 调用时只生成一次（第 9798 行），所以调用边界改用 `onStepStart`。
 
-这些事还没有证实，由执行者在对应 PR 里确认并记在这里。
+设计阶段未证实的事项，执行阶段（2026-11-14，mock provider 走真实 SDK）的结果如下。
 
-- 增量编码在真实 provider 请求上不退化成 `raw`（TR1 Lane 2）。
-- `onToolExecutionStart` 和 `onToolExecutionEnd` 是否覆盖审批后执行的工具，以及 `gateTools` 包装的发布工具（TR1 Lane 9）。
-- 审批恢复是否改写已发出的历史（TR1 Lane 9）。
-- DeepSeek 是否在历史里回传 `reasoning_content`。这决定 Replayed as 与 Response 的常见差异，不影响实现。
+- 增量编码不退化。每个会话的第一条记录存为 `raw`，之后全部是 `delta`，live lane 累计数百条记录都是这样。第一条存 `raw` 的原因是 provider 把 `messages` 放在请求对象中间，带 `rest` 的展开无法还原键序；参数变化的那一条同理。两种形式存的字节数相同。存储量是会话记录的 1.15 到 1.16 倍。
+- 审批后执行的工具和 `gateTools` 包装的发布工具，在浏览器里实测不到。浏览器 Agent 连接的 core 工具集没有 publish 作用域的工具（27 个 read、15 个 write），不会出现审批卡片。runner 测试用真实 SDK 证明，`pr_create` 和带 publish 元数据的 `html_view_create` 审批后都触发 `onToolExecutionStart` 和 `onToolExecutionEnd`。
+- 审批恢复是否改写历史，同样只有 runner 测试的证据：审批前后记录 `seq` 连续，展开请求体与发送的逐字相同，没有 rewrite。
+- DeepSeek 是否回传 `reasoning_content`，没有测。全部 lane 用的是 OpenAI-compatible mock。
+
+执行中新发现的事实。
+
+- `ai@7.0.166` 只在消费方继续读取流时触发 `onAbort`。引导消息在模型回复中途打断调用时会触发 `onAbort`，记录为 `aborted`。引导消息在 provider 回复之前打断时，SDK 不触发任何结束事件，这条记录会一直停在 `running`。这与设计假设不符，已报告操作者，等待决定。
+- 浏览器引导消息无法附带 reference，只有新会话的输入框能附带。TR1 Lane 3 和 TR2 Lane 4 改为在新会话的第一条消息里附带。
+- verify-uvw 没有「HTML View 草稿流程」，原因见上面审批一条。
+
+性能实测值（Vite dev，单实例只切换 web 代码，trunk 和 head 交替）。
+
+- TR1 相邻请求间隔，中位数 trunk 26 ms、TR1 25 ms（每侧 10 次、190 个间隔，负载 19 到 24）。早先测得 TR1 慢 17 到 40 ms，原因是工具计时回调里两次 `snapshot()` 让会话页每个工具多重渲染两次。去掉后，间隔与 trunk 相同。
+- TR2 调试模式关闭时，刷新到第一条消息可见，三次 dev 测量分别是比 trunk 快 94 ms、慢 171 ms、快 256 ms（最后一次每侧 20 次）。差异落在约 ±250 ms 的噪声内，没有变慢。生产构建的对比因第二个 origin 的 MCP 返回 403 没有测成。
+- 40 次调用的 Trajectory 从点击到全部行可见，中位数 dev 143 ms，生产构建 61 ms。改之前分别是 512 ms 和 406 ms，其中约 300 ms 是 React Suspense 的 `FALLBACK_THROTTLE_MS`。现在打开调试模式时就预先加载视图模块，调试模式关闭时不请求。
 
 ## Appendix B. Alternatives rejected
 
