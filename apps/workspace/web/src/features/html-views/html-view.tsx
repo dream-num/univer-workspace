@@ -12,7 +12,7 @@ import {
 import { useI18n } from "../../shared/i18n";
 import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
-import { createWorkspaceBindingEngine } from "./workspace-binding-engine";
+import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
 import { resolveWorkspaceMedia, workspaceMediaSources } from "./workspace-media";
@@ -61,7 +61,11 @@ export function HtmlView({
         ),
         () => setTrial(true),
         draft,
-      );
+      ).catch((error: unknown) => {
+        if (error instanceof HtmlViewSourceSheetRequiredError)
+          throw new Error(translation.current("htmlViewSourceSheetRequired"));
+        throw error;
+      });
       writeModes.set(unitId, engine.writeMode);
       return engine;
     },
