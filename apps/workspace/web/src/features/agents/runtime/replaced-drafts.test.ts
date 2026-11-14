@@ -1,6 +1,6 @@
 import type { UIMessage } from "ai";
 import { expect, it, vi } from "vitest";
-import { replacedDraftIds } from "./replaced-drafts";
+import { replacedDraftIds } from "../replaced-drafts";
 import { draftReminder, type DraftStatus } from "./draft-reminder";
 
 function draft(id: string, toolName = "html_view_create", input: unknown = { space: "sales", name: "Report" }): UIMessage {

@@ -3,7 +3,7 @@ import type { UIMessage } from "ai";
 import { z } from "zod";
 import type { components } from "../../../../../generated/http/schema";
 import { SYSTEM_REMINDER_START } from "../agent.types";
-import { replacedDraftIds } from "./replaced-drafts";
+import { replacedDraftIds } from "../replaced-drafts";
 
 type Draft = components["schemas"]["HtmlViewDraft"];
 export type DraftStatus = Pick<Draft, "state" | "name" | "published">;

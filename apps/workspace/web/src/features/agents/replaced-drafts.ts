@@ -1,4 +1,3 @@
-import { isToolUIPart } from "ai";
 import type { UIMessage } from "ai";
 import { z } from "zod";
 
@@ -15,7 +14,7 @@ export function replacedDraftIds(messages: readonly UIMessage[]): Set<string> {
   for (const message of messages) {
     if (message.role !== "assistant") continue;
     for (const part of message.parts) {
-      if (!isToolUIPart(part) || part.state !== "output-available") continue;
+      if (!("toolCallId" in part) || part.state !== "output-available") continue;
       const tool = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
       let target: string;
       if (tool === "html_view_create") {

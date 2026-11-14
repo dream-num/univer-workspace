@@ -20,7 +20,7 @@ import { useAgentMessages } from "./messages";
 import { pendingApprovals, resumableApprovalResponse } from "../approvals";
 import { ApprovalCard } from "./approval-card";
 import { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
-import { replacedDraftIds } from "../runtime/replaced-drafts";
+import { replacedDraftIds } from "../replaced-drafts";
 import { SessionModel, SessionPullRequest, SessionScope, SessionStatus, useAgentSessions } from "./sessions";
 import type { StepPart, ToolPart } from "./summaries";
 import { argumentSummary, cacheHitRate, durationLabel, messageBlocks, toolStatus, pullRequestUrl, resultSummary, summarize } from "./summaries";
