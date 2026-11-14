@@ -121,6 +121,31 @@ describe("Skill static scan", () => {
       expect(findings).not.toContainEqual(expect.objectContaining({ rule: "facade-script" }));
     },
   );
+  it.each([
+    "const sheet = workbook.getActiveSheet();\nsheet.getRange('A1').setValue('Hot');",
+    "return api.getActiveWorkbook().getId();",
+    "return doc.getBody().dataStream;",
+    "const slide = presentation.getSlides()[0];",
+  ])("treats code using only execute's predefined roots as Facade code: %s", async (code) => {
+    const path = "scripts/build-workbook.js";
+    const findings = await scanSkill("weekly-report", [...valid(), file(path, code)]);
+    expect(findings.filter((finding) => finding.path === path)).toEqual([
+      expect.objectContaining({ rule: "facade-script", severity: "info" }),
+    ]);
+    expect(compatibility(findings, [])).toBe("ready");
+  });
+  it.each([
+    'const fs = require("fs");\nconst workbook = JSON.parse(fs.readFileSync(process.argv[2]));',
+    'import { readFile } from "node:fs/promises";\nworkbook.getActiveSheet();',
+    'const res = await fetch("https://api.example.com/hot");\nconsole.log(await res.json());',
+  ])("still warns for Node or network code that mentions Univer names: %s", async (code) => {
+    const path = "scripts/fetch-hot.js";
+    const findings = await scanSkill("weekly-report", [...valid(), file(path, code)]);
+    expect(findings).toContainEqual(
+      expect.objectContaining({ rule: "script-file", severity: "warn", path }),
+    );
+    expect(findings).not.toContainEqual(expect.objectContaining({ rule: "facade-script" }));
+  });
   it("does not flag gateway-supported invocation controls as ignored", async () => {
     const findings = await scanSkill("weekly-report", [
       file("SKILL.md", manifest("disable-model-invocation: true\nargument-hint: report name\n")),
