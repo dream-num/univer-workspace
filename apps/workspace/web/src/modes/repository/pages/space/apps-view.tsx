@@ -50,11 +50,11 @@ export function AppsView({
             id="repository-pages-heading"
             className="m-0 text-[2em] leading-[1.25] font-semibold"
           >
-            {t("apps")}
+            {t("pages")}
           </h1>
           {newPage}
         </div>
-        <p className="m-0 mb-4">{t("repositoryAppsSummary", { count: apps.length })}</p>
+        <p className="m-0 mb-4">{t("repositoryPagesSummary", { count: apps.length })}</p>
       </div>
       {selectedApp ? (
         <div className="my-6">
@@ -132,10 +132,10 @@ export function AppsView({
       ) : (
         <div>
           <h2 className="mt-6 mb-4 border-b border-border pb-[0.3em] text-2xl leading-[1.25] font-semibold">
-            {t("repositoryNoApps")}
+            {t("repositoryNoPages")}
           </h2>
-          <p className="m-0 mb-4">{t("appsEmptyDescription")}</p>
-          <p className="m-0 mb-4">{t("appsEmptyHint")}</p>
+          <p className="m-0 mb-4">{t("pagesEmptyDescription")}</p>
+          <p className="m-0 mb-4">{t("pagesEmptyHint")}</p>
           {newPage}
         </div>
       )}

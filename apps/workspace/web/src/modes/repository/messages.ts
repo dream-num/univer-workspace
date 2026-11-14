@@ -9,8 +9,8 @@ import type { AppLanguage, MessageKey } from "../../shared/i18n";
 export const repositoryMessages: Record<AppLanguage, Partial<Record<MessageKey, string>>> = {
   "zh-CN": {
     repositoryHint: "仓库视图按 GitHub 的方式组织。主题设置仅保存在当前浏览器。",
-    apps: "Pages",
-    repositoryAppsSummary: "{count} 个页面，可选择一个作为默认页面。",
+    pages: "Pages",
+    repositoryPagesSummary: "{count} 个页面，可选择一个作为默认页面。",
     repositoryPageLoading: "正在打开页面…",
     searchRepositories: "查找仓库…",
     repositoriesEmpty: "还没有仓库",
@@ -46,8 +46,8 @@ export const repositoryMessages: Record<AppLanguage, Partial<Record<MessageKey, 
   "en-US": {
     repositoryHint:
       "The repository view follows GitHub conventions. This theme is saved only in this browser.",
-    apps: "Pages",
-    repositoryAppsSummary: "{count} pages. Choose one as the default page.",
+    pages: "Pages",
+    repositoryPagesSummary: "{count} pages. Choose one as the default page.",
     repositoryPageLoading: "Opening page…",
     searchRepositories: "Find a repository…",
     repositoriesEmpty: "No repositories yet",

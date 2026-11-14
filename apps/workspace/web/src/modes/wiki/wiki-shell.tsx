@@ -188,7 +188,7 @@ export function WikiShell({
               label={space.name}
             />
           ))}
-          <NavLink to="/apps" selected={selectedView === "apps"} collapsed icon={<LayoutGrid />} label={t("apps")} />
+          <NavLink to="/apps" selected={selectedView === "apps"} collapsed icon={<LayoutGrid />} label={t("pages")} />
           <NavLink
             to="/issues"
             selected={selectedView === "issues"}
@@ -415,7 +415,7 @@ export function WikiShell({
 
 function workspaceViewTitle(view: WorkspaceView | undefined, t: (key: MessageKey) => string): string {
   if (view === "home") return t("home");
-  if (view === "apps") return t("apps");
+  if (view === "apps") return t("pages");
   if (view === "worktrees") return t("workbench");
   if (view === "trash") return t("trash");
   if (view === "members") return t("members");

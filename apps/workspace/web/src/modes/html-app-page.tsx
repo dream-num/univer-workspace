@@ -96,7 +96,7 @@ export function HtmlAppPage({ node: selectedNodeId, spaceId, q }: AppsPageProps)
           </Button>
         </Empty>
       ) : empty ? (
-        <Empty title={t("appsEmpty")} description={t("appsEmptyHint")} />
+        <Empty title={t("pagesEmpty")} description={t("pagesEmptyHint")} />
       ) : resource?.kind === "blob" ? (
         <section
           key={resource.id}
