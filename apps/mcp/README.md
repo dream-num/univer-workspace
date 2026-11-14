@@ -255,6 +255,7 @@ and the matching owner/slug candidates when available.
 | `api_show` | Required `symbols`; optional `cursor` | `{ results: [...] }`, one `found` or `not-found` entry per symbol, from `@univer-cli/api-reference`. A long class is paged (below) |
 | `skill_source_read` | `source`, optional `skill`, `path`, `cursor` | Resolves a pinned GitHub, skills.sh, ClawHub or Space zip/folder source; returns candidates, a Skill with scan findings, or a text page. Does not import or publish |
 | `skills_read` | Optional `repo`, `name`, `resource`, `full`, `cursor` | Without `name`: `{ skills, diagnostics, repository }`. Entries include `name`, `description`, `source`, invocation flags and optional `path`, `argumentHint` and `metadata`. With `name`: `{ name, source, content, resources?, binaryFiles?, files? }`. With `resource`: `{ name, source, path, content }`. Text resources include a `readCommand` |
+| `html_view_styles` | No arguments | `{ default, styles: [{ id, name: { en, zh }, mood: { en, zh } }] }` from the built-in Skill snapshot. Scope `read`, no executor |
 | `html_view_validate` | Exactly one of `html` or `html_upload_id` (ready `html-view` upload) | `{ valid, unitIds, bindingCount, bindings, truncated? }`. Up to 512 KiB of valid UTF-8 HTML |
 | `html_view_create` | Exactly one of `html` or `html_upload_id`; required `space`, `name`, `idempotency_key`; optional `parent` | `{ draft: { id, kind, state, name, space, resource?, previewUrl, expiresAt, repositoryVisibility, privateSourceUnitIds } }`. Scope `write`; the user previews and publishes in Workspace |
 | `html_view_read` | Required `resource` | `{ resource, node, space, name, html, etag, shareUrl }`. Gateway-only bounded inline read |
@@ -428,7 +429,7 @@ the draft page before the Skill exists. Ask-mode connections must switch to Auto
 with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
-`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
+`search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
 `pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
@@ -754,6 +755,11 @@ starting points; write the page in the language and conventions of the user's co
 design.md describes, without i18n dictionaries or language switches. Controls write
 Sheet cells or append rows; display recalculated source values through live bindings,
 never page-side Sheet formulas, copied data or fallback numbers.
+
+The default `core` toolset includes gateway-only `html_view_styles {}` (`read`), which returns the
+ordered bilingual style catalog and its default from the same built-in snapshot as `skills_read`.
+Call it before the style question so Workspace can show a gallery. Still list every style name
+and mood in the reply text for clients without a gallery.
 
 The default `core` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
 `html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`write`).

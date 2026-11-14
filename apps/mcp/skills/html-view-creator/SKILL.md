@@ -74,6 +74,8 @@ Send one message with:
    cells the page will change in the source Sheet. A change there is a change for
    everyone who uses that Sheet.
 3. The style question, as the design reference of the `html-view` Skill describes it.
+   If `html_view_styles` is in your tool list, call it before sending this message so
+   Workspace shows the gallery, and still name every style in the message text.
    If the user already named a style, confirm it instead.
 4. Who can open the page, and anything that stops it, such as a private repository
    when they want a public link.
