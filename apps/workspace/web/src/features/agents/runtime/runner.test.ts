@@ -1203,6 +1203,34 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(JSON.parse(request).thinking).toEqual({ type: "disabled" });
   });
 
+  it("publishes completed tool timings through message updates and saves them", async () => {
+    const waiting = deferred<void>();
+    const release = deferred<void>();
+    const test = await setup({ model: async (index) => {
+      if (index === 1) return modelStream("pr_create");
+      waiting.resolve();
+      await release.promise;
+      return modelStream();
+    } });
+    const published: AgentSession[] = [];
+    test.sessions.subscribe((value) => published.push(value));
+    const started = await test.runner.start(test.input);
+    try {
+      await waiting.promise;
+      await vi.waitFor(() => expect(published.some((value) => value.status === "running" && value.toolTimings["call-1"]?.endedAt)).toBe(true));
+      const timing = published.find((value) => value.toolTimings["call-1"]?.endedAt)!.toolTimings["call-1"]!;
+      const { records } = await test.trajectory.list(started.id);
+      expect(records[0]?.endedAt).not.toBeNull();
+      expect(Date.parse(timing.startedAt)).toBeGreaterThanOrEqual(Date.parse(records[0]!.endedAt!));
+      expect(timing.endedAt).not.toBeNull();
+      release.resolve();
+      const done = await test.finished(started.id);
+      expect(done?.toolTimings["call-1"]).toEqual(timing);
+      expect(test.saved.at(-1)?.toolTimings["call-1"]).toEqual(timing);
+      expect((await createSessionStore(test.storage).get(started.id))?.toolTimings["call-1"]).toEqual(timing);
+    } finally { release.resolve(); await test.runner.stop(started.id); }
+  });
+
   it("records tool timing on execution events, and preserves it across continuation", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(new Date("2026-11-11T01:00:00.000Z"));
@@ -1210,28 +1238,22 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const release = deferred<void>();
     const test = await setup({ tool: async () => { entered.resolve(); await release.promise; } });
     const updates: AgentSession[] = [];
-    const timingStarted = deferred<void>();
     const timingEnded = deferred<void>();
     test.sessions.subscribe((value) => {
       updates.push(value);
       const timing = value.toolTimings["call-1"];
-      if (timing?.endedAt === null) timingStarted.resolve();
       if (timing?.endedAt) timingEnded.resolve();
     });
     const started = await test.runner.start(test.input);
     try {
       await entered.promise;
-      await timingStarted.promise;
-      expect((await test.sessions.get(started.id))?.toolTimings["call-1"]).toEqual({
-        startedAt: "2026-11-11T01:00:00.000Z", endedAt: null,
-      });
       vi.setSystemTime(new Date("2026-11-11T01:00:01.500Z"));
       release.resolve();
       await timingEnded.promise;
       const done = await test.finished(started.id);
       const timing = { startedAt: "2026-11-11T01:00:00.000Z", endedAt: "2026-11-11T01:00:01.500Z" };
       expect(done?.toolTimings["call-1"]).toEqual(timing);
-      expect(updates.some((value) => value.toolTimings["call-1"]?.endedAt === null)).toBe(true);
+      expect(updates.some((value) => value.toolTimings["call-1"]?.endedAt === timing.endedAt)).toBe(true);
       expect(test.saved.at(-1)?.toolTimings["call-1"]).toEqual(timing);
       vi.setSystemTime(new Date("2026-11-11T01:00:10.000Z"));
       await test.runner.send(started.id, "Continue");

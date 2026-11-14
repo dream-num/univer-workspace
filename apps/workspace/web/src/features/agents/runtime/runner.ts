@@ -183,12 +183,10 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         redact: (body) => key ? body.replaceAll(escaped, "[redacted]").replaceAll(key, "[redacted]") : body,
         onToolExecutionStart({ toolCall }) {
           run.session.toolTimings = { ...run.session.toolTimings, [toolCall.toolCallId]: { startedAt: new Date().toISOString(), endedAt: null } };
-          snapshot();
         },
         onToolExecutionEnd({ toolCall }) {
           const timing = run.session.toolTimings[toolCall.toolCallId];
           if (timing) timing.endedAt = new Date().toISOString();
-          snapshot();
         },
       });
       const model = createModel(resolved, run.session.model, recorder.fetch, mcpUrl.origin);
