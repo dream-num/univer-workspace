@@ -5,7 +5,7 @@ import { DialogContent, DialogRoot, DialogTitle } from "../../../shared/ui/dialo
 import { useDraftMessages } from "./messages";
 import "./draft-preview.css";
 
-export function DraftPreview({ html, name, replacing, current, currentError, disabled, onOpened, onClose, onDecide }: {
+export function DraftPreview({ html, name, replacing, current, currentError, disabled, onOpened, onClose, onDecide, onRequestChanges, requestChangesDisabled }: {
   readonly html: string;
   readonly name: string;
   readonly replacing: boolean;
@@ -15,6 +15,8 @@ export function DraftPreview({ html, name, replacing, current, currentError, dis
   readonly onOpened: () => void;
   readonly onClose: () => void;
   readonly onDecide: (approved: boolean) => void;
+  readonly onRequestChanges?: (() => void) | undefined;
+  readonly requestChangesDisabled?: boolean;
 }) {
   const m = useDraftMessages();
   useEffect(onOpened, [onOpened]);
@@ -26,6 +28,7 @@ export function DraftPreview({ html, name, replacing, current, currentError, dis
           <Button variant="secondary" onClick={onClose}>{m.back}</Button>
           <Button disabled={disabled} onClick={() => onDecide(true)}>{m.publish}</Button>
           <Button variant="secondary" disabled={disabled} onClick={() => onDecide(false)}>{m.reject}</Button>
+          {onRequestChanges && <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={onRequestChanges}>{m.requestChanges}</Button>}
         </div>
       </header>
       <DraftVersions html={html} replacing={replacing} current={current} currentError={currentError} />

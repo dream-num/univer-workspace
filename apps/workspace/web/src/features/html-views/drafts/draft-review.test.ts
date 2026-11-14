@@ -39,6 +39,7 @@ let queries: QueryClient;
 let publishStatus: number;
 let publishMessage: string;
 let rejectStatus: number;
+let rejectWait: Promise<void> | undefined;
 let notFound: boolean;
 const requests: Request[] = [];
 const NativeRequest = globalThis.Request;
@@ -54,6 +55,7 @@ beforeEach(() => {
   };
   html = "<!doctype html><html><body>New draft</body></html>";
   publishStatus = 200; rejectStatus = 200; publishMessage = "The page changed."; notFound = false;
+  rejectWait = undefined;
   vi.stubGlobal("fetch", preview.fetch);
   preview.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof NativeRequest ? input : new Request(input, init);
@@ -66,6 +68,7 @@ beforeEach(() => {
       draft = { ...draft, state: "published", published: { nodeId: "page-node", resourceId: "page-resource", etag: '"v2"' } };
     }
     if (path.endsWith("/reject")) {
+      await rejectWait;
       if (rejectStatus !== 200) return Response.json({ error: { message: "Interactive session required." } }, { status: rejectStatus });
       draft = { ...draft, state: "rejected" };
     }
@@ -86,9 +89,9 @@ afterEach(async () => {
   queries.clear(); container.remove(); vi.unstubAllGlobals();
 });
 
-async function render(presentation: "page" | "card" = "page") {
+async function render(presentation: "page" | "card" = "page", props: Partial<ComponentProps<typeof HtmlViewDraftReview>> = {}) {
   await act(async () => root.render(createElement(LanguageProvider, null,
-    createElement(QueryClientProvider, { client: queries }, createElement(HtmlViewDraftReview, { draftId: draft.id, presentation })))));
+    createElement(QueryClientProvider, { client: queries }, createElement(HtmlViewDraftReview, { draftId: draft.id, presentation, ...props })))));
 }
 async function waitFor(check: () => void) {
   for (let attempt = 0; ; attempt++) {
@@ -103,6 +106,96 @@ function button(label: string) {
 }
 async function click(label: string) { await act(async () => button(label).click()); }
 function count(suffix: string) { return requests.filter((request) => new URL(request.url).pathname.endsWith(suffix)).length; }
+async function reason(value: string) {
+  const input = container.querySelector("textarea");
+  if (!input) throw new Error("Missing change reason");
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+it.each(["en-US", "zh-CN"])("hides all decisions for a replaced pending draft in %s", async (language) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  await render("card", { replaced: true, onRequestChanges: vi.fn() });
+  await waitFor(() => expect(container.textContent).toContain(language === "en-US" ? "A newer draft replaced this one" : "已有更新的草稿"));
+  expect(container.querySelector("button")).toBeNull();
+  expect(count("/content")).toBe(0);
+});
+
+it.each(["published", "rejected", "expired", "conflicted"] as const)("keeps a replaced %s draft's existing terminal display", async (state) => {
+  draft = { ...draft, state };
+  await render("card", { replaced: true, onRequestChanges: vi.fn() });
+  await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
+  expect(container.textContent).not.toContain("A newer draft replaced this one");
+  expect(container.textContent).toContain(state === "conflicted" ? "The page changed" : state[0]!.toUpperCase() + state.slice(1));
+  expect(container.querySelector("button")).toBeNull();
+});
+
+it("labels the change reason and disables Send for blank input or a running session", async () => {
+  const onRequestChanges = vi.fn();
+  await render("card", { onRequestChanges });
+  await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
+  await click("Request changes");
+  expect(container.querySelector("label")?.textContent).toBe("What should change?");
+  expect(button("Send").disabled).toBe(true);
+  await reason("   "); expect(button("Send").disabled).toBe(true);
+  await reason("Make the chart larger"); expect(button("Send").disabled).toBe(false);
+  await render("card", { onRequestChanges, requestChangesDisabled: true });
+  expect(button("Send").disabled).toBe(true);
+  await click("Send");
+  expect(count("/reject")).toBe(0); expect(onRequestChanges).not.toHaveBeenCalled();
+});
+
+it.each(["en-US", "zh-CN"])("rejects before sending the localized change request in %s", async (language) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  let finishReject!: () => void;
+  rejectWait = new Promise<void>((resolve) => { finishReject = resolve; });
+  const onRequestChanges = vi.fn(() => { expect(draft.state).toBe("rejected"); });
+  await render("card", { onRequestChanges });
+  await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
+  await click(language === "en-US" ? "Request changes" : "要求修改");
+  await reason("  Make the chart larger  ");
+  const send = language === "en-US" ? "Send" : "发送";
+  await click(send);
+  await waitFor(() => expect(button(send).disabled).toBe(true));
+  expect(onRequestChanges).not.toHaveBeenCalled();
+  await act(async () => finishReject());
+  await waitFor(() => expect(onRequestChanges).toHaveBeenCalledExactlyOnceWith(language === "en-US"
+    ? "Revise draft “Sales.univer.html”: Make the chart larger" : "修改草稿「Sales.univer.html」：Make the chart larger"));
+  expect(count("/reject")).toBe(1);
+  expect(requests.find((request) => request.url.endsWith("/reject"))?.method).toBe("POST");
+});
+
+it("shows rejection failure on the card without sending or losing the reason", async () => {
+  rejectStatus = 403;
+  const onRequestChanges = vi.fn();
+  await render("card", { onRequestChanges });
+  await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
+  await click("Request changes"); await reason("Change the colors"); await click("Send");
+  await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent).toBe("Interactive session required."));
+  expect(onRequestChanges).not.toHaveBeenCalled();
+  expect(container.querySelector("textarea")?.value).toBe("Change the colors");
+  expect(button("Send").disabled).toBe(false);
+});
+
+it("returns from full-screen preview to the card's change form", async () => {
+  await render("card", { onRequestChanges: vi.fn() });
+  await waitFor(() => expect(button("Open draft preview").disabled).toBe(false));
+  await click("Open draft preview");
+  await waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+  const action = [...document.querySelectorAll<HTMLButtonElement>('[role="dialog"] button')].find((button) => button.textContent === "Request changes");
+  expect(action).toBeDefined();
+  await act(async () => action!.click());
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(container.querySelector("textarea")).not.toBeNull();
+});
+
+it("offers no Request changes on the standalone draft page", async () => {
+  await render("page", { onRequestChanges: vi.fn() });
+  await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
+  expect(container.textContent).not.toContain("Request changes");
+});
 
 it("shows a create draft and destination, publishes once, and links to the immersive page", async () => {
   await render();

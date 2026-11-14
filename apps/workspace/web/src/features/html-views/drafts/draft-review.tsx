@@ -4,6 +4,7 @@ import { getHtmlViewUnitIds, parseHtmlView } from "@univerjs-labs/html-view";
 import { api } from "../../../shared/api/client";
 import { ApiError, apiError } from "../../../shared/api/errors";
 import { Button } from "../../../shared/ui/button";
+import { Textarea } from "../../../shared/ui/textarea";
 import { nodeQueryOptions } from "../../nodes/nodes.queries";
 import { resourceOpenQueryOptions } from "../../resources/resources.queries";
 import { spaceQueryOptions } from "../../spaces/spaces.queries";
@@ -15,16 +16,22 @@ const DraftVersions = lazy(() => import("./draft-preview").then((module) => ({ d
 
 type Presentation = "page" | "card";
 
-export function HtmlViewDraftReview({ draftId, presentation }: {
+export function HtmlViewDraftReview({ draftId, presentation, replaced = false, onRequestChanges, requestChangesDisabled = false }: {
   readonly draftId: string;
   readonly presentation: Presentation;
+  readonly replaced?: boolean;
+  readonly onRequestChanges?: ((message: string) => void) | undefined;
+  readonly requestChangesDisabled?: boolean;
 }) {
   const m = useDraftMessages();
   const draft = useQuery(htmlViewDraftQueryOptions(draftId));
   return <section className={presentation === "page" ? "flex h-dvh min-h-0 flex-col bg-background text-foreground" : "rounded-xl border border-border bg-background p-5 text-foreground"} aria-label={m.draft}>
     {draft.isError ? <p role="alert" className="p-5">{draft.error instanceof ApiError && draft.error.code === "NOT_FOUND" ? m.notFound : draft.error.message}</p> :
       !draft.data ? <p role="status" className="p-5">{m.loading}</p> :
-        draft.data.state === "pending" ? <PendingDraft key={draftId} draft={draft.data} presentation={presentation} /> :
+        draft.data.state === "pending" && replaced ? <div className="p-5">
+          <h1 className="text-lg font-semibold">{draft.data.name}</h1><p role="status">{m.replaced}</p>
+        </div> : draft.data.state === "pending" ? <PendingDraft key={draftId} draft={draft.data} presentation={presentation}
+          onRequestChanges={presentation === "card" ? onRequestChanges : undefined} requestChangesDisabled={requestChangesDisabled} /> :
           <div className="p-5">
             <h1 className="text-lg font-semibold">{draft.data.name}</h1>
             <p role="status">{m[draft.data.state]}</p>
@@ -33,7 +40,12 @@ export function HtmlViewDraftReview({ draftId, presentation }: {
   </section>;
 }
 
-function PendingDraft({ draft, presentation }: { readonly draft: HtmlViewDraft; readonly presentation: Presentation }) {
+function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDisabled }: {
+  readonly draft: HtmlViewDraft;
+  readonly presentation: Presentation;
+  readonly onRequestChanges: ((message: string) => void) | undefined;
+  readonly requestChangesDisabled: boolean;
+}) {
   const m = useDraftMessages();
   const content = useQuery(draftContentQueryOptions(draft.id));
   const current = useQuery({ ...resourceOpenQueryOptions(draft.targetResourceId ?? ""), enabled: draft.kind === "replace" && draft.targetResourceId !== null });
@@ -43,6 +55,7 @@ function PendingDraft({ draft, presentation }: { readonly draft: HtmlViewDraft; 
   const reject = useRejectDraft(draft.id);
   const [preview, setPreview] = useState(false);
   const [seen, setSeen] = useState(false);
+  const [changes, setChanges] = useState<string | null>(null);
   const markSeen = useCallback(() => setSeen(true), []);
   const sourceIds = useMemo(() => {
     if (content.data === undefined) return null;
@@ -63,6 +76,14 @@ function PendingDraft({ draft, presentation }: { readonly draft: HtmlViewDraft; 
     setPreview(false);
     if (approved) publish.mutate(); else reject.mutate();
   };
+  const openChanges = () => { setPreview(false); setChanges((value) => value ?? ""); };
+  async function requestChanges() {
+    if (!onRequestChanges || disabled || requestChangesDisabled || !changes?.trim()) return;
+    const message = m.changeDraftMessage(draft.name, changes.trim());
+    try { await reject.mutateAsync(); }
+    catch { return; }
+    onRequestChanges(message);
+  }
   const destination = repository.data;
   const previewProps = {
     html: content.data ?? "", replacing: draft.kind === "replace",
@@ -86,14 +107,22 @@ function PendingDraft({ draft, presentation }: { readonly draft: HtmlViewDraft; 
         {presentation === "card" && <Button variant="secondary" disabled={content.data === undefined || disabled} onClick={() => setPreview(true)}>{m.draftPreview}</Button>}
         <Button disabled={disabled || presentation === "card" && !seen} onClick={() => decide(true)}>{m.publish}</Button>
         <Button variant="secondary" disabled={disabled} onClick={() => decide(false)}>{m.reject}</Button>
+        {onRequestChanges && <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={openChanges}>{m.requestChanges}</Button>}
       </div>
     </header>
     {error && <p role="alert" className="p-5 text-destructive">{error.message}</p>}
+    {changes !== null && onRequestChanges && <form className="space-y-3 p-5" onSubmit={(event) => { event.preventDefault(); void requestChanges(); }}>
+      <label className="block space-y-2 text-sm">{m.changeReason}
+        <Textarea autoFocus value={changes} rows={3} disabled={disabled || requestChangesDisabled} onChange={(event) => setChanges(event.target.value)} />
+      </label>
+      <Button type="submit" disabled={disabled || requestChangesDisabled || !changes.trim()}>{m.sendChanges}</Button>
+    </form>}
     {presentation === "card" && !seen && <p className="mt-3 text-sm text-muted-foreground">{m.previewFirst}</p>}
     {presentation === "page" && (content.data === undefined ? <p role="status" className="p-5">{content.isPending ? m.loading : m.previewUnavailable}</p> :
       <Suspense fallback={<p role="status">{m.loading}</p>}><DraftVersions {...previewProps} /></Suspense>)}
     {presentation === "card" && preview && content.data !== undefined && <Suspense fallback={<p role="status">{m.loading}</p>}>
-      <DraftPreview {...previewProps} name={draft.name} disabled={disabled} onOpened={markSeen} onClose={() => setPreview(false)} onDecide={decide} />
+      <DraftPreview {...previewProps} name={draft.name} disabled={disabled} onOpened={markSeen} onClose={() => setPreview(false)} onDecide={decide}
+        onRequestChanges={onRequestChanges ? openChanges : undefined} requestChangesDisabled={requestChangesDisabled} />
     </Suspense>}
   </>;
 }
