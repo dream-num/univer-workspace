@@ -10,9 +10,11 @@ import { SkillMenu, useSkillMenu } from "./skill-menu";
 import { AgentSessionPage } from "./session-page";
 import type { HtmlViewDraftReview } from "../../html-views/drafts/draft-review";
 
+const trajectoryLoaded = vi.hoisted(() => vi.fn());
 const runner = vi.hoisted(() => ({ skills: vi.fn(), send: vi.fn(), stop: vi.fn(), isRunningHere: () => true }));
 const client = { prewarm: async () => {}, runner: async () => runner };
 let current = session();
+vi.mock("./trajectory-view", () => { trajectoryLoaded(); return { TrajectoryView: () => createElement("div", { className: "trajectory-fixture" }, "Trajectory fixture") }; });
 vi.mock("./client", () => ({ useAgentClient: () => client }));
 vi.mock("./sessions", () => ({
   useAgentSessions: () => ({ data: [current] }), SessionStatus: () => null,
@@ -51,6 +53,7 @@ beforeEach(() => {
     constructor(callback: typeof resize) { resize = callback; }
     observe = observe; disconnect = disconnect;
   });
+  window.localStorage.removeItem("univer-workspace-debug-mode");
   window.localStorage.setItem("univer-workspace-language", "en-US");
   container = document.createElement("div"); container.className = "rd-viewport"; document.body.append(container);
   contentHeight = 3247;
@@ -474,4 +477,56 @@ it("orders unused repository, personal and builtin skills consistently in the ra
   expect([...container.querySelectorAll(".agent-skill-name")].map((item) => item.textContent))
     .toEqual(["repository-skill", "user-skill", "builtin-skill"]);
   expect(container.querySelector(".agent-skills")?.textContent).toContain("Built-in");
+});
+
+
+it("R5 preloads the view only after Debug mode turns on and mounts it on click", async () => {
+  await renderSession(); await vi.dynamicImportSettled();
+  expect(trajectoryLoaded).not.toHaveBeenCalled();
+  expect(container.querySelector('[role="tablist"]')).toBeNull();
+  await act(async () => {
+    window.localStorage.setItem("univer-workspace-debug-mode", "1");
+    window.dispatchEvent(new StorageEvent("storage", { key: "univer-workspace-debug-mode" }));
+    await vi.dynamicImportSettled();
+  });
+  expect(trajectoryLoaded).toHaveBeenCalledOnce();
+  expect(container.querySelector(".trajectory-fixture")).toBeNull();
+  const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find((item) => item.textContent === "Trajectory");
+  if (!tab) throw new Error("Missing Trajectory tab");
+  await act(async () => tab.click());
+  expect(container.querySelector(".trajectory-fixture")).not.toBeNull();
+});
+
+it("preserves the follow-up draft and conversation scroll across trajectory tabs", async () => {
+  window.localStorage.setItem("univer-workspace-debug-mode", "1");
+  await renderSession(); await type("Unsent draft");
+  const input = textarea();
+  const layout = container.querySelector<HTMLElement>(".agent-session-layout");
+  const tabs = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')];
+  const conversation = tabs.find((tab) => tab.textContent === "Conversation");
+  const trajectory = tabs.find((tab) => tab.textContent === "Trajectory");
+  if (!layout || !conversation || !trajectory) throw new Error("Missing session tabs");
+  container.scrollTop = 1000;
+  await act(async () => { trajectory.click(); await vi.dynamicImportSettled(); });
+  expect(layout.hidden).toBe(true);
+  expect(textarea()).toBe(input);
+  expect(textarea().value).toBe("Unsent draft");
+  expect(container.querySelector(".trajectory-fixture")).not.toBeNull();
+  container.scrollTop = 200;
+  resize(); expect(container.scrollTop).toBe(200);
+  await act(async () => conversation.click());
+  expect(layout.hidden).toBe(false);
+  expect(textarea()).toBe(input);
+  expect(textarea().value).toBe("Unsent draft");
+  expect(container.scrollTop).toBe(1000);
+  await act(async () => trajectory.click());
+  await act(async () => {
+    window.localStorage.setItem("univer-workspace-debug-mode", "0");
+    window.dispatchEvent(new StorageEvent("storage", { key: "univer-workspace-debug-mode" }));
+  });
+  expect(container.querySelector('[role="tablist"]')).toBeNull();
+  expect(container.querySelector(".agent-page > .agent-session-layout")).toBe(layout);
+  expect(layout.hasAttribute("hidden")).toBe(false);
+  expect(textarea().value).toBe("Unsent draft");
+  expect(container.scrollTop).toBe(1000);
 });

@@ -32,6 +32,7 @@ html[data-ui-mode="repository"] .agent-table-scroll { overflow-x: auto; }
 html[data-ui-mode="repository"] .agent-table { width: 100%; min-width: 820px; table-layout: fixed; border-collapse: collapse; font-size: 13px; }
 html[data-ui-mode="repository"] .agent-table :is(td, th) { text-align: start; padding: 12px; border-bottom: 1px solid var(--rd-line); vertical-align: top; }
 html[data-ui-mode="repository"] .agent-session-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 36px; }
+.agent-session-layout[hidden] { display: none !important; }
 html[data-ui-mode="repository"] .agent-conversation { min-width: 0; }
 html[data-ui-mode="repository"] .agent-page:has(.agent-session-dock) { display: flex; flex: 1; flex-direction: column; padding-bottom: 0; }
 html[data-ui-mode="repository"] .agent-page:has(.agent-session-dock) > .agent-session-layout { flex: 1; }

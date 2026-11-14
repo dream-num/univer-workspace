@@ -1,6 +1,7 @@
 import { Monitor, Moon, Sun } from "lucide-react";
 import type { ReactNode } from "react";
 import { useI18n } from "../../shared/i18n";
+import { useDebugMode } from "../../shared/debug-mode";
 import { useTheme } from "../../shared/theme";
 import { Dialog, Segmented } from "../../shared/ui";
 
@@ -11,6 +12,7 @@ export function AppSettingsDialog({ open, onOpenChange, layoutSettings }: {
 }) {
   const { language, setLanguage, t } = useI18n();
   const { theme, setTheme } = useTheme();
+  const [debugMode, setDebugMode] = useDebugMode();
   return (
     <Dialog
       open={open}
@@ -70,6 +72,15 @@ export function AppSettingsDialog({ open, onOpenChange, layoutSettings }: {
               },
             ]}
           />
+        </div>
+        <div className="py-3.5">
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm font-medium">{t("debugMode")}</span>
+            <Segmented aria-label={t("debugMode")} size="sm" value={debugMode ? "on" : "off"}
+              onValueChange={(value) => setDebugMode(value === "on")}
+              options={[{ label: t("debugModeOff"), value: "off" }, { label: t("debugModeOn"), value: "on" }]} />
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">{t("debugModeDescription")}</p>
         </div>
       </div>
     </Dialog>

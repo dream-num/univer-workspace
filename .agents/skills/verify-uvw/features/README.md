@@ -50,6 +50,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 
 ## Features
 
+- [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded requests, timing, tool results, search, and rewritten history.
+
 - [Browser Agent skills](./agent-skills.md): AS1-AS15 cover the mock provider, catalog
   reminders, rail, slash menus in both composers, invocation gates, and stable request prefixes.
 - [Accounts and sign-in](./auth.md): browser registration, browser password sign-in,
