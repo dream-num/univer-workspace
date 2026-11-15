@@ -468,7 +468,7 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V17 product databases to V19 automatically.
+backs up and migrates supported V0 through V20 product databases to V21 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
@@ -486,7 +486,7 @@ application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V19,
+2. Start a single new instance. Startup first prepares the product database to V21,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -828,3 +828,12 @@ and wait for its consistent backup, migration and health checks before restoring
 product rows, object keys and unfinished recovery state are preserved. Failed migration rolls back;
 successful restarts do not repeat migration or backup. To roll back, stop V20 and restore the V19
 backup. Never run V19 and V20 writers on the same SQLite file.
+
+### Agent identities and product database V21
+
+V20→V21 appends `users.kind` (`human` or `agent`, existing Users read as `human`) and adds the `agents`
+and `node_reports` tables. Stop every old instance, start one V21 instance, and wait for its consistent
+backup, migration and health checks before restoring service. Existing product rows, object keys and
+unfinished recovery state are preserved. Failed migration rolls back; successful restarts do not repeat
+migration or backup. To roll back, stop V21 and restore the V20 backup. Never run V20 and V21 writers on
+the same SQLite file.
