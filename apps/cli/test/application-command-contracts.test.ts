@@ -27,7 +27,7 @@ describe("Workspace application Commander adapters", () => {
       verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
     }));
     const commands = authCommands({ startCliLogin } as unknown as WorkspaceAuth);
-    expect(commands.map((command) => command.name())).toEqual(["login", "logout", "status"]);
+    expect(commands.map((command) => command.name())).toEqual(["login", "guest", "logout", "status"]);
     const login = commands[0]!;
     const help = login.helpInformation();
     expect(help).toContain("--complete");

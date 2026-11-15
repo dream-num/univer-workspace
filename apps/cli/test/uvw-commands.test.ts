@@ -1,11 +1,17 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Command, type OutputConfiguration } from "commander";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   WorkspaceIssueFeature,
   WorkspaceSpaceFeature,
   WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core";
+import { createWorkspaceConfig } from "../src/config.js";
 import { workspaceError } from "../src/errors.js";
+import { createAuthCommand } from "../src/features/auth/command.js";
+import { WorkspaceAuth } from "../src/features/auth/session.js";
 import { createBrowseCommand } from "../src/features/browse/command.js";
 import { createIssueCommand } from "../src/features/issue/command.js";
 import { createLabelCommand } from "../src/features/label/command.js";
@@ -991,6 +997,84 @@ describe("uvw read command JSON field contracts", () => {
   it("projects the Browser URL with duplicate and padded field names", async () => {
     expect(JSON.parse(await run(commands().program, ["browse", "12", "-R", "alice/docs", "--json", " url, url "])))
       .toEqual({ url: `${ORIGIN}/spaces/space-1/pulls/12` });
+  });
+});
+
+describe("uvw auth guest", () => {
+  const homes: string[] = [];
+  afterEach(async () => {
+    await Promise.all(homes.splice(0).map(async (path) => await rm(path, { force: true, recursive: true })));
+  });
+
+  async function guestHome(respond: () => Response) {
+    const home = await mkdtemp(join(tmpdir(), "uvw-guest-"));
+    homes.push(home);
+    const config = createWorkspaceConfig({ UNIVER_HOME: home });
+    await config.setFromText({ key: "workspace.origin", text: ORIGIN });
+    const sessionPath = join(home, "session.json");
+    const requests: { readonly body: unknown; readonly cookie: string | null; readonly path: string }[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      requests.push({
+        body: JSON.parse(String(init?.body)),
+        cookie: new Headers(init?.headers).get("cookie"),
+        path: `${String(init?.method)} ${new URL(String(input)).pathname}`,
+      });
+      return respond();
+    };
+    return {
+      guest: async (...args: string[]) =>
+        await run(createAuthCommand(new WorkspaceAuth({ config, fetcher, sessionPath })), ["guest", ...args]),
+      requests,
+      session: async () => JSON.parse(await readFile(sessionPath, "utf8")) as unknown,
+    };
+  }
+  const created = () =>
+    Response.json(
+      { agent: { id: "agent-1", username: "budget-bot-x7k2" } },
+      { headers: { "set-cookie": "workspace_session=guest; Path=/; HttpOnly" }, status: 201 },
+    );
+
+  it("creates an agent, stores its session and prints its Personal Space repository", async () => {
+    const home = await guestHome(created);
+    const output = await home.guest("--label", "Budget bot");
+    expect(output).toContain("budget-bot-x7k2");
+    expect(output).toContain("budget-bot-x7k2/personal");
+    expect(home.requests).toEqual([{ body: { label: "Budget bot" }, cookie: null, path: "POST /api/auth/guest" }]);
+    expect(await home.session()).toEqual({
+      sessions: { [ORIGIN]: { cookie: "workspace_session=guest", subject: "agent-1" } },
+    });
+
+    expect(JSON.parse(await (await guestHome(created)).guest("--json"))).toEqual({
+      agent: { id: "agent-1", username: "budget-bot-x7k2" },
+      origin: ORIGIN,
+      repo: "budget-bot-x7k2/personal",
+    });
+  });
+
+  it("refuses while a session is stored and sends no request", async () => {
+    const home = await guestHome(created);
+    await home.guest();
+    const stored = await home.session();
+    const error = await home.guest().catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ exitCode: 1, message: expect.stringContaining("uvw auth logout") });
+    expect(home.requests).toHaveLength(1);
+    expect(await home.session()).toEqual(stored);
+  });
+
+  it("surfaces the server's rate limit and stores nothing", async () => {
+    const home = await guestHome(() =>
+      Response.json(
+        { error: { code: "AGENT_CREATE_RATE_LIMITED", message: "Too many agents were created from this address." } },
+        { status: 429 },
+      ));
+    const error = await home.guest().catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining(
+        "AGENT_CREATE_RATE_LIMITED: Too many agents were created from this address.",
+      ),
+    });
+    await expect(home.session()).rejects.toMatchObject({ code: "ENOENT" });
   });
 });
 

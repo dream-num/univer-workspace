@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import type { Config } from "@univer-cli/config";
 import {
   completeCliLogin as completeCliLoginProtocol,
+  createGuestAgent,
   loginWithPassword,
   logout as logoutProtocol,
   startCliLogin as startCliLoginProtocol,
@@ -56,6 +57,23 @@ export class WorkspaceAuth {
     const result = await loginWithPassword(this.unauthenticatedHttp(origin), input);
     await this.save(result.origin, { cookie: result.cookie, subject: result.subject.id });
     return { origin: result.origin, subject: result.subject };
+  }
+
+  /** Refuses while a session is stored. The new agent would replace it, and a guest agent cannot sign in again. */
+  public async guest(input: { readonly label?: string } = {}): Promise<{
+    readonly agent: { readonly id: string; readonly username: string };
+    readonly origin: string;
+  }> {
+    const origin = await this.configuredOrigin();
+    if ((await this.cookie(origin)) !== undefined) {
+      throw workspaceError(
+        "workspace-session-exists",
+        `A session for ${origin} is already stored. Run \`uvw auth logout\` first.`,
+      );
+    }
+    const result = await createGuestAgent(this.unauthenticatedHttp(origin), input);
+    await this.save(result.origin, { cookie: result.cookie, subject: result.agent.id });
+    return { agent: result.agent, origin: result.origin };
   }
 
   public async startCliLogin(): Promise<PendingCliLogin> {
