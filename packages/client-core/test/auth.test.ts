@@ -8,6 +8,7 @@ import {
   whoami,
   WorkspaceHttp,
 } from "../src/index.js";
+import { createGuestAgent } from "../src/product.js";
 
 const origin = "https://workspace.test";
 const fixedNow = 1_787_878_800_000;
@@ -308,6 +309,65 @@ describe("Workspace authentication protocol", () => {
     expect(request?.url).toBe(`${origin}/api/session`);
     expect(request?.method).toBe("GET");
     expect(request?.headers.get("cookie")).toBe("workspace_session=test");
+  });
+
+  it.each([
+    [{ kind: "agent", claimed: false }, { kind: "agent", claimed: false }],
+    [{ kind: "agent", claimed: true }, { kind: "agent", claimed: true }],
+    [{ kind: "human" }, {}],
+  ])("reads the principal kind %j of the current User", async (sent, expected) => {
+    const http = new WorkspaceHttp({
+      cookie: "workspace_session=test",
+      fetcher: async () => Response.json({ authenticated: true, user: { ...validUser(), ...sent } }),
+      origin,
+      role: "client",
+    });
+    await expect(whoami(http)).resolves.toEqual({
+      origin,
+      subject: { id: "user-1", name: "Alice", ...expected },
+    });
+  });
+
+  it("creates a guest agent and returns its Session without sending the current one", async () => {
+    let request: Request | undefined;
+    const http = new WorkspaceHttp({
+      cookie: "workspace_session=existing",
+      fetcher: async (input, init) => {
+        request = new Request(input, init);
+        return Response.json(
+          { agent: { id: "agent-1", username: "budget-x7k2" } },
+          { status: 201, headers: { "set-cookie": "workspace_session=guest; Path=/; HttpOnly" } },
+        );
+      },
+      origin,
+      role: "client",
+    });
+    await expect(createGuestAgent(http, { label: "budget" })).resolves.toEqual({
+      agent: { id: "agent-1", username: "budget-x7k2" },
+      cookie: "workspace_session=guest",
+      origin,
+    });
+    expect(request?.url).toBe(`${origin}/api/auth/guest`);
+    expect(request?.method).toBe("POST");
+    expect(request?.headers.get("cookie")).toBeNull();
+    await expect(request?.json()).resolves.toEqual({ label: "budget" });
+  });
+
+  it.each([
+    ["no Session cookie", Response.json({ agent: { id: "agent-1", username: "a" } }, { status: 201 }), "workspace-invalid-response"],
+    [
+      "an invalid agent",
+      Response.json({ agent: { id: "agent-1" } }, { status: 201, headers: { "set-cookie": "workspace_session=guest" } }),
+      "workspace-invalid-response",
+    ],
+    [
+      "the creation limit",
+      Response.json({ error: { code: "AGENT_CREATE_RATE_LIMITED", message: "Too many agents." } }, { status: 429 }),
+      "AGENT_CREATE_RATE_LIMITED",
+    ],
+  ])("rejects a guest agent response with %s", async (_case, response, code) => {
+    const http = new WorkspaceHttp({ fetcher: async () => response, origin, role: "client" });
+    await expect(createGuestAgent(http)).rejects.toMatchObject({ code });
   });
 
   it.each([

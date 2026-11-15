@@ -22,7 +22,12 @@ const exchangeResponse = z.object({
     id: z.string().min(1),
     client_id: z.string().nullable(),
   }),
-  user: z.object({ id: z.string().min(1), displayName: z.string() }),
+  user: z.object({
+    id: z.string().min(1),
+    displayName: z.string(),
+    kind: z.enum(["human", "agent"]).optional(),
+    claimed: z.boolean().optional(),
+  }),
 });
 const maxCacheMs = 30_000;
 const negativeCacheMs = 5_000;
@@ -92,11 +97,15 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
       throw new Error("Token exchange failed");
     }
     const { subject, user, scope, access_token, expires_in } = parsed.data;
+    const identity = { id: user.id, name: user.displayName };
     const value: Authentication = {
       session: access_token,
       obtainedAt: Date.now(),
       expiresAt: Date.now() + expires_in * 1000,
-      user: { id: user.id, name: user.displayName },
+      user:
+        user.kind === "agent"
+          ? { ...identity, kind: user.kind, claimed: user.claimed === true }
+          : identity,
       scopes: new Set(
         scope.split(/\s+/).filter((name): name is ToolScope => allScopes.has(name as ToolScope)),
       ),

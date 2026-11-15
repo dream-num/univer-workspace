@@ -5,10 +5,14 @@ import {
   WorkspaceHttp,
 } from "./http.js";
 
-export interface WorkspaceSubject {
-  readonly id: string;
-  readonly name: string;
-}
+/**
+ * A human has no `kind`, so what a person reads back is the same as before agents existed.
+ * For an agent, `claimed` says whether a human has claimed it.
+ */
+export type WorkspaceSubject = { readonly id: string; readonly name: string } & (
+  | { readonly kind?: never }
+  | { readonly kind: "agent"; readonly claimed: boolean }
+);
 
 export interface WorkspaceAuthentication {
   readonly cookie: string;
@@ -124,6 +128,32 @@ export async function completeCliLogin(
   };
 }
 
+/** Creates a guest agent User and returns its Session. Sends no existing Session, so it never replaces one. */
+export async function createGuestAgent(
+  http: WorkspaceHttp,
+  input: { readonly label?: string } = {},
+): Promise<{
+  readonly agent: { readonly id: string; readonly username: string };
+  readonly cookie: string;
+  readonly origin: string;
+}> {
+  const response = await http.request("/api/auth/guest", {
+    authenticated: false,
+    body: input,
+    method: "POST",
+  });
+  const cookie = sessionCookie(response, "Guest agent");
+  const agent = (await readWorkspaceJsonResponse(response))["agent"];
+  if (
+    !isWorkspaceRecord(agent) ||
+    typeof agent["id"] !== "string" ||
+    typeof agent["username"] !== "string"
+  ) {
+    throw responseError("Guest agent response contains an invalid agent.");
+  }
+  return { agent: { id: agent["id"], username: agent["username"] }, cookie, origin: http.origin };
+}
+
 export async function whoami(
   http: WorkspaceHttp,
 ): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject }> {
@@ -149,15 +179,20 @@ async function authenticationFromResponse(
   response: Response,
   label: "CLI login" | "Login",
 ): Promise<WorkspaceAuthentication> {
-  const cookie = response.headers.get("set-cookie")?.split(";", 1)[0];
-  if (cookie === undefined || cookie.length === 0) {
-    throw responseError(`${label} response did not include a Session cookie.`);
-  }
+  const cookie = sessionCookie(response, label);
   const body = await readWorkspaceJsonResponse(response);
   if (body["authenticated"] !== true) {
     throw responseError(`${label} response is not an authenticated Session.`);
   }
   return { cookie, origin, subject: parseSubject(body["user"]) };
+}
+
+function sessionCookie(response: Response, label: string): string {
+  const cookie = response.headers.get("set-cookie")?.split(";", 1)[0];
+  if (cookie === undefined || cookie.length === 0) {
+    throw responseError(`${label} response did not include a Session cookie.`);
+  }
+  return cookie;
 }
 
 function parseSubject(value: unknown): WorkspaceSubject {
@@ -168,7 +203,10 @@ function parseSubject(value: unknown): WorkspaceSubject {
   ) {
     throw responseError("Workspace response contains an invalid user.");
   }
-  return { id: value["id"], name: value["displayName"] };
+  const subject = { id: value["id"], name: value["displayName"] };
+  return value["kind"] === "agent"
+    ? { ...subject, kind: "agent", claimed: value["claimed"] === true }
+    : subject;
 }
 
 function requiredString(value: unknown, field: string): string {
