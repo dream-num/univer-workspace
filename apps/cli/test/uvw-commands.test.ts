@@ -112,7 +112,7 @@ describe("uvw repository and Issue commands", () => {
     expect(spaces.list).toHaveBeenCalledTimes(1);
   });
 
-  it("exits 4 and points at `uvw auth login` when sign-in is required", async () => {
+  it("exits 4 and points at `uvw auth login` and `uvw auth guest` when sign-in is required", async () => {
     const { repoContext } = context();
     const command = createIssueCommand({
       context: repoContext,
@@ -124,7 +124,10 @@ describe("uvw repository and Issue commands", () => {
       origin: async () => ORIGIN,
     });
     const error = await run(command, ["list", "-R", "alice/docs"]).catch((caught: unknown) => caught);
-    expect(error).toMatchObject({ exitCode: 4, message: expect.stringContaining("uvw auth login") });
+    expect(error).toMatchObject({
+      exitCode: 4,
+      message: expect.stringMatching(/uvw auth login.*uvw auth guest/u),
+    });
   });
 
   it("requires a repository when neither -R nor UVW_REPO is set", async () => {
