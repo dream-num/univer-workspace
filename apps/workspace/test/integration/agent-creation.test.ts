@@ -168,6 +168,7 @@ describe("agent creation rate limit", () => {
 
   it("disables creation when the limit is 0", async () => {
     const { origin } = await start({ agentCreateLimitPerHour: 0 });
+    expect(await (await fetch(`${origin}/api/session`)).json()).toMatchObject({ guestAuthEnabled: false });
     for (const path of ["/api/agents", "/api/auth/guest"]) {
       const refused = await post(origin, path, {});
       expect(refused.status).toBe(429);

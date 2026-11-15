@@ -5449,6 +5449,7 @@ components:
         - discordOAuthEnabled
         - passwordAuthEnabled
         - emailAuthEnabled
+        - guestAuthEnabled
       properties:
         authenticated:
           const: false
@@ -5462,6 +5463,9 @@ components:
           type: boolean
         emailAuthEnabled:
           type: boolean
+        guestAuthEnabled:
+          type: boolean
+          description: Whether POST /api/auth/guest can create agents. False when AGENT_CREATE_LIMIT_PER_HOUR is 0.
     ExternalIdentitySummary:
       type: object
       additionalProperties: false

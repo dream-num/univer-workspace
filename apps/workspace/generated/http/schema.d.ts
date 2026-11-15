@@ -2699,6 +2699,8 @@ export interface components {
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
             emailAuthEnabled: boolean;
+            /** @description Whether POST /api/auth/guest can create agents. False when AGENT_CREATE_LIMIT_PER_HOUR is 0. */
+            guestAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
             /** @enum {string} */

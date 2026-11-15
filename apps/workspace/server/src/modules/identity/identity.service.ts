@@ -234,7 +234,8 @@ export function createIdentityModule(options: {
   const emailAuthEnabled =
     options.emailAuthEnabled ?? emailSender !== null;
   const trialDeployment = options.trialDeployment ?? false;
-  const agentCreateLimiter = createSourceRateLimiter(options.agentCreateLimitPerHour ?? 5, now);
+  const agentCreateLimitPerHour = options.agentCreateLimitPerHour ?? 5;
+  const agentCreateLimiter = createSourceRateLimiter(agentCreateLimitPerHour, now);
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
   const expiredSessionIds = repository.deleteExpiredSessions(now());
@@ -248,6 +249,7 @@ export function createIdentityModule(options: {
       discordOAuthEnabled,
       passwordAuthEnabled,
       emailAuthEnabled,
+      guestAuthEnabled: agentCreateLimitPerHour > 0,
     };
   }
 
