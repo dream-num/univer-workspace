@@ -13,6 +13,17 @@ export interface User {
   readonly avatarUrl: string | null;
 }
 
+export interface AgentCreation {
+  readonly label: string | undefined;
+  /** Only the creation rate limit reads it; it is never stored. */
+  readonly originIp: string | undefined;
+}
+
+export interface CreatedAgent {
+  readonly user: User;
+  readonly expiresAt: number;
+}
+
 export interface AuthenticationMethods {
   readonly password: boolean;
   readonly email: string | null;

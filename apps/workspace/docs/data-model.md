@@ -103,6 +103,9 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 被引用为主人的 User 不能删除。`origin_label` 是创建时提交的标签。`last_active_at` 是最近活跃时间。
 `expires_at` 为空表示不过期，`banned_at` 非空表示已封禁。全部时间为毫秒时间戳。不保存来源 IP。
 
+Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
+不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
+
 ### `password_credentials`
 
 本地密码凭据，与 User 一对一并随 User 删除。
