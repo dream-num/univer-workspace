@@ -36,14 +36,22 @@ export async function shareNode(
             role: input.link === "editor" ? "editor" : "viewer",
           });
   } catch (error) {
-    if (!(error instanceof WorkspaceApplicationError) || error.code !== "INTERACTIVE_SESSION_REQUIRED") {
-      throw error;
+    if (!(error instanceof WorkspaceApplicationError)) throw error;
+    if (error.code === "INTERACTIVE_SESSION_REQUIRED") {
+      throw workspaceError(
+        error.code,
+        `This connection cannot change a person's Link Sharing. Ask the user to share the file in the browser: ${url}`,
+        { url },
+      );
     }
-    throw workspaceError(
-      error.code,
-      `This connection cannot change a person's Link Sharing. Ask the user to share the file in the browser: ${url}`,
-      { url },
-    );
+    if (error.code === "FORBIDDEN") {
+      throw workspaceError(
+        error.code,
+        `Only the owner of this file can read or change its Link Sharing. To read the file itself, pass its link as the Unit with trunk: ${url}`,
+        { url },
+      );
+    }
+    throw error;
   }
   return {
     url,

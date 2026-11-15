@@ -3,8 +3,7 @@ import {
   nodeUrl,
   pullSpaceId,
   pullUrl,
-  resolveNodeReference,
-  workspaceError,
+  resolveUnitReference,
   WorkspaceUnitFeature,
   type WorkspaceUnit,
   type WorkspaceWorktree,
@@ -30,16 +29,11 @@ export function acceptUnitLink(tool: ToolDefinition): ToolDefinition {
     ...tool,
     async run(context, args) {
       const unit = isWorkspaceRecord(args) ? args["unit"] : undefined;
-      if (typeof unit !== "string" || !/^\s*https?:\/\//i.test(unit)) return tool.run(context, args);
-      const node = await resolveNodeReference(spaceFeature(context), unit, context.identityOrigin);
-      if (node.resource?.kind !== "univer") {
-        throw workspaceError(
-          "workspace-argument-invalid",
-          `The link names "${node.name}", which is not a Unit, so this tool cannot read it.`,
-          { nodeId: node.nodeId },
-        );
-      }
-      return tool.run(context, { ...(args as object), unit: node.resource.unitId });
+      if (typeof unit !== "string") return tool.run(context, args);
+      return tool.run(context, {
+        ...(args as object),
+        unit: await resolveUnitReference(spaceFeature(context), unit, context.identityOrigin),
+      });
     },
   };
 }

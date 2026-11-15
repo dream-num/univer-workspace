@@ -46,7 +46,9 @@ export async function executeCommand<Result>(
           ? `\n${JSON.stringify(error.detail, null, 2)}`
           : "";
       const authenticationRequired = error.code === "workspace-authentication-required";
-      const hint = authenticationRequired ? "\nHint: run uvw auth login" : "";
+      const hint = authenticationRequired
+        ? "\nHint: run uvw auth login, or uvw auth guest to continue as a guest agent"
+        : "";
       command.error(`${error.code}: ${error.message}${detail}${hint}`, {
         code: "workspace.command.failed",
         exitCode: authenticationRequired ? EXIT_AUTHENTICATION_REQUIRED : 1,

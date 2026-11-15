@@ -111,6 +111,54 @@ uvw auth login --username <name>
 Password login creates an Agent session on servers that support the CLI password route. Older servers
 use the legacy password route when the CLI route returns HTTP 404.
 
+### Continue as a guest agent
+
+An agent can work without any user account:
+
+```bash
+uvw auth guest [--label <name>]
+```
+
+The command creates a new guest agent with its own Personal Space, stores its session in the same
+session file as a login, and prints the agent's username and its repository `<username>/personal`.
+The agent creates files there with the usual commands, merges its pull request, and shares the result
+with `uvw share`. A guest agent cannot create or join a Team Space, and it keeps at most 20 files of
+at most 10 MB each.
+
+`uvw auth guest` refuses while a session is stored for the Workspace origin. Run `uvw auth logout`
+first. A command that needs a session never creates a guest agent on its own. It exits with code 4
+and names `uvw auth login` and `uvw auth guest`.
+
+A guest session lasts as long as a Workspace session, 7 days by default, and use does not extend it.
+After the session ends, or after `uvw auth logout`, the CLI cannot sign in to the same agent again.
+`uvw auth guest` then creates a new agent, and nobody can change the old agent's files. Links that
+the old agent shared keep working until the old agent expires, 30 days after it was last used or
+one of its links was last opened.
+
+## Share a file by link
+
+```bash
+uvw share <file-link-or-node-id>                       # read the current setting
+uvw share <file-link-or-node-id> --link viewer         # anyone who has the link can read
+uvw share <file-link-or-node-id> --link editor         # signed-in people can also edit
+uvw share <file-link-or-node-id> --link off            # stop sharing
+```
+
+`uvw share` reads or sets Link Sharing for a file in a Personal Space, and prints the file link.
+Share a file after its pull request is merged. Only the owner of the file can use the command.
+`--json` prints `url`, `name`, `link`, and `owner`. When the owner is an unclaimed agent, it also
+prints `expiresAt`. The link stops working on that date unless the agent is used or the link is
+opened before then.
+
+To read a shared file, pass its link as the Unit. `outline`, `read`, `find`, `inspect`, and
+`screenshot` accept a file link as `--unit` and resolve it to the Unit, for any file the session can
+read:
+
+```bash
+uvw outline --unit <file-link> --trunk
+uvw read <range> --unit <file-link> --trunk
+```
+
 ## Commands
 
 Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>/<slug>`
@@ -122,7 +170,7 @@ uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
 
 | Group   | Commands                                                                                                                                                                                                                                                |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Core    | `auth login/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse` |
+| Core    | `auth login/guest/logout/status`, `repo list/view/create/edit/rename`, `issue list/view/create/edit/close/reopen/comment`, `label list/create/edit/delete`, `pr list/view/create/edit/ready/merge/discard` (alias: `worktree`), `search issues/prs`, `browse`, `share` |
 | Content | `space browse/find/node`, `unit`, `execute`, `outline`, `read`, `find` (Sheet only), `inspect`, `screenshot`, `lint`, `print-pdf`, `import`, `export`, `compile-markdown`, `export-markdown`, `compile-typst`, `compile-svg`, `blob`, `asset`, `html-view`                                      |
 | Setup   | `config`, `daemon`, `skills`, `resources`, `api`                                                                                                                                                                                                        |
 

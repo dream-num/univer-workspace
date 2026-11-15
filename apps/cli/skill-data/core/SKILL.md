@@ -17,6 +17,22 @@ To understand a Sheet Unit, run `uvw outline` first. Zoom into a region or table
 Sheet with `execute` or treat one `read` page as the whole range. `uvw skills read sheet
 references/reading.md` lists every option.
 
+### Read a file from its link
+
+When the user gives you a file link (`<origin>/nodes/<node-id>`), pass the link as `--unit` with
+`--trunk`. `outline`, `read`, `find`, `inspect`, and `screenshot` accept it and resolve it to the Unit:
+
+```bash
+uvw outline --unit <file-link> --trunk
+uvw read <range> --unit <file-link> --trunk --json
+```
+
+The output carries the Unit ID. This reads any file the session can read, including a file that
+another user or agent shared with Link Sharing. You do not need to own the file or know its
+repository. The commands still need a session, so sign in first, or continue as a guest agent when
+that path applies. `uvw share <file-link>` is for the owner only, so a `FORBIDDEN` answer there does
+not mean the file cannot be read.
+
 ## Bind shared operations to the CLI
 
 Other Skills name operations without `uvw`. Each is the `uvw` command of the same name, with flags defined by `uvw <command> --help`. Load a Skill with `uvw skills get <name>` and a reference with `uvw skills read <name> <path>`. Use `uvw skills get <name> --full` only when all references are needed; `uvw skills path <name> --json` locates installed files.
@@ -211,7 +227,8 @@ uvw repo list --json
 `repo list` shows repositories you own or have joined. Open another public repository with
 `uvw repo view <owner>/<slug>`.
 
-Exit code 4 means sign-in is required: run `uvw auth login`, do not retry the failed command.
+Exit code 4 means sign-in is required. Run `uvw auth login`, or `uvw auth guest` when the guest path
+below applies. Do not retry the failed command. No command creates a guest agent on its own.
 `--json` prints the bare object or array (no `{ issue }` or `{ worktree }` wrapper); `--json id,number`
 keeps only those top-level fields.
 
@@ -221,6 +238,32 @@ The first command returns `status: "authorization_required"`, `verificationUrl`,
 has not finished. If it is still pending, show the same URL/code to the user and wait for their
 reply; do not create a polling loop. Password, GitHub, and Discord browser accounts all use this
 same handoff.
+
+### Continue as a guest agent
+
+Use the guest path when the user has no Workspace account, or asks for a new file and its link
+without signing in. When the work belongs in the user's own repositories, use the browser approval
+above.
+
+```bash
+uvw auth guest --label "<short task name>" --json
+```
+
+The command creates a new agent and stores its session. It returns `agent.username` and `repo`, the
+agent's Personal Space repository `<username>/personal`. Pass `repo` with `-R`. A guest agent works
+only in that Personal Space. It cannot create or join a Team Space, and it keeps at most 20 files of
+at most 10 MB each. `uvw auth status --json` reports `subject.kind: "agent"` for a guest session and
+no `kind` for a person.
+
+`uvw auth guest` refuses while a session is stored for the origin, and creates nothing. Do not run
+`uvw auth logout` to get past the refusal unless the user asks. Logout discards the stored session,
+and the CLI cannot sign in to the same agent again.
+
+A guest session lasts as long as a Workspace session, 7 days by default. Use does not extend it.
+After it ends, commands exit with code 4. Run `uvw auth logout` and then `uvw auth guest`. That
+creates a new agent with an empty Personal Space, and the old agent's files can no longer be changed.
+Links that the old agent shared keep working until the old agent expires, 30 days after it was last
+used or one of its links was last opened.
 
 ## Work from an Issue
 
@@ -303,7 +346,7 @@ Create a new Worktree first, then create or import one Worktree-local Unit:
 uvw pr create -R <owner>/<slug> -t <task-name> --json
 
 uvw unit create \
-  --worktree <new-worktree-id> --space <team-space-id> \
+  --worktree <new-worktree-id> --space <owner>/<slug> \
   --type sheet --name <file-name> [--parent <node-id>] [--idempotency-key <key>] --json
 ```
 
@@ -437,15 +480,36 @@ irreversible. There is no `pr close` or `pr reopen`; to take a `ready` pull requ
 `pr ready <n> --undo`. A later
 same-task correction follows the rework flow above.
 
+### Hand off as a guest agent
+
+The user cannot open a guest agent's pull request, so a guest agent finishes the task itself. After
+step 4, merge the pull request, turn on Link Sharing for the file, and return the link instead of
+the review URL:
+
+```bash
+uvw pr merge <n> -R <username>/personal --json
+uvw share <node-id> --link viewer --json
+```
+
+`share` takes the file link or the `nodeId` from `unit create`. `--link viewer` lets anyone who has
+the link read the file without signing in. `--link editor` also lets signed-in people edit it.
+`--link off` stops sharing. Without `--link`, the command only reads the current setting. Only the
+owner of a file can read or change its Link Sharing. Give the user `url`. When the result has
+`expiresAt`, tell the user that the link stops working on that date unless the agent is used or the
+link is opened before then.
+
+With a person's session, treat `uvw share --link` like a merge: run it only when the user asks.
+
 ## Command map
 
 Use `uvw <command> --help` as the syntax authority. `-R <owner>/<slug>` (or `UVW_REPO`) selects the
 repository; there is no stored default repository.
 `outline`, `read`, and `find` accept only Sheet Units. They can use `--trunk` instead of `--worktree <id>` for shared content. Use `inspect` for other Unit types.
+`outline`, `read`, `find`, `inspect`, and `screenshot` accept a file link as `--unit`.
 
 | Intent                    | Commands                                                                    |
 | ------------------------- | --------------------------------------------------------------------------- |
-| Connect                   | `config set workspace.origin`, `auth login`, `auth status`, `auth logout`   |
+| Connect                   | `config set workspace.origin`, `auth login`, `auth guest`, `auth status`, `auth logout` |
 | List owned/joined repositories or view a public repository | `repo list`, `repo view <owner>/<slug>`, `repo create/edit/rename` |
 | Discover/organize files   | `space browse`, `space find`, `space node create/rename/move`               |
 | Read and update Issues    | `issue list/view/create/edit/comment/close/reopen`, `label list/create/edit/delete`, `search issues` |
@@ -461,5 +525,6 @@ repository; there is no stored default repository.
 | Deliver output            | `export`, `print-pdf`                                                                                |
 | Hand off                  | `pr ready`, `browse <n> --unit <id>`                                                                 |
 | User-authorized lifecycle | `pr merge`, `pr discard` (irreversible)                                                              |
+| Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (a guest agent shares its own result)   |
 | User-authorized cleanup   | `space node trash`                                                                                   |
 | Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                                               |

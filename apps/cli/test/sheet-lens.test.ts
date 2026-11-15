@@ -38,6 +38,8 @@ const target: WorkspaceRuntimeTarget = {
   revision: 7,
 };
 
+const link = "https://workspace.test/nodes/node-1";
+
 function programWith(run: (input: SheetLensInput) => Promise<SheetLensResult>) {
   const stdout: string[] = [],
     stderr: string[] = [];
@@ -46,7 +48,8 @@ function programWith(run: (input: SheetLensInput) => Promise<SheetLensResult>) {
     writeOut: (text) => stdout.push(text),
     writeErr: (text) => stderr.push(text),
   });
-  for (const command of createSheetLensCommands({ run })) {
+  const resolveUnit = async (unit: string) => (unit === link ? "book-1" : unit);
+  for (const command of createSheetLensCommands({ run, resolveUnit })) {
     command.configureOutput(program.configureOutput()).exitOverride();
     program.addCommand(command);
   }
@@ -164,6 +167,17 @@ describe("Sheet Lens commands", () => {
     const command = lines[3]?.split("more hits: ")[1];
     expect(command).toBeDefined();
     expect(shellArgs(command ?? "")).toContain("Sheet1!B2");
+  });
+
+  it("reads a file link as its Unit and carries the Unit ID into the output and the next page", async () => {
+    const next = { op: "read", range: "Sheet1!A2:C5", remaining: 4 } as const;
+    const run = vi.fn(async () => ({ ...result, next }));
+    const { program, stdout } = programWith(run);
+    await program.parseAsync(["read", "Sheet1!A1:C5", "--unit", link, "--trunk"], { from: "user" });
+    expect(run).toHaveBeenCalledWith(expect.objectContaining({ unitId: "book-1", scope: { kind: "trunk" } }));
+    const lines = stdout.join("").trimEnd().split("\n");
+    expect(lines[0]).toBe("unit book-1 [trunk, rev=7]");
+    expect(lines.at(-1)).toContain("uvw read --unit book-1 --trunk");
   });
 
   it("stamps a worktree read with its scope and revision", async () => {

@@ -27,7 +27,7 @@ describe("Workspace application Commander adapters", () => {
       verificationUrl: "https://workspace.test/cli-login?userCode=ABCD-EFGH",
     }));
     const commands = authCommands({ startCliLogin } as unknown as WorkspaceAuth);
-    expect(commands.map((command) => command.name())).toEqual(["login", "logout", "status"]);
+    expect(commands.map((command) => command.name())).toEqual(["login", "guest", "logout", "status"]);
     const login = commands[0]!;
     const help = login.helpInformation();
     expect(help).toContain("--complete");
@@ -249,7 +249,7 @@ describe("Workspace application Commander adapters", () => {
       add,
       create,
       list: async () => [],
-    } as unknown as WorkspaceUnitFeature);
+    } as unknown as WorkspaceUnitFeature, repoContext());
 
     await run(command, ["add", "--worktree", "wt-1", "--resource", "resource-1"]);
     await run(command, [
@@ -257,7 +257,7 @@ describe("Workspace application Commander adapters", () => {
       "--worktree",
       "wt-1",
       "--space",
-      "space-1",
+      "me/personal",
       "--type",
       "doc",
       "--name",
@@ -273,7 +273,7 @@ describe("Workspace application Commander adapters", () => {
       idempotencyKey: "unit-key",
       name: "Brief",
       parentNodeId: "parent-1",
-      spaceId: "space-1",
+      spaceId: "looked-up",
       type: "doc",
       worktreeId: "wt-1",
     });

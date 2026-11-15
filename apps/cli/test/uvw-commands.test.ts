@@ -1,17 +1,24 @@
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Command, type OutputConfiguration } from "commander";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   WorkspaceIssueFeature,
   WorkspaceSpaceFeature,
   WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core";
+import { createWorkspaceConfig } from "../src/config.js";
 import { workspaceError } from "../src/errors.js";
+import { createAuthCommand } from "../src/features/auth/command.js";
+import { WorkspaceAuth } from "../src/features/auth/session.js";
 import { createBrowseCommand } from "../src/features/browse/command.js";
 import { createIssueCommand } from "../src/features/issue/command.js";
 import { createLabelCommand } from "../src/features/label/command.js";
 import { createPullRequestCommands } from "../src/features/pr/command.js";
 import { createRepoCommand } from "../src/features/repo/command.js";
 import { createSearchCommand } from "../src/features/search/command.js";
+import { createShareCommand } from "../src/features/share/command.js";
 import { RepoContext } from "../src/repo-context.js";
 
 const ORIGIN = "https://workspace.test";
@@ -106,7 +113,7 @@ describe("uvw repository and Issue commands", () => {
     expect(spaces.list).toHaveBeenCalledTimes(1);
   });
 
-  it("exits 4 and points at `uvw auth login` when sign-in is required", async () => {
+  it("exits 4 and points at `uvw auth login` and `uvw auth guest` when sign-in is required", async () => {
     const { repoContext } = context();
     const command = createIssueCommand({
       context: repoContext,
@@ -118,7 +125,10 @@ describe("uvw repository and Issue commands", () => {
       origin: async () => ORIGIN,
     });
     const error = await run(command, ["list", "-R", "alice/docs"]).catch((caught: unknown) => caught);
-    expect(error).toMatchObject({ exitCode: 4, message: expect.stringContaining("uvw auth login") });
+    expect(error).toMatchObject({
+      exitCode: 4,
+      message: expect.stringMatching(/uvw auth login.*uvw auth guest/u),
+    });
   });
 
   it("requires a repository when neither -R nor UVW_REPO is set", async () => {
@@ -994,6 +1004,153 @@ describe("uvw read command JSON field contracts", () => {
   });
 });
 
+describe("uvw auth guest", () => {
+  const homes: string[] = [];
+  afterEach(async () => {
+    await Promise.all(homes.splice(0).map(async (path) => await rm(path, { force: true, recursive: true })));
+  });
+
+  async function guestHome(respond: () => Response) {
+    const home = await mkdtemp(join(tmpdir(), "uvw-guest-"));
+    homes.push(home);
+    const config = createWorkspaceConfig({ UNIVER_HOME: home });
+    await config.setFromText({ key: "workspace.origin", text: ORIGIN });
+    const sessionPath = join(home, "session.json");
+    const requests: { readonly body: unknown; readonly cookie: string | null; readonly path: string }[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      requests.push({
+        body: JSON.parse(String(init?.body)),
+        cookie: new Headers(init?.headers).get("cookie"),
+        path: `${String(init?.method)} ${new URL(String(input)).pathname}`,
+      });
+      return respond();
+    };
+    return {
+      guest: async (...args: string[]) =>
+        await run(createAuthCommand(new WorkspaceAuth({ config, fetcher, sessionPath })), ["guest", ...args]),
+      requests,
+      session: async () => JSON.parse(await readFile(sessionPath, "utf8")) as unknown,
+    };
+  }
+  const created = () =>
+    Response.json(
+      { agent: { id: "agent-1", username: "budget-bot-x7k2" } },
+      { headers: { "set-cookie": "workspace_session=guest; Path=/; HttpOnly" }, status: 201 },
+    );
+
+  it("creates an agent, stores its session and prints its Personal Space repository", async () => {
+    const home = await guestHome(created);
+    const output = await home.guest("--label", "Budget bot");
+    expect(output).toContain("budget-bot-x7k2");
+    expect(output).toContain("budget-bot-x7k2/personal");
+    expect(home.requests).toEqual([{ body: { label: "Budget bot" }, cookie: null, path: "POST /api/auth/guest" }]);
+    expect(await home.session()).toEqual({
+      sessions: { [ORIGIN]: { cookie: "workspace_session=guest", subject: "agent-1" } },
+    });
+
+    expect(JSON.parse(await (await guestHome(created)).guest("--json"))).toEqual({
+      agent: { id: "agent-1", username: "budget-bot-x7k2" },
+      origin: ORIGIN,
+      repo: "budget-bot-x7k2/personal",
+    });
+  });
+
+  it("refuses while a session is stored and sends no request", async () => {
+    const home = await guestHome(created);
+    await home.guest();
+    const stored = await home.session();
+    const error = await home.guest().catch((caught: unknown) => caught);
+    expect(error).toMatchObject({ exitCode: 1, message: expect.stringContaining("uvw auth logout") });
+    expect(home.requests).toHaveLength(1);
+    expect(await home.session()).toEqual(stored);
+  });
+
+  it("surfaces the server's rate limit and stores nothing", async () => {
+    const home = await guestHome(() =>
+      Response.json(
+        { error: { code: "AGENT_CREATE_RATE_LIMITED", message: "Too many agents were created from this address." } },
+        { status: 429 },
+      ));
+    const error = await home.guest().catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining(
+        "AGENT_CREATE_RATE_LIMITED: Too many agents were created from this address.",
+      ),
+    });
+    await expect(home.session()).rejects.toMatchObject({ code: "ENOENT" });
+  });
+});
+
+describe("uvw share", () => {
+  const url = `${ORIGIN}/nodes/node-1`;
+  const owner = { claimed: false, kind: "agent", username: "budget-bot-x7k2" };
+  const expiresAt = "2026-12-14T00:00:00.000Z";
+
+  function share(updateLinkSharing?: () => Promise<never>) {
+    const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner, role });
+    const spaces = {
+      getLinkSharing: vi.fn(async () => sharing(false, "viewer")),
+      getNode: vi.fn(async (nodeId: string) => ({ name: "Budget", nodeId })),
+      updateLinkSharing: vi.fn(
+        updateLinkSharing ??
+          (async (_id: string, input: { enabled: boolean; role: string }) => sharing(input.enabled, input.role)),
+      ),
+    };
+    return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN), spaces };
+  }
+
+  it("reads the Link Sharing of a file link or Node ID without changing it", async () => {
+    const { command, spaces } = share();
+    const text = await run(command, [url]);
+    expect(text).toContain(url);
+    expect(text).toContain("Budget");
+    expect(text).toContain("Link Sharing: off");
+    expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
+      expiresAt, link: "off", name: "Budget", owner, url,
+    });
+    expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
+    expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["off", { enabled: false, role: "viewer" }],
+    ["viewer", { enabled: true, role: "viewer" }],
+    ["editor", { enabled: true, role: "editor" }],
+  ] as const)("sets --link %s and reports it in text and JSON", async (link, written) => {
+    const { command, spaces } = share();
+    const text = await run(command, [url, "--link", link]);
+    expect(text).toContain(`Link Sharing: ${link}`);
+    expect(text.includes(expiresAt)).toBe(link !== "off");
+    expect(JSON.parse(await run(command, [url, "--link", link, "--json"]))).toEqual({
+      expiresAt, link, name: "Budget", owner, url,
+    });
+    expect(JSON.parse(await run(command, [url, "--link", link, "--json", "url,link"]))).toEqual({ link, url });
+    expect(spaces.updateLinkSharing).toHaveBeenCalledWith("node-1", written);
+    expect(spaces.getLinkSharing).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown --link value before any request", async () => {
+    const { command, spaces } = share();
+    await expect(run(command, [url, "--link", "public"])).rejects.toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("off, viewer, editor"),
+    });
+    expect(spaces.getNode).not.toHaveBeenCalled();
+  });
+
+  it("tells a person's delegated session to share in the browser", async () => {
+    const { command } = share(async () => {
+      throw workspaceError("INTERACTIVE_SESSION_REQUIRED", "An interactive sign-in is required.", { status: 403 });
+    });
+    const error = await run(command, [url, "--link", "viewer"]).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      exitCode: 1,
+      message: expect.stringMatching(new RegExp(`INTERACTIVE_SESSION_REQUIRED: .*browser: ${url}`, "u")),
+    });
+  });
+});
+
 async function run(command: Command, args: readonly string[]): Promise<string> {
   let output = "";
   const configuration: OutputConfiguration = {
@@ -1067,7 +1224,7 @@ describe("uvw startup", () => {
       "command.ts", "errors.ts", "repo-context.ts", "product-commands.ts", "transport/http.ts",
       "features/auth/command.ts", "features/auth/session.ts", "features/browse/command.ts",
       "features/issue/command.ts", "features/label/command.ts", "features/pr/command.ts",
-      "features/repo/command.ts", "features/search/command.ts",
+      "features/repo/command.ts", "features/search/command.ts", "features/share/command.ts",
     ];
     for (const file of files) {
       const source = await readFile(new URL(`../src/${file}`, import.meta.url), "utf8");

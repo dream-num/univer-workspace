@@ -164,6 +164,24 @@ export async function resolveNodeReference(
   return await spaces.getNode(parseNodeReference(reference, origin));
 }
 
+/** Lets a Unit be named by its file link: returns the Unit ID the link names, and any other text as given. */
+export async function resolveUnitReference(
+  spaces: Pick<WorkspaceSpaceFeature, "getNode">,
+  unit: string,
+  origin: string,
+): Promise<string> {
+  if (!/^\s*https?:\/\//i.test(unit)) return unit;
+  const node = await resolveNodeReference(spaces, unit, origin);
+  if (node.resource?.kind !== "univer") {
+    throw workspaceError(
+      "workspace-argument-invalid",
+      `The link names "${node.name}", which is not a Unit, so this tool cannot read it.`,
+      { nodeId: node.nodeId },
+    );
+  }
+  return node.resource.unitId;
+}
+
 function browserUrl(value: string): { readonly url: URL; readonly segments: readonly string[] } {
   let url: URL;
   try {

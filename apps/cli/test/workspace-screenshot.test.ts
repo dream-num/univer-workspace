@@ -16,6 +16,12 @@ describe("Workspace screenshot command", () => {
     expect(application.loadUnit).toHaveBeenCalledWith({ scope, unitId: "book-1" });
   });
 
+  it("captures the Unit a file link names", async () => {
+    const application = screenshotApplication();
+    await programWith(application).parseAsync(["screenshot", "--trunk", "--unit", link], { from: "user" });
+    expect(application.loadUnit).toHaveBeenCalledWith({ scope: { kind: "trunk" }, unitId: "book-1" });
+  });
+
   it("rejects a screenshot without an explicit Workspace scope", async () => {
     const application = screenshotApplication();
 
@@ -26,6 +32,8 @@ describe("Workspace screenshot command", () => {
   });
 });
 
+const link = "https://workspace.test/nodes/node-1";
+
 function programWith(application: WorkspaceScreenshotApplication): Command {
   const program = new Command("test");
   program.configureOutput({ writeOut: () => undefined, writeErr: () => undefined });
@@ -33,6 +41,7 @@ function programWith(application: WorkspaceScreenshotApplication): Command {
   const command = createWorkspaceScreenshotCommand({
     browserSetup: { install: vi.fn(), probe: vi.fn(), resolve: vi.fn() },
     env: {},
+    resolveUnit: async (unit) => (unit === link ? "book-1" : unit),
     screenshot: application,
   });
   command.configureOutput(program.configureOutput());

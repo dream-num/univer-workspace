@@ -138,6 +138,25 @@ export function createAuthCommand(auth: WorkspaceAuth): Command {
       );
     });
 
+  const guest = new Command("guest")
+    .description("Continue as a new guest agent, without a user account")
+    .option("--label <name>", "start the agent's username with this name")
+    .option("--json", "write structured JSON")
+    .action(async (options: JsonOption & { readonly label?: string }) => {
+      const result = await executeCommand(guest, async () => {
+        const { agent, origin } = await auth.guest(
+          options.label === undefined ? {} : { label: options.label },
+        );
+        return { origin, agent, repo: `${agent.username}/personal` };
+      });
+      present(
+        guest,
+        options,
+        result,
+        `Signed in to ${result.origin} as guest agent ${result.agent.username}\nPersonal Space repository: ${result.repo}`,
+      );
+    });
+
   const status = new Command("status")
     .description("Show the Workspace origin and the authenticated user")
     .option("--json", "write structured JSON")
@@ -157,6 +176,7 @@ export function createAuthCommand(auth: WorkspaceAuth): Command {
   return new Command("auth")
     .description("Sign in to a Workspace and check the current session")
     .addCommand(login)
+    .addCommand(guest)
     .addCommand(logout)
     .addCommand(status);
 }

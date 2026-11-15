@@ -32,6 +32,8 @@ interface LensOptions extends JsonOption {
 
 export function createSheetLensCommands(application: {
   run(input: SheetLensInput): Promise<SheetLensResult>;
+  /** Turns a file link given as `--unit` into its Unit ID, so the output and the next page carry the ID. */
+  resolveUnit(unit: string): Promise<string>;
 }): Command[] {
   const outline = baseCommand("outline", "Outline")
     .option("--at <ref>", "zoom in on an outline ref")
@@ -96,14 +98,17 @@ export function createSheetLensCommands(application: {
   return [outline, read, find];
 
   async function run(command: Command, options: LensOptions, request: SheetLensRequest) {
-    const { scope, result } = await executeCommand(command, async () => {
+    const { scope, unitId, result } = await executeCommand(command, async () => {
       const scope = scopeOf(options);
-      return { scope, result: await application.run({ unitId: options.unit, scope, request }) };
+      const unitId = await application.resolveUnit(options.unit);
+      return { scope, unitId, result: await application.run({ unitId, scope, request }) };
     });
-    const next = result.next ? continuation(command, options, request, result.next) : undefined;
+    const next = result.next
+      ? continuation(command, { ...options, unit: unitId }, request, result.next)
+      : undefined;
     const scopeText = scope.kind === "trunk" ? "trunk" : `worktree ${scope.worktreeId}`;
     const lines = [
-      `unit ${options.unit} [${scopeText}, rev=${result.revision}]`,
+      `unit ${unitId} [${scopeText}, rev=${result.revision}]`,
       result.text.replace(/\n+$/, ""),
     ];
     lines.push(...result.warnings.map((warning) => `note: ${warning.message}`));
@@ -120,7 +125,7 @@ export function createSheetLensCommands(application: {
       command,
       options,
       {
-        unitId: options.unit,
+        unitId,
         scope,
         revision: result.revision,
         text: result.text,
@@ -136,7 +141,7 @@ export function createSheetLensCommands(application: {
 function baseCommand(name: string, verb: string): Command {
   return new Command(name)
     .description(`${verb} a Sheet Unit (Sheet only; use inspect for Doc, Slide, Base and Board)`)
-    .requiredOption("--unit <id>", "Sheet Unit to read")
+    .requiredOption("--unit <id>", "Sheet Unit to read: its Unit ID or its file link")
     .addOption(new Option("--trunk", "read from trunk").conflicts("worktree"))
     .addOption(new Option("--worktree <id>", "read from a Worktree").conflicts("trunk"))
     .option("--json", "write structured JSON");
