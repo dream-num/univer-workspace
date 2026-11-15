@@ -73,6 +73,21 @@ it("revokes the downstream session when its personal access token is revoked", a
   await expect(app.identity.requireSession(cookie)).rejects.toThrow();
 });
 
+it("enforces the OAuth client limit and rotates a refresh token once under concurrent requests", async ({ onTestFinished }) => {
+  const { app, owner } = await setup(onTestFinished);
+  const tokens = createAccessTokenService({ repository: app.repositories.accessTokens, now: Date.now });
+  const clients = await Promise.all(["one", "two"].map(clientName =>
+    tokens.registerClient({ clientName, redirectUris: ["https://client.example/callback"] }, 1)));
+  expect(clients.filter(Boolean)).toHaveLength(1);
+  const clientId = clients.find(client => client !== null)!.clientId;
+  const resource = "https://workspace.example/mcp";
+  const grant = await tokens.issueGrant({ userId: owner, clientId, scopes: ["read"], resource });
+  const refresh = () => tokens.refreshGrant({ refreshToken: grant.refreshToken, clientId, resource });
+  const outcomes = await Promise.all([refresh(), refresh()]);
+  expect(outcomes.filter(result => result.ok)).toHaveLength(1);
+  expect(outcomes).toContainEqual({ ok: false, reason: "retired" });
+});
+
 async function setup(onTestFinished: (cleanup: () => Promise<void>) => void) {
   const root = await mkdtemp(join(tmpdir(), "workspace-product-contract-"));
   onTestFinished(() => rm(root, { recursive: true, force: true }));

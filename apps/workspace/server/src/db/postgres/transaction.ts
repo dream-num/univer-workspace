@@ -33,7 +33,7 @@ export async function withPostgresTransaction<T>(
 // serialization conflict. Replay only allocations and idempotency lookups that
 // can observe the winning row and recompute their result.
 const retryableConstraints = new Set([
-  "operations_pkey", "issues_space_id_number_key", "worktrees_team_number", "worktrees_user_number",
+  "operations_pkey", "oauth_refresh_history_pkey", "issues_space_id_number_key", "worktrees_team_number", "worktrees_user_number",
   "issue_labels_space_name", "html_view_drafts_author_user_id_idempotency_key_key",
   "skill_drafts_author_user_id_idempotency_key_key",
 ]);

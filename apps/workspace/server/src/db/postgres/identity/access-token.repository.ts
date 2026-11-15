@@ -109,7 +109,7 @@ export class PostgresAccessTokenRepository implements AccessTokenRepository {
   }
 
   async verifySubject(token: TokenCredential, resource: string, at: number): Promise<SubjectToken | null> {
-    return await this.verifySubjectNow(token, resource, at);
+    return this.database.transaction(() => this.verifySubjectNow(token, resource, at));
   }
 
   private async verifySubjectNow(token: TokenCredential, resource: string, at: number): Promise<SubjectToken | null> {
@@ -154,11 +154,15 @@ export class PostgresAccessTokenRepository implements AccessTokenRepository {
   }
 
   async insertClient(client: OAuthClientRecord, limit: number | null): Promise<boolean> {
-    const result = await this.database.prepare(`
-      INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at)
-      SELECT ?, ?, ?, ? WHERE ?::text IS NULL OR (SELECT COUNT(*) FROM oauth_clients) < ?
-    `).run(client.clientId, client.clientName, JSON.stringify(client.redirectUris), client.createdAt, limit, limit);
-    return result.changes > 0;
+    return this.database.transaction(async (db) => {
+      const result = await db.prepare(`
+        INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at)
+        SELECT $clientId, $clientName, $redirectUris, $createdAt
+        WHERE $limit::bigint IS NULL OR (SELECT COUNT(*) FROM oauth_clients) < $limit
+      `).run({ clientId: client.clientId, clientName: client.clientName, redirectUris: JSON.stringify(client.redirectUris),
+        createdAt: client.createdAt, limit });
+      return result.changes > 0;
+    });
   }
 
   async getClient(clientId: string): Promise<OAuthClientRecord | null> {
