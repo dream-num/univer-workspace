@@ -30,12 +30,13 @@ export function parseStory(argv) {
   return { as, oauth, label, client, prompt };
 }
 
-/** opencode cannot deny the `execute` wrapper that carries MCP calls, nor the `fetch` and `search` inside it. */
+/** An mcp story keeps opencode's `execute` wrapper: it carries the MCP calls, with `fetch`, `search` and `tools.opencode.*` beside them. */
 export function opencodeConfig({ client, mcpUrl, bearer, tmp }) {
   const deny = names => Object.fromEntries(names.map(name => [name, 'deny']));
   // Models keep their scripts and screenshots in opencode's temp directory, so file tools may use it too.
   // opencode's built-in explore subagent allows every external directory.
-  if (client === 'uvw') return { $schema: 'https://opencode.ai/config.json', permission: { ...deny(['webfetch', 'websearch', 'question', 'task', 'subagent']), external_directory: { '*': 'deny', [`${tmp}/**`]: 'allow' } } };
+  // Inside `execute`, tools.opencode.session_move changes the working directory, and read and glob then reach any file there.
+  if (client === 'uvw') return { $schema: 'https://opencode.ai/config.json', permission: { ...deny(['webfetch', 'websearch', 'question', 'task', 'subagent', 'execute']), external_directory: { '*': 'deny', [`${tmp}/**`]: 'allow' } } };
   return {
     $schema: 'https://opencode.ai/config.json',
     mcp: { [SERVER]: { type: 'remote', url: mcpUrl, enabled: true, ...(bearer ? { oauth: false, headers: { Authorization: `Bearer ${bearer}` } } : {}) } },

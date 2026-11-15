@@ -280,10 +280,13 @@ written to your own opencode database.
   list, edit, write, bash and shell, webfetch, websearch, question, task, skill, lsp.
 - `uvw`: no MCP server. Shell and file tools are allowed, `uvw` is first on PATH, and the
   checkout's `skills/univer-workspace-cli` is installed as an opencode Skill. Denied: webfetch,
-  websearch, question, task and subagent, and file tools outside the working directory and the
-  story's `TMPDIR`. The shell tool runs `/bin/zsh` under macOS `sandbox-exec` (`SHELL` names
-  `.local/libexec/zsh` in the story HOME, profile `.local/libexec/shell.sb`). The profile denies
-  reading and writing your home directory and the whole `VERIFY_UVW_ROOT`, then gives back only
+  websearch, question, task and subagent, opencode's `execute` wrapper, and file tools outside the
+  working directory and the story's `TMPDIR`. Inside `execute`, `tools.opencode.session_move` moves
+  the working directory anywhere, after which `read` and `glob` returned the run's credential export
+  without an `external_directory` refusal. The shell tool runs `/bin/zsh` under macOS
+  `sandbox-exec` (`SHELL` names `.local/libexec/zsh` in the story HOME, profile
+  `.local/libexec/shell.sb`). The profile denies reading and writing your home directory and the
+  whole `VERIFY_UVW_ROOT`, then gives back only
   the story's `work/`, `TMPDIR` and `.univer-workspace-cli`, read access to `.local/bin`,
   `.local/lib`, the checkout without `.data/`, and node's install directory. Every process the
   shell starts, `uvw` included, inherits it. Without `/usr/bin/sandbox-exec`, a `uvw` story refuses
@@ -298,8 +301,14 @@ after 30 minutes and `run-meta.json` records `timed_out`.
 Not contained, so read `trajectory.txt` for it and report it:
 
 - `mcp`: opencode cannot deny its own `execute` wrapper, which carries the MCP calls. Inside it
-  the model also has `fetch`, which reaches any host including this run's HTTP API, plus `search`
-  and `opencode.*` helpers.
+  the model also has `fetch`, which reaches any host and local port including this run's HTTP API,
+  plus `search` and the `tools.opencode.*` helpers. The wrapper is a restricted interpreter: with a
+  scripted model, `require`, `import()`, `process`, `Bun`, `Deno`, `globalThis`, the Function
+  constructor and `fetch('file://…')` all failed, and no canary file or environment value came
+  back. `session_move` still moves the working directory anywhere, and opencode then adds the
+  `AGENTS.md` it finds there, and in parent directories, to the conversation. In a git
+  repository `worktree_create` adds a worktree to the repository's `.git` and checks it out under
+  the story HOME. The model credential is not reachable this way.
 - `uvw`: the shell cannot read the run's `home/` (the model credential export, principal tokens,
   `mcp-*`), `user.pw`, `run.env`, `user.env`, other story HOMEs, opencode's data in its own story
   HOME, or your home directory. What it can still read: its own uvw session in
@@ -308,8 +317,7 @@ Not contained, so read `trajectory.txt` for it and report it:
   and the run root, such as `/etc` and other `/tmp` directories. `uvw` can upload whatever the shell
   can read. The network is not restricted, so the shell reaches every local port, your own
   Workspace on 3020 included, without its cookies. `stat` still shows names and sizes of denied
-  files. opencode's `execute` wrapper runs in opencode's own process, outside the sandbox. The
-  `uvw` wrapper and `readlink` still reveal the checkout path.
+  files. The `uvw` wrapper and `readlink` still reveal the checkout path.
 - opencode's per-command shell rules (`permission.shell`) were tried and do not hold. With
   `{"*": "deny", "uvw *": "allow"}`, `--auto` keeps the deny, and pipes, `&&`, `;`, `$(cat …)`
   and backticks are refused. But `uvw "$(< file)"`, `X=$(<file); uvw "$X"`, `uvw … < file`, a
@@ -336,8 +344,8 @@ Client pitfalls seen with opencode 2.0.29. They are harness artifacts, not produ
 
 - `opencode run` cannot answer its `question` tool, so the tool is denied. A model that needs an
   answer has to say so in its reply.
-- opencode's wrapper is also named `execute`, and models confuse it with the Workspace `execute`
-  tool. In `trajectory.txt` the Workspace one is `univer-workspace.execute`. The first wrapper
+- In `mcp` stories opencode's wrapper is also named `execute`, and models confuse it with the
+  Workspace `execute` tool. In `trajectory.txt` the Workspace one is `univer-workspace.execute`. The first wrapper
   call can fail with `Unknown tool namespace 'univer-workspace'` while the tool list loads.
 - File tools are confined by resolved path, and `/tmp` is `/private/tmp` on macOS. A read or
   write refused with `external_directory` is an artifact. The story's paths are already resolved

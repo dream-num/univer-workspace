@@ -27,10 +27,10 @@ test('mcp mode gives opencode one server and denies every local tool it can deny
   assert.deepEqual(opencodeConfig({ client: 'mcp', mcpUrl: 'http://127.0.0.1:3930/mcp' }).mcp['univer-workspace'], { type: 'remote', url: 'http://127.0.0.1:3930/mcp', enabled: true });
 });
 
-test('uvw mode has no MCP server or subagents, keeps the shell, and confines file tools to the working and temp directories', () => {
+test('uvw mode has no MCP server, subagents or execute wrapper, keeps the shell, and confines file tools to the working and temp directories', () => {
   const config = opencodeConfig({ client: 'uvw', mcpUrl: 'http://127.0.0.1:3930/mcp', bearer: 'token-1', tmp: '/private/tmp/run/home/stories/uvw-a1/tmp' });
   assert.equal(config.mcp, undefined);
-  assert.deepEqual(config.permission, { webfetch: 'deny', websearch: 'deny', question: 'deny', task: 'deny', subagent: 'deny', external_directory: { '*': 'deny', '/private/tmp/run/home/stories/uvw-a1/tmp/**': 'allow' } });
+  assert.deepEqual(config.permission, { webfetch: 'deny', websearch: 'deny', question: 'deny', task: 'deny', subagent: 'deny', execute: 'deny', external_directory: { '*': 'deny', '/private/tmp/run/home/stories/uvw-a1/tmp/**': 'allow' } });
 });
 
 test('the uvw story shell is denied your home and the run root, then given back only what uvw needs, later rules winning', () => {
