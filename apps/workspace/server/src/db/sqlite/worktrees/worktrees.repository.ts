@@ -1,5 +1,7 @@
-import { assertFileQuota } from "../access/access.repository.js";
 import { createHash } from "node:crypto";
+import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
+import { checkCreateTarget } from "../access/resource-target.js";
+import { type SqliteAccessRepository, assertFileQuota } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -8,13 +10,13 @@ import type {
   WorktreeCursor,
   WorktreeRow,
   WorktreeUnitRow,
-  WorktreeOperationDatabaseKind,
+  WorktreeReservation,
   WorktreeOperationRow,
   WorktreesRepository,
 } from "../../../modules/worktrees/worktrees.repository.js";
 
 export class SqliteWorktreesRepository implements WorktreesRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(private readonly _database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
 
   async hasCreatedWorktree(userId: string): Promise<boolean> {
     return Boolean(
@@ -185,6 +187,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     // Issue sequence; User Worktrees are numbered per creator.
     this._database.transaction((database) => {
       if (database.prepare("SELECT 1 FROM worktrees WHERE id = ?").get(input.id)) return;
+      if (input.kind === "team" && input.teamSpaceId) this.requireTarget(input.creatorUserId, input.teamSpaceId, null);
       const next = (input.kind === "team"
         ? database.prepare(
             `SELECT MAX(
@@ -337,6 +340,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly createdAt: number;
   }): Promise<void> {
     this._database.transaction((database) => {
+      this.requireTarget(input.createdBy, input.targetSpaceId, input.targetParentNodeId);
       database
         .prepare(
           `INSERT INTO worktree_units
@@ -388,6 +392,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
 
   async activateLocalUnit(
     row: WorktreeUnitRow,
+    actorUserId: string,
     creatorUserId: string,
     activatedAt: number
   ): Promise<void> {
@@ -399,7 +404,14 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     ) {
       return;
     }
+    const targetSpaceId = row.target_space_id;
     this._database.transaction((database) => {
+      const intent = database.prepare(`
+        SELECT activated_at, discarded_at FROM worktree_node_intents WHERE worktree_id = ? AND unit_id = ?
+      `).get(row.worktree_id, row.unit_id);
+      if (!intent || intent.discarded_at !== null) throw notFound();
+      if (intent.activated_at !== null) return;
+      this.requireTarget(actorUserId, targetSpaceId, row.target_parent_node_id);
       database
         .prepare(
           `INSERT INTO nodes
@@ -505,19 +517,28 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     );
   }
 
-  async reserveOperation(input: {
-    readonly id: string;
-    readonly kind: WorktreeOperationDatabaseKind;
-    readonly actorUserId: string;
-    readonly payload: Readonly<Record<string, unknown>>;
-    readonly createdAt: number;
-  }): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }> {
+  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null): void {
+    const access = checkCreateTarget(this.access, userId, spaceId, parentNodeId);
+    if (access === "notFound") throw notFound();
+    if (access === "forbidden") throw forbidden();
+  }
+
+  async reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }> {
     return this._database.transaction((database) => {
-      if (input.kind === "create_worktree_unit") assertFileQuota(database, input.actorUserId, 1, input.id);
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
         .get(input.id) as WorktreeOperationRow | undefined;
       if (existing) return { created: false, row: existing };
+      if (input.kind === "create_worktree_unit") {
+        this.requireTarget(input.actorUserId, input.payload.targetSpaceId, input.payload.targetParentNodeId);
+        assertFileQuota(database, input.actorUserId, 1, input.id);
+      } else if (input.kind === "create_worktree" && input.payload.teamSpaceId !== null) {
+        this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null);
+      } else if (input.kind === "add_worktree_unit") {
+        const resource = this.access.readResourceAccess(input.actorUserId, input.payload.resourceId);
+        if (!resource || resource.kind !== "univer") throw notFound();
+        if (!resource.capabilities.editContent) throw forbidden();
+      }
       database
         .prepare(
           `INSERT INTO operations

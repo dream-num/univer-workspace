@@ -3,6 +3,7 @@ import type { NodeAccess } from "../../../modules/access/index.js";
 import { assertNotDelegatedPageWrite } from "../../../modules/blobs/html-view-guard.js";
 import type { Principal } from "../../../modules/identity/index.js";
 import { nodeForbidden, nodeNotFound } from "../../../modules/nodes/nodes.errors.js";
+import { checkCreateTarget } from "../access/resource-target.js";
 import type { SqliteAccessRepository } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { NodePatch, NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository } from "../../../modules/nodes/nodes.repository.js";
@@ -141,15 +142,9 @@ export class SqliteNodesRepository implements NodesRepository {
     return node;
   }
 
-  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null) {
-    if (parentNodeId === null) {
-      const space = this.access.readSpaceAccess(userId, spaceId);
-      if (!space) throw nodeNotFound();
-      if (!space.capabilities.createAtRoot) throw nodeForbidden();
-    } else {
-      const parent = this.requireNode(userId, parentNodeId);
-      if (parent.spaceId !== spaceId) throw nodeNotFound();
-      if (!parent.capabilities.createChildren) throw nodeForbidden();
-    }
+  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null): void {
+    const target = checkCreateTarget(this.access, userId, spaceId, parentNodeId);
+    if (target === "notFound") throw nodeNotFound();
+    if (target === "forbidden") throw nodeForbidden();
   }
 }

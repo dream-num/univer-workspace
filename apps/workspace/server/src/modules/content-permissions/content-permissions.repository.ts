@@ -1,3 +1,5 @@
+import type { ResourceContentAccess, UnitType } from "../access/index.js";
+
 export interface ContentCollaborator {
   readonly userId: string;
   readonly role: number;
@@ -24,9 +26,26 @@ export interface ContentPermissionUpdate {
   readonly collaborators: readonly ContentCollaborator[] | null;
 }
 
+export type ContentPermissionWriteResult = "saved" | "denied" | "invalid-collaborator";
+
+export function canManageContentPermission(
+  userId: string,
+  creatorId: string,
+  resource: ResourceContentAccess | null,
+): boolean {
+  if (!resource?.capabilities.editContent) return false;
+  return creatorId === userId || resource.role === "owner" || resource.role === "admin";
+}
+
 export interface ContentPermissionsRepository {
   get(unitId: string, objectId: string): Promise<ContentPermissionObject | null>;
-  create(object: ContentPermissionObject): Promise<void>;
-  update(unitId: string, objectId: string, patch: ContentPermissionUpdate): Promise<boolean>;
+  /** Both writes recheck actor and named collaborator access within the write transaction. */
+  create(object: ContentPermissionObject, unitType: UnitType): Promise<ContentPermissionWriteResult>;
+  update(
+    userId: string,
+    unitId: string,
+    objectId: string,
+    patch: ContentPermissionUpdate,
+  ): Promise<ContentPermissionWriteResult>;
   candidateUserIds(unitId: string): Promise<string[]>;
 }

@@ -7,3 +7,11 @@ export function trashNotFound(): ApplicationError {
 export function trashBatchMismatch(): ApplicationError {
   return new ApplicationError("CONFLICT", 409, "The Trash Batch belongs to a different deletion request.");
 }
+
+export function trashForbidden(): ApplicationError {
+  return new ApplicationError(
+    "FORBIDDEN",
+    403,
+    "This action is not allowed."
+  );
+}

@@ -1,4 +1,8 @@
-import { assertFileQuota } from "../access/access.repository.js";
+import type { Principal } from "../../../modules/identity/index.js";
+import { ApplicationError } from "../../../middleware/errors.js";
+import { assertNotDelegatedPageWrite } from "../../../modules/blobs/html-view-guard.js";
+import { requireResourceTarget } from "../access/resource-target.js";
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import type { DatabaseSync } from "node:sqlite";
 import type { OperationView } from "../../../modules/resources/index.js";
 import { randomUUID } from "node:crypto";
@@ -32,15 +36,29 @@ interface BlobOperationRow {
 }
 
 export class SqliteBlobsRepository implements BlobsRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(
+    private readonly _database: SqliteDatabase,
+    private readonly access: SqliteAccessRepository,
+  ) {}
+
+  private requireWritable(actor: Principal, resourceId: string) {
+    const resource = this.access.readResourceAccess(actor.user.id, resourceId);
+    if (!resource || resource.kind !== "blob") throw new ApplicationError("NOT_FOUND", 404, "The resource was not found.");
+    if (!resource.capabilities.editContent) throw new ApplicationError("FORBIDDEN", 403, "This action is not allowed.");
+    assertNotDelegatedPageWrite(actor, [resource.node.name, resource.originalFilename]);
+    if (resource.availability !== "ready") throw new ApplicationError("CONFLICT", 409, "Blob content is not currently available.");
+    return resource;
+  }
 
   async reserveReplacement(
     operationId: string,
-    userId: string,
+    actor: Principal,
     intent: BlobReplacementIntent,
     now: number,
-  ): Promise<{ readonly objectKey: string; readonly result: BlobReplacementResult | null }> {
+  ): Promise<{ readonly objectKey: string; readonly currentEtag: string; readonly result: BlobReplacementResult | null }> {
     return this._database.transaction((database) => {
+      const userId = actor.user.id;
+      const { etag: currentEtag } = this.requireWritable(actor, intent.resourceId);
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
         .get(operationId) as
@@ -68,6 +86,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
         }
         return {
           objectKey: payload.objectKey,
+          currentEtag,
           result: JSON.parse(existing.result_json!) as BlobReplacementResult,
         };
       }
@@ -77,18 +96,20 @@ export class SqliteBlobsRepository implements BlobsRepository {
         (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, created_at, updated_at)
         VALUES (?, 'replace_blob_content', ?, 'receiving', 'pending', ?, 0, ?, ?, ?)`)
         .run(operationId, userId, JSON.stringify({ ...intent, objectKey }), now, now, now);
-      return { objectKey, result: null };
+      return { objectKey, currentEtag, result: null };
     });
   }
 
   async completeReplacement(
     operationId: string,
+    actor: Principal,
     intent: BlobReplacementIntent,
     objectKey: string,
     stored: StoredBlob,
     now: number,
   ): Promise<BlobReplacementResult> {
     return this._database.transaction((database) => {
+      this.requireWritable(actor, intent.resourceId);
       const swapped = swapBlobContent(database, { ...intent, objectKey, stored, now });
       if (swapped === "etag-mismatch") throw new BlobReplacementConflictError("etag");
       const { etag } = swapped;
@@ -138,6 +159,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     readonly expiresAt: number;
   }): Promise<ReservedBlobUpload> {
     return this._database.transaction((database) => {
+      requireResourceTarget(this.access, input.actorUserId, input.intent.spaceId, input.intent.parentNodeId, "This action is not allowed.");
       assertFileQuota(database, input.actorUserId, 1, input.operationId);
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
@@ -298,6 +320,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
         !upload.etag ||
         !upload.detected_media_type
       ) throw new Error("Blob Upload Session is not ready to complete.");
+      requireResourceTarget(this.access, upload.actor_user_id, upload.target_space_id, upload.target_parent_node_id, "This action is not allowed.");
       database.prepare(
         `UPDATE blob_upload_sessions
          SET state = 'verifying', updated_at = ? WHERE id = ?`

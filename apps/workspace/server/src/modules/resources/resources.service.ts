@@ -156,7 +156,6 @@ export function createResourcesModule(options: {
     async create(userId, operationIdValue, inputValue, reserved) {
       const operationId = validOperationId(operationIdValue);
       const intent = validCreateResource(inputValue);
-      await validateTarget(userId, intent, options.access);
       const reservation = await options.repository.reserveCreateResource({
         operationId,
         actorUserId: userId,
@@ -275,22 +274,6 @@ export function createResourcesModule(options: {
       return claimed.length;
     },
   };
-}
-
-async function validateTarget(
-  userId: string,
-  input: CreateResourceIntent,
-  access: AccessResolver
-): Promise<void> {
-  if (input.parentNodeId === null) {
-    const space = await access.resolveSpace(userId, input.spaceId);
-    if (!space) throw notFound();
-    if (!space.capabilities.createAtRoot) throw forbidden();
-    return;
-  }
-  const parent = await access.resolveNode(userId, input.parentNodeId);
-  if (!parent || parent.spaceId !== input.spaceId) throw notFound();
-  if (!parent.capabilities.createChildren) throw forbidden();
 }
 
 function validCreateResource(value: unknown): CreateResourceIntent {
@@ -431,6 +414,9 @@ function operationError(error: unknown): {
   readonly message: string;
   readonly retryable: boolean;
 } {
+  if (error instanceof ApplicationError && (error.code === "NOT_FOUND" || error.code === "FORBIDDEN")) {
+    return { code: error.code, message: error.message, retryable: false };
+  }
   if (error instanceof UnitStoreError) {
     return {
       code: error.code,
@@ -448,14 +434,6 @@ function operationError(error: unknown): {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "The current user cannot perform this action."
-  );
 }
 
 function notFound(): ApplicationError {

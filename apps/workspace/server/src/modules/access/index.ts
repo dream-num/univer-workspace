@@ -7,6 +7,7 @@ export {
   spaceCapabilities,
   resolveStoredSpaceAccess,
   resolveStoredNodeAccess,
+  resolveStoredContentAccess,
   resolveStoredResourceAccess,
   requesterCategory,
 } from "./access.service.js";

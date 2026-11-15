@@ -125,7 +125,6 @@ export function createBlobsModule(options: {
       }
     },
     async replace(actor, resourceId, key, ifMatch, contentLength, body) {
-      const userId = actor.user.id;
       const operationId = validOperationId(key);
       if (typeof ifMatch !== "string" || !/^"[^"\r\n]+"$/.test(ifMatch) || ifMatch.length > 200) {
         throw invalidInput("If-Match must contain one quoted strong ETag.", "If-Match");
@@ -141,19 +140,10 @@ export function createBlobsModule(options: {
           "Blob exceeds the configured byte limit.",
         );
       assertCeiling(principalCategory(actor.user), "storeFile", { byteSize });
-      const requireWritable = async () => {
-        const access = await requireBlobAccess(options.access, userId, resourceId);
-        if (!access.capabilities.editContent) throw forbidden();
-        assertNotDelegatedPageWrite(actor, [access.node.name, access.originalFilename]);
-        if (access.availability !== "ready")
-          throw conflict("Blob content is not currently available.");
-        return access;
-      };
-      await requireWritable();
       const intent = { resourceId, expectedEtag: ifMatch.slice(1, -1), byteSize };
       let reserved;
       try {
-        reserved = await options.repository.reserveReplacement(operationId, userId, intent, now());
+        reserved = await options.repository.reserveReplacement(operationId, actor, intent, now());
       } catch (error) {
         throw replacementError(error);
       }
@@ -162,7 +152,7 @@ export function createBlobsModule(options: {
         return reserved.result;
       }
       try {
-        if ((await requireWritable()).etag !== intent.expectedEtag) {
+        if (reserved.currentEtag !== intent.expectedEtag) {
           throw new ApplicationError(
             "PRECONDITION_FAILED",
             412,
@@ -174,10 +164,9 @@ export function createBlobsModule(options: {
           body,
           expectedByteSize: byteSize,
         });
-        // Resolve live permissions after the asynchronous upload, immediately before the product transaction.
-        await requireWritable();
         return await options.repository.completeReplacement(
           operationId,
+          actor,
           intent,
           reserved.objectKey,
           stored,

@@ -1,4 +1,4 @@
-import type { UnitType } from "../access/index.js";
+import type { NodeAccess, UnitType } from "../access/index.js";
 
 export interface TrashCursor {
   readonly createdAt: number;
@@ -39,7 +39,6 @@ export interface TrashRepository {
   trashNode(input: {
     readonly batchId: string;
     readonly nodeId: string;
-    readonly spaceId: string;
     readonly createdBy: string;
     readonly createdAt: number;
   }): Promise<void>;
@@ -51,6 +50,7 @@ export interface TrashRepository {
   ): Promise<TrashBatchRow[]>;
   originalBreadcrumbs(rootNodeId: string): Promise<TrashBreadcrumbRow[]>;
   blockers(batch: TrashBatchRow): Promise<TrashBlockers>;
-  restore(batch: TrashBatchRow, userId: string, restoredAt: number): Promise<"restored" | "parentInTrash">;
-  removePermanently(batch: TrashBatchRow, deletedAt: number): Promise<"removed" | "nestedBatch" | "activeWorktreeReference">;
+  /** Returns the restored root Node, or null when the parent is still in Trash. */
+  restore(batchId: string, userId: string, restoredAt: number): Promise<NodeAccess | null>;
+  removePermanently(batchId: string, userId: string, deletedAt: number): Promise<"removed" | "nestedBatch" | "activeWorktreeReference">;
 }

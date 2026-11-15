@@ -1,10 +1,18 @@
-import { assertFileQuota } from "../access/access.repository.js";
+import { requireResourceTarget } from "../access/resource-target.js";
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { CreateResourcePayload } from "../../../modules/resources/resources.types.js";
 import type { OperationRow, ReservedCreateResource, ResourcesRepository } from "../../../modules/resources/resources.repository.js";
 
 export class SqliteResourcesRepository implements ResourcesRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(
+    private readonly _database: SqliteDatabase,
+    private readonly access: SqliteAccessRepository,
+  ) {}
+
+  private requireTarget(actorUserId: string, payload: CreateResourcePayload): void {
+    requireResourceTarget(this.access, actorUserId, payload.spaceId, payload.parentNodeId, "The current user cannot perform this action.");
+  }
 
   async reserveCreateResource(input: {
     readonly operationId: string;
@@ -13,6 +21,7 @@ export class SqliteResourcesRepository implements ResourcesRepository {
     readonly createdAt: number;
   }): Promise<ReservedCreateResource> {
     return this._database.transaction((database) => {
+      this.requireTarget(input.actorUserId, input.payload);
       assertFileQuota(database, input.actorUserId, 1, input.operationId);
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
@@ -166,8 +175,10 @@ export class SqliteResourcesRepository implements ResourcesRepository {
          WHERE id = ? AND actor_user_id = ? AND kind = 'create_resource' AND state = 'failed' RETURNING *`)
         .get(updatedAt, updatedAt + 60_000, updatedAt, operationId, actorUserId) as OperationRow | undefined;
       if (!row) return null;
+      const payload = parsePayload(row.payload_json);
+      this.requireTarget(actorUserId, payload);
       assertFileQuota(db, actorUserId, 0);
-      return { created: false, row, payload: parsePayload(row.payload_json) };
+      return { created: false, row, payload };
     });
   }
 
@@ -182,6 +193,7 @@ export class SqliteResourcesRepository implements ResourcesRepository {
         .prepare("SELECT 1 FROM resources WHERE id = ?")
         .get(input.payload.resourceId);
       if (!existing) {
+        this.requireTarget(input.actorUserId, input.payload);
         database
           .prepare(
             `INSERT INTO nodes

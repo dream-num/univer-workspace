@@ -4,10 +4,12 @@ import { CollabError, type RequiredUnitPermission } from "@univerjs-pro/collabor
 import { ErrorCode, ObjectScope, UnitAction, UnitObject, UnitRole } from "@univerjs/protocol";
 import type { AccessResolver, ResourceContentAccess } from "../../modules/access/index.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
-import type {
-  ContentPermissionsRepository,
-  ContentPermissionObject,
-  ContentCollaborator,
+import {
+  canManageContentPermission,
+  type ContentPermissionWriteResult,
+  type ContentPermissionsRepository,
+  type ContentPermissionObject,
+  type ContentCollaborator,
 } from "../../modules/content-permissions/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
 import { protocolUser } from "./protocol-user.js";
@@ -105,11 +107,9 @@ export function createContentPermissions(options: {
     // An object grant cannot widen file access. Object ManageCollaborator is not the file
     // action of the same name: the creator, and the current file Owner or Admin, can manage
     // the rule while they can still edit the file.
-    const objectOwner =
-      object.creatorUserId === userId || resource.role === "owner" || resource.role === "admin";
     if (
       !unitActionAllowed(resource, action) &&
-      !(management.has(action) && objectOwner && resource.capabilities.editContent)
+      !(management.has(action) && canManageContentPermission(userId, object.creatorUserId, resource))
     ) {
       return false;
     }
@@ -159,7 +159,7 @@ export function createContentPermissions(options: {
       deny();
     return object;
   }
-  async function collaborators(value: unknown, creator: string, unitId: string): Promise<ContentCollaborator[]> {
+  function collaborators(value: unknown, creator: string): ContentCollaborator[] {
     const entries = array(value ?? []);
     const users = new Map<string, ContentCollaborator>();
     for (const raw of entries) {
@@ -171,12 +171,6 @@ export function createContentPermissions(options: {
       if (userId === creator) continue;
       if (entry.role !== UnitRole.Reader && entry.role !== UnitRole.Editor)
         invalid("Invalid collaborator role.");
-      if (
-        !(await identity.findUsers([userId])).length ||
-        !(await access.resolveUnitContent(userId, unitId))?.capabilities.openContent
-      ) {
-        invalid("Collaborator must already have access to this Unit.");
-      }
       users.set(userId, { userId, role: entry.role });
     }
     return [...users.values()];
@@ -373,7 +367,7 @@ export function createContentPermissions(options: {
     const input = record(body[key!]);
     const unitId = string(input.unitID);
     const resource = await requireUnit(userId, unitId, true);
-    if (resource.unitType !== kind) invalid("Object type does not belong to this Unit.");
+    if (!resource.unitType || resource.unitType !== kind) invalid("Object type does not belong to this Unit.");
     const scope = scopes(input.scope);
     const object: ContentPermissionObject = {
       id: randomUUID(),
@@ -384,11 +378,11 @@ export function createContentPermissions(options: {
       strategies: strategies(input.strategies),
       readScope: scope.read,
       editScope: scope.edit,
-      collaborators: await collaborators(input.collaborators, userId, unitId),
+      collaborators: collaborators(input.collaborators, userId),
     };
     // Persist before the SDK submits the binding. Retain unattached ACLs for retry,
     // undo and history; only permanent Resource deletion cascades their removal.
-    await repository.create(object);
+    requireSaved(await repository.create(object, resource.unitType));
     response.json({ error: ok, objectID: object.id });
   });
   router.put("/:objectType/object/:objectId", async (request, response) => {
@@ -410,15 +404,15 @@ export function createContentPermissions(options: {
       (Array.isArray(body.strategies) && body.strategies.length === 0)
         ? null
         : strategies(body.strategies);
-    const updated = await repository.update(unitId, objectId, {
+    const result = await repository.update(response.locals.contentUserId, unitId, objectId, {
       name: body.name == null ? null : string(body.name, true),
       strategies: nextStrategies,
       scope,
       collaborators: body.collaborators === undefined
         ? null
-        : await collaborators(record(body.collaborators).collaborators, object.creatorUserId, unitId),
+        : collaborators(record(body.collaborators).collaborators, object.creatorUserId),
     });
-    if (!updated) deny();
+    requireSaved(result);
     response.json({ error: ok });
   });
   router.get("/collaborator", async (request, response) => {
@@ -476,6 +470,10 @@ function string(value: unknown, empty = false): string {
   if (typeof value !== "string" || (!empty && !value) || value.length > 1000)
     invalid("Invalid string.");
   return value;
+}
+function requireSaved(result: ContentPermissionWriteResult): void {
+  if (result === "denied") deny();
+  if (result === "invalid-collaborator") invalid("Collaborator must already have access to this Unit.");
 }
 function invalid(message: string): never {
   throw new CollabError("INVALID_REQUEST", message);

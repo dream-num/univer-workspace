@@ -200,6 +200,29 @@ describe("Worktrees", () => {
     expect(ownTask.body.creator.id).toBe(member.id);
   });
 
+  it("rechecks the target when reserving a local Worktree file", async () => {
+    const app = await createTestApplication();
+    const owner = await register(app, "reservation-owner");
+    const editor = await register(app, "reservation-editor");
+    const team = await app.spaces.createTeamSpace(owner.id, { name: "Target" });
+    await app.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    const { body } = await app.worktrees.create(editor.id, "create-before-role-change", {
+      kind: "team", teamSpaceId: team.id, visibility: "private", name: "Draft", summary: null,
+    });
+    const repository = app.repositories.worktrees;
+    const reserve = repository.reserveOperation.bind(repository);
+    vi.spyOn(repository, "reserveOperation").mockImplementationOnce(async (input) => {
+      await app.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "viewer" });
+      return reserve(input);
+    });
+    const key = "add-after-role-change";
+    await expect(app.worktrees.addUnit(editor.id, body.id, key, {
+      source: "worktree", name: "New document", unitType: "doc",
+      targetSpaceId: team.id, targetParentNodeId: null,
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(await repository.getOperation(key)).toBeNull();
+  });
+
   it("preserves concurrent summary patches including an explicit clear", async () => {
     const app = await createTestApplication();
     const owner = await register(app, "worktree-patches");

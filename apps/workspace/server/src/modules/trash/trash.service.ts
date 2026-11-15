@@ -1,4 +1,4 @@
-import { trashBatchMismatch, trashNotFound } from "./trash.errors.js";
+import { trashNotFound } from "./trash.errors.js";
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
@@ -23,45 +23,15 @@ export function createTrashModule(options: {
 
   return {
     async trashNode(userId, nodeId) {
-      const node = await options.access.resolveNode(userId, nodeId);
-      if (!node) throw trashNotFound();
-      if (!node.capabilities.trash) throw forbidden();
       const batchId = randomUUID();
-      await options.repository.trashNode({
-        batchId,
-        nodeId,
-        spaceId: node.spaceId,
-        createdBy: userId,
-        createdAt: now(),
-      });
+      await options.repository.trashNode({ batchId, nodeId, createdBy: userId, createdAt: now() });
       const batch = await options.repository.findBatch(batchId);
       if (!batch) throw new Error("Created Trash Batch is missing");
       return batchView(batch, options.repository);
     },
 
     async trashNodeOnce(userId, nodeId, batchId) {
-      const alreadyTrashed = async () => {
-        const existing = await options.repository.findBatch(batchId);
-        if (!existing) return false;
-        if (existing.root_node_id !== nodeId || existing.created_by !== userId) throw trashBatchMismatch();
-        return true;
-      };
-      // Restoration is a later user decision. Replaying deletion must preserve it.
-      if (await alreadyTrashed()) return;
-      const node = await options.access.resolveNode(userId, nodeId);
-      if (!node) {
-        // Another call with this batch ID may have trashed the node since the first lookup.
-        if (await alreadyTrashed()) return;
-        throw trashNotFound();
-      }
-      if (!node.capabilities.trash) throw forbidden();
-      await options.repository.trashNode({
-        batchId,
-        nodeId,
-        spaceId: node.spaceId,
-        createdBy: userId,
-        createdAt: now(),
-      });
+      await options.repository.trashNode({ batchId, nodeId, createdBy: userId, createdAt: now() });
     },
 
     async list(userId, spaceId, page) {
@@ -89,35 +59,19 @@ export function createTrashModule(options: {
     },
 
     async restore(userId, trashBatchId) {
-      const batch = await requireManageableBatch(
-        userId,
-        trashBatchId,
-        options
-      );
-      if (await options.repository.restore(batch, userId, now()) === "parentInTrash") {
+      const restored = await options.repository.restore(trashBatchId, userId, now());
+      if (restored === null) {
         throw new ApplicationError(
           "RESTORE_PARENT_IN_TRASH",
           409,
           "Restore the parent Trash Batch first."
         );
       }
-      const restored = await options.access.resolveNode(
-        userId,
-        batch.root_node_id
-      );
-      if (!restored) {
-        throw new Error("Restored Node is not discoverable");
-      }
       return nodeSummary(restored);
     },
 
     async removePermanently(userId, trashBatchId) {
-      const batch = await requireManageableBatch(
-        userId,
-        trashBatchId,
-        options
-      );
-      const result = await options.repository.removePermanently(batch, now());
+      const result = await options.repository.removePermanently(trashBatchId, userId, now());
       if (result === "nestedBatch") {
         throw new ApplicationError(
           "NESTED_TRASH_BATCH",
@@ -134,21 +88,6 @@ export function createTrashModule(options: {
       }
     },
   };
-}
-
-async function requireManageableBatch(
-  userId: string,
-  batchId: string,
-  options: {
-    readonly repository: TrashRepository;
-    readonly access: AccessResolver;
-  }
-): Promise<TrashBatchRow> {
-  const batch = await options.repository.findBatch(batchId);
-  if (!batch || batch.restored_at !== null) throw trashNotFound();
-  const space = await options.access.resolveSpace(userId, batch.space_id);
-  if (!space?.capabilities.viewTrash) throw trashNotFound();
-  return batch;
 }
 
 async function batchView(
@@ -257,12 +196,4 @@ function encodeCursor(cursor: TrashCursor): string {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "This action is not allowed."
-  );
 }

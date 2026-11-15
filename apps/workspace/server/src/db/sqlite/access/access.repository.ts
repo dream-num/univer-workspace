@@ -1,4 +1,4 @@
-import { assertCeiling, requesterCategory, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import { assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
 import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { SqliteDatabase } from "../connection.js";
 import type {
@@ -118,6 +118,10 @@ export class SqliteAccessRepository implements AccessRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
   async findResourceByUnitId(unitId: string): Promise<ResourceMappingRow | null> {
+    return this.readUnitMapping(unitId);
+  }
+
+  private readUnitMapping(unitId: string): ResourceMappingRow | null {
     return (
       (this._database.connection
         .prepare(
@@ -222,7 +226,16 @@ export class SqliteAccessRepository implements AccessRepository {
     return mapping && resolveStoredResourceAccess(mapping, this.readNodeAccess(userId, mapping.node_id));
   }
 
+  readUnitContentAccess(userId: string, unitId: string) {
+    const mapping = this.readUnitMapping(unitId);
+    return mapping && resolveStoredContentAccess(userId, mapping, this.readNodeAuthorization(userId, mapping.node_id));
+  }
+
   async resolveNodeAuthorization(userId: string, nodeId: string): Promise<NodeAuthorizationRow | null> {
+    return this.readNodeAuthorization(userId, nodeId);
+  }
+
+  private readNodeAuthorization(userId: string, nodeId: string): NodeAuthorizationRow | null {
     return (
       ((this._resolveAuthorizationStatement ??= this._database.connection.prepare(
         nodeAccessQuery(true),

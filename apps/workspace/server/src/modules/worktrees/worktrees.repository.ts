@@ -56,6 +56,21 @@ export type WorktreeOperationDatabaseKind =
   | "discard_worktree"
   | "activate_worktree_resource";
 
+type OperationPayload = Readonly<Record<string, unknown>> & { readonly worktreeId: string };
+
+export type WorktreeReservation = {
+  readonly id: string;
+  readonly actorUserId: string;
+  readonly createdAt: number;
+} & (
+  | { readonly kind: "create_worktree_unit"; readonly payload: OperationPayload & {
+      readonly targetSpaceId: string; readonly targetParentNodeId: string | null;
+    } }
+  | { readonly kind: "add_worktree_unit"; readonly payload: OperationPayload & { readonly resourceId: string } }
+  | { readonly kind: "create_worktree"; readonly payload: OperationPayload & { readonly teamSpaceId: string | null } }
+  | { readonly kind: "merge_worktree" | "discard_worktree"; readonly payload: OperationPayload }
+);
+
 export interface WorktreeOperationRow {
   readonly id: string;
   readonly kind: WorktreeOperationDatabaseKind;
@@ -136,6 +151,7 @@ export interface WorktreesRepository {
   }): Promise<void>;
   activateLocalUnit(
     row: WorktreeUnitRow,
+    actorUserId: string,
     creatorUserId: string,
     activatedAt: number
   ): Promise<void>;
@@ -145,13 +161,7 @@ export interface WorktreesRepository {
   removalBatchId(worktreeId: string, unitId: string): Promise<string>;
   hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): Promise<boolean>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;
-  reserveOperation(input: {
-    readonly id: string;
-    readonly kind: WorktreeOperationDatabaseKind;
-    readonly actorUserId: string;
-    readonly payload: Readonly<Record<string, unknown>>;
-    readonly createdAt: number;
-  }): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
+  reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
   completeOperation(
     operationId: string,
     result: Readonly<Record<string, unknown>>,

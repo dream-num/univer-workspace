@@ -32,6 +32,7 @@ import type {
   WorktreeUnit,
   WorktreeVisibility,
 } from "./worktrees.types.js";
+import { forbidden, notFound } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -443,6 +444,7 @@ export function createWorktreesModule(options: {
           "add_worktree_unit",
           userId
         );
+        if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
         assertJsonIntent(input, {
           source: stable.source,
           resourceId: stable.resourceId,
@@ -509,6 +511,7 @@ export function createWorktreesModule(options: {
         "create_worktree_unit",
         userId
       );
+      if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
       assertJsonIntent(input, {
         source: stable.source,
         name: stable.name,
@@ -736,6 +739,7 @@ export function createWorktreesModule(options: {
               : options.backend.merge(worktreeId, userId),
           );
           const mergedUnitIds = await activateSuccessfulUnits(
+            userId,
             value.row,
             await options.repository.units(worktreeId),
             data.units,
@@ -1012,7 +1016,7 @@ async function validateAllTargets(
         throw forbidden();
       continue;
     }
-    if (!await canEditUnit(userId, row, unit, options.access)) {
+    if (!(await canEditUnit(userId, row, unit, options.access))) {
       throw forbidden();
     }
   }
@@ -1142,6 +1146,7 @@ function activationState(
 }
 
 async function activateSuccessfulUnits(
+  actorUserId: string,
   worktree: WorktreeRow,
   rows: readonly WorktreeUnitRow[],
   states: readonly {
@@ -1165,6 +1170,7 @@ async function activateSuccessfulUnits(
     ) {
       await repository.activateLocalUnit(
         row,
+        actorUserId,
         worktree.creator_user_id,
         activatedAt
       );
@@ -1827,18 +1833,6 @@ function operationFailure(error: unknown): {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function notFound(): ApplicationError {
-  return new ApplicationError("NOT_FOUND", 404, "Worktree not found.");
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "This Worktree action is not allowed."
-  );
 }
 
 function conflict(message: string): ApplicationError {

@@ -1,5 +1,6 @@
-import { trashBatchMismatch, trashNotFound } from "../../../modules/trash/trash.errors.js";
-import { assertFileQuota } from "../access/access.repository.js";
+import type { NodeAccess } from "../../../modules/access/index.js";
+import { trashBatchMismatch, trashForbidden, trashNotFound } from "../../../modules/trash/trash.errors.js";
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import { randomUUID } from "node:crypto";
 import type { SqliteDatabase } from "../connection.js";
 import type {
@@ -11,37 +12,35 @@ import type {
 } from "../../../modules/trash/trash.repository.js";
 
 export class SqliteTrashRepository implements TrashRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(private readonly _database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
 
   async trashNode(input: {
     readonly batchId: string;
     readonly nodeId: string;
-    readonly spaceId: string;
     readonly createdBy: string;
     readonly createdAt: number;
   }): Promise<void> {
     this._database.transaction((database) => {
       const existing = database
-        .prepare("SELECT root_node_id, space_id, created_by FROM trash_batches WHERE id = ?")
+        .prepare("SELECT root_node_id, created_by FROM trash_batches WHERE id = ?")
         .get(input.batchId) as
         | {
             readonly root_node_id: string;
-            readonly space_id: string;
             readonly created_by: string;
           }
         | undefined;
       if (existing) {
         if (
           existing.root_node_id !== input.nodeId ||
-          existing.space_id !== input.spaceId ||
           existing.created_by !== input.createdBy
         ) {
           throw trashBatchMismatch();
         }
         return;
       }
-      if (!database.prepare("SELECT 1 FROM nodes WHERE id = ? AND space_id = ? AND trash_batch_id IS NULL")
-        .get(input.nodeId, input.spaceId)) throw trashNotFound();
+      const node = this.access.readNodeAccess(input.createdBy, input.nodeId);
+      if (!node) throw trashNotFound();
+      if (!node.capabilities.trash) throw trashForbidden();
       database
         .prepare(
           `INSERT INTO trash_batches
@@ -50,7 +49,7 @@ export class SqliteTrashRepository implements TrashRepository {
         )
         .run(
           input.batchId,
-          input.spaceId,
+          node.spaceId,
           input.nodeId,
           input.createdBy,
           input.createdAt
@@ -225,18 +224,18 @@ export class SqliteTrashRepository implements TrashRepository {
     return row.files;
   }
 
-  private requireActiveBatch(batch: TrashBatchRow): void {
-    const active = this._database.connection.prepare(`
-      SELECT 1 FROM trash_batches b JOIN nodes n ON n.id = b.root_node_id AND n.trash_batch_id = b.id
-      WHERE b.id = ? AND b.root_node_id = ? AND b.restored_at IS NULL
-    `).get(batch.id, batch.root_node_id);
-    if (!active) throw trashNotFound();
+  private requireManageableBatch(batchId: string, userId: string): TrashBatchRow {
+    const batch = this._database.connection.prepare(`
+      ${batchSelect()} WHERE batch.id = ? AND batch.restored_at IS NULL AND root.trash_batch_id = batch.id
+    `).get(batchId) as TrashBatchRow | undefined;
+    if (!batch || !this.access.readSpaceAccess(userId, batch.space_id)?.capabilities.viewTrash) throw trashNotFound();
+    return batch;
   }
 
-  async restore(batch: TrashBatchRow, userId: string, restoredAt: number): Promise<"restored" | "parentInTrash"> {
+  async restore(batchId: string, userId: string, restoredAt: number): Promise<NodeAccess | null> {
     return this._database.transaction((database) => {
-      this.requireActiveBatch(batch);
-      if (this.readBlockers(batch).parentBatchId) return "parentInTrash";
+      const batch = this.requireManageableBatch(batchId, userId);
+      if (this.readBlockers(batch).parentBatchId) return null;
       assertFileQuota(database, userId, this.countFiles(batch));
       database
         .prepare(
@@ -252,13 +251,15 @@ export class SqliteTrashRepository implements TrashRepository {
            WHERE id = ? AND restored_at IS NULL`
         )
         .run(restoredAt, batch.id);
-      return "restored";
+      const restored = this.access.readNodeAccess(userId, batch.root_node_id);
+      if (!restored) throw new Error("Restored Node is not discoverable");
+      return restored;
     });
   }
 
-  async removePermanently(batch: TrashBatchRow, deletedAt: number): Promise<"removed" | "nestedBatch" | "activeWorktreeReference"> {
+  async removePermanently(batchId: string, userId: string, deletedAt: number): Promise<"removed" | "nestedBatch" | "activeWorktreeReference"> {
     return this._database.transaction((database) => {
-      this.requireActiveBatch(batch);
+      const batch = this.requireManageableBatch(batchId, userId);
       const blockers = this.readBlockers(batch);
       if (blockers.nestedBatchId) return "nestedBatch";
       if (blockers.activeWorktreeReference) return "activeWorktreeReference";

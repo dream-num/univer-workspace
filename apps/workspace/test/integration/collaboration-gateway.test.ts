@@ -1694,6 +1694,75 @@ describe("content permission integration", () => {
     };
   }
 
+  it("rechecks the actor's permissions when creating or updating a protection rule", async () => {
+    const f = await fixture();
+    const repository = f.application.repositories.contentPermissions;
+    const create = () => f.authz(f.editor.cookie, "/3/object", {
+      objectType: 3, selectRangeObject: { unitID: f.unitId, name: "Original" },
+    });
+    const setEditorRole = (role: "editor" | "viewer") =>
+      f.application.permissions.upsertNodeGrant(f.owner.id, f.node.id, f.editor.id, { role });
+
+    const insert = repository.create.bind(repository);
+    let deniedId = "";
+    const onCreate = vi.spyOn(repository, "create").mockImplementationOnce(async (object, type) => {
+      deniedId = object.id;
+      await setEditorRole("viewer");
+      return insert(object, type);
+    });
+    try {
+      const denied = await create();
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).toMatchObject({ error: { code: ErrorCode.PERMISSION_DENIED } });
+      expect(deniedId).not.toBe("");
+      expect(await repository.get(f.unitId, deniedId)).toBeNull();
+    } finally {
+      onCreate.mockRestore();
+    }
+
+    await setEditorRole("editor");
+    const created = await create();
+    expect(created.status).toBe(200);
+    const { objectID } = await created.json() as { objectID: string };
+    const before = await repository.get(f.unitId, objectID);
+    const write = repository.update.bind(repository);
+    const onUpdate = vi.spyOn(repository, "update").mockImplementationOnce(async (...args) => {
+      await setEditorRole("viewer");
+      return write(...args);
+    });
+    try {
+      const denied = await f.authz(f.editor.cookie, `/3/object/${objectID}`, {
+        unitID: f.unitId, objectType: 3, objectID, name: "Changed",
+        collaborators: { collaborators: [{ id: f.viewer.id, role: 1 }] },
+      }, "PUT");
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).toMatchObject({ error: { code: ErrorCode.PERMISSION_DENIED } });
+      expect(await repository.get(f.unitId, objectID)).toEqual(before);
+    } finally {
+      onUpdate.mockRestore();
+    }
+  });
+
+  it("rejects a collaborator whose file access was revoked before the rule is written", async () => {
+    const f = await fixture();
+    const repository = f.application.repositories.contentPermissions;
+    const insert = repository.create.bind(repository);
+    const onCreate = vi.spyOn(repository, "create").mockImplementationOnce(async (...args) => {
+      await f.application.permissions.removeNodeGrant(f.owner.id, f.node.id, f.viewer.id);
+      return insert(...args);
+    });
+    try {
+      const response = await f.authz(f.owner.cookie, "/3/object", {
+        objectType: 3,
+        selectRangeObject: { unitID: f.unitId, collaborators: [{ id: f.viewer.id, role: 1 }] },
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: ErrorCode.INVALID_ARGUMENT } });
+    } finally {
+      onCreate.mockRestore();
+    }
+  });
+
   it("preserves a concurrent collaborator revocation when renaming an object", async () => {
     const f = await fixture();
     const objectType = 3;

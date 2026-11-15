@@ -54,17 +54,7 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
   ): Promise<ResourceContentAccess | null> {
     if (!mapping) return null;
     const row = await repository.resolveNodeAuthorization(userId, mapping.node_id);
-    if (!row) return null;
-    const { role } = resolvedRoles(userId, row);
-    if (!role || !validMapping(mapping)) return null;
-    return {
-      id: mapping.resource_id,
-      kind: mapping.resource_kind,
-      role,
-      unitId: mapping.unit_id,
-      unitType: mapping.unit_type,
-      capabilities: resourceCapabilities(role, mapping.resource_kind),
-    };
+    return resolveStoredContentAccess(userId, mapping, row);
   }
 
   return {
@@ -102,6 +92,24 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     countPersonalFiles(userId, operationId) {
       return repository.countPersonalFiles(userId, operationId ?? null);
     },
+  };
+}
+
+export function resolveStoredContentAccess(
+  userId: string,
+  mapping: ResourceMappingRow,
+  row: NodeAuthorizationRow | null,
+): ResourceContentAccess | null {
+  if (!row) return null;
+  const { role } = resolvedRoles(userId, row);
+  if (!role || !validMapping(mapping)) return null;
+  return {
+    id: mapping.resource_id,
+    kind: mapping.resource_kind,
+    role,
+    unitId: mapping.unit_id,
+    unitType: mapping.unit_type,
+    capabilities: resourceCapabilities(role, mapping.resource_kind),
   };
 }
 

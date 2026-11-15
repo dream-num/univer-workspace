@@ -1,3 +1,4 @@
+import type { Principal } from "../identity/index.js";
 import type { BlobReplacementResult } from "./blobs.types.js";
 import type { StoredBlob } from "../../integrations/blob/blob-store.js";
 import type { OperationView } from "../resources/index.js";
@@ -84,12 +85,13 @@ export class BlobUploadStateConflictError extends Error {}
 export interface BlobsRepository {
   reserveReplacement(
     operationId: string,
-    userId: string,
+    actor: Principal,
     intent: BlobReplacementIntent,
     now: number,
-  ): Promise<{ readonly objectKey: string; readonly result: BlobReplacementResult | null }>;
+  ): Promise<{ readonly objectKey: string; readonly currentEtag: string; readonly result: BlobReplacementResult | null }>;
   completeReplacement(
     operationId: string,
+    actor: Principal,
     intent: BlobReplacementIntent,
     objectKey: string,
     stored: StoredBlob,

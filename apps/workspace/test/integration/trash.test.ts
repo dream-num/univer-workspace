@@ -41,7 +41,6 @@ describe("Trash Batches", () => {
     await application.repositories.trash.trashNode({
       batchId,
       nodeId,
-      spaceId: space.id,
       createdBy: owner.id,
       createdAt: Date.now(),
     });
@@ -68,12 +67,36 @@ describe("Trash Batches", () => {
     expect(items).toHaveLength(1);
     const repository = application.repositories.trash;
     const remove = repository.removePermanently.bind(repository);
-    vi.spyOn(repository, "removePermanently").mockImplementationOnce(async (batch, at) => {
-      await application.trash.restore(owner.id, batch.id);
-      return remove(batch, at);
+    vi.spyOn(repository, "removePermanently").mockImplementationOnce(async (batchId, actorId, at) => {
+      await application.trash.restore(owner.id, batchId);
+      return remove(batchId, actorId, at);
     });
     await expect(application.trash.removePermanently(owner.id, items[0]!.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect((await application.resources.get(owner.id, resource.resourceId)).node.id).toBe(resource.node.id);
+  });
+
+  it("checks the current actor before trashing, restoring or permanently removing nodes", async () => {
+    const app = await createTestApplication();
+    const owner = await register(app, "trash-space-owner");
+    const admin = await register(app, "trash-space-admin");
+    const space = await app.spaces.createTeamSpace(owner.id, { name: "Trash permissions" });
+    await app.permissions.upsertTeamMember(owner.id, space.id, admin.id, { role: "admin" });
+    const active = await createResource(app, owner.id, space.id, null, "Active sheet");
+    const trashed = await createResource(app, owner.id, space.id, null, "Trashed sheet");
+    const batch = await app.trash.trashNode(admin.id, trashed.node.id);
+    expect((await app.trash.list(admin.id, space.id, {})).items[0]?.id).toBe(batch.id);
+
+    await app.permissions.upsertTeamMember(owner.id, space.id, admin.id, { role: "viewer" });
+    const repository = app.repositories.trash;
+    await expect(repository.trashNode({
+      batchId: "stale-admin", nodeId: active.node.id, createdBy: admin.id, createdAt: Date.now(),
+    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(repository.restore(batch.id, admin.id, Date.now())).rejects.toMatchObject({ code: "NOT_FOUND" });
+    await expect(repository.removePermanently(batch.id, admin.id, Date.now())).rejects.toMatchObject({ code: "NOT_FOUND" });
+
+    expect(await repository.findBatch("stale-admin")).toBeNull();
+    expect((await app.resources.get(owner.id, active.resourceId)).node.id).toBe(active.node.id);
+    expect((await app.trash.restore(owner.id, batch.id)).id).toBe(trashed.node.id);
   });
 
   it("rolls back the workflow receipt when deleting the Node fails", async () => {

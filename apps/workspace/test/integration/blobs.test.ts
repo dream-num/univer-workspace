@@ -18,6 +18,37 @@ afterEach(async () => {
 });
 
 describe("Blob Resources", () => {
+  it("checks the target in the upload reservation and again after verifying stored bytes", async () => {
+    const { application } = await createTestApplication();
+    const owner = await register(application, "blob-target-owner");
+    const editor = await register(application, "blob-target-editor");
+    const space = await application.spaces.createTeamSpace(owner, { name: "Documents" });
+    const folder = await application.nodes.create(owner, { name: "Uploads", spaceId: space.id, parentNodeId: null });
+    const actor = interactivePrincipal(editor);
+    const intent = { name: "plain.bin", originalFilename: "plain.bin", byteSize: 4, spaceId: space.id, parentNodeId: folder.id };
+    const repo = application.repositories.blobs;
+    await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "editor" });
+    const reserve = repo.reserve.bind(repo);
+    vi.spyOn(repo, "reserve").mockImplementationOnce(async (input) => {
+      await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "viewer" });
+      return reserve(input);
+    });
+    const key = "reserve-blob-target-changed";
+    await expect(application.blobs.createUpload(actor, key, intent)).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(count(application, "blob_upload_sessions")).toBe(0);
+    await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "editor" });
+    const { body } = await application.blobs.createUpload(actor, key, intent);
+    await application.blobs.upload(editor, body.upload.id, "4", Readable.from([Buffer.from("data")]));
+    const complete = repo.complete.bind(repo);
+    vi.spyOn(repo, "complete").mockImplementationOnce(async (...args) => {
+      await application.trash.trashNode(owner, folder.id);
+      return complete(...args);
+    });
+    await expect(application.blobs.complete(actor, body.upload.id)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await repo.find(body.upload.id, editor))?.upload.state).toBe("uploaded");
+    expect(count(application, "blob_resources")).toBe(0);
+  });
+
   it("publishes only after verified upload and exposes generic Resource views", async () => {
     const { application } = await createTestApplication();
     const userId = await register(application, "blob-owner");
@@ -596,6 +627,30 @@ describe("Blob content replacement", () => {
     ).toMatchObject({ etag: fast.etag.slice(1, -1) });
   });
 
+  it("rejects a delegated replacement when the destination becomes an HTML View before publication", async () => {
+    const { application, blobDirectory } = await createTestApplication();
+    const owner = await register(application, "replace-renamed-page");
+    const space = (await application.spaces.list(owner)).spaces[0]!;
+    const actor = interactivePrincipal(owner);
+    const blob = await uploadedBlob(application, owner, space.id, "plain.bin", "rename-page-initial-0001");
+    await application.blobs.complete(actor, blob.uploadId);
+    const etag = await contentEtag(application, owner, blob.resourceId);
+    const repo = application.repositories.blobs;
+    const complete = repo.completeReplacement.bind(repo);
+    vi.spyOn(repo, "completeReplacement").mockImplementationOnce(async (...args) => {
+      await application.nodes.update(actor, blob.nodeId, { name: "page.univer.html" });
+      return complete(...args);
+    });
+    const key = "replace-after-rename-0001";
+    await expect(application.blobs.replace(
+      { ...actor, tokenIssued: true }, blob.resourceId, key, etag, "4", Readable.from([Buffer.from("lost")]),
+    )).rejects.toMatchObject({ code: "HTML_VIEW_DRAFT_REQUIRED", status: 403 });
+    expect(await application.operations.get(owner, key)).toMatchObject({ state: "failed", error: { code: "HTML_VIEW_DRAFT_REQUIRED" } });
+    await application.blobs.runMaintenance("replacement-cleanup");
+    expect(readdirSync(blobDirectory)).toHaveLength(1);
+    expect(await contentEtag(application, owner, blob.resourceId)).toBe(etag);
+  });
+
   it("keeps published bytes when editor permission is revoked during upload", async () => {
     const { application } = await createTestApplication();
     const owner = await register(application, "replace-revoke-owner");
@@ -661,7 +716,7 @@ describe("Blob content replacement", () => {
     const operationId = "replace-interrupted-0001";
     const pending = await repository.reserveReplacement(
       operationId,
-      user,
+      interactivePrincipal(user),
       { resourceId: blob.resourceId, expectedEtag: "old", byteSize: 4 },
       Date.now(),
     );
