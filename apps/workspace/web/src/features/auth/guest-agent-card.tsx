@@ -1,0 +1,71 @@
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Bot } from "lucide-react";
+import { api } from "../../shared/api/client";
+import { apiError, type ApiError } from "../../shared/api/errors";
+import { useI18n } from "../../shared/i18n";
+import { Alert, Button } from "../../shared/ui";
+import { isOAuthAuthorizeReturnTo, sessionQueryOptions } from "./auth.queries";
+
+/** Renders nothing unless login returns to OAuth authorization and the deployment creates guest agents. */
+export function GuestAgentCard({ returnTo }: { readonly returnTo?: string }) {
+  const { t } = useI18n();
+  const session = useQuery(sessionQueryOptions);
+  const guest = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/api/auth/guest");
+      if (error) throw apiError(error);
+    },
+  });
+  const error = guest.error as ApiError | null;
+
+  if (
+    !returnTo ||
+    !isOAuthAuthorizeReturnTo(returnTo) ||
+    session.data?.authenticated !== false ||
+    !session.data.guestAuthEnabled
+  ) {
+    return null;
+  }
+
+  return (
+    <section
+      aria-labelledby="guest-agent-title"
+      className="w-[min(420px,100%)] rounded-2xl border border-primary bg-background p-8 shadow-lg max-[480px]:p-5"
+    >
+      <span className="mb-3.5 grid size-9 place-items-center rounded-full bg-info-soft text-brand-600">
+        <Bot aria-hidden="true" className="size-5" />
+      </span>
+      <h2 id="guest-agent-title" className="m-0 text-xl font-bold tracking-tight">
+        {t("guestAgentTitle")}
+      </h2>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {t("guestAgentDescription")}
+      </p>
+      <ul className="my-5 grid list-disc gap-1.5 pl-5 text-[13px] text-muted-foreground">
+        <li>{t("guestAgentPrivate")}</li>
+        <li>{t("guestAgentExpiry")}</li>
+      </ul>
+
+      {error ? (
+        <Alert variant="destructive" className="mb-5">
+          {error.code === "AGENT_CREATE_RATE_LIMITED"
+            ? t("guestAgentRateLimited")
+            : error.message}
+        </Alert>
+      ) : null}
+
+      <Button
+        size="lg"
+        className="w-full"
+        disabled={guest.isPending || guest.isSuccess}
+        onClick={() =>
+          guest.mutate(undefined, {
+            onSuccess: () => window.location.assign(returnTo),
+          })
+        }
+      >
+        {t("continueAsGuestAgent")}
+      </Button>
+    </section>
+  );
+}

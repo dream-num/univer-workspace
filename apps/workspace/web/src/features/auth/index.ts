@@ -1,4 +1,5 @@
 export { AuthCard } from "./auth-card";
+export { GuestAgentCard } from "./guest-agent-card";
 export {
   requireAuthenticatedSession,
   sessionQueryKey,
