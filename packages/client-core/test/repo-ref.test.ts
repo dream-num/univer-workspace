@@ -126,13 +126,25 @@ describe("file links", () => {
     });
   });
 
-  it("passes other Link Sharing refusals through and rejects a malformed response", async () => {
-    const forbidden = clients((call) =>
+  it("tells someone who is not the owner to read the file through its link", async () => {
+    const { spaces } = clients((call) =>
       call.path.endsWith("/link-sharing")
         ? Response.json({ error: { code: "FORBIDDEN", message: "Not yours." } }, { status: 403 })
         : Response.json(node(sheet)));
-    await expect(shareNode(forbidden.spaces, origin, { node: "n1" }))
-      .rejects.toMatchObject({ code: "FORBIDDEN", message: "Not yours." });
+    await expect(shareNode(spaces, origin, { node: "n1" })).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: expect.stringMatching(/^Only the owner .* pass its link as the Unit with trunk: https:\/\/workspace\.test\/nodes\/n1$/u),
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
+
+  it("passes other Link Sharing refusals through and rejects a malformed response", async () => {
+    const limited = clients((call) =>
+      call.path.endsWith("/link-sharing")
+        ? Response.json({ error: { code: "RATE_LIMITED", message: "Slow down." } }, { status: 429 })
+        : Response.json(node(sheet)));
+    await expect(shareNode(limited.spaces, origin, { node: "n1" }))
+      .rejects.toMatchObject({ code: "RATE_LIMITED", message: "Slow down." });
     const malformed = clients((call) =>
       Response.json(call.path.endsWith("/link-sharing") ? sharing({ role: "owner" }) : node(sheet)));
     await expect(shareNode(malformed.spaces, origin, { node: "n1" }))
