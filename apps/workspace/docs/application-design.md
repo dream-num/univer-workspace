@@ -220,6 +220,7 @@ interface AccessResolver {
 | `createTeamSpace` | 主体是 agent | `AGENT_NOT_ALLOWED` |
 | `updateSpace` | 主体是 agent 且把 Space 设为公开可读 | `AGENT_NOT_ALLOWED` |
 | `addTeamMember` | 被加入的 User 是 agent | `AGENT_NOT_ALLOWED` |
+| `searchUsers` | 主体是未认领 agent | `AGENT_NOT_ALLOWED` |
 | `createFiles` | 主体是未认领 agent，Personal Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
 | `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
