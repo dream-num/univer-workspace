@@ -8,9 +8,12 @@ export function buildServerInstructions(
   selected: readonly ToolDefinition[],
   operations: ReadonlySet<OpName>,
   executorRestricted: boolean,
+  principal: "human" | "agent",
 ): string {
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
+  // An agent owns its Personal Space and has no reviewer, so it finishes its own pull requests.
+  const agentFinishes = principal === "agent" && has("pr_merge");
   const find = ["space_find", "space_browse"].filter(has);
   const workflow = [
     ...(find.length ? [`Find the file with ${find.join(" or ")}.`] : []),
@@ -23,16 +26,32 @@ export function buildServerInstructions(
     ...(has("unit_create") ? ["Create new Units inside the pull request with unit_create."] : []),
     "Make the change inside the pull request.",
     "Read the result back to verify it before you report success.",
-    ...(has("pr_ready")
+    ...(agentFinishes
       ? [
-          "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+          `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
+          ...(has("share")
+            ? [
+                "Call share with the merged file's nodeId and link viewer, then give the returned url to the user.",
+              ]
+            : []),
         ]
-      : []),
-    "Give the user the pull request link so they can review it.",
-    "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
+      : [
+          ...(has("pr_ready")
+            ? [
+                "Only mark the pull request ready with pr_ready when the user explicitly says the work is finished or requests review. Otherwise, leave the verified changes in draft.",
+              ]
+            : []),
+          "Give the user the pull request link so they can review it.",
+          "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.",
+        ]),
   ];
   const instructions = [
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
+    ...(agentFinishes
+      ? [
+          "This connection is an agent identity that works in its own Personal Space, where nobody else reviews or merges. Finish your own pull requests as the workflow says, even where a tool description or a Skill leaves readiness, merging or the link to the user.",
+        ]
+      : []),
     ...(executorRestricted
       ? [
           "Editing document contents is not enabled for this account; ask the user to edit in the browser.",

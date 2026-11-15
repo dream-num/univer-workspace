@@ -161,6 +161,7 @@ export function createGateway(
           state.selected,
           state.operations,
           state.executorRestricted,
+          state.context.user.kind ?? "human",
         ),
       },
     );

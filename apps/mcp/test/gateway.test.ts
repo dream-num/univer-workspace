@@ -650,6 +650,37 @@ describe("gateway over real HTTP and the MCP client", () => {
     },
   );
 
+  it("tells an agent to merge and share, and a person to review, in the server instructions", async () => {
+    const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
+    const review = "Give the user the pull request link so they can review it.";
+    const leave = "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
+    const human = await instructions();
+    expect(human).toContain(review);
+    expect(human).toContain(leave);
+    expect(human).not.toContain("agent identity");
+    expect(human).not.toContain("pr_merge");
+
+    principal = { kind: "agent", claimed: false };
+    const agent = await instructions();
+    expect(agent).toContain("This connection is an agent identity");
+    expect(agent).toContain(
+      "Once the result is verified, mark the pull request ready with pr_ready, then merge it with pr_merge.",
+    );
+    expect(agent).toContain(
+      "Call share with the merged file's nodeId and link viewer, then give the returned url to the user.",
+    );
+    for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
+      expect(agent).not.toContain(sentence);
+    }
+    const adminOnly = await instructions("?toolsets=admin");
+    expect(adminOnly).toContain("Once the result is verified, merge it with pr_merge.");
+    expect(adminOnly).not.toContain("Call share");
+    // Without pr_merge in the list, an agent gets the same hand-off as a person.
+    const filesOnly = await instructions("?toolsets=files");
+    expect(filesOnly).toContain(leave);
+    expect(filesOnly).not.toContain("agent identity");
+  });
+
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {
     const challenge = `Bearer resource_metadata="${new URL(url).origin}/.well-known/oauth-protected-resource/mcp"`;
     for (const authorization of [undefined, "Bearer ", "Bearer rejected-session"]) {

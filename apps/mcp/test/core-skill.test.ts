@@ -69,6 +69,17 @@ describe("MCP core Skill tool bindings", () => {
     expect(description).not.toContain("Read back with inspect before marking ready.");
   });
 
+  it("binds share and defers its merge rules to the server instructions for an agent identity", async () => {
+    const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    expect(content).toContain("| `share` | `share` |");
+    expect(content).toContain(
+      "When the server instructions say the connection is an agent identity, they override every rule here that leaves readiness, merging or the link to the user.",
+    );
+    expect(content).toContain("Admin; explicit user request only, except for an agent identity");
+    expect(content).toContain("unless explicitly asked or the server instructions say otherwise.");
+    expect(content).toContain("An agent identity follows the server instructions instead");
+  });
+
   it("states the shared idempotency key rule", async () => {
     const content = await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8");
     expect(content.replace(/\s+/gu, " ")).toContain(IDEMPOTENCY_KEY_DESCRIPTION);
