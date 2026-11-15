@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, mkdtempSync, mkdirSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
@@ -45,6 +45,25 @@ test('the uvw story shell is denied your home and the run root, then given back 
     `(allow file-read-data file-write* (subpath "${home}/work") (subpath "${home}/tmp") (subpath "${home}/.univer-workspace-cli"))`,
   ]);
   assert.match(shellSandbox({ root: '/r', realHome: '/h', home: '/r/a "b"', repo: '/x', node: '/n' }), /\(subpath "\/r\/a \\"b\\"\/work"\)/);
+});
+
+// sandbox-exec matches resolved paths only: a rule spelled /tmp never matches /private/tmp, so story.mjs resolves every path.
+test('under the profile zsh cannot read the run root but can read its working directory', { skip: !existsSync('/usr/bin/sandbox-exec') && 'no sandbox-exec' }, () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'verify-uvw-sandbox-')));
+  try {
+    const home = join(root, 'run/home/stories/uvw-a1');
+    mkdirSync(join(home, 'work'), { recursive: true });
+    writeFileSync(join(root, 'run/home/canary.txt'), 'denied-canary');
+    writeFileSync(join(home, 'work/note.txt'), 'allowed-note');
+    const profile = join(root, 'shell.sb');
+    writeFileSync(profile, shellSandbox({ root, realHome: realpathSync(homedir()), home, repo: join(root, 'repo'), node: join(root, 'node') }));
+    const cat = file => spawnSync('/usr/bin/sandbox-exec', ['-f', profile, '/bin/zsh', '-c', `cat ${JSON.stringify(file)}`], { encoding: 'utf8' });
+    const denied = cat(join(root, 'run/home/canary.txt'));
+    assert.notEqual(denied.status, 0);
+    assert.doesNotMatch(denied.stdout, /denied-canary/);
+    const allowed = cat(join(home, 'work/note.txt'));
+    assert.deepEqual([allowed.status, allowed.stdout], [0, 'allowed-note']);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
 const use = (tool, state) => ({ type: 'tool_use', part: { tool, state } });
