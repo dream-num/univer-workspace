@@ -23,6 +23,10 @@ export interface WorkspaceConfig {
   /** Configured Email sign-in delivery; null disables Email sign-in. */
   readonly emailAuth: EmailConfig | null;
   readonly trialDeployment?: boolean;
+  /** Agent creations allowed per source IP per hour; 0 disables creation. Defaults to 5. */
+  readonly agentCreateLimitPerHour?: number;
+  /** Express `trust proxy`. Unset, the source IP is the TCP peer, so clients behind one proxy share a rate limit. */
+  readonly trustProxy?: boolean | number | string;
   readonly discordBotApiKey?: string;
   readonly githubToken?: string;
   readonly githubOAuth?: {
@@ -117,6 +121,8 @@ export function loadConfig(
       false,
       "TRIAL_DEPLOYMENT"
     ),
+    agentCreateLimitPerHour: agentCreateLimit(environment.AGENT_CREATE_LIMIT_PER_HOUR),
+    ...(environment.TRUST_PROXY ? { trustProxy: trustProxy(environment.TRUST_PROXY) } : {}),
     ...(discordBotApiKey ? { discordBotApiKey } : {}),
     ...(metricsToken ? { metricsToken } : {}),
     ...(environment.GITHUB_TOKEN?.trim() ? { githubToken: environment.GITHUB_TOKEN.trim() } : {}),
@@ -127,6 +133,22 @@ export function loadConfig(
     mcpOAuth: mcpOAuthConfig(environment, publicOrigin),
     univerLicense: resolveUniverLicense(environment),
   };
+}
+
+function agentCreateLimit(value: string | undefined): number {
+  if (value === undefined) return 5;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new Error("AGENT_CREATE_LIMIT_PER_HOUR must be a non-negative integer");
+  }
+  return parsed;
+}
+
+/** true or false, a proxy hop count, or the comma-separated proxy addresses and subnets Express accepts. */
+function trustProxy(value: string): boolean | number | string {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return /^\d+$/u.test(value) ? Number(value) : value;
 }
 
 function optionalSecret(

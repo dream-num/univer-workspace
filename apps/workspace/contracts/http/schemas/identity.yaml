@@ -329,6 +329,51 @@ AgentTokenCreated:
       format: uri
       description: The configured /mcp URL at PUBLIC_ORIGIN.
 
+AgentCreate:
+  type: object
+  properties:
+    label:
+      type: string
+      maxLength: 64
+      description: Names the agent. Blank or omitted means `agent`.
+
+AgentIdentity:
+  type: object
+  additionalProperties: false
+  required: [id, username]
+  properties:
+    id:
+      type: string
+    username:
+      type: string
+
+AgentCreated:
+  type: object
+  additionalProperties: false
+  required: [agent, token, mcpUrl, expiresAt]
+  properties:
+    agent:
+      $ref: "#/AgentIdentity"
+    token:
+      type: string
+      pattern: "^uvw_pat_"
+      description: Personal access token with every MCP scope.
+    mcpUrl:
+      type: [string, "null"]
+      format: uri
+      description: The first URL in MCP_RESOURCE_URLS, or null when none is configured.
+    expiresAt:
+      type: integer
+      description: Unix epoch milliseconds when the unclaimed agent expires, 30 days after creation.
+
+GuestAgentCreated:
+  type: object
+  additionalProperties: false
+  required: [agent]
+  properties:
+    agent:
+      $ref: "#/AgentIdentity"
+
 PersonalAccessToken:
   type: object
   additionalProperties: false

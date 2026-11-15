@@ -159,6 +159,11 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   A draft is a `.univer.html` create or revision whose bytes wait in the BlobStore; only its author can publish
   or reject it, from an interactive session, at `/api/html-view-drafts`. Publishing adopts the stored bytes in one
   transaction; rejected, expired and stale drafts release them. Pending drafts expire after 7 days.
+- Product V21 adds `users.kind` (`human` or `agent`) and the `agents` and `node_reports` tables through a backed-up
+  V20 → V21 startup migration that backfills nothing. `POST /api/agents` and `POST /api/auth/guest` need no
+  credentials: each creates an agent User with its own Personal Space, and returns a personal access token or sets
+  a login session cookie. Creation is limited per source IP by bounded process-local state; the source IP is not
+  persisted.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

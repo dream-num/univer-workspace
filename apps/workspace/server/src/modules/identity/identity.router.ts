@@ -6,6 +6,7 @@ import type { IdentityModule } from "./identity.service.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
 
 const WORKSPACE_AGENTS_CLIENT_ID = "univer-workspace-agents";
+const MAX_AGENT_LABEL_LENGTH = 64;
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
@@ -66,6 +67,43 @@ export function createIdentityRouter(options: {
     });
     setSessionCookie(response, identity, issued.cookieValue, options);
     response.json(issued.view);
+  });
+
+  router.post("/agents", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    const { user, expiresAt } = identity.createAgent({
+      label: agentLabel(request.body?.label),
+      originIp: request.ip,
+    });
+    const { token } = options.accessTokens.createPersonalToken({
+      userId: user.id,
+      name: "agent",
+    });
+    response.status(201).json({
+      agent: { id: user.id, username: user.username },
+      token,
+      mcpUrl: options.mcpOAuth?.resources[0] ?? null,
+      expiresAt,
+    });
+  });
+
+  router.post("/auth/guest", (request, response) => {
+    response.set("Cache-Control", "no-store");
+    // A cross-site POST must not replace the session of a signed-in User.
+    if (identity.getSession(request.headers.cookie).authenticated) {
+      throw new ApplicationError(
+        "CONFLICT",
+        409,
+        "Sign out before continuing as a guest agent."
+      );
+    }
+    const { user } = identity.createAgent({
+      label: agentLabel(request.body?.label),
+      originIp: request.ip,
+    });
+    const issued = identity.issueSession(user, "browser");
+    setSessionCookie(response, identity, issued.cookieValue, options);
+    response.status(201).json({ agent: { id: user.id, username: user.username } });
   });
 
   router.post("/auth/cli/authorizations", (_request, response) => {
@@ -422,6 +460,19 @@ function logOAuthFailure(
   error: unknown
 ): void {
   console.error(`[identity] ${provider} OAuth callback failed`, error);
+}
+
+function agentLabel(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string" || value.length > MAX_AGENT_LABEL_LENGTH) {
+    throw new ApplicationError(
+      "INVALID_INPUT",
+      400,
+      `label must be a string of at most ${MAX_AGENT_LABEL_LENGTH} characters.`,
+      "label"
+    );
+  }
+  return value;
 }
 
 function setOAuthCookie(

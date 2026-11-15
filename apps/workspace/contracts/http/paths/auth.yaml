@@ -485,6 +485,94 @@
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
 
+/api/agents:
+  post:
+    tags: [Authentication]
+    operationId: createAgent
+    summary: Create an agent User and a personal access token for it.
+    description: |
+      Needs no credentials. Creates a User of kind agent with its own Personal
+      Space, unclaimed and expiring 30 days later, and returns a personal access
+      token with every MCP scope. The plaintext token is returned only in this
+      response. The username is a slug of the label, or `agent`, followed by a
+      hyphen and four random characters.
+      Creation is limited per source IP, shared with POST /api/auth/guest. The
+      default is 5 per hour, set by AGENT_CREATE_LIMIT_PER_HOUR; 0 disables
+      creation. An IPv6 source counts as its /64 prefix.
+      All responses have Cache-Control: no-store.
+    security: []
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/AgentCreate
+    responses:
+      "201":
+        description: Created agent and its token.
+        headers:
+          Cache-Control:
+            schema:
+              type: string
+              const: no-store
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AgentCreated
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "429":
+        description: AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/auth/guest:
+  post:
+    tags: [Authentication]
+    operationId: continueAsGuestAgent
+    summary: Create an agent User and sign the browser in as it.
+    description: |
+      Needs no credentials. Creates the same agent User as POST /api/agents
+      under the same per-source limit, but sets a browser login session cookie
+      and returns no token. A request that already carries a valid login
+      session is refused with 409, so it cannot replace a signed-in session.
+      All responses have Cache-Control: no-store.
+    security: []
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/AgentCreate
+    responses:
+      "201":
+        description: Created agent. The response sets the session cookie.
+        headers:
+          Cache-Control:
+            schema:
+              type: string
+              const: no-store
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/GuestAgentCreated
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "409":
+        description: CONFLICT. The request already carries a valid login session.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "429":
+        description: AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
 /api/auth/tokens:
   get:
     tags: [Authentication]
