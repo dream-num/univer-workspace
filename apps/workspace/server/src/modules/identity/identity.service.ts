@@ -17,8 +17,11 @@ import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
 import { IdentityRepository, type NewPasswordUser, type StoredSession } from "./identity.repository.js";
 import { emailLoginMessage } from "./email-login-mail.js";
+import { createAgentCreateLimiter } from "./agent-create-limiter.js";
 import type {
+  AgentCreation,
   AuthenticatedSession,
+  CreatedAgent,
   Principal,
   CliAuthorizationExchange,
   CliAuthorizationStart,
@@ -57,6 +60,8 @@ const EMAIL_CODE_RESEND_INTERVAL_MS = 60 * 1000;
 const EMAIL_CODE_WINDOW_MS = 60 * 60 * 1000;
 const EMAIL_CODE_WINDOW_LIMIT = 5;
 const EMAIL_CODE_MAX_ATTEMPTS = 5;
+const AGENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const DEFAULT_AGENT_LABEL = "agent";
 
 interface PendingCliAuthorization {
   readonly deviceCodeHash: string;
@@ -81,6 +86,11 @@ export interface IdentityModule {
   ): Promise<IssuedEmailLoginCode>;
   loginWithEmailCode(input: EmailLogin): Promise<IssuedSession>;
   loginWithDiscordBot(input: DiscordBotLogin): IssuedSession;
+  /**
+   * Creates an agent User with its Personal Space and no credential. Every creation path goes
+   * through here, so the per-source rate limit cannot be skipped.
+   */
+  createAgent(input: AgentCreation): CreatedAgent;
   startCliAuthorization(): CliAuthorizationStart;
   approveCliAuthorization(
     cookieHeader: string | undefined,
@@ -187,6 +197,8 @@ export function createIdentityModule(options: {
   readonly emailSender?: EmailSender | null;
   readonly emailAuthEnabled?: boolean;
   readonly trialDeployment?: boolean;
+  /** Agent creations allowed per source IP per hour; 0 disables creation. Defaults to 5. */
+  readonly agentCreateLimitPerHour?: number;
 }): IdentityModule {
   const now = options.now ?? Date.now;
   const repository = options.repository;
@@ -208,6 +220,7 @@ export function createIdentityModule(options: {
   const emailAuthEnabled =
     options.emailAuthEnabled ?? emailSender !== null;
   const trialDeployment = options.trialDeployment ?? false;
+  const agentCreateLimiter = createAgentCreateLimiter(options.agentCreateLimitPerHour ?? 5, now);
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
   const expiredSessionIds = repository.deleteExpiredSessions(now());
@@ -551,6 +564,48 @@ export function createIdentityModule(options: {
         "CONFLICT",
         409,
         "A Workspace account could not be created for this email address."
+      );
+    },
+
+    createAgent(input) {
+      if (!agentCreateLimiter.take(input.originIp)) {
+        throw new ApplicationError(
+          "AGENT_CREATE_RATE_LIMITED",
+          429,
+          "Too many agents were created from this address. Try again later."
+        );
+      }
+      const label = input.label?.trim() || DEFAULT_AGENT_LABEL;
+      const createdAt = now();
+      const expiresAt = createdAt + AGENT_TTL_MS;
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        const user: User = {
+          id: randomUUID(),
+          username: agentUsername(label),
+          displayName: label,
+          avatarUrl: null,
+        };
+        try {
+          repository.createAgentUser({
+            user,
+            personalSpace: {
+              id: randomUUID(),
+              name: `${user.displayName} 的个人空间`,
+            },
+            originLabel: label,
+            createdAt,
+            expiresAt,
+          });
+        } catch (error) {
+          if (isUniqueConstraint(error, "users.username")) continue;
+          throw error;
+        }
+        return { user, expiresAt };
+      }
+      throw new ApplicationError(
+        "CONFLICT",
+        409,
+        "A username could not be generated for this agent."
       );
     },
 
@@ -1486,6 +1541,20 @@ function usernameFromEmail(email: string, attempt: number): string {
   return attempt === 0
     ? base
     : `${base}-${randomBytes(3).toString("hex")}`;
+}
+
+function agentUsername(label: string): string {
+  // Slicing first keeps the username within validUsername's 64 characters; a surrogate the
+  // slice splits is not a letter, so the replace turns it into a hyphen.
+  const slug = label
+    .normalize("NFKC")
+    .toLowerCase()
+    .slice(0, 48)
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+  // shortcut: 36^4 suffixes per slug, so the five retries start failing near a million agents with one label; widen the suffix then.
+  const suffix = randomInt(36 ** 4).toString(36).padStart(4, "0");
+  return `${slug || DEFAULT_AGENT_LABEL}-${suffix}`;
 }
 
 function displayNameFromEmail(email: string): string {

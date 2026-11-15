@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  email TEXT COLLATE NOCASE
+  email TEXT COLLATE NOCASE,
+  kind TEXT NOT NULL DEFAULT 'human' CHECK (kind IN ('human', 'agent'))
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_email
   ON users(email)
@@ -755,7 +756,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 20;
+PRAGMA user_version = 21;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>
@@ -816,3 +817,23 @@ CREATE TABLE IF NOT EXISTS skill_drafts (
 );
 CREATE INDEX IF NOT EXISTS skill_drafts_due
   ON skill_drafts(expires_at, id) WHERE state IN ('receiving', 'pending');
+
+CREATE TABLE IF NOT EXISTS agents (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  owner_user_id TEXT REFERENCES users(id) ON DELETE RESTRICT,
+  claimed_at INTEGER,
+  origin_label TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  last_active_at INTEGER NOT NULL,
+  expires_at INTEGER,
+  banned_at INTEGER,
+  CHECK ((owner_user_id IS NULL) = (claimed_at IS NULL))
+);
+
+CREATE TABLE IF NOT EXISTS node_reports (
+  id TEXT PRIMARY KEY,
+  node_id TEXT NOT NULL REFERENCES nodes(id) ON DELETE CASCADE,
+  reporter_user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  reason TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);

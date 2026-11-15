@@ -99,11 +99,11 @@ export function verifyV13Migration(
     assert.deepEqual(rows(migrated.connection), before);
     assert.equal(
       migrated.connection.prepare("PRAGMA user_version").get()?.user_version,
-      20,
+      21,
     );
     assert.deepEqual(userColumns(migrated.connection), [
       "id", "username", "display_name", "avatar_url", "created_at",
-      "updated_at", "email",
+      "updated_at", "email", "kind",
     ]);
     assert.deepEqual(
       (
@@ -170,7 +170,7 @@ export function verifyV13Migration(
     const restarted = open(filename);
     assert.equal(
       restarted.connection.prepare("PRAGMA user_version").get()?.user_version,
-      20,
+      21,
     );
     assert.equal(
       (
@@ -192,7 +192,7 @@ export function verifyV13Migration(
     broken.close();
     assert.throws(
       () => open(rollbackFilename),
-      /V13 to V20 migration failed.*rolled back.*backup/,
+      /V13 to V21 migration failed.*rolled back.*backup/,
     );
     const preservedBackupName = readdirSync(root).find((name) =>
       name.startsWith("rollback.sqlite.v13-backup-"),

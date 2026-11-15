@@ -197,6 +197,58 @@ export class IdentityRepository {
     });
   }
 
+  /** Unlike the sign-in paths, an agent is created without a Session; its caller issues the credential. */
+  createAgentUser(input: {
+    readonly user: User;
+    readonly personalSpace: NewPasswordUser["personalSpace"];
+    readonly originLabel: string;
+    readonly createdAt: number;
+    readonly expiresAt: number;
+  }): void {
+    this._database.transaction((database) => {
+      database
+        .prepare(
+          `INSERT INTO users
+            (id, username, display_name, avatar_url, created_at, updated_at, kind)
+           VALUES (?, ?, ?, ?, ?, ?, 'agent')`
+        )
+        .run(
+          input.user.id,
+          input.user.username,
+          input.user.displayName,
+          input.user.avatarUrl,
+          input.createdAt,
+          input.createdAt
+        );
+      database
+        .prepare(
+          `INSERT INTO spaces
+            (id, type, name, owner_user_id, created_at, updated_at)
+           VALUES (?, 'personal', ?, ?, ?, ?)`
+        )
+        .run(
+          input.personalSpace.id,
+          input.personalSpace.name,
+          input.user.id,
+          input.createdAt,
+          input.createdAt
+        );
+      database
+        .prepare(
+          `INSERT INTO agents
+            (user_id, origin_label, created_at, last_active_at, expires_at)
+           VALUES (?, ?, ?, ?, ?)`
+        )
+        .run(
+          input.user.id,
+          input.originLabel,
+          input.createdAt,
+          input.createdAt,
+          input.expiresAt
+        );
+    });
+  }
+
   findExternalIdentity(
     provider: ExternalIdentityProvider,
     providerSubject: string

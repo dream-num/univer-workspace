@@ -354,6 +354,25 @@ MCP clients such as opencode, Claude and ChatGPT obtain their tokens through sta
 
 `POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
 
+`POST /api/agents` and `POST /api/auth/guest` create an agent User without credentials: a User of kind
+`agent` with its own Personal Space that expires 30 days later. `POST /api/agents` takes an optional
+`{ "label" }` and returns `201` with `{ agent: { id, username }, token, mcpUrl, expiresAt }`. `token` is a
+personal access token with every MCP scope, and `mcpUrl` is the first URL in `MCP_RESOURCE_URLS`, or `null`
+when none is configured. `POST /api/auth/guest` sets the `workspace_session` cookie instead and returns
+`{ agent }`. It answers `409` when the request already carries a valid session, so it cannot replace a
+signed-in session.
+
+Both endpoints share one in-process limit per source IP: `AGENT_CREATE_LIMIT_PER_HOUR` creations in any
+one hour, default `5`. `0` disables creation. Past the limit the response is `429` with
+`AGENT_CREATE_RATE_LIMITED`. An IPv6 source counts as its /64 prefix. The count lives in the process, so
+it starts again on restart and is not shared between instances.
+
+The source IP is the TCP peer unless `TRUST_PROXY` is set. Behind a reverse proxy the peer is the proxy,
+so all clients share one limit until you set it. `TRUST_PROXY` becomes the Express `trust proxy` setting:
+the number of proxy hops in front of Workspace (for example `1`), or a comma-separated list of proxy
+addresses and subnets (for example `loopback, 10.0.0.0/8`). `true` trusts every `X-Forwarded-For` value,
+which lets a client that reaches Workspace directly choose its own source IP.
+
 HTTPS `client_id` URLs can identify public MCP clients through Client ID Metadata Documents
 (CIMD), without dynamic registration or a row in `oauth_clients`. With MCP OAuth enabled,
 CIMD is on by default and discovery advertises `client_id_metadata_document_supported`
@@ -468,7 +487,7 @@ docker run --rm \
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V17 product databases to V19 automatically.
+backs up and migrates supported V0 through V20 product databases to V21 automatically.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
@@ -486,7 +505,7 @@ application Services, the server entry point prepares the Collaboration file:
 
 1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V19,
+2. Start a single new instance. Startup first prepares the product database to V21,
    then reads the Collaboration component versions. If migration is needed, it takes
    an exclusive lock, checks the source file's integrity and foreign keys, and
    creates a consistent
@@ -828,3 +847,12 @@ and wait for its consistent backup, migration and health checks before restoring
 product rows, object keys and unfinished recovery state are preserved. Failed migration rolls back;
 successful restarts do not repeat migration or backup. To roll back, stop V20 and restore the V19
 backup. Never run V19 and V20 writers on the same SQLite file.
+
+### Agent identities and product database V21
+
+V20→V21 appends `users.kind` (`human` or `agent`, existing Users read as `human`) and adds the `agents`
+and `node_reports` tables. Stop every old instance, start one V21 instance, and wait for its consistent
+backup, migration and health checks before restoring service. Existing product rows, object keys and
+unfinished recovery state are preserved. Failed migration rolls back; successful restarts do not repeat
+migration or backup. To roll back, stop V21 and restore the V20 backup. Never run V20 and V21 writers on
+the same SQLite file.

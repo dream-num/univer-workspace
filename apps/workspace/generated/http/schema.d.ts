@@ -513,6 +513,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an agent User and a personal access token for it.
+         * @description Needs no credentials. Creates a User of kind agent with its own Personal
+         *     Space, unclaimed and expiring 30 days later, and returns a personal access
+         *     token with every MCP scope. The plaintext token is returned only in this
+         *     response. The username is a slug of the label, or `agent`, followed by a
+         *     hyphen and four random characters.
+         *     Creation is limited per source IP, shared with POST /api/auth/guest. The
+         *     default is 5 per hour, set by AGENT_CREATE_LIMIT_PER_HOUR; 0 disables
+         *     creation. An IPv6 source counts as its /64 prefix.
+         *     All responses have Cache-Control: no-store.
+         */
+        post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/guest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an agent User and sign the browser in as it.
+         * @description Needs no credentials. Creates the same agent User as POST /api/agents
+         *     under the same per-source limit, but sets a browser login session cookie
+         *     and returns no token. A request that already carries a valid login
+         *     session is refused with 409, so it cannot replace a signed-in session.
+         *     All responses have Cache-Control: no-store.
+         */
+        post: operations["continueAsGuestAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/tokens/{id}": {
         parameters: {
             query?: never;
@@ -2798,6 +2850,29 @@ export interface components {
              */
             resource: string;
         };
+        AgentCreate: {
+            /** @description Names the agent. Blank or omitted means `agent`. */
+            label?: string;
+        };
+        AgentIdentity: {
+            id: string;
+            username: string;
+        };
+        AgentCreated: {
+            agent: components["schemas"]["AgentIdentity"];
+            /** @description Personal access token with every MCP scope. */
+            token: string;
+            /**
+             * Format: uri
+             * @description The first URL in MCP_RESOURCE_URLS, or null when none is configured.
+             */
+            mcpUrl: string | null;
+            /** @description Unix epoch milliseconds when the unclaimed agent expires, 30 days after creation. */
+            expiresAt: number;
+        };
+        GuestAgentCreated: {
+            agent: components["schemas"]["AgentIdentity"];
+        };
         PasswordRegistration: {
             username: string;
             displayName: string;
@@ -4574,6 +4649,85 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             /** @description OAUTH_CLIENT_UNAVAILABLE. MCP_RESOURCE_URLS must include /mcp at PUBLIC_ORIGIN; MCP OAuth may be unconfigured. */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AgentCreate"];
+            };
+        };
+        responses: {
+            /** @description Created agent and its token. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    continueAsGuestAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AgentCreate"];
+            };
+        };
+        responses: {
+            /** @description Created agent. The response sets the session cookie. */
+            201: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GuestAgentCreated"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            /** @description CONFLICT. The request already carries a valid login session. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

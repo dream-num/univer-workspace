@@ -1070,6 +1070,94 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/agents:
+    post:
+      tags:
+        - Authentication
+      operationId: createAgent
+      summary: Create an agent User and a personal access token for it.
+      description: |
+        Needs no credentials. Creates a User of kind agent with its own Personal
+        Space, unclaimed and expiring 30 days later, and returns a personal access
+        token with every MCP scope. The plaintext token is returned only in this
+        response. The username is a slug of the label, or `agent`, followed by a
+        hyphen and four random characters.
+        Creation is limited per source IP, shared with POST /api/auth/guest. The
+        default is 5 per hour, set by AGENT_CREATE_LIMIT_PER_HOUR; 0 disables
+        creation. An IPv6 source counts as its /64 prefix.
+        All responses have Cache-Control: no-store.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      responses:
+        '201':
+          description: Created agent and its token.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          description: AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/guest:
+    post:
+      tags:
+        - Authentication
+      operationId: continueAsGuestAgent
+      summary: Create an agent User and sign the browser in as it.
+      description: |
+        Needs no credentials. Creates the same agent User as POST /api/agents
+        under the same per-source limit, but sets a browser login session cookie
+        and returns no token. A request that already carries a valid login
+        session is refused with 409, so it cannot replace a signed-in session.
+        All responses have Cache-Control: no-store.
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentCreate'
+      responses:
+        '201':
+          description: Created agent. The response sets the session cookie.
+          headers:
+            Cache-Control:
+              schema:
+                type: string
+                const: no-store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuestAgentCreated'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: CONFLICT. The request already carries a valid login session.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/tokens/{id}:
     delete:
       tags:
@@ -5786,6 +5874,56 @@ components:
           type: string
           format: uri
           description: The configured /mcp URL at PUBLIC_ORIGIN.
+    AgentCreate:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 64
+          description: Names the agent. Blank or omitted means `agent`.
+    AgentIdentity:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - username
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+    AgentCreated:
+      type: object
+      additionalProperties: false
+      required:
+        - agent
+        - token
+        - mcpUrl
+        - expiresAt
+      properties:
+        agent:
+          $ref: '#/components/schemas/AgentIdentity'
+        token:
+          type: string
+          pattern: ^uvw_pat_
+          description: Personal access token with every MCP scope.
+        mcpUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+          description: The first URL in MCP_RESOURCE_URLS, or null when none is configured.
+        expiresAt:
+          type: integer
+          description: Unix epoch milliseconds when the unclaimed agent expires, 30 days after creation.
+    GuestAgentCreated:
+      type: object
+      additionalProperties: false
+      required:
+        - agent
+      properties:
+        agent:
+          $ref: '#/components/schemas/AgentIdentity'
     PasswordRegistration:
       type: object
       additionalProperties: false

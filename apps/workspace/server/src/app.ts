@@ -215,6 +215,9 @@ export function createWorkspaceApplication(
     emailSender,
     emailAuthEnabled: emailSender !== null,
     trialDeployment: config.trialDeployment ?? false,
+    ...(config.agentCreateLimitPerHour === undefined
+      ? {}
+      : { agentCreateLimitPerHour: config.agentCreateLimitPerHour }),
   });
   const resourcesRepository = new ResourcesRepository(database);
   let collaboration: CollaborationRuntime | null = null;
@@ -351,6 +354,7 @@ export function createWorkspaceApplication(
   const app = express();
 
   app.disable("x-powered-by");
+  if (config.trustProxy !== undefined) app.set("trust proxy", config.trustProxy);
   // Register HTTP observation before routes so it covers all requests.
   app.use(createMetricsMiddleware());
   // Attach the request-scoped logger for downstream error handling.

@@ -7,7 +7,7 @@ export function withoutSpaceDescription(table: string, rows: readonly Record<str
       : table === "worktrees"
         ? { number: null, created_via: null }
         : table === "users"
-          ? { email: null }
+          ? { email: null, kind: "human" }
           : table === "issues"
             ? { created_via: null }
             : table === "login_sessions"

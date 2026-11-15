@@ -5,6 +5,9 @@
  * row is untouched.
  */
 export const DROP_V18_SQL = `
+  DROP TABLE IF EXISTS node_reports;
+  DROP TABLE IF EXISTS agents;
+  ALTER TABLE users DROP COLUMN kind;
   DROP TABLE IF EXISTS skill_drafts;
   DROP TABLE IF EXISTS html_view_drafts;
   DROP INDEX IF EXISTS login_sessions_pat;

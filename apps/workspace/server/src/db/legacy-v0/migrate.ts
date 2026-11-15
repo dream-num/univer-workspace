@@ -110,6 +110,7 @@ export function migrateLegacyV0(database: DatabaseSync): void {
       ALTER TABLE worktrees ADD COLUMN number INTEGER;
       ALTER TABLE worktrees ADD COLUMN created_via TEXT CHECK (created_via IN ('browser', 'agent'));
       ALTER TABLE users ADD COLUMN email TEXT COLLATE NOCASE;
+      ALTER TABLE users ADD COLUMN kind TEXT NOT NULL DEFAULT 'human' CHECK (kind IN ('human', 'agent'));
     `);
     database.exec(readTargetSchema());
     copyCoreData(database, files, resourceByNode);
@@ -536,9 +537,9 @@ function validateMigrated(
   const version = database.prepare("PRAGMA user_version").get() as
     | { readonly user_version?: unknown }
     | undefined;
-  if (version?.user_version !== 20) {
+  if (version?.user_version !== 21) {
     throw new Error(
-      `Migrated database has user_version ${String(version?.user_version)} instead of 20.`
+      `Migrated database has user_version ${String(version?.user_version)} instead of 21.`
     );
   }
 }
