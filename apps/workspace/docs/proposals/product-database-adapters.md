@@ -71,7 +71,7 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 
 服务启动顺序为「产品库准备并打开 → 协同库升级 → 装配并启动应用」。工厂在构造 Repository 前完成产品库准备。启动入口只把 `unitCreationFacts` 交给协同迁移，需要升级时才读取创建人和时间。打开产品库的入口负责在后续启动失败或正常退出时关闭它，正常退出先等待使用数据库的任务和请求结束。[当前启动顺序](../../server/src/main.ts) · [旧库创建信息读取](../../server/src/integrations/univer/migrations/unit-creation-facts.ts)
 
-`db:ban-agent` 也通过工厂和业务接口执行；`db:reset` 属于显式运维操作，单独处理其后端行为。产品库的选择独立于 `COLLABORATION_DATABASE_FILE` 和 `BLOB_STORE`。
+`db:ban-agent` 也通过工厂和业务接口执行。产品库的选择独立于 `COLLABORATION_DATABASE_FILE` 和 `BLOB_STORE`。
 
 ## 事务和第一阶段验收
 

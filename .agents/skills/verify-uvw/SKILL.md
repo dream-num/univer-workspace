@@ -219,7 +219,7 @@ This closes this run's agent-browser session and stops the uvw daemon under this
 `UNIVER_HOME` and under each story identity's. It then kills only the recorded server and Vite PIDs, after checking each
 one's command line is still `server/src/main.ts` or `vite.js`, plus their direct children.
 It deletes `data/`, `home/` and `user.pw`, and keeps `evidence/` and `logs/`. Never kill by
-process name or port, run `db:reset`, or touch `apps/workspace/.data/`. Delete old runs'
+process name or port or touch `apps/workspace/.data/`. Delete old runs'
 evidence with `rm -rf /tmp/verify-uvw/<run-id>` only when you no longer need the proof.
 
 Run `down` after every failed attempt too, so stray processes don't keep 3920/5973.

@@ -224,17 +224,7 @@ docker run --name univer-workspace \
 
 通过 HTTPS 部署时保持安全 Cookie 开启。使用明文 HTTP 时，传入 `-e SECURE_COOKIES=false`。
 
-仅在需要清空一次性环境中的全部产品和协同数据时，对该卷执行重置命令。
-
-```bash
-docker run --rm \
-  -v univer-workspace-data:/app/univer-workspace/.data \
-  univer-workspace node dist/server/db/reset.js
-```
-
-重置后，S3 中的文件仍会保留。
-
-正常部署时直接启动或重启应用即可。启动会保留数据库，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
+需要全新的本地测试实例时，挂载一个新的空数据卷即可。启动会保留已有数据，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
 
 协同数据库各组件的版本为 `core=3`、`worktree=3`、`history=2`、`comment=1`。SDK 1.0.0 引入 `core=2`、`worktree=3` 和 `history=2`。SDK 1.4.0 将 Core 升至 v3，以 MessagePack 保存协议对象，并将原 tombstone 表的删除状态直接存入 `collaboration_units`。
 
@@ -298,11 +288,10 @@ docker run --rm \
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm db:reset
 pnpm db:ban-agent <username or user id>
 ```
 
-`db:reset` 会清空数据，仅用于可丢弃的开发或测试环境。设计说明见[技术架构](docs/architecture.md)、[数据模型](docs/data-model.md)和[应用设计](docs/application-design.md)。
+设计说明见[技术架构](docs/architecture.md)、[数据模型](docs/data-model.md)和[应用设计](docs/application-design.md)。
 
 ### 查询 Worktree
 

@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL("../../server/src/", import.meta.url));
 const sources = sourceFiles(root).filter((path) => !path.endsWith(".test.ts"));
 const sqlite = "db/sqlite/";
 const factory = "db/open-product-database";
-const commands = ["main", "db/reset", "db/ban-agent"];
+const commands = ["main", "db/ban-agent"];
 
 function sourceName(path: string): string {
   return relative(root, path).replaceAll("\\", "/").replace(/\.[jt]sx?$/, "");
@@ -31,7 +31,7 @@ it("keeps the SQLite product adapter private and selects it at the product datab
           violations.push(`${name} → ${target}`);
         }
       } else if (target.startsWith(sqlite) && !name.startsWith(sqlite)) {
-        if (name !== factory || !["db/sqlite/open", "db/sqlite/reset"].includes(target)) {
+        if (name !== factory || target !== "db/sqlite/open") {
           violations.push(`${name} → ${target}`);
         }
       } else if (!name.startsWith("db/") && target.startsWith("db/") && target !== "db/index") {
@@ -45,7 +45,7 @@ it("keeps the SQLite product adapter private and selects it at the product datab
   expect(violations).toEqual([]);
 });
 
-it("exports only the database lifecycle functions and type-only contracts from the public entry point", () => {
+it("exports only the database factory and type-only contracts from the public entry point", () => {
   const runtimeExports: string[] = [];
   for (const statement of readSource(resolve(root, "db/index.ts")).statements) {
     expect(ts.isExportDeclaration(statement)).toBe(true);
@@ -56,5 +56,5 @@ it("exports only the database lifecycle functions and type-only contracts from t
       runtimeExports.push(...clause.elements.filter((entry) => !entry.isTypeOnly).map((entry) => entry.name.text));
     }
   }
-  expect(runtimeExports.sort()).toEqual(["openProductDatabase", "resetProductDatabase"]);
+  expect(runtimeExports).toEqual(["openProductDatabase"]);
 });
