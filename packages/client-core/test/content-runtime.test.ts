@@ -745,6 +745,30 @@ describe("Workspace content runtime owner", () => {
     expect(current.release).toHaveBeenCalledOnce();
   });
 
+  it("replaces a warm Sheet runtime that is behind the selected revision", async () => {
+    const behind = lease({ baseRevision: 8, unitData: { id: "stale formula values" } });
+    behind.getState = lease().getState;
+    const reloaded = lease({ baseRevision: 8, unitData: { id: "recalculated" } });
+    const acquire = vi
+      .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
+      .mockResolvedValueOnce(lease())
+      .mockResolvedValueOnce(behind)
+      .mockResolvedValue(reloaded);
+    const runtime = createRuntime({ acquire });
+    const observe = vi.fn();
+
+    await runtime.exportUnitData({ target });
+    await expect(
+      runtime.exportUnitData({ target: { ...target, revision: 8 }, observe }),
+    ).resolves.toEqual({ id: "recalculated" });
+    expect(behind.invalidate).toHaveBeenCalledOnce();
+    expect(behind.pull).not.toHaveBeenCalled();
+    expect(observe).toHaveBeenCalledExactlyOnceWith({
+      coldStart: true,
+      workerMs: expect.any(Number),
+    });
+  });
+
   it("releases formed read and export leases when content access fails", async () => {
     const read = lease({ executeError: new Error("read failed") });
     const exported = lease({ exportError: new Error("export failed") });
@@ -794,7 +818,7 @@ describe("Workspace content runtime owner", () => {
 
   it("preserves pull conflict and revision mismatch failures", async () => {
     const conflict = lease({ pullStatus: "conflict" });
-    const mismatch = lease({ baseRevision: 6 });
+    const mismatch = lease({ baseRevision: 8 });
     const acquire = vi
       .fn<UniverCollaborationRuntimePool<unknown>["acquire"]>()
       .mockResolvedValueOnce(conflict)
