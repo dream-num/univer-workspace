@@ -201,7 +201,10 @@ PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree �
 各自的编辑器入口与 preset，`features/editor/features/` 保存跨类型共享能力（exchange、
 thread comment、license、assets），`features/editor/workarounds/` 集中保存上游 SDK workaround。
 
-Worktree 审阅保留 Agent 草稿作为默认视图，并通过 `packages/unit-comparison-viewer` 提供可选的结构化
+Worktree 审阅保留草稿作为默认视图。Browser 草稿视图遵循服务端 `editorMode` 与 `editDraft` 能力开放
+实时编辑；独立的嵌入路由订阅 Worktree Change Feed，以刷新状态与权限。Ready 的“继续编辑”入口
+遵循 `reopen` 能力，成功后回到草稿视图。Trunk 审阅、Merge Preview 和比较保持只读。
+通过 `packages/unit-comparison-viewer` 提供可选的结构化
 双栏比较。该 package 只消费已解码的 UnitData 和语义 comparison result，不请求数据或装配 Univer Runtime；Web 通过
 `features/editor/comparison-univer.ts` 注入与应用编辑器一致的渲染 preset、locale、theme 和只读
 命令边界。Server 在已认证的 `/universer-api/worktrees/:worktreeId/units/:unitId/comparison` 内部端点

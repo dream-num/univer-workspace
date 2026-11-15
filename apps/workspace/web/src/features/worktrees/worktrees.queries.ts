@@ -145,7 +145,8 @@ export interface WorktreeUnitComparisonPayload {
 export function worktreeUnitComparisonQueryOptions(worktreeId: string, unitId: string) {
   return queryOptions({
     queryKey: [...worktreesQueryKey, "comparison", worktreeId, unitId] as const,
-    staleTime: Infinity,
+    // Returning from the live draft editor must compare its latest confirmed edits.
+    staleTime: 0,
     queryFn: async (): Promise<WorktreeUnitComparisonPayload> => {
       const response = await fetch(
         `/universer-api/worktrees/${encodeURIComponent(

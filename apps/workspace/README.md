@@ -64,7 +64,13 @@ when the signed-in user has never created a Worktree and has no visible tasks. U
 visible team tasks see a compact introduction alongside their task list.
 
 Worktree review keeps the agent draft as its default view and also offers a
-structured, read-only side-by-side comparison. The Server materializes and
+structured, read-only side-by-side comparison. In the Browser, the draft view is
+editable when the Server grants draft editing permission; changes synchronize
+with agents working in the same Worktree. Ready Worktrees offer **Continue editing**
+to users with reopen permission, returning the Worktree to draft. Trunk review,
+merge previews, and comparisons remain read-only. Wait for the editor to finish
+synchronizing before switching views or submitting the Worktree for review.
+The Server materializes and
 decodes the authoritative Trunk and draft states, computes semantic differences
 with the matching History SDK adapter, and returns them through the
 authenticated internal `/universer-api` boundary. The Browser supplies its own
