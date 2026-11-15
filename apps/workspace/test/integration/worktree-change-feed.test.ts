@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { UniverType } from "@univerjs/protocol";
 import { describe, expect, it } from "vitest";
-import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
+import { createProductTestApplication } from "../support/product-test-application.js";
 import { shutdownServer } from "../../server/src/server-lifecycle.js";
 
 describe("worktree change feed", () => {
   it("notifies the product audience after every committed Worktree change", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-worktree-feed-"));
-    const application = await createSqliteTestApplication({
+    const application = await createProductTestApplication({
       host: "127.0.0.1",
       port: 3020,
-      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
+      productFilename: join(directory, "product.sqlite"),
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -223,10 +223,10 @@ describe("worktree change feed", () => {
 
   it("notifies both the previous and next audience when Team visibility changes", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-worktree-feed-"));
-    const application = await createSqliteTestApplication({
+    const application = await createProductTestApplication({
       host: "127.0.0.1",
       port: 3020,
-      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
+      productFilename: join(directory, "product.sqlite"),
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       secureCookies: false,
       sessionTtlMs: 60_000,

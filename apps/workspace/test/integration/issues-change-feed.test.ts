@@ -3,16 +3,16 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
+import { createProductTestApplication } from "../support/product-test-application.js";
 import { shutdownServer } from "../../server/src/server-lifecycle.js";
 
 describe("Issue change feed", () => {
   it("tells Space members to refetch after a write and nobody else", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-issue-feed-"));
-    const application = await createSqliteTestApplication({
+    const application = await createProductTestApplication({
       host: "127.0.0.1",
       port: 3020,
-      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
+      productFilename: join(directory, "product.sqlite"),
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       secureCookies: false,
       sessionTtlMs: 60_000,

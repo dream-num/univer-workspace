@@ -92,10 +92,7 @@ export function loadConfig(
     host: environment.HOST ?? "127.0.0.1",
     port: integer(environment.PORT, 3020, "PORT"),
     publicOrigin,
-    productDatabase: {
-      provider: "sqlite",
-      filename: resolve(environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite"),
-    },
+    productDatabase: productDatabaseConfig(environment),
     collaborationDatabaseFilename: resolve(
       environment.COLLABORATION_DATABASE_FILE ??
         ".data/univer-collaboration.sqlite"
@@ -499,4 +496,18 @@ function integer(
     throw new Error(`${name} must be a positive integer`);
   }
   return parsed;
+}
+
+
+function productDatabaseConfig(environment: NodeJS.ProcessEnv): ProductDatabaseConfig {
+  const provider = environment.PRODUCT_DATABASE_PROVIDER ?? "sqlite";
+  if (provider === "sqlite") {
+    return { provider, filename: resolve(environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite") };
+  }
+  if (provider !== "postgres") throw new Error("PRODUCT_DATABASE_PROVIDER must be sqlite or postgres");
+  const connectionString = environment.DATABASE_URL?.trim();
+  if (!connectionString || !/^postgres(?:ql)?:\/\//i.test(connectionString)) {
+    throw new Error("DATABASE_URL must be a PostgreSQL connection URL when PRODUCT_DATABASE_PROVIDER=postgres");
+  }
+  return { provider, connectionString };
 }

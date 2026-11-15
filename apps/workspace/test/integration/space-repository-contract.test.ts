@@ -2,8 +2,28 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { SpacesRepository, SpacePinsRepository } from "../../server/src/modules/spaces/index.js";
 import { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
 import { SqliteSpacesRepository } from "../../server/src/db/sqlite/spaces/spaces.repository.js";
-import { openPostgresSpaceFixture } from "../support/postgres/space-fixture.js";
+import { createPostgresTestSchema } from "../support/postgres/schema.js";
+import { openProductDatabase } from "../../server/src/db/index.js";
+
 import { SqliteSpacePinsRepository } from "../../server/src/db/sqlite/spaces/space-pins.repository.js";
+
+async function openPostgresSpaceFixture(url: string): Promise<Fixture> {
+  const schema = await createPostgresTestSchema(url);
+  try {
+    const product = await openProductDatabase({ provider: "postgres", connectionString: schema.connectionString });
+    return {
+      spaces: product.repositories.spaces,
+      pins: product.repositories.spacePins,
+      async exec(sql) { await schema.pool.query(sql); },
+      async close() {
+        try { await product.close(); } finally { await schema.close(); }
+      },
+    };
+  } catch (error) {
+    await schema.close();
+    throw error;
+  }
+}
 
 interface Fixture {
   spaces: SpacesRepository;

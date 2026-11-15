@@ -1,6 +1,6 @@
 # Workspace 产品数据库适配器设计
 
-SQLite 是当前可部署的产品库。PostgreSQL 已实现空间与置顶两个 Repository，其余领域和启动迁移仍待接入。协同库和文件存储各自管理数据。
+SQLite 和 PostgreSQL 实现同一组产品 Repository 接口。协同库和文件存储各自管理数据。
 
 ## 目录与文件
 
@@ -33,6 +33,9 @@ db/
     migrations/                      SQLite 版本识别、备份、升级和校验
     legacy-v0/                       SQLite V0 迁移入口
   postgres/
+    open.ts                          建立连接池、准备 schema、创建各领域 Repository
+    initialize.ts                    串行化首次建库，检查版本和结构指纹
+    schema.sql                       PostgreSQL V1 基线
     transaction.ts                   在同一连接上开启事务、提交、回滚和重试
     spaces/
       spaces.repository.ts           同一空间接口的 PostgreSQL 实现
@@ -56,7 +59,7 @@ db/
 
 ## 配置和生命周期
 
-`loadConfig()` 负责把环境变量解析为有判别字段的配置。SQLite 沿用 `DATABASE_FILE` 及其默认值，产出 `{ provider: "sqlite", filename }`。待 PostgreSQL 实现全部 Repository 和建库迁移后，在工厂增加 `{ provider: "postgres", connectionString }`。以下签名给启动入口生命周期控制权，`app.ts` 只接收 `database.repositories`。
+`loadConfig()` 负责把环境变量解析为有判别字段的配置。SQLite 沿用 `DATABASE_FILE` 及其默认值，产出 `{ provider: "sqlite", filename }`。设置 `PRODUCT_DATABASE_PROVIDER=postgres` 后，从 `DATABASE_URL` 读取连接地址，产出 `{ provider: "postgres", connectionString }`。以下签名给启动入口生命周期控制权，`app.ts` 只接收 `database.repositories`。
 
 ```ts
 export interface ProductDatabase {
@@ -83,12 +86,12 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 
 [依赖边界检查](../../test/unit/product-database-boundary.test.ts)约束后端导入。同一领域的实现应复用行为用例，覆盖并发写入、失败回滚与权限变化。SQLite 的历史兼容性由迁移矩阵和生产构建验证。
 
-## PostgreSQL 空间契约用例
+## PostgreSQL 事务与契约用例
 
 `withPostgresTransaction` 在一个池连接上运行可串行化事务。序列化失败或死锁时，重试整个业务操作。事务回调只通过传入的连接访问产品库，外部通知和文件操作放在事务之外。
 
-[空间契约用例](../../test/integration/space-repository-contract.test.ts)默认运行 SQLite。设置 `WORKSPACE_TEST_POSTGRES_URL` 后，同一命令也会测试 PostgreSQL。使用允许创建 schema 的测试库账号。fixture 为本次运行创建独立 schema 并在结束时删除。
+共享的应用用例覆盖 HTTP、权限、文件、草稿、Issue 和 Worktree，空间与置顶另有并发契约用例。提供 `WORKSPACE_TEST_POSTGRES_URL` 后，可用以下命令运行 PostgreSQL 套件，包括建库、重启及结构漂移检查。测试账号需要创建和删除独立 schema 的权限。
 
 ```bash
-pnpm --filter @univerjs/univer-workspace test test/integration/space-repository-contract.test.ts
+pnpm --filter @univerjs/univer-workspace test:postgres
 ```

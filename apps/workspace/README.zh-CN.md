@@ -190,6 +190,17 @@ CIMD URL 必须使用 HTTPS，含根目录以外的路径，并省略凭据、�
 
 已登录的浏览器会保持一个 `/api/worktree-events` WebSocket 连接。AI 或 CLI 对 Worktree 的写入在协同及产品操作均完成后通知浏览器刷新缓存。活动和已处理任务列表、详情、侧栏计数及受 Worktree 影响的节点与资源列表会自动更新。连接使用一次性会话票据，通知不含 Worktree 元数据或正文。
 
+### 产品数据库
+
+默认产品库为 SQLite，文件位置由 `DATABASE_FILE` 指定。使用 PostgreSQL 17 时，先建一个专用空库，给 Workspace 账号授予在目标 schema 创建表、索引、序列和函数的权限。给服务进程或容器传入：
+
+```dotenv
+PRODUCT_DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace@db/workspace
+```
+
+首次启动自动建表。切换后端会打开独立的产品库，已有 SQLite 数据仍在原文件中，需要另行迁移。协同库继续使用 `COLLABORATION_DATABASE_FILE`，文件字节继续使用配置的 BlobStore。备份时停掉全部写入实例，同时保留 PostgreSQL 逻辑备份、协同文件及 Blob 对象。恢复时将备份还原到具有相同 schema 名称的空库，再启动一个 Workspace 实例。
+
 ## Docker
 
 在仓库根目录构建镜像。
@@ -230,7 +241,7 @@ docker run --name univer-workspace \
 
 服务端入口会在创建应用服务前准备协同数据库。升级顺序如下。
 
-1. 停止**所有**会写入 Workspace 的旧实例，备份两个 SQLite 文件和 Blob 存储。Kubernetes 部署使用单副本及 `Recreate` 策略。
+1. 停止**所有**会写入 Workspace 的旧实例，备份产品数据库、协同 SQLite 文件和 Blob 存储。Kubernetes 部署使用单副本及 `Recreate` 策略。
 2. 启动一个新实例。服务先将产品数据库准备到 V21，再读取协同组件版本。需要迁移时，服务获取排他锁，检查源文件的完整性和外键，并在数据库旁创建一致性备份 `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak`。如果其他进程仍打开 WAL 模式的文件或持有任何锁，启动会在备份前失败。空闲的 rollback-journal 连接不持锁，无法通过锁检测，因此必须执行第 1 步。
 3. 服务持锁期间，已发布的 SDK 迁移依次在暂存副本上执行 Core v1→v2、Worktree、History、Core v2→v3。Schema 校验、`foreign_key_check` 和 `integrity_check` 全部通过后，才用副本原子替换原文件。如果迁移失败，服务在接收流量前终止启动，原库、日志模式和备份均保留。
 4. 确认启动正常、文档和 Worktree 均可访问后，恢复服务。后续启动只读取组件版本，无需重复完整性和外键扫描、迁移或备份。
@@ -360,7 +371,7 @@ Agent 可以创建和读取草稿，发布或拒绝则需要作者的交互式�
 
 每个 Skill 最多 100 个文件，总计 20 MiB。`SKILL.md` 上限为 64 KiB，单个二进制文件上限为 10 MiB，文本读取上限为 256 KiB。压缩包最多 1,000 个条目，单条上限 20 MiB、总计 100 MiB，单条解压比不超过 100:1。解压前会拒绝不安全路径、符号链接、加密、分卷和 ZIP64 压缩包。请求在 15 秒后超时，最多跟随五次重定向，目标限于 `api.github.com`、`raw.githubusercontent.com` 和 `clawhub.ai`。
 
-发布时，服务端重新扫描已存储的文件并核对要替换的完整基线，在一个 SQLite 事务中将所有文件发布到 `.agents/skills/<name>/`。移除的文件进入回收站，任一写入失败时整体回滚。发布无需创建 Operation 或另行恢复。接收中的草稿一小时后过期，待发布草稿七天后过期。草稿被拒绝、过期或冲突时，其文件对象会进入 Blob 维护任务的删除队列。
+发布时，服务端重新扫描已存储的文件并核对要替换的完整基线，在一个产品库事务中将所有文件发布到 `.agents/skills/<name>/`。移除的文件进入回收站，任一写入失败时整体回滚。发布无需创建 Operation 或另行恢复。接收中的草稿一小时后过期，待发布草稿七天后过期。草稿被拒绝、过期或冲突时，其文件对象会进入 Blob 维护任务的删除队列。
 
 V19→V20 新增 `skill_drafts` 表和过期索引。升级时停止全部旧实例，启动一个 V20 实例，待一致性备份、迁移和健康检查通过后再恢复服务。已有产品数据、对象键和未完成的恢复状态均会保留。迁移失败会回滚，成功后重启不会重复迁移或备份。若需回退，停止 V20 并恢复 V19 备份。V19 和 V20 不得同时写入同一 SQLite 文件。
 
