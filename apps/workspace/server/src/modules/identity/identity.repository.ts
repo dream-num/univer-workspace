@@ -372,6 +372,37 @@ export class IdentityRepository {
     return row ? toPrincipal(row) : null;
   }
 
+  /**
+   * Pushes out the expiry of the unclaimed agent that is `userId`, or that owns the Space of
+   * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write.
+   */
+  touchUnclaimedAgent(
+    target: { readonly userId: string } | { readonly nodeId: string },
+    at: number,
+    staleBefore: number,
+    expiresAt: number
+  ): void {
+    const stale = this._database.connection
+      .prepare(
+        `SELECT user_id FROM agents
+         WHERE owner_user_id IS NULL
+           AND last_active_at <= ?
+           AND user_id = ${
+             "userId" in target
+               ? "?"
+               : `(SELECT spaces.owner_user_id FROM nodes
+                   JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
+           }`
+      )
+      .get(staleBefore, "userId" in target ? target.userId : target.nodeId) as
+      | { readonly user_id: string }
+      | undefined;
+    if (!stale) return;
+    this._database.connection
+      .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
+      .run(at, expiresAt, stale.user_id);
+  }
+
   findUsers(userIds: readonly string[]): readonly User[] {
     const uniqueUserIds = [...new Set(userIds)];
     if (uniqueUserIds.length === 0) return [];

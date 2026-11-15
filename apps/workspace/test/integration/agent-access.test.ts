@@ -1,11 +1,18 @@
 import { randomUUID } from "node:crypto";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import express from "express";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
 import type { WorkspaceConfig } from "../../server/src/config.js";
+import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
 
 const GATEWAY_ID = "univer-workspace-mcp-gateway";
 const GATEWAY_SECRET = "test-gateway-secret-at-least-32-characters";
+const HOUR = 60 * 60 * 1000;
+const DAY = 24 * HOUR;
 
 interface Agent {
   readonly id: string;
@@ -17,10 +24,12 @@ interface Agent {
 
 const applications: WorkspaceApplication[] = [];
 const servers: Server[] = [];
+const directories: string[] = [];
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
+  for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
 });
 
 describe("principal kind", () => {
@@ -116,6 +125,122 @@ describe("access rules for agents", () => {
   });
 });
 
+describe("agent expiry", () => {
+  it("moves an unclaimed agent's expiry 30 days out when it authenticates, at most once a day", async () => {
+    const { origin, application } = await start();
+    const agent = await createAgent(origin);
+    const lifecycle = agentLifecycle(application, agent.id);
+    const authenticate = () => fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } });
+
+    lifecycle.set({ last_active_at: Date.now() - 25 * HOUR, expires_at: Date.now() + DAY });
+    let before = Date.now();
+    expect((await authenticate()).status).toBe(200);
+    expect(lifecycle.get().last_active_at).toBeGreaterThanOrEqual(before);
+    expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
+
+    // Seen within the day: the next request leaves the row alone.
+    lifecycle.set({ last_active_at: Date.now() - 23 * HOUR, expires_at: 1 });
+    await authenticate();
+    await exchange(origin, agent.token);
+    expect(lifecycle.get().expires_at).toBe(1);
+
+    lifecycle.set({ last_active_at: Date.now() - 25 * HOUR, expires_at: 1 });
+    before = Date.now();
+    expect((await exchange(origin, agent.token)).status).toBe(200);
+    expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
+
+    const human = await register(origin, "claimer");
+    application.database.connection
+      .prepare("UPDATE agents SET owner_user_id = ?, claimed_at = 1, expires_at = NULL, last_active_at = 0 WHERE user_id = ?")
+      .run(human.id, agent.id);
+    await authenticate();
+    expect(lifecycle.get()).toEqual({ last_active_at: 0, expires_at: null });
+  });
+
+  it("closes an expired agent's link to anonymous readers until the agent is active again", async () => {
+    const { origin, application } = await start();
+    const pages = await startPages(application);
+    const agent = await createAgent(origin);
+    const nodeId = await createFile(origin, agent.cookie, "Budget");
+    await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie);
+    const lifecycle = agentLifecycle(application, agent.id);
+    const page = async () => (await fetch(`${pages}/nodes/${nodeId}`)).text();
+    expect(await page()).toContain("<title>Budget · Univer Workspace</title>");
+
+    const expired = { last_active_at: Date.now() - 31 * DAY, expires_at: Date.now() - DAY };
+    lifecycle.set(expired);
+    expect(await accessRole(origin, nodeId, undefined)).toBeNull();
+    expect(await page()).toContain("<title>Univer Workspace</title>");
+    expect(lifecycle.get()).toEqual(expired);
+
+    expect((await fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } })).status).toBe(200);
+    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
+    expect(await page()).toContain("<title>Budget · Univer Workspace</title>");
+  });
+
+  it("moves the expiry out when a reader opens the agent's shared page, at most once a day", async () => {
+    const { origin, application } = await start();
+    const pages = await startPages(application);
+    const agent = await createAgent(origin);
+    const nodeId = await createFile(origin, agent.cookie, "Budget");
+    await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie);
+    const privateNodeId = await createFile(origin, agent.cookie, "Private");
+    const lifecycle = agentLifecycle(application, agent.id);
+
+    lifecycle.set({ last_active_at: Date.now() - 25 * HOUR, expires_at: Date.now() + DAY });
+    const stale = lifecycle.get();
+    await fetch(`${pages}/nodes/${privateNodeId}`);
+    expect(lifecycle.get()).toEqual(stale);
+
+    const before = Date.now();
+    await fetch(`${pages}/nodes/${nodeId}`);
+    expect(lifecycle.get().last_active_at).toBeGreaterThanOrEqual(before);
+    expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
+
+    lifecycle.set({ last_active_at: Date.now() - 23 * HOUR, expires_at: Date.now() + DAY });
+    const fresh = lifecycle.get();
+    await fetch(`${pages}/nodes/${nodeId}`);
+    expect(lifecycle.get()).toEqual(fresh);
+  });
+});
+
+function agentLifecycle(application: WorkspaceApplication, agentId: string) {
+  type Lifecycle = { last_active_at: number; expires_at: number | null };
+  return {
+    get: (): Lifecycle => ({
+      ...(application.database.connection
+        .prepare("SELECT last_active_at, expires_at FROM agents WHERE user_id = ?")
+        .get(agentId) as unknown as Lifecycle),
+    }),
+    set: (value: Lifecycle) => {
+      application.database.connection
+        .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
+        .run(value.last_active_at, value.expires_at, agentId);
+    },
+  };
+}
+
+/** The share-page route the production build mounts when the web bundle exists. */
+async function startPages(application: WorkspaceApplication): Promise<string> {
+  const directory = mkdtempSync(join(tmpdir(), "workspace-agent-pages-"));
+  directories.push(directory);
+  writeFileSync(join(directory, "index.html"), "<!doctype html><html><head><title>Univer Workspace</title></head><body></body></html>");
+  const app = express();
+  app.use(createStaticSiteRouter(directory, { nodes: application.nodes, identity: application.identity }));
+  return listen(createServer(app));
+}
+
+async function listen(server: Server): Promise<string> {
+  servers.push(server);
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  const address = server.address();
+  if (!address || typeof address === "string") throw new Error("Server did not expose a TCP address");
+  return `http://127.0.0.1:${address.port}`;
+}
+
 async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: WorkspaceApplication }> {
   const application = createWorkspaceApplication({
     host: "127.0.0.1",
@@ -135,15 +260,7 @@ async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: s
     unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
   });
   applications.push(application);
-  const server = createServer(application.app);
-  servers.push(server);
-  await new Promise<void>((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const address = server.address();
-  if (!address || typeof address === "string") throw new Error("Server did not expose a TCP address");
-  return { origin: `http://127.0.0.1:${address.port}`, application };
+  return { origin: await listen(createServer(application.app)), application };
 }
 
 async function createAgent(origin: string): Promise<Agent> {

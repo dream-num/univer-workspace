@@ -67,6 +67,7 @@ const EMAIL_CODE_WINDOW_MS = 60 * 60 * 1000;
 const EMAIL_CODE_WINDOW_LIMIT = 5;
 const EMAIL_CODE_MAX_ATTEMPTS = 5;
 const AGENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const AGENT_ACTIVITY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_AGENT_LABEL = "agent";
 
 interface PendingCliAuthorization {
@@ -184,6 +185,11 @@ export interface IdentityModule {
   findUsers(userIds: readonly string[]): readonly User[];
   /** The User a verified access token belongs to, or null when it is missing or a banned agent. */
   authenticateUser(userId: string): PrincipalUser | null;
+  /**
+   * A shared page of this Node was served to a reader. When an unclaimed agent owns it, its expiry
+   * moves 30 days out, as when the agent authenticates; either happens at most once a day.
+   */
+  recordAgentPageView(nodeId: string): void;
   /**
    * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
    * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
@@ -308,10 +314,19 @@ export function createIdentityModule(options: {
     return authenticated(stored);
   }
 
-  /** Every verified credential ends here, so a banned agent cannot authenticate by any path. */
+  /**
+   * Every verified credential ends here, so a banned agent cannot authenticate by any path. An
+   * expired agent still can: authenticating is how it recovers.
+   */
   function authenticated<T extends StoredPrincipal>(stored: T | null): T | null {
     if (!stored || stored.banned) return null;
+    if (stored.kind === "agent" && !stored.claimed) recordAgentActivity({ userId: stored.id });
     return stored;
+  }
+
+  function recordAgentActivity(target: Parameters<IdentityRepository["touchUnclaimedAgent"]>[0]): void {
+    const at = now();
+    repository.touchUnclaimedAgent(target, at, at - AGENT_ACTIVITY_INTERVAL_MS, at + AGENT_TTL_MS);
   }
 
   function getSession(cookieHeader: string | undefined): SessionView {
@@ -387,6 +402,10 @@ export function createIdentityModule(options: {
     authenticateUser(userId) {
       const stored = authenticated(repository.findPrincipal(userId));
       return stored && principalUser(stored);
+    },
+
+    recordAgentPageView(nodeId) {
+      recordAgentActivity({ nodeId });
     },
 
     async registerWithPassword(input) {
