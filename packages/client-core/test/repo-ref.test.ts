@@ -7,7 +7,7 @@ import {
   WorkspaceSpaceFeature,
   WorkspaceWorktreeFeature,
 } from "../src/index.js";
-import { parseNodeReference, resolveNodeReference, shareNode } from "../src/product.js";
+import { parseNodeReference, resolveNodeReference, resolveUnitReference, shareNode } from "../src/product.js";
 
 interface Call { readonly method: string; readonly path: string; readonly body: unknown }
 
@@ -81,6 +81,19 @@ describe("file links", () => {
     await expect(resolveNodeReference(spaces, "https://other.test/nodes/n1", origin))
       .rejects.toMatchObject({ code: "workspace-origin-mismatch" });
     expect(calls.map(({ method, path }) => [method, path])).toEqual([["GET", "/api/nodes/n1"]]);
+  });
+
+  it("resolves a file link given as a Unit to the Unit ID and leaves an ID alone", async () => {
+    const { spaces, calls } = clients(() => Response.json(node(sheet)));
+    await expect(resolveUnitReference(spaces, ` ${origin}/nodes/n1`, origin)).resolves.toBe("u1");
+    await expect(resolveUnitReference(spaces, "u1", origin)).resolves.toBe("u1");
+    expect(calls.map(({ method, path }) => [method, path])).toEqual([["GET", "/api/nodes/n1"]]);
+    const folder = clients(() => Response.json(node(null)));
+    await expect(resolveUnitReference(folder.spaces, `${origin}/nodes/n1`, origin)).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: 'The link names "Budget", which is not a Unit, so this tool cannot read it.',
+      detail: { nodeId: "n1" },
+    });
   });
 
   it("reads Link Sharing without writing when no link is given", async () => {

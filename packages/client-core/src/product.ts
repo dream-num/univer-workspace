@@ -67,6 +67,7 @@ export {
   resolveItemTarget,
   resolveNodeReference,
   resolveRepoReference,
+  resolveUnitReference,
   type ItemTarget,
   type ResolvedWorkspaceRepo,
   type WorkspaceRepoReference,

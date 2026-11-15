@@ -32,6 +32,7 @@ import {
   serializeWorkspaceRuntimeTarget,
   type SheetLensResult,
 } from "@univerjs/univer-workspace-client-core";
+import { resolveUnitReference } from "@univerjs/univer-workspace-client-core/product";
 import type { Command } from "commander";
 import { resolveUniverLicense, resolveUniverLicenseKey } from "./config.js";
 import { createAssetCommand } from "./features/asset/command.js";
@@ -108,6 +109,8 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
   const daemonControl = createDaemonControl(daemonOptions);
   const product = createProductServices(options);
   const { auth, authenticatedHttp, spaces } = product;
+  const resolveUnit = async (unit: string) =>
+    await resolveUnitReference(spaces, unit, await product.origin());
   const openResourceLibrary = createNodeResourceLibraryFactory({
     cacheRoot: options.resourceCacheRoot,
     manifestPath: options.resourceManifestPath,
@@ -224,12 +227,14 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     ),
     createWorkspaceScreenshotCommand({
       env: options.env,
+      resolveUnit,
       screenshot,
     }),
     createWorkspacePrintPdfCommand(printPdf),
     createWorkspaceUnitLayoutLintCommand(unitLayoutLint),
     createContentExecuteCommand(contentExecution),
     ...createSheetLensCommands({
+      resolveUnit,
       run: async ({ unitId, scope, request }) => {
         const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
         const target =
@@ -249,10 +254,11 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createWorktreeContentInspectionCommand({
       acquireRuntime: async ({ unitId, worktreeID }) => {
         const source = new WorkspaceContentSource(await auth.authenticatedHttp("client"));
+        const unit = await resolveUnit(unitId);
         const target =
           worktreeID === undefined
-            ? await source.resolveTrunkRuntimeTarget({ unitId })
-            : await source.resolveRuntimeTarget({ unitId, worktreeId: worktreeID });
+            ? await source.resolveTrunkRuntimeTarget({ unitId: unit })
+            : await source.resolveRuntimeTarget({ unitId: unit, worktreeId: worktreeID });
         return {
           unitId: target.unitId,
           unitType: target.unitType,

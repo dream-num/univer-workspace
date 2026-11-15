@@ -22,6 +22,7 @@ interface WorkspaceScreenshotCommandOptions {
 export function createWorkspaceScreenshotCommand(input: {
   readonly browserSetup?: UniverRenderBrowserSetupCommandDependencies;
   readonly env: NodeJS.ProcessEnv;
+  readonly resolveUnit: (unit: string) => Promise<string>;
   readonly screenshot: WorkspaceScreenshotApplication;
 }): Command {
   let command: Command;
@@ -30,7 +31,7 @@ export function createWorkspaceScreenshotCommand(input: {
     loadUnit: async ({ unitId }) =>
       await input.screenshot.loadUnit({
         scope: screenshotScope(command.opts<WorkspaceScreenshotCommandOptions>()),
-        ...(unitId === undefined ? {} : { unitId }),
+        ...(unitId === undefined ? {} : { unitId: await input.resolveUnit(unitId) }),
       }),
     screenshot: { capture: async (captureInput) => await input.screenshot.capture(captureInput) },
     writeImages: async (writeInput) => await input.screenshot.writeImages(writeInput),
