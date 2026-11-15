@@ -1,6 +1,6 @@
 # Workspace 产品数据库适配器设计
 
-第一阶段交付现有 SQLite 行为，第二阶段接入 PostgreSQL。范围是 Workspace 产品数据；协同库和文件存储各自使用已有的适配器。
+SQLite 是当前可部署的产品库。PostgreSQL 已实现空间与置顶两个 Repository，其余领域和启动迁移仍待接入。协同库和文件存储各自管理数据。
 
 ## 目录与文件
 
@@ -32,9 +32,8 @@ db/
     schema.sql                       SQLite V21 基线
     migrations/                      SQLite 版本识别、备份、升级和校验
     legacy-v0/                       SQLite V0 迁移入口
-  postgres/                          第二阶段加入
-    open.ts                          准备数据库、创建连接池、装配 Repository、提供 close
-    migrations/                      PostgreSQL 自己的建库和升级脚本
+  postgres/
+    transaction.ts                   在同一连接上开启事务、提交、回滚和重试
     spaces/
       spaces.repository.ts           同一空间接口的 PostgreSQL 实现
       space-pins.repository.ts       同一置顶接口的 PostgreSQL 实现
@@ -57,7 +56,7 @@ db/
 
 ## 配置和生命周期
 
-`loadConfig()` 负责把环境变量解析为有判别字段的配置。第一阶段沿用 `DATABASE_FILE` 及其默认值，产出 `{ provider: "sqlite", filename }`。接入 PostgreSQL 时增加 `{ provider: "postgres", connectionString }`。以下签名给启动入口生命周期控制权，`app.ts` 只接收 `database.repositories`。
+`loadConfig()` 负责把环境变量解析为有判别字段的配置。SQLite 沿用 `DATABASE_FILE` 及其默认值，产出 `{ provider: "sqlite", filename }`。待 PostgreSQL 实现全部 Repository 和建库迁移后，在工厂增加 `{ provider: "postgres", connectionString }`。以下签名给启动入口生命周期控制权，`app.ts` 只接收 `database.repositories`。
 
 ```ts
 export interface ProductDatabase {
@@ -83,3 +82,13 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 - 跨产品库、协同服务和 BlobStore 的写入通过持久化 Operation、幂等键和恢复流程衔接。
 
 [依赖边界检查](../../test/unit/product-database-boundary.test.ts)约束后端导入。同一领域的实现应复用行为用例，覆盖并发写入、失败回滚与权限变化。SQLite 的历史兼容性由迁移矩阵和生产构建验证。
+
+## PostgreSQL 空间契约用例
+
+`withPostgresTransaction` 在一个池连接上运行可串行化事务。序列化失败或死锁时，重试整个业务操作。事务回调只通过传入的连接访问产品库，外部通知和文件操作放在事务之外。
+
+[空间契约用例](../../test/integration/space-repository-contract.test.ts)默认运行 SQLite。设置 `WORKSPACE_TEST_POSTGRES_URL` 后，同一命令也会测试 PostgreSQL。使用允许创建 schema 的测试库账号。fixture 为本次运行创建独立 schema 并在结束时删除。
+
+```bash
+pnpm --filter @univerjs/univer-workspace test test/integration/space-repository-contract.test.ts
+```
