@@ -318,19 +318,19 @@ export function createSkillSourcesModule(options: {
           : {},
     };
   }
-  function spaceManifest(userId: string, nodeId: string) {
-    const root = options.access.resolveNode(userId, nodeId);
+  async function spaceManifest(userId: string, nodeId: string) {
+    const root = await options.access.resolveNode(userId, nodeId);
     if (!root) throw notFound();
     const files: { path: string; resource: BlobResourceAccess }[] = [];
     const entries: unknown[] = [[root.id, root.name]];
     const visited = new Set<string>();
-    function walk(id: string, path: string) {
+    async function walk(id: string, path: string) {
       if (visited.has(id) || visited.size >= ARCHIVE_LIMITS.entries) throw limit();
       visited.add(id);
-      const node = options.access.resolveNode(userId, id);
+      const node = await options.access.resolveNode(userId, id);
       if (!node) throw notFound();
       if (node.resourceId) {
-        const resource = options.access.resolveResource(userId, node.resourceId);
+        const resource = await options.access.resolveResource(userId, node.resourceId);
         if (!resource || !resource.capabilities.openContent) throw notFound();
         if (resource.kind !== "blob" || resource.availability !== "ready")
           throw invalidSource("Space Skill sources must contain available Blob files only.");
@@ -339,17 +339,17 @@ export function createSkillSourcesModule(options: {
       } else {
         if (!node.capabilities.browseChildren) throw notFound();
         entries.push([id, path]);
-        const children = options.nodes.listChildren(
+        const children = await options.nodes.listChildren(
           node.spaceId,
           id,
           null,
           ARCHIVE_LIMITS.entries + 1,
         );
         if (children.length > ARCHIVE_LIMITS.entries) throw limit();
-        for (const child of children) walk(child.id, path ? `${path}/${child.name}` : child.name);
+        for (const child of children) await walk(child.id, path ? `${path}/${child.name}` : child.name);
       }
     }
-    walk(nodeId, root.resourceId ? root.name : "");
+    await walk(nodeId, root.resourceId ? root.name : "");
     const etag = root.resourceId ? files[0]!.resource.etag : sha256(JSON.stringify(entries));
     return { files, root, etag: `"${etag}"` };
   }
@@ -375,11 +375,11 @@ export function createSkillSourcesModule(options: {
     userId: string,
     input: Extract<SourceInput | ResolvedSource, { kind: "space" }>,
   ): Promise<LoadedSource> {
-    const manifest = spaceManifest(userId, input.nodeId);
+    const manifest = await spaceManifest(userId, input.nodeId);
     if ("etag" in input && manifest.etag !== input.etag) throw conflict();
     const source: ResolvedSource = { kind: "space", nodeId: input.nodeId, etag: manifest.etag };
-    const check = () => {
-      if (spaceManifest(userId, input.nodeId).etag !== source.etag) throw conflict();
+    const check = async () => {
+      if ((await spaceManifest(userId, input.nodeId)).etag !== source.etag) throw conflict();
     };
     let files: SourceFile[];
     if (manifest.root.resourceId) {
@@ -398,7 +398,7 @@ export function createSkillSourcesModule(options: {
         read: () => readBlob(resource, ARCHIVE_LIMITS.fileBytes),
       }));
     validateFiles(files);
-    check();
+    await check();
     return { source, files, label: manifest.root.name, context: {}, check };
   }
   async function load(userId: string, input: string | ResolvedSource): Promise<LoadedSource> {

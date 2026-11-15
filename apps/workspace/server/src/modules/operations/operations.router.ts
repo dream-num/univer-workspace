@@ -7,9 +7,9 @@ export function createOperationsRouter(options: {
   readonly operations: OperationsModule;
 }): Router {
   const router = Router();
-  router.get("/operations/:operationId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    const operation = options.operations.get(
+  router.get("/operations/:operationId", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    const operation = await options.operations.get(
       session.user.id,
       parameter(request.params.operationId)
     );
@@ -19,7 +19,7 @@ export function createOperationsRouter(options: {
   router.post(
     "/operations/:operationId/retry",
     async (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
+      const session = await options.identity.requireSession(request.headers.cookie);
       response.status(202).json(
         await options.operations.retry(
           session.user.id,

@@ -77,7 +77,7 @@ export async function exportWorkspaceSnapshot(
 
   async function loadOnlineUnit(ref: IOleOnlineUnitRef): Promise<ISnapshotWithBlocks> {
     const unitType = unitTypeOf(ref.type);
-    const access = context.access.resolveUnit(context.userId, ref.unitId);
+    const access = await context.access.resolveUnit(context.userId, ref.unitId);
     if (
       !access ||
       access.kind !== "univer" ||

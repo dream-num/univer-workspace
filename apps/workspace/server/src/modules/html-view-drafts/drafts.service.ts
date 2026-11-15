@@ -4,8 +4,8 @@ import { z } from "zod";
 import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import { assertCeiling, type AccessResolver } from "../access/index.js";
-import { type HtmlViewDraftsRepository, draftConflict } from "./drafts.repository.js";
+import type { AccessResolver } from "../access/index.js";
+import { type HtmlViewDraftsRepository, assertDraftDestination, requireDraftResource, draftConflict } from "./drafts.repository.js";
 import type { DraftRow, HtmlViewDraftView } from "./drafts.types.js";
 
 const id = z.string().trim().min(1).max(255);
@@ -44,50 +44,31 @@ export function createHtmlViewDraftsModule(options: {
   const now = options.now ?? Date.now;
   // Concurrent retries for the same draft must share one object upload.
   const receiving = new Map<string, Promise<DraftRow>>();
-  function requireDraft(userId: string, draftId: string): DraftRow {
-    const row = repository.find(draftId);
+  async function requireDraft(userId: string, draftId: string): Promise<DraftRow> {
+    const row = await repository.find(draftId);
     if (!row || row.author_user_id !== userId || row.state === "receiving")
       throw new ApplicationError("NOT_FOUND", 404, "Draft not found.");
     return row;
   }
-  function validateCreate(userId: string, spaceId: string, parentNodeId: string | null) {
+  async function validateCreate(userId: string, spaceId: string, parentNodeId: string | null) {
     const target =
       parentNodeId === null
-        ? access.resolveSpace(userId, spaceId)
-        : access.resolveNode(userId, parentNodeId);
-    if (!target || ("spaceId" in target && target.spaceId !== spaceId))
-      throw new ApplicationError("NOT_FOUND", 404, "Draft destination not found.");
-    const allowed =
-      "createAtRoot" in target.capabilities
-        ? target.capabilities.createAtRoot
-        : target.capabilities.createChildren;
-    if (!allowed)
-      throw new ApplicationError("FORBIDDEN", 403, "Cannot create at the draft destination.");
+        ? await access.resolveSpace(userId, spaceId)
+        : await access.resolveNode(userId, parentNodeId);
+    assertDraftDestination(target, spaceId);
   }
-  function validateReplace(userId: string, resourceId: string) {
-    const target = access.resolveResource(userId, resourceId);
-    if (!target || target.kind !== "blob")
-      throw new ApplicationError("NOT_FOUND", 404, "Draft target not found.");
-    if (!target.capabilities.editContent)
-      throw new ApplicationError("FORBIDDEN", 403, "Cannot edit draft target.");
-    if (
-      target.availability !== "ready" ||
-      !(isHtmlViewFilename(target.node.name) || isHtmlViewFilename(target.originalFilename))
-    )
-      throw draftConflict("Draft target is not an available HTML View.");
-    return target;
+  async function validateReplace(userId: string, resourceId: string) {
+    const target = await access.resolveResource(userId, resourceId);
+    return requireDraftResource(target);
   }
-  function view(row: DraftRow): HtmlViewDraftView {
+  async function view(row: DraftRow): Promise<HtmlViewDraftView> {
     if (row.state === "receiving") throw draftConflict("Draft content is still receiving.");
-    const state =
-      row.state === "pending" && row.expires_at <= now()
-        ? "expired"
-        : row.state === "pending" &&
-            row.kind === "replace" &&
-            repository.currentEtag(row.target_resource_id!) !== undefined &&
-            repository.currentEtag(row.target_resource_id!) !== row.base_etag
-          ? "conflicted"
-          : row.state;
+    let state: HtmlViewDraftView["state"] = row.state;
+    if (state === "pending" && row.expires_at <= now()) state = "expired";
+    else if (state === "pending" && row.kind === "replace") {
+      const etag = await repository.currentEtag(row.target_resource_id!);
+      if (etag !== undefined && etag !== row.base_etag) state = "conflicted";
+    }
     return {
       id: row.id,
       kind: row.kind,
@@ -139,39 +120,23 @@ export function createHtmlViewDraftsModule(options: {
           : null;
       if (name && name.length > 255)
         throw new ApplicationError("INVALID_INPUT", 400, "Draft name is too long.");
-      let row = repository.findKey(userId, key.data);
-      const created = !row;
-      if (row) {
-        const same =
-          row.kind === input.kind &&
-          row.sha256 === sha256 &&
-          (input.kind === "create"
-            ? row.space_id === input.spaceId &&
-              row.parent_node_id === (input.parentNodeId ?? null) &&
-              row.name === name
-            : row.target_resource_id === input.resourceId &&
-              row.base_etag === input.etag.slice(1, -1));
-        if (!same) throw draftConflict("Idempotency-Key belongs to another draft intent.");
-        if (
-          (row.state === "pending" || row.state === "receiving" || row.state === "expired") &&
-          row.expires_at <= now()
-        )
-          throw draftConflict("Draft expired; use a new Idempotency-Key.");
-      } else {
+      let row = await repository.findKey(userId, key.data);
+      let created = false;
+      if (!row) {
         let spaceId: string;
         let displayName: string;
         if (input.kind === "create") {
-          validateCreate(userId, input.spaceId, input.parentNodeId ?? null);
+          await validateCreate(userId, input.spaceId, input.parentNodeId ?? null);
           spaceId = input.spaceId;
           displayName = name!;
         } else {
-          const target = validateReplace(userId, input.resourceId);
+          const target = await validateReplace(userId, input.resourceId);
           if (target.etag !== input.etag.slice(1, -1))
             throw new ApplicationError("PRECONDITION_FAILED", 412, "HTML View content changed.");
           spaceId = target.node.spaceId;
           displayName = target.node.name;
         }
-        row = repository.reserve(
+        const reservation = await repository.reserve(
           {
             author_user_id: userId,
             idempotency_key: key.data,
@@ -186,7 +151,24 @@ export function createHtmlViewDraftsModule(options: {
           },
           now(),
         );
+        row = reservation.row;
+        created = reservation.created;
       }
+      const same =
+        row.kind === input.kind &&
+        row.sha256 === sha256 &&
+        (input.kind === "create"
+          ? row.space_id === input.spaceId &&
+            row.parent_node_id === (input.parentNodeId ?? null) &&
+            row.name === name
+          : row.target_resource_id === input.resourceId &&
+            row.base_etag === input.etag.slice(1, -1));
+      if (!same) throw draftConflict("Idempotency-Key belongs to another draft intent.");
+      if (
+        (row.state === "pending" || row.state === "receiving" || row.state === "expired") &&
+        row.expires_at <= now()
+      )
+        throw draftConflict("Draft expired; use a new Idempotency-Key.");
       if (row.state === "receiving") {
         const reserved = row;
         let pending = receiving.get(row.id);
@@ -199,9 +181,9 @@ export function createHtmlViewDraftsModule(options: {
             });
             if (stored.sha256 !== sha256)
               throw new Error("Draft bytes failed checksum verification.");
-            const row = repository.markPending(reserved.id, stored, now());
+            const row = await repository.markPending(reserved.id, stored, now());
             if (row.state === "receiving") {
-              repository.decide(row.id, userId, "reject", now());
+              await repository.decide(row.id, userId, "reject", now());
               throw draftConflict("Draft expired; use a new Idempotency-Key.");
             }
             return row;
@@ -214,42 +196,34 @@ export function createHtmlViewDraftsModule(options: {
           if (receiving.get(reserved.id) === pending) receiving.delete(reserved.id);
         }
       }
-      return { status: created ? 201 : 200, draft: view(row) };
+      return { status: created ? 201 : 200, draft: await view(row) };
     },
-    get(userId: string, draftId: string) {
-      return view(requireDraft(userId, draftId));
+    async get(userId: string, draftId: string) {
+      return view(await requireDraft(userId, draftId));
     },
     async openContent(userId: string, draftId: string) {
-      const row = requireDraft(userId, draftId);
-      if (row.state !== "pending" || !["pending", "conflicted"].includes(view(row).state))
+      const row = await requireDraft(userId, draftId);
+      if (row.state !== "pending" || !["pending", "conflicted"].includes((await view(row)).state))
         throw draftConflict("Draft bytes are no longer available.");
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
-    publish(userId: string, draftId: string) {
-      const row = requireDraft(userId, draftId);
+    async publish(userId: string, draftId: string) {
+      const row = await requireDraft(userId, draftId);
       if (row.state === "published") return view(row);
       if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
-      if (row.expires_at > now()) {
-        if (row.kind === "create") validateCreate(userId, row.space_id, row.parent_node_id);
-        else validateReplace(userId, row.target_resource_id!);
-        assertCeiling(access.principalCategory(userId), "createFiles", {
-          held: () => access.countPersonalFiles(userId),
-          adding: row.kind === "create" ? 1 : 0,
-        });
-      }
-      const decided = repository.decide(row.id, userId, "publish", now());
+      const decided = await repository.decide(row.id, userId, "publish", now());
       if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
       return view(decided);
     },
-    reject(userId: string, draftId: string) {
-      const row = requireDraft(userId, draftId);
+    async reject(userId: string, draftId: string) {
+      const row = await requireDraft(userId, draftId);
       if (row.state === "rejected") return view(row);
       if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
-      const decided = repository.decide(row.id, userId, "reject", now());
+      const decided = await repository.decide(row.id, userId, "reject", now());
       if (decided.state !== "rejected") throw draftConflict(`Draft is ${decided.state}.`);
       return view(decided);
     },
-    expireDue(time: number, limit: number) {
+    async expireDue(time: number, limit: number) {
       return repository.expireDue(time, limit, [...receiving.keys()]);
     },
   };

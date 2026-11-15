@@ -1,13 +1,15 @@
 import { randomUUID } from "node:crypto";
 import type { BlobsModule } from "../modules/blobs/index.js";
+import type { HtmlViewDraftsModule } from "../modules/html-view-drafts/index.js";
+import type { SkillDraftsModule } from "../modules/skill-drafts/index.js";
 import type { OperationRecovery } from "./operation-recovery.js";
 
 export function startBlobMaintenance(
-  blobs: BlobsModule,
+  blobs: Pick<BlobsModule, "runMaintenance">,
   options: {
     readonly intervalMs?: number;
-    readonly skillDrafts?: { expireDue(now: number, limit: number): number };
-    readonly drafts?: { expireDue(now: number, limit: number): number };
+    readonly skillDrafts?: Pick<SkillDraftsModule, "expireDue">;
+    readonly drafts?: Pick<HtmlViewDraftsModule, "expireDue">;
     readonly onError?: (error: unknown) => void;
   } = {}
 ): OperationRecovery {
@@ -20,12 +22,11 @@ export function startBlobMaintenance(
   const run = () => {
     if (disposed || running) return;
     running = Promise.resolve()
-      .then(() => {
-        options.drafts?.expireDue(Date.now(), 25);
-        options.skillDrafts?.expireDue(Date.now(), 25);
-        return blobs.runMaintenance(workerId);
+      .then(async () => {
+        await options.drafts?.expireDue(Date.now(), 25);
+        await options.skillDrafts?.expireDue(Date.now(), 25);
+        await blobs.runMaintenance(workerId);
       })
-      .then(() => undefined)
       .catch(onError)
       .finally(() => {
         running = null;
@@ -37,7 +38,6 @@ export function startBlobMaintenance(
 
   return {
     async dispose() {
-      if (disposed) return;
       disposed = true;
       clearInterval(timer);
       await running;

@@ -16,7 +16,7 @@ afterEach(async () => {
 
 describe("spaces and Nodes", () => {
   it("creates personal and team spaces and browses nested Nodes", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const alice = await register(application, "alice");
     const listed = await application.spaces.list(alice);
 
@@ -41,13 +41,13 @@ describe("spaces and Nodes", () => {
       accessRole: "owner",
     });
 
-    const projects = application.nodes.create(alice, {
+    const projects = await application.nodes.create(alice, {
       spaceId: personalSpace.id,
         parentNodeId: null,
         name: "Projects",
       }
     );
-    const planning = application.nodes.create(alice, {
+    const planning = await application.nodes.create(alice, {
       spaceId: personalSpace.id,
         parentNodeId: projects.id,
         name: "Planning",
@@ -55,7 +55,7 @@ describe("spaces and Nodes", () => {
     );
 
     expect(
-      application.nodes.listSpaceRoot(alice, personalSpace.id, {
+      await application.nodes.listSpaceRoot(alice, personalSpace.id, {
         cursor: undefined,
         limit: undefined,
       })
@@ -73,7 +73,7 @@ describe("spaces and Nodes", () => {
       ],
     });
     expect(
-      application.nodes.get(alice, planning.id)
+      await application.nodes.get(alice, planning.id)
     ).toMatchObject({
       node: { id: planning.id, resource: null },
       breadcrumbs: [
@@ -84,27 +84,26 @@ describe("spaces and Nodes", () => {
   });
 
   it("uses one inherited access model for direct Node sharing", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const alice = await register(application, "alice");
     const bob = await register(application, "bob");
     const aliceSpace = (await application.spaces.list(alice)).spaces[0];
     if (!aliceSpace) throw new Error("Personal space is missing");
-    const sharedRoot = application.nodes.create(alice, {
+    const sharedRoot = await application.nodes.create(alice, {
       spaceId: aliceSpace.id,
         parentNodeId: null,
         name: "Shared root",
       }
     );
-    const existingChild = application.nodes.create(alice, {
+    const existingChild = await application.nodes.create(alice, {
       spaceId: aliceSpace.id,
         parentNodeId: sharedRoot.id,
         name: "Existing child",
       }
     );
 
-    expect(() =>
-      application.nodes.get(bob, sharedRoot.id)
-    ).toThrowError(ApplicationError);
+    await expect(application.nodes.get(bob, sharedRoot.id)
+    ).rejects.toThrowError(ApplicationError);
 
     application.database.connection
       .prepare(
@@ -115,7 +114,7 @@ describe("spaces and Nodes", () => {
       .run(sharedRoot.id, bob, alice, 1_000, 1_000);
 
     expect(
-      application.nodes.get(bob, existingChild.id)
+      await application.nodes.get(bob, existingChild.id)
     ).toMatchObject({
       navigationRootNodeId: sharedRoot.id,
       breadcrumbs: [
@@ -123,7 +122,7 @@ describe("spaces and Nodes", () => {
         { id: existingChild.id },
       ],
     });
-    const bobChild = application.nodes.create(bob, {
+    const bobChild = await application.nodes.create(bob, {
       spaceId: aliceSpace.id,
       parentNodeId: sharedRoot.id,
       name: "Bob child",
@@ -137,11 +136,10 @@ describe("spaces and Nodes", () => {
       },
     });
 
-    expect(() =>
-      application.nodes.update(interactivePrincipal(bob), sharedRoot.id, {
+    await expect(application.nodes.update(interactivePrincipal(bob), sharedRoot.id, {
         parentNodeId: null,
       })
-    ).toThrowError(
+    ).rejects.toThrowError(
       expect.objectContaining({
         code: "FORBIDDEN",
         status: 403,
@@ -149,17 +147,46 @@ describe("spaces and Nodes", () => {
     );
   });
 
+  it("serializes opposing moves and preserves independent patches", async () => {
+    const app = await createTestApplication();
+    const owner = await register(app, "node-moves");
+    const actor = interactivePrincipal(owner);
+    const [space] = (await app.spaces.list(owner)).spaces;
+    if (!space) throw new Error("Personal space is missing");
+    const [left, right] = await Promise.all(["Left", "Right"].map((name) =>
+      app.nodes.create(owner, { spaceId: space.id, parentNodeId: null, name }),
+    ));
+
+    const moves = await Promise.allSettled([
+      app.nodes.update(actor, left.id, { parentNodeId: right.id }),
+      app.nodes.update(actor, right.id, { parentNodeId: left.id }),
+    ]);
+    expect(moves.filter((move) => move.status === "fulfilled")).toHaveLength(1);
+    expect(moves.find((move) => move.status === "rejected")).toMatchObject({
+      reason: { code: "CONFLICT" },
+    });
+
+    const moved = moves[0].status === "fulfilled" ? left : right;
+    await Promise.all([
+      app.nodes.update(actor, moved.id, { name: "Renamed" }),
+      app.nodes.update(actor, moved.id, { parentNodeId: null }),
+    ]);
+    expect((await app.nodes.get(owner, moved.id)).node).toMatchObject({
+      name: "Renamed", parentNodeId: null,
+    });
+  });
+
   it("allows a Resource Node to own children and rejects cycles", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const userId = await register(application, "alice");
     const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
-    const parent = application.nodes.create(userId, {
+    const parent = await application.nodes.create(userId, {
       spaceId: space.id,
       parentNodeId: null,
       name: "Parent",
     });
-    const child = application.nodes.create(userId, {
+    const child = await application.nodes.create(userId, {
       spaceId: space.id,
       parentNodeId: parent.id,
       name: "Child",
@@ -176,13 +203,13 @@ describe("spaces and Nodes", () => {
       }
     );
     if (resource.status === 202) throw new Error("Resource is pending");
-    const nestedUnderResource = application.nodes.create(userId, {
+    const nestedUnderResource = await application.nodes.create(userId, {
       spaceId: space.id,
       parentNodeId: resource.body.node.id,
       name: "Nested",
     });
     expect(
-      application.nodes.listChildren(
+      await application.nodes.listChildren(
         userId,
         resource.body.node.id,
         { cursor: undefined, limit: undefined }
@@ -191,11 +218,10 @@ describe("spaces and Nodes", () => {
       nodes: [{ id: nestedUnderResource.id }],
     });
 
-    expect(() =>
-      application.nodes.update(interactivePrincipal(userId), parent.id, {
+    await expect(application.nodes.update(interactivePrincipal(userId), parent.id, {
         parentNodeId: child.id,
       })
-    ).toThrowError(
+    ).rejects.toThrowError(
       expect.objectContaining({
         code: "CONFLICT",
         status: 409,
@@ -204,8 +230,8 @@ describe("spaces and Nodes", () => {
   });
 });
 
-function createTestApplication(): SqliteTestApplication {
-  const application = createSqliteTestApplication({
+async function createTestApplication(): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: ":memory:" },

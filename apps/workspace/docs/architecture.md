@@ -242,7 +242,7 @@ modules/nodes/
 
 - Router 只负责 HTTP 输入输出和调用 Module。
 - Service 只在存在业务流程、权限组合或 transaction 时创建。
-- Module 定义 Repository 接口，SQLite 的 SQL、驱动和事务实现位于 `db/sqlite/<模块>/`。
+- Module 定义异步 Repository 接口。权限、配额或状态校验与依赖该校验的写入由同一数据库操作完成。SQLite 的 SQL、驱动和同步事务实现位于 `db/sqlite/<模块>/`。
 - Policy 保存可独立表达和测试的授权规则。
 - `index.ts` 是 Module 的公开入口。
 

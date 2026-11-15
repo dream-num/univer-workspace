@@ -1,3 +1,4 @@
+import { assertFileQuota } from "../access/access.repository.js";
 import type { DatabaseSync } from "node:sqlite";
 import type { OperationView } from "../../../modules/resources/index.js";
 import { randomUUID } from "node:crypto";
@@ -33,12 +34,12 @@ interface BlobOperationRow {
 export class SqliteBlobsRepository implements BlobsRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
-  reserveReplacement(
+  async reserveReplacement(
     operationId: string,
     userId: string,
     intent: BlobReplacementIntent,
     now: number,
-  ): { readonly objectKey: string; readonly result: BlobReplacementResult | null } {
+  ): Promise<{ readonly objectKey: string; readonly result: BlobReplacementResult | null }> {
     return this._database.transaction((database) => {
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
@@ -80,13 +81,13 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  completeReplacement(
+  async completeReplacement(
     operationId: string,
     intent: BlobReplacementIntent,
     objectKey: string,
     stored: StoredBlob,
     now: number,
-  ): BlobReplacementResult {
+  ): Promise<BlobReplacementResult> {
     return this._database.transaction((database) => {
       const swapped = swapBlobContent(database, { ...intent, objectKey, stored, now });
       if (swapped === "etag-mismatch") throw new BlobReplacementConflictError("etag");
@@ -100,7 +101,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  failReplacement(operationId: string, code: string, message: string, now: number): void {
+  async failReplacement(operationId: string, code: string, message: string, now: number): Promise<void> {
     this._database.transaction((database) => {
       const row = database
         .prepare(
@@ -120,7 +121,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  pendingReplacementIds(): string[] {
+  async pendingReplacementIds(): Promise<string[]> {
     const rows = this._database.connection
       .prepare(
         "SELECT id FROM operations WHERE kind = 'replace_blob_content' AND state = 'pending'",
@@ -129,14 +130,15 @@ export class SqliteBlobsRepository implements BlobsRepository {
     return rows.map((row) => row.id);
   }
 
-  reserve(input: {
+  async reserve(input: {
     readonly operationId: string;
     readonly actorUserId: string;
     readonly intent: BlobUploadIntent;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): ReservedBlobUpload {
+  }): Promise<ReservedBlobUpload> {
     return this._database.transaction((database) => {
+      assertFileQuota(database, input.actorUserId, 1, input.operationId);
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
         .get(input.operationId) as BlobOperationRow | undefined;
@@ -212,7 +214,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  find(uploadId: string, actorUserId: string): ReservedBlobUpload | null {
+  async find(uploadId: string, actorUserId: string): Promise<ReservedBlobUpload | null> {
     const upload = this._database.connection.prepare(
       "SELECT * FROM blob_upload_sessions WHERE id = ? AND actor_user_id = ?"
     ).get(uploadId, actorUserId) as BlobUploadRow | undefined;
@@ -220,7 +222,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     return this.requireByOperation(upload.operation_id);
   }
 
-  recoverInterruptedUploads(recoveredAt: number): number {
+  async recoverInterruptedUploads(recoveredAt: number): Promise<number> {
     return Number(this._database.connection.prepare(
       `UPDATE blob_upload_sessions
        SET state = 'waiting_for_upload', updated_at = ?,
@@ -230,7 +232,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     ).run(recoveredAt).changes);
   }
 
-  beginUpload(uploadId: string, updatedAt: number): boolean {
+  async beginUpload(uploadId: string, updatedAt: number): Promise<boolean> {
     const result = this._database.connection.prepare(
       `UPDATE blob_upload_sessions
        SET state = 'verifying', updated_at = ?, last_error_code = NULL,
@@ -240,14 +242,14 @@ export class SqliteBlobsRepository implements BlobsRepository {
     return result.changes === 1;
   }
 
-  markUploaded(input: {
+  async markUploaded(input: {
     readonly uploadId: string;
     readonly byteSize: number;
     readonly sha256: string;
     readonly etag: string;
     readonly mediaType: string;
     readonly updatedAt: number;
-  }): BlobUploadRow {
+  }): Promise<BlobUploadRow> {
     const result = this._database.connection.prepare(
       `UPDATE blob_upload_sessions
        SET state = 'uploaded', received_size = ?, sha256 = ?, etag = ?,
@@ -270,11 +272,11 @@ export class SqliteBlobsRepository implements BlobsRepository {
     return this.requireUpload(input.uploadId);
   }
 
-  resetUploadAfterFailure(
+  async resetUploadAfterFailure(
     uploadId: string,
     message: string,
     updatedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection.prepare(
       `UPDATE blob_upload_sessions
        SET state = 'waiting_for_upload', updated_at = ?,
@@ -283,7 +285,7 @@ export class SqliteBlobsRepository implements BlobsRepository {
     ).run(updatedAt, message, uploadId);
   }
 
-  complete(uploadId: string, completedAt: number): ReservedBlobUpload {
+  async complete(uploadId: string, completedAt: number): Promise<ReservedBlobUpload> {
     return this._database.transaction((database) => {
       const upload = this.requireUpload(uploadId);
       if (upload.state === "completed") {
@@ -325,15 +327,17 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  abort(uploadId: string, abortedAt: number): void {
-    this._database.transaction((database) => {
+  async abort(uploadId: string, abortedAt: number): Promise<boolean> {
+    return this._database.transaction((database) => {
       const upload = this.requireUpload(uploadId);
-      database.prepare(
+      if (upload.state === "aborted") return true;
+      const { changes } = database.prepare(
         `UPDATE blob_upload_sessions
          SET state = 'aborted', updated_at = ?
          WHERE id = ?
            AND state IN ('waiting_for_upload', 'uploaded', 'verifying')`
       ).run(abortedAt, uploadId);
+      if (!changes) return false;
       database.prepare(
         `UPDATE operations
          SET state = 'failed', last_error_code = 'UPLOAD_ABORTED',
@@ -346,10 +350,11 @@ export class SqliteBlobsRepository implements BlobsRepository {
          VALUES (?, ?, 'blob_upload_abandoned', ?, ?, ?)
          ON CONFLICT (object_key) DO NOTHING`
       ).run(randomUUID(), upload.object_key, abortedAt, abortedAt, abortedAt);
+      return true;
     });
   }
 
-  expireDue(expiredAt: number, limit: number): number {
+  async expireDue(expiredAt: number, limit: number): Promise<number> {
     return this._database.transaction((database) => {
       const rows = database.prepare(
         `SELECT id, operation_id, object_key
@@ -401,12 +406,12 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  claimDeletionJobs(input: {
+  async claimDeletionJobs(input: {
     readonly workerId: string;
     readonly now: number;
     readonly leaseMs: number;
     readonly limit: number;
-  }): BlobDeletionJobRow[] {
+  }): Promise<BlobDeletionJobRow[]> {
     return this._database.transaction((database) => {
       const rows = database.prepare(
         `SELECT id, object_key, attempt_count
@@ -434,19 +439,19 @@ export class SqliteBlobsRepository implements BlobsRepository {
     });
   }
 
-  completeDeletionJob(jobId: string, workerId: string): void {
+  async completeDeletionJob(jobId: string, workerId: string): Promise<void> {
     this._database.connection.prepare(
       "DELETE FROM object_deletion_jobs WHERE id = ? AND lease_owner = ?"
     ).run(jobId, workerId);
   }
 
-  failDeletionJob(input: {
+  async failDeletionJob(input: {
     readonly jobId: string;
     readonly workerId: string;
     readonly message: string;
     readonly nextAttemptAt: number;
     readonly updatedAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.connection.prepare(
       `UPDATE object_deletion_jobs
        SET attempt_count = attempt_count + 1,

@@ -10,9 +10,9 @@ export function createWorktreesRouter(options: {
   router.use(json({ limit: "1mb" }));
 
   router.get("/worktrees", async (request, response) => {
-    const user = options.identity.requireSession(
+    const user = (await options.identity.requireSession(
       request.headers.cookie
-    ).user;
+    )).user;
     response.json(
       await options.worktrees.list(user.id, {
         scope: request.query.scope,
@@ -27,7 +27,7 @@ export function createWorktreesRouter(options: {
     );
   });
   router.post("/worktrees", async (request, response) => {
-    const { user, writeSource } = options.identity.requireSession(
+    const { user, writeSource } = await options.identity.requireSession(
       request.headers.cookie
     );
     const result = await options.worktrees.create(
@@ -39,17 +39,17 @@ export function createWorktreesRouter(options: {
     response.status(result.status).json(result.body);
   });
   router.get("/worktrees/:worktreeId", async (request, response) => {
-    const user = options.identity.requireSession(
+    const user = (await options.identity.requireSession(
       request.headers.cookie
-    ).user;
+    )).user;
     response.json(
       await options.worktrees.get(user.id, request.params.worktreeId)
     );
   });
   router.get("/spaces/:spaceId/worktrees/:number", async (request, response) => {
-    const user = options.identity.requireSession(
+    const user = (await options.identity.requireSession(
       request.headers.cookie
-    ).user;
+    )).user;
     response.json(
       await options.worktrees.getByNumber(
         user.id,
@@ -61,9 +61,9 @@ export function createWorktreesRouter(options: {
   router.patch(
     "/worktrees/:worktreeId",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.update(
           user.id,
@@ -76,9 +76,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/units",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       const result = await options.worktrees.addUnit(
         user.id,
         request.params.worktreeId,
@@ -89,7 +89,7 @@ export function createWorktreesRouter(options: {
     }
   );
   router.post("/worktrees/:worktreeId/units/:unitId/removal", async (request, response) => {
-    const user = options.identity.requireSession(request.headers.cookie).user;
+    const user = (await options.identity.requireSession(request.headers.cookie)).user;
     response.json(
       await options.worktrees.setUnitRemoved(
         user.id,
@@ -102,9 +102,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/units/:unitId/open",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.openUnit(
           user.id,
@@ -118,9 +118,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/units/:unitId/changesets",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.submitChangeset(
           user.id,
@@ -134,9 +134,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/ready",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.markReady(
           user.id,
@@ -148,9 +148,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/reopen",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.reopen(
           user.id,
@@ -162,9 +162,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/merge",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.merge(
           user.id,
@@ -177,9 +177,9 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/discard",
     async (request, response) => {
-      const user = options.identity.requireSession(
+      const user = (await options.identity.requireSession(
         request.headers.cookie
-      ).user;
+      )).user;
       response.json(
         await options.worktrees.discard(
           user.id,

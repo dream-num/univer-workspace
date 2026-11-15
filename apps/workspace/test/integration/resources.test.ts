@@ -12,6 +12,7 @@ import {
   collaborationCallOptions,
   createCollaborationRuntime,
   createUnitData,
+  UnitStoreError,
   type UnitStore,
 } from "../../server/src/integrations/univer/unit-store.js";
 import { createWorktreeBackend } from "../../server/src/integrations/univer/worktree-store.js";
@@ -33,7 +34,7 @@ afterEach(async () => {
 describe("Resources", () => {
   it("creates one collaboration Unit and one Node/Resource per idempotency key", async () => {
     const createdUnits: string[] = [];
-    const application = createTestApplication(async ({ unitId }) => {
+    const application = await createTestApplication(async ({ unitId }) => {
       createdUnits.push(unitId);
     });
     const userId = await register(application, "alice");
@@ -83,9 +84,41 @@ describe("Resources", () => {
     });
   });
 
+  it("allows one retry to claim a failed operation and excludes background recovery while it runs", async () => {
+    let calls = 0;
+    let started!: () => void;
+    let release!: () => void;
+    const retryStarted = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const application = await createTestApplication(async () => {
+      if (++calls === 1) throw new UnitStoreError("INVALID_UNIT", "Rejected by UnitStore", false);
+      started();
+      await gate;
+    });
+    const owner = await register(application, "concurrent-retry");
+    const space = (await application.spaces.list(owner)).spaces[0]!;
+    const key = "concurrent-create-retry-0001";
+    await expect(application.resources.create(owner, key, {
+      kind: "univer", name: "Retry", unitType: "sheet", spaceId: space.id, parentNodeId: null,
+    })).resolves.toMatchObject({ body: { operation: { state: "failed" } } });
+
+    const retries = Promise.allSettled([application.operations.retry(owner, key), application.operations.retry(owner, key)]);
+    await retryStarted;
+    try {
+      expect(await application.repositories.resources.claimDue("other-worker", Date.now(), Date.now() + 30_000, 1)).toEqual([]);
+    } finally {
+      release();
+    }
+    const results = await retries;
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((r) => r.status === "rejected")).toMatchObject({ reason: { code: "CONFLICT" } });
+    expect(calls).toBe(2);
+    expect(await application.operations.get(owner, key)).toMatchObject({ state: "completed" });
+  });
+
   it("creates a PDF Unit through the product API and lists it with its type", async () => {
     const requested: UnitType[] = [];
-    const application = createTestApplication(async ({ unitType }) => {
+    const application = await createTestApplication(async ({ unitType }) => {
       requested.push(unitType);
     });
     const userId = await register(application, "alice");
@@ -109,7 +142,7 @@ describe("Resources", () => {
     });
     expect(requested).toEqual(["pdf"]);
     expect(
-      application.views.listOwned(userId, { cursor: undefined, limit: undefined })
+      await application.views.listOwned(userId, { cursor: undefined, limit: undefined })
     ).toMatchObject({
       items: [{ node: { name: "Brochure" }, resource: { unitType: "pdf" } }],
     });
@@ -126,7 +159,7 @@ describe("Resources", () => {
   });
 
   it("records recent only after a successful Resource open", async () => {
-    const application = createTestApplication(async () => {});
+    const application = await createTestApplication(async () => {});
     const userId = await register(application, "alice");
     const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
@@ -146,7 +179,7 @@ describe("Resources", () => {
     if (!resourceId) throw new Error("Created Resource is missing");
 
     expect(
-      application.views.listOwned(userId, {
+      await application.views.listOwned(userId, {
         cursor: undefined,
         limit: undefined,
       })
@@ -169,7 +202,7 @@ describe("Resources", () => {
         .prepare("SELECT COUNT(*) AS count FROM recent_resources")
         .get()
     ).toMatchObject({ count: 0 });
-    const opened = application.resources.open(userId, resourceId);
+    const opened = await application.resources.open(userId, resourceId);
     expect(opened).toMatchObject({
       resource: {
         id: resourceId,
@@ -183,7 +216,7 @@ describe("Resources", () => {
       throw new Error("Created Resource is not a Univer Resource");
     }
     expect(
-      application.resources.getByUnit(userId, opened.resource.unitId)
+      await application.resources.getByUnit(userId, opened.resource.unitId)
     ).toMatchObject({
       resource: { id: resourceId },
       node: { id: created.body.node.id, name: "Plan" },
@@ -194,7 +227,7 @@ describe("Resources", () => {
         .get()
     ).toMatchObject({ count: 1 });
     expect(
-      application.views.listRecent(userId, {
+      await application.views.listRecent(userId, {
         cursor: undefined,
         limit: undefined,
       })
@@ -218,7 +251,7 @@ describe("Resources", () => {
 
   it("keeps an operation pending when collaboration creation can be retried", async () => {
     let attempt = 0;
-    const application = createTestApplication(async () => {
+    const application = await createTestApplication(async () => {
       attempt += 1;
       if (attempt === 1) throw new Error("temporary failure");
     });
@@ -265,7 +298,7 @@ describe("Resources", () => {
     await expect(
       application.resources.resumeDue("test-worker")
     ).resolves.toBe(1);
-    expect(application.resources.getOperation(userId, operationId)).toMatchObject({
+    expect(await application.resources.getOperation(userId, operationId)).toMatchObject({
       state: "completed",
     });
     expect(attempt).toBe(2);
@@ -273,7 +306,7 @@ describe("Resources", () => {
 
   it("forwards initial Unit data with the server-reserved identity", async () => {
     let received: Parameters<UnitStore["createUnit"]>[0] | undefined;
-    const application = createTestApplication(async (input) => {
+    const application = await createTestApplication(async (input) => {
       received = input;
     });
     const userId = await register(application, "importer");
@@ -308,7 +341,7 @@ describe("Resources", () => {
   });
 
   it("does not publish a Resource when collaboration returns another Unit identity", async () => {
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       testConfig(),
       {
         unitStore: {
@@ -528,12 +561,12 @@ describe("Univer unit store", () => {
   });
 });
 
-function createTestApplication(
+async function createTestApplication(
   onCreateUnit: (
     input: Parameters<UnitStore["createUnit"]>[0]
   ) => Promise<void>
-): SqliteTestApplication {
-  const application = createSqliteTestApplication(
+): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication(
     testConfig(),
     {
       unitStore: {

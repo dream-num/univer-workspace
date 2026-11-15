@@ -137,7 +137,7 @@ async function startApplication(discordBotApiKey?: string): Promise<{
   readonly origin: string;
 }> {
   directory = mkdtempSync(join(tmpdir(), "univer-discord-bot-login-"));
-  application = createSqliteTestApplication({
+  application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },

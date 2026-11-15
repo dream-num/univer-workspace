@@ -23,7 +23,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
       createUnit: async (input: { unitId: string }) => ({ unitId: input.unitId, headRevision: 1 }),
     },
   };
-  let application = createSqliteTestApplication(config, dependencies);
+  let application = await createSqliteTestApplication(config, dependencies);
   let server: Server | undefined;
   try {
     const owner = await application.identity.registerWithPassword({
@@ -96,7 +96,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
     await close(server);
     server = undefined;
     await application.close();
-    application = createSqliteTestApplication(config, dependencies);
+    application = await createSqliteTestApplication(config, dependencies);
     server = createServer(application.app);
     origin = await listen(server);
     expect(await request(team.id, "GET", readerCookie)).toEqual({

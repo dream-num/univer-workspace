@@ -42,7 +42,7 @@ db/
 
 接口由使用它的业务模块定义，数据库目录按后端保存实现。`sqlite/initialize.ts` 在打开 `sqlite/connection.ts` 定义的连接前准备数据库，`sqlite/open.ts` 使用该连接装配各领域 Repository。SQLite schema 和所有历史迁移也在 `db/sqlite/`。生产构建从新目录复制 schema，历史验证同时扫描迁移前后的 Git 路径。
 
-现有其余 Repository 分属 `access`、`blobs`、`content-permissions`、`html-view-drafts`、`identity`、`issues`、`nodes`、`operations`、`permissions`、`resources`、`skill-drafts`、`trash`、`univer-assets`、`views`、`worktrees`。按实际业务操作迁移，模块的 `index.ts` 通过 `export type` 公开 Repository 契约。
+现有其余 Repository 分属 `access`、`blobs`、`content-permissions`、`html-view-drafts`、`identity`、`issues`、`nodes`、`operations`、`permissions`、`resources`、`skill-drafts`、`trash`、`univer-assets`、`views`、`worktrees`。模块的 `index.ts` 通过 `export type` 公开 Repository 契约。
 
 ## 外部能用什么
 
@@ -73,11 +73,13 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 
 `db:ban-agent` 也通过工厂和业务接口执行。产品库的选择独立于 `COLLABORATION_DATABASE_FILE` 和 `BLOB_STORE`。
 
-## 事务和第一阶段验收
+## Repository 与事务
 
-空间与置顶 Repository 的 I/O 均返回 Promise。创建 Team Space 时，选择可用 slug、插入和回读属于同一次操作。一次设置更新只写请求提供的字段，并在事务内返回结果。其他模块仍有同步 I/O 接口，调整时需同时核对调用方和事务边界。
+所有产品 Repository 的 I/O 都返回 Promise。Service、Router、启动和后台任务等待结果。SQLite 在单次方法调用内执行同步事务；事务回调中只使用同一连接，不能跨越 `await`。
 
-- **Repository 方法表达业务原子性。** 例如 `replacePins(userId, spaceIds, createdAt): Promise<StoredSpacePins | null>`。实现必须在一次事务内重查置顶资格、删除旧顺序并写入新顺序，成功返回事务内读回的最终列表，有空间无权置顶时返回 `null`。Service 和 Router 均等待结果。
-- **跨表操作保持原子。** 例如 OAuth 兑换中的令牌状态校验与会话签发，由 Identity 提供一个原子操作。重构时逐项核对已有事务，避免拆成若干独立提交。跨产品库、协同服务、BlobStore 的工作继续沿用既有 Operation 和恢复流程。
-- **按模块实施，按全库验收。** 先用空间置顶验证成功、无权限、顺序、中途失败回滚和 HTTP 行为，再迁其余 Repository，包含令牌服务、OAuth 路由、维护命令和测试中直接使用连接的入口。第一阶段以业务代码全部通过接口访问产品库作为完成条件。
-- **自动检查边界。** 在 `apps/workspace/test/unit/product-database-boundary.test.ts` 检查生产代码对后端目录、数据库驱动和具体实现的导入与再导出，仅放行工厂及后端内部装配。保留协同库自己的驱动边界。置顶等契约用例放在 `apps/workspace/test/integration/`，第二阶段让两种后端运行同一组行为测试。SQLite 重构需通过既有迁移矩阵和生产构建验证。
+- 创建 Team Space 时，在同一操作中分配 slug、插入并回读。修改设置时只写请求提供的字段。
+- `replacePins` 在一个事务中复查置顶资格、替换顺序并回读列表。没有权限的请求保留原有置顶。
+- 消费授权码与签发凭据、检查剩余配额与预留文件、校验目录树与移动节点分别属于一次原子操作。数据库适配器负责在并发请求下维持这些约束。
+- 跨产品库、协同服务和 BlobStore 的写入通过持久化 Operation、幂等键和恢复流程衔接。
+
+[依赖边界检查](../../test/unit/product-database-boundary.test.ts)约束后端导入。同一领域的实现应复用行为用例，覆盖并发写入、失败回滚与权限变化。SQLite 的历史兼容性由迁移矩阵和生产构建验证。

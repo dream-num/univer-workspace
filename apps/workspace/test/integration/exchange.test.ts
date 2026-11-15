@@ -81,12 +81,12 @@ describe("Universer Exchange protocol", () => {
     });
     const deckResource = deck.body.node.resource!;
     if (deckResource.kind !== "univer") throw new Error("Expected Univer Resource");
-    application.permissions.upsertNodeGrant(owner.userId, deck.body.node.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(owner.userId, deck.body.node.id, viewer.userId, { role: "viewer" });
     const start = () => startTask(origin, viewer.cookie, `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`, {
       unitID: deckResource.unitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX,
     });
     expect(await waitForTask(origin, viewer.cookie, await start())).toMatchObject({ status: "failed" });
-    application.permissions.upsertNodeGrant(owner.userId, carrier.body.node.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(owner.userId, carrier.body.node.id, viewer.userId, { role: "viewer" });
     const result = await waitForTask(origin, viewer.cookie, await start());
     expect(result, JSON.stringify(result)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
     const file = await downloadArtifact(origin, viewer.cookie, result.export!.fileID);
@@ -104,7 +104,7 @@ describe("Universer Exchange protocol", () => {
     const personalSpace = (await application.spaces.list(owner.userId))
       .spaces.find((space) => space.type === "personal");
     expect(personalSpace).toBeDefined();
-    const imports = application.nodes.create(owner.userId, {
+    const imports = await application.nodes.create(owner.userId, {
       spaceId: personalSpace!.id,
       parentNodeId: null,
       name: "Imports",
@@ -132,7 +132,7 @@ describe("Universer Exchange protocol", () => {
     expect(imported.status).toBe("done");
     expect(imported.import?.unitID).toEqual(expect.any(String));
 
-    const access = application.access.resolveUnit(
+    const access = await application.access.resolveUnit(
       owner.userId,
       imported.import!.unitID
     );
@@ -161,7 +161,7 @@ describe("Universer Exchange protocol", () => {
       404
     );
 
-    application.permissions.upsertNodeGrant(
+    await application.permissions.upsertNodeGrant(
       owner.userId,
       access!.node.id,
       viewer.userId,
@@ -266,7 +266,7 @@ describe("Universer Exchange protocol", () => {
     expect(imported.import?.unitID).toEqual(expect.any(String));
     expect(imported.import?.unitID).not.toBe(unitId);
     expect(
-      application.access.resolveUnit(owner.userId, imported.import!.unitID)
+      await application.access.resolveUnit(owner.userId, imported.import!.unitID)
     ).toMatchObject({
       kind: "univer",
       unitType: "pdf",
@@ -469,7 +469,7 @@ describe("Universer Exchange protocol", () => {
       import: { unitID: expect.any(String) },
     });
     expect(
-      application.access.resolveUnit(owner.userId, imported.import!.unitID)
+      await application.access.resolveUnit(owner.userId, imported.import!.unitID)
     ).toMatchObject({
       kind: "univer",
       unitType: fixture.unitType,
@@ -572,7 +572,7 @@ describe("Universer Exchange protocol", () => {
     const viewer = await register(application, "ole-convert-viewer");
     const outsider = await register(application, "ole-convert-outsider");
     const personalSpace = (await application.spaces.list(owner.userId)).spaces.find((space) => space.type === "personal")!;
-    const folder = application.nodes.create(owner.userId, { spaceId: personalSpace.id, parentNodeId: null, name: "Decks" });
+    const folder = await application.nodes.create(owner.userId, { spaceId: personalSpace.id, parentNodeId: null, name: "Decks" });
     const uploaded = await uploadExchangeFile(origin, owner.cookie, await oleFixture());
     const imported = await waitForTask(
       origin,
@@ -583,7 +583,7 @@ describe("Universer Exchange protocol", () => {
     );
     expect(imported).toMatchObject({ status: "done" });
     const hostUnitId = imported.import!.unitID;
-    const hostNode = application.access.resolveUnit(owner.userId, hostUnitId)!.node;
+    const hostNode = (await application.access.resolveUnit(owner.userId, hostUnitId))!.node;
     const attachment = listAssets(application).find((asset) => asset.original_filename.endsWith(".docx"))!;
     expect(attachment).toBeDefined();
     const convertPath = `/universer-api/exchange/${UniverType.UNIVER_DOC}/import`;
@@ -597,7 +597,7 @@ describe("Universer Exchange protocol", () => {
     const converted = await waitForTask(origin, owner.cookie, await startTask(origin, owner.cookie, convertPath, convertBody));
     expect(converted, JSON.stringify(converted)).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
     const childUnitId = converted.import!.unitID;
-    const child = application.access.resolveUnit(owner.userId, childUnitId)!;
+    const child = (await application.access.resolveUnit(owner.userId, childUnitId))!;
     expect(child).toMatchObject({ kind: "univer", unitType: "doc" });
     // The online document lands in the host's folder; the attachment stays with the host.
     expect(child.node.parentNodeId).toBe(hostNode.parentNodeId);
@@ -620,8 +620,8 @@ describe("Universer Exchange protocol", () => {
     const linkedUnitId = (linkedDeck.body.node.resource as { readonly unitId: string }).unitId;
 
     // Exports that take files embed the online version by default; the others cannot ask for it.
-    application.permissions.upsertNodeGrant(owner.userId, hostNode.id, viewer.userId, { role: "viewer" });
-    application.permissions.upsertNodeGrant(owner.userId, linkedDeck.body.node.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(owner.userId, hostNode.id, viewer.userId, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(owner.userId, linkedDeck.body.node.id, viewer.userId, { role: "viewer" });
     const exportPath = `/universer-api/exchange/${UniverType.UNIVER_SLIDE}/export`;
     const byDefault = { unitID: linkedUnitId, type: UniverInstanceType.UNIVER_SLIDE, format: ExchangeFormat.PPTX };
     await expectTaskStart(origin, owner.cookie, `/universer-api/exchange/${UniverType.UNIVER_SHEET}/export`, {
@@ -668,7 +668,7 @@ describe("Universer Exchange protocol", () => {
       import: { unitID: expect.any(String) },
     });
     expect(
-      application.access.resolveUnit(owner.userId, imported.import!.unitID)
+      await application.access.resolveUnit(owner.userId, imported.import!.unitID)
     ).toMatchObject({
       kind: "univer",
       unitType: "slide",
@@ -683,7 +683,7 @@ async function startApplication(): Promise<{
 }> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-exchange-"));
   directories.push(directory);
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },

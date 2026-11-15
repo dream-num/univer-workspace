@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { ApplicationError } from "../../server/src/middleware/errors.js";
 
@@ -19,7 +19,7 @@ afterEach(async () => {
 
 describe("Blob Resources", () => {
   it("publishes only after verified upload and exposes generic Resource views", async () => {
-    const { application } = createTestApplication();
+    const { application } = await createTestApplication();
     const userId = await register(application, "blob-owner");
     const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
@@ -32,7 +32,7 @@ describe("Blob Resources", () => {
       declaredMediaType: "application/pdf",
     };
 
-    const reserved = application.blobs.createUpload(
+    const reserved = await application.blobs.createUpload(
       interactivePrincipal(userId),
       "blob-upload-idempotency-0001",
       intent
@@ -45,7 +45,7 @@ describe("Blob Resources", () => {
         uploadTarget: { method: "PUT" },
       },
     });
-    const replay = application.blobs.createUpload(
+    const replay = await application.blobs.createUpload(
       interactivePrincipal(userId),
       "blob-upload-idempotency-0001",
       intent
@@ -63,7 +63,7 @@ describe("Blob Resources", () => {
       "11",
       Readable.from([Buffer.from("hello world")])
     );
-    expect(application.blobs.getUpload(userId, reserved.body.upload.id)).toMatchObject({
+    expect(await application.blobs.getUpload(userId, reserved.body.upload.id)).toMatchObject({
       upload: {
         state: "uploaded",
         receivedSize: 11,
@@ -103,11 +103,11 @@ describe("Blob Resources", () => {
     expect(count(application, "univer_resources")).toBe(0);
     expect(count(application, "blob_resources")).toBe(1);
 
-    expect(application.resources.get(userId, reserved.body.upload.resourceId)).toMatchObject({
+    expect(await application.resources.get(userId, reserved.body.upload.resourceId)).toMatchObject({
       resource: { kind: "blob", mediaType: "text/plain; charset=utf-8" },
       node: { id: reserved.body.upload.nodeId },
     });
-    expect(application.resources.open(userId, reserved.body.upload.resourceId)).toMatchObject({
+    expect(await application.resources.open(userId, reserved.body.upload.resourceId)).toMatchObject({
       resource: {
         kind: "blob",
         originalFilename: "client-name.pdf",
@@ -115,7 +115,7 @@ describe("Blob Resources", () => {
         downloadUrl: `/api/blob-resources/${reserved.body.upload.resourceId}/download`,
       },
     });
-    expect(application.nodes.listSpaceRoot(userId, space.id, {})).toMatchObject({
+    expect(await application.nodes.listSpaceRoot(userId, space.id, {})).toMatchObject({
       nodes: [{ resource: { kind: "blob" } }],
     });
 
@@ -127,14 +127,14 @@ describe("Blob Resources", () => {
         undefined
       )
     ).rejects.toMatchObject<ApplicationError>({ code: "NOT_FOUND" });
-    application.permissions.upsertNodeGrant(
+    await application.permissions.upsertNodeGrant(
       userId,
       reserved.body.upload.nodeId,
       viewerId,
       { role: "viewer" }
     );
     expect(
-      application.resources.open(viewerId, reserved.body.upload.resourceId)
+      await application.resources.open(viewerId, reserved.body.upload.resourceId)
     ).toMatchObject({ resource: { kind: "blob", accessRole: "viewer" } });
     const viewerContent = await application.blobs.openContent(
       viewerId,
@@ -177,9 +177,8 @@ describe("Blob Resources", () => {
     application.database.connection
       .prepare("UPDATE blob_resources SET availability = 'quarantined' WHERE resource_id = ?")
       .run(reserved.body.upload.resourceId);
-    expect(() =>
-      application.resources.open(userId, reserved.body.upload.resourceId)
-    ).toThrowError(expect.objectContaining({ code: "CONFLICT" }));
+    await expect(application.resources.open(userId, reserved.body.upload.resourceId)
+    ).rejects.toThrowError(expect.objectContaining({ code: "CONFLICT" }));
     expect(count(application, "recent_resources")).toBe(0);
     await expect(
       application.blobs.openContent(
@@ -191,11 +190,11 @@ describe("Blob Resources", () => {
   });
 
   it("rejects conflicting intents and permits a clean retry after a short body", async () => {
-    const { application } = createTestApplication();
+    const { application } = await createTestApplication();
     const userId = await register(application, "blob-retry");
     const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
-    const result = application.blobs.createUpload(
+    const result = await application.blobs.createUpload(
       interactivePrincipal(userId),
       "blob-upload-idempotency-0002",
       {
@@ -208,8 +207,7 @@ describe("Blob Resources", () => {
       }
     );
 
-    expect(() =>
-      application.blobs.createUpload(interactivePrincipal(userId), "blob-upload-idempotency-0002", {
+    await expect(application.blobs.createUpload(interactivePrincipal(userId), "blob-upload-idempotency-0002", {
         spaceId: space.id,
         parentNodeId: null,
         name: "other.zip",
@@ -217,9 +215,8 @@ describe("Blob Resources", () => {
         byteSize: 4,
         declaredMediaType: "application/octet-stream",
       })
-    ).toThrowError(expect.objectContaining({ code: "CONFLICT" }));
-    expect(() =>
-      application.blobs.createUpload(interactivePrincipal(userId), "blob-upload-too-large-0001", {
+    ).rejects.toThrowError(expect.objectContaining({ code: "CONFLICT" }));
+    await expect(application.blobs.createUpload(interactivePrincipal(userId), "blob-upload-too-large-0001", {
         spaceId: space.id,
         parentNodeId: null,
         name: "too-large.bin",
@@ -227,7 +224,7 @@ describe("Blob Resources", () => {
         byteSize: 1025,
         declaredMediaType: "application/octet-stream",
       })
-    ).toThrowError(
+    ).rejects.toThrowError(
       expect.objectContaining({ code: "PAYLOAD_TOO_LARGE", status: 413 })
     );
 
@@ -239,7 +236,7 @@ describe("Blob Resources", () => {
         Readable.from([Buffer.from("abc")])
       )
     ).rejects.toMatchObject<ApplicationError>({ code: "CONFLICT" });
-    expect(application.blobs.getUpload(userId, result.body.upload.id).upload.state).toBe(
+    expect((await application.blobs.getUpload(userId, result.body.upload.id)).upload.state).toBe(
       "waitingForUpload"
     );
     await application.blobs.upload(
@@ -248,17 +245,17 @@ describe("Blob Resources", () => {
       "4",
       Readable.from([Buffer.from("PK12")])
     );
-    expect(application.blobs.getUpload(userId, result.body.upload.id)).toMatchObject({
+    expect(await application.blobs.getUpload(userId, result.body.upload.id)).toMatchObject({
       upload: { state: "uploaded", detectedMediaType: "application/zip" },
     });
   });
 
   it("supports publishing and reading an empty Blob", async () => {
-    const { application } = createTestApplication();
+    const { application } = await createTestApplication();
     const userId = await register(application, "blob-empty");
     const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
-    const reserved = application.blobs.createUpload(
+    const reserved = await application.blobs.createUpload(
       interactivePrincipal(userId),
       "blob-upload-empty-0001",
       {
@@ -307,12 +304,12 @@ describe("Blob Resources", () => {
         },
       },
     };
-    const first = createSqliteTestApplication(config, dependencies);
+    const first = await createSqliteTestApplication(config, dependencies);
     applications.push(first);
     const userId = await register(first, "blob-restart");
     const space = (await first.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
-    const reserved = first.blobs.createUpload(
+    const reserved = await first.blobs.createUpload(
       interactivePrincipal(userId),
       "blob-upload-restart-0001",
       {
@@ -336,9 +333,9 @@ describe("Blob Resources", () => {
     writeFileSync(join(blobDirectory, `${objectKey}.upload`), "stale");
     await first.close();
 
-    const restarted = createSqliteTestApplication(config, dependencies);
+    const restarted = await createSqliteTestApplication(config, dependencies);
     applications.push(restarted);
-    expect(restarted.blobs.getUpload(userId, reserved.body.upload.id)).toMatchObject({
+    expect(await restarted.blobs.getUpload(userId, reserved.body.upload.id)).toMatchObject({
       upload: { state: "waitingForUpload" },
     });
     await restarted.blobs.upload(
@@ -351,15 +348,33 @@ describe("Blob Resources", () => {
     expect(existsSync(join(blobDirectory, objectKey))).toBe(true);
   });
 
+  it("keeps published bytes when an abort read the upload before completion", async () => {
+    const { application } = await createTestApplication();
+    const owner = await register(application, "abort-race");
+    const space = (await application.spaces.list(owner)).spaces[0]!;
+    const upload = await uploadedBlob(application, owner, space.id, "retained.bin", "abort-after-publication-0001");
+    const repository = application.repositories.blobs;
+    const abort = repository.abort.bind(repository);
+    vi.spyOn(repository, "abort").mockImplementationOnce(async (id, at) => {
+      await application.blobs.complete(interactivePrincipal(owner), id);
+      return abort(id, at);
+    });
+    await expect(application.blobs.abort(owner, upload.uploadId)).rejects.toMatchObject({ code: "CONFLICT" });
+    expect(count(application, "object_deletion_jobs")).toBe(0);
+    await application.blobs.runMaintenance("abort-race-worker");
+    const opened = await application.blobs.openContent(owner, upload.resourceId, undefined);
+    expect(await readAll(opened.stream)).toEqual(Buffer.from([0, 1, 2, 3]));
+  });
+
   it("cleans aborted, expired, and permanently deleted objects through the outbox", async () => {
-    const { application, blobDirectory } = createTestApplication();
+    const { application, blobDirectory } = await createTestApplication();
     const userId = await register(application, "blob-cleanup");
     const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     const aborted = await uploadedBlob(application, userId, space.id, "abort.bin", "blob-cleanup-abort-0001");
     expect(readdirSync(blobDirectory)).toHaveLength(1);
-    application.blobs.abort(userId, aborted.uploadId);
+    await application.blobs.abort(userId, aborted.uploadId);
     expect(count(application, "object_deletion_jobs")).toBe(1);
     await application.blobs.runMaintenance("cleanup-worker");
     expect(readdirSync(blobDirectory)).toHaveLength(0);
@@ -370,7 +385,7 @@ describe("Blob Resources", () => {
       .prepare("UPDATE blob_upload_sessions SET expires_at = 0 WHERE id = ?")
       .run(expired.uploadId);
     await application.blobs.runMaintenance("cleanup-worker");
-    expect(application.blobs.getUpload(userId, expired.uploadId).upload.state).toBe("expired");
+    expect((await application.blobs.getUpload(userId, expired.uploadId)).upload.state).toBe("expired");
     expect(readdirSync(blobDirectory)).toHaveLength(0);
 
     const published = await uploadedBlob(application, userId, space.id, "delete.bin", "blob-cleanup-delete-0001");
@@ -382,8 +397,8 @@ describe("Blob Resources", () => {
     ).object_key;
     const objectFilename = join(blobDirectory, objectKey);
     expect(existsSync(objectFilename)).toBe(true);
-    const batch = application.trash.trashNode(userId, published.nodeId);
-    application.trash.removePermanently(userId, batch.id);
+    const batch = await application.trash.trashNode(userId, published.nodeId);
+    await application.trash.removePermanently(userId, batch.id);
     expect(existsSync(objectFilename)).toBe(true);
     expect(count(application, "object_deletion_jobs")).toBe(1);
     await application.blobs.runMaintenance("cleanup-worker");
@@ -394,7 +409,7 @@ describe("Blob Resources", () => {
 
 describe("Blob content replacement", () => {
   it("replaces bytes with stable identity, fresh ETags, idempotent replay and stale-write protection", async () => {
-    const { application, blobDirectory } = createTestApplication();
+    const { application, blobDirectory } = await createTestApplication();
     const user = await register(application, "replace-owner");
     const space = (await application.spaces.list(user)).spaces[0]!;
     const blob = await uploadedBlob(
@@ -406,7 +421,7 @@ describe("Blob content replacement", () => {
     );
     await application.blobs.complete(interactivePrincipal(user), blob.uploadId);
     const etag = await contentEtag(application, user, blob.resourceId);
-    const originalNode = application.nodes.get(user, blob.nodeId);
+    const originalNode = await application.nodes.get(user, blob.nodeId);
     const first = await application.blobs.replace(
       interactivePrincipal(user),
       blob.resourceId,
@@ -416,12 +431,12 @@ describe("Blob content replacement", () => {
       Readable.from(["text"]),
     );
     expect(first.etag).not.toBe(etag);
-    expect(application.resources.open(user, blob.resourceId).resource).toMatchObject({
+    expect((await application.resources.open(user, blob.resourceId)).resource).toMatchObject({
       name: "original.bin",
       originalFilename: "original.bin",
       byteSize: 4,
     });
-    expect(application.nodes.get(user, blob.nodeId)).toMatchObject({
+    expect(await application.nodes.get(user, blob.nodeId)).toMatchObject({
       node: { id: blob.nodeId, name: "original.bin", parentNodeId: originalNode.node.parentNodeId },
     });
     expect(count(application, "resources")).toBe(1);
@@ -477,7 +492,7 @@ describe("Blob content replacement", () => {
         Readable.from(["bad"]),
       ),
     ).rejects.toMatchObject({ status: 409 });
-    expect(application.operations.get(user, first.operationId)).toMatchObject({
+    expect(await application.operations.get(user, first.operationId)).toMatchObject({
       kind: "replaceBlobContent",
       state: "completed",
       result: first,
@@ -487,7 +502,7 @@ describe("Blob content replacement", () => {
   });
 
   it("keeps old bytes after failed uploads, competing writes, or trashing during upload", async () => {
-    const { application } = createTestApplication();
+    const { application } = await createTestApplication();
     const user = await register(application, "replace-race");
     const space = (await application.spaces.list(user)).spaces[0]!;
     const blob = await uploadedBlob(
@@ -502,7 +517,7 @@ describe("Blob content replacement", () => {
     const replace = (key: string, body: Readable) =>
       application.blobs.replace(interactivePrincipal(user), blob.resourceId, key, etag, "4", body);
     await expect(replace("replace-short-body-0001", Readable.from(["x"]))).rejects.toThrow();
-    expect(application.operations.get(user, "replace-short-body-0001").state).toBe("failed");
+    expect((await application.operations.get(user, "replace-short-body-0001")).state).toBe("failed");
     let release!: () => void;
     let started!: () => void;
     const waiting = new Promise<void>((resolve) => {
@@ -537,7 +552,7 @@ describe("Blob content replacement", () => {
         Readable.from(["nope"]),
       ),
     ).rejects.toMatchObject({ status: 404 });
-    application.permissions.upsertNodeGrant(user, blob.nodeId, outsider, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(user, blob.nodeId, outsider, { role: "viewer" });
     await expect(
       application.blobs.replace(
         interactivePrincipal(outsider),
@@ -571,7 +586,7 @@ describe("Blob content replacement", () => {
       ),
     );
     await entered;
-    application.trash.trashNode(user, blob.nodeId);
+    await application.trash.trashNode(user, blob.nodeId);
     unpause();
     await expect(trashed).rejects.toMatchObject({ status: 404 });
     expect(
@@ -582,7 +597,7 @@ describe("Blob content replacement", () => {
   });
 
   it("keeps published bytes when editor permission is revoked during upload", async () => {
-    const { application } = createTestApplication();
+    const { application } = await createTestApplication();
     const owner = await register(application, "replace-revoke-owner");
     const editor = await register(application, "replace-revoke-editor");
     const space = (await application.spaces.list(owner)).spaces[0]!;
@@ -594,7 +609,7 @@ describe("Blob content replacement", () => {
       "replace-revoke-create-0001",
     );
     await application.blobs.complete(interactivePrincipal(owner), blob.uploadId);
-    application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "editor" });
+    await application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "editor" });
     const etag = await contentEtag(application, editor, blob.resourceId);
     let release!: () => void;
     let started!: () => void;
@@ -620,18 +635,18 @@ describe("Blob content replacement", () => {
       ),
     );
     await entered;
-    application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(owner, blob.nodeId, editor, { role: "viewer" });
     release();
     await expect(pending).rejects.toMatchObject({ status: 403 });
     expect(await contentEtag(application, owner, blob.resourceId)).toBe(etag);
-    expect(application.operations.get(editor, operationId)).toMatchObject({
+    expect(await application.operations.get(editor, operationId)).toMatchObject({
       state: "failed",
       error: { code: "FORBIDDEN" },
     });
   });
 
   it("fails interrupted replacements once on restart and cleans only unpublished objects", async () => {
-    const { application, blobDirectory } = createTestApplication();
+    const { application, blobDirectory } = await createTestApplication();
     const user = await register(application, "replace-recovery");
     const space = (await application.spaces.list(user)).spaces[0]!;
     const blob = await uploadedBlob(
@@ -644,7 +659,7 @@ describe("Blob content replacement", () => {
     await application.blobs.complete(interactivePrincipal(user), blob.uploadId);
     const repository = application.repositories.blobs;
     const operationId = "replace-interrupted-0001";
-    const pending = repository.reserveReplacement(
+    const pending = await repository.reserveReplacement(
       operationId,
       user,
       { resourceId: blob.resourceId, expectedEtag: "old", byteSize: 4 },
@@ -652,8 +667,8 @@ describe("Blob content replacement", () => {
     );
     writeFileSync(join(blobDirectory, pending.objectKey), "lost");
     await application.close();
-    const restarted = createTestApplication(join(blobDirectory, "..")).application;
-    expect(restarted.operations.get(user, operationId)).toMatchObject({
+    const restarted = (await createTestApplication(join(blobDirectory, ".."))).application;
+    expect(await restarted.operations.get(user, operationId)).toMatchObject({
       state: "failed",
       error: { code: "REPLACEMENT_INTERRUPTED" },
     });
@@ -662,19 +677,19 @@ describe("Blob content replacement", () => {
     const content = await restarted.blobs.openContent(user, blob.resourceId, undefined);
     expect(await readAll(content.stream)).toEqual(Buffer.from([0, 1, 2, 3]));
     await restarted.close();
-    const again = createTestApplication(join(blobDirectory, "..")).application;
+    const again = (await createTestApplication(join(blobDirectory, ".."))).application;
     expect(count(again, "object_deletion_jobs")).toBe(0);
   });
 });
 
-function createTestApplication(existingDirectory?: string): {
+async function createTestApplication(existingDirectory?: string): Promise<{
   readonly application: SqliteTestApplication;
   readonly blobDirectory: string;
-} {
+}> {
   const directory = existingDirectory ?? mkdtempSync(join(tmpdir(), "workspace-blobs-"));
   directories.push(directory);
   const blobDirectory = join(directory, "objects");
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
@@ -714,7 +729,7 @@ async function uploadedBlob(
   idempotencyKey: string
 ): Promise<{ readonly uploadId: string; readonly nodeId: string; readonly resourceId: string }> {
   const content = Buffer.from([0, 1, 2, 3]);
-  const reserved = application.blobs.createUpload(interactivePrincipal(userId), idempotencyKey, {
+  const reserved = await application.blobs.createUpload(interactivePrincipal(userId), idempotencyKey, {
     spaceId,
     parentNodeId: null,
     name,

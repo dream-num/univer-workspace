@@ -1,11 +1,28 @@
 import type { PublicUser } from "../permissions/index.js";
-import { forbidden, invalid } from "./issues.errors.js";
+import type { SpaceAccess } from "../access/index.js";
+import { ApplicationError } from "../../middleware/errors.js";
+import { forbidden, invalid, notFound } from "./issues.errors.js";
 import type { IssueRelations, IssueRow, IssueUpdate, LabelRow } from "./issues.repository.js";
 import type { IssueEventKind, IssueState, IssueStateReason } from "./issues.types.js";
 
 interface IssueEvent {
   readonly kind: IssueEventKind;
   readonly payload: Record<string, unknown>;
+}
+
+export function requireIssueSpace(space: SpaceAccess | null): SpaceAccess {
+  if (!space) throw notFound();
+  if (space.type !== "team") throw new ApplicationError("CONFLICT", 409, "Issues are available only in team spaces.");
+  return space;
+}
+
+export function checkCreateRelations(space: SpaceAccess, relations: IssueRelations): void {
+  if (Object.values(relations).some((ids) => ids.length > 0) && !space.capabilities.triageIssues) throw forbidden();
+}
+
+export function checkCommentWrite(space: SpaceAccess, userId: string, author: string, action: "update" | "delete"): void {
+  const manager = space.role === "owner" || space.role === "admin";
+  if (!space.member || (userId !== author && !(action === "delete" && manager))) throw forbidden();
 }
 
 /** Derive mutations and audit events from the issue as read in the write transaction. */

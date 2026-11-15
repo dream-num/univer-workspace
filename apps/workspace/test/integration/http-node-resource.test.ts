@@ -24,7 +24,7 @@ afterEach(async () => {
 
 describe("Node/Resource HTTP API", () => {
   it("supports Resource Nodes as parents and exposes no legacy routes", async () => {
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,

@@ -1,4 +1,5 @@
 import { ApplicationError } from "../../middleware/errors.js";
+import { conflict, notFound, requireManageMembers, requireShare, requireTeam } from "./permissions.policy.js";
 import { assertCeiling, type AccessResolver } from "../access/index.js";
 import type {
   PermissionsRepository,
@@ -20,49 +21,49 @@ export interface PermissionsModule {
   searchUsers(
     actorUserId: string,
     query: unknown
-  ): { readonly users: readonly PublicUser[] };
+  ): Promise<{ readonly users: readonly PublicUser[] }>;
   listTeamMembers(
     actorUserId: string,
     spaceId: string
-  ): {
+  ): Promise<{
     readonly owner: PublicUser;
     readonly members: readonly TeamMembership[];
-  };
+  }>;
   upsertTeamMember(
     actorUserId: string,
     spaceId: string,
     userId: string,
     input: unknown
-  ): TeamMembership;
+  ): Promise<TeamMembership>;
   removeTeamMember(
     actorUserId: string,
     spaceId: string,
     userId: string
-  ): void;
+  ): Promise<void>;
   listNodeGrants(
     actorUserId: string,
     nodeId: string
-  ): { readonly grants: readonly NodeGrant[] };
+  ): Promise<{ readonly grants: readonly NodeGrant[] }>;
   upsertNodeGrant(
     actorUserId: string,
     nodeId: string,
     userId: string,
     input: unknown
-  ): NodeGrant;
+  ): Promise<NodeGrant>;
   removeNodeGrant(
     actorUserId: string,
     nodeId: string,
     userId: string
-  ): { readonly effectiveRole: GrantRole | null };
+  ): Promise<{ readonly effectiveRole: GrantRole | null }>;
   getNodeLinkSharing(
     actorUserId: string,
     nodeId: string
-  ): NodeLinkSharing;
+  ): Promise<NodeLinkSharing>;
   updateNodeLinkSharing(
     actorUserId: string,
     nodeId: string,
     input: unknown
-  ): NodeLinkSharing;
+  ): Promise<NodeLinkSharing>;
 }
 
 export function createPermissionsModule(options: {
@@ -74,175 +75,99 @@ export function createPermissionsModule(options: {
 }): PermissionsModule {
   const now = options.now ?? Date.now;
 
-  function manageableTeam(actorUserId: string, spaceId: string) {
-    const space = options.access.resolveSpace(actorUserId, spaceId);
-    if (!space || space.type !== "team") throw notFound();
-    if (!space.capabilities.manageMembers) throw forbidden();
-    return space;
-  }
-
-  function shareableNode(actorUserId: string, nodeId: string) {
-    const node = options.access.resolveNode(actorUserId, nodeId);
-    if (!node || node.spaceType !== "personal") throw notFound();
-    if (!node.capabilities.share) throw forbidden();
-    return node;
-  }
-
   return {
-    searchUsers(actorUserId, value) {
-      assertCeiling(options.access.principalCategory(actorUserId), "searchUsers", {});
+    async searchUsers(actorUserId, value) {
+      assertCeiling(await options.access.principalCategory(actorUserId), "searchUsers", {});
       const query = validSearch(value);
       return {
-        users: options.repository.searchUsers(query, actorUserId),
+        users: await options.repository.searchUsers(query, actorUserId),
       };
     },
 
-    listTeamMembers(actorUserId, spaceId) {
-      const space = options.access.resolveSpace(actorUserId, spaceId);
-      if (!space || space.type !== "team") throw notFound();
-      const owner = options.repository.findUser(space.ownerUserId);
+    async listTeamMembers(actorUserId, spaceId) {
+      const space = requireTeam(await options.access.resolveSpace(actorUserId, spaceId));
+      const owner = await options.repository.findUser(space.ownerUserId);
       if (!owner) throw new Error("Team space owner is missing");
       return {
         owner,
-        members: options.repository
-          .listMembers(spaceId)
-          .map(membershipView),
+        members: (await options.repository.listMembers(spaceId)).map(membershipView),
       };
     },
 
-    upsertTeamMember(actorUserId, spaceId, userId, input) {
-      const space = manageableTeam(actorUserId, spaceId);
+    async upsertTeamMember(actorUserId, spaceId, userId, input) {
+      const space = requireManageMembers(await options.access.resolveSpace(actorUserId, spaceId));
       if (space.ownerUserId === userId) {
         throw conflict("The space owner cannot be a member.");
       }
-      requireUser(options.repository, userId);
-      assertCeiling(options.access.principalCategory(actorUserId), "addTeamMember", {
-        member: options.access.principalCategory(userId),
+      await requireUser(options.repository, userId);
+      assertCeiling(await options.access.principalCategory(actorUserId), "addTeamMember", {
+        member: await options.access.principalCategory(userId),
       });
       const role = validTeamRole(input);
-      const existing = options.repository
-        .listMembers(spaceId)
-        .find((member) => member.user_id === userId);
-      if (
-        space.role === "admin" &&
-        (role === "admin" || existing?.role === "admin")
-      ) {
-        throw forbidden();
-      }
-      options.repository.upsertMember({
+      const row = await options.repository.upsertMember({
         spaceId,
         userId,
         role,
         grantedBy: actorUserId,
         now: now(),
       });
-      const row = options.repository
-        .listMembers(spaceId)
-        .find((member) => member.user_id === userId);
-      if (!row) throw new Error("Updated membership is missing");
       return membershipView(row);
     },
 
-    removeTeamMember(actorUserId, spaceId, userId) {
-      const space = options.access.resolveSpace(actorUserId, spaceId);
-      if (!space || space.type !== "team") throw notFound();
-      if (
-        actorUserId !== userId &&
-        !space.capabilities.manageMembers
-      ) {
-        throw forbidden();
-      }
-      if (space.ownerUserId === userId) {
-        throw conflict("The space owner cannot leave the space.");
-      }
-      const member = options.repository
-        .listMembers(spaceId)
-        .find((candidate) => candidate.user_id === userId);
-      if (
-        actorUserId !== userId &&
-        space.role === "admin" &&
-        member?.role === "admin"
-      ) {
-        throw forbidden();
-      }
-      if (!options.repository.removeMember(spaceId, userId)) throw notFound();
+    async removeTeamMember(actorUserId, spaceId, userId) {
+      await options.repository.removeMember(actorUserId, spaceId, userId);
       // Reuse the gateway's existing policy invalidation so removed users
       // cannot keep reading a room through an already authenticated socket.
       options.onAccessRevoked?.();
     },
 
-    listNodeGrants(actorUserId, nodeId) {
-      shareableNode(actorUserId, nodeId);
+    async listNodeGrants(actorUserId, nodeId) {
+      requireShare(await options.access.resolveNode(actorUserId, nodeId));
       return {
-        grants: options.repository
-          .listGrants(nodeId)
-          .map((row) => grantView(row, nodeId, options.access)),
+        grants: (await options.repository.listGrants(nodeId)).map(grantView),
       };
     },
 
-    upsertNodeGrant(actorUserId, nodeId, userId, input) {
-      const node = shareableNode(actorUserId, nodeId);
-      if (node.role === "owner" && node.spaceType === "personal") {
-        const space = options.access.resolveSpace(actorUserId, node.spaceId);
-        if (space?.ownerUserId === userId) {
-          throw conflict("The space owner already has access.");
-        }
-      }
-      requireUser(options.repository, userId);
-      options.repository.upsertGrant({
+    async upsertNodeGrant(actorUserId, nodeId, userId, input) {
+      requireShare(await options.access.resolveNode(actorUserId, nodeId));
+      if (actorUserId === userId) throw conflict("The space owner already has access.");
+      await requireUser(options.repository, userId);
+      const row = await options.repository.upsertGrant({
         nodeId,
         userId,
         role: validGrantRole(input),
         grantedBy: actorUserId,
         now: now(),
       });
-      const row = options.repository.findGrant(nodeId, userId);
-      if (!row) throw new Error("Updated grant is missing");
-      return grantView(row, nodeId, options.access);
+      return grantView(row);
     },
 
-    removeNodeGrant(actorUserId, nodeId, userId) {
-      shareableNode(actorUserId, nodeId);
-      if (!options.repository.removeGrant(nodeId, userId)) throw notFound();
+    async removeNodeGrant(actorUserId, nodeId, userId) {
+      const effectiveRole = await options.repository.removeGrant(actorUserId, nodeId, userId);
       options.onAccessRevoked?.();
-      const remaining = options.access.resolveNode(userId, nodeId);
-      return {
-        effectiveRole:
-          remaining?.role === "editor" || remaining?.role === "viewer"
-            ? remaining.role
-            : null,
-      };
+      return { effectiveRole };
     },
 
-    getNodeLinkSharing(actorUserId, nodeId) {
-      shareableNode(actorUserId, nodeId);
-      const row = options.repository.findLinkSharing(nodeId);
+    async getNodeLinkSharing(actorUserId, nodeId) {
+      requireShare(await options.access.resolveNode(actorUserId, nodeId));
+      const row = await options.repository.findLinkSharing(nodeId);
       return {
         ...(row ? linkSharingView(row) : defaultLinkSharing()),
-        ...ownerView(options.repository.findNodeOwner(nodeId)),
+        ...ownerView(await options.repository.findNodeOwner(nodeId)),
       };
     },
 
-    updateNodeLinkSharing(actorUserId, nodeId, input) {
-      shareableNode(actorUserId, nodeId);
+    async updateNodeLinkSharing(actorUserId, nodeId, input) {
+      requireShare(await options.access.resolveNode(actorUserId, nodeId));
       const settings = validLinkSharing(input);
-      const previous = options.repository.findLinkSharing(nodeId);
-      options.repository.upsertLinkSharing({
+      const { row, owner, changed } = await options.repository.upsertLinkSharing({
         nodeId,
         ...settings,
         actorUserId,
         now: now(),
       });
-      const row = options.repository.findLinkSharing(nodeId);
-      if (!row) throw new Error("Updated Link Sharing settings are missing");
-      if (
-        !previous ||
-        previous.enabled !== row.enabled ||
-        previous.role !== row.role
-      ) {
-        options.onLinkSharingUpdated?.(nodeId);
-      }
-      return { ...linkSharingView(row), ...ownerView(options.repository.findNodeOwner(nodeId)) };
+      if (changed) options.onLinkSharingUpdated?.(nodeId);
+      return { ...linkSharingView(row), ...ownerView(owner) };
     },
   };
 }
@@ -267,15 +192,7 @@ function membershipView(row: MembershipRow): TeamMembership {
   };
 }
 
-function grantView(
-  row: GrantRow,
-  nodeId: string,
-  access: AccessResolver
-): NodeGrant {
-  const effective = access.resolveNode(row.user_id, nodeId)?.role;
-  if (effective !== "editor" && effective !== "viewer") {
-    throw new Error("Grant has no effective Node access");
-  }
+function grantView(row: GrantRow): NodeGrant {
   return {
     user: {
       id: row.user_id,
@@ -284,7 +201,7 @@ function grantView(
       avatarUrl: row.avatar_url,
     },
     role: row.role,
-    effectiveRole: effective,
+    effectiveRole: row.effectiveRole,
     grantedBy: {
       id: row.granted_by_id,
       username: row.granted_by_username,
@@ -340,11 +257,11 @@ function defaultLinkSharing(): Omit<NodeLinkSharing, "owner" | "expiresAt"> {
   };
 }
 
-function requireUser(
+async function requireUser(
   repository: PermissionsRepository,
   userId: string
-): PublicUser {
-  const user = repository.findUser(userId);
+): Promise<PublicUser> {
+  const user = await repository.findUser(userId);
   if (!user) throw notFound();
   return user;
 }
@@ -406,24 +323,4 @@ function recordRole(input: unknown): unknown {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "The current user cannot perform this action."
-  );
-}
-
-function notFound(): ApplicationError {
-  return new ApplicationError(
-    "NOT_FOUND",
-    404,
-    "The resource was not found."
-  );
-}
-
-function conflict(message: string): ApplicationError {
-  return new ApplicationError("CONFLICT", 409, message);
 }

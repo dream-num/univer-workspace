@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import type { AccessResolver } from "../../../modules/access/index.js";
-import { assigneeEvent, checkLabelCapacity, labelEvent, planIssueUpdate, referenceEvent, relationDelta } from "../../../modules/issues/issue-changes.js";
-import { labelNameTaken, notFound } from "../../../modules/issues/issues.errors.js";
+import type { SpaceAccess } from "../../../modules/access/index.js";
+import type { SqliteAccessRepository } from "../access/access.repository.js";
+import { assigneeEvent, checkCommentWrite, checkCreateRelations, checkLabelCapacity, requireIssueSpace, labelEvent, planIssueUpdate, referenceEvent, relationDelta } from "../../../modules/issues/issue-changes.js";
+import { forbidden, labelNameTaken, notFound } from "../../../modules/issues/issues.errors.js";
 import type { SQLInputValue } from "node:sqlite";
 import type { SqliteDatabase } from "../connection.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -9,6 +10,9 @@ import type { PublicUser } from "../../../modules/permissions/index.js";
 import type { IssueEventKind, IssueState, IssueStateReason } from "../../../modules/issues/issues.types.js";
 import type {
   IssueRow,
+  IssueSummaryData,
+  IssueDetail,
+  LabelFields,
   LabelRow,
   CommentRow,
   TimelineRow,
@@ -27,24 +31,35 @@ const ISSUE_SELECT = `SELECT issues.*, spaces.name AS space_name
 export class SqliteIssuesRepository implements IssuesRepository {
   constructor(
     private readonly _database: SqliteDatabase,
-    private readonly access: Pick<AccessResolver, "resolveNode">,
+    private readonly access: SqliteAccessRepository,
   ) {}
 
-  createIssue(input: CreateIssue): void {
-    this._database.transaction(() => {
+  private issueSpace(userId: string, spaceId: string): SpaceAccess {
+    return requireIssueSpace(this.access.readSpaceAccess(userId, spaceId));
+  }
+
+  async createIssue(input: CreateIssue): Promise<IssueDetail> {
+    return this._database.transaction(() => {
+      const space = this.issueSpace(input.userId, input.spaceId);
+      if (!space.capabilities.createIssue) throw forbidden();
+      checkCreateRelations(space, input.relations);
+      const number = this.nextNumber(input.spaceId);
       this.insertIssue({
-        id: input.id, spaceId: input.spaceId, number: this.nextNumber(input.spaceId), title: input.title,
+        id: input.id, spaceId: input.spaceId, number, title: input.title,
         body: input.body, authorUserId: input.userId, now: input.now, createdVia: input.createdVia,
       });
       this.applyRelations(input.userId, input.spaceId, input.id, input.relations, input.now);
+      return this.readIssueDetail(input.userId, space, number);
     });
   }
 
-  updateIssue(userId: string, spaceId: string, number: number, triage: boolean, patch: IssueUpdate, at: number): string {
+  async updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail> {
     return this._database.transaction(() => {
-      const row = this.findIssue(spaceId, number);
+      const space = this.issueSpace(userId, spaceId);
+      if (!space.member) throw forbidden();
+      const row = this.readIssue(spaceId, number);
       if (!row) throw notFound();
-      const { text, state, events } = planIssueUpdate(row, patch, userId, triage);
+      const { text, state, events } = planIssueUpdate(row, patch, userId, space.capabilities.triageIssues);
       if (text) this.updateIssueText(row.id, text.title, text.body, at);
       if (state) this.setIssueState(row.id, state.value, state.reason, state.closedBy, at);
       for (const event of events) {
@@ -52,19 +67,32 @@ export class SqliteIssuesRepository implements IssuesRepository {
       }
       const relationsChanged = this.applyRelations(userId, spaceId, row.id, patch, at);
       if (text || state || relationsChanged) this.touch(row.id, at);
-      return row.id;
+      return this.readIssueDetail(userId, space, number);
     });
   }
 
-  findIssue(spaceId: string, number: number): IssueRow | null {
+  async findIssue(spaceId: string, number: number): Promise<IssueRow | null> {
+    return this.readIssue(spaceId, number);
+  }
+
+  private readIssue(spaceId: string, number: number): IssueRow | null {
     return (this._get(`${ISSUE_SELECT} WHERE issues.space_id = ? AND issues.number = ?`, spaceId, number) as IssueRow | undefined) ?? null;
   }
 
-  findIssueById(id: string): IssueRow | null {
-    return (this._get(`${ISSUE_SELECT} WHERE issues.id = ?`, id) as IssueRow | undefined) ?? null;
+  async issueDetail(userId: string, spaceId: string, number: number): Promise<IssueDetail> {
+    return this.readIssueDetail(userId, this.issueSpace(userId, spaceId), number);
   }
 
-  listIssues(filter: IssueFilter, page: IssueListPage): IssueRow[] {
+  private readIssueDetail(userId: string, space: SpaceAccess, number: number): IssueDetail {
+    const row = this.readIssue(space.id, number);
+    if (!row) throw notFound();
+    const references = this.readReferenceNodeIds(row.id).map((nodeId) => ({
+      nodeId, node: this.access.readNodeAccess(userId, nodeId),
+    }));
+    return { row, space, summary: this.readSummaryData([row]), references };
+  }
+
+  async listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]> {
     const where = filterClause(filter, true);
     const column = page.sort === "created" ? "created_at" : "updated_at";
     const params = [...where.params];
@@ -82,9 +110,9 @@ export class SqliteIssuesRepository implements IssuesRepository {
     ) as unknown as IssueRow[];
   }
 
-  activityRows(spaceId: string, since: number, limit: number): Array<Pick<IssueRow,
+  async activityRows(spaceId: string, since: number, limit: number): Promise<Array<Pick<IssueRow,
     "number" | "title" | "author_user_id" | "created_via" | "created_at" | "closed_by_user_id" | "closed_at"
-  >> {
+  >>> {
     return this._all(
       `SELECT number, title, author_user_id, created_via, created_at, closed_by_user_id, closed_at
        FROM issues WHERE space_id = ? AND (created_at >= ? OR closed_at >= ?)
@@ -95,7 +123,7 @@ export class SqliteIssuesRepository implements IssuesRepository {
     >>;
   }
 
-  countIssues(filter: IssueFilter): { open: number; closed: number } {
+  async countIssues(filter: IssueFilter): Promise<{ open: number; closed: number }> {
     const where = filterClause(filter, false);
     const rows = this._all(
       `SELECT issues.state AS state, COUNT(*) AS count FROM issues WHERE ${where.sql} GROUP BY issues.state`,
@@ -106,7 +134,11 @@ export class SqliteIssuesRepository implements IssuesRepository {
     return counts;
   }
 
-  users(ids: readonly string[]): Map<string, PublicUser> {
+  async users(ids: readonly string[]): Promise<Map<string, PublicUser>> {
+    return this.readUsers(ids);
+  }
+
+  private readUsers(ids: readonly string[]): Map<string, PublicUser> {
     const users = new Map<string, PublicUser>();
     for (const id of new Set(ids)) {
       const row = this._get(
@@ -125,7 +157,25 @@ export class SqliteIssuesRepository implements IssuesRepository {
     return users;
   }
 
-  labelsFor(issueIds: readonly string[]): Map<string, Array<LabelRow & { issue_id: string }>> {
+  async summaryData(rows: readonly IssueRow[]): Promise<IssueSummaryData> {
+    return this.readSummaryData(rows);
+  }
+
+  private readSummaryData(rows: readonly IssueRow[]): IssueSummaryData {
+    const ids = rows.map((row) => row.id);
+    const assignees = this.readAssigneeIds(ids);
+    const users = this.readUsers([
+      ...rows.flatMap((row) => [row.author_user_id, ...(row.closed_by_user_id ? [row.closed_by_user_id] : [])]),
+      ...[...assignees.values()].flat().map((entry) => entry.user_id),
+    ]);
+    return {
+      labels: this.readLabels(ids), assignees, users,
+      commentCounts: this._counts(ids, "issue_comments"),
+      referenceCounts: this._counts(ids, "issue_node_refs"),
+    };
+  }
+
+  private readLabels(issueIds: readonly string[]): Map<string, Array<LabelRow & { issue_id: string }>> {
     return this._group<LabelRow & { issue_id: string }>(
       issueIds,
       `SELECT link.issue_id AS issue_id, label.* FROM issue_label_links AS link
@@ -134,22 +184,14 @@ export class SqliteIssuesRepository implements IssuesRepository {
     );
   }
 
-  assigneeIdsFor(issueIds: readonly string[]): Map<string, Array<{ issue_id: string; user_id: string }>> {
+  private readAssigneeIds(issueIds: readonly string[]): Map<string, Array<{ issue_id: string; user_id: string }>> {
     return this._group(
       issueIds,
       "SELECT issue_id, user_id FROM issue_assignees WHERE issue_id IN (%) ORDER BY rowid",
     );
   }
 
-  commentCounts(issueIds: readonly string[]): Map<string, number> {
-    return this._counts(issueIds, "issue_comments");
-  }
-
-  referenceCounts(issueIds: readonly string[]): Map<string, number> {
-    return this._counts(issueIds, "issue_node_refs");
-  }
-
-  referenceNodeIds(issueId: string): string[] {
+  private readReferenceNodeIds(issueId: string): string[] {
     return (this._all("SELECT node_id FROM issue_node_refs WHERE issue_id = ? ORDER BY created_at, node_id", issueId) as unknown as Array<{ node_id: string }>).map((row) => row.node_id);
   }
 
@@ -241,17 +283,28 @@ export class SqliteIssuesRepository implements IssuesRepository {
     );
   }
 
-  insertComment(input: { id: string; issueId: string; authorUserId: string; body: string; now: number }): void {
-    this._database.transaction(() => {
+  async insertComment(input: { id: string; issueId: string; authorUserId: string; body: string; now: number }): Promise<CommentRow> {
+    return this._database.transaction(() => {
+      const issue = this._get("SELECT space_id FROM issues WHERE id = ?", input.issueId) as { space_id: string } | undefined;
+      if (!issue) throw notFound();
+      if (!this.issueSpace(input.authorUserId, issue.space_id).member) throw forbidden();
       this._run(
         "INSERT INTO issue_comments (id, issue_id, author_user_id, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
         input.id, input.issueId, input.authorUserId, input.body, input.now, input.now,
       );
       this.touch(input.issueId, input.now);
+      return {
+        id: input.id, issue_id: input.issueId, space_id: issue.space_id, author_user_id: input.authorUserId,
+        body: input.body, created_at: input.now, updated_at: input.now,
+      };
     });
   }
 
-  findComment(id: string): CommentRow | null {
+  async findComment(id: string): Promise<CommentRow | null> {
+    return this.readComment(id);
+  }
+
+  private readComment(id: string): CommentRow | null {
     return (this._get(
       `SELECT comment.*, issue.space_id AS space_id FROM issue_comments AS comment
        JOIN issues AS issue ON issue.id = comment.issue_id WHERE comment.id = ?`,
@@ -259,21 +312,32 @@ export class SqliteIssuesRepository implements IssuesRepository {
     ) as CommentRow | undefined) ?? null;
   }
 
-  updateComment(id: string, issueId: string, body: string, now: number): void {
-    this._database.transaction(() => {
+  private writableComment(userId: string, id: string, action: "update" | "delete"): CommentRow {
+    const comment = this.readComment(id);
+    if (!comment) throw notFound();
+    checkCommentWrite(this.issueSpace(userId, comment.space_id), userId, comment.author_user_id, action);
+    return comment;
+  }
+
+  async updateComment(userId: string, id: string, body: string, now: number): Promise<CommentRow> {
+    return this._database.transaction(() => {
+      const comment = this.writableComment(userId, id, "update");
       this._run("UPDATE issue_comments SET body = ?, updated_at = ? WHERE id = ?", body, now, id);
-      this.touch(issueId, now);
+      this.touch(comment.issue_id, now);
+      return { ...comment, body, updated_at: now };
     });
   }
 
-  deleteComment(id: string, issueId: string, now: number): void {
-    this._database.transaction(() => {
+  async deleteComment(userId: string, id: string, now: number): Promise<string> {
+    return this._database.transaction(() => {
+      const comment = this.writableComment(userId, id, "delete");
       this._run("DELETE FROM issue_comments WHERE id = ?", id);
-      this.touch(issueId, now);
+      this.touch(comment.issue_id, now);
+      return comment.space_id;
     });
   }
 
-  timeline(issueId: string, cursor: TimelineCursor | null, limit: number): TimelineRow[] {
+  async timeline(issueId: string, cursor: TimelineCursor | null, limit: number): Promise<TimelineRow[]> {
     const keyset = cursor ? "WHERE (created_at, rank, id) > (?, ?, ?)" : "";
     const params: SQLInputValue[] = [issueId, issueId];
     if (cursor) params.push(cursor.ts, cursor.rank, cursor.id);
@@ -291,7 +355,7 @@ export class SqliteIssuesRepository implements IssuesRepository {
     ) as unknown as TimelineRow[];
   }
 
-  listLabels(spaceId: string): Array<LabelRow & { open_issue_count: number }> {
+  async listLabels(spaceId: string): Promise<Array<LabelRow & { open_issue_count: number }>> {
     return this._all(
       `SELECT label.*, (
          SELECT COUNT(*) FROM issue_label_links AS link
@@ -303,7 +367,11 @@ export class SqliteIssuesRepository implements IssuesRepository {
     ) as unknown as Array<LabelRow & { open_issue_count: number }>;
   }
 
-  findLabel(id: string): LabelRow | null {
+  async findLabel(id: string): Promise<LabelRow | null> {
+    return this.readLabel(id);
+  }
+
+  private readLabel(id: string): LabelRow | null {
     return (this._get("SELECT * FROM issue_labels WHERE id = ?", id) as LabelRow | undefined) ?? null;
   }
 
@@ -315,8 +383,9 @@ export class SqliteIssuesRepository implements IssuesRepository {
     return (this._get("SELECT COUNT(*) AS count FROM issue_labels WHERE space_id = ?", spaceId) as { count: number }).count;
   }
 
-  insertLabel(input: LabelRow & { now: number }): void {
+  async insertLabel(userId: string, input: LabelRow & { now: number }): Promise<void> {
     this._database.transaction(() => {
+      if (!this.issueSpace(userId, input.space_id).capabilities.manageIssueLabels) throw forbidden();
       checkLabelCapacity(this.countLabels(input.space_id));
       if (this.findLabelByName(input.space_id, input.name)) throw labelNameTaken();
       this._run(
@@ -326,19 +395,32 @@ export class SqliteIssuesRepository implements IssuesRepository {
     });
   }
 
-  updateLabel(input: LabelRow & { now: number }): void {
-    this._database.transaction(() => {
-      const clash = this.findLabelByName(input.space_id, input.name);
-      if (clash && clash.id !== input.id) throw labelNameTaken();
+  private writableLabel(userId: string, id: string): LabelRow {
+    const label = this.readLabel(id);
+    if (!label) throw notFound();
+    if (!this.issueSpace(userId, label.space_id).capabilities.manageIssueLabels) throw forbidden();
+    return label;
+  }
+
+  async updateLabel(userId: string, id: string, patch: Partial<LabelFields>, now: number): Promise<LabelRow> {
+    return this._database.transaction(() => {
+      const label = { ...this.writableLabel(userId, id), ...patch };
+      const clash = this.findLabelByName(label.space_id, label.name);
+      if (clash && clash.id !== id) throw labelNameTaken();
       this._run(
         "UPDATE issue_labels SET name = ?, color = ?, description = ?, updated_at = ? WHERE id = ?",
-        input.name, input.color, input.description, input.now, input.id,
+        label.name, label.color, label.description, now, id,
       );
+      return label;
     });
   }
 
-  deleteLabel(id: string): void {
-    this._run("DELETE FROM issue_labels WHERE id = ?", id);
+  async deleteLabel(userId: string, id: string): Promise<string> {
+    return this._database.transaction(() => {
+      const label = this.writableLabel(userId, id);
+      this._run("DELETE FROM issue_labels WHERE id = ?", id);
+      return label.space_id;
+    });
   }
 
   private isSpaceParticipant(spaceId: string, userId: string): boolean {
@@ -349,7 +431,7 @@ export class SqliteIssuesRepository implements IssuesRepository {
     ));
   }
 
-  audience(spaceId: string): string[] {
+  async audience(spaceId: string): Promise<string[]> {
     return (this._all(
       `SELECT owner_user_id AS user_id FROM spaces WHERE id = ?
        UNION SELECT user_id FROM space_members WHERE space_id = ? ORDER BY user_id`,
@@ -371,22 +453,22 @@ export class SqliteIssuesRepository implements IssuesRepository {
       changed = true;
     };
     if (desired.labelIds) {
-      const current = new Map((this.labelsFor([issueId]).get(issueId) ?? []).map((label) => [label.id, label]));
+      const current = new Map((this.readLabels([issueId]).get(issueId) ?? []).map((label) => [label.id, label]));
       const delta = relationDelta("labelIds", [...current.keys()], desired.labelIds);
       for (const id of delta.removed) {
         this.removeLabel(issueId, id);
         recordEvent(labelEvent("unlabeled", spaceId, current.get(id)!));
       }
       for (const id of delta.added) {
-        const event = labelEvent("labeled", spaceId, this.findLabel(id));
+        const event = labelEvent("labeled", spaceId, this.readLabel(id));
         this.addLabel(issueId, id);
         recordEvent(event);
       }
     }
     if (desired.assigneeUserIds) {
-      const current = this.assigneeIdsFor([issueId]).get(issueId)?.map((row) => row.user_id) ?? [];
+      const current = this.readAssigneeIds([issueId]).get(issueId)?.map((row) => row.user_id) ?? [];
       const delta = relationDelta("assigneeUserIds", current, desired.assigneeUserIds);
-      const users = this.users([...delta.removed, ...delta.added]);
+      const users = this.readUsers([...delta.removed, ...delta.added]);
       for (const id of delta.removed) {
         this.removeAssignee(issueId, id);
         recordEvent(assigneeEvent("unassigned", id, users.get(id)));
@@ -398,13 +480,13 @@ export class SqliteIssuesRepository implements IssuesRepository {
       }
     }
     if (desired.nodeIds) {
-      const delta = relationDelta("nodeIds", this.referenceNodeIds(issueId), desired.nodeIds);
+      const delta = relationDelta("nodeIds", this.readReferenceNodeIds(issueId), desired.nodeIds);
       for (const id of delta.removed) {
         this.removeReference(issueId, id);
-        recordEvent(referenceEvent("node_unreferenced", id, spaceId, this.access.resolveNode(userId, id)));
+        recordEvent(referenceEvent("node_unreferenced", id, spaceId, this.access.readNodeAccess(userId, id)));
       }
       for (const id of delta.added) {
-        const event = referenceEvent("node_referenced", id, spaceId, this.access.resolveNode(userId, id));
+        const event = referenceEvent("node_referenced", id, spaceId, this.access.readNodeAccess(userId, id));
         this.addReference(issueId, id, at);
         recordEvent(event);
       }

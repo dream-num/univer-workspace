@@ -1,11 +1,14 @@
 import { forbidden, invalid, notFound } from "./issues.errors.js";
 import { randomUUID } from "node:crypto";
-import { ApplicationError } from "../../middleware/errors.js";
+import { checkCommentWrite, checkCreateRelations, requireIssueSpace } from "./issue-changes.js";
 import { writeSourceView } from "../identity/index.js";
-import type { AccessResolver, SpaceAccess } from "../access/index.js";
+import type { AccessResolver, NodeAccess, SpaceAccess } from "../access/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type {
   IssuesRepository,
+  IssueDetail,
+  IssueSummaryData,
+  LabelFields,
   CommentRow,
   IssueFilter,
   IssueRelations,
@@ -46,40 +49,27 @@ export function createIssuesModule(options: {
   const { repository, access } = options;
   const now = options.now ?? Date.now;
 
-  function notify(spaceId: string): void {
+  async function notify(spaceId: string): Promise<void> {
     try {
-      options.onChanged?.({ spaceId, audienceUserIds: repository.audience(spaceId) });
+      options.onChanged?.({ spaceId, audienceUserIds: await repository.audience(spaceId) });
     } catch {
       // Change delivery is a cache hint; a failed push must not fail the committed write.
     }
   }
 
-  function requireSpace(userId: string, spaceId: string): SpaceAccess {
-    const space = access.resolveSpace(userId, spaceId);
-    if (!space) throw notFound();
-    if (space.type !== "team") {
-      throw new ApplicationError("CONFLICT", 409, "Issues are available only in team spaces.");
-    }
-    return space;
+  async function requireSpace(userId: string, spaceId: string): Promise<SpaceAccess> {
+    return requireIssueSpace(await access.resolveSpace(userId, spaceId));
   }
 
-  function requireIssue(spaceId: string, number: unknown): IssueRow {
-    const row = repository.findIssue(spaceId, issueNumber(number));
+  async function requireIssue(spaceId: string, number: unknown): Promise<IssueRow> {
+    const row = await repository.findIssue(spaceId, issueNumber(number));
     if (!row) throw notFound();
     return row;
   }
 
-  function summaries(rows: readonly IssueRow[]): IssueSummaryView[] {
-    const ids = rows.map((row) => row.id);
-    const labels = repository.labelsFor(ids);
-    const assignees = repository.assigneeIdsFor(ids);
-    const comments = repository.commentCounts(ids);
-    const references = repository.referenceCounts(ids);
-    const users = repository.users([
-      ...rows.flatMap((row) => [row.author_user_id, ...(row.closed_by_user_id ? [row.closed_by_user_id] : [])]),
-      ...[...assignees.values()].flat().map((assignee) => assignee.user_id),
-    ]);
-    return rows.map((row) => ({
+  function summaryView(row: IssueRow, data: IssueSummaryData): IssueSummaryView {
+    const { labels, assignees, commentCounts, referenceCounts, users } = data;
+    return {
       id: row.id,
       number: row.number,
       space: { id: row.space_id, name: row.space_name },
@@ -91,22 +81,20 @@ export function createIssuesModule(options: {
       closedAt: row.closed_at === null ? null : iso(row.closed_at),
       labels: (labels.get(row.id) ?? []).map(labelView),
       assignees: (assignees.get(row.id) ?? []).map((assignee) => user(users, assignee.user_id)),
-      commentCount: comments.get(row.id) ?? 0,
-      referenceCount: references.get(row.id) ?? 0,
+      commentCount: commentCounts.get(row.id) ?? 0,
+      referenceCount: referenceCounts.get(row.id) ?? 0,
       createdVia: writeSourceView(row.created_via),
       createdAt: iso(row.created_at),
       updatedAt: iso(row.updated_at),
-    }));
+    };
   }
 
-  function issueView(userId: string, space: SpaceAccess, row: IssueRow): IssueView {
-    const [summary] = summaries([row]);
-    if (!summary) throw new Error("Issue summary is missing");
+  function issueView(userId: string, { row, space, summary, references }: IssueDetail): IssueView {
     const editable = space.member && (row.author_user_id === userId || space.capabilities.triageIssues);
     return {
-      ...summary,
+      ...summaryView(row, summary),
       body: row.body,
-      references: repository.referenceNodeIds(row.id).map((nodeId) => reference(userId, row.space_id, nodeId)),
+      references: references.map(({ nodeId, node }) => reference(row.space_id, nodeId, node)),
       capabilities: {
         edit: editable,
         close: editable,
@@ -116,8 +104,7 @@ export function createIssuesModule(options: {
     };
   }
 
-  function reference(userId: string, spaceId: string, nodeId: string): IssueReferenceView {
-    const node = access.resolveNode(userId, nodeId);
+  function reference(spaceId: string, nodeId: string, node: NodeAccess | null): IssueReferenceView {
     if (!node || node.spaceId !== spaceId) return { nodeId, available: false, name: null, resource: null };
     return {
       nodeId,
@@ -132,11 +119,11 @@ export function createIssuesModule(options: {
     };
   }
 
-  function listFor(
+  async function listFor(
     userId: string,
     scope: IssueFilter["scope"],
     query: IssueListQuery,
-  ): IssueList {
+  ): Promise<IssueList> {
     const state = parseEnum(query.state, ["open", "closed", "all"], "open", "state");
     const sort = parseEnum(query.sort, ["created", "updated"], "created", "sort");
     const order = parseEnum(query.order, ["asc", "desc"], "desc", "order");
@@ -151,24 +138,25 @@ export function createIssuesModule(options: {
     const limit = validLimit(query.limit, 50);
     const cursor = decodeCursor<{ ts: number; id: string }>(query.cursor, (value) =>
       Number.isSafeInteger(value.ts) && typeof value.id === "string" && value.id !== "");
-    const rows = repository.listIssues(filter, { sort, order, cursor, limit: limit + 1 });
+    const rows = await repository.listIssues(filter, { sort, order, cursor, limit: limit + 1 });
     const hasNext = rows.length > limit;
     const page = hasNext ? rows.slice(0, limit) : rows;
     const last = page.at(-1);
     const column = sort === "created" ? "created_at" : "updated_at";
+    const summary = await repository.summaryData(page);
     return {
-      items: summaries(page),
+      items: page.map((row) => summaryView(row, summary)),
       nextCursor: hasNext && last ? encodeCursor({ ts: last[column], id: last.id }) : null,
-      counts: repository.countIssues(filter),
+      counts: await repository.countIssues(filter),
     };
   }
 
   return {
-    activity(userId, spaceId, since) {
-      requireSpace(userId, spaceId);
-      const rows = repository.activityRows(spaceId, since, MAX_ACTIVITY_ROWS + 1);
+    async activity(userId, spaceId, since) {
+      await requireSpace(userId, spaceId);
+      const rows = await repository.activityRows(spaceId, since, MAX_ACTIVITY_ROWS + 1);
       const page = rows.slice(0, MAX_ACTIVITY_ROWS);
-      const users = repository.users(page.flatMap((row) => [
+      const users = await repository.users(page.flatMap((row) => [
         row.author_user_id, ...(row.closed_by_user_id ? [row.closed_by_user_id] : []),
       ]));
       return {
@@ -182,8 +170,8 @@ export function createIssuesModule(options: {
       };
     },
 
-    list(userId, spaceId, query) {
-      requireSpace(userId, spaceId);
+    async list(userId, spaceId, query) {
+      await requireSpace(userId, spaceId);
       return listFor(userId, { kind: "space", spaceId }, query);
     },
 
@@ -191,47 +179,46 @@ export function createIssuesModule(options: {
       return listFor(userId, { kind: "member", userId }, query);
     },
 
-    create(userId, spaceId, input, createdVia = null) {
-      const space = requireSpace(userId, spaceId);
+    async create(userId, spaceId, input, createdVia = null) {
+      const space = await requireSpace(userId, spaceId);
       if (!space.capabilities.createIssue) throw forbidden();
       const body = record(input, ["title", "body", "labelIds", "assigneeUserIds", "nodeIds"]);
       const relations = parseRelations(body);
-      const hasRelations = Object.values(relations).some((value) => value !== undefined && value.length > 0);
-      if (hasRelations && !space.capabilities.triageIssues) throw forbidden();
+      checkCreateRelations(space, relations);
       const title = validTitle(body.title);
       const text = body.body === undefined ? "" : validText(body.body, "body", true);
       const id = randomUUID();
       const at = now();
-      repository.createIssue({ id, spaceId, userId, createdVia, title, body: text, relations, now: at });
-      notify(spaceId);
-      return issueView(userId, space, mustFind(repository, id));
+      const detail = await repository.createIssue({ id, spaceId, userId, createdVia, title, body: text, relations, now: at });
+      await notify(spaceId);
+      return issueView(userId, detail);
     },
 
-    get(userId, spaceId, number) {
-      const space = requireSpace(userId, spaceId);
-      return issueView(userId, space, requireIssue(spaceId, number));
+    async get(userId, spaceId, number) {
+      await requireSpace(userId, spaceId);
+      return issueView(userId, await repository.issueDetail(userId, spaceId, issueNumber(number)));
     },
 
-    update(userId, spaceId, number, input) {
-      const space = requireSpace(userId, spaceId);
+    async update(userId, spaceId, number, input) {
+      const space = await requireSpace(userId, spaceId);
       if (!space.member) throw forbidden();
       const patch = parseUpdate(input);
       const at = now();
-      const id = repository.updateIssue(userId, spaceId, issueNumber(number), space.capabilities.triageIssues, patch, at);
-      notify(spaceId);
-      return issueView(userId, space, mustFind(repository, id));
+      const detail = await repository.updateIssue(userId, spaceId, issueNumber(number), patch, at);
+      await notify(spaceId);
+      return issueView(userId, detail);
     },
 
-    timeline(userId, spaceId, number, page) {
-      requireSpace(userId, spaceId);
-      const issue = requireIssue(spaceId, number);
+    async timeline(userId, spaceId, number, page) {
+      await requireSpace(userId, spaceId);
+      const issue = await requireIssue(spaceId, number);
       const limit = validLimit(page.limit, 100);
       const cursor = decodeCursor<{ ts: number; rank: number; id: string }>(page.cursor, (value) =>
         Number.isSafeInteger(value.ts) && (value.rank === 0 || value.rank === 1) && typeof value.id === "string" && value.id !== "");
-      const rows = repository.timeline(issue.id, cursor, limit + 1);
+      const rows = await repository.timeline(issue.id, cursor, limit + 1);
       const hasNext = rows.length > limit;
       const visible = hasNext ? rows.slice(0, limit) : rows;
-      const users = repository.users(visible.map((row) => row.actor_user_id));
+      const users = await repository.users(visible.map((row) => row.actor_user_id));
       const items = visible.map((row): IssueTimelineItem =>
         row.type === "comment"
           ? {
@@ -251,95 +238,81 @@ export function createIssuesModule(options: {
       };
     },
 
-    createComment(userId, spaceId, number, input) {
-      const space = requireSpace(userId, spaceId);
+    async createComment(userId, spaceId, number, input) {
+      const space = await requireSpace(userId, spaceId);
       if (!space.member) throw forbidden();
       const body = validText(record(input, ["body"]).body, "body", false);
-      const issue = requireIssue(spaceId, number);
+      const issue = await requireIssue(spaceId, number);
       const id = randomUUID();
       const at = now();
-      repository.insertComment({ id, issueId: issue.id, authorUserId: userId, body, now: at });
-      notify(spaceId);
-      return commentView(repository, id);
+      const comment = await repository.insertComment({ id, issueId: issue.id, authorUserId: userId, body, now: at });
+      await notify(spaceId);
+      return commentView(repository, comment);
     },
 
-    updateComment(userId, commentId, input) {
-      const { comment, space } = requireComment(userId, commentId);
-      if (!space.member || comment.author_user_id !== userId) throw forbidden();
+    async updateComment(userId, commentId, input) {
+      const { comment, space } = await requireComment(userId, commentId);
+      checkCommentWrite(space, userId, comment.author_user_id, "update");
       const body = validText(record(input, ["body"]).body, "body", false);
       const at = now();
-      repository.updateComment(commentId, comment.issue_id, body, at);
-      notify(comment.space_id);
-      return commentView(repository, commentId);
+      const updated = await repository.updateComment(userId, commentId, body, at);
+      await notify(comment.space_id);
+      return commentView(repository, updated);
     },
 
-    deleteComment(userId, commentId) {
-      const { comment, space } = requireComment(userId, commentId);
-      const manager = space.role === "owner" || space.role === "admin";
-      if (!space.member || (comment.author_user_id !== userId && !manager)) throw forbidden();
-      repository.deleteComment(commentId, comment.issue_id, now());
-      notify(comment.space_id);
+    async deleteComment(userId, commentId) {
+      const spaceId = await repository.deleteComment(userId, commentId, now());
+      await notify(spaceId);
     },
 
-    listLabels(userId, spaceId) {
-      requireSpace(userId, spaceId);
+    async listLabels(userId, spaceId) {
+      await requireSpace(userId, spaceId);
       return {
-        labels: repository.listLabels(spaceId).map((row) => ({ ...labelView(row), openIssueCount: row.open_issue_count })),
+        labels: (await repository.listLabels(spaceId)).map((row) => ({ ...labelView(row), openIssueCount: row.open_issue_count })),
       };
     },
 
-    createLabel(userId, spaceId, input) {
-      const space = requireSpace(userId, spaceId);
+    async createLabel(userId, spaceId, input) {
+      const space = await requireSpace(userId, spaceId);
       if (!space.capabilities.manageIssueLabels) throw forbidden();
-      const fields = parseLabel(input, null);
+      const fields = parseLabel(input, "create");
       const id = randomUUID();
-      repository.insertLabel({ id, space_id: spaceId, ...fields, now: now() });
-      notify(spaceId);
+      await repository.insertLabel(userId, { id, space_id: spaceId, ...fields, now: now() });
+      await notify(spaceId);
       return labelView({ id, ...fields });
     },
 
-    updateLabel(userId, labelId, input) {
-      const { label } = requireLabel(userId, labelId);
-      const fields = parseLabel(input, label);
-      repository.updateLabel({ id: labelId, space_id: label.space_id, ...fields, now: now() });
-      notify(label.space_id);
-      return labelView({ ...label, ...fields });
+    async updateLabel(userId, labelId, input) {
+      await requireLabel(userId, labelId);
+      const label = await repository.updateLabel(userId, labelId, parseLabel(input, "patch"), now());
+      await notify(label.space_id);
+      return labelView(label);
     },
 
-    deleteLabel(userId, labelId) {
-      const { label } = requireLabel(userId, labelId);
-      repository.deleteLabel(labelId);
-      notify(label.space_id);
+    async deleteLabel(userId, labelId) {
+      const spaceId = await repository.deleteLabel(userId, labelId);
+      await notify(spaceId);
     },
   };
 
-  function requireComment(userId: string, commentId: string): { comment: CommentRow; space: SpaceAccess } {
-    const comment = repository.findComment(commentId);
+  async function requireComment(userId: string, commentId: string): Promise<{ comment: CommentRow; space: SpaceAccess }> {
+    const comment = await repository.findComment(commentId);
     if (!comment) throw notFound();
-    return { comment, space: requireSpace(userId, comment.space_id) };
+    return { comment, space: await requireSpace(userId, comment.space_id) };
   }
 
-  function requireLabel(userId: string, labelId: string): { label: LabelRow; space: SpaceAccess } {
-    const label = repository.findLabel(labelId);
+  async function requireLabel(userId: string, labelId: string): Promise<void> {
+    const label = await repository.findLabel(labelId);
     if (!label) throw notFound();
-    const space = requireSpace(userId, label.space_id);
+    const space = await requireSpace(userId, label.space_id);
     if (!space.capabilities.manageIssueLabels) throw forbidden();
-    return { label, space };
   }
 }
 
-function mustFind(repository: IssuesRepository, id: string): IssueRow {
-  const row = repository.findIssueById(id);
-  if (!row) throw new Error("Issue is missing after write");
-  return row;
-}
-
-function commentView(repository: IssuesRepository, id: string): IssueCommentView {
-  const comment = repository.findComment(id);
-  if (!comment) throw new Error("Issue comment is missing after write");
+async function commentView(repository: IssuesRepository, comment: CommentRow): Promise<IssueCommentView> {
   return {
     id: comment.id,
-    author: user(repository.users([comment.author_user_id]), comment.author_user_id),
+    author: user(await repository.users([comment.author_user_id]), comment.author_user_id),
     body: comment.body,
     createdAt: iso(comment.created_at),
     updatedAt: iso(comment.updated_at),
@@ -429,25 +402,33 @@ function parseUpdate(input: unknown): IssueUpdate {
   };
 }
 
-function parseLabel(
-  input: unknown,
-  existing: LabelRow | null,
-): { name: string; color: string; description: string } {
+function parseLabel(input: unknown, mode: "create"): LabelFields;
+function parseLabel(input: unknown, mode: "patch"): Partial<LabelFields>;
+function parseLabel(input: unknown, mode: "create" | "patch"): Partial<LabelFields> {
   const body = record(input, ["name", "color", "description"]);
-  if (existing && Object.keys(body).length === 0) throw invalid("At least one label field is required.");
-  const name = body.name === undefined && existing ? existing.name : typeof body.name === "string" ? body.name.trim() : "";
-  if (!name || name.length > MAX_LABEL_NAME) {
-    throw invalid(`name must contain between 1 and ${MAX_LABEL_NAME} characters.`, "name");
+  if (mode === "patch" && Object.keys(body).length === 0) throw invalid("At least one label field is required.");
+  const fields: { name?: string; color?: string; description?: string } = {};
+  if (mode === "create" || body.name !== undefined) {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > MAX_LABEL_NAME) {
+      throw invalid(`name must contain between 1 and ${MAX_LABEL_NAME} characters.`, "name");
+    }
+    fields.name = name;
   }
-  const color = body.color === undefined && existing ? existing.color : body.color;
-  if (typeof color !== "string" || !(ISSUE_LABEL_COLORS as readonly string[]).includes(color)) {
-    throw invalid(`color must be one of ${ISSUE_LABEL_COLORS.join(", ")}.`, "color");
+  if (mode === "create" || body.color !== undefined) {
+    if (typeof body.color !== "string" || !(ISSUE_LABEL_COLORS as readonly string[]).includes(body.color)) {
+      throw invalid(`color must be one of ${ISSUE_LABEL_COLORS.join(", ")}.`, "color");
+    }
+    fields.color = body.color;
   }
-  const description = body.description === undefined ? (existing?.description ?? "") : body.description;
-  if (typeof description !== "string" || description.length > MAX_LABEL_DESCRIPTION) {
-    throw invalid(`description must not exceed ${MAX_LABEL_DESCRIPTION} characters.`, "description");
+  if (mode === "create" || body.description !== undefined) {
+    const description = body.description === undefined ? "" : body.description;
+    if (typeof description !== "string" || description.length > MAX_LABEL_DESCRIPTION) {
+      throw invalid(`description must not exceed ${MAX_LABEL_DESCRIPTION} characters.`, "description");
+    }
+    fields.description = description;
   }
-  return { name, color, description };
+  return fields;
 }
 
 function parseEnum<T extends string>(value: unknown, allowed: readonly T[], fallback: T, field: string): T {

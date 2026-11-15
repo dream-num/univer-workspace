@@ -32,7 +32,7 @@ export interface OperationView {
 }
 
 export interface OperationsModule {
-  get(userId: string, operationId: string): OperationView;
+  get(userId: string, operationId: string): Promise<OperationView>;
   retry(userId: string, operationId: string): Promise<OperationView>;
 }
 
@@ -45,14 +45,14 @@ export function createOperationsModule(options: {
   const now = options.now ?? Date.now;
 
   return {
-    get(userId, operationId) {
+    async get(userId, operationId) {
       return operationView(
-        requireOperation(options.repository, userId, operationId)
+        await requireOperation(options.repository, userId, operationId)
       );
     },
 
     async retry(userId, operationId) {
-      const row = requireOperation(options.repository, userId, operationId);
+      const row = await requireOperation(options.repository, userId, operationId);
       if (row.state !== "failed") {
         throw new ApplicationError(
           "CONFLICT",
@@ -63,7 +63,7 @@ export function createOperationsModule(options: {
       if (row.kind === "create_resource") {
         await options.resources.retry(userId, operationId);
         return operationView(
-          requireOperation(options.repository, userId, operationId)
+          await requireOperation(options.repository, userId, operationId)
         );
       }
       if (row.kind === "create_blob_resource" || row.kind === "replace_blob_content") {
@@ -80,11 +80,13 @@ export function createOperationsModule(options: {
           "Resource activation is retried by its parent merge operation."
         );
       }
-      options.repository.retry(operationId, userId, now());
+      if (!(await options.repository.retry(operationId, userId, now()))) {
+        throw new ApplicationError("CONFLICT", 409, "Only a failed operation can be retried.");
+      }
       try {
         await retryWorktreeOperation(options.worktrees, userId, row);
       } catch (error) {
-        options.repository.fail(
+        await options.repository.fail(
           operationId,
           userId,
           {
@@ -102,7 +104,7 @@ export function createOperationsModule(options: {
         throw error;
       }
       return operationView(
-        requireOperation(options.repository, userId, operationId)
+        await requireOperation(options.repository, userId, operationId)
       );
     },
   };
@@ -161,12 +163,12 @@ function requiredPayloadId(value: unknown, name: string): string {
   return value;
 }
 
-function requireOperation(
+async function requireOperation(
   repository: OperationsRepository,
   userId: string,
   operationId: string
-): OperationRow {
-  const row = repository.get(operationId, userId);
+): Promise<OperationRow> {
+  const row = await repository.get(operationId, userId);
   if (!row) {
     throw new ApplicationError(
       "NOT_FOUND",

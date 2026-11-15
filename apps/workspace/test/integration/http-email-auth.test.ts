@@ -26,7 +26,7 @@ afterEach(async () => {
 describe("Email sign-in HTTP API", () => {
   it("emails a code and signs a new User in with it", async () => {
     const sent: EmailMessage[] = [];
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
@@ -113,7 +113,7 @@ describe("Email sign-in HTTP API", () => {
   });
 
   it("reports Email sign-in as disabled when no provider is configured", async () => {
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
@@ -153,7 +153,7 @@ describe("Email sign-in HTTP API", () => {
 
   it("rejects a malformed address without contacting the provider", async () => {
     const sent: EmailMessage[] = [];
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,

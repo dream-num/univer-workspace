@@ -1,9 +1,13 @@
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import { randomUUID } from "node:crypto";
 import type { SqliteDatabase } from "../connection.js";
 import { enqueueObjectDeletion, insertReadyBlobResource, swapBlobContent } from "../blobs/blobs.repository.js";
 import { draftBase, draftFiles, draftKeep, type DraftRow } from "../../../modules/skill-drafts/drafts.types.js";
 import { safeSkillPath } from "../../../modules/skill-drafts/scan.js";
 import {
+  assertSkillDestination,
+  assertSkillFolder,
+  assertSkillFile,
   draftConflict,
   type CurrentFile,
   type SkillTarget,
@@ -11,13 +15,21 @@ import {
 } from "../../../modules/skill-drafts/drafts.repository.js";
 
 export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
-  constructor(private readonly database: SqliteDatabase) {}
-  find(id: string): DraftRow | undefined {
+  constructor(private readonly database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
+  async find(id: string): Promise<DraftRow | undefined> {
+    return this._findSync(id);
+  }
+
+  private _findSync(id: string): DraftRow | undefined {
     return this.database.connection.prepare("SELECT * FROM skill_drafts WHERE id = ?").get(id) as
       | DraftRow
       | undefined;
   }
-  findKey(userId: string, key: string): DraftRow | undefined {
+  async findKey(userId: string, key: string): Promise<DraftRow | undefined> {
+    return this._findKeySync(userId, key);
+  }
+
+  private _findKeySync(userId: string, key: string): DraftRow | undefined {
     return this.database.connection
       .prepare("SELECT * FROM skill_drafts WHERE author_user_id = ? AND idempotency_key = ?")
       .get(userId, key) as DraftRow | undefined;
@@ -32,7 +44,11 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
       throw draftConflict("Ambiguous Skill destination or file/folder collision.");
     return rows.length === 0 ? null : String(rows[0]!.id);
   }
-  target(spaceId: string, name: string): SkillTarget {
+  async target(spaceId: string, name: string): Promise<SkillTarget> {
+    return this._targetSync(spaceId, name);
+  }
+
+  private _targetSync(spaceId: string, name: string): SkillTarget {
     let parentId: string | null = null;
     for (const segment of [".agents", "skills", name]) {
       parentId = this.folder(spaceId, parentId, segment);
@@ -68,7 +84,7 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
     }
     return { folderNodeId: parentId, files, nonEmpty: rows.length > 0 };
   }
-  personalNameConflict(userId: string, spaceId: string, name: string): boolean {
+  async personalNameConflict(userId: string, spaceId: string, name: string): Promise<boolean> {
     const space = this.database.connection
       .prepare("SELECT type FROM spaces WHERE id = ?")
       .get(spaceId);
@@ -78,12 +94,12 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
       .get(userId);
     if (!personal) return false;
     try {
-      return this.target(String(personal.id), name).nonEmpty;
+      return this._targetSync(String(personal.id), name).nonEmpty;
     } catch {
       return true;
     }
   }
-  reserve(
+  async reserve(
     input: Pick<
       DraftRow,
       | "author_user_id"
@@ -101,9 +117,9 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
       | "source"
     >,
     now: number,
-  ): { row: DraftRow; created: boolean } {
+  ): Promise<{ row: DraftRow; created: boolean }> {
     return this.database.transaction((db) => {
-      const existing = this.findKey(input.author_user_id, input.idempotency_key);
+      const existing = this._findKeySync(input.author_user_id, input.idempotency_key);
       if (existing) {
         if (existing.intent_sha256 !== input.intent_sha256)
           throw draftConflict("Idempotency-Key belongs to another draft intent.");
@@ -131,25 +147,33 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
         now,
         now,
       );
-      return { row: this.find(id)!, created: true };
+      return { row: this._findSync(id)!, created: true };
     });
   }
-  markPending(id: string, now: number): DraftRow {
+  async markPending(id: string, now: number): Promise<DraftRow> {
     this.database.connection
       .prepare(`UPDATE skill_drafts SET state = 'pending', expires_at = ?, updated_at = ?
       WHERE id = ? AND state = 'receiving' AND expires_at > ?`)
       .run(now + 7 * 86400000, now, id, now);
-    return this.find(id)!;
+    return this._findSync(id)!;
   }
-  decide(
+  async decide(
     id: string,
     userId: string,
     action: "publish" | "reject",
     now: number,
-    authorize?: (row: DraftRow, target: SkillTarget) => void,
+  ): Promise<DraftRow> {
+    return this._decideSync(id, userId, action, now);
+  }
+
+  private _decideSync(
+    id: string,
+    userId: string,
+    action: "publish" | "reject",
+    now: number,
   ): DraftRow {
     return this.database.transaction((db) => {
-      const row = this.find(id)!;
+      const row = this._findSync(id)!;
       if (row.state !== "pending" && row.state !== "receiving") return row;
       let state: DraftRow["state"];
       let folderId: string | null = null;
@@ -157,8 +181,15 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
       else if (action === "reject") state = "rejected";
       else {
         if (row.state !== "pending") throw draftConflict("Draft content is still receiving.");
-        const target = this.target(row.space_id, row.name);
-        authorize?.(row, target);
+        const target = this._targetSync(row.space_id, row.name);
+        assertSkillDestination(userId, this.access.readSpaceAccess(userId, row.space_id));
+        if (target.folderNodeId) assertSkillFolder(this.access.readNodeAccess(userId, target.folderNodeId));
+        for (const current of target.files) {
+          assertSkillFile(this.access.readResourceAccess(userId, current.resourceId), current.nodeId);
+        }
+        const files = draftFiles(row);
+        const adding = files.filter((file) => !target.files.some((current) => current.path === file.path)).length;
+        assertFileQuota(db, userId, adding);
         const base = draftBase(row);
         const changed =
           base === null
@@ -186,7 +217,6 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
             return nodeId;
           };
           folderId = ensureFolder(ensureFolder(ensureFolder(null, ".agents"), "skills"), row.name);
-          const files = draftFiles(row);
           for (const file of files) {
             const existing = target.files.find((current) => current.path === file.path);
             if (existing) {
@@ -245,15 +275,15 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
       db.prepare(
         `UPDATE skill_drafts SET state = ?, result_folder_node_id = ?, decided_by = ?, decided_at = ?, updated_at = ? WHERE id = ?`,
       ).run(state, folderId, userId, now, now, id);
-      return this.find(id)!;
+      return this._findSync(id)!;
     });
   }
-  expireDue(now: number, limit: number, active: readonly string[] = []): number {
+  async expireDue(now: number, limit: number, active: readonly string[] = []): Promise<number> {
     const rows = this.database.connection
       .prepare(`SELECT id, author_user_id FROM skill_drafts WHERE state IN ('receiving', 'pending') AND expires_at <= ?
       AND id NOT IN (${active.map(() => "?").join(",") || "''"}) ORDER BY expires_at, id LIMIT ?`)
       .all(now, ...active, limit);
-    for (const row of rows) this.decide(String(row.id), String(row.author_user_id), "reject", now);
+    for (const row of rows) this._decideSync(String(row.id), String(row.author_user_id), "reject", now);
     return rows.length;
   }
 }

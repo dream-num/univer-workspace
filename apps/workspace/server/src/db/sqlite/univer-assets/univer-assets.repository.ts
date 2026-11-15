@@ -24,7 +24,7 @@ interface UniverAssetUploadRow {
 export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
-  reserveUpload(input: {
+  async reserveUpload(input: {
     readonly actorUserId: string;
     readonly unitId: string;
     readonly worktreeId: string | null;
@@ -35,7 +35,7 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     readonly expiresAt: number;
     /** An Asset ID the caller already wrote into the Unit (an Office import's references). */
     readonly assetId?: string;
-  }): { readonly id: string; readonly objectKey: string } {
+  }): Promise<{ readonly id: string; readonly objectKey: string }> {
     const uploadId = randomUUID();
     const assetId = input.assetId ?? randomUUID();
     const objectKey = randomUUID();
@@ -64,13 +64,13 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     return { id: uploadId, objectKey };
   }
 
-  markStored(input: {
+  async markStored(input: {
     readonly uploadId: string;
     readonly receivedSize: number;
     readonly sha256: string;
     readonly etag: string;
     readonly updatedAt: number;
-  }): void {
+  }): Promise<void> {
     const result = this._database.connection.prepare(
       `UPDATE univer_asset_uploads
        SET state = 'stored', received_size = ?, sha256 = ?, etag = ?,
@@ -88,7 +88,11 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     }
   }
 
-  publishStored(uploadId: string): UniverAssetRow {
+  async publishStored(uploadId: string): Promise<UniverAssetRow> {
+    return this._publishStoredSync(uploadId);
+  }
+
+  private _publishStoredSync(uploadId: string): UniverAssetRow {
     return this._database.transaction((database) => {
       const upload = this._requireUpload(uploadId);
       if (
@@ -126,7 +130,11 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     });
   }
 
-  abandonUpload(uploadId: string, abandonedAt: number): void {
+  async abandonUpload(uploadId: string, abandonedAt: number): Promise<void> {
+    return this._abandonUploadSync(uploadId, abandonedAt);
+  }
+
+  private _abandonUploadSync(uploadId: string, abandonedAt: number): void {
     this._database.transaction((database) => {
       const upload = database.prepare(
         "SELECT * FROM univer_asset_uploads WHERE id = ?"
@@ -144,10 +152,10 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     });
   }
 
-  recoverInterruptedUploads(recoveredAt: number): {
+  async recoverInterruptedUploads(recoveredAt: number): Promise<{
     readonly published: number;
     readonly abandoned: number;
-  } {
+  }> {
     const rows = this._database.connection.prepare(
       `SELECT * FROM univer_asset_uploads ORDER BY created_at, id`
     ).all() as unknown as UniverAssetUploadRow[];
@@ -155,17 +163,21 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     let abandoned = 0;
     for (const row of rows) {
       if (row.state === "stored") {
-        this.publishStored(row.id);
+        this._publishStoredSync(row.id);
         published += 1;
       } else {
-        this.abandonUpload(row.id, recoveredAt);
+        this._abandonUploadSync(row.id, recoveredAt);
         abandoned += 1;
       }
     }
     return { published, abandoned };
   }
 
-  findAsset(assetId: string): UniverAssetRow | null {
+  async findAsset(assetId: string): Promise<UniverAssetRow | null> {
+    return this._findAssetSync(assetId);
+  }
+
+  private _findAssetSync(assetId: string): UniverAssetRow | null {
     return (
       (this._database.connection.prepare(
         "SELECT * FROM univer_assets WHERE id = ?"
@@ -173,10 +185,10 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
     );
   }
 
-  publishWorktreeAssets(
+  async publishWorktreeAssets(
     worktreeId: string,
     unitIds: readonly string[]
-  ): number {
+  ): Promise<number> {
     if (unitIds.length === 0) return 0;
     return this._database.transaction((database) => {
       const publish = database.prepare(
@@ -201,7 +213,7 @@ export class SqliteUniverAssetsRepository implements UniverAssetsRepository {
   }
 
   private _requireAsset(assetId: string): UniverAssetRow {
-    const row = this.findAsset(assetId);
+    const row = this._findAssetSync(assetId);
     if (!row) throw new Error("Published Univer Asset is missing.");
     return row;
   }

@@ -9,7 +9,7 @@ import { Readable } from "node:stream";
 import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 import { interactivePrincipal } from "./principal.js";
 const directory = mkdtempSync(join(tmpdir(), "workspace-native-preview-"));
-const application = createSqliteTestApplication({ host: "127.0.0.1", port: 3091,
+const application = await createSqliteTestApplication({ host: "127.0.0.1", port: 3091,
   productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") }, collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "blobs"), secureCookies: false, sessionTtlMs: 3_600_000,
   passwordAuthEnabled: true, oauthClients: null });
@@ -51,11 +51,11 @@ addEventListener('workspace-preview-status',e=>document.getElementById('status')
 addEventListener('workspace-preview-closed',()=>document.getElementById('status').textContent='closed');
 </script></body></html>`;
 const bytes = Buffer.from(html);
-const upload = application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), { spaceId: space.id, parentNodeId: null,
+const upload = await application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), { spaceId: space.id, parentNodeId: null,
   name: "Connected workspace.univer.html", originalFilename: "Connected workspace.univer.html", byteSize: bytes.length, declaredMediaType: "text/html" });
 await application.blobs.upload(userId, upload.body.upload.id, String(bytes.length), Readable.from([bytes]));
 const result = await application.blobs.complete(interactivePrincipal(userId), upload.body.upload.id);
-application.permissions.updateNodeLinkSharing(userId, result.body.node!.id, { enabled: true, role: "viewer" });
+await application.permissions.updateNodeLinkSharing(userId, result.body.node!.id, { enabled: true, role: "viewer" });
 const info = { sheetId, origin: "http://127.0.0.1:3091", nodeId: result.body.node?.id, units,
   cookieName: application.identity.cookieName, cookieValue: issued.cookieValue, username: "preview-owner", password };
 writeFileSync(join(directory, "session.json"), JSON.stringify(info), { mode: 0o600 });

@@ -1,16 +1,22 @@
+import { ApplicationError } from "../../../middleware/errors.js";
+import type { NodeAccess } from "../../../modules/access/index.js";
+import { assertNotDelegatedPageWrite } from "../../../modules/blobs/html-view-guard.js";
+import type { Principal } from "../../../modules/identity/index.js";
+import { nodeForbidden, nodeNotFound } from "../../../modules/nodes/nodes.errors.js";
+import type { SqliteAccessRepository } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
-import type { NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository } from "../../../modules/nodes/nodes.repository.js";
+import type { NodePatch, NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository } from "../../../modules/nodes/nodes.repository.js";
 
 export class SqliteNodesRepository implements NodesRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(private readonly _database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
 
-  createReport(input: {
+  async createReport(input: {
     readonly id: string;
     readonly nodeId: string;
     readonly reporterUserId: string | null;
     readonly reason: string;
     readonly createdAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.connection
       .prepare(
         `INSERT INTO node_reports (id, node_id, reporter_user_id, reason, created_at)
@@ -19,37 +25,30 @@ export class SqliteNodesRepository implements NodesRepository {
       .run(input.id, input.nodeId, input.reporterUserId, input.reason, input.createdAt);
   }
 
-  createNode(input: {
+  async createNode(input: {
     readonly id: string;
     readonly spaceId: string;
     readonly parentNodeId: string | null;
     readonly name: string;
     readonly createdBy: string;
     readonly createdAt: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO nodes
-          (id, space_id, parent_id, name, created_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        input.id,
-        input.spaceId,
-        input.parentNodeId,
-        input.name,
-        input.createdBy,
-        input.createdAt,
-        input.createdAt
-      );
+  }): Promise<NodeAccess> {
+    return this._database.transaction((db) => {
+      this.requireTarget(input.createdBy, input.spaceId, input.parentNodeId);
+      db.prepare(`
+        INSERT INTO nodes (id, space_id, parent_id, name, created_by, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(input.id, input.spaceId, input.parentNodeId, input.name, input.createdBy, input.createdAt, input.createdAt);
+      return this.requireNode(input.createdBy, input.id);
+    });
   }
 
-  listChildren(
+  async listChildren(
     spaceId: string,
     parentNodeId: string | null,
     cursor: NodeCursor | null,
     limit: number
-  ): NodeListRow[] {
+  ): Promise<NodeListRow[]> {
     const cursorClause =
       cursor === null
         ? ""
@@ -82,7 +81,7 @@ export class SqliteNodesRepository implements NodesRepository {
       .all(...parameters) as unknown as NodeListRow[];
   }
 
-  breadcrumbs(nodeId: string): BreadcrumbRow[] {
+  async breadcrumbs(nodeId: string): Promise<BreadcrumbRow[]> {
     return this._database.connection
       .prepare(
         `WITH RECURSIVE ancestry(id, parent_id, name, depth) AS (
@@ -97,7 +96,7 @@ export class SqliteNodesRepository implements NodesRepository {
       .all(nodeId) as unknown as BreadcrumbRow[];
   }
 
-  isSelfOrDescendant(nodeId: string, candidateId: string): boolean {
+  private isSelfOrDescendant(nodeId: string, candidateId: string): boolean {
     return Boolean(
       this._database.connection
         .prepare(
@@ -114,23 +113,43 @@ export class SqliteNodesRepository implements NodesRepository {
     );
   }
 
-  updateNode(input: {
-    readonly nodeId: string;
-    readonly name: string;
-    readonly parentNodeId: string | null;
-    readonly updatedAt: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `UPDATE nodes
-         SET name = ?, parent_id = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .run(
-        input.name,
-        input.parentNodeId,
-        input.updatedAt,
-        input.nodeId
+  async updateNode(actor: Principal, nodeId: string, patch: NodePatch, updatedAt: number): Promise<NodeAccess> {
+    return this._database.transaction((db) => {
+      const userId = actor.user.id;
+      const source = this.requireNode(userId, nodeId);
+      if (patch.name !== undefined) {
+        if (!source.capabilities.rename) throw nodeForbidden();
+        if (source.resourceKind === "blob") assertNotDelegatedPageWrite(actor, [patch.name]);
+      }
+      if (patch.parentNodeId !== undefined) {
+        if (!source.capabilities.move) throw nodeForbidden();
+        if (patch.parentNodeId !== null && this.isSelfOrDescendant(nodeId, patch.parentNodeId)) {
+          throw new ApplicationError("CONFLICT", 409, "A Node cannot be moved into itself or one of its descendants.");
+        }
+        this.requireTarget(userId, source.spaceId, patch.parentNodeId);
+      }
+      db.prepare("UPDATE nodes SET name = ?, parent_id = ?, updated_at = ? WHERE id = ?").run(
+        patch.name ?? source.name, patch.parentNodeId === undefined ? source.parentNodeId : patch.parentNodeId, updatedAt, nodeId,
       );
+      return this.requireNode(userId, nodeId);
+    });
+  }
+
+  private requireNode(userId: string, nodeId: string): NodeAccess {
+    const node = this.access.readNodeAccess(userId, nodeId);
+    if (!node) throw nodeNotFound();
+    return node;
+  }
+
+  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null) {
+    if (parentNodeId === null) {
+      const space = this.access.readSpaceAccess(userId, spaceId);
+      if (!space) throw nodeNotFound();
+      if (!space.capabilities.createAtRoot) throw nodeForbidden();
+    } else {
+      const parent = this.requireNode(userId, parentNodeId);
+      if (parent.spaceId !== spaceId) throw nodeNotFound();
+      if (!parent.capabilities.createChildren) throw nodeForbidden();
+    }
   }
 }

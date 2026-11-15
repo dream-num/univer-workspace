@@ -26,39 +26,40 @@ export interface ResourcesRepository {
     readonly actorUserId: string;
     readonly payload: CreateResourcePayload;
     readonly createdAt: number;
-  }): ReservedCreateResource;
-  getOperation(operationId: string, actorUserId: string): OperationRow | null;
-  markAttempt(operationId: string, attemptedAt: number): void;
-  markUnitCreated(operationId: string, updatedAt: number): void;
+  }): Promise<ReservedCreateResource>;
+  getOperation(operationId: string, actorUserId: string): Promise<OperationRow | null>;
+  markAttempt(operationId: string, attemptedAt: number): Promise<void>;
+  markUnitCreated(operationId: string, updatedAt: number): Promise<void>;
   markPendingError(
     operationId: string,
     error: { readonly code: string; readonly message: string },
     nextAttemptAt: number,
     updatedAt: number
-  ): void;
+  ): Promise<void>;
   markFailed(
     operationId: string,
     error: { readonly code: string; readonly message: string },
     updatedAt: number
-  ): void;
+  ): Promise<void>;
   claimDue(
     workerId: string,
     now: number,
     leaseExpiresAt: number,
     limit: number
-  ): ReservedCreateResource[];
-  retry(operationId: string, actorUserId: string, updatedAt: number): boolean;
+  ): Promise<ReservedCreateResource[]>;
+  /** Claims a failed operation and returns the reserved payload under the same lease. */
+  retry(operationId: string, actorUserId: string, updatedAt: number): Promise<ReservedCreateResource | null>;
   completeCreateResource(input: {
     readonly operationId: string;
     readonly actorUserId: string;
     readonly payload: CreateResourcePayload;
     readonly completedAt: number;
-  }): OperationRow;
+  }): Promise<OperationRow>;
   recordRecent(
     userId: string,
     resourceId: string,
     openedAt: number
-  ): void;
+  ): Promise<void>;
 }
 
 export function operationView(row: OperationRow): OperationView {

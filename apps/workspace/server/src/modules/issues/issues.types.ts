@@ -156,26 +156,26 @@ export interface IssueActivity {
 }
 
 export interface IssuesModule {
-  activity(userId: string, spaceId: string, since: number): {
+  activity(userId: string, spaceId: string, since: number): Promise<{
     readonly items: readonly IssueActivity[];
     readonly complete: boolean;
-  };
-  list(userId: string, spaceId: string, query: IssueListQuery): IssueList;
-  listMine(userId: string, query: IssueListQuery): IssueList;
-  create(userId: string, spaceId: string, input: unknown, createdVia?: WriteSource | null): IssueView;
-  get(userId: string, spaceId: string, number: unknown): IssueView;
-  update(userId: string, spaceId: string, number: unknown, input: unknown): IssueView;
+  }>;
+  list(userId: string, spaceId: string, query: IssueListQuery): Promise<IssueList>;
+  listMine(userId: string, query: IssueListQuery): Promise<IssueList>;
+  create(userId: string, spaceId: string, input: unknown, createdVia?: WriteSource | null): Promise<IssueView>;
+  get(userId: string, spaceId: string, number: unknown): Promise<IssueView>;
+  update(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueView>;
   timeline(
     userId: string,
     spaceId: string,
     number: unknown,
     page: { readonly cursor?: unknown; readonly limit?: unknown },
-  ): IssueTimelinePage;
-  createComment(userId: string, spaceId: string, number: unknown, input: unknown): IssueCommentView;
-  updateComment(userId: string, commentId: string, input: unknown): IssueCommentView;
-  deleteComment(userId: string, commentId: string): void;
-  listLabels(userId: string, spaceId: string): { readonly labels: readonly IssueLabelUsageView[] };
-  createLabel(userId: string, spaceId: string, input: unknown): IssueLabelView;
-  updateLabel(userId: string, labelId: string, input: unknown): IssueLabelView;
-  deleteLabel(userId: string, labelId: string): void;
+  ): Promise<IssueTimelinePage>;
+  createComment(userId: string, spaceId: string, number: unknown, input: unknown): Promise<IssueCommentView>;
+  updateComment(userId: string, commentId: string, input: unknown): Promise<IssueCommentView>;
+  deleteComment(userId: string, commentId: string): Promise<void>;
+  listLabels(userId: string, spaceId: string): Promise<{ readonly labels: readonly IssueLabelUsageView[] }>;
+  createLabel(userId: string, spaceId: string, input: unknown): Promise<IssueLabelView>;
+  updateLabel(userId: string, labelId: string, input: unknown): Promise<IssueLabelView>;
+  deleteLabel(userId: string, labelId: string): Promise<void>;
 }

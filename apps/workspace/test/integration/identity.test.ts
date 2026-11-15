@@ -4,7 +4,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
-import { ApplicationError } from "../../server/src/middleware/errors.js";
 import {
   createIdentityModule,
   type DiscordOAuthProvider,
@@ -30,6 +29,7 @@ describe("identity", () => {
       sessionTtlMs: 60_000,
       now: () => 1_000,
     });
+    await identity.initialize();
 
     try {
       const issued = await identity.registerWithPassword({
@@ -70,7 +70,7 @@ describe("identity", () => {
           displayName: "Another Alice",
           password: "another secure password",
         })
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "USERNAME_TAKEN",
         status: 409,
       });
@@ -91,6 +91,7 @@ describe("identity", () => {
       sessionTtlMs: 60_000,
       now: () => 1_000,
     });
+    await firstIdentity.initialize();
     const issued = await firstIdentity.registerWithPassword({
       username: "bob",
       displayName: "Bob",
@@ -106,7 +107,8 @@ describe("identity", () => {
         sessionTtlMs: 60_000,
         now: () => 2_000,
       });
-      const restoredSession = secondIdentity.getSession(cookie);
+      await secondIdentity.initialize();
+      const restoredSession = await secondIdentity.getSession(cookie);
       expect(restoredSession).toMatchObject({
         authenticated: true,
         user: { username: "bob" },
@@ -115,7 +117,7 @@ describe("identity", () => {
       expect(restoredSession).not.toHaveProperty("user.secretHash");
       expect(restoredSession).not.toHaveProperty("user.expiresAt");
       expect(
-        secondIdentity.getSession(
+        await secondIdentity.getSession(
           `${secondIdentity.cookieName}=${issued.cookieValue}tampered`
         )
       ).toEqual({
@@ -128,8 +130,8 @@ describe("identity", () => {
         guestAuthEnabled: true,
       });
 
-      secondIdentity.logout(cookie);
-      expect(secondIdentity.getSession(cookie)).toEqual({
+      await secondIdentity.logout(cookie);
+      expect(await secondIdentity.getSession(cookie)).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
         googleOAuthEnabled: false,
@@ -149,6 +151,7 @@ describe("identity", () => {
       repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
     });
+    await identity.initialize();
 
     try {
       await identity.registerWithPassword({
@@ -173,10 +176,27 @@ describe("identity", () => {
           username: "carol",
           password: "wrong password",
         }, "browser")
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "INVALID_CREDENTIALS",
         status: 401,
       });
+    } finally {
+      database.close();
+    }
+  });
+
+  it("keeps disjoint concurrent profile edits", async () => {
+    const database = openWorkspaceDatabase(":memory:");
+    try {
+      const identity = createIdentityModule({ repository: createSqliteRepositories(database).identity, sessionTtlMs: 60_000 });
+      await identity.initialize();
+      const issued = await identity.registerWithPassword({ username: "owner", displayName: "Owner", password: "correct horse battery staple" });
+      const cookie = `${identity.cookieName}=${issued.cookieValue}`;
+      await Promise.all([
+        identity.updateCurrentUser(cookie, { displayName: "Updated" }),
+        identity.updateCurrentUser(cookie, { avatarUrl: "https://example.test/profile.png" }),
+      ]);
+      expect(await identity.getSession(cookie)).toMatchObject({ user: { displayName: "Updated", avatarUrl: "https://example.test/profile.png" } });
     } finally {
       database.close();
     }
@@ -190,6 +210,7 @@ describe("identity", () => {
       sessionTtlMs: 60_000,
       now: () => currentTime,
     });
+    await identity.initialize();
 
     try {
       const browserSession = await identity.registerWithPassword({
@@ -207,17 +228,21 @@ describe("identity", () => {
         expiresIn: 600,
         interval: 2,
       });
-      expect(identity.exchangeCliAuthorization(started.deviceCode)).toEqual({
+      expect(await identity.exchangeCliAuthorization(started.deviceCode)).toEqual({
         status: "pending",
       });
       expect(
-        identity.approveCliAuthorization(
+        await identity.approveCliAuthorization(
           browserCookie,
           started.userCode.toLowerCase().replace("-", "")
         )
       ).toMatchObject({ user: { username: "device-user" } });
 
-      const exchanged = identity.exchangeCliAuthorization(started.deviceCode);
+      const firstExchange = identity.exchangeCliAuthorization(started.deviceCode);
+      await expect(identity.exchangeCliAuthorization(started.deviceCode)).rejects.toMatchObject({
+        code: "CLI_AUTHORIZATION_INVALID",
+      });
+      const exchanged = await firstExchange;
       expect(exchanged).toMatchObject({
         status: "authorized",
         issuedSession: { view: { user: { username: "device-user" } } },
@@ -225,15 +250,11 @@ describe("identity", () => {
       if (exchanged.status !== "authorized") throw new Error("Missing authorized session");
       expectSessionSource(database.connection, exchanged.issuedSession.cookieValue, "agent");
       expect(tableCount(database, "login_sessions")).toBe(2);
-      expect(() =>
-        identity.exchangeCliAuthorization(started.deviceCode)
-      ).toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_INVALID" }));
+      await expect(identity.exchangeCliAuthorization(started.deviceCode)).rejects.toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_INVALID" }));
 
       const expiring = identity.startCliAuthorization();
       currentTime += 10 * 60 * 1000;
-      expect(() =>
-        identity.exchangeCliAuthorization(expiring.deviceCode)
-      ).toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_EXPIRED" }));
+      await expect(identity.exchangeCliAuthorization(expiring.deviceCode)).rejects.toThrowError(expect.objectContaining({ code: "CLI_AUTHORIZATION_EXPIRED" }));
     } finally {
       database.close();
     }
@@ -245,6 +266,7 @@ describe("identity", () => {
       repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
     });
+    await identity.initialize();
 
     try {
       const issued = await identity.registerWithPassword({
@@ -259,7 +281,7 @@ describe("identity", () => {
           currentPassword: "incorrect password",
           newPassword: "replacement secure password",
         })
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "INVALID_CURRENT_PASSWORD",
         status: 400,
       });
@@ -274,7 +296,7 @@ describe("identity", () => {
           username: "dana",
           password: "original secure password",
         }, "browser")
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "INVALID_CREDENTIALS",
       });
       await expect(
@@ -285,7 +307,7 @@ describe("identity", () => {
       ).resolves.toMatchObject({
         view: { user: { username: "dana" } },
       });
-      expect(identity.getSession(cookie)).toMatchObject({
+      expect(await identity.getSession(cookie)).toMatchObject({
         authenticated: true,
       });
     } finally {
@@ -328,9 +350,10 @@ describe("identity", () => {
       oauthStateSecret: "test-oauth-state-secret",
       now: () => 1_000,
     });
+    await identity.initialize();
 
     try {
-      const login = identity.startGitHubOAuth({
+      const login = await identity.startGitHubOAuth({
         intent: "login",
         returnTo: "/worktrees",
         cookieHeader: undefined,
@@ -356,7 +379,7 @@ describe("identity", () => {
           ],
         },
       });
-      const repeatLogin = identity.startGitHubOAuth({ intent: "login", returnTo: "/worktrees", cookieHeader: undefined });
+      const repeatLogin = await identity.startGitHubOAuth({ intent: "login", returnTo: "/worktrees", cookieHeader: undefined });
       const repeated = await identity.finishGitHubOAuth({
         code: "repeat-code",
         state: new URL(repeatLogin.authorizationUrl).searchParams.get("state"),
@@ -369,9 +392,9 @@ describe("identity", () => {
       const githubCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
       const cliLogin = identity.startCliAuthorization();
       expect(
-        identity.approveCliAuthorization(githubCookie, cliLogin.userCode)
+        await identity.approveCliAuthorization(githubCookie, cliLogin.userCode)
       ).toMatchObject({ user: { username: "octocat" } });
-      expect(identity.exchangeCliAuthorization(cliLogin.deviceCode)).toMatchObject({
+      expect(await identity.exchangeCliAuthorization(cliLogin.deviceCode)).toMatchObject({
         status: "authorized",
         issuedSession: {
           view: {
@@ -383,11 +406,11 @@ describe("identity", () => {
           },
         },
       });
-      expect(() => identity.unlinkGitHub(githubCookie)).toThrowError(
+      await expect(identity.unlinkGitHub(githubCookie)).rejects.toThrowError(
         expect.objectContaining({ code: "CONFLICT" })
       );
 
-      const discordLink = identity.startDiscordOAuth({
+      const discordLink = await identity.startDiscordOAuth({
         intent: "link",
         returnTo: "/",
         cookieHeader: githubCookie,
@@ -402,7 +425,7 @@ describe("identity", () => {
         oauthCookieHeader: `${identity.discordOAuthCookieName}=${discordLink.cookieValue}`,
         sessionCookieHeader: githubCookie,
       });
-      expect(identity.unlinkGitHub(githubCookie)).toMatchObject({
+      expect(await identity.unlinkGitHub(githubCookie)).toMatchObject({
         authenticationMethods: {
           password: false,
           externalIdentities: [
@@ -410,7 +433,7 @@ describe("identity", () => {
           ],
         },
       });
-      expect(() => identity.unlinkDiscord(githubCookie)).toThrowError(
+      await expect(identity.unlinkDiscord(githubCookie)).rejects.toThrowError(
         expect.objectContaining({ code: "CONFLICT" })
       );
 
@@ -426,7 +449,7 @@ describe("identity", () => {
         displayName: "Alice Hub",
         avatarUrl: "https://avatars.example/alice.png",
       };
-      const link = identity.startGitHubOAuth({
+      const link = await identity.startGitHubOAuth({
         intent: "link",
         returnTo: "/",
         cookieHeader: passwordCookie,
@@ -441,7 +464,7 @@ describe("identity", () => {
         oauthCookieHeader: `${identity.githubOAuthCookieName}=${link.cookieValue}`,
         sessionCookieHeader: passwordCookie,
       });
-      expect(identity.getSession(passwordCookie)).toMatchObject({
+      expect(await identity.getSession(passwordCookie)).toMatchObject({
         authenticationMethods: {
           password: true,
           externalIdentities: [
@@ -449,7 +472,7 @@ describe("identity", () => {
           ],
         },
       });
-      expect(identity.unlinkGitHub(passwordCookie)).toMatchObject({
+      expect(await identity.unlinkGitHub(passwordCookie)).toMatchObject({
         authenticationMethods: {
           password: true,
           externalIdentities: [],
@@ -462,7 +485,7 @@ describe("identity", () => {
 
   it("logs in, links, and safely unlinks Google identities", async () => {
     const database = openWorkspaceDatabase(":memory:");
-    let googleUser = {
+    let googleUser: Awaited<ReturnType<GoogleOAuthProvider["exchangeCode"]>> = {
       subject: "google-subject-1",
       username: "alice.gmail",
       displayName: "Alice Gmail",
@@ -482,14 +505,15 @@ describe("identity", () => {
       oauthStateSecret: "test-oauth-state-secret",
       now: () => 1_000,
     });
+    await identity.initialize();
 
     try {
-      expect(identity.getSession(undefined)).toMatchObject({
+      expect(await identity.getSession(undefined)).toMatchObject({
         authenticated: false,
         googleOAuthEnabled: true,
       });
 
-      const login = identity.startGoogleOAuth({
+      const login = await identity.startGoogleOAuth({
         intent: "login",
         returnTo: "/worktrees",
         cookieHeader: undefined,
@@ -516,7 +540,7 @@ describe("identity", () => {
         },
       });
       const googleCookie = `${identity.cookieName}=${loggedIn.issuedSession!.cookieValue}`;
-      expect(() => identity.unlinkGoogle(googleCookie)).toThrowError(
+      await expect(identity.unlinkGoogle(googleCookie)).rejects.toThrowError(
         expect.objectContaining({ code: "CONFLICT" })
       );
 
@@ -532,7 +556,7 @@ describe("identity", () => {
         displayName: "Alice Work",
         avatarUrl: null,
       };
-      const link = identity.startGoogleOAuth({
+      const link = await identity.startGoogleOAuth({
         intent: "link",
         returnTo: "/",
         cookieHeader: passwordCookie,
@@ -547,7 +571,7 @@ describe("identity", () => {
         oauthCookieHeader: `${identity.googleOAuthCookieName}=${link.cookieValue}`,
         sessionCookieHeader: passwordCookie,
       });
-      expect(identity.getSession(passwordCookie)).toMatchObject({
+      expect(await identity.getSession(passwordCookie)).toMatchObject({
         authenticationMethods: {
           password: true,
           externalIdentities: [
@@ -555,13 +579,13 @@ describe("identity", () => {
           ],
         },
       });
-      expect(identity.unlinkGoogle(passwordCookie)).toMatchObject({
+      expect(await identity.unlinkGoogle(passwordCookie)).toMatchObject({
         authenticationMethods: {
           password: true,
           externalIdentities: [],
         },
       });
-      expect(() => identity.unlinkGoogle(undefined)).toThrowError(
+      await expect(identity.unlinkGoogle(undefined)).rejects.toThrowError(
         expect.objectContaining({ code: "UNAUTHENTICATED" })
       );
     } finally {
@@ -591,16 +615,17 @@ describe("identity", () => {
       oauthStateSecret: "test-oauth-state-secret",
       now: () => 1_000,
     });
+    await identity.initialize();
 
     try {
-      const botLogin = identity.loginWithDiscordBot({ discordUserId });
+      const botLogin = await identity.loginWithDiscordBot({ discordUserId });
       expect(botLogin.view.user).toMatchObject({
         username: `discord-${discordUserId}`,
         displayName: `discord-${discordUserId}`,
         avatarUrl: null,
       });
 
-      const login = identity.startDiscordOAuth({
+      const login = await identity.startDiscordOAuth({
         intent: "login",
         returnTo: "/",
         cookieHeader: undefined,
@@ -639,11 +664,13 @@ describe("identity", () => {
     const database = openWorkspaceDatabase(":memory:");
     const repository = createSqliteRepositories(database).identity;
     const regular = createIdentityModule({ repository, sessionTtlMs: 60_000 });
+    await regular.initialize();
     const trial = createIdentityModule({
       repository,
       sessionTtlMs: 60_000,
       trialDeployment: true,
     });
+    await trial.initialize();
 
     try {
       const issued = await regular.registerWithPassword({
@@ -654,11 +681,11 @@ describe("identity", () => {
       const cookie = `${regular.cookieName}=${issued.cookieValue}`;
 
       expect(issued.view.trialDeployment).toBe(false);
-      expect(trial.getSession(cookie)).toMatchObject({
+      expect(await trial.getSession(cookie)).toMatchObject({
         authenticated: true,
         trialDeployment: true,
       });
-      expect(trial.getSession(undefined)).not.toHaveProperty("trialDeployment");
+      expect(await trial.getSession(undefined)).not.toHaveProperty("trialDeployment");
     } finally {
       database.close();
     }
@@ -671,6 +698,7 @@ describe("identity", () => {
       repository,
       sessionTtlMs: 60_000,
     });
+    await enabled.initialize();
 
     try {
       const issued = await enabled.registerWithPassword({
@@ -684,8 +712,9 @@ describe("identity", () => {
         sessionTtlMs: 60_000,
         passwordAuthEnabled: false,
       });
+      await disabled.initialize();
 
-      expect(disabled.getSession(undefined)).toEqual({
+      expect(await disabled.getSession(undefined)).toEqual({
         authenticated: false,
         githubOAuthEnabled: false,
         googleOAuthEnabled: false,
@@ -694,7 +723,7 @@ describe("identity", () => {
         emailAuthEnabled: false,
         guestAuthEnabled: true,
       });
-      expect(disabled.getSession(cookie)).toMatchObject({
+      expect(await disabled.getSession(cookie)).toMatchObject({
         authenticated: true,
         passwordAuthEnabled: false,
         authenticationMethods: { password: true },
@@ -705,7 +734,7 @@ describe("identity", () => {
           displayName: "Frank",
           password: "correct horse battery staple",
         })
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "PASSWORD_AUTH_DISABLED",
         status: 403,
       });
@@ -714,7 +743,7 @@ describe("identity", () => {
           username: "erin",
           password: "correct horse battery staple",
         }, "browser")
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "PASSWORD_AUTH_DISABLED",
         status: 403,
       });
@@ -723,7 +752,7 @@ describe("identity", () => {
           currentPassword: "correct horse battery staple",
           newPassword: "replacement secure password",
         })
-      ).rejects.toMatchObject<ApplicationError>({
+      ).rejects.toMatchObject({
         code: "PASSWORD_AUTH_DISABLED",
         status: 403,
       });
@@ -754,6 +783,7 @@ describe("identity", () => {
       oauthStateSecret: "test-oauth-state-secret",
       now: () => 1_000,
     });
+    await enabled.initialize();
 
     try {
       const issued = await enabled.registerWithPassword({
@@ -762,7 +792,7 @@ describe("identity", () => {
         password: "correct horse battery staple",
       });
       const cookie = `${enabled.cookieName}=${issued.cookieValue}`;
-      const link = enabled.startGitHubOAuth({
+      const link = await enabled.startGitHubOAuth({
         intent: "link",
         returnTo: "/",
         cookieHeader: cookie,
@@ -776,9 +806,9 @@ describe("identity", () => {
         sessionCookieHeader: cookie,
       });
 
-      expect(() => enabled.unlinkGitHub(cookie)).not.toThrow();
+      await expect(async () => enabled.unlinkGitHub(cookie)).not.toThrow();
 
-      const relink = enabled.startGitHubOAuth({
+      const relink = await enabled.startGitHubOAuth({
         intent: "link",
         returnTo: "/",
         cookieHeader: cookie,
@@ -802,10 +832,11 @@ describe("identity", () => {
         passwordAuthEnabled: false,
         now: () => 2_000,
       });
-      expect(() => disabled.unlinkGitHub(cookie)).toThrowError(
+      await disabled.initialize();
+      await expect(disabled.unlinkGitHub(cookie)).rejects.toThrowError(
         expect.objectContaining({ code: "CONFLICT", status: 409 })
       );
-      expect(disabled.getSession(cookie)).toMatchObject({
+      expect(await disabled.getSession(cookie)).toMatchObject({
         authenticationMethods: {
           password: true,
           externalIdentities: [

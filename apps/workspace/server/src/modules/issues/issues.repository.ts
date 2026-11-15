@@ -1,3 +1,4 @@
+import type { NodeAccess, SpaceAccess } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { IssueEventKind, IssueState, IssueStateReason } from "./issues.types.js";
@@ -96,31 +97,45 @@ export interface CreateIssue {
   readonly now: number;
 }
 
+export interface IssueSummaryData {
+  readonly labels: ReadonlyMap<string, readonly LabelRow[]>;
+  readonly assignees: ReadonlyMap<string, ReadonlyArray<{ user_id: string }>>;
+  readonly commentCounts: ReadonlyMap<string, number>;
+  readonly referenceCounts: ReadonlyMap<string, number>;
+  readonly users: ReadonlyMap<string, PublicUser>;
+}
+
+/** A write returns the issue, relations and actor access as of its commit. */
+export interface IssueDetail {
+  readonly row: IssueRow;
+  readonly space: SpaceAccess;
+  readonly summary: IssueSummaryData;
+  readonly references: ReadonlyArray<{ nodeId: string; node: NodeAccess | null }>;
+}
+
+export type LabelFields = Pick<LabelRow, "name" | "color" | "description">;
+
 export interface IssuesRepository {
-  createIssue(input: CreateIssue): void;
-  updateIssue(userId: string, spaceId: string, number: number, triage: boolean, patch: IssueUpdate, at: number): string;
-  findIssue(spaceId: string, number: number): IssueRow | null;
-  findIssueById(id: string): IssueRow | null;
-  listIssues(filter: IssueFilter, page: IssueListPage): IssueRow[];
-  activityRows(spaceId: string, since: number, limit: number): Array<Pick<IssueRow,
+  createIssue(input: CreateIssue): Promise<IssueDetail>;
+  updateIssue(userId: string, spaceId: string, number: number, patch: IssueUpdate, at: number): Promise<IssueDetail>;
+  findIssue(spaceId: string, number: number): Promise<IssueRow | null>;
+  issueDetail(userId: string, spaceId: string, number: number): Promise<IssueDetail>;
+  listIssues(filter: IssueFilter, page: IssueListPage): Promise<IssueRow[]>;
+  activityRows(spaceId: string, since: number, limit: number): Promise<Array<Pick<IssueRow,
     "number" | "title" | "author_user_id" | "created_via" | "created_at" | "closed_by_user_id" | "closed_at"
-  >>;
-  countIssues(filter: IssueFilter): { open: number; closed: number };
-  users(ids: readonly string[]): Map<string, PublicUser>;
-  labelsFor(issueIds: readonly string[]): Map<string, Array<LabelRow & { issue_id: string }>>;
-  assigneeIdsFor(issueIds: readonly string[]): Map<string, Array<{ issue_id: string; user_id: string }>>;
-  commentCounts(issueIds: readonly string[]): Map<string, number>;
-  referenceCounts(issueIds: readonly string[]): Map<string, number>;
-  referenceNodeIds(issueId: string): string[];
-  insertComment(input: { id: string; issueId: string; authorUserId: string; body: string; now: number }): void;
-  findComment(id: string): CommentRow | null;
-  updateComment(id: string, issueId: string, body: string, now: number): void;
-  deleteComment(id: string, issueId: string, now: number): void;
-  timeline(issueId: string, cursor: TimelineCursor | null, limit: number): TimelineRow[];
-  listLabels(spaceId: string): Array<LabelRow & { open_issue_count: number }>;
-  findLabel(id: string): LabelRow | null;
-  insertLabel(input: LabelRow & { now: number }): void;
-  updateLabel(input: LabelRow & { now: number }): void;
-  deleteLabel(id: string): void;
-  audience(spaceId: string): string[];
+  >>>;
+  countIssues(filter: IssueFilter): Promise<{ open: number; closed: number }>;
+  users(ids: readonly string[]): Promise<Map<string, PublicUser>>;
+  summaryData(rows: readonly IssueRow[]): Promise<IssueSummaryData>;
+  insertComment(input: { id: string; issueId: string; authorUserId: string; body: string; now: number }): Promise<CommentRow>;
+  findComment(id: string): Promise<CommentRow | null>;
+  updateComment(userId: string, id: string, body: string, now: number): Promise<CommentRow>;
+  deleteComment(userId: string, id: string, now: number): Promise<string>;
+  timeline(issueId: string, cursor: TimelineCursor | null, limit: number): Promise<TimelineRow[]>;
+  listLabels(spaceId: string): Promise<Array<LabelRow & { open_issue_count: number }>>;
+  findLabel(id: string): Promise<LabelRow | null>;
+  insertLabel(userId: string, input: LabelRow & { now: number }): Promise<void>;
+  updateLabel(userId: string, id: string, patch: Partial<LabelFields>, now: number): Promise<LabelRow>;
+  deleteLabel(userId: string, id: string): Promise<string>;
+  audience(spaceId: string): Promise<string[]>;
 }

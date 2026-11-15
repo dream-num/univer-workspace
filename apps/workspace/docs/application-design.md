@@ -139,21 +139,7 @@ Comment 1 不变。产品数据库先准备到 V21，协同迁移再从中读取
 
 ## Login Session Authenticator
 
-需要登录的产品 HTTP、Changeset 与 Worktree 入口使用同一 Login Session：
-
-```ts
-interface LoginSessionAuthenticator {
-  authenticate(cookieHeader: string | undefined):
-    | { authenticated: false }
-    | {
-        authenticated: true;
-        userId: string;
-        sessionId: string;
-      };
-}
-```
-
-它只证明身份，不携带或缓存 Space、Node、Resource、Worktree Role。
+产品 HTTP、Changeset 与 Worktree 入口异步校验同一个登录 Session。产品模块通过 `identity.requireSession(cookieHeader)` 取得 `Principal`，需要交互登录的操作使用 `requireInteractiveSession`。Space、Node、Resource 和 Worktree 的权限在执行对应操作时解析。
 
 Node、Resource 打开、按 Unit 查询、Blob 与 Trunk Asset 的指定读取接口也接受匿名访问者。
 匿名身份以保留的 `ANONYMOUS_USER_ID`（`workspace:anonymous`）进入 Access Resolver，仅由 Link Sharing 或 Space 公开可读提供 viewer 权限；

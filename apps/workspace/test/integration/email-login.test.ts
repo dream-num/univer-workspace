@@ -19,7 +19,7 @@ afterEach(() => {
 
 describe("passwordless Email sign-in", () => {
   it("emails a code, then creates the User, Personal Space, and session on verification", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
 
     await expect(
       harness.identity.requestEmailLoginCode({ email: "Alice@Example.com" })
@@ -70,7 +70,7 @@ describe("passwordless Email sign-in", () => {
     expect(tableCount(harness.database, "spaces")).toBe(1);
     expect(tableCount(harness.database, "login_sessions")).toBe(1);
     expect(
-      harness.identity.getSession(
+      await harness.identity.getSession(
         `${harness.identity.cookieName}=${issued.cookieValue}`
       )
     ).toMatchObject({
@@ -85,7 +85,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("reuses the same User for later sign-ins with the same address", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     const first = await signIn(harness, "alice@example.com");
     harness.advance(61_000);
     const second = await signIn(harness, "ALICE@example.com");
@@ -104,7 +104,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("accepts only the newest code for an address", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.identity.requestEmailLoginCode({
       email: "alice@example.com",
     });
@@ -130,7 +130,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("derives a unique Username from the email local part", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.identity.registerWithPassword({
       username: "alice",
       displayName: "Alice",
@@ -147,7 +147,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("rejects an incorrect code and locks the code after five attempts", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.identity.requestEmailLoginCode({
       email: "alice@example.com",
     });
@@ -176,7 +176,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("rejects an expired code", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.identity.requestEmailLoginCode({
       email: "alice@example.com",
     });
@@ -192,7 +192,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("rate limits code requests per address", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await harness.identity.requestEmailLoginCode({
       email: "alice@example.com",
     });
@@ -218,7 +218,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("removes the code when the provider cannot deliver it", async () => {
-    const harness = createHarness({
+    const harness = await createHarness({
       send: async () => {
         throw new Error("SMTP unavailable");
       },
@@ -230,7 +230,7 @@ describe("passwordless Email sign-in", () => {
   });
 
   it("refuses Email sign-in when no provider is configured", async () => {
-    const harness = createHarness({ sender: null });
+    const harness = await createHarness({ sender: null });
     await expect(
       harness.identity.requestEmailLoginCode({ email: "alice@example.com" })
     ).rejects.toMatchObject({ code: "EMAIL_AUTH_DISABLED", status: 403 });
@@ -240,14 +240,14 @@ describe("passwordless Email sign-in", () => {
         code: "123456",
       })
     ).rejects.toMatchObject({ code: "EMAIL_AUTH_DISABLED", status: 403 });
-    expect(harness.identity.getSession(undefined)).toMatchObject({
+    expect(await harness.identity.getSession(undefined)).toMatchObject({
       authenticated: false,
       emailAuthEnabled: false,
     });
   });
 
   it("rejects malformed addresses and codes before sending", async () => {
-    const harness = createHarness();
+    const harness = await createHarness();
     await expect(
       harness.identity.requestEmailLoginCode({ email: "not-an-email" })
     ).rejects.toMatchObject({ code: "INVALID_INPUT", field: "email" });
@@ -264,15 +264,15 @@ describe("passwordless Email sign-in", () => {
   });
 });
 
-function createHarness(
+async function createHarness(
   options: { readonly sender?: EmailSender | null; readonly send?: EmailSender["send"] } = {}
-): {
+): Promise<{
   readonly database: DatabaseSync;
   readonly identity: IdentityModule;
   readonly sent: EmailMessage[];
   readonly now: () => number;
   readonly advance: (milliseconds: number) => void;
-} {
+}> {
   const workspace = openWorkspaceDatabase(":memory:");
   workspaces.push(workspace);
   const sent: EmailMessage[] = [];
@@ -292,6 +292,7 @@ function createHarness(
     ...(sender ? { emailSender: sender } : {}),
     now: () => currentTime,
   });
+  await identity.initialize();
   return {
     database: workspace.connection,
     identity,
@@ -304,7 +305,7 @@ function createHarness(
 }
 
 async function signIn(
-  harness: ReturnType<typeof createHarness>,
+  harness: Awaited<ReturnType<typeof createHarness>>,
   email: string
 ) {
   await harness.identity.requestEmailLoginCode({ email });

@@ -8,7 +8,7 @@ export function createActivityRouter(options: {
 }): Router {
   const router = Router();
   router.get("/spaces/:spaceId/activity", async (request, response) => {
-    const { user } = options.identity.requireSession(request.headers.cookie);
+    const { user } = await options.identity.requireSession(request.headers.cookie);
     response.json(await options.activity.get(user.id, request.params.spaceId, { timeZone: request.query.timeZone }));
   });
   return router;

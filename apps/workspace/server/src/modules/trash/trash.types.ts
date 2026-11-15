@@ -58,14 +58,14 @@ export interface TrashList {
 }
 
 export interface TrashModule {
-  trashNode(userId: string, nodeId: string): TrashBatchView;
+  trashNode(userId: string, nodeId: string): Promise<TrashBatchView>;
   /** Internal workflow entry; the caller owns the stable batch ID and its recovery lifetime. */
-  trashNodeOnce(userId: string, nodeId: string, batchId: string): void;
+  trashNodeOnce(userId: string, nodeId: string, batchId: string): Promise<void>;
   list(
     userId: string,
     spaceId: string,
     page: { readonly cursor: unknown; readonly limit: unknown }
-  ): TrashList;
-  restore(userId: string, trashBatchId: string): NodeSummary;
-  removePermanently(userId: string, trashBatchId: string): void;
+  ): Promise<TrashList>;
+  restore(userId: string, trashBatchId: string): Promise<NodeSummary>;
+  removePermanently(userId: string, trashBatchId: string): Promise<void>;
 }

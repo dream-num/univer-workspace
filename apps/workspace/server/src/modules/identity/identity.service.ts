@@ -1,4 +1,4 @@
-import { authenticateStoredPrincipal, recordAgentActivity, AGENT_TTL_MS } from "./agent-activity.js";
+import { agentActivityWindow, authenticateStoredPrincipal, AGENT_TTL_MS } from "./agent-activity.js";
 import { createSessionToken, secretMatches } from "./session-token.js";
 import {
   createHash,
@@ -72,9 +72,11 @@ interface PendingCliAuthorization {
   readonly userCode: string;
   readonly expiresAt: number;
   approvedUserId?: string;
+  exchanging?: boolean;
 }
 
 export interface IdentityModule {
+  initialize(): Promise<void>;
   readonly cookieName: string;
   readonly sessionTtlMs: number;
   readonly githubOAuthCookieName: string;
@@ -89,47 +91,47 @@ export interface IdentityModule {
     input: EmailLoginCodeRequest
   ): Promise<IssuedEmailLoginCode>;
   loginWithEmailCode(input: EmailLogin): Promise<IssuedSession>;
-  loginWithDiscordBot(input: DiscordBotLogin): IssuedSession;
+  loginWithDiscordBot(input: DiscordBotLogin): Promise<IssuedSession>;
   /**
    * Creates an agent User with its Personal Space and no credential. Every creation path goes
    * through here, so the per-source rate limit cannot be skipped.
    */
-  createAgent(input: AgentCreation): CreatedAgent;
+  createAgent(input: AgentCreation): Promise<CreatedAgent>;
   startCliAuthorization(): CliAuthorizationStart;
   approveCliAuthorization(
     cookieHeader: string | undefined,
     userCode: unknown
-  ): AuthenticatedSession;
-  exchangeCliAuthorization(deviceCode: unknown): CliAuthorizationExchange;
+  ): Promise<AuthenticatedSession>;
+  exchangeCliAuthorization(deviceCode: unknown): Promise<CliAuthorizationExchange>;
   changePassword(
     cookieHeader: string | undefined,
     input: PasswordChange
   ): Promise<void>;
-  getSession(cookieHeader: string | undefined): SessionView;
-  getRealtimeSession(cookieHeader: string | undefined): {
+  getSession(cookieHeader: string | undefined): Promise<SessionView>;
+  getRealtimeSession(cookieHeader: string | undefined): Promise<{
     readonly user: User;
     readonly sessionId: string;
     readonly expiresAt: number;
-  } | null;
-  requireSession(cookieHeader: string | undefined): Principal;
+  } | null>;
+  requireSession(cookieHeader: string | undefined): Promise<Principal>;
   issueSession(
     user: User,
     writeSource: WriteSource,
     options?: IssueSessionOptions
-  ): IssuedSession;
-  logout(cookieHeader: string | undefined): void;
+  ): Promise<IssuedSession>;
+  logout(cookieHeader: string | undefined): Promise<void>;
   updateCurrentUser(
     cookieHeader: string | undefined,
     patch: UserProfilePatch
-  ): PrincipalUser;
+  ): Promise<PrincipalUser>;
   startGitHubOAuth(input: {
     readonly intent: "login" | "link";
     readonly returnTo: unknown;
     readonly cookieHeader: string | undefined;
-  }): {
+  }): Promise<{
     readonly authorizationUrl: string;
     readonly cookieValue: string;
-  };
+  }>;
   finishGitHubOAuth(input: {
     readonly code: unknown;
     readonly state: unknown;
@@ -140,15 +142,15 @@ export interface IdentityModule {
     readonly returnTo: string;
     readonly issuedSession: IssuedSession | null;
   }>;
-  unlinkGitHub(cookieHeader: string | undefined): AuthenticatedSession;
+  unlinkGitHub(cookieHeader: string | undefined): Promise<AuthenticatedSession>;
   startGoogleOAuth(input: {
     readonly intent: "login" | "link";
     readonly returnTo: unknown;
     readonly cookieHeader: string | undefined;
-  }): {
+  }): Promise<{
     readonly authorizationUrl: string;
     readonly cookieValue: string;
-  };
+  }>;
   finishGoogleOAuth(input: {
     readonly code: unknown;
     readonly state: unknown;
@@ -159,15 +161,15 @@ export interface IdentityModule {
     readonly returnTo: string;
     readonly issuedSession: IssuedSession | null;
   }>;
-  unlinkGoogle(cookieHeader: string | undefined): AuthenticatedSession;
+  unlinkGoogle(cookieHeader: string | undefined): Promise<AuthenticatedSession>;
   startDiscordOAuth(input: {
     readonly intent: "login" | "link";
     readonly returnTo: unknown;
     readonly cookieHeader: string | undefined;
-  }): {
+  }): Promise<{
     readonly authorizationUrl: string;
     readonly cookieValue: string;
-  };
+  }>;
   finishDiscordOAuth(input: {
     readonly code: unknown;
     readonly state: unknown;
@@ -178,19 +180,19 @@ export interface IdentityModule {
     readonly returnTo: string;
     readonly issuedSession: IssuedSession | null;
   }>;
-  unlinkDiscord(cookieHeader: string | undefined): AuthenticatedSession;
-  findUsers(userIds: readonly string[]): readonly User[];
+  unlinkDiscord(cookieHeader: string | undefined): Promise<AuthenticatedSession>;
+  findUsers(userIds: readonly string[]): Promise<readonly User[]>;
   /**
    * A shared page of this Node was served to a reader. When an unclaimed agent owns it, its expiry
    * moves 30 days out, as when the agent authenticates; either happens at most once a day.
    */
-  recordAgentPageView(nodeId: string): void;
+  recordAgentPageView(nodeId: string): Promise<void>;
   /**
    * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
    * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
    * that token's revocation.
    */
-  requireInteractiveSession(cookieHeader: string | undefined): Principal;
+  requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal>;
 }
 
 export function createIdentityModule(options: {
@@ -233,8 +235,6 @@ export function createIdentityModule(options: {
   const agentCreateLimiter = createSourceRateLimiter(agentCreateLimitPerHour, now);
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
-  const expiredSessionIds = repository.deleteExpiredSessions(now());
-  options.onSessionsDeleted?.(expiredSessionIds);
 
   function anonymousSession(): SessionView {
     return {
@@ -268,7 +268,9 @@ export function createIdentityModule(options: {
     return emailSender;
   }
 
-  function authenticatedSession(user: User | PrincipalUser): AuthenticatedSession {
+  async function authenticatedSession(user: User | PrincipalUser): Promise<AuthenticatedSession> {
+    const stored = "kind" in user ? user : await repository.findPrincipal(user.id);
+    if (!stored) throw new Error("Session User is missing");
     return {
       authenticated: true,
       githubOAuthEnabled,
@@ -277,15 +279,13 @@ export function createIdentityModule(options: {
       passwordAuthEnabled,
       emailAuthEnabled,
       trialDeployment,
-      user: principalUser(user),
-      authenticationMethods: repository.authenticationMethods(user.id),
+      user: principalUser(user, stored),
+      authenticationMethods: await repository.authenticationMethods(user.id),
     };
   }
 
   /** The User as sessions and the token exchange show it: the profile plus its principal kind. */
-  function principalUser(user: User | PrincipalUser): PrincipalUser {
-    const stored = "kind" in user ? user : repository.findPrincipal(user.id);
-    if (!stored) throw new Error("Session User is missing");
+  function principalUser(user: User, stored: PrincipalUser): PrincipalUser {
     return {
       id: user.id,
       username: user.username,
@@ -297,31 +297,37 @@ export function createIdentityModule(options: {
     };
   }
 
-  function storedSession(cookieHeader: string | undefined): StoredSession | null {
+  async function storedSession(cookieHeader: string | undefined): Promise<StoredSession | null> {
     const token = readSessionToken(cookieHeader);
     if (!token) return null;
-    const stored = repository.findSession(token.id);
+    const stored = await repository.findSession(token.id);
     if (!stored) return null;
     if (stored.expiresAt <= now()) {
-      repository.deleteSession(stored.sessionId);
+      await repository.deleteSession(stored.sessionId);
       options.onSessionsDeleted?.([stored.sessionId]);
       return null;
     }
     if (!secretMatches(token.secret, stored.secretHash)) return null;
-    return authenticateStoredPrincipal(repository, stored, now());
+    const authenticated = authenticateStoredPrincipal(stored, now());
+    if (!authenticated) return null;
+    if (authenticated.activity) {
+      const { at, staleBefore, expiresAt } = authenticated.activity;
+      await repository.touchUnclaimedAgent({ userId: stored.id }, at, staleBefore, expiresAt);
+    }
+    return stored;
   }
 
-  function getSession(cookieHeader: string | undefined): SessionView {
-    const stored = storedSession(cookieHeader);
+  async function getSession(cookieHeader: string | undefined): Promise<SessionView> {
+    const stored = await storedSession(cookieHeader);
     return stored ? authenticatedSession(stored) : anonymousSession();
   }
 
-  function requireSession(cookieHeader: string | undefined): Principal {
-    return principal(storedSession(cookieHeader));
+  async function requireSession(cookieHeader: string | undefined): Promise<Principal> {
+    return principal(await storedSession(cookieHeader));
   }
 
-  function requireInteractiveSession(cookieHeader: string | undefined): Principal {
-    const stored = storedSession(cookieHeader);
+  async function requireInteractiveSession(cookieHeader: string | undefined): Promise<Principal> {
+    const stored = await storedSession(cookieHeader);
     if (stored?.tokenIssued) {
       throw new ApplicationError(
         "FORBIDDEN",
@@ -341,17 +347,17 @@ export function createIdentityModule(options: {
       );
     }
     return {
-      user: principalUser(stored),
+      user: principalUser(stored, stored),
       writeSource: stored.writeSource,
       tokenIssued: stored.tokenIssued,
     };
   }
 
-  function issueSession(
+  async function issueSession(
     user: User,
     writeSource: WriteSource,
     sessionOptions: IssueSessionOptions = {}
-  ): IssuedSession {
+  ): Promise<IssuedSession> {
     const ttlMs = sessionOptions.ttlMs ?? options.sessionTtlMs;
     if (!Number.isInteger(ttlMs) || ttlMs <= 0 || ttlMs > options.sessionTtlMs) {
       throw invalidInput("Session ttlMs must be a positive integer not above the session lifetime.", "ttlMs");
@@ -363,26 +369,31 @@ export function createIdentityModule(options: {
       writeSource,
       sessionOptions.issuedFor
     );
-    repository.createSession(user.id, issued.stored);
+    await repository.createSession(user.id, issued.stored);
     return {
       cookieValue: issued.cookieValue,
-      view: authenticatedSession(user),
+      view: await authenticatedSession(user),
     };
   }
 
   return {
+    async initialize() {
+      const expiredSessionIds = await repository.deleteExpiredSessions(now());
+      options.onSessionsDeleted?.(expiredSessionIds);
+    },
     cookieName: COOKIE_NAME,
     githubOAuthCookieName: GITHUB_OAUTH_COOKIE_NAME,
     googleOAuthCookieName: GOOGLE_OAUTH_COOKIE_NAME,
     discordOAuthCookieName: DISCORD_OAUTH_COOKIE_NAME,
     sessionTtlMs: options.sessionTtlMs,
 
-    findUsers(userIds) {
+    async findUsers(userIds) {
       return repository.findUsers(userIds);
     },
 
-    recordAgentPageView(nodeId) {
-      recordAgentActivity(repository, { nodeId }, now());
+    async recordAgentPageView(nodeId) {
+      const { at, staleBefore, expiresAt } = agentActivityWindow(now());
+      await repository.touchUnclaimedAgent({ nodeId }, at, staleBefore, expiresAt);
     },
 
     async registerWithPassword(input) {
@@ -404,7 +415,7 @@ export function createIdentityModule(options: {
       );
 
       try {
-        repository.createPasswordUser({
+        await repository.createPasswordUser({
           user,
           passwordHash: await hashPassword(password),
           personalSpace: {
@@ -415,7 +426,7 @@ export function createIdentityModule(options: {
           createdAt,
         });
       } catch (error) {
-        if (repository.isIdentityConflict(error, "username")) {
+        if (await repository.isIdentityConflict(error, "username")) {
           throw usernameTaken();
         }
         throw error;
@@ -423,7 +434,7 @@ export function createIdentityModule(options: {
 
       return {
         cookieValue: issued.cookieValue,
-        view: authenticatedSession(user),
+        view: await authenticatedSession(user),
       };
     },
 
@@ -431,7 +442,7 @@ export function createIdentityModule(options: {
       requirePasswordAuth();
       const username = validUsername(input.username);
       const password = validPassword(input.password);
-      const credential = repository.findCredential(username);
+      const credential = await repository.findCredential(username);
       if (
         !credential ||
         !(await verifyPassword(password, credential.passwordHash))
@@ -450,10 +461,10 @@ export function createIdentityModule(options: {
       const sender = requireEmailSender();
       const email = validEmail(input.email);
       const requestedAt = now();
-      repository.deleteEmailLoginCodesBefore(
+      await repository.deleteEmailLoginCodesBefore(
         requestedAt - EMAIL_CODE_WINDOW_MS
       );
-      const lastRequestedAt = repository.latestEmailLoginCodeCreatedAt(email);
+      const lastRequestedAt = await repository.latestEmailLoginCodeCreatedAt(email);
       if (
         lastRequestedAt !== null &&
         requestedAt - lastRequestedAt < EMAIL_CODE_RESEND_INTERVAL_MS
@@ -466,7 +477,7 @@ export function createIdentityModule(options: {
         );
       }
       if (
-        repository.countEmailLoginCodesSince(
+        await repository.countEmailLoginCodesSince(
           email,
           requestedAt - EMAIL_CODE_WINDOW_MS
         ) >= EMAIL_CODE_WINDOW_LIMIT
@@ -481,7 +492,7 @@ export function createIdentityModule(options: {
 
       const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
       const id = randomUUID();
-      repository.createEmailLoginCode({
+      await repository.createEmailLoginCode({
         id,
         email,
         codeHash: await hashPassword(code),
@@ -498,7 +509,7 @@ export function createIdentityModule(options: {
         );
       } catch (error) {
         logger.error({ err: error }, "email sign-in code delivery failed");
-        repository.deleteEmailLoginCode(id);
+        await repository.deleteEmailLoginCode(id);
         throw new ApplicationError(
           "EMAIL_DELIVERY_FAILED",
           503,
@@ -506,7 +517,7 @@ export function createIdentityModule(options: {
           "email"
         );
       }
-      repository.consumeOtherEmailLoginCodes(email, id, requestedAt);
+      await repository.consumeOtherEmailLoginCodes(email, id, requestedAt);
       return {
         expiresIn: Math.floor(EMAIL_CODE_TTL_MS / 1_000),
         resendAfter: Math.floor(EMAIL_CODE_RESEND_INTERVAL_MS / 1_000),
@@ -518,12 +529,12 @@ export function createIdentityModule(options: {
       const email = validEmail(input.email);
       const code = validEmailCode(input.code);
       const verifiedAt = now();
-      const stored = repository.findEmailLoginCode(email, verifiedAt);
+      const stored = await repository.findEmailLoginCode(email, verifiedAt);
       if (stored === null) {
         throw invalidEmailCode();
       }
       if (stored.attempts >= EMAIL_CODE_MAX_ATTEMPTS) {
-        repository.deleteEmailLoginCode(stored.id);
+        await repository.deleteEmailLoginCode(stored.id);
         throw new ApplicationError(
           "INVALID_EMAIL_CODE",
           400,
@@ -532,15 +543,15 @@ export function createIdentityModule(options: {
         );
       }
       if (!(await verifyPassword(code, stored.codeHash))) {
-        repository.incrementEmailLoginCodeAttempts(stored.id);
+        await repository.incrementEmailLoginCodeAttempts(stored.id);
         throw invalidEmailCode();
       }
-      if (!repository.consumeEmailLoginCode(stored.id, verifiedAt)) {
+      if (!(await repository.consumeEmailLoginCode(stored.id, verifiedAt))) {
         throw invalidEmailCode();
       }
-      repository.consumeOtherEmailLoginCodes(email, stored.id, verifiedAt);
+      await repository.consumeOtherEmailLoginCodes(email, stored.id, verifiedAt);
 
-      const existing = repository.findUserByEmail(email);
+      const existing = await repository.findUserByEmail(email);
       if (existing) return issueSession(existing, "browser");
 
       const createdAt = verifiedAt;
@@ -557,7 +568,7 @@ export function createIdentityModule(options: {
           avatarUrl: null,
         };
         try {
-          repository.createEmailUser({
+          await repository.createEmailUser({
             user,
             email,
             personalSpace: {
@@ -568,16 +579,16 @@ export function createIdentityModule(options: {
             createdAt,
           });
         } catch (error) {
-          if (repository.isIdentityConflict(error, "username")) continue;
-          if (repository.isIdentityConflict(error, "email")) {
-            const concurrent = repository.findUserByEmail(email);
+          if (await repository.isIdentityConflict(error, "username")) continue;
+          if (await repository.isIdentityConflict(error, "email")) {
+            const concurrent = await repository.findUserByEmail(email);
             if (concurrent) return issueSession(concurrent, "browser");
           }
           throw error;
         }
         return {
           cookieValue: issued.cookieValue,
-          view: authenticatedSession(user),
+          view: await authenticatedSession(user),
         };
       }
       throw new ApplicationError(
@@ -587,7 +598,7 @@ export function createIdentityModule(options: {
       );
     },
 
-    createAgent(input) {
+    async createAgent(input) {
       if (!agentCreateLimiter.take(input.originIp)) {
         throw new ApplicationError(
           "AGENT_CREATE_RATE_LIMITED",
@@ -606,7 +617,7 @@ export function createIdentityModule(options: {
           avatarUrl: null,
         };
         try {
-          repository.createAgentUser({
+          await repository.createAgentUser({
             user,
             personalSpace: {
               id: randomUUID(),
@@ -617,7 +628,7 @@ export function createIdentityModule(options: {
             expiresAt,
           });
         } catch (error) {
-          if (repository.isIdentityConflict(error, "username")) continue;
+          if (await repository.isIdentityConflict(error, "username")) continue;
           throw error;
         }
         return { user, expiresAt };
@@ -629,13 +640,13 @@ export function createIdentityModule(options: {
       );
     },
 
-    loginWithDiscordBot(input) {
+    async loginWithDiscordBot(input) {
       const discordUserId = validDiscordUserId(input.discordUserId);
       const suppliedUsername =
         input.username === undefined
           ? undefined
           : validUsername(input.username);
-      const existing = repository.findExternalIdentity(
+      const existing = await repository.findExternalIdentity(
         "discord",
         discordUserId
       );
@@ -644,7 +655,7 @@ export function createIdentityModule(options: {
           suppliedUsername !== undefined &&
           suppliedUsername !== existing.providerUsername
         ) {
-          repository.updateExternalUsername(
+          await repository.updateExternalUsername(
             "discord",
             discordUserId,
             suppliedUsername,
@@ -667,7 +678,7 @@ export function createIdentityModule(options: {
       const createdAt = now();
       const user: User = {
         id: randomUUID(),
-        username: availableExternalUsername(
+        username: await availableExternalUsername(
           providerUsername,
           discordUserId,
           "discord",
@@ -682,7 +693,7 @@ export function createIdentityModule(options: {
         "agent"
       );
       try {
-        repository.createExternalUser({
+        await repository.createExternalUser({
           provider: "discord",
           user,
           providerSubject: discordUserId,
@@ -695,8 +706,8 @@ export function createIdentityModule(options: {
           createdAt,
         });
       } catch (error) {
-        if (repository.isIdentityConflict(error, "externalIdentity")) {
-          const concurrent = repository.findExternalIdentity(
+        if (await repository.isIdentityConflict(error, "externalIdentity")) {
+          const concurrent = await repository.findExternalIdentity(
             "discord",
             discordUserId
           );
@@ -706,7 +717,7 @@ export function createIdentityModule(options: {
       }
       return {
         cookieValue: token.cookieValue,
-        view: authenticatedSession(user),
+        view: await authenticatedSession(user),
       };
     },
 
@@ -742,8 +753,8 @@ export function createIdentityModule(options: {
       };
     },
 
-    approveCliAuthorization(cookieHeader, inputUserCode) {
-      const session = requireInteractiveSession(cookieHeader);
+    async approveCliAuthorization(cookieHeader, inputUserCode) {
+      const session = await requireInteractiveSession(cookieHeader);
       const userCode = validCliUserCode(inputUserCode);
       const authorization = cliAuthorizations.get(userCode);
       if (!authorization) throw invalidCliAuthorization();
@@ -765,7 +776,7 @@ export function createIdentityModule(options: {
       return authenticatedSession(session.user);
     },
 
-    exchangeCliAuthorization(inputDeviceCode) {
+    async exchangeCliAuthorization(inputDeviceCode) {
       const deviceCode = validCliDeviceCode(inputDeviceCode);
       const deviceCodeHash = hashCliDeviceCode(deviceCode);
       const userCode = cliAuthorizationDevices.get(deviceCodeHash);
@@ -785,25 +796,31 @@ export function createIdentityModule(options: {
       if (authorization.approvedUserId === undefined) {
         return { status: "pending" };
       }
-      const user = repository.findUser(authorization.approvedUserId);
-      if (!user) {
+      if (authorization.exchanging) throw invalidCliAuthorization();
+      authorization.exchanging = true;
+      try {
+        const user = await repository.findUser(authorization.approvedUserId);
+        if (!user) {
+          deleteCliAuthorization(authorization);
+          throw invalidCliAuthorization();
+        }
+        const issuedSession = await issueSession(user, "agent");
         deleteCliAuthorization(authorization);
-        throw invalidCliAuthorization();
+        return { status: "authorized", issuedSession };
+      } finally {
+        delete authorization.exchanging;
       }
-      const issuedSession = issueSession(user, "agent");
-      deleteCliAuthorization(authorization);
-      return { status: "authorized", issuedSession };
     },
 
     async changePassword(cookieHeader, input) {
       requirePasswordAuth();
-      const session = requireInteractiveSession(cookieHeader);
+      const session = await requireInteractiveSession(cookieHeader);
       const currentPassword = validPassword(
         input.currentPassword,
         "currentPassword"
       );
       const newPassword = validPassword(input.newPassword, "newPassword");
-      const credential = repository.findCredentialByUserId(
+      const credential = await repository.findCredentialByUserId(
         session.user.id
       );
       if (!credential) {
@@ -826,7 +843,7 @@ export function createIdentityModule(options: {
           "currentPassword"
         );
       }
-      repository.updatePasswordHash(
+      await repository.updatePasswordHash(
         session.user.id,
         await hashPassword(newPassword),
         now()
@@ -834,8 +851,8 @@ export function createIdentityModule(options: {
     },
 
     getSession,
-    getRealtimeSession(cookieHeader) {
-      const stored = storedSession(cookieHeader);
+    async getRealtimeSession(cookieHeader) {
+      const stored = await storedSession(cookieHeader);
       if (!stored) return null;
       return {
         user: {
@@ -852,18 +869,18 @@ export function createIdentityModule(options: {
     issueSession,
     requireInteractiveSession,
 
-    logout(cookieHeader) {
+    async logout(cookieHeader) {
       const token = readSessionToken(cookieHeader);
       if (!token) return;
-      const stored = repository.findSession(token.id);
+      const stored = await repository.findSession(token.id);
       if (stored && secretMatches(token.secret, stored.secretHash)) {
-        repository.deleteSession(token.id);
+        await repository.deleteSession(token.id);
         options.onSessionsDeleted?.([token.id]);
       }
     },
 
-    updateCurrentUser(cookieHeader, patch) {
-      const session = requireSession(cookieHeader);
+    async updateCurrentUser(cookieHeader, patch) {
+      const session = await requireSession(cookieHeader);
       if (
         patch.username === undefined &&
         patch.displayName === undefined &&
@@ -875,41 +892,31 @@ export function createIdentityModule(options: {
         );
       }
 
-      const user: PrincipalUser = {
-        ...session.user,
-        username:
-          patch.username === undefined
-            ? session.user.username
-            : validUsername(patch.username),
-        displayName:
-          patch.displayName === undefined
-            ? session.user.displayName
-            : validDisplayName(patch.displayName),
-        avatarUrl:
-          patch.avatarUrl === undefined
-            ? session.user.avatarUrl
-            : validAvatarUrl(patch.avatarUrl),
+      const fields = {
+        ...(patch.username !== undefined && { username: validUsername(patch.username) }),
+        ...(patch.displayName !== undefined && { displayName: validDisplayName(patch.displayName) }),
+        ...(patch.avatarUrl !== undefined && { avatarUrl: validAvatarUrl(patch.avatarUrl) }),
       };
       try {
-        repository.updateUser(user, now());
+        const user = await repository.updateUser(session.user.id, fields, now());
+        return principalUser(user, session.user);
       } catch (error) {
-        if (repository.isIdentityConflict(error, "username")) {
+        if (await repository.isIdentityConflict(error, "username")) {
           throw usernameTaken();
         }
         throw error;
       }
-      return user;
     },
 
-    startGitHubOAuth(input) {
+    async startGitHubOAuth(input) {
       return startExternalOAuth("github", githubOAuthProvider, input);
     },
 
-    startGoogleOAuth(input) {
+    async startGoogleOAuth(input) {
       return startExternalOAuth("google", googleOAuthProvider, input);
     },
 
-    startDiscordOAuth(input) {
+    async startDiscordOAuth(input) {
       return startExternalOAuth("discord", discordOAuthProvider, input);
     },
 
@@ -925,20 +932,20 @@ export function createIdentityModule(options: {
       return finishExternalOAuth("discord", discordOAuthProvider, input);
     },
 
-    unlinkGitHub(cookieHeader) {
+    async unlinkGitHub(cookieHeader) {
       return unlinkExternalIdentity("github", cookieHeader);
     },
 
-    unlinkGoogle(cookieHeader) {
+    async unlinkGoogle(cookieHeader) {
       return unlinkExternalIdentity("google", cookieHeader);
     },
 
-    unlinkDiscord(cookieHeader) {
+    async unlinkDiscord(cookieHeader) {
       return unlinkExternalIdentity("discord", cookieHeader);
     },
   };
 
-  function startExternalOAuth(
+  async function startExternalOAuth(
     provider: ExternalIdentityProvider,
     oauthProvider: ExternalOAuthProvider | null,
     input: {
@@ -952,7 +959,7 @@ export function createIdentityModule(options: {
     }
     const linkedUserId =
       input.intent === "link"
-        ? requireInteractiveSession(input.cookieHeader).user.id
+        ? (await requireInteractiveSession(input.cookieHeader)).user.id
         : null;
     const state = randomBytes(32).toString("base64url");
     const verifier = randomBytes(48).toString("base64url");
@@ -1027,12 +1034,12 @@ export function createIdentityModule(options: {
       code,
       oauth.verifier
     );
-    const existing = repository.findExternalIdentity(
+    const existing = await repository.findExternalIdentity(
       provider,
       identity.subject
     );
     if (oauth.intent === "link") {
-      const session = requireInteractiveSession(input.sessionCookieHeader);
+      const session = await requireInteractiveSession(input.sessionCookieHeader);
       if (
         !oauth.linkedUserId ||
         oauth.linkedUserId !== session.user.id
@@ -1051,7 +1058,7 @@ export function createIdentityModule(options: {
         );
       }
       try {
-        repository.linkExternalIdentity({
+        await repository.linkExternalIdentity({
           provider,
           userId: session.user.id,
           providerSubject: identity.subject,
@@ -1059,7 +1066,7 @@ export function createIdentityModule(options: {
           updatedAt: now(),
         });
       } catch (error) {
-        if (repository.isIdentityConflict(error, "externalIdentity")) {
+        if (await repository.isIdentityConflict(error, "externalIdentity")) {
           throw new ApplicationError(
             "CONFLICT",
             409,
@@ -1072,7 +1079,7 @@ export function createIdentityModule(options: {
     }
 
     if (existing) {
-      repository.updateExternalUsername(
+      await repository.updateExternalUsername(
         provider,
         identity.subject,
         identity.username,
@@ -1080,18 +1087,18 @@ export function createIdentityModule(options: {
       );
       const user =
         provider === "discord"
-          ? completeDiscordPlaceholderProfile(existing.user, identity)
+          ? await completeDiscordPlaceholderProfile(existing.user, identity)
           : existing.user;
       return {
         returnTo: oauth.returnTo,
-        issuedSession: issueSession(user, "browser"),
+        issuedSession: await issueSession(user, "browser"),
       };
     }
 
     const createdAt = now();
     const user: User = {
       id: randomUUID(),
-      username: availableExternalUsername(
+      username: await availableExternalUsername(
         identity.username,
         identity.subject,
         provider,
@@ -1105,7 +1112,7 @@ export function createIdentityModule(options: {
       createdAt + options.sessionTtlMs,
       "browser"
     );
-    repository.createExternalUser({
+    await repository.createExternalUser({
       provider,
       user,
       providerSubject: identity.subject,
@@ -1121,44 +1128,34 @@ export function createIdentityModule(options: {
       returnTo: oauth.returnTo,
       issuedSession: {
         cookieValue: token.cookieValue,
-        view: authenticatedSession(user),
+        view: await authenticatedSession(user),
       },
     };
   }
 
-  function unlinkExternalIdentity(
+  async function unlinkExternalIdentity(
     provider: ExternalIdentityProvider,
     cookieHeader: string | undefined
   ) {
-    const session = requireSession(cookieHeader);
-    const methods = repository.authenticationMethods(session.user.id);
-    const hasProvider = methods.externalIdentities.some(
-      (identity) => identity.provider === provider
-    );
-    const passwordCountsAsLogin = passwordAuthEnabled && methods.password;
-    if (
-      hasProvider &&
-      !passwordCountsAsLogin &&
-      methods.externalIdentities.length === 1
-    ) {
+    const session = await requireSession(cookieHeader);
+    if (!(await repository.removeExternalIdentity(session.user.id, provider, passwordAuthEnabled))) {
       throw new ApplicationError(
         "CONFLICT",
         409,
         `${providerDisplayName(provider)} cannot be unlinked because it is the last authentication method.`
       );
     }
-    repository.removeExternalIdentity(session.user.id, provider);
-    const user = repository.findUser(session.user.id);
+    const user = await repository.findUser(session.user.id);
     if (!user) {
       throw new Error("Authenticated user is missing.");
     }
     return authenticatedSession(user);
   }
 
-  function completeDiscordPlaceholderProfile(
+  async function completeDiscordPlaceholderProfile(
     user: User,
     identity: ExternalIdentity
-  ): User {
+  ): Promise<User> {
     const placeholder = `discord-${identity.subject}`;
     const usernameIsPlaceholder = user.username === placeholder;
     const displayNameIsPlaceholder = user.displayName === placeholder;
@@ -1170,23 +1167,12 @@ export function createIdentityModule(options: {
     ) {
       return user;
     }
-    const completed: User = {
-      id: user.id,
-      username: usernameIsPlaceholder
-        ? availableExternalUsername(
-            identity.username,
-            identity.subject,
-            "discord",
-            repository
-          )
-        : user.username,
-      displayName: displayNameIsPlaceholder
-        ? validDisplayName(identity.displayName)
-        : user.displayName,
-      avatarUrl: avatarIsMissing ? identity.avatarUrl : user.avatarUrl,
+    const patch = {
+      ...(usernameIsPlaceholder && { username: await availableExternalUsername(identity.username, identity.subject, "discord", repository) }),
+      ...(displayNameIsPlaceholder && { displayName: validDisplayName(identity.displayName) }),
+      ...(avatarIsMissing && { avatarUrl: identity.avatarUrl }),
     };
-    repository.updateUser(completed, now());
-    return completed;
+    return repository.updateUser(user.id, patch, now(), user);
   }
 
   function deleteExpiredCliAuthorizations(): void {
@@ -1343,17 +1329,17 @@ function requiredOAuthText(
   return value;
 }
 
-function availableExternalUsername(
+async function availableExternalUsername(
   preferred: string,
   subject: string,
   provider: ExternalIdentityProvider,
   repository: IdentityRepository
-): string {
+): Promise<string> {
   const base = preferred.slice(0, 64);
-  if (!repository.usernameExists(base)) return base;
+  if (!(await repository.usernameExists(base))) return base;
   const suffix = `-${subject.replaceAll(/[^A-Za-z0-9]/g, "").slice(-10) || provider}`;
   const candidate = `${base.slice(0, 64 - suffix.length)}${suffix}`;
-  if (!repository.usernameExists(candidate)) return candidate;
+  if (!(await repository.usernameExists(candidate))) return candidate;
   const randomSuffix = `-${randomBytes(4).toString("hex")}`;
   return `${base.slice(0, 64 - randomSuffix.length)}${randomSuffix}`;
 }

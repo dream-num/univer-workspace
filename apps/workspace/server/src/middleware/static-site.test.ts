@@ -14,7 +14,7 @@ let server: Server;
 let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
 const identity = { recordAgentPageView: vi.fn() };
-const getNode = vi.fn((userId: string, nodeId: string) => {
+const getNode = vi.fn(async (userId: string, nodeId: string) => {
   if (["private", "missing", "deleted", "failure"].includes(nodeId)) {
     throw new Error("No metadata may escape this lookup");
   }

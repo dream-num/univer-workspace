@@ -117,12 +117,12 @@ describe("Blob Resource HTTP API", () => {
     expect(Buffer.from(await download.arrayBuffer())).toEqual(content);
 
     expect((await fetch(contentUrl)).status).toBe(404);
-    application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: true, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: true, role: "editor" });
     const anonymousContent = await fetch(contentUrl);
     expect(anonymousContent.headers.get("cache-control")).toBe("private, no-store");
     expect(Buffer.from(await anonymousContent.arrayBuffer())).toEqual(content);
     expect((await fetch(contentUrl, { method: "PUT", body: "denied" })).status).toBe(401);
-    application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: false, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(userId, reservation.upload.nodeId, { enabled: false, role: "editor" });
     expect((await fetch(contentUrl, { headers: { "if-none-match": etag! } })).status).toBe(404);
     expect(
       (
@@ -180,7 +180,7 @@ describe("Blob replacement HTTP API", () => {
 async function publishedBlob() {
   const { application, cookie, space, origin, userId } = await createHttpContext();
   const content = Buffer.from("hello blob");
-  const { body } = application.blobs.createUpload(interactivePrincipal(userId), "http-replace-setup-0001", {
+  const { body } = await application.blobs.createUpload(interactivePrincipal(userId), "http-replace-setup-0001", {
     spaceId: space.id,
     parentNodeId: null,
     name: "file.txt",
@@ -204,7 +204,7 @@ async function publishedBlob() {
 async function createHttpContext() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-http-blob-"));
   directories.push(directory);
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,

@@ -16,9 +16,17 @@ export interface ContentPermissionObject {
   readonly collaborators: readonly ContentCollaborator[];
 }
 
+/** Null fields preserve the current stored value when a client updates part of a rule. */
+export interface ContentPermissionUpdate {
+  readonly name: string | null;
+  readonly strategies: ContentPermissionObject["strategies"] | null;
+  readonly scope: { readonly read: number; readonly edit: number } | null;
+  readonly collaborators: readonly ContentCollaborator[] | null;
+}
+
 export interface ContentPermissionsRepository {
-  get(unitId: string, objectId: string): ContentPermissionObject | null;
-  create(object: ContentPermissionObject): void;
-  update(object: ContentPermissionObject): void;
-  candidateUserIds(unitId: string): string[];
+  get(unitId: string, objectId: string): Promise<ContentPermissionObject | null>;
+  create(object: ContentPermissionObject): Promise<void>;
+  update(unitId: string, objectId: string, patch: ContentPermissionUpdate): Promise<boolean>;
+  candidateUserIds(unitId: string): Promise<string[]>;
 }

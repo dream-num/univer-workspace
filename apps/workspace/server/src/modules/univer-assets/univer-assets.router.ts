@@ -16,14 +16,14 @@ export function createUniverAssetsRouter(options: {
   readonly assets: UniverAssetsModule;
 }): Router {
   const router = Router();
-  const userId = (request: Request) =>
-    options.identity.requireSession(request.headers.cookie).user.id;
+  const userId = async (request: Request) =>
+    (await options.identity.requireSession(request.headers.cookie)).user.id;
 
   router.post("/stream/file/upload", async (request, response) => {
     const result = await uploadMultipart(
       request,
       options.assets,
-      userId(request),
+      await userId(request),
       { kind: "trunk" }
     );
     response.status(201).json(result);
@@ -34,7 +34,7 @@ export function createUniverAssetsRouter(options: {
       const result = await uploadMultipart(
         request,
         options.assets,
-        userId(request),
+        await userId(request),
         {
           kind: "worktree",
           worktreeId: required(request.params.worktreeId),
@@ -45,7 +45,7 @@ export function createUniverAssetsRouter(options: {
   );
 
   router.get("/file/:fileId/sign-url", async (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     const url = await options.assets.resolveContentUrl(
       session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
       { kind: "trunk" },
@@ -58,7 +58,7 @@ export function createUniverAssetsRouter(options: {
     "/worktrees/:worktreeId/file/:fileId/sign-url",
     async (request, response) => {
       const url = await options.assets.resolveContentUrl(
-        userId(request),
+        await userId(request),
         {
           kind: "worktree",
           worktreeId: required(request.params.worktreeId),
@@ -71,7 +71,7 @@ export function createUniverAssetsRouter(options: {
   );
 
   router.get("/file/:fileId/content", async (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     await sendContent(
       request,
       response,
@@ -88,7 +88,7 @@ export function createUniverAssetsRouter(options: {
         request,
         response,
         options.assets,
-        userId(request),
+        await userId(request),
         {
           kind: "worktree",
           worktreeId: required(request.params.worktreeId),

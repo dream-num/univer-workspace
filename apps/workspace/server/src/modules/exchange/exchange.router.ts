@@ -12,15 +12,15 @@ export function createExchangeRouter(options: {
   readonly exchange: ExchangeModule;
 }): Router {
   const router = Router();
-  const userId = (request: Request) =>
-    options.identity.requireSession(request.headers.cookie).user.id;
+  const userId = async (request: Request) =>
+    (await options.identity.requireSession(request.headers.cookie)).user.id;
 
   router.post("/stream/file/upload", async (request, response, next) => {
     if (!options.exchange.acceptsUpload(request.query.source)) {
       next();
       return;
     }
-    const authenticatedUserId = userId(request);
+    const authenticatedUserId = await userId(request);
     const result = await receiveSingleMultipartFile(
       request,
       MAX_EXCHANGE_FILE_BYTES,
@@ -42,7 +42,7 @@ export function createExchangeRouter(options: {
     async (request, response) => {
       response.json(
         await options.exchange.importFile(
-          userId(request),
+          await userId(request),
           "auto",
           request.body
         )
@@ -55,7 +55,7 @@ export function createExchangeRouter(options: {
     async (request, response) => {
       response.json(
         await options.exchange.importFile(
-          userId(request),
+          await userId(request),
           request.params.type,
           request.body
         )
@@ -68,18 +68,18 @@ export function createExchangeRouter(options: {
     async (request, response) => {
       response.json(
         await options.exchange.exportFile(
-          userId(request),
+          await userId(request),
           request.params.type,
           request.body
         )
       );
     }
   );
-  router.get("/exchange/task/:taskId", (request, response) => {
+  router.get("/exchange/task/:taskId", async (request, response) => {
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
       options.exchange.getTask(
-        userId(request),
+        await userId(request),
         required(request.params.taskId)
       )
     );
@@ -87,7 +87,7 @@ export function createExchangeRouter(options: {
 
   router.get("/file/:fileId/sign-url", async (request, response, next) => {
     // Embedded assets share these paths and may be anonymously readable.
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
       next();
       return;
@@ -105,7 +105,7 @@ export function createExchangeRouter(options: {
   });
   router.get("/file/:fileId/content", async (request, response, next) => {
     // Embedded assets share these paths and may be anonymously readable.
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
       next();
       return;

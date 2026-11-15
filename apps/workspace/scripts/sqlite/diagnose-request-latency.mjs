@@ -104,7 +104,7 @@ try {
   for (let i = 0; i < 60; i++) {
     const created = await request("/api/resources", resourceInput);
     resources.push(created.node.resource);
-    application.resources.open(userId, created.node.resource.id);
+    await application.resources.open(userId, created.node.resource.id);
   }
   for (let i = 0; i < 10; i++) {
     const created = await request("/api/worktrees", worktreeInput);

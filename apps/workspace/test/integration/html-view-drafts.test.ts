@@ -2,7 +2,7 @@ import { createServer, type Server } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
 const applications: SqliteTestApplication[] = [];
@@ -45,7 +45,7 @@ async function harness() {
 describe("HTML View draft HTTP API", () => {
   it("requires drafts for delegated upload names and original filenames, ignoring case", async () => {
     const c = await harness();
-    const tokenCookie = delegatedCookie(c);
+    const tokenCookie = await delegatedCookie(c);
     for (const names of [
       { name: "Page.univer.html", originalFilename: "source.txt" },
       { name: "ordinary.txt", originalFilename: "Page.UnIvEr.HtMl" },
@@ -59,7 +59,7 @@ describe("HTML View draft HTTP API", () => {
 
   it("requires drafts for delegated replacement of either page filename", async () => {
     const c = await harness();
-    const tokenCookie = delegatedCookie(c);
+    const tokenCookie = await delegatedCookie(c);
     for (const names of [
       { name: "PAGE.UNIVER.HTML", originalFilename: "source.txt" },
       { name: "ordinary.txt", originalFilename: "Page.UnIvEr.HtMl" },
@@ -80,7 +80,7 @@ describe("HTML View draft HTTP API", () => {
 
   it("guards delegated Blob renames while allowing ordinary Blob writes and folder names", async () => {
     const c = await harness();
-    const tokenCookie = delegatedCookie(c);
+    const tokenCookie = await delegatedCookie(c);
     const upload = await uploadBlob(c, tokenCookie, { name: "notes.txt", originalFilename: "notes.txt" });
     const replaced = await fetch(`${c.origin}/api/blob-resources/${upload.resourceId}/content`, {
       method: "PUT",
@@ -103,13 +103,13 @@ describe("HTML View draft HTTP API", () => {
     expect((await fetch(`${c.origin}/api/trash-batches/${batch.id}/restore`, {
       method: "POST", headers: { cookie: tokenCookie },
     })).status).toBe(200);
-    const folder = c.application.nodes.create(c.userId, { spaceId: c.space.id, parentNodeId: null, name: "Folder" });
+    const folder = await c.application.nodes.create(c.userId, { spaceId: c.space.id, parentNodeId: null, name: "Folder" });
     expect((await rename(folder.id, "Folder.univer.html")).status).toBe(200);
   });
 
   it("prevents delegated completion of an interactive page reservation", async () => {
     const c = await harness();
-    const tokenCookie = delegatedCookie(c);
+    const tokenCookie = await delegatedCookie(c);
     const reserved = await reserveBlob(c, c.cookie, { name: "Page.univer.html", originalFilename: "source.txt" });
     const { upload } = await reserved.json();
     expect((await fetch(`${c.origin}/api/blob-upload-sessions/${upload.id}/content`, {
@@ -119,7 +119,7 @@ describe("HTML View draft HTTP API", () => {
       method: "POST", headers: { cookie },
     });
     await expectDraftRequired(await complete(tokenCookie));
-    expect(c.application.views.listHtmlViews(c.userId, {}).items).toHaveLength(0);
+    expect((await c.application.views.listHtmlViews(c.userId, {})).items).toHaveLength(0);
     expect((await complete(c.cookie)).status).toBe(201);
   });
 
@@ -154,12 +154,40 @@ describe("HTML View draft HTTP API", () => {
     expect((await c.send("", { ...body, html }, "short")).status).toBe(400);
   });
 
+  it.each([
+    ["same intent", "Weekly", 200],
+    ["different intent", "Another name", 409],
+  ] as const)("handles a concurrent reservation for the %s", async (_case, name, status) => {
+    const c = await harness();
+    const key = crypto.randomUUID();
+    const body = { kind: "create", name: "Weekly", spaceId: c.space.id, html };
+    const repository = c.application.repositories.htmlViewDrafts;
+    const find = repository.findKey.bind(repository);
+    let winningId: string | undefined;
+    const overlap = vi.spyOn(repository, "findKey").mockImplementationOnce(async (...args) => {
+      const beforeReservation = await find(...args);
+      expect(beforeReservation).toBeUndefined();
+      const winner = await c.send("", body, key);
+      expect(winner.status).toBe(201);
+      winningId = (await winner.json()).draft.id;
+      return beforeReservation;
+    });
+    try {
+      const response = await c.send("", { ...body, name }, key);
+      expect(response.status).toBe(status);
+      if (status === 200) expect((await response.json()).draft.id).toBe(winningId);
+      expect((await find(c.userId, key))?.id).toBe(winningId);
+    } finally {
+      overlap.mockRestore();
+    }
+  });
+
   it("stages inert author-only bytes then publishes a visible page and replays", async () => {
     const c = await harness();
     const key = crypto.randomUUID();
     const draft = await c.submit(key);
     expect(draft).toMatchObject({ state: "pending", name: "Weekly.univer.html", published: null });
-    expect(c.application.views.listHtmlViews(c.userId, {}).items).toHaveLength(0);
+    expect((await c.application.views.listHtmlViews(c.userId, {})).items).toHaveLength(0);
     const replay = await c.send(
       "",
       { kind: "create", spaceId: c.space.id, name: "Weekly", html },
@@ -185,7 +213,7 @@ describe("HTML View draft HTTP API", () => {
         .prepare("SELECT id FROM nodes WHERE id = ?")
         .get(view.published.nodeId),
     ).toBeDefined();
-    expect(c.application.views.listHtmlViews(c.userId, {}).items).toHaveLength(1);
+    expect((await c.application.views.listHtmlViews(c.userId, {})).items).toHaveLength(1);
     const bytes = await fetch(
       `${c.origin}/api/blob-resources/${view.published.resourceId}/content`,
       { headers: { cookie: c.cookie } },
@@ -242,7 +270,7 @@ describe("HTML View draft HTTP API", () => {
         "UPDATE html_view_drafts SET state = 'receiving', media_type = NULL, stored_etag = NULL, expires_at = 1 WHERE id = ?",
       )
       .run(receiving.id);
-    expect(c.application.htmlViewDrafts.expireDue(Date.now(), 25)).toBe(2);
+    expect(await c.application.htmlViewDrafts.expireDue(Date.now(), 25)).toBe(2);
     for (const id of [draft.id, expired.id, receiving.id]) {
       expect(
         c.application.database.connection
@@ -272,8 +300,8 @@ describe("HTML View draft HTTP API", () => {
     db.prepare(
       "INSERT INTO personal_access_tokens (id, user_id, name, token_hash, scopes, created_at) VALUES ('draft-pat', ?, 'Draft', 'draft-hash', 'read write publish', 1)",
     ).run(c.userId);
-    const user = c.application.identity.requireSession(c.cookie).user;
-    const tokenSession = c.application.identity.issueSession(user, "agent", {
+    const user = (await c.application.identity.requireSession(c.cookie)).user;
+    const tokenSession = await c.application.identity.issueSession(user, "agent", {
       issuedFor: { kind: "pat", id: "draft-pat" },
     });
     const tokenCookie = `${c.application.identity.cookieName}=${tokenSession.cookieValue}`;
@@ -316,7 +344,7 @@ describe("HTML View draft HTTP API", () => {
 async function createHttpContext() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-http-blob-"));
   directories.push(directory);
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
@@ -369,11 +397,11 @@ function closeServer(server: Server): Promise<void> {
   });
 }
 
-function delegatedCookie(c: Awaited<ReturnType<typeof createHttpContext>>): string {
+async function delegatedCookie(c: Awaited<ReturnType<typeof createHttpContext>>): Promise<string> {
   c.application.database.connection.prepare(
     "INSERT INTO personal_access_tokens (id, user_id, name, token_hash, scopes, created_at) VALUES ('guard-pat', ?, 'Guard', 'guard-hash', 'read write publish', 1)",
   ).run(c.userId);
-  const issued = c.application.identity.issueSession(c.application.identity.requireSession(c.cookie).user, "agent", {
+  const issued = await c.application.identity.issueSession((await c.application.identity.requireSession(c.cookie)).user, "agent", {
     issuedFor: { kind: "pat", id: "guard-pat" },
   });
   return `${c.application.identity.cookieName}=${issued.cookieValue}`;

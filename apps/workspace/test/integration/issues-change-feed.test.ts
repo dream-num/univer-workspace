@@ -9,7 +9,7 @@ import { shutdownServer } from "../../server/src/server-lifecycle.js";
 describe("Issue change feed", () => {
   it("tells Space members to refetch after a write and nobody else", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-issue-feed-"));
-    const application = createSqliteTestApplication({
+    const application = await createSqliteTestApplication({
       host: "127.0.0.1",
       port: 3020,
       productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -34,7 +34,7 @@ describe("Issue change feed", () => {
       const member = await register("issue-feed-member");
       const visitor = await register("issue-feed-visitor");
       const space = await application.spaces.createTeamSpace(owner.view.user.id, { name: "Feed", publicRead: true });
-      application.permissions.upsertTeamMember(owner.view.user.id, space.id, member.view.user.id, { role: "viewer" });
+      await application.permissions.upsertTeamMember(owner.view.user.id, space.id, member.view.user.id, { role: "viewer" });
 
       const cookie = (session: { cookieValue: string }) => `${application.identity.cookieName}=${session.cookieValue}`;
       const memberSocket = await connect(origin, cookie(member));
@@ -42,13 +42,13 @@ describe("Issue change feed", () => {
 
       const memberMessage = nextMessage(memberSocket);
       const visitorQuiet = noMessage(visitorSocket, 300);
-      application.issues.create(owner.view.user.id, space.id, { title: "Announce" });
+      await application.issues.create(owner.view.user.id, space.id, { title: "Announce" });
       await expect(memberMessage).resolves.toEqual({ event: "issuesChanged", spaceId: space.id });
       // Public read gives the visitor access to read Issues, but not a push.
       await expect(visitorQuiet).resolves.toBe(true);
 
       const rejectedQuiet = noMessage(memberSocket, 300);
-      expect(() => application.issues.create(owner.view.user.id, space.id, { title: "" })).toThrow();
+      await expect(application.issues.create(owner.view.user.id, space.id, { title: "" })).rejects.toThrow();
       await expect(rejectedQuiet).resolves.toBe(true);
     } finally {
       await shutdownServer(server, { dispose: async () => {} }, application);

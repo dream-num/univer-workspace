@@ -1,28 +1,37 @@
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import { randomUUID } from "node:crypto";
 import type { SqliteDatabase } from "../connection.js";
 import type { StoredBlob } from "../../../integrations/blob/blob-store.js";
 import { enqueueObjectDeletion, insertReadyBlobResource, swapBlobContent } from "../blobs/blobs.repository.js";
 import type { DraftRow } from "../../../modules/html-view-drafts/drafts.types.js";
-import type { HtmlViewDraftsRepository } from "../../../modules/html-view-drafts/drafts.repository.js";
+import { assertDraftDestination, requireDraftResource, draftConflict, type HtmlViewDraftsRepository } from "../../../modules/html-view-drafts/drafts.repository.js";
 
 export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository {
-  constructor(private readonly database: SqliteDatabase) {}
-  find(id: string): DraftRow | undefined {
+  constructor(private readonly database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
+  async find(id: string): Promise<DraftRow | undefined> {
+    return this._findSync(id);
+  }
+
+  private _findSync(id: string): DraftRow | undefined {
     return this.database.connection
       .prepare("SELECT * FROM html_view_drafts WHERE id = ?")
       .get(id) as DraftRow | undefined;
   }
-  findKey(userId: string, key: string): DraftRow | undefined {
+  async findKey(userId: string, key: string): Promise<DraftRow | undefined> {
+    return this._findKeySync(userId, key);
+  }
+
+  private _findKeySync(userId: string, key: string): DraftRow | undefined {
     return this.database.connection
       .prepare("SELECT * FROM html_view_drafts WHERE author_user_id = ? AND idempotency_key = ?")
       .get(userId, key) as DraftRow | undefined;
   }
-  currentEtag(resourceId: string): string | undefined {
+  async currentEtag(resourceId: string): Promise<string | undefined> {
     return this.database.connection
       .prepare("SELECT etag FROM blob_resources WHERE resource_id = ?")
       .get(resourceId)?.etag as string | undefined;
   }
-  reserve(
+  async reserve(
     input: Pick<
       DraftRow,
       | "author_user_id"
@@ -37,8 +46,10 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
       | "byte_size"
     >,
     now: number,
-  ): DraftRow {
+  ): Promise<{ row: DraftRow; created: boolean }> {
     return this.database.transaction((db) => {
+      const existing = this._findKeySync(input.author_user_id, input.idempotency_key);
+      if (existing) return { row: existing, created: false };
       db.prepare(`INSERT INTO html_view_drafts
         (id, author_user_id, idempotency_key, kind, space_id, parent_node_id, name, target_resource_id,
          base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at)
@@ -59,25 +70,35 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
         now,
         now,
       );
-      return this.findKey(input.author_user_id, input.idempotency_key)!;
+      return { row: this._findKeySync(input.author_user_id, input.idempotency_key)!, created: true };
     });
   }
-  markPending(id: string, stored: StoredBlob, now: number): DraftRow {
+  async markPending(id: string, stored: StoredBlob, now: number): Promise<DraftRow> {
     this.database.connection
       .prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?,
       expires_at = ?, updated_at = ? WHERE id = ? AND state = 'receiving' AND expires_at > ?`)
       .run(stored.mediaType, stored.etag, now + 7 * 86400000, now, id, now);
-    return this.find(id)!;
+    return this._findSync(id)!;
   }
-  decide(id: string, userId: string, action: "publish" | "reject", now: number): DraftRow {
+  async decide(id: string, userId: string, action: "publish" | "reject", now: number): Promise<DraftRow> {
+    return this._decideSync(id, userId, action, now);
+  }
+
+  private _decideSync(id: string, userId: string, action: "publish" | "reject", now: number): DraftRow {
     return this.database.transaction((db) => {
-      const row = this.find(id)!;
+      const row = this._findSync(id)!;
       if (row.state !== "pending" && row.state !== "receiving") return row;
       let state: DraftRow["state"];
       let result: { nodeId: string; resourceId: string; etag: string } | null = null;
       if (row.expires_at <= now) state = "expired";
       else if (action === "reject") state = "rejected";
+      else if (row.state !== "pending") throw draftConflict("Draft content is still receiving.");
       else if (row.kind === "create") {
+        const target = row.parent_node_id === null
+          ? this.access.readSpaceAccess(userId, row.space_id)
+          : this.access.readNodeAccess(userId, row.parent_node_id);
+        assertDraftDestination(target, row.space_id);
+        assertFileQuota(db, userId, 1);
         result = { nodeId: randomUUID(), resourceId: randomUUID(), etag: row.stored_etag! };
         insertReadyBlobResource(db, {
           ...result,
@@ -94,6 +115,8 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
         });
         state = "published";
       } else {
+        requireDraftResource(this.access.readResourceAccess(userId, row.target_resource_id!));
+        assertFileQuota(db, userId, 0);
         const swapped = swapBlobContent(db, {
           resourceId: row.target_resource_id!,
           expectedEtag: row.base_etag!,
@@ -123,16 +146,16 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
         now,
         id,
       );
-      return this.find(id)!;
+      return this._findSync(id)!;
     });
   }
-  expireDue(now: number, limit: number, active: readonly string[] = []): number {
+  async expireDue(now: number, limit: number, active: readonly string[] = []): Promise<number> {
     const rows = this.database.connection
       .prepare(`SELECT id, author_user_id FROM html_view_drafts
       WHERE state IN ('receiving', 'pending') AND expires_at <= ?
       AND id NOT IN (${active.map(() => "?").join(",") || "''"}) ORDER BY expires_at, id LIMIT ?`)
       .all(now, ...active, limit);
-    for (const row of rows) this.decide(String(row.id), String(row.author_user_id), "reject", now);
+    for (const row of rows) this._decideSync(String(row.id), String(row.author_user_id), "reject", now);
     return rows.length;
   }
 }

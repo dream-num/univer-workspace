@@ -25,6 +25,7 @@ export interface ImportedUniverAsset {
 }
 
 export interface UniverAssetsModule {
+  initialize(): Promise<void>;
   upload(
     userId: string,
     scope: UniverAssetScope,
@@ -80,14 +81,16 @@ export function createUniverAssetsModule(options: {
 }): UniverAssetsModule {
   const now = options.now ?? Date.now;
   const maxAssetBytes = options.maxAssetBytes ?? MAX_UNIVER_ASSET_BYTES;
-  options.repository.recoverInterruptedUploads(now());
 
   return {
+    async initialize() {
+      await options.repository.recoverInterruptedUploads(now());
+    },
     async upload(userId, scope, input) {
       const intent = validUploadIntent(input, maxAssetBytes);
       await authorizeUnit(options, userId, scope, intent.unitId, true);
       const createdAt = now();
-      const upload = options.repository.reserveUpload({
+      const upload = await options.repository.reserveUpload({
         actorUserId: userId,
         unitId: intent.unitId,
         worktreeId: scope.kind === "worktree" ? scope.worktreeId : null,
@@ -104,17 +107,17 @@ export function createUniverAssetsModule(options: {
           expectedByteSize: intent.size,
           detectMediaType: false,
         });
-        options.repository.markStored({
+        await options.repository.markStored({
           uploadId: upload.id,
           receivedSize: stored.byteSize,
           sha256: stored.sha256,
           etag: stored.etag,
           updatedAt: now(),
         });
-        const asset = options.repository.publishStored(upload.id);
+        const asset = await options.repository.publishStored(upload.id);
         return { FileId: asset.id };
       } catch (error) {
-        options.repository.abandonUpload(upload.id, now());
+        await options.repository.abandonUpload(upload.id, now());
         if (error instanceof ApplicationError) throw error;
         throw invalidInput(
           error instanceof Error ? error.message : "Image upload failed.",
@@ -143,7 +146,7 @@ export function createUniverAssetsModule(options: {
           );
         }
         const createdAt = now();
-        const upload = options.repository.reserveUpload({
+        const upload = await options.repository.reserveUpload({
           actorUserId: input.actorUserId,
           unitId: input.unitId,
           worktreeId: null,
@@ -163,7 +166,7 @@ export function createUniverAssetsModule(options: {
             expectedByteSize: file.bytes.byteLength,
             detectMediaType: false,
           });
-          options.repository.markStored({
+          await options.repository.markStored({
             uploadId: upload.id,
             receivedSize: stored.byteSize,
             sha256: stored.sha256,
@@ -171,10 +174,10 @@ export function createUniverAssetsModule(options: {
             updatedAt: now(),
           });
         } catch (error) {
-          options.repository.abandonUpload(upload.id, now());
+          await options.repository.abandonUpload(upload.id, now());
           throw error;
         }
-        options.repository.publishStored(upload.id);
+        await options.repository.publishStored(upload.id);
       }
     },
 
@@ -259,7 +262,7 @@ async function requireAuthorizedAsset(
   scope: UniverAssetScope,
   assetId: string
 ): Promise<UniverAssetRow> {
-  const asset = options.repository.findAsset(assetId);
+  const asset = await options.repository.findAsset(assetId);
   if (!asset) throw notFound();
   if (scope.kind === "trunk") {
     if (asset.worktree_id !== null) throw notFound();
@@ -293,7 +296,7 @@ async function authorizeUnit(
     if (!allowed) throw notFound();
     return;
   }
-  const resource = options.access.resolveUnit(userId, unitId);
+  const resource = await options.access.resolveUnit(userId, unitId);
   if (!resource || resource.kind !== "univer") throw notFound();
   if (!resource.capabilities.openContent) throw notFound();
   if (write && !resource.capabilities.editContent) throw notFound();

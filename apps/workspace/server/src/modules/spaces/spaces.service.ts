@@ -91,7 +91,7 @@ export function createSpacesModule(options: {
     },
 
     async createTeamSpace(userId, input) {
-      assertCeiling(options.access.principalCategory(userId), "createTeamSpace", {});
+      assertCeiling(await options.access.principalCategory(userId), "createTeamSpace", {});
       const id = randomUUID();
       const name = validName(input.name);
       const publicRead = input.publicRead === undefined
@@ -137,7 +137,7 @@ export function createSpacesModule(options: {
     },
 
     async update(userId, spaceId, input) {
-      const access = options.access.resolveSpace(userId, spaceId);
+      const access = await options.access.resolveSpace(userId, spaceId);
       if (!access) throw spaceNotFound();
       if (!access.capabilities.renameSpace) throw spaceUpdateForbidden();
       if (
@@ -154,7 +154,7 @@ export function createSpacesModule(options: {
       }
       const name = input.name === undefined ? undefined : validName(input.name);
       const publicRead = input.publicRead === undefined ? undefined : validBoolean(input.publicRead, "publicRead");
-      assertCeiling(options.access.principalCategory(userId), "updateSpace", { publicRead: publicRead ?? access.publicRead });
+      assertCeiling(await options.access.principalCategory(userId), "updateSpace", { publicRead: publicRead ?? access.publicRead });
       const description = input.description === undefined ? undefined : validDescription(input.description);
       if (input.slug !== undefined && access.type !== "team") {
         throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");

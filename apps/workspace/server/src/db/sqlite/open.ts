@@ -1,4 +1,3 @@
-import { createAccessResolver } from "../../modules/access/index.js";
 import type { ProductDatabase, ProductDatabaseConfig, ProductRepositories } from "../product-database.js";
 import type { SqliteDatabase } from "./connection.js";
 import { openWorkspaceDatabase } from "./initialize.js";
@@ -29,15 +28,15 @@ export function createSqliteRepositories(database: SqliteDatabase): ProductRepos
     access,
     blobs: new SqliteBlobsRepository(database),
     contentPermissions: new SqliteContentPermissionsRepository(database),
-    htmlViewDrafts: new SqliteHtmlViewDraftsRepository(database),
+    htmlViewDrafts: new SqliteHtmlViewDraftsRepository(database, access),
     identity,
-    accessTokens: new SqliteAccessTokenRepository(database, identity),
-    issues: new SqliteIssuesRepository(database, createAccessResolver(access)),
-    nodes: new SqliteNodesRepository(database),
+    accessTokens: new SqliteAccessTokenRepository(database),
+    issues: new SqliteIssuesRepository(database, access),
+    nodes: new SqliteNodesRepository(database, access),
     operations: new SqliteOperationsRepository(database),
-    permissions: new SqlitePermissionsRepository(database),
+    permissions: new SqlitePermissionsRepository(database, access),
     resources: new SqliteResourcesRepository(database),
-    skillDrafts: new SqliteSkillDraftsRepository(database),
+    skillDrafts: new SqliteSkillDraftsRepository(database, access),
     spacePins: new SqliteSpacePinsRepository(database),
     spaces: new SqliteSpacesRepository(database),
     trash: new SqliteTrashRepository(database),

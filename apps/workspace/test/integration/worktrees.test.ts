@@ -31,7 +31,7 @@ describe("Worktrees", () => {
   it.each(["browser", "agent", "unknown"] as const)(
     "attributes HTTP Worktrees and Issues to %s without exposing session source",
     async (source) => {
-      const application = createTestApplication();
+      const application = await createTestApplication();
       const server = createServer(application.app);
       await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
       try {
@@ -96,7 +96,7 @@ describe("Worktrees", () => {
         expect(application.database.connection.prepare("SELECT COUNT(*) AS count FROM issue_events WHERE issue_id = ?").get(issue.id))
           .toEqual({ count: 0 });
 
-        const other = application.identity.issueSession(registered.user, source === "browser" ? "agent" : "browser");
+        const other = await application.identity.issueSession(registered.user, source === "browser" ? "agent" : "browser");
         const replay = await fetch(`${origin}/api/worktrees`, {
           method: "POST", headers: { cookie: `workspace_session=${other.cookieValue}`, "content-type": "application/json", "idempotency-key": "source-worktree-create" },
           body: JSON.stringify(input),
@@ -105,7 +105,7 @@ describe("Worktrees", () => {
         expect(await replay.json()).toMatchObject({ id: worktree.id, createdVia: source });
         expect((await application.worktrees.create(registered.user.id, "source-internal-create", { kind: "user", name: "Internal", summary: null })).body.createdVia)
           .toBe("unknown");
-        expect(application.issues.create(registered.user.id, team.id, { title: "Internal" }).createdVia).toBe("unknown");
+        expect((await application.issues.create(registered.user.id, team.id, { title: "Internal" })).createdVia).toBe("unknown");
       } finally {
         await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
       }
@@ -113,11 +113,11 @@ describe("Worktrees", () => {
   );
 
   it("preserves an agent reservation when a browser retries the failed HTTP create", async () => {
-    const application = createTestApplication(new FailOnceCreateWorktreeBackend());
+    const application = await createTestApplication(new FailOnceCreateWorktreeBackend());
     const issued = await application.identity.registerWithPassword({
       username: "source-retry", displayName: "Retry", password: "correct horse battery staple",
     });
-    const agent = application.identity.issueSession(issued.view.user, "agent");
+    const agent = await application.identity.issueSession(issued.view.user, "agent");
     const server = createServer(application.app);
     await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
     try {
@@ -130,7 +130,7 @@ describe("Worktrees", () => {
         body: JSON.stringify({ kind: "user", name: "Retry source", summary: null }),
       });
       expect(failed.status).toBe(409);
-      expect(application.operations.get(issued.view.user.id, operationId).state).toBe("failed");
+      expect((await application.operations.get(issued.view.user.id, operationId)).state).toBe("failed");
       const retried = await fetch(`${origin}/api/operations/${operationId}/retry`, {
         method: "POST", headers: { cookie: `workspace_session=${issued.cookieValue}` },
       });
@@ -144,7 +144,7 @@ describe("Worktrees", () => {
   });
 
   it("exposes creation history only for the authenticated HTTP caller", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const creator = await register(application, "history-creator");
     await application.worktrees.create(creator.id, "history-http-created", {
       kind: "user", name: "Private task", summary: null,
@@ -170,14 +170,14 @@ describe("Worktrees", () => {
   });
 
   it("reports the actor's creation history independently of visibility, filters and processed state", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "onboarding-owner");
     const member = await register(application, "onboarding-member");
     expect(await application.worktrees.list(owner.id, {})).toMatchObject({
       items: [], hasCreatedWorktree: false,
     });
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Onboarding" });
-    application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
     const task = await application.worktrees.create(owner.id, "onboarding-team-task", {
       kind: "team", teamSpaceId: team.id, visibility: "space", name: "Team draft", summary: null,
     });
@@ -195,17 +195,32 @@ describe("Worktrees", () => {
     const ownTask = await application.worktrees.create(member.id, "onboarding-member-task", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "My draft", summary: null,
     });
-    application.permissions.removeTeamMember(owner.id, team.id, member.id);
+    await application.permissions.removeTeamMember(owner.id, team.id, member.id);
     expect((await application.worktrees.list(member.id, { search: "missing" })).hasCreatedWorktree).toBe(true);
     expect(ownTask.body.creator.id).toBe(member.id);
   });
 
+  it("preserves concurrent summary patches including an explicit clear", async () => {
+    const app = await createTestApplication();
+    const owner = await register(app, "worktree-patches");
+    const { body } = await app.worktrees.create(owner.id, "worktree-summary-patches", {
+      kind: "user", name: "Original", summary: "Description",
+    });
+    await Promise.all([
+      app.worktrees.update(owner.id, body.id, { name: "Renamed" }),
+      app.worktrees.update(owner.id, body.id, { summary: null }),
+    ]);
+    expect((await app.worktrees.get(owner.id, body.id)).worktree).toMatchObject({
+      name: "Renamed", summary: null,
+    });
+  });
+
   it("shares resource resolution within a summary and rechecks permissions on the next request", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "summary-owner");
     const editor = await register(application, "summary-editor");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Summary permissions" });
-    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
     const resource = await createResource(application, editor.id, team.id);
     const created = await application.worktrees.create(editor.id, "summary-permissions-create", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "Changes", summary: null,
@@ -227,14 +242,14 @@ describe("Worktrees", () => {
     expect((await application.worktrees.list(owner.id, {})).items[0])
       .toMatchObject({ unitCount: 1, capabilities: { review: false, editDraft: false } });
 
-    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "viewer" });
     resolve.mockClear();
     const second = await application.worktrees.list(editor.id, {});
     expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
     expect(second.items[0]).toMatchObject({ unitCount: 1, capabilities: { review: true, editDraft: false } });
     await expect(application.worktrees.markReady(editor.id, created.body.id))
       .rejects.toMatchObject({ code: "FORBIDDEN" });
-    application.permissions.removeTeamMember(owner.id, team.id, editor.id);
+    await application.permissions.removeTeamMember(owner.id, team.id, editor.id);
     resolve.mockClear();
     expect((await application.worktrees.list(editor.id, {})).items[0])
       .toMatchObject({ unitCount: 1, capabilities: { review: false, editDraft: false } });
@@ -243,12 +258,12 @@ describe("Worktrees", () => {
 
   it("paginates authorized summaries before hydration, with stable ordering and literal search", async () => {
     const backend = new MemoryWorktreeBackend();
-    const application = createTestApplication(backend);
+    const application = await createTestApplication(backend);
     const owner = await register(application, "page-owner");
     const viewer = await register(application, "page-viewer");
     const outsider = await register(application, "page-outsider");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Pagination team" });
-    application.permissions.upsertTeamMember(owner.id, team.id, viewer.id, { role: "viewer" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, viewer.id, { role: "viewer" });
     const visibleIds: string[] = [];
     for (let i = 0; i < 110; i += 1) {
       const visible = i < 55;
@@ -286,7 +301,7 @@ describe("Worktrees", () => {
 
   it("does not trash a removed Unit until all content merge results succeed", async () => {
     const backend = new MemoryWorktreeBackend();
-    const application = createTestApplication(backend);
+    const application = await createTestApplication(backend);
     const user = await register(application, "partial-removal-user");
     const space = (await application.spaces.list(user.id)).spaces[0]!;
     const resource = await createResource(application, user.id, space.id);
@@ -333,18 +348,18 @@ describe("Worktrees", () => {
     });
     const partial = await application.worktrees.merge(user.id, id, "partial-removal-merge-0001");
     expect(partial.worktree.state).toBe("ready");
-    expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
-    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    expect((await application.trash.list(user.id, space.id, {})).items).toEqual([]);
+    expect((await application.resources.get(user.id, resource.id)).resource.id).toBe(resource.id);
     await expect(
       application.worktrees.merge(user.id, id, "partial-removal-merge-0002"),
     ).resolves.toMatchObject({ worktree: { state: "merged" }, operation: { state: "completed" } });
-    expect(application.trash.list(user.id, space.id, {}).items).toHaveLength(1);
+    expect((await application.trash.list(user.id, space.id, {})).items).toHaveLength(1);
   });
 
   it("recovers persisted removal finalization after closing and reopening both databases", async () => {
     const directory = mkdtempSync(join(tmpdir(), "workspace-removal-restart-"));
     temporaryDirectories.push(directory);
-    const application = createRealTestApplication(directory);
+    const application = await createRealTestApplication(directory);
     await application.initialize();
     const user = await register(application, "restart-removal-user");
     const space = (await application.spaces.list(user.id)).spaces[0]!;
@@ -371,27 +386,27 @@ describe("Worktrees", () => {
     await expect(application.worktrees.merge(user.id, id, operationId)).rejects.toThrow(
       "Stop before product deletion",
     );
-    expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
+    expect((await application.trash.list(user.id, space.id, {})).items).toEqual([]);
     expect((await application.worktrees.get(user.id, id)).worktree.state).toBe("merged");
     await application.close();
     applications.splice(applications.indexOf(application), 1);
 
-    const reopened = createRealTestApplication(directory);
+    const reopened = await createRealTestApplication(directory);
     await reopened.initialize();
-    expect(reopened.operations.get(user.id, operationId).state).toBe("failed");
+    expect((await reopened.operations.get(user.id, operationId)).state).toBe("failed");
     await expect(reopened.operations.retry(user.id, operationId)).resolves.toMatchObject({
       state: "completed",
     });
-    const batches = reopened.trash.list(user.id, space.id, {}).items;
+    const batches = (await reopened.trash.list(user.id, space.id, {})).items;
     expect(batches).toHaveLength(1);
     await reopened.worktrees.merge(user.id, id, operationId);
-    expect(reopened.trash.list(user.id, space.id, {}).items.map((batch) => batch.id)).toEqual(
+    expect((await reopened.trash.list(user.id, space.id, {})).items.map((batch) => batch.id)).toEqual(
       batches.map((batch) => batch.id),
     );
   });
 
   it("finalizes real SDK removal through Trash and preserves restoration across merge recovery", async () => {
-    const application = createRealTestApplication();
+    const application = await createRealTestApplication();
     const user = await register(application, "real-removal-user");
     const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
@@ -431,7 +446,7 @@ describe("Worktrees", () => {
         }),
       ).toBe(false);
     }
-    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    expect((await application.resources.get(user.id, resource.id)).resource.id).toBe(resource.id);
     await application.worktrees.markReady(user.id, worktreeId);
     application.database.connection.exec(`
       CREATE TEMP TRIGGER fail_after_trash BEFORE UPDATE OF processed_at ON worktrees
@@ -441,7 +456,7 @@ describe("Worktrees", () => {
     await expect(application.worktrees.merge(user.id, worktreeId, operationId)).rejects.toThrow(
       "Injected finalization failure",
     );
-    const batches = application.trash.list(user.id, space.id, {}).items;
+    const batches = (await application.trash.list(user.id, space.id, {})).items;
     expect(batches).toHaveLength(1);
     await expect(application.worktrees.get(user.id, worktreeId)).resolves.toMatchObject({
       worktree: {
@@ -468,7 +483,7 @@ describe("Worktrees", () => {
         write: false,
       }),
     ).toBe(false);
-    application.trash.restore(user.id, batches[0]!.id);
+    await application.trash.restore(user.id, batches[0]!.id);
     application.database.connection.exec("DROP TRIGGER fail_after_trash");
     await expect(
       application.operations.retry(user.id, operationId)
@@ -478,13 +493,13 @@ describe("Worktrees", () => {
     await expect(
       application.worktrees.merge(user.id, worktreeId, operationId),
     ).resolves.toMatchObject({ operation: { state: "completed" } });
-    expect(application.trash.list(user.id, space.id, {}).items).toEqual([]);
-    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
-    expect(() => application.resources.get(user.id, local.body.unit.resourceId)).toThrowError(
+    expect((await application.trash.list(user.id, space.id, {})).items).toEqual([]);
+    expect((await application.resources.get(user.id, resource.id)).resource.id).toBe(resource.id);
+    await expect(application.resources.get(user.id, local.body.unit.resourceId)).rejects.toThrowError(
       expect.objectContaining({ code: "NOT_FOUND" }),
     );
-    const permanentBatch = application.trash.trashNode(user.id, trunk.body.unit.nodeId!);
-    application.trash.removePermanently(user.id, permanentBatch.id);
+    const permanentBatch = await application.trash.trashNode(user.id, trunk.body.unit.nodeId!);
+    await application.trash.removePermanently(user.id, permanentBatch.id);
     const history = await application.worktrees.get(user.id, worktreeId);
     expect(
       history.worktree.units.find((unit) => unit.unitId === trunk.body.unit.unitId),
@@ -500,10 +515,10 @@ describe("Worktrees", () => {
   });
 
   it("cancels a new Unit after its target disappears and prevents undo until the target is restored", async () => {
-    const application = createRealTestApplication();
+    const application = await createRealTestApplication();
     const user = await register(application, "canceled-target-user");
     const space = (await application.spaces.list(user.id)).spaces[0]!;
-    const folder = application.nodes.create(user.id, {
+    const folder = await application.nodes.create(user.id, {
       spaceId: space.id,
       parentNodeId: null,
       name: "Target",
@@ -521,21 +536,21 @@ describe("Worktrees", () => {
       targetSpaceId: space.id,
       targetParentNodeId: folder.id,
     });
-    const batch = application.trash.trashNode(user.id, folder.id);
+    const batch = await application.trash.trashNode(user.id, folder.id);
     await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
       removed: true,
     });
     await expect(
       application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, { removed: false }),
     ).rejects.toMatchObject({ code: "NOT_FOUND" });
-    application.trash.restore(user.id, batch.id);
+    await application.trash.restore(user.id, batch.id);
     await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
       removed: false,
     });
     await application.worktrees.setUnitRemoved(user.id, id, added.body.unit.unitId, {
       removed: true,
     });
-    application.trash.trashNode(user.id, folder.id);
+    await application.trash.trashNode(user.id, folder.id);
     await application.worktrees.markReady(user.id, id);
     await expect(
       application.worktrees.merge(user.id, id, "cancel-target-merge-0001"),
@@ -547,11 +562,11 @@ describe("Worktrees", () => {
   });
 
   it("rechecks membership before merging a deletion and discards without trashing the live Unit", async () => {
-    const application = createRealTestApplication();
+    const application = await createRealTestApplication();
     const owner = await register(application, "removal-team-owner");
     const editor = await register(application, "removal-team-editor");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Removal review" });
-    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
     const resource = await createResource(application, editor.id, team.id);
     const created = await application.worktrees.create(editor.id, "removal-team-create-0001", {
       kind: "team",
@@ -570,24 +585,24 @@ describe("Worktrees", () => {
         removed: true,
       }),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "admin" });
     await application.worktrees.setUnitRemoved(editor.id, id, added.body.unit.unitId, {
       removed: true,
     });
     await application.worktrees.markReady(editor.id, id);
-    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
     await expect(
       application.worktrees.merge(editor.id, id, "removal-team-merge-0001"),
     ).rejects.toMatchObject({ code: "FORBIDDEN" });
-    expect(application.trash.list(owner.id, team.id, {}).items).toEqual([]);
-    application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
+    expect((await application.trash.list(owner.id, team.id, {})).items).toEqual([]);
+    await application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
     await application.worktrees.discard(editor.id, id, "removal-team-discard-0001");
-    expect(application.resources.get(owner.id, resource.id).resource.id).toBe(resource.id);
-    expect(application.trash.list(owner.id, team.id, {}).items).toEqual([]);
+    expect((await application.resources.get(owner.id, resource.id)).resource.id).toBe(resource.id);
+    expect((await application.trash.list(owner.id, team.id, {})).items).toEqual([]);
   });
 
   it("records reversible deletion intent without changing the live document", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const user = await register(application, "removal-intent-user");
     const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
@@ -610,7 +625,7 @@ describe("Worktrees", () => {
     ).resolves.toMatchObject({
       worktree: { units: [expect.objectContaining({ change: "deleted" })] },
     });
-    expect(application.resources.get(user.id, resource.id).resource.id).toBe(resource.id);
+    expect((await application.resources.get(user.id, resource.id)).resource.id).toBe(resource.id);
     await expect(
       application.worktrees.setUnitRemoved(user.id, worktreeId, unitId, { removed: false }),
     ).resolves.toMatchObject({
@@ -623,7 +638,7 @@ describe("Worktrees", () => {
   });
 
   it("creates, edits, readies and merges trunk and local Units", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const user = await register(application, "worktree-user");
     const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
@@ -709,7 +724,7 @@ describe("Worktrees", () => {
     expect(merged.worktree.state).toBe("merged");
     expect(merged.operation.state).toBe("completed");
     expect(
-      application.resources.get(user.id, local.body.unit.resourceId)
+      await application.resources.get(user.id, local.body.unit.resourceId)
     ).toMatchObject({
       resource: {
         id: local.body.unit.resourceId,
@@ -734,7 +749,7 @@ describe("Worktrees", () => {
     async (operationState) => {
       const backend = new MemoryWorktreeBackend();
       const merge = vi.spyOn(backend, "merge");
-      const application = createTestApplication(backend);
+      const application = await createTestApplication(backend);
       const user = await register(application, "merge-recovery-user");
       const space = (await application.spaces.list(user.id)).spaces[0]!;
       const created = await application.worktrees.create(user.id, "create-merge-recovery-0001", {
@@ -765,7 +780,7 @@ describe("Worktrees", () => {
         "Injected activation failure",
       );
       expect((await backend.getWorktree(worktreeId)).status).toBe("merged");
-      expect(application.operations.get(user.id, operationId).state).toBe("failed");
+      expect((await application.operations.get(user.id, operationId)).state).toBe("failed");
       application.database.connection.exec("DROP TRIGGER fail_worktree_activation");
 
       await expect(
@@ -784,7 +799,7 @@ describe("Worktrees", () => {
           state: "completed",
         });
       }
-      expect(application.resources.get(user.id, local.body.unit.resourceId)).toMatchObject({
+      expect(await application.resources.get(user.id, local.body.unit.resourceId)).toMatchObject({
         node: { id: local.body.unit.nodeId, name: "Recovered document" },
       });
       await expect(
@@ -795,20 +810,20 @@ describe("Worktrees", () => {
   );
 
   it("keeps private Team Worktree Units hidden from administrators", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "team-owner");
     const creator = await register(application, "team-editor");
     const viewer = await register(application, "team-viewer");
     const team = await application.spaces.createTeamSpace(owner.id, {
       name: "Product",
     });
-    application.permissions.upsertTeamMember(
+    await application.permissions.upsertTeamMember(
       owner.id,
       team.id,
       creator.id,
       { role: "editor" }
     );
-    application.permissions.upsertTeamMember(
+    await application.permissions.upsertTeamMember(
       owner.id,
       team.id,
       viewer.id,
@@ -858,7 +873,7 @@ describe("Worktrees", () => {
 
   it("records failed Worktree operations and retries their immutable input", async () => {
     const backend = new FailOnceCreateWorktreeBackend();
-    const application = createTestApplication(backend);
+    const application = await createTestApplication(backend);
     const user = await register(application, "retry-user");
     const operationId = "retry-create-worktree-0001";
 
@@ -869,7 +884,7 @@ describe("Worktrees", () => {
         summary: null,
       })
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(application.operations.get(user.id, operationId)).toMatchObject({
+    expect(await application.operations.get(user.id, operationId)).toMatchObject({
       kind: "createWorktree",
       state: "failed",
       error: { code: "CONFLICT" },
@@ -891,7 +906,7 @@ describe("Worktrees", () => {
   });
 
   it("rejects a backend-created Unit with an identity different from the reservation", async () => {
-    const application = createTestApplication(
+    const application = await createTestApplication(
       new WrongIdentityCreateUnitBackend()
     );
     const user = await register(application, "wrong-unit-user");
@@ -918,7 +933,7 @@ describe("Worktrees", () => {
         }
       )
     ).rejects.toMatchObject({ code: "CONFLICT" });
-    expect(application.operations.get(user.id, operationId)).toMatchObject({
+    expect(await application.operations.get(user.id, operationId)).toMatchObject({
       state: "failed",
       error: { code: "CONFLICT" },
     });
@@ -928,7 +943,7 @@ describe("Worktrees", () => {
   });
 
   it("creates, retries and activates an imported Unit with one stable server identity", async () => {
-    const application = createRealTestApplication();
+    const application = await createRealTestApplication();
     const user = await register(application, "real-import-user");
     const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
@@ -987,7 +1002,7 @@ describe("Worktrees", () => {
     );
     expect(merged.operation.state).toBe("completed");
     expect(
-      application.resources.open(user.id, first.body.unit.resourceId)
+      await application.resources.open(user.id, first.body.unit.resourceId)
     ).toMatchObject({
       resource: {
         id: first.body.unit.resourceId,
@@ -1179,10 +1194,10 @@ class WrongIdentityCreateUnitBackend extends MemoryWorktreeBackend {
   }
 }
 
-function createTestApplication(
+async function createTestApplication(
   worktreeBackend: WorktreeBackend = new MemoryWorktreeBackend()
-): SqliteTestApplication {
-  const application = createSqliteTestApplication(
+): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
@@ -1204,8 +1219,8 @@ function createTestApplication(
   return application;
 }
 
-function createRealTestApplication(directory?: string): SqliteTestApplication {
-  const application = createSqliteTestApplication({
+async function createRealTestApplication(directory?: string): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: directory ? join(directory, "product.sqlite") : ":memory:" },

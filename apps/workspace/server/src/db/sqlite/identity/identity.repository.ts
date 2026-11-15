@@ -18,7 +18,7 @@ import type {
 export class SqliteIdentityRepository implements IdentityRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
-  isIdentityConflict(error: unknown, field: IdentityConflict): boolean {
+  async isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean> {
     const constraints = { username: "users.username", email: "users.email", externalIdentity: "external_identities" };
     return error instanceof Error && error.message.includes("UNIQUE constraint failed") && error.message.includes(constraints[field]);
   }
@@ -35,7 +35,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     });
   }
 
-  createPasswordUser(input: NewPasswordUser): void {
+  async createPasswordUser(input: NewPasswordUser): Promise<void> {
     this._database.transaction((database) => {
       database
         .prepare(
@@ -80,7 +80,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     });
   }
 
-  createExternalUser(input: {
+  async createExternalUser(input: {
     readonly provider: ExternalIdentityProvider;
     readonly user: User;
     readonly providerSubject: string;
@@ -88,7 +88,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly session: NewPasswordUser["session"];
     readonly createdAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.transaction((database) => {
       database
         .prepare(
@@ -138,7 +138,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     });
   }
 
-  createEmailUser(input: NewEmailUser): void {
+  async createEmailUser(input: NewEmailUser): Promise<void> {
     this._database.transaction((database) => {
       database
         .prepare(
@@ -173,13 +173,13 @@ export class SqliteIdentityRepository implements IdentityRepository {
   }
 
   /** Unlike the sign-in paths, an agent is created without a Session; its caller issues the credential. */
-  createAgentUser(input: {
+  async createAgentUser(input: {
     readonly user: User;
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly originLabel: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.transaction((database) => {
       database
         .prepare(
@@ -224,10 +224,10 @@ export class SqliteIdentityRepository implements IdentityRepository {
     });
   }
 
-  findExternalIdentity(
+  async findExternalIdentity(
     provider: ExternalIdentityProvider,
     providerSubject: string
-  ): ExternalIdentityUser | null {
+  ): Promise<ExternalIdentityUser | null> {
     const row = this._database.connection
       .prepare(
         `SELECT
@@ -252,13 +252,13 @@ export class SqliteIdentityRepository implements IdentityRepository {
       : null;
   }
 
-  linkExternalIdentity(input: {
+  async linkExternalIdentity(input: {
     readonly provider: ExternalIdentityProvider;
     readonly userId: string;
     readonly providerSubject: string;
     readonly providerUsername: string;
     readonly updatedAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.connection
       .prepare(
         `INSERT INTO external_identities
@@ -283,12 +283,12 @@ export class SqliteIdentityRepository implements IdentityRepository {
       );
   }
 
-  updateExternalUsername(
+  async updateExternalUsername(
     provider: ExternalIdentityProvider,
     providerSubject: string,
     providerUsername: string,
     updatedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE external_identities
@@ -298,21 +298,22 @@ export class SqliteIdentityRepository implements IdentityRepository {
       .run(providerUsername, updatedAt, provider, providerSubject);
   }
 
-  removeExternalIdentity(
-    userId: string,
-    provider: ExternalIdentityProvider
-  ): boolean {
-    return (
-      this._database.connection
-        .prepare(
-          `DELETE FROM external_identities
-           WHERE provider = ? AND user_id = ?`
-        )
-        .run(provider, userId).changes > 0
-    );
+  async removeExternalIdentity(userId: string, provider: ExternalIdentityProvider, passwordAuthEnabled: boolean): Promise<boolean> {
+    return this._database.transaction((db) => {
+      const hasAnotherMethod = db.prepare(`
+        SELECT 1 FROM external_identities WHERE user_id = ? AND provider <> ?
+        UNION ALL SELECT 1 FROM password_credentials WHERE user_id = ? AND ? = 1
+        LIMIT 1
+      `).get(userId, provider, userId, Number(passwordAuthEnabled));
+      if (!hasAnotherMethod) {
+        return !db.prepare("SELECT 1 FROM external_identities WHERE user_id = ? AND provider = ?").get(userId, provider);
+      }
+      db.prepare("DELETE FROM external_identities WHERE user_id = ? AND provider = ?").run(userId, provider);
+      return true;
+    });
   }
 
-  usernameExists(username: string): boolean {
+  async usernameExists(username: string): Promise<boolean> {
     return Boolean(
       this._database.connection
         .prepare(
@@ -322,7 +323,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     );
   }
 
-  findUser(userId: string): User | null {
+  async findUser(userId: string): Promise<User | null> {
     const row = this._database.connection
       .prepare(
         `SELECT id, username, display_name, avatar_url
@@ -332,15 +333,8 @@ export class SqliteIdentityRepository implements IdentityRepository {
     return row ? toUser(row) : null;
   }
 
-  findPrincipal(userId: string): StoredPrincipal | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT users.id, users.username, users.display_name, users.avatar_url, ${principalColumns}
-         FROM users ${agentJoin}
-         WHERE users.id = ?`
-      )
-      .get(userId) as PrincipalRow | undefined;
-    return row ? toPrincipal(row) : null;
+  async findPrincipal(userId: string): Promise<StoredPrincipal | null> {
+    return findPrincipal(this._database.connection, userId);
   }
 
   /**
@@ -348,34 +342,16 @@ export class SqliteIdentityRepository implements IdentityRepository {
    * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write. An
    * agent that has already expired is always pushed out, so its next use brings it back.
    */
-  touchUnclaimedAgent(
+  async touchUnclaimedAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
-  ): void {
-    const stale = this._database.connection
-      .prepare(
-        `SELECT user_id FROM agents
-         WHERE owner_user_id IS NULL
-           AND (last_active_at <= ? OR expires_at <= ?)
-           AND user_id = ${
-             "userId" in target
-               ? "?"
-               : `(SELECT spaces.owner_user_id FROM nodes
-                   JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
-           }`
-      )
-      .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
-      | { readonly user_id: string }
-      | undefined;
-    if (!stale) return;
-    this._database.connection
-      .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
-      .run(at, expiresAt, stale.user_id);
+  ): Promise<void> {
+    touchUnclaimedAgent(this._database.connection, target, at, staleBefore, expiresAt);
   }
 
-  findUsers(userIds: readonly string[]): readonly User[] {
+  async findUsers(userIds: readonly string[]): Promise<readonly User[]> {
     const uniqueUserIds = [...new Set(userIds)];
     if (uniqueUserIds.length === 0) return [];
     const users = new Map<string, User>();
@@ -399,7 +375,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     });
   }
 
-  findCredential(username: string): StoredCredential | null {
+  async findCredential(username: string): Promise<StoredCredential | null> {
     const row = this._database.connection
       .prepare(
         `SELECT
@@ -422,7 +398,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
       : null;
   }
 
-  findCredentialByUserId(userId: string): StoredCredential | null {
+  async findCredentialByUserId(userId: string): Promise<StoredCredential | null> {
     const row = this._database.connection
       .prepare(
         `SELECT
@@ -445,11 +421,11 @@ export class SqliteIdentityRepository implements IdentityRepository {
       : null;
   }
 
-  updatePasswordHash(
+  async updatePasswordHash(
     userId: string,
     passwordHash: string,
     updatedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE password_credentials
@@ -459,14 +435,14 @@ export class SqliteIdentityRepository implements IdentityRepository {
       .run(passwordHash, updatedAt, userId);
   }
 
-  createSession(
+  async createSession(
     userId: string,
     session: NewPasswordUser["session"]
-  ): void {
+  ): Promise<void> {
     insertSession(this._database.connection, userId, session);
   }
 
-  findSession(sessionId: string): StoredSession | null {
+  async findSession(sessionId: string): Promise<StoredSession | null> {
     const row = this._database.connection
       .prepare(
         `SELECT
@@ -499,7 +475,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
       : null;
   }
 
-  authenticationMethods(userId: string): AuthenticationMethods {
+  async authenticationMethods(userId: string): Promise<AuthenticationMethods> {
     const password = Boolean(
       this._database.connection
         .prepare("SELECT 1 FROM password_credentials WHERE user_id = ?")
@@ -526,7 +502,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     };
   }
 
-  findUserByEmail(email: string): User | null {
+  async findUserByEmail(email: string): Promise<User | null> {
     const row = this._database.connection
       .prepare(
         `SELECT id, username, display_name, avatar_url
@@ -537,13 +513,13 @@ export class SqliteIdentityRepository implements IdentityRepository {
     return row ? toUser(row) : null;
   }
 
-  createEmailLoginCode(input: {
+  async createEmailLoginCode(input: {
     readonly id: string;
     readonly email: string;
     readonly codeHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.connection
       .prepare(
         `INSERT INTO email_login_codes
@@ -559,10 +535,10 @@ export class SqliteIdentityRepository implements IdentityRepository {
       );
   }
 
-  findEmailLoginCode(
+  async findEmailLoginCode(
     email: string,
     now: number
-  ): StoredEmailLoginCode | null {
+  ): Promise<StoredEmailLoginCode | null> {
     const row = this._database.connection
       .prepare(
         `SELECT id, code_hash, attempts
@@ -579,7 +555,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
       : null;
   }
 
-  incrementEmailLoginCodeAttempts(id: string): void {
+  async incrementEmailLoginCodeAttempts(id: string): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?`
@@ -587,7 +563,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
       .run(id);
   }
 
-  consumeEmailLoginCode(id: string, consumedAt: number): boolean {
+  async consumeEmailLoginCode(id: string, consumedAt: number): Promise<boolean> {
     const result = this._database.connection
       .prepare(
         `UPDATE email_login_codes
@@ -598,11 +574,11 @@ export class SqliteIdentityRepository implements IdentityRepository {
     return Number(result.changes) > 0;
   }
 
-  consumeOtherEmailLoginCodes(
+  async consumeOtherEmailLoginCodes(
     email: string,
     keepId: string,
     consumedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE email_login_codes
@@ -614,13 +590,13 @@ export class SqliteIdentityRepository implements IdentityRepository {
       .run(consumedAt, email, keepId);
   }
 
-  deleteEmailLoginCode(id: string): void {
+  async deleteEmailLoginCode(id: string): Promise<void> {
     this._database.connection
       .prepare("DELETE FROM email_login_codes WHERE id = ?")
       .run(id);
   }
 
-  latestEmailLoginCodeCreatedAt(email: string): number | null {
+  async latestEmailLoginCodeCreatedAt(email: string): Promise<number | null> {
     const row = this._database.connection
       .prepare(
         `SELECT MAX(created_at) AS created_at
@@ -631,7 +607,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
     return row?.created_at ?? null;
   }
 
-  countEmailLoginCodesSince(email: string, since: number): number {
+  async countEmailLoginCodesSince(email: string, since: number): Promise<number> {
     const row = this._database.connection
       .prepare(
         `SELECT COUNT(*) AS count
@@ -642,35 +618,40 @@ export class SqliteIdentityRepository implements IdentityRepository {
     return row.count;
   }
 
-  deleteEmailLoginCodesBefore(cutoff: number): void {
+  async deleteEmailLoginCodesBefore(cutoff: number): Promise<void> {
     this._database.connection
       .prepare("DELETE FROM email_login_codes WHERE created_at <= ?")
       .run(cutoff);
   }
 
-  updateUser(user: User, updatedAt: number): void {
-    this._database.connection
-      .prepare(
-        `UPDATE users
-         SET username = ?, display_name = ?, avatar_url = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .run(
-        user.username,
-        user.displayName,
-        user.avatarUrl,
-        updatedAt,
-        user.id
-      );
+  async updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User> {
+    const fields = ["updated_at = ?"];
+    const values: (string | number | null)[] = [updatedAt];
+    for (const [key, column] of [["username", "username"], ["displayName", "display_name"], ["avatarUrl", "avatar_url"]] as const) {
+      const value = patch[key];
+      if (value === undefined) continue;
+      if (expected) {
+        fields.push(`${column} = CASE WHEN ${column} COLLATE BINARY IS ? THEN ? ELSE ${column} END`);
+        values.push(expected[key], value);
+      } else {
+        fields.push(`${column} = ?`);
+        values.push(value);
+      }
+    }
+    const row = this._database.connection.prepare(`
+      UPDATE users SET ${fields.join(", ")} WHERE id = ? RETURNING id, username, display_name, avatar_url
+    `).get(...values, userId) as UserRow | undefined;
+    if (!row) throw new Error("Authenticated user is missing.");
+    return toUser(row);
   }
 
-  deleteSession(sessionId: string): void {
+  async deleteSession(sessionId: string): Promise<void> {
     this._database.connection
       .prepare("DELETE FROM login_sessions WHERE id = ?")
       .run(sessionId);
   }
 
-  deleteExpiredSessions(now: number): string[] {
+  async deleteExpiredSessions(now: number): Promise<string[]> {
     return this._database.connection
       .prepare("DELETE FROM login_sessions WHERE expires_at <= ? RETURNING id")
       .all(now)
@@ -720,7 +701,49 @@ interface EmailLoginCodeRow {
   readonly attempts: number;
 }
 
-function insertSession(
+export function findPrincipal(
+  db: DatabaseSync,
+  userId: string,
+): StoredPrincipal | null {
+  const row = db
+    .prepare(
+      `SELECT users.id, users.username, users.display_name, users.avatar_url, ${principalColumns}
+       FROM users ${agentJoin}
+       WHERE users.id = ?`
+    )
+    .get(userId) as PrincipalRow | undefined;
+  return row ? toPrincipal(row) : null;
+}
+
+export function touchUnclaimedAgent(
+  db: DatabaseSync,
+  target: Parameters<IdentityRepository["touchUnclaimedAgent"]>[0],
+  at: number,
+  staleBefore: number,
+  expiresAt: number,
+): void {
+  const stale = db
+    .prepare(
+      `SELECT user_id FROM agents
+       WHERE owner_user_id IS NULL
+         AND (last_active_at <= ? OR expires_at <= ?)
+         AND user_id = ${
+           "userId" in target
+             ? "?"
+             : `(SELECT spaces.owner_user_id FROM nodes
+                 JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
+         }`
+    )
+    .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
+    | { readonly user_id: string }
+    | undefined;
+  if (!stale) return;
+  db
+    .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
+    .run(at, expiresAt, stale.user_id);
+}
+
+export function insertSession(
   database: DatabaseSync,
   userId: string,
   session: NewPasswordUser["session"]

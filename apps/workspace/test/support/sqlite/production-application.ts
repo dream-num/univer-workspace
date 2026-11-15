@@ -13,6 +13,7 @@ export async function createProductionTestApplication(
   try {
     const application = createWorkspaceApplication(config, product.repositories, dependencies);
     cleanup.defer(() => application.close());
+    await application.initialize();
     const connection = new DatabaseSync(config.productDatabase.filename);
     cleanup.defer(() => connection.close());
     return { ...application, connection, close: () => cleanup.disposeAsync() };

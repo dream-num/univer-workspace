@@ -3,8 +3,8 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import { assertCeiling, type AccessResolver } from "../access/index.js";
-import { type SkillDraftsRepository, draftConflict, type SkillTarget } from "./drafts.repository.js";
+import type { AccessResolver } from "../access/index.js";
+import { type SkillDraftsRepository, assertSkillDestination, assertSkillFolder, assertSkillFile, draftConflict, type SkillTarget } from "./drafts.repository.js";
 import {
   draftBase,
   draftFiles,
@@ -64,32 +64,17 @@ export function createSkillDraftsModule(options: {
   const receiving = new Map<string, Promise<DraftRow>>();
   const publishing = new Set<string>();
   const hash = (bytes: Uint8Array | string) => createHash("sha256").update(bytes).digest("hex");
-  function requireDraft(userId: string, id: string): DraftRow {
-    const row = repository.find(id);
+  async function requireDraft(userId: string, id: string): Promise<DraftRow> {
+    const row = await repository.find(id);
     if (!row || row.author_user_id !== userId || row.state === "receiving")
       throw new ApplicationError("NOT_FOUND", 404, "Draft not found.");
     return row;
   }
-  function authorize(userId: string, spaceId: string, target?: SkillTarget) {
-    const space = access.resolveSpace(userId, spaceId);
-    if (!space) throw new ApplicationError("NOT_FOUND", 404, "Draft destination not found.");
-    if (
-      (space.type === "personal" && space.ownerUserId !== userId) ||
-      !space.capabilities.createAtRoot
-    )
-      throw new ApplicationError("FORBIDDEN", 403, "Cannot create Skills at this destination.");
-    if (
-      target?.folderNodeId &&
-      !access.resolveNode(userId, target.folderNodeId)?.capabilities.createChildren
-    )
-      throw new ApplicationError("FORBIDDEN", 403, "Cannot edit the Skill folder.");
+  async function authorize(userId: string, spaceId: string, target?: SkillTarget) {
+    assertSkillDestination(userId, await access.resolveSpace(userId, spaceId));
+    if (target?.folderNodeId) assertSkillFolder(await access.resolveNode(userId, target.folderNodeId));
     for (const file of target?.files ?? []) {
-      const resource = access.resolveResource(userId, file.resourceId);
-      if (
-        !resource?.capabilities.editContent ||
-        !access.resolveNode(userId, file.nodeId)?.capabilities.trash
-      )
-        throw new ApplicationError("FORBIDDEN", 403, "Cannot replace Skill files.");
+      assertSkillFile(await access.resolveResource(userId, file.resourceId), file.nodeId);
     }
   }
   function view(row: DraftRow): SkillDraftView {
@@ -153,7 +138,7 @@ export function createSkillDraftsModule(options: {
           "Invalid Skill draft request or Idempotency-Key.",
         );
       const input = parsed.data;
-      const existing = repository.findKey(userId, key.data);
+      const existing = await repository.findKey(userId, key.data);
       const fromIntent = input.from ? hash(JSON.stringify({ ...input, keep: [...input.keep].sort(), from: {
         ...input.from, overrides: [...input.from.overrides].sort((a, b) => a.path.localeCompare(b.path, "en")),
       } })) : null;
@@ -163,7 +148,7 @@ export function createSkillDraftsModule(options: {
           throw draftConflict("Draft expired; use a new Idempotency-Key.");
         if (existing.state !== "receiving") return { status: 200, draft: view(existing) };
       }
-      if (input.from) authorize(userId, input.spaceId);
+      if (input.from) await authorize(userId, input.spaceId);
       const imported = input.from ? await options.sources.intake(userId, input.from.source, input.from.skill) : null;
       const receivedAt = existing?.created_at ?? now();
       const files = (imported && input.from ? await importSkillFiles({
@@ -189,16 +174,16 @@ export function createSkillDraftsModule(options: {
           keep: [...input.keep].sort(),
         }),
       );
-      let row = repository.findKey(userId, key.data);
+      let row = await repository.findKey(userId, key.data);
       let created = false;
       if (row && row.intent_sha256 !== intent)
         throw draftConflict("Idempotency-Key belongs to another draft intent.");
       if (!row) {
-        authorize(userId, input.spaceId);
-        const target = repository.target(input.spaceId, input.name);
+        await authorize(userId, input.spaceId);
+        const target = await repository.target(input.spaceId, input.name);
         if (input.replace && !target.folderNodeId)
           throw new ApplicationError("NOT_FOUND", 404, "Skill to replace not found.");
-        if (input.replace) authorize(userId, input.spaceId, target);
+        if (input.replace) await authorize(userId, input.spaceId, target);
         const base = input.replace
           ? target.files.map(({ path, resourceId, etag }) => ({ path, resourceId, etag }))
           : null;
@@ -212,10 +197,10 @@ export function createSkillDraftsModule(options: {
           ...imported?.context,
           nameConflict:
             (!input.replace && target.nonEmpty) ||
-            repository.personalNameConflict(userId, input.spaceId, input.name),
+            await repository.personalNameConflict(userId, input.spaceId, input.name),
         });
         const verified = verifyReview(files, input.review);
-        const reserved = repository.reserve(
+        const reserved = await repository.reserve(
           {
             author_user_id: userId,
             idempotency_key: key.data,
@@ -263,9 +248,9 @@ export function createSkillDraftsModule(options: {
               if (stored.sha256 !== file.sha256)
                 throw draftConflict("Stored Skill content failed checksum verification.");
             }
-            const row = repository.markPending(reserved.id, now());
+            const row = await repository.markPending(reserved.id, now());
             if (row.state !== "pending") {
-              repository.decide(reserved.id, userId, "reject", now());
+              await repository.decide(reserved.id, userId, "reject", now());
               throw draftConflict("Draft expired; use a new Idempotency-Key.");
             }
             return row;
@@ -280,11 +265,11 @@ export function createSkillDraftsModule(options: {
       }
       return { status: created ? 201 : 200, draft: view(row) };
     },
-    get(userId: string, id: string) {
-      return view(requireDraft(userId, id));
+    async get(userId: string, id: string) {
+      return view(await requireDraft(userId, id));
     },
     async openContent(userId: string, id: string, path: unknown, version: unknown) {
-      const row = requireDraft(userId, id);
+      const row = await requireDraft(userId, id);
       if (
         typeof path !== "string" ||
         !safeSkillPath(path) ||
@@ -292,11 +277,11 @@ export function createSkillDraftsModule(options: {
       )
         throw new ApplicationError("INVALID_INPUT", 400, "Invalid file path or version.");
       if (version === "current") {
-        authorize(userId, row.space_id);
-        const file = repository
-          .target(row.space_id, row.name)
+        await authorize(userId, row.space_id);
+        const file = (await repository
+          .target(row.space_id, row.name))
           .files.find((file) => file.path === path);
-        const resource = file && access.resolveResource(userId, file.resourceId);
+        const resource = file && await access.resolveResource(userId, file.resourceId);
         if (!file || !resource?.capabilities.openContent)
           throw new ApplicationError("NOT_FOUND", 404, "Current Skill file not found.");
         return { ...(await store.open({ objectKey: file.objectKey })), byteSize: file.byteSize };
@@ -308,14 +293,14 @@ export function createSkillDraftsModule(options: {
       return { ...(await store.open({ objectKey: file.objectKey })), byteSize: file.byteSize };
     },
     async publish(userId: string, id: string) {
-      const row = requireDraft(userId, id);
+      const row = await requireDraft(userId, id);
       if (row.state === "published") return view(row);
       if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
       if (row.expires_at <= now()) {
-        repository.decide(id, userId, "reject", now());
+        await repository.decide(id, userId, "reject", now());
         throw draftConflict("Draft is expired.");
       }
-      authorize(userId, row.space_id);
+      await authorize(userId, row.space_id);
       publishing.add(id);
       try {
         const files: ScanFile[] = [];
@@ -328,30 +313,22 @@ export function createSkillDraftsModule(options: {
         const scan = await scanSkill(row.name, files);
         if (scan.some((finding) => finding.severity === "block"))
           throw draftConflict("Static scan blocks publication.");
-        const decided = repository.decide(id, userId, "publish", now(), (draft, target) => {
-          authorize(userId, draft.space_id, target);
-          assertCeiling(access.principalCategory(userId), "createFiles", {
-            held: () => access.countPersonalFiles(userId),
-            adding: draftFiles(draft).filter(
-              (file) => !target.files.some((current) => current.path === file.path),
-            ).length,
-          });
-        });
+        const decided = await repository.decide(id, userId, "publish", now());
         if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
         return view(decided);
       } finally {
         publishing.delete(id);
       }
     },
-    reject(userId: string, id: string) {
-      const row = requireDraft(userId, id);
+    async reject(userId: string, id: string) {
+      const row = await requireDraft(userId, id);
       if (row.state === "rejected") return view(row);
       if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
-      const decided = repository.decide(id, userId, "reject", now());
+      const decided = await repository.decide(id, userId, "reject", now());
       if (decided.state !== "rejected") throw draftConflict(`Draft is ${decided.state}.`);
       return view(decided);
     },
-    expireDue(time: number, limit: number) {
+    async expireDue(time: number, limit: number) {
       return repository.expireDue(time, limit, [...receiving.keys(), ...publishing]);
     },
   };

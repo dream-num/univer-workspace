@@ -1,3 +1,5 @@
+import type { SqliteAccessRepository } from "../access/access.repository.js";
+import { conflict, forbidden, notFound, requireManageMembers, requireShare, requireTeam } from "../../../modules/permissions/permissions.policy.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { GrantRole, PublicUser, TeamRole } from "../../../modules/permissions/permissions.types.js";
 import type {
@@ -9,9 +11,12 @@ import type {
 } from "../../../modules/permissions/permissions.repository.js";
 
 export class SqlitePermissionsRepository implements PermissionsRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(
+    private readonly _database: SqliteDatabase,
+    private readonly access: SqliteAccessRepository,
+  ) {}
 
-  findUser(userId: string): PublicUser | null {
+  async findUser(userId: string): Promise<PublicUser | null> {
     const row = this._database.connection
       .prepare(
         `SELECT id, username, display_name, avatar_url
@@ -22,7 +27,11 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     return row ? publicUser(row) : null;
   }
 
-  searchUsers(query: string, excludedUserId: string): PublicUser[] {
+  private requireUser(userId: string): void {
+    if (!this._database.connection.prepare("SELECT 1 FROM users WHERE id = ?").get(userId)) throw notFound();
+  }
+
+  async searchUsers(query: string, excludedUserId: string): Promise<PublicUser[]> {
     const pattern = `%${escapeLike(query)}%`;
     return (
       this._database.connection
@@ -44,7 +53,11 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     ).map(publicUser);
   }
 
-  listMembers(spaceId: string): MembershipRow[] {
+  async listMembers(spaceId: string): Promise<MembershipRow[]> {
+    return this.readMembers(spaceId);
+  }
+
+  private readMembers(spaceId: string, userId?: string): MembershipRow[] {
     return this._database.connection
       .prepare(
         `SELECT
@@ -62,52 +75,70 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
          FROM space_members AS membership
          JOIN users AS member ON member.id = membership.user_id
          JOIN users AS grantor ON grantor.id = membership.granted_by
-         WHERE membership.space_id = ?
+         WHERE membership.space_id = ? ${userId === undefined ? "" : "AND membership.user_id = ?"}
          ORDER BY member.username COLLATE NOCASE, member.id`
       )
-      .all(spaceId) as unknown as MembershipRow[];
+      .all(...(userId === undefined ? [spaceId] : [spaceId, userId])) as unknown as MembershipRow[];
   }
 
-  upsertMember(input: {
+  async upsertMember(input: {
     readonly spaceId: string;
     readonly userId: string;
     readonly role: TeamRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO space_members
-           (space_id, user_id, role, granted_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (space_id, user_id)
-         DO UPDATE SET
-           role = excluded.role,
-           granted_by = excluded.granted_by,
-           updated_at = excluded.updated_at`
-      )
-      .run(
-        input.spaceId,
-        input.userId,
-        input.role,
-        input.grantedBy,
-        input.now,
-        input.now
-      );
-  }
-
-  removeMember(spaceId: string, userId: string): boolean {
-    return (
+  }): Promise<MembershipRow> {
+    return this._database.transaction(() => {
+      const team = requireManageMembers(this.access.readSpaceAccess(input.grantedBy, input.spaceId));
+      if (team.ownerUserId === input.userId) throw conflict("The space owner cannot be a member.");
+      this.requireUser(input.userId);
+      if (team.role === "admin" && (input.role === "admin" || this.readMembers(input.spaceId, input.userId)[0]?.role === "admin")) {
+        throw forbidden();
+      }
       this._database.connection
         .prepare(
-          "DELETE FROM space_members WHERE space_id = ? AND user_id = ?"
+          `INSERT INTO space_members
+             (space_id, user_id, role, granted_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (space_id, user_id)
+           DO UPDATE SET
+             role = excluded.role,
+             granted_by = excluded.granted_by,
+             updated_at = excluded.updated_at`
         )
-        .run(spaceId, userId).changes > 0
-    );
+        .run(
+          input.spaceId,
+          input.userId,
+          input.role,
+          input.grantedBy,
+          input.now,
+          input.now
+        );
+      const member = this.readMembers(input.spaceId, input.userId)[0];
+      if (!member) throw new Error("Updated membership is missing");
+      return member;
+    });
   }
 
-  listGrants(nodeId: string): GrantRow[] {
-    return this._database.connection
+  async removeMember(actorUserId: string, spaceId: string, userId: string): Promise<void> {
+    this._database.transaction(() => {
+      const team = requireTeam(this.access.readSpaceAccess(actorUserId, spaceId));
+      if (actorUserId !== userId && !team.capabilities.manageMembers) throw forbidden();
+      if (team.ownerUserId === userId) throw conflict("The space owner cannot leave the space.");
+      if (actorUserId !== userId && team.role === "admin" && this.readMembers(spaceId, userId)[0]?.role === "admin") {
+        throw forbidden();
+      }
+      const result = this._database.connection.prepare("DELETE FROM space_members WHERE space_id = ? AND user_id = ?").run(spaceId, userId);
+      if (!result.changes) throw notFound();
+    });
+  }
+
+  async listGrants(nodeId: string): Promise<GrantRow[]> {
+    return this.readGrants(nodeId);
+  }
+
+  private readGrants(nodeId: string, userId?: string): GrantRow[] {
+    const rows = this._database.connection
       .prepare(
         `SELECT
            grantee.id AS user_id,
@@ -124,56 +155,72 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
          FROM node_grants AS grant_node
          JOIN users AS grantee ON grantee.id = grant_node.user_id
          JOIN users AS grantor ON grantor.id = grant_node.granted_by
-         WHERE grant_node.node_id = ?
+         WHERE grant_node.node_id = ? ${userId === undefined ? "" : "AND grant_node.user_id = ?"}
          ORDER BY grantee.username COLLATE NOCASE, grantee.id`
       )
-      .all(nodeId) as unknown as GrantRow[];
+      .all(...(userId === undefined ? [nodeId] : [nodeId, userId])) as unknown as Omit<GrantRow, "effectiveRole">[];
+    return rows.map((row) => {
+      const effectiveRole = this.effectiveRole(row.user_id, nodeId);
+      if (!effectiveRole) throw new Error("Grant has no effective Node access");
+      return { ...row, effectiveRole };
+    });
   }
 
-  findGrant(nodeId: string, userId: string): GrantRow | null {
-    return this.listGrants(nodeId).find((row) => row.user_id === userId) ?? null;
+  private effectiveRole(userId: string, nodeId: string): GrantRole | null {
+    const role = this.access.readNodeAccess(userId, nodeId)?.role;
+    return role === "editor" || role === "viewer" ? role : null;
   }
 
-  upsertGrant(input: {
+  async upsertGrant(input: {
     readonly nodeId: string;
     readonly userId: string;
     readonly role: GrantRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO node_grants
-           (node_id, user_id, role, granted_by, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (node_id, user_id)
-         DO UPDATE SET
-           role = excluded.role,
-           granted_by = excluded.granted_by,
-           updated_at = excluded.updated_at`
-      )
-      .run(
-        input.nodeId,
-        input.userId,
-        input.role,
-        input.grantedBy,
-        input.now,
-        input.now
-      );
-  }
-
-  removeGrant(nodeId: string, userId: string): boolean {
-    return (
+  }): Promise<GrantRow> {
+    return this._database.transaction(() => {
+      requireShare(this.access.readNodeAccess(input.grantedBy, input.nodeId));
+      if (input.userId === input.grantedBy) throw conflict("The space owner already has access.");
+      this.requireUser(input.userId);
       this._database.connection
         .prepare(
-          `DELETE FROM node_grants
-           WHERE node_id = ? AND user_id = ?`
+          `INSERT INTO node_grants
+             (node_id, user_id, role, granted_by, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)
+           ON CONFLICT (node_id, user_id)
+           DO UPDATE SET
+             role = excluded.role,
+             granted_by = excluded.granted_by,
+             updated_at = excluded.updated_at`
         )
-        .run(nodeId, userId).changes > 0
-    );
+        .run(
+          input.nodeId,
+          input.userId,
+          input.role,
+          input.grantedBy,
+          input.now,
+          input.now
+        );
+      const grant = this.readGrants(input.nodeId, input.userId)[0];
+      if (!grant) throw new Error("Updated grant is missing");
+      return grant;
+    });
   }
 
-  findLinkSharing(nodeId: string): LinkSharingRow | null {
+  async removeGrant(actorUserId: string, nodeId: string, userId: string): Promise<GrantRole | null> {
+    return this._database.transaction(() => {
+      requireShare(this.access.readNodeAccess(actorUserId, nodeId));
+      const result = this._database.connection.prepare("DELETE FROM node_grants WHERE node_id = ? AND user_id = ?").run(nodeId, userId);
+      if (!result.changes) throw notFound();
+      return this.effectiveRole(userId, nodeId);
+    });
+  }
+
+  async findLinkSharing(nodeId: string): Promise<LinkSharingRow | null> {
+    return this.readLinkSharing(nodeId);
+  }
+
+  private readLinkSharing(nodeId: string): LinkSharingRow | null {
     return (
       (this._database.connection
         .prepare(
@@ -199,7 +246,11 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     );
   }
 
-  findNodeOwner(nodeId: string): NodeOwnerRow {
+  async findNodeOwner(nodeId: string): Promise<NodeOwnerRow> {
+    return this.readNodeOwner(nodeId);
+  }
+
+  private readNodeOwner(nodeId: string): NodeOwnerRow {
     return this._database.connection
       .prepare(
         `SELECT
@@ -216,44 +267,50 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
       .get(nodeId) as unknown as NodeOwnerRow;
   }
 
-  upsertLinkSharing(input: {
+  async upsertLinkSharing(input: {
     readonly nodeId: string;
     readonly enabled: boolean;
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO node_link_sharing
-           (
-             node_id,
-             enabled,
-             role,
-             created_by,
-             updated_by,
-             created_at,
-             updated_at
-           )
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (node_id)
-         DO UPDATE SET
-           enabled = excluded.enabled,
-           role = excluded.role,
-           updated_by = excluded.updated_by,
-           updated_at = excluded.updated_at
-         WHERE node_link_sharing.enabled <> excluded.enabled
-            OR node_link_sharing.role <> excluded.role`
-      )
-      .run(
-        input.nodeId,
-        input.enabled ? 1 : 0,
-        input.role,
-        input.actorUserId,
-        input.actorUserId,
-        input.now,
-        input.now
-      );
+  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean }> {
+    return this._database.transaction(() => {
+      requireShare(this.access.readNodeAccess(input.actorUserId, input.nodeId));
+      const result = this._database.connection
+        .prepare(
+          `INSERT INTO node_link_sharing
+             (
+               node_id,
+               enabled,
+               role,
+               created_by,
+               updated_by,
+               created_at,
+               updated_at
+             )
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (node_id)
+           DO UPDATE SET
+             enabled = excluded.enabled,
+             role = excluded.role,
+             updated_by = excluded.updated_by,
+             updated_at = excluded.updated_at
+           WHERE node_link_sharing.enabled <> excluded.enabled
+              OR node_link_sharing.role <> excluded.role`
+        )
+        .run(
+          input.nodeId,
+          input.enabled ? 1 : 0,
+          input.role,
+          input.actorUserId,
+          input.actorUserId,
+          input.now,
+          input.now
+        );
+      const row = this.readLinkSharing(input.nodeId);
+      if (!row) throw new Error("Updated Link Sharing settings are missing");
+      return { row, owner: this.readNodeOwner(input.nodeId), changed: result.changes > 0 };
+    });
   }
 }
 

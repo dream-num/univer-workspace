@@ -10,7 +10,7 @@ afterEach(async () => {
 
 describe("repository slugs", () => {
   it("generates, validates and resolves slugs", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const owner = await register(application, "Owner");
     const other = await register(application, "other");
 
@@ -42,7 +42,7 @@ describe("repository slugs", () => {
   });
 
   it("hides what the caller cannot discover and edits slugs like names", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const owner = await register(application, "owner");
     const stranger = await register(application, "stranger");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Private repo" });
@@ -69,7 +69,7 @@ describe("repository slugs", () => {
   });
 
   it("gives the Space slug triggers the last word", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const owner = await register(application, "owner");
     const personal = (await application.spaces.list(owner.id)).spaces.find((space) => space.type === "personal");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "t" });
@@ -81,16 +81,16 @@ describe("repository slugs", () => {
 
 describe("shared Issue and Team Worktree numbering", () => {
   it("numbers Issues and Team Worktrees from one per-Space sequence", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const owner = await register(application, "owner");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Repo" });
     const otherTeam = await application.spaces.createTeamSpace(owner.id, { name: "Other" });
 
-    const issue1 = application.issues.create(owner.id, team.id, { title: "one" });
+    const issue1 = await application.issues.create(owner.id, team.id, { title: "one" });
     const pr2 = await application.worktrees.create(owner.id, "number-pr-two-0001", {
       kind: "team", teamSpaceId: team.id, visibility: "space", name: "PR", summary: "body",
     });
-    const issue3 = application.issues.create(owner.id, team.id, { title: "three" });
+    const issue3 = await application.issues.create(owner.id, team.id, { title: "three" });
     const pr4 = await application.worktrees.create(owner.id, "number-pr-four-0001", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "PR", summary: null,
     });
@@ -114,7 +114,7 @@ describe("shared Issue and Team Worktree numbering", () => {
   });
 
   it("numbers User Worktrees per creator and addresses them through the Personal Space", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const alice = await register(application, "alice");
     const bob = await register(application, "bob");
     const make = (userId: string, key: string) =>
@@ -140,7 +140,7 @@ describe("shared Issue and Team Worktree numbering", () => {
   });
 
   it("uses the same HTTP authorization for numbered and ID-addressed private Team Worktrees", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const owner = await register(application, "owner");
     const creator = await register(application, "creator");
     const admin = await register(application, "admin");
@@ -148,7 +148,7 @@ describe("shared Issue and Team Worktree numbering", () => {
     const stranger = await register(application, "stranger");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Private repo" });
     for (const [user, role] of [[creator, "editor"], [admin, "admin"], [viewer, "viewer"]] as const) {
-      application.permissions.upsertTeamMember(owner.id, team.id, user.id, { role });
+      await application.permissions.upsertTeamMember(owner.id, team.id, user.id, { role });
     }
     const created = await application.worktrees.create(creator.id, "numbered-private-team-0001", {
       kind: "team", teamSpaceId: team.id, visibility: "private", name: "Private changes", summary: null,
@@ -174,7 +174,7 @@ describe("shared Issue and Team Worktree numbering", () => {
         worktree: { units: [{ unitId: unit.body.unit.unitId }], capabilities: { review: true, editDraft: true } },
       });
 
-      application.permissions.removeTeamMember(owner.id, team.id, creator.id);
+      await application.permissions.removeTeamMember(owner.id, team.id, creator.id);
       await expect(application.spaces.get(creator.id, team.id)).rejects.toThrowError(
         expect.objectContaining({ code: "NOT_FOUND" }),
       );
@@ -224,7 +224,7 @@ describe("shared Issue and Team Worktree numbering", () => {
   });
 
   it("keeps old Worktrees unnumbered and filters lists by state before paging", async () => {
-    const application = createApplication();
+    const application = await createApplication();
     const owner = await register(application, "owner");
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Repo" });
     const ids: string[] = [];
@@ -262,8 +262,8 @@ describe("shared Issue and Team Worktree numbering", () => {
   });
 });
 
-function createApplication(): SqliteTestApplication {
-  const application = createSqliteTestApplication({
+async function createApplication(): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: ":memory:" },

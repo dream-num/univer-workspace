@@ -1,6 +1,7 @@
+import { trashBatchMismatch, trashNotFound } from "./trash.errors.js";
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
-import { assertCeiling, type AccessResolver } from "../access/index.js";
+import type { AccessResolver } from "../access/index.js";
 import { nodeSummary } from "../nodes/nodes.service.js";
 import type {
   TrashRepository,
@@ -21,40 +22,40 @@ export function createTrashModule(options: {
   const now = options.now ?? Date.now;
 
   return {
-    trashNode(userId, nodeId) {
-      const node = options.access.resolveNode(userId, nodeId);
-      if (!node) throw notFound();
+    async trashNode(userId, nodeId) {
+      const node = await options.access.resolveNode(userId, nodeId);
+      if (!node) throw trashNotFound();
       if (!node.capabilities.trash) throw forbidden();
       const batchId = randomUUID();
-      options.repository.trashNode({
+      await options.repository.trashNode({
         batchId,
         nodeId,
         spaceId: node.spaceId,
         createdBy: userId,
         createdAt: now(),
       });
-      const batch = options.repository.findBatch(batchId);
+      const batch = await options.repository.findBatch(batchId);
       if (!batch) throw new Error("Created Trash Batch is missing");
       return batchView(batch, options.repository);
     },
 
-    trashNodeOnce(userId, nodeId, batchId) {
-      const existing = options.repository.findBatch(batchId);
-      if (existing) {
-        if (existing.root_node_id !== nodeId || existing.created_by !== userId) {
-          throw new ApplicationError(
-            "CONFLICT",
-            409,
-            "The Trash Batch belongs to a different deletion request.",
-          );
-        }
-        // Restoration is a later user decision. Replaying deletion must preserve it.
-        return;
+    async trashNodeOnce(userId, nodeId, batchId) {
+      const alreadyTrashed = async () => {
+        const existing = await options.repository.findBatch(batchId);
+        if (!existing) return false;
+        if (existing.root_node_id !== nodeId || existing.created_by !== userId) throw trashBatchMismatch();
+        return true;
+      };
+      // Restoration is a later user decision. Replaying deletion must preserve it.
+      if (await alreadyTrashed()) return;
+      const node = await options.access.resolveNode(userId, nodeId);
+      if (!node) {
+        // Another call with this batch ID may have trashed the node since the first lookup.
+        if (await alreadyTrashed()) return;
+        throw trashNotFound();
       }
-      const node = options.access.resolveNode(userId, nodeId);
-      if (!node) throw notFound();
       if (!node.capabilities.trash) throw forbidden();
-      options.repository.trashNode({
+      await options.repository.trashNode({
         batchId,
         nodeId,
         spaceId: node.spaceId,
@@ -63,12 +64,12 @@ export function createTrashModule(options: {
       });
     },
 
-    list(userId, spaceId, page) {
-      const space = options.access.resolveSpace(userId, spaceId);
-      if (!space) throw notFound();
-      if (!space.capabilities.viewTrash) throw notFound();
+    async list(userId, spaceId, page) {
+      const space = await options.access.resolveSpace(userId, spaceId);
+      if (!space) throw trashNotFound();
+      if (!space.capabilities.viewTrash) throw trashNotFound();
       const limit = validLimit(page.limit);
-      const rows = options.repository.listBatches(
+      const rows = await options.repository.listBatches(
         spaceId,
         decodeCursor(page.cursor),
         limit + 1
@@ -77,9 +78,9 @@ export function createTrashModule(options: {
       const items = hasNext ? rows.slice(0, limit) : rows;
       const last = items.at(-1);
       return {
-        items: items.map((batch) =>
+        items: await Promise.all(items.map((batch) =>
           batchView(batch, options.repository)
-        ),
+        )),
         nextCursor:
           hasNext && last
             ? encodeCursor({ createdAt: last.created_at, id: last.id })
@@ -87,26 +88,20 @@ export function createTrashModule(options: {
       };
     },
 
-    restore(userId, trashBatchId) {
-      const batch = requireManageableBatch(
+    async restore(userId, trashBatchId) {
+      const batch = await requireManageableBatch(
         userId,
         trashBatchId,
         options
       );
-      const blockers = options.repository.blockers(batch);
-      if (blockers.parentBatchId) {
+      if (await options.repository.restore(batch, userId, now()) === "parentInTrash") {
         throw new ApplicationError(
           "RESTORE_PARENT_IN_TRASH",
           409,
           "Restore the parent Trash Batch first."
         );
       }
-      assertCeiling(options.access.principalCategory(userId), "createFiles", {
-        held: () => options.access.countPersonalFiles(userId),
-        adding: options.repository.countFiles(batch),
-      });
-      options.repository.restore(batch, now());
-      const restored = options.access.resolveNode(
+      const restored = await options.access.resolveNode(
         userId,
         batch.root_node_id
       );
@@ -116,52 +111,51 @@ export function createTrashModule(options: {
       return nodeSummary(restored);
     },
 
-    removePermanently(userId, trashBatchId) {
-      const batch = requireManageableBatch(
+    async removePermanently(userId, trashBatchId) {
+      const batch = await requireManageableBatch(
         userId,
         trashBatchId,
         options
       );
-      const blockers = options.repository.blockers(batch);
-      if (blockers.nestedBatchId) {
+      const result = await options.repository.removePermanently(batch, now());
+      if (result === "nestedBatch") {
         throw new ApplicationError(
           "NESTED_TRASH_BATCH",
           409,
           "Remove or restore the nested Trash Batch first."
         );
       }
-      if (blockers.activeWorktreeReference) {
+      if (result === "activeWorktreeReference") {
         throw new ApplicationError(
           "ACTIVE_WORKTREE_RESOURCE_REFERENCE",
           409,
           "An active Worktree references this content."
         );
       }
-      options.repository.removePermanently(batch, now());
     },
   };
 }
 
-function requireManageableBatch(
+async function requireManageableBatch(
   userId: string,
   batchId: string,
   options: {
     readonly repository: TrashRepository;
     readonly access: AccessResolver;
   }
-): TrashBatchRow {
-  const batch = options.repository.findBatch(batchId);
-  if (!batch || batch.restored_at !== null) throw notFound();
-  const space = options.access.resolveSpace(userId, batch.space_id);
-  if (!space?.capabilities.viewTrash) throw notFound();
+): Promise<TrashBatchRow> {
+  const batch = await options.repository.findBatch(batchId);
+  if (!batch || batch.restored_at !== null) throw trashNotFound();
+  const space = await options.access.resolveSpace(userId, batch.space_id);
+  if (!space?.capabilities.viewTrash) throw trashNotFound();
   return batch;
 }
 
-function batchView(
+async function batchView(
   batch: TrashBatchRow,
   repository: TrashRepository
-): TrashBatchView {
-  const blockers = repository.blockers(batch);
+): Promise<TrashBatchView> {
+  const blockers = await repository.blockers(batch);
   const restoreBlockedBy: TrashBlocker | null = blockers.parentBatchId
     ? {
         code: "RESTORE_PARENT_IN_TRASH",
@@ -204,7 +198,7 @@ function batchView(
           : null,
     },
     originalLocation: {
-      breadcrumbs: repository.originalBreadcrumbs(batch.root_node_id),
+      breadcrumbs: await repository.originalBreadcrumbs(batch.root_node_id),
     },
     trashedBy: {
       id: batch.created_by,
@@ -263,10 +257,6 @@ function encodeCursor(cursor: TrashCursor): string {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function notFound(): ApplicationError {
-  return new ApplicationError("NOT_FOUND", 404, "Trash Batch not found.");
 }
 
 function forbidden(): ApplicationError {

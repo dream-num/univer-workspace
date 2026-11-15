@@ -42,16 +42,15 @@ export interface TrashRepository {
     readonly spaceId: string;
     readonly createdBy: string;
     readonly createdAt: number;
-  }): void;
-  findBatch(batchId: string): TrashBatchRow | null;
+  }): Promise<void>;
+  findBatch(batchId: string): Promise<TrashBatchRow | null>;
   listBatches(
     spaceId: string,
     cursor: TrashCursor | null,
     limit: number
-  ): TrashBatchRow[];
-  originalBreadcrumbs(rootNodeId: string): TrashBreadcrumbRow[];
-  blockers(batch: TrashBatchRow): TrashBlockers;
-  countFiles(batch: TrashBatchRow): number;
-  restore(batch: TrashBatchRow, restoredAt: number): void;
-  removePermanently(batch: TrashBatchRow, deletedAt: number): void;
+  ): Promise<TrashBatchRow[]>;
+  originalBreadcrumbs(rootNodeId: string): Promise<TrashBreadcrumbRow[]>;
+  blockers(batch: TrashBatchRow): Promise<TrashBlockers>;
+  restore(batch: TrashBatchRow, userId: string, restoredAt: number): Promise<"restored" | "parentInTrash">;
+  removePermanently(batch: TrashBatchRow, deletedAt: number): Promise<"removed" | "nestedBatch" | "activeWorktreeReference">;
 }

@@ -7,7 +7,7 @@ import { createSqliteTestApplication } from "../support/sqlite/test-application.
 
 it("stores a trimmed Space description, validates it, and restricts edits to Space managers", async () => {
   const root = mkdtempSync(join(tmpdir(), "workspace-description-"));
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,

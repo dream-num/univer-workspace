@@ -12,7 +12,7 @@ import { shutdownServer } from "../../server/src/server-lifecycle.js";
 
 it("shuts down while a collaboration WebSocket is connected", async () => {
   const directory = mkdtempSync(join(tmpdir(), "univer-lifecycle-"));
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -84,7 +84,7 @@ it("releases its configured S3 client and leaves the product database to its cal
 
 it("leaves disposal of an injected blob store to its owner", async () => {
   const blobStore = { put: vi.fn(), head: vi.fn(), open: vi.fn(), delete: vi.fn(), dispose: vi.fn() };
-  const application = createSqliteTestApplication(s3Config, { blobStore });
+  const application = await createSqliteTestApplication(s3Config, { blobStore });
   await application.close();
   expect(blobStore.dispose).not.toHaveBeenCalled();
 });

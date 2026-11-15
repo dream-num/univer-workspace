@@ -3,10 +3,10 @@ import { loadConfig, type WorkspaceConfig } from "../../../server/src/config.js"
 import { openWorkspaceDatabase } from "../../../server/src/db/sqlite/initialize.js";
 import { createSqliteRepositories } from "../../../server/src/db/sqlite/open.js";
 
-export type SqliteTestApplication = ReturnType<typeof createSqliteTestApplication>;
+export type SqliteTestApplication = Awaited<ReturnType<typeof createSqliteTestApplication>>;
 
 /** Fixtures share the adapter connection to seed data and inspect transaction state, including :memory:. */
-export function createSqliteTestApplication(
+export async function createSqliteTestApplication(
   settings: Partial<WorkspaceConfig> & Pick<WorkspaceConfig, "productDatabase" | "collaborationDatabaseFilename">,
   dependencies?: Parameters<typeof createWorkspaceApplication>[2],
 ) {
@@ -15,6 +15,12 @@ export function createSqliteTestApplication(
   try {
     const repositories = createSqliteRepositories(database);
     const application = createWorkspaceApplication(config, repositories, dependencies);
+    try {
+      await application.initialize();
+    } catch (error) {
+      await application.close();
+      throw error;
+    }
     return {
       ...application,
       repositories,

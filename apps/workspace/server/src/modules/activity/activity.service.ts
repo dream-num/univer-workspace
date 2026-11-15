@@ -44,12 +44,12 @@ export function createActivityModule(options: {
   return {
     async get(userId, spaceId, query) {
       const window = activityWindow(query.timeZone, (options.now ?? Date.now)());
-      const space = options.access.resolveSpace(userId, spaceId);
+      const space = await options.access.resolveSpace(userId, spaceId);
       if (!space || (space.type === "personal" && space.ownerUserId !== userId)) {
         throw new ApplicationError("NOT_FOUND", 404, "The resource was not found.");
       }
       const issues = space.type === "team"
-        ? options.issues.activity(userId, spaceId, window.since)
+        ? await options.issues.activity(userId, spaceId, window.since)
         : { items: [], complete: true };
       const pulls = await options.worktrees.activity(userId, space.type === "team"
         ? { kind: "team", teamSpaceId: spaceId } : { kind: "user" }, window.since);

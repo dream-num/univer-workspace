@@ -10,7 +10,7 @@ import { createSqliteTestApplication } from "../support/sqlite/test-application.
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-pull-requests-"));
 const port = Number(process.env.PORT ?? 3020);
-const application = createSqliteTestApplication({
+const application = await createSqliteTestApplication({
   host: "127.0.0.1",
   port,
   productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },

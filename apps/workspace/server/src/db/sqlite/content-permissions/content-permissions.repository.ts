@@ -1,10 +1,10 @@
 import type { SqliteDatabase } from "../connection.js";
-import type { ContentCollaborator, ContentPermissionObject, ContentPermissionsRepository } from "../../../modules/content-permissions/content-permissions.repository.js";
+import type { ContentCollaborator, ContentPermissionObject, ContentPermissionUpdate, ContentPermissionsRepository } from "../../../modules/content-permissions/content-permissions.repository.js";
 
 export class SqliteContentPermissionsRepository implements ContentPermissionsRepository {
   constructor(private readonly database: SqliteDatabase) {}
 
-  get(unitId: string, objectId: string): ContentPermissionObject | null {
+  async get(unitId: string, objectId: string): Promise<ContentPermissionObject | null> {
     const row = this.database.connection
       .prepare("SELECT * FROM content_permission_objects WHERE unit_id = ? AND id = ?")
       .get(unitId, objectId) as
@@ -38,7 +38,7 @@ export class SqliteContentPermissionsRepository implements ContentPermissionsRep
     };
   }
 
-  create(object: ContentPermissionObject): void {
+  async create(object: ContentPermissionObject): Promise<void> {
     this.database.transaction((db) => {
       const now = Date.now();
       db.prepare(`INSERT INTO content_permission_objects
@@ -55,29 +55,35 @@ export class SqliteContentPermissionsRepository implements ContentPermissionsRep
         now,
         now,
       );
-      this.writeCollaborators(object);
+      this.writeCollaborators(object.id, object.collaborators);
     });
   }
 
-  update(object: ContentPermissionObject): void {
-    this.database.transaction((db) => {
-      db.prepare(`UPDATE content_permission_objects SET name = ?, strategies_json = ?, read_scope = ?, edit_scope = ?, updated_at = ?
+  async update(unitId: string, objectId: string, patch: ContentPermissionUpdate): Promise<boolean> {
+    return this.database.transaction((db) => {
+      const updated = db.prepare(`UPDATE content_permission_objects
+        SET name = COALESCE(?, name), strategies_json = COALESCE(?, strategies_json),
+            read_scope = COALESCE(?, read_scope), edit_scope = COALESCE(?, edit_scope), updated_at = ?
         WHERE id = ? AND unit_id = ?`).run(
-        object.name,
-        JSON.stringify(object.strategies),
-        object.readScope,
-        object.editScope,
+        patch.name,
+        patch.strategies === null ? null : JSON.stringify(patch.strategies),
+        patch.scope?.read ?? null,
+        patch.scope?.edit ?? null,
         Date.now(),
-        object.id,
-        object.unitId,
+        objectId,
+        unitId,
       );
-      db.prepare("DELETE FROM content_permission_collaborators WHERE object_id = ?").run(object.id);
-      this.writeCollaborators(object);
+      if (updated.changes === 0) return false;
+      if (patch.collaborators !== null) {
+        db.prepare("DELETE FROM content_permission_collaborators WHERE object_id = ?").run(objectId);
+        this.writeCollaborators(objectId, patch.collaborators);
+      }
+      return true;
     });
   }
 
   /** Finite explicit membership only; public/link readers are never enumerated. */
-  candidateUserIds(unitId: string): string[] {
+  async candidateUserIds(unitId: string): Promise<string[]> {
     const rows = this.database.connection
       .prepare(`
       WITH RECURSIVE ancestors(id, parent_id, space_id) AS (
@@ -96,10 +102,10 @@ export class SqliteContentPermissionsRepository implements ContentPermissionsRep
     return rows.map((row) => row.id);
   }
 
-  private writeCollaborators(object: ContentPermissionObject): void {
+  private writeCollaborators(objectId: string, collaborators: readonly ContentCollaborator[]): void {
     const insert = this.database.connection.prepare(
       "INSERT INTO content_permission_collaborators (object_id, user_id, role) VALUES (?, ?, ?)",
     );
-    for (const user of object.collaborators) insert.run(object.id, user.userId, user.role);
+    for (const user of collaborators) insert.run(objectId, user.userId, user.role);
   }
 }

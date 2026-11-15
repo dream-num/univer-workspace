@@ -24,11 +24,11 @@ export interface ExchangedSession {
 }
 
 export interface AccessTokenRepository {
-  insertPersonal(record: PersonalTokenRecord, tokenHash: string): void;
-  listPersonal(userId: string): PersonalTokenRecord[];
+  insertPersonal(record: PersonalTokenRecord, tokenHash: string): Promise<void>;
+  listPersonal(userId: string): Promise<PersonalTokenRecord[]>;
   /** Returns the sessions removed in the same commit, or null if the token was not revoked. */
-  revokePersonal(userId: string, id: string, at: number): readonly string[] | null;
-  insertGrant(record: OAuthGrantRecord, secrets: GrantSecrets): void;
+  revokePersonal(userId: string, id: string, at: number): Promise<readonly string[] | null>;
+  insertGrant(record: OAuthGrantRecord, secrets: GrantSecrets): Promise<void>;
   rotateGrant(input: {
     readonly id: string;
     readonly secret: string;
@@ -36,13 +36,13 @@ export interface AccessTokenRepository {
     readonly resource: string;
     readonly now: () => number;
     readonly next: GrantSecrets;
-  }): RefreshOutcome;
-  revokeGrant(userId: string, id: string, at: number): readonly string[] | null;
-  revokeClientGrant(id: string, secret: string, refresh: boolean, clientId: string, at: number): readonly string[] | null;
-  verifySubject(token: TokenCredential, resource: string, at: number): SubjectToken | null;
+  }): Promise<RefreshOutcome>;
+  revokeGrant(userId: string, id: string, at: number): Promise<readonly string[] | null>;
+  revokeClientGrant(id: string, secret: string, refresh: boolean, clientId: string, at: number): Promise<readonly string[] | null>;
+  verifySubject(token: TokenCredential, resource: string, at: number): Promise<SubjectToken | null>;
   /** Rechecks the token and principal, then inserts the linked session in a single transaction. */
   exchangeSubject(token: TokenCredential, resource: string, maxTtlMs: number, now: () => number): Promise<ExchangedSession | null>;
-  insertClient(client: OAuthClientRecord): void;
-  getClient(id: string): OAuthClientRecord | null;
-  countClients(): number;
+  /** Checks the registration cap and inserts the client atomically. */
+  insertClient(client: OAuthClientRecord, limit: number | null): Promise<boolean>;
+  getClient(id: string): Promise<OAuthClientRecord | null>;
 }

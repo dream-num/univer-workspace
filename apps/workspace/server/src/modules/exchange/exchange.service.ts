@@ -37,7 +37,7 @@ import {
 } from "../../integrations/univer/univer-license.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { logger } from "../../logging/logger.js";
-import { assertCeiling, type AccessResolver, type NodeAccess, type UnitType } from "../access/index.js";
+import { assertCeiling, assertCreateFilesCeiling, type AccessResolver, type NodeAccess, type UnitType } from "../access/index.js";
 import type { ResourcesModule } from "../resources/index.js";
 import type { SpacesModule } from "../spaces/index.js";
 import {
@@ -273,7 +273,7 @@ export function createExchangeModule(options: {
     fileID: string,
     sourceUnitID: string
   ): Promise<ImportSource> {
-    const access = options.access.resolveUnit(userId, sourceUnitID);
+    const access = await options.access.resolveUnit(userId, sourceUnitID);
     if (!access || access.kind !== "univer" || !access.capabilities.openContent) {
       throw notFound();
     }
@@ -281,7 +281,7 @@ export function createExchangeModule(options: {
       opened.stream.destroy();
       return opened.asset;
     });
-    const target = hostTarget(userId, access.node);
+    const target = await hostTarget(userId, access.node);
     return {
       filename: asset.original_filename,
       byteSize: asset.byte_size,
@@ -316,17 +316,17 @@ export function createExchangeModule(options: {
     return use(opened);
   }
 
-  function hostTarget(
+  async function hostTarget(
     userId: string,
     node: NodeAccess
-  ): { readonly spaceId: string; readonly parentNodeId: string | null } | undefined {
+  ): Promise<{ readonly spaceId: string; readonly parentNodeId: string | null } | undefined> {
     if (node.parentNodeId) {
-      const parent = options.access.resolveNode(userId, node.parentNodeId);
+      const parent = await options.access.resolveNode(userId, node.parentNodeId);
       return parent?.capabilities.createChildren
         ? { spaceId: node.spaceId, parentNodeId: node.parentNodeId }
         : undefined;
     }
-    const space = options.access.resolveSpace(userId, node.spaceId);
+    const space = await options.access.resolveSpace(userId, node.spaceId);
     return space?.capabilities.createAtRoot
       ? { spaceId: node.spaceId, parentNodeId: null }
       : undefined;
@@ -339,7 +339,7 @@ export function createExchangeModule(options: {
 
     async upload(userId, input) {
       const size = validSize(input.size, maxFileBytes);
-      assertCeiling(options.access.principalCategory(userId), "storeFile", { byteSize: size });
+      assertCeiling(await options.access.principalCategory(userId), "storeFile", { byteSize: size });
       const flate = validBooleanQuery(input.flate);
       if (!input.filename || input.filename.length > 1024) {
         throw invalidInput("The uploaded filename is invalid.", "file");
@@ -365,10 +365,10 @@ export function createExchangeModule(options: {
         typeValue === "auto"
           ? unitTypeFromFilename(source.filename)
           : unitTypeFromProtocol(typeValue);
-      const principal = options.access.principalCategory(userId);
+      const principal = await options.access.principalCategory(userId);
       assertCeiling(principal, "storeFile", { byteSize: source.byteSize });
       // Refused here for an answer the caller can read; resources.create holds the limit itself.
-      assertCeiling(principal, "createFiles", {
+      await assertCreateFilesCeiling(principal, {
         held: () => options.access.countPersonalFiles(userId),
         adding: input.outputType === 2 ? 0 : 1,
       });
@@ -445,7 +445,7 @@ export function createExchangeModule(options: {
         if (!resource || resource.kind !== "univer") {
           throw new Error("The imported Resource mapping is missing.");
         }
-        const opened = options.resources.open(userId, resource.id);
+        const opened = await options.resources.open(userId, resource.id);
         if (opened.resource.kind !== "univer") {
           throw new Error("The imported Resource is not a Univer Unit.");
         }
@@ -467,7 +467,7 @@ export function createExchangeModule(options: {
       const unitType = unitTypeFromProtocol(typeValue);
       const input = validExportRequest(inputValue, unitType);
       if (input.unitID) {
-        const access = options.access.resolveUnit(userId, input.unitID);
+        const access = await options.access.resolveUnit(userId, input.unitID);
         if (
           !access ||
           access.kind !== "univer" ||
@@ -483,7 +483,7 @@ export function createExchangeModule(options: {
         let aggregate: ISnapshotWithBlocks;
         let name = "univer-export";
         if (input.unitID) {
-          const access = options.access.resolveUnit(userId, input.unitID);
+          const access = await options.access.resolveUnit(userId, input.unitID);
           if (!access || access.kind !== "univer") throw notFound();
           const materialized = await options.snapshots.materialize({
             userId,

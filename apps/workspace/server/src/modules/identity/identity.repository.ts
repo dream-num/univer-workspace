@@ -68,9 +68,9 @@ export interface AgentBanResult {
 }
 
 export interface IdentityRepository {
-  isIdentityConflict(error: unknown, field: IdentityConflict): boolean;
+  isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean>;
   banAgent(target: string, at: number): Promise<AgentBanResult | null>;
-  createPasswordUser(input: NewPasswordUser): void;
+  createPasswordUser(input: NewPasswordUser): Promise<void>;
   createExternalUser(input: {
     readonly provider: ExternalIdentityProvider;
     readonly user: User;
@@ -79,83 +79,82 @@ export interface IdentityRepository {
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly session: NewPasswordUser["session"];
     readonly createdAt: number;
-  }): void;
-  createEmailUser(input: NewEmailUser): void;
+  }): Promise<void>;
+  createEmailUser(input: NewEmailUser): Promise<void>;
   createAgentUser(input: {
     readonly user: User;
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly originLabel: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): void;
+  }): Promise<void>;
   findExternalIdentity(
     provider: ExternalIdentityProvider,
     providerSubject: string
-  ): ExternalIdentityUser | null;
+  ): Promise<ExternalIdentityUser | null>;
   linkExternalIdentity(input: {
     readonly provider: ExternalIdentityProvider;
     readonly userId: string;
     readonly providerSubject: string;
     readonly providerUsername: string;
     readonly updatedAt: number;
-  }): void;
+  }): Promise<void>;
   updateExternalUsername(
     provider: ExternalIdentityProvider,
     providerSubject: string,
     providerUsername: string,
     updatedAt: number
-  ): void;
-  removeExternalIdentity(
-    userId: string,
-    provider: ExternalIdentityProvider
-  ): boolean;
-  usernameExists(username: string): boolean;
-  findUser(userId: string): User | null;
-  findPrincipal(userId: string): StoredPrincipal | null;
+  ): Promise<void>;
+  /** Returns false if removing this identity would leave the User without a sign-in method. */
+  removeExternalIdentity(userId: string, provider: ExternalIdentityProvider, passwordAuthEnabled: boolean): Promise<boolean>;
+  usernameExists(username: string): Promise<boolean>;
+  findUser(userId: string): Promise<User | null>;
+  findPrincipal(userId: string): Promise<StoredPrincipal | null>;
   touchUnclaimedAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
-  ): void;
-  findUsers(userIds: readonly string[]): readonly User[];
-  findCredential(username: string): StoredCredential | null;
-  findCredentialByUserId(userId: string): StoredCredential | null;
+  ): Promise<void>;
+  findUsers(userIds: readonly string[]): Promise<readonly User[]>;
+  findCredential(username: string): Promise<StoredCredential | null>;
+  findCredentialByUserId(userId: string): Promise<StoredCredential | null>;
   updatePasswordHash(
     userId: string,
     passwordHash: string,
     updatedAt: number
-  ): void;
+  ): Promise<void>;
   createSession(
     userId: string,
     session: NewPasswordUser["session"]
-  ): void;
-  findSession(sessionId: string): StoredSession | null;
-  authenticationMethods(userId: string): AuthenticationMethods;
-  findUserByEmail(email: string): User | null;
+  ): Promise<void>;
+  findSession(sessionId: string): Promise<StoredSession | null>;
+  authenticationMethods(userId: string): Promise<AuthenticationMethods>;
+  findUserByEmail(email: string): Promise<User | null>;
   createEmailLoginCode(input: {
     readonly id: string;
     readonly email: string;
     readonly codeHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): void;
+  }): Promise<void>;
   findEmailLoginCode(
     email: string,
     now: number
-  ): StoredEmailLoginCode | null;
-  incrementEmailLoginCodeAttempts(id: string): void;
-  consumeEmailLoginCode(id: string, consumedAt: number): boolean;
+  ): Promise<StoredEmailLoginCode | null>;
+  incrementEmailLoginCodeAttempts(id: string): Promise<void>;
+  consumeEmailLoginCode(id: string, consumedAt: number): Promise<boolean>;
   consumeOtherEmailLoginCodes(
     email: string,
     keepId: string,
     consumedAt: number
-  ): void;
-  deleteEmailLoginCode(id: string): void;
-  latestEmailLoginCodeCreatedAt(email: string): number | null;
-  countEmailLoginCodesSince(email: string, since: number): number;
-  deleteEmailLoginCodesBefore(cutoff: number): void;
-  updateUser(user: User, updatedAt: number): void;
-  deleteSession(sessionId: string): void;
-  deleteExpiredSessions(now: number): string[];
+  ): Promise<void>;
+  deleteEmailLoginCode(id: string): Promise<void>;
+  latestEmailLoginCodeCreatedAt(email: string): Promise<number | null>;
+  countEmailLoginCodesSince(email: string, since: number): Promise<number>;
+  deleteEmailLoginCodesBefore(cutoff: number): Promise<void>;
+  /** Updates supplied fields only. A provider may fill fields only while their observed values still match. */
+  updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User>;
+  deleteSession(sessionId: string): Promise<void>;
+  deleteExpiredSessions(now: number): Promise<string[]>;
 }

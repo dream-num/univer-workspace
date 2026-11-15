@@ -37,9 +37,9 @@ export function createStandaloneAppRouter(options: {
     response.setHeader("Cache-Control", "private, no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Referrer-Policy", "no-referrer");
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     const userId = session.authenticated ? session.user.id : ANONYMOUS_USER_ID;
-    const node = options.access.resolveNode(userId, request.params.nodeId);
+    const node = await options.access.resolveNode(userId, request.params.nodeId);
     if (!node && !session.authenticated) {
       response.setHeader("Content-Security-Policy", `default-src 'none'; script-src 'sha256-${loginScriptHash}'; base-uri 'none'; frame-ancestors 'none'`);
       response.type("html").send(`<!doctype html><title>Sign in to Workspace</title><script>${loginScript}</script><noscript>Please sign in to Workspace, then reopen this App.</noscript>`);
@@ -48,7 +48,7 @@ export function createStandaloneAppRouter(options: {
     if (!node || node.resourceKind !== "blob" || !node.resourceId) {
       throw new ApplicationError("NOT_FOUND", 404, "The App was not found.");
     }
-    const access = options.access.resolveResource(userId, node.resourceId);
+    const access = await options.access.resolveResource(userId, node.resourceId);
     if (!access || access.kind !== "blob" || !isHtmlViewFilename(access.originalFilename)) {
       throw new ApplicationError("NOT_FOUND", 404, "The App was not found.");
     }

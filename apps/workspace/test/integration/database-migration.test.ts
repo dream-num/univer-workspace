@@ -366,7 +366,7 @@ describe("automatic product database migration to V21", () => {
     const { directory, filename, legacy } = legacyDatabase();
     seedRichLegacyV0(legacy);
     legacy.close();
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
@@ -388,7 +388,7 @@ describe("automatic product database migration to V21", () => {
       }
     );
     try {
-      expect(application.nodes.get("alice", "doc-node")).toMatchObject({
+      expect(await application.nodes.get("alice", "doc-node")).toMatchObject({
         node: {
           id: "doc-node",
           resource: { unitType: "doc" },
@@ -676,7 +676,7 @@ describe("automatic product database migration to V21", () => {
 
   it("starts the application after V3 migration and recovers upload sessions", async () => {
     const { directory, filename } = richV3Database();
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,

@@ -57,7 +57,7 @@ export function createOAuthAuthorizationRouter(options: {
   const mcp = options.mcpOAuth ?? null;
   // Codes already redeemed by MCP clients, kept until they would have expired: RFC 6749 section 4.1.2
   // asks that a replayed code revoke the grant it produced.
-  const redeemedCodes = new Map<string, { readonly grantId: string; readonly userId: string; readonly expiresAt: number }>();
+  const redeemedCodes = new Map<string, { readonly grantId: Promise<string | null>; readonly userId: string; readonly expiresAt: number }>();
   router.use(json({ limit: "1mb" }));
   router.use(urlencoded({ extended: false, limit: "1mb" }));
   const clients = new Map<string, OAuthClient>();
@@ -70,7 +70,7 @@ export function createOAuthAuthorizationRouter(options: {
     const authorizationRequest = await resolveAuthorizationRequest(request, response);
     if (authorizationRequest === null) return;
 
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
       response.redirect(
         `/login?returnTo=${encodeURIComponent(
@@ -79,7 +79,7 @@ export function createOAuthAuthorizationRouter(options: {
       );
       return;
     }
-    options.identity.requireInteractiveSession(request.headers.cookie);
+    await options.identity.requireInteractiveSession(request.headers.cookie);
 
     if (authorizationRequest.kind === "mcp" || authorizationRequest.client.requiresConsent === true) {
       response.redirect(`/api/auth/authorize/consent?${authorizationQuery(authorizationRequest).toString()}`);
@@ -94,12 +94,12 @@ export function createOAuthAuthorizationRouter(options: {
   router.get("/authorize/consent", async (request, response) => {
     const authorizationRequest = await resolveAuthorizationRequest(request, response);
     if (authorizationRequest === null) return;
-    const session = options.identity.getSession(request.headers.cookie);
+    const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) {
       response.redirect(`/login?returnTo=${encodeURIComponent(`/api/auth/authorize/consent?${new URLSearchParams(request.query as Record<string, string>).toString()}`)}`);
       return;
     }
-    options.identity.requireInteractiveSession(request.headers.cookie);
+    await options.identity.requireInteractiveSession(request.headers.cookie);
     for (const [token, entry] of consentTokens) if (entry.expiresAt <= Date.now()) consentTokens.delete(token);
     const consentToken = randomBytes(32).toString("base64url");
     consentTokens.set(consentToken, { userId: session.user.id, request: authorizationRequest, expiresAt: Date.now() + 5 * 60_000 });
@@ -119,10 +119,10 @@ export function createOAuthAuthorizationRouter(options: {
     );
   });
 
-  router.post("/authorize/consent", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.post("/authorize/consent", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     if (!session.authenticated) throw new ApplicationError("UNAUTHENTICATED", 401, "Sign in is required.");
-    options.identity.requireInteractiveSession(request.headers.cookie);
+    await options.identity.requireInteractiveSession(request.headers.cookie);
     const token = request.body.consent_token;
     if (typeof token !== "string" || token === "") {
       throw new ApplicationError(
@@ -166,13 +166,13 @@ export function createOAuthAuthorizationRouter(options: {
       await exchangeToken(request, response);
       return;
     }
-    const source = resolveClientSource(request.body?.client_id, clients, options.accessTokens, mcp);
+    const source = await resolveClientSource(request.body?.client_id, clients, options.accessTokens, mcp);
     if (
       mcp !== null &&
       (request.body?.grant_type === "refresh_token" ||
         source?.kind !== "static")
     ) {
-      mcpToken(request, response, source);
+      await mcpToken(request, response, source);
       return;
     }
     if (request.body.grant_type !== "authorization_code") {
@@ -206,7 +206,7 @@ export function createOAuthAuthorizationRouter(options: {
     options.authorizationStore.delete(code);
 
     if (scopeIncludesSession(authorization.scope)) {
-      const issued = options.identity.issueSession(user, "agent");
+      const issued = await options.identity.issueSession(user, "agent");
       response.json({
         access_token: issued.cookieValue,
         token_type: "Bearer",
@@ -235,7 +235,7 @@ export function createOAuthAuthorizationRouter(options: {
   });
 
   if (mcp !== null) {
-    router.post("/revoke", (request, response) => {
+    router.post("/revoke", async (request, response) => {
       response.set({ "cache-control": "no-store", pragma: "no-cache" });
       if (!request.is("application/x-www-form-urlencoded")) {
         oauthError(response, 400, "invalid_request", "The revocation request must be a form body.");
@@ -246,12 +246,12 @@ export function createOAuthAuthorizationRouter(options: {
         oauthError(response, 400, "invalid_request", "token is required.");
         return;
       }
-      const source = resolveClientSource(body.client_id, clients, options.accessTokens, mcp);
+      const source = await resolveClientSource(body.client_id, clients, options.accessTokens, mcp);
       if (source === null || source.kind === "static") {
         oauthError(response, 401, "invalid_client", "client_id is not a registered MCP client.");
         return;
       }
-      options.accessTokens.revokeClientGrant(body.token, source.kind === "cimd" ? source.clientId : source.client.clientId);
+      await options.accessTokens.revokeClientGrant(body.token, source.kind === "cimd" ? source.clientId : source.client.clientId);
       response.status(200).end();
     });
   }
@@ -259,17 +259,17 @@ export function createOAuthAuthorizationRouter(options: {
   async function resolveAuthorizationRequest(request: Request, response: Response): Promise<AuthorizationRequest | null> {
     const values = request.query;
     const clientId = requireQueryString(values.client_id);
-    const source = resolveClientSource(clientId, clients, options.accessTokens, mcp);
+    const source = await resolveClientSource(clientId, clients, options.accessTokens, mcp);
     if (source?.kind === "static") return parseStaticAuthorizationRequest(source.client, values);
     if (mcp === null || source === null) throw unavailableClient(clientId);
     let client: OAuthClientRecord | CimdClient;
     if (source.kind === "cimd") {
-      const session = options.identity.getSession(request.headers.cookie);
+      const session = await options.identity.getSession(request.headers.cookie);
       if (!session.authenticated) {
         response.redirect(`/login?returnTo=${encodeURIComponent(request.originalUrl)}`);
         return null;
       }
-      options.identity.requireInteractiveSession(request.headers.cookie);
+      await options.identity.requireInteractiveSession(request.headers.cookie);
       try {
         client = await options.resolveClientMetadata(source.clientId, session.user.id);
       } catch (error) {
@@ -290,7 +290,7 @@ export function createOAuthAuthorizationRouter(options: {
     return parsed;
   }
 
-  function mcpToken(request: Request, response: Response, source: ClientSource | null): void {
+  async function mcpToken(request: Request, response: Response, source: ClientSource | null): Promise<void> {
     response.set({ "cache-control": "no-store", pragma: "no-cache" });
     const fail = (status: number, error: string, description: string) => oauthError(response, status, error, description);
     const body: Record<string, unknown> = request.body ?? {};
@@ -321,7 +321,7 @@ export function createOAuthAuthorizationRouter(options: {
         fail(400, "invalid_request", "refresh_token is required.");
         return;
       }
-      const refreshed = options.accessTokens.refreshGrant({ refreshToken: body.refresh_token, clientId, resource });
+      const refreshed = await options.accessTokens.refreshGrant({ refreshToken: body.refresh_token, clientId, resource });
       if (!refreshed.ok) {
         fail(400, "invalid_grant", "The refresh token is invalid, expired, revoked, already used, or bound to another client or resource.");
         return;
@@ -340,7 +340,8 @@ export function createOAuthAuthorizationRouter(options: {
     const replayed = redeemedCodes.get(code);
     if (replayed !== undefined) {
       redeemedCodes.delete(code);
-      options.accessTokens.revokeGrant(replayed.userId, replayed.grantId);
+      const grantId = await replayed.grantId;
+      if (grantId) await options.accessTokens.revokeGrant(replayed.userId, grantId);
       fail(400, "invalid_grant", "The authorization code was already used; the tokens it produced are revoked.");
       return;
     }
@@ -368,14 +369,19 @@ export function createOAuthAuthorizationRouter(options: {
       fail(400, "invalid_grant", "resource does not match the authorization request.");
       return;
     }
-    const issued = options.accessTokens.issueGrant({
+    const issuing = options.accessTokens.issueGrant({
       userId: user.id,
       clientId,
       scopes: authorization.scope.split(" "),
       resource: authorization.resource,
     });
-    redeemedCodes.set(code, { grantId: issued.grant.id, userId: user.id, expiresAt: authorization.expiresAt });
-    sendGrant(response, issued);
+    // A concurrent replay must wait for issuance before revoking the resulting grant.
+    redeemedCodes.set(code, {
+      grantId: issuing.then((issued) => issued.grant.id, () => null),
+      userId: user.id,
+      expiresAt: authorization.expiresAt,
+    });
+    sendGrant(response, await issuing);
   }
 
   async function exchangeToken(request: Request, response: Response): Promise<void> {
@@ -447,7 +453,7 @@ export function createMcpClientRegistrationHandler(options: {
 }): RequestHandler {
   const parseRegistration = json({ limit: REGISTRATION_BODY_LIMIT });
   return (request, response, next) => {
-    parseRegistration(request, response, (error?: unknown) => {
+    parseRegistration(request, response, async (error?: unknown) => {
       if (error !== undefined) {
         const tooLarge = (error as { status?: unknown }).status === 413;
         oauthError(
@@ -459,7 +465,7 @@ export function createMcpClientRegistrationHandler(options: {
         return;
       }
       try {
-        registerClient(options.accessTokens, options.mcpOAuth, request, response);
+        await registerClient(options.accessTokens, options.mcpOAuth, request, response);
       } catch (thrown) {
         next(thrown);
       }
@@ -467,7 +473,7 @@ export function createMcpClientRegistrationHandler(options: {
   };
 }
 
-function registerClient(accessTokens: AccessTokenService, config: McpOAuthConfig, request: Request, response: Response): void {
+async function registerClient(accessTokens: AccessTokenService, config: McpOAuthConfig, request: Request, response: Response): Promise<void> {
   response.set({ "cache-control": "no-store", pragma: "no-cache" });
   if (!request.is("application/json")) {
     oauthError(response, 400, "invalid_client_metadata", "The registration request must be a JSON body.");
@@ -478,14 +484,14 @@ function registerClient(accessTokens: AccessTokenService, config: McpOAuthConfig
     oauthError(response, 400, parsed.error, parsed.description);
     return;
   }
-  if (accessTokens.countClients() >= config.maxRegisteredClients) {
+  const record = await accessTokens.registerClient({
+    clientName: parsed.registration.clientName,
+    redirectUris: parsed.registration.redirectUris,
+  }, config.maxRegisteredClients);
+  if (!record) {
     oauthError(response, 503, "temporarily_unavailable", "This Workspace cannot register more clients right now.");
     return;
   }
-  const record = accessTokens.registerClient({
-    clientName: parsed.registration.clientName,
-    redirectUris: parsed.registration.redirectUris,
-  });
   response.status(201).json({
     client_id: record.clientId,
     client_id_issued_at: Math.floor(record.createdAt / 1000),

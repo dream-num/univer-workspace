@@ -1,28 +1,64 @@
+import type { SessionTicketRecord } from "@univerjs-pro/collaboration-endpoint";
 import type { NodeTransportConnection } from "@univerjs-pro/collaboration-transport-node";
+import { ANONYMOUS_USER_ID } from "../../modules/identity/anonymous-user.js";
 
 export interface SessionSockets {
-  track(sessionId: string, expiresAt: number, connection: NodeTransportConnection): () => void;
+  track(ticket: SessionTicketRecord, connection: NodeTransportConnection): Promise<boolean>;
+  isActive(connection: NodeTransportConnection): boolean;
+  untrack(connection: NodeTransportConnection): void;
   closeSessions(sessionIds: readonly string[]): void;
 }
 
-export function createSessionSockets(isSessionActive: (sessionId: string) => boolean): SessionSockets {
+interface Registration {
+  ready: boolean;
+  expiresAt: number;
+  release?: () => void;
+}
+
+export function createSessionSockets(isSessionActive: (sessionId: string, userId: string) => Promise<boolean>): SessionSockets {
   const sessions = new Map<string, Set<() => void>>();
+  // A closed connection can still have an SDK open callback or a database lookup in flight.
+  const registrations = new WeakMap<NodeTransportConnection, Registration | null>();
+
+  function untrack(connection: NodeTransportConnection): void {
+    registrations.get(connection)?.release?.();
+    registrations.set(connection, null);
+  }
 
   return {
-    track(sessionId, expiresAt, connection) {
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const untrack = () => {
-        clearTimeout(timer);
-        const connections = sessions.get(sessionId);
-        connections?.delete(close);
-        if (connections?.size === 0) sessions.delete(sessionId);
-      };
+    async track(ticket, connection) {
+      if (registrations.has(connection)) return false;
+      const state: Registration = { ready: false, expiresAt: Infinity };
+      registrations.set(connection, state);
       const close = () => {
-        untrack();
+        if (registrations.get(connection) !== state) return;
+        untrack(connection);
         connection.close(1008, "Workspace session ended");
       };
+      if (ticket.userID === ANONYMOUS_USER_ID) {
+        state.ready = true;
+        return true;
+      }
+
+      const { sessionId, sessionExpiresAt } = ticket.customData;
+      if (typeof sessionId !== "string" || typeof sessionExpiresAt !== "number" ||
+        !Number.isFinite(sessionExpiresAt) || sessionExpiresAt <= Date.now()) {
+        close();
+        return false;
+      }
+
+      let timer: ReturnType<typeof setTimeout>;
+      state.expiresAt = sessionExpiresAt;
+      const connections = sessions.get(sessionId) ?? new Set();
+      connections.add(close);
+      sessions.set(sessionId, connections);
+      state.release = () => {
+        clearTimeout(timer);
+        connections.delete(close);
+        if (connections.size === 0) sessions.delete(sessionId);
+      };
       const schedule = () => {
-        const remaining = expiresAt - Date.now();
+        const remaining = sessionExpiresAt - Date.now();
         if (remaining <= 0) {
           close();
           return;
@@ -31,16 +67,27 @@ export function createSessionSockets(isSessionActive: (sessionId: string) => boo
         timer = setTimeout(schedule, Math.min(remaining, 2_147_483_647));
         timer.unref();
       };
-      if (expiresAt <= Date.now() || !isSessionActive(sessionId)) {
-        close();
-        return untrack;
-      }
-      const connections = sessions.get(sessionId) ?? new Set();
-      connections.add(close);
-      sessions.set(sessionId, connections);
       schedule();
-      return untrack;
+
+      // Register before the lookup so an intervening logout wins even over a stale successful read.
+      try {
+        if (!await isSessionActive(sessionId, ticket.userID) || state.expiresAt <= Date.now()) {
+          close();
+          return false;
+        }
+      } catch {
+        close();
+        return false;
+      }
+      if (registrations.get(connection) !== state) return false;
+      state.ready = true;
+      return true;
     },
+    isActive(connection) {
+      const state = registrations.get(connection);
+      return state?.ready === true && state.expiresAt > Date.now();
+    },
+    untrack,
     closeSessions(sessionIds) {
       for (const id of sessionIds) {
         for (const close of sessions.get(id) ?? []) close();
