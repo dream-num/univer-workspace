@@ -170,6 +170,48 @@ export class AccessRepository {
     );
   }
 
+  findRequester(userId: string): Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> {
+    return this._database.connection
+      .prepare(`SELECT ${requesterColumns}`)
+      .get({ userId }) as Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">;
+  }
+
+  /**
+   * Files the User's Personal Space holds or is about to hold: Nodes with a Resource outside Trash,
+   * new-file intents of open pull requests, and creations still in flight. A file that
+   * `operationId` already accounts for is left out, so replaying an operation adds nothing.
+   */
+  countPersonalFiles(userId: string, operationId: string | null): number {
+    const row = this._database.connection
+      .prepare(
+        `SELECT
+           (SELECT COUNT(*)
+            FROM resources
+            JOIN nodes ON nodes.id = resources.node_id
+            JOIN spaces ON spaces.id = nodes.space_id
+            WHERE spaces.type = 'personal'
+              AND spaces.owner_user_id = $userId
+              AND nodes.trash_batch_id IS NULL)
+           + (SELECT COUNT(*)
+              FROM worktree_node_intents AS intent
+              JOIN spaces ON spaces.id = intent.target_space_id
+              WHERE spaces.type = 'personal'
+                AND spaces.owner_user_id = $userId
+                AND intent.activated_at IS NULL
+                AND intent.discarded_at IS NULL)
+           + (SELECT COUNT(*)
+              FROM operations
+              WHERE actor_user_id = $userId
+                AND state = 'pending'
+                AND kind IN ('create_resource', 'create_blob_resource', 'create_worktree_unit'))
+           - EXISTS (
+               SELECT 1 FROM operations WHERE id = $operationId AND actor_user_id = $userId
+             ) AS files`,
+      )
+      .get({ userId, operationId }) as { readonly files: number };
+    return row.files;
+  }
+
   resolveSpace(userId: string, spaceId: string): SpaceAccessRow | null {
     return (
       (this._database.connection

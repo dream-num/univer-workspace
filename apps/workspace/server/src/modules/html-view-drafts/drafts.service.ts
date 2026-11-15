@@ -4,7 +4,7 @@ import { z } from "zod";
 import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver } from "../access/index.js";
+import { assertCeiling, type AccessResolver } from "../access/index.js";
 import { HtmlViewDraftsRepository, draftConflict } from "./drafts.repository.js";
 import type { DraftRow, HtmlViewDraftView } from "./drafts.types.js";
 
@@ -232,6 +232,10 @@ export function createHtmlViewDraftsModule(options: {
       if (row.expires_at > now()) {
         if (row.kind === "create") validateCreate(userId, row.space_id, row.parent_node_id);
         else validateReplace(userId, row.target_resource_id!);
+        assertCeiling(access.principalCategory(userId), "createFiles", {
+          held: () => access.countPersonalFiles(userId),
+          adding: row.kind === "create" ? 1 : 0,
+        });
       }
       const decided = repository.decide(row.id, userId, "publish", now());
       if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);

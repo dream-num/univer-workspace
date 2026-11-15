@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
+import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
@@ -8,6 +9,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
 import type { WorkspaceConfig } from "../../server/src/config.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
+import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
+import { UniverType } from "@univerjs/protocol";
 
 const GATEWAY_ID = "univer-workspace-mcp-gateway";
 const GATEWAY_SECRET = "test-gateway-secret-at-least-32-characters";
@@ -25,11 +28,14 @@ interface Agent {
 const applications: WorkspaceApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
+/** How long the stub Unit store takes, so that concurrent creations overlap. */
+let unitStoreDelayMs = 0;
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
+  unitStoreDelayMs = 0;
 });
 
 describe("principal kind", () => {
@@ -124,6 +130,195 @@ describe("access rules for agents", () => {
     expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
   });
 });
+
+describe("ceilings", () => {
+  it("keeps an agent out of Team Spaces and public Spaces, whether or not a human claimed it", async () => {
+    const { origin, application } = await start();
+    const human = await register(origin, "owner");
+    const agent = await createAgent(origin);
+    const team = (await (await post(origin, "/api/team-spaces", { name: "Team", publicRead: true }, { cookie: human.cookie })).json()) as { id: string };
+    const personal = await personalSpaceId(origin, agent.cookie);
+
+    for (const claimed of [false, true]) {
+      if (claimed) claim(application, agent.id, human.id);
+      await expectRefused(post(origin, "/api/team-spaces", { name: "Agent team" }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
+      await expectRefused(send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: agent.cookie }), "AGENT_NOT_ALLOWED");
+      await expectRefused(put(origin, `/api/team-spaces/${team.id}/members/${agent.id}`, { role: "viewer" }, human.cookie), "AGENT_NOT_ALLOWED");
+    }
+    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { name: "Renamed" }, { cookie: agent.cookie })).status).toBe(200);
+    expect(await (await fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } })).json()).toMatchObject({
+      spaces: [{ type: "personal", name: "Renamed", publicRead: false }],
+    });
+
+    const other = await register(origin, "member");
+    expect((await put(origin, `/api/team-spaces/${team.id}/members/${other.id}`, { role: "viewer" }, human.cookie)).status).toBe(200);
+    expect((await send(origin, "PATCH", `/api/spaces/${team.id}`, { publicRead: false }, { cookie: human.cookie })).status).toBe(200);
+    expect((await send(origin, "PATCH", `/api/spaces/${team.id}`, { publicRead: true }, { cookie: human.cookie })).status).toBe(200);
+  });
+
+  it("refuses an unclaimed agent's 21st file on the direct path, and counts Trash out and restores in", async () => {
+    const { origin } = await start();
+    const agent = await createAgent(origin);
+    const key = randomUUID();
+    const nodeIds: string[] = [];
+    for (let index = 1; index <= 20; index += 1) {
+      const response = await createFileRequest(origin, agent.cookie, `File ${index}`, index === 20 ? key : undefined);
+      expect(response.status).toBe(201);
+      nodeIds.push(((await response.json()) as { node: { id: string } }).node.id);
+    }
+    await expectRefused(createFileRequest(origin, agent.cookie, "File 21"), "AGENT_QUOTA_EXCEEDED");
+    // The 20th creation, replayed with its Idempotency-Key, is the same file and not a 21st.
+    expect((await createFileRequest(origin, agent.cookie, "File 20", key)).status).toBe(200);
+
+    const trashed = await post(origin, `/api/nodes/${nodeIds[0]}/trash`, undefined, { cookie: agent.cookie });
+    expect(trashed.status).toBe(201);
+    const batchId = ((await trashed.json()) as { id: string }).id;
+    expect((await createFileRequest(origin, agent.cookie, "File 21")).status).toBe(201);
+    await expectRefused(post(origin, `/api/trash-batches/${batchId}/restore`, undefined, { cookie: agent.cookie }), "AGENT_QUOTA_EXCEEDED");
+
+    const upload = await exchangeUpload(origin, agent.cookie, 5);
+    expect(upload.status).toBe(201);
+    const { FileId } = (await upload.json()) as { FileId: string };
+    await expectRefused(post(origin, "/universer-api/exchange/import", { fileID: FileId, outputType: 1 }, { cookie: agent.cookie }), "AGENT_QUOTA_EXCEEDED");
+  });
+
+  it("holds the limit when creations race", async () => {
+    const { origin } = await start();
+    const agent = await createAgent(origin);
+    unitStoreDelayMs = 20;
+    const statuses = await Promise.all(
+      Array.from({ length: 30 }, async (_, index) => (await createFileRequest(origin, agent.cookie, `File ${index}`)).status),
+    );
+    expect(statuses.filter((status) => status === 201)).toHaveLength(20);
+    expect(statuses.filter((status) => status === 403)).toHaveLength(10);
+  });
+
+  it("refuses the 21st file inside a pull request at creation, counting both paths together", async () => {
+    const { origin } = await start();
+    const agent = await createAgent(origin);
+    const spaceId = await personalSpaceId(origin, agent.cookie);
+    const worktree = (await (await post(origin, "/api/worktrees", { kind: "user", name: "Budget", summary: null }, { cookie: agent.cookie, "idempotency-key": randomUUID() })).json()) as { id: string };
+    const addUnit = (name: string) =>
+      post(
+        origin,
+        `/api/worktrees/${worktree.id}/units`,
+        { source: "worktree", name, unitType: "sheet", targetSpaceId: spaceId, targetParentNodeId: null },
+        { cookie: agent.cookie, "idempotency-key": randomUUID() },
+      );
+    for (let index = 1; index <= 12; index += 1) expect((await addUnit(`Draft ${index}`)).status).toBe(201);
+    for (let index = 13; index <= 20; index += 1) expect((await createFileRequest(origin, agent.cookie, `File ${index}`)).status).toBe(201);
+    await expectRefused(addUnit("Draft 21"), "AGENT_QUOTA_EXCEEDED");
+    await expectRefused(createFileRequest(origin, agent.cookie, "File 21"), "AGENT_QUOTA_EXCEEDED");
+
+    // Discarding the pull request gives its twelve pending files back.
+    expect((await post(origin, `/api/worktrees/${worktree.id}/discard`, {}, { cookie: agent.cookie, "idempotency-key": randomUUID() })).status).toBe(200);
+    expect((await createFileRequest(origin, agent.cookie, "File 21")).status).toBe(201);
+  });
+
+  it("does not limit a claimed agent or a human", async () => {
+    const { origin, application } = await start();
+    const human = await register(origin, "owner");
+    const agent = await createAgent(origin);
+    claim(application, agent.id, human.id);
+    for (const cookie of [agent.cookie, human.cookie]) {
+      for (let index = 1; index <= 21; index += 1) expect((await createFileRequest(origin, cookie, `File ${index}`)).status).toBe(201);
+      expect((await reserveBlob(origin, cookie, 10 * 1024 * 1024 + 1)).status).toBe(201);
+    }
+  });
+
+  it("refuses an unclaimed agent a file above 10 MB at blob upload and at exchange upload", async () => {
+    const { origin } = await start();
+    const agent = await createAgent(origin);
+    expect((await reserveBlob(origin, agent.cookie, 10 * 1024 * 1024)).status).toBe(201);
+    await expectRefused(reserveBlob(origin, agent.cookie, 10 * 1024 * 1024 + 1), "AGENT_QUOTA_EXCEEDED");
+
+    await expectRefused(exchangeUpload(origin, agent.cookie, 10 * 1024 * 1024 + 1), "AGENT_QUOTA_EXCEEDED");
+    expect((await exchangeUpload(origin, agent.cookie, 5)).status).toBe(201);
+  });
+
+  it("requires an interactive session for a human to write Link Sharing, and lets an agent's token session share its own file", async () => {
+    const { origin } = await start();
+    const human = await register(origin, "owner");
+    const nodeId = await createFile(origin, human.cookie, "Private sheet");
+    const pat = ((await (await post(origin, "/api/auth/tokens", { name: "cli" }, { cookie: human.cookie })).json()) as { token: string }).token;
+    const delegated = await tokenSession(origin, pat);
+    const settings = { enabled: true, role: "viewer" };
+
+    await expectRefused(put(origin, `/api/nodes/${nodeId}/link-sharing`, settings, delegated), "INTERACTIVE_SESSION_REQUIRED");
+    const read = await fetch(`${origin}/api/nodes/${nodeId}/link-sharing`, { headers: { cookie: delegated } });
+    expect(read.status).toBe(200);
+    expect(await read.json()).toMatchObject({ enabled: false });
+    expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, settings, human.cookie)).status).toBe(200);
+
+    const agent = await createAgent(origin);
+    const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
+    const shared = await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, settings, agent.cookie);
+    expect(shared.status).toBe(200);
+    expect(await shared.json()).toMatchObject({ enabled: true, role: "viewer" });
+    // The ceiling grants nothing: the human's file is readable through its link, not shareable.
+    expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "editor" }, agent.cookie)).status).toBe(403);
+  });
+});
+
+function claim(application: WorkspaceApplication, agentId: string, ownerId: string): void {
+  application.database.connection
+    .prepare("UPDATE agents SET owner_user_id = ?, claimed_at = 1, expires_at = NULL WHERE user_id = ?")
+    .run(ownerId, agentId);
+}
+
+async function expectRefused(request: Promise<Response>, code: string): Promise<void> {
+  const response = await request;
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ error: { code } });
+}
+
+async function personalSpaceId(origin: string, cookie: string): Promise<string> {
+  const spaces = (await (await fetch(`${origin}/api/spaces`, { headers: { cookie } })).json()) as { spaces: { id: string; type: string }[] };
+  return spaces.spaces.find((space) => space.type === "personal")!.id;
+}
+
+function exchangeUpload(origin: string, cookie: string, declaredSize: number): Promise<Response> {
+  const form = new FormData();
+  form.append("file", new File(["small"], "book.xlsx"));
+  return fetch(`${origin}/universer-api/stream/file/upload?size=${declaredSize}&source=1&flate=false`, { method: "POST", headers: { cookie }, body: form });
+}
+
+async function reserveBlob(origin: string, cookie: string, byteSize: number): Promise<Response> {
+  return post(
+    origin,
+    "/api/blob-upload-sessions",
+    { spaceId: await personalSpaceId(origin, cookie), parentNodeId: null, name: `${randomUUID()}.bin`, originalFilename: "data.bin", byteSize },
+    { cookie, "idempotency-key": randomUUID() },
+  );
+}
+
+/** Pull requests without a collaboration runtime: enough to create them, add new Units and discard. */
+function memoryWorktreeBackend(): WorktreeBackend {
+  type Worktree = Awaited<ReturnType<WorktreeBackend["getWorktree"]>>;
+  const worktrees = new Map<string, Worktree>();
+  const backend: Pick<WorktreeBackend, "createWorktree" | "getWorktree" | "createUnit" | "discard"> = {
+    async createWorktree(worktreeID) {
+      const worktree: Worktree = { worktreeID, status: "draft", units: [] };
+      worktrees.set(worktreeID, worktree);
+      return worktree;
+    },
+    async getWorktree(worktreeID) {
+      return worktrees.get(worktreeID)!;
+    },
+    async createUnit(input) {
+      const current = worktrees.get(input.worktreeId)!;
+      const worktree = { ...current, units: [...current.units, { unitID: input.unitId, type: UniverType.UNIVER_SHEET, source: "worktree", draftHeadRevision: 1 }] } as Worktree;
+      worktrees.set(input.worktreeId, worktree);
+      return worktree;
+    },
+    async discard(worktreeID) {
+      const worktree = { ...worktrees.get(worktreeID)!, status: "discarded" } as Worktree;
+      worktrees.set(worktreeID, worktree);
+      return worktree;
+    },
+  };
+  return backend as WorktreeBackend;
+}
 
 describe("agent expiry", () => {
   it("moves an unclaimed agent's expiry 30 days out when it authenticates, at most once a day", async () => {
@@ -257,7 +452,13 @@ async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: s
     },
     ...config,
   }, {
-    unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
+    unitStore: {
+      async createUnit(input) {
+        await delay(unitStoreDelayMs);
+        return { unitId: input.unitId, headRevision: 1 };
+      },
+    },
+    worktreeBackend: memoryWorktreeBackend(),
   });
   applications.push(application);
   return { origin: await listen(createServer(application.app)), application };
@@ -287,13 +488,12 @@ async function createFile(origin: string, cookie: string, name: string): Promise
   return ((await response.json()) as { node: { id: string } }).node.id;
 }
 
-async function createFileRequest(origin: string, cookie: string, name: string): Promise<Response> {
-  const spaces = (await (await fetch(`${origin}/api/spaces`, { headers: { cookie } })).json()) as { spaces: { id: string; type: string }[] };
+async function createFileRequest(origin: string, cookie: string, name: string, key: string = randomUUID()): Promise<Response> {
   return post(
     origin,
     "/api/resources",
-    { kind: "univer", spaceId: spaces.spaces.find((space) => space.type === "personal")!.id, parentNodeId: null, name, unitType: "sheet" },
-    { cookie, "idempotency-key": randomUUID() },
+    { kind: "univer", spaceId: await personalSpaceId(origin, cookie), parentNodeId: null, name, unitType: "sheet" },
+    { cookie, "idempotency-key": key },
   );
 }
 

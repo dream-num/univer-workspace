@@ -3,12 +3,13 @@ import { UniverType, type IChangeset } from "@univerjs/protocol";
 import { ApplicationError } from "../../middleware/errors.js";
 import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
-import type {
-  AccessResolver,
-  ResourceAccess,
-  ResourceContentAccess,
-  UniverResourceAccess,
-  UnitType,
+import {
+  assertCeiling,
+  type AccessResolver,
+  type ResourceAccess,
+  type ResourceContentAccess,
+  type UniverResourceAccess,
+  type UnitType,
 } from "../access/index.js";
 import {
   WorktreesRepository,
@@ -493,6 +494,11 @@ export function createWorktreesModule(options: {
         input.targetParentNodeId,
         options.access
       );
+      // A new file counts from the moment it is created in the pull request, not from its merge.
+      assertCeiling(options.access.principalCategory(userId), "createFiles", {
+        held: () => options.access.countPersonalFiles(userId, operationId),
+        adding: 1,
+      });
       const payload = {
         ...input,
         worktreeId,

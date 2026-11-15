@@ -1,4 +1,4 @@
-import { ANONYMOUS_USER_ID, principalCategory } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, principalCategory, type PrincipalCategory } from "../identity/index.js";
 import {
   AccessRepository,
   type NodeAuthorizationRow,
@@ -29,6 +29,13 @@ export interface AccessResolver {
   resolveNode(userId: string, nodeId: string): NodeAccess | null;
   resolveResource(userId: string, resourceId: string): ResourceAccess | null;
   resolveUnit(userId: string, unitId: string): ResourceAccess | null;
+  /** Who the User is, for the ceilings: a service holds a user id, not a session. */
+  principalCategory(userId: string): PrincipalCategory;
+  /**
+   * Files the User's Personal Space holds or is about to hold, for the quota ceiling. Pass the
+   * operation being served so that replaying it does not count its own file a second time.
+   */
+  countPersonalFiles(userId: string, operationId?: string): number;
 }
 
 export function createAccessResolver(repository: AccessRepository): AccessResolver {
@@ -166,7 +173,23 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     resolveUnit(userId, unitId) {
       return resourceAccess(userId, repository.findResourceByUnitId(unitId));
     },
+    principalCategory(userId) {
+      return requesterCategory(repository.findRequester(userId));
+    },
+    countPersonalFiles(userId, operationId) {
+      return repository.countPersonalFiles(userId, operationId ?? null);
+    },
   };
+}
+
+function requesterCategory(
+  row: Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">,
+): PrincipalCategory {
+  return principalCategory(
+    row.requester_kind === "agent"
+      ? { kind: "agent", claimed: Boolean(row.requester_claimed) }
+      : row.requester_kind && { kind: "human" },
+  );
 }
 
 export function spaceAccessFromRow(userId: string, row: SpaceAccessRow): SpaceAccess | null {
@@ -289,11 +312,7 @@ function resolvedRoles(userId: string, row: NodeAuthorizationRow) {
     userId === ANONYMOUS_USER_ID ? null : assignedRole,
     row.public_read ? "viewer" : null,
   );
-  const requester = principalCategory(
-    row.requester_kind === "agent"
-      ? { kind: "agent", claimed: Boolean(row.requester_claimed) }
-      : row.requester_kind && { kind: "human" },
-  );
+  const requester = requesterCategory(row);
   // The anonymous reader and an unclaimed agent cost nothing to create, so a link never lets them edit.
   const linkRole =
     row.link_sharing_role && (requester === "anonymous" || requester === "agent_unclaimed")

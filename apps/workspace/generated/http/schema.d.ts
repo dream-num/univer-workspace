@@ -3695,7 +3695,14 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description The current User cannot perform this action. */
+        /**
+         * @description The current User cannot perform this action. The code is `FORBIDDEN` when its role is
+         *     insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+         *     agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
+         *     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
+         *     Personal Space, pending pull-request files included, or store one file above 10 MB) and
+         *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
+         */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -5726,6 +5733,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -5805,6 +5813,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -6259,7 +6268,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6453,7 +6462,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6682,6 +6691,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /** @description An ancestor remains in Trash. */
             409: {

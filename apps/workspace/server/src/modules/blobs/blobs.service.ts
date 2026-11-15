@@ -2,7 +2,8 @@ import type { Readable } from "node:stream";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { parseByteRange } from "../../integrations/blob/blob-http.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver, BlobResourceAccess } from "../access/index.js";
+import { assertCeiling, type AccessResolver, type BlobResourceAccess } from "../access/index.js";
+import { principalCategory } from "../identity/index.js";
 import type { Principal } from "../identity/index.js";
 import { nodeSummary } from "../nodes/nodes.service.js";
 import type { ResourceCreateResponse } from "../resources/index.js";
@@ -137,6 +138,7 @@ export function createBlobsModule(options: {
           413,
           "Blob exceeds the configured byte limit.",
         );
+      assertCeiling(principalCategory(actor.user), "storeFile", { byteSize });
       const requireWritable = () => {
         const access = requireBlobAccess(options.access, userId, resourceId);
         if (!access.capabilities.editContent) throw forbidden();
@@ -197,6 +199,11 @@ export function createBlobsModule(options: {
       const intent = validIntent(inputValue, maxBlobBytes);
       validateTarget(userId, intent, options.access);
       assertNotDelegatedPageWrite(actor, [intent.name, intent.originalFilename]);
+      assertCeiling(principalCategory(actor.user), "storeFile", { byteSize: intent.byteSize });
+      assertCeiling(principalCategory(actor.user), "createFiles", {
+        held: () => options.access.countPersonalFiles(userId, operationId),
+        adding: 1,
+      });
       let reserved;
       try {
         reserved = options.repository.reserve({

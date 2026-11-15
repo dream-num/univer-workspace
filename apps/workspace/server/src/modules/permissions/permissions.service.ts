@@ -1,5 +1,5 @@
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver } from "../access/index.js";
+import { assertCeiling, type AccessResolver } from "../access/index.js";
 import {
   PermissionsRepository,
   type GrantRow,
@@ -114,6 +114,9 @@ export function createPermissionsModule(options: {
         throw conflict("The space owner cannot be a member.");
       }
       requireUser(options.repository, userId);
+      assertCeiling(options.access.principalCategory(actorUserId), "addTeamMember", {
+        member: options.access.principalCategory(userId),
+      });
       const role = validTeamRole(input);
       const existing = options.repository
         .listMembers(spaceId)
