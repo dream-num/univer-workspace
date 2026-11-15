@@ -1,6 +1,7 @@
 import { parseCimdExemptNetworks } from "./modules/identity/client-metadata-document.js";
 import { resolve } from "node:path";
 import type { S3BlobStoreOptions } from "./integrations/blob/s3-blob-store.js";
+import type { ProductDatabaseConfig } from "./db/index.js";
 import type { EmailConfig } from "./integrations/email/index.js";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
 import { parseMcpResourceUrls, type McpOAuthConfig } from "./modules/identity/mcp-oauth.js";
@@ -14,7 +15,7 @@ export interface WorkspaceConfig {
   readonly port: number;
   readonly publicOrigin?: string | null;
   readonly metricsToken?: string;
-  readonly databaseFilename: string;
+  readonly productDatabase: ProductDatabaseConfig;
   readonly collaborationDatabaseFilename: string;
   readonly blobDirectory?: string;
   readonly s3BlobStore?: S3BlobStoreOptions;
@@ -91,9 +92,10 @@ export function loadConfig(
     host: environment.HOST ?? "127.0.0.1",
     port: integer(environment.PORT, 3020, "PORT"),
     publicOrigin,
-    databaseFilename: resolve(
-      environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite"
-    ),
+    productDatabase: {
+      provider: "sqlite",
+      filename: resolve(environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite"),
+    },
     collaborationDatabaseFilename: resolve(
       environment.COLLABORATION_DATABASE_FILE ??
         ".data/univer-collaboration.sqlite"

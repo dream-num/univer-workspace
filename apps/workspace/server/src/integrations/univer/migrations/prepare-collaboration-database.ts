@@ -1,3 +1,4 @@
+import type { UnitCreationFactsReader } from "../../../db/index.js";
 import { startupStage, startupStageAsync } from "../../../logging/startup.js";
 import { randomUUID } from "node:crypto";
 import { chmodSync, copyFileSync, existsSync, renameSync, rmSync, statSync } from "node:fs";
@@ -25,15 +26,15 @@ type ComponentVersions = ReadonlyMap<string, number>;
 /**
  * Offline startup boundary for the published SDK schema migrations (Core and
  * Worktree since SDK 1.0.0, Core v3 since SDK 1.4.0). Stop every writer before
- * calling this, before constructing any Service/Adapter, and after the product
- * database is on V7. The SDK owns schema migrations; we migrate a consistent
+ * calling this. Prepare the product database first and construct collaboration Services/Adapters
+ * after migration. The SDK owns schema migrations; we migrate a consistent
  * copy so a failure in any component leaves the original usable by the
  * previous release. Retire legacy branches after all deployments have
  * upgraded; never invoke this from a request or recovery job.
  */
 export async function prepareCollaborationDatabase(
   filename: string,
-  productDatabaseFilename: string,
+  productFacts: UnitCreationFactsReader,
 ): Promise<
   | { readonly status: "fresh" | "current" }
   | { readonly status: "migrated"; readonly backupFilename: string }
@@ -61,7 +62,7 @@ export async function prepareCollaborationDatabase(
         filename,
         source,
         versions,
-        productDatabaseFilename,
+        productFacts,
         journalMode,
       );
       return { status: "migrated", backupFilename };
@@ -140,11 +141,11 @@ async function migrateCopy(
   filename: string,
   source: DatabaseSync,
   versions: ComponentVersions,
-  productDatabaseFilename: string,
+  productFacts: UnitCreationFactsReader,
   journalMode: string,
 ): Promise<string> {
-  const creation = startupStage("collaboration.creation-facts.read", () =>
-    readUnitCreationFacts(source, productDatabaseFilename, Date.now()),
+  const creation = await startupStageAsync("collaboration.creation-facts.read", () =>
+    readUnitCreationFacts(source, productFacts, Date.now()),
   );
   const backupFilename = `${filename}.pre-sdk-migration-${Date.now()}-${randomUUID()}.bak`;
   startupStage("collaboration.backup", () => source.prepare("VACUUM INTO ?").run(backupFilename));

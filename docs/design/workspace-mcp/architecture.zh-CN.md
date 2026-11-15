@@ -153,7 +153,7 @@ MCP 可以水平扩展，但每次编辑最终都落到单副本的 Workspace Se
 - token 端点返回的 `access_token` 是 7 天有效的登录 session，由 `issueSession(user, "agent")` 签发，调用方必须以 `workspace_session` cookie 发送（`oauth-authorization-router.ts:152-166`）。`issueSession` 不接受自定义有效期。
 - 产品 API 和协同端点只认 cookie，不认 `Authorization: Bearer`。服务端没有 Origin 或 CSRF 检查，也没有通用限流。
 - 没有授权服务器元数据、受保护资源元数据、动态注册、refresh token。
-- `login_sessions` 表只有 `id`、`secret_hash`、`user_id`、`created_at`、`expires_at`、`write_source`（`apps/workspace/server/src/db/schema.sql:36-44`），没有 scope。
+- `login_sessions` 表只有 `id`、`secret_hash`、`user_id`、`created_at`、`expires_at`、`write_source`（`apps/workspace/server/src/db/sqlite/schema.sql:36-44`），没有 scope。
 
 ### 4.2 目标模型
 

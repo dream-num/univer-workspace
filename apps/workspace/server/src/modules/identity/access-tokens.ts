@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { WorkspaceDatabase } from "../../db/database.js";
+import type { AccessTokenRepository, GrantSecrets, TokenCredential } from "./access-token.repository.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import { hashSessionSecret, secretMatches } from "./identity.service.js";
+import { hashSessionSecret } from "./session-token.js";
 
 export const MCP_SCOPES = ["read", "write", "publish", "worktree:merge"] as const;
 export type McpScope = (typeof MCP_SCOPES)[number];
@@ -61,34 +61,29 @@ export interface OAuthClientRecord {
   readonly lastUsedAt: number | null;
 }
 
-type Row = Record<string, unknown>;
-
-/** Persisted MCP OAuth grants, personal access tokens and dynamically registered clients. No HTTP. */
+/** Token formats, scope validation and lifetimes shared by all persistence backends. */
 export function createAccessTokenService(options: {
-  readonly database: WorkspaceDatabase;
+  readonly repository: AccessTokenRepository;
   readonly onSessionsDeleted?: (sessionIds: readonly string[]) => void;
   readonly now?: () => number;
 }) {
   const now = options.now ?? Date.now;
-  const db = options.database.connection;
+  const { repository } = options;
 
-  function deleteSessions(column: "issued_for_pat_id" | "issued_for_grant_id", id: string): void {
-    const sessionIds = db.prepare(`SELECT id FROM login_sessions WHERE ${column} = ?`).all(id)
-      .map((row) => String(row.id));
-    db.prepare(`DELETE FROM login_sessions WHERE ${column} = ?`).run(id);
+  function notifyRevocation(sessionIds: readonly string[] | null): boolean {
+    if (sessionIds === null) return false;
     options.onSessionsDeleted?.(sessionIds);
+    return true;
   }
 
-  function revokeGrantNow(id: string, userId?: string): boolean {
-    const revoked = db.prepare(
-      "UPDATE oauth_grants SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL AND (? IS NULL OR user_id = ?)"
-    ).run(now(), id, userId ?? null, userId ?? null);
-    if (revoked.changes > 0) deleteSessions("issued_for_grant_id", id);
-    return revoked.changes > 0;
-  }
-
-  function toIssued(row: Row, accessToken: string, refreshToken: string): IssuedGrant {
-    return { accessToken, refreshToken, expiresIn: ACCESS_TOKEN_TTL_MS / 1000, grant: toGrant(row) };
+  function newGrantTokens(id: string) {
+    const access = mintSecret(ACCESS_PREFIX, id);
+    const refresh = mintSecret(REFRESH_PREFIX, id);
+    const secrets: GrantSecrets = {
+      accessHash: access.hash, refreshHash: refresh.hash,
+    };
+    const issued = { accessToken: access.token, refreshToken: refresh.token, expiresIn: ACCESS_TOKEN_TTL_MS / 1000 };
+    return { secrets, issued };
   }
 
   return {
@@ -108,26 +103,20 @@ export function createAccessTokenService(options: {
       if (input.expiresAt != null && (!Number.isInteger(input.expiresAt) || input.expiresAt <= createdAt)) {
         throw new ApplicationError("INVALID_INPUT", 400, "expiresAt must be an integer timestamp in the future.", "expiresAt");
       }
-      db.prepare(
-        `INSERT INTO personal_access_tokens (id, user_id, name, token_hash, scopes, created_at, expires_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run(minted.id, input.userId, name, minted.hash, scopes.join(" "), createdAt, input.expiresAt ?? null);
-      return { token: minted.token, record: toPersonalToken(personalRow(minted.id)!) };
+      const record: PersonalTokenRecord = {
+        id: minted.id, userId: input.userId, name, scopes, createdAt,
+        expiresAt: input.expiresAt ?? null, lastUsedAt: null, revokedAt: null,
+      };
+      repository.insertPersonal(record, minted.hash);
+      return { token: minted.token, record };
     },
 
     listPersonalTokens(userId: string): PersonalTokenRecord[] {
-      return db.prepare("SELECT * FROM personal_access_tokens WHERE user_id = ? ORDER BY created_at DESC, id").all(userId)
-        .map(toPersonalToken);
+      return repository.listPersonal(userId);
     },
 
     revokePersonalToken(userId: string, id: string): boolean {
-      return options.database.transaction(() => {
-        const revoked = db.prepare(
-          "UPDATE personal_access_tokens SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL"
-        ).run(now(), id, userId);
-        if (revoked.changes > 0) deleteSessions("issued_for_pat_id", id);
-        return revoked.changes > 0;
-      });
+      return notifyRevocation(repository.revokePersonal(userId, id, now()));
     },
 
     issueGrant(input: {
@@ -141,22 +130,14 @@ export function createAccessTokenService(options: {
         throw new ApplicationError("INVALID_INPUT", 400, "resource is required.", "resource");
       }
       const id = randomUUID();
-      const access = mintSecret(ACCESS_PREFIX, id);
-      const refresh = mintSecret(REFRESH_PREFIX, id);
       const createdAt = now();
-      return options.database.transaction(() => {
-        db.prepare(
-          `INSERT INTO oauth_grants
-            (id, user_id, client_id, scopes, resource, access_token_hash, access_expires_at,
-             refresh_token_hash, refresh_expires_at, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        ).run(
-          id, input.userId, input.clientId, scopes.join(" "), input.resource, access.hash,
-          createdAt + ACCESS_TOKEN_TTL_MS, refresh.hash, createdAt + REFRESH_TOKEN_TTL_MS, createdAt
-        );
-        db.prepare("UPDATE oauth_clients SET last_used_at = ? WHERE client_id = ?").run(createdAt, input.clientId);
-        return toIssued(grantRow(id)!, access.token, refresh.token);
-      });
+      const { secrets, issued } = newGrantTokens(id);
+      const grant: OAuthGrantRecord = {
+        ...input, id, scopes, accessExpiresAt: createdAt + ACCESS_TOKEN_TTL_MS, refreshExpiresAt: createdAt + REFRESH_TOKEN_TTL_MS,
+        createdAt, lastUsedAt: null, revokedAt: null,
+      };
+      repository.insertGrant(grant, secrets);
+      return { ...issued, grant };
     },
 
     refreshGrant(input: {
@@ -166,89 +147,31 @@ export function createAccessTokenService(options: {
     }): RefreshResult {
       const parsed = parseToken(input.refreshToken, REFRESH_PREFIX);
       if (!parsed) return { ok: false, reason: "invalid" };
-      return options.database.transaction((): RefreshResult => {
-        const row = grantRow(parsed.id);
-        if (!row) return { ok: false, reason: "invalid" };
-        const at = now();
-        const current = secretMatches(parsed.secret, String(row.refresh_token_hash));
-        const retired = current
-          ? undefined
-          : (db.prepare(
-              "SELECT retired_at FROM oauth_refresh_history WHERE refresh_token_hash = ? AND grant_id = ?"
-            ).get(hashSessionSecret(parsed.secret), parsed.id) as { retired_at: number } | undefined);
-        if (!current && !retired) return { ok: false, reason: "invalid" };
-        if (row.revoked_at !== null) return { ok: false, reason: "revoked" };
-        if (Number(row.refresh_expires_at) <= at) return { ok: false, reason: "expired" };
-        if (retired) {
-          if (at - retired.retired_at < REFRESH_REUSE_GRACE_MS) return { ok: false, reason: "retired" };
-          revokeGrantNow(parsed.id);
-          return { ok: false, reason: "reused" };
-        }
-        if (row.client_id !== input.clientId) return { ok: false, reason: "client_mismatch" };
-        if (row.resource !== input.resource) {
-          return { ok: false, reason: "resource_mismatch" };
-        }
-        const access = mintSecret(ACCESS_PREFIX, parsed.id);
-        const refresh = mintSecret(REFRESH_PREFIX, parsed.id);
-        db.prepare("INSERT INTO oauth_refresh_history (refresh_token_hash, grant_id, retired_at) VALUES (?, ?, ?)")
-          .run(String(row.refresh_token_hash), parsed.id, at);
-        db.prepare("DELETE FROM oauth_refresh_history WHERE grant_id = ? AND retired_at < ?")
-          .run(parsed.id, at - REFRESH_TOKEN_TTL_MS);
-        db.prepare(
-          `UPDATE oauth_grants
-           SET access_token_hash = ?, access_expires_at = ?, refresh_token_hash = ?, refresh_expires_at = ?, last_used_at = ?
-           WHERE id = ?`
-        ).run(access.hash, at + ACCESS_TOKEN_TTL_MS, refresh.hash, at + REFRESH_TOKEN_TTL_MS, at, parsed.id);
-        return { ok: true, ...toIssued(grantRow(parsed.id)!, access.token, refresh.token) };
-      });
+      const { secrets, issued } = newGrantTokens(parsed.id);
+      const result = repository.rotateGrant({ ...parsed, clientId: input.clientId, resource: input.resource, now, next: secrets });
+      if (result.ok) return { ok: true, ...issued, grant: result.grant };
+      if (result.deletedSessions) options.onSessionsDeleted?.(result.deletedSessions);
+      return { ok: false, reason: result.reason };
     },
 
     revokeGrant(userId: string, id: string): boolean {
-      return options.database.transaction(() => revokeGrantNow(id, userId));
+      return notifyRevocation(repository.revokeGrant(userId, id, now()));
     },
 
-    /** RFC 7009: revokes the grant behind a current access or refresh token, only when it belongs to `clientId`. */
     revokeClientGrant(token: string, clientId: string): void {
       const refresh = token.startsWith(REFRESH_PREFIX);
       const parsed = parseToken(token, refresh ? REFRESH_PREFIX : ACCESS_PREFIX);
-      if (!parsed) return;
-      options.database.transaction(() => {
-        const row = grantRow(parsed.id);
-        if (!row || row.client_id !== clientId) return;
-        if (secretMatches(parsed.secret, String(refresh ? row.refresh_token_hash : row.access_token_hash))) {
-          revokeGrantNow(parsed.id);
-        }
-      });
+      if (parsed) notifyRevocation(repository.revokeClientGrant(parsed.id, parsed.secret, refresh, clientId, now()));
     },
 
     verifySubjectToken(token: string, check: { readonly resource: string }): SubjectToken | null {
-      const at = now();
-      const pat = parseToken(token, PAT_PREFIX);
-      if (pat) {
-        const row = personalRow(pat.id);
-        if (
-          !row || !secretMatches(pat.secret, String(row.token_hash)) || row.revoked_at !== null ||
-          (row.expires_at !== null && Number(row.expires_at) <= at)
-        ) return null;
-        db.prepare("UPDATE personal_access_tokens SET last_used_at = ? WHERE id = ?").run(at, pat.id);
-        return {
-          kind: "pat", id: pat.id, userId: String(row.user_id), scopes: toScopes(row.scopes),
-          expiresAt: row.expires_at === null ? null : Number(row.expires_at),
-        };
-      }
-      const access = parseToken(token, ACCESS_PREFIX);
-      if (!access) return null;
-      const row = grantRow(access.id);
-      if (
-        !row || !secretMatches(access.secret, String(row.access_token_hash)) || row.revoked_at !== null ||
-        Number(row.access_expires_at) <= at ||
-        row.resource !== check.resource
-      ) return null;
-      db.prepare("UPDATE oauth_grants SET last_used_at = ? WHERE id = ?").run(at, access.id);
-      return {
-        kind: "oauth", id: access.id, userId: String(row.user_id), scopes: toScopes(row.scopes),
-        expiresAt: Number(row.access_expires_at), clientId: String(row.client_id),
-      };
+      const parsed = parseSubjectToken(token);
+      return parsed && repository.verifySubject(parsed, check.resource, now());
+    },
+
+    async exchangeSubjectToken(token: string, resource: string, maxTtlMs: number) {
+      const parsed = parseSubjectToken(token);
+      return parsed && repository.exchangeSubject(parsed, resource, maxTtlMs, now);
     },
 
     registerClient(input: {
@@ -259,39 +182,20 @@ export function createAccessTokenService(options: {
       if (redirectUris.length === 0 || !redirectUris.every(isAbsoluteUrl)) {
         throw new ApplicationError("INVALID_INPUT", 400, "redirect_uris must be a non-empty list of absolute URLs.", "redirect_uris");
       }
-      const clientId = randomUUID();
-      db.prepare("INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at) VALUES (?, ?, ?, ?)")
-        .run(clientId, input.clientName?.trim() || null, JSON.stringify(redirectUris), now());
-      return getClient(clientId)!;
+      const client = { clientId: randomUUID(), clientName: input.clientName?.trim() || null, redirectUris, createdAt: now(), lastUsedAt: null };
+      repository.insertClient(client);
+      return client;
     },
 
-    getClient,
-
-    countClients(): number {
-      return Number((db.prepare("SELECT count(*) AS n FROM oauth_clients").get() as Row).n);
-    },
+    getClient(id: string) { return repository.getClient(id); },
+    countClients() { return repository.countClients(); },
   };
+}
 
-  function getClient(clientId: string): OAuthClientRecord | null {
-    const row = db.prepare("SELECT * FROM oauth_clients WHERE client_id = ?").get(clientId) as Row | undefined;
-    return row
-      ? {
-          clientId: String(row.client_id),
-          clientName: (row.client_name as string | null) ?? null,
-          redirectUris: JSON.parse(String(row.redirect_uris)) as string[],
-          createdAt: Number(row.created_at),
-          lastUsedAt: (row.last_used_at as number | null) ?? null,
-        }
-      : null;
-  }
-
-  function personalRow(id: string): Row | undefined {
-    return db.prepare("SELECT * FROM personal_access_tokens WHERE id = ?").get(id) as Row | undefined;
-  }
-
-  function grantRow(id: string): Row | undefined {
-    return db.prepare("SELECT * FROM oauth_grants WHERE id = ?").get(id) as Row | undefined;
-  }
+function parseSubjectToken(token: string): TokenCredential | null {
+  const kind = token.startsWith(PAT_PREFIX) ? "pat" : "oauth";
+  const parsed = parseToken(token, kind === "pat" ? PAT_PREFIX : ACCESS_PREFIX);
+  return parsed && { ...parsed, kind };
 }
 
 export type AccessTokenService = ReturnType<typeof createAccessTokenService>;
@@ -323,10 +227,6 @@ function normalizeScopes(scopes: readonly string[]): McpScope[] {
   return known;
 }
 
-function toScopes(value: unknown): McpScope[] {
-  return MCP_SCOPES.filter((scope) => String(value).split(" ").includes(scope));
-}
-
 function isAbsoluteUrl(value: string): boolean {
   try {
     new URL(value);
@@ -334,32 +234,4 @@ function isAbsoluteUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-function toPersonalToken(row: Row): PersonalTokenRecord {
-  return {
-    id: String(row.id),
-    userId: String(row.user_id),
-    name: String(row.name),
-    scopes: toScopes(row.scopes),
-    createdAt: Number(row.created_at),
-    expiresAt: (row.expires_at as number | null) ?? null,
-    lastUsedAt: (row.last_used_at as number | null) ?? null,
-    revokedAt: (row.revoked_at as number | null) ?? null,
-  };
-}
-
-function toGrant(row: Row): OAuthGrantRecord {
-  return {
-    id: String(row.id),
-    userId: String(row.user_id),
-    clientId: String(row.client_id),
-    scopes: toScopes(row.scopes),
-    resource: String(row.resource),
-    accessExpiresAt: Number(row.access_expires_at),
-    refreshExpiresAt: Number(row.refresh_expires_at),
-    createdAt: Number(row.created_at),
-    lastUsedAt: (row.last_used_at as number | null) ?? null,
-    revokedAt: (row.revoked_at as number | null) ?? null,
-  };
 }

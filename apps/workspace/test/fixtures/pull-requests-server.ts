@@ -6,14 +6,14 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-pull-requests-"));
 const port = Number(process.env.PORT ?? 3020);
-const application = createWorkspaceApplication({
+const application = createSqliteTestApplication({
   host: "127.0.0.1",
   port,
-  databaseFilename: join(directory, "product.sqlite"),
+  productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
   collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "blobs"),
   secureCookies: false,

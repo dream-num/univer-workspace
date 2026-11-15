@@ -6,9 +6,9 @@ import type { WorktreeData } from "@univerjs-pro/collaboration-worktree-service"
 import { UniverType } from "@univerjs/protocol";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import { blankUnitData } from "../../server/src/integrations/univer/unit-store.js";
 import type {
   WorktreeBackend,
@@ -16,7 +16,7 @@ import type {
 
 import { expectSessionSource } from "../fixtures/session-source.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -1181,12 +1181,12 @@ class WrongIdentityCreateUnitBackend extends MemoryWorktreeBackend {
 
 function createTestApplication(
   worktreeBackend: WorktreeBackend = new MemoryWorktreeBackend()
-): WorkspaceApplication {
-  const application = createWorkspaceApplication(
+): SqliteTestApplication {
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
-      databaseFilename: ":memory:",
+      productDatabase: { provider: "sqlite", filename: ":memory:" },
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -1204,11 +1204,11 @@ function createTestApplication(
   return application;
 }
 
-function createRealTestApplication(directory?: string): WorkspaceApplication {
-  const application = createWorkspaceApplication({
+function createRealTestApplication(directory?: string): SqliteTestApplication {
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: directory ? join(directory, "product.sqlite") : ":memory:",
+    productDatabase: { provider: "sqlite", filename: directory ? join(directory, "product.sqlite") : ":memory:" },
     collaborationDatabaseFilename: directory ? join(directory, "collaboration.sqlite") : ":memory:",
     ...(directory ? { blobDirectory: join(directory, "blobs") } : {}),
     secureCookies: false,
@@ -1219,7 +1219,7 @@ function createRealTestApplication(directory?: string): WorkspaceApplication {
 }
 
 async function register(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   username: string
 ) {
   const issued = await application.identity.registerWithPassword({
@@ -1231,7 +1231,7 @@ async function register(
 }
 
 async function createResource(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   userId: string,
   spaceId: string
 ) {

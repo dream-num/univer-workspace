@@ -32,12 +32,12 @@ import {
 import { ErrorCode, UniverType } from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import { blankUnitData } from "../../server/src/integrations/univer/unit-store.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
 
@@ -680,15 +680,15 @@ describe("Universer Exchange protocol", () => {
 });
 
 async function startApplication(): Promise<{
-  readonly application: WorkspaceApplication;
+  readonly application: SqliteTestApplication;
   readonly origin: string;
 }> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-exchange-"));
   directories.push(directory);
-  const application = createWorkspaceApplication({
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     blobDirectory: join(directory, "objects"),
     secureCookies: false,
@@ -709,7 +709,7 @@ async function startApplication(): Promise<{
 }
 
 async function register(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   username: string
 ): Promise<{ readonly userId: string; readonly cookie: string }> {
   const issued = await application.identity.registerWithPassword({
@@ -843,7 +843,7 @@ function storedSlideData(unitId: string): ISlideData {
   }
 }
 
-function listAssets(application: WorkspaceApplication): readonly {
+function listAssets(application: SqliteTestApplication): readonly {
   readonly id: string;
   readonly unit_id: string;
   readonly worktree_id: string | null;
@@ -960,7 +960,7 @@ async function downloadArtifact(
   return Buffer.from(await content.arrayBuffer());
 }
 
-function count(application: WorkspaceApplication, table: string): number {
+function count(application: SqliteTestApplication, table: string): number {
   return (
     application.database.connection
       .prepare(`SELECT COUNT(*) AS count FROM ${table}`)

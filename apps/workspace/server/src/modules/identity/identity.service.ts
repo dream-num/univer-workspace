@@ -1,3 +1,5 @@
+import { authenticateStoredPrincipal, recordAgentActivity, AGENT_TTL_MS } from "./agent-activity.js";
+import { createSessionToken, secretMatches } from "./session-token.js";
 import {
   createHash,
   createHmac,
@@ -15,11 +17,9 @@ import {
 import { logger } from "../../logging/logger.js";
 import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
-import {
+import type {
   IdentityRepository,
-  type NewPasswordUser,
-  type StoredPrincipal,
-  type StoredSession,
+  StoredSession,
 } from "./identity.repository.js";
 import { emailLoginMessage } from "./email-login-mail.js";
 import { createSourceRateLimiter } from "./source-rate-limiter.js";
@@ -39,7 +39,6 @@ import type {
   PasswordChange,
   PasswordLogin,
   PasswordRegistration,
-  SessionIssuedFor,
   SessionView,
   User,
   UserProfilePatch,
@@ -66,8 +65,6 @@ const EMAIL_CODE_RESEND_INTERVAL_MS = 60 * 1000;
 const EMAIL_CODE_WINDOW_MS = 60 * 60 * 1000;
 const EMAIL_CODE_WINDOW_LIMIT = 5;
 const EMAIL_CODE_MAX_ATTEMPTS = 5;
-const AGENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-const AGENT_ACTIVITY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_AGENT_LABEL = "agent";
 
 interface PendingCliAuthorization {
@@ -183,8 +180,6 @@ export interface IdentityModule {
   }>;
   unlinkDiscord(cookieHeader: string | undefined): AuthenticatedSession;
   findUsers(userIds: readonly string[]): readonly User[];
-  /** The User a verified access token belongs to, or null when it is missing or a banned agent. */
-  authenticateUser(userId: string): PrincipalUser | null;
   /**
    * A shared page of this Node was served to a reader. When an unclaimed agent owns it, its expiry
    * moves 30 days out, as when the agent authenticates; either happens at most once a day.
@@ -313,22 +308,7 @@ export function createIdentityModule(options: {
       return null;
     }
     if (!secretMatches(token.secret, stored.secretHash)) return null;
-    return authenticated(stored);
-  }
-
-  /**
-   * Every verified credential ends here, so a banned agent cannot authenticate by any path. An
-   * expired agent still can: authenticating is how it recovers.
-   */
-  function authenticated<T extends StoredPrincipal>(stored: T | null): T | null {
-    if (!stored || stored.banned) return null;
-    if (stored.kind === "agent" && !stored.claimed) recordAgentActivity({ userId: stored.id });
-    return stored;
-  }
-
-  function recordAgentActivity(target: Parameters<IdentityRepository["touchUnclaimedAgent"]>[0]): void {
-    const at = now();
-    repository.touchUnclaimedAgent(target, at, at - AGENT_ACTIVITY_INTERVAL_MS, at + AGENT_TTL_MS);
+    return authenticateStoredPrincipal(repository, stored, now());
   }
 
   function getSession(cookieHeader: string | undefined): SessionView {
@@ -401,13 +381,8 @@ export function createIdentityModule(options: {
       return repository.findUsers(userIds);
     },
 
-    authenticateUser(userId) {
-      const stored = authenticated(repository.findPrincipal(userId));
-      return stored && principalUser(stored);
-    },
-
     recordAgentPageView(nodeId) {
-      recordAgentActivity({ nodeId });
+      recordAgentActivity(repository, { nodeId }, now());
     },
 
     async registerWithPassword(input) {
@@ -440,7 +415,7 @@ export function createIdentityModule(options: {
           createdAt,
         });
       } catch (error) {
-        if (isUniqueConstraint(error, "users.username")) {
+        if (repository.isIdentityConflict(error, "username")) {
           throw usernameTaken();
         }
         throw error;
@@ -593,8 +568,8 @@ export function createIdentityModule(options: {
             createdAt,
           });
         } catch (error) {
-          if (isUniqueConstraint(error, "users.username")) continue;
-          if (isUniqueConstraint(error, "users.email")) {
+          if (repository.isIdentityConflict(error, "username")) continue;
+          if (repository.isIdentityConflict(error, "email")) {
             const concurrent = repository.findUserByEmail(email);
             if (concurrent) return issueSession(concurrent, "browser");
           }
@@ -642,7 +617,7 @@ export function createIdentityModule(options: {
             expiresAt,
           });
         } catch (error) {
-          if (isUniqueConstraint(error, "users.username")) continue;
+          if (repository.isIdentityConflict(error, "username")) continue;
           throw error;
         }
         return { user, expiresAt };
@@ -720,7 +695,7 @@ export function createIdentityModule(options: {
           createdAt,
         });
       } catch (error) {
-        if (isUniqueConstraint(error, "external_identities")) {
+        if (repository.isIdentityConflict(error, "externalIdentity")) {
           const concurrent = repository.findExternalIdentity(
             "discord",
             discordUserId
@@ -918,7 +893,7 @@ export function createIdentityModule(options: {
       try {
         repository.updateUser(user, now());
       } catch (error) {
-        if (isUniqueConstraint(error, "users.username")) {
+        if (repository.isIdentityConflict(error, "username")) {
           throw usernameTaken();
         }
         throw error;
@@ -1084,7 +1059,7 @@ export function createIdentityModule(options: {
           updatedAt: now(),
         });
       } catch (error) {
-        if (isUniqueConstraint(error, "external_identities")) {
+        if (repository.isIdentityConflict(error, "externalIdentity")) {
           throw new ApplicationError(
             "CONFLICT",
             409,
@@ -1434,30 +1409,6 @@ function oauthCookieName(provider: ExternalIdentityProvider): string {
   return OAUTH_PROVIDERS[provider].cookieName;
 }
 
-function createSessionToken(
-  createdAt: number,
-  expiresAt: number,
-  writeSource: WriteSource,
-  issuedFor?: SessionIssuedFor
-): {
-  readonly cookieValue: string;
-  readonly stored: NewPasswordUser["session"];
-} {
-  const id = randomUUID();
-  const secret = randomBytes(32).toString("base64url");
-  return {
-    cookieValue: `${id}.${secret}`,
-    stored: {
-      id,
-      secretHash: hashSessionSecret(secret),
-      createdAt,
-      expiresAt,
-      writeSource,
-      ...(issuedFor ? { issuedFor } : {}),
-    },
-  };
-}
-
 function readSessionToken(
   cookieHeader: string | undefined
 ): { readonly id: string; readonly secret: string } | null {
@@ -1507,18 +1458,6 @@ async function verifyPassword(
     expected.length
   )) as Buffer;
   return actual.length === expected.length && timingSafeEqual(actual, expected);
-}
-
-export function hashSessionSecret(secret: string): string {
-  return createHash("sha256").update(secret).digest("base64url");
-}
-
-export function secretMatches(secret: string, expectedHash: string): boolean {
-  const actual = Buffer.from(hashSessionSecret(secret), "base64url");
-  const expected = Buffer.from(expectedHash, "base64url");
-  return (
-    actual.length === expected.length && timingSafeEqual(actual, expected)
-  );
 }
 
 function validUsername(value: unknown): string {
@@ -1660,13 +1599,5 @@ function usernameTaken() {
     409,
     "Username is already in use.",
     "username"
-  );
-}
-
-function isUniqueConstraint(error: unknown, column: string): boolean {
-  return (
-    error instanceof Error &&
-    error.message.includes("UNIQUE constraint failed") &&
-    error.message.includes(column)
   );
 }

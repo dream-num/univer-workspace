@@ -1,5 +1,3 @@
-import type { DatabaseSync } from "node:sqlite";
-import type { WorkspaceDatabase } from "../../db/database.js";
 import type {
   AuthenticationMethods,
   ExternalIdentityProvider,
@@ -61,54 +59,18 @@ export interface ExternalIdentityUser {
   readonly providerUsername: string;
 }
 
-export class IdentityRepository {
-  constructor(private readonly _database: WorkspaceDatabase) {}
+export type IdentityConflict = "username" | "email" | "externalIdentity";
 
-  createPasswordUser(input: NewPasswordUser): void {
-    this._database.transaction((database) => {
-      database
-        .prepare(
-          `INSERT INTO users
-            (id, username, display_name, avatar_url, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.user.id,
-          input.user.username,
-          input.user.displayName,
-          input.user.avatarUrl,
-          input.createdAt,
-          input.createdAt
-        );
-      database
-        .prepare(
-          `INSERT INTO password_credentials
-            (user_id, password_hash, created_at, updated_at)
-           VALUES (?, ?, ?, ?)`
-        )
-        .run(
-          input.user.id,
-          input.passwordHash,
-          input.createdAt,
-          input.createdAt
-        );
-      database
-        .prepare(
-          `INSERT INTO spaces
-            (id, type, name, owner_user_id, created_at, updated_at)
-           VALUES (?, 'personal', ?, ?, ?, ?)`
-        )
-        .run(
-          input.personalSpace.id,
-          input.personalSpace.name,
-          input.user.id,
-          input.createdAt,
-          input.createdAt
-        );
-      insertSession(database, input.user.id, input.session);
-    });
-  }
+export interface AgentBanResult {
+  readonly status: "banned" | "not-agent";
+  readonly username: string;
+  readonly id: string;
+}
 
+export interface IdentityRepository {
+  isIdentityConflict(error: unknown, field: IdentityConflict): boolean;
+  banAgent(target: string, at: number): Promise<AgentBanResult | null>;
+  createPasswordUser(input: NewPasswordUser): void;
   createExternalUser(input: {
     readonly provider: ExternalIdentityProvider;
     readonly user: User;
@@ -117,676 +79,83 @@ export class IdentityRepository {
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly session: NewPasswordUser["session"];
     readonly createdAt: number;
-  }): void {
-    this._database.transaction((database) => {
-      database
-        .prepare(
-          `INSERT INTO users
-            (id, username, display_name, avatar_url, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.user.id,
-          input.user.username,
-          input.user.displayName,
-          input.user.avatarUrl,
-          input.createdAt,
-          input.createdAt
-        );
-      database
-        .prepare(
-          `INSERT INTO external_identities
-            (
-              provider, provider_subject, user_id, provider_username,
-              created_at, updated_at
-            )
-           VALUES (?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.provider,
-          input.providerSubject,
-          input.user.id,
-          input.providerUsername,
-          input.createdAt,
-          input.createdAt
-        );
-      database
-        .prepare(
-          `INSERT INTO spaces
-            (id, type, name, owner_user_id, created_at, updated_at)
-           VALUES (?, 'personal', ?, ?, ?, ?)`
-        )
-        .run(
-          input.personalSpace.id,
-          input.personalSpace.name,
-          input.user.id,
-          input.createdAt,
-          input.createdAt
-        );
-      insertSession(database, input.user.id, input.session);
-    });
-  }
-
-  createEmailUser(input: NewEmailUser): void {
-    this._database.transaction((database) => {
-      database
-        .prepare(
-          `INSERT INTO users
-            (id, username, display_name, avatar_url, created_at, updated_at, email)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.user.id,
-          input.user.username,
-          input.user.displayName,
-          input.user.avatarUrl,
-          input.createdAt,
-          input.createdAt,
-          input.email
-        );
-      database
-        .prepare(
-          `INSERT INTO spaces
-            (id, type, name, owner_user_id, created_at, updated_at)
-           VALUES (?, 'personal', ?, ?, ?, ?)`
-        )
-        .run(
-          input.personalSpace.id,
-          input.personalSpace.name,
-          input.user.id,
-          input.createdAt,
-          input.createdAt
-        );
-      insertSession(database, input.user.id, input.session);
-    });
-  }
-
-  /** Unlike the sign-in paths, an agent is created without a Session; its caller issues the credential. */
+  }): void;
+  createEmailUser(input: NewEmailUser): void;
   createAgentUser(input: {
     readonly user: User;
     readonly personalSpace: NewPasswordUser["personalSpace"];
     readonly originLabel: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): void {
-    this._database.transaction((database) => {
-      database
-        .prepare(
-          `INSERT INTO users
-            (id, username, display_name, avatar_url, created_at, updated_at, kind)
-           VALUES (?, ?, ?, ?, ?, ?, 'agent')`
-        )
-        .run(
-          input.user.id,
-          input.user.username,
-          input.user.displayName,
-          input.user.avatarUrl,
-          input.createdAt,
-          input.createdAt
-        );
-      database
-        .prepare(
-          `INSERT INTO spaces
-            (id, type, name, owner_user_id, created_at, updated_at)
-           VALUES (?, 'personal', ?, ?, ?, ?)`
-        )
-        .run(
-          input.personalSpace.id,
-          input.personalSpace.name,
-          input.user.id,
-          input.createdAt,
-          input.createdAt
-        );
-      database
-        .prepare(
-          `INSERT INTO agents
-            (user_id, origin_label, created_at, last_active_at, expires_at)
-           VALUES (?, ?, ?, ?, ?)`
-        )
-        .run(
-          input.user.id,
-          input.originLabel,
-          input.createdAt,
-          input.createdAt,
-          input.expiresAt
-        );
-    });
-  }
-
+  }): void;
   findExternalIdentity(
     provider: ExternalIdentityProvider,
     providerSubject: string
-  ): ExternalIdentityUser | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT
-           users.id,
-           users.username,
-           users.display_name,
-           users.avatar_url,
-           external_identities.provider_username
-         FROM external_identities
-         JOIN users ON users.id = external_identities.user_id
-         WHERE external_identities.provider = ?
-           AND external_identities.provider_subject = ?`
-      )
-      .get(provider, providerSubject) as
-      | (UserRow & { readonly provider_username: string })
-      | undefined;
-    return row
-      ? {
-          user: toUser(row),
-          providerUsername: row.provider_username,
-        }
-      : null;
-  }
-
+  ): ExternalIdentityUser | null;
   linkExternalIdentity(input: {
     readonly provider: ExternalIdentityProvider;
     readonly userId: string;
     readonly providerSubject: string;
     readonly providerUsername: string;
     readonly updatedAt: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO external_identities
-          (
-            provider, provider_subject, user_id, provider_username,
-            created_at, updated_at
-          )
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (user_id, provider)
-         DO UPDATE SET
-           provider_subject = excluded.provider_subject,
-           provider_username = excluded.provider_username,
-           updated_at = excluded.updated_at`
-      )
-      .run(
-        input.provider,
-        input.providerSubject,
-        input.userId,
-        input.providerUsername,
-        input.updatedAt,
-        input.updatedAt
-      );
-  }
-
+  }): void;
   updateExternalUsername(
     provider: ExternalIdentityProvider,
     providerSubject: string,
     providerUsername: string,
     updatedAt: number
-  ): void {
-    this._database.connection
-      .prepare(
-        `UPDATE external_identities
-         SET provider_username = ?, updated_at = ?
-         WHERE provider = ? AND provider_subject = ?`
-      )
-      .run(providerUsername, updatedAt, provider, providerSubject);
-  }
-
+  ): void;
   removeExternalIdentity(
     userId: string,
     provider: ExternalIdentityProvider
-  ): boolean {
-    return (
-      this._database.connection
-        .prepare(
-          `DELETE FROM external_identities
-           WHERE provider = ? AND user_id = ?`
-        )
-        .run(provider, userId).changes > 0
-    );
-  }
-
-  usernameExists(username: string): boolean {
-    return Boolean(
-      this._database.connection
-        .prepare(
-          "SELECT 1 FROM users WHERE username = ? COLLATE NOCASE"
-        )
-        .get(username)
-    );
-  }
-
-  findUser(userId: string): User | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT id, username, display_name, avatar_url
-         FROM users WHERE id = ?`
-      )
-      .get(userId) as UserRow | undefined;
-    return row ? toUser(row) : null;
-  }
-
-  findPrincipal(userId: string): StoredPrincipal | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT users.id, users.username, users.display_name, users.avatar_url, ${principalColumns}
-         FROM users ${agentJoin}
-         WHERE users.id = ?`
-      )
-      .get(userId) as PrincipalRow | undefined;
-    return row ? toPrincipal(row) : null;
-  }
-
-  /**
-   * Pushes out the expiry of the unclaimed agent that is `userId`, or that owns the Space of
-   * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write. An
-   * agent that has already expired is always pushed out, so its next use brings it back.
-   */
+  ): boolean;
+  usernameExists(username: string): boolean;
+  findUser(userId: string): User | null;
+  findPrincipal(userId: string): StoredPrincipal | null;
   touchUnclaimedAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
-  ): void {
-    const stale = this._database.connection
-      .prepare(
-        `SELECT user_id FROM agents
-         WHERE owner_user_id IS NULL
-           AND (last_active_at <= ? OR expires_at <= ?)
-           AND user_id = ${
-             "userId" in target
-               ? "?"
-               : `(SELECT spaces.owner_user_id FROM nodes
-                   JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
-           }`
-      )
-      .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
-      | { readonly user_id: string }
-      | undefined;
-    if (!stale) return;
-    this._database.connection
-      .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
-      .run(at, expiresAt, stale.user_id);
-  }
-
-  findUsers(userIds: readonly string[]): readonly User[] {
-    const uniqueUserIds = [...new Set(userIds)];
-    if (uniqueUserIds.length === 0) return [];
-    const users = new Map<string, User>();
-    for (let offset = 0; offset < uniqueUserIds.length; offset += 500) {
-      const batch = uniqueUserIds.slice(offset, offset + 500);
-      const placeholders = batch.map(() => "?").join(", ");
-      const rows = this._database.connection
-        .prepare(
-          `SELECT id, username, display_name, avatar_url
-           FROM users WHERE id IN (${placeholders})`
-        )
-        .all(...batch) as unknown as readonly UserRow[];
-      for (const row of rows) {
-        const user = toUser(row);
-        users.set(user.id, user);
-      }
-    }
-    return uniqueUserIds.flatMap((userId) => {
-      const user = users.get(userId);
-      return user ? [user] : [];
-    });
-  }
-
-  findCredential(username: string): StoredCredential | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT
-           users.id,
-           users.username,
-           users.display_name,
-           users.avatar_url,
-           password_credentials.password_hash
-         FROM users
-         JOIN password_credentials
-           ON password_credentials.user_id = users.id
-         WHERE users.username = ? COLLATE NOCASE`
-      )
-      .get(username) as CredentialRow | undefined;
-    return row
-      ? {
-          ...toUser(row),
-          passwordHash: row.password_hash,
-        }
-      : null;
-  }
-
-  findCredentialByUserId(userId: string): StoredCredential | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT
-           users.id,
-           users.username,
-           users.display_name,
-           users.avatar_url,
-           password_credentials.password_hash
-         FROM users
-         JOIN password_credentials
-           ON password_credentials.user_id = users.id
-         WHERE users.id = ?`
-      )
-      .get(userId) as CredentialRow | undefined;
-    return row
-      ? {
-          ...toUser(row),
-          passwordHash: row.password_hash,
-        }
-      : null;
-  }
-
+  ): void;
+  findUsers(userIds: readonly string[]): readonly User[];
+  findCredential(username: string): StoredCredential | null;
+  findCredentialByUserId(userId: string): StoredCredential | null;
   updatePasswordHash(
     userId: string,
     passwordHash: string,
     updatedAt: number
-  ): void {
-    this._database.connection
-      .prepare(
-        `UPDATE password_credentials
-         SET password_hash = ?, updated_at = ?
-         WHERE user_id = ?`
-      )
-      .run(passwordHash, updatedAt, userId);
-  }
-
+  ): void;
   createSession(
     userId: string,
     session: NewPasswordUser["session"]
-  ): void {
-    insertSession(this._database.connection, userId, session);
-  }
-
-  findSession(sessionId: string): StoredSession | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT
-           login_sessions.id AS session_id,
-           login_sessions.secret_hash,
-           login_sessions.expires_at,
-           login_sessions.write_source,
-           login_sessions.issued_for_pat_id IS NOT NULL
-             OR login_sessions.issued_for_grant_id IS NOT NULL AS token_issued,
-           users.id,
-           users.username,
-           users.display_name,
-           users.avatar_url,
-           ${principalColumns}
-         FROM login_sessions
-         JOIN users ON users.id = login_sessions.user_id
-         ${agentJoin}
-         WHERE login_sessions.id = ?`
-      )
-      .get(sessionId) as SessionRow | undefined;
-    return row
-      ? {
-          ...toPrincipal(row),
-          sessionId: row.session_id,
-          secretHash: row.secret_hash,
-          expiresAt: row.expires_at,
-          writeSource: row.write_source,
-          tokenIssued: row.token_issued === 1,
-        }
-      : null;
-  }
-
-  authenticationMethods(userId: string): AuthenticationMethods {
-    const password = Boolean(
-      this._database.connection
-        .prepare("SELECT 1 FROM password_credentials WHERE user_id = ?")
-        .get(userId)
-    );
-    const emailRow = this._database.connection
-      .prepare("SELECT email FROM users WHERE id = ?")
-      .get(userId) as { readonly email: string | null } | undefined;
-    const rows = this._database.connection
-      .prepare(
-        `SELECT provider, provider_username
-         FROM external_identities
-         WHERE user_id = ?
-         ORDER BY provider`
-      )
-      .all(userId) as unknown as ExternalIdentityRow[];
-    return {
-      password,
-      email: emailRow?.email ?? null,
-      externalIdentities: rows.map((row) => ({
-        provider: row.provider,
-        providerUsername: row.provider_username,
-      })),
-    };
-  }
-
-  findUserByEmail(email: string): User | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT id, username, display_name, avatar_url
-         FROM users
-         WHERE email = ? COLLATE NOCASE`
-      )
-      .get(email) as UserRow | undefined;
-    return row ? toUser(row) : null;
-  }
-
+  ): void;
+  findSession(sessionId: string): StoredSession | null;
+  authenticationMethods(userId: string): AuthenticationMethods;
+  findUserByEmail(email: string): User | null;
   createEmailLoginCode(input: {
     readonly id: string;
     readonly email: string;
     readonly codeHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO email_login_codes
-          (id, email, code_hash, attempts, created_at, expires_at)
-         VALUES (?, ?, ?, 0, ?, ?)`
-      )
-      .run(
-        input.id,
-        input.email,
-        input.codeHash,
-        input.createdAt,
-        input.expiresAt
-      );
-  }
-
+  }): void;
   findEmailLoginCode(
     email: string,
     now: number
-  ): StoredEmailLoginCode | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT id, code_hash, attempts
-         FROM email_login_codes
-         WHERE email = ? COLLATE NOCASE
-           AND consumed_at IS NULL
-           AND expires_at > ?
-         ORDER BY created_at DESC
-         LIMIT 1`
-      )
-      .get(email, now) as EmailLoginCodeRow | undefined;
-    return row
-      ? { id: row.id, codeHash: row.code_hash, attempts: row.attempts }
-      : null;
-  }
-
-  incrementEmailLoginCodeAttempts(id: string): void {
-    this._database.connection
-      .prepare(
-        `UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?`
-      )
-      .run(id);
-  }
-
-  consumeEmailLoginCode(id: string, consumedAt: number): boolean {
-    const result = this._database.connection
-      .prepare(
-        `UPDATE email_login_codes
-         SET consumed_at = ?
-         WHERE id = ? AND consumed_at IS NULL`
-      )
-      .run(consumedAt, id);
-    return Number(result.changes) > 0;
-  }
-
+  ): StoredEmailLoginCode | null;
+  incrementEmailLoginCodeAttempts(id: string): void;
+  consumeEmailLoginCode(id: string, consumedAt: number): boolean;
   consumeOtherEmailLoginCodes(
     email: string,
     keepId: string,
     consumedAt: number
-  ): void {
-    this._database.connection
-      .prepare(
-        `UPDATE email_login_codes
-         SET consumed_at = ?
-         WHERE email = ? COLLATE NOCASE
-           AND id <> ?
-           AND consumed_at IS NULL`
-      )
-      .run(consumedAt, email, keepId);
-  }
-
-  deleteEmailLoginCode(id: string): void {
-    this._database.connection
-      .prepare("DELETE FROM email_login_codes WHERE id = ?")
-      .run(id);
-  }
-
-  latestEmailLoginCodeCreatedAt(email: string): number | null {
-    const row = this._database.connection
-      .prepare(
-        `SELECT MAX(created_at) AS created_at
-         FROM email_login_codes
-         WHERE email = ? COLLATE NOCASE`
-      )
-      .get(email) as { readonly created_at: number | null } | undefined;
-    return row?.created_at ?? null;
-  }
-
-  countEmailLoginCodesSince(email: string, since: number): number {
-    const row = this._database.connection
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM email_login_codes
-         WHERE email = ? COLLATE NOCASE AND created_at > ?`
-      )
-      .get(email, since) as { readonly count: number };
-    return row.count;
-  }
-
-  deleteEmailLoginCodesBefore(cutoff: number): void {
-    this._database.connection
-      .prepare("DELETE FROM email_login_codes WHERE created_at <= ?")
-      .run(cutoff);
-  }
-
-  updateUser(user: User, updatedAt: number): void {
-    this._database.connection
-      .prepare(
-        `UPDATE users
-         SET username = ?, display_name = ?, avatar_url = ?, updated_at = ?
-         WHERE id = ?`
-      )
-      .run(
-        user.username,
-        user.displayName,
-        user.avatarUrl,
-        updatedAt,
-        user.id
-      );
-  }
-
-  deleteSession(sessionId: string): void {
-    this._database.connection
-      .prepare("DELETE FROM login_sessions WHERE id = ?")
-      .run(sessionId);
-  }
-
-  deleteExpiredSessions(now: number): string[] {
-    return this._database.connection
-      .prepare("DELETE FROM login_sessions WHERE expires_at <= ? RETURNING id")
-      .all(now)
-      .map((row) => String(row.id));
-  }
-}
-
-interface UserRow {
-  readonly id: string;
-  readonly username: string;
-  readonly display_name: string;
-  readonly avatar_url: string | null;
-}
-
-interface CredentialRow extends UserRow {
-  readonly password_hash: string;
-}
-
-interface PrincipalRow extends UserRow {
-  readonly kind: "human" | "agent";
-  readonly claimed: number;
-  readonly banned: number;
-}
-
-const principalColumns = `users.kind,
-  agents.owner_user_id IS NOT NULL AS claimed,
-  agents.banned_at IS NOT NULL AS banned`;
-const agentJoin = "LEFT JOIN agents ON agents.user_id = users.id";
-
-interface SessionRow extends PrincipalRow {
-  readonly write_source: WriteSource | null;
-  readonly token_issued: number;
-  readonly session_id: string;
-  readonly secret_hash: string;
-  readonly expires_at: number;
-}
-
-interface ExternalIdentityRow {
-  readonly provider: ExternalIdentityProvider;
-  readonly provider_username: string;
-}
-
-interface EmailLoginCodeRow {
-  readonly id: string;
-  readonly code_hash: string;
-  readonly attempts: number;
-}
-
-function insertSession(
-  database: DatabaseSync,
-  userId: string,
-  session: NewPasswordUser["session"]
-): void {
-  database
-    .prepare(
-      `INSERT INTO login_sessions
-        (id, secret_hash, user_id, created_at, expires_at, write_source,
-         issued_for_pat_id, issued_for_grant_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-    )
-    .run(
-      session.id,
-      session.secretHash,
-      userId,
-      session.createdAt,
-      session.expiresAt,
-      session.writeSource,
-      session.issuedFor?.kind === "pat" ? session.issuedFor.id : null,
-      session.issuedFor?.kind === "oauth" ? session.issuedFor.id : null
-    );
-}
-
-function toPrincipal(row: PrincipalRow): StoredPrincipal {
-  return {
-    ...toUser(row),
-    ...(row.kind === "agent"
-      ? { kind: "agent", claimed: row.claimed === 1 }
-      : { kind: "human" }),
-    banned: row.banned === 1,
-  };
-}
-
-function toUser(row: UserRow): User {
-  return {
-    id: row.id,
-    username: row.username,
-    displayName: row.display_name,
-    avatarUrl: row.avatar_url,
-  };
+  ): void;
+  deleteEmailLoginCode(id: string): void;
+  latestEmailLoginCodeCreatedAt(email: string): number | null;
+  countEmailLoginCodesSince(email: string, since: number): number;
+  deleteEmailLoginCodesBefore(cutoff: number): void;
+  updateUser(user: User, updatedAt: number): void;
+  deleteSession(sessionId: string): void;
+  deleteExpiredSessions(now: number): string[];
 }

@@ -559,9 +559,9 @@ revision 1, then from the product database: the Trunk Node for a Unit, or the
 Worktree node intent for a Unit created in a Worktree. Only when both lack a value
 does the migration use `anonymous` and the migration time; these values are
 fallbacks, not reconstructed authorship. Changeset times keep the SDK defaults.
-Custom server entry points must prepare the product database and then await
-`prepareCollaborationDatabase(collaborationFile, productFile)` before
-constructing `createWorkspaceApplication` for an existing database.
+Custom server entry points call `openProductDatabase(config.productDatabase)`, pass its
+`unitCreationFacts` reader to `prepareCollaborationDatabase`, then pass its `repositories`
+to `createWorkspaceApplication`. Close the product database after the application shuts down.
 Never run old and new SDK writers together. To roll back, stop the new instance
 and restore the matching pre-upgrade product/Collaboration/Blob backups; changing
 only the application image is insufficient. Retain backups until rollout is accepted.

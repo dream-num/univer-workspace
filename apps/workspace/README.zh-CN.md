@@ -247,7 +247,7 @@ docker run --rm \
 
 支持从 Core V1、Worktree V1/V2 和 History V1 升级。新数据库由当前适配器初始化。迁移优先从 History V1 的修订 1 读取 Unit 创建者和时间，缺失时查询产品数据库。主线 Unit 取其 Trunk Node，Worktree 内创建的 Unit 取对应的节点意图。两个来源均缺少信息时，以 `anonymous` 和迁移时间补缺，不能据此还原真实的创建信息。Changeset 时间沿用 SDK 默认值。
 
-自定义服务端入口处理已有数据库时，先准备产品数据库，再等待 `prepareCollaborationDatabase(collaborationFile, productFile)` 完成，最后调用 `createWorkspaceApplication`。新旧 SDK 实例不能同时写入。回滚时停止新实例，同时还原同一批次的升级前产品库、协同库与 Blob 备份。只换回旧镜像无法还原数据，备份应保留到部署验收完成。
+自定义服务端入口先调用 `openProductDatabase(config.productDatabase)`，将其 `unitCreationFacts` 交给 `prepareCollaborationDatabase`，再将 `repositories` 传入 `createWorkspaceApplication`。应用关闭后释放产品库。新旧 SDK 实例不能同时写入。回滚时停止新实例，同时还原同一批次的升级前产品库、协同库与 Blob 备份。只换回旧镜像无法还原数据，备份应保留到部署验收完成。
 
 各版本的产品数据库变更如下。
 

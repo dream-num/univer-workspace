@@ -5,9 +5,9 @@ import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
 import type { WorktreesModule } from "../worktrees/index.js";
-import {
+import type {
   UniverAssetsRepository,
-  type UniverAssetRow,
+  UniverAssetRow,
 } from "./univer-assets.repository.js";
 
 export const MAX_UNIVER_ASSET_BYTES = 20 * 1024 * 1024;
@@ -99,7 +99,7 @@ export function createUniverAssetsModule(options: {
       });
       try {
         const stored = await options.store.put({
-          objectKey: upload.object_key,
+          objectKey: upload.objectKey,
           body: input.body,
           expectedByteSize: intent.size,
           detectMediaType: false,
@@ -156,7 +156,7 @@ export function createUniverAssetsModule(options: {
         });
         try {
           const stored = await options.store.put({
-            objectKey: upload.object_key,
+            objectKey: upload.objectKey,
             body: Readable.from([
               Buffer.from(file.bytes.buffer, file.bytes.byteOffset, file.bytes.byteLength),
             ]),

@@ -23,7 +23,7 @@
 
 | 问题 | 事实 | 来源 |
 | --- | --- | --- |
-| User 可以没有邮箱吗 | 可以。`username` 必填且唯一，`email` 可空 | `apps/workspace/server/src/db/schema.sql:3-14` |
+| User 可以没有邮箱吗 | 可以。`username` 必填且唯一，`email` 可空 | `apps/workspace/server/src/db/sqlite/schema.sql:3-14` |
 | 建 User 时自带 Personal Space 吗 | 是。同一事务内创建，每人一个 | `identity.repository.ts` 的 `create*User` |
 | 无人参与能建 User 吗 | 有先例。`loginWithDiscordBot` 凭服务密钥建 User 并签发 `agent` 会话 | `identity.service.ts:557` |
 | 现有工具能从零建文件吗 | 能。阶段 G0 验收里，一次中文请求让 opencode 依次调用 `space_find`、`pr_create`、`unit_add`、`execute`、`inspect`、`pr_ready`、`browse` 并全部成功 | `docs/design/workspace-mcp/stages.zh-CN.md` 的 run g0cli |

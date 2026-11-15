@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openWorkspaceDatabase } from "../dist/server/db/initialize.js";
+import { openWorkspaceDatabase } from "../dist/server/db/sqlite/initialize.js";
 import { DROP_V12_SQL } from "./support/v12-downgrade.js";
 import { DROP_V14_SQL } from "./support/v14-downgrade.js";
 

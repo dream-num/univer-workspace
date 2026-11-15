@@ -1,18 +1,18 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 afterEach(async () => {
   await Promise.all(applications.splice(0).map((app) => app.close()));
 });
 
 async function setup() {
-  const app = createWorkspaceApplication(
+  const app = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: ":memory:",
+      productDatabase: { provider: "sqlite", filename: ":memory:" },
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,

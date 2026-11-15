@@ -6,11 +6,11 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { createServer } from "node:http";
 import { Readable } from "node:stream";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 import { interactivePrincipal } from "./principal.js";
 const directory = mkdtempSync(join(tmpdir(), "workspace-native-preview-"));
-const application = createWorkspaceApplication({ host: "127.0.0.1", port: 3091,
-  databaseFilename: join(directory, "product.sqlite"), collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+const application = createSqliteTestApplication({ host: "127.0.0.1", port: 3091,
+  productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") }, collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "blobs"), secureCookies: false, sessionTtlMs: 3_600_000,
   passwordAuthEnabled: true, oauthClients: null });
 await application.initialize();

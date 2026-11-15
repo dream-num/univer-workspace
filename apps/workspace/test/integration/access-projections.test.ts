@@ -1,21 +1,21 @@
+import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/index.js";
-import { AccessRepository } from "../../server/src/modules/access/access.repository.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 afterEach(async () => {
   vi.restoreAllMocks();
   await Promise.all(applications.splice(0).map((app) => app.close()));
 });
 
 async function setup() {
-  const app = createWorkspaceApplication(
+  const app = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: ":memory:",
+      productDatabase: { provider: "sqlite", filename: ":memory:" },
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -92,7 +92,7 @@ describe("access projections", () => {
   it("preserves inherited roles, anonymous read-only access, revocation and trash in content checks", async () => {
     const { app, owner, reader, space, folder, create } = await setup();
     const { resource, node } = await create();
-    const fullLookup = vi.spyOn(AccessRepository.prototype, "resolveNode");
+    const fullLookup = vi.spyOn(app.repositories.access, "resolveNode");
     function check(actor: string, role: string | null) {
       const full = app.access.resolveResource(actor, resource.id);
       fullLookup.mockClear();
@@ -176,7 +176,8 @@ describe("access projections", () => {
   it("uses the existing space-prefixed child index and omits child queries from content authorization", async () => {
     const { app, owner, create } = await setup();
     const { node } = await create();
-    const repository = new AccessRepository(app.database);
+    // Start with a cold prepared-statement cache so the query plan is observable.
+    const repository = createSqliteRepositories(app.database).access;
     const prepare = vi.spyOn(app.database.connection, "prepare");
     repository.resolveNode(owner, node.id);
     const sql = prepare.mock.calls[0]![0];

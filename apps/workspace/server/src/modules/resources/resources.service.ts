@@ -13,7 +13,7 @@ import {
 } from "../access/index.js";
 import { nodeSummary, resourceSummary } from "../nodes/nodes.service.js";
 import {
-  ResourcesRepository,
+  type ResourcesRepository,
   operationView,
   type ReservedCreateResource,
 } from "./resources.repository.js";

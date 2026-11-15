@@ -9,7 +9,7 @@ export function verifyV14Migration(
   open: (filename: string) => { connection: DatabaseSync; close(): void },
 ): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v14-migration-"));
-  const schema = readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8");
   const createV14 = (filename: string) => {
     const database = new DatabaseSync(filename);
     database.exec(schema);

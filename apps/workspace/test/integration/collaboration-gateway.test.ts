@@ -23,13 +23,13 @@ import {
 } from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 
 import { httpRequestDurationSeconds } from "../../server/src/middleware/metrics.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 const sockets: WebSocket[] = [];
 const temporaryDirectories: string[] = [];
@@ -1505,21 +1505,21 @@ function nextCombResponse(socket: WebSocket) {
 }
 
 async function startApplication(): Promise<{
-  readonly application: WorkspaceApplication;
+  readonly application: SqliteTestApplication;
   readonly origin: string;
   readonly collaborationDatabaseFilename: string;
   readonly directory: string;
   readonly server: Server;
 }>;
 async function startApplication(existingDirectory: string): Promise<{
-  readonly application: WorkspaceApplication;
+  readonly application: SqliteTestApplication;
   readonly origin: string;
   readonly collaborationDatabaseFilename: string;
   readonly directory: string;
   readonly server: Server;
 }>;
 async function startApplication(existingDirectory?: string): Promise<{
-  readonly application: WorkspaceApplication;
+  readonly application: SqliteTestApplication;
   readonly origin: string;
   readonly collaborationDatabaseFilename: string;
   readonly directory: string;
@@ -1532,10 +1532,10 @@ async function startApplication(existingDirectory?: string): Promise<{
     directory,
     "collaboration.sqlite"
   );
-  const application = createWorkspaceApplication({
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename,
     secureCookies: false,
     sessionTtlMs: 60_000,
@@ -1566,7 +1566,7 @@ async function startApplication(existingDirectory?: string): Promise<{
 }
 
 async function stopApplication(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   server: Server
 ): Promise<void> {
   const serverIndex = servers.indexOf(server);

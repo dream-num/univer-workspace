@@ -1,10 +1,10 @@
 import { ApplicationError } from "../../middleware/errors.js";
 import type { ResourcesModule } from "../resources/index.js";
 import type { WorktreesModule } from "../worktrees/index.js";
-import {
+import type {
   OperationsRepository,
-  type OperationDatabaseKind,
-  type OperationRow,
+  OperationDatabaseKind,
+  OperationRow,
 } from "./operations.repository.js";
 
 export type OperationKind =

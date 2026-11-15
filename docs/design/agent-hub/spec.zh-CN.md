@@ -44,7 +44,7 @@
 - `users.kind`：`'human'` 或 `'agent'`，非空，默认 `'human'`。
 - 新表 `agents`：`user_id` 主键并引用 `users`，`owner_user_id` 可空并引用 `users`，`claimed_at` 可空，`origin_label`，`created_at`，`last_active_at`，`expires_at` 可空，`banned_at` 可空。`owner_user_id` 与 `claimed_at` 同时为空或同时非空。
 - 新表 `node_reports`：`id`、`node_id`、`reporter_user_id` 可空、`reason`、`created_at`。
-- 迁移放在 `server/src/db/migrations/v20-to-v21`，同步 `schema.sql`、`database.ts` 的版本检查和 `docs/data-model.md`。
+- 迁移放在 `server/src/db/sqlite/migrations/v20-to-v21`，同步 `schema.sql`、`database.ts` 的版本检查和 `docs/data-model.md`。
 
 **F1.2 创建 agent。**
 
@@ -63,7 +63,7 @@
 
 - `Principal` 带上 `kind` 和认领状态。被封禁的 agent 在 `requireSession` 处得到 401。
 - `access.repository.ts` 的权限查询多带出两样：请求者的主体类别，以及 Space 所有者是否处于暂停。`AccessResolver` 的签名不变。
-- `access.service.ts` 的 `resolvedRoles` 和 `spaceAccessFromRow` 加两条规则：
+- `access.service.ts` 的 `resolvedRoles` 和 `resolveStoredSpaceAccess` 加两条规则：
   1. 所有者处于暂停时，所有者以外的请求者得不到任何角色。
   2. 请求者是 `agent_unclaimed` 时，经 Link Sharing 得到的角色是 `viewer`，与匿名读者相同。
 - HTTP 和协同 WebSocket 共用这个解析器，两条路径都要有测试。

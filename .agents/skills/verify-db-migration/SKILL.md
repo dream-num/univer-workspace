@@ -1,6 +1,6 @@
 ---
 name: verify-db-migration
-description: Verify that a Univer Workspace database change migrates deployed databases correctly. Replays every product schema.sql on origin/main and in release tags (plus explicit deployment refs) through current startup and requires a structure identical to a fresh install, then runs the per-version data, backup, rollback and restart matrix against source and the production build. Use whenever a change touches apps/workspace/server/src/db (schema.sql, migrations, database.ts, initialize.ts), the Collaboration migrations, or the Univer SDK baseline, and before calling such a change done.
+description: Verify that a Univer Workspace database change migrates deployed databases correctly. Replays every product schema.sql on origin/main and in release tags (plus explicit deployment refs) through current startup and requires a structure identical to a fresh install, then runs the per-version data, backup, rollback and restart matrix against source and the production build. Use whenever a change touches apps/workspace/server/src/db (schema.sql, migrations, connection.ts, initialize.ts), the Collaboration migrations, or the Univer SDK baseline, and before calling such a change done.
 ---
 
 # verify-db-migration
@@ -19,9 +19,9 @@ git diff --stat origin/main -- apps/workspace/server/src/db \
 
 - Anything under `server/src/db` changed: run steps 2 to 5.
 - A changed published structure or constraint in `schema.sql` needs a `PRAGMA user_version`
-  bump and a `migrations/v<N-1>-to-v<N>/migrate.ts`. Step 3 applies to a new migration and to
+  bump and a `sqlite/migrations/v<N-1>-to-v<N>/migrate.ts`. Step 3 applies to a new migration and to
   any changed behavior of an existing one or of `prepare-current-database.ts`,
-  `database.ts` or `initialize.ts`.
+  `sqlite/connection.ts` or `sqlite/initialize.ts`.
 - Only the SDK baseline or `integrations/univer/migrations` changed: run steps 4 and 5. Step 4
   includes the Collaboration matrix (`test/production-collaboration-migration.ts`).
 
@@ -31,11 +31,12 @@ git diff --stat origin/main -- apps/workspace/server/src/db \
 (cd apps/workspace && node --import tsx ../../.agents/skills/verify-db-migration/bin/schema-parity.ts)
 ```
 
+The verifier checks both `db/sqlite/schema.sql` and the pre-refactor `db/schema.sql` in Git.
 For every distinct `schema.sql` on the first-parent history of `origin/main` and in every
 `v*` tag, the script builds a database, runs `prepareCurrentDatabase`, and compares the result
 with a fresh install of the working-tree `schema.sql` before startup re-runs `schema.sql`, and
 requires exactly one backup for an older version and none for the current one. Then it opens
-the database twice with `openWorkspaceDatabase`, compares again after each start, and fails if
+the database twice through the public `openProductDatabase` factory, compares again after each start, and fails if
 startup throws, changes the structure, or creates a backup. Every replayed schema must print
 `ok`.
 
@@ -52,7 +53,7 @@ not a local commit with `schema.sql` is an error; fetch it first.
 Read a `FAIL` as:
 
 - `startup threw Unsupported product database version`: the new version has no branch in
-  `prepare-current-database.ts`, or `database.ts` still expects the old number.
+  `prepare-current-database.ts`, or `sqlite/connection.ts` still expects the old number.
 - `startup threw … fingerprint mismatch`: `assertV<N>Fingerprint` disagrees with what the
   migration produces.
 - The committed schema with the working tree's version fails: `schema.sql` changed without a
@@ -84,15 +85,16 @@ Copy the newest `apps/workspace/test/support/v*-migration-checks.ts` into
   as V<N-1> with no leftover rebuild tables.
 
 The V<N-1> fixture must be the previous schema, not the new one. Build it from
-`git show origin/main:apps/workspace/server/src/db/schema.sql`, or from the current schema plus a
+the previous release’s `apps/workspace/server/src/db/sqlite/schema.sql` (older releases use
+`apps/workspace/server/src/db/schema.sql`), or from the current schema plus a
 `v<N>-downgrade.ts` that reproduces that file's structure, as the existing checks do.
 
 Wire it twice: a Vitest case under `test/integration/` with the source `openWorkspaceDatabase`,
-and `test/production-v<N-1>-migration.ts` with `../dist/server/db/initialize.js`, appended to
+and `test/production-v<N-1>-migration.ts` with `../dist/server/db/sqlite/initialize.js`, appended to
 `test:production-import` in `apps/workspace/package.json`. Also update `TARGET_VERSION`, every
 `createBackup`/fingerprint version union, the "expected 0 … N" message, and the version
-`database.ts` expects. Each V1+ chain in `prepareCurrentDatabase` must end with
-`migrateV<N-1>ToV<N>` followed by `assertV<N>Fingerprint`. V0 is different: `legacy-v0/migrate.ts`
+`sqlite/connection.ts` expects. Each V1+ chain in `prepareCurrentDatabase` must end with
+`migrateV<N-1>ToV<N>` followed by `assertV<N>Fingerprint`. V0 is different: `sqlite/legacy-v0/migrate.ts`
 runs the current `schema.sql` directly, so update the `user_version` it expects instead of
 appending a migration. It keeps the legacy `users`, `spaces` and `worktrees` tables, which that
 `CREATE TABLE IF NOT EXISTS` never changes, so a change to those tables also needs an explicit
@@ -106,8 +108,8 @@ pnpm --filter @univerjs/univer-workspace build:server
 pnpm --filter @univerjs/univer-workspace test:production-import
 ```
 
-`--dist` loads `dist/server/db`, including its copied `schema.sql`. Rebuild first. Parity catches
-a stale migration and an extra object in the copied schema, but not a definition missing from it.
+`--dist` loads `dist/server/db/sqlite` and checks that the packaged `schema.sql` matches the source
+before replaying historical databases. Rebuild first.
 
 ## 5. Repository gates and docs
 

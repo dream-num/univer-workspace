@@ -4,16 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { S3Client } from "@aws-sdk/client-s3";
 import { expect, it, vi } from "vitest";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 import { createWorkspaceApplication } from "../../server/src/app.js";
-import { loadConfig } from "../../server/src/config.js";
+import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
+import { openProductDatabase } from "../../server/src/db/index.js";
 import { shutdownServer } from "../../server/src/server-lifecycle.js";
 
 it("shuts down while a collaboration WebSocket is connected", async () => {
   const directory = mkdtempSync(join(tmpdir(), "univer-lifecycle-"));
-  const application = createWorkspaceApplication({
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
     sessionTtlMs: 60_000,
@@ -62,28 +64,27 @@ it("shuts down while a collaboration WebSocket is connected", async () => {
 
 const s3Config = {
   ...loadConfig({ BLOB_STORE: "s3", BLOB_S3_BUCKET: "test-bucket", BLOB_S3_REGION: "us-east-1" }),
-  databaseFilename: ":memory:",
+  productDatabase: { provider: "sqlite", filename: ":memory:" },
   collaborationDatabaseFilename: ":memory:",
-};
+} satisfies WorkspaceConfig;
 
-it("releases the configured S3 client even when closing the database fails", async () => {
-  const application = createWorkspaceApplication(s3Config);
+it("releases its configured S3 client and leaves the product database to its caller", async () => {
+  const database = await openProductDatabase(s3Config.productDatabase);
+  const application = createWorkspaceApplication(s3Config, database.repositories);
   const destroy = vi.spyOn(S3Client.prototype, "destroy");
-  const error = new Error("database shutdown failed");
-  const close = vi.spyOn(application.database, "close").mockImplementationOnce(() => { throw error; });
   try {
-    await expect(application.close()).rejects.toBe(error);
+    await application.close();
     expect(destroy).toHaveBeenCalledOnce();
+    await expect(database.unitCreationFacts.read()).resolves.toEqual({ units: [], worktreeUnits: [] });
   } finally {
-    close.mockRestore();
-    application.database.close();
     destroy.mockRestore();
+    await database.close();
   }
 });
 
 it("leaves disposal of an injected blob store to its owner", async () => {
   const blobStore = { put: vi.fn(), head: vi.fn(), open: vi.fn(), delete: vi.fn(), dispose: vi.fn() };
-  const application = createWorkspaceApplication(s3Config, { blobStore });
+  const application = createSqliteTestApplication(s3Config, { blobStore });
   await application.close();
   expect(blobStore.dispose).not.toHaveBeenCalled();
 });

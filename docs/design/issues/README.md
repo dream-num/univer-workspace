@@ -186,7 +186,7 @@ CREATE INDEX issue_node_refs_node ON issue_node_refs(node_id);
 
 按 `apps/workspace/AGENTS.md` 执行完整 V8 → V9 流程，模板用 `v7-to-v8`：
 
-1. 新增 `server/src/db/migrations/v8-to-v9/migrate.ts`，内容是上面的建表与建索引语句，
+1. 新增 `server/src/db/sqlite/migrations/v8-to-v9/migrate.ts`，内容是上面的建表与建索引语句，
    然后设置 `PRAGMA user_version = 9`，执行 `foreign_key_check` 和 `integrity_check`。
 2. 在 `prepare-current-database.ts` 中：把 `TARGET_VERSION` 改为 9；在每个旧版本分支末尾追加
    `migrateV8ToV9`；新增 `assertV9Fingerprint`；把 `createBackup` 和 `verifyBackup` 的版本联合

@@ -4,11 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
-import { BlobsRepository } from "../../server/src/modules/blobs/blobs.repository.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { ApplicationError } from "../../server/src/middleware/errors.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const directories: string[] = [];
 
 afterEach(async () => {
@@ -294,7 +293,7 @@ describe("Blob Resources", () => {
     const config = {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: join(directory, "product.sqlite"),
+      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       blobDirectory,
       maxBlobBytes: 1024,
@@ -308,7 +307,7 @@ describe("Blob Resources", () => {
         },
       },
     };
-    const first = createWorkspaceApplication(config, dependencies);
+    const first = createSqliteTestApplication(config, dependencies);
     applications.push(first);
     const userId = await register(first, "blob-restart");
     const space = first.spaces.list(userId).spaces[0];
@@ -337,7 +336,7 @@ describe("Blob Resources", () => {
     writeFileSync(join(blobDirectory, `${objectKey}.upload`), "stale");
     await first.close();
 
-    const restarted = createWorkspaceApplication(config, dependencies);
+    const restarted = createSqliteTestApplication(config, dependencies);
     applications.push(restarted);
     expect(restarted.blobs.getUpload(userId, reserved.body.upload.id)).toMatchObject({
       upload: { state: "waitingForUpload" },
@@ -643,7 +642,7 @@ describe("Blob content replacement", () => {
       "replace-recovery-create-0001",
     );
     await application.blobs.complete(interactivePrincipal(user), blob.uploadId);
-    const repository = new BlobsRepository(application.database);
+    const repository = application.repositories.blobs;
     const operationId = "replace-interrupted-0001";
     const pending = repository.reserveReplacement(
       operationId,
@@ -669,17 +668,17 @@ describe("Blob content replacement", () => {
 });
 
 function createTestApplication(existingDirectory?: string): {
-  readonly application: WorkspaceApplication;
+  readonly application: SqliteTestApplication;
   readonly blobDirectory: string;
 } {
   const directory = existingDirectory ?? mkdtempSync(join(tmpdir(), "workspace-blobs-"));
   directories.push(directory);
   const blobDirectory = join(directory, "objects");
-  const application = createWorkspaceApplication(
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: join(directory, "product.sqlite"),
+      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       blobDirectory,
       maxBlobBytes: 1024,
@@ -698,7 +697,7 @@ function createTestApplication(existingDirectory?: string): {
   return { application, blobDirectory };
 }
 
-async function register(application: WorkspaceApplication, username: string): Promise<string> {
+async function register(application: SqliteTestApplication, username: string): Promise<string> {
   const issued = await application.identity.registerWithPassword({
     username,
     displayName: username,
@@ -708,7 +707,7 @@ async function register(application: WorkspaceApplication, username: string): Pr
 }
 
 async function uploadedBlob(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   userId: string,
   spaceId: string,
   name: string,
@@ -736,7 +735,7 @@ async function uploadedBlob(
   };
 }
 
-function count(application: WorkspaceApplication, table: string): number {
+function count(application: SqliteTestApplication, table: string): number {
   return (
     application.database.connection
       .prepare(`SELECT COUNT(*) AS count FROM ${table}`)
@@ -751,7 +750,7 @@ async function readAll(stream: Readable): Promise<Buffer> {
 }
 
 async function contentEtag(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   userId: string,
   resourceId: string,
 ): Promise<string> {

@@ -3,7 +3,7 @@ export {
   createViewsModule,
   type ViewsModule,
 } from "./views.service.js";
-export { ViewsRepository } from "./views.repository.js";
+export type { ViewsRepository } from "./views.repository.js";
 export type {
   RecentResourceItem,
   RecentResourceList,

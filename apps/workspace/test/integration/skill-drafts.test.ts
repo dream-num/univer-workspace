@@ -7,10 +7,10 @@ import { mkdtempSync, rmSync, readdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import type { SkillDraftView } from "../../server/src/modules/skill-drafts/drafts.types.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
 afterEach(async () => {
@@ -35,11 +35,11 @@ const initialFiles = () => [
 async function harness() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-skill-drafts-"));
   directories.push(directory);
-  const application = createWorkspaceApplication(
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: join(directory, "product.sqlite"),
+      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       blobDirectory: join(directory, "objects"),
       secureCookies: false,

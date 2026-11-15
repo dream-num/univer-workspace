@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { ClientMetadataDocumentError, type FetchClientMetadataDocument } from "../../server/src/modules/identity/client-metadata-document.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 
@@ -36,7 +36,7 @@ const OAUTH_CLIENTS: WorkspaceConfig["oauthClients"] = {
   ],
 };
 
-let application: WorkspaceApplication | undefined;
+let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
 
@@ -708,10 +708,10 @@ async function registerUser(origin: string, username: string): Promise<string> {
 
 async function start(options: { maxRegisteredClients?: number; disabled?: boolean; staticConsent?: boolean; cimdEnabled?: boolean; fetchDocument?: FetchClientMetadataDocument } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-mcp-oauth-"));
-  application = createWorkspaceApplication({
+  application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,

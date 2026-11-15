@@ -5,8 +5,8 @@
 
 ## 数据库与部署
 
-- 修改产品数据库 schema 前，先阅读 `docs/data-model.md`、`server/src/db/schema.sql` 和
-  `server/src/db/migrations/prepare-current-database.ts`，确认当前版本与已支持的升级路径。
+- 修改产品数据库 schema 前，先阅读 `docs/data-model.md`、`server/src/db/sqlite/schema.sql` 和
+  `server/src/db/sqlite/migrations/prepare-current-database.ts`，确认当前版本与已支持的升级路径。
 - 已发布 schema 的结构或约束发生变化时，必须提升 `PRAGMA user_version` 并提供版本化迁移；
   不得只修改 `schema.sql`，不得要求正常部署执行 `db:reset`，不得假设线上数据库为空。
 - 迁移必须在业务 Repository 初始化前运行，并包含迁移前一致性备份、事务失败回滚、Schema

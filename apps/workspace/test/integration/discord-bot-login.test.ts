@@ -4,16 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 
 
 import { expectSessionSource } from "../fixtures/session-source.js";
 
 const API_KEY = "discord-bot-test-api-key-32-characters";
 
-let application: WorkspaceApplication | undefined;
+let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
 
@@ -137,10 +137,10 @@ async function startApplication(discordBotApiKey?: string): Promise<{
   readonly origin: string;
 }> {
   directory = mkdtempSync(join(tmpdir(), "univer-discord-bot-login-"));
-  application = createWorkspaceApplication({
+  application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
     sessionTtlMs: 60_000,

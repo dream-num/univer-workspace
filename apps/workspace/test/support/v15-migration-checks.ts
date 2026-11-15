@@ -15,7 +15,7 @@ export function verifyV15Migration(
   open: (filename: string) => { connection: DatabaseSync; close(): void },
 ): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v15-migration-"));
-  const schema = readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8");
   const createV15 = (filename: string) => {
     const database = new DatabaseSync(filename);
     database.exec(schema);

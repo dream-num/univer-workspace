@@ -3,20 +3,20 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 
 it("separates affiliation, discovery and stars and persists eligible ordered pins through HTTP", async () => {
   const root = mkdtempSync(join(tmpdir(), "workspace-space-lists-"));
   const config = {
     host: "127.0.0.1", port: 0,
-    databaseFilename: join(root, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(root, "product.sqlite") },
     collaborationDatabaseFilename: ":memory:", blobDirectory: join(root, "blobs"),
     secureCookies: false, sessionTtlMs: 60_000, passwordAuthEnabled: true, oauthClients: null,
   };
   const dependencies = {
     unitStore: { createUnit: async (input: { unitId: string }) => ({ unitId: input.unitId, headRevision: 1 }) },
   };
-  let application = createWorkspaceApplication(config, dependencies);
+  let application = createSqliteTestApplication(config, dependencies);
   let server: Server | undefined;
   try {
     const register = (username: string) => application.identity.registerWithPassword({
@@ -106,7 +106,7 @@ it("separates affiliation, discovery and stars and persists eligible ordered pin
     await close(server);
     server = undefined;
     await application.close();
-    application = createWorkspaceApplication(config, dependencies);
+    application = createSqliteTestApplication(config, dependencies);
     server = createServer(application.app);
     origin = await listen(server);
     expect(await request("/spaces/pins")).toEqual(saved);

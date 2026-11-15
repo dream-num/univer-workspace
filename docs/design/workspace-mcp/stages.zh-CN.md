@@ -409,7 +409,7 @@ B、C、F 在 A 之后可以并行。G0 第一步需要 B、D、F，第二步需
 
 **目标。** Workspace 的 Space 活动统计能区分 MCP 客户端与 CLI。
 
-**背景。** 活动统计读取的是 `worktrees.created_via` 和 `issues.created_via`（`apps/workspace/server/src/db/schema.sql:213, 613`，`modules/activity/activity.service.ts:109, 125`），
+**背景。** 活动统计读取的是 `worktrees.created_via` 和 `issues.created_via`（`apps/workspace/server/src/db/sqlite/schema.sql:213, 613`，`modules/activity/activity.service.ts:109, 125`），
 HTTP contract 的计数字段固定为 `browser`、`agent`、`unknown`（`apps/workspace/contracts/http/schemas/activity.yaml`）。
 只给 `login_sessions` 加字段不会改变活动统计。
 

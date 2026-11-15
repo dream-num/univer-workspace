@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import type { WorkspaceConfig } from "../../server/src/config.js";
 import { logger } from "../../server/src/logging/logger.js";
 import { UnitStoreError } from "../../server/src/integrations/univer/unit-store.js";
@@ -28,7 +28,7 @@ interface Agent {
   readonly token: string;
 }
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
 /** How long the stub Unit store takes, so that concurrent creations overlap. */
@@ -95,7 +95,7 @@ describe("db:ban-agent", () => {
     const directory = mkdtempSync(join(tmpdir(), "workspace-ban-agent-"));
     directories.push(directory);
     const databaseFilename = join(directory, "workspace.sqlite");
-    const { origin, application } = await start({ databaseFilename });
+    const { origin, application } = await start({ productDatabase: { provider: "sqlite", filename: databaseFilename } });
     const [byName, byId] = [await createAgent(origin), await createAgent(origin)];
     await register(origin, "alice");
     const ban = (target: string) => spawnSync(process.execPath, ["--import", "tsx", "server/src/db/ban-agent.ts", target], {
@@ -325,7 +325,7 @@ describe("ceilings", () => {
   });
 });
 
-function claim(application: WorkspaceApplication, agentId: string, ownerId: string): void {
+function claim(application: SqliteTestApplication, agentId: string, ownerId: string): void {
   application.database.connection
     .prepare("UPDATE agents SET owner_user_id = ?, claimed_at = 1, expires_at = NULL WHERE user_id = ?")
     .run(ownerId, agentId);
@@ -595,7 +595,7 @@ describe("agent expiry", () => {
   });
 });
 
-function agentLifecycle(application: WorkspaceApplication, agentId: string) {
+function agentLifecycle(application: SqliteTestApplication, agentId: string) {
   type Lifecycle = { last_active_at: number; expires_at: number | null };
   return {
     get: (): Lifecycle => ({
@@ -612,7 +612,7 @@ function agentLifecycle(application: WorkspaceApplication, agentId: string) {
 }
 
 /** The share-page route the production build mounts when the web bundle exists. */
-async function startPages(application: WorkspaceApplication): Promise<string> {
+async function startPages(application: SqliteTestApplication): Promise<string> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-agent-pages-"));
   directories.push(directory);
   writeFileSync(join(directory, "index.html"), "<!doctype html><html><head><title>Univer Workspace</title></head><body></body></html>");
@@ -632,11 +632,11 @@ async function listen(server: Server): Promise<string> {
   return `http://127.0.0.1:${address.port}`;
 }
 
-async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: WorkspaceApplication }> {
-  const application = createWorkspaceApplication({
+async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: SqliteTestApplication }> {
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    databaseFilename: ":memory:",
+    productDatabase: { provider: "sqlite", filename: ":memory:" },
     collaborationDatabaseFilename: ":memory:",
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,

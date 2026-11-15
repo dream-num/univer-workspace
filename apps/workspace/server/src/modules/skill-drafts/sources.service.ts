@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver, BlobResourceAccess } from "../access/index.js";
-import { NodesRepository } from "../nodes/nodes.repository.js";
+import type { NodesRepository } from "../nodes/nodes.repository.js";
 import {
   decodeSkillText,
   safeSkillPath,

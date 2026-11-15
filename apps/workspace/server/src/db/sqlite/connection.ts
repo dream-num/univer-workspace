@@ -3,7 +3,9 @@ import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
 
-export class WorkspaceDatabase {
+type Synchronous<T> = T extends PromiseLike<unknown> ? never : T;
+
+export class SqliteDatabase {
   readonly connection: DatabaseSync;
   private _closed = false;
 
@@ -30,7 +32,8 @@ export class WorkspaceDatabase {
     }
   }
 
-  transaction<T>(operation: (database: DatabaseSync) => T): T {
+  // This connection is shared across requests. No transaction may span an await.
+  transaction<T>(operation: (database: DatabaseSync) => Synchronous<T>): T {
     this._assertOpen();
     if (this.connection.isTransaction) {
       throw new Error("Nested product database transactions are not supported");

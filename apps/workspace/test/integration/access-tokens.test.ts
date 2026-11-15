@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { openWorkspaceDatabase } from "../../server/src/db/initialize.js";
+import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
+import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
 import {
   ACCESS_TOKEN_TTL_MS,
   REFRESH_REUSE_GRACE_MS,
@@ -7,7 +8,6 @@ import {
   createAccessTokenService,
 } from "../../server/src/modules/identity/access-tokens.js";
 import {
-  IdentityRepository,
   createIdentityModule,
   type User,
 } from "../../server/src/modules/identity/index.js";
@@ -24,8 +24,9 @@ function harness() {
   }
   const clock = { value: 1_000_000 };
   const now = () => clock.value;
-  const tokens = createAccessTokenService({ database, now });
-  const identity = createIdentityModule({ repository: new IdentityRepository(database), sessionTtlMs: 60_000, now });
+  const repositories = createSqliteRepositories(database);
+  const tokens = createAccessTokenService({ repository: repositories.accessTokens, now });
+  const identity = createIdentityModule({ repository: repositories.identity, sessionTtlMs: 60_000, now });
   const sessionRow = (cookieValue: string) =>
     database.connection
       .prepare("SELECT expires_at, issued_for_pat_id, issued_for_grant_id FROM login_sessions WHERE id = ?")
@@ -100,6 +101,31 @@ describe("personal access tokens", () => {
       expect(() => tokens.createPersonalToken({ userId: "u1", name: "Bad", expiresAt })).toThrow(/expiresAt/);
     }
     expect(tokens.listPersonalTokens("u1")).toEqual([]);
+  });
+
+  it("rolls back token verification when the exchanged session cannot be inserted", async () => {
+    const { database, tokens } = harness();
+    const { token } = tokens.createPersonalToken({ userId: "u1", name: "test" });
+    database.connection.exec(`
+      CREATE TRIGGER fail_session BEFORE INSERT ON login_sessions
+      BEGIN SELECT RAISE(ABORT, 'session insert failed'); END;
+    `);
+    await expect(tokens.exchangeSubjectToken(token, RESOURCE, 60_000)).rejects.toThrow("session insert failed");
+    expect(tokens.listPersonalTokens("u1")[0]?.lastUsedAt).toBeNull();
+    expect(database.connection.prepare("SELECT count(*) AS count FROM login_sessions").get()?.count).toBe(0);
+  });
+
+  it("checks expiry after acquiring the transaction for session exchange and refresh", async () => {
+    const { database, clock, tokens } = harness();
+    const { token } = tokens.createPersonalToken({ userId: "u1", name: "test", expiresAt: clock.value + 60_000 });
+    const grant = tokens.issueGrant({ userId: "u1", clientId: "client", scopes: ["read"], resource: RESOURCE });
+    const waiting = createAccessTokenService({
+      repository: createSqliteRepositories(database).accessTokens,
+      now: () => database.connection.isTransaction ? grant.grant.refreshExpiresAt : clock.value,
+    });
+    await expect(waiting.exchangeSubjectToken(token, RESOURCE, 60_000)).resolves.toBeNull();
+    expect(waiting.refreshGrant({ refreshToken: grant.refreshToken, clientId: "client", resource: RESOURCE }))
+      .toEqual({ ok: false, reason: "expired" });
   });
 
   it("stores only hashes", () => {

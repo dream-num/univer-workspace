@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 import { createAccessTokenService } from "../../server/src/modules/identity/access-tokens.js";
 
@@ -27,7 +27,7 @@ const OAUTH_CLIENTS_JSON = JSON.stringify({
 });
 
 const sockets: WebSocket[] = [];
-let application: WorkspaceApplication | undefined;
+let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
 
@@ -238,7 +238,7 @@ describe("token exchange", () => {
     application!.database.connection.prepare("UPDATE personal_access_tokens SET expires_at = 1 WHERE id = ?").run(record.id);
     await expectInvalidGrant(await exchange(origin, { subject_token: token }));
 
-    const grants = createAccessTokenService({ database: application!.database });
+    const grants = createAccessTokenService({ repository: application!.repositories.accessTokens });
     const issued = grants.issueGrant({ userId: alice.userId, clientId: "claude", scopes: ["read"], resource: RESOURCE });
     for (const resource of [undefined, "", "https://other.example.test/mcp"]) {
       await expectInvalidGrant(await exchange(origin, { subject_token: issued.accessToken, ...(resource === undefined ? {} : { resource }) }));
@@ -317,7 +317,7 @@ describe("token exchange", () => {
     expect(await lifetime(pat)).toBeLessThanOrEqual(30_000);
     expect(Math.floor((await lifetime(pat)) / 1000)).toBe(pat.expires_in);
 
-    const issued = createAccessTokenService({ database: application!.database })
+    const issued = createAccessTokenService({ repository: application!.repositories.accessTokens })
       .issueGrant({ userId: alice.userId, clientId: "claude", scopes: ["read"], resource: RESOURCE });
     application!.database.connection
       .prepare("UPDATE oauth_grants SET access_expires_at = ? WHERE id = ?")
@@ -395,7 +395,7 @@ describe("session-bound realtime sockets", () => {
         method: "DELETE", headers: { cookie: alice.cookie },
       });
     } else {
-      const tokens = createAccessTokenService({ database: application!.database });
+      const tokens = createAccessTokenService({ repository: application!.repositories.accessTokens });
       const client = tokens.registerClient({ redirectUris: ["http://127.0.0.1/callback"] });
       const grant = tokens.issueGrant({ userId: alice.userId, clientId: client.clientId, scopes: ["read"], resource: RESOURCE });
       subjectToken = grant.accessToken;
@@ -546,10 +546,10 @@ function fakeProvider(name: string) {
 
 async function start(options: { sessionTtlMs?: number; mcpOAuth?: boolean } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-pat-exchange-"));
-  application = createWorkspaceApplication({
+  application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
     ...(options.mcpOAuth ? { mcpOAuth: { issuer: "https://space.example.test", resources: [RESOURCE], maxRegisteredClients: 100 } } : {}),

@@ -1,11 +1,11 @@
-export type { SpaceAccessRow } from "./access.repository.js";
-export { AccessRepository, spaceAccessColumns, spaceMemberJoin, visibleSpaceSql } from "./access.repository.js";
+export type { StoredSpaceAccess } from "./access.repository.js";
+export type { AccessRepository } from "./access.repository.js";
 export {
   createAccessResolver,
   nodeCapabilities,
   resourceCapabilities,
   spaceCapabilities,
-  spaceAccessFromRow,
+  resolveStoredSpaceAccess,
 } from "./access.service.js";
 export type { AccessResolver } from "./access.service.js";
 export { assertCeiling } from "./ceilings.js";

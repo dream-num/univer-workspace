@@ -1,14 +1,17 @@
+import { forbidden, invalid, notFound } from "./issues.errors.js";
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import { writeSourceView } from "../identity/index.js";
 import type { AccessResolver, SpaceAccess } from "../access/index.js";
 import type { PublicUser } from "../permissions/index.js";
-import {
+import type {
   IssuesRepository,
-  type CommentRow,
-  type IssueFilter,
-  type IssueRow,
-  type LabelRow,
+  CommentRow,
+  IssueFilter,
+  IssueRelations,
+  IssueUpdate,
+  IssueRow,
+  LabelRow,
 } from "./issues.repository.js";
 import {
   ISSUE_LABEL_COLORS,
@@ -19,7 +22,6 @@ import {
   type IssueListQuery,
   type IssueProductChange,
   type IssueReferenceView,
-  type IssueState,
   type IssueStateReason,
   type IssueSummaryView,
   type IssueTimelineItem,
@@ -29,21 +31,11 @@ import {
 
 const MAX_TITLE = 256;
 const MAX_TEXT = 65_536;
-const MAX_LABELS_PER_SPACE = 100;
 const MAX_ACTIVITY_ROWS = 1000;
-const MAX_LABELS_PER_ISSUE = 20;
-const MAX_ASSIGNEES = 10;
-const MAX_REFERENCES = 20;
 const MAX_LABEL_NAME = 50;
 const MAX_LABEL_DESCRIPTION = 200;
 const MAX_SEARCH = 200;
 const MAX_LABEL_FILTERS = 10;
-
-interface Relations {
-  readonly labelIds?: readonly string[];
-  readonly assigneeUserIds?: readonly string[];
-  readonly nodeIds?: readonly string[];
-}
 
 export function createIssuesModule(options: {
   readonly repository: IssuesRepository;
@@ -171,76 +163,6 @@ export function createIssuesModule(options: {
     };
   }
 
-  /** Diff the requested relation sets against the stored ones and record one event per change. */
-  function applyRelations(
-    userId: string,
-    space: SpaceAccess,
-    issueId: string,
-    desired: Relations,
-    at: number,
-  ): boolean {
-    let changed = false;
-    const event = (kind: IssueEventKind, payload: Record<string, unknown>) => {
-      repository.insertEvent({ id: randomUUID(), issueId, actorUserId: userId, kind, payload, now: at });
-      changed = true;
-    };
-    const current = repository.labelsFor([issueId]).get(issueId) ?? [];
-    if (desired.labelIds) {
-      const wanted = new Set(desired.labelIds);
-      if (wanted.size > MAX_LABELS_PER_ISSUE) throw invalid(`An Issue can have at most ${MAX_LABELS_PER_ISSUE} labels.`, "labelIds");
-      for (const label of current) {
-        if (wanted.has(label.id)) continue;
-        repository.removeLabel(issueId, label.id);
-        event("unlabeled", { labelId: label.id, name: label.name, color: label.color });
-      }
-      const have = new Set(current.map((label) => label.id));
-      for (const labelId of wanted) {
-        if (have.has(labelId)) continue;
-        const label = repository.findLabel(labelId);
-        if (!label || label.space_id !== space.id) throw invalid("Label does not belong to this Space.", "labelIds");
-        repository.addLabel(issueId, labelId);
-        event("labeled", { labelId, name: label.name, color: label.color });
-      }
-    }
-    if (desired.assigneeUserIds) {
-      const wanted = new Set(desired.assigneeUserIds);
-      if (wanted.size > MAX_ASSIGNEES) throw invalid(`An Issue can have at most ${MAX_ASSIGNEES} assignees.`, "assigneeUserIds");
-      const have = repository.assigneeIdsFor([issueId]).get(issueId)?.map((row) => row.user_id) ?? [];
-      const users = repository.users([...wanted, ...have]);
-      for (const assigneeId of have) {
-        if (wanted.has(assigneeId)) continue;
-        repository.removeAssignee(issueId, assigneeId);
-        event("unassigned", userSnapshot(users.get(assigneeId), assigneeId));
-      }
-      for (const assigneeId of wanted) {
-        if (have.includes(assigneeId)) continue;
-        if (!repository.isSpaceParticipant(space.id, assigneeId)) {
-          throw invalid("Assignees must be the owner or a member of this Space.", "assigneeUserIds");
-        }
-        repository.addAssignee(issueId, assigneeId);
-        event("assigned", userSnapshot(users.get(assigneeId), assigneeId));
-      }
-    }
-    if (desired.nodeIds) {
-      const wanted = new Set(desired.nodeIds);
-      if (wanted.size > MAX_REFERENCES) throw invalid(`An Issue can reference at most ${MAX_REFERENCES} files.`, "nodeIds");
-      const have = repository.referenceNodeIds(issueId);
-      for (const nodeId of have) {
-        if (wanted.has(nodeId)) continue;
-        repository.removeReference(issueId, nodeId);
-        event("node_unreferenced", { nodeId, name: access.resolveNode(userId, nodeId)?.name ?? null });
-      }
-      for (const nodeId of wanted) {
-        if (have.includes(nodeId)) continue;
-        const node = access.resolveNode(userId, nodeId);
-        if (!node || node.spaceId !== space.id) throw invalid("Referenced files must be in this Space.", "nodeIds");
-        repository.addReference(issueId, nodeId, at);
-        event("node_referenced", { nodeId, name: node.name });
-      }
-    }
-    return changed;
-  }
-
   return {
     activity(userId, spaceId, since) {
       requireSpace(userId, spaceId);
@@ -280,12 +202,7 @@ export function createIssuesModule(options: {
       const text = body.body === undefined ? "" : validText(body.body, "body", true);
       const id = randomUUID();
       const at = now();
-      repository.transaction(() => {
-        repository.insertIssue({
-          id, spaceId, number: repository.nextNumber(spaceId), title, body: text, authorUserId: userId, now: at, createdVia,
-        });
-        applyRelations(userId, space, id, relations, at);
-      });
+      repository.createIssue({ id, spaceId, userId, createdVia, title, body: text, relations, now: at });
       notify(spaceId);
       return issueView(userId, space, mustFind(repository, id));
     },
@@ -300,44 +217,7 @@ export function createIssuesModule(options: {
       if (!space.member) throw forbidden();
       const patch = parseUpdate(input);
       const at = now();
-      const id = repository.transaction(() => {
-        const row = requireIssue(spaceId, number);
-        const triage = space.capabilities.triageIssues;
-        const editable = row.author_user_id === userId || triage;
-        const touchesText = patch.title !== undefined || patch.body !== undefined || patch.state !== undefined;
-        const touchesRelations = patch.labelIds !== undefined || patch.assigneeUserIds !== undefined || patch.nodeIds !== undefined;
-        if ((touchesText && !editable) || (touchesRelations && !triage)) throw forbidden();
-        let changed = false;
-        const title = patch.title ?? row.title;
-        const text = patch.body ?? row.body;
-        if (title !== row.title || text !== row.body) {
-          repository.updateIssueText(row.id, title, text, at);
-          changed = true;
-          if (title !== row.title) {
-            repository.insertEvent({
-              id: randomUUID(), issueId: row.id, actorUserId: userId, kind: "renamed",
-              payload: { from: row.title, to: title }, now: at,
-            });
-          }
-        }
-        if (patch.state === "closed" && (row.state !== "closed" || row.state_reason !== patch.stateReason)) {
-          repository.setIssueState(row.id, "closed", patch.stateReason, userId, at);
-          repository.insertEvent({
-            id: randomUUID(), issueId: row.id, actorUserId: userId, kind: "closed",
-            payload: { reason: patch.stateReason }, now: at,
-          });
-          changed = true;
-        } else if (patch.state === "open" && row.state === "closed") {
-          repository.setIssueState(row.id, "open", null, null, at);
-          repository.insertEvent({
-            id: randomUUID(), issueId: row.id, actorUserId: userId, kind: "reopened", payload: {}, now: at,
-          });
-          changed = true;
-        }
-        if (applyRelations(userId, space, row.id, patch, at)) changed = true;
-        if (changed) repository.touch(row.id, at);
-        return row.id;
-      });
+      const id = repository.updateIssue(userId, spaceId, issueNumber(number), space.capabilities.triageIssues, patch, at);
       notify(spaceId);
       return issueView(userId, space, mustFind(repository, id));
     },
@@ -378,10 +258,7 @@ export function createIssuesModule(options: {
       const issue = requireIssue(spaceId, number);
       const id = randomUUID();
       const at = now();
-      repository.transaction(() => {
-        repository.insertComment({ id, issueId: issue.id, authorUserId: userId, body, now: at });
-        repository.touch(issue.id, at);
-      });
+      repository.insertComment({ id, issueId: issue.id, authorUserId: userId, body, now: at });
       notify(spaceId);
       return commentView(repository, id);
     },
@@ -391,10 +268,7 @@ export function createIssuesModule(options: {
       if (!space.member || comment.author_user_id !== userId) throw forbidden();
       const body = validText(record(input, ["body"]).body, "body", false);
       const at = now();
-      repository.transaction(() => {
-        repository.updateComment(commentId, body, at);
-        repository.touch(comment.issue_id, at);
-      });
+      repository.updateComment(commentId, comment.issue_id, body, at);
       notify(comment.space_id);
       return commentView(repository, commentId);
     },
@@ -403,10 +277,7 @@ export function createIssuesModule(options: {
       const { comment, space } = requireComment(userId, commentId);
       const manager = space.role === "owner" || space.role === "admin";
       if (!space.member || (comment.author_user_id !== userId && !manager)) throw forbidden();
-      repository.transaction(() => {
-        repository.deleteComment(commentId);
-        repository.touch(comment.issue_id, now());
-      });
+      repository.deleteComment(commentId, comment.issue_id, now());
       notify(comment.space_id);
     },
 
@@ -422,13 +293,7 @@ export function createIssuesModule(options: {
       if (!space.capabilities.manageIssueLabels) throw forbidden();
       const fields = parseLabel(input, null);
       const id = randomUUID();
-      repository.transaction(() => {
-        if (repository.countLabels(spaceId) >= MAX_LABELS_PER_SPACE) {
-          throw invalid(`A Space can have at most ${MAX_LABELS_PER_SPACE} labels.`, "name");
-        }
-        if (repository.findLabelByName(spaceId, fields.name)) throw labelNameTaken();
-        repository.insertLabel({ id, space_id: spaceId, ...fields, now: now() });
-      });
+      repository.insertLabel({ id, space_id: spaceId, ...fields, now: now() });
       notify(spaceId);
       return labelView({ id, ...fields });
     },
@@ -436,11 +301,7 @@ export function createIssuesModule(options: {
     updateLabel(userId, labelId, input) {
       const { label } = requireLabel(userId, labelId);
       const fields = parseLabel(input, label);
-      repository.transaction(() => {
-        const clash = repository.findLabelByName(label.space_id, fields.name);
-        if (clash && clash.id !== labelId) throw labelNameTaken();
-        repository.updateLabel({ id: labelId, ...fields, now: now() });
-      });
+      repository.updateLabel({ id: labelId, space_id: label.space_id, ...fields, now: now() });
       notify(label.space_id);
       return labelView({ ...label, ...fields });
     },
@@ -495,10 +356,6 @@ function user(users: ReadonlyMap<string, PublicUser>, id: string): PublicUser {
   return found;
 }
 
-function userSnapshot(found: PublicUser | undefined, userId: string): Record<string, unknown> {
-  return { userId, username: found?.username ?? null, displayName: found?.displayName ?? null };
-}
-
 function iso(value: number): string {
   return new Date(value).toISOString();
 }
@@ -545,7 +402,7 @@ function stringList(value: unknown, field: string): string[] | undefined {
   return [...new Set(value as string[])];
 }
 
-function parseRelations(body: Record<string, unknown>): Relations {
+function parseRelations(body: Record<string, unknown>): IssueRelations {
   const labelIds = stringList(body.labelIds, "labelIds");
   const assigneeUserIds = stringList(body.assigneeUserIds, "assigneeUserIds");
   const nodeIds = stringList(body.nodeIds, "nodeIds");
@@ -556,12 +413,7 @@ function parseRelations(body: Record<string, unknown>): Relations {
   };
 }
 
-function parseUpdate(input: unknown): Relations & {
-  readonly title?: string;
-  readonly body?: string;
-  readonly state?: IssueState;
-  readonly stateReason: IssueStateReason | null;
-} {
+function parseUpdate(input: unknown): IssueUpdate {
   const body = record(input, ["title", "body", "state", "stateReason", "labelIds", "assigneeUserIds", "nodeIds"]);
   if (Object.keys(body).length === 0) throw invalid("At least one Issue field is required.");
   const state = body.state === undefined ? undefined : parseEnum(body.state, ["open", "closed"], "open", "state");
@@ -649,20 +501,4 @@ function decodeCursor<T extends object>(value: unknown, valid: (cursor: T) => bo
 
 function encodeCursor(cursor: object): string {
   return Buffer.from(JSON.stringify(cursor)).toString("base64url");
-}
-
-function invalid(message: string, field?: string): ApplicationError {
-  return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function notFound(): ApplicationError {
-  return new ApplicationError("NOT_FOUND", 404, "The resource was not found.");
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError("FORBIDDEN", 403, "The current user cannot perform this Issue action.");
-}
-
-function labelNameTaken(): ApplicationError {
-  return new ApplicationError("CONFLICT", 409, "A label with this name already exists.");
 }

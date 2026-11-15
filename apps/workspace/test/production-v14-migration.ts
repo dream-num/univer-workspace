@@ -1,4 +1,4 @@
-import { openWorkspaceDatabase } from "../dist/server/db/initialize.js";
+import { openWorkspaceDatabase } from "../dist/server/db/sqlite/initialize.js";
 import { verifyV14Migration } from "./support/v14-migration-checks.js";
 
 verifyV14Migration(openWorkspaceDatabase);

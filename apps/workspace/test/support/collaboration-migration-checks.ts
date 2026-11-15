@@ -4,12 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { decode } from "@msgpack/msgpack";
+import type { UnitCreationFactsReader } from "../../server/src/db/index.js";
 import type { prepareCollaborationDatabase } from "../../server/src/integrations/univer/migrations/prepare-collaboration-database.js";
 import type { createCollaborationRuntime } from "../../server/src/integrations/univer/unit-store.js";
 
 export async function verifyCollaborationMigration(
   prepare: typeof prepareCollaborationDatabase,
   createRuntime: typeof createCollaborationRuntime,
+  createProductFactsReader: (db: DatabaseSync) => UnitCreationFactsReader,
 ): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-sdk-migration-"));
   const schema = readFileSync(
@@ -35,7 +37,8 @@ export async function verifyCollaborationMigration(
     return { filename, db };
   };
   const productFilename = createProductDatabase(join(directory, "product.sqlite"));
-  const prepareWithProduct = (filename: string) => prepare(filename, productFilename);
+  const product = new DatabaseSync(productFilename, { readOnly: true });
+  const prepareWithProduct = (filename: string) => prepare(filename, createProductFactsReader(product));
   try {
     assert.deepEqual(await prepareWithProduct(join(directory, "fresh.sqlite")), {
       status: "fresh",
@@ -271,13 +274,16 @@ export async function verifyCollaborationMigration(
     const unpreparedProduct = join(directory, "product-v6.sqlite");
     const v6 = new DatabaseSync(unpreparedProduct);
     v6.exec("CREATE TABLE nodes (id TEXT); PRAGMA user_version = 6");
-    v6.close();
     const needsProduct = createLegacy("needs-product.sqlite", true);
     needsProduct.db.close();
-    await assert.rejects(
-      prepare(needsProduct.filename, unpreparedProduct),
-      /Prepare the product database to V21/,
-    );
+    try {
+      await assert.rejects(
+        prepare(needsProduct.filename, createProductFactsReader(v6)),
+        /Prepare the product database to V21/,
+      );
+    } finally {
+      v6.close();
+    }
     assert.equal(
       readdirSync(directory).some((name) => name.startsWith("needs-product.sqlite.pre-")),
       false,
@@ -333,6 +339,7 @@ export async function verifyCollaborationMigration(
       false,
     );
   } finally {
+    product.close();
     rmSync(directory, { recursive: true, force: true });
   }
 }
@@ -340,7 +347,7 @@ export async function verifyCollaborationMigration(
 function createProductDatabase(filename: string): string {
   const db = new DatabaseSync(filename);
   try {
-    db.exec(readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8"));
+    db.exec(readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8"));
     db.exec(`
       INSERT INTO users
         (id, username, display_name, avatar_url, created_at, updated_at)

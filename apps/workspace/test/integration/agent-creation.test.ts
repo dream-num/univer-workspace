@@ -1,6 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 
 const GATEWAY_ID = "univer-workspace-mcp-gateway";
@@ -14,7 +14,7 @@ interface Agent {
   readonly username: string;
 }
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
@@ -191,11 +191,11 @@ describe("agent creation rate limit", () => {
   });
 });
 
-async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: WorkspaceApplication }> {
-  const application = createWorkspaceApplication({
+async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: SqliteTestApplication }> {
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    databaseFilename: ":memory:",
+    productDatabase: { provider: "sqlite", filename: ":memory:" },
     collaborationDatabaseFilename: ":memory:",
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,

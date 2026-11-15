@@ -7,8 +7,8 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication } from "../../server/src/app.js";
-import { openWorkspaceDatabase } from "../../server/src/db/initialize.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
+import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
 import {
   createLegacyV0Schema,
   seedRichLegacyV0,
@@ -366,11 +366,11 @@ describe("automatic product database migration to V21", () => {
     const { directory, filename, legacy } = legacyDatabase();
     seedRichLegacyV0(legacy);
     legacy.close();
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
-        databaseFilename: filename,
+        productDatabase: { provider: "sqlite", filename: filename },
         collaborationDatabaseFilename: join(
           directory,
           "collaboration.sqlite"
@@ -676,11 +676,11 @@ describe("automatic product database migration to V21", () => {
 
   it("starts the application after V3 migration and recovers upload sessions", async () => {
     const { directory, filename } = richV3Database();
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
-        databaseFilename: filename,
+        productDatabase: { provider: "sqlite", filename: filename },
         collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
         blobDirectory: join(directory, "objects"),
         secureCookies: false,

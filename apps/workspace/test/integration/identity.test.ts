@@ -1,13 +1,13 @@
+import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { openWorkspaceDatabase } from "../../server/src/db/initialize.js";
+import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
 import { ApplicationError } from "../../server/src/middleware/errors.js";
 import {
   createIdentityModule,
   type DiscordOAuthProvider,
-  IdentityRepository,
   type GitHubOAuthProvider,
   type GoogleOAuthProvider,
 } from "../../server/src/modules/identity/index.js";
@@ -26,7 +26,7 @@ describe("identity", () => {
   it("creates the user, credential, personal space, and session atomically", async () => {
     const database = openWorkspaceDatabase(":memory:");
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
       now: () => 1_000,
     });
@@ -87,7 +87,7 @@ describe("identity", () => {
     const filename = join(directory, "product.sqlite");
     const firstDatabase = openWorkspaceDatabase(filename);
     const firstIdentity = createIdentityModule({
-      repository: new IdentityRepository(firstDatabase),
+      repository: createSqliteRepositories(firstDatabase).identity,
       sessionTtlMs: 60_000,
       now: () => 1_000,
     });
@@ -102,7 +102,7 @@ describe("identity", () => {
     const secondDatabase = openWorkspaceDatabase(filename);
     try {
       const secondIdentity = createIdentityModule({
-        repository: new IdentityRepository(secondDatabase),
+        repository: createSqliteRepositories(secondDatabase).identity,
         sessionTtlMs: 60_000,
         now: () => 2_000,
       });
@@ -146,7 +146,7 @@ describe("identity", () => {
   it("authenticates a registered user with their password", async () => {
     const database = openWorkspaceDatabase(":memory:");
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
     });
 
@@ -186,7 +186,7 @@ describe("identity", () => {
     const database = openWorkspaceDatabase(":memory:");
     let currentTime = 1_000;
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
       now: () => currentTime,
     });
@@ -242,7 +242,7 @@ describe("identity", () => {
   it("changes the current user's password", async () => {
     const database = openWorkspaceDatabase(":memory:");
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
     });
 
@@ -321,7 +321,7 @@ describe("identity", () => {
       },
     };
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
       githubOAuthProvider: provider,
       discordOAuthProvider: discordProvider,
@@ -476,7 +476,7 @@ describe("identity", () => {
       },
     };
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
       googleOAuthProvider: googleProvider,
       oauthStateSecret: "test-oauth-state-secret",
@@ -585,7 +585,7 @@ describe("identity", () => {
       },
     };
     const identity = createIdentityModule({
-      repository: new IdentityRepository(database),
+      repository: createSqliteRepositories(database).identity,
       sessionTtlMs: 60_000,
       discordOAuthProvider: discordProvider,
       oauthStateSecret: "test-oauth-state-secret",
@@ -637,7 +637,7 @@ describe("identity", () => {
 
   it("reports the trial deployment flag in authenticated sessions", async () => {
     const database = openWorkspaceDatabase(":memory:");
-    const repository = new IdentityRepository(database);
+    const repository = createSqliteRepositories(database).identity;
     const regular = createIdentityModule({ repository, sessionTtlMs: 60_000 });
     const trial = createIdentityModule({
       repository,
@@ -666,7 +666,7 @@ describe("identity", () => {
 
   it("rejects password registration, login, and changes when password auth is disabled", async () => {
     const database = openWorkspaceDatabase(":memory:");
-    const repository = new IdentityRepository(database);
+    const repository = createSqliteRepositories(database).identity;
     const enabled = createIdentityModule({
       repository,
       sessionTtlMs: 60_000,
@@ -734,7 +734,7 @@ describe("identity", () => {
 
   it("keeps GitHub linked when password no longer counts as a sign-in method", async () => {
     const database = openWorkspaceDatabase(":memory:");
-    const repository = new IdentityRepository(database);
+    const repository = createSqliteRepositories(database).identity;
     const provider: GitHubOAuthProvider = {
       authorizationUrl: ({ state, codeChallenge }) =>
         `https://github.example/authorize?state=${state}&code_challenge=${codeChallenge}`,

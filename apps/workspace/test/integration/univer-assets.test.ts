@@ -11,11 +11,11 @@ import { join } from "node:path";
 import { ErrorCode } from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
 
@@ -296,7 +296,7 @@ describe("Univer embedded assets", () => {
     const config = {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: join(directory, "product.sqlite"),
+      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       blobDirectory,
       secureCookies: false,
@@ -309,7 +309,7 @@ describe("Univer embedded assets", () => {
         },
       },
     };
-    const first = createWorkspaceApplication(config, dependencies);
+    const first = createSqliteTestApplication(config, dependencies);
     applications.push(first);
     const owner = await register(first, "asset-recovery-owner");
     const slide = await createSlide(first, owner.userId, "Recovery Slide");
@@ -368,7 +368,7 @@ describe("Univer embedded assets", () => {
     await first.close();
     applications.splice(applications.indexOf(first), 1);
 
-    const restarted = createWorkspaceApplication(config, dependencies);
+    const restarted = createSqliteTestApplication(config, dependencies);
     applications.push(restarted);
     expect(count(restarted, "univer_asset_uploads")).toBe(0);
     expect(count(restarted, "univer_assets")).toBe(1);
@@ -391,15 +391,15 @@ describe("Univer embedded assets", () => {
 });
 
 async function startApplication(): Promise<{
-  readonly application: WorkspaceApplication;
+  readonly application: SqliteTestApplication;
   readonly origin: string;
 }> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-univer-assets-"));
   directories.push(directory);
-  const application = createWorkspaceApplication({
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     blobDirectory: join(directory, "objects"),
     secureCookies: false,
@@ -420,7 +420,7 @@ async function startApplication(): Promise<{
 }
 
 async function register(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   username: string
 ): Promise<{ readonly userId: string; readonly cookie: string }> {
   const issued = await application.identity.registerWithPassword({
@@ -435,7 +435,7 @@ async function register(
 }
 
 async function createSlide(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   userId: string,
   name: string
 ): Promise<{ readonly nodeId: string; readonly unitId: string }> {
@@ -493,7 +493,7 @@ async function uploadImage(input: {
 }
 
 function assetScope(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   assetId: string
 ): { readonly unit_id: string; readonly worktree_id: string | null } {
   return application.database.connection.prepare(
@@ -504,7 +504,7 @@ function assetScope(
   };
 }
 
-function count(application: WorkspaceApplication, table: string): number {
+function count(application: SqliteTestApplication, table: string): number {
   return (
     application.database.connection
       .prepare(`SELECT COUNT(*) AS count FROM ${table}`)

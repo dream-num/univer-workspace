@@ -1,19 +1,17 @@
 import { createSkillSourcesModule } from "./modules/skill-drafts/sources.service.js";
-import { SkillDraftsRepository, createSkillDraftsModule, createSkillDraftsRouter, type SkillDraftsModule } from "./modules/skill-drafts/index.js";
-import { HtmlViewDraftsRepository, createHtmlViewDraftsModule, createHtmlViewDraftsRouter, type HtmlViewDraftsModule } from "./modules/html-view-drafts/index.js";
+import { createSkillDraftsModule, createSkillDraftsRouter, type SkillDraftsModule } from "./modules/skill-drafts/index.js";
+import { createHtmlViewDraftsModule, createHtmlViewDraftsRouter, type HtmlViewDraftsModule } from "./modules/html-view-drafts/index.js";
 import { createClientMetadataDocumentResolver, type FetchClientMetadataDocument } from "./modules/identity/client-metadata-document.js";
 import { createActivityModule, createActivityRouter } from "./modules/activity/index.js";
 import { createStandaloneAppRouter } from "./modules/views/standalone-app.router.js";
 import { existsSync } from "node:fs";
 import type { Server } from "node:http";
 import { resolve } from "node:path";
-import { ContentPermissionsRepository } from "./modules/content-permissions/index.js";
 import { createContentPermissions } from "./integrations/univer/content-permissions.js";
 import { apiReference } from "@scalar/express-api-reference";
 import express from "express";
 import type { WorkspaceConfig } from "./config.js";
-import type { WorkspaceDatabase } from "./db/database.js";
-import { openWorkspaceDatabase } from "./db/initialize.js";
+import type { ProductRepositories } from "./db/index.js";
 import {
   createEmailSender,
   type EmailSender,
@@ -45,12 +43,10 @@ import {
 import { createRequestLoggingMiddleware } from "./middleware/logging.js";
 import { createStaticSiteRouter } from "./middleware/static-site.js";
 import {
-  AccessRepository,
   createAccessResolver,
   type AccessResolver,
 } from "./modules/access/index.js";
 import {
-  NodesRepository,
   createNodesModule,
   createNodesRouter,
   type NodesModule,
@@ -58,7 +54,6 @@ import {
 import {
   createResourcesModule,
   createResourcesRouter,
-  ResourcesRepository,
   type ResourcesModule,
 } from "./modules/resources/index.js";
 import {
@@ -75,54 +70,45 @@ import {
   type GoogleOAuthProvider,
   type GitHubOAuthProvider,
   type IssuedAuthorization,
-  IdentityRepository,
   type IdentityModule,
 } from "./modules/identity/index.js";
 import {
   createPermissionsModule,
   createPermissionsRouter,
-  PermissionsRepository,
   type PermissionsModule,
 } from "./modules/permissions/index.js";
 import {
   createOperationsModule,
   createOperationsRouter,
-  OperationsRepository,
   type OperationsModule,
 } from "./modules/operations/index.js";
 import {
   createSpacesModule,
   createSpacesRouter,
-  SpacesRepository,
   type SpacesModule,
 } from "./modules/spaces/index.js";
 import {
   createViewsModule,
   createViewsRouter,
-  ViewsRepository,
   type ViewsModule,
 } from "./modules/views/index.js";
 import {
   createIssuesModule,
   createIssuesRouter,
-  IssuesRepository,
   type IssuesModule,
 } from "./modules/issues/index.js";
 import {
   createTrashModule,
   createTrashRouter,
-  TrashRepository,
   type TrashModule,
 } from "./modules/trash/index.js";
 import {
   createWorktreesModule,
   createWorktreesRouter,
-  WorktreesRepository,
   type WorktreeBackend,
   type WorktreesModule,
 } from "./modules/worktrees/index.js";
 import {
-  BlobsRepository,
   createBlobsModule,
   createBlobsRouter,
   type BlobsModule,
@@ -130,7 +116,6 @@ import {
 import {
   createUniverAssetsModule,
   createUniverAssetsRouter,
-  UniverAssetsRepository,
   type UniverAssetsModule,
 } from "./modules/univer-assets/index.js";
 import {
@@ -141,7 +126,6 @@ import {
 
 export interface WorkspaceApplication {
   readonly app: express.Express;
-  readonly database: WorkspaceDatabase;
   readonly identity: IdentityModule;
   readonly access: AccessResolver;
   readonly spaces: SpacesModule;
@@ -166,6 +150,7 @@ export interface WorkspaceApplication {
 
 export function createWorkspaceApplication(
   config: WorkspaceConfig,
+  repositories: ProductRepositories,
   dependencies: {
     readonly unitStore?: UnitStore;
     readonly unitSnapshotStore?: UnitSnapshotStore;
@@ -180,7 +165,6 @@ export function createWorkspaceApplication(
     readonly fetchClientMetadataDocument?: FetchClientMetadataDocument;
   } = {},
 ): WorkspaceApplication {
-  const database = openWorkspaceDatabase(config.databaseFilename);
   const oauthStateSecret =
     dependencies.oauthStateSecret ??
     config.githubOAuth?.clientSecret ??
@@ -189,10 +173,10 @@ export function createWorkspaceApplication(
   const emailSender =
     dependencies.emailSender ??
     (config.emailAuth ? createEmailSender(config.emailAuth) : null);
-  const identityRepository = new IdentityRepository(database);
+  const identityRepository = repositories.identity;
   const sessionSockets = createSessionSockets((sessionId) => identityRepository.findSession(sessionId) !== null);
   const onSessionsDeleted = sessionSockets.closeSessions;
-  const accessTokens = createAccessTokenService({ database, onSessionsDeleted });
+  const accessTokens = createAccessTokenService({ repository: repositories.accessTokens, onSessionsDeleted });
   const identity = createIdentityModule({
     repository: identityRepository,
     onSessionsDeleted,
@@ -221,7 +205,7 @@ export function createWorkspaceApplication(
       ? {}
       : { agentCreateLimitPerHour: config.agentCreateLimitPerHour }),
   });
-  const resourcesRepository = new ResourcesRepository(database);
+  const resourcesRepository = repositories.resources;
   let collaboration: CollaborationRuntime | null = null;
   const unitStore =
     dependencies.unitStore ??
@@ -245,13 +229,14 @@ export function createWorkspaceApplication(
     dependencies.unitSnapshotStore ??
     collaboration?.unitSnapshotStore ??
     unavailableUnitSnapshotStore();
-  const access = createAccessResolver(new AccessRepository(database));
+  const access = createAccessResolver(repositories.access);
   const spaces = createSpacesModule({
-    repository: new SpacesRepository(database),
+    repository: repositories.spaces,
+    pins: repositories.spacePins,
     access,
   });
   const nodes = createNodesModule({
-    repository: new NodesRepository(database),
+    repository: repositories.nodes,
     access,
   });
   const resources = createResourcesModule({
@@ -261,11 +246,11 @@ export function createWorkspaceApplication(
   });
   const { blobStore: injectedBlobStore } = dependencies;
   const blobStore = injectedBlobStore ?? createBlobStore(config);
-  const skillSources = createSkillSourcesModule({ access, nodes: new NodesRepository(database), store: blobStore, ...(config.githubToken ? { githubToken: config.githubToken } : {}) });
-  const skillDrafts = createSkillDraftsModule({ repository: new SkillDraftsRepository(database), access, store: blobStore, sources: skillSources });
-  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: new HtmlViewDraftsRepository(database), access, store: blobStore });
+  const skillSources = createSkillSourcesModule({ access, nodes: repositories.nodes, store: blobStore, ...(config.githubToken ? { githubToken: config.githubToken } : {}) });
+  const skillDrafts = createSkillDraftsModule({ repository: repositories.skillDrafts, access, store: blobStore, sources: skillSources });
+  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore });
   const blobs = createBlobsModule({
-    repository: new BlobsRepository(database),
+    repository: repositories.blobs,
     access,
     store: blobStore,
     ...(config.maxBlobBytes === undefined
@@ -273,30 +258,30 @@ export function createWorkspaceApplication(
       : { maxBlobBytes: config.maxBlobBytes }),
   });
   const views = createViewsModule({
-    repository: new ViewsRepository(database),
+    repository: repositories.views,
     access,
   });
   let invalidateRealtimeNodeAccess: () => void = () => undefined;
   const permissions = createPermissionsModule({
-    repository: new PermissionsRepository(database),
+    repository: repositories.permissions,
     access,
     onLinkSharingUpdated: () => invalidateRealtimeNodeAccess(),
     onAccessRevoked: () => invalidateRealtimeNodeAccess(),
   });
   const trash = createTrashModule({
-    repository: new TrashRepository(database),
+    repository: repositories.trash,
     access,
   });
-  const univerAssetsRepository = new UniverAssetsRepository(database);
+  const univerAssetsRepository = repositories.univerAssets;
   const worktreeChangeFeed = createWorktreeChangeFeed(sessionSockets);
   const issues = createIssuesModule({
-    repository: new IssuesRepository(database),
+    repository: repositories.issues,
     access,
     onChanged: (change) => worktreeChangeFeed.publishIssues(change),
   });
   const worktrees = createWorktreesModule({
     trash,
-    repository: new WorktreesRepository(database),
+    repository: repositories.worktrees,
     access,
     backend:
       dependencies.worktreeBackend ??
@@ -315,7 +300,7 @@ export function createWorkspaceApplication(
     store: blobStore,
   });
   const operations = createOperationsModule({
-    repository: new OperationsRepository(database),
+    repository: repositories.operations,
     resources,
     worktrees,
   });
@@ -331,7 +316,7 @@ export function createWorkspaceApplication(
   const collaborationGateway: CollaborationGateway | null = collaboration
     ? createCollaborationGateway({
         contentPermissions: createContentPermissions({
-          repository: new ContentPermissionsRepository(database),
+          repository: repositories.contentPermissions,
           access,
           identity,
           worktrees,
@@ -413,7 +398,6 @@ export function createWorkspaceApplication(
     createOAuthAuthorizationRouter({
       identity,
       accessTokens,
-      database,
       secureCookies: config.secureCookies,
       oauthClients,
       authorizationStore,
@@ -468,7 +452,6 @@ export function createWorkspaceApplication(
 
   return {
     app,
-    database,
     identity,
     access,
     spaces,
@@ -511,11 +494,7 @@ export function createWorkspaceApplication(
           try {
             await collaboration?.dispose();
           } finally {
-            try {
-              database.close();
-            } finally {
-              if (!injectedBlobStore) await blobStore.dispose?.();
-            }
+            if (!injectedBlobStore) await blobStore.dispose?.();
           }
         }
       }

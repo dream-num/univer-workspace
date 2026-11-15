@@ -3,14 +3,14 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { WorkspaceDatabase } from "../../server/src/db/database.js";
+import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
 
 // V21 adds users.kind; compare the columns Users already had.
 const USER_COLUMNS = "id, username, display_name, avatar_url, created_at, updated_at, email";
 
-export function verifyV19Migration(open: (filename: string) => WorkspaceDatabase): void {
+export function verifyV19Migration(open: (filename: string) => SqliteDatabase): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v19-"));
-  const schema = readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8");
   const fixture = (filename: string, seeded: boolean) => {
     const db = new DatabaseSync(filename);
     db.exec(schema);

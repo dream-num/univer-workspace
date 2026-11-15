@@ -1,11 +1,11 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
@@ -24,11 +24,11 @@ afterEach(async () => {
 
 describe("Node/Resource HTTP API", () => {
   it("supports Resource Nodes as parents and exposes no legacy routes", async () => {
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
-        databaseFilename: ":memory:",
+        productDatabase: { provider: "sqlite", filename: ":memory:" },
         collaborationDatabaseFilename: ":memory:",
         secureCookies: false,
         sessionTtlMs: 60_000,

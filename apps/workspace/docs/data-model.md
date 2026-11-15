@@ -2,7 +2,7 @@
 
 状态：V21，已实现
 
-权威定义：`server/src/db/schema.sql`
+权威定义：`server/src/db/sqlite/schema.sql`
 
 产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
 `PRAGMA user_version = 21`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
@@ -534,7 +534,7 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 
 ## 一次性自动迁移边界
 
-临时迁移入口位于 `server/src/db/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
+临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
 1. 不存在或空文件：创建 V21，不备份；
