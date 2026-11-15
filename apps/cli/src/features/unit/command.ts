@@ -1,8 +1,9 @@
 import { Command } from "commander";
 import type { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-core";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
+import type { RepoContext } from "../../repo-context.js";
 
-export function createUnitCommand(feature: WorkspaceUnitFeature): Command {
+export function createUnitCommand(feature: WorkspaceUnitFeature, context: RepoContext): Command {
   const root = new Command("unit").description("Manage Worktree Units");
   const list = new Command("list")
     .requiredOption("--worktree <id>")
@@ -30,7 +31,7 @@ export function createUnitCommand(feature: WorkspaceUnitFeature): Command {
     );
   const create = new Command("create")
     .requiredOption("--worktree <id>")
-    .requiredOption("--space <id>")
+    .requiredOption("--space <repo>", "owner/slug, unique bare slug from repo list, Space ID or URL")
     .requiredOption("--type <type>")
     .requiredOption("--name <name>")
     .option("--parent <node>")
@@ -53,7 +54,7 @@ export function createUnitCommand(feature: WorkspaceUnitFeature): Command {
             async () =>
               await feature.create({
                 name: options.name,
-                spaceId: options.space,
+                spaceId: (await context.repo(options.space)).spaceId,
                 type: oneOf(options.type, ["sheet", "doc", "slide", "base", "board"], "--type"),
                 worktreeId: options.worktree,
                 ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
