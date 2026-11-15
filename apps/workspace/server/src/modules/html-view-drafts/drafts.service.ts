@@ -5,7 +5,7 @@ import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { assertCeiling, type AccessResolver } from "../access/index.js";
-import { HtmlViewDraftsRepository, draftConflict } from "./drafts.repository.js";
+import { type HtmlViewDraftsRepository, draftConflict } from "./drafts.repository.js";
 import type { DraftRow, HtmlViewDraftView } from "./drafts.types.js";
 
 const id = z.string().trim().min(1).max(255);

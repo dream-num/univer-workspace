@@ -8,11 +8,10 @@ import type { Principal } from "../identity/index.js";
 import { nodeSummary } from "../nodes/nodes.service.js";
 import type { ResourceCreateResponse } from "../resources/index.js";
 import {
-  BlobsRepository,
+  type BlobsRepository,
   BlobReplacementConflictError,
   BlobReservationConflictError,
   BlobUploadStateConflictError,
-  blobOperationView,
   type BlobUploadIntent,
   type BlobUploadRow,
   type ReservedBlobUpload,
@@ -91,7 +90,7 @@ export function createBlobsModule(options: {
 
   function envelope(value: ReservedBlobUpload): BlobUploadSessionEnvelope {
     return {
-      operation: blobOperationView(value.operation),
+      operation: value.operation,
       upload: uploadView(value.upload),
       uploadTarget:
         value.upload.state === "waiting_for_upload"
@@ -108,14 +107,14 @@ export function createBlobsModule(options: {
     readonly body: ResourceCreateResponse;
   } {
     const access = options.access.resolveResource(
-      value.operation.actor_user_id,
+      value.actorUserId,
       value.upload.resource_id
     );
     if (!access) throw notFound();
     return {
       status,
       body: {
-        operation: blobOperationView(value.operation),
+        operation: value.operation,
         node: nodeSummary(access.node),
       },
     };
@@ -446,8 +445,8 @@ function assertSameIntent(
 ): void {
   const payload = value.payload;
   if (
-    value.operation.kind !== "create_blob_resource" ||
-    value.operation.actor_user_id !== userId ||
+    value.operation.kind !== "createBlobResource" ||
+    value.actorUserId !== userId ||
     payload.spaceId !== intent.spaceId ||
     payload.parentNodeId !== intent.parentNodeId ||
     payload.name !== intent.name ||

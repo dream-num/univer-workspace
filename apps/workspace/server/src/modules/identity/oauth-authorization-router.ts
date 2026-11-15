@@ -2,10 +2,9 @@ import { ClientMetadataDocumentError, type CimdClient, type CimdClientId } from 
 import { randomBytes } from "node:crypto";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { WorkspaceDatabase } from "../../db/database.js";
-import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord, type SubjectToken } from "./access-tokens.js";
+import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord } from "./access-tokens.js";
 import type { IdentityModule } from "./identity.service.js";
-import type { IssuedSession, User } from "./identity.types.js";
+import type { User } from "./identity.types.js";
 import {
   authorizeRedirectTarget,
   defaultOAuthScope,
@@ -48,7 +47,6 @@ const SCOPE_DESCRIPTIONS: Readonly<Record<McpScope, string>> = {
 export function createOAuthAuthorizationRouter(options: {
   readonly identity: IdentityModule;
   readonly accessTokens: AccessTokenService;
-  readonly database: WorkspaceDatabase;
   readonly secureCookies: boolean;
   readonly oauthClients: OAuthClientConfig | null;
   readonly authorizationStore: Map<string, IssuedAuthorization>;
@@ -163,9 +161,9 @@ export function createOAuthAuthorizationRouter(options: {
     response.redirect(303, issueAuthorization(options, authorizationRequest, session.user));
   });
 
-  router.post("/token", (request, response) => {
+  router.post("/token", async (request, response) => {
     if (request.body?.grant_type === TOKEN_EXCHANGE_GRANT_TYPE) {
-      exchangeToken(request, response);
+      await exchangeToken(request, response);
       return;
     }
     const source = resolveClientSource(request.body?.client_id, clients, options.accessTokens, mcp);
@@ -380,7 +378,7 @@ export function createOAuthAuthorizationRouter(options: {
     sendGrant(response, issued);
   }
 
-  function exchangeToken(request: Request, response: Response): void {
+  async function exchangeToken(request: Request, response: Response): Promise<void> {
     response.set({ "cache-control": "no-store", pragma: "no-cache" });
     const fail = (status: number, error: string) => response.status(status).json({ error });
     if (!request.is("application/x-www-form-urlencoded")) {
@@ -413,31 +411,16 @@ export function createOAuthAuthorizationRouter(options: {
     }
     const subjectToken = body.subject_token;
     const resource = body.resource ?? "";
-    // One transaction: a revoke cannot land between the revocation check and the session insert.
-    const exchanged = options.database.transaction((): { subject: SubjectToken; issued: IssuedSession; ttlMs: number } | null => {
-      const subject = options.accessTokens.verifySubjectToken(subjectToken, { resource });
-      if (subject === null) return null;
-      const user = options.identity.authenticateUser(subject.userId);
-      if (user === null) return null;
-      const ttlMs = Math.min(
-        DOWNSTREAM_SESSION_TTL_MS,
-        options.identity.sessionTtlMs,
-        subject.expiresAt === null ? Infinity : subject.expiresAt - Date.now(),
-      );
-      if (ttlMs < 1000) return null;
-      const issued = options.identity.issueSession(user, "agent", {
-        ttlMs,
-        issuedFor: { kind: subject.kind, id: subject.id },
-      });
-      return { subject, issued, ttlMs };
-    });
+    const exchanged = await options.accessTokens.exchangeSubjectToken(
+      subjectToken, resource, Math.min(DOWNSTREAM_SESSION_TTL_MS, options.identity.sessionTtlMs)
+    );
     if (exchanged === null) {
       fail(400, "invalid_grant");
       return;
     }
-    const { subject, issued, ttlMs } = exchanged;
+    const { subject, ttlMs, user, cookieValue } = exchanged;
     response.json({
-      access_token: issued.cookieValue,
+      access_token: cookieValue,
       issued_token_type: WORKSPACE_SESSION_TOKEN_TYPE,
       token_type: "N_A",
       expires_in: Math.floor(ttlMs / 1000),
@@ -447,7 +430,7 @@ export function createOAuthAuthorizationRouter(options: {
         id: subject.id,
         client_id: subject.kind === "oauth" ? subject.clientId : null,
       },
-      user: issued.view.user,
+      user,
     });
   }
 

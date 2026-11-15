@@ -42,19 +42,19 @@ export function createSpacesRouter(options: {
     response.json(options.spaces.explore(session.user.id));
   });
 
-  router.get("/spaces/pins", (request, response) => {
+  router.get("/spaces/pins", async (request, response) => {
     const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.getPins(session.user.id));
+    response.json(await options.spaces.getPins(session.user.id));
   });
 
-  router.put("/spaces/pins", (request, response) => {
+  router.put("/spaces/pins", async (request, response) => {
     const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.setPins(session.user.id, request.body?.spaceIds));
+    response.json(await options.spaces.setPins(session.user.id, request.body?.spaceIds));
   });
 
-  router.delete("/spaces/pins", (request, response) => {
+  router.delete("/spaces/pins", async (request, response) => {
     const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.resetPins(session.user.id));
+    response.json(await options.spaces.resetPins(session.user.id));
   });
 
   router.get("/spaces/:spaceId", (request, response) => {

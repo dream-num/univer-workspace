@@ -1,4 +1,4 @@
-export { UniverAssetsRepository } from "./univer-assets.repository.js";
+export type { UniverAssetsRepository } from "./univer-assets.repository.js";
 export { createUniverAssetsRouter } from "./univer-assets.router.js";
 export {
   createUniverAssetsModule,

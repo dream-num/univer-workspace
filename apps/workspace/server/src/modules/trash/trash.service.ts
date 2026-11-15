@@ -2,10 +2,10 @@ import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import { assertCeiling, type AccessResolver } from "../access/index.js";
 import { nodeSummary } from "../nodes/nodes.service.js";
-import {
+import type {
   TrashRepository,
-  type TrashBatchRow,
-  type TrashCursor,
+  TrashBatchRow,
+  TrashCursor,
 } from "./trash.repository.js";
 import type {
   TrashBatchView,

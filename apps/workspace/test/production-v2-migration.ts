@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createWorkspaceApplication } from "../dist/server/app.js";
+import { createProductionTestApplication } from "./support/sqlite/production-application.js";
 import { DROP_V12_SQL } from "./support/v12-downgrade.js";
 import { DROP_V14_SQL } from "./support/v14-downgrade.js";
 
@@ -12,7 +12,7 @@ const databaseFilename = join(directory, "workspace.sqlite");
 const config = {
   host: "127.0.0.1",
   port: 0,
-  databaseFilename,
+  productDatabase: { provider: "sqlite", filename: databaseFilename },
   collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "objects"),
   secureCookies: false,
@@ -28,8 +28,8 @@ const dependencies = {
 };
 
 try {
-  const fresh = createWorkspaceApplication(config, dependencies);
-  fresh.database.connection.exec(`
+  const fresh = await createProductionTestApplication(config, dependencies);
+  fresh.connection.exec(`
     INSERT INTO users (id, username, display_name, created_at, updated_at)
     VALUES ('owner', 'owner', 'Owner', 1, 1);
     INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at)
@@ -102,13 +102,13 @@ try {
   `);
   v2.close();
 
-  const migrated = createWorkspaceApplication(config, dependencies);
+  const migrated = await createProductionTestApplication(config, dependencies);
   try {
-    const version = migrated.database.connection
+    const version = migrated.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
     assert.equal(version.user_version, 21);
-    const deletion = migrated.database.connection
+    const deletion = migrated.connection
       .prepare("SELECT reason FROM object_deletion_jobs")
       .get() as { readonly reason: string };
     assert.equal(deletion.reason, "blob_upload_abandoned");

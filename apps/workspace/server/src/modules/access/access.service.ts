@@ -1,10 +1,10 @@
 import { ANONYMOUS_USER_ID, principalCategory, type PrincipalCategory } from "../identity/index.js";
-import {
+import type {
   AccessRepository,
-  type NodeAuthorizationRow,
-  type ResolvedNodeRow,
-  type ResourceMappingRow,
-  type SpaceAccessRow,
+  NodeAuthorizationRow,
+  ResolvedNodeRow,
+  ResourceMappingRow,
+  StoredSpaceAccess,
 } from "./access.repository.js";
 import type {
   AccessRole,
@@ -154,7 +154,7 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     resolveOwnedResources(userId, resourceIds) {
       const resources = new Map<string, ResourceAccess>();
       if (userId === ANONYMOUS_USER_ID) return resources;
-      // Ownership is checked in SQL, not trusted from the caller's candidate list.
+      // The repository checks ownership for every candidate.
       for (const row of repository.resolveOwnedResources(userId, resourceIds)) {
         const resource = resourceAccess(userId, row, nodeAccess(userId, row));
         if (resource) resources.set(resource.id, resource);
@@ -164,7 +164,7 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
     resolveSpace(userId, spaceId) {
       const row = repository.resolveSpace(userId, spaceId);
       if (!row) return null;
-      return spaceAccessFromRow(userId, row);
+      return resolveStoredSpaceAccess(userId, row);
     },
     resolveNode,
     resolveResource(userId, resourceId) {
@@ -192,20 +192,20 @@ function requesterCategory(
   );
 }
 
-export function spaceAccessFromRow(userId: string, row: SpaceAccessRow): SpaceAccess | null {
-  const assignedRole = row.owner_user_id === userId ? "owner" : row.member_role;
+export function resolveStoredSpaceAccess(userId: string, row: StoredSpaceAccess): SpaceAccess | null {
+  const assignedRole = row.ownerUserId === userId ? "owner" : row.memberRole;
   const member = userId !== ANONYMOUS_USER_ID && assignedRole !== null;
   const role = highestRole(
     userId === ANONYMOUS_USER_ID ? null : assignedRole,
-    row.public_read ? "viewer" : null,
+    row.publicRead ? "viewer" : null,
   );
   if (!role) return null;
   return {
     id: row.id,
     type: row.type,
     name: row.name,
-    ownerUserId: row.owner_user_id,
-    publicRead: Boolean(row.public_read),
+    ownerUserId: row.ownerUserId,
+    publicRead: row.publicRead,
     role,
     member,
     capabilities: spaceCapabilities(role, { type: row.type, member }),

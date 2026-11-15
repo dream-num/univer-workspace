@@ -1,11 +1,11 @@
 import { ApplicationError } from "../../middleware/errors.js";
 import { assertCeiling, type AccessResolver } from "../access/index.js";
-import {
+import type {
   PermissionsRepository,
-  type GrantRow,
-  type LinkSharingRow,
-  type MembershipRow,
-  type NodeOwnerRow,
+  GrantRow,
+  LinkSharingRow,
+  MembershipRow,
+  NodeOwnerRow,
 } from "./permissions.repository.js";
 import type {
   NodeLinkSharing,

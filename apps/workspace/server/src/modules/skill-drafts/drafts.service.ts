@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { assertCeiling, type AccessResolver } from "../access/index.js";
-import { SkillDraftsRepository, draftConflict, type SkillTarget } from "./drafts.repository.js";
+import { type SkillDraftsRepository, draftConflict, type SkillTarget } from "./drafts.repository.js";
 import {
   draftBase,
   draftFiles,

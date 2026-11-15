@@ -11,13 +11,13 @@ import {
   type UniverResourceAccess,
   type UnitType,
 } from "../access/index.js";
-import {
+import type {
   WorktreesRepository,
-  type WorktreeCursor,
-  type WorktreeOperationDatabaseKind,
-  type WorktreeOperationRow,
-  type WorktreeRow,
-  type WorktreeUnitRow,
+  WorktreeCursor,
+  WorktreeOperationDatabaseKind,
+  WorktreeOperationRow,
+  WorktreeRow,
+  WorktreeUnitRow,
 } from "./worktrees.repository.js";
 import type {
   ActivationState,

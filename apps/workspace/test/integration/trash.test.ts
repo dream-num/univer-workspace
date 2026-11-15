@@ -1,11 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
-import { TrashRepository } from "../../server/src/modules/trash/trash.repository.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 
 afterEach(async () => {
   await Promise.all(
@@ -39,7 +38,7 @@ describe("Trash Batches", () => {
     application.trash.restore(owner.id, batchId);
     application.trash.trashNodeOnce(owner.id, nodeId, batchId);
     // The repository also protects callers that observed an absent batch before another writer.
-    new TrashRepository(application.database).trashNode({
+    application.repositories.trash.trashNode({
       batchId,
       nodeId,
       spaceId: space.id,
@@ -68,7 +67,7 @@ describe("Trash Batches", () => {
     expect(() => application.trash.trashNodeOnce(owner.id, resource.node.id, batchId)).toThrow(
       "Injected Trash failure",
     );
-    expect(new TrashRepository(application.database).findBatch(batchId)).toBeNull();
+    expect(application.repositories.trash.findBatch(batchId)).toBeNull();
     expect(
       application.resources.get(owner.id, resource.resourceId).resource.id
     ).toBe(resource.resourceId);
@@ -204,12 +203,12 @@ describe("Trash Batches", () => {
   });
 });
 
-function createTestApplication(): WorkspaceApplication {
-  const application = createWorkspaceApplication(
+function createTestApplication(): SqliteTestApplication {
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
-      databaseFilename: ":memory:",
+      productDatabase: { provider: "sqlite", filename: ":memory:" },
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -227,7 +226,7 @@ function createTestApplication(): WorkspaceApplication {
 }
 
 async function register(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   username: string
 ) {
   const issued = await application.identity.registerWithPassword({
@@ -239,7 +238,7 @@ async function register(
 }
 
 async function createResource(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   userId: string,
   spaceId: string,
   parentNodeId: string | null,

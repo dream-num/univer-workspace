@@ -3,14 +3,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 
 it("persists per-user Space stars across restart and enforces access at the HTTP boundary", async () => {
   const root = mkdtempSync(join(tmpdir(), "workspace-stars-"));
   const config = {
     host: "127.0.0.1",
     port: 0,
-    databaseFilename: join(root, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(root, "product.sqlite") },
     collaborationDatabaseFilename: ":memory:",
     blobDirectory: join(root, "blobs"),
     secureCookies: false,
@@ -23,7 +23,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
       createUnit: async (input: { unitId: string }) => ({ unitId: input.unitId, headRevision: 1 }),
     },
   };
-  let application = createWorkspaceApplication(config, dependencies);
+  let application = createSqliteTestApplication(config, dependencies);
   let server: Server | undefined;
   try {
     const owner = await application.identity.registerWithPassword({
@@ -97,7 +97,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
     await close(server);
     server = undefined;
     await application.close();
-    application = createWorkspaceApplication(config, dependencies);
+    application = createSqliteTestApplication(config, dependencies);
     server = createServer(application.app);
     origin = await listen(server);
     expect(await request(team.id, "GET", readerCookie)).toEqual({

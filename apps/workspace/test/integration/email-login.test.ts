@@ -1,17 +1,17 @@
+import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
-import type { WorkspaceDatabase } from "../../server/src/db/database.js";
-import { openWorkspaceDatabase } from "../../server/src/db/initialize.js";
+import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
+import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
 import type { EmailMessage, EmailSender } from "../../server/src/integrations/email/index.js";
 import {
   createIdentityModule,
-  IdentityRepository,
   type IdentityModule,
 } from "../../server/src/modules/identity/index.js";
 
 import { expectSessionSource } from "../fixtures/session-source.js";
 
-const workspaces: WorkspaceDatabase[] = [];
+const workspaces: SqliteDatabase[] = [];
 
 afterEach(() => {
   for (const workspace of workspaces.splice(0)) workspace.close();
@@ -287,7 +287,7 @@ function createHarness(
           },
         };
   const identity = createIdentityModule({
-    repository: new IdentityRepository(workspace),
+    repository: createSqliteRepositories(workspace).identity,
     sessionTtlMs: 60_000,
     ...(sender ? { emailSender: sender } : {}),
     now: () => currentTime,

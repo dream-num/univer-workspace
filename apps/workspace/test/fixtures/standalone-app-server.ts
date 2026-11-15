@@ -5,13 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable } from "node:stream";
 import { randomUUID } from "node:crypto";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 import { interactivePrincipal } from "./principal.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-standalone-"));
-const application = createWorkspaceApplication({
+const application = createSqliteTestApplication({
   host: "127.0.0.1", port: 3092,
-  databaseFilename: join(directory, "product.sqlite"),
+  productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
   collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "blobs"), secureCookies: false, sessionTtlMs: 3_600_000, passwordAuthEnabled: true,
 }, {unitStore: {async createUnit(input) {return {unitId: input.unitId, headRevision: 1};}}});

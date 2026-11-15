@@ -3,13 +3,13 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
 const ISSUER = "https://space.example.test";
 const RESOURCE = `${ISSUER}/mcp`;
 const GATEWAY_ID = "univer-workspace-mcp-gateway";
 const GATEWAY_SECRET = "test-gateway-secret-at-least-32-characters";
-let application: WorkspaceApplication | undefined;
+let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
 
@@ -126,9 +126,9 @@ function exchange(origin: string, token: string, resource: string): Promise<Resp
 
 async function start(resources: string[] | null = [RESOURCE]): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-agent-token-"));
-  application = createWorkspaceApplication({
+  application = createSqliteTestApplication({
     host: "127.0.0.1", port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,

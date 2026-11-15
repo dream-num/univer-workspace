@@ -12,7 +12,7 @@ export function verifyV17Migration(
   open: (filename: string) => { connection: DatabaseSync; close(): void },
 ): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v17-migration-"));
-  const schema = readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8");
   const tableNames = (database: DatabaseSync) =>
     database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' ORDER BY name")
       .all().map((row) => String(row.name));

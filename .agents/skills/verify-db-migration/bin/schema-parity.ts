@@ -10,7 +10,8 @@ import { DatabaseSync } from "node:sqlite";
 import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 
-const SCHEMA = "apps/workspace/server/src/db/schema.sql";
+const SCHEMA = "apps/workspace/server/src/db/sqlite/schema.sql";
+const SCHEMA_PATHS = [SCHEMA, "apps/workspace/server/src/db/schema.sql"];
 const { values: options } = parseArgs({
   options: {
     dist: { type: "boolean", default: false },
@@ -20,20 +21,28 @@ const { values: options } = parseArgs({
 });
 const root = execFileSync("git", ["rev-parse", "--show-toplevel"], { encoding: "utf8" }).trim();
 const git = (...argv: string[]) => execFileSync("git", argv, { cwd: root, encoding: "utf8" });
+// Released revisions before the adapter split used the second path.
+function schemaBlob(revision: string): string | undefined {
+  for (const path of SCHEMA_PATHS) {
+    const entry = git("ls-tree", revision, "--", path);
+    if (entry) return entry.split(/\s+/)[2];
+  }
+  return undefined;
+}
 if (git("rev-parse", "--is-shallow-repository").trim() !== "false") {
   throw new Error("Shallow clone: run `git fetch --unshallow --tags` so every deployed schema is visible.");
 }
 
 process.env.LOG_LEVEL ??= "warn";
-const build = options.dist ? "apps/workspace/dist/server/db" : "apps/workspace/server/src/db";
+const build = options.dist ? "apps/workspace/dist/server/db/sqlite" : "apps/workspace/server/src/db/sqlite";
 const extension = options.dist ? "js" : "ts";
 const load = async <T>(path: string) => (await import(pathToFileURL(resolve(root, build, path)).href)) as T;
 const { prepareCurrentDatabase } = await load<{ prepareCurrentDatabase(filename: string): unknown }>(
   `migrations/prepare-current-database.${extension}`,
 );
-const { openWorkspaceDatabase } = await load<{
-  openWorkspaceDatabase(filename: string): { connection: DatabaseSync; close(): void };
-}>(`initialize.${extension}`);
+const { openProductDatabase } = await load<{
+  openProductDatabase(config: { provider: "sqlite"; filename: string }): Promise<{ close(): Promise<void> }>;
+}>(`../index.${extension}`);
 
 // Quoted spans and comments in one alternation, so whichever starts first wins.
 const LEXEMES = /('(?:[^']|'')*'|"(?:[^"]|"")*"|`(?:[^`]|``)*`|\[[^\]]*\]|--[^\n]*|\/\*[\s\S]*?\*\/)/;
@@ -140,6 +149,9 @@ let failures = 0;
 try {
   const fresh = new DatabaseSync(join(directory, "fresh.sqlite"));
   const currentSql = readFileSync(join(root, SCHEMA), "utf8");
+  if (options.dist && readFileSync(resolve(root, build, "schema.sql"), "utf8") !== currentSql) {
+    throw new Error("Production SQLite schema differs from the working-tree schema. Rebuild the server.");
+  }
   fresh.exec(currentSql);
   const expected = shape(fresh);
   const targetVersion = expected.get("pragma user_version");
@@ -147,24 +159,23 @@ try {
   console.log(`target: working-tree schema.sql V${targetVersion} via ${options.dist ? "dist" : "source"}`);
 
   const revisions = [
-    ...git("log", "--first-parent", "--format=%H", options.base, "--", SCHEMA).split("\n"),
+    ...git("log", "--first-parent", "--format=%H", options.base, "--", ...SCHEMA_PATHS).split("\n"),
     ...git("tag", "--list", "v*").split("\n"),
   ].filter(Boolean);
   for (const ref of options.ref) {
     try {
-      git("rev-parse", "--verify", "--quiet", `${ref}^{commit}:${SCHEMA}`);
+      git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`);
     } catch {
-      throw new Error(`--ref ${ref} is not a local commit with ${SCHEMA}; fetch it or fix the ref.`);
+      throw new Error(`--ref ${ref} is not a local commit; fetch it or fix the ref.`);
     }
     revisions.push(ref);
   }
   const blobs = new Map<string, string[]>();
   for (const revision of revisions) {
-    let blob: string;
-    try {
-      blob = git("rev-parse", "--verify", "--quiet", `${revision}:${SCHEMA}`).trim();
-    } catch {
-      console.log(`skip ${revision}: no ${SCHEMA}`);
+    const blob = schemaBlob(revision);
+    if (!blob) {
+      if (options.ref.includes(revision)) throw new Error(`--ref ${revision} has no product schema.sql.`);
+      console.log(`skip ${revision}: no product schema.sql`);
       continue;
     }
     const name = /^[0-9a-f]{40}$/.test(revision) ? revision.slice(0, 9) : revision;
@@ -195,10 +206,15 @@ try {
         problems.push(`  expected ${expectedBackups} backup after migration, found: ${migrationBackups.join(", ") || "<none>"}`);
       }
       for (const start of ["first", "second"]) {
-        const opened = openWorkspaceDatabase(filename);
-        const changed = differences(expected, shape(opened.connection));
-        opened.close();
-        if (changed.length > 0) problems.push(`  after ${start} startup:`, ...changed);
+        const product = await openProductDatabase({ provider: "sqlite", filename });
+        await product.close();
+        const inspected = new DatabaseSync(filename, { readOnly: true });
+        try {
+          const changed = differences(expected, shape(inspected));
+          if (changed.length > 0) problems.push(`  after ${start} startup:`, ...changed);
+        } finally {
+          inspected.close();
+        }
       }
       if (backups().length !== migrationBackups.length) problems.push(`  startup created backups: ${backups().join(", ")}`);
     } catch (error) {

@@ -3,15 +3,15 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 
 it("stores a trimmed Space description, validates it, and restricts edits to Space managers", async () => {
   const root = mkdtempSync(join(tmpdir(), "workspace-description-"));
-  const application = createWorkspaceApplication(
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: join(root, "product.sqlite"),
+      productDatabase: { provider: "sqlite", filename: join(root, "product.sqlite") },
       collaborationDatabaseFilename: ":memory:",
       blobDirectory: join(root, "blobs"),
       secureCookies: false,

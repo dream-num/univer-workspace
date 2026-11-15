@@ -1,12 +1,12 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import type { EmailMessage } from "../../server/src/integrations/email/index.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
@@ -26,11 +26,11 @@ afterEach(async () => {
 describe("Email sign-in HTTP API", () => {
   it("emails a code and signs a new User in with it", async () => {
     const sent: EmailMessage[] = [];
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
-        databaseFilename: ":memory:",
+        productDatabase: { provider: "sqlite", filename: ":memory:" },
         collaborationDatabaseFilename: ":memory:",
         secureCookies: false,
         sessionTtlMs: 60_000,
@@ -113,11 +113,11 @@ describe("Email sign-in HTTP API", () => {
   });
 
   it("reports Email sign-in as disabled when no provider is configured", async () => {
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
-        databaseFilename: ":memory:",
+        productDatabase: { provider: "sqlite", filename: ":memory:" },
         collaborationDatabaseFilename: ":memory:",
         secureCookies: false,
         sessionTtlMs: 60_000,
@@ -153,11 +153,11 @@ describe("Email sign-in HTTP API", () => {
 
   it("rejects a malformed address without contacting the provider", async () => {
     const sent: EmailMessage[] = [];
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
-        databaseFilename: ":memory:",
+        productDatabase: { provider: "sqlite", filename: ":memory:" },
         collaborationDatabaseFilename: ":memory:",
         secureCookies: false,
         sessionTtlMs: 60_000,
@@ -192,7 +192,7 @@ describe("Email sign-in HTTP API", () => {
   });
 });
 
-async function serve(application: WorkspaceApplication): Promise<string> {
+async function serve(application: SqliteTestApplication): Promise<string> {
   const server = createServer(application.app);
   servers.push(server);
   await new Promise<void>((resolve, reject) => {

@@ -1,7 +1,7 @@
 import { createServer, type Server } from "node:http";
 import type { WorktreeData } from "@univerjs-pro/collaboration-worktree-service";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import type { RepositoryActivity } from "../../server/src/modules/activity/activity.service.js";
 import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 
@@ -27,8 +27,8 @@ async function setup() {
     discard: (id) => transition(id, "discarded"), reopen: (id) => transition(id, "draft"),
     addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused,
   };
-  const application = createWorkspaceApplication({
-    host: "127.0.0.1", port: 0, databaseFilename: ":memory:", collaborationDatabaseFilename: ":memory:",
+  const application = createSqliteTestApplication({
+    host: "127.0.0.1", port: 0, productDatabase: { provider: "sqlite", filename: ":memory:" }, collaborationDatabaseFilename: ":memory:",
     secureCookies: false, sessionTtlMs: 600_000,
   }, { unitStore: { async createUnit(input) { return { unitId: input.unitId, headRevision: 1 }; } }, worktreeBackend: backend });
   cleanups.push(() => application.close());
@@ -57,7 +57,7 @@ async function setup() {
   return { application, states, getWorktree, request, register, owner, team, activity };
 }
 
-async function createPull(application: WorkspaceApplication, userId: string, teamSpaceId?: string, visibility = "space") {
+async function createPull(application: SqliteTestApplication, userId: string, teamSpaceId?: string, visibility = "space") {
   return (await application.worktrees.create(userId, `activity-${crypto.randomUUID()}`, {
     kind: teamSpaceId ? "team" : "user", teamSpaceId, name: "Activity pull", summary: null, visibility,
   })).body;

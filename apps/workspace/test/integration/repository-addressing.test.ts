@@ -1,8 +1,8 @@
 import { createServer } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 
 afterEach(async () => {
   await Promise.all(applications.splice(0).map((application) => application.close()));
@@ -262,11 +262,11 @@ describe("shared Issue and Team Worktree numbering", () => {
   });
 });
 
-function createApplication(): WorkspaceApplication {
-  const application = createWorkspaceApplication({
+function createApplication(): SqliteTestApplication {
+  const application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: ":memory:",
+    productDatabase: { provider: "sqlite", filename: ":memory:" },
     collaborationDatabaseFilename: ":memory:",
     secureCookies: false,
     sessionTtlMs: 60_000,
@@ -275,7 +275,7 @@ function createApplication(): WorkspaceApplication {
   return application;
 }
 
-async function register(application: WorkspaceApplication, username: string) {
+async function register(application: SqliteTestApplication, username: string) {
   const issued = await application.identity.registerWithPassword({
     username,
     displayName: username,

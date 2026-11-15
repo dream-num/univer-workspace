@@ -12,7 +12,7 @@ export type {
 } from "./identity.types.js";
 export { principalCategory } from "./principal-category.js";
 export { createSourceRateLimiter } from "./source-rate-limiter.js";
-export { IdentityRepository } from "./identity.repository.js";
+export type { IdentityRepository } from "./identity.repository.js";
 export { createIdentityRouter } from "./identity.router.js";
 export { createGitHubOAuthProvider } from "./github-oauth.js";
 export { createDiscordOAuthProvider } from "./discord-oauth.js";
@@ -31,3 +31,4 @@ export { writeSourceView, type WriteSource, type WriteSourceView } from "./write
 export { createAccessTokenService } from "./access-tokens.js";
 export type { AccessTokenService, McpScope } from "./access-tokens.js";
 export { authorizationServerMetadata, type McpOAuthConfig } from "./mcp-oauth.js";
+export type { AccessTokenRepository } from "./access-token.repository.js";

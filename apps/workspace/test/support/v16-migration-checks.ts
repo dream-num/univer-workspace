@@ -11,7 +11,7 @@ export function verifyV16Migration(
   open: (filename: string) => { connection: DatabaseSync; close(): void },
 ): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v16-migration-"));
-  const schema = readFileSync(new URL("../../server/src/db/schema.sql", import.meta.url), "utf8");
+  const schema = readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8");
   const tableSql = (database: DatabaseSync, name: string) =>
     String(database.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(name)?.sql);
   const createV16 = (filename: string) => {

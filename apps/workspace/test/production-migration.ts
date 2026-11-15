@@ -3,7 +3,7 @@ import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { createWorkspaceApplication } from "../dist/server/app.js";
+import { createProductionTestApplication } from "./support/sqlite/production-application.js";
 import {
   createLegacyV0Schema,
   seedRichLegacyV0,
@@ -18,11 +18,11 @@ try {
   seedRichLegacyV0(legacy);
   legacy.close();
 
-  const application = createWorkspaceApplication(
+  const application = await createProductionTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename,
+      productDatabase: { provider: "sqlite", filename: databaseFilename },
       collaborationDatabaseFilename: join(
         directory,
         "collaboration.sqlite"
@@ -40,7 +40,7 @@ try {
     }
   );
   try {
-    const version = application.database.connection
+    const version = application.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
     assert.equal(version.user_version, 21);

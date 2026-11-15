@@ -1,6 +1,6 @@
 import { migrateV19ToV20 } from "./v19-to-v20/migrate.js";
 import { migrateV20ToV21 } from "./v20-to-v21/migrate.js";
-import { startupStage } from "../../logging/startup.js";
+import { startupStage } from "../../../logging/startup.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
 import { dirname, basename, join } from "node:path";
@@ -124,8 +124,7 @@ type DatabasePreparation =
 /**
  * Temporary rollout boundary for the supported legacy schemas.
  *
- * Delete this migrations directory and the calls from db/initialize.ts and
- * main.ts after every deployed database is on V21. Business repositories never
+ * Delete this migrations directory and the initialization call after every deployed database is on V21. Business repositories never
  * import it.
  */
 export function prepareCurrentDatabase(filename: string): DatabasePreparation {

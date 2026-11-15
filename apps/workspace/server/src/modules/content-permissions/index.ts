@@ -1,4 +1,4 @@
-export { ContentPermissionsRepository } from "./content-permissions.repository.js";
+export type { ContentPermissionsRepository } from "./content-permissions.repository.js";
 export type {
   ContentPermissionObject,
   ContentCollaborator,

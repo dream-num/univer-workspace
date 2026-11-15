@@ -58,11 +58,10 @@ apps/workspace/
 │       ├── app.ts
 │       ├── config.ts
 │       ├── db/
-│       │   ├── database.ts
-│       │   ├── initialize.ts
-│       │   ├── legacy-v0/
-│       │   ├── migrations/
-│       │   └── schema.sql
+│       │   ├── index.ts
+│       │   ├── product-database.ts
+│       │   ├── open-product-database.ts
+│       │   └── sqlite/           # 连接、领域 Repository 实现、schema.sql 和历史迁移
 │       ├── middleware/
 │       │   └── errors.ts
 │       ├── modules/
@@ -243,7 +242,7 @@ modules/nodes/
 
 - Router 只负责 HTTP 输入输出和调用 Module。
 - Service 只在存在业务流程、权限组合或 transaction 时创建。
-- Repository 封装本 Module 的 SQL 和 row mapping。
+- Module 定义 Repository 接口，SQLite 的 SQL、驱动和事务实现位于 `db/sqlite/<模块>/`。
 - Policy 保存可独立表达和测试的授权规则。
 - `index.ts` 是 Module 的公开入口。
 
@@ -307,7 +306,9 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-产品数据库使用 Node `node:sqlite`。`db/schema.sql` 定义完整 V21 结构，`initialize.ts`
+服务端入口将 `config.productDatabase` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务和封禁 Agent 的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
+
+`db/sqlite/schema.sql` 定义完整 V21 结构，`db/sqlite/initialize.ts`
 负责在业务 Module 初始化前识别数据库状态：空数据库应用 V21；V21 校验指纹；V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
@@ -404,7 +405,7 @@ contracts/http/openapi.yaml + paths + schemas
 
 ## Space 列表与访问
 
-Access Module 共享 Space 可见性 SQL、Membership Join、投影与 `spaceAccessFromRow`；
+SQLite 适配器复用 Space 可见性 SQL 和 Membership Join，Access Module 通过 `resolveStoredSpaceAccess` 计算权限；
 Spaces Module 的 `mine`、`starred`、`explore`、`pins` 范围各自只做一次列表查询。
 `toSpaceView` 统一产生详情与列表，`affiliation` 从所有者和成员事实派生。
 Pins 保存在产品库 V16 的 `space_pins`，不进入协同库。其资格校验和完整替换使用同一个产品事务。

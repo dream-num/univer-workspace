@@ -1,12 +1,12 @@
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver, NodeAccess, ResourceAccess } from "../access/index.js";
 import { nodeSummary, resourceSummary } from "../nodes/nodes.service.js";
-import {
+import type {
   ViewsRepository,
-  type OwnedRow,
-  type RecentCursor,
-  type RecentRow,
-  type SharedRow,
+  OwnedRow,
+  RecentCursor,
+  RecentRow,
+  SharedRow,
 } from "./views.repository.js";
 import type {
   OwnedResourceItem,

@@ -5,9 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 
 import { expectSessionSource } from "../fixtures/session-source.js";
@@ -47,7 +47,7 @@ const OAUTH_CLIENTS_JSON = JSON.stringify({
   ],
 });
 
-let application: WorkspaceApplication | undefined;
+let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
 
@@ -357,10 +357,10 @@ describe("OAuth authorization", () => {
 
 async function startApplication(): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-oauth-authorization-"));
-  application = createWorkspaceApplication({
+  application = createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: join(directory, "product.sqlite"),
+    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
     collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
     secureCookies: false,
     sessionTtlMs: 60_000,

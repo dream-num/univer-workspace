@@ -505,20 +505,9 @@ docker run --name univer-workspace \
 For a plain HTTP environment, use `-e SECURE_COOKIES=false`. Keep secure
 cookies enabled when the deployment is served over HTTPS.
 
-To intentionally erase all product and collaboration data in a disposable
-environment, run the reset command against the volume:
-
-```bash
-docker run --rm \
-  -v univer-workspace-data:/app/univer-workspace/.data \
-  univer-workspace node dist/server/db/reset.js
-```
-
-Files stored in S3 survive this reset.
-
-Starting or restarting the application does not recreate the database.
-Do not run the reset command during a normal deployment; application startup
-backs up and migrates supported V0 through V20 product databases to V21 automatically.
+For a fresh local test instance, mount a new empty data volume. On startup,
+the application preserves existing data and automatically backs up and migrates
+supported V0 through V20 product databases to V21.
 While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
@@ -559,9 +548,9 @@ revision 1, then from the product database: the Trunk Node for a Unit, or the
 Worktree node intent for a Unit created in a Worktree. Only when both lack a value
 does the migration use `anonymous` and the migration time; these values are
 fallbacks, not reconstructed authorship. Changeset times keep the SDK defaults.
-Custom server entry points must prepare the product database and then await
-`prepareCollaborationDatabase(collaborationFile, productFile)` before
-constructing `createWorkspaceApplication` for an existing database.
+Custom server entry points call `openProductDatabase(config.productDatabase)`, pass its
+`unitCreationFacts` reader to `prepareCollaborationDatabase`, then pass its `repositories`
+to `createWorkspaceApplication`. Close the product database after the application shuts down.
 Never run old and new SDK writers together. To roll back, stop the new instance
 and restore the matching pre-upgrade product/Collaboration/Blob backups; changing
 only the application image is insufficient. Retain backups until rollout is accepted.
@@ -725,7 +714,6 @@ measurements, and there is no timer-based progress log during blocking SDK work.
 pnpm typecheck
 pnpm test
 pnpm build
-pnpm db:reset
 pnpm db:ban-agent <username or user id>
 ```
 

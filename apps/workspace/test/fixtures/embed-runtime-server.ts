@@ -5,16 +5,15 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { ResourcesRepository } from "../../server/src/modules/resources/resources.repository.js";
-import { createWorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-embed-runtime-"));
 process.once("exit", () => rmSync(directory, { recursive: true, force: true }));
 const port = Number(process.env.PORT ?? 3092);
-const application = createWorkspaceApplication({
+const application = createSqliteTestApplication({
   host: "127.0.0.1",
   port,
-  databaseFilename: join(directory, "product.sqlite"),
+  productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
   collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "blobs"),
   secureCookies: false,
@@ -32,7 +31,7 @@ const userId = issued.view.user.id;
 const space = application.spaces.list(userId).spaces[0]!;
 const sourceBase = JSON.parse(readFileSync(process.env.EMBED_BASE_SNAPSHOT!, "utf8"));
 const sourceDoc = JSON.parse(readFileSync(process.env.EMBED_DOC_SNAPSHOT!, "utf8"));
-const repository = new ResourcesRepository(application.database);
+const repository = application.repositories.resources;
 const baseUnit = randomUUID();
 const docUnit = randomUUID();
 async function seed(

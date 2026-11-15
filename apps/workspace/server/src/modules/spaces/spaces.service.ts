@@ -2,12 +2,13 @@ import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import {
   assertCeiling,
-  spaceAccessFromRow,
+  resolveStoredSpaceAccess,
   type AccessResolver,
   type SpaceAccess,
   type SpaceType,
 } from "../access/index.js";
-import { SpacesRepository, type SpaceListScope } from "./spaces.repository.js";
+import type { SpacesRepository, SpaceListScope, SpaceListEntry } from "./spaces.repository.js";
+import type { SpacePinsRepository, StoredSpacePins } from "./space-pins.repository.js";
 import { RESERVED_SLUG, slugBaseFromName, validSlug } from "./space-slug.js";
 import type { MySpaceView, SpacePins, SpaceStar, SpaceView } from "./spaces.types.js";
 
@@ -15,9 +16,9 @@ export interface SpacesModule {
   list(userId: string): { readonly spaces: readonly MySpaceView[] };
   listStarred(userId: string): { readonly spaces: readonly SpaceView[] };
   explore(userId: string): { readonly spaces: readonly SpaceView[] };
-  getPins(userId: string): SpacePins;
-  setPins(userId: string, spaceIds: unknown): SpacePins;
-  resetPins(userId: string): SpacePins;
+  getPins(userId: string): Promise<SpacePins>;
+  setPins(userId: string, spaceIds: unknown): Promise<SpacePins>;
+  resetPins(userId: string): Promise<SpacePins>;
   createTeamSpace(
     userId: string,
     input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown }
@@ -43,25 +44,27 @@ const PIN_LIMIT = 12;
 
 export function createSpacesModule(options: {
   readonly repository: SpacesRepository;
+  readonly pins: SpacePinsRepository;
   readonly access: AccessResolver;
   readonly now?: () => number;
 }): SpacesModule {
   const now = options.now ?? Date.now;
 
-  function list(userId: string, scope: SpaceListScope): SpaceView[] {
-    return options.repository.listViews(userId, scope).map((row) => {
-      const access = spaceAccessFromRow(userId, row);
-      if (!access) throw new Error("Space listing returned an inaccessible row");
-      return toSpaceView(userId, access, { ...row, ownerUsername: row.owner_username });
-    });
+  function spaceView(userId: string, row: SpaceListEntry): SpaceView {
+    const access = resolveStoredSpaceAccess(userId, row);
+    if (!access) throw new Error("Space listing returned an inaccessible row");
+    return toSpaceView(userId, access, row);
   }
 
-  function getPins(userId: string): SpacePins {
-    const spaces = list(userId, "pins");
+  function list(userId: string, scope: SpaceListScope): SpaceView[] {
+    return options.repository.listViews(userId, scope).map((row) => spaceView(userId, row));
+  }
+
+  function pinView(userId: string, pins: StoredSpacePins): SpacePins {
     return {
-      customized: spaces.length > 0,
+      customized: pins.customized,
       limit: PIN_LIMIT,
-      spaces: spaces.length > 0 ? spaces : list(userId, "mine").slice(0, DEFAULT_PIN_COUNT),
+      spaces: pins.spaces.map((row) => spaceView(userId, row)),
     };
   }
 
@@ -78,15 +81,17 @@ export function createSpacesModule(options: {
     explore(userId) {
       return { spaces: list(userId, "explore") };
     },
-    getPins,
-    setPins(userId, input) {
-      const ids = validPinIds(input);
-      if (!options.repository.replacePins(userId, ids, now())) throw invalidPins();
-      return getPins(userId);
+    async getPins(userId) {
+      return pinView(userId, await options.pins.getPins(userId, DEFAULT_PIN_COUNT));
     },
-    resetPins(userId) {
-      options.repository.deletePins(userId);
-      return getPins(userId);
+    async setPins(userId, input) {
+      const ids = validPinIds(input);
+      const pins = await options.pins.replacePins(userId, ids, now());
+      if (!pins) throw invalidPins();
+      return pinView(userId, pins);
+    },
+    async resetPins(userId) {
+      return pinView(userId, await options.pins.resetPins(userId, DEFAULT_PIN_COUNT));
     },
 
     createTeamSpace(userId, input) {

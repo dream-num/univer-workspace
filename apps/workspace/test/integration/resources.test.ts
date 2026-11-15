@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import {
   blankUnitData,
   collaborationCallOptions,
@@ -18,7 +18,7 @@ import { createWorktreeBackend } from "../../server/src/integrations/univer/work
 import { ApplicationError } from "../../server/src/middleware/errors.js";
 import type { UnitType } from "../../server/src/modules/access/index.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
@@ -308,7 +308,7 @@ describe("Resources", () => {
   });
 
   it("does not publish a Resource when collaboration returns another Unit identity", async () => {
-    const application = createWorkspaceApplication(
+    const application = createSqliteTestApplication(
       testConfig(),
       {
         unitStore: {
@@ -532,8 +532,8 @@ function createTestApplication(
   onCreateUnit: (
     input: Parameters<UnitStore["createUnit"]>[0]
   ) => Promise<void>
-): WorkspaceApplication {
-  const application = createWorkspaceApplication(
+): SqliteTestApplication {
+  const application = createSqliteTestApplication(
     testConfig(),
     {
       unitStore: {
@@ -552,7 +552,7 @@ function testConfig() {
   return {
     host: "127.0.0.1",
     port: 3020,
-    databaseFilename: ":memory:",
+    productDatabase: { provider: "sqlite", filename: ":memory:" },
     collaborationDatabaseFilename: ":memory:",
     secureCookies: false,
     sessionTtlMs: 60_000,
@@ -560,7 +560,7 @@ function testConfig() {
 }
 
 async function register(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   username: string
 ): Promise<string> {
   const session = await application.identity.registerWithPassword({

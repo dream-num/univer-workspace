@@ -1,3 +1,4 @@
+import { dependencies, sourceFiles, staticValueDependencies } from "../support/source-dependencies.js";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,42 +13,6 @@ const modeIds = readdirSync(resolve(webRoot, "modes"), { withFileTypes: true })
       ["index.ts", "index.tsx"].some((file) => existsSync(resolve(webRoot, "modes", entry.name, file))),
   )
   .map((entry) => entry.name);
-
-function sourceFiles(directory: string): string[] {
-  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
-    const path = resolve(directory, entry.name);
-    return entry.isDirectory() ? sourceFiles(path) : /\.tsx?$/.test(entry.name) ? [path] : [];
-  });
-}
-
-function dependencies(source: ts.SourceFile): string[] {
-  const imports: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      imports.push(node.moduleSpecifier.text);
-    } else if (
-      ts.isImportTypeNode(node) &&
-      ts.isLiteralTypeNode(node.argument) &&
-      ts.isStringLiteral(node.argument.literal)
-    ) {
-      imports.push(node.argument.literal.text);
-    } else if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) && node.expression.text === "require"))
-    ) {
-      const argument = node.arguments[0];
-      if (argument && ts.isStringLiteralLike(argument)) imports.push(argument.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return imports;
-}
 
 const sources = sourceFiles(webRoot).map((path) => ({
   path,
@@ -104,32 +69,6 @@ function agentTarget(path: string, specifier: string): string {
     .replaceAll("\\", "/").replace(/\.[jt]sx?$/, "");
 }
 
-function valueDependencies(source: ts.SourceFile): string[] {
-  const imports: string[] = [];
-  const visit = (node: ts.Node) => {
-    if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
-      const clause = node.importClause;
-      const bindings = clause?.namedBindings;
-      const typeOnly = clause?.isTypeOnly || (!clause?.name && bindings && ts.isNamedImports(bindings) &&
-        bindings.elements.length > 0 && bindings.elements.every((binding) => binding.isTypeOnly));
-      if (!typeOnly) imports.push(node.moduleSpecifier.text);
-    } else if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
-      const typeOnly = node.isTypeOnly || (node.exportClause && ts.isNamedExports(node.exportClause) &&
-        node.exportClause.elements.length > 0 && node.exportClause.elements.every((binding) => binding.isTypeOnly));
-      if (!typeOnly) imports.push(node.moduleSpecifier.text);
-    } else if (ts.isImportEqualsDeclaration(node) && !node.isTypeOnly && ts.isExternalModuleReference(node.moduleReference) &&
-      node.moduleReference.expression && ts.isStringLiteral(node.moduleReference.expression)) {
-      imports.push(node.moduleReference.expression.text);
-    } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "require" &&
-      node.arguments[0] && ts.isStringLiteralLike(node.arguments[0])) {
-      imports.push(node.arguments[0].text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(source);
-  return imports;
-}
-
 function browserGlobalReferences(ast: ts.SourceFile): string[] {
   const globals = new Set(["window", "document", "localStorage", "sessionStorage", "indexedDB", "navigator", "globalThis",
     "fetch", "XMLHttpRequest", "WebSocket", "EventSource", "location", "self"]);
@@ -161,13 +100,7 @@ describe("Agents isolation", () => {
     const violations: string[] = [];
     for (const { path, name, ast } of sources) {
       if (name === "features/agents/providers.ts") continue;
-      const allDependencies = dependencies(ast);
-      const visit = (node: ts.Node) => {
-        if (ts.isExternalModuleReference(node) && node.expression && ts.isStringLiteral(node.expression)) allDependencies.push(node.expression.text);
-        ts.forEachChild(node, visit);
-      };
-      visit(ast);
-      for (const specifier of allDependencies) {
+      for (const specifier of dependencies(ast)) {
         if (agentTarget(path, specifier) === "features/agents/provider-keys") violations.push(`${name} → ${specifier}`);
       }
     }
@@ -178,7 +111,7 @@ describe("Agents isolation", () => {
     const violations: string[] = [];
     const agentRoot = "features/agents/";
     for (const { path, name, ast } of sources) {
-      const imports = valueDependencies(ast);
+      const imports = staticValueDependencies(ast);
       if (name === `${agentRoot}index.ts`) {
         for (const specifier of imports) violations.push(`${name} → ${specifier}`);
       } else if (!name.startsWith(agentRoot)) {
@@ -195,7 +128,7 @@ describe("Agents isolation", () => {
     const violations: string[] = [];
     for (const { name, ast } of sources) {
       if (name.startsWith(agentRuntime)) continue;
-      for (const specifier of valueDependencies(ast)) {
+      for (const specifier of staticValueDependencies(ast)) {
         if (specifier === "ai" || specifier.startsWith("@ai-sdk/")) violations.push(`${name} → ${specifier}`);
       }
     }
@@ -206,7 +139,7 @@ describe("Agents isolation", () => {
     const violations: string[] = [];
     for (const { path, name, ast } of sources) {
       if (name.startsWith(agentRuntime)) continue;
-      for (const specifier of valueDependencies(ast)) {
+      for (const specifier of staticValueDependencies(ast)) {
         const target = agentTarget(path, specifier);
         if (target === agentRuntime.slice(0, -1) || target.startsWith(agentRuntime)) violations.push(`${name} → ${specifier}`);
       }

@@ -14,7 +14,7 @@ export function verifyV13Migration(
 ): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v13-migration-"));
   const schema = readFileSync(
-    new URL("../../server/src/db/schema.sql", import.meta.url),
+    new URL("../../server/src/db/sqlite/schema.sql", import.meta.url),
     "utf8",
   );
   const createV13 = (filename: string) => {

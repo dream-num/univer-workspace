@@ -1,10 +1,10 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
-import { WorkspaceDatabase } from "../../db/database.js";
+import { SqliteDatabase } from "../../db/sqlite/connection.js";
+import { createSqliteRepositories } from "../../db/sqlite/open.js";
 import { LocalBlobStore } from "../../integrations/blob/blob-store.js";
-import { createAccessResolver, AccessRepository } from "../access/index.js";
-import { NodesRepository } from "../nodes/nodes.repository.js";
+import { createAccessResolver } from "../access/index.js";
 import { createSkillSourcesModule } from "./sources.service.js";
 import { createSourceFetch, type SourceFetch } from "./sources.fetch.js";
 
@@ -22,7 +22,7 @@ const records = z
   .parse(
     JSON.parse(readFileSync(new URL("./fixtures/hub-recordings.json", import.meta.url), "utf8")),
   );
-const databases: WorkspaceDatabase[] = [];
+const databases: SqliteDatabase[] = [];
 afterEach(() => {
   for (const db of databases.splice(0)) db.close();
 });
@@ -41,11 +41,12 @@ function replay(url: string): Response {
   );
 }
 function sources(fetcher: SourceFetch) {
-  const db = new WorkspaceDatabase(":memory:");
+  const db = new SqliteDatabase(":memory:");
   databases.push(db);
+  const repositories = createSqliteRepositories(db);
   return createSkillSourcesModule({
-    access: createAccessResolver(new AccessRepository(db)),
-    nodes: new NodesRepository(db),
+    access: createAccessResolver(repositories.access),
+    nodes: repositories.nodes,
     store: new LocalBlobStore("/unused-skill-source-test"),
     fetch: fetcher,
   });

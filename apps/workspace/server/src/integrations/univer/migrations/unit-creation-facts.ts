@@ -1,5 +1,5 @@
-import { existsSync, statSync } from "node:fs";
-import { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync } from "node:sqlite";
+import type { UnitCreationFactsReader } from "../../../db/index.js";
 
 export interface UnitCreation {
   readonly creatorID: string;
@@ -25,11 +25,11 @@ const ANONYMOUS = "anonymous";
  * Everything is read up front: the SDK migrations use a different SQLite
  * library, and two libraries must not hold the same file open concurrently.
  */
-export function readUnitCreationFacts(
+export async function readUnitCreationFacts(
   collaboration: DatabaseSync,
-  productDatabaseFilename: string,
+  reader: UnitCreationFactsReader,
   fallbackTime: number,
-): UnitCreationResolvers {
+): Promise<UnitCreationResolvers> {
   const history = new Map<string, CreationFact>();
   if (hasTable(collaboration, "collaboration_history_revisions")) {
     for (const row of collaboration
@@ -51,61 +51,24 @@ export function readUnitCreationFacts(
       );
     }
   }
-  const product = readProductFacts(productDatabaseFilename);
+  const product = await reader.read();
+  const units = new Map(product.units.map((row) => [row.unitId, fact(row.creatorId, row.createdAt)]));
+  const worktreeUnits = new Map(product.worktreeUnits.map((row) => [
+    worktreeKey(row.worktreeId, row.unitId),
+    fact(row.creatorId, row.createdAt),
+  ]));
 
   const resolveUnitCreation = (unitID: string) =>
-    merge([history.get(unitID), product.units.get(unitID)], fallbackTime);
+    merge([history.get(unitID), units.get(unitID)], fallbackTime);
   return {
     resolveUnitCreation,
     resolveWorktreeUnitCreation(worktreeID, unitID) {
       const key = worktreeKey(worktreeID, unitID);
       return worktreeSources.get(key) === "worktree"
-        ? merge([product.worktreeUnits.get(key)], fallbackTime)
+        ? merge([worktreeUnits.get(key)], fallbackTime)
         : resolveUnitCreation(unitID);
     },
   };
-}
-
-function readProductFacts(filename: string): {
-  readonly units: ReadonlyMap<string, CreationFact>;
-  readonly worktreeUnits: ReadonlyMap<string, CreationFact>;
-} {
-  const units = new Map<string, CreationFact>();
-  const worktreeUnits = new Map<string, CreationFact>();
-  if (!existsSync(filename) || statSync(filename).size === 0) {
-    return { units, worktreeUnits };
-  }
-  const database = new DatabaseSync(filename, { readOnly: true });
-  try {
-    if (database.prepare("PRAGMA user_version").get()?.user_version !== 21) {
-      throw new Error(
-        "Prepare the product database to V21 before migrating the Collaboration database.",
-      );
-    }
-    for (const row of database
-      .prepare(
-        `SELECT univer.unit_id, node.created_by, node.created_at
-         FROM univer_resources AS univer
-         JOIN resources AS resource ON resource.id = univer.resource_id
-         JOIN nodes AS node ON node.id = resource.node_id`,
-      )
-      .all()) {
-      units.set(String(row.unit_id), fact(row.created_by, row.created_at));
-    }
-    for (const row of database
-      .prepare(
-        "SELECT worktree_id, unit_id, created_by, created_at FROM worktree_node_intents",
-      )
-      .all()) {
-      worktreeUnits.set(
-        worktreeKey(String(row.worktree_id), String(row.unit_id)),
-        fact(row.created_by, row.created_at),
-      );
-    }
-  } finally {
-    database.close();
-  }
-  return { units, worktreeUnits };
 }
 
 function merge(

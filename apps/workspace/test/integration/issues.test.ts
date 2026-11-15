@@ -1,15 +1,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import {
   createIssuesModule,
-  IssuesRepository,
   type IssueProductChange,
 } from "../../server/src/modules/issues/index.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 
 afterEach(async () => {
   await Promise.all(applications.splice(0).map((application) => application.close()));
@@ -244,7 +243,7 @@ async function setup(changes?: IssueProductChange[]) {
   let clock = 1_000_000;
   // A strictly increasing clock keeps created_at ordering deterministic.
   const issues = createIssuesModule({
-    repository: new IssuesRepository(application.database),
+    repository: application.repositories.issues,
     access: application.access,
     now: () => ++clock,
     ...(changes ? { onChanged: (change: IssueProductChange) => void changes.push(change) } : {}),
@@ -264,12 +263,12 @@ async function setup(changes?: IssueProductChange[]) {
   return { application, issues, team, hidden, owner, admin, editor, viewer, reader, stranger };
 }
 
-function createApplication(): WorkspaceApplication {
-  const application = createWorkspaceApplication(
+function createApplication(): SqliteTestApplication {
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
-      databaseFilename: ":memory:",
+      productDatabase: { provider: "sqlite", filename: ":memory:" },
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -280,7 +279,7 @@ function createApplication(): WorkspaceApplication {
   return application;
 }
 
-async function register(application: WorkspaceApplication, username: string): Promise<string> {
+async function register(application: SqliteTestApplication, username: string): Promise<string> {
   return (
     await application.identity.registerWithPassword({
       username,

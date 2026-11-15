@@ -9,10 +9,10 @@ import type {
 import { resourceCapabilities } from "../access/access.service.js";
 import { assertNotDelegatedPageWrite } from "../blobs/html-view-guard.js";
 import { ANONYMOUS_USER_ID, createSourceRateLimiter, type Principal } from "../identity/index.js";
-import {
+import type {
   NodesRepository,
-  type BreadcrumbRow,
-  type NodeCursor,
+  BreadcrumbRow,
+  NodeCursor,
 } from "./nodes.repository.js";
 import type {
   Breadcrumb,

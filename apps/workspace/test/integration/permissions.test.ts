@@ -2,12 +2,12 @@ import { interactivePrincipal } from "../fixtures/principal.js";
 import { ANONYMOUS_USER_ID } from "../../server/src/modules/identity/index.js";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createWorkspaceApplication,
-  type WorkspaceApplication,
-} from "../../server/src/app.js";
+  createSqliteTestApplication,
+  type SqliteTestApplication,
+} from "../support/sqlite/test-application.js";
 import { ApplicationError } from "../../server/src/middleware/errors.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 
 afterEach(async () => {
   await Promise.all(
@@ -527,12 +527,12 @@ describe("permissions", () => {
   });
 });
 
-function createTestApplication(): WorkspaceApplication {
-  const application = createWorkspaceApplication(
+function createTestApplication(): SqliteTestApplication {
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
-      databaseFilename: ":memory:",
+      productDatabase: { provider: "sqlite", filename: ":memory:" },
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -551,7 +551,7 @@ function createTestApplication(): WorkspaceApplication {
 }
 
 async function register(
-  application: WorkspaceApplication,
+  application: SqliteTestApplication,
   username: string
 ): Promise<string> {
   return (

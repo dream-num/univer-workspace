@@ -1,0 +1,60 @@
+import { readFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import ts from "typescript";
+import { expect, it } from "vitest";
+import { importReferences, sourceFiles } from "../support/source-dependencies.js";
+
+const root = fileURLToPath(new URL("../../server/src/", import.meta.url));
+const sources = sourceFiles(root).filter((path) => !path.endsWith(".test.ts"));
+const sqlite = "db/sqlite/";
+const factory = "db/open-product-database";
+const commands = ["main", "db/ban-agent"];
+
+function sourceName(path: string): string {
+  return relative(root, path).replaceAll("\\", "/").replace(/\.[jt]sx?$/, "");
+}
+
+function readSource(path: string): ts.SourceFile {
+  return ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+}
+
+it("keeps the SQLite product adapter private and selects it at the product database factory", () => {
+  const violations: string[] = [];
+  for (const path of sources) {
+    const name = sourceName(path);
+    const ast = readSource(path);
+    for (const { specifier, kind } of importReferences(ast)) {
+      const target = specifier.startsWith(".") ? sourceName(resolve(dirname(path), specifier)) : specifier;
+      if (target === "node:sqlite") {
+        if (!name.startsWith(sqlite) && !name.startsWith("integrations/univer/migrations/")) {
+          violations.push(`${name} → ${target}`);
+        }
+      } else if (target.startsWith(sqlite) && !name.startsWith(sqlite)) {
+        if (name !== factory || target !== "db/sqlite/open") {
+          violations.push(`${name} → ${target}`);
+        }
+      } else if (!name.startsWith("db/") && target.startsWith("db/") && target !== "db/index") {
+        violations.push(`${name} → ${target}`);
+      } else if (target === "db/index" && kind !== "type" && !commands.includes(name)) {
+        // Services and the Express application may depend on types, never the runtime factory.
+        violations.push(`${name} → ${target} (runtime import)`);
+      }
+    }
+  }
+  expect(violations).toEqual([]);
+});
+
+it("exports only the database factory and type-only contracts from the public entry point", () => {
+  const runtimeExports: string[] = [];
+  for (const statement of readSource(resolve(root, "db/index.ts")).statements) {
+    expect(ts.isExportDeclaration(statement)).toBe(true);
+    if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) continue;
+    const clause = statement.exportClause;
+    expect(clause && ts.isNamedExports(clause)).toBe(true);
+    if (clause && ts.isNamedExports(clause)) {
+      runtimeExports.push(...clause.elements.filter((entry) => !entry.isTypeOnly).map((entry) => entry.name.text));
+    }
+  }
+  expect(runtimeExports).toEqual(["openProductDatabase"]);
+});

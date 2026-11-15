@@ -3,9 +3,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 
-const applications: WorkspaceApplication[] = [];
+const applications: SqliteTestApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
 
@@ -316,11 +316,11 @@ describe("HTML View draft HTTP API", () => {
 async function createHttpContext() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-http-blob-"));
   directories.push(directory);
-  const application = createWorkspaceApplication(
+  const application = createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      databaseFilename: join(directory, "product.sqlite"),
+      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       blobDirectory: join(directory, "objects"),
       secureCookies: false,

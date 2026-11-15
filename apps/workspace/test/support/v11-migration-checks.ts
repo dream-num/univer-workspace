@@ -3,9 +3,9 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { migrateV8ToV9 } from "../../server/src/db/migrations/v8-to-v9/migrate.js";
-import { migrateV9ToV10 } from "../../server/src/db/migrations/v9-to-v10/migrate.js";
-import { migrateV10ToV11 } from "../../server/src/db/migrations/v10-to-v11/migrate.js";
+import { migrateV8ToV9 } from "../../server/src/db/sqlite/migrations/v8-to-v9/migrate.js";
+import { migrateV9ToV10 } from "../../server/src/db/sqlite/migrations/v9-to-v10/migrate.js";
+import { migrateV10ToV11 } from "../../server/src/db/sqlite/migrations/v10-to-v11/migrate.js";
 import { withoutSpaceDescription } from "./space-description.js";
 
 /** Run unchanged against source and built startup, preserving every pre-existing table. */

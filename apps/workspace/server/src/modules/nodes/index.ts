@@ -1,5 +1,5 @@
 export { createNodesRouter } from "./nodes.router.js";
-export { NodesRepository } from "./nodes.repository.js";
+export type { NodesRepository } from "./nodes.repository.js";
 export { createNodesModule } from "./nodes.service.js";
 export type { NodesModule } from "./nodes.service.js";
 export type {

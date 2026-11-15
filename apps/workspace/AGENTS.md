@@ -5,17 +5,17 @@
 
 ## 数据库与部署
 
-- 修改产品数据库 schema 前，先阅读 `docs/data-model.md`、`server/src/db/schema.sql` 和
-  `server/src/db/migrations/prepare-current-database.ts`，确认当前版本与已支持的升级路径。
+- 修改产品数据库 schema 前，先阅读 `docs/data-model.md`、`server/src/db/sqlite/schema.sql` 和
+  `server/src/db/sqlite/migrations/prepare-current-database.ts`，确认当前版本与已支持的升级路径。
 - 已发布 schema 的结构或约束发生变化时，必须提升 `PRAGMA user_version` 并提供版本化迁移；
-  不得只修改 `schema.sql`，不得要求正常部署执行 `db:reset`，不得假设线上数据库为空。
+  不得只修改 `schema.sql`，不得假设线上数据库为空。
 - 迁移必须在业务 Repository 初始化前运行，并包含迁移前一致性备份、事务失败回滚、Schema
   指纹校验、`foreign_key_check` 和 `integrity_check`。
 - 迁移必须保留已有业务数据、对象存储身份和恢复状态。删除或改写字段时，要明确旧数据到新
   语义的映射；不能静默丢弃仍可能被启动恢复流程使用的数据。
 - 部署升级不得让不兼容的旧、新版本进程同时写同一个 SQLite 文件。发布说明应明确停旧实例、
   启动单个新实例完成迁移、确认成功后再恢复服务的顺序。
-- `db:reset` 只用于用户明确要求清空数据的可丢弃环境；普通启动、重启和升级必须保留数据库。
+- 普通启动、重启和升级必须保留数据库。可丢弃的测试实例使用独立的临时数据目录或卷。
 
 ## 迁移验证
 

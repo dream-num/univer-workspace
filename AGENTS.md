@@ -111,7 +111,7 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 - Browser 和 CLI 都不能信任客户端提供的 User、Role、Resource、Unit、Worktree 或 confirmed
   revision；服务端从认证 Session 与产品数据解析权威身份和权限。
 - `apps/workspace/**` 的 schema、迁移、备份、升级和部署操作必须遵守
-  `apps/workspace/AGENTS.md`。不得把 `db:reset` 用于正常启动、升级或生产恢复。
+  `apps/workspace/AGENTS.md`。正常启动、升级和生产恢复必须保留持久化数据。
 
 ## HTML View
 

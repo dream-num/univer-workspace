@@ -38,8 +38,8 @@ Endpoint 签发的一次性 Session Ticket，但不传播 snapshot、changeset�
 
 ## 数据库启动边界
 
-`db/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
-`db/migrations` 准备阶段：
+`db/sqlite/initialize.ts` 在创建业务 Repository 前打开数据库。磁盘数据库先经过可整体删除的
+`db/sqlite/migrations` 准备阶段：
 
 - Fresh：创建 V21；
 - V21：校验 Schema 指纹；
@@ -83,9 +83,8 @@ V15 增加 `space_pins` 与 `space_stars_user` 索引，使用已有备份、事
 Explore 当前不分页，按收藏总数倒序、名称与 ID 排序。公开链接、匿名访问、Node Grant 和详情权限不变。
 `SpaceView.affiliation` 由 `SpaceAccess` 推导为 `owner | member | none`，本人列表只允许前两种。
 
-Access Module 维护共享的 Space 可见性 SQL、列和 Membership Join，以及纯函数 `spaceAccessFromRow`。
-Spaces Repository 的 `listViews` 只接受 `mine | starred | explore | pins`，每种范围只执行一次 SQL，
-复用访问投影和角色推导。所有 SpaceView 由一个 `toSpaceView` 构造。
+SQLite 适配器维护共享的 Space 可见性 SQL、列与 Membership Join。Access Module 通过 `resolveStoredSpaceAccess` 将读取的权限信息映射为业务权限。
+`SpacesRepository.listViews` 提供 `mine | starred | explore` 三种列表，`SpacePinsRepository` 提供置顶列表及默认回退。它们共用空间访问投影和角色推导，所有 SpaceView 都由 `toSpaceView` 构造。
 
 `GET/PUT/DELETE /api/spaces/pins` 管理当前用户有序侧栏选择。可固定本人拥有或加入的 Space，以及已收藏的公开 Space。
 GET 过滤不符合条件的存储行，没有剩余行则返回本人列表前 8 个，`customized = false`。

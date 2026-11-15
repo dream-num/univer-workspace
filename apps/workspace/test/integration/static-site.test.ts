@@ -6,12 +6,12 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import express from "express";
 import { afterEach, expect, it } from "vitest";
-import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
+import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
 import { loadConfig } from "../../server/src/config.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
 import { createNodesRouter } from "../../server/src/modules/nodes/index.js";
 
-let application: WorkspaceApplication | undefined;
+let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
 
@@ -31,7 +31,7 @@ it("previews only Nodes readable through anonymous public-repository and inherit
     BLOB_DIRECTORY: join(directory, "objects"),
     PUBLIC_ORIGIN: "https://workspace.example/",
   });
-  const workspace = createWorkspaceApplication(config, {
+  const workspace = createSqliteTestApplication(config, {
     unitStore: { async createUnit(input) { return { unitId: input.unitId, headRevision: 1 }; } },
   });
   application = workspace;
