@@ -376,7 +376,8 @@ export interface paths {
          *     cannot create personal access tokens, approve CLI logins, authorize
          *     OAuth clients or link identities (403). Errors use the RFC 6749 body
          *     `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
-         *     body), `invalid_grant` (400), `unauthorized_client` (400, a
+         *     body), `invalid_grant` (400, including a subject token that belongs
+         *     to a banned agent), `unauthorized_client` (400, a
          *     confidential client without `tokenExchange`) or `invalid_client` (401,
          *     an unknown or public client or a wrong secret).
          *
@@ -1011,7 +1012,7 @@ export interface paths {
         };
         /**
          * Find Users for Team Membership or Direct Share.
-         * @description Match username or display name substrings, or an exact User ID, excluding the caller. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE.
+         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every agent User. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
          */
         get: operations["searchUsers"];
         put?: never;
@@ -1324,6 +1325,32 @@ export interface paths {
         get: operations["listNodeChildren"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/nodes/{nodeId}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a Node for abuse.
+         * @description Needs no credentials. The requester must be able to read the Node, as an
+         *     anonymous reader or through its session; any other Node returns 404.
+         *     Reports are limited to 10 per source IP per hour, and an IPv6 source
+         *     counts as its /64 prefix. The reason is stored for operators and is not
+         *     shown to anyone else.
+         */
+        post: operations["reportNode"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2238,14 +2265,25 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["Error"];
         };
+        /** @description The authenticated User, with the kind of principal it is. */
         User: {
             id: string;
             username: string;
             displayName: string;
             /** Format: uri */
             avatarUrl: string | null;
+            /** @enum {string} */
+            kind: "human" | "agent";
+            /** @description Present only for an agent. Whether a human has claimed it. */
+            claimed?: boolean;
         };
-        PublicUser: components["schemas"]["User"];
+        PublicUser: {
+            id: string;
+            username: string;
+            displayName: string;
+            /** Format: uri */
+            avatarUrl: string | null;
+        };
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
             /** @description URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed. */
@@ -2320,7 +2358,7 @@ export interface components {
             originalLocation: {
                 breadcrumbs: components["schemas"]["Breadcrumb"][];
             };
-            trashedBy: components["schemas"]["User"];
+            trashedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             trashedAt: string;
             nodeCount: number;
@@ -2329,19 +2367,19 @@ export interface components {
             removeBlockedBy: components["schemas"]["TrashBlocker"] | null;
         };
         TeamMembership: {
-            user: components["schemas"]["User"];
+            user: components["schemas"]["PublicUser"];
             role: components["schemas"]["TeamRole"];
-            grantedBy: components["schemas"]["User"];
+            grantedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
         NodeGrant: {
-            user: components["schemas"]["User"];
+            user: components["schemas"]["PublicUser"];
             role: components["schemas"]["GrantRole"];
             effectiveRole: components["schemas"]["GrantRole"];
-            grantedBy: components["schemas"]["User"];
+            grantedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -2350,8 +2388,23 @@ export interface components {
         NodeLinkSharing: {
             enabled: boolean;
             role: components["schemas"]["LinkSharingRole"];
-            createdBy: components["schemas"]["User"] | null;
-            updatedBy: components["schemas"]["User"] | null;
+            /** @description Owner of the Space that holds the Node. */
+            owner: {
+                username: string;
+                /** @enum {string} */
+                kind: "human" | "agent";
+                /** @description Present only for an agent. Whether a human has claimed it. */
+                claimed?: boolean;
+            };
+            /**
+             * Format: date-time
+             * @description When the link stops working because its owner, an unclaimed agent, expires. The date moves
+             *     30 days out while the agent stays active or the shared page is read. Null when the owner
+             *     does not expire.
+             */
+            expiresAt: string | null;
+            createdBy: components["schemas"]["PublicUser"] | null;
+            updatedBy: components["schemas"]["PublicUser"] | null;
             /** Format: date-time */
             createdAt: string | null;
             /** Format: date-time */
@@ -2372,12 +2425,12 @@ export interface components {
             title: string;
             state: components["schemas"]["IssueState"];
             stateReason: components["schemas"]["IssueStateReason"] | null;
-            author: components["schemas"]["User"];
-            closedBy: components["schemas"]["User"] | null;
+            author: components["schemas"]["PublicUser"];
+            closedBy: components["schemas"]["PublicUser"] | null;
             /** Format: date-time */
             closedAt: string | null;
             labels: components["schemas"]["IssueLabel"][];
-            assignees: components["schemas"]["User"][];
+            assignees: components["schemas"]["PublicUser"][];
             commentCount: number;
             referenceCount: number;
             /** Format: date-time */
@@ -2399,7 +2452,7 @@ export interface components {
             teamSpace: components["schemas"]["SpaceSummary"] | null;
             visibility: components["schemas"]["WorktreeVisibility"];
             state: components["schemas"]["WorktreeState"];
-            creator: components["schemas"]["User"];
+            creator: components["schemas"]["PublicUser"];
             unitCount: number;
             /** Format: date-time */
             processedAt: string | null;
@@ -2936,7 +2989,7 @@ export interface components {
             avatarUrl?: string | null;
         };
         UserSearchResult: {
-            users: components["schemas"]["User"][];
+            users: components["schemas"]["PublicUser"][];
         };
         WriteSourceCounts: {
             browser: number;
@@ -2954,7 +3007,7 @@ export interface components {
             kind: "pull-opened" | "pull-merged";
             /** Format: date-time */
             at: string;
-            actor: components["schemas"]["User"] | null;
+            actor: components["schemas"]["PublicUser"] | null;
             /** @description Source of this write; `unknown` for merges (not recorded). */
             writeSource: components["schemas"]["WriteSource"];
             pull: {
@@ -2969,7 +3022,7 @@ export interface components {
             kind: "issue-opened" | "issue-closed";
             /** Format: date-time */
             at: string;
-            actor: components["schemas"]["User"] | null;
+            actor: components["schemas"]["PublicUser"] | null;
             /** @description Source of this write; `unknown` for closes (not recorded). */
             writeSource: components["schemas"]["WriteSource"];
             issue: {
@@ -3159,6 +3212,12 @@ export interface components {
             name?: string;
             parentNodeId?: string | null;
         };
+        CreateNodeReport: {
+            reason: string;
+        };
+        NodeReport: {
+            id: string;
+        };
         /** @enum {string} */
         OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource";
         /** @enum {string} */
@@ -3290,7 +3349,7 @@ export interface components {
         };
         SharedItem: {
             node: components["schemas"]["NodeSummary"];
-            sharedBy: components["schemas"]["User"];
+            sharedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             sharedAt: string;
         };
@@ -3330,7 +3389,7 @@ export interface components {
         /** @enum {string} */
         TeamRole: "admin" | "editor" | "viewer";
         TeamMemberList: {
-            owner: components["schemas"]["User"];
+            owner: components["schemas"]["PublicUser"];
             members: components["schemas"]["TeamMembership"][];
         };
         UpsertTeamMembership: {
@@ -3438,7 +3497,7 @@ export interface components {
              */
             type: "comment";
             id: string;
-            author: components["schemas"]["User"];
+            author: components["schemas"]["PublicUser"];
             body: string;
             /** Format: date-time */
             createdAt: string;
@@ -3455,7 +3514,7 @@ export interface components {
             type: "event";
             id: string;
             kind: components["schemas"]["IssueEventKind"];
-            actor: components["schemas"]["User"];
+            actor: components["schemas"]["PublicUser"];
             /**
              * @description Snapshot taken when the event happened. `closed` carries `reason`;
              *     `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
@@ -3479,7 +3538,7 @@ export interface components {
         };
         IssueComment: {
             id: string;
-            author: components["schemas"]["User"];
+            author: components["schemas"]["PublicUser"];
             body: string;
             /** Format: date-time */
             createdAt: string;
@@ -3674,7 +3733,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description A valid login session is required. */
+        /** @description A valid login session is required. A session of a banned agent is not valid. */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
@@ -3683,7 +3742,14 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description The current User cannot perform this action. */
+        /**
+         * @description The current User cannot perform this action. The code is `FORBIDDEN` when its role is
+         *     insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+         *     agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
+         *     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
+         *     Personal Space, pending pull-request files included, or store one file above 10 MB) and
+         *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
+         */
         Forbidden: {
             headers: {
                 [name: string]: unknown;
@@ -5529,6 +5595,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getSpaceActivity: {
@@ -5714,6 +5781,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -5793,6 +5861,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -6039,6 +6108,43 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    reportNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNodeReport"];
+            };
+        };
+        responses: {
+            /** @description Stored report. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description REPORT_RATE_LIMITED. Too many reports were sent from this source IP in the last hour. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     getOperation: {
         parameters: {
             query?: never;
@@ -6086,6 +6192,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
@@ -6247,7 +6354,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6441,7 +6548,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6670,6 +6777,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             /** @description An ancestor remains in Trash. */
             409: {

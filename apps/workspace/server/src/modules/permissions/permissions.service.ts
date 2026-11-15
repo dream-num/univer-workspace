@@ -1,10 +1,11 @@
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver } from "../access/index.js";
+import { assertCeiling, type AccessResolver } from "../access/index.js";
 import {
   PermissionsRepository,
   type GrantRow,
   type LinkSharingRow,
   type MembershipRow,
+  type NodeOwnerRow,
 } from "./permissions.repository.js";
 import type {
   NodeLinkSharing,
@@ -89,6 +90,7 @@ export function createPermissionsModule(options: {
 
   return {
     searchUsers(actorUserId, value) {
+      assertCeiling(options.access.principalCategory(actorUserId), "searchUsers", {});
       const query = validSearch(value);
       return {
         users: options.repository.searchUsers(query, actorUserId),
@@ -114,6 +116,9 @@ export function createPermissionsModule(options: {
         throw conflict("The space owner cannot be a member.");
       }
       requireUser(options.repository, userId);
+      assertCeiling(options.access.principalCategory(actorUserId), "addTeamMember", {
+        member: options.access.principalCategory(userId),
+      });
       const role = validTeamRole(input);
       const existing = options.repository
         .listMembers(spaceId)
@@ -212,7 +217,10 @@ export function createPermissionsModule(options: {
     getNodeLinkSharing(actorUserId, nodeId) {
       shareableNode(actorUserId, nodeId);
       const row = options.repository.findLinkSharing(nodeId);
-      return row ? linkSharingView(row) : defaultLinkSharing();
+      return {
+        ...(row ? linkSharingView(row) : defaultLinkSharing()),
+        ...ownerView(options.repository.findNodeOwner(nodeId)),
+      };
     },
 
     updateNodeLinkSharing(actorUserId, nodeId, input) {
@@ -234,7 +242,7 @@ export function createPermissionsModule(options: {
       ) {
         options.onLinkSharingUpdated?.(nodeId);
       }
-      return linkSharingView(row);
+      return { ...linkSharingView(row), ...ownerView(options.repository.findNodeOwner(nodeId)) };
     },
   };
 }
@@ -288,7 +296,19 @@ function grantView(
   };
 }
 
-function linkSharingView(row: LinkSharingRow): NodeLinkSharing {
+function ownerView(row: NodeOwnerRow): Pick<NodeLinkSharing, "owner" | "expiresAt"> {
+  return {
+    owner: {
+      username: row.username,
+      ...(row.kind === "agent"
+        ? { kind: "agent", claimed: row.claimed === 1 }
+        : { kind: "human" }),
+    },
+    expiresAt: row.expires_at === null ? null : new Date(row.expires_at).toISOString(),
+  };
+}
+
+function linkSharingView(row: LinkSharingRow): Omit<NodeLinkSharing, "owner" | "expiresAt"> {
   return {
     enabled: row.enabled === 1,
     role: row.role,
@@ -309,7 +329,7 @@ function linkSharingView(row: LinkSharingRow): NodeLinkSharing {
   };
 }
 
-function defaultLinkSharing(): NodeLinkSharing {
+function defaultLinkSharing(): Omit<NodeLinkSharing, "owner" | "expiresAt"> {
   return {
     enabled: false,
     role: "viewer",

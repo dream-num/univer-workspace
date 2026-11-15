@@ -5,10 +5,11 @@ import {
   type UnitStore,
 } from "../../integrations/univer/unit-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import type {
-  AccessResolver,
-  ResourceAccess,
-  UnitType,
+import {
+  assertCeiling,
+  type AccessResolver,
+  type ResourceAccess,
+  type UnitType,
 } from "../access/index.js";
 import { nodeSummary, resourceSummary } from "../nodes/nodes.service.js";
 import {
@@ -157,6 +158,10 @@ export function createResourcesModule(options: {
       const operationId = validOperationId(operationIdValue);
       const intent = validCreateResource(inputValue);
       validateTarget(userId, intent, options.access);
+      assertCeiling(options.access.principalCategory(userId), "createFiles", {
+        held: () => options.access.countPersonalFiles(userId, operationId),
+        adding: 1,
+      });
       const reservation = options.repository.reserveCreateResource({
         operationId,
         actorUserId: userId,
@@ -260,6 +265,10 @@ export function createResourcesModule(options: {
           "Only a failed operation can be retried."
         );
       }
+      assertCeiling(options.access.principalCategory(userId), "createFiles", {
+        held: () => options.access.countPersonalFiles(userId, operationId),
+        adding: 1,
+      });
       options.repository.retry(operationId, userId, now());
       const reservation = options.repository.reserveCreateResource({
         operationId,

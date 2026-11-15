@@ -8,6 +8,7 @@ export {
   spaceAccessFromRow,
 } from "./access.service.js";
 export type { AccessResolver } from "./access.service.js";
+export { assertCeiling } from "./ceilings.js";
 export type {
   AccessRole,
   BlobAvailability,

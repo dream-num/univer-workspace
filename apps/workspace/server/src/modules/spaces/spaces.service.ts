@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import {
+  assertCeiling,
   spaceAccessFromRow,
   type AccessResolver,
   type SpaceAccess,
@@ -89,6 +90,7 @@ export function createSpacesModule(options: {
     },
 
     createTeamSpace(userId, input) {
+      assertCeiling(options.access.principalCategory(userId), "createTeamSpace", {});
       const id = randomUUID();
       const name = validName(input.name);
       const publicRead = input.publicRead === undefined
@@ -160,6 +162,7 @@ export function createSpacesModule(options: {
       const publicRead = input.publicRead === undefined
         ? access.publicRead
         : validBoolean(input.publicRead, "publicRead");
+      assertCeiling(options.access.principalCategory(userId), "updateSpace", { publicRead });
       const details = options.repository.getDetails(spaceId);
       const description = input.description === undefined
         ? details.description

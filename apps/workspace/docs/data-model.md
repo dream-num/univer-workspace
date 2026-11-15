@@ -106,6 +106,11 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
 不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
 
+未认领 agent 认证成功，或它的 `/nodes/:nodeId` 页面被匿名访问成功时，`last_active_at` 写为当前时间，
+`expires_at` 写为 30 天后；每个 agent 每天最多写一次。`banned_at` 只由运维命令 `db:ban-agent` 写入，
+已有值不被覆盖。“暂停”不落库：`banned_at` 非空或 `expires_at` 已过时，权限解析对所有者以外的人
+不给出该 agent 的 Space 的任何角色。
+
 ### `password_credentials`
 
 本地密码凭据，与 User 一对一并随 User 删除。

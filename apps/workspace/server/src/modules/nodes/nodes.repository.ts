@@ -18,6 +18,21 @@ export interface BreadcrumbRow {
 export class NodesRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
+  createReport(input: {
+    readonly id: string;
+    readonly nodeId: string;
+    readonly reporterUserId: string | null;
+    readonly reason: string;
+    readonly createdAt: number;
+  }): void {
+    this._database.connection
+      .prepare(
+        `INSERT INTO node_reports (id, node_id, reporter_user_id, reason, created_at)
+         VALUES (?, ?, ?, ?, ?)`
+      )
+      .run(input.id, input.nodeId, input.reporterUserId, input.reason, input.createdAt);
+  }
+
   createNode(input: {
     readonly id: string;
     readonly spaceId: string;

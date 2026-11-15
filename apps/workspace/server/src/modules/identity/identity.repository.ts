@@ -3,18 +3,22 @@ import type { WorkspaceDatabase } from "../../db/database.js";
 import type {
   AuthenticationMethods,
   ExternalIdentityProvider,
+  PrincipalUser,
   SessionIssuedFor,
   User,
 } from "./identity.types.js";
 import type { WriteSource } from "./write-source.js";
 
-export interface StoredSession extends User {
+/** A banned agent is a User that may no longer authenticate. */
+export type StoredPrincipal = PrincipalUser & { readonly banned: boolean };
+
+export type StoredSession = StoredPrincipal & {
   readonly sessionId: string;
   readonly secretHash: string;
   readonly expiresAt: number;
   readonly writeSource: WriteSource | null;
   readonly tokenIssued: boolean;
-}
+};
 
 export interface StoredCredential extends User {
   readonly passwordHash: string;
@@ -357,6 +361,49 @@ export class IdentityRepository {
     return row ? toUser(row) : null;
   }
 
+  findPrincipal(userId: string): StoredPrincipal | null {
+    const row = this._database.connection
+      .prepare(
+        `SELECT users.id, users.username, users.display_name, users.avatar_url, ${principalColumns}
+         FROM users ${agentJoin}
+         WHERE users.id = ?`
+      )
+      .get(userId) as PrincipalRow | undefined;
+    return row ? toPrincipal(row) : null;
+  }
+
+  /**
+   * Pushes out the expiry of the unclaimed agent that is `userId`, or that owns the Space of
+   * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write. An
+   * agent that has already expired is always pushed out, so its next use brings it back.
+   */
+  touchUnclaimedAgent(
+    target: { readonly userId: string } | { readonly nodeId: string },
+    at: number,
+    staleBefore: number,
+    expiresAt: number
+  ): void {
+    const stale = this._database.connection
+      .prepare(
+        `SELECT user_id FROM agents
+         WHERE owner_user_id IS NULL
+           AND (last_active_at <= ? OR expires_at <= ?)
+           AND user_id = ${
+             "userId" in target
+               ? "?"
+               : `(SELECT spaces.owner_user_id FROM nodes
+                   JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
+           }`
+      )
+      .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
+      | { readonly user_id: string }
+      | undefined;
+    if (!stale) return;
+    this._database.connection
+      .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
+      .run(at, expiresAt, stale.user_id);
+  }
+
   findUsers(userIds: readonly string[]): readonly User[] {
     const uniqueUserIds = [...new Set(userIds)];
     if (uniqueUserIds.length === 0) return [];
@@ -461,15 +508,17 @@ export class IdentityRepository {
            users.id,
            users.username,
            users.display_name,
-           users.avatar_url
+           users.avatar_url,
+           ${principalColumns}
          FROM login_sessions
          JOIN users ON users.id = login_sessions.user_id
+         ${agentJoin}
          WHERE login_sessions.id = ?`
       )
       .get(sessionId) as SessionRow | undefined;
     return row
       ? {
-          ...toUser(row),
+          ...toPrincipal(row),
           sessionId: row.session_id,
           secretHash: row.secret_hash,
           expiresAt: row.expires_at,
@@ -669,7 +718,18 @@ interface CredentialRow extends UserRow {
   readonly password_hash: string;
 }
 
-interface SessionRow extends UserRow {
+interface PrincipalRow extends UserRow {
+  readonly kind: "human" | "agent";
+  readonly claimed: number;
+  readonly banned: number;
+}
+
+const principalColumns = `users.kind,
+  agents.owner_user_id IS NOT NULL AS claimed,
+  agents.banned_at IS NOT NULL AS banned`;
+const agentJoin = "LEFT JOIN agents ON agents.user_id = users.id";
+
+interface SessionRow extends PrincipalRow {
   readonly write_source: WriteSource | null;
   readonly token_issued: number;
   readonly session_id: string;
@@ -710,6 +770,16 @@ function insertSession(
       session.issuedFor?.kind === "pat" ? session.issuedFor.id : null,
       session.issuedFor?.kind === "oauth" ? session.issuedFor.id : null
     );
+}
+
+function toPrincipal(row: PrincipalRow): StoredPrincipal {
+  return {
+    ...toUser(row),
+    ...(row.kind === "agent"
+      ? { kind: "agent", claimed: row.claimed === 1 }
+      : { kind: "human" }),
+    banned: row.banned === 1,
+  };
 }
 
 function toUser(row: UserRow): User {

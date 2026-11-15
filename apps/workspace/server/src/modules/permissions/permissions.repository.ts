@@ -48,6 +48,13 @@ export interface LinkSharingRow {
   readonly updated_at: number;
 }
 
+export interface NodeOwnerRow {
+  readonly username: string;
+  readonly kind: "human" | "agent";
+  readonly claimed: 0 | 1;
+  readonly expires_at: number | null;
+}
+
 export class PermissionsRepository {
   constructor(private readonly _database: WorkspaceDatabase) {}
 
@@ -70,6 +77,7 @@ export class PermissionsRepository {
           `SELECT id, username, display_name, avatar_url
            FROM users
            WHERE id <> ?
+             AND kind = 'human'
              AND (
                id = ?
                OR username LIKE ? ESCAPE '\\' COLLATE NOCASE
@@ -236,6 +244,23 @@ export class PermissionsRepository {
         )
         .get(nodeId) as LinkSharingRow | undefined) ?? null
     );
+  }
+
+  findNodeOwner(nodeId: string): NodeOwnerRow {
+    return this._database.connection
+      .prepare(
+        `SELECT
+           owner.username,
+           owner.kind,
+           agents.owner_user_id IS NOT NULL AS claimed,
+           agents.expires_at
+         FROM nodes
+         JOIN spaces ON spaces.id = nodes.space_id
+         JOIN users AS owner ON owner.id = spaces.owner_user_id
+         LEFT JOIN agents ON agents.user_id = owner.id
+         WHERE nodes.id = ?`
+      )
+      .get(nodeId) as unknown as NodeOwnerRow;
   }
 
   upsertLinkSharing(input: {

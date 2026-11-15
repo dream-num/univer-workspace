@@ -788,7 +788,8 @@ paths:
         cannot create personal access tokens, approve CLI logins, authorize
         OAuth clients or link identities (403). Errors use the RFC 6749 body
         `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
-        body), `invalid_grant` (400), `unauthorized_client` (400, a
+        body), `invalid_grant` (400, including a subject token that belongs
+        to a banned agent), `unauthorized_client` (400, a
         confidential client without `tokenExchange`) or `invalid_client` (401,
         an unknown or public client or a wrong secret).
 
@@ -1871,7 +1872,7 @@ paths:
         - Users
       operationId: searchUsers
       summary: Find Users for Team Membership or Direct Share.
-      description: Match username or display name substrings, or an exact User ID, excluding the caller. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE.
+      description: Match username or display name substrings, or an exact User ID, excluding the caller and every agent User. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
       parameters:
         - name: query
           in: query
@@ -1891,6 +1892,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/spaces/{spaceId}/activity:
     parameters:
       - name: spaceId
@@ -2055,6 +2058,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
   /api/spaces/lookup:
@@ -2135,6 +2140,8 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2371,6 +2378,50 @@ paths:
                 $ref: '#/components/schemas/NodePage'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/nodes/{nodeId}/reports:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      security:
+        - {}
+        - sessionCookie: []
+      tags:
+        - Nodes
+      operationId: reportNode
+      summary: Report a Node for abuse.
+      description: |
+        Needs no credentials. The requester must be able to read the Node, as an
+        anonymous reader or through its session; any other Node returns 404.
+        Reports are limited to 10 per source IP per hour, and an IPv6 source
+        counts as its /64 prefix. The reason is stored for operators and is not
+        shown to anyone else.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNodeReport'
+      responses:
+        '201':
+          description: Stored report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: REPORT_RATE_LIMITED. Too many reports were sent from this source IP in the last hour.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/operations/{operationId}:
     parameters:
       - name: operationId
@@ -2420,6 +2471,8 @@ paths:
                 $ref: '#/components/schemas/OperationView'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -2577,7 +2630,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts.
+          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB.
           content:
             application/json:
               schema:
@@ -2768,7 +2821,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts.
+          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB.
           content:
             application/json:
               schema:
@@ -2963,6 +3016,8 @@ paths:
                 $ref: '#/components/schemas/NodeSummary'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
         '409':
@@ -4139,6 +4194,36 @@ components:
           $ref: '#/components/schemas/Error'
     User:
       type: object
+      description: The authenticated User, with the kind of principal it is.
+      additionalProperties: false
+      required:
+        - id
+        - username
+        - displayName
+        - avatarUrl
+        - kind
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+        kind:
+          type: string
+          enum:
+            - human
+            - agent
+        claimed:
+          type: boolean
+          description: Present only for an agent. Whether a human has claimed it.
+    PublicUser:
+      type: object
       additionalProperties: false
       required:
         - id
@@ -4157,8 +4242,6 @@ components:
             - string
             - 'null'
           format: uri
-    PublicUser:
-      $ref: '#/components/schemas/User'
     SessionView:
       oneOf:
         - $ref: '#/components/schemas/AnonymousSession'
@@ -4391,7 +4474,7 @@ components:
               items:
                 $ref: '#/components/schemas/Breadcrumb'
         trashedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         trashedAt:
           type: string
           format: date-time
@@ -4419,11 +4502,11 @@ components:
         - updatedAt
       properties:
         user:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         role:
           $ref: '#/components/schemas/TeamRole'
         grantedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         createdAt:
           type: string
           format: date-time
@@ -4442,13 +4525,13 @@ components:
         - updatedAt
       properties:
         user:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         role:
           $ref: '#/components/schemas/GrantRole'
         effectiveRole:
           $ref: '#/components/schemas/GrantRole'
         grantedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         createdAt:
           type: string
           format: date-time
@@ -4465,18 +4548,47 @@ components:
         - updatedBy
         - createdAt
         - updatedAt
+        - owner
+        - expiresAt
       properties:
         enabled:
           type: boolean
         role:
           $ref: '#/components/schemas/LinkSharingRole'
+        owner:
+          type: object
+          description: Owner of the Space that holds the Node.
+          additionalProperties: false
+          required:
+            - username
+            - kind
+          properties:
+            username:
+              type: string
+            kind:
+              type: string
+              enum:
+                - human
+                - agent
+            claimed:
+              type: boolean
+              description: Present only for an agent. Whether a human has claimed it.
+        expiresAt:
+          type:
+            - string
+            - 'null'
+          format: date-time
+          description: |
+            When the link stops working because its owner, an unclaimed agent, expires. The date moves
+            30 days out while the agent stays active or the shared page is read. Null when the owner
+            does not expire.
         createdBy:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         updatedBy:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         createdAt:
           type:
@@ -4547,10 +4659,10 @@ components:
             - $ref: '#/components/schemas/IssueStateReason'
             - type: 'null'
         author:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         closedBy:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         closedAt:
           type:
@@ -4564,7 +4676,7 @@ components:
         assignees:
           type: array
           items:
-            $ref: '#/components/schemas/User'
+            $ref: '#/components/schemas/PublicUser'
         commentCount:
           type: integer
           minimum: 0
@@ -4626,7 +4738,7 @@ components:
         state:
           $ref: '#/components/schemas/WorktreeState'
         creator:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         unitCount:
           type: integer
           minimum: 0
@@ -6121,7 +6233,7 @@ components:
           type: array
           maxItems: 20
           items:
-            $ref: '#/components/schemas/User'
+            $ref: '#/components/schemas/PublicUser'
     WriteSourceCounts:
       type: object
       additionalProperties: false
@@ -6176,7 +6288,7 @@ components:
           format: date-time
         actor:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         writeSource:
           $ref: '#/components/schemas/WriteSource'
@@ -6220,7 +6332,7 @@ components:
           format: date-time
         actor:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         writeSource:
           $ref: '#/components/schemas/WriteSource'
@@ -6737,6 +6849,24 @@ components:
           type:
             - string
             - 'null'
+    CreateNodeReport:
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    NodeReport:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+      properties:
+        id:
+          type: string
     OperationKind:
       type: string
       enum:
@@ -7116,7 +7246,7 @@ components:
         node:
           $ref: '#/components/schemas/NodeSummary'
         sharedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         sharedAt:
           type: string
           format: date-time
@@ -7236,7 +7366,7 @@ components:
         - members
       properties:
         owner:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         members:
           type: array
           items:
@@ -7524,7 +7654,7 @@ components:
         id:
           type: string
         author:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         body:
           type: string
         createdAt:
@@ -7564,7 +7694,7 @@ components:
         kind:
           $ref: '#/components/schemas/IssueEventKind'
         actor:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         payload:
           type: object
           additionalProperties: true
@@ -7624,7 +7754,7 @@ components:
         id:
           type: string
         author:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         body:
           type: string
         createdAt:
@@ -8251,7 +8381,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
-      description: A valid login session is required.
+      description: A valid login session is required. A session of a banned agent is not valid.
       content:
         application/json:
           schema:
@@ -8263,7 +8393,13 @@ components:
                   code: UNAUTHENTICATED
                   message: Authentication is required.
     Forbidden:
-      description: The current User cannot perform this action.
+      description: |
+        The current User cannot perform this action. The code is `FORBIDDEN` when its role is
+        insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+        agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
+        an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
+        Personal Space, pending pull-request files included, or store one file above 10 MB) and
+        `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
       content:
         application/json:
           schema:

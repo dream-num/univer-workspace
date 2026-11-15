@@ -1429,7 +1429,7 @@ function commentWrite(
   );
 }
 
-async function joinUnit(
+async function requestJoin(
   origin: string,
   cookie: string,
   unitId: string
@@ -1468,13 +1468,19 @@ async function joinUnit(
     })
   );
   const joined = await nextCombResponse(socket);
-  expect(joined).toMatchObject({
-    cmd: CombCmd.JOIN,
-    code: CmdRspCode.OK,
-  });
   if (joined.cmd !== CombCmd.JOIN) throw new Error("JOIN response missing");
+  return { memberId: hello.data.memberID, socket, joined };
+}
+
+async function joinUnit(
+  origin: string,
+  cookie: string,
+  unitId: string
+) {
+  const { memberId, socket, joined } = await requestJoin(origin, cookie, unitId);
+  expect(joined).toMatchObject({ code: CmdRspCode.OK });
   return {
-    memberId: hello.data.memberID,
+    memberId,
     socket,
     members: joined.data.roomInfos[unitId]?.members,
   };
@@ -1915,6 +1921,58 @@ describe("content permission integration", () => {
       ]),
     ).toBe("permission_rej");
   });
+
+  it("holds an unclaimed agent to Viewer on an Editor link, like the anonymous reader", async () => {
+    const f = await fixture();
+    f.application.permissions.updateNodeLinkSharing(f.owner.id, f.node.id, { enabled: true, role: "editor" });
+    const edit = { cellValue: { 0: { 0: { v: "link edit" } } } };
+    const agent = await sheetSubmit(f, agentSession(f).cookie);
+    expect(await agent.submit(1, "sheet.mutation.set-range-values", edit)).toBe("permission_rej");
+    const human = await sheetSubmit(f, f.outsider.cookie);
+    expect(await human.submit(1, "sheet.mutation.set-range-values", edit)).toBe("changeset_ack");
+  });
+
+  it("closes a suspended agent's Unit to link readers until the suspension ends", async () => {
+    const f = await fixture();
+    const agent = agentSession(f);
+    const created = await f.application.resources.create(agent.id, "suspended-agent-unit-0001", {
+      kind: "univer",
+      spaceId: f.application.spaces.list(agent.id).spaces[0]!.id,
+      parentNodeId: null,
+      name: "Agent sheet",
+      unitType: "sheet",
+    });
+    if (created.status === 202 || created.body.node.resource?.kind !== "univer")
+      throw new Error("Missing Unit");
+    const unitId = created.body.node.resource.unitId;
+    f.application.permissions.updateNodeLinkSharing(agent.id, created.body.node.id, { enabled: true, role: "viewer" });
+    const snapshot = () =>
+      fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${unitId}/rev/0`, {
+        headers: { cookie: f.outsider.cookie },
+      }).then(async (response) => ((await response.json()) as { error: { code: number } }).error.code);
+    const suspend = (column: "expires_at" | "banned_at", value: number | null) =>
+      f.application.database.connection
+        .prepare(`UPDATE agents SET ${column} = ? WHERE user_id = ?`)
+        .run(value, agent.id);
+
+    await joinUnit(f.origin, f.outsider.cookie, unitId);
+    expect(await snapshot()).toBe(ErrorCode.OK);
+
+    for (const [column, lifted] of [["expires_at", Date.now() + 60_000], ["banned_at", null]] as const) {
+      suspend(column, Date.now() - 1);
+      expect((await requestJoin(f.origin, f.outsider.cookie, unitId)).joined.code).not.toBe(CmdRspCode.OK);
+      expect(await snapshot()).toBe(ErrorCode.PERMISSION_DENIED);
+      suspend(column, lifted);
+      await joinUnit(f.origin, f.outsider.cookie, unitId);
+      expect(await snapshot()).toBe(ErrorCode.OK);
+    }
+  });
+
+  function agentSession(f: Awaited<ReturnType<typeof fixture>>) {
+    const { user } = f.application.identity.createAgent({ label: "guest", originIp: "203.0.113.9" });
+    const issued = f.application.identity.issueSession(user, "browser");
+    return { id: user.id, cookie: `${f.application.identity.cookieName}=${issued.cookieValue}` };
+  }
 
   async function sheetSubmit(f: Awaited<ReturnType<typeof fixture>>, cookie: string) {
     const connection = await joinUnit(f.origin, cookie, f.unitId);

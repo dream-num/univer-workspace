@@ -1,5 +1,6 @@
 import { json, Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { assertCeiling } from "../access/index.js";
+import { principalCategory, type IdentityModule } from "../identity/index.js";
 import type { PermissionsModule } from "./permissions.service.js";
 
 export function createPermissionsRouter(options: {
@@ -102,6 +103,9 @@ export function createPermissionsRouter(options: {
     "/nodes/:nodeId/link-sharing",
     (request, response) => {
       const session = options.identity.requireSession(request.headers.cookie);
+      assertCeiling(principalCategory(session.user), "writeLinkSharing", {
+        tokenIssued: session.tokenIssued,
+      });
       response.json(
         options.permissions.updateNodeLinkSharing(
           session.user.id,

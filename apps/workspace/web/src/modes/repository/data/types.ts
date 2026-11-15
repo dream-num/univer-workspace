@@ -7,7 +7,7 @@ export interface DayWindow {
 }
 export type ActorKind = "people" | "agents" | "unknown";
 export interface ActorRef {
-  readonly user: components["schemas"]["User"] | null;
+  readonly user: components["schemas"]["PublicUser"] | null;
   readonly kind: ActorKind;
 }
 export type SegmentKey = ActorKind;

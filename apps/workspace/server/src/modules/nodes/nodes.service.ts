@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { logger } from "../../logging/logger.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type {
   AccessResolver,
@@ -7,7 +8,7 @@ import type {
 } from "../access/index.js";
 import { resourceCapabilities } from "../access/access.service.js";
 import { assertNotDelegatedPageWrite } from "../blobs/html-view-guard.js";
-import type { Principal } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, createSourceRateLimiter, type Principal } from "../identity/index.js";
 import {
   NodesRepository,
   type BreadcrumbRow,
@@ -20,6 +21,9 @@ import type {
   NodeSummary,
   ResourceSummary,
 } from "./nodes.types.js";
+
+const MAX_REPORT_REASON_LENGTH = 1000;
+const REPORT_LIMIT_PER_HOUR = 10;
 
 interface PageRequest {
   readonly cursor: unknown;
@@ -40,6 +44,16 @@ export interface NodesModule {
   ): NodePage;
   create(userId: string, input: unknown): NodeSummary;
   update(actor: Principal, nodeId: string, input: unknown): NodeSummary;
+  /**
+   * Files an abuse report on a Node the requester can read; anyone may, signed in or not. The
+   * source IP is only the rate-limit key and is never stored.
+   */
+  report(
+    userId: string,
+    nodeId: string,
+    input: unknown,
+    originIp: string | undefined
+  ): { readonly id: string };
 }
 
 export function createNodesModule(options: {
@@ -48,6 +62,7 @@ export function createNodesModule(options: {
   readonly now?: () => number;
 }): NodesModule {
   const now = options.now ?? Date.now;
+  const reportLimiter = createSourceRateLimiter(REPORT_LIMIT_PER_HOUR, now);
 
   function listPage(
     userId: string,
@@ -190,6 +205,30 @@ export function createNodesModule(options: {
       const updated = options.access.resolveNode(userId, nodeId);
       if (!updated) throw new Error("Updated Node is not discoverable.");
       return nodeSummary(updated);
+    },
+
+    report(userId, nodeId, inputValue, originIp) {
+      // A Node the requester cannot read is indistinguishable from a missing one, as on the Node route.
+      if (!options.access.resolveNode(userId, nodeId)) throw notFound();
+      const reason = validReportReason(inputValue);
+      if (!reportLimiter.take(originIp)) {
+        throw new ApplicationError(
+          "REPORT_RATE_LIMITED",
+          429,
+          "Too many reports were sent from this address. Try again later."
+        );
+      }
+      const id = randomUUID();
+      options.repository.createReport({
+        id,
+        nodeId,
+        reporterUserId: userId === ANONYMOUS_USER_ID ? null : userId,
+        reason,
+        createdAt: now(),
+      });
+      // The reason is free text from an untrusted reader, so it stays out of the log.
+      logger.warn({ event: "node_reported", nodeId, reportId: id }, "node reported");
+      return { id };
     },
   };
 }
@@ -334,6 +373,21 @@ function validPatch(value: unknown): {
         }
       : {}),
   };
+}
+
+function validReportReason(value: unknown): string {
+  const reason = requiredRecord(value).reason;
+  if (
+    typeof reason !== "string" ||
+    reason.trim().length === 0 ||
+    reason.length > MAX_REPORT_REASON_LENGTH
+  ) {
+    throw invalidInput(
+      `reason must be a non-empty string of at most ${MAX_REPORT_REASON_LENGTH} characters.`,
+      "reason"
+    );
+  }
+  return reason.trim();
 }
 
 function requiredRecord(value: unknown): Record<string, unknown> {

@@ -65,7 +65,7 @@ BadRequest:
         $ref: "#/ErrorResponse"
 
 Unauthorized:
-  description: A valid login session is required.
+  description: A valid login session is required. A session of a banned agent is not valid.
   content:
     application/json:
       schema:
@@ -78,7 +78,13 @@ Unauthorized:
               message: Authentication is required.
 
 Forbidden:
-  description: The current User cannot perform this action.
+  description: |
+    The current User cannot perform this action. The code is `FORBIDDEN` when its role is
+    insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
+    agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
+    an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
+    Personal Space, pending pull-request files included, or store one file above 10 MB) and
+    `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
   content:
     application/json:
       schema:

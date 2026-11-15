@@ -136,3 +136,47 @@
               $ref: ../schemas/nodes.yaml#/NodePage
       "404":
         $ref: ../schemas/common.yaml#/NotFound
+
+/api/nodes/{nodeId}/reports:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    security:
+      - {}
+      - sessionCookie: []
+    tags: [Nodes]
+    operationId: reportNode
+    summary: Report a Node for abuse.
+    description: |
+      Needs no credentials. The requester must be able to read the Node, as an
+      anonymous reader or through its session; any other Node returns 404.
+      Reports are limited to 10 per source IP per hour, and an IPv6 source
+      counts as its /64 prefix. The reason is stored for operators and is not
+      shown to anyone else.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/nodes.yaml#/CreateNodeReport
+    responses:
+      "201":
+        description: Stored report.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/NodeReport
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "429":
+        description: REPORT_RATE_LIMITED. Too many reports were sent from this source IP in the last hour.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse

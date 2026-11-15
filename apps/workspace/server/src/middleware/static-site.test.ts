@@ -13,6 +13,7 @@ let directory: string;
 let server: Server;
 let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
+const identity = { recordAgentPageView: vi.fn() };
 const getNode = vi.fn((userId: string, nodeId: string) => {
   if (["private", "missing", "deleted", "failure"].includes(nodeId)) {
     throw new Error("No metadata may escape this lookup");
@@ -45,8 +46,8 @@ beforeAll(async () => {
   writeFileSync(join(directory, "favicon.ico"), "icon");
 
   const app = express();
-  app.use("/without-origin", createStaticSiteRouter(directory, { nodes: { get: getNode } }));
-  app.use(createStaticSiteRouter(directory, { nodes: { get: getNode }, publicOrigin: "https://workspace.example" }));
+  app.use("/without-origin", createStaticSiteRouter(directory, { nodes: { get: getNode }, identity }));
+  app.use(createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, publicOrigin: "https://workspace.example" }));
   server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));
   });
@@ -69,12 +70,14 @@ describe("public Node link metadata", () => {
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     expect(response.headers.get("vary")).toBe("Accept-Language");
     expect(getNode).toHaveBeenCalledWith(ANONYMOUS_USER_ID, "public");
+    expect(identity.recordAgentPageView).toHaveBeenCalledWith("public");
   });
 
   it.each(["private", "missing", "deleted", "failure"])("leaves the shell byte-identical for %s", async (nodeId) => {
     const response = await fetch(`${origin}/nodes/${nodeId}`, { headers: { cookie: "session=owner", "Accept-Language": "zh" } });
     expect(response.status).toBe(200);
     expect(Buffer.from(await response.arrayBuffer())).toEqual(Buffer.from(indexHtml));
+    expect(identity.recordAgentPageView).not.toHaveBeenCalledWith(nodeId);
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     expect(response.headers.get("vary")).toBeNull();
   });

@@ -54,7 +54,7 @@ it("previews only Nodes readable through anonymous public-repository and inherit
 
   const app = express();
   app.use("/api", createNodesRouter({ identity: workspace.identity, nodes: workspace.nodes }));
-  app.use(createStaticSiteRouter(directory, { nodes: workspace.nodes, publicOrigin: config.publicOrigin }));
+  app.use(createStaticSiteRouter(directory, { nodes: workspace.nodes, identity: workspace.identity, publicOrigin: config.publicOrigin }));
   const httpServer = createServer(app);
   server = httpServer;
   await new Promise<void>((resolve) => httpServer.listen(0, "127.0.0.1", resolve));

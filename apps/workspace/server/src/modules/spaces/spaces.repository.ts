@@ -63,7 +63,7 @@ export class SpacesRepository {
     return this._database.transaction((database) => {
       const pinnable = database.prepare(`
         SELECT spaces.id FROM spaces ${spaceMemberJoin}
-        WHERE spaces.id IN (SELECT value FROM json_each($ids)) AND ${pinnableSql}
+        WHERE spaces.id IN (SELECT value FROM json_each($ids)) AND ${visibleSpaceSql} AND ${pinnableSql}
       `).all({ userId, ids: JSON.stringify(spaceIds) });
       if (pinnable.length !== spaceIds.length) return false;
       database.prepare("DELETE FROM space_pins WHERE user_id = ?").run(userId);

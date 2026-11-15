@@ -252,7 +252,8 @@
       cannot create personal access tokens, approve CLI logins, authorize
       OAuth clients or link identities (403). Errors use the RFC 6749 body
       `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
-      body), `invalid_grant` (400), `unauthorized_client` (400, a
+      body), `invalid_grant` (400, including a subject token that belongs
+      to a banned agent), `unauthorized_client` (400, a
       confidential client without `tokenExchange`) or `invalid_client` (401,
       an unknown or public client or a wrong secret).
 

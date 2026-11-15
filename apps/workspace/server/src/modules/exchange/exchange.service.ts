@@ -37,7 +37,7 @@ import {
 } from "../../integrations/univer/univer-license.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { logger } from "../../logging/logger.js";
-import type { AccessResolver, NodeAccess, UnitType } from "../access/index.js";
+import { assertCeiling, type AccessResolver, type NodeAccess, type UnitType } from "../access/index.js";
 import type { ResourcesModule } from "../resources/index.js";
 import type { SpacesModule } from "../spaces/index.js";
 import {
@@ -260,6 +260,7 @@ export function createExchangeModule(options: {
     const artifact = requireArtifact(artifacts, userId, fileID);
     return {
       filename: artifact.filename,
+      byteSize: artifact.byteSize,
       read: () => readArtifact(options.store, artifact, maxFileBytes),
     };
   }
@@ -283,6 +284,7 @@ export function createExchangeModule(options: {
     const target = hostTarget(userId, access.node);
     return {
       filename: asset.original_filename,
+      byteSize: asset.byte_size,
       read: () =>
         openAttachment(userId, fileID, sourceUnitID, (opened) =>
           readStream(opened.stream, maxFileBytes)
@@ -337,6 +339,7 @@ export function createExchangeModule(options: {
 
     async upload(userId, input) {
       const size = validSize(input.size, maxFileBytes);
+      assertCeiling(options.access.principalCategory(userId), "storeFile", { byteSize: size });
       const flate = validBooleanQuery(input.flate);
       if (!input.filename || input.filename.length > 1024) {
         throw invalidInput("The uploaded filename is invalid.", "file");
@@ -362,6 +365,13 @@ export function createExchangeModule(options: {
         typeValue === "auto"
           ? unitTypeFromFilename(source.filename)
           : unitTypeFromProtocol(typeValue);
+      const principal = options.access.principalCategory(userId);
+      assertCeiling(principal, "storeFile", { byteSize: source.byteSize });
+      // Refused here for an answer the caller can read; resources.create holds the limit itself.
+      assertCeiling(principal, "createFiles", {
+        held: () => options.access.countPersonalFiles(userId),
+        adding: input.outputType === 2 ? 0 : 1,
+      });
       const taskID = startTask(userId, "import", async () => {
         const buffer = await source.read();
         const importOptions = exchangeImportOptions(
@@ -637,6 +647,7 @@ function validImportRequest(value: unknown): {
 
 interface ImportSource {
   readonly filename: string;
+  readonly byteSize: number;
   read(): Promise<Buffer>;
   /** Where the imported Unit lands when the request names no Space; the host Unit's folder. */
   readonly target?: { readonly spaceId: string; readonly parentNodeId: string | null };

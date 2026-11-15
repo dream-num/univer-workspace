@@ -1,5 +1,27 @@
 User:
   type: object
+  description: The authenticated User, with the kind of principal it is.
+  additionalProperties: false
+  required: [id, username, displayName, avatarUrl, kind]
+  properties:
+    id:
+      type: string
+    username:
+      type: string
+    displayName:
+      type: string
+    avatarUrl:
+      type: [string, "null"]
+      format: uri
+    kind:
+      type: string
+      enum: [human, agent]
+    claimed:
+      type: boolean
+      description: Present only for an agent. Whether a human has claimed it.
+
+PublicUser:
+  type: object
   additionalProperties: false
   required: [id, username, displayName, avatarUrl]
   properties:
@@ -12,9 +34,6 @@ User:
     avatarUrl:
       type: [string, "null"]
       format: uri
-
-PublicUser:
-  $ref: "#/User"
 
 ExternalIdentitySummary:
   type: object

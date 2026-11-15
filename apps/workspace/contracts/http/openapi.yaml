@@ -168,6 +168,8 @@ paths:
     $ref: ./paths/nodes.yaml#/~1api~1nodes~1{nodeId}
   /api/nodes/{nodeId}/children:
     $ref: ./paths/nodes.yaml#/~1api~1nodes~1{nodeId}~1children
+  /api/nodes/{nodeId}/reports:
+    $ref: ./paths/nodes.yaml#/~1api~1nodes~1{nodeId}~1reports
   /api/operations/{operationId}:
     $ref: ./paths/operations.yaml#/~1api~1operations~1{operationId}
   /api/operations/{operationId}/retry:

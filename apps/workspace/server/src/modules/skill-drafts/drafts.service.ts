@@ -3,7 +3,7 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver } from "../access/index.js";
+import { assertCeiling, type AccessResolver } from "../access/index.js";
 import { SkillDraftsRepository, draftConflict, type SkillTarget } from "./drafts.repository.js";
 import {
   draftBase,
@@ -328,9 +328,15 @@ export function createSkillDraftsModule(options: {
         const scan = await scanSkill(row.name, files);
         if (scan.some((finding) => finding.severity === "block"))
           throw draftConflict("Static scan blocks publication.");
-        const decided = repository.decide(id, userId, "publish", now(), (draft, target) =>
-          authorize(userId, draft.space_id, target),
-        );
+        const decided = repository.decide(id, userId, "publish", now(), (draft, target) => {
+          authorize(userId, draft.space_id, target);
+          assertCeiling(access.principalCategory(userId), "createFiles", {
+            held: () => access.countPersonalFiles(userId),
+            adding: draftFiles(draft).filter(
+              (file) => !target.files.some((current) => current.path === file.path),
+            ).length,
+          });
+        });
         if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
         return view(decided);
       } finally {

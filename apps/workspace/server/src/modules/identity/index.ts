@@ -4,9 +4,14 @@ export type { IdentityModule } from "./identity.service.js";
 export type {
   AuthenticatedSession,
   Principal,
+  PrincipalCategory,
+  PrincipalKind,
+  PrincipalUser,
   SessionView,
   User,
 } from "./identity.types.js";
+export { principalCategory } from "./principal-category.js";
+export { createSourceRateLimiter } from "./source-rate-limiter.js";
 export { IdentityRepository } from "./identity.repository.js";
 export { createIdentityRouter } from "./identity.router.js";
 export { createGitHubOAuthProvider } from "./github-oauth.js";

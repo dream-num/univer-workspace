@@ -233,6 +233,19 @@ export class TrashRepository {
     };
   }
 
+  /** Nodes with a Resource that restoring the batch brings back. */
+  countFiles(batch: TrashBatchRow): number {
+    const row = this._database.connection
+      .prepare(
+        `SELECT COUNT(*) AS files
+         FROM resources
+         JOIN nodes ON nodes.id = resources.node_id
+         WHERE nodes.trash_batch_id = ?`
+      )
+      .get(batch.id) as { readonly files: number };
+    return row.files;
+  }
+
   restore(batch: TrashBatchRow, restoredAt: number): void {
     this._database.transaction((database) => {
       database

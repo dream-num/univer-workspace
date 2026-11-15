@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
-import type { AccessResolver } from "../access/index.js";
+import { assertCeiling, type AccessResolver } from "../access/index.js";
 import { nodeSummary } from "../nodes/nodes.service.js";
 import {
   TrashRepository,
@@ -101,6 +101,10 @@ export function createTrashModule(options: {
           "Restore the parent Trash Batch first."
         );
       }
+      assertCeiling(options.access.principalCategory(userId), "createFiles", {
+        held: () => options.access.countPersonalFiles(userId),
+        adding: options.repository.countFiles(batch),
+      });
       options.repository.restore(batch, now());
       const restored = options.access.resolveNode(
         userId,
