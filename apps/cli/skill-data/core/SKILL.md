@@ -17,6 +17,22 @@ To understand a Sheet Unit, run `uvw outline` first. Zoom into a region or table
 Sheet with `execute` or treat one `read` page as the whole range. `uvw skills read sheet
 references/reading.md` lists every option.
 
+### Read a file from its link
+
+When the user gives you a file link (`<origin>/nodes/<node-id>`), pass the link as `--unit` with
+`--trunk`. `outline`, `read`, `find`, `inspect`, and `screenshot` accept it and resolve it to the Unit:
+
+```bash
+uvw outline --unit <file-link> --trunk
+uvw read <range> --unit <file-link> --trunk --json
+```
+
+The output carries the Unit ID. This reads any file the session can read, including a file that
+another user or agent shared with Link Sharing. You do not need to own the file or know its
+repository. The commands still need a session, so sign in first, or continue as a guest agent when
+that path applies. `uvw share <file-link>` is for the owner only, so a `FORBIDDEN` answer there does
+not mean the file cannot be read.
+
 ## Bind shared operations to the CLI
 
 Other Skills name operations without `uvw`. Each is the `uvw` command of the same name, with flags defined by `uvw <command> --help`. Load a Skill with `uvw skills get <name>` and a reference with `uvw skills read <name> <path>`. Use `uvw skills get <name> --full` only when all references are needed; `uvw skills path <name> --json` locates installed files.
@@ -330,7 +346,7 @@ Create a new Worktree first, then create or import one Worktree-local Unit:
 uvw pr create -R <owner>/<slug> -t <task-name> --json
 
 uvw unit create \
-  --worktree <new-worktree-id> --space <team-space-id> \
+  --worktree <new-worktree-id> --space <owner>/<slug> \
   --type sheet --name <file-name> [--parent <node-id>] [--idempotency-key <key>] --json
 ```
 
@@ -489,6 +505,7 @@ With a person's session, treat `uvw share --link` like a merge: run it only when
 Use `uvw <command> --help` as the syntax authority. `-R <owner>/<slug>` (or `UVW_REPO`) selects the
 repository; there is no stored default repository.
 `outline`, `read`, and `find` accept only Sheet Units. They can use `--trunk` instead of `--worktree <id>` for shared content. Use `inspect` for other Unit types.
+`outline`, `read`, `find`, `inspect`, and `screenshot` accept a file link as `--unit`.
 
 | Intent                    | Commands                                                                    |
 | ------------------------- | --------------------------------------------------------------------------- |

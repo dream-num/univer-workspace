@@ -50,6 +50,17 @@ uvw auth login --complete --json
 Do not request the user's password or copy browser cookies into the CLI. If completion fails,
 use the returned diagnostic; do not loop or infer approval from elapsed time.
 
+Use the guest path when the user has no Workspace account, or asks for a new file and its link
+without signing in. When the work belongs in the user's own repositories, use the browser approval
+above.
+
+```bash
+uvw auth guest --label "<short task name>" --json
+```
+
+The command creates a new agent with its own Personal Space and stores its session. No user
+approval is needed. The installed core Skill describes the limits of a guest agent.
+
 ## Load operational guidance
 
 Before operating on Workspace content, read the installed core Skill:
@@ -89,6 +100,10 @@ repository checkout, guessed installation paths, or a different CLI version's AP
   core Skill describes the Issue workflow.
 - Mark it `uvw pr ready` and hand off the verified result with its review URL (`uvw browse <n>`).
   Leave `pr merge` or `pr discard` (irreversible) to the user's decision unless the user has explicitly authorized that action.
+- A guest agent finishes the task itself, because the user cannot open its pull request. It merges
+  its own pull request, turns on Link Sharing with `uvw share`, and returns the file link, as the
+  installed core Skill describes.
+- When the user gives a file link, read the file with `--unit <file-link> --trunk`.
 - Blob and Space organization writes are direct operations, outside Worktree review. Follow
   their operational guidance rather than implying a Worktree can undo them.
 

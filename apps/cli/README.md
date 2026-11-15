@@ -150,6 +150,15 @@ Share a file after its pull request is merged. Only the owner of the file can us
 prints `expiresAt`. The link stops working on that date unless the agent is used or the link is
 opened before then.
 
+To read a shared file, pass its link as the Unit. `outline`, `read`, `find`, `inspect`, and
+`screenshot` accept a file link as `--unit` and resolve it to the Unit, for any file the session can
+read:
+
+```bash
+uvw outline --unit <file-link> --trunk
+uvw read <range> --unit <file-link> --trunk
+```
+
 ## Commands
 
 Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>/<slug>`
