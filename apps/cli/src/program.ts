@@ -289,6 +289,7 @@ const CORE_COMMANDS = new Set([
   "worktree",
   "search",
   "browse",
+  "share",
 ]);
 const SETUP_COMMANDS = new Set(["config", "daemon", "skills", "resources", "api"]);
 

@@ -18,6 +18,7 @@ import { createLabelCommand } from "../src/features/label/command.js";
 import { createPullRequestCommands } from "../src/features/pr/command.js";
 import { createRepoCommand } from "../src/features/repo/command.js";
 import { createSearchCommand } from "../src/features/search/command.js";
+import { createShareCommand } from "../src/features/share/command.js";
 import { RepoContext } from "../src/repo-context.js";
 
 const ORIGIN = "https://workspace.test";
@@ -1081,6 +1082,75 @@ describe("uvw auth guest", () => {
   });
 });
 
+describe("uvw share", () => {
+  const url = `${ORIGIN}/nodes/node-1`;
+  const owner = { claimed: false, kind: "agent", username: "budget-bot-x7k2" };
+  const expiresAt = "2026-12-14T00:00:00.000Z";
+
+  function share(updateLinkSharing?: () => Promise<never>) {
+    const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner, role });
+    const spaces = {
+      getLinkSharing: vi.fn(async () => sharing(false, "viewer")),
+      getNode: vi.fn(async (nodeId: string) => ({ name: "Budget", nodeId })),
+      updateLinkSharing: vi.fn(
+        updateLinkSharing ??
+          (async (_id: string, input: { enabled: boolean; role: string }) => sharing(input.enabled, input.role)),
+      ),
+    };
+    return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN), spaces };
+  }
+
+  it("reads the Link Sharing of a file link or Node ID without changing it", async () => {
+    const { command, spaces } = share();
+    const text = await run(command, [url]);
+    expect(text).toContain(url);
+    expect(text).toContain("Budget");
+    expect(text).toContain("Link Sharing: off");
+    expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
+      expiresAt, link: "off", name: "Budget", owner, url,
+    });
+    expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
+    expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["off", { enabled: false, role: "viewer" }],
+    ["viewer", { enabled: true, role: "viewer" }],
+    ["editor", { enabled: true, role: "editor" }],
+  ] as const)("sets --link %s and reports it in text and JSON", async (link, written) => {
+    const { command, spaces } = share();
+    const text = await run(command, [url, "--link", link]);
+    expect(text).toContain(`Link Sharing: ${link}`);
+    expect(text.includes(expiresAt)).toBe(link !== "off");
+    expect(JSON.parse(await run(command, [url, "--link", link, "--json"]))).toEqual({
+      expiresAt, link, name: "Budget", owner, url,
+    });
+    expect(JSON.parse(await run(command, [url, "--link", link, "--json", "url,link"]))).toEqual({ link, url });
+    expect(spaces.updateLinkSharing).toHaveBeenCalledWith("node-1", written);
+    expect(spaces.getLinkSharing).not.toHaveBeenCalled();
+  });
+
+  it("rejects an unknown --link value before any request", async () => {
+    const { command, spaces } = share();
+    await expect(run(command, [url, "--link", "public"])).rejects.toMatchObject({
+      exitCode: 1,
+      message: expect.stringContaining("off, viewer, editor"),
+    });
+    expect(spaces.getNode).not.toHaveBeenCalled();
+  });
+
+  it("tells a person's delegated session to share in the browser", async () => {
+    const { command } = share(async () => {
+      throw workspaceError("INTERACTIVE_SESSION_REQUIRED", "An interactive sign-in is required.", { status: 403 });
+    });
+    const error = await run(command, [url, "--link", "viewer"]).catch((caught: unknown) => caught);
+    expect(error).toMatchObject({
+      exitCode: 1,
+      message: expect.stringMatching(new RegExp(`INTERACTIVE_SESSION_REQUIRED: .*browser: ${url}`, "u")),
+    });
+  });
+});
+
 async function run(command: Command, args: readonly string[]): Promise<string> {
   let output = "";
   const configuration: OutputConfiguration = {
@@ -1154,7 +1224,7 @@ describe("uvw startup", () => {
       "command.ts", "errors.ts", "repo-context.ts", "product-commands.ts", "transport/http.ts",
       "features/auth/command.ts", "features/auth/session.ts", "features/browse/command.ts",
       "features/issue/command.ts", "features/label/command.ts", "features/pr/command.ts",
-      "features/repo/command.ts", "features/search/command.ts",
+      "features/repo/command.ts", "features/search/command.ts", "features/share/command.ts",
     ];
     for (const file of files) {
       const source = await readFile(new URL(`../src/${file}`, import.meta.url), "utf8");
