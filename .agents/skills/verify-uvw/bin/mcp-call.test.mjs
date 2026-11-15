@@ -20,6 +20,8 @@ test('invalid MCP input exits 2 before connecting or writing evidence', () => {
       ['call', 'input', 'whoami', 'null'],
       ['call', 'input', 'whoami', '{'],
       ['tools', '--auth', 'none', 'input'],
+      ['call', '--as', 'Agent One', 'input', 'whoami'],
+      ['call', '--as', 'a1', '--auth', 'pat', 'input', 'whoami'],
       ['tools', 'input', 'extra'],
     ]) {
       const result = spawnSync(process.execPath, [fileURLToPath(new URL('./mcp-call.mjs', import.meta.url)), ...internal, ...args], { encoding: 'utf8' });
@@ -40,6 +42,7 @@ function validateErrorCode(outcome, code, errorCode, extra = {}) {
     args: {},
     auth: 'dev',
     patId: null,
+    principalId: undefined,
     ...extra.globals,
     protocol: '2026-07-28',
     result: { isError: outcome === 'tool_error', structuredContent: { code } },
@@ -127,6 +130,15 @@ test('OAuth transcript redaction preserves JSON strings with escaped quotes', ()
     assert.equal(result.status, 0, result.stderr);
     assert.deepEqual(JSON.parse(result.stdout), { type: 'tool_use', input: { code: '[REDACTED]', state: '[REDACTED]' }, output: 'ok' });
   } finally { rmSync(run, { recursive: true, force: true }); }
+});
+
+test('an agent principal event is matched by its user, whatever PAT id the gateway reports', () => {
+  const globals = { auth: 'pat', patId: undefined, principalId: 'agent-1' };
+  const event = { auth_kind: 'pat', client_id: 'pat-id-never-returned', user_id: 'agent-1' };
+  assert.equal(validateErrorCode('ok', undefined, null, { globals, event }).length, 0);
+  for (const wrong of [{ user_id: 'human-1' }, { auth_kind: 'dev' }]) {
+    assert.ok(validateErrorCode('ok', undefined, null, { globals, event: { ...event, ...wrong } }).includes('Event authentication differs from --auth pat'));
+  }
 });
 
 for (const tool of ['skill_draft_create', 'skill_draft_get']) {

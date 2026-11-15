@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | secret-check [directory] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -329,6 +329,33 @@ cmd_mcp_token() {
   mcp_token "$@"
 }
 
+cmd_principal() { # name [label]: a new agent principal whose token never leaves home/
+  [[ $# -ge 1 && $# -le 2 && "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ && "$1" != human ]] \
+    || die "usage: verify-uvw principal <name> [label]  (name: a-z, 0-9, _ and -, not human)"
+  load_run
+  [[ ! -e "$RUN/home/principals/$1.token" ]] || die "principal $1 already exists in this run"
+  node --input-type=module - "$RUN" "$ORIGIN" "$@" <<'JS'
+import {mkdirSync,writeFileSync} from 'node:fs';
+const [run,origin,name,label]=process.argv.slice(2);
+const fail=message=>{ console.error('verify-uvw: '+message); process.exit(1); };
+const response=await fetch(origin+'/api/agents',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(label===undefined?{}:{label})});
+if (response.status===429) fail('agent creation is limited to 5 per hour per source IP on this instance; reuse a principal or wait');
+const body=await response.json().catch(()=>null);
+if (response.status!==201 || typeof body?.token!=='string' || typeof body.agent?.id!=='string') fail('POST /api/agents returned '+response.status);
+mkdirSync(run+'/home/principals',{recursive:true,mode:0o700});
+writeFileSync(`${run}/home/principals/${name}.token`,body.token,{mode:0o600});
+writeFileSync(`${run}/home/principals/${name}.id`,body.agent.id,{mode:0o600});
+writeFileSync(`${run}/evidence/principal-${name}.json`,JSON.stringify({name,agent:body.agent,mcpUrl:body.mcpUrl,expiresAt:body.expiresAt},null,2)+'\n');
+console.log(`id:       ${body.agent.id}\nusername: ${body.agent.username}`);
+JS
+}
+
+cmd_secret_check() { # [directory]: fails when evidence holds a token, a session cookie or one of this run's secrets
+  [[ $# -le 1 ]] || die "usage: verify-uvw secret-check [directory]"
+  load_run
+  node "$BIN/secrets.mjs" check "$RUN" "${1:-$RUN/evidence}"
+}
+
 cmd_agent_up() {
   load_run
   [[ -n "${AGENT_PORT:-}" ]] || die "no Agent callback registered; start up with VERIFY_UVW_AGENT_PORT"
@@ -573,10 +600,11 @@ cmd_user() {
 cmd_mcp_oauth() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
-  [[ -f "$RUN/user.env" ]] || die "no user; run: verify-uvw user"
+  # login --guest needs no user: it continues through the guest agent card.
+  local USERNAME=""
   # shellcheck disable=SC1091
-  source "$RUN/user.env"
-  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$REPO/.agents/skills/verify-uvw/bin/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
+  [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"
+  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$BIN/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
 }
 
 cmd_env() {
@@ -642,6 +670,8 @@ case "${1:-}" in
   up) shift; cmd_up "$@" ;;
   doctor) shift; cmd_doctor "$@" ;;
   user) shift; cmd_user "$@" ;;
+  principal) shift; cmd_principal "$@" ;;
+  secret-check) shift; cmd_secret_check "$@" ;;
   env) shift; cmd_env "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;
