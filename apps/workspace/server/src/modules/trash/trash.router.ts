@@ -10,26 +10,26 @@ export function createTrashRouter(options: {
 
   router.post(
     "/nodes/:nodeId/trash",
-    (request, response) => {
-      const session = options.identity.requireSession(
+    async (request, response) => {
+      const session = await options.identity.requireSession(
         request.headers.cookie
       );
       response
         .status(201)
         .json(
-          options.trash.trashNode(
+          await options.trash.trashNode(
             session.user.id,
             request.params.nodeId
           )
         );
     }
   );
-  router.get("/spaces/:spaceId/trash", (request, response) => {
-    const session = options.identity.requireSession(
+  router.get("/spaces/:spaceId/trash", async (request, response) => {
+    const session = await options.identity.requireSession(
       request.headers.cookie
     );
     response.json(
-      options.trash.list(session.user.id, request.params.spaceId, {
+      await options.trash.list(session.user.id, request.params.spaceId, {
         cursor: request.query.cursor,
         limit: request.query.limit,
       })
@@ -37,12 +37,12 @@ export function createTrashRouter(options: {
   });
   router.post(
     "/trash-batches/:trashBatchId/restore",
-    (request, response) => {
-      const session = options.identity.requireSession(
+    async (request, response) => {
+      const session = await options.identity.requireSession(
         request.headers.cookie
       );
       response.json(
-        options.trash.restore(
+        await options.trash.restore(
           session.user.id,
           request.params.trashBatchId
         )
@@ -51,11 +51,11 @@ export function createTrashRouter(options: {
   );
   router.delete(
     "/trash-batches/:trashBatchId",
-    (request, response) => {
-      const session = options.identity.requireSession(
+    async (request, response) => {
+      const session = await options.identity.requireSession(
         request.headers.cookie
       );
-      options.trash.removePermanently(
+      await options.trash.removePermanently(
         session.user.id,
         request.params.trashBatchId
       );

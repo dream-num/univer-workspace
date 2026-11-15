@@ -1,23 +1,15 @@
-import type { IdentityRepository, StoredPrincipal } from "./identity.repository.js";
+import type { StoredPrincipal } from "./identity.repository.js";
 
 export const AGENT_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const ACTIVITY_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
-export function recordAgentActivity(
-  repository: IdentityRepository,
-  target: Parameters<IdentityRepository["touchUnclaimedAgent"]>[0],
-  at: number,
-): void {
-  repository.touchUnclaimedAgent(target, at, at - ACTIVITY_INTERVAL_MS, at + AGENT_TTL_MS);
+export function agentActivityWindow(at: number) {
+  return { at, staleBefore: at - ACTIVITY_INTERVAL_MS, expiresAt: at + AGENT_TTL_MS };
 }
 
 /** A banned agent cannot authenticate. An expired unclaimed agent recovers on authentication. */
-export function authenticateStoredPrincipal<T extends StoredPrincipal>(
-  repository: IdentityRepository,
-  stored: T | null,
-  at: number,
-): T | null {
+export function authenticateStoredPrincipal<T extends StoredPrincipal>(stored: T | null, at: number) {
   if (!stored || stored.banned) return null;
-  if (stored.kind === "agent" && !stored.claimed) recordAgentActivity(repository, { userId: stored.id }, at);
-  return stored;
+  const activity = stored.kind === "agent" && !stored.claimed ? agentActivityWindow(at) : null;
+  return { principal: stored, activity };
 }

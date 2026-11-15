@@ -215,7 +215,7 @@ describe("token exchange", () => {
 
     const session = application!.database.connection
       .prepare("SELECT created_at, expires_at, write_source, issued_for_pat_id FROM login_sessions WHERE id = ?")
-      .get(body.access_token.split(".", 1)[0]) as Record<string, unknown>;
+      .get(body.access_token.split(".", 1)[0]!) as Record<string, unknown>;
     expect(Number(session.expires_at) - Number(session.created_at)).toBe(600_000);
     expect(session).toMatchObject({ write_source: "agent", issued_for_pat_id: record.id });
 
@@ -239,7 +239,7 @@ describe("token exchange", () => {
     await expectInvalidGrant(await exchange(origin, { subject_token: token }));
 
     const grants = createAccessTokenService({ repository: application!.repositories.accessTokens });
-    const issued = grants.issueGrant({ userId: alice.userId, clientId: "claude", scopes: ["read"], resource: RESOURCE });
+    const issued = await grants.issueGrant({ userId: alice.userId, clientId: "claude", scopes: ["read"], resource: RESOURCE });
     for (const resource of [undefined, "", "https://other.example.test/mcp"]) {
       await expectInvalidGrant(await exchange(origin, { subject_token: issued.accessToken, ...(resource === undefined ? {} : { resource }) }));
     }
@@ -252,7 +252,7 @@ describe("token exchange", () => {
       subject: { kind: "oauth", id: issued.grant.id, client_id: "claude" },
       user: { id: alice.userId },
     });
-    grants.revokeGrant(alice.userId, issued.grant.id);
+    await grants.revokeGrant(alice.userId, issued.grant.id);
     expect(application!.database.connection.prepare("SELECT count(*) AS n FROM login_sessions WHERE issued_for_grant_id = ?").get(issued.grant.id)).toEqual({ n: 0 });
     await expectInvalidGrant(await exchange(origin, { subject_token: issued.accessToken, resource: RESOURCE }));
   });
@@ -292,7 +292,7 @@ describe("token exchange", () => {
     const lifetime = async (body: { access_token: string; expires_in: number }) => {
       const row = application!.database.connection
         .prepare("SELECT created_at, expires_at FROM login_sessions WHERE id = ?")
-        .get(body.access_token.split(".", 1)[0]) as { created_at: number; expires_at: number };
+        .get(body.access_token.split(".", 1)[0]!) as { created_at: number; expires_at: number };
       return row.expires_at - row.created_at;
     };
     const short = await start({ sessionTtlMs: 60_000 });
@@ -317,7 +317,7 @@ describe("token exchange", () => {
     expect(await lifetime(pat)).toBeLessThanOrEqual(30_000);
     expect(Math.floor((await lifetime(pat)) / 1000)).toBe(pat.expires_in);
 
-    const issued = createAccessTokenService({ repository: application!.repositories.accessTokens })
+    const issued = await createAccessTokenService({ repository: application!.repositories.accessTokens })
       .issueGrant({ userId: alice.userId, clientId: "claude", scopes: ["read"], resource: RESOURCE });
     application!.database.connection
       .prepare("UPDATE oauth_grants SET access_expires_at = ? WHERE id = ?")
@@ -396,8 +396,9 @@ describe("session-bound realtime sockets", () => {
       });
     } else {
       const tokens = createAccessTokenService({ repository: application!.repositories.accessTokens });
-      const client = tokens.registerClient({ redirectUris: ["http://127.0.0.1/callback"] });
-      const grant = tokens.issueGrant({ userId: alice.userId, clientId: client.clientId, scopes: ["read"], resource: RESOURCE });
+      const client = await tokens.registerClient({ redirectUris: ["http://127.0.0.1/callback"] });
+      if (!client) throw new Error("Client registration failed");
+      const grant = await tokens.issueGrant({ userId: alice.userId, clientId: client.clientId, scopes: ["read"], resource: RESOURCE });
       subjectToken = grant.accessToken;
       revoke = () => fetch(`${origin}/api/auth/revoke`, {
         method: "POST",
@@ -419,8 +420,8 @@ describe("session-bound realtime sockets", () => {
     const staleClosed = await Promise.all(staleTickets.map((url) => socketClosed(openSocket(url))));
     expect(staleClosed).toEqual([1008, 1008]);
     expect(control.map((socket) => socket.readyState)).toEqual([WebSocket.OPEN, WebSocket.OPEN]);
-    expect(application!.identity.getSession(cookies[0]).authenticated).toBe(false);
-    expect(application!.identity.getSession(alice.cookie).authenticated).toBe(true);
+    expect((await application!.identity.getSession(cookies[0])).authenticated).toBe(false);
+    expect((await application!.identity.getSession(alice.cookie)).authenticated).toBe(true);
   });
 
   it("closes both socket types on password logout and rejects outstanding tickets", async () => {
@@ -441,8 +442,8 @@ describe("session-bound realtime sockets", () => {
     const origin = await start();
     const alice = await register(origin, "alice");
     const control = await connectBoth(origin, alice.cookie);
-    const user = application!.identity.requireSession(alice.cookie).user;
-    const short = application!.identity.issueSession(user, "agent", { ttlMs: 500 });
+    const user = (await application!.identity.requireSession(alice.cookie)).user;
+    const short = await application!.identity.issueSession(user, "agent", { ttlMs: 500 });
     const cookie = `workspace_session=${short.cookieValue}`;
     const affected = await connectBoth(origin, cookie);
     const staleTickets = await ticketsForBoth(origin, cookie);
@@ -546,7 +547,7 @@ function fakeProvider(name: string) {
 
 async function start(options: { sessionTtlMs?: number; mcpOAuth?: boolean } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-pat-exchange-"));
-  application = createSqliteTestApplication({
+  application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },

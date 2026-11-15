@@ -28,9 +28,9 @@ export interface SharedRow {
 }
 
 export interface ViewsRepository {
-  listRecent(userId: string, cursor: RecentCursor | null, limit: number): RecentRow[];
-  listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): OwnedRow[];
-  listOwned(userId: string, cursor: RecentCursor | null, limit: number): OwnedRow[];
-  breadcrumbs(nodeId: string): BreadcrumbRow[];
-  listShared(userId: string, cursor: RecentCursor | null, limit: number): SharedRow[];
+  listRecent(userId: string, cursor: RecentCursor | null, limit: number): Promise<RecentRow[]>;
+  listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): Promise<OwnedRow[]>;
+  listOwned(userId: string, cursor: RecentCursor | null, limit: number): Promise<OwnedRow[]>;
+  breadcrumbs(nodeId: string): Promise<BreadcrumbRow[]>;
+  listShared(userId: string, cursor: RecentCursor | null, limit: number): Promise<SharedRow[]>;
 }

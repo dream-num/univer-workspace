@@ -4,10 +4,12 @@ import { CollabError, type RequiredUnitPermission } from "@univerjs-pro/collabor
 import { ErrorCode, ObjectScope, UnitAction, UnitObject, UnitRole } from "@univerjs/protocol";
 import type { AccessResolver, ResourceContentAccess } from "../../modules/access/index.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../../modules/identity/index.js";
-import type {
-  ContentPermissionsRepository,
-  ContentPermissionObject,
-  ContentCollaborator,
+import {
+  canManageContentPermission,
+  type ContentPermissionWriteResult,
+  type ContentPermissionsRepository,
+  type ContentPermissionObject,
+  type ContentCollaborator,
 } from "../../modules/content-permissions/index.js";
 import type { WorktreesModule } from "../../modules/worktrees/index.js";
 import { protocolUser } from "./protocol-user.js";
@@ -83,16 +85,16 @@ export function createContentPermissions(options: {
 }) {
   const { repository, access, identity } = options;
 
-  function allowed(
+  async function allowed(
     userId: string,
     requirement: Pick<RequiredUnitPermission, "unitID" | "objectID" | "objectType" | "action">,
     draft = false,
-  ): boolean {
+  ): Promise<boolean> {
     const { unitID, objectID, objectType, action } = requirement;
     if (!knownAction(action)) return false;
     // Draft rules are inherited; neither bindings nor policy can be managed here.
     if (draft && management.has(action)) return false;
-    const resource = access.resolveUnitContent(userId, unitID);
+    const resource = await access.resolveUnitContent(userId, unitID);
     if (objectID === unitID) {
       // Worktree-local Units have no published Resource yet. The caller MUST first
       // authorize the mapped Worktree Unit through authorizeProtocol.
@@ -100,16 +102,14 @@ export function createContentPermissions(options: {
       return unitActionAllowed(resource, action);
     }
     if (!resource?.unitType || objectTypes.get(objectType) !== resource.unitType) return false;
-    const object = repository.get(unitID, objectID);
+    const object = await repository.get(unitID, objectID);
     if (!object || object.objectType !== objectType) return false;
     // An object grant cannot widen file access. Object ManageCollaborator is not the file
     // action of the same name: the creator, and the current file Owner or Admin, can manage
     // the rule while they can still edit the file.
-    const objectOwner =
-      object.creatorUserId === userId || resource.role === "owner" || resource.role === "admin";
     if (
       !unitActionAllowed(resource, action) &&
-      !(management.has(action) && objectOwner && resource.capabilities.editContent)
+      !(management.has(action) && canManageContentPermission(userId, object.creatorUserId, resource))
     ) {
       return false;
     }
@@ -140,26 +140,26 @@ export function createContentPermissions(options: {
     return role !== undefined && role >= minimum;
   }
 
-  function requireUnit(userId: string, unitId: string, edit = false) {
-    const resource = access.resolveUnitContent(userId, unitId);
+  async function requireUnit(userId: string, unitId: string, edit = false) {
+    const resource = await access.resolveUnitContent(userId, unitId);
     if (!resource?.capabilities.openContent || (edit && !resource.capabilities.editContent)) deny();
     return resource;
   }
-  function requireManaged(userId: string, unitId: string, objectId: string) {
-    const object = repository.get(unitId, objectId);
+  async function requireManaged(userId: string, unitId: string, objectId: string) {
+    const object = await repository.get(unitId, objectId);
     if (
       !object ||
-      !allowed(userId, {
+      !(await allowed(userId, {
         unitID: unitId,
         objectID: objectId,
         objectType: object.objectType,
         action: UnitAction.ManageCollaborator,
-      })
+      }))
     )
       deny();
     return object;
   }
-  function collaborators(value: unknown, creator: string, unitId: string): ContentCollaborator[] {
+  function collaborators(value: unknown, creator: string): ContentCollaborator[] {
     const entries = array(value ?? []);
     const users = new Map<string, ContentCollaborator>();
     for (const raw of entries) {
@@ -171,12 +171,6 @@ export function createContentPermissions(options: {
       if (userId === creator) continue;
       if (entry.role !== UnitRole.Reader && entry.role !== UnitRole.Editor)
         invalid("Invalid collaborator role.");
-      if (
-        !identity.findUsers([userId]).length ||
-        !access.resolveUnitContent(userId, unitId)?.capabilities.openContent
-      ) {
-        invalid("Collaborator must already have access to this Unit.");
-      }
       users.set(userId, { userId, role: entry.role });
     }
     return [...users.values()];
@@ -195,18 +189,15 @@ export function createContentPermissions(options: {
     }
     return [...result.values()];
   }
-  function scopes(
-    value: unknown,
-    previous = { read: ObjectScope.SomeCollaborator, edit: ObjectScope.OneSelf },
-  ): { readonly read: number; readonly edit: number } {
-    if (value === undefined) return previous;
+  function scopes(value: unknown): { readonly read: number; readonly edit: number } {
+    if (value === undefined) return { read: ObjectScope.SomeCollaborator, edit: ObjectScope.OneSelf };
     const scope = record(value);
     if (!scopeValues.has(scope.read as number) || !scopeValues.has(scope.edit as number)) {
       invalid("Invalid object scope.");
     }
     return { read: scope.read as number, edit: scope.edit as number };
   }
-  function actionResults(
+  async function actionResults(
     userId: string,
     value: Record<string, unknown>,
     draft = false,
@@ -215,16 +206,20 @@ export function createContentPermissions(options: {
     const unitID = string(value.unitID);
     const objectID = string(value.objectID ?? unitID);
     const objectType = Number(value.objectType);
-    return array(value.actions).map((action) => ({
-      action,
-      allowed:
-        (canWrite || readActions.has(action as UnitAction)) &&
-        allowed(userId, { unitID, objectID, objectType, action: action as UnitAction }, draft),
-    }));
+    const results = [];
+    for (const action of array(value.actions)) {
+      results.push({
+        action,
+        allowed:
+          (canWrite || readActions.has(action as UnitAction)) &&
+          await allowed(userId, { unitID, objectID, objectType, action: action as UnitAction }, draft),
+      });
+    }
+    return results;
   }
-  function toCollaborators(entries: readonly ContentCollaborator[]) {
+  async function toCollaborators(entries: readonly ContentCollaborator[]) {
     const users = new Map(
-      identity.findUsers(entries.map((entry) => entry.userId)).map((user) => [user.id, user]),
+      (await identity.findUsers(entries.map((entry) => entry.userId))).map((user) => [user.id, user]),
     );
     return entries.flatMap((entry) => {
       const user = users.get(entry.userId);
@@ -234,8 +229,8 @@ export function createContentPermissions(options: {
 
   const router = Router({ mergeParams: true });
   router.use(json({ limit: "1mb" }));
-  router.use((request, response, next) => {
-    const session = identity.getSession(request.headers.cookie);
+  router.use(async (request, response, next) => {
+    const session = await identity.getSession(request.headers.cookie);
     response.locals.contentUserId = session.authenticated ? session.user.id : ANONYMOUS_USER_ID;
     response.setHeader("Cache-Control", "private, no-store");
     next();
@@ -279,29 +274,28 @@ export function createContentPermissions(options: {
     }
     next();
   });
-  router.post("/-/object/-/batch_allowed", (request, response) => {
+  router.post("/-/object/-/batch_allowed", async (request, response) => {
     const body = record(request.body);
-    response.json({
-      error: ok,
-      objectActions: array(body.requests).map((raw) => {
-        const item = record(raw);
-        return {
-          unitID: string(item.unitID),
-          objectID: string(item.objectID ?? item.unitID),
-          actions: actionResults(
-            response.locals.contentUserId,
-            item,
-            response.locals.contentDraft,
-            response.locals.contentCanWrite,
-          ),
-        };
-      }),
-    });
+    const objectActions = [];
+    for (const raw of array(body.requests)) {
+      const item = record(raw);
+      objectActions.push({
+        unitID: string(item.unitID),
+        objectID: string(item.objectID ?? item.unitID),
+        actions: await actionResults(
+          response.locals.contentUserId,
+          item,
+          response.locals.contentDraft,
+          response.locals.contentCanWrite,
+        ),
+      });
+    }
+    response.json({ error: ok, objectActions });
   });
-  router.post("/:objectType/object/:objectId/allowed", (request, response) => {
+  router.post("/:objectType/object/:objectId/allowed", async (request, response) => {
     response.json({
       error: ok,
-      actions: actionResults(
+      actions: await actionResults(
         response.locals.contentUserId,
         {
           ...record(request.body),
@@ -317,43 +311,42 @@ export function createContentPermissions(options: {
     if (response.locals.contentUserId === ANONYMOUS_USER_ID) deny();
     next();
   });
-  router.post("/-/object/list", (request, response) => {
+  router.post("/-/object/list", async (request, response) => {
     const body = record(request.body);
     const unitId = string(body.unitID);
-    if (!response.locals.contentDraft) requireUnit(response.locals.contentUserId, unitId);
-    const objects = array(body.objectIDs).flatMap((id) => {
-      const object = repository.get(unitId, string(id));
-      if (!object) return [];
-      const creator = identity.findUsers([object.creatorUserId])[0];
-      return [
-        {
-          unitID: unitId,
-          objectID: object.id,
-          objectType: object.objectType,
-          name: object.name,
-          creator: creator ? protocolUser(creator) : undefined,
-          strategies: object.strategies,
-          scope: { read: object.readScope, edit: object.editScope },
-          shareOn: false,
-          shareRole: UnitRole.Owner,
-          shareScope: 0,
-          actions: actionResults(
-            response.locals.contentUserId,
-            {
-              unitID: unitId,
-              objectID: object.id,
-              objectType: object.objectType,
-              actions: body.actions ?? [],
-            },
-            response.locals.contentDraft,
-            response.locals.contentCanWrite,
-          ),
-        },
-      ];
-    });
+    if (!response.locals.contentDraft) await requireUnit(response.locals.contentUserId, unitId);
+    const objects = [];
+    for (const id of array(body.objectIDs)) {
+      const object = await repository.get(unitId, string(id));
+      if (!object) continue;
+      const [creator] = await identity.findUsers([object.creatorUserId]);
+      objects.push({
+        unitID: unitId,
+        objectID: object.id,
+        objectType: object.objectType,
+        name: object.name,
+        creator: creator ? protocolUser(creator) : undefined,
+        strategies: object.strategies,
+        scope: { read: object.readScope, edit: object.editScope },
+        shareOn: false,
+        shareRole: UnitRole.Owner,
+        shareScope: 0,
+        actions: await actionResults(
+          response.locals.contentUserId,
+          {
+            unitID: unitId,
+            objectID: object.id,
+            objectType: object.objectType,
+            actions: body.actions ?? [],
+          },
+          response.locals.contentDraft,
+          response.locals.contentCanWrite,
+        ),
+      });
+    }
     response.json({ error: ok, objects });
   });
-  router.post("/:objectType/object", (request, response) => {
+  router.post("/:objectType/object", async (request, response) => {
     const userId = response.locals.contentUserId as string;
     const body = record(request.body);
     const objectType = Number(request.params.objectType);
@@ -373,8 +366,8 @@ export function createContentPermissions(options: {
             }[kind];
     const input = record(body[key!]);
     const unitId = string(input.unitID);
-    const resource = requireUnit(userId, unitId, true);
-    if (resource.unitType !== kind) invalid("Object type does not belong to this Unit.");
+    const resource = await requireUnit(userId, unitId, true);
+    if (!resource.unitType || resource.unitType !== kind) invalid("Object type does not belong to this Unit.");
     const scope = scopes(input.scope);
     const object: ContentPermissionObject = {
       id: randomUUID(),
@@ -385,18 +378,18 @@ export function createContentPermissions(options: {
       strategies: strategies(input.strategies),
       readScope: scope.read,
       editScope: scope.edit,
-      collaborators: collaborators(input.collaborators, userId, unitId),
+      collaborators: collaborators(input.collaborators, userId),
     };
     // Persist before the SDK submits the binding. Retain unattached ACLs for retry,
     // undo and history; only permanent Resource deletion cascades their removal.
-    repository.create(object);
+    requireSaved(await repository.create(object, resource.unitType));
     response.json({ error: ok, objectID: object.id });
   });
-  router.put("/:objectType/object/:objectId", (request, response) => {
+  router.put("/:objectType/object/:objectId", async (request, response) => {
     const body = record(request.body);
     const objectId = string(request.params.objectId);
     const unitId = string(body.unitID);
-    const object = requireManaged(response.locals.contentUserId, unitId, objectId);
+    const object = await requireManaged(response.locals.contentUserId, unitId, objectId);
     if (
       body.objectID !== objectId ||
       body.objectType !== object.objectType ||
@@ -404,56 +397,46 @@ export function createContentPermissions(options: {
     ) {
       invalid("Object identity mismatch.");
     }
-    const scope = scopes(body.scope, { read: object.readScope, edit: object.editScope });
+    const scope = body.scope === undefined ? null : scopes(body.scope);
     // The sheet panel sends an empty strategies array when only people or scope change.
     const nextStrategies =
       body.strategies === undefined ||
       (Array.isArray(body.strategies) && body.strategies.length === 0)
-        ? object.strategies
+        ? null
         : strategies(body.strategies);
-    repository.update({
-      ...object,
-      name: string(body.name ?? object.name, true),
+    const result = await repository.update(response.locals.contentUserId, unitId, objectId, {
+      name: body.name == null ? null : string(body.name, true),
       strategies: nextStrategies,
-      readScope: scope.read,
-      editScope: scope.edit,
-      collaborators:
-        body.collaborators === undefined
-          ? object.collaborators
-          : collaborators(record(body.collaborators).collaborators, object.creatorUserId, unitId),
+      scope,
+      collaborators: body.collaborators === undefined
+        ? null
+        : collaborators(record(body.collaborators).collaborators, object.creatorUserId),
     });
+    requireSaved(result);
     response.json({ error: ok });
   });
-  router.get("/collaborator", (request, response) => {
+  router.get("/collaborator", async (request, response) => {
     const unitId = string(request.query.unitID);
     const objectId = string(request.query.objectID);
-    requireUnit(response.locals.contentUserId, unitId);
-    let entries: readonly ContentCollaborator[];
+    await requireUnit(response.locals.contentUserId, unitId);
+    const entries: ContentCollaborator[] = [];
     if (objectId === unitId) {
-      entries = repository.candidateUserIds(unitId).flatMap((userId) => {
-        const resource = access.resolveUnitContent(userId, unitId);
-        return resource
-          ? [
-              {
-                userId,
-                role:
-                  resource.role === "owner" || resource.role === "admin"
-                    ? UnitRole.Owner
-                    : resource.capabilities.editContent
-                      ? UnitRole.Editor
-                      : UnitRole.Reader,
-              },
-            ]
-          : [];
-      });
+      for (const userId of await repository.candidateUserIds(unitId)) {
+        const resource = await access.resolveUnitContent(userId, unitId);
+        if (!resource) continue;
+        const role = resource.role === "owner" || resource.role === "admin"
+          ? UnitRole.Owner
+          : resource.capabilities.editContent ? UnitRole.Editor : UnitRole.Reader;
+        entries.push({ userId, role });
+      }
     } else {
-      const object = repository.get(unitId, objectId);
+      const object = await repository.get(unitId, objectId);
       if (!object) deny();
-      entries = [{ userId: object.creatorUserId, role: UnitRole.Owner }, ...object.collaborators];
+      entries.push({ userId: object.creatorUserId, role: UnitRole.Owner }, ...object.collaborators);
     }
     response.json({
       error: ok,
-      collaborators: toCollaborators(entries),
+      collaborators: await toCollaborators(entries),
       cfgEnableObjInherit: true,
     });
   });
@@ -487,6 +470,10 @@ function string(value: unknown, empty = false): string {
   if (typeof value !== "string" || (!empty && !value) || value.length > 1000)
     invalid("Invalid string.");
   return value;
+}
+function requireSaved(result: ContentPermissionWriteResult): void {
+  if (result === "denied") deny();
+  if (result === "invalid-collaborator") invalid("Collaborator must already have access to this Unit.");
 }
 function invalid(message: string): never {
   throw new CollabError("INVALID_REQUEST", message);

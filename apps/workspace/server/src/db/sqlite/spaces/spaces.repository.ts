@@ -1,132 +1,100 @@
+import { resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import { spaceNotFound, spaceUpdateForbidden } from "../../../modules/spaces/spaces.errors.js";
+import type {
+  CreateTeamSpaceInput, SpaceListEntry, SpaceListScope, SpaceSettingsPatch, SpacesRepository,
+} from "../../../modules/spaces/spaces.repository.js";
+import type { SpaceStar } from "../../../modules/spaces/spaces.types.js";
+import { spaceMemberJoin, visibleSpaceSql } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
-import { listSpaceViews } from "./space-views.js";
-import type { SpaceStar, SpaceView } from "../../../modules/spaces/spaces.types.js";
-import type { SpaceListEntry, SpaceListScope, SpacesRepository } from "../../../modules/spaces/spaces.repository.js";
-
-const PERSONAL_SLUG = "personal";
+import { findSpaceView, listSpaceViews } from "./space-views.js";
 
 export class SqliteSpacesRepository implements SpacesRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
-  listViews(userId: string, scope: SpaceListScope): SpaceListEntry[] {
+  async listViews(userId: string, scope: SpaceListScope): Promise<SpaceListEntry[]> {
     return listSpaceViews(this._database, userId, scope);
   }
 
-  getOwner(userId: string): SpaceView["owner"] {
-    const row = this._database.connection.prepare("SELECT id, username FROM users WHERE id = ?").get(userId);
-    if (!row) throw new Error("Space owner is missing");
-    return row as unknown as SpaceView["owner"];
+  async getView(userId: string, spaceId: string): Promise<SpaceListEntry | null> {
+    return findSpaceView(this._database, userId, { spaceId });
   }
 
-  getDetails(spaceId: string): { readonly description: string; readonly slug: string | null } {
-    const row = this._database.connection
-      .prepare("SELECT description, slug FROM spaces WHERE id = ?")
-      .get(spaceId) as { description: string; slug: string | null } | undefined;
-    if (!row) throw new Error("Space is missing");
-    return row;
+  async findViewByFullName(userId: string, username: string, slug: string): Promise<SpaceListEntry | null> {
+    return findSpaceView(this._database, userId, { username, slug });
   }
 
-  /** Resolves `<username>/<slug>`; the personal Space is addressed by the reserved slug `personal`. */
-  findIdByFullName(username: string, slug: string): string | null {
-    const personal = slug.toLowerCase() === PERSONAL_SLUG;
-    const row = this._database.connection
-      .prepare(
-        `SELECT spaces.id FROM spaces
-         JOIN users ON users.id = spaces.owner_user_id
-         WHERE users.username = ?
-           AND ${personal ? "spaces.type = 'personal'" : "spaces.type = 'team' AND spaces.slug = ?"}`
-      )
-      .get(...(personal ? [username] : [username, slug])) as { id: string } | undefined;
-    return row?.id ?? null;
+  async getStar(userId: string, spaceId: string): Promise<SpaceStar | null> {
+    return this._readStar(userId, spaceId);
   }
 
-  /** The first free slug for the owner: `base`, then `base-2`, `base-3`, ... */
-  freeSlug(ownerUserId: string, base: string): string {
-    const taken = this._database.connection.prepare(
-      "SELECT 1 FROM spaces WHERE owner_user_id = ? AND slug = ?"
-    );
-    for (let attempt = 1; ; attempt += 1) {
-      const suffix = attempt === 1 ? "" : `-${attempt}`;
-      const candidate = `${base.slice(0, 100 - suffix.length)}${suffix}`;
-      if (!taken.get(ownerUserId, candidate)) return candidate;
-    }
-  }
-
-  slugTaken(ownerUserId: string, slug: string, exceptSpaceId?: string): boolean {
-    return Boolean(
-      this._database.connection
-        .prepare("SELECT 1 FROM spaces WHERE owner_user_id = ? AND slug = ? AND id <> ?")
-        .get(ownerUserId, slug, exceptSpaceId ?? "")
-    );
-  }
-
-  getStar(userId: string, spaceId: string): SpaceStar {
-    const row = this._database.connection.prepare(`
-      SELECT COUNT(*) AS star_count,
-             COALESCE(MAX(user_id = ?), 0) AS starred
-      FROM space_stars WHERE space_id = ?
-    `).get(userId, spaceId) as { star_count: number; starred: number };
-    return { starred: Boolean(row.starred), starCount: row.star_count };
-  }
-
-  setStar(userId: string, spaceId: string, starred: boolean, createdAt: number): SpaceStar {
+  async setStar(userId: string, spaceId: string, starred: boolean, createdAt: number): Promise<SpaceStar | null> {
     return this._database.transaction((database) => {
+      if (!findSpaceView(this._database, userId, { spaceId })) return null;
       if (starred) {
         database.prepare(`INSERT INTO space_stars (space_id, user_id, created_at)
           VALUES (?, ?, ?) ON CONFLICT (space_id, user_id) DO NOTHING`).run(spaceId, userId, createdAt);
       } else {
         database.prepare("DELETE FROM space_stars WHERE space_id = ? AND user_id = ?").run(spaceId, userId);
       }
-      return this.getStar(userId, spaceId);
+      const result = this._readStar(userId, spaceId);
+      if (!result) throw spaceNotFound();
+      return result;
     });
   }
 
-  createTeamSpace(input: {
-    readonly id: string;
-    readonly name: string;
-    readonly slug: string;
-    readonly publicRead: boolean;
-    readonly ownerUserId: string;
-    readonly createdAt: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `INSERT INTO spaces
-          (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
-         VALUES (?, 'team', ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        input.id,
-        input.name,
-        input.slug,
-        input.publicRead ? 1 : 0,
-        input.ownerUserId,
-        input.createdAt,
-        input.createdAt
-      );
+  async createTeamSpace(input: CreateTeamSpaceInput): Promise<SpaceListEntry | null> {
+    return this._database.transaction((database) => {
+      const insert = database.prepare(`
+        INSERT INTO spaces (id, type, name, slug, public_read, owner_user_id, created_at, updated_at)
+        VALUES (?, 'team', ?, ?, ?, ?, ?, ?)
+        ON CONFLICT (owner_user_id, slug) WHERE slug IS NOT NULL DO NOTHING
+      `);
+      let slug = input.slug ?? input.slugBase;
+      for (let attempt = 2; ; attempt += 1) {
+        const result = insert.run(input.id, input.name, slug, Number(input.publicRead), input.ownerUserId, input.createdAt, input.createdAt);
+        if (result.changes) break;
+        if (input.slugBase === undefined) return null;
+        const suffix = `-${attempt}`;
+        slug = input.slugBase.slice(0, 100 - suffix.length) + suffix;
+      }
+      const space = findSpaceView(this._database, input.ownerUserId, { spaceId: input.id });
+      if (!space) throw spaceNotFound();
+      return space;
+    });
   }
 
-  updateName(spaceId: string, name: string, updatedAt: number): void {
-    this._database.connection
-      .prepare("UPDATE spaces SET name = ?, updated_at = ? WHERE id = ?")
-      .run(name, updatedAt, spaceId);
+  async updateSettings(userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number): Promise<SpaceListEntry | null> {
+    return this._database.transaction((database) => {
+      const before = findSpaceView(this._database, userId, { spaceId });
+      if (!before) throw spaceNotFound();
+      if (!resolveStoredSpaceAccess(userId, before)?.capabilities.renameSpace) throw spaceUpdateForbidden();
+      if (settings.slug !== undefined && database.prepare(`
+        SELECT 1 FROM spaces WHERE owner_user_id = ? AND slug = ? AND id <> ?
+      `).get(before.ownerUserId, settings.slug, spaceId)) return null;
+
+      const assignments = ["updated_at = ?"];
+      const values: (string | number)[] = [updatedAt];
+      for (const [column, value] of [
+        ["name", settings.name], ["description", settings.description], ["public_read", settings.publicRead], ["slug", settings.slug],
+      ] as const) {
+        if (value === undefined) continue;
+        assignments.push(`${column} = ?`);
+        values.push(typeof value === "boolean" ? Number(value) : value);
+      }
+      database.prepare(`UPDATE spaces SET ${assignments.join(", ")} WHERE id = ?`).run(...values, spaceId);
+      const after = findSpaceView(this._database, userId, { spaceId });
+      if (!after) throw spaceNotFound();
+      return after;
+    });
   }
 
-  updateSlug(spaceId: string, slug: string, updatedAt: number): void {
-    this._database.connection
-      .prepare("UPDATE spaces SET slug = ?, updated_at = ? WHERE id = ?")
-      .run(slug, updatedAt, spaceId);
-  }
-
-  updateDescription(spaceId: string, description: string, updatedAt: number): void {
-    this._database.connection
-      .prepare("UPDATE spaces SET description = ?, updated_at = ? WHERE id = ?")
-      .run(description, updatedAt, spaceId);
-  }
-
-  updatePublicRead(spaceId: string, publicRead: boolean, updatedAt: number): void {
-    this._database.connection
-      .prepare("UPDATE spaces SET public_read = ?, updated_at = ? WHERE id = ?")
-      .run(publicRead ? 1 : 0, updatedAt, spaceId);
+  private _readStar(userId: string, spaceId: string): SpaceStar | null {
+    const row = this._database.connection.prepare(`
+      SELECT (SELECT COUNT(*) FROM space_stars WHERE space_id = spaces.id) AS starCount,
+             EXISTS (SELECT 1 FROM space_stars WHERE space_id = spaces.id AND user_id = $userId) AS starred
+      FROM spaces ${spaceMemberJoin}
+      WHERE spaces.id = $spaceId AND ${visibleSpaceSql}
+    `).get({ userId, spaceId }) as { starCount: number; starred: number } | undefined;
+    return row ? { starred: Boolean(row.starred), starCount: row.starCount } : null;
   }
 }

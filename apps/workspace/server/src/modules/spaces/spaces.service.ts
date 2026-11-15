@@ -4,29 +4,29 @@ import {
   assertCeiling,
   resolveStoredSpaceAccess,
   type AccessResolver,
-  type SpaceAccess,
   type SpaceType,
 } from "../access/index.js";
+import { spaceNotFound, spaceUpdateForbidden } from "./spaces.errors.js";
 import type { SpacesRepository, SpaceListScope, SpaceListEntry } from "./spaces.repository.js";
 import type { SpacePinsRepository, StoredSpacePins } from "./space-pins.repository.js";
 import { RESERVED_SLUG, slugBaseFromName, validSlug } from "./space-slug.js";
 import type { MySpaceView, SpacePins, SpaceStar, SpaceView } from "./spaces.types.js";
 
 export interface SpacesModule {
-  list(userId: string): { readonly spaces: readonly MySpaceView[] };
-  listStarred(userId: string): { readonly spaces: readonly SpaceView[] };
-  explore(userId: string): { readonly spaces: readonly SpaceView[] };
+  list(userId: string): Promise<{ readonly spaces: readonly MySpaceView[] }>;
+  listStarred(userId: string): Promise<{ readonly spaces: readonly SpaceView[] }>;
+  explore(userId: string): Promise<{ readonly spaces: readonly SpaceView[] }>;
   getPins(userId: string): Promise<SpacePins>;
   setPins(userId: string, spaceIds: unknown): Promise<SpacePins>;
   resetPins(userId: string): Promise<SpacePins>;
   createTeamSpace(
     userId: string,
     input: { readonly name: unknown; readonly slug?: unknown; readonly publicRead?: unknown }
-  ): SpaceView;
-  get(userId: string, spaceId: string): SpaceView;
-  lookup(userId: string, owner: unknown, slug: unknown): SpaceView;
-  getStar(userId: string, spaceId: string): SpaceStar;
-  setStar(userId: string, spaceId: string, starred: boolean): SpaceStar;
+  ): Promise<SpaceView>;
+  get(userId: string, spaceId: string): Promise<SpaceView>;
+  lookup(userId: string, owner: unknown, slug: unknown): Promise<SpaceView>;
+  getStar(userId: string, spaceId: string): Promise<SpaceStar>;
+  setStar(userId: string, spaceId: string, starred: boolean): Promise<SpaceStar>;
   update(
     userId: string,
     spaceId: string,
@@ -36,7 +36,7 @@ export interface SpacesModule {
       readonly publicRead?: unknown;
       readonly description?: unknown;
     }
-  ): SpaceView;
+  ): Promise<SpaceView>;
 }
 
 const DEFAULT_PIN_COUNT = 8;
@@ -50,14 +50,9 @@ export function createSpacesModule(options: {
 }): SpacesModule {
   const now = options.now ?? Date.now;
 
-  function spaceView(userId: string, row: SpaceListEntry): SpaceView {
-    const access = resolveStoredSpaceAccess(userId, row);
-    if (!access) throw new Error("Space listing returned an inaccessible row");
-    return toSpaceView(userId, access, row);
-  }
-
-  function list(userId: string, scope: SpaceListScope): SpaceView[] {
-    return options.repository.listViews(userId, scope).map((row) => spaceView(userId, row));
+  async function list(userId: string, scope: SpaceListScope): Promise<SpaceView[]> {
+    const rows = await options.repository.listViews(userId, scope);
+    return rows.map((row) => spaceView(userId, row));
   }
 
   function pinView(userId: string, pins: StoredSpacePins): SpacePins {
@@ -69,17 +64,18 @@ export function createSpacesModule(options: {
   }
 
   return {
-    list(userId) {
-      return { spaces: list(userId, "mine").map((space): MySpaceView => {
+    async list(userId) {
+      const spaces = await list(userId, "mine");
+      return { spaces: spaces.map((space): MySpaceView => {
         if (space.affiliation === "none") throw new Error("My Spaces returned an unaffiliated Space");
         return { ...space, affiliation: space.affiliation };
       }) };
     },
-    listStarred(userId) {
-      return { spaces: list(userId, "starred") };
+    async listStarred(userId) {
+      return { spaces: await list(userId, "starred") };
     },
-    explore(userId) {
-      return { spaces: list(userId, "explore") };
+    async explore(userId) {
+      return { spaces: await list(userId, "explore") };
     },
     async getPins(userId) {
       return pinView(userId, await options.pins.getPins(userId, DEFAULT_PIN_COUNT));
@@ -94,62 +90,56 @@ export function createSpacesModule(options: {
       return pinView(userId, await options.pins.resetPins(userId, DEFAULT_PIN_COUNT));
     },
 
-    createTeamSpace(userId, input) {
-      assertCeiling(options.access.principalCategory(userId), "createTeamSpace", {});
+    async createTeamSpace(userId, input) {
+      assertCeiling(await options.access.principalCategory(userId), "createTeamSpace", {});
       const id = randomUUID();
       const name = validName(input.name);
       const publicRead = input.publicRead === undefined
         ? false
         : validBoolean(input.publicRead, "publicRead");
-      const slug = input.slug === undefined
-        ? options.repository.freeSlug(userId, slugBaseFromName(name, id))
-        : validSlug(input.slug);
-      if (options.repository.slugTaken(userId, slug)) throw slugTaken();
-      options.repository.createTeamSpace({
+      const row = await options.repository.createTeamSpace({
         id,
         name,
-        slug,
+        ...(input.slug === undefined ? { slugBase: slugBaseFromName(name, id) } : { slug: validSlug(input.slug) }),
         publicRead,
         ownerUserId: userId,
         createdAt: now(),
       });
-      return resolveSpace(options.access, options.repository, userId, id);
+      if (!row) throw slugTaken();
+      return spaceView(userId, row);
     },
 
-    get(userId, spaceId) {
-      return resolveSpace(options.access, options.repository, userId, spaceId);
+    async get(userId, spaceId) {
+      const row = await options.repository.getView(userId, spaceId);
+      if (!row) throw spaceNotFound();
+      return spaceView(userId, row);
     },
 
-    lookup(userId, owner, slug) {
+    async lookup(userId, owner, slug) {
       if (typeof owner !== "string" || typeof slug !== "string" || !owner || !slug) {
         throw new ApplicationError("INVALID_INPUT", 400, "owner and slug are required.", "owner");
       }
-      // Hidden and missing Spaces are indistinguishable.
-      const spaceId = options.repository.findIdByFullName(owner, slug);
-      if (!spaceId) throw notFound();
-      return resolveSpace(options.access, options.repository, userId, spaceId);
+      const row = await options.repository.findViewByFullName(userId, owner, slug);
+      if (!row) throw spaceNotFound();
+      return spaceView(userId, row);
     },
 
-    getStar(userId, spaceId) {
-      if (!options.access.resolveSpace(userId, spaceId)) throw notFound();
-      return options.repository.getStar(userId, spaceId);
+    async getStar(userId, spaceId) {
+      const star = await options.repository.getStar(userId, spaceId);
+      if (!star) throw spaceNotFound();
+      return star;
     },
 
-    setStar(userId, spaceId, starred) {
-      if (!options.access.resolveSpace(userId, spaceId)) throw notFound();
-      return options.repository.setStar(userId, spaceId, starred, now());
+    async setStar(userId, spaceId, starred) {
+      const star = await options.repository.setStar(userId, spaceId, starred, now());
+      if (!star) throw spaceNotFound();
+      return star;
     },
 
-    update(userId, spaceId, input) {
-      const access = options.access.resolveSpace(userId, spaceId);
-      if (!access) throw notFound();
-      if (!access.capabilities.renameSpace) {
-        throw new ApplicationError(
-          "FORBIDDEN",
-          403,
-          "The current user cannot update this space."
-        );
-      }
+    async update(userId, spaceId, input) {
+      const access = await options.access.resolveSpace(userId, spaceId);
+      if (!access) throw spaceNotFound();
+      if (!access.capabilities.renameSpace) throw spaceUpdateForbidden();
       if (
         input.name === undefined &&
         input.slug === undefined &&
@@ -162,67 +152,36 @@ export function createSpacesModule(options: {
           "At least one Space setting is required."
         );
       }
-      const updatedAt = now();
-      const name = input.name === undefined ? access.name : validName(input.name);
-      const publicRead = input.publicRead === undefined
-        ? access.publicRead
-        : validBoolean(input.publicRead, "publicRead");
-      assertCeiling(options.access.principalCategory(userId), "updateSpace", { publicRead });
-      const details = options.repository.getDetails(spaceId);
-      const description = input.description === undefined
-        ? details.description
-        : validDescription(input.description);
-      let slug = details.slug;
-      if (input.slug !== undefined) {
-        if (access.type !== "team") {
-          throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");
-        }
-        slug = validSlug(input.slug);
-        if (options.repository.slugTaken(access.ownerUserId, slug, spaceId)) throw slugTaken();
-        options.repository.updateSlug(spaceId, slug, updatedAt);
+      const name = input.name === undefined ? undefined : validName(input.name);
+      const publicRead = input.publicRead === undefined ? undefined : validBoolean(input.publicRead, "publicRead");
+      assertCeiling(await options.access.principalCategory(userId), "updateSpace", { publicRead: publicRead ?? access.publicRead });
+      const description = input.description === undefined ? undefined : validDescription(input.description);
+      if (input.slug !== undefined && access.type !== "team") {
+        throw new ApplicationError("INVALID_INPUT", 400, "Only a Team Space has a slug.", "slug");
       }
-      if (input.name !== undefined) {
-        options.repository.updateName(spaceId, name, updatedAt);
-      }
-      if (input.publicRead !== undefined) {
-        options.repository.updatePublicRead(spaceId, publicRead, updatedAt);
-      }
-      if (input.description !== undefined) {
-        options.repository.updateDescription(spaceId, description, updatedAt);
-      }
-      return toSpaceView(userId, { ...access, name, publicRead }, {
-        description, slug, ownerUsername: options.repository.getOwner(access.ownerUserId).username,
-      });
+      const row = await options.repository.updateSettings(userId, spaceId, {
+        ...(name !== undefined && { name }),
+        ...(publicRead !== undefined && { publicRead }),
+        ...(description !== undefined && { description }),
+        ...(input.slug !== undefined && { slug: validSlug(input.slug) }),
+      }, now());
+      if (!row) throw slugTaken();
+      return spaceView(userId, row);
     },
   };
 }
 
-function resolveSpace(
-  resolver: AccessResolver,
-  repository: SpacesRepository,
-  userId: string,
-  spaceId: string
-): SpaceView {
-  const access = resolver.resolveSpace(userId, spaceId);
-  if (!access) throw notFound();
-  const details = repository.getDetails(access.id);
-  const owner = repository.getOwner(access.ownerUserId);
-  return toSpaceView(userId, access, { ...details, ownerUsername: owner.username });
-}
-
-function toSpaceView(
-  userId: string,
-  access: SpaceAccess,
-  details: { readonly description: string; readonly slug: string | null; readonly ownerUsername: string },
-): SpaceView {
+function spaceView(userId: string, row: SpaceListEntry): SpaceView {
+  const access = resolveStoredSpaceAccess(userId, row);
+  if (!access) throw new Error("Space repository returned an inaccessible row");
   return {
     id: access.id,
     type: access.type,
     name: access.name,
     publicRead: access.publicRead,
-    description: details.description,
-    ...fullNameOf(access.type, details.slug, details.ownerUsername),
-    owner: { id: access.ownerUserId, username: details.ownerUsername },
+    description: row.description,
+    ...fullNameOf(access.type, row.slug, row.ownerUsername),
+    owner: { id: access.ownerUserId, username: row.ownerUsername },
     accessRole: access.role,
     affiliation: access.ownerUserId === userId ? "owner" : access.member ? "member" : "none",
     capabilities: access.capabilities,
@@ -309,12 +268,4 @@ function validDescription(value: unknown): string {
     );
   }
   return description;
-}
-
-function notFound(): ApplicationError {
-  return new ApplicationError(
-    "NOT_FOUND",
-    404,
-    "The resource was not found."
-  );
 }

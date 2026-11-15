@@ -122,21 +122,21 @@ export function createCollaborationGateway(options: {
       await next();
       return;
     }
-    requireUnitAccess(access, context.userID, context.request.unitID);
+    await requireUnitAccess(access, context.userID, context.request.unitID);
     await next();
   });
   service.use("submitChangeset", async (context, next) => {
-    requireChangesetAccess(access, context.userID, context.request.changeset);
+    await requireChangesetAccess(access, context.userID, context.request.changeset);
     await next();
   });
   service.use("applyChangeset", async (context, next) => {
-    requireChangesetAccess(access, context.userID, context.request.changeset);
+    await requireChangesetAccess(access, context.userID, context.request.changeset);
     await next();
   });
   service.use("commitChangeset", async (context, next) => {
-    requireChangesetAccess(access, context.userID, context.request.changeset);
+    await requireChangesetAccess(access, context.userID, context.request.changeset);
     for (const requirement of context.requiredUnitPermissions) {
-      if (!contentPermissions.allowed(context.userID, requirement)) {
+      if (!(await contentPermissions.allowed(context.userID, requirement))) {
         throw new CollabError("PERMISSION_DENIED", "Content permission denied.");
       }
     }
@@ -145,7 +145,7 @@ export function createCollaborationGateway(options: {
   });
 
   commentService.use("listComments", async (context, next) => {
-    requireCommentAccess(access, context.userID, context.request.unitID);
+    await requireCommentAccess(access, context.userID, context.request.unitID);
     await next();
   });
   const authorizeCommentWrite = async (
@@ -155,7 +155,7 @@ export function createCollaborationGateway(options: {
     },
     next: () => Promise<void>
   ) => {
-    requireCommentAccess(access, context.userID, context.request.unitID);
+    await requireCommentAccess(access, context.userID, context.request.unitID);
     await next();
   };
   commentService.use("addComment", authorizeCommentWrite);
@@ -163,7 +163,7 @@ export function createCollaborationGateway(options: {
   commentService.use("setThreadSolved", authorizeCommentWrite);
   commentService.use("editComment", authorizeCommentWrite);
   commentService.use("deleteComment", async (context, next) => {
-    authorizeCommentDelete(access, context);
+    await authorizeCommentDelete(access, context);
     await next();
   });
 
@@ -174,7 +174,7 @@ export function createCollaborationGateway(options: {
     },
     next: () => Promise<void>
   ) => {
-    requireUnitAccess(access, context.userID, context.request.unitID);
+    await requireUnitAccess(access, context.userID, context.request.unitID);
     await next();
   };
   historyService.use("getHistoryList", authorizeHistoryRead);
@@ -182,17 +182,18 @@ export function createCollaborationGateway(options: {
   historyService.use("getHistoryChangesets", authorizeHistoryRead);
 
   endpoint.use("connect", async (context, next) => {
+    if (!(await options.sessionSockets.track(context.session, context.connection))) {
+      throw new CollabError("PERMISSION_DENIED", "Workspace session ended.");
+    }
     const user = context.session.customData.user as
       | ReturnType<typeof protocolUser>
       | undefined;
-    context.connection.customData.sessionId = context.session.customData.sessionId;
-    context.connection.customData.sessionExpiresAt = context.session.customData.sessionExpiresAt;
     context.member.name = user?.name ?? context.session.userID;
     context.member.avatar = user?.avatar ?? "";
     await next();
   });
   endpoint.use("joinUnit", async (context, next) => {
-    const resource = requireUnitAccess(
+    const resource = await requireUnitAccess(
       access,
       context.session.userID,
       context.unitID
@@ -260,7 +261,7 @@ export function createCollaborationGateway(options: {
   }
   worktreeService.use("commitChangeset", async (context, next) => {
     for (const requirement of context.requiredUnitPermissions) {
-      if (!contentPermissions.allowed(context.userID, requirement, true)) {
+      if (!(await contentPermissions.allowed(context.userID, requirement, true))) {
         throw new CollabError("PERMISSION_DENIED", "Draft content permission denied; manage protection on Trunk.");
       }
     }
@@ -285,16 +286,20 @@ export function createCollaborationGateway(options: {
     await next();
   }
   worktreeEndpoint.use("connect", async (context, next) => {
+    if (!(await options.sessionSockets.track(context.session, context.connection))) {
+      throw new CollabError("PERMISSION_DENIED", "Workspace session ended.");
+    }
     await requireWorktreeProtocolAccess(worktrees, {
       userId: context.session.userID,
       worktreeId: context.worktreeID,
       write: false,
     });
+    if (!options.sessionSockets.isActive(context.connection)) {
+      throw new CollabError("PERMISSION_DENIED", "Workspace session ended.");
+    }
     const user = context.session.customData.user as
       | ReturnType<typeof protocolUser>
       | undefined;
-    context.connection.customData.sessionId = context.session.customData.sessionId;
-    context.connection.customData.sessionExpiresAt = context.session.customData.sessionExpiresAt;
     context.member.name = user?.name ?? context.session.userID;
     context.member.avatar = user?.avatar ?? "";
     await next();
@@ -311,7 +316,7 @@ export function createCollaborationGateway(options: {
 
   transport.use(createCollaborationMetricsMiddleware());
   transport.use(async (context, next) => {
-    const session = identity.getRealtimeSession(cookieHeader(context));
+    const session = await identity.getRealtimeSession(cookieHeader(context));
     if (!session) {
       const { pathname } = new URL(context.incomingMessage.url ?? "/", "http://localhost");
       if (
@@ -342,9 +347,9 @@ export function createCollaborationGateway(options: {
   transport.register(trackConnections(endpoint, nodeAccessConnections, options.sessionSockets));
 
   const router = Router();
-  router.use((request, response, next) => {
+  router.use(async (request, response, next) => {
     try {
-      response.locals.session = identity.getSession(request.headers.cookie);
+      response.locals.session = await identity.getSession(request.headers.cookie);
       response.setHeader("Cache-Control", "private, no-store");
       next();
     } catch (error) {
@@ -362,8 +367,8 @@ export function createCollaborationGateway(options: {
   // The formal Comment datasource resolves authors through this SDK route,
   // including authors who are no longer present in the collaboration room.
   // Reuse the existing Identity repository and protocol projection only.
-  router.get("/user/list", (request, response) => {
-    identity.requireSession(request.headers.cookie);
+  router.get("/user/list", async (request, response) => {
+    await identity.requireSession(request.headers.cookie);
     const raw = request.query.userIDs ?? request.query["userIDs[]"];
     const ids = typeof raw === "string" ? [raw] : raw;
     if (!Array.isArray(ids) || ids.length === 0 || ids.length > 100 ||
@@ -371,7 +376,7 @@ export function createCollaborationGateway(options: {
       response.status(400).json({ message: "Provide between 1 and 100 user IDs." });
       return;
     }
-    response.json({ error: OK_ERROR, users: identity.findUsers([...new Set(ids as string[])]).map(protocolUser) });
+    response.json({ error: OK_ERROR, users: (await identity.findUsers([...new Set(ids as string[])])).map(protocolUser) });
   });
   router.use("/authz", contentPermissions.router);
   router.use("/worktrees/:worktreeId/authz", contentPermissions.router);
@@ -385,7 +390,7 @@ export function createCollaborationGateway(options: {
         response.status(400).json({ message: "Invalid comparison mode." });
         return;
       }
-      const userId = identity.requireSession(request.headers.cookie).user.id;
+      const userId = (await identity.requireSession(request.headers.cookie)).user.id;
       const detail = await worktrees.get(userId, request.params.worktreeId);
       const unit = detail.worktree.units.find(
         (candidate) => candidate.unitId === request.params.unitId
@@ -446,6 +451,7 @@ export function createCollaborationGateway(options: {
     },
     invalidateNodeAccess() {
       for (const connection of nodeAccessConnections) {
+        options.sessionSockets.untrack(connection);
         connection.close(1008, "Node access policy changed");
       }
       nodeAccessConnections.clear();
@@ -494,24 +500,16 @@ function trackConnectionLifecycle(
   connections: Set<NodeTransportConnection> | null,
   sessionSockets: SessionSockets
 ): NodeWebSocketHandler {
-  let untrack: (() => void) | undefined;
-  let closed = false;
   return {
     async open(context) {
       connections?.add(context.connection);
       await handler.open?.(context);
-      if (closed) return;
-      const { sessionId, sessionExpiresAt } = context.connection.customData;
-      if (typeof sessionId === "string" && typeof sessionExpiresAt === "number") {
-        untrack = sessionSockets.track(sessionId, sessionExpiresAt, context.connection);
-      }
     },
     async message(context) {
-      await handler.message?.(context);
+      if (sessionSockets.isActive(context.connection)) await handler.message?.(context);
     },
     async close(context) {
-      closed = true;
-      untrack?.();
+      sessionSockets.untrack(context.connection);
       connections?.delete(context.connection);
       await handler.close?.(context);
     },
@@ -548,24 +546,24 @@ async function requireWorktreeProtocolAccess(
   }
 }
 
-function requireUnitAccess(
+async function requireUnitAccess(
   access: AccessResolver,
   userId: string,
   unitId: string
-): ResourceContentAccess {
-  const resource = access.resolveUnitContent(userId, unitId);
+): Promise<ResourceContentAccess> {
+  const resource = await access.resolveUnitContent(userId, unitId);
   if (!resource?.capabilities.openContent) {
     throw new CollabError("PERMISSION_DENIED", "Cannot read this unit.");
   }
   return resource;
 }
 
-function requireUnitEdit(
+async function requireUnitEdit(
   access: AccessResolver,
   userId: string,
   unitId: string
-): ResourceContentAccess {
-  const resource = requireUnitAccess(access, userId, unitId);
+): Promise<ResourceContentAccess> {
+  const resource = await requireUnitAccess(access, userId, unitId);
   if (!resource.capabilities.editContent) {
     throw new CollabError("PERMISSION_DENIED", "Unit is read-only.");
   }
@@ -573,14 +571,14 @@ function requireUnitEdit(
 }
 
 // Comment anchors need Unit Comment, which every reader holds; every other changeset needs Edit.
-function requireChangesetAccess(
+async function requireChangesetAccess(
   access: AccessResolver,
   userId: string,
   changeset: { readonly unitID: string; readonly mutations: readonly { readonly id: string }[] }
-): ResourceContentAccess {
+): Promise<ResourceContentAccess> {
   return isCommentOnlyChangeset(changeset)
-    ? requireUnitAccess(access, userId, changeset.unitID)
-    : requireUnitEdit(access, userId, changeset.unitID);
+    ? await requireUnitAccess(access, userId, changeset.unitID)
+    : await requireUnitEdit(access, userId, changeset.unitID);
 }
 
 function protocolUnitType(unitType: UnitType | null): UniverType {
@@ -602,12 +600,12 @@ function protocolUnitType(unitType: UnitType | null): UniverType {
   }
 }
 
-function requireCommentAccess(
+async function requireCommentAccess(
   access: AccessResolver,
   userId: string,
   unitId: string
-): ResourceContentAccess {
-  const resource = requireUnitAccess(access, userId, unitId);
+): Promise<ResourceContentAccess> {
+  const resource = await requireUnitAccess(access, userId, unitId);
   if (resource.kind !== "univer" || resource.unitType === null) {
     throw new CollabError(
       "INVALID_REQUEST",
@@ -617,11 +615,11 @@ function requireCommentAccess(
   return resource;
 }
 
-function authorizeCommentDelete(
+async function authorizeCommentDelete(
   access: AccessResolver,
   context: DeleteCommentMiddlewareContext
-): void {
-  const resource = requireCommentAccess(
+): Promise<void> {
+  const resource = await requireCommentAccess(
     access,
     context.userID,
     context.request.unitID

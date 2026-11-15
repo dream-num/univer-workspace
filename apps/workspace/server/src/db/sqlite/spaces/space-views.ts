@@ -37,19 +37,36 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
   },
 };
 
+const selectSpaceView = `
+  SELECT ${spaceAccessColumns}, users.username AS ownerUsername, spaces.description, spaces.slug
+  FROM spaces
+  JOIN users ON users.id = spaces.owner_user_id
+  ${spaceMemberJoin}`;
+
+type SpaceViewRow = SqliteSpaceAccessRow & Pick<SpaceListEntry, "description" | "slug" | "ownerUsername">;
+
+function storedSpaceView(row: SpaceViewRow): SpaceListEntry {
+  return { ...storedSpaceAccess(row), description: row.description, slug: row.slug, ownerUsername: row.ownerUsername };
+}
+
+export function findSpaceView(database: SqliteDatabase, userId: string, key: { spaceId: string } | { username: string; slug: string }): SpaceListEntry | null {
+  const where = "spaceId" in key ? "spaces.id = $spaceId" : `users.username = $username AND (
+    (spaces.type = 'team' AND spaces.slug = $slug) OR (spaces.type = 'personal' AND $slug = 'personal' COLLATE NOCASE)
+  )`;
+  const row = database.connection.prepare(`
+    ${selectSpaceView} WHERE ${visibleSpaceSql} AND ${where}
+  `).get({ userId, ...key }) as SpaceViewRow | undefined;
+  return row ? storedSpaceView(row) : null;
+}
+
 export function listSpaceViews(database: SqliteDatabase, userId: string, scope: SpaceListScope | "pins", limit = -1): SpaceListEntry[] {
   const { join, where, order } = scopes[scope];
   const rows = database.connection.prepare(`
-    SELECT ${spaceAccessColumns}, users.username AS ownerUsername, spaces.description, spaces.slug
-    FROM spaces
-    JOIN users ON users.id = spaces.owner_user_id
-    ${spaceMemberJoin}
+    ${selectSpaceView}
     ${join}
     WHERE ${visibleSpaceSql} AND ${where}
     ORDER BY ${order}
     LIMIT $limit
-  `).all({ userId, limit }) as unknown as Array<SqliteSpaceAccessRow & Pick<SpaceListEntry, "description" | "slug" | "ownerUsername">>;
-  return rows.map((row) => ({
-    ...storedSpaceAccess(row), description: row.description, slug: row.slug, ownerUsername: row.ownerUsername,
-  }));
+  `).all({ userId, limit }) as unknown as SpaceViewRow[];
+  return rows.map(storedSpaceView);
 }

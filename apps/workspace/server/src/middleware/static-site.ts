@@ -29,13 +29,13 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
     if (!options) return next();
     let node: NodeSummary;
     try {
-      node = options.nodes.get(ANONYMOUS_USER_ID, request.params.nodeId).node;
+      node = (await options.nodes.get(ANONYMOUS_USER_ID, request.params.nodeId)).node;
     } catch {
       // Metadata must never disclose a failed or unauthorized lookup.
       return next();
     }
     // Only a page the anonymous reader got: an expired agent's page stays closed until the agent returns.
-    options.identity.recordAgentPageView(node.id);
+    await options.identity.recordAgentPageView(node.id);
     const htmlView = node.resource?.kind === "blob" && isHtmlViewFilename(node.name);
     const name = htmlView ? node.name.slice(0, -".univer.html".length) : node.name;
     const title = escapeHtml(`${name} · Univer Workspace`);

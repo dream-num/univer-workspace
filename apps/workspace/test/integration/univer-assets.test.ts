@@ -93,7 +93,7 @@ describe("Univer embedded assets", () => {
       PIXEL_PNG.subarray(0, 8)
     );
 
-    application.permissions.upsertNodeGrant(
+    await application.permissions.upsertNodeGrant(
       owner.userId,
       created.nodeId,
       viewer.userId,
@@ -114,7 +114,7 @@ describe("Univer embedded assets", () => {
     });
     expect(viewerUpload.response.status).toBe(404);
 
-    application.permissions.removeNodeGrant(
+    await application.permissions.removeNodeGrant(
       owner.userId,
       created.nodeId,
       viewer.userId
@@ -127,17 +127,17 @@ describe("Univer embedded assets", () => {
       ).status
     ).toBe(404);
 
-    application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: true, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: true, role: "editor" });
     expect((await fetch(signUrl)).status).toBe(200);
     const anonymousContent = await fetch(contentUrl);
     expect(anonymousContent.status).toBe(200);
     expect(Buffer.from(await anonymousContent.arrayBuffer())).toEqual(PIXEL_PNG);
-    application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: false, role: "editor" });
+    await application.permissions.updateNodeLinkSharing(owner.userId, created.nodeId, { enabled: false, role: "editor" });
     expect((await fetch(signUrl)).status).toBe(404);
     expect((await fetch(contentUrl)).status).toBe(404);
 
-    const batch = application.trash.trashNode(owner.userId, created.nodeId);
-    application.trash.removePermanently(owner.userId, batch.id);
+    const batch = await application.trash.trashNode(owner.userId, created.nodeId);
+    await application.trash.removePermanently(owner.userId, batch.id);
     expect(count(application, "univer_assets")).toBe(0);
     expect(count(application, "object_deletion_jobs")).toBe(1);
     expect(
@@ -159,7 +159,7 @@ describe("Univer embedded assets", () => {
       "asset-create-worktree-0001",
       { kind: "user", name: "Asset Draft", summary: null }
     );
-    const space = application.spaces.list(owner.userId).spaces[0];
+    const space = (await application.spaces.list(owner.userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing.");
     const local = await application.worktrees.addUnit(
       owner.userId,
@@ -309,7 +309,7 @@ describe("Univer embedded assets", () => {
         },
       },
     };
-    const first = createSqliteTestApplication(config, dependencies);
+    const first = await createSqliteTestApplication(config, dependencies);
     applications.push(first);
     const owner = await register(first, "asset-recovery-owner");
     const slide = await createSlide(first, owner.userId, "Recovery Slide");
@@ -368,7 +368,7 @@ describe("Univer embedded assets", () => {
     await first.close();
     applications.splice(applications.indexOf(first), 1);
 
-    const restarted = createSqliteTestApplication(config, dependencies);
+    const restarted = await createSqliteTestApplication(config, dependencies);
     applications.push(restarted);
     expect(count(restarted, "univer_asset_uploads")).toBe(0);
     expect(count(restarted, "univer_assets")).toBe(1);
@@ -396,7 +396,7 @@ async function startApplication(): Promise<{
 }> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-univer-assets-"));
   directories.push(directory);
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -439,7 +439,7 @@ async function createSlide(
   userId: string,
   name: string
 ): Promise<{ readonly nodeId: string; readonly unitId: string }> {
-  const space = application.spaces.list(userId).spaces[0];
+  const space = (await application.spaces.list(userId)).spaces[0];
   if (!space) throw new Error("Personal space is missing.");
   const created = await application.resources.create(
     userId,
@@ -456,7 +456,7 @@ async function createSlide(
   if (created.status === 202 || !resourceId) {
     throw new Error("Slide creation did not finish.");
   }
-  const opened = application.resources.open(userId, resourceId);
+  const opened = await application.resources.open(userId, resourceId);
   if (opened.resource.kind !== "univer") {
     throw new Error("Created Resource is not a Univer Unit.");
   }

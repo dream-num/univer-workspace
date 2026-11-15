@@ -21,7 +21,7 @@ import {
   UnitAction,
   UniverType,
 } from "@univerjs/protocol";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSqliteTestApplication,
   type SqliteTestApplication,
@@ -75,13 +75,13 @@ describe("collaboration gateway", () => {
         password: "correct horse battery staple",
       });
       const ownerId = issued.view.user.id;
-      const space = application.spaces.list(ownerId).spaces[0]!;
-      const parent = application.nodes.create(ownerId, {
+      const space = (await application.spaces.list(ownerId)).spaces[0]!;
+      const parent = await application.nodes.create(ownerId, {
         spaceId: space.id,
         parentNodeId: null,
         name: "Private parent",
       });
-      const shared = application.nodes.create(ownerId, {
+      const shared = await application.nodes.create(ownerId, {
         spaceId: space.id,
         parentNodeId: parent.id,
         name: "Shared folder",
@@ -101,12 +101,12 @@ describe("collaboration gateway", () => {
       expect((await fetch(`${origin}/api/nodes/${node.id}`)).status).toBe(404);
       expect((await fetch(snapshotUrl)).status).toBe(403);
       if (policy !== "space") {
-        application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+        await application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
           enabled: true,
           role: "editor",
         });
       } else {
-        application.spaces.update(ownerId, space.id, { publicRead: true });
+        await application.spaces.update(ownerId, space.id, { publicRead: true });
       }
 
       const metadata = await fetch(`${origin}/api/nodes/${node.id}`);
@@ -211,18 +211,18 @@ describe("collaboration gateway", () => {
       }
 
       if (policy === "link") {
-        application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
+        await application.permissions.updateNodeLinkSharing(ownerId, shared.id, {
           enabled: false,
           role: "editor",
         });
       } else if (policy === "space") {
-        application.spaces.update(ownerId, space.id, { publicRead: false });
+        await application.spaces.update(ownerId, space.id, { publicRead: false });
       } else if (policy === "move") {
-        application.nodes.update(interactivePrincipal(ownerId), node.id, { parentNodeId: parent.id });
+        await application.nodes.update(interactivePrincipal(ownerId), node.id, { parentNodeId: parent.id });
       } else if (policy === "trash") {
-        application.trash.trashNode(ownerId, shared.id);
+        await application.trash.trashNode(ownerId, shared.id);
       } else {
-        application.trash.trashNodeOnce(ownerId, shared.id, "anonymous-trash-once");
+        await application.trash.trashNodeOnce(ownerId, shared.id, "anonymous-trash-once");
       }
       expect((await fetch(snapshotUrl)).status).toBe(403);
       expect(
@@ -252,7 +252,7 @@ describe("collaboration gateway", () => {
       `${application.identity.cookieName}=${owner.cookieValue}`;
     const collaboratorCookie =
       `${application.identity.cookieName}=${collaborator.cookieValue}`;
-    const space = application.spaces.list(owner.view.user.id).spaces[0];
+    const space = (await application.spaces.list(owner.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     for (const unitType of [
@@ -278,14 +278,14 @@ describe("collaboration gateway", () => {
       }
       const resourceId = created.body.node.resource?.id;
       if (!resourceId) throw new Error("Created Resource is missing");
-      const opened = application.resources.open(
+      const opened = await application.resources.open(
         owner.view.user.id,
         resourceId
       );
       if (opened.resource.kind !== "univer") {
         throw new Error("Created Resource is not a Univer Resource");
       }
-      application.permissions.updateNodeLinkSharing(
+      await application.permissions.updateNodeLinkSharing(
         owner.view.user.id,
         created.body.node.id,
         { enabled: true, role: "editor" }
@@ -434,7 +434,7 @@ describe("collaboration gateway", () => {
     const ownerId = owner.view.user.id;
     const ownerCookie =
       `${application.identity.cookieName}=${owner.cookieValue}`;
-    const space = application.spaces.list(ownerId).spaces[0];
+    const space = (await application.spaces.list(ownerId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const createdUnits: Array<{
       readonly nodeId: string;
@@ -463,7 +463,7 @@ describe("collaboration gateway", () => {
       if (created.status === 202) throw new Error("Resource creation is pending");
       const resourceId = created.body.node.resource?.id;
       if (!resourceId) throw new Error("Created Resource is missing");
-      const opened = application.resources.open(ownerId, resourceId);
+      const opened = await application.resources.open(ownerId, resourceId);
       if (opened.resource.kind !== "univer") {
         throw new Error("Created Resource is not a Univer Resource");
       }
@@ -562,7 +562,7 @@ describe("collaboration gateway", () => {
       displayName: "History Viewer",
       password: "correct horse battery staple",
     });
-    application.permissions.updateNodeLinkSharing(ownerId, first.nodeId, {
+    await application.permissions.updateNodeLinkSharing(ownerId, first.nodeId, {
       enabled: true,
       role: "viewer",
     });
@@ -619,7 +619,7 @@ describe("collaboration gateway", () => {
       password: "correct horse battery staple",
     });
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(issued.view.user.id).spaces[0];
+    const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       issued.view.user.id,
@@ -635,10 +635,10 @@ describe("collaboration gateway", () => {
     if (created.status === 202) throw new Error("Resource creation is pending");
     const resourceId = created.body.node.resource?.id;
     if (!resourceId) throw new Error("Created Resource is missing");
-    const unitId = application.resources.open(
+    const unitId = (await application.resources.open(
       issued.view.user.id,
       resourceId
-    ).resource.unitId;
+    )).resource.unitId;
     const connection = await joinUnit(origin, cookie, unitId);
     const beforeSubmit = currentUnixTimeSeconds();
     const submitResponse = await fetch(
@@ -696,7 +696,7 @@ describe("collaboration gateway", () => {
     });
     const userId = issued.view.user.id;
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.worktrees.create(userId, "guard-worktree-create-0001", {
       kind: "user",
@@ -758,7 +758,7 @@ describe("collaboration gateway", () => {
     });
     const userId = issued.view.user.id;
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(userId).spaces[0]!;
+    const space = (await application.spaces.list(userId)).spaces[0]!;
     const created = await application.resources.create(userId, "history-resource-0001", {
       kind: "univer", spaceId: space.id, parentNodeId: null, name: "History", unitType: "sheet",
     });
@@ -829,10 +829,10 @@ describe("collaboration gateway", () => {
       password: "correct horse battery staple",
     });
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    application.identity.updateCurrentUser(cookie, {
+    await application.identity.updateCurrentUser(cookie, {
       avatarUrl: "https://avatars.example/gateway-user.png",
     });
-    const space = application.spaces.list(issued.view.user.id).spaces[0];
+    const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       issued.view.user.id,
@@ -849,7 +849,7 @@ describe("collaboration gateway", () => {
     const nodeId = created.body.node.id;
     const resourceId = created.body.node.resource?.id;
     if (!resourceId) throw new Error("Created Resource is missing");
-    const opened = application.resources.open(
+    const opened = await application.resources.open(
       issued.view.user.id,
       resourceId
     );
@@ -1399,10 +1399,10 @@ describe("collaboration gateway", () => {
     );
     expect(merged.operation.state).toBe("completed");
     expect(
-      application.resources.get(
+      (await application.resources.get(
         issued.view.user.id,
         localUnit.body.unit.resourceId
-      ).node
+      )).node
     ).toMatchObject({
       name: "Gateway Document",
       resource: { unitType: "doc" },
@@ -1532,7 +1532,7 @@ async function startApplication(existingDirectory?: string): Promise<{
     directory,
     "collaboration.sqlite"
   );
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -1649,7 +1649,7 @@ describe("content permission integration", () => {
     const editor = await account("protection-editor");
     const viewer = await account("protection-viewer");
     const outsider = await account("protection-outsider");
-    const space = application.spaces.list(owner.id).spaces[0]!;
+    const space = (await application.spaces.list(owner.id)).spaces[0]!;
     const created = await application.resources.create(
       owner.id,
       "content-permission-resource-0001",
@@ -1666,8 +1666,8 @@ describe("content permission integration", () => {
       throw new Error("Missing Unit");
     const node = created.body.node;
     const unitId = created.body.node.resource.unitId;
-    application.permissions.upsertNodeGrant(owner.id, node.id, editor.id, { role: "editor" });
-    application.permissions.upsertNodeGrant(owner.id, node.id, viewer.id, { role: "viewer" });
+    await application.permissions.upsertNodeGrant(owner.id, node.id, editor.id, { role: "editor" });
+    await application.permissions.upsertNodeGrant(owner.id, node.id, viewer.id, { role: "viewer" });
     async function authz(cookie: string, path: string, body?: unknown, method = "POST") {
       return fetch(`${origin}/universer-api/authz${path}`, {
         method,
@@ -1693,6 +1693,104 @@ describe("content permission integration", () => {
       }[type],
     };
   }
+
+  it("rechecks the actor's permissions when creating or updating a protection rule", async () => {
+    const f = await fixture();
+    const repository = f.application.repositories.contentPermissions;
+    const create = () => f.authz(f.editor.cookie, "/3/object", {
+      objectType: 3, selectRangeObject: { unitID: f.unitId, name: "Original" },
+    });
+    const setEditorRole = (role: "editor" | "viewer") =>
+      f.application.permissions.upsertNodeGrant(f.owner.id, f.node.id, f.editor.id, { role });
+
+    const insert = repository.create.bind(repository);
+    let deniedId = "";
+    const onCreate = vi.spyOn(repository, "create").mockImplementationOnce(async (object, type) => {
+      deniedId = object.id;
+      await setEditorRole("viewer");
+      return insert(object, type);
+    });
+    try {
+      const denied = await create();
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).toMatchObject({ error: { code: ErrorCode.PERMISSION_DENIED } });
+      expect(deniedId).not.toBe("");
+      expect(await repository.get(f.unitId, deniedId)).toBeNull();
+    } finally {
+      onCreate.mockRestore();
+    }
+
+    await setEditorRole("editor");
+    const created = await create();
+    expect(created.status).toBe(200);
+    const { objectID } = await created.json() as { objectID: string };
+    const before = await repository.get(f.unitId, objectID);
+    const write = repository.update.bind(repository);
+    const onUpdate = vi.spyOn(repository, "update").mockImplementationOnce(async (...args) => {
+      await setEditorRole("viewer");
+      return write(...args);
+    });
+    try {
+      const denied = await f.authz(f.editor.cookie, `/3/object/${objectID}`, {
+        unitID: f.unitId, objectType: 3, objectID, name: "Changed",
+        collaborators: { collaborators: [{ id: f.viewer.id, role: 1 }] },
+      }, "PUT");
+      expect(denied.status).toBe(403);
+      expect(await denied.json()).toMatchObject({ error: { code: ErrorCode.PERMISSION_DENIED } });
+      expect(await repository.get(f.unitId, objectID)).toEqual(before);
+    } finally {
+      onUpdate.mockRestore();
+    }
+  });
+
+  it("rejects a collaborator whose file access was revoked before the rule is written", async () => {
+    const f = await fixture();
+    const repository = f.application.repositories.contentPermissions;
+    const insert = repository.create.bind(repository);
+    const onCreate = vi.spyOn(repository, "create").mockImplementationOnce(async (...args) => {
+      await f.application.permissions.removeNodeGrant(f.owner.id, f.node.id, f.viewer.id);
+      return insert(...args);
+    });
+    try {
+      const response = await f.authz(f.owner.cookie, "/3/object", {
+        objectType: 3,
+        selectRangeObject: { unitID: f.unitId, collaborators: [{ id: f.viewer.id, role: 1 }] },
+      });
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({ error: { code: ErrorCode.INVALID_ARGUMENT } });
+    } finally {
+      onCreate.mockRestore();
+    }
+  });
+
+  it("preserves a concurrent collaborator revocation when renaming an object", async () => {
+    const f = await fixture();
+    const objectType = 3;
+    const created = await f.authz(f.owner.cookie, "/3/object", {
+      objectType,
+      selectRangeObject: {
+        unitID: f.unitId, name: "Original", collaborators: [{ id: f.viewer.id, role: 1 }],
+      },
+    });
+    expect(created.status).toBe(200);
+    const { objectID } = await created.json() as { objectID: string };
+    const update = (fields: Record<string, unknown>) => f.authz(f.owner.cookie, `/3/object/${objectID}`, {
+      unitID: f.unitId, objectID, objectType, ...fields,
+    }, "PUT");
+    const repository = f.application.repositories.contentPermissions;
+    const write = repository.update.bind(repository);
+    // Commit the revocation after the rename authorized against the original object.
+    const pendingRename = vi.spyOn(repository, "update").mockImplementationOnce(async (...args) => {
+      expect((await update({ collaborators: { collaborators: [] } })).status).toBe(200);
+      return write(...args);
+    });
+    try {
+      expect((await update({ name: "Renamed" })).status).toBe(200);
+      expect(await repository.get(f.unitId, objectID)).toMatchObject({ name: "Renamed", collaborators: [] });
+    } finally {
+      pendingRename.mockRestore();
+    }
+  });
 
   it.each([
     ["sheet", 2, "worksheetObject"],
@@ -1847,7 +1945,7 @@ describe("content permission integration", () => {
       expect(members.collaborators.map((member) => member.id).sort()).toEqual(
         [f.owner.id, f.editor.id, f.viewer.id].sort(),
       );
-      f.application.permissions.removeNodeGrant(f.owner.id, f.node.id, f.editor.id);
+      await f.application.permissions.removeNodeGrant(f.owner.id, f.node.id, f.editor.id);
       expect(
         (await f.authz(f.editor.cookie, `/${objectType}/object/${objectID}`, update, "PUT")).status,
       ).toBe(403);
@@ -1924,9 +2022,9 @@ describe("content permission integration", () => {
 
   it("holds an unclaimed agent to Viewer on an Editor link, like the anonymous reader", async () => {
     const f = await fixture();
-    f.application.permissions.updateNodeLinkSharing(f.owner.id, f.node.id, { enabled: true, role: "editor" });
+    await f.application.permissions.updateNodeLinkSharing(f.owner.id, f.node.id, { enabled: true, role: "editor" });
     const edit = { cellValue: { 0: { 0: { v: "link edit" } } } };
-    const agent = await sheetSubmit(f, agentSession(f).cookie);
+    const agent = await sheetSubmit(f, (await agentSession(f)).cookie);
     expect(await agent.submit(1, "sheet.mutation.set-range-values", edit)).toBe("permission_rej");
     const human = await sheetSubmit(f, f.outsider.cookie);
     expect(await human.submit(1, "sheet.mutation.set-range-values", edit)).toBe("changeset_ack");
@@ -1934,10 +2032,11 @@ describe("content permission integration", () => {
 
   it("closes a suspended agent's Unit to link readers until the suspension ends", async () => {
     const f = await fixture();
-    const agent = agentSession(f);
+    const agent = await agentSession(f);
+    const agentSpace = (await f.application.spaces.list(agent.id)).spaces[0]!;
     const created = await f.application.resources.create(agent.id, "suspended-agent-unit-0001", {
       kind: "univer",
-      spaceId: f.application.spaces.list(agent.id).spaces[0]!.id,
+      spaceId: agentSpace.id,
       parentNodeId: null,
       name: "Agent sheet",
       unitType: "sheet",
@@ -1945,7 +2044,7 @@ describe("content permission integration", () => {
     if (created.status === 202 || created.body.node.resource?.kind !== "univer")
       throw new Error("Missing Unit");
     const unitId = created.body.node.resource.unitId;
-    f.application.permissions.updateNodeLinkSharing(agent.id, created.body.node.id, { enabled: true, role: "viewer" });
+    await f.application.permissions.updateNodeLinkSharing(agent.id, created.body.node.id, { enabled: true, role: "viewer" });
     const snapshot = () =>
       fetch(`${f.origin}/universer-api/snapshot/${f.protocolType}/unit/${unitId}/rev/0`, {
         headers: { cookie: f.outsider.cookie },
@@ -1968,9 +2067,9 @@ describe("content permission integration", () => {
     }
   });
 
-  function agentSession(f: Awaited<ReturnType<typeof fixture>>) {
-    const { user } = f.application.identity.createAgent({ label: "guest", originIp: "203.0.113.9" });
-    const issued = f.application.identity.issueSession(user, "browser");
+  async function agentSession(f: Awaited<ReturnType<typeof fixture>>) {
+    const { user } = await f.application.identity.createAgent({ label: "guest", originIp: "203.0.113.9" });
+    const issued = await f.application.identity.issueSession(user, "browser");
     return { id: user.id, cookie: `${f.application.identity.cookieName}=${issued.cookieValue}` };
   }
 
@@ -2523,6 +2622,54 @@ it("resolves comment authors through the existing authenticated Identity project
   expect((await fetch(`${origin}/universer-api/user/list?${oversized}`, { headers })).status).toBe(400);
 });
 
+it.each(["/universer-api/comb/connect", "/api/worktree-events"])(
+  "does not deliver messages after revocation during the initial session check on %s", async (path) => {
+    const { application, origin } = await startApplication();
+    const user = await application.identity.registerWithPassword({
+      username: "pending-socket", displayName: "Pending Socket", password: "correct horse battery staple",
+    });
+    const cookie = `${application.identity.cookieName}=${user.cookieValue}`;
+    const response = await fetch(`${origin}/universer-api/user/session-ticket`, { headers: { cookie } });
+    expect(response.status).toBe(200);
+    const { ticket } = await response.json() as { ticket: string };
+
+    const repository = application.repositories.identity;
+    const findSession = repository.findSession.bind(repository);
+    let started!: () => void;
+    let release!: () => void;
+    const startedChecking = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const lookup = vi.spyOn(repository, "findSession").mockImplementationOnce(async (id) => {
+      const beforeLogout = await findSession(id);
+      started();
+      await gate;
+      return beforeLogout;
+    });
+    try {
+      const socket = new WebSocket(`${origin.replace(/^http/, "ws")}${path}?sessionTicket=${encodeURIComponent(ticket)}`);
+      sockets.push(socket);
+      const received = vi.fn();
+      socket.addEventListener("message", received);
+      const closed = new Promise<CloseEvent>((resolve) => socket.addEventListener("close", resolve, { once: true }));
+      await new Promise<void>((resolve, reject) => {
+        socket.addEventListener("open", () => resolve(), { once: true });
+        socket.addEventListener("error", () => reject(new Error("WebSocket did not open")), { once: true });
+      });
+      if (path === "/universer-api/comb/connect") {
+        socket.send(serializeCombRequest({ cmd: CombCmd.HELLO, routeKey: "hello", routeType: "" }));
+      }
+      await startedChecking;
+      await application.identity.logout(cookie);
+      release();
+      expect((await closed).code).toBe(1008);
+      expect(received).not.toHaveBeenCalled();
+    } finally {
+      release();
+      lookup.mockRestore();
+    }
+  },
+);
+
 it('closes existing collaboration sockets when Team membership is removed', async () => {
   const { application, origin } = await startApplication();
   const owner = await application.identity.registerWithPassword({
@@ -2535,10 +2682,10 @@ it('closes existing collaboration sockets when Team membership is removed', asyn
     displayName: 'Revoke Member',
     password: 'correct horse battery staple',
   });
-  const space = application.spaces.createTeamSpace(owner.view.user.id, {
+  const space = await application.spaces.createTeamSpace(owner.view.user.id, {
     name: 'Revoke access',
   });
-  application.permissions.upsertTeamMember(
+  await application.permissions.upsertTeamMember(
     owner.view.user.id,
     space.id,
     member.view.user.id,
@@ -2566,7 +2713,7 @@ it('closes existing collaboration sockets when Team membership is removed', asyn
   const closed = new Promise<CloseEvent>((resolve) =>
     connection.socket.addEventListener('close', resolve, { once: true }),
   );
-  application.permissions.removeTeamMember(
+  await application.permissions.removeTeamMember(
     owner.view.user.id,
     space.id,
     member.view.user.id,

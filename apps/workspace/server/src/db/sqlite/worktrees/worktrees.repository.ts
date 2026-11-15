@@ -1,4 +1,7 @@
 import { createHash } from "node:crypto";
+import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
+import { checkCreateTarget } from "../access/resource-target.js";
+import { type SqliteAccessRepository, assertFileQuota } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -7,15 +10,15 @@ import type {
   WorktreeCursor,
   WorktreeRow,
   WorktreeUnitRow,
-  WorktreeOperationDatabaseKind,
+  WorktreeReservation,
   WorktreeOperationRow,
   WorktreesRepository,
 } from "../../../modules/worktrees/worktrees.repository.js";
 
 export class SqliteWorktreesRepository implements WorktreesRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(private readonly _database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
 
-  hasCreatedWorktree(userId: string): boolean {
+  async hasCreatedWorktree(userId: string): Promise<boolean> {
     return Boolean(
       this._database.connection
         .prepare("SELECT 1 FROM worktrees WHERE creator_user_id = ? LIMIT 1")
@@ -23,7 +26,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     );
   }
 
-  audience(worktreeId: string): string[] {
+  async audience(worktreeId: string): Promise<string[]> {
     const rows = this._database.connection
       .prepare(
         `SELECT audience.user_id
@@ -59,7 +62,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     return rows.map((row) => row.user_id);
   }
 
-  listCandidates(input: {
+  async listCandidates(input: {
     readonly userId: string;
     readonly scope: "active" | "processed" | "all";
     readonly touchedSince?: number;
@@ -69,7 +72,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly teamSpaceId: string | null;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
-  }): WorktreeRow[] {
+  }): Promise<WorktreeRow[]> {
     const predicates = [
       input.scope === "all"
         ? "1 = 1"
@@ -136,7 +139,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       .all(...parameters) as unknown as WorktreeRow[];
   }
 
-  get(worktreeId: string, userId: string): WorktreeRow | null {
+  async get(worktreeId: string, userId: string): Promise<WorktreeRow | null> {
     return (
       (this._database.connection
         .prepare(
@@ -147,10 +150,10 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     );
   }
 
-  resourceUnit(resourceId: string): {
+  async resourceUnit(resourceId: string): Promise<{
     readonly unitId: string;
     readonly unitType: UnitType;
-  } | null {
+  } | null> {
     const row = this._database.connection
       .prepare(
         `SELECT unit_id, unit_type
@@ -168,7 +171,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       : null;
   }
 
-  create(input: {
+  async create(input: {
     readonly id: string;
     readonly name: string;
     readonly summary: string | null;
@@ -178,12 +181,13 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly visibility: WorktreeVisibility;
     readonly createdVia: WriteSource | null;
     readonly createdAt: number;
-  }): void {
+  }): Promise<void> {
     // The number is allocated inside the insert transaction (BEGIN IMMEDIATE), so
     // concurrent writers serialize. Team Worktrees continue the Space's shared
     // Issue sequence; User Worktrees are numbered per creator.
     this._database.transaction((database) => {
       if (database.prepare("SELECT 1 FROM worktrees WHERE id = ?").get(input.id)) return;
+      if (input.kind === "team" && input.teamSpaceId) this.requireTarget(input.creatorUserId, input.teamSpaceId, null);
       const next = (input.kind === "team"
         ? database.prepare(
             `SELECT MAX(
@@ -220,10 +224,10 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
   }
 
   /** Finds a numbered Worktree: in a Team Space, or among the user's own User Worktrees. */
-  findIdByNumber(
+  async findIdByNumber(
     scope: { readonly teamSpaceId: string } | { readonly creatorUserId: string },
     number: number
-  ): string | null {
+  ): Promise<string | null> {
     const row = ("teamSpaceId" in scope
       ? this._database.connection
           .prepare("SELECT id FROM worktrees WHERE kind = 'team' AND team_space_id = ? AND number = ?")
@@ -234,29 +238,32 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     return row?.id ?? null;
   }
 
-  update(input: {
-    readonly id: string;
-    readonly name: string;
-    readonly summary: string | null;
-    readonly visibility: WorktreeVisibility;
-    readonly updatedAt: number;
-  }): void {
-    this._database.connection
-      .prepare(
-        `UPDATE worktrees
-         SET name = ?, summary = ?, visibility = ?, updated_at = ?
-         WHERE id = ?`
+  async update(input: Parameters<WorktreesRepository["update"]>[0]): Promise<boolean> {
+    const result = this._database.connection.prepare(`
+      UPDATE worktrees
+      SET name = COALESCE($name, name),
+          summary = CASE WHEN $setSummary THEN $summary ELSE summary END,
+          visibility = COALESCE($visibility, visibility),
+          updated_at = $updatedAt
+      WHERE id = $id AND (
+        creator_user_id = $actorId OR
+        EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND owner_user_id = $actorId) OR
+        EXISTS (SELECT 1 FROM space_members
+                WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin')
       )
-      .run(
-        input.name,
-        input.summary,
-        input.visibility,
-        input.updatedAt,
-        input.id
-      );
+    `).run({
+      id: input.id,
+      actorId: input.actorId,
+      name: input.name ?? null,
+      setSummary: Number(input.summary !== undefined),
+      summary: input.summary ?? null,
+      visibility: input.visibility ?? null,
+      updatedAt: input.updatedAt,
+    });
+    return Number(result.changes) === 1;
   }
 
-  units(worktreeId: string): WorktreeUnitRow[] {
+  async units(worktreeId: string): Promise<WorktreeUnitRow[]> {
     return this._database.connection
       .prepare(
         `SELECT
@@ -290,12 +297,12 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       .all(worktreeId) as unknown as WorktreeUnitRow[];
   }
 
-  addTrunkUnit(input: {
+  async addTrunkUnit(input: {
     readonly worktreeId: string;
     readonly unitId: string;
     readonly resourceId: string;
     readonly addedAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.connection
       .prepare(
         `INSERT INTO worktree_units
@@ -319,7 +326,8 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       );
   }
 
-  addLocalUnit(input: {
+  async completeLocalUnit(input: {
+    readonly operationId: string;
     readonly worktreeId: string;
     readonly unitId: string;
     readonly resourceId: string;
@@ -330,8 +338,9 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly unitType: UnitType;
     readonly createdBy: string;
     readonly createdAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.transaction((database) => {
+      this.requireTarget(input.createdBy, input.targetSpaceId, input.targetParentNodeId);
       database
         .prepare(
           `INSERT INTO worktree_units
@@ -375,14 +384,18 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
           input.createdAt,
           input.createdAt
         );
+      this.finishOperation(input.operationId, { worktreeId: input.worktreeId, unitId: input.unitId }, input.createdAt);
+      // A direct replay of a failed operation may no longer have a pending slot.
+      assertFileQuota(database, input.createdBy, 0);
     });
   }
 
-  activateLocalUnit(
+  async activateLocalUnit(
     row: WorktreeUnitRow,
+    actorUserId: string,
     creatorUserId: string,
     activatedAt: number
-  ): void {
+  ): Promise<void> {
     if (
       row.source !== "worktree" ||
       !row.target_space_id ||
@@ -391,7 +404,14 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     ) {
       return;
     }
+    const targetSpaceId = row.target_space_id;
     this._database.transaction((database) => {
+      const intent = database.prepare(`
+        SELECT activated_at, discarded_at FROM worktree_node_intents WHERE worktree_id = ? AND unit_id = ?
+      `).get(row.worktree_id, row.unit_id);
+      if (!intent || intent.discarded_at !== null) throw notFound();
+      if (intent.activated_at !== null) return;
+      this.requireTarget(actorUserId, targetSpaceId, row.target_parent_node_id);
       database
         .prepare(
           `INSERT INTO nodes
@@ -440,7 +460,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     });
   }
 
-  markProcessed(worktreeId: string, processedAt: number): void {
+  async markProcessed(worktreeId: string, processedAt: number): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE worktrees
@@ -450,7 +470,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       .run(processedAt, processedAt, worktreeId);
   }
 
-  markLocalUnitsDiscarded(worktreeId: string, discardedAt: number): void {
+  async markLocalUnitsDiscarded(worktreeId: string, discardedAt: number): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE worktree_node_intents
@@ -462,7 +482,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       .run(discardedAt, discardedAt, worktreeId);
   }
 
-  markLocalUnitDiscarded(worktreeId: string, unitId: string, discardedAt: number): void {
+  async markLocalUnitDiscarded(worktreeId: string, unitId: string, discardedAt: number): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE worktree_node_intents SET discarded_at = ?, updated_at = ?
@@ -471,21 +491,25 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       .run(discardedAt, discardedAt, worktreeId, unitId);
   }
 
-  removalBatchId(worktreeId: string, unitId: string): string {
+  async removalBatchId(worktreeId: string, unitId: string): Promise<string> {
+    return this._removalBatchIdSync(worktreeId, unitId);
+  }
+
+  private _removalBatchIdSync(worktreeId: string, unitId: string): string {
     return `worktree-${createHash("sha256")
       .update(JSON.stringify([worktreeId, unitId]))
       .digest("hex")}`;
   }
 
-  hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): boolean {
+  async hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): Promise<boolean> {
     return Boolean(
       this._database.connection
         .prepare("SELECT 1 FROM trash_batches WHERE id = ? AND created_by = ?")
-        .get(this.removalBatchId(worktreeId, unitId), userId),
+        .get(this._removalBatchIdSync(worktreeId, unitId), userId),
     );
   }
 
-  getOperation(operationId: string): WorktreeOperationRow | null {
+  async getOperation(operationId: string): Promise<WorktreeOperationRow | null> {
     return (
       (this._database.connection
         .prepare("SELECT * FROM operations WHERE id = ?")
@@ -493,18 +517,28 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     );
   }
 
-  reserveOperation(input: {
-    readonly id: string;
-    readonly kind: WorktreeOperationDatabaseKind;
-    readonly actorUserId: string;
-    readonly payload: Readonly<Record<string, unknown>>;
-    readonly createdAt: number;
-  }): { readonly created: boolean; readonly row: WorktreeOperationRow } {
+  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null): void {
+    const access = checkCreateTarget(this.access, userId, spaceId, parentNodeId);
+    if (access === "notFound") throw notFound();
+    if (access === "forbidden") throw forbidden();
+  }
+
+  async reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }> {
     return this._database.transaction((database) => {
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
         .get(input.id) as WorktreeOperationRow | undefined;
       if (existing) return { created: false, row: existing };
+      if (input.kind === "create_worktree_unit") {
+        this.requireTarget(input.actorUserId, input.payload.targetSpaceId, input.payload.targetParentNodeId);
+        assertFileQuota(database, input.actorUserId, 1, input.id);
+      } else if (input.kind === "create_worktree" && input.payload.teamSpaceId !== null) {
+        this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null);
+      } else if (input.kind === "add_worktree_unit") {
+        const resource = this.access.readResourceAccess(input.actorUserId, input.payload.resourceId);
+        if (!resource || resource.kind !== "univer") throw notFound();
+        if (!resource.capabilities.editContent) throw forbidden();
+      }
       database
         .prepare(
           `INSERT INTO operations
@@ -534,11 +568,18 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     });
   }
 
-  completeOperation(
+  async completeOperation(
     operationId: string,
     result: Readonly<Record<string, unknown>>,
     completedAt: number
-  ): WorktreeOperationRow {
+  ): Promise<WorktreeOperationRow> {
+    this.finishOperation(operationId, result, completedAt);
+    return this._database.connection
+      .prepare("SELECT * FROM operations WHERE id = ?")
+      .get(operationId) as unknown as WorktreeOperationRow;
+  }
+
+  private finishOperation(operationId: string, result: Readonly<Record<string, unknown>>, completedAt: number): void {
     this._database.connection
       .prepare(
         `UPDATE operations
@@ -559,16 +600,13 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
         completedAt,
         operationId
       );
-    return this._database.connection
-      .prepare("SELECT * FROM operations WHERE id = ?")
-      .get(operationId) as unknown as WorktreeOperationRow;
   }
 
-  failOperation(
+  async failOperation(
     operationId: string,
     error: { readonly code: string; readonly message: string },
     failedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE operations

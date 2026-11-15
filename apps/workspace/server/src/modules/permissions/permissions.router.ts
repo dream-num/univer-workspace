@@ -10,16 +10,16 @@ export function createPermissionsRouter(options: {
   const router = Router();
   router.use(json({ limit: "1mb" }));
 
-  router.get("/users/search", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/users/search", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.permissions.searchUsers(session.user.id, request.query.query)
+      await options.permissions.searchUsers(session.user.id, request.query.query)
     );
   });
-  router.get("/team-spaces/:spaceId/members", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/team-spaces/:spaceId/members", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.permissions.listTeamMembers(
+      await options.permissions.listTeamMembers(
         session.user.id,
         parameter(request.params.spaceId)
       )
@@ -27,10 +27,10 @@ export function createPermissionsRouter(options: {
   });
   router.put(
     "/team-spaces/:spaceId/members/:userId",
-    (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
+    async (request, response) => {
+      const session = await options.identity.requireSession(request.headers.cookie);
       response.json(
-        options.permissions.upsertTeamMember(
+        await options.permissions.upsertTeamMember(
           session.user.id,
           parameter(request.params.spaceId),
           parameter(request.params.userId),
@@ -41,9 +41,9 @@ export function createPermissionsRouter(options: {
   );
   router.delete(
     "/team-spaces/:spaceId/members/:userId",
-    (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
-      options.permissions.removeTeamMember(
+    async (request, response) => {
+      const session = await options.identity.requireSession(request.headers.cookie);
+      await options.permissions.removeTeamMember(
         session.user.id,
         parameter(request.params.spaceId),
         parameter(request.params.userId)
@@ -51,10 +51,10 @@ export function createPermissionsRouter(options: {
       response.status(204).end();
     }
   );
-  router.get("/nodes/:nodeId/grants", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/nodes/:nodeId/grants", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.permissions.listNodeGrants(
+      await options.permissions.listNodeGrants(
         session.user.id,
         parameter(request.params.nodeId)
       )
@@ -62,10 +62,10 @@ export function createPermissionsRouter(options: {
   });
   router.put(
     "/nodes/:nodeId/grants/:userId",
-    (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
+    async (request, response) => {
+      const session = await options.identity.requireSession(request.headers.cookie);
       response.json(
-        options.permissions.upsertNodeGrant(
+        await options.permissions.upsertNodeGrant(
           session.user.id,
           parameter(request.params.nodeId),
           parameter(request.params.userId),
@@ -76,10 +76,10 @@ export function createPermissionsRouter(options: {
   );
   router.delete(
     "/nodes/:nodeId/grants/:userId",
-    (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
+    async (request, response) => {
+      const session = await options.identity.requireSession(request.headers.cookie);
       response.json(
-        options.permissions.removeNodeGrant(
+        await options.permissions.removeNodeGrant(
           session.user.id,
           parameter(request.params.nodeId),
           parameter(request.params.userId)
@@ -89,10 +89,10 @@ export function createPermissionsRouter(options: {
   );
   router.get(
     "/nodes/:nodeId/link-sharing",
-    (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
+    async (request, response) => {
+      const session = await options.identity.requireSession(request.headers.cookie);
       response.json(
-        options.permissions.getNodeLinkSharing(
+        await options.permissions.getNodeLinkSharing(
           session.user.id,
           parameter(request.params.nodeId)
         )
@@ -101,13 +101,13 @@ export function createPermissionsRouter(options: {
   );
   router.put(
     "/nodes/:nodeId/link-sharing",
-    (request, response) => {
-      const session = options.identity.requireSession(request.headers.cookie);
+    async (request, response) => {
+      const session = await options.identity.requireSession(request.headers.cookie);
       assertCeiling(principalCategory(session.user), "writeLinkSharing", {
         tokenIssued: session.tokenIssued,
       });
       response.json(
-        options.permissions.updateNodeLinkSharing(
+        await options.permissions.updateNodeLinkSharing(
           session.user.id,
           parameter(request.params.nodeId),
           request.body

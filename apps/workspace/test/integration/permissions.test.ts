@@ -5,7 +5,6 @@ import {
   createSqliteTestApplication,
   type SqliteTestApplication,
 } from "../support/sqlite/test-application.js";
-import { ApplicationError } from "../../server/src/middleware/errors.js";
 
 const applications: SqliteTestApplication[] = [];
 
@@ -17,7 +16,7 @@ afterEach(async () => {
 
 describe("permissions", () => {
   it("keeps exact username and opaque ID matches ahead of twenty fuzzy matches", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const actor = await register(application, "search-actor");
     const insertUser = application.database.connection.prepare(
       "INSERT INTO users (id, username, display_name, avatar_url, created_at, updated_at) VALUES (?, ?, ?, NULL, 0, 0)"
@@ -27,60 +26,60 @@ describe("permissions", () => {
     }
     insertUser.run("opaque-target-id", "target-user", "Target");
 
-    const byUsername = application.permissions.searchUsers(actor, "TARGET-USER").users;
+    const byUsername = (await application.permissions.searchUsers(actor, "TARGET-USER")).users;
     expect(byUsername).toHaveLength(20);
     expect(byUsername[0]).toMatchObject({ id: "opaque-target-id", username: "target-user" });
-    const byId = application.permissions.searchUsers(actor, "opaque-target-id").users;
+    const byId = (await application.permissions.searchUsers(actor, "opaque-target-id")).users;
     expect(byId).toHaveLength(20);
     expect(byId[0]).toMatchObject({ id: "opaque-target-id", username: "target-user" });
-    expect(application.permissions.searchUsers(actor, "search-actor").users).toEqual([]);
+    expect((await application.permissions.searchUsers(actor, "search-actor")).users).toEqual([]);
   });
 
   it("accepts one-character user searches and still rejects empty or excessive queries", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const actor = await register(application, "search-actor");
     const target = await register(application, "中");
-    expect(application.permissions.searchUsers(actor, "中").users).toMatchObject([{ id: target, username: "中" }]);
+    expect((await application.permissions.searchUsers(actor, "中")).users).toMatchObject([{ id: target, username: "中" }]);
     for (const query of ["", " ", "x".repeat(101)]) {
-      expect(() => application.permissions.searchUsers(actor, query)).toThrowError(
+      await expect(application.permissions.searchUsers(actor, query)).rejects.toThrowError(
         expect.objectContaining({ code: "INVALID_INPUT", status: 400 })
       );
     }
   });
 
   it("keeps Unicode case-distinct usernames separate while matching ASCII case", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const actor = await register(application, "search-actor");
     const upper = await register(application, "Älpha");
     const lower = await register(application, "älpha");
-    expect(application.permissions.searchUsers(actor, "ÄLPHA").users).toMatchObject([{ id: upper, username: "Älpha" }]);
-    expect(application.permissions.searchUsers(actor, "äLPHA").users).toMatchObject([{ id: lower, username: "älpha" }]);
+    expect((await application.permissions.searchUsers(actor, "ÄLPHA")).users).toMatchObject([{ id: upper, username: "Älpha" }]);
+    expect((await application.permissions.searchUsers(actor, "äLPHA")).users).toMatchObject([{ id: lower, username: "älpha" }]);
   });
 
   it("combines anonymous public-read policies without inheriting edit grants", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "anonymous-policy-owner");
-    const space = application.spaces.list(owner).spaces[0]!;
-    const root = application.nodes.create(owner, {
+    const space = (await application.spaces.list(owner)).spaces[0]!;
+    const root = await application.nodes.create(owner, {
       spaceId: space.id,
       parentNodeId: null,
       name: "Shared root",
     });
-    const child = application.nodes.create(owner, {
+    const child = await application.nodes.create(owner, {
       spaceId: space.id,
       parentNodeId: root.id,
       name: "Child",
     });
-    const sibling = application.nodes.create(owner, {
+    const sibling = await application.nodes.create(owner, {
       spaceId: space.id,
       parentNodeId: null,
       name: "Private sibling",
     });
-    application.permissions.updateNodeLinkSharing(owner, root.id, {
+    await application.permissions.updateNodeLinkSharing(owner, root.id, {
       enabled: true,
       role: "editor",
     });
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toMatchObject({
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toMatchObject({
       role: "viewer",
       navigationRootNodeId: root.id,
       capabilities: {
@@ -91,69 +90,69 @@ describe("permissions", () => {
         share: false,
       },
     });
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, sibling.id)).toBeNull();
-    application.spaces.update(owner, space.id, { publicRead: true });
-    application.permissions.updateNodeLinkSharing(owner, root.id, {
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, sibling.id)).toBeNull();
+    await application.spaces.update(owner, space.id, { publicRead: true });
+    await application.permissions.updateNodeLinkSharing(owner, root.id, {
       enabled: false,
       role: "editor",
     });
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toMatchObject({
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toMatchObject({
       role: "viewer",
       navigationRootNodeId: null,
     });
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, sibling.id)?.role).toBe("viewer");
-    application.spaces.update(owner, space.id, { publicRead: false });
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toBeNull();
+    expect((await application.access.resolveNode(ANONYMOUS_USER_ID, sibling.id))?.role).toBe("viewer");
+    await application.spaces.update(owner, space.id, { publicRead: false });
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toBeNull();
 
-    application.permissions.updateNodeLinkSharing(owner, root.id, {
+    await application.permissions.updateNodeLinkSharing(owner, root.id, {
       enabled: true,
       role: "editor",
     });
-    application.nodes.update(interactivePrincipal(owner), child.id, { parentNodeId: null });
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toBeNull();
-    const trash = application.trash.trashNode(owner, root.id);
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, root.id)).toBeNull();
-    application.trash.restore(owner, trash.id);
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, root.id)?.role).toBe("viewer");
+    await application.nodes.update(interactivePrincipal(owner), child.id, { parentNodeId: null });
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, child.id)).toBeNull();
+    const trash = await application.trash.trashNode(owner, root.id);
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, root.id)).toBeNull();
+    await application.trash.restore(owner, trash.id);
+    expect((await application.access.resolveNode(ANONYMOUS_USER_ID, root.id))?.role).toBe("viewer");
 
-    const team = application.spaces.createTeamSpace(owner, {
+    const team = await application.spaces.createTeamSpace(owner, {
       name: "Public team",
       publicRead: true,
     });
-    const teamNode = application.nodes.create(owner, {
+    const teamNode = await application.nodes.create(owner, {
       spaceId: team.id,
       parentNodeId: null,
       name: "Team document",
     });
-    expect(application.access.resolveSpace(ANONYMOUS_USER_ID, team.id)?.role).toBe("viewer");
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, teamNode.id)?.role).toBe("viewer");
-    application.spaces.update(owner, team.id, { publicRead: false });
-    expect(application.access.resolveSpace(ANONYMOUS_USER_ID, team.id)).toBeNull();
-    expect(application.access.resolveNode(ANONYMOUS_USER_ID, teamNode.id)).toBeNull();
+    expect((await application.access.resolveSpace(ANONYMOUS_USER_ID, team.id))?.role).toBe("viewer");
+    expect((await application.access.resolveNode(ANONYMOUS_USER_ID, teamNode.id))?.role).toBe("viewer");
+    await application.spaces.update(owner, team.id, { publicRead: false });
+    expect(await application.access.resolveSpace(ANONYMOUS_USER_ID, team.id)).toBeNull();
+    expect(await application.access.resolveNode(ANONYMOUS_USER_ID, teamNode.id)).toBeNull();
   });
 
   it("can enable public read while creating a Team Space", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "public-team-owner");
     const visitor = await register(application, "public-team-visitor");
 
-    const team = application.spaces.createTeamSpace(owner, {
+    const team = await application.spaces.createTeamSpace(owner, {
       name: "Public team",
       publicRead: true,
     });
 
     expect(team).toMatchObject({ publicRead: true, accessRole: "owner" });
-    expect(application.access.resolveSpace(visitor, team.id)).toMatchObject({
+    expect(await application.access.resolveSpace(visitor, team.id)).toMatchObject({
       publicRead: true,
       role: "viewer",
     });
   });
 
   it("lets every signed-in user read an opted-in Space without an invitation", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "public-owner");
     const visitor = await register(application, "public-visitor");
-    const space = application.spaces.list(owner).spaces[0];
+    const space = (await application.spaces.list(owner)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       owner,
@@ -170,13 +169,13 @@ describe("permissions", () => {
     const resourceId = created.body.node.resource?.id;
     if (!resourceId) throw new Error("Created Resource is missing");
 
-    expect(application.access.resolveSpace(visitor, space.id)).toBeNull();
-    expect(application.access.resolveResource(visitor, resourceId)).toBeNull();
+    expect(await application.access.resolveSpace(visitor, space.id)).toBeNull();
+    expect(await application.access.resolveResource(visitor, resourceId)).toBeNull();
 
     expect(
-      application.spaces.update(owner, space.id, { publicRead: true })
+      await application.spaces.update(owner, space.id, { publicRead: true })
     ).toMatchObject({ publicRead: true });
-    expect(application.spaces.list(visitor).spaces).not.toContainEqual(
+    expect((await application.spaces.list(visitor)).spaces).not.toContainEqual(
       expect.objectContaining({
         id: space.id,
         publicRead: true,
@@ -187,7 +186,7 @@ describe("permissions", () => {
         }),
       })
     );
-    expect(application.access.resolveResource(visitor, resourceId)).toMatchObject({
+    expect(await application.access.resolveResource(visitor, resourceId)).toMatchObject({
       node: {
         role: "viewer",
         navigationRootNodeId: null,
@@ -195,36 +194,34 @@ describe("permissions", () => {
       },
       capabilities: { openContent: true, editContent: false },
     });
-    expect(application.resources.open(visitor, resourceId)).toMatchObject({
+    expect(await application.resources.open(visitor, resourceId)).toMatchObject({
       resource: { accessRole: "viewer", editorMode: "readOnly" },
     });
-    expect(() =>
-      application.spaces.update(visitor, space.id, { publicRead: false })
-    ).toThrowError(
-      expect.objectContaining<ApplicationError>({ code: "FORBIDDEN", status: 403 })
+    await expect(application.spaces.update(visitor, space.id, { publicRead: false })).rejects.toThrowError(
+      expect.objectContaining({ code: "FORBIDDEN", status: 403 })
     );
 
-    application.spaces.update(owner, space.id, { publicRead: false });
-    expect(application.access.resolveResource(visitor, resourceId)).toBeNull();
+    await application.spaces.update(owner, space.id, { publicRead: false });
+    expect(await application.access.resolveResource(visitor, resourceId)).toBeNull();
   });
 
   it("manages team membership through the same space access resolver", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "owner");
     const member = await register(application, "member");
     const other = await register(application, "other");
     const contributor = await register(application, "contributor");
-    const team = application.spaces.createTeamSpace(owner, {
+    const team = await application.spaces.createTeamSpace(owner, {
       name: "Product",
     });
 
     expect(
-      application.permissions.searchUsers(owner, "mem")
+      await application.permissions.searchUsers(owner, "mem")
     ).toMatchObject({
       users: [{ id: member, username: "member" }],
     });
     expect(
-      application.permissions.upsertTeamMember(
+      await application.permissions.upsertTeamMember(
         owner,
         team.id,
         member,
@@ -235,81 +232,118 @@ describe("permissions", () => {
       role: "viewer",
       grantedBy: { id: owner },
     });
-    expect(application.access.resolveSpace(member, team.id)?.role).toBe(
+    expect((await application.access.resolveSpace(member, team.id))?.role).toBe(
       "viewer"
     );
     expect(
-      application.permissions.listTeamMembers(member, team.id)
+      await application.permissions.listTeamMembers(member, team.id)
     ).toMatchObject({
       owner: { id: owner },
       members: [{ user: { id: member }, role: "viewer" }],
     });
-    expect(() =>
-      application.permissions.upsertTeamMember(
+    await expect(application.permissions.upsertTeamMember(
         member,
         team.id,
         other,
         { role: "editor" }
       )
-    ).toThrowError(
-      expect.objectContaining<ApplicationError>({
+    ).rejects.toThrowError(
+      expect.objectContaining({
         code: "FORBIDDEN",
         status: 403,
       })
     );
 
-    application.permissions.upsertTeamMember(
+    await application.permissions.upsertTeamMember(
       owner,
       team.id,
       member,
       { role: "admin" }
     );
-    application.permissions.upsertTeamMember(
+    await application.permissions.upsertTeamMember(
       owner,
       team.id,
       other,
       { role: "admin" }
     );
-    expect(() =>
-      application.permissions.upsertTeamMember(
+    await expect(application.permissions.upsertTeamMember(
         member,
         team.id,
         other,
         { role: "viewer" }
       )
-    ).toThrowError(
-      expect.objectContaining<ApplicationError>({ code: "FORBIDDEN" })
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: "FORBIDDEN" })
     );
-    expect(() =>
-      application.permissions.upsertTeamMember(
+    await expect(application.permissions.upsertTeamMember(
         member,
         team.id,
         contributor,
         { role: "admin" }
       )
-    ).toThrowError(
-      expect.objectContaining<ApplicationError>({ code: "FORBIDDEN" })
+    ).rejects.toThrowError(
+      expect.objectContaining({ code: "FORBIDDEN" })
     );
     expect(
-      application.permissions.upsertTeamMember(
+      (await application.permissions.upsertTeamMember(
         member,
         team.id,
         contributor,
         { role: "editor" }
-      ).role
+      )).role
     ).toBe("editor");
 
-    application.permissions.removeTeamMember(member, team.id, member);
-    expect(application.access.resolveSpace(member, team.id)).toBeNull();
+    await application.permissions.removeTeamMember(member, team.id, member);
+    expect(await application.access.resolveSpace(member, team.id)).toBeNull();
+  });
+
+  it("returns each concurrent membership write and rechecks the acting admin at commit", async () => {
+    const app = await createTestApplication();
+    const owner = await register(app, "owner");
+    const admin = await register(app, "admin");
+    const member = await register(app, "member");
+    const team = await app.spaces.createTeamSpace(owner, { name: "Members" });
+    const writes = await Promise.all([
+      app.permissions.upsertTeamMember(owner, team.id, member, { role: "viewer" }),
+      app.permissions.upsertTeamMember(owner, team.id, member, { role: "editor" }),
+    ]);
+    expect(writes.map((write) => write.role)).toEqual(["viewer", "editor"]);
+
+    await app.permissions.upsertTeamMember(owner, team.id, admin, { role: "admin" });
+    const change = app.permissions.upsertTeamMember(admin, team.id, member, { role: "viewer" });
+    await app.permissions.removeTeamMember(owner, team.id, admin);
+    await expect(change).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect((await app.access.resolveSpace(member, team.id))?.role).toBe("editor");
+  });
+
+  it("returns the direct grant and link settings from each concurrent write", async () => {
+    const app = await createTestApplication();
+    const owner = await register(app, "owner");
+    const member = await register(app, "member");
+    const [space] = (await app.spaces.list(owner)).spaces;
+    if (!space) throw new Error("Personal space is missing");
+    const group = await app.nodes.create(owner, { spaceId: space.id, parentNodeId: null, name: "Shared" });
+    const grants = await Promise.all([
+      app.permissions.upsertNodeGrant(owner, group.id, member, { role: "viewer" }),
+      app.permissions.upsertNodeGrant(owner, group.id, member, { role: "editor" }),
+    ]);
+    expect(grants.map(({ role, effectiveRole }) => [role, effectiveRole])).toEqual([
+      ["viewer", "viewer"], ["editor", "editor"],
+    ]);
+    const links = await Promise.all([
+      app.permissions.updateNodeLinkSharing(owner, group.id, { enabled: true, role: "viewer" }),
+      app.permissions.updateNodeLinkSharing(owner, group.id, { enabled: false, role: "editor" }),
+    ]);
+    expect(links.map(({ enabled, role }) => [enabled, role])).toEqual([[true, "viewer"], [false, "editor"]]);
   });
 
   it("applies direct group Node grants to Resource access and editor mode", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "alice");
     const recipient = await register(application, "bob");
-    const space = application.spaces.list(owner).spaces[0];
+    const space = (await application.spaces.list(owner)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
-    const groupNode = application.nodes.create(owner, {
+    const groupNode = await application.nodes.create(owner, {
       spaceId: space.id,
       parentNodeId: null,
       name: "Shared group",
@@ -330,7 +364,7 @@ describe("permissions", () => {
     if (!resourceId) throw new Error("Created Resource is missing");
 
     expect(
-      application.permissions.upsertNodeGrant(
+      await application.permissions.upsertNodeGrant(
         owner,
         groupNode.id,
         recipient,
@@ -342,7 +376,7 @@ describe("permissions", () => {
       effectiveRole: "viewer",
     });
     expect(
-      application.views.listShared(recipient, {
+      await application.views.listShared(recipient, {
         cursor: undefined,
         limit: undefined,
       })
@@ -356,7 +390,7 @@ describe("permissions", () => {
       nextCursor: null,
     });
     expect(
-      application.resources.open(recipient, resourceId)
+      await application.resources.open(recipient, resourceId)
     ).toMatchObject({
       resource: {
         accessRole: "viewer",
@@ -365,7 +399,7 @@ describe("permissions", () => {
     });
 
     expect(
-      application.permissions.upsertNodeGrant(
+      await application.permissions.upsertNodeGrant(
         owner,
         created.body.node.id,
         recipient,
@@ -375,45 +409,45 @@ describe("permissions", () => {
       role: "editor",
       effectiveRole: "editor",
     });
+    expect((await application.resources.open(recipient, resourceId)).resource).toMatchObject({
+      kind: "univer", editorMode: "edit",
+    });
     expect(
-      application.resources.open(recipient, resourceId).resource.editorMode
-    ).toBe("edit");
-    expect(
-      application.permissions.removeNodeGrant(
+      await application.permissions.removeNodeGrant(
         owner,
         created.body.node.id,
         recipient
       )
     ).toEqual({ effectiveRole: "viewer" });
-    expect(
-      application.resources.open(recipient, resourceId).resource.editorMode
-    ).toBe("readOnly");
+    expect((await application.resources.open(recipient, resourceId)).resource).toMatchObject({
+      kind: "univer", editorMode: "readOnly",
+    });
 
     expect(
-      application.permissions.removeNodeGrant(
+      await application.permissions.removeNodeGrant(
         owner,
         groupNode.id,
         recipient
       )
     ).toEqual({ effectiveRole: null });
     expect(
-      application.access.resolveNode(recipient, groupNode.id)
+      await application.access.resolveNode(recipient, groupNode.id)
     ).toBeNull();
     expect(
-      application.views.listShared(recipient, {
+      (await application.views.listShared(recipient, {
         cursor: undefined,
         limit: undefined,
-      }).items
+      })).items
     ).toEqual([]);
   });
 
   it("applies one mutable Link Sharing policy to a personal Node subtree", async () => {
-    const application = createTestApplication();
+    const application = await createTestApplication();
     const owner = await register(application, "link-owner");
     const visitor = await register(application, "link-visitor");
-    const space = application.spaces.list(owner).spaces[0];
+    const space = (await application.spaces.list(owner)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
-    const groupNode = application.nodes.create(owner, {
+    const groupNode = await application.nodes.create(owner, {
       spaceId: space.id,
       parentNodeId: null,
       name: "Linked group",
@@ -434,7 +468,7 @@ describe("permissions", () => {
     if (!resourceId) throw new Error("Created Resource is missing");
 
     expect(
-      application.permissions.getNodeLinkSharing(owner, groupNode.id)
+      await application.permissions.getNodeLinkSharing(owner, groupNode.id)
     ).toEqual({
       enabled: false,
       role: "viewer",
@@ -445,10 +479,10 @@ describe("permissions", () => {
       owner: { username: "link-owner", kind: "human" },
       expiresAt: null,
     });
-    expect(application.access.resolveNode(visitor, groupNode.id)).toBeNull();
+    expect(await application.access.resolveNode(visitor, groupNode.id)).toBeNull();
 
     expect(
-      application.permissions.updateNodeLinkSharing(
+      await application.permissions.updateNodeLinkSharing(
         owner,
         groupNode.id,
         { enabled: true, role: "viewer" }
@@ -460,7 +494,7 @@ describe("permissions", () => {
       updatedBy: { id: owner },
     });
     expect(
-      application.access.resolveNode(visitor, groupNode.id)
+      await application.access.resolveNode(visitor, groupNode.id)
     ).toMatchObject({
       role: "viewer",
       navigationRootNodeId: groupNode.id,
@@ -473,33 +507,33 @@ describe("permissions", () => {
         share: false,
       },
     });
-    expect(application.resources.open(visitor, resourceId)).toMatchObject({
+    expect(await application.resources.open(visitor, resourceId)).toMatchObject({
       resource: { accessRole: "viewer", editorMode: "readOnly" },
     });
     expect(
-      application.views.listRecent(visitor, {
+      (await application.views.listRecent(visitor, {
         cursor: undefined,
         limit: undefined,
-      }).items
+      })).items
     ).toMatchObject([{ resource: { id: resourceId } }]);
     expect(
-      application.views.listShared(visitor, {
+      (await application.views.listShared(visitor, {
         cursor: undefined,
         limit: undefined,
-      }).items
+      })).items
     ).toEqual([]);
     expect(
-      application.views.listOwned(visitor, {
+      (await application.views.listOwned(visitor, {
         cursor: undefined,
         limit: undefined,
-      }).items
+      })).items
     ).toEqual([]);
 
-    application.permissions.updateNodeLinkSharing(owner, groupNode.id, {
+    await application.permissions.updateNodeLinkSharing(owner, groupNode.id, {
       enabled: true,
       role: "editor",
     });
-    expect(application.access.resolveResource(visitor, resourceId)).toMatchObject({
+    expect(await application.access.resolveResource(visitor, resourceId)).toMatchObject({
       node: {
         role: "editor",
         navigationRootNodeId: groupNode.id,
@@ -509,26 +543,26 @@ describe("permissions", () => {
         editContent: true,
       },
     });
-    expect(application.resources.open(visitor, resourceId).resource.editorMode).toBe(
-      "edit"
-    );
+    expect((await application.resources.open(visitor, resourceId)).resource).toMatchObject({
+      kind: "univer", editorMode: "edit",
+    });
 
-    application.permissions.updateNodeLinkSharing(owner, groupNode.id, {
+    await application.permissions.updateNodeLinkSharing(owner, groupNode.id, {
       enabled: false,
       role: "editor",
     });
-    expect(application.access.resolveResource(visitor, resourceId)).toBeNull();
+    expect(await application.access.resolveResource(visitor, resourceId)).toBeNull();
     expect(
-      application.views.listRecent(visitor, {
+      (await application.views.listRecent(visitor, {
         cursor: undefined,
         limit: undefined,
-      }).items
+      })).items
     ).toEqual([]);
   });
 });
 
-function createTestApplication(): SqliteTestApplication {
-  const application = createSqliteTestApplication(
+async function createTestApplication(): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,

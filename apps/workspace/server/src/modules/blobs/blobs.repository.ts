@@ -1,3 +1,4 @@
+import type { Principal } from "../identity/index.js";
 import type { BlobReplacementResult } from "./blobs.types.js";
 import type { StoredBlob } from "../../integrations/blob/blob-store.js";
 import type { OperationView } from "../resources/index.js";
@@ -84,29 +85,30 @@ export class BlobUploadStateConflictError extends Error {}
 export interface BlobsRepository {
   reserveReplacement(
     operationId: string,
-    userId: string,
+    actor: Principal,
     intent: BlobReplacementIntent,
     now: number,
-  ): { readonly objectKey: string; readonly result: BlobReplacementResult | null };
+  ): Promise<{ readonly objectKey: string; readonly currentEtag: string; readonly result: BlobReplacementResult | null }>;
   completeReplacement(
     operationId: string,
+    actor: Principal,
     intent: BlobReplacementIntent,
     objectKey: string,
     stored: StoredBlob,
     now: number,
-  ): BlobReplacementResult;
-  failReplacement(operationId: string, code: string, message: string, now: number): void;
-  pendingReplacementIds(): string[];
+  ): Promise<BlobReplacementResult>;
+  failReplacement(operationId: string, code: string, message: string, now: number): Promise<void>;
+  pendingReplacementIds(): Promise<string[]>;
   reserve(input: {
     readonly operationId: string;
     readonly actorUserId: string;
     readonly intent: BlobUploadIntent;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): ReservedBlobUpload;
-  find(uploadId: string, actorUserId: string): ReservedBlobUpload | null;
-  recoverInterruptedUploads(recoveredAt: number): number;
-  beginUpload(uploadId: string, updatedAt: number): boolean;
+  }): Promise<ReservedBlobUpload>;
+  find(uploadId: string, actorUserId: string): Promise<ReservedBlobUpload | null>;
+  recoverInterruptedUploads(recoveredAt: number): Promise<number>;
+  beginUpload(uploadId: string, updatedAt: number): Promise<boolean>;
   markUploaded(input: {
     readonly uploadId: string;
     readonly byteSize: number;
@@ -114,27 +116,28 @@ export interface BlobsRepository {
     readonly etag: string;
     readonly mediaType: string;
     readonly updatedAt: number;
-  }): BlobUploadRow;
+  }): Promise<BlobUploadRow>;
   resetUploadAfterFailure(
     uploadId: string,
     message: string,
     updatedAt: number
-  ): void;
-  complete(uploadId: string, completedAt: number): ReservedBlobUpload;
-  abort(uploadId: string, abortedAt: number): void;
-  expireDue(expiredAt: number, limit: number): number;
+  ): Promise<void>;
+  complete(uploadId: string, completedAt: number): Promise<ReservedBlobUpload>;
+  /** A completed or expired upload cannot be aborted or scheduled for object deletion. */
+  abort(uploadId: string, abortedAt: number): Promise<boolean>;
+  expireDue(expiredAt: number, limit: number): Promise<number>;
   claimDeletionJobs(input: {
     readonly workerId: string;
     readonly now: number;
     readonly leaseMs: number;
     readonly limit: number;
-  }): BlobDeletionJobRow[];
-  completeDeletionJob(jobId: string, workerId: string): void;
+  }): Promise<BlobDeletionJobRow[]>;
+  completeDeletionJob(jobId: string, workerId: string): Promise<void>;
   failDeletionJob(input: {
     readonly jobId: string;
     readonly workerId: string;
     readonly message: string;
     readonly nextAttemptAt: number;
     readonly updatedAt: number;
-  }): void;
+  }): Promise<void>;
 }

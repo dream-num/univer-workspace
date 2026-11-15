@@ -10,7 +10,7 @@ import { shutdownServer } from "../../server/src/server-lifecycle.js";
 describe("worktree change feed", () => {
   it("notifies the product audience after every committed Worktree change", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-worktree-feed-"));
-    const application = createSqliteTestApplication({
+    const application = await createSqliteTestApplication({
       host: "127.0.0.1",
       port: 3020,
       productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -94,9 +94,7 @@ describe("worktree change feed", () => {
           { name: "Updated Realtime Worktree" }
         );
       });
-      const personalSpace = application.spaces.list(
-        creator.view.user.id
-      ).spaces[0];
+      const personalSpace = (await application.spaces.list(creator.view.user.id)).spaces[0];
       if (!personalSpace) throw new Error("Personal space is missing");
       let unitId = "";
       await expectChange(creatorSocket, async () => {
@@ -225,7 +223,7 @@ describe("worktree change feed", () => {
 
   it("notifies both the previous and next audience when Team visibility changes", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-worktree-feed-"));
-    const application = createSqliteTestApplication({
+    const application = await createSqliteTestApplication({
       host: "127.0.0.1",
       port: 3020,
       productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -253,10 +251,10 @@ describe("worktree change feed", () => {
         displayName: "Worktree Feed Team Viewer",
         password: "correct horse battery staple",
       });
-      const team = application.spaces.createTeamSpace(owner.view.user.id, {
+      const team = await application.spaces.createTeamSpace(owner.view.user.id, {
         name: "Realtime Team",
       });
-      application.permissions.upsertTeamMember(
+      await application.permissions.upsertTeamMember(
         owner.view.user.id,
         team.id,
         viewer.view.user.id,

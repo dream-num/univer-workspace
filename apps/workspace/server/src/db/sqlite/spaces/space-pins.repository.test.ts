@@ -5,7 +5,7 @@ import type { SpacePinsRepository } from "../../../modules/spaces/space-pins.rep
 
 let database: SqliteDatabase;
 let pins: SpacePinsRepository;
-beforeEach(() => {
+beforeEach(async () => {
   database = new SqliteDatabase(":memory:");
   const repositories = createSqliteRepositories(database);
   database.connection.exec(`
@@ -13,7 +13,7 @@ beforeEach(() => {
     VALUES ('owner', 'owner', 'Owner', 1, 1)
   `);
   for (const id of ["alpha", "beta", "gamma"]) {
-    repositories.spaces.createTeamSpace({
+    await repositories.spaces.createTeamSpace({
       id, name: id, slug: id, publicRead: false, ownerUserId: "owner", createdAt: 1,
     });
   }

@@ -174,7 +174,10 @@ export function createWorkspaceApplication(
     dependencies.emailSender ??
     (config.emailAuth ? createEmailSender(config.emailAuth) : null);
   const identityRepository = repositories.identity;
-  const sessionSockets = createSessionSockets((sessionId) => identityRepository.findSession(sessionId) !== null);
+  const sessionSockets = createSessionSockets(async (sessionId, userId) => {
+    const session = await identityRepository.findSession(sessionId);
+    return session?.id === userId && !session.banned && session.expiresAt > Date.now();
+  });
   const onSessionsDeleted = sessionSockets.closeSessions;
   const accessTokens = createAccessTokenService({ repository: repositories.accessTokens, onSessionsDeleted });
   const identity = createIdentityModule({
@@ -215,12 +218,12 @@ export function createWorkspaceApplication(
         ...(config.univerLicense ? { license: config.univerLicense } : {}),
         commentUserProvider: {
           async getUsers(userIds) {
-            return identity.findUsers(userIds).map(protocolUser);
+            return (await identity.findUsers(userIds)).map(protocolUser);
           },
         },
         historyUserProvider: {
           async getUsers(userIds) {
-            return identity.findUsers(userIds).map(protocolUser);
+            return (await identity.findUsers(userIds)).map(protocolUser);
           },
         },
       }
@@ -288,8 +291,9 @@ export function createWorkspaceApplication(
       (collaboration
         ? createWorktreeBackend(collaboration.worktreeService)
         : unavailableWorktreeBackend()),
-    publishMergedAssets: (worktreeId, unitIds) =>
-      univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds),
+    async publishMergedAssets(worktreeId, unitIds) {
+      await univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds);
+    },
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
   const activity = createActivityModule({ access, worktrees, issues });
@@ -450,6 +454,7 @@ export function createWorkspaceApplication(
   app.use(notFoundHandler);
   app.use(errorHandler);
 
+  let initialization: Promise<void> | undefined;
   return {
     app,
     identity,
@@ -468,8 +473,14 @@ export function createWorkspaceApplication(
     skillDrafts,
     univerAssets,
     exchange,
-    // Retain the application startup hook; SDK History now owns its catch-up.
-    async initialize() {},
+    initialize() {
+      initialization ??= (async () => {
+        await identity.initialize();
+        await blobs.initialize();
+        await univerAssets.initialize();
+      })();
+      return initialization;
+    },
     attachWebSocket(server) {
       collaborationGateway?.attachWebSocket(server);
     },

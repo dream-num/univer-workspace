@@ -67,12 +67,12 @@ export type NodeAuthorizationRow = Pick<
 export type OwnedResourceRow = ResolvedNodeRow & ResourceMappingRow;
 
 export interface AccessRepository {
-  findResourceByUnitId(unitId: string): ResourceMappingRow | null;
-  findResource(resourceId: string): ResourceMappingRow | null;
-  findRequester(userId: string): Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">;
-  countPersonalFiles(userId: string, operationId: string | null): number;
-  resolveSpace(userId: string, spaceId: string): StoredSpaceAccess | null;
-  resolveNode(userId: string, nodeId: string): ResolvedNodeRow | null;
-  resolveNodeAuthorization(userId: string, nodeId: string): NodeAuthorizationRow | null;
-  resolveOwnedResources(userId: string, resourceIds: readonly string[]): OwnedResourceRow[];
+  findResourceByUnitId(unitId: string): Promise<ResourceMappingRow | null>;
+  findResource(resourceId: string): Promise<ResourceMappingRow | null>;
+  findRequester(userId: string): Promise<Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">>;
+  countPersonalFiles(userId: string, operationId: string | null): Promise<number>;
+  resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null>;
+  resolveNode(userId: string, nodeId: string): Promise<ResolvedNodeRow | null>;
+  resolveNodeAuthorization(userId: string, nodeId: string): Promise<NodeAuthorizationRow | null>;
+  resolveOwnedResources(userId: string, resourceIds: readonly string[]): Promise<OwnedResourceRow[]>;
 }

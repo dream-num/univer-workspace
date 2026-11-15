@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createSqliteTestApplication,
   type SqliteTestApplication,
@@ -12,6 +12,7 @@ import {
   collaborationCallOptions,
   createCollaborationRuntime,
   createUnitData,
+  UnitStoreError,
   type UnitStore,
 } from "../../server/src/integrations/univer/unit-store.js";
 import { createWorktreeBackend } from "../../server/src/integrations/univer/worktree-store.js";
@@ -33,11 +34,11 @@ afterEach(async () => {
 describe("Resources", () => {
   it("creates one collaboration Unit and one Node/Resource per idempotency key", async () => {
     const createdUnits: string[] = [];
-    const application = createTestApplication(async ({ unitId }) => {
+    const application = await createTestApplication(async ({ unitId }) => {
       createdUnits.push(unitId);
     });
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const operationId = "create-resource-operation-0001";
     const input = {
@@ -83,13 +84,93 @@ describe("Resources", () => {
     });
   });
 
+  it("rejects a reservation if the editor loses access before the transaction", async () => {
+    const createUnit = vi.fn(async () => {});
+    const application = await createTestApplication(createUnit);
+    const owner = await register(application, "resource-race-owner");
+    const editor = await register(application, "resource-race-editor");
+    const space = await application.spaces.createTeamSpace(owner, { name: "Research" });
+    await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "editor" });
+    const repo = application.repositories.resources;
+    const reserve = repo.reserveCreateResource.bind(repo);
+    vi.spyOn(repo, "reserveCreateResource").mockImplementationOnce(async (input) => {
+      await application.permissions.upsertTeamMember(owner, space.id, editor, { role: "viewer" });
+      return reserve(input);
+    });
+    const key = "create-resource-target-revoked";
+    await expect(application.resources.create(editor, key, {
+      kind: "univer", unitType: "sheet", name: "Budget", spaceId: space.id, parentNodeId: null,
+    })).rejects.toMatchObject({ code: "FORBIDDEN", status: 403 });
+    expect(await repo.getOperation(key, editor)).toBeNull();
+    expect(createUnit).not.toHaveBeenCalled();
+  });
+
+  it("keeps the reserved Unit identity when target access is lost during creation and later restored", async () => {
+    const created: string[] = [];
+    let revoke!: () => Promise<void>;
+    const application = await createTestApplication(async ({ unitId }) => {
+      created.push(unitId);
+      if (created.length === 1) await revoke();
+    });
+    const owner = await register(application, "resource-publish-owner");
+    const editor = await register(application, "resource-publish-editor");
+    const space = (await application.spaces.list(owner)).spaces[0]!;
+    const folder = await application.nodes.create(owner, { name: "Shared", spaceId: space.id, parentNodeId: null });
+    await application.permissions.upsertNodeGrant(owner, folder.id, editor, { role: "editor" });
+    revoke = async () => { await application.permissions.removeNodeGrant(owner, folder.id, editor); };
+    const key = "resource-target-changed-before-publish";
+    const input = { kind: "univer", unitType: "sheet", name: "Budget", spaceId: space.id, parentNodeId: folder.id };
+
+    await expect(application.resources.create(editor, key, input)).resolves.toMatchObject({
+      status: 202, body: { operation: { state: "failed", error: { code: "NOT_FOUND" } } },
+    });
+    expect(application.database.connection.prepare("SELECT COUNT(*) AS n FROM resources").get()).toEqual({ n: 0 });
+    await expect(application.operations.retry(editor, key)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    expect(created).toHaveLength(1);
+    await application.permissions.upsertNodeGrant(owner, folder.id, editor, { role: "editor" });
+    await expect(application.operations.retry(editor, key)).resolves.toMatchObject({ state: "completed" });
+    expect(created).toEqual([created[0], created[0]]);
+  });
+
+  it("allows one retry to claim a failed operation and excludes background recovery while it runs", async () => {
+    let calls = 0;
+    let started!: () => void;
+    let release!: () => void;
+    const retryStarted = new Promise<void>((resolve) => { started = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const application = await createTestApplication(async () => {
+      if (++calls === 1) throw new UnitStoreError("INVALID_UNIT", "Rejected by UnitStore", false);
+      started();
+      await gate;
+    });
+    const owner = await register(application, "concurrent-retry");
+    const space = (await application.spaces.list(owner)).spaces[0]!;
+    const key = "concurrent-create-retry-0001";
+    await expect(application.resources.create(owner, key, {
+      kind: "univer", name: "Retry", unitType: "sheet", spaceId: space.id, parentNodeId: null,
+    })).resolves.toMatchObject({ body: { operation: { state: "failed" } } });
+
+    const retries = Promise.allSettled([application.operations.retry(owner, key), application.operations.retry(owner, key)]);
+    await retryStarted;
+    try {
+      expect(await application.repositories.resources.claimDue("other-worker", Date.now(), Date.now() + 30_000, 1)).toEqual([]);
+    } finally {
+      release();
+    }
+    const results = await retries;
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((r) => r.status === "rejected")).toMatchObject({ reason: { code: "CONFLICT" } });
+    expect(calls).toBe(2);
+    expect(await application.operations.get(owner, key)).toMatchObject({ state: "completed" });
+  });
+
   it("creates a PDF Unit through the product API and lists it with its type", async () => {
     const requested: UnitType[] = [];
-    const application = createTestApplication(async ({ unitType }) => {
+    const application = await createTestApplication(async ({ unitType }) => {
       requested.push(unitType);
     });
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     const created = await application.resources.create(
@@ -109,7 +190,7 @@ describe("Resources", () => {
     });
     expect(requested).toEqual(["pdf"]);
     expect(
-      application.views.listOwned(userId, { cursor: undefined, limit: undefined })
+      await application.views.listOwned(userId, { cursor: undefined, limit: undefined })
     ).toMatchObject({
       items: [{ node: { name: "Brochure" }, resource: { unitType: "pdf" } }],
     });
@@ -126,9 +207,9 @@ describe("Resources", () => {
   });
 
   it("records recent only after a successful Resource open", async () => {
-    const application = createTestApplication(async () => {});
+    const application = await createTestApplication(async () => {});
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       userId,
@@ -146,7 +227,7 @@ describe("Resources", () => {
     if (!resourceId) throw new Error("Created Resource is missing");
 
     expect(
-      application.views.listOwned(userId, {
+      await application.views.listOwned(userId, {
         cursor: undefined,
         limit: undefined,
       })
@@ -169,7 +250,7 @@ describe("Resources", () => {
         .prepare("SELECT COUNT(*) AS count FROM recent_resources")
         .get()
     ).toMatchObject({ count: 0 });
-    const opened = application.resources.open(userId, resourceId);
+    const opened = await application.resources.open(userId, resourceId);
     expect(opened).toMatchObject({
       resource: {
         id: resourceId,
@@ -183,7 +264,7 @@ describe("Resources", () => {
       throw new Error("Created Resource is not a Univer Resource");
     }
     expect(
-      application.resources.getByUnit(userId, opened.resource.unitId)
+      await application.resources.getByUnit(userId, opened.resource.unitId)
     ).toMatchObject({
       resource: { id: resourceId },
       node: { id: created.body.node.id, name: "Plan" },
@@ -194,7 +275,7 @@ describe("Resources", () => {
         .get()
     ).toMatchObject({ count: 1 });
     expect(
-      application.views.listRecent(userId, {
+      await application.views.listRecent(userId, {
         cursor: undefined,
         limit: undefined,
       })
@@ -218,12 +299,12 @@ describe("Resources", () => {
 
   it("keeps an operation pending when collaboration creation can be retried", async () => {
     let attempt = 0;
-    const application = createTestApplication(async () => {
+    const application = await createTestApplication(async () => {
       attempt += 1;
       if (attempt === 1) throw new Error("temporary failure");
     });
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const operationId = "create-resource-operation-0003";
     const input = {
@@ -265,7 +346,7 @@ describe("Resources", () => {
     await expect(
       application.resources.resumeDue("test-worker")
     ).resolves.toBe(1);
-    expect(application.resources.getOperation(userId, operationId)).toMatchObject({
+    expect(await application.resources.getOperation(userId, operationId)).toMatchObject({
       state: "completed",
     });
     expect(attempt).toBe(2);
@@ -273,11 +354,11 @@ describe("Resources", () => {
 
   it("forwards initial Unit data with the server-reserved identity", async () => {
     let received: Parameters<UnitStore["createUnit"]>[0] | undefined;
-    const application = createTestApplication(async (input) => {
+    const application = await createTestApplication(async (input) => {
       received = input;
     });
     const userId = await register(application, "importer");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const initialData = {
       id: "client-unit-id",
@@ -308,7 +389,7 @@ describe("Resources", () => {
   });
 
   it("does not publish a Resource when collaboration returns another Unit identity", async () => {
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       testConfig(),
       {
         unitStore: {
@@ -320,7 +401,7 @@ describe("Resources", () => {
     );
     applications.push(application);
     const userId = await register(application, "identity-mismatch");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     await expect(
@@ -528,12 +609,12 @@ describe("Univer unit store", () => {
   });
 });
 
-function createTestApplication(
+async function createTestApplication(
   onCreateUnit: (
     input: Parameters<UnitStore["createUnit"]>[0]
   ) => Promise<void>
-): SqliteTestApplication {
-  const application = createSqliteTestApplication(
+): Promise<SqliteTestApplication> {
+  const application = await createSqliteTestApplication(
     testConfig(),
     {
       unitStore: {

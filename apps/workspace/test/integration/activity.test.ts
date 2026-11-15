@@ -27,7 +27,7 @@ async function setup() {
     discard: (id) => transition(id, "discarded"), reopen: (id) => transition(id, "draft"),
     addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused,
   };
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1", port: 0, productDatabase: { provider: "sqlite", filename: ":memory:" }, collaborationDatabaseFilename: ":memory:",
     secureCookies: false, sessionTtlMs: 600_000,
   }, { unitStore: { async createUnit(input) { return { unitId: input.unitId, headRevision: 1 }; } }, worktreeBackend: backend });
@@ -48,7 +48,7 @@ async function setup() {
     return { user: issued.view.user, cookie: `workspace_session=${issued.cookieValue}` };
   };
   const owner = await register("activity-owner");
-  const team = application.spaces.createTeamSpace(owner.user.id, { name: "Activity" });
+  const team = await application.spaces.createTeamSpace(owner.user.id, { name: "Activity" });
   const activity = async (spaceId = team.id, cookie = owner.cookie): Promise<RepositoryActivity> => {
     const response = await request(`/spaces/${spaceId}/activity?timeZone=Asia%2FShanghai`, cookie);
     expect(response.status).toBe(200);
@@ -104,9 +104,9 @@ describe("GET Space activity", () => {
     const discarded = await createPull(application, owner.user.id, team.id);
     const old = Date.now() - 40 * 86_400_000;
     application.database.connection.prepare("UPDATE worktrees SET created_at = ? WHERE id IN (?, ?)").run(old, merged.id, discarded.id);
-    const issue = application.issues.create(owner.user.id, team.id, { title: "Older issue" });
+    const issue = await application.issues.create(owner.user.id, team.id, { title: "Older issue" });
     application.database.connection.prepare("UPDATE issues SET created_at = ? WHERE id = ?").run(old, issue.id);
-    application.issues.update(owner.user.id, team.id, issue.number, { state: "closed" });
+    await application.issues.update(owner.user.id, team.id, issue.number, { state: "closed" });
     await application.worktrees.markReady(owner.user.id, merged.id);
     await application.worktrees.merge(owner.user.id, merged.id, "activity-merge-pull");
     await application.worktrees.discard(owner.user.id, discarded.id, "activity-discard-pull");
@@ -124,14 +124,14 @@ describe("GET Space activity", () => {
     const { application, register, owner, team, activity } = await setup();
     const member = await register("activity-member");
     const reader = await register("activity-reader");
-    application.permissions.upsertTeamMember(owner.user.id, team.id, member.user.id, { role: "editor" });
-    application.spaces.update(owner.user.id, team.id, { publicRead: true });
+    await application.permissions.upsertTeamMember(owner.user.id, team.id, member.user.id, { role: "editor" });
+    await application.spaces.update(owner.user.id, team.id, { publicRead: true });
     await createPull(application, owner.user.id, team.id, "private");
     const shared = await createPull(application, owner.user.id, team.id);
     const result = await activity(team.id, member.cookie);
     expect(result.events).toEqual([expect.objectContaining({ pull: expect.objectContaining({ id: shared.id }) })]);
     expect(result.days.reduce((sum, day) => sum + day.opened.unknown, 0)).toBe(1);
-    application.issues.create(owner.user.id, team.id, { title: "Public issue" });
+    await application.issues.create(owner.user.id, team.id, { title: "Public issue" });
     const publicResult = await activity(team.id, reader.cookie);
     expect(publicResult.events.map((event) => event.kind)).toEqual(["issue-opened"]);
   });
@@ -139,12 +139,12 @@ describe("GET Space activity", () => {
   it("returns only the owner's User Worktrees for personal Spaces, and hides them from others", async () => {
     const { application, request, register, owner, team, activity } = await setup();
     const other = await register("activity-other");
-    const personal = application.spaces.list(owner.user.id).spaces.find((space) => space.type === "personal");
+    const personal = (await application.spaces.list(owner.user.id)).spaces.find((space) => space.type === "personal");
     if (!personal) throw new Error("Missing personal space");
     const own = await createPull(application, owner.user.id);
     await createPull(application, other.user.id);
     await createPull(application, owner.user.id, team.id);
-    application.issues.create(owner.user.id, team.id, { title: "Team issue" });
+    await application.issues.create(owner.user.id, team.id, { title: "Team issue" });
     const result = await activity(personal.id);
     expect(result.complete).toBe(true);
     expect(result.events).toEqual([expect.objectContaining({ kind: "pull-opened", pull: expect.objectContaining({ id: own.id, spaceId: personal.id }) })]);

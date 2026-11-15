@@ -1,4 +1,5 @@
-import type { StatementSync } from "node:sqlite";
+import { assertCeiling, requesterCategory, resolveStoredContentAccess, resolveStoredNodeAccess, resolveStoredResourceAccess, resolveStoredSpaceAccess } from "../../../modules/access/index.js";
+import type { DatabaseSync, StatementSync } from "node:sqlite";
 import type { SqliteDatabase } from "../connection.js";
 import type {
   ResolvedNodeRow,
@@ -53,6 +54,61 @@ const requesterColumns = `
   (SELECT kind FROM users WHERE id = $userId) AS requester_kind,
   (SELECT owner_user_id IS NOT NULL FROM agents WHERE user_id = $userId) AS requester_claimed`;
 
+function readRequester(database: DatabaseSync, userId: string) {
+  return database.prepare(`SELECT ${requesterColumns}`).get({ userId }) as
+    Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">;
+}
+
+/**
+ * Files the User's Personal Space holds or is about to hold: Nodes with a Resource outside Trash,
+ * new-file intents of open pull requests, and creations still in flight. A file that
+ * `operationId` already accounts for is left out, so replaying an operation adds nothing.
+ */
+function countPersonalFiles(database: DatabaseSync, userId: string, operationId: string | null): number {
+  const row = database
+    .prepare(
+      `SELECT
+         (SELECT COUNT(*)
+          FROM resources
+          JOIN nodes ON nodes.id = resources.node_id
+          JOIN spaces ON spaces.id = nodes.space_id
+          WHERE spaces.type = 'personal'
+            AND spaces.owner_user_id = $userId
+            AND nodes.trash_batch_id IS NULL)
+         + (SELECT COUNT(*)
+            FROM worktree_node_intents AS intent
+            JOIN spaces ON spaces.id = intent.target_space_id
+            WHERE spaces.type = 'personal'
+              AND spaces.owner_user_id = $userId
+              AND intent.activated_at IS NULL
+              AND intent.discarded_at IS NULL)
+         + (SELECT COUNT(*)
+            FROM operations
+            WHERE actor_user_id = $userId
+              AND state = 'pending'
+              AND kind IN ('create_resource', 'create_blob_resource', 'create_worktree_unit'))
+         - EXISTS (
+             SELECT 1 FROM operations
+             WHERE id = $operationId AND actor_user_id = $userId AND state <> 'failed'
+           ) AS files`,
+    )
+    .get({ userId, operationId }) as { readonly files: number };
+  return row.files;
+}
+
+/** Read the principal and inventory on the same connection and transaction as the write. */
+export function assertFileQuota(
+  database: DatabaseSync,
+  userId: string,
+  adding: number,
+  operationId: string | null = null,
+): void {
+  const principal = requesterCategory(readRequester(database, userId));
+  if (principal === "agent_unclaimed") {
+    assertCeiling(principal, "createFiles", { held: countPersonalFiles(database, userId, operationId), adding });
+  }
+}
+
 export class SqliteAccessRepository implements AccessRepository {
   // Reuse SQL compilation, not authorization results. Every execution binds
   // the current actor and reads current data on this repository's connection.
@@ -61,7 +117,11 @@ export class SqliteAccessRepository implements AccessRepository {
 
   constructor(private readonly _database: SqliteDatabase) {}
 
-  findResourceByUnitId(unitId: string): ResourceMappingRow | null {
+  async findResourceByUnitId(unitId: string): Promise<ResourceMappingRow | null> {
+    return this.readUnitMapping(unitId);
+  }
+
+  private readUnitMapping(unitId: string): ResourceMappingRow | null {
     return (
       (this._database.connection
         .prepare(
@@ -86,7 +146,11 @@ export class SqliteAccessRepository implements AccessRepository {
     );
   }
 
-  findResource(resourceId: string): ResourceMappingRow | null {
+  async findResource(resourceId: string): Promise<ResourceMappingRow | null> {
+    return this.readResourceRow(resourceId);
+  }
+
+  private readResourceRow(resourceId: string): ResourceMappingRow | null {
     return (
       (this._database.connection
         .prepare(
@@ -114,50 +178,19 @@ export class SqliteAccessRepository implements AccessRepository {
     );
   }
 
-  findRequester(userId: string): Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed"> {
-    return this._database.connection
-      .prepare(`SELECT ${requesterColumns}`)
-      .get({ userId }) as Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">;
+  async findRequester(userId: string): Promise<Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">> {
+    return readRequester(this._database.connection, userId);
   }
 
-  /**
-   * Files the User's Personal Space holds or is about to hold: Nodes with a Resource outside Trash,
-   * new-file intents of open pull requests, and creations still in flight. A file that
-   * `operationId` already accounts for is left out, so replaying an operation adds nothing.
-   */
-  countPersonalFiles(userId: string, operationId: string | null): number {
-    const row = this._database.connection
-      .prepare(
-        `SELECT
-           (SELECT COUNT(*)
-            FROM resources
-            JOIN nodes ON nodes.id = resources.node_id
-            JOIN spaces ON spaces.id = nodes.space_id
-            WHERE spaces.type = 'personal'
-              AND spaces.owner_user_id = $userId
-              AND nodes.trash_batch_id IS NULL)
-           + (SELECT COUNT(*)
-              FROM worktree_node_intents AS intent
-              JOIN spaces ON spaces.id = intent.target_space_id
-              WHERE spaces.type = 'personal'
-                AND spaces.owner_user_id = $userId
-                AND intent.activated_at IS NULL
-                AND intent.discarded_at IS NULL)
-           + (SELECT COUNT(*)
-              FROM operations
-              WHERE actor_user_id = $userId
-                AND state = 'pending'
-                AND kind IN ('create_resource', 'create_blob_resource', 'create_worktree_unit'))
-           - EXISTS (
-               SELECT 1 FROM operations
-               WHERE id = $operationId AND actor_user_id = $userId AND state <> 'failed'
-             ) AS files`,
-      )
-      .get({ userId, operationId }) as { readonly files: number };
-    return row.files;
+  async countPersonalFiles(userId: string, operationId: string | null): Promise<number> {
+    return countPersonalFiles(this._database.connection, userId, operationId);
   }
 
-  resolveSpace(userId: string, spaceId: string): StoredSpaceAccess | null {
+  async resolveSpace(userId: string, spaceId: string): Promise<StoredSpaceAccess | null> {
+    return this.readSpaceRow(userId, spaceId);
+  }
+
+  private readSpaceRow(userId: string, spaceId: string): StoredSpaceAccess | null {
     const row = this._database.connection.prepare(`
       SELECT ${spaceAccessColumns}
       FROM spaces ${spaceMemberJoin}
@@ -166,7 +199,11 @@ export class SqliteAccessRepository implements AccessRepository {
     return row ? storedSpaceAccess(row) : null;
   }
 
-  resolveNode(userId: string, nodeId: string): ResolvedNodeRow | null {
+  async resolveNode(userId: string, nodeId: string): Promise<ResolvedNodeRow | null> {
+    return this.readNodeRow(userId, nodeId);
+  }
+
+  private readNodeRow(userId: string, nodeId: string): ResolvedNodeRow | null {
     return (
       ((this._resolveNodeStatement ??= this._database.connection.prepare(
         nodeAccessQuery(false),
@@ -174,7 +211,31 @@ export class SqliteAccessRepository implements AccessRepository {
     );
   }
 
-  resolveNodeAuthorization(userId: string, nodeId: string): NodeAuthorizationRow | null {
+  // Domain writes recheck these projections on the connection holding the write transaction.
+  readSpaceAccess(userId: string, spaceId: string) {
+    const row = this.readSpaceRow(userId, spaceId);
+    return row && resolveStoredSpaceAccess(userId, row);
+  }
+
+  readNodeAccess(userId: string, nodeId: string) {
+    return resolveStoredNodeAccess(userId, this.readNodeRow(userId, nodeId));
+  }
+
+  readResourceAccess(userId: string, resourceId: string) {
+    const mapping = this.readResourceRow(resourceId);
+    return mapping && resolveStoredResourceAccess(mapping, this.readNodeAccess(userId, mapping.node_id));
+  }
+
+  readUnitContentAccess(userId: string, unitId: string) {
+    const mapping = this.readUnitMapping(unitId);
+    return mapping && resolveStoredContentAccess(userId, mapping, this.readNodeAuthorization(userId, mapping.node_id));
+  }
+
+  async resolveNodeAuthorization(userId: string, nodeId: string): Promise<NodeAuthorizationRow | null> {
+    return this.readNodeAuthorization(userId, nodeId);
+  }
+
+  private readNodeAuthorization(userId: string, nodeId: string): NodeAuthorizationRow | null {
     return (
       ((this._resolveAuthorizationStatement ??= this._database.connection.prepare(
         nodeAccessQuery(true),
@@ -182,7 +243,7 @@ export class SqliteAccessRepository implements AccessRepository {
     );
   }
 
-  resolveOwnedResources(userId: string, resourceIds: readonly string[]): OwnedResourceRow[] {
+  async resolveOwnedResources(userId: string, resourceIds: readonly string[]): Promise<OwnedResourceRow[]> {
     if (resourceIds.length === 0) return [];
     return this._database.connection
       .prepare(`

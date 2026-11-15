@@ -1,3 +1,11 @@
+import type { NodeAccess } from "../access/index.js";
+import type { Principal } from "../identity/index.js";
+
+export interface NodePatch {
+  readonly name?: string;
+  readonly parentNodeId?: string | null;
+}
+
 export interface NodeCursor {
   readonly name: string;
   readonly id: string;
@@ -20,7 +28,7 @@ export interface NodesRepository {
     readonly reporterUserId: string | null;
     readonly reason: string;
     readonly createdAt: number;
-  }): void;
+  }): Promise<void>;
   createNode(input: {
     readonly id: string;
     readonly spaceId: string;
@@ -28,19 +36,14 @@ export interface NodesRepository {
     readonly name: string;
     readonly createdBy: string;
     readonly createdAt: number;
-  }): void;
+  }): Promise<NodeAccess>;
   listChildren(
     spaceId: string,
     parentNodeId: string | null,
     cursor: NodeCursor | null,
     limit: number
-  ): NodeListRow[];
-  breadcrumbs(nodeId: string): BreadcrumbRow[];
-  isSelfOrDescendant(nodeId: string, candidateId: string): boolean;
-  updateNode(input: {
-    readonly nodeId: string;
-    readonly name: string;
-    readonly parentNodeId: string | null;
-    readonly updatedAt: number;
-  }): void;
+  ): Promise<NodeListRow[]>;
+  breadcrumbs(nodeId: string): Promise<BreadcrumbRow[]>;
+  /** Authorize and apply the patch together so concurrent moves cannot form a cycle. */
+  updateNode(actor: Principal, nodeId: string, patch: NodePatch, updatedAt: number): Promise<NodeAccess>;
 }

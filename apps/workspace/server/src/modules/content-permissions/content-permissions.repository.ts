@@ -1,3 +1,5 @@
+import type { ResourceContentAccess, UnitType } from "../access/index.js";
+
 export interface ContentCollaborator {
   readonly userId: string;
   readonly role: number;
@@ -16,9 +18,34 @@ export interface ContentPermissionObject {
   readonly collaborators: readonly ContentCollaborator[];
 }
 
+/** Null fields preserve the current stored value when a client updates part of a rule. */
+export interface ContentPermissionUpdate {
+  readonly name: string | null;
+  readonly strategies: ContentPermissionObject["strategies"] | null;
+  readonly scope: { readonly read: number; readonly edit: number } | null;
+  readonly collaborators: readonly ContentCollaborator[] | null;
+}
+
+export type ContentPermissionWriteResult = "saved" | "denied" | "invalid-collaborator";
+
+export function canManageContentPermission(
+  userId: string,
+  creatorId: string,
+  resource: ResourceContentAccess | null,
+): boolean {
+  if (!resource?.capabilities.editContent) return false;
+  return creatorId === userId || resource.role === "owner" || resource.role === "admin";
+}
+
 export interface ContentPermissionsRepository {
-  get(unitId: string, objectId: string): ContentPermissionObject | null;
-  create(object: ContentPermissionObject): void;
-  update(object: ContentPermissionObject): void;
-  candidateUserIds(unitId: string): string[];
+  get(unitId: string, objectId: string): Promise<ContentPermissionObject | null>;
+  /** Both writes recheck actor and named collaborator access within the write transaction. */
+  create(object: ContentPermissionObject, unitType: UnitType): Promise<ContentPermissionWriteResult>;
+  update(
+    userId: string,
+    unitId: string,
+    objectId: string,
+    patch: ContentPermissionUpdate,
+  ): Promise<ContentPermissionWriteResult>;
+  candidateUserIds(unitId: string): Promise<string[]>;
 }

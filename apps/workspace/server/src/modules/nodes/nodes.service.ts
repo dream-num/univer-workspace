@@ -7,12 +7,13 @@ import type {
   SpaceAccess,
 } from "../access/index.js";
 import { resourceCapabilities } from "../access/access.service.js";
-import { assertNotDelegatedPageWrite } from "../blobs/html-view-guard.js";
 import { ANONYMOUS_USER_ID, createSourceRateLimiter, type Principal } from "../identity/index.js";
+import { nodeNotFound as notFound } from "./nodes.errors.js";
 import type {
   NodesRepository,
   BreadcrumbRow,
   NodeCursor,
+  NodePatch,
 } from "./nodes.repository.js";
 import type {
   Breadcrumb,
@@ -35,15 +36,15 @@ export interface NodesModule {
     userId: string,
     spaceId: string,
     page: PageRequest
-  ): NodePage;
-  get(userId: string, nodeId: string): NodeResponse;
+  ): Promise<NodePage>;
+  get(userId: string, nodeId: string): Promise<NodeResponse>;
   listChildren(
     userId: string,
     nodeId: string,
     page: PageRequest
-  ): NodePage;
-  create(userId: string, input: unknown): NodeSummary;
-  update(actor: Principal, nodeId: string, input: unknown): NodeSummary;
+  ): Promise<NodePage>;
+  create(userId: string, input: unknown): Promise<NodeSummary>;
+  update(actor: Principal, nodeId: string, input: unknown): Promise<NodeSummary>;
   /**
    * Files an abuse report on a Node the requester can read; anyone may, signed in or not. The
    * source IP is only the rate-limit key and is never stored.
@@ -53,7 +54,7 @@ export interface NodesModule {
     nodeId: string,
     input: unknown,
     originIp: string | undefined
-  ): { readonly id: string };
+  ): Promise<{ readonly id: string }>;
 }
 
 export function createNodesModule(options: {
@@ -64,23 +65,22 @@ export function createNodesModule(options: {
   const now = options.now ?? Date.now;
   const reportLimiter = createSourceRateLimiter(REPORT_LIMIT_PER_HOUR, now);
 
-  function listPage(
+  async function listPage(
     userId: string,
     space: SpaceAccess,
     parentNode: NodeAccess | null,
     pageRequest: PageRequest
-  ): NodePage {
+  ): Promise<NodePage> {
     const limit = validLimit(pageRequest.limit);
     const cursor = decodeCursor(pageRequest.cursor);
-    const rows = options.repository.listChildren(
+    const rows = await options.repository.listChildren(
       space.id,
       parentNode?.id ?? null,
       cursor,
       limit + 1
     );
-    const visible = rows
-      .map((row) => options.access.resolveNode(userId, row.id))
-      .filter((access): access is NodeAccess => access !== null);
+    const resolved = await Promise.all(rows.map((row) => options.access.resolveNode(userId, row.id)));
+    const visible = resolved.filter((node): node is NodeAccess => node !== null);
     const hasNext = visible.length > limit;
     const page = hasNext ? visible.slice(0, limit) : visible;
     const last = page.at(-1);
@@ -93,7 +93,7 @@ export function createNodesModule(options: {
         parentNode === null
           ? []
           : visibleBreadcrumbs(
-              options.repository.breadcrumbs(parentNode.id),
+              await options.repository.breadcrumbs(parentNode.id),
               parentNode.navigationRootNodeId
             ),
       nodes: page.map(nodeSummary),
@@ -105,111 +105,57 @@ export function createNodesModule(options: {
   }
 
   return {
-    listSpaceRoot(userId, spaceId, page) {
-      const space = options.access.resolveSpace(userId, spaceId);
+    async listSpaceRoot(userId, spaceId, page) {
+      const space = await options.access.resolveSpace(userId, spaceId);
       if (!space) throw notFound();
       return listPage(userId, space, null, page);
     },
 
-    get(userId, nodeId) {
-      const node = options.access.resolveNode(userId, nodeId);
+    async get(userId, nodeId) {
+      const node = await options.access.resolveNode(userId, nodeId);
       if (!node) throw notFound();
       const space =
-        options.access.resolveSpace(userId, node.spaceId) ??
+        await options.access.resolveSpace(userId, node.spaceId) ??
         syntheticSpace(node);
       return {
         node: nodeSummary(node),
         space: spaceSummary(space),
         breadcrumbs: visibleBreadcrumbs(
-          options.repository.breadcrumbs(node.id),
+          await options.repository.breadcrumbs(node.id),
           node.navigationRootNodeId
         ),
         navigationRootNodeId: node.navigationRootNodeId,
       };
     },
 
-    listChildren(userId, nodeId, page) {
-      const node = options.access.resolveNode(userId, nodeId);
+    async listChildren(userId, nodeId, page) {
+      const node = await options.access.resolveNode(userId, nodeId);
       if (!node || !node.capabilities.browseChildren) throw notFound();
       const space =
-        options.access.resolveSpace(userId, node.spaceId) ??
+        await options.access.resolveSpace(userId, node.spaceId) ??
         syntheticSpace(node);
       return listPage(userId, space, node, page);
     },
 
-    create(userId, inputValue) {
+    async create(userId, inputValue) {
       const input = validCreate(inputValue);
-      validateTarget(
-        userId,
-        input.spaceId,
-        input.parentNodeId,
-        options.access
-      );
-      const id = randomUUID();
-      const createdAt = now();
-      options.repository.createNode({
-        id,
-        spaceId: input.spaceId,
-        parentNodeId: input.parentNodeId,
-        name: input.name,
+      const node = await options.repository.createNode({
+        ...input,
+        id: randomUUID(),
         createdBy: userId,
-        createdAt,
+        createdAt: now(),
       });
-      const access = options.access.resolveNode(userId, id);
-      if (!access) throw new Error("Created Node is not discoverable.");
-      return nodeSummary(access);
+      return nodeSummary(node);
     },
 
-    update(actor, nodeId, inputValue) {
-      const userId = actor.user.id;
-      const patch = validPatch(inputValue);
-      const source = options.access.resolveNode(userId, nodeId);
-      if (!source) throw notFound();
-      if (patch.name !== undefined && !source.capabilities.rename) {
-        throw forbidden();
-      }
-      if (patch.name !== undefined && source.resourceKind === "blob") {
-        assertNotDelegatedPageWrite(actor, [patch.name]);
-      }
-      if (patch.parentNodeId !== undefined) {
-        if (!source.capabilities.move) throw forbidden();
-        if (
-          patch.parentNodeId !== null &&
-          options.repository.isSelfOrDescendant(
-            source.id,
-            patch.parentNodeId
-          )
-        ) {
-          throw new ApplicationError(
-            "CONFLICT",
-            409,
-            "A Node cannot be moved into itself or one of its descendants."
-          );
-        }
-        validateTarget(
-          userId,
-          source.spaceId,
-          patch.parentNodeId,
-          options.access
-        );
-      }
-      options.repository.updateNode({
-        nodeId,
-        name: patch.name ?? source.name,
-        parentNodeId:
-          patch.parentNodeId === undefined
-            ? source.parentNodeId
-            : patch.parentNodeId,
-        updatedAt: now(),
-      });
-      const updated = options.access.resolveNode(userId, nodeId);
-      if (!updated) throw new Error("Updated Node is not discoverable.");
-      return nodeSummary(updated);
+    async update(actor, nodeId, inputValue) {
+      const node = await options.repository.updateNode(actor, nodeId, validPatch(inputValue), now());
+      return nodeSummary(node);
     },
 
-    report(userId, nodeId, inputValue, originIp) {
+    async report(userId, nodeId, inputValue, originIp) {
       // A Node the requester cannot read is indistinguishable from a missing one, as on the Node route.
-      if (!options.access.resolveNode(userId, nodeId)) throw notFound();
+      if (!(await options.access.resolveNode(userId, nodeId))) throw notFound();
       const reason = validReportReason(inputValue);
       if (!reportLimiter.take(originIp)) {
         throw new ApplicationError(
@@ -219,7 +165,7 @@ export function createNodesModule(options: {
         );
       }
       const id = randomUUID();
-      options.repository.createReport({
+      await options.repository.createReport({
         id,
         nodeId,
         reporterUserId: userId === ANONYMOUS_USER_ID ? null : userId,
@@ -281,23 +227,6 @@ export function resourceSummary(access: NodeAccess): ResourceSummary | null {
   return null;
 }
 
-function validateTarget(
-  userId: string,
-  spaceId: string,
-  parentNodeId: string | null,
-  access: AccessResolver
-): void {
-  if (parentNodeId === null) {
-    const space = access.resolveSpace(userId, spaceId);
-    if (!space) throw notFound();
-    if (!space.capabilities.createAtRoot) throw forbidden();
-    return;
-  }
-  const parent = access.resolveNode(userId, parentNodeId);
-  if (!parent || parent.spaceId !== spaceId) throw notFound();
-  if (!parent.capabilities.createChildren) throw forbidden();
-}
-
 function syntheticSpace(node: NodeAccess): SpaceAccess {
   return {
     id: node.spaceId,
@@ -352,10 +281,7 @@ function validCreate(value: unknown): {
   };
 }
 
-function validPatch(value: unknown): {
-  readonly name?: string;
-  readonly parentNodeId?: string | null;
-} {
+function validPatch(value: unknown): NodePatch {
   const record = requiredRecord(value);
   const hasName = Object.hasOwn(record, "name");
   const hasParentNodeId = Object.hasOwn(record, "parentNodeId");
@@ -459,16 +385,4 @@ function encodeCursor(cursor: NodeCursor): string {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "The current user cannot perform this action."
-  );
-}
-
-function notFound(): ApplicationError {
-  return new ApplicationError("NOT_FOUND", 404, "The resource was not found.");
 }

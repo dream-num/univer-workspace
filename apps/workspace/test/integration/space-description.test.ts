@@ -7,7 +7,7 @@ import { createSqliteTestApplication } from "../support/sqlite/test-application.
 
 it("stores a trimmed Space description, validates it, and restricts edits to Space managers", async () => {
   const root = mkdtempSync(join(tmpdir(), "workspace-description-"));
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
@@ -40,7 +40,7 @@ it("stores a trimmed Space description, validates it, and restricts edits to Spa
       displayName: "Reader",
       password: "correct horse battery staple",
     });
-    const team = application.spaces.createTeamSpace(owner.view.user.id, {
+    const team = await application.spaces.createTeamSpace(owner.view.user.id, {
       name: "Repository",
       publicRead: true,
     });
@@ -70,12 +70,12 @@ it("stores a trimmed Space description, validates it, and restricts edits to Spa
       body: { description: "Docs and pages", name: "Renamed" },
     });
     expect(
-      application.spaces.get(reader.view.user.id, team.id),
+      await application.spaces.get(reader.view.user.id, team.id),
     ).toMatchObject({ description: "Docs and pages" });
     expect((await patch(owner.cookieValue, { description: "x".repeat(351) })).status).toBe(400);
     expect((await patch(owner.cookieValue, { description: 7 })).status).toBe(400);
     expect((await patch(reader.cookieValue, { description: "Hijack" })).status).toBe(403);
-    expect(application.spaces.get(owner.view.user.id, team.id).description).toBe("Docs and pages");
+    expect((await application.spaces.get(owner.view.user.id, team.id)).description).toBe("Docs and pages");
     expect(await patch(owner.cookieValue, { description: "" })).toMatchObject({
       status: 200,
       body: { description: "" },

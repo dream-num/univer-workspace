@@ -24,7 +24,7 @@ afterEach(async () => {
 
 describe("Node/Resource HTTP API", () => {
   it("supports Resource Nodes as parents and exposes no legacy routes", async () => {
-    const application = createSqliteTestApplication(
+    const application = await createSqliteTestApplication(
       {
         host: "127.0.0.1",
         port: 0,
@@ -49,7 +49,7 @@ describe("Node/Resource HTTP API", () => {
       password: "correct horse battery staple",
     });
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(issued.view.user.id).spaces[0];
+    const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space was not created.");
 
     const server = createServer(application.app);

@@ -9,17 +9,17 @@ export function createSpacesRouter(options: {
   const router = Router();
   router.use(json({ limit: "1mb" }));
 
-  router.get("/spaces", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.list(session.user.id));
+  router.get("/spaces", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.list(session.user.id));
   });
 
-  router.post("/team-spaces", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.post("/team-spaces", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response
       .status(201)
       .json(
-        options.spaces.createTeamSpace(session.user.id, {
+        await options.spaces.createTeamSpace(session.user.id, {
           name: request.body?.name,
           slug: request.body?.slug,
           publicRead: request.body?.publicRead,
@@ -27,47 +27,47 @@ export function createSpacesRouter(options: {
       );
   });
 
-  router.get("/spaces/lookup", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.lookup(session.user.id, request.query.owner, request.query.slug));
+  router.get("/spaces/lookup", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.lookup(session.user.id, request.query.owner, request.query.slug));
   });
 
-  router.get("/spaces/starred", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.listStarred(session.user.id));
+  router.get("/spaces/starred", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.listStarred(session.user.id));
   });
 
-  router.get("/spaces/explore", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.explore(session.user.id));
+  router.get("/spaces/explore", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.explore(session.user.id));
   });
 
   router.get("/spaces/pins", async (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(await options.spaces.getPins(session.user.id));
   });
 
   router.put("/spaces/pins", async (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(await options.spaces.setPins(session.user.id, request.body?.spaceIds));
   });
 
   router.delete("/spaces/pins", async (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(await options.spaces.resetPins(session.user.id));
   });
 
-  router.get("/spaces/:spaceId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/spaces/:spaceId", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.spaces.get(session.user.id, requiredParameter(request.params.spaceId))
+      await options.spaces.get(session.user.id, requiredParameter(request.params.spaceId))
     );
   });
 
-  router.patch("/spaces/:spaceId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.patch("/spaces/:spaceId", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.spaces.update(
+      await options.spaces.update(
         session.user.id,
         requiredParameter(request.params.spaceId),
         {
@@ -80,19 +80,19 @@ export function createSpacesRouter(options: {
     );
   });
 
-  router.get("/spaces/:spaceId/star", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.getStar(session.user.id, requiredParameter(request.params.spaceId)));
+  router.get("/spaces/:spaceId/star", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.getStar(session.user.id, requiredParameter(request.params.spaceId)));
   });
 
-  router.put("/spaces/:spaceId/star", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.setStar(session.user.id, requiredParameter(request.params.spaceId), true));
+  router.put("/spaces/:spaceId/star", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.setStar(session.user.id, requiredParameter(request.params.spaceId), true));
   });
 
-  router.delete("/spaces/:spaceId/star", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
-    response.json(options.spaces.setStar(session.user.id, requiredParameter(request.params.spaceId), false));
+  router.delete("/spaces/:spaceId/star", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
+    response.json(await options.spaces.setStar(session.user.id, requiredParameter(request.params.spaceId), false));
   });
 
   return router;

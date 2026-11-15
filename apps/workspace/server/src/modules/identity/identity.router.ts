@@ -19,8 +19,8 @@ export function createIdentityRouter(options: {
   const { identity } = options;
   router.use(json({ limit: "1mb" }));
 
-  router.get("/session", (request, response) => {
-    response.json(identity.getSession(request.headers.cookie));
+  router.get("/session", async (request, response) => {
+    response.json(await identity.getSession(request.headers.cookie));
   });
 
   router.post("/auth/password/register", async (request, response) => {
@@ -69,13 +69,13 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
-  router.post("/agents", (request, response) => {
+  router.post("/agents", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    const { user, expiresAt } = identity.createAgent({
+    const { user, expiresAt } = await identity.createAgent({
       label: agentLabel(request.body?.label),
       originIp: request.ip,
     });
-    const { token } = options.accessTokens.createPersonalToken({
+    const { token } = await options.accessTokens.createPersonalToken({
       userId: user.id,
       name: "agent",
     });
@@ -87,21 +87,21 @@ export function createIdentityRouter(options: {
     });
   });
 
-  router.post("/auth/guest", (request, response) => {
+  router.post("/auth/guest", async (request, response) => {
     response.set("Cache-Control", "no-store");
     // A cross-site POST must not replace the session of a signed-in User.
-    if (identity.getSession(request.headers.cookie).authenticated) {
+    if ((await identity.getSession(request.headers.cookie)).authenticated) {
       throw new ApplicationError(
         "CONFLICT",
         409,
         "Sign out before continuing as a guest agent."
       );
     }
-    const { user } = identity.createAgent({
+    const { user } = await identity.createAgent({
       label: agentLabel(request.body?.label),
       originIp: request.ip,
     });
-    const issued = identity.issueSession(user, "browser");
+    const issued = await identity.issueSession(user, "browser");
     setSessionCookie(response, identity, issued.cookieValue, options);
     response.status(201).json({ agent: { id: user.id, username: user.username } });
   });
@@ -111,19 +111,19 @@ export function createIdentityRouter(options: {
     response.status(201).json(identity.startCliAuthorization());
   });
 
-  router.post("/auth/cli/authorizations/approve", (request, response) => {
+  router.post("/auth/cli/authorizations/approve", async (request, response) => {
     response.set("Cache-Control", "no-store");
     response.json(
-      identity.approveCliAuthorization(
+      await identity.approveCliAuthorization(
         request.headers.cookie,
         request.body?.userCode
       )
     );
   });
 
-  router.post("/auth/cli/authorizations/exchange", (request, response) => {
+  router.post("/auth/cli/authorizations/exchange", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    const result = identity.exchangeCliAuthorization(
+    const result = await identity.exchangeCliAuthorization(
       request.body?.deviceCode
     );
     if (result.status === "pending") {
@@ -139,12 +139,12 @@ export function createIdentityRouter(options: {
     response.json(result.issuedSession.view);
   });
 
-  router.post("/auth/discord/bot-login", (request, response) => {
+  router.post("/auth/discord/bot-login", async (request, response) => {
     requireDiscordBotApiKey(
       request.get("x-api-key"),
       options.discordBotApiKey
     );
-    const issued = identity.loginWithDiscordBot({
+    const issued = await identity.loginWithDiscordBot({
       discordUserId: request.body?.discordUserId,
       username: request.body?.username,
       displayName: request.body?.displayName,
@@ -162,21 +162,21 @@ export function createIdentityRouter(options: {
     response.status(204).end();
   });
 
-  router.post("/auth/logout", (request, response) => {
-    identity.logout(request.headers.cookie);
+  router.post("/auth/logout", async (request, response) => {
+    await identity.logout(request.headers.cookie);
     response.clearCookie(identity.cookieName, { path: "/" });
     response.status(204).end();
   });
 
-  router.get("/auth/tokens", (request, response) => {
+  router.get("/auth/tokens", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    const { user } = identity.requireSession(request.headers.cookie);
-    response.json({ tokens: options.accessTokens.listPersonalTokens(user.id).map(toTokenView) });
+    const { user } = await identity.requireSession(request.headers.cookie);
+    response.json({ tokens: (await options.accessTokens.listPersonalTokens(user.id)).map(toTokenView) });
   });
 
-  router.post("/auth/agent-token", (request, response) => {
+  router.post("/auth/agent-token", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    const { user } = identity.requireInteractiveSession(request.headers.cookie);
+    const { user } = await identity.requireInteractiveSession(request.headers.cookie);
     const scopes: unknown = request.body?.scopes;
     if (!Array.isArray(scopes) || scopes.length > 2 || !scopes.includes("read") ||
       !scopes.every((scope) => scope === "read" || scope === "write" || scope === "publish") ||
@@ -189,7 +189,7 @@ export function createIdentityRouter(options: {
     if (!resource) {
       throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", 503, "MCP_RESOURCE_URLS must include the /mcp URL at PUBLIC_ORIGIN to issue agent tokens.");
     }
-    const issued = options.accessTokens.issueGrant({ userId: user.id, clientId: WORKSPACE_AGENTS_CLIENT_ID, scopes, resource });
+    const issued = await options.accessTokens.issueGrant({ userId: user.id, clientId: WORKSPACE_AGENTS_CLIENT_ID, scopes, resource });
     response.status(201).json({
       token: issued.accessToken,
       expiresAt: issued.grant.accessExpiresAt,
@@ -198,9 +198,9 @@ export function createIdentityRouter(options: {
     });
   });
 
-  router.post("/auth/tokens", (request, response) => {
+  router.post("/auth/tokens", async (request, response) => {
     response.set("Cache-Control", "no-store");
-    const { user } = identity.requireInteractiveSession(request.headers.cookie);
+    const { user } = await identity.requireInteractiveSession(request.headers.cookie);
     const { name, scopes, expiresAt } = request.body ?? {};
     if (typeof name !== "string") {
       throw new ApplicationError("INVALID_INPUT", 400, "name must be a string.", "name");
@@ -208,20 +208,20 @@ export function createIdentityRouter(options: {
     if (scopes !== undefined && !(Array.isArray(scopes) && scopes.every((scope) => typeof scope === "string"))) {
       throw new ApplicationError("INVALID_INPUT", 400, "scopes must be an array of strings.", "scopes");
     }
-    const created = options.accessTokens.createPersonalToken({ userId: user.id, name, scopes, expiresAt });
+    const created = await options.accessTokens.createPersonalToken({ userId: user.id, name, scopes, expiresAt });
     response.status(201).json({ token: created.token, record: toTokenView(created.record) });
   });
 
-  router.delete("/auth/tokens/:id", (request, response) => {
-    const { user } = identity.requireSession(request.headers.cookie);
-    if (!options.accessTokens.revokePersonalToken(user.id, request.params.id)) {
+  router.delete("/auth/tokens/:id", async (request, response) => {
+    const { user } = await identity.requireSession(request.headers.cookie);
+    if (!(await options.accessTokens.revokePersonalToken(user.id, request.params.id))) {
       throw new ApplicationError("NOT_FOUND", 404, "The token was not found.");
     }
     response.status(204).end();
   });
 
-  router.get("/auth/github/login", (request, response) => {
-    const started = identity.startGitHubOAuth({
+  router.get("/auth/github/login", async (request, response) => {
+    const started = await identity.startGitHubOAuth({
       intent: "login",
       returnTo: request.query.returnTo,
       cookieHeader: request.headers.cookie,
@@ -235,8 +235,8 @@ export function createIdentityRouter(options: {
     response.redirect(started.authorizationUrl);
   });
 
-  router.get("/auth/github/link", (request, response) => {
-    const started = identity.startGitHubOAuth({
+  router.get("/auth/github/link", async (request, response) => {
+    const started = await identity.startGitHubOAuth({
       intent: "link",
       returnTo: request.query.returnTo,
       cookieHeader: request.headers.cookie,
@@ -282,12 +282,12 @@ export function createIdentityRouter(options: {
     }
   });
 
-  router.delete("/auth/github", (request, response) => {
-    response.json(identity.unlinkGitHub(request.headers.cookie));
+  router.delete("/auth/github", async (request, response) => {
+    response.json(await identity.unlinkGitHub(request.headers.cookie));
   });
 
-  router.get("/auth/google/login", (request, response) => {
-    const started = identity.startGoogleOAuth({
+  router.get("/auth/google/login", async (request, response) => {
+    const started = await identity.startGoogleOAuth({
       intent: "login",
       returnTo: request.query.returnTo,
       cookieHeader: request.headers.cookie,
@@ -301,8 +301,8 @@ export function createIdentityRouter(options: {
     response.redirect(started.authorizationUrl);
   });
 
-  router.get("/auth/google/link", (request, response) => {
-    const started = identity.startGoogleOAuth({
+  router.get("/auth/google/link", async (request, response) => {
+    const started = await identity.startGoogleOAuth({
       intent: "link",
       returnTo: request.query.returnTo,
       cookieHeader: request.headers.cookie,
@@ -348,12 +348,12 @@ export function createIdentityRouter(options: {
     }
   });
 
-  router.delete("/auth/google", (request, response) => {
-    response.json(identity.unlinkGoogle(request.headers.cookie));
+  router.delete("/auth/google", async (request, response) => {
+    response.json(await identity.unlinkGoogle(request.headers.cookie));
   });
 
-  router.get("/auth/discord/login", (request, response) => {
-    const started = identity.startDiscordOAuth({
+  router.get("/auth/discord/login", async (request, response) => {
+    const started = await identity.startDiscordOAuth({
       intent: "login",
       returnTo: request.query.returnTo,
       cookieHeader: request.headers.cookie,
@@ -367,8 +367,8 @@ export function createIdentityRouter(options: {
     response.redirect(started.authorizationUrl);
   });
 
-  router.get("/auth/discord/link", (request, response) => {
-    const started = identity.startDiscordOAuth({
+  router.get("/auth/discord/link", async (request, response) => {
+    const started = await identity.startDiscordOAuth({
       intent: "link",
       returnTo: request.query.returnTo,
       cookieHeader: request.headers.cookie,
@@ -412,13 +412,13 @@ export function createIdentityRouter(options: {
     }
   });
 
-  router.delete("/auth/discord", (request, response) => {
-    response.json(identity.unlinkDiscord(request.headers.cookie));
+  router.delete("/auth/discord", async (request, response) => {
+    response.json(await identity.unlinkDiscord(request.headers.cookie));
   });
 
-  router.patch("/users/me", (request, response) => {
+  router.patch("/users/me", async (request, response) => {
     response.json(
-      identity.updateCurrentUser(request.headers.cookie, {
+      await identity.updateCurrentUser(request.headers.cookie, {
         username: request.body?.username,
         displayName: request.body?.displayName,
         avatarUrl: request.body?.avatarUrl,

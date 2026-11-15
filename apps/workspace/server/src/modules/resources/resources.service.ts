@@ -6,7 +6,6 @@ import {
 } from "../../integrations/univer/unit-store.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import {
-  assertCeiling,
   type AccessResolver,
   type ResourceAccess,
   type UnitType,
@@ -45,10 +44,10 @@ export interface ResourcesModule {
      */
     reserved?: { readonly unitId: string }
   ): Promise<CreateResourceResult>;
-  get(userId: string, resourceId: string): ResourceResponse;
-  getByUnit(userId: string, unitId: string): ResourceResponse;
-  open(userId: string, resourceId: string): ResourceOpenView;
-  getOperation(userId: string, operationId: string): OperationView;
+  get(userId: string, resourceId: string): Promise<ResourceResponse>;
+  getByUnit(userId: string, unitId: string): Promise<ResourceResponse>;
+  open(userId: string, resourceId: string): Promise<ResourceOpenView>;
+  getOperation(userId: string, operationId: string): Promise<OperationView>;
   retry(userId: string, operationId: string): Promise<OperationView>;
   resumeDue(workerId: string, limit?: number): Promise<number>;
 }
@@ -71,7 +70,7 @@ export function createResourcesModule(options: {
         reservation.payload
       );
     }
-    options.repository.markAttempt(reservation.row.id, now());
+    await options.repository.markAttempt(reservation.row.id, now());
     try {
       const created = await options.unitStore.createUnit({
         unitId: reservation.payload.unitId,
@@ -89,14 +88,14 @@ export function createResourcesModule(options: {
           false
         );
       }
-      options.repository.markUnitCreated(reservation.row.id, now());
-      const completed = options.repository.completeCreateResource({
+      await options.repository.markUnitCreated(reservation.row.id, now());
+      const completed = await options.repository.completeCreateResource({
         operationId: reservation.row.id,
         actorUserId: reservation.row.actor_user_id,
         payload: reservation.payload,
         completedAt: now(),
       });
-      return completedResult(
+      return await completedResult(
         reservation.created ? 201 : 200,
         completed,
         reservation.payload
@@ -104,14 +103,14 @@ export function createResourcesModule(options: {
     } catch (error) {
       const normalized = operationError(error);
       if (normalized.retryable) {
-        options.repository.markPendingError(
+        await options.repository.markPendingError(
           reservation.row.id,
           normalized,
           now() + 5_000,
           now()
         );
       } else {
-        options.repository.markFailed(
+        await options.repository.markFailed(
           reservation.row.id,
           normalized,
           now()
@@ -120,7 +119,7 @@ export function createResourcesModule(options: {
       return {
         status: 202,
         body: {
-          operation: getOperation(
+          operation: await getOperation(
             options.repository,
             reservation.row.actor_user_id,
             reservation.row.id
@@ -130,12 +129,12 @@ export function createResourcesModule(options: {
     }
   }
 
-  function completedResult(
+  async function completedResult(
     status: 200 | 201,
     row: ReservedCreateResource["row"],
     payload: CreateResourcePayload
-  ): CreateResourceResult {
-    const access = options.access.resolveResource(
+  ): Promise<CreateResourceResult> {
+    const access = await options.access.resolveResource(
       row.actor_user_id,
       payload.resourceId
     );
@@ -157,12 +156,7 @@ export function createResourcesModule(options: {
     async create(userId, operationIdValue, inputValue, reserved) {
       const operationId = validOperationId(operationIdValue);
       const intent = validCreateResource(inputValue);
-      validateTarget(userId, intent, options.access);
-      assertCeiling(options.access.principalCategory(userId), "createFiles", {
-        held: () => options.access.countPersonalFiles(userId, operationId),
-        adding: 1,
-      });
-      const reservation = options.repository.reserveCreateResource({
+      const reservation = await options.repository.reserveCreateResource({
         operationId,
         actorUserId: userId,
         payload: {
@@ -183,16 +177,16 @@ export function createResourcesModule(options: {
       return execute(reservation);
     },
 
-    get(userId, resourceId) {
-      const access = requireResourceAccess(options.access, userId, resourceId);
+    async get(userId, resourceId) {
+      const access = await requireResourceAccess(options.access, userId, resourceId);
       return {
         resource: resourceSummary(access.node)!,
         node: nodeSummary(access.node),
       };
     },
 
-    getByUnit(userId, unitId) {
-      const access = options.access.resolveUnit(userId, unitId);
+    async getByUnit(userId, unitId) {
+      const access = await options.access.resolveUnit(userId, unitId);
       if (!access) throw notFound();
       return {
         resource: resourceSummary(access.node)!,
@@ -200,8 +194,8 @@ export function createResourcesModule(options: {
       };
     },
 
-    open(userId, resourceId) {
-      const access = requireResourceAccess(options.access, userId, resourceId);
+    async open(userId, resourceId) {
+      const access = await requireResourceAccess(options.access, userId, resourceId);
       if (!access.capabilities.openContent) throw notFound();
       if (access.kind === "blob") {
         if (access.availability !== "ready") {
@@ -212,7 +206,7 @@ export function createResourcesModule(options: {
           );
         }
         if (userId !== ANONYMOUS_USER_ID) {
-          options.repository.recordRecent(userId, resourceId, now());
+          await options.repository.recordRecent(userId, resourceId, now());
         }
         return {
           resource: {
@@ -232,7 +226,7 @@ export function createResourcesModule(options: {
         };
       }
       if (userId !== ANONYMOUS_USER_ID) {
-        options.repository.recordRecent(userId, resourceId, now());
+        await options.repository.recordRecent(userId, resourceId, now());
       }
       return {
         resource: {
@@ -251,38 +245,26 @@ export function createResourcesModule(options: {
       };
     },
 
-    getOperation(userId, operationId) {
+    async getOperation(userId, operationId) {
       return getOperation(options.repository, userId, operationId);
     },
 
     async retry(userId, operationId) {
-      const existing = options.repository.getOperation(operationId, userId);
+      const existing = await options.repository.getOperation(operationId, userId);
       if (!existing) throw notFound();
-      if (existing.state !== "failed") {
+      const reservation = await options.repository.retry(operationId, userId, now());
+      if (!reservation) {
         throw new ApplicationError(
           "CONFLICT",
           409,
           "Only a failed operation can be retried."
         );
       }
-      assertCeiling(options.access.principalCategory(userId), "createFiles", {
-        held: () => options.access.countPersonalFiles(userId, operationId),
-        adding: 1,
-      });
-      options.repository.retry(operationId, userId, now());
-      const reservation = options.repository.reserveCreateResource({
-        operationId,
-        actorUserId: userId,
-        payload: JSON.parse(
-          existing.payload_json
-        ) as CreateResourcePayload,
-        createdAt: now(),
-      });
       return (await execute(reservation)).body.operation;
     },
 
     async resumeDue(workerId, limit = 20) {
-      const claimed = options.repository.claimDue(
+      const claimed = await options.repository.claimDue(
         workerId,
         now(),
         now() + 30_000,
@@ -292,22 +274,6 @@ export function createResourcesModule(options: {
       return claimed.length;
     },
   };
-}
-
-function validateTarget(
-  userId: string,
-  input: CreateResourceIntent,
-  access: AccessResolver
-): void {
-  if (input.parentNodeId === null) {
-    const space = access.resolveSpace(userId, input.spaceId);
-    if (!space) throw notFound();
-    if (!space.capabilities.createAtRoot) throw forbidden();
-    return;
-  }
-  const parent = access.resolveNode(userId, input.parentNodeId);
-  if (!parent || parent.spaceId !== input.spaceId) throw notFound();
-  if (!parent.capabilities.createChildren) throw forbidden();
 }
 
 function validCreateResource(value: unknown): CreateResourceIntent {
@@ -423,22 +389,22 @@ function assertSameIntent(
   }
 }
 
-function requireResourceAccess(
+async function requireResourceAccess(
   resolver: AccessResolver,
   userId: string,
   resourceId: string
-): ResourceAccess {
-  const access = resolver.resolveResource(userId, resourceId);
+): Promise<ResourceAccess> {
+  const access = await resolver.resolveResource(userId, resourceId);
   if (!access) throw notFound();
   return access;
 }
 
-function getOperation(
+async function getOperation(
   repository: ResourcesRepository,
   userId: string,
   operationId: string
-): OperationView {
-  const row = repository.getOperation(operationId, userId);
+): Promise<OperationView> {
+  const row = await repository.getOperation(operationId, userId);
   if (!row) throw notFound();
   return operationView(row);
 }
@@ -448,6 +414,9 @@ function operationError(error: unknown): {
   readonly message: string;
   readonly retryable: boolean;
 } {
+  if (error instanceof ApplicationError && (error.code === "NOT_FOUND" || error.code === "FORBIDDEN")) {
+    return { code: error.code, message: error.message, retryable: false };
+  }
   if (error instanceof UnitStoreError) {
     return {
       code: error.code,
@@ -465,14 +434,6 @@ function operationError(error: unknown): {
 
 function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "The current user cannot perform this action."
-  );
 }
 
 function notFound(): ApplicationError {

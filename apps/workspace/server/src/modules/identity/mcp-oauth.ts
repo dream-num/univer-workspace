@@ -190,17 +190,17 @@ export type ClientSource =
   | { readonly kind: "dcr"; readonly client: OAuthClientRecord }
   | { readonly kind: "cimd"; readonly clientId: CimdClientId };
 
-export function resolveClientSource(
+export async function resolveClientSource(
   raw: unknown,
   clients: ReadonlyMap<string, OAuthClient>,
   accessTokens: AccessTokenService,
   config: McpOAuthConfig | null,
-): ClientSource | null {
+): Promise<ClientSource | null> {
   if (typeof raw !== "string" || raw === "") return null;
   const client = clients.get(raw);
   if (client !== undefined) return { kind: "static", client };
   if (config === null) return null;
   if (config.cimdEnabled !== false && isCimdClientId(raw, [config.issuer, ...config.resources])) return { kind: "cimd", clientId: raw };
-  const registered = accessTokens.getClient(raw);
+  const registered = await accessTokens.getClient(raw);
   return registered === null ? null : { kind: "dcr", client: registered };
 }

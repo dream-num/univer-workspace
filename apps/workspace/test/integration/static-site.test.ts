@@ -31,7 +31,7 @@ it("previews only Nodes readable through anonymous public-repository and inherit
     BLOB_DIRECTORY: join(directory, "objects"),
     PUBLIC_ORIGIN: "https://workspace.example/",
   });
-  const workspace = createSqliteTestApplication(config, {
+  const workspace = await createSqliteTestApplication(config, {
     unitStore: { async createUnit(input) { return { unitId: input.unitId, headRevision: 1 }; } },
   });
   application = workspace;
@@ -39,18 +39,18 @@ it("previews only Nodes readable through anonymous public-repository and inherit
     username: "link-meta-owner", displayName: "Owner", password: "correct horse battery staple",
   });
   const userId = issued.view.user.id;
-  const personal = workspace.spaces.list(userId).spaces[0];
+  const personal = (await workspace.spaces.list(userId)).spaces[0];
   if (!personal) throw new Error("Personal space is missing");
-  const repository = workspace.spaces.createTeamSpace(userId, { name: "Public repository", publicRead: true });
+  const repository = await workspace.spaces.createTeamSpace(userId, { name: "Public repository", publicRead: true });
   const content = Buffer.from("<!doctype html><title>HTML content is not the metadata source</title>");
-  const upload = workspace.blobs.createUpload(interactivePrincipal(userId), crypto.randomUUID(), {
+  const upload = (await workspace.blobs.createUpload(interactivePrincipal(userId), crypto.randomUUID(), {
     spaceId: repository.id, parentNodeId: null, name: "Sales.univer.html",
     originalFilename: "Sales.univer.html", byteSize: content.length,
-  }).body.upload;
+  })).body.upload;
   await workspace.blobs.upload(userId, upload.id, String(content.length), Readable.from([content]));
   await workspace.blobs.complete(interactivePrincipal(userId), upload.id);
-  const parent = workspace.nodes.create(userId, { spaceId: personal.id, parentNodeId: null, name: "Shared folder" });
-  const child = workspace.nodes.create(userId, { spaceId: personal.id, parentNodeId: parent.id, name: "Personal document" });
+  const parent = await workspace.nodes.create(userId, { spaceId: personal.id, parentNodeId: null, name: "Shared folder" });
+  const child = await workspace.nodes.create(userId, { spaceId: personal.id, parentNodeId: parent.id, name: "Personal document" });
 
   const app = express();
   app.use("/api", createNodesRouter({ identity: workspace.identity, nodes: workspace.nodes }));
@@ -73,24 +73,24 @@ it("previews only Nodes readable through anonymous public-repository and inherit
   expect(publicHtml).toContain(`content="https://workspace.example/nodes/${upload.nodeId}?view=immersive"`);
   expect(await (await page(child.id, { cookie: `${workspace.identity.cookieName}=${issued.cookieValue}` })).text()).toBe(indexHtml);
 
-  workspace.permissions.updateNodeLinkSharing(userId, parent.id, { enabled: true, role: "editor" });
+  await workspace.permissions.updateNodeLinkSharing(userId, parent.id, { enabled: true, role: "editor" });
   expect((await api(child.id)).status).toBe(200);
   const sharedResponse = await page(child.id, { "Accept-Language": "zh-CN,zh;q=0.9" });
   expect(await sharedResponse.text()).toContain('content="分享自 Univer Workspace"');
   expect(sharedResponse.headers.get("vary")).toBe("Accept-Language");
-  workspace.permissions.updateNodeLinkSharing(userId, parent.id, { enabled: false, role: "editor" });
+  await workspace.permissions.updateNodeLinkSharing(userId, parent.id, { enabled: false, role: "editor" });
   expect((await api(child.id)).status).toBe(404);
   expect(await (await page(child.id)).text()).toBe(indexHtml);
 
-  workspace.nodes.update(interactivePrincipal(userId), upload.nodeId, { name: '<Sales & "growth">.univer.html' });
+  await workspace.nodes.update(interactivePrincipal(userId), upload.nodeId, { name: '<Sales & "growth">.univer.html' });
   expect(await (await page(upload.nodeId)).text()).toContain("<title>&lt;Sales &amp; &quot;growth&quot;&gt; · Univer Workspace</title>");
-  workspace.spaces.update(userId, repository.id, { publicRead: false });
+  await workspace.spaces.update(userId, repository.id, { publicRead: false });
   const revoked = await page(upload.nodeId, { "If-None-Match": publicResponse.headers.get("etag") ?? "" });
   expect(revoked.status).toBe(200);
   expect(await revoked.text()).toBe(indexHtml);
   expect((await api(upload.nodeId)).status).toBe(404);
-  workspace.spaces.update(userId, repository.id, { publicRead: true });
-  workspace.trash.trashNode(userId, upload.nodeId);
+  await workspace.spaces.update(userId, repository.id, { publicRead: true });
+  await workspace.trash.trashNode(userId, upload.nodeId);
   for (const id of [upload.nodeId, "missing"]) {
     expect((await api(id)).status).toBe(404);
     const response = await page(id);

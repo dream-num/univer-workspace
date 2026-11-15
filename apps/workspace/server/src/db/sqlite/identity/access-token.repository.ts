@@ -19,27 +19,27 @@ import {
 } from "../../../modules/identity/access-tokens.js";
 import { authenticateStoredPrincipal } from "../../../modules/identity/agent-activity.js";
 import { createSessionToken, hashSessionSecret, secretMatches } from "../../../modules/identity/session-token.js";
-import type { SqliteIdentityRepository } from "./identity.repository.js";
+import { findPrincipal, insertSession, touchUnclaimedAgent } from "./identity.repository.js";
 
 type Row = Record<string, unknown>;
 
 export class SqliteAccessTokenRepository implements AccessTokenRepository {
-  constructor(private readonly database: SqliteDatabase, private readonly identity: SqliteIdentityRepository) {}
+  constructor(private readonly database: SqliteDatabase) {}
 
-  insertPersonal(token: PersonalTokenRecord, tokenHash: string): void {
+  async insertPersonal(token: PersonalTokenRecord, tokenHash: string): Promise<void> {
     this.database.connection.prepare(
       `INSERT INTO personal_access_tokens (id, user_id, name, token_hash, scopes, created_at, expires_at)
        VALUES (?, ?, ?, ?, ?, ?, ?)`
     ).run(token.id, token.userId, token.name, tokenHash, token.scopes.join(" "), token.createdAt, token.expiresAt);
   }
 
-  listPersonal(userId: string): PersonalTokenRecord[] {
+  async listPersonal(userId: string): Promise<PersonalTokenRecord[]> {
     return this.database.connection.prepare(
       "SELECT * FROM personal_access_tokens WHERE user_id = ? ORDER BY created_at DESC, id"
     ).all(userId).map(toPersonalToken);
   }
 
-  revokePersonal(userId: string, id: string, at: number): readonly string[] | null {
+  async revokePersonal(userId: string, id: string, at: number): Promise<readonly string[] | null> {
     return this.database.transaction((db) => {
       const revoked = db.prepare(
         "UPDATE personal_access_tokens SET revoked_at = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL"
@@ -48,7 +48,7 @@ export class SqliteAccessTokenRepository implements AccessTokenRepository {
     });
   }
 
-  insertGrant(grant: OAuthGrantRecord, secrets: GrantSecrets): void {
+  async insertGrant(grant: OAuthGrantRecord, secrets: GrantSecrets): Promise<void> {
     this.database.transaction((db) => {
       db.prepare(
         `INSERT INTO oauth_grants
@@ -63,7 +63,7 @@ export class SqliteAccessTokenRepository implements AccessTokenRepository {
     });
   }
 
-  rotateGrant(input: Parameters<AccessTokenRepository["rotateGrant"]>[0]): RefreshOutcome {
+  async rotateGrant(input: Parameters<AccessTokenRepository["rotateGrant"]>[0]): Promise<RefreshOutcome> {
     const { id, secret, next } = input;
     return this.database.transaction((db): RefreshOutcome => {
       const row = this.grantRow(id);
@@ -95,11 +95,11 @@ export class SqliteAccessTokenRepository implements AccessTokenRepository {
     });
   }
 
-  revokeGrant(userId: string, id: string, at: number): readonly string[] | null {
+  async revokeGrant(userId: string, id: string, at: number): Promise<readonly string[] | null> {
     return this.database.transaction(() => this.revokeGrantNow(id, at, userId));
   }
 
-  revokeClientGrant(id: string, secret: string, refresh: boolean, clientId: string, at: number): readonly string[] | null {
+  async revokeClientGrant(id: string, secret: string, refresh: boolean, clientId: string, at: number): Promise<readonly string[] | null> {
     return this.database.transaction(() => {
       const row = this.grantRow(id);
       if (!row || row.client_id !== clientId ||
@@ -108,7 +108,11 @@ export class SqliteAccessTokenRepository implements AccessTokenRepository {
     });
   }
 
-  verifySubject(token: TokenCredential, resource: string, at: number): SubjectToken | null {
+  async verifySubject(token: TokenCredential, resource: string, at: number): Promise<SubjectToken | null> {
+    return this.verifySubjectNow(token, resource, at);
+  }
+
+  private verifySubjectNow(token: TokenCredential, resource: string, at: number): SubjectToken | null {
     const db = this.database.connection;
     if (token.kind === "pat") {
       const row = db.prepare("SELECT * FROM personal_access_tokens WHERE id = ?").get(token.id);
@@ -131,39 +135,39 @@ export class SqliteAccessTokenRepository implements AccessTokenRepository {
   }
 
   async exchangeSubject(token: TokenCredential, resource: string, maxTtlMs: number, now: () => number): Promise<ExchangedSession | null> {
-    return this.database.transaction(() => {
+    return this.database.transaction((db) => {
       const at = now();
-      const subject = this.verifySubject(token, resource, at);
+      const subject = this.verifySubjectNow(token, resource, at);
       if (!subject) return null;
-      const principal = authenticateStoredPrincipal(this.identity, this.identity.findPrincipal(subject.userId), at);
-      if (!principal) return null;
+      const authenticated = authenticateStoredPrincipal(findPrincipal(db, subject.userId), at);
+      if (!authenticated) return null;
+      const { principal, activity } = authenticated;
+      if (activity) touchUnclaimedAgent(db, { userId: principal.id }, at, activity.staleBefore, activity.expiresAt);
       const expiresAt = Math.min(at + maxTtlMs, subject.expiresAt ?? Infinity);
       const ttlMs = expiresAt - at;
       if (ttlMs < 1000) return null;
       const session = createSessionToken(at, expiresAt, "agent", { kind: subject.kind, id: subject.id });
-      this.identity.createSession(principal.id, session.stored);
+      insertSession(db, principal.id, session.stored);
       const { banned: _banned, ...user } = principal;
       return { user, subject, cookieValue: session.cookieValue, ttlMs };
     });
   }
 
-  insertClient(client: OAuthClientRecord): void {
-    this.database.connection.prepare(
-      "INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at) VALUES (?, ?, ?, ?)"
-    ).run(client.clientId, client.clientName, JSON.stringify(client.redirectUris), client.createdAt);
+  async insertClient(client: OAuthClientRecord, limit: number | null): Promise<boolean> {
+    const result = this.database.connection.prepare(`
+      INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at)
+      SELECT ?, ?, ?, ? WHERE ? IS NULL OR (SELECT COUNT(*) FROM oauth_clients) < ?
+    `).run(client.clientId, client.clientName, JSON.stringify(client.redirectUris), client.createdAt, limit, limit);
+    return result.changes > 0;
   }
 
-  getClient(clientId: string): OAuthClientRecord | null {
+  async getClient(clientId: string): Promise<OAuthClientRecord | null> {
     const row = this.database.connection.prepare("SELECT * FROM oauth_clients WHERE client_id = ?").get(clientId);
     return row ? {
       clientId: String(row.client_id), clientName: row.client_name as string | null,
       redirectUris: JSON.parse(String(row.redirect_uris)) as string[],
       createdAt: Number(row.created_at), lastUsedAt: row.last_used_at as number | null,
     } : null;
-  }
-
-  countClients(): number {
-    return Number(this.database.connection.prepare("SELECT count(*) AS n FROM oauth_clients").get()!.n);
   }
 
   private grantRow(id: string) {

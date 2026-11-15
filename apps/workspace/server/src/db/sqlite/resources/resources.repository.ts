@@ -1,17 +1,28 @@
+import { requireResourceTarget } from "../access/resource-target.js";
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { CreateResourcePayload } from "../../../modules/resources/resources.types.js";
 import type { OperationRow, ReservedCreateResource, ResourcesRepository } from "../../../modules/resources/resources.repository.js";
 
 export class SqliteResourcesRepository implements ResourcesRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(
+    private readonly _database: SqliteDatabase,
+    private readonly access: SqliteAccessRepository,
+  ) {}
 
-  reserveCreateResource(input: {
+  private requireTarget(actorUserId: string, payload: CreateResourcePayload): void {
+    requireResourceTarget(this.access, actorUserId, payload.spaceId, payload.parentNodeId, "The current user cannot perform this action.");
+  }
+
+  async reserveCreateResource(input: {
     readonly operationId: string;
     readonly actorUserId: string;
     readonly payload: CreateResourcePayload;
     readonly createdAt: number;
-  }): ReservedCreateResource {
+  }): Promise<ReservedCreateResource> {
     return this._database.transaction((database) => {
+      this.requireTarget(input.actorUserId, input.payload);
+      assertFileQuota(database, input.actorUserId, 1, input.operationId);
       const existing = database
         .prepare("SELECT * FROM operations WHERE id = ?")
         .get(input.operationId) as OperationRow | undefined;
@@ -54,7 +65,7 @@ export class SqliteResourcesRepository implements ResourcesRepository {
     });
   }
 
-  getOperation(operationId: string, actorUserId: string): OperationRow | null {
+  async getOperation(operationId: string, actorUserId: string): Promise<OperationRow | null> {
     return (
       (this._database.connection
         .prepare(
@@ -64,7 +75,7 @@ export class SqliteResourcesRepository implements ResourcesRepository {
     );
   }
 
-  markAttempt(operationId: string, attemptedAt: number): void {
+  async markAttempt(operationId: string, attemptedAt: number): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE operations
@@ -75,7 +86,7 @@ export class SqliteResourcesRepository implements ResourcesRepository {
       .run(attemptedAt, operationId);
   }
 
-  markUnitCreated(operationId: string, updatedAt: number): void {
+  async markUnitCreated(operationId: string, updatedAt: number): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE operations SET step = 'unit_created', updated_at = ?
@@ -84,12 +95,12 @@ export class SqliteResourcesRepository implements ResourcesRepository {
       .run(updatedAt, operationId);
   }
 
-  markPendingError(
+  async markPendingError(
     operationId: string,
     error: { readonly code: string; readonly message: string },
     nextAttemptAt: number,
     updatedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE operations
@@ -107,11 +118,11 @@ export class SqliteResourcesRepository implements ResourcesRepository {
       );
   }
 
-  markFailed(
+  async markFailed(
     operationId: string,
     error: { readonly code: string; readonly message: string },
     updatedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE operations
@@ -123,12 +134,12 @@ export class SqliteResourcesRepository implements ResourcesRepository {
       .run(error.code, error.message, updatedAt, operationId);
   }
 
-  claimDue(
+  async claimDue(
     workerId: string,
     now: number,
     leaseExpiresAt: number,
     limit: number
-  ): ReservedCreateResource[] {
+  ): Promise<ReservedCreateResource[]> {
     return this._database.transaction((database) => {
       const rows = database
         .prepare(
@@ -156,32 +167,33 @@ export class SqliteResourcesRepository implements ResourcesRepository {
     });
   }
 
-  retry(operationId: string, actorUserId: string, updatedAt: number): boolean {
-    return (
-      this._database.connection
-        .prepare(
-          `UPDATE operations
-           SET state = 'pending', next_attempt_at = ?,
-               last_error_code = NULL, last_error_message = NULL,
-               updated_at = ?
-           WHERE id = ? AND actor_user_id = ?
-             AND kind = 'create_resource' AND state = 'failed'`
-        )
-        .run(updatedAt, updatedAt, operationId, actorUserId).changes > 0
-    );
+  async retry(operationId: string, actorUserId: string, updatedAt: number): Promise<ReservedCreateResource | null> {
+    return this._database.transaction((db) => {
+      const row = db.prepare(`UPDATE operations
+         SET state = 'pending', next_attempt_at = ?, last_error_code = NULL,
+             last_error_message = NULL, lease_owner = 'product-api', lease_expires_at = ?, updated_at = ?
+         WHERE id = ? AND actor_user_id = ? AND kind = 'create_resource' AND state = 'failed' RETURNING *`)
+        .get(updatedAt, updatedAt + 60_000, updatedAt, operationId, actorUserId) as OperationRow | undefined;
+      if (!row) return null;
+      const payload = parsePayload(row.payload_json);
+      this.requireTarget(actorUserId, payload);
+      assertFileQuota(db, actorUserId, 0);
+      return { created: false, row, payload };
+    });
   }
 
-  completeCreateResource(input: {
+  async completeCreateResource(input: {
     readonly operationId: string;
     readonly actorUserId: string;
     readonly payload: CreateResourcePayload;
     readonly completedAt: number;
-  }): OperationRow {
+  }): Promise<OperationRow> {
     return this._database.transaction((database) => {
       const existing = database
         .prepare("SELECT 1 FROM resources WHERE id = ?")
         .get(input.payload.resourceId);
       if (!existing) {
+        this.requireTarget(input.actorUserId, input.payload);
         database
           .prepare(
             `INSERT INTO nodes
@@ -245,11 +257,11 @@ export class SqliteResourcesRepository implements ResourcesRepository {
     });
   }
 
-  recordRecent(
+  async recordRecent(
     userId: string,
     resourceId: string,
     openedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `INSERT INTO recent_resources (user_id, resource_id, last_opened_at)

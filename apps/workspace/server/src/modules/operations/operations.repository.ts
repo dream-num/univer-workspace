@@ -25,12 +25,12 @@ export interface OperationRow {
 }
 
 export interface OperationsRepository {
-  get(operationId: string, actorUserId: string): OperationRow | null;
-  retry(operationId: string, actorUserId: string, retriedAt: number): boolean;
+  get(operationId: string, actorUserId: string): Promise<OperationRow | null>;
+  retry(operationId: string, actorUserId: string, retriedAt: number): Promise<boolean>;
   fail(
     operationId: string,
     actorUserId: string,
     error: { readonly code: string; readonly message: string },
     failedAt: number
-  ): void;
+  ): Promise<void>;
 }

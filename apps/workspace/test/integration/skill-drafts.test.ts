@@ -35,7 +35,7 @@ const initialFiles = () => [
 async function harness() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-skill-drafts-"));
   directories.push(directory);
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
@@ -61,7 +61,7 @@ async function harness() {
   });
   const userId = issued.view.user.id;
   const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-  const space = application.spaces.list(userId).spaces[0]!;
+  const space = (await application.spaces.list(userId)).spaces[0]!;
   const server = createServer(application.app);
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -110,12 +110,12 @@ async function harness() {
         "SELECT n.id, n.parent_id, n.name FROM nodes n LEFT JOIN resources r ON r.node_id = n.id WHERE r.id IS NULL AND n.trash_batch_id IS NULL ORDER BY n.name",
       )
       .all();
-  const delegated = () => {
+  const delegated = async () => {
     db.prepare(
       "INSERT INTO personal_access_tokens (id, user_id, name, token_hash, scopes, created_at) VALUES ('pat', ?, 'Agent', 'hash', 'read write publish', 1)",
     ).run(userId);
-    const issued = application.identity.issueSession(
-      application.identity.requireSession(cookie).user,
+    const issued = await application.identity.issueSession(
+      (await application.identity.requireSession(cookie)).user,
       "agent",
       { issuedFor: { kind: "pat", id: "pat" } },
     );
@@ -204,12 +204,12 @@ describe("Skill draft HTTP and atomic publication", () => {
   });
   it("publishes every file into the tree, adopts objects and reuses destination folders", async () => {
     const c = await harness();
-    const agents = c.application.nodes.create(c.userId, {
+    const agents = await c.application.nodes.create(c.userId, {
       spaceId: c.space.id,
       parentNodeId: null,
       name: ".agents",
     });
-    const skills = c.application.nodes.create(c.userId, {
+    const skills = await c.application.nodes.create(c.userId, {
       spaceId: c.space.id,
       parentNodeId: agents.id,
       name: "skills",
@@ -268,7 +268,7 @@ describe("Skill draft HTTP and atomic publication", () => {
     );
     expect((await c.publish(draft)).status).toBe(409);
     expect(c.files()).toEqual(before);
-    expect(c.application.skillDrafts.get(c.userId, draft.id).state).toBe("conflicted");
+    expect((await c.application.skillDrafts.get(c.userId, draft.id)).state).toBe("conflicted");
     expect(c.db.prepare("SELECT count(*) AS n FROM object_deletion_jobs").get()?.n).toBe(3);
   });
   it.each(["etag", "vanished", "added"])(
@@ -299,7 +299,7 @@ describe("Skill draft HTTP and atomic publication", () => {
       const before = c.files();
       expect((await c.publish(draft)).status).toBe(409);
       expect(c.files()).toEqual(before);
-      expect(c.application.skillDrafts.get(c.userId, draft.id).state).toBe("conflicted");
+      expect((await c.application.skillDrafts.get(c.userId, draft.id)).state).toBe("conflicted");
     },
   );
   it("replaces in place, preserves keep files and moves removed files to Trash", async () => {
@@ -350,13 +350,13 @@ describe("Skill draft HTTP and atomic publication", () => {
       const draft = await c.submit();
       let parentId: string | null = null;
       for (const segment of [".agents", "skills", "weekly-report"]) {
-        const folder = c.application.nodes.create(c.userId, {
+        const folder = await c.application.nodes.create(c.userId, {
           spaceId: c.space.id,
           parentNodeId: parentId,
           name: segment,
         });
         if (segment === name)
-          c.application.nodes.create(c.userId, {
+          await c.application.nodes.create(c.userId, {
             spaceId: c.space.id,
             parentNodeId: parentId,
             name: segment,
@@ -366,7 +366,7 @@ describe("Skill draft HTTP and atomic publication", () => {
       if (name === "SKILL.md") {
         // Duplicate file identities matter independently of extension or content.
         for (let i = 0; i < 2; i++) {
-          const node = c.application.nodes.create(c.userId, {
+          const node = await c.application.nodes.create(c.userId, {
             spaceId: c.space.id,
             parentNodeId: parentId,
             name,
@@ -385,13 +385,13 @@ describe("Skill draft HTTP and atomic publication", () => {
       }
       const before = c.files();
       expect((await c.publish(draft)).status).toBe(409);
-      expect(c.application.skillDrafts.get(c.userId, draft.id).state).toBe("pending");
+      expect((await c.application.skillDrafts.get(c.userId, draft.id)).state).toBe("pending");
       expect(c.files()).toEqual(before);
     },
   );
   it("allows delegated create/read but only the author's interactive session can decide", async () => {
     const c = await harness();
-    const delegated = c.delegated();
+    const delegated = await c.delegated();
     const draft = await c.submit(c.body(), crypto.randomUUID(), delegated);
     expect((await c.send(`/${draft.id}`, undefined, undefined, delegated)).status).toBe(200);
     expect((await c.publish(draft, delegated)).status).toBe(403);
@@ -410,13 +410,13 @@ describe("Skill draft HTTP and atomic publication", () => {
       .prepare("UPDATE skill_drafts SET state = 'receiving', expires_at = 1 WHERE id = ?")
       .run(receiving.id);
     expect((await c.send(`/${receiving.id}`)).status).toBe(404);
-    expect(c.application.skillDrafts.expireDue(Date.now(), 25)).toBe(2);
+    expect(await c.application.skillDrafts.expireDue(Date.now(), 25)).toBe(2);
     expect(c.db.prepare("SELECT state FROM skill_drafts").all()).toEqual([
       { state: "expired" },
       { state: "expired" },
     ]);
     expect(c.db.prepare("SELECT count(*) AS n FROM object_deletion_jobs").get()?.n).toBe(6);
-    expect(c.application.skillDrafts.expireDue(Date.now(), 25)).toBe(0);
+    expect(await c.application.skillDrafts.expireDue(Date.now(), 25)).toBe(0);
     expect((await c.publish(pending)).status).toBe(409);
   });
   it("blocks unsafe content at publish, enforces byte limits and rejects invalid evidence", async () => {
@@ -424,7 +424,7 @@ describe("Skill draft HTTP and atomic publication", () => {
     const draft = await c.submit(c.body([{ path: "SKILL.md", text: "bad frontmatter" }]));
     expect(draft.compatibility).toBe("blocked");
     expect((await c.publish(draft)).status).toBe(409);
-    expect(c.application.skillDrafts.get(c.userId, draft.id).state).toBe("pending");
+    expect((await c.application.skillDrafts.get(c.userId, draft.id)).state).toBe("pending");
     expect(c.files()).toHaveLength(0);
     expect(
       (
@@ -464,7 +464,7 @@ describe("Skill draft HTTP and atomic publication", () => {
 
 async function uploadSource(c: Awaited<ReturnType<typeof harness>>, name: string, bytes: Uint8Array, parentNodeId: string | null = null) {
   const actor = interactivePrincipal(c.userId);
-  const reserved = c.application.blobs.createUpload(actor, crypto.randomUUID(), {
+  const reserved = await c.application.blobs.createUpload(actor, crypto.randomUUID(), {
     spaceId: c.space.id, parentNodeId, name, originalFilename: name, byteSize: bytes.byteLength,
   });
   await c.application.blobs.upload(c.userId, reserved.body.upload.id, String(bytes.byteLength), Readable.from([bytes]));
@@ -511,7 +511,7 @@ describe("Skill source HTTP and draft imports", () => {
     expect((await c.send("", { ...body, from: { ...body.from, overrides: [{ path: "../bad", text: "bad" }] } }, crypto.randomUUID())).status).toBe(400);
     expect((await c.send("", { ...body, from: { ...body.from, overrides: [{ path: "SKILL.md", text: null }] } }, crypto.randomUUID())).status).toBe(400);
     const actor = interactivePrincipal(c.userId);
-    const resource = c.application.access.resolveResource(c.userId, uploaded.resourceId);
+    const resource = await c.application.access.resolveResource(c.userId, uploaded.resourceId);
     if (!resource || resource.kind !== "blob") throw new Error("Missing source blob");
     await c.application.blobs.replace(actor, resource.id, crypto.randomUUID(), `"${resource.etag}"`, "7", Readable.from([Buffer.from("changed")]));
     expect((await c.sourceRead({ source })).status).toBe(409);
@@ -525,7 +525,7 @@ describe("Skill source HTTP and draft imports", () => {
   });
   it("pins a folder manifest and pages text with source-bound cursors", async () => {
     const c = await harness();
-    const folder = c.application.nodes.create(c.userId, { spaceId: c.space.id, name: "source-folder", parentNodeId: null });
+    const folder = await c.application.nodes.create(c.userId, { spaceId: c.space.id, name: "source-folder", parentNodeId: null });
     await uploadSource(c, "SKILL.md", Buffer.from(skill()), folder.id);
     const text = "😀\"\n".repeat(24000);
     await uploadSource(c, "guide.txt", Buffer.from(text), folder.id);

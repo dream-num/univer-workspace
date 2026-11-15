@@ -1,4 +1,3 @@
-import { createAccessResolver } from "../../modules/access/index.js";
 import type { ProductDatabase, ProductDatabaseConfig, ProductRepositories } from "../product-database.js";
 import type { SqliteDatabase } from "./connection.js";
 import { openWorkspaceDatabase } from "./initialize.js";
@@ -27,23 +26,23 @@ export function createSqliteRepositories(database: SqliteDatabase): ProductRepos
   const identity = new SqliteIdentityRepository(database);
   return {
     access,
-    blobs: new SqliteBlobsRepository(database),
-    contentPermissions: new SqliteContentPermissionsRepository(database),
-    htmlViewDrafts: new SqliteHtmlViewDraftsRepository(database),
+    blobs: new SqliteBlobsRepository(database, access),
+    contentPermissions: new SqliteContentPermissionsRepository(database, access),
+    htmlViewDrafts: new SqliteHtmlViewDraftsRepository(database, access),
     identity,
-    accessTokens: new SqliteAccessTokenRepository(database, identity),
-    issues: new SqliteIssuesRepository(database, createAccessResolver(access)),
-    nodes: new SqliteNodesRepository(database),
+    accessTokens: new SqliteAccessTokenRepository(database),
+    issues: new SqliteIssuesRepository(database, access),
+    nodes: new SqliteNodesRepository(database, access),
     operations: new SqliteOperationsRepository(database),
-    permissions: new SqlitePermissionsRepository(database),
-    resources: new SqliteResourcesRepository(database),
-    skillDrafts: new SqliteSkillDraftsRepository(database),
+    permissions: new SqlitePermissionsRepository(database, access),
+    resources: new SqliteResourcesRepository(database, access),
+    skillDrafts: new SqliteSkillDraftsRepository(database, access),
     spacePins: new SqliteSpacePinsRepository(database),
     spaces: new SqliteSpacesRepository(database),
-    trash: new SqliteTrashRepository(database),
+    trash: new SqliteTrashRepository(database, access),
     univerAssets: new SqliteUniverAssetsRepository(database),
     views: new SqliteViewsRepository(database),
-    worktrees: new SqliteWorktreesRepository(database),
+    worktrees: new SqliteWorktreesRepository(database, access),
   };
 }
 

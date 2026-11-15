@@ -87,12 +87,12 @@ export function createAccessTokenService(options: {
   }
 
   return {
-    createPersonalToken(input: {
+    async createPersonalToken(input: {
       readonly userId: string;
       readonly name: string;
       readonly scopes?: readonly string[];
       readonly expiresAt?: number | null;
-    }): { readonly token: string; readonly record: PersonalTokenRecord } {
+    }): Promise<{ readonly token: string; readonly record: PersonalTokenRecord }> {
       const name = input.name.trim();
       if (name.length === 0 || name.length > MAX_TOKEN_NAME_LENGTH) {
         throw new ApplicationError("INVALID_INPUT", 400, `Token name must be 1 to ${MAX_TOKEN_NAME_LENGTH} characters.`, "name");
@@ -107,24 +107,24 @@ export function createAccessTokenService(options: {
         id: minted.id, userId: input.userId, name, scopes, createdAt,
         expiresAt: input.expiresAt ?? null, lastUsedAt: null, revokedAt: null,
       };
-      repository.insertPersonal(record, minted.hash);
+      await repository.insertPersonal(record, minted.hash);
       return { token: minted.token, record };
     },
 
-    listPersonalTokens(userId: string): PersonalTokenRecord[] {
+    async listPersonalTokens(userId: string): Promise<PersonalTokenRecord[]> {
       return repository.listPersonal(userId);
     },
 
-    revokePersonalToken(userId: string, id: string): boolean {
-      return notifyRevocation(repository.revokePersonal(userId, id, now()));
+    async revokePersonalToken(userId: string, id: string): Promise<boolean> {
+      return notifyRevocation(await repository.revokePersonal(userId, id, now()));
     },
 
-    issueGrant(input: {
+    async issueGrant(input: {
       readonly userId: string;
       readonly clientId: string;
       readonly scopes: readonly string[];
       readonly resource: string;
-    }): IssuedGrant {
+    }): Promise<IssuedGrant> {
       const scopes = normalizeScopes(input.scopes);
       if (input.resource.trim().length === 0) {
         throw new ApplicationError("INVALID_INPUT", 400, "resource is required.", "resource");
@@ -136,35 +136,35 @@ export function createAccessTokenService(options: {
         ...input, id, scopes, accessExpiresAt: createdAt + ACCESS_TOKEN_TTL_MS, refreshExpiresAt: createdAt + REFRESH_TOKEN_TTL_MS,
         createdAt, lastUsedAt: null, revokedAt: null,
       };
-      repository.insertGrant(grant, secrets);
+      await repository.insertGrant(grant, secrets);
       return { ...issued, grant };
     },
 
-    refreshGrant(input: {
+    async refreshGrant(input: {
       readonly refreshToken: string;
       readonly clientId: string;
       readonly resource: string;
-    }): RefreshResult {
+    }): Promise<RefreshResult> {
       const parsed = parseToken(input.refreshToken, REFRESH_PREFIX);
       if (!parsed) return { ok: false, reason: "invalid" };
       const { secrets, issued } = newGrantTokens(parsed.id);
-      const result = repository.rotateGrant({ ...parsed, clientId: input.clientId, resource: input.resource, now, next: secrets });
+      const result = await repository.rotateGrant({ ...parsed, clientId: input.clientId, resource: input.resource, now, next: secrets });
       if (result.ok) return { ok: true, ...issued, grant: result.grant };
       if (result.deletedSessions) options.onSessionsDeleted?.(result.deletedSessions);
       return { ok: false, reason: result.reason };
     },
 
-    revokeGrant(userId: string, id: string): boolean {
-      return notifyRevocation(repository.revokeGrant(userId, id, now()));
+    async revokeGrant(userId: string, id: string): Promise<boolean> {
+      return notifyRevocation(await repository.revokeGrant(userId, id, now()));
     },
 
-    revokeClientGrant(token: string, clientId: string): void {
+    async revokeClientGrant(token: string, clientId: string): Promise<void> {
       const refresh = token.startsWith(REFRESH_PREFIX);
       const parsed = parseToken(token, refresh ? REFRESH_PREFIX : ACCESS_PREFIX);
-      if (parsed) notifyRevocation(repository.revokeClientGrant(parsed.id, parsed.secret, refresh, clientId, now()));
+      if (parsed) notifyRevocation(await repository.revokeClientGrant(parsed.id, parsed.secret, refresh, clientId, now()));
     },
 
-    verifySubjectToken(token: string, check: { readonly resource: string }): SubjectToken | null {
+    async verifySubjectToken(token: string, check: { readonly resource: string }): Promise<SubjectToken | null> {
       const parsed = parseSubjectToken(token);
       return parsed && repository.verifySubject(parsed, check.resource, now());
     },
@@ -174,21 +174,20 @@ export function createAccessTokenService(options: {
       return parsed && repository.exchangeSubject(parsed, resource, maxTtlMs, now);
     },
 
-    registerClient(input: {
+    async registerClient(input: {
       readonly clientName?: string | null;
       readonly redirectUris: readonly string[];
-    }): OAuthClientRecord {
+    }, limit: number | null = null): Promise<OAuthClientRecord | null> {
       const redirectUris = [...new Set(input.redirectUris)];
       if (redirectUris.length === 0 || !redirectUris.every(isAbsoluteUrl)) {
         throw new ApplicationError("INVALID_INPUT", 400, "redirect_uris must be a non-empty list of absolute URLs.", "redirect_uris");
       }
       const client = { clientId: randomUUID(), clientName: input.clientName?.trim() || null, redirectUris, createdAt: now(), lastUsedAt: null };
-      repository.insertClient(client);
-      return client;
+      const inserted = await repository.insertClient(client, limit);
+      return inserted ? client : null;
     },
 
-    getClient(id: string) { return repository.getClient(id); },
-    countClients() { return repository.countClients(); },
+    async getClient(id: string) { return repository.getClient(id); },
   };
 }
 

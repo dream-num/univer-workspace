@@ -11,7 +11,7 @@ import type {
 export class SqliteViewsRepository implements ViewsRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
-  listRecent(userId: string, cursor: RecentCursor | null, limit: number): RecentRow[] {
+  async listRecent(userId: string, cursor: RecentCursor | null, limit: number): Promise<RecentRow[]> {
     const cursorClause =
       cursor === null
         ? ""
@@ -41,7 +41,7 @@ export class SqliteViewsRepository implements ViewsRepository {
       .all(...parameters) as unknown as RecentRow[];
   }
 
-  listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): OwnedRow[] {
+  async listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): Promise<OwnedRow[]> {
     const cursorClause =
       cursor === null
         ? ""
@@ -72,7 +72,7 @@ export class SqliteViewsRepository implements ViewsRepository {
       .all(...parameters) as unknown as OwnedRow[];
   }
 
-  listOwned(userId: string, cursor: RecentCursor | null, limit: number): OwnedRow[] {
+  async listOwned(userId: string, cursor: RecentCursor | null, limit: number): Promise<OwnedRow[]> {
     const cursorClause =
       cursor === null
         ? ""
@@ -99,7 +99,7 @@ export class SqliteViewsRepository implements ViewsRepository {
       .all(...parameters) as unknown as OwnedRow[];
   }
 
-  breadcrumbs(nodeId: string): BreadcrumbRow[] {
+  async breadcrumbs(nodeId: string): Promise<BreadcrumbRow[]> {
     return this._database.connection
       .prepare(
         `WITH RECURSIVE ancestry(id, parent_id, name, depth) AS (
@@ -117,7 +117,7 @@ export class SqliteViewsRepository implements ViewsRepository {
       .all(nodeId) as unknown as BreadcrumbRow[];
   }
 
-  listShared(userId: string, cursor: RecentCursor | null, limit: number): SharedRow[] {
+  async listShared(userId: string, cursor: RecentCursor | null, limit: number): Promise<SharedRow[]> {
     const cursorClause =
       cursor === null
         ? ""

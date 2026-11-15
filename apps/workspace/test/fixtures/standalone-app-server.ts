@@ -9,7 +9,7 @@ import { createSqliteTestApplication } from "../support/sqlite/test-application.
 import { interactivePrincipal } from "./principal.js";
 
 const directory = mkdtempSync(join(tmpdir(), "workspace-standalone-"));
-const application = createSqliteTestApplication({
+const application = await createSqliteTestApplication({
   host: "127.0.0.1", port: 3092,
   productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
   collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
@@ -17,14 +17,14 @@ const application = createSqliteTestApplication({
 }, {unitStore: {async createUnit(input) {return {unitId: input.unitId, headRevision: 1};}}});
 const issued = await application.identity.registerWithPassword({username: "standalone-owner", displayName: "Fixture", password: "standalone fixture password"});
 const userId = issued.view.user.id;
-const space = application.spaces.list(userId).spaces[0]!;
+const space = (await application.spaces.list(userId)).spaces[0]!;
 async function publish(html: string, shared = true) {
   const bytes = Buffer.from(html);
-  const {body} = application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), {spaceId: space.id, parentNodeId: null,
+  const {body} = await application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), {spaceId: space.id, parentNodeId: null,
     name: "Standalone.univer.html", originalFilename: "Standalone.univer.html", byteSize: bytes.length});
   await application.blobs.upload(userId, body.upload.id, String(bytes.length), Readable.from([bytes]));
   await application.blobs.complete(interactivePrincipal(userId), body.upload.id);
-  if (shared) application.permissions.updateNodeLinkSharing(userId, body.upload.nodeId, {enabled: true, role: "viewer"});
+  if (shared) await application.permissions.updateNodeLinkSharing(userId, body.upload.nodeId, {enabled: true, role: "viewer"});
   return `http://127.0.0.1:3092/apps/${body.upload.nodeId}/run`;
 }
 const probe = await publish(`<!doctype html><title>Standalone sandbox probe</title><h1>Standalone sandbox probe</h1>

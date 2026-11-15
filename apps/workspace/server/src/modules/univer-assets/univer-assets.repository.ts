@@ -24,23 +24,23 @@ export interface UniverAssetsRepository {
     readonly expiresAt: number;
     /** An Asset ID the caller already wrote into the Unit (an Office import's references). */
     readonly assetId?: string;
-  }): { readonly id: string; readonly objectKey: string };
+  }): Promise<{ readonly id: string; readonly objectKey: string }>;
   markStored(input: {
     readonly uploadId: string;
     readonly receivedSize: number;
     readonly sha256: string;
     readonly etag: string;
     readonly updatedAt: number;
-  }): void;
-  publishStored(uploadId: string): UniverAssetRow;
-  abandonUpload(uploadId: string, abandonedAt: number): void;
-  recoverInterruptedUploads(recoveredAt: number): {
+  }): Promise<void>;
+  publishStored(uploadId: string): Promise<UniverAssetRow>;
+  abandonUpload(uploadId: string, abandonedAt: number): Promise<void>;
+  recoverInterruptedUploads(recoveredAt: number): Promise<{
     readonly published: number;
     readonly abandoned: number;
-  };
-  findAsset(assetId: string): UniverAssetRow | null;
+  }>;
+  findAsset(assetId: string): Promise<UniverAssetRow | null>;
   publishWorktreeAssets(
     worktreeId: string,
     unitIds: readonly string[]
-  ): number;
+  ): Promise<number>;
 }

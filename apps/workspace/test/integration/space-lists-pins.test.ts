@@ -16,7 +16,7 @@ it("separates affiliation, discovery and stars and persists eligible ordered pin
   const dependencies = {
     unitStore: { createUnit: async (input: { unitId: string }) => ({ unitId: input.unitId, headRevision: 1 }) },
   };
-  let application = createSqliteTestApplication(config, dependencies);
+  let application = await createSqliteTestApplication(config, dependencies);
   let server: Server | undefined;
   try {
     const register = (username: string) => application.identity.registerWithPassword({
@@ -106,7 +106,7 @@ it("separates affiliation, discovery and stars and persists eligible ordered pin
     await close(server);
     server = undefined;
     await application.close();
-    application = createSqliteTestApplication(config, dependencies);
+    application = await createSqliteTestApplication(config, dependencies);
     server = createServer(application.app);
     origin = await listen(server);
     expect(await request("/spaces/pins")).toEqual(saved);

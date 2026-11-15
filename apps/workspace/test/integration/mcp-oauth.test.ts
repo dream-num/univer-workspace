@@ -424,10 +424,13 @@ describe("MCP OAuth", () => {
       grant_types: ["authorization_code", "refresh_token"],
       token_endpoint_auth_method: "none",
     });
-    expect((await registerClient(origin, OPENCODE_REGISTRATION)).status).toBe(201);
-    const full = await registerClient(origin, OPENCODE_REGISTRATION);
-    expect(full.status).toBe(503);
-    expect(((await full.json()) as { error: string }).error).toBe("temporarily_unavailable");
+    const attempts = await Promise.all([
+      registerClient(origin, OPENCODE_REGISTRATION),
+      registerClient(origin, OPENCODE_REGISTRATION),
+    ]);
+    expect(attempts.map((response) => response.status).sort()).toEqual([201, 503]);
+    const full = attempts.find((response) => response.status === 503)!;
+    expect(await full.json()).toMatchObject({ error: "temporarily_unavailable" });
     expect(application!.database.connection.prepare("SELECT count(*) AS n FROM oauth_clients").get()).toEqual({ n: 2 });
   });
 
@@ -708,7 +711,7 @@ async function registerUser(origin: string, username: string): Promise<string> {
 
 async function start(options: { maxRegisteredClients?: number; disabled?: boolean; staticConsent?: boolean; cimdEnabled?: boolean; fetchDocument?: FetchClientMetadataDocument } = {}): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-mcp-oauth-"));
-  application = createSqliteTestApplication({
+  application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },

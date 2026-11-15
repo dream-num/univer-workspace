@@ -12,7 +12,7 @@ export function createSkillDraftsRouter(options: {
 }): Router {
   const router = Router();
   router.post("/skill-sources/read", parseBody("16kb"), async (request, response) => {
-    const actor = options.identity.requireSession(request.headers.cookie);
+    const actor = await options.identity.requireSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(await options.sources.read(actor.user.id, request.body));
   });
@@ -20,7 +20,7 @@ export function createSkillDraftsRouter(options: {
     "/skill-drafts",
     parseBody("125mb"),
     async (request, response) => {
-      const actor = options.identity.requireSession(request.headers.cookie);
+      const actor = await options.identity.requireSession(request.headers.cookie);
       const result = await options.drafts.submit(
         actor.user.id,
         request.headers["idempotency-key"],
@@ -29,13 +29,13 @@ export function createSkillDraftsRouter(options: {
       response.status(result.status).json({ draft: result.draft });
     },
   );
-  router.get("/skill-drafts/:draftId", (request, response) => {
-    const actor = options.identity.requireSession(request.headers.cookie);
+  router.get("/skill-drafts/:draftId", async (request, response) => {
+    const actor = await options.identity.requireSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
-    response.json({ draft: options.drafts.get(actor.user.id, String(request.params.draftId)) });
+    response.json({ draft: await options.drafts.get(actor.user.id, String(request.params.draftId)) });
   });
   router.get("/skill-drafts/:draftId/content", async (request, response) => {
-    const actor = options.identity.requireSession(request.headers.cookie);
+    const actor = await options.identity.requireSession(request.headers.cookie);
     const opened = await options.drafts.openContent(
       actor.user.id,
       String(request.params.draftId),
@@ -51,7 +51,7 @@ export function createSkillDraftsRouter(options: {
   });
   for (const action of ["publish", "reject"] as const) {
     router.post(`/skill-drafts/:draftId/${action}`, async (request, response) => {
-      const actor = options.identity.requireInteractiveSession(request.headers.cookie);
+      const actor = await options.identity.requireInteractiveSession(request.headers.cookie);
       response.setHeader("Cache-Control", "private, no-store");
       response.json({
         draft: await options.drafts[action](actor.user.id, String(request.params.draftId)),

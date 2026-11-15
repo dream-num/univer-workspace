@@ -42,9 +42,9 @@ describe("standalone HTML Apps", () => {
     expect(policy).toContain("base-uri 'none'");
     expect(policy).toContain("frame-ancestors 'none'");
     expect(await entry.text()).toBe(html);
-    ctx.application.permissions.updateNodeLinkSharing(ctx.userId, published.nodeId, {enabled: true, role: 'viewer'});
+    await ctx.application.permissions.updateNodeLinkSharing(ctx.userId, published.nodeId, {enabled: true, role: 'viewer'});
     expect(await (await fetch(url)).text()).toBe(html);
-    ctx.application.permissions.updateNodeLinkSharing(ctx.userId, published.nodeId, {enabled: false, role: 'viewer'});
+    await ctx.application.permissions.updateNodeLinkSharing(ctx.userId, published.nodeId, {enabled: false, role: 'viewer'});
     const revoked = await fetch(url);
     expect(revoked.status).toBe(200);
     const revokedBody = await revoked.text();
@@ -53,7 +53,7 @@ describe("standalone HTML Apps", () => {
     const denied = await ctx.application.identity.registerWithPassword({username: 'other', displayName: 'Other', password: 'correct horse battery staple'});
     expect((await fetch(url, {headers: {cookie: `${ctx.application.identity.cookieName}=${denied.cookieValue}`}})).status).toBe(404);
     expect((await fetch(`${ctx.origin}/api/blob-resources/${published.resourceId}/content`)).status).toBe(404);
-    expect(ctx.application.access.resolveNode(ctx.userId, published.nodeId)?.resourceId).toBe(published.resourceId);
+    expect((await ctx.application.access.resolveNode(ctx.userId, published.nodeId))?.resourceId).toBe(published.resourceId);
   });
 
   it("redirects live-bound Apps and rejects ordinary uploads, invalid bindings and oversized documents", async () => {
@@ -64,7 +64,7 @@ describe("standalone HTML Apps", () => {
     const response = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {headers: {cookie: ctx.cookie}, redirect: "manual"});
     expect(response.status).toBe(302);
     expect(response.headers.get("location")).toBe(`/nodes/${encodeURIComponent(bound.nodeId)}?view=immersive`);
-    ctx.application.permissions.updateNodeLinkSharing(ctx.userId, bound.nodeId, {enabled: true, role: 'viewer'});
+    await ctx.application.permissions.updateNodeLinkSharing(ctx.userId, bound.nodeId, {enabled: true, role: 'viewer'});
     const publicEntry = await fetch(`${ctx.origin}/apps/${bound.nodeId}/run`, {redirect: "manual"});
     expect(publicEntry.status).toBe(302);
     expect(publicEntry.headers.get("location")).toBe(response.headers.get("location"));
@@ -78,7 +78,7 @@ describe("standalone HTML Apps", () => {
 
 async function publish(ctx: Awaited<ReturnType<typeof createHttpContext>>, html: string, filename = 'example.univer.html') {
   const content = Buffer.from(html);
-  const { body } = ctx.application.blobs.createUpload(interactivePrincipal(ctx.userId), crypto.randomUUID(), {
+  const { body } = await ctx.application.blobs.createUpload(interactivePrincipal(ctx.userId), crypto.randomUUID(), {
     spaceId: ctx.space.id, parentNodeId: null, name: filename,
     originalFilename: filename, byteSize: content.length,
   });
@@ -90,7 +90,7 @@ async function publish(ctx: Awaited<ReturnType<typeof createHttpContext>>, html:
 async function createHttpContext() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-http-blob-"));
   directories.push(directory);
-  const application = createSqliteTestApplication(
+  const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
@@ -115,7 +115,7 @@ async function createHttpContext() {
     password: "correct horse battery staple",
   });
   const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-  const space = application.spaces.list(issued.view.user.id).spaces[0];
+  const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
   if (!space) throw new Error("Personal space is missing");
   const server = createServer(application.app);
   servers.push(server);

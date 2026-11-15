@@ -21,19 +21,19 @@ export interface ViewsModule {
   listRecent(
     userId: string,
     page: { readonly cursor: unknown; readonly limit: unknown },
-  ): RecentResourceList;
+  ): Promise<RecentResourceList>;
   listOwned(
     userId: string,
     page: { readonly cursor: unknown; readonly limit: unknown },
-  ): OwnedResourceList;
+  ): Promise<OwnedResourceList>;
   listHtmlViews(
     userId: string,
     page: { readonly cursor: unknown; readonly limit: unknown; readonly spaceId?: unknown },
-  ): OwnedResourceList;
+  ): Promise<OwnedResourceList>;
   listShared(
     userId: string,
     page: { readonly cursor: unknown; readonly limit: unknown },
-  ): SharedList;
+  ): Promise<SharedList>;
 }
 
 export function createViewsModule(options: {
@@ -41,7 +41,7 @@ export function createViewsModule(options: {
   readonly access: AccessResolver;
 }): ViewsModule {
   return {
-    listRecent(userId, page) {
+    async listRecent(userId, page) {
       const limit = validLimit(page.limit);
       let scanCursor = decodeCursor(page.cursor);
       const visible: Array<{
@@ -49,9 +49,9 @@ export function createViewsModule(options: {
         readonly resource: ResourceAccess;
       }> = [];
       while (visible.length < limit + 1) {
-        const rows = options.repository.listRecent(userId, scanCursor, 100);
+        const rows = await options.repository.listRecent(userId, scanCursor, 100);
         for (const row of rows) {
-          const resource = options.access.resolveResource(userId, row.resource_id);
+          const resource = await options.access.resolveResource(userId, row.resource_id);
           if (resource) visible.push({ row, resource });
           scanCursor = recentRowCursor(row);
           if (visible.length === limit + 1) break;
@@ -62,12 +62,12 @@ export function createViewsModule(options: {
       const items = hasNext ? visible.slice(0, limit) : visible;
       const last = items.at(-1);
       return {
-        items: items.map(({ row, resource }) => recentItem(row, resource, options.repository)),
+        items: await Promise.all(items.map(({ row, resource }) => recentItem(row, resource, options.repository))),
         nextCursor: hasNext && last ? encodeCursor(recentRowCursor(last.row)) : null,
       };
     },
 
-    listOwned(userId, page) {
+    async listOwned(userId, page) {
       const limit = validLimit(page.limit);
       let scanCursor = decodeCursor(page.cursor);
       const visible: Array<{
@@ -75,8 +75,8 @@ export function createViewsModule(options: {
         readonly resource: ResourceAccess;
       }> = [];
       while (visible.length < limit + 1) {
-        const rows = options.repository.listOwned(userId, scanCursor, 100);
-        const resources = options.access.resolveOwnedResources(
+        const rows = await options.repository.listOwned(userId, scanCursor, 100);
+        const resources = await options.access.resolveOwnedResources(
           userId,
           rows.map((row) => row.resource_id),
         );
@@ -92,12 +92,12 @@ export function createViewsModule(options: {
       const items = hasNext ? visible.slice(0, limit) : visible;
       const last = items.at(-1);
       return {
-        items: items.map(({ resource }) => ownedItem(resource, options.repository)),
+        items: await Promise.all(items.map(({ resource }) => ownedItem(resource, options.repository))),
         nextCursor: hasNext && last ? encodeCursor(ownedRowCursor(last.row)) : null,
       };
     },
 
-    listHtmlViews(userId, page) {
+    async listHtmlViews(userId, page) {
       const limit = validLimit(page.limit);
       const spaceId = optionalSpaceId(page.spaceId);
       let scanCursor = decodeCursor(page.cursor);
@@ -106,9 +106,9 @@ export function createViewsModule(options: {
         readonly resource: ResourceAccess;
       }> = [];
       while (visible.length < limit + 1) {
-        const rows = options.repository.listHtmlViews(scanCursor, 100, spaceId);
+        const rows = await options.repository.listHtmlViews(scanCursor, 100, spaceId);
         for (const row of rows) {
-          const resource = options.access.resolveResource(userId, row.resource_id);
+          const resource = await options.access.resolveResource(userId, row.resource_id);
           if (resource) visible.push({ row, resource });
           scanCursor = ownedRowCursor(row);
           if (visible.length === limit + 1) break;
@@ -119,12 +119,12 @@ export function createViewsModule(options: {
       const items = hasNext ? visible.slice(0, limit) : visible;
       const last = items.at(-1);
       return {
-        items: items.map(({ resource }) => ownedItem(resource, options.repository)),
+        items: await Promise.all(items.map(({ resource }) => ownedItem(resource, options.repository))),
         nextCursor: hasNext && last ? encodeCursor(ownedRowCursor(last.row)) : null,
       };
     },
 
-    listShared(userId, page) {
+    async listShared(userId, page) {
       const limit = validLimit(page.limit);
       let scanCursor = decodeCursor(page.cursor);
       const visible: Array<{
@@ -132,9 +132,9 @@ export function createViewsModule(options: {
         readonly node: NodeAccess;
       }> = [];
       while (visible.length < limit + 1) {
-        const rows = options.repository.listShared(userId, scanCursor, 100);
+        const rows = await options.repository.listShared(userId, scanCursor, 100);
         for (const row of rows) {
-          const node = options.access.resolveNode(userId, row.node_id);
+          const node = await options.access.resolveNode(userId, row.node_id);
           if (node) visible.push({ row, node });
           scanCursor = sharedRowCursor(row);
           if (visible.length === limit + 1) break;
@@ -152,37 +152,37 @@ export function createViewsModule(options: {
   };
 }
 
-function recentItem(
+async function recentItem(
   row: RecentRow,
   resource: ResourceAccess,
   repository: ViewsRepository,
-): RecentResourceItem {
+): Promise<RecentResourceItem> {
   const node = resource.node;
   return {
     lastOpenedAt: new Date(row.last_opened_at).toISOString(),
     node: nodeSummary(node),
     resource: resourceSummary(node)!,
-    location: resourceLocation(resource, repository),
+    location: await resourceLocation(resource, repository),
   };
 }
 
-function ownedItem(resource: ResourceAccess, repository: ViewsRepository): OwnedResourceItem {
+async function ownedItem(resource: ResourceAccess, repository: ViewsRepository): Promise<OwnedResourceItem> {
   return {
     node: nodeSummary(resource.node),
     resource: resourceSummary(resource.node)!,
-    location: resourceLocation(resource, repository),
+    location: await resourceLocation(resource, repository),
   };
 }
 
-function resourceLocation(
+async function resourceLocation(
   resource: ResourceAccess,
   repository: ViewsRepository,
-): RecentResourceItem["location"] {
+): Promise<RecentResourceItem["location"]> {
   const node = resource.node;
   const breadcrumbs =
     node.parentNodeId === null || node.navigationRootNodeId === node.id
       ? []
-      : visibleBreadcrumbs(repository.breadcrumbs(node.parentNodeId), node.navigationRootNodeId);
+      : visibleBreadcrumbs(await repository.breadcrumbs(node.parentNodeId), node.navigationRootNodeId);
   return {
     space: {
       id: node.spaceId,

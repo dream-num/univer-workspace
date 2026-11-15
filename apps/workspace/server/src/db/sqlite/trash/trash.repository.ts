@@ -1,3 +1,6 @@
+import type { NodeAccess } from "../../../modules/access/index.js";
+import { trashBatchMismatch, trashForbidden, trashNotFound } from "../../../modules/trash/trash.errors.js";
+import { assertFileQuota, type SqliteAccessRepository } from "../access/access.repository.js";
 import { randomUUID } from "node:crypto";
 import type { SqliteDatabase } from "../connection.js";
 import type {
@@ -9,35 +12,35 @@ import type {
 } from "../../../modules/trash/trash.repository.js";
 
 export class SqliteTrashRepository implements TrashRepository {
-  constructor(private readonly _database: SqliteDatabase) {}
+  constructor(private readonly _database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
 
-  trashNode(input: {
+  async trashNode(input: {
     readonly batchId: string;
     readonly nodeId: string;
-    readonly spaceId: string;
     readonly createdBy: string;
     readonly createdAt: number;
-  }): void {
+  }): Promise<void> {
     this._database.transaction((database) => {
       const existing = database
-        .prepare("SELECT root_node_id, space_id, created_by FROM trash_batches WHERE id = ?")
+        .prepare("SELECT root_node_id, created_by FROM trash_batches WHERE id = ?")
         .get(input.batchId) as
         | {
             readonly root_node_id: string;
-            readonly space_id: string;
             readonly created_by: string;
           }
         | undefined;
       if (existing) {
         if (
           existing.root_node_id !== input.nodeId ||
-          existing.space_id !== input.spaceId ||
           existing.created_by !== input.createdBy
         ) {
-          throw new Error("Trash Batch identity does not match the deletion request.");
+          throw trashBatchMismatch();
         }
         return;
       }
+      const node = this.access.readNodeAccess(input.createdBy, input.nodeId);
+      if (!node) throw trashNotFound();
+      if (!node.capabilities.trash) throw trashForbidden();
       database
         .prepare(
           `INSERT INTO trash_batches
@@ -46,7 +49,7 @@ export class SqliteTrashRepository implements TrashRepository {
         )
         .run(
           input.batchId,
-          input.spaceId,
+          node.spaceId,
           input.nodeId,
           input.createdBy,
           input.createdAt
@@ -69,7 +72,7 @@ export class SqliteTrashRepository implements TrashRepository {
     });
   }
 
-  findBatch(batchId: string): TrashBatchRow | null {
+  async findBatch(batchId: string): Promise<TrashBatchRow | null> {
     return (
       (this._database.connection
         .prepare(
@@ -80,11 +83,11 @@ export class SqliteTrashRepository implements TrashRepository {
     );
   }
 
-  listBatches(
+  async listBatches(
     spaceId: string,
     cursor: TrashCursor | null,
     limit: number
-  ): TrashBatchRow[] {
+  ): Promise<TrashBatchRow[]> {
     const cursorClause =
       cursor === null
         ? ""
@@ -114,7 +117,7 @@ export class SqliteTrashRepository implements TrashRepository {
       .all(...parameters) as unknown as TrashBatchRow[];
   }
 
-  originalBreadcrumbs(rootNodeId: string): TrashBreadcrumbRow[] {
+  async originalBreadcrumbs(rootNodeId: string): Promise<TrashBreadcrumbRow[]> {
     return this._database.connection
       .prepare(
         `WITH RECURSIVE ancestry(id, parent_id, name, depth) AS (
@@ -134,7 +137,11 @@ export class SqliteTrashRepository implements TrashRepository {
       .all(rootNodeId) as unknown as TrashBreadcrumbRow[];
   }
 
-  blockers(batch: TrashBatchRow): TrashBlockers {
+  async blockers(batch: TrashBatchRow): Promise<TrashBlockers> {
+    return this.readBlockers(batch);
+  }
+
+  private readBlockers(batch: TrashBatchRow): TrashBlockers {
     const parent = this._database.connection
       .prepare(
         `WITH RECURSIVE ancestry(id, parent_id, trash_batch_id) AS (
@@ -205,7 +212,7 @@ export class SqliteTrashRepository implements TrashRepository {
   }
 
   /** Nodes with a Resource that restoring the batch brings back. */
-  countFiles(batch: TrashBatchRow): number {
+  private countFiles(batch: TrashBatchRow): number {
     const row = this._database.connection
       .prepare(
         `SELECT COUNT(*) AS files
@@ -217,8 +224,19 @@ export class SqliteTrashRepository implements TrashRepository {
     return row.files;
   }
 
-  restore(batch: TrashBatchRow, restoredAt: number): void {
-    this._database.transaction((database) => {
+  private requireManageableBatch(batchId: string, userId: string): TrashBatchRow {
+    const batch = this._database.connection.prepare(`
+      ${batchSelect()} WHERE batch.id = ? AND batch.restored_at IS NULL AND root.trash_batch_id = batch.id
+    `).get(batchId) as TrashBatchRow | undefined;
+    if (!batch || !this.access.readSpaceAccess(userId, batch.space_id)?.capabilities.viewTrash) throw trashNotFound();
+    return batch;
+  }
+
+  async restore(batchId: string, userId: string, restoredAt: number): Promise<NodeAccess | null> {
+    return this._database.transaction((database) => {
+      const batch = this.requireManageableBatch(batchId, userId);
+      if (this.readBlockers(batch).parentBatchId) return null;
+      assertFileQuota(database, userId, this.countFiles(batch));
       database
         .prepare(
           `UPDATE nodes
@@ -233,11 +251,18 @@ export class SqliteTrashRepository implements TrashRepository {
            WHERE id = ? AND restored_at IS NULL`
         )
         .run(restoredAt, batch.id);
+      const restored = this.access.readNodeAccess(userId, batch.root_node_id);
+      if (!restored) throw new Error("Restored Node is not discoverable");
+      return restored;
     });
   }
 
-  removePermanently(batch: TrashBatchRow, deletedAt: number): void {
-    this._database.transaction((database) => {
+  async removePermanently(batchId: string, userId: string, deletedAt: number): Promise<"removed" | "nestedBatch" | "activeWorktreeReference"> {
+    return this._database.transaction((database) => {
+      const batch = this.requireManageableBatch(batchId, userId);
+      const blockers = this.readBlockers(batch);
+      if (blockers.nestedBatchId) return "nestedBatch";
+      if (blockers.activeWorktreeReference) return "activeWorktreeReference";
       const blobRows = database
         .prepare(
           `WITH RECURSIVE descendants(id) AS (
@@ -330,6 +355,7 @@ export class SqliteTrashRepository implements TrashRepository {
       database
         .prepare("DELETE FROM trash_batches WHERE id = ?")
         .run(batch.id);
+      return "removed";
     });
   }
 }

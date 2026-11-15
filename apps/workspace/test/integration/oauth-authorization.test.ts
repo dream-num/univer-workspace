@@ -357,7 +357,7 @@ describe("OAuth authorization", () => {
 
 async function startApplication(): Promise<string> {
   directory = mkdtempSync(join(tmpdir(), "univer-oauth-authorization-"));
-  application = createSqliteTestApplication({
+  application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
     productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },

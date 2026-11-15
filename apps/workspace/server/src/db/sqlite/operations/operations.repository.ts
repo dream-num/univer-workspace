@@ -1,10 +1,11 @@
+import { assertFileQuota } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { OperationRow, OperationsRepository } from "../../../modules/operations/operations.repository.js";
 
 export class SqliteOperationsRepository implements OperationsRepository {
   constructor(private readonly _database: SqliteDatabase) {}
 
-  get(operationId: string, actorUserId: string): OperationRow | null {
+  async get(operationId: string, actorUserId: string): Promise<OperationRow | null> {
     return (
       (this._database.connection
         .prepare(
@@ -14,9 +15,9 @@ export class SqliteOperationsRepository implements OperationsRepository {
     );
   }
 
-  retry(operationId: string, actorUserId: string, retriedAt: number): boolean {
-    return (
-      this._database.connection
+  async retry(operationId: string, actorUserId: string, retriedAt: number): Promise<boolean> {
+    return this._database.transaction((db) => {
+      const row = db
         .prepare(
           `UPDATE operations
            SET state = 'pending',
@@ -26,24 +27,26 @@ export class SqliteOperationsRepository implements OperationsRepository {
                lease_owner = 'product-api',
                lease_expires_at = ?,
                updated_at = ?
-           WHERE id = ? AND actor_user_id = ? AND state = 'failed'`
+           WHERE id = ? AND actor_user_id = ? AND state = 'failed' RETURNING kind`
         )
-        .run(
+        .get(
           retriedAt,
           retriedAt + 60_000,
           retriedAt,
           operationId,
           actorUserId
-        ).changes > 0
-    );
+        );
+      if (row?.kind === "create_worktree_unit") assertFileQuota(db, actorUserId, 0);
+      return Boolean(row);
+    });
   }
 
-  fail(
+  async fail(
     operationId: string,
     actorUserId: string,
     error: { readonly code: string; readonly message: string },
     failedAt: number
-  ): void {
+  ): Promise<void> {
     this._database.connection
       .prepare(
         `UPDATE operations

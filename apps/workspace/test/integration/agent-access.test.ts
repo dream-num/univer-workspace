@@ -82,7 +82,7 @@ describe("a banned agent", () => {
       expect(refused.status).toBe(401);
       expect(await refused.json()).toMatchObject({ error: { code: "UNAUTHENTICATED" } });
       expect(await session(origin, cookie)).toMatchObject({ authenticated: false });
-      expect(application.identity.getRealtimeSession(cookie)).toBeNull();
+      expect(await application.identity.getRealtimeSession(cookie)).toBeNull();
     }
     const refused = await exchange(origin, agent.token);
     expect(refused.status).toBe(400);
@@ -165,7 +165,7 @@ describe("access rules for agents", () => {
       expect(await accessRole(origin, nodeId, undefined)).toBeNull();
       expect(await accessRole(origin, nodeId, reader.cookie)).toBeNull();
       expect(await sharedWithReader()).toBe(0);
-      expect(application.access.resolveNode(agent.id, nodeId)?.role).toBe("owner");
+      expect((await application.access.resolveNode(agent.id, nodeId))?.role).toBe("owner");
       suspend(column, lifted);
     }
     expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
@@ -633,7 +633,7 @@ async function listen(server: Server): Promise<string> {
 }
 
 async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: SqliteTestApplication }> {
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
     productDatabase: { provider: "sqlite", filename: ":memory:" },

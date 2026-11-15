@@ -10,7 +10,7 @@ export function createResourcesRouter(options: {
   router.use(json({ limit: "1mb" }));
 
   router.post("/resources", async (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+    const session = await options.identity.requireSession(request.headers.cookie);
     const result = await options.resources.create(
       session.user.id,
       request.headers["idempotency-key"],
@@ -28,32 +28,32 @@ export function createResourcesRouter(options: {
     response.status(result.status).json(result.body);
   });
 
-  router.get("/resources/:resourceId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/resources/:resourceId", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.resources.get(
+      await options.resources.get(
         session.user.id,
         requiredParameter(request.params.resourceId)
       )
     );
   });
 
-  router.get("/unit-resources/:unitId", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.get("/unit-resources/:unitId", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
-      options.resources.getByUnit(
+      await options.resources.getByUnit(
         session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.unitId)
       )
     );
   });
 
-  router.post("/resources/:resourceId/open", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.post("/resources/:resourceId/open", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
-      options.resources.open(
+      await options.resources.open(
         session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.resourceId)
       )

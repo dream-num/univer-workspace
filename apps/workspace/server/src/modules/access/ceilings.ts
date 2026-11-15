@@ -11,7 +11,7 @@ export interface CeilingContexts {
   readonly addTeamMember: { readonly member: PrincipalCategory };
   readonly searchUsers: Readonly<Record<never, never>>;
   /** `held` counts the files the principal's Personal Space already has or is about to get. */
-  readonly createFiles: { readonly held: () => number; readonly adding: number };
+  readonly createFiles: { readonly held: number; readonly adding: number };
   readonly storeFile: { readonly byteSize: number };
   /** `tokenIssued` is true for a session issued for a personal access token or an OAuth grant. */
   readonly writeLinkSharing: { readonly tokenIssued: boolean };
@@ -58,7 +58,7 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     code: "AGENT_QUOTA_EXCEEDED",
     message: `An unclaimed agent can keep at most ${UNCLAIMED_AGENT_MAX_FILES} files.`,
     forbids: (principal, { held, adding }) =>
-      principal === "agent_unclaimed" && held() + adding > UNCLAIMED_AGENT_MAX_FILES,
+      principal === "agent_unclaimed" && held + adding > UNCLAIMED_AGENT_MAX_FILES,
   },
   storeFile: {
     code: "AGENT_QUOTA_EXCEEDED",
@@ -86,5 +86,15 @@ export function assertCeiling<A extends CeilingAction>(
   const ceiling = ceilings[action];
   if (ceiling.forbids(principal, context)) {
     throw new ApplicationError(ceiling.code, 403, ceiling.message);
+  }
+}
+
+/** Count held files only for principals subject to the file quota. */
+export async function assertCreateFilesCeiling(
+  principal: PrincipalCategory,
+  context: { readonly held: () => Promise<number>; readonly adding: number },
+): Promise<void> {
+  if (principal === "agent_unclaimed") {
+    assertCeiling(principal, "createFiles", { held: await context.held(), adding: context.adding });
   }
 }

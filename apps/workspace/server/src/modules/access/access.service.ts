@@ -19,162 +19,75 @@ import type {
 } from "./access.types.js";
 
 export interface AccessResolver {
-  resolveResourceContent(userId: string, resourceId: string): ResourceContentAccess | null;
-  resolveUnitContent(userId: string, unitId: string): ResourceContentAccess | null;
+  resolveResourceContent(userId: string, resourceId: string): Promise<ResourceContentAccess | null>;
+  resolveUnitContent(userId: string, unitId: string): Promise<ResourceContentAccess | null>;
   resolveOwnedResources(
     userId: string,
     resourceIds: readonly string[],
-  ): ReadonlyMap<string, ResourceAccess>;
-  resolveSpace(userId: string, spaceId: string): SpaceAccess | null;
-  resolveNode(userId: string, nodeId: string): NodeAccess | null;
-  resolveResource(userId: string, resourceId: string): ResourceAccess | null;
-  resolveUnit(userId: string, unitId: string): ResourceAccess | null;
+  ): Promise<ReadonlyMap<string, ResourceAccess>>;
+  resolveSpace(userId: string, spaceId: string): Promise<SpaceAccess | null>;
+  resolveNode(userId: string, nodeId: string): Promise<NodeAccess | null>;
+  resolveResource(userId: string, resourceId: string): Promise<ResourceAccess | null>;
+  resolveUnit(userId: string, unitId: string): Promise<ResourceAccess | null>;
   /** Who the User is, for the ceilings: a service holds a user id, not a session. */
-  principalCategory(userId: string): PrincipalCategory;
+  principalCategory(userId: string): Promise<PrincipalCategory>;
   /**
    * Files the User's Personal Space holds or is about to hold, for the quota ceiling. Pass the
    * operation being served so that replaying it does not count its own file a second time.
    */
-  countPersonalFiles(userId: string, operationId?: string): number;
+  countPersonalFiles(userId: string, operationId?: string): Promise<number>;
 }
 
 export function createAccessResolver(repository: AccessRepository): AccessResolver {
-  function resolveNode(userId: string, nodeId: string): NodeAccess | null {
-    const row = repository.resolveNode(userId, nodeId);
-    if (!row) return null;
-    return nodeAccess(userId, row);
+  async function resolveNode(userId: string, nodeId: string): Promise<NodeAccess | null> {
+    return resolveStoredNodeAccess(userId, await repository.resolveNode(userId, nodeId));
   }
 
-  function nodeAccess(userId: string, row: ResolvedNodeRow): NodeAccess | null {
-    const { regularRole, role } = resolvedRoles(userId, row);
-    if (!role) return null;
-    const navigationRootNodeId =
-      role === "owner" || row.space_type === "team" || Boolean(row.public_read)
-        ? null
-        : row.navigation_root_id;
-    return {
-      id: row.id,
-      spaceId: row.space_id,
-      spaceType: row.space_type,
-      spaceName: row.space_name,
-      parentNodeId:
-        navigationRootNodeId !== null && row.id === navigationRootNodeId ? null : row.parent_id,
-      name: row.name,
-      resourceId: row.resource_id,
-      resourceKind: row.resource_kind,
-      unitId: row.unit_id,
-      unitType: row.unit_type,
-      blobMediaType: row.blob_media_type,
-      blobByteSize: row.blob_byte_size,
-      blobAvailability: row.blob_availability,
-      hasChildren: Boolean(row.has_children),
-      updatedAt: row.updated_at,
-      role,
-      capabilities: mergeNodeCapabilities(
-        regularRole
-          ? nodeCapabilities(regularRole, row.grant_navigation_root_id === row.id, row.space_type)
-          : emptyNodeCapabilities(),
-        row.link_sharing_role ? linkSharingNodeCapabilities() : emptyNodeCapabilities(),
-      ),
-      navigationRootNodeId,
-    };
+  async function resolveMapping(userId: string, mapping: ResourceMappingRow | null): Promise<ResourceAccess | null> {
+    if (!mapping) return null;
+    return resolveStoredResourceAccess(mapping, await resolveNode(userId, mapping.node_id));
   }
 
-  function resourceAccess(
+  async function contentAccess(
     userId: string,
     mapping: ResourceMappingRow | null,
-    resolvedNode?: NodeAccess | null,
-  ): ResourceAccess | null {
+  ): Promise<ResourceContentAccess | null> {
     if (!mapping) return null;
-    const node = resolvedNode === undefined ? resolveNode(userId, mapping.node_id) : resolvedNode;
-    if (!node || node.resourceId !== mapping.resource_id) return null;
-    const capabilities = resourceCapabilities(node.role, mapping.resource_kind);
-    if (mapping.resource_kind === "univer") {
-      if (!mapping.unit_id || !mapping.unit_type) return null;
-      return {
-        id: mapping.resource_id,
-        kind: "univer",
-        node,
-        unitId: mapping.unit_id,
-        unitType: mapping.unit_type,
-        capabilities,
-      };
-    }
-    if (
-      !mapping.object_key ||
-      !mapping.original_filename ||
-      !mapping.media_type ||
-      mapping.byte_size === null ||
-      !mapping.sha256 ||
-      !mapping.etag ||
-      !mapping.availability
-    )
-      return null;
-    return {
-      id: mapping.resource_id,
-      kind: "blob",
-      node,
-      objectKey: mapping.object_key,
-      originalFilename: mapping.original_filename,
-      mediaType: mapping.media_type,
-      byteSize: mapping.byte_size,
-      sha256: mapping.sha256,
-      etag: mapping.etag,
-      availability: mapping.availability,
-      capabilities,
-    };
-  }
-
-  function contentAccess(
-    userId: string,
-    mapping: ResourceMappingRow | null,
-  ): ResourceContentAccess | null {
-    if (!mapping) return null;
-    const row = repository.resolveNodeAuthorization(userId, mapping.node_id);
-    if (!row) return null;
-    const { role } = resolvedRoles(userId, row);
-    if (!role || !validMapping(mapping)) return null;
-    return {
-      id: mapping.resource_id,
-      kind: mapping.resource_kind,
-      role,
-      unitId: mapping.unit_id,
-      unitType: mapping.unit_type,
-      capabilities: resourceCapabilities(role, mapping.resource_kind),
-    };
+    const row = await repository.resolveNodeAuthorization(userId, mapping.node_id);
+    return resolveStoredContentAccess(userId, mapping, row);
   }
 
   return {
-    resolveResourceContent(userId, resourceId) {
-      return contentAccess(userId, repository.findResource(resourceId));
+    async resolveResourceContent(userId, resourceId) {
+      return contentAccess(userId, await repository.findResource(resourceId));
     },
-    resolveUnitContent(userId, unitId) {
-      return contentAccess(userId, repository.findResourceByUnitId(unitId));
+    async resolveUnitContent(userId, unitId) {
+      return contentAccess(userId, await repository.findResourceByUnitId(unitId));
     },
-    resolveOwnedResources(userId, resourceIds) {
+    async resolveOwnedResources(userId, resourceIds) {
       const resources = new Map<string, ResourceAccess>();
       if (userId === ANONYMOUS_USER_ID) return resources;
       // The repository checks ownership for every candidate.
-      for (const row of repository.resolveOwnedResources(userId, resourceIds)) {
-        const resource = resourceAccess(userId, row, nodeAccess(userId, row));
+      for (const row of await repository.resolveOwnedResources(userId, resourceIds)) {
+        const resource = resolveStoredResourceAccess(row, resolveStoredNodeAccess(userId, row));
         if (resource) resources.set(resource.id, resource);
       }
       return resources;
     },
-    resolveSpace(userId, spaceId) {
-      const row = repository.resolveSpace(userId, spaceId);
+    async resolveSpace(userId, spaceId) {
+      const row = await repository.resolveSpace(userId, spaceId);
       if (!row) return null;
       return resolveStoredSpaceAccess(userId, row);
     },
     resolveNode,
-    resolveResource(userId, resourceId) {
-      return resourceAccess(userId, repository.findResource(resourceId));
+    async resolveResource(userId, resourceId) {
+      return resolveMapping(userId, await repository.findResource(resourceId));
     },
-    resolveUnit(userId, unitId) {
-      return resourceAccess(userId, repository.findResourceByUnitId(unitId));
+    async resolveUnit(userId, unitId) {
+      return resolveMapping(userId, await repository.findResourceByUnitId(unitId));
     },
-    principalCategory(userId) {
-      return requesterCategory(repository.findRequester(userId));
+    async principalCategory(userId) {
+      return requesterCategory(await repository.findRequester(userId));
     },
     countPersonalFiles(userId, operationId) {
       return repository.countPersonalFiles(userId, operationId ?? null);
@@ -182,7 +95,103 @@ export function createAccessResolver(repository: AccessRepository): AccessResolv
   };
 }
 
-function requesterCategory(
+export function resolveStoredContentAccess(
+  userId: string,
+  mapping: ResourceMappingRow,
+  row: NodeAuthorizationRow | null,
+): ResourceContentAccess | null {
+  if (!row) return null;
+  const { role } = resolvedRoles(userId, row);
+  if (!role || !validMapping(mapping)) return null;
+  return {
+    id: mapping.resource_id,
+    kind: mapping.resource_kind,
+    role,
+    unitId: mapping.unit_id,
+    unitType: mapping.unit_type,
+    capabilities: resourceCapabilities(role, mapping.resource_kind),
+  };
+}
+
+export function resolveStoredNodeAccess(userId: string, row: ResolvedNodeRow | null): NodeAccess | null {
+  if (!row) return null;
+  const { regularRole, role } = resolvedRoles(userId, row);
+  if (!role) return null;
+  const navigationRootNodeId =
+    role === "owner" || row.space_type === "team" || Boolean(row.public_read)
+      ? null
+      : row.navigation_root_id;
+  return {
+    id: row.id,
+    spaceId: row.space_id,
+    spaceType: row.space_type,
+    spaceName: row.space_name,
+    parentNodeId:
+      navigationRootNodeId !== null && row.id === navigationRootNodeId ? null : row.parent_id,
+    name: row.name,
+    resourceId: row.resource_id,
+    resourceKind: row.resource_kind,
+    unitId: row.unit_id,
+    unitType: row.unit_type,
+    blobMediaType: row.blob_media_type,
+    blobByteSize: row.blob_byte_size,
+    blobAvailability: row.blob_availability,
+    hasChildren: Boolean(row.has_children),
+    updatedAt: row.updated_at,
+    role,
+    capabilities: mergeNodeCapabilities(
+      regularRole
+        ? nodeCapabilities(regularRole, row.grant_navigation_root_id === row.id, row.space_type)
+        : emptyNodeCapabilities(),
+      row.link_sharing_role ? linkSharingNodeCapabilities() : emptyNodeCapabilities(),
+    ),
+    navigationRootNodeId,
+  };
+}
+
+export function resolveStoredResourceAccess(
+  mapping: ResourceMappingRow,
+  node: NodeAccess | null,
+): ResourceAccess | null {
+  if (!node || node.resourceId !== mapping.resource_id) return null;
+  const capabilities = resourceCapabilities(node.role, mapping.resource_kind);
+  if (mapping.resource_kind === "univer") {
+    if (!mapping.unit_id || !mapping.unit_type) return null;
+    return {
+      id: mapping.resource_id,
+      kind: "univer",
+      node,
+      unitId: mapping.unit_id,
+      unitType: mapping.unit_type,
+      capabilities,
+    };
+  }
+  if (
+    !mapping.object_key ||
+    !mapping.original_filename ||
+    !mapping.media_type ||
+    mapping.byte_size === null ||
+    !mapping.sha256 ||
+    !mapping.etag ||
+    !mapping.availability
+  )
+    return null;
+  return {
+    id: mapping.resource_id,
+    kind: "blob",
+    node,
+    objectKey: mapping.object_key,
+    originalFilename: mapping.original_filename,
+    mediaType: mapping.media_type,
+    byteSize: mapping.byte_size,
+    sha256: mapping.sha256,
+    etag: mapping.etag,
+    availability: mapping.availability,
+    capabilities,
+  };
+}
+
+export function requesterCategory(
   row: Pick<NodeAuthorizationRow, "requester_kind" | "requester_claimed">,
 ): PrincipalCategory {
   return principalCategory(

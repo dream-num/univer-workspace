@@ -8,7 +8,7 @@ afterEach(async () => {
 });
 
 async function setup() {
-  const app = createSqliteTestApplication(
+  const app = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
@@ -32,10 +32,10 @@ async function setup() {
   const owner = await register("owner");
   const member = await register("member");
   const outsider = await register("outsider");
-  const space = app.spaces.list(owner).spaces[0]!;
-  const team = app.spaces.createTeamSpace(owner, { name: "Supply" });
+  const space = (await app.spaces.list(owner)).spaces[0]!;
+  const team = await app.spaces.createTeamSpace(owner, { name: "Supply" });
   const db = app.database.connection;
-  const insertBlob = (input: {
+  const insertBlob = async (input: {
     actor: string;
     spaceId: string;
     name: string;
@@ -43,7 +43,7 @@ async function setup() {
     updatedAt: number;
     resourceId?: string;
   }) => {
-    const node = app.nodes.create(input.actor, {
+    const node = await app.nodes.create(input.actor, {
       spaceId: input.spaceId,
       parentNodeId: null,
       name: input.name,
@@ -74,7 +74,7 @@ async function setup() {
 describe("html view list", () => {
   it("lists accessible html blobs and skips hidden rows without breaking pagination", async () => {
     const { app, owner, member, outsider, space, team, insertBlob } = await setup();
-    const newest = insertBlob({
+    const newest = await insertBlob({
       actor: owner,
       spaceId: space.id,
       name: "看板",
@@ -82,15 +82,15 @@ describe("html view list", () => {
       updatedAt: 30,
       resourceId: "res-newest",
     });
-    const hidden = insertBlob({
+    const hidden = await insertBlob({
       actor: outsider,
-      spaceId: app.spaces.list(outsider).spaces[0]!.id,
+      spaceId: (await app.spaces.list(outsider)).spaces[0]!.id,
       name: "Hidden",
       filename: "hidden.univer.html",
       updatedAt: 25,
       resourceId: "res-hidden",
     });
-    const sameTimeB = insertBlob({
+    const sameTimeB = await insertBlob({
       actor: owner,
       spaceId: space.id,
       name: "Board",
@@ -98,7 +98,7 @@ describe("html view list", () => {
       updatedAt: 20,
       resourceId: "res-b",
     });
-    const sameTimeA = insertBlob({
+    const sameTimeA = await insertBlob({
       actor: owner,
       spaceId: space.id,
       name: "Alpha",
@@ -106,7 +106,7 @@ describe("html view list", () => {
       updatedAt: 20,
       resourceId: "res-a",
     });
-    const oldest = insertBlob({
+    const oldest = await insertBlob({
       actor: owner,
       spaceId: team.id,
       name: "库存",
@@ -114,14 +114,14 @@ describe("html view list", () => {
       updatedAt: 10,
       resourceId: "res-oldest",
     });
-    insertBlob({
+    await insertBlob({
       actor: owner,
       spaceId: space.id,
       name: "Notes",
       filename: "notes.txt",
       updatedAt: 40,
     });
-    insertBlob({
+    await insertBlob({
       actor: owner,
       spaceId: space.id,
       name: "Almost",
@@ -137,7 +137,7 @@ describe("html view list", () => {
     });
 
     const page = { limit: 2, cursor: undefined as unknown };
-    const first = app.views.listHtmlViews(owner, page);
+    const first = await app.views.listHtmlViews(owner, page);
     expect(first.items.map((item) => item.resource.id)).toEqual([
       newest.resourceId,
       sameTimeA.resourceId,
@@ -146,7 +146,7 @@ describe("html view list", () => {
       node: { id: newest.nodeId, name: "看板" },
       location: { space: { id: space.id } },
     });
-    const second = app.views.listHtmlViews(owner, { limit: 2, cursor: first.nextCursor });
+    const second = await app.views.listHtmlViews(owner, { limit: 2, cursor: first.nextCursor });
     expect(second.items.map((item) => item.resource.id)).toEqual([
       sameTimeB.resourceId,
       oldest.resourceId,
@@ -154,31 +154,31 @@ describe("html view list", () => {
     expect(second.nextCursor).toBeNull();
     expect(second.items.map((item) => item.resource.id)).not.toContain(hidden.resourceId);
     expect(
-      app.views
-        .listHtmlViews(owner, { limit: 10, cursor: undefined, spaceId: team.id })
+      (await app.views
+        .listHtmlViews(owner, { limit: 10, cursor: undefined, spaceId: team.id }))
         .items.map((item) => item.resource.id),
     ).toEqual([oldest.resourceId]);
 
-    expect(app.views.listHtmlViews(member, page).items).toEqual([]);
-    app.permissions.upsertTeamMember(owner, team.id, member, { role: "viewer" });
-    expect(app.views.listHtmlViews(member, page).items.map((item) => item.resource.id)).toEqual([
+    expect((await app.views.listHtmlViews(member, page)).items).toEqual([]);
+    await app.permissions.upsertTeamMember(owner, team.id, member, { role: "viewer" });
+    expect((await app.views.listHtmlViews(member, page)).items.map((item) => item.resource.id)).toEqual([
       oldest.resourceId,
     ]);
 
-    expect(app.views.listHtmlViews(outsider, page).items.map((item) => item.resource.id)).toEqual([
+    expect((await app.views.listHtmlViews(outsider, page)).items.map((item) => item.resource.id)).toEqual([
       hidden.resourceId,
     ]);
-    app.permissions.upsertNodeGrant(owner, newest.nodeId, outsider, { role: "viewer" });
+    await app.permissions.upsertNodeGrant(owner, newest.nodeId, outsider, { role: "viewer" });
     expect(
-      app.views
-        .listHtmlViews(outsider, { limit: 10, cursor: undefined })
+      (await app.views
+        .listHtmlViews(outsider, { limit: 10, cursor: undefined }))
         .items.map((item) => item.resource.id),
     ).toEqual([newest.resourceId, hidden.resourceId]);
 
-    app.trash.trashNode(owner, sameTimeA.nodeId);
+    await app.trash.trashNode(owner, sameTimeA.nodeId);
     expect(
-      app.views
-        .listHtmlViews(owner, { limit: 10, cursor: undefined })
+      (await app.views
+        .listHtmlViews(owner, { limit: 10, cursor: undefined }))
         .items.map((item) => item.resource.id),
     ).toEqual([newest.resourceId, sameTimeB.resourceId, oldest.resourceId]);
   });

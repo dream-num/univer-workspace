@@ -29,7 +29,7 @@ export function createHtmlViewDraftsRouter(options: {
         );
       }),
     async (request, response) => {
-      const actor = options.identity.requireSession(request.headers.cookie);
+      const actor = await options.identity.requireSession(request.headers.cookie);
       const result = await options.drafts.submit(
         actor.user.id,
         request.headers["idempotency-key"],
@@ -38,13 +38,13 @@ export function createHtmlViewDraftsRouter(options: {
       response.status(result.status).json({ draft: result.draft });
     },
   );
-  router.get("/html-view-drafts/:draftId", (request, response) => {
-    const actor = options.identity.requireSession(request.headers.cookie);
+  router.get("/html-view-drafts/:draftId", async (request, response) => {
+    const actor = await options.identity.requireSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
-    response.json({ draft: options.drafts.get(actor.user.id, String(request.params.draftId)) });
+    response.json({ draft: await options.drafts.get(actor.user.id, String(request.params.draftId)) });
   });
   router.get("/html-view-drafts/:draftId/content", async (request, response) => {
-    const actor = options.identity.requireSession(request.headers.cookie);
+    const actor = await options.identity.requireSession(request.headers.cookie);
     const opened = await options.drafts.openContent(actor.user.id, String(request.params.draftId));
     response.setHeader("Content-Type", "text/plain; charset=utf-8");
     response.setHeader("Content-Security-Policy", "sandbox");
@@ -54,11 +54,11 @@ export function createHtmlViewDraftsRouter(options: {
     pipeBlobContent(opened.stream, response);
   });
   for (const action of ["publish", "reject"] as const) {
-    router.post(`/html-view-drafts/:draftId/${action}`, (request, response) => {
-      const actor = options.identity.requireInteractiveSession(request.headers.cookie);
+    router.post(`/html-view-drafts/:draftId/${action}`, async (request, response) => {
+      const actor = await options.identity.requireInteractiveSession(request.headers.cookie);
       response.setHeader("Cache-Control", "private, no-store");
       response.json({
-        draft: options.drafts[action](actor.user.id, String(request.params.draftId)),
+        draft: await options.drafts[action](actor.user.id, String(request.params.draftId)),
       });
     });
   }

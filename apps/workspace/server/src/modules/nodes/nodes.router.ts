@@ -9,11 +9,11 @@ export function createNodesRouter(options: {
   const router = Router();
   router.use(json({ limit: "1mb" }));
 
-  router.get("/spaces/:spaceId/nodes", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.get("/spaces/:spaceId/nodes", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
-      options.nodes.listSpaceRoot(
+      await options.nodes.listSpaceRoot(
         session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.spaceId),
         { cursor: request.query.cursor, limit: request.query.limit }
@@ -21,29 +21,29 @@ export function createNodesRouter(options: {
     );
   });
 
-  router.post("/nodes", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.post("/nodes", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.status(201).json(
-      options.nodes.create(session.user.id, request.body)
+      await options.nodes.create(session.user.id, request.body)
     );
   });
 
-  router.get("/nodes/:nodeId", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.get("/nodes/:nodeId", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
-      options.nodes.get(
+      await options.nodes.get(
         session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.nodeId)
       )
     );
   });
 
-  router.get("/nodes/:nodeId/children", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.get("/nodes/:nodeId/children", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     response.setHeader("Cache-Control", "private, no-store");
     response.json(
-      options.nodes.listChildren(
+      await options.nodes.listChildren(
         session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.nodeId),
         { cursor: request.query.cursor, limit: request.query.limit }
@@ -51,10 +51,10 @@ export function createNodesRouter(options: {
     );
   });
 
-  router.patch("/nodes/:nodeId", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.patch("/nodes/:nodeId", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.nodes.update(
+      await options.nodes.update(
         session,
         requiredParameter(request.params.nodeId),
         request.body
@@ -62,11 +62,11 @@ export function createNodesRouter(options: {
     );
   });
 
-  router.post("/nodes/:nodeId/reports", (request, response) => {
-    const session = options.identity.getSession(request.headers.cookie);
+  router.post("/nodes/:nodeId/reports", async (request, response) => {
+    const session = await options.identity.getSession(request.headers.cookie);
     response.setHeader("Cache-Control", "no-store");
     response.status(201).json(
-      options.nodes.report(
+      await options.nodes.report(
         session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
         requiredParameter(request.params.nodeId),
         request.body,

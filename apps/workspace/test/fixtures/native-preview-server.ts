@@ -9,7 +9,7 @@ import { Readable } from "node:stream";
 import { createSqliteTestApplication } from "../support/sqlite/test-application.js";
 import { interactivePrincipal } from "./principal.js";
 const directory = mkdtempSync(join(tmpdir(), "workspace-native-preview-"));
-const application = createSqliteTestApplication({ host: "127.0.0.1", port: 3091,
+const application = await createSqliteTestApplication({ host: "127.0.0.1", port: 3091,
   productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") }, collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
   blobDirectory: join(directory, "blobs"), secureCookies: false, sessionTtlMs: 3_600_000,
   passwordAuthEnabled: true, oauthClients: null });
@@ -17,7 +17,7 @@ await application.initialize();
 const password = randomUUID();
 const issued = await application.identity.registerWithPassword({ username: "preview-owner", displayName: "Preview owner", password });
 const userId = issued.view.user.id;
-const space = application.spaces.list(userId).spaces[0]!;
+const space = (await application.spaces.list(userId)).spaces[0]!;
 const units: Record<string, string> = {};
 for (const unitType of ["sheet", "doc", "slide"] as const) {
   const result = await application.resources.create(userId, randomUUID(), {
@@ -33,7 +33,7 @@ const snapshot = await (await fetch(`http://127.0.0.1:3091/universer-api/snapsho
 const sheetId = snapshot.snapshot.workbook.sheetOrder[0];
 const cell = `${units.sheet}:${sheetId}:A1`;
 const other = await application.identity.registerWithPassword({ username: "private-owner", displayName: "Private owner", password: randomUUID() });
-const privateSpace = application.spaces.list(other.view.user.id).spaces[0]!;
+const privateSpace = (await application.spaces.list(other.view.user.id)).spaces[0]!;
 const privateDoc = await application.resources.create(other.view.user.id, randomUUID(), {
   kind: "univer", name: "Private document", spaceId: privateSpace.id, parentNodeId: null, unitType: "doc",
 });
@@ -51,11 +51,11 @@ addEventListener('workspace-preview-status',e=>document.getElementById('status')
 addEventListener('workspace-preview-closed',()=>document.getElementById('status').textContent='closed');
 </script></body></html>`;
 const bytes = Buffer.from(html);
-const upload = application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), { spaceId: space.id, parentNodeId: null,
+const upload = await application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), { spaceId: space.id, parentNodeId: null,
   name: "Connected workspace.univer.html", originalFilename: "Connected workspace.univer.html", byteSize: bytes.length, declaredMediaType: "text/html" });
 await application.blobs.upload(userId, upload.body.upload.id, String(bytes.length), Readable.from([bytes]));
 const result = await application.blobs.complete(interactivePrincipal(userId), upload.body.upload.id);
-application.permissions.updateNodeLinkSharing(userId, result.body.node!.id, { enabled: true, role: "viewer" });
+await application.permissions.updateNodeLinkSharing(userId, result.body.node!.id, { enabled: true, role: "viewer" });
 const info = { sheetId, origin: "http://127.0.0.1:3091", nodeId: result.body.node?.id, units,
   cookieName: application.identity.cookieName, cookieValue: issued.cookieValue, username: "preview-owner", password };
 writeFileSync(join(directory, "session.json"), JSON.stringify(info), { mode: 0o600 });

@@ -15,6 +15,7 @@ export interface MembershipRow {
 }
 
 export interface GrantRow {
+  readonly effectiveRole: GrantRole;
   readonly user_id: string;
   readonly username: string;
   readonly display_name: string;
@@ -50,35 +51,35 @@ export interface NodeOwnerRow {
   readonly expires_at: number | null;
 }
 
+/** Mutations recheck access and capture their result in the same transaction. */
 export interface PermissionsRepository {
-  findUser(userId: string): PublicUser | null;
-  searchUsers(query: string, excludedUserId: string): PublicUser[];
-  listMembers(spaceId: string): MembershipRow[];
+  findUser(userId: string): Promise<PublicUser | null>;
+  searchUsers(query: string, excludedUserId: string): Promise<PublicUser[]>;
+  listMembers(spaceId: string): Promise<MembershipRow[]>;
   upsertMember(input: {
     readonly spaceId: string;
     readonly userId: string;
     readonly role: TeamRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): void;
-  removeMember(spaceId: string, userId: string): boolean;
-  listGrants(nodeId: string): GrantRow[];
-  findGrant(nodeId: string, userId: string): GrantRow | null;
+  }): Promise<MembershipRow>;
+  removeMember(actorUserId: string, spaceId: string, userId: string): Promise<void>;
+  listGrants(nodeId: string): Promise<GrantRow[]>;
   upsertGrant(input: {
     readonly nodeId: string;
     readonly userId: string;
     readonly role: GrantRole;
     readonly grantedBy: string;
     readonly now: number;
-  }): void;
-  removeGrant(nodeId: string, userId: string): boolean;
-  findLinkSharing(nodeId: string): LinkSharingRow | null;
-  findNodeOwner(nodeId: string): NodeOwnerRow;
+  }): Promise<GrantRow>;
+  removeGrant(actorUserId: string, nodeId: string, userId: string): Promise<GrantRole | null>;
+  findLinkSharing(nodeId: string): Promise<LinkSharingRow | null>;
+  findNodeOwner(nodeId: string): Promise<NodeOwnerRow>;
   upsertLinkSharing(input: {
     readonly nodeId: string;
     readonly enabled: boolean;
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): void;
+  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean }>;
 }

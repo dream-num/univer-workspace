@@ -45,13 +45,15 @@ export function createWorktreeChangeFeed(sessionSockets: SessionSockets): Worktr
               context.reject(401, "Invalid or expired session ticket");
               return;
             }
-            let untrack: (() => void) | undefined;
             context.accept({
-              open({ connection }) {
-                const { sessionId, sessionExpiresAt } = ticket.customData;
-                if (typeof sessionId === "string" && typeof sessionExpiresAt === "number") {
-                  untrack = sessionSockets.track(sessionId, sessionExpiresAt, connection);
+              async open({ connection }) {
+                if (!await sessionSockets.track(ticket, connection)) return;
+                if (disposed) {
+                  sessionSockets.untrack(connection);
+                  connection.close(1001, "Worktree change feed disposed");
+                  return;
                 }
+                if (!sessionSockets.isActive(connection)) return;
                 const userConnections = connections.get(ticket.userID) ?? new Map();
                 userConnections.set(connection.id, connection);
                 connections.set(ticket.userID, userConnections);
@@ -61,7 +63,7 @@ export function createWorktreeChangeFeed(sessionSockets: SessionSockets): Worktr
                 connection.close(1003, "Worktree change feed is server-only");
               },
               close({ connection }) {
-                untrack?.();
+                sessionSockets.untrack(connection);
                 removeConnection(ticket.userID, connection.id);
               },
             });
@@ -91,7 +93,7 @@ export function createWorktreeChangeFeed(sessionSockets: SessionSockets): Worktr
     if (disposed) return;
     for (const userId of userIds) {
       for (const connection of connections.get(userId)?.values() ?? []) {
-        safeSend(connection, message);
+        if (sessionSockets.isActive(connection)) safeSend(connection, message);
       }
     }
   }
@@ -107,6 +109,7 @@ export function createWorktreeChangeFeed(sessionSockets: SessionSockets): Worktr
     disposed = true;
     for (const userConnections of connections.values()) {
       for (const connection of userConnections.values()) {
+        sessionSockets.untrack(connection);
         connection.close(1001, "Worktree change feed disposed");
       }
     }

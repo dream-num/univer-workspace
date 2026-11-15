@@ -10,7 +10,7 @@ import { createSqliteTestApplication } from "../support/sqlite/test-application.
 const directory = mkdtempSync(join(tmpdir(), "workspace-embed-runtime-"));
 process.once("exit", () => rmSync(directory, { recursive: true, force: true }));
 const port = Number(process.env.PORT ?? 3092);
-const application = createSqliteTestApplication({
+const application = await createSqliteTestApplication({
   host: "127.0.0.1",
   port,
   productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
@@ -28,7 +28,7 @@ const issued = await application.identity.registerWithPassword({
   password: randomUUID(),
 });
 const userId = issued.view.user.id;
-const space = application.spaces.list(userId).spaces[0]!;
+const space = (await application.spaces.list(userId)).spaces[0]!;
 const sourceBase = JSON.parse(readFileSync(process.env.EMBED_BASE_SNAPSHOT!, "utf8"));
 const sourceDoc = JSON.parse(readFileSync(process.env.EMBED_DOC_SNAPSHOT!, "utf8"));
 const repository = application.repositories.resources;
@@ -41,7 +41,7 @@ async function seed(
   data: unknown,
 ) {
   const operationId = randomUUID();
-  repository.reserveCreateResource({
+  await repository.reserveCreateResource({
     operationId,
     actorUserId: userId,
     createdAt: Date.now(),
@@ -57,10 +57,10 @@ async function seed(
       ...(data === undefined ? {} : { initialData: data }),
     },
   });
-  repository.markFailed(operationId, { code: "FIXTURE", message: "Seed reserved" }, Date.now());
+  await repository.markFailed(operationId, { code: "FIXTURE", message: "Seed reserved" }, Date.now());
   const result = await application.resources.retry(userId, operationId);
   if (result.state !== "completed") throw new Error(`${name}: ${JSON.stringify(result)}`);
-  return application.resources.getByUnit(userId, unitId).node;
+  return (await application.resources.getByUnit(userId, unitId)).node;
 }
 const base = await seed(
   "base",

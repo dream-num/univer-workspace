@@ -25,6 +25,7 @@ import type {
 } from "./blobs.types.js";
 
 export interface BlobsModule {
+  initialize(): Promise<void>;
   replace(
     actor: Principal,
     resourceId: string,
@@ -37,8 +38,8 @@ export interface BlobsModule {
     actor: Principal,
     idempotencyKey: unknown,
     input: unknown
-  ): { readonly status: 200 | 201; readonly body: BlobUploadSessionEnvelope };
-  getUpload(userId: string, uploadId: string): BlobUploadSessionEnvelope;
+  ): Promise<{ readonly status: 200 | 201; readonly body: BlobUploadSessionEnvelope }>;
+  getUpload(userId: string, uploadId: string): Promise<BlobUploadSessionEnvelope>;
   upload(
     userId: string,
     uploadId: string,
@@ -46,7 +47,7 @@ export interface BlobsModule {
     body: Readable
   ): Promise<void>;
   complete(actor: Principal, uploadId: string): Promise<CompleteBlobUploadResult>;
-  abort(userId: string, uploadId: string): void;
+  abort(userId: string, uploadId: string): Promise<void>;
   openContent(
     userId: string,
     resourceId: string,
@@ -71,19 +72,9 @@ export function createBlobsModule(options: {
 }): BlobsModule {
   const now = options.now ?? Date.now;
   const maxBlobBytes = options.maxBlobBytes ?? 512 * 1024 * 1024;
-  options.repository.recoverInterruptedUploads(now());
-  // A single-process restart cannot resume interrupted PUT bodies.
-  for (const operationId of options.repository.pendingReplacementIds()) {
-    options.repository.failReplacement(
-      operationId,
-      "REPLACEMENT_INTERRUPTED",
-      "Server restarted during Blob replacement; retry with a new key.",
-      now(),
-    );
-  }
 
-  function reservation(userId: string, uploadId: string): ReservedBlobUpload {
-    const value = options.repository.find(uploadId, userId);
+  async function reservation(userId: string, uploadId: string): Promise<ReservedBlobUpload> {
+    const value = await options.repository.find(uploadId, userId);
     if (!value) throw notFound();
     return value;
   }
@@ -102,11 +93,11 @@ export function createBlobsModule(options: {
     };
   }
 
-  function completed(value: ReservedBlobUpload, status: 200 | 201): {
+  async function completed(value: ReservedBlobUpload, status: 200 | 201): Promise<{
     readonly status: 200 | 201;
     readonly body: ResourceCreateResponse;
-  } {
-    const access = options.access.resolveResource(
+  }> {
+    const access = await options.access.resolveResource(
       value.actorUserId,
       value.upload.resource_id
     );
@@ -121,8 +112,19 @@ export function createBlobsModule(options: {
   }
 
   return {
+    async initialize() {
+      await options.repository.recoverInterruptedUploads(now());
+      // A single-process restart cannot resume interrupted PUT bodies.
+      for (const operationId of await options.repository.pendingReplacementIds()) {
+        await options.repository.failReplacement(
+          operationId,
+          "REPLACEMENT_INTERRUPTED",
+          "Server restarted during Blob replacement; retry with a new key.",
+          now(),
+        );
+      }
+    },
     async replace(actor, resourceId, key, ifMatch, contentLength, body) {
-      const userId = actor.user.id;
       const operationId = validOperationId(key);
       if (typeof ifMatch !== "string" || !/^"[^"\r\n]+"$/.test(ifMatch) || ifMatch.length > 200) {
         throw invalidInput("If-Match must contain one quoted strong ETag.", "If-Match");
@@ -138,19 +140,10 @@ export function createBlobsModule(options: {
           "Blob exceeds the configured byte limit.",
         );
       assertCeiling(principalCategory(actor.user), "storeFile", { byteSize });
-      const requireWritable = () => {
-        const access = requireBlobAccess(options.access, userId, resourceId);
-        if (!access.capabilities.editContent) throw forbidden();
-        assertNotDelegatedPageWrite(actor, [access.node.name, access.originalFilename]);
-        if (access.availability !== "ready")
-          throw conflict("Blob content is not currently available.");
-        return access;
-      };
-      requireWritable();
       const intent = { resourceId, expectedEtag: ifMatch.slice(1, -1), byteSize };
       let reserved;
       try {
-        reserved = options.repository.reserveReplacement(operationId, userId, intent, now());
+        reserved = await options.repository.reserveReplacement(operationId, actor, intent, now());
       } catch (error) {
         throw replacementError(error);
       }
@@ -159,7 +152,7 @@ export function createBlobsModule(options: {
         return reserved.result;
       }
       try {
-        if (requireWritable().etag !== intent.expectedEtag) {
+        if (reserved.currentEtag !== intent.expectedEtag) {
           throw new ApplicationError(
             "PRECONDITION_FAILED",
             412,
@@ -171,10 +164,9 @@ export function createBlobsModule(options: {
           body,
           expectedByteSize: byteSize,
         });
-        // Resolve live permissions after the asynchronous upload, immediately before the product transaction.
-        requireWritable();
-        return options.repository.completeReplacement(
+        return await options.repository.completeReplacement(
           operationId,
+          actor,
           intent,
           reserved.objectKey,
           stored,
@@ -182,7 +174,7 @@ export function createBlobsModule(options: {
         );
       } catch (error) {
         const failure = replacementError(error);
-        options.repository.failReplacement(
+        await options.repository.failReplacement(
           operationId,
           failure instanceof ApplicationError ? failure.code : "REPLACEMENT_FAILED",
           failure instanceof Error ? failure.message : "Blob replacement failed.",
@@ -192,20 +184,16 @@ export function createBlobsModule(options: {
       }
     },
 
-    createUpload(actor, keyValue, inputValue) {
+    async createUpload(actor, keyValue, inputValue) {
       const userId = actor.user.id;
       const operationId = validOperationId(keyValue);
       const intent = validIntent(inputValue, maxBlobBytes);
-      validateTarget(userId, intent, options.access);
+      await validateTarget(userId, intent, options.access);
       assertNotDelegatedPageWrite(actor, [intent.name, intent.originalFilename]);
       assertCeiling(principalCategory(actor.user), "storeFile", { byteSize: intent.byteSize });
-      assertCeiling(principalCategory(actor.user), "createFiles", {
-        held: () => options.access.countPersonalFiles(userId, operationId),
-        adding: 1,
-      });
       let reserved;
       try {
-        reserved = options.repository.reserve({
+        reserved = await options.repository.reserve({
           operationId,
           actorUserId: userId,
           intent,
@@ -222,12 +210,12 @@ export function createBlobsModule(options: {
       return { status: reserved.created ? 201 : 200, body: envelope(reserved) };
     },
 
-    getUpload(userId, uploadId) {
-      return envelope(reservation(userId, uploadId));
+    async getUpload(userId, uploadId) {
+      return envelope(await reservation(userId, uploadId));
     },
 
     async upload(userId, uploadId, contentLengthValue, body) {
-      const value = reservation(userId, uploadId);
+      const value = await reservation(userId, uploadId);
       if (value.upload.state === "uploaded") {
         body.resume();
         return;
@@ -242,7 +230,7 @@ export function createBlobsModule(options: {
       if (contentLength !== value.upload.byte_size) {
         throw conflict("Content-Length does not match the reserved byte size.");
       }
-      if (!options.repository.beginUpload(uploadId, now())) {
+      if (!await options.repository.beginUpload(uploadId, now())) {
         throw conflict("Blob Upload Session is already receiving content.");
       }
       let stored;
@@ -255,11 +243,11 @@ export function createBlobsModule(options: {
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Blob upload failed.";
-        options.repository.resetUploadAfterFailure(uploadId, message, now());
+        await options.repository.resetUploadAfterFailure(uploadId, message, now());
         throw conflict(message);
       }
       try {
-        options.repository.markUploaded({
+        await options.repository.markUploaded({
           uploadId,
           byteSize: stored.byteSize,
           sha256: stored.sha256,
@@ -277,23 +265,23 @@ export function createBlobsModule(options: {
 
     async complete(actor, uploadId) {
       const userId = actor.user.id;
-      const value = reservation(userId, uploadId);
+      const value = await reservation(userId, uploadId);
       assertNotDelegatedPageWrite(actor, [value.payload.name, value.payload.originalFilename]);
       if (value.upload.state === "completed") return completed(value, 200);
       if (value.upload.state !== "uploaded") {
         throw conflict("Blob bytes must be uploaded before completion.");
       }
-      validateTarget(userId, value.payload, options.access);
+      await validateTarget(userId, value.payload, options.access);
       const object = await options.store.head(value.upload.object_key);
       if (!object || object.byteSize !== value.upload.byte_size) {
         throw conflict("Stored Blob does not match the Upload Session.");
       }
-      const result = options.repository.complete(uploadId, now());
+      const result = await options.repository.complete(uploadId, now());
       return completed(result, 201);
     },
 
-    abort(userId, uploadId) {
-      const value = reservation(userId, uploadId);
+    async abort(userId, uploadId) {
+      const value = await reservation(userId, uploadId);
       if (value.upload.state === "completed") {
         throw conflict("A completed Blob Upload cannot be aborted.");
       }
@@ -305,11 +293,13 @@ export function createBlobsModule(options: {
       ) {
         throw conflict("Blob Upload Session can no longer be aborted.");
       }
-      options.repository.abort(uploadId, now());
+      if (!(await options.repository.abort(uploadId, now()))) {
+        throw conflict("Blob Upload Session can no longer be aborted.");
+      }
     },
 
     async openContent(userId, resourceId, rangeHeader) {
-      const access = requireBlobAccess(options.access, userId, resourceId);
+      const access = await requireBlobAccess(options.access, userId, resourceId);
       if (!access.capabilities.openContent || access.availability !== "ready") {
         throw notFound();
       }
@@ -323,8 +313,8 @@ export function createBlobsModule(options: {
 
     async runMaintenance(workerId, limit = 25) {
       const startedAt = now();
-      options.repository.expireDue(startedAt, limit);
-      const jobs = options.repository.claimDeletionJobs({
+      await options.repository.expireDue(startedAt, limit);
+      const jobs = await options.repository.claimDeletionJobs({
         workerId,
         now: startedAt,
         leaseMs: 30_000,
@@ -333,14 +323,14 @@ export function createBlobsModule(options: {
       for (const job of jobs) {
         try {
           await options.store.delete(job.object_key);
-          options.repository.completeDeletionJob(job.id, workerId);
+          await options.repository.completeDeletionJob(job.id, workerId);
         } catch (error) {
           const failedAt = now();
           const delay = Math.min(
             60 * 60 * 1000,
             1_000 * 2 ** Math.min(job.attempt_count, 12)
           );
-          options.repository.failDeletionJob({
+          await options.repository.failDeletionJob({
             jobId: job.id,
             workerId,
             message:
@@ -422,18 +412,18 @@ function validIntent(value: unknown, maxBytes: number): BlobUploadIntent {
   };
 }
 
-function validateTarget(
+async function validateTarget(
   userId: string,
   input: Pick<BlobUploadIntent, "spaceId" | "parentNodeId">,
   access: AccessResolver
-): void {
+): Promise<void> {
   if (input.parentNodeId === null) {
-    const space = access.resolveSpace(userId, input.spaceId);
+    const space = await access.resolveSpace(userId, input.spaceId);
     if (!space) throw notFound();
     if (!space.capabilities.createAtRoot) throw forbidden();
     return;
   }
-  const parent = access.resolveNode(userId, input.parentNodeId);
+  const parent = await access.resolveNode(userId, input.parentNodeId);
   if (!parent || parent.spaceId !== input.spaceId) throw notFound();
   if (!parent.capabilities.createChildren) throw forbidden();
 }
@@ -456,12 +446,12 @@ function assertSameIntent(
   ) throw conflict("Idempotency-Key is already associated with another request.");
 }
 
-function requireBlobAccess(
+async function requireBlobAccess(
   resolver: AccessResolver,
   userId: string,
   resourceId: string
-): BlobResourceAccess {
-  const value = resolver.resolveResource(userId, resourceId);
+): Promise<BlobResourceAccess> {
+  const value = await resolver.resolveResource(userId, resourceId);
   if (!value || value.kind !== "blob") throw notFound();
   return value;
 }

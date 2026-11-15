@@ -7,38 +7,38 @@ export function createViewsRouter(options: {
   readonly views: ViewsModule;
 }): Router {
   const router = Router();
-  router.get("/recent-resources", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/recent-resources", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.views.listRecent(session.user.id, {
+      await options.views.listRecent(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
       }),
     );
   });
-  router.get("/owned-by-me", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/owned-by-me", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.views.listOwned(session.user.id, {
+      await options.views.listOwned(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
       }),
     );
   });
-  router.get("/html-views", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/html-views", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.views.listHtmlViews(session.user.id, {
+      await options.views.listHtmlViews(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
         spaceId: request.query.spaceId,
       }),
     );
   });
-  router.get("/shared-with-me", (request, response) => {
-    const session = options.identity.requireSession(request.headers.cookie);
+  router.get("/shared-with-me", async (request, response) => {
+    const session = await options.identity.requireSession(request.headers.cookie);
     response.json(
-      options.views.listShared(session.user.id, {
+      await options.views.listShared(session.user.id, {
         cursor: request.query.cursor,
         limit: request.query.limit,
       }),

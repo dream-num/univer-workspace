@@ -8,11 +8,11 @@ export function createBlobsRouter(options: {
   readonly blobs: BlobsModule;
 }): Router {
   const router = Router();
-  const session = (cookie: string | undefined) => options.identity.requireSession(cookie).user.id;
+  const session = async (cookie: string | undefined) => (await options.identity.requireSession(cookie)).user.id;
 
   router.put("/blob-resources/:resourceId/content", async (request, response) => {
     const result = await options.blobs.replace(
-      options.identity.requireSession(request.headers.cookie),
+      await options.identity.requireSession(request.headers.cookie),
       required(request.params.resourceId),
       request.headers["idempotency-key"],
       request.headers["if-match"],
@@ -26,19 +26,19 @@ export function createBlobsRouter(options: {
   router.post(
     "/blob-upload-sessions",
     json({ limit: "1mb" }),
-    (request, response) => {
-      const result = options.blobs.createUpload(
-        options.identity.requireSession(request.headers.cookie),
+    async (request, response) => {
+      const result = await options.blobs.createUpload(
+        await options.identity.requireSession(request.headers.cookie),
         request.headers["idempotency-key"],
         request.body
       );
       response.status(result.status).json(result.body);
     }
   );
-  router.get("/blob-upload-sessions/:uploadId", (request, response) => {
+  router.get("/blob-upload-sessions/:uploadId", async (request, response) => {
     response.json(
-      options.blobs.getUpload(
-        session(request.headers.cookie),
+      await options.blobs.getUpload(
+        await session(request.headers.cookie),
         required(request.params.uploadId)
       )
     );
@@ -47,7 +47,7 @@ export function createBlobsRouter(options: {
     "/blob-upload-sessions/:uploadId/content",
     async (request, response) => {
       await options.blobs.upload(
-        session(request.headers.cookie),
+        await session(request.headers.cookie),
         required(request.params.uploadId),
         request.headers["content-length"],
         request
@@ -59,15 +59,15 @@ export function createBlobsRouter(options: {
     "/blob-upload-sessions/:uploadId/complete",
     async (request, response) => {
       const result = await options.blobs.complete(
-        options.identity.requireSession(request.headers.cookie),
+        await options.identity.requireSession(request.headers.cookie),
         required(request.params.uploadId)
       );
       response.status(result.status).json(result.body);
     }
   );
-  router.delete("/blob-upload-sessions/:uploadId", (request, response) => {
-    options.blobs.abort(
-      session(request.headers.cookie),
+  router.delete("/blob-upload-sessions/:uploadId", async (request, response) => {
+    await options.blobs.abort(
+      await session(request.headers.cookie),
       required(request.params.uploadId)
     );
     response.status(204).end();
@@ -77,7 +77,7 @@ export function createBlobsRouter(options: {
     router.get(
       `/blob-resources/:resourceId/${disposition}`,
       async (request, response) => {
-        const reader = options.identity.getSession(request.headers.cookie);
+        const reader = await options.identity.getSession(request.headers.cookie);
         response.setHeader("Cache-Control", "private, no-store");
         const opened = await options.blobs.openContent(
           reader.authenticated ? reader.user.id : ANONYMOUS_USER_ID,

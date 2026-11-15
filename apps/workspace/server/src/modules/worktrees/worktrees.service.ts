@@ -4,7 +4,6 @@ import { ApplicationError } from "../../middleware/errors.js";
 import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
 import {
-  assertCeiling,
   type AccessResolver,
   type ResourceAccess,
   type ResourceContentAccess,
@@ -33,6 +32,7 @@ import type {
   WorktreeUnit,
   WorktreeVisibility,
 } from "./worktrees.types.js";
+import { forbidden, notFound } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -50,7 +50,7 @@ export function createWorktreesModule(options: {
   readonly publishMergedAssets: (
     worktreeId: string,
     unitIds: readonly string[]
-  ) => void;
+  ) => Promise<void>;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
 }): WorktreesModule {
@@ -63,7 +63,7 @@ export function createWorktreesModule(options: {
     try {
       return await action();
     } catch (error) {
-      options.repository.failOperation(
+      await options.repository.failOperation(
         operationId,
         operationFailure(error),
         now()
@@ -73,14 +73,14 @@ export function createWorktreesModule(options: {
   }
 
   async function context(userId: string, worktreeId: string): Promise<WorktreeContext> {
-    const row = options.repository.get(worktreeId, userId);
+    const row = await options.repository.get(worktreeId, userId);
     if (!row || !isDiscoverable(userId, row)) throw notFound();
     const data = await backendCall(() =>
       options.backend.getWorktree(worktreeId, userId)
     );
-    const unitRows = options.repository.units(worktreeId);
-    const units = mapUnits(unitRows, data.units, userId, options.access);
-    const access = worktreeCapabilities(
+    const unitRows = await options.repository.units(worktreeId);
+    const units = await mapUnits(unitRows, data.units, userId, options.access);
+    const access = await worktreeCapabilities(
       userId,
       row,
       data.status,
@@ -97,13 +97,13 @@ export function createWorktreesModule(options: {
     };
   }
 
-  function notifyChanged(
+  async function notifyChanged(
     kind: WorktreeProductChange["kind"],
     worktreeId: string,
-    audienceUserIds = options.repository.audience(worktreeId)
-  ): void {
+    audienceUserIds?: readonly string[]
+  ): Promise<void> {
     try {
-      options.onChanged?.({ kind, worktreeId, audienceUserIds });
+      options.onChanged?.({ kind, worktreeId, audienceUserIds: audienceUserIds ?? await options.repository.audience(worktreeId) });
     } catch {
       // Realtime cache invalidation cannot change a completed product write.
     }
@@ -126,7 +126,7 @@ export function createWorktreesModule(options: {
         canMergeAsActor(userId, value.row);
       if (!value.capabilities.editDraft && !cancelLocal) throw forbidden();
       if (!removed && unit.source === "worktree" && unit.target) {
-        validateTarget(
+        await validateTarget(
           userId,
           value.row,
           unit.target.spaceId,
@@ -135,18 +135,18 @@ export function createWorktreesModule(options: {
         );
       }
       if (removed && unit.source === "trunk") {
-        const node = unit.nodeId === null ? null : options.access.resolveNode(userId, unit.nodeId);
+        const node = unit.nodeId === null ? null : await options.access.resolveNode(userId, unit.nodeId);
         if (!node?.capabilities.trash) throw forbidden();
       }
       const data = await backendCall(() =>
         options.backend.setUnitRemoved(worktreeId, unitId, removed, userId),
       );
-      notifyChanged("updated", worktreeId);
+      await notifyChanged("updated", worktreeId);
       return { worktree: detailView(await contextFromData(userId, value.row, data)) };
     },
 
     async activity(userId, scope, since) {
-      const rows = options.repository.listCandidates({
+      const rows = await options.repository.listCandidates({
         userId, scope: "all", kind: scope.kind,
         teamSpaceId: scope.kind === "team" ? scope.teamSpaceId : null,
         search: "", order: "createdAtDesc", cursor: null, limit: MAX_ACTIVITY_ROWS + 1, touchedSince: since,
@@ -224,7 +224,7 @@ export function createWorktreesModule(options: {
       // State lives in the Collaboration Service, not the product database, so a
       // state filter scans candidate batches until the page is full or exhausted.
       for (;;) {
-        const rows = options.repository.listCandidates({
+        const rows = await options.repository.listCandidates({
           userId,
           scope,
           kind,
@@ -244,12 +244,11 @@ export function createWorktreesModule(options: {
           if (states.length && !states.includes(data.status)) continue;
           loaded.push({ row, data });
         }
-        // Share current permissions only across the following synchronous pass.
-        // Never retain authorization results over an await or between requests.
+        // Reuse each permission lookup while building this page, after loading SDK state.
         const pageAccess = cacheResourceContent(options.access, userId);
         for (const { row, data } of loaded) {
-          const unitRows = options.repository.units(row.id);
-          const access = worktreeCapabilities(
+          const unitRows = await options.repository.units(row.id);
+          const access = await worktreeCapabilities(
             userId,
             row,
             data.status,
@@ -273,7 +272,7 @@ export function createWorktreesModule(options: {
       const resumeFrom = last?.row ?? lastScanned;
       return {
         items: page.map((item) => item.summary),
-        hasCreatedWorktree: options.repository.hasCreatedWorktree(userId),
+        hasCreatedWorktree: await options.repository.hasCreatedWorktree(userId),
         nextCursor:
           (hasNext || visible.length > limit) && resumeFrom
             ? encodeCursor(position(resumeFrom))
@@ -288,7 +287,7 @@ export function createWorktreesModule(options: {
         if (!input.teamSpaceId) {
           throw invalidInput("teamSpaceId is required.", "teamSpaceId");
         }
-        const space = options.access.resolveSpace(
+        const space = await options.access.resolveSpace(
           userId,
           input.teamSpaceId
         );
@@ -300,7 +299,7 @@ export function createWorktreesModule(options: {
         worktreeId: randomUUID(),
         createdVia,
       };
-      const reserved = options.repository.reserveOperation({
+      const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "create_worktree",
         actorUserId: userId,
@@ -322,7 +321,7 @@ export function createWorktreesModule(options: {
           await backendCall(() =>
             options.backend.createWorktree(stable.worktreeId, userId)
           );
-          options.repository.create({
+          await options.repository.create({
             id: stable.worktreeId,
             name: stable.name,
             summary: stable.summary,
@@ -333,7 +332,7 @@ export function createWorktreesModule(options: {
             createdAt: now(),
             createdVia: stable.createdVia ?? null,
           });
-          options.repository.completeOperation(
+          await options.repository.completeOperation(
             operationId,
             { worktreeId: stable.worktreeId },
             now()
@@ -341,7 +340,7 @@ export function createWorktreesModule(options: {
         });
       }
       const created = await context(userId, stable.worktreeId);
-      notifyChanged("created", stable.worktreeId);
+      await notifyChanged("created", stable.worktreeId);
       return {
         status: 201,
         body: summaryView(
@@ -360,12 +359,12 @@ export function createWorktreesModule(options: {
     async getByNumber(userId, spaceId, numberValue) {
       const number = validNumber(numberValue);
       // Team Worktree creators remain discoverable after losing Space membership.
-      let worktreeId = options.repository.findIdByNumber({ teamSpaceId: spaceId }, number);
+      let worktreeId = await options.repository.findIdByNumber({ teamSpaceId: spaceId }, number);
       if (!worktreeId) {
-        const space = options.access.resolveSpace(userId, spaceId);
+        const space = await options.access.resolveSpace(userId, spaceId);
         // A Personal Space lists its owner's own User Worktrees only.
         if (space?.type === "personal" && space.ownerUserId === userId) {
-          worktreeId = options.repository.findIdByNumber({ creatorUserId: userId }, number);
+          worktreeId = await options.repository.findIdByNumber({ creatorUserId: userId }, number);
         }
       }
       if (!worktreeId) throw notFound();
@@ -375,7 +374,7 @@ export function createWorktreesModule(options: {
     async update(userId, worktreeId, inputValue) {
       const value = await context(userId, worktreeId);
       if (!canManageSummary(userId, value.row)) throw forbidden();
-      const previousAudience = options.repository.audience(worktreeId);
+      const previousAudience = await options.repository.audience(worktreeId);
       const patch = validPatch(inputValue);
       if (
         patch.visibility !== undefined &&
@@ -386,25 +385,22 @@ export function createWorktreesModule(options: {
           "visibility"
         );
       }
-      options.repository.update({
+      const applied = await options.repository.update({
         id: worktreeId,
-        name: patch.name ?? value.row.name,
-        summary:
-          patch.summary === undefined
-            ? value.row.summary
-            : patch.summary,
-        visibility: patch.visibility ?? value.row.visibility,
+        actorId: userId,
+        ...patch,
         updatedAt: now(),
       });
+      if (!applied) throw forbidden();
       const updated = {
         worktree: detailView(await context(userId, worktreeId)),
       };
-      notifyChanged(
+      await notifyChanged(
         "updated",
         worktreeId,
         unionAudience(
           previousAudience,
-          options.repository.audience(worktreeId)
+          await options.repository.audience(worktreeId)
         )
       );
       return updated;
@@ -421,13 +417,13 @@ export function createWorktreesModule(options: {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.addUnit) throw forbidden();
       if (input.source === "trunk") {
-        const resource = requireEditableResource(
+        const resource = await requireEditableResource(
           userId,
           input.resourceId,
           options.access
         );
         assertTeamResource(value.row, resource);
-        const resourceUnit = options.repository.resourceUnit(resource.id);
+        const resourceUnit = await options.repository.resourceUnit(resource.id);
         if (!resourceUnit) throw notFound();
         const unitId = resourceUnit.unitId;
         const payload = {
@@ -436,7 +432,7 @@ export function createWorktreesModule(options: {
           unitId,
           worktreeId,
         };
-        const reserved = options.repository.reserveOperation({
+        const reserved = await options.repository.reserveOperation({
           id: operationId,
           kind: "add_worktree_unit",
           actorUserId: userId,
@@ -448,6 +444,7 @@ export function createWorktreesModule(options: {
           "add_worktree_unit",
           userId
         );
+        if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
         assertJsonIntent(input, {
           source: stable.source,
           resourceId: stable.resourceId,
@@ -461,13 +458,13 @@ export function createWorktreesModule(options: {
                 userId
               )
             );
-            options.repository.addTrunkUnit({
+            await options.repository.addTrunkUnit({
               worktreeId,
               unitId: stable.unitId,
               resourceId: stable.resourceId,
               addedAt: now(),
             });
-            options.repository.completeOperation(
+            await options.repository.completeOperation(
               operationId,
               { worktreeId, unitId: stable.unitId },
               now()
@@ -483,11 +480,11 @@ export function createWorktreesModule(options: {
             ),
           },
         } as const;
-        notifyChanged("unitAdded", worktreeId);
+        await notifyChanged("unitAdded", worktreeId);
         return result;
       }
 
-      validateTarget(
+      await validateTarget(
         userId,
         value.row,
         input.targetSpaceId,
@@ -495,10 +492,6 @@ export function createWorktreesModule(options: {
         options.access
       );
       // A new file counts from the moment it is created in the pull request, not from its merge.
-      assertCeiling(options.access.principalCategory(userId), "createFiles", {
-        held: () => options.access.countPersonalFiles(userId, operationId),
-        adding: 1,
-      });
       const payload = {
         ...input,
         worktreeId,
@@ -506,7 +499,7 @@ export function createWorktreesModule(options: {
         resourceId: randomUUID(),
         nodeId: randomUUID(),
       };
-      const reserved = options.repository.reserveOperation({
+      const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "create_worktree_unit",
         actorUserId: userId,
@@ -518,6 +511,7 @@ export function createWorktreesModule(options: {
         "create_worktree_unit",
         userId
       );
+      if (stable.worktreeId !== worktreeId) throw idempotencyConflict();
       assertJsonIntent(input, {
         source: stable.source,
         name: stable.name,
@@ -555,7 +549,8 @@ export function createWorktreesModule(options: {
               "Collaboration Worktree Unit identity did not match the reserved Unit."
             );
           }
-          options.repository.addLocalUnit({
+          await options.repository.completeLocalUnit({
+            operationId,
             worktreeId,
             unitId: stable.unitId,
             resourceId: stable.resourceId,
@@ -567,11 +562,6 @@ export function createWorktreesModule(options: {
             createdBy: userId,
             createdAt: now(),
           });
-          options.repository.completeOperation(
-            operationId,
-            { worktreeId, unitId: stable.unitId },
-            now()
-          );
         });
       }
       const result = {
@@ -583,7 +573,7 @@ export function createWorktreesModule(options: {
           ),
         },
       } as const;
-      notifyChanged("unitAdded", worktreeId);
+      await notifyChanged("unitAdded", worktreeId);
       return result;
     },
 
@@ -593,12 +583,12 @@ export function createWorktreesModule(options: {
       const unit = requireMappedUnit(value, unitId);
       if (
         unit.source === "trunk" &&
-        !options.access.resolveResource(userId, unit.resourceId)?.capabilities.openContent
+        !(await options.access.resolveResource(userId, unit.resourceId))?.capabilities.openContent
       ) {
         throw notFound();
       }
       if (mode === "trunk") {
-        const resource = options.access.resolveResource(
+        const resource = await options.access.resolveResource(
           userId,
           unit.resourceId
         );
@@ -657,7 +647,7 @@ export function createWorktreesModule(options: {
         )
       );
       if (result.status === "committed") {
-        notifyChanged("contentChanged", worktreeId);
+        await notifyChanged("contentChanged", worktreeId);
       }
       return result;
     },
@@ -669,7 +659,7 @@ export function createWorktreesModule(options: {
         options.backend.markReady(worktreeId, userId)
       );
       const updated = await contextFromData(userId, value.row, data);
-      notifyChanged("stateChanged", worktreeId);
+      await notifyChanged("stateChanged", worktreeId);
       return {
         worktree: summaryView(
           updated.row,
@@ -686,7 +676,7 @@ export function createWorktreesModule(options: {
         options.backend.reopen(worktreeId, userId)
       );
       const updated = await contextFromData(userId, value.row, data);
-      notifyChanged("stateChanged", worktreeId);
+      await notifyChanged("stateChanged", worktreeId);
       return {
         worktree: summaryView(
           updated.row,
@@ -699,7 +689,7 @@ export function createWorktreesModule(options: {
     async merge(userId, worktreeId, operationIdValue) {
       const operationId = validOperationId(operationIdValue);
       const value = await context(userId, worktreeId);
-      const existing = options.repository.getOperation(operationId);
+      const existing = await options.repository.getOperation(operationId);
       if (existing) {
         const input = operationPayload<{ readonly worktreeId: string }>(
           existing,
@@ -717,10 +707,10 @@ export function createWorktreesModule(options: {
         throw forbidden();
       }
       if (existing?.state !== "completed" && value.row.processed_at === null) {
-        validateAllTargets(userId, value.row, value.units, options);
+        await validateAllTargets(userId, value.row, value.units, options);
       }
       const payload = { worktreeId };
-      const reserved = options.repository.reserveOperation({
+      const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "merge_worktree",
         actorUserId: userId,
@@ -748,30 +738,31 @@ export function createWorktreesModule(options: {
               ? options.backend.getWorktree(worktreeId, userId)
               : options.backend.merge(worktreeId, userId),
           );
-          const mergedUnitIds = activateSuccessfulUnits(
+          const mergedUnitIds = await activateSuccessfulUnits(
+            userId,
             value.row,
-            options.repository.units(worktreeId),
+            await options.repository.units(worktreeId),
             data.units,
             options.repository,
             now()
           );
-          options.publishMergedAssets(worktreeId, mergedUnitIds);
+          await options.publishMergedAssets(worktreeId, mergedUnitIds);
           if (data.status === "merged") {
             for (const unit of data.units) {
               if (unit.mergeResult?.status !== "removed") continue;
               const mapped = requireMappedUnit(value, unit.unitID);
               if (mapped.source === "worktree") {
-                options.repository.markLocalUnitDiscarded(worktreeId, unit.unitID, now());
+                await options.repository.markLocalUnitDiscarded(worktreeId, unit.unitID, now());
               } else {
                 if (mapped.nodeId === null) throw notFound();
-                options.trash.trashNodeOnce(
+                await options.trash.trashNodeOnce(
                   userId,
                   mapped.nodeId,
-                  options.repository.removalBatchId(worktreeId, unit.unitID),
+                  await options.repository.removalBatchId(worktreeId, unit.unitID),
                 );
               }
             }
-            options.repository.markProcessed(worktreeId, now());
+            await options.repository.markProcessed(worktreeId, now());
           }
           return options.repository.completeOperation(
             operationId,
@@ -781,7 +772,7 @@ export function createWorktreesModule(options: {
         });
       }
       const current = await context(userId, worktreeId);
-      notifyChanged("merged", worktreeId);
+      await notifyChanged("merged", worktreeId);
       return {
         operation: operationView(operation),
         worktree: summaryView(
@@ -797,7 +788,7 @@ export function createWorktreesModule(options: {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.discard) throw forbidden();
       const payload = { worktreeId };
-      const reserved = options.repository.reserveOperation({
+      const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "discard_worktree",
         actorUserId: userId,
@@ -816,8 +807,8 @@ export function createWorktreesModule(options: {
           const data = await backendCall(() =>
             options.backend.discard(worktreeId, userId)
           );
-          options.repository.markLocalUnitsDiscarded(worktreeId, now());
-          options.repository.markProcessed(worktreeId, now());
+          await options.repository.markLocalUnitsDiscarded(worktreeId, now());
+          await options.repository.markProcessed(worktreeId, now());
           return options.repository.completeOperation(
             operationId,
             { worktreeId, state: data.status },
@@ -826,7 +817,7 @@ export function createWorktreesModule(options: {
         });
       }
       const current = await context(userId, worktreeId);
-      notifyChanged("discarded", worktreeId);
+      await notifyChanged("discarded", worktreeId);
       return {
         operation: operationView(operation),
         worktree: summaryView(
@@ -845,7 +836,7 @@ export function createWorktreesModule(options: {
           if (input.write && unit.change === "deleted") return false;
           if (
             unit.source === "trunk" &&
-            !options.access.resolveResource(input.userId, unit.resourceId)?.capabilities.openContent
+            !(await options.access.resolveResource(input.userId, unit.resourceId))?.capabilities.openContent
           )
             return false;
         }
@@ -863,8 +854,8 @@ export function createWorktreesModule(options: {
     row: WorktreeRow,
     data: Awaited<ReturnType<WorktreeBackend["getWorktree"]>>,
   ): Promise<WorktreeContext> {
-    const unitRows = options.repository.units(row.id);
-    const access = worktreeCapabilities(
+    const unitRows = await options.repository.units(row.id);
+    const access = await worktreeCapabilities(
       userId,
       row,
       data.status,
@@ -873,26 +864,26 @@ export function createWorktreesModule(options: {
       data.units,
     );
     return {
-      row: options.repository.get(row.id, userId) ?? row,
+      row: await options.repository.get(row.id, userId) ?? row,
       state: data.status,
-      units: mapUnits(unitRows, data.units, userId, options.access),
+      units: await mapUnits(unitRows, data.units, userId, options.access),
       capabilities: access.capabilities,
       canSeeUnits: access.canSeeUnits,
     };
   }
 }
 
-function worktreeCapabilities(
+async function worktreeCapabilities(
   userId: string,
   row: WorktreeRow,
   state: WorktreeState,
   units: readonly WorktreeUnitRow[],
   access: AccessResolver,
   states: readonly { readonly unitID: string; readonly removed?: boolean }[],
-): {
+): Promise<{
   readonly capabilities: WorktreeCapabilities;
   readonly canSeeUnits: boolean;
-} {
+}> {
   const creator = row.creator_user_id === userId;
   const teamRole =
     row.team_owner_user_id === userId
@@ -904,17 +895,18 @@ function worktreeCapabilities(
       row.visibility === "space" &&
       teamRole !== null);
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
-  // Read and edit checks run synchronously for one actor. Reuse their resource
-  // resolution only within this calculation, never across awaits or requests.
+  // Share resource lookups only within this capability calculation for one actor.
   const capabilityAccess = cacheResourceContent(access, userId);
-  const unitRead = units.every(
-    (unit) => removed.has(unit.unit_id) || canReadUnit(userId, row, unit, capabilityAccess),
-  );
-  const unitEdit = units.every(
-    (unit) =>
-      (unit.source === "worktree" && removed.has(unit.unit_id)) ||
-      canEditUnit(userId, row, unit, capabilityAccess),
-  );
+  let unitRead = true;
+  let unitEdit = true;
+  for (const unit of units) {
+    const isRemoved = removed.has(unit.unit_id);
+    if (unitRead && !isRemoved) unitRead = await canReadUnit(userId, row, unit, capabilityAccess);
+    if (unitEdit && !(unit.source === "worktree" && isRemoved)) {
+      unitEdit = await canEditUnit(userId, row, unit, capabilityAccess);
+    }
+    if (!unitRead && !unitEdit) break;
+  }
   const review = visibleReview && unitRead;
   const creatorCanEdit =
     creator &&
@@ -954,41 +946,41 @@ function canMergeAsActor(userId: string, row: WorktreeRow): boolean {
   );
 }
 
-function canReadUnit(
+async function canReadUnit(
   userId: string,
   row: WorktreeRow,
   unit: WorktreeUnitRow,
   access: AccessResolver
-): boolean {
+): Promise<boolean> {
   if (unit.source === "trunk" || unit.activated_at !== null) {
     return Boolean(
-      access.resolveResourceContent(userId, unit.resource_id)?.capabilities
+      (await access.resolveResourceContent(userId, unit.resource_id))?.capabilities
         .openContent
     );
   }
   if (row.kind === "user") return row.creator_user_id === userId;
   return Boolean(
     unit.target_space_id &&
-      access.resolveSpace(userId, unit.target_space_id)?.capabilities
+      (await access.resolveSpace(userId, unit.target_space_id))?.capabilities
         .browseRoot
   );
 }
 
-function canEditUnit(
+async function canEditUnit(
   userId: string,
   row: WorktreeRow,
   unit: WorktreeUnitRow,
   access: AccessResolver
-): boolean {
+): Promise<boolean> {
   if (unit.source === "trunk" || unit.activated_at !== null) {
     return Boolean(
-      access.resolveResourceContent(userId, unit.resource_id)?.capabilities
+      (await access.resolveResourceContent(userId, unit.resource_id))?.capabilities
         .editContent
     );
   }
   if (!unit.target_space_id) return false;
   try {
-    validateTarget(
+    await validateTarget(
       userId,
       row,
       unit.target_space_id,
@@ -1001,7 +993,7 @@ function canEditUnit(
   }
 }
 
-function validateAllTargets(
+async function validateAllTargets(
   userId: string,
   row: WorktreeRow,
   states: readonly WorktreeUnit[],
@@ -1009,34 +1001,34 @@ function validateAllTargets(
     readonly repository: WorktreesRepository;
     readonly access: AccessResolver;
   },
-): void {
-  for (const unit of options.repository.units(row.id)) {
+): Promise<void> {
+  for (const unit of await options.repository.units(row.id)) {
     if (states.find((state) => state.unitId === unit.unit_id)?.change === "deleted") {
       if (
         unit.source === "worktree" ||
-        options.repository.hasRemovalReceipt(row.id, unit.unit_id, userId)
+        await options.repository.hasRemovalReceipt(row.id, unit.unit_id, userId)
       )
         continue;
       if (
         unit.node_id === null ||
-        !options.access.resolveNode(userId, unit.node_id)?.capabilities.trash
+        !(await options.access.resolveNode(userId, unit.node_id))?.capabilities.trash
       )
         throw forbidden();
       continue;
     }
-    if (!canEditUnit(userId, row, unit, options.access)) {
+    if (!(await canEditUnit(userId, row, unit, options.access))) {
       throw forbidden();
     }
   }
 }
 
-function validateTarget(
+async function validateTarget(
   userId: string,
   worktree: WorktreeRow,
   spaceId: string,
   parentNodeId: string | null,
   access: AccessResolver
-): void {
+): Promise<void> {
   if (
     worktree.kind === "team" &&
     worktree.team_space_id !== spaceId
@@ -1047,12 +1039,12 @@ function validateTarget(
     );
   }
   if (parentNodeId === null) {
-    const space = access.resolveSpace(userId, spaceId);
+    const space = await access.resolveSpace(userId, spaceId);
     if (!space) throw notFound();
     if (!space.capabilities.createAtRoot) throw forbidden();
     return;
   }
-  const parent = access.resolveNode(userId, parentNodeId);
+  const parent = await access.resolveNode(userId, parentNodeId);
   if (!parent || parent.spaceId !== spaceId) {
     throw notFound();
   }
@@ -1080,7 +1072,7 @@ function canManageSummary(userId: string, row: WorktreeRow): boolean {
   );
 }
 
-function mapUnits(
+async function mapUnits(
   rows: readonly WorktreeUnitRow[],
   states: readonly {
     readonly unitID: string;
@@ -1092,9 +1084,9 @@ function mapUnits(
   }[],
   userId: string,
   access: AccessResolver,
-): WorktreeUnit[] {
+): Promise<WorktreeUnit[]> {
   const byId = new Map(states.map((state) => [state.unitID, state]));
-  return rows.map((row) => {
+  return Promise.all(rows.map(async (row) => {
     const state = byId.get(row.unit_id);
     const mergeResult =
       state?.mergeResult?.status === "merged" ||
@@ -1110,7 +1102,7 @@ function mapUnits(
       nodeId: row.node_id,
       source: row.source,
       name:
-        state?.removed && row.source === "trunk" && !access.resolveResource(userId, row.resource_id)
+        state?.removed && row.source === "trunk" && !(await access.resolveResource(userId, row.resource_id))
           ? "Removed resource"
           : (row.existing_name ?? row.new_name ?? "Removed resource"),
       unitType: requireUnitType(
@@ -1136,7 +1128,7 @@ function mapUnits(
       mergeResult,
       activationState: activationState(row, mergeResult),
     };
-  });
+  }));
 }
 
 function activationState(
@@ -1153,7 +1145,8 @@ function activationState(
   return "waitingForMerge";
 }
 
-function activateSuccessfulUnits(
+async function activateSuccessfulUnits(
+  actorUserId: string,
   worktree: WorktreeRow,
   rows: readonly WorktreeUnitRow[],
   states: readonly {
@@ -1162,7 +1155,7 @@ function activateSuccessfulUnits(
   }[],
   repository: WorktreesRepository,
   activatedAt: number
-): string[] {
+): Promise<string[]> {
   const byId = new Map(states.map((state) => [state.unitID, state]));
   const successful: string[] = [];
   for (const row of rows) {
@@ -1175,8 +1168,9 @@ function activateSuccessfulUnits(
       row.activated_at === null &&
       (status === "merged" || status === "unchanged")
     ) {
-      repository.activateLocalUnit(
+      await repository.activateLocalUnit(
         row,
+        actorUserId,
         worktree.creator_user_id,
         activatedAt
       );
@@ -1242,12 +1236,12 @@ function requireMappedUnit(
   return unit;
 }
 
-function requireEditableResource(
+async function requireEditableResource(
   userId: string,
   resourceId: string,
   access: AccessResolver
-): UniverResourceAccess {
-  const resource = access.resolveResource(userId, resourceId);
+): Promise<UniverResourceAccess> {
+  const resource = await access.resolveResource(userId, resourceId);
   if (!resource || resource.kind !== "univer") throw notFound();
   if (!resource.capabilities.editContent) throw forbidden();
   return resource;
@@ -1841,18 +1835,6 @@ function invalidInput(message: string, field?: string): ApplicationError {
   return new ApplicationError("INVALID_INPUT", 400, message, field);
 }
 
-function notFound(): ApplicationError {
-  return new ApplicationError("NOT_FOUND", 404, "Worktree not found.");
-}
-
-function forbidden(): ApplicationError {
-  return new ApplicationError(
-    "FORBIDDEN",
-    403,
-    "This Worktree action is not allowed."
-  );
-}
-
 function conflict(message: string): ApplicationError {
   return new ApplicationError("CONFLICT", 409, message);
 }
@@ -1867,10 +1849,10 @@ function cacheResourceContent(access: AccessResolver, userId: string): AccessRes
   const resources = new Map<string, ResourceContentAccess | null>();
   return {
     ...access,
-    resolveResourceContent(actorId, resourceId) {
+    async resolveResourceContent(actorId, resourceId) {
       if (actorId !== userId) return access.resolveResourceContent(actorId, resourceId);
       if (!resources.has(resourceId)) {
-        resources.set(resourceId, access.resolveResourceContent(actorId, resourceId));
+        resources.set(resourceId, await access.resolveResourceContent(actorId, resourceId));
       }
       return resources.get(resourceId)!;
     },

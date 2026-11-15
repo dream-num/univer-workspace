@@ -45,6 +45,22 @@ it("keeps the SQLite product adapter private and selects it at the product datab
   expect(violations).toEqual([]);
 });
 
+it("exposes product repository I/O through promises", () => {
+  const violations: string[] = [];
+  for (const path of sources.filter((file) => file.endsWith(".repository.ts") && sourceName(file).startsWith("modules/"))) {
+    for (const declaration of readSource(path).statements) {
+      if (!ts.isInterfaceDeclaration(declaration) || !declaration.name.text.endsWith("Repository")) continue;
+      for (const method of declaration.members) {
+        if (!ts.isMethodSignature(method) || !method.type ||
+            !ts.isTypeReferenceNode(method.type) || method.type.typeName.getText() !== "Promise") {
+          violations.push(`${declaration.name.text}.${method.name?.getText()}`);
+        }
+      }
+    }
+  }
+  expect(violations).toEqual([]);
+});
+
 it("exports only the database factory and type-only contracts from the public entry point", () => {
   const runtimeExports: string[] = [];
   for (const statement of readSource(resolve(root, "db/index.ts")).statements) {

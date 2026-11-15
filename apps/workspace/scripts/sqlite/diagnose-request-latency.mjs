@@ -85,7 +85,7 @@ try {
   });
   const userId = issued.view.user.id;
   const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-  const spaceId = application.spaces.list(userId).spaces[0].id;
+  const spaceId = (await application.spaces.list(userId)).spaces[0].id;
   async function request(path, body) {
     const response = await fetch(origin + path, {
       method: body ? "POST" : "GET",
@@ -104,7 +104,7 @@ try {
   for (let i = 0; i < 60; i++) {
     const created = await request("/api/resources", resourceInput);
     resources.push(created.node.resource);
-    application.resources.open(userId, created.node.resource.id);
+    await application.resources.open(userId, created.node.resource.id);
   }
   for (let i = 0; i < 10; i++) {
     const created = await request("/api/worktrees", worktreeInput);

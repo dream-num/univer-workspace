@@ -192,7 +192,7 @@ describe("agent creation rate limit", () => {
 });
 
 async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: SqliteTestApplication }> {
-  const application = createSqliteTestApplication({
+  const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
     productDatabase: { provider: "sqlite", filename: ":memory:" },

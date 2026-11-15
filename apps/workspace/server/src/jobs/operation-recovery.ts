@@ -34,7 +34,6 @@ export function startOperationRecovery(
 
   return {
     async dispose() {
-      if (disposed) return;
       disposed = true;
       clearInterval(timer);
       await running;
