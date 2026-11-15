@@ -15,6 +15,10 @@ $V user      # register a throwaway password user and sign uvw in as it
 $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
+$V principal <name> [label]    # create an agent principal; its token stays private in the run
+$V story [--as <identity>] [--oauth] <label> mcp|uvw '<prompt>'   # one recorded real-model run
+$V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
+$V secret-check [directory]    # fail when evidence holds a token or a session cookie
 $V agent-up  # install/start Agent (requires VERIFY_UVW_AGENT_PORT at up)
 $V agent-down # stop only this run's Agent
 $V down      # stop what this run started, including Agent; delete data; keep evidence + logs
@@ -212,7 +216,7 @@ $V down
 ```
 
 This closes this run's agent-browser session and stops the uvw daemon under this run's
-`UNIVER_HOME`. It then kills only the recorded server and Vite PIDs, after checking each
+`UNIVER_HOME` and under each story identity's. It then kills only the recorded server and Vite PIDs, after checking each
 one's command line is still `server/src/main.ts` or `vite.js`, plus their direct children.
 It deletes `data/`, `home/` and `user.pw`, and keeps `evidence/` and `logs/`. Never kill by
 process name or port, run `db:reset`, or touch `apps/workspace/.data/`. Delete old runs'
@@ -229,6 +233,106 @@ One run per port pair. A second concurrent run needs its own ports and an explic
 VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 VERIFY_UVW_MCP_PORT=3931 $V up
 VERIFY_UVW_RUN=b $V doctor
 ```
+
+## Agent principals and real-agent stories
+
+An agent principal is a User that never signed in. These commands speak as one; the `mcp` forms need MCP mode.
+
+```bash
+$V principal <name> [label]                # POST /api/agents; prints id and username
+$V mcp --as <name> <label> <tool> [json]   # also mcp-tools, mcp-skills, mcp-resources, mcp-resource, mcp-instructions
+$V mcp-oauth login <label> --guest         # scripted OAuth client that takes the guest agent card
+$V story [--as <identity>] [--oauth] <label> mcp|uvw '<prompt>'
+$V open-anon <label> <url>
+$V secret-check [directory]                # default: this run's evidence
+```
+
+`principal` keeps the token in `home/principals/<name>.token` (mode 0600) and never prints it;
+`principal-<name>.json` in `$EVIDENCE` records id, username and expiry. Names match
+`^[a-z0-9][a-z0-9_-]{0,31}$`; `human` means the run user. Workspace creates at most 5 agents per
+hour per source IP per instance and answers 429 after that; `principal` refuses with that reason.
+Every `principal`, `mcp-oauth login --guest`, first `story --oauth` of an identity, and
+`uvw auth guest` a model runs counts toward the limit.
+`mcp --as` authenticates with the principal's PAT, excludes `--auth`, and matches the usage event
+by `user_id`, because the PAT id is never returned. `mcp-oauth login --guest` needs no `user`. It
+opens the authorize URL with no cookies, saves `<label>-guest-card.png`, continues through the
+card, and replaces the grant in `home/mcp-oauth-*`, so `mcp --auth oauth` then speaks as that
+guest. The run's browser stays signed in as the guest.
+
+**Stories.** `story` runs `opencode run` once with `console-deepseek/deepseek-flash#high` and
+the prompt as one verbatim argument. Each client and identity gets a throwaway HOME,
+`home/stories/<client>-<identity>/`, with XDG config, data, state and cache, `TMPDIR`, and an empty
+working directory `work/<label>/` addressed by its real path. opencode's environment holds your
+PATH, that HOME and the XDG variables, and no API key from your shell. The model credential is
+copied once with `opencode auth export 'OpenCode Console'` into `home/opencode-credential.json`
+(mode 0600) and imported into each story HOME. `down` deletes all of it with `home/`. Nothing is
+written to your own opencode database.
+
+| Client | `--as` (default `human`) | What the agent starts with |
+| --- | --- | --- |
+| `mcp` | `human` | the run user's PAT as bearer |
+| `mcp` | a principal | that principal's token as bearer |
+| `mcp` | another name, with `--oauth` | no credential. The first story runs opencode's own `mcp auth` and takes the guest agent card (`oauth-*` in the story evidence); later stories of that identity reuse the grant |
+| `uvw` | `human` | `uvw` signed in as the run user |
+| `uvw` | another name | `uvw` with the origin configured and no session. The model signs in itself, and later stories of that identity keep its session |
+
+- `mcp`: one MCP server named `univer-workspace`, as in the README. Denied: read, glob, grep,
+  list, edit, write, bash and shell, webfetch, websearch, question, task, skill, lsp.
+- `uvw`: no MCP server. Shell and file tools are allowed, `uvw` is first on PATH, and the
+  checkout's `skills/univer-workspace-cli` is installed as an opencode Skill. Denied: webfetch,
+  websearch, question, and file tools outside the working directory and the story's `TMPDIR`.
+
+Story evidence is `$EVIDENCE/<label>/`: `prompt.txt`, `transcript.jsonl` (redacted),
+`trajectory.txt` (one `ok` or `error` line per MCP call, helper call or shell command, then the
+final answer verbatim), `answer.txt`, `opencode-stderr.txt`, and `run-meta.json` (model, client,
+identity, duration, exit code). A label that already has evidence is refused. The run is killed
+after 30 minutes and `run-meta.json` records `timed_out`.
+
+Not contained, so read `trajectory.txt` for it and report it:
+
+- `mcp`: opencode cannot deny its own `execute` wrapper, which carries the MCP calls. Inside it
+  the model also has `fetch`, which reaches any host including this run's HTTP API, plus `search`
+  and `opencode.*` helpers.
+- `uvw`: the shell is not sandboxed and runs as you. It can read the run's `home/` (tokens, the
+  password, the model credential), other story HOMEs, and the checkout. The `uvw` wrapper names
+  only `~/.local/lib/uvw`; that is a symlink to `apps/cli/dist`, so `readlink` or a node stack
+  trace still reveals the checkout.
+
+Rules for the verifier:
+
+- The prompt is the one sentence a user would type, and nothing else: no tool names, IDs, URLs or
+  hints. Preparation belongs in the identity, not in the prompt.
+- The first attempt is the result. Another attempt gets its own label (`<label>-attempt2`), and
+  the report shows every attempt.
+- When the model goes wrong, quote what it said and did from `transcript.jsonl`. Do not
+  paraphrase it or repair the prompt.
+- Check the end state yourself: read the file back as another principal or with `uvw read --trunk`,
+  `open-anon` every link in the answer, and compare both with what the answer claims. Exit 0 and
+  a confident answer prove nothing.
+- Run `secret-check` before you quote or copy evidence.
+
+Client pitfalls seen with opencode 2.0.29. They are harness artifacts, not product behavior:
+
+- `opencode run` cannot answer its `question` tool, so the tool is denied. A model that needs an
+  answer has to say so in its reply.
+- opencode's wrapper is also named `execute`, and models confuse it with the Workspace `execute`
+  tool. In `trajectory.txt` the Workspace one is `univer-workspace.execute`. The first wrapper
+  call can fail with `Unknown tool namespace 'univer-workspace'` while the tool list loads.
+- File tools are confined by resolved path, and `/tmp` is `/private/tmp` on macOS. A read or
+  write refused with `external_directory` is an artifact. The story's paths are already resolved
+  and its `TMPDIR`, where models keep scripts and screenshots, is allowed.
+
+`open-anon` opens the URL in its own agent-browser session, closed first so it holds no cookie,
+waits 8 seconds, and saves `<label>.png`, `<label>.webm`, `<label>.mp4` when `ffmpeg` is on
+PATH, and `<label>.page.txt`. For a `/nodes/<id>` link it also saves `<label>.node-status`,
+the status of `GET /api/nodes/<id>` without credentials.
+
+`bin/secrets.mjs` is the one place that redacts. It removes this run's secret values (password,
+sessions, PATs, OAuth tokens, principal tokens, the model credential, uvw sessions of story
+identities) and anything shaped like `uvw_pat_…`, `uvw_at_…`, `uvw_rt_…`, `workspace_session=…`,
+`Bearer …` or an OAuth token field. `mcp`, `mcp-oauth`, `story` and `open-anon` write evidence
+through it. `secret-check` reads every file under a directory and exits 1 naming the file and the
+kind of secret, never the value. After `down` it can only match shapes, so run it before `down`.
 
 ## MCP gateway
 
@@ -284,13 +388,13 @@ both call-direction tokens (`executor-token` and `renderer-token`),
 and the metrics token stay under `home/` with credential files mode 0600.
 
 ```bash
-$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid] [--toolsets list] <label> <tool> [json]
-$V mcp-tools [--protocol version] [--toolsets list] <label>
-$V mcp-resources [--protocol version] [--toolsets list] <label>
-$V mcp-resource [--protocol version] [--toolsets list] <label> <uri>
-$V mcp-instructions [--protocol version] [--toolsets list] <label>
+$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | --as principal] [--toolsets list] <label> <tool> [json]
+$V mcp-tools [--protocol version] [--toolsets list] [--as principal] <label>
+$V mcp-resources [--protocol version] [--toolsets list] [--as principal] <label>
+$V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
+$V mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-token [--scopes read,write,...] [--name name]
-$V mcp-oauth login <label> [--scopes read,write,...] [--client-id <https-url>]
+$V mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>]
 $V mcp-oauth refresh|reuse|revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
 $V mcp-allow-users <user-id>...|'*' # replace the executor allowlist; recreate executor(s), then gateway
