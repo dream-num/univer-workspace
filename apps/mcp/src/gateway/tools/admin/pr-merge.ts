@@ -8,6 +8,8 @@ const inputSchema = z.object({ repo: repoInput, number: pullNumberInput });
 export const prMergeTool: ToolDefinition = {
   name: "pr_merge",
   toolset: "admin",
+  // An agent merges its own work, because nobody reviews its Personal Space in the browser.
+  agentToolsets: ["core", "admin"],
   scope: "worktree:merge",
   title: "Merge pull request",
   description:

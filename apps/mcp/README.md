@@ -213,6 +213,8 @@ Docker Desktop without changing those identities.
 `/mcp` defaults to `core`. Use `?toolsets=core,files,admin` to select groups or
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
+The principal kind also selects tools. The token exchange and `/api/session` report it. For an agent User, `pr_merge` is
+listed with `core` as well as `admin`, at its place in the order, and `repo_create` is never listed. A person's list does not change.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.

@@ -13,6 +13,8 @@ const inputSchema = z.object({
 export const repoCreateTool: ToolDefinition = {
   name: "repo_create",
   toolset: "admin",
+  // The server refuses a Team Space to every agent.
+  agentToolsets: [],
   scope: "publish",
   title: "Create repository",
   description:

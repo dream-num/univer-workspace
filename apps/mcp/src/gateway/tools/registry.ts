@@ -136,14 +136,17 @@ export const toolsets = ["core", "files", "admin", "all"] as const;
 export function selectTools(
   value: string | null,
   operations: ReadonlySet<OpName>,
+  principal: "human" | "agent",
 ): readonly ToolDefinition[] | undefined {
   const selected = (value ?? "core").split(",");
   if (selected.some((name) => !toolsets.some((valid) => valid === name))) return undefined;
-  return tools.filter(
-    (tool) =>
-      (selected.includes("all") || selected.includes(tool.toolset)) &&
-      toolAvailable(tool, operations),
-  );
+  return tools.filter((tool) => {
+    const listedIn = (principal === "agent" ? tool.agentToolsets : undefined) ?? [tool.toolset];
+    return (
+      listedIn.some((toolset) => selected.includes("all") || selected.includes(toolset)) &&
+      toolAvailable(tool, operations)
+    );
+  });
 }
 
 export function toolAvailable(tool: ToolDefinition, operations: ReadonlySet<OpName>): boolean {

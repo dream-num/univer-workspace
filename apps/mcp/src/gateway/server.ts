@@ -425,7 +425,7 @@ export function createGateway(
       config.MCP_EXECUTOR_ALLOWED_USER_IDS !== undefined &&
       !config.MCP_EXECUTOR_ALLOWED_USER_IDS.has(user.id);
     const operations = executorRestricted ? new Set<OpName>() : capabilities.operations;
-    const selected = selectTools(url.searchParams.get("toolsets"), operations);
+    const selected = selectTools(url.searchParams.get("toolsets"), operations, user.kind ?? "human");
     if (!selected)
       return Response.json({ message: "Unknown toolset", valid: toolsets }, { status: 400 });
     let body: unknown;

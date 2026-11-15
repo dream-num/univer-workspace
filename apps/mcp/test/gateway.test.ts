@@ -137,7 +137,9 @@ describe("gateway over real HTTP and the MCP client", () => {
   let clients: Client[];
   let expireDuringTool: boolean;
   let missingRepoCode: string;
+  let principal: Record<string, unknown>;
   beforeEach(async () => {
+    principal = { kind: "human" };
     clients = [];
     gateway = undefined;
     ready = false;
@@ -168,7 +170,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         response.end(
           JSON.stringify({
             authenticated: true,
-            user: { id: subject.id, displayName: subject.name },
+            user: { id: subject.id, displayName: subject.name, ...principal },
           }),
         );
       } else if (expireDuringTool) {
@@ -622,6 +624,31 @@ describe("gateway over real HTTP and the MCP client", () => {
     }
     expect(events()).toHaveLength(0);
   });
+
+  it.each([false, true])(
+    "lists pr_merge with core and never repo_create for an agent (claimed: %s)",
+    async (claimed) => {
+      principal = { kind: "agent", claimed };
+      const names = async (suffix: string) =>
+        (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map(
+          (tool) => tool.name,
+        );
+      const agentAdmin = adminNames.filter((name) => name !== "repo_create");
+      expect(await names("")).toEqual([...coreNames, "pr_merge"]);
+      expect(await names("?toolsets=core")).toEqual([...coreNames, "pr_merge"]);
+      expect(await names("?toolsets=files")).toEqual(filesNames);
+      expect(await names("?toolsets=admin")).toEqual(agentAdmin);
+      expect(await names("?toolsets=admin,core")).toEqual([...coreNames, ...agentAdmin]);
+      expect(await names("?toolsets=core,files,admin")).toEqual([
+        ...coreNames,
+        ...filesNames,
+        ...agentAdmin,
+      ]);
+      expect(await names("?toolsets=all")).toEqual([...coreNames, ...filesNames, ...agentAdmin]);
+      const whoami = await (await connect()).callTool({ name: "whoami", arguments: {} });
+      expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject });
+    },
+  );
 
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {
     const challenge = `Bearer resource_metadata="${new URL(url).origin}/.well-known/oauth-protected-resource/mcp"`;
