@@ -1012,7 +1012,7 @@ export interface paths {
         };
         /**
          * Find Users for Team Membership or Direct Share.
-         * @description Match username or display name substrings, or an exact User ID, excluding the caller. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE.
+         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every agent User. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE.
          */
         get: operations["searchUsers"];
         put?: never;

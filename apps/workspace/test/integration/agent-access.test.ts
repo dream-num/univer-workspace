@@ -357,6 +357,24 @@ function memoryWorktreeBackend(): WorktreeBackend {
   return backend as WorktreeBackend;
 }
 
+describe("GET /api/users/search", () => {
+  it("returns humans only, by name and by exact id", async () => {
+    const { origin } = await start();
+    const alice = await register(origin, "alice");
+    const bob = await register(origin, "bobby");
+    const agent = (await (await post(origin, "/api/agents", { label: "bobbin" })).json()) as { agent: { id: string; username: string } };
+    expect(agent.agent.username).toMatch(/^bobbin-/);
+    const search = async (query: string) =>
+      ((await (await fetch(`${origin}/api/users/search?query=${query}`, { headers: { cookie: alice.cookie } })).json()) as {
+        users: { id: string }[];
+      }).users.map((user) => user.id);
+
+    expect(await search("bobb")).toEqual([bob.id]);
+    expect(await search(agent.agent.id)).toEqual([]);
+    expect(await search(bob.id)).toEqual([bob.id]);
+  });
+});
+
 describe("Link Sharing settings", () => {
   it("name the Space owner and say when an unclaimed agent's link expires", async () => {
     const { origin, application } = await start();

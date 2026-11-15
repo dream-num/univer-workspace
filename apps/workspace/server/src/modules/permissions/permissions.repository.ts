@@ -77,6 +77,7 @@ export class PermissionsRepository {
           `SELECT id, username, display_name, avatar_url
            FROM users
            WHERE id <> ?
+             AND kind = 'human'
              AND (
                id = ?
                OR username LIKE ? ESCAPE '\\' COLLATE NOCASE
