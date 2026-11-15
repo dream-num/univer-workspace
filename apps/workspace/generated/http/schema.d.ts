@@ -2362,6 +2362,21 @@ export interface components {
         NodeLinkSharing: {
             enabled: boolean;
             role: components["schemas"]["LinkSharingRole"];
+            /** @description Owner of the Space that holds the Node. */
+            owner: {
+                username: string;
+                /** @enum {string} */
+                kind: "human" | "agent";
+                /** @description Present only for an agent. Whether a human has claimed it. */
+                claimed?: boolean;
+            };
+            /**
+             * Format: date-time
+             * @description When the link stops working because its owner, an unclaimed agent, expires. The date moves
+             *     30 days out while the agent stays active or the shared page is read. Null when the owner
+             *     does not expire.
+             */
+            expiresAt: string | null;
             createdBy: components["schemas"]["PublicUser"] | null;
             updatedBy: components["schemas"]["PublicUser"] | null;
             /** Format: date-time */

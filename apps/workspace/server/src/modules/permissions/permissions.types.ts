@@ -1,3 +1,5 @@
+import type { PrincipalKind } from "../identity/index.js";
+
 export interface PublicUser {
   readonly id: string;
   readonly username: string;
@@ -32,4 +34,8 @@ export interface NodeLinkSharing {
   readonly updatedBy: PublicUser | null;
   readonly createdAt: string | null;
   readonly updatedAt: string | null;
+  /** Owner of the Space that holds the Node. */
+  readonly owner: { readonly username: string } & PrincipalKind;
+  /** When the link suspends because its owner is an unclaimed agent that expires; null otherwise. */
+  readonly expiresAt: string | null;
 }

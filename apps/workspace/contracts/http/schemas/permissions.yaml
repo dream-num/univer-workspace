@@ -118,11 +118,34 @@ NodeLinkSharing:
     - updatedBy
     - createdAt
     - updatedAt
+    - owner
+    - expiresAt
   properties:
     enabled:
       type: boolean
     role:
       $ref: "#/LinkSharingRole"
+    owner:
+      type: object
+      description: Owner of the Space that holds the Node.
+      additionalProperties: false
+      required: [username, kind]
+      properties:
+        username:
+          type: string
+        kind:
+          type: string
+          enum: [human, agent]
+        claimed:
+          type: boolean
+          description: Present only for an agent. Whether a human has claimed it.
+    expiresAt:
+      type: [string, "null"]
+      format: date-time
+      description: |
+        When the link stops working because its owner, an unclaimed agent, expires. The date moves
+        30 days out while the agent stays active or the shared page is read. Null when the owner
+        does not expire.
     createdBy:
       oneOf:
         - $ref: ./identity.yaml#/PublicUser

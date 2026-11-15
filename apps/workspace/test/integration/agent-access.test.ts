@@ -320,6 +320,34 @@ function memoryWorktreeBackend(): WorktreeBackend {
   return backend as WorktreeBackend;
 }
 
+describe("Link Sharing settings", () => {
+  it("name the Space owner and say when an unclaimed agent's link expires", async () => {
+    const { origin, application } = await start();
+    const human = await register(origin, "owner");
+    const agent = await createAgent(origin);
+    const settings = { enabled: true, role: "viewer" };
+    const linkSharing = async (cookie: string, nodeId: string) =>
+      (await (await fetch(`${origin}/api/nodes/${nodeId}/link-sharing`, { headers: { cookie } })).json()) as { owner: unknown; expiresAt: string | null };
+
+    const humanNodeId = await createFile(origin, human.cookie, "Human sheet");
+    expect(await linkSharing(human.cookie, humanNodeId)).toMatchObject({ enabled: false, owner: { username: "owner", kind: "human" }, expiresAt: null });
+    expect((await linkSharing(human.cookie, humanNodeId)).owner).not.toHaveProperty("claimed");
+
+    const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
+    const written = (await (await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, settings, agent.cookie)).json()) as { owner: unknown; expiresAt: string };
+    const expiresAt = agentLifecycle(application, agent.id).get().expires_at!;
+    expect(written.owner).toEqual({ username: agent.username, kind: "agent", claimed: false });
+    expect(written.expiresAt).toBe(new Date(expiresAt).toISOString());
+    expect(await linkSharing(agent.cookie, agentNodeId)).toMatchObject({ enabled: true, owner: written.owner, expiresAt: written.expiresAt });
+
+    claim(application, agent.id, human.id);
+    expect(await linkSharing(agent.cookie, agentNodeId)).toMatchObject({
+      owner: { username: agent.username, kind: "agent", claimed: true },
+      expiresAt: null,
+    });
+  });
+});
+
 describe("agent expiry", () => {
   it("moves an unclaimed agent's expiry 30 days out when it authenticates, at most once a day", async () => {
     const { origin, application } = await start();

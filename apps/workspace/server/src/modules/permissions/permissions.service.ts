@@ -5,6 +5,7 @@ import {
   type GrantRow,
   type LinkSharingRow,
   type MembershipRow,
+  type NodeOwnerRow,
 } from "./permissions.repository.js";
 import type {
   NodeLinkSharing,
@@ -215,7 +216,10 @@ export function createPermissionsModule(options: {
     getNodeLinkSharing(actorUserId, nodeId) {
       shareableNode(actorUserId, nodeId);
       const row = options.repository.findLinkSharing(nodeId);
-      return row ? linkSharingView(row) : defaultLinkSharing();
+      return {
+        ...(row ? linkSharingView(row) : defaultLinkSharing()),
+        ...ownerView(options.repository.findNodeOwner(nodeId)),
+      };
     },
 
     updateNodeLinkSharing(actorUserId, nodeId, input) {
@@ -237,7 +241,7 @@ export function createPermissionsModule(options: {
       ) {
         options.onLinkSharingUpdated?.(nodeId);
       }
-      return linkSharingView(row);
+      return { ...linkSharingView(row), ...ownerView(options.repository.findNodeOwner(nodeId)) };
     },
   };
 }
@@ -291,7 +295,19 @@ function grantView(
   };
 }
 
-function linkSharingView(row: LinkSharingRow): NodeLinkSharing {
+function ownerView(row: NodeOwnerRow): Pick<NodeLinkSharing, "owner" | "expiresAt"> {
+  return {
+    owner: {
+      username: row.username,
+      ...(row.kind === "agent"
+        ? { kind: "agent", claimed: row.claimed === 1 }
+        : { kind: "human" }),
+    },
+    expiresAt: row.expires_at === null ? null : new Date(row.expires_at).toISOString(),
+  };
+}
+
+function linkSharingView(row: LinkSharingRow): Omit<NodeLinkSharing, "owner" | "expiresAt"> {
   return {
     enabled: row.enabled === 1,
     role: row.role,
@@ -312,7 +328,7 @@ function linkSharingView(row: LinkSharingRow): NodeLinkSharing {
   };
 }
 
-function defaultLinkSharing(): NodeLinkSharing {
+function defaultLinkSharing(): Omit<NodeLinkSharing, "owner" | "expiresAt"> {
   return {
     enabled: false,
     role: "viewer",

@@ -442,6 +442,8 @@ describe("permissions", () => {
       updatedBy: null,
       createdAt: null,
       updatedAt: null,
+      owner: { username: "link-owner", kind: "human" },
+      expiresAt: null,
     });
     expect(application.access.resolveNode(visitor, groupNode.id)).toBeNull();
 
