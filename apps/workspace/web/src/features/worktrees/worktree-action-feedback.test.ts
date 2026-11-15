@@ -27,4 +27,19 @@ describe("reviewActionFeedback", () => {
       message: "taskChangesDiscarded",
     });
   });
+
+  it("reports reopening only after the Worktree returns to draft", () => {
+    expect(reviewActionFeedback("reopen", "draft")).toEqual({
+      kind: "success",
+      message: "taskReopened",
+    });
+    expect(reviewActionFeedback("reopen", "ready")).toEqual({
+      kind: "info",
+      message: "taskActionPending",
+    });
+    expect(reviewActionFeedback("reopen", null)).toEqual({
+      kind: "info",
+      message: "taskActionPending",
+    });
+  });
 });

@@ -2,7 +2,7 @@ import type { components } from "../../../../generated/http/schema.js";
 import type { MessageKey } from "../../shared/i18n";
 
 type WorktreeState = components["schemas"]["WorktreeState"];
-type ReviewAction = "markReady" | "merge" | "discard";
+type ReviewAction = "markReady" | "reopen" | "merge" | "discard";
 
 export interface ReviewActionFeedback {
   readonly kind: "success" | "error" | "info";
@@ -18,6 +18,11 @@ export function reviewActionFeedback(
   }
   if (action === "markReady") {
     return { kind: "success", message: "taskSubmittedForReview" };
+  }
+  if (action === "reopen") {
+    return state === "draft"
+      ? { kind: "success", message: "taskReopened" }
+      : { kind: "info", message: "taskActionPending" };
   }
   if (action === "discard") {
     return { kind: "success", message: "taskChangesDiscarded" };

@@ -9,6 +9,7 @@ import {
 } from "../features/auth";
 import { ResourceEditor } from "../features/editor";
 import {
+  useWorktreeChangeFeed,
   worktreeQueryOptions,
   worktreeUnitOpenQueryOptions,
 } from "../features/worktrees";
@@ -62,9 +63,21 @@ function WorktreeUnitPage() {
   );
   const worktree = useQuery(worktreeQueryOptions(worktreeId));
   const session = useQuery(sessionQueryOptions);
+  // This embedded route has its own QueryClient and does not mount a workspace shell.
+  useWorktreeChangeFeed(session.data?.authenticated === true);
   if (!open.data || !worktree.data || !session.data?.authenticated) {
     return null;
   }
+  const editable =
+    mode === "draft" &&
+    !open.isError &&
+    !worktree.isError &&
+    open.data.unit.editorMode === "edit" &&
+    worktree.data.worktree.state === "draft" &&
+    worktree.data.worktree.capabilities.editDraft &&
+    worktree.data.worktree.units.some(
+      (unit) => unit.unitId === unitId && unit.change !== "deleted"
+    );
   return (
     <section className="flex h-dvh min-h-0 w-full flex-col overflow-hidden bg-background">
       <ResourceEditor
@@ -75,7 +88,7 @@ function WorktreeUnitPage() {
         mappedUnitIds={worktree.data.worktree.units.map(
           (unit) => unit.unitId
         )}
-        readOnly
+        readOnly={!editable}
       />
     </section>
   );

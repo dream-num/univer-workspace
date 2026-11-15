@@ -6,7 +6,7 @@ import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { worktreesQueryKey } from "./worktrees.queries";
 
 type WorktreeUnit = components["schemas"]["WorktreeUnit"];
-type ReviewAction = "markReady" | "merge" | "discard";
+type ReviewAction = "markReady" | "reopen" | "merge" | "discard";
 
 export function useToggleUnitRemoval(worktreeId: string) {
   const client = useQueryClient();
@@ -31,23 +31,27 @@ export function useWorktreeLifecycle(worktreeId: string) {
           ? await api.POST("/api/worktrees/{worktreeId}/ready", {
               params: { path: { worktreeId } },
             })
-          : value === "merge"
-            ? await api.POST("/api/worktrees/{worktreeId}/merge", {
-                params: {
-                  path: { worktreeId },
-                  header: {
-                    "Idempotency-Key": createIdempotencyKey(),
-                  },
-                },
+          : value === "reopen"
+            ? await api.POST("/api/worktrees/{worktreeId}/reopen", {
+                params: { path: { worktreeId } },
               })
-            : await api.POST("/api/worktrees/{worktreeId}/discard", {
-                params: {
-                  path: { worktreeId },
-                  header: {
-                    "Idempotency-Key": createIdempotencyKey(),
+            : value === "merge"
+              ? await api.POST("/api/worktrees/{worktreeId}/merge", {
+                  params: {
+                    path: { worktreeId },
+                    header: {
+                      "Idempotency-Key": createIdempotencyKey(),
+                    },
                   },
-                },
-              });
+                })
+              : await api.POST("/api/worktrees/{worktreeId}/discard", {
+                  params: {
+                    path: { worktreeId },
+                    header: {
+                      "Idempotency-Key": createIdempotencyKey(),
+                    },
+                  },
+                });
       if (result.error) throw apiError(result.error);
       return {
         action: value,

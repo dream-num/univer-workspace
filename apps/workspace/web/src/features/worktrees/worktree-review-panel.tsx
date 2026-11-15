@@ -53,7 +53,7 @@ type WorktreeDetailModel = components["schemas"]["WorktreeDetail"];
 type WorktreeState = components["schemas"]["WorktreeState"];
 type WorktreeUnit = components["schemas"]["WorktreeUnit"];
 type UnitChange = WorktreeUnit["change"];
-type ReviewAction = "markReady" | "merge" | "discard";
+type ReviewAction = "markReady" | "reopen" | "merge" | "discard";
 type BadgeVariant = "default" | "brand" | "success" | "warning" | "danger" | "violet" | "outline";
 
 export function WorktreeReviewPanel({
@@ -104,6 +104,9 @@ export function WorktreeReviewPanel({
   const runAction = (value: ReviewAction) =>
     action.mutate(value, {
       onSuccess: ({ action: value, state }) => {
+        if (value === "reopen" && state === "draft") {
+          onSelectedViewChange?.("agent");
+        }
         const feedback = reviewActionFeedback(value, state);
         if (feedback.kind === "success") {
           toast.success(t(feedback.message));
@@ -118,6 +121,12 @@ export function WorktreeReviewPanel({
 
   const lifecycleActions = (
     <>
+      {worktree.capabilities.reopen ? (
+        <Button size="sm" disabled={action.isPending} onClick={() => runAction("reopen")}>
+          <Pencil />
+          {t("continueEditing")}
+        </Button>
+      ) : null}
       {worktree.capabilities.markReady ? (
         <ConfirmDialog
           title={t("submitForReviewConfirm")}
