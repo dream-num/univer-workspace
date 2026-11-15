@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { opencodeConfig, parseStory, trajectory } from './story.mjs';
+import { opencodeConfig, parseStory, shellSandbox, trajectory } from './story.mjs';
 
 test('story options: the prompt is one verbatim argument and the identity defaults to the run user', () => {
   assert.deepEqual(parseStory(['s1', 'mcp', '做一张带公式的预算表并把链接给我']), { as: 'human', oauth: false, label: 's1', client: 'mcp', prompt: '做一张带公式的预算表并把链接给我' });
@@ -27,10 +27,24 @@ test('mcp mode gives opencode one server and denies every local tool it can deny
   assert.deepEqual(opencodeConfig({ client: 'mcp', mcpUrl: 'http://127.0.0.1:3930/mcp' }).mcp['univer-workspace'], { type: 'remote', url: 'http://127.0.0.1:3930/mcp', enabled: true });
 });
 
-test('uvw mode has no MCP server, keeps the shell, and confines file tools to the working and temp directories', () => {
+test('uvw mode has no MCP server or subagents, keeps the shell, and confines file tools to the working and temp directories', () => {
   const config = opencodeConfig({ client: 'uvw', mcpUrl: 'http://127.0.0.1:3930/mcp', bearer: 'token-1', tmp: '/private/tmp/run/home/stories/uvw-a1/tmp' });
   assert.equal(config.mcp, undefined);
-  assert.deepEqual(config.permission, { webfetch: 'deny', websearch: 'deny', question: 'deny', external_directory: { '*': 'deny', '/private/tmp/run/home/stories/uvw-a1/tmp/**': 'allow' } });
+  assert.deepEqual(config.permission, { webfetch: 'deny', websearch: 'deny', question: 'deny', task: 'deny', subagent: 'deny', external_directory: { '*': 'deny', '/private/tmp/run/home/stories/uvw-a1/tmp/**': 'allow' } });
+});
+
+test('the uvw story shell is denied your home and the run root, then given back only what uvw needs, later rules winning', () => {
+  const home = '/private/tmp/root/run/home/stories/uvw-a1';
+  const rules = shellSandbox({ root: '/private/tmp/root', realHome: '/Users/dev', home, repo: '/Users/dev/repo', node: '/Users/dev/.nvm/node' }).trim().split('\n');
+  assert.deepEqual(rules, [
+    '(version 1)',
+    '(allow default)',
+    '(deny file-read-data file-write* (subpath "/Users/dev") (subpath "/private/tmp/root"))',
+    `(allow file-read-data (subpath "/Users/dev/repo") (subpath "/Users/dev/.nvm/node") (subpath "${home}/.local/bin") (subpath "${home}/.local/lib"))`,
+    '(deny file-read-data file-write* (subpath "/Users/dev/repo/.data"))',
+    `(allow file-read-data file-write* (subpath "${home}/work") (subpath "${home}/tmp") (subpath "${home}/.univer-workspace-cli"))`,
+  ]);
+  assert.match(shellSandbox({ root: '/r', realHome: '/h', home: '/r/a "b"', repo: '/x', node: '/n' }), /\(subpath "\/r\/a \\"b\\"\/work"\)/);
 });
 
 const use = (tool, state) => ({ type: 'tool_use', part: { tool, state } });

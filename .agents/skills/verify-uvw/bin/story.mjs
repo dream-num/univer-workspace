@@ -4,7 +4,8 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
-import { basename, join } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { credentialSecrets, redact, runSecrets } from './secrets.mjs';
@@ -33,12 +34,30 @@ export function parseStory(argv) {
 export function opencodeConfig({ client, mcpUrl, bearer, tmp }) {
   const deny = names => Object.fromEntries(names.map(name => [name, 'deny']));
   // Models keep their scripts and screenshots in opencode's temp directory, so file tools may use it too.
-  if (client === 'uvw') return { $schema: 'https://opencode.ai/config.json', permission: { ...deny(['webfetch', 'websearch', 'question']), external_directory: { '*': 'deny', [`${tmp}/**`]: 'allow' } } };
+  // opencode's built-in explore subagent allows every external directory.
+  if (client === 'uvw') return { $schema: 'https://opencode.ai/config.json', permission: { ...deny(['webfetch', 'websearch', 'question', 'task', 'subagent']), external_directory: { '*': 'deny', [`${tmp}/**`]: 'allow' } } };
   return {
     $schema: 'https://opencode.ai/config.json',
     mcp: { [SERVER]: { type: 'remote', url: mcpUrl, enabled: true, ...(bearer ? { oauth: false, headers: { Authorization: `Bearer ${bearer}` } } : {}) } },
     permission: deny(['read', 'glob', 'grep', 'list', 'edit', 'write', 'bash', 'shell', 'webfetch', 'websearch', 'question', 'task', 'subagent', 'skill', 'lsp', 'external_directory']),
   };
+}
+
+/**
+ * A sandbox-exec profile for the uvw story shell. opencode's per-command shell rules cannot hold it:
+ * `uvw "$(< file)"`, `X=$(<file)` and zsh's bare `< file` read files without a denied command.
+ * The shell sees its own working, temp and uvw directories, the checkout without `.data`, and node.
+ */
+export function shellSandbox({ root, realHome, home, repo, node }) {
+  const paths = list => list.map(path => `(subpath ${JSON.stringify(path)})`).join(' ');
+  return [
+    '(version 1)',
+    '(allow default)',
+    `(deny file-read-data file-write* ${paths([realHome, root])})`,
+    `(allow file-read-data ${paths([repo, node, join(home, '.local/bin'), join(home, '.local/lib')])})`,
+    `(deny file-read-data file-write* ${paths([join(repo, '.data')])})`,
+    `(allow file-read-data file-write* ${paths([join(home, 'work'), join(home, 'tmp'), join(home, '.univer-workspace-cli')])})`,
+  ].join('\n') + '\n';
 }
 
 /** One line per tool call or shell command, and the text the model wrote after its last call. */
@@ -76,6 +95,7 @@ async function main() {
   const evidence = join(run, 'evidence', label);
   if (existsSync(evidence)) fail(`story ${label} already has evidence; a rerun is another attempt and needs its own label, for example ${label}-attempt2`, 2);
   if (client === 'mcp' && !mcpUrl) fail('MCP not enabled for this run; start with VERIFY_UVW_MCP=1');
+  if (client === 'uvw' && !existsSync('/usr/bin/sandbox-exec')) fail('a uvw story sandboxes its shell with macOS sandbox-exec, which this machine does not have');
   const secret = name => existsSync(join(run, 'home', name)) ? readFileSync(join(run, 'home', name), 'utf8').trim() : undefined;
   const bearer = client === 'uvw' || oauth ? undefined : secret(as === 'human' ? 'mcp-token' : `principals/${as}.token`);
   if (client === 'mcp' && !oauth && !bearer) fail(as === 'human' ? 'no PAT for the run user; run: verify-uvw user' : `no principal ${as}; run: verify-uvw principal ${as}, or pass --oauth to sign opencode in through the guest agent card`);
@@ -94,7 +114,8 @@ async function main() {
   const env = {
     PATH: `${join(home, '.local/bin')}:${process.env.PATH}`, HOME: home, TMPDIR: join(home, 'tmp'), TERM: 'dumb', LANG: process.env.LANG ?? 'en_US.UTF-8',
     XDG_CONFIG_HOME: join(home, '.config'), XDG_DATA_HOME: join(home, '.local/share'), XDG_STATE_HOME: join(home, '.local/state'), XDG_CACHE_HOME: join(home, '.cache'),
-    ...(client === 'uvw' ? { UNIVER_HOME: join(home, '.univer-workspace-cli') } : {}),
+    // opencode runs its shell tool as `$SHELL -c <command>`.
+    ...(client === 'uvw' ? { UNIVER_HOME: join(home, '.univer-workspace-cli'), SHELL: join(home, '.local/libexec/zsh') } : {}),
   };
   const opencode = (args, options = {}) => spawnSync('opencode', args, { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options });
   writeFileSync(join(home, '.config/opencode/opencode.json'), `${JSON.stringify(opencodeConfig({ client, mcpUrl, bearer, tmp: env.TMPDIR }), null, 2)}\n`, { mode: 0o600 });
@@ -113,10 +134,12 @@ async function main() {
 
   if (client === 'uvw') {
     // The wrapper names only this home. The link target is the checkout's CLI build, which a determined model can still resolve.
-    mkdirSync(join(home, '.local/bin'), { recursive: true });
-    mkdirSync(join(home, '.local/lib'), { recursive: true });
+    for (const directory of ['.local/bin', '.local/lib', '.local/libexec']) mkdirSync(join(home, directory), { recursive: true });
     if (!existsSync(join(home, '.local/lib/uvw'))) symlinkSync(join(repo, 'apps/cli/dist'), join(home, '.local/lib/uvw'));
-    writeFileSync(join(home, '.local/bin/uvw'), `#!/bin/sh\nexec node "${join(home, '.local/lib/uvw/main.js')}" "$@"\n`, { mode: 0o755 });
+    const node = realpathSync(process.execPath);
+    writeFileSync(join(home, '.local/bin/uvw'), `#!/bin/sh\nexec "${node}" "${join(home, '.local/lib/uvw/main.js')}" "$@"\n`, { mode: 0o755 });
+    writeFileSync(join(home, '.local/libexec/shell.sb'), shellSandbox({ root: realpathSync(dirname(run)), realHome: realpathSync(homedir()), home, repo: realpathSync(repo), node: dirname(dirname(node)) }));
+    writeFileSync(env.SHELL, `#!/bin/sh\nexec /usr/bin/sandbox-exec -f "${join(home, '.local/libexec/shell.sb')}" /bin/zsh "$@"\n`, { mode: 0o755 });
     cpSync(join(repo, 'skills/univer-workspace-cli'), join(home, '.config/opencode/skills/univer-workspace-cli'), { recursive: true });
     if (!existsSync(env.UNIVER_HOME)) {
       const uvw = (args, input) => execFileSync(join(home, '.local/bin/uvw'), args, { env, input, stdio: ['pipe', 'ignore', 'inherit'] });

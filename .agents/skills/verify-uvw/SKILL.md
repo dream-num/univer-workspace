@@ -280,7 +280,14 @@ written to your own opencode database.
   list, edit, write, bash and shell, webfetch, websearch, question, task, skill, lsp.
 - `uvw`: no MCP server. Shell and file tools are allowed, `uvw` is first on PATH, and the
   checkout's `skills/univer-workspace-cli` is installed as an opencode Skill. Denied: webfetch,
-  websearch, question, and file tools outside the working directory and the story's `TMPDIR`.
+  websearch, question, task and subagent, and file tools outside the working directory and the
+  story's `TMPDIR`. The shell tool runs `/bin/zsh` under macOS `sandbox-exec` (`SHELL` names
+  `.local/libexec/zsh` in the story HOME, profile `.local/libexec/shell.sb`). The profile denies
+  reading and writing your home directory and the whole `VERIFY_UVW_ROOT`, then gives back only
+  the story's `work/`, `TMPDIR` and `.univer-workspace-cli`, read access to `.local/bin`,
+  `.local/lib`, the checkout without `.data/`, and node's install directory. Every process the
+  shell starts, `uvw` included, inherits it. Without `/usr/bin/sandbox-exec`, a `uvw` story refuses
+  to start.
 
 Story evidence is `$EVIDENCE/<label>/`: `prompt.txt`, `transcript.jsonl` (redacted),
 `trajectory.txt` (one `ok` or `error` line per MCP call, helper call or shell command, then the
@@ -293,10 +300,24 @@ Not contained, so read `trajectory.txt` for it and report it:
 - `mcp`: opencode cannot deny its own `execute` wrapper, which carries the MCP calls. Inside it
   the model also has `fetch`, which reaches any host including this run's HTTP API, plus `search`
   and `opencode.*` helpers.
-- `uvw`: the shell is not sandboxed and runs as you. It can read the run's `home/` (tokens, the
-  password, the model credential), other story HOMEs, and the checkout. The `uvw` wrapper names
-  only `~/.local/lib/uvw`; that is a symlink to `apps/cli/dist`, so `readlink` or a node stack
-  trace still reveals the checkout.
+- `uvw`: the shell cannot read the run's `home/` (the model credential export, principal tokens,
+  `mcp-*`), `user.pw`, `run.env`, `user.env`, other story HOMEs, opencode's data in its own story
+  HOME, or your home directory. What it can still read: its own uvw session in
+  `.univer-workspace-cli` (the identity's own credential), the whole checkout except `.data/`
+  (including any untracked files there), node's install directory, and anything outside your home
+  and the run root, such as `/etc` and other `/tmp` directories. `uvw` can upload whatever the shell
+  can read. The network is not restricted, so the shell reaches every local port, your own
+  Workspace on 3020 included, without its cookies. `stat` still shows names and sizes of denied
+  files. opencode's `execute` wrapper runs in opencode's own process, outside the sandbox. The
+  `uvw` wrapper and `readlink` still reveal the checkout path.
+- opencode's per-command shell rules (`permission.shell`) were tried and do not hold. With
+  `{"*": "deny", "uvw *": "allow"}`, `--auto` keeps the deny, and pipes, `&&`, `;`, `$(cat …)`
+  and backticks are refused. But `uvw "$(< file)"`, `X=$(<file); uvw "$X"`, `uvw … < file`, a
+  here-string and zsh's bare `< file` all run and return the file. opencode checks only command
+  nodes, and these read files without one.
+- The plaintext export `home/opencode-credential.json` stays for the whole run. `secrets.mjs` reads
+  it to redact the model credential, and each story HOME's opencode database holds the same value
+  anyway. The sandbox denies both to the shell. `down` removes them.
 
 Rules for the verifier:
 
