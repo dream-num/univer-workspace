@@ -159,7 +159,7 @@ describe("Univer embedded assets", () => {
       "asset-create-worktree-0001",
       { kind: "user", name: "Asset Draft", summary: null }
     );
-    const space = application.spaces.list(owner.userId).spaces[0];
+    const space = (await application.spaces.list(owner.userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing.");
     const local = await application.worktrees.addUnit(
       owner.userId,
@@ -439,7 +439,7 @@ async function createSlide(
   userId: string,
   name: string
 ): Promise<{ readonly nodeId: string; readonly unitId: string }> {
-  const space = application.spaces.list(userId).spaces[0];
+  const space = (await application.spaces.list(userId)).spaces[0];
   if (!space) throw new Error("Personal space is missing.");
   const created = await application.resources.create(
     userId,

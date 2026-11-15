@@ -1,5 +1,5 @@
 import type { StoredSpaceAccess } from "../access/index.js";
-import type { SpaceStar, SpaceView } from "./spaces.types.js";
+import type { SpaceStar } from "./spaces.types.js";
 
 export interface SpaceListEntry extends StoredSpaceAccess {
   readonly ownerUsername: string;
@@ -9,25 +9,32 @@ export interface SpaceListEntry extends StoredSpaceAccess {
 
 export type SpaceListScope = "mine" | "starred" | "explore";
 
+export type CreateTeamSpaceInput = {
+  readonly id: string;
+  readonly name: string;
+  readonly publicRead: boolean;
+  readonly ownerUserId: string;
+  readonly createdAt: number;
+} & (
+  | { readonly slug: string; readonly slugBase?: never }
+  | { readonly slugBase: string; readonly slug?: never }
+);
+
+export interface SpaceSettingsPatch {
+  readonly name?: string;
+  readonly slug?: string;
+  readonly description?: string;
+  readonly publicRead?: boolean;
+}
+
 export interface SpacesRepository {
-  listViews(userId: string, scope: SpaceListScope): SpaceListEntry[];
-  getOwner(userId: string): SpaceView["owner"];
-  getDetails(spaceId: string): { readonly description: string; readonly slug: string | null };
-  findIdByFullName(username: string, slug: string): string | null;
-  freeSlug(ownerUserId: string, base: string): string;
-  slugTaken(ownerUserId: string, slug: string, exceptSpaceId?: string): boolean;
-  getStar(userId: string, spaceId: string): SpaceStar;
-  setStar(userId: string, spaceId: string, starred: boolean, createdAt: number): SpaceStar;
-  createTeamSpace(input: {
-    readonly id: string;
-    readonly name: string;
-    readonly slug: string;
-    readonly publicRead: boolean;
-    readonly ownerUserId: string;
-    readonly createdAt: number;
-  }): void;
-  updateName(spaceId: string, name: string, updatedAt: number): void;
-  updateSlug(spaceId: string, slug: string, updatedAt: number): void;
-  updateDescription(spaceId: string, description: string, updatedAt: number): void;
-  updatePublicRead(spaceId: string, publicRead: boolean, updatedAt: number): void;
+  listViews(userId: string, scope: SpaceListScope): Promise<SpaceListEntry[]>;
+  getView(userId: string, spaceId: string): Promise<SpaceListEntry | null>;
+  findViewByFullName(userId: string, username: string, slug: string): Promise<SpaceListEntry | null>;
+  getStar(userId: string, spaceId: string): Promise<SpaceStar | null>;
+  setStar(userId: string, spaceId: string, starred: boolean, createdAt: number): Promise<SpaceStar | null>;
+  /** Returns null on an explicit slug conflict. A generated slug is allocated with the insert. */
+  createTeamSpace(input: CreateTeamSpaceInput): Promise<SpaceListEntry | null>;
+  /** Writes only the supplied fields. Returns null on a slug conflict. */
+  updateSettings(userId: string, spaceId: string, settings: SpaceSettingsPatch, updatedAt: number): Promise<SpaceListEntry | null>;
 }

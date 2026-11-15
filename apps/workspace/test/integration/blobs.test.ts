@@ -21,7 +21,7 @@ describe("Blob Resources", () => {
   it("publishes only after verified upload and exposes generic Resource views", async () => {
     const { application } = createTestApplication();
     const userId = await register(application, "blob-owner");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const intent = {
       spaceId: space.id,
@@ -193,7 +193,7 @@ describe("Blob Resources", () => {
   it("rejects conflicting intents and permits a clean retry after a short body", async () => {
     const { application } = createTestApplication();
     const userId = await register(application, "blob-retry");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const result = application.blobs.createUpload(
       interactivePrincipal(userId),
@@ -256,7 +256,7 @@ describe("Blob Resources", () => {
   it("supports publishing and reading an empty Blob", async () => {
     const { application } = createTestApplication();
     const userId = await register(application, "blob-empty");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const reserved = application.blobs.createUpload(
       interactivePrincipal(userId),
@@ -310,7 +310,7 @@ describe("Blob Resources", () => {
     const first = createSqliteTestApplication(config, dependencies);
     applications.push(first);
     const userId = await register(first, "blob-restart");
-    const space = first.spaces.list(userId).spaces[0];
+    const space = (await first.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const reserved = first.blobs.createUpload(
       interactivePrincipal(userId),
@@ -354,7 +354,7 @@ describe("Blob Resources", () => {
   it("cleans aborted, expired, and permanently deleted objects through the outbox", async () => {
     const { application, blobDirectory } = createTestApplication();
     const userId = await register(application, "blob-cleanup");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     const aborted = await uploadedBlob(application, userId, space.id, "abort.bin", "blob-cleanup-abort-0001");
@@ -396,7 +396,7 @@ describe("Blob content replacement", () => {
   it("replaces bytes with stable identity, fresh ETags, idempotent replay and stale-write protection", async () => {
     const { application, blobDirectory } = createTestApplication();
     const user = await register(application, "replace-owner");
-    const space = application.spaces.list(user).spaces[0]!;
+    const space = (await application.spaces.list(user)).spaces[0]!;
     const blob = await uploadedBlob(
       application,
       user,
@@ -489,7 +489,7 @@ describe("Blob content replacement", () => {
   it("keeps old bytes after failed uploads, competing writes, or trashing during upload", async () => {
     const { application } = createTestApplication();
     const user = await register(application, "replace-race");
-    const space = application.spaces.list(user).spaces[0]!;
+    const space = (await application.spaces.list(user)).spaces[0]!;
     const blob = await uploadedBlob(
       application,
       user,
@@ -585,7 +585,7 @@ describe("Blob content replacement", () => {
     const { application } = createTestApplication();
     const owner = await register(application, "replace-revoke-owner");
     const editor = await register(application, "replace-revoke-editor");
-    const space = application.spaces.list(owner).spaces[0]!;
+    const space = (await application.spaces.list(owner)).spaces[0]!;
     const blob = await uploadedBlob(
       application,
       owner,
@@ -633,7 +633,7 @@ describe("Blob content replacement", () => {
   it("fails interrupted replacements once on restart and cleans only unpublished objects", async () => {
     const { application, blobDirectory } = createTestApplication();
     const user = await register(application, "replace-recovery");
-    const space = application.spaces.list(user).spaces[0]!;
+    const space = (await application.spaces.list(user)).spaces[0]!;
     const blob = await uploadedBlob(
       application,
       user,

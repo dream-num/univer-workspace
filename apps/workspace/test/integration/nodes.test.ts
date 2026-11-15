@@ -18,7 +18,7 @@ describe("spaces and Nodes", () => {
   it("creates personal and team spaces and browses nested Nodes", async () => {
     const application = createTestApplication();
     const alice = await register(application, "alice");
-    const listed = application.spaces.list(alice);
+    const listed = await application.spaces.list(alice);
 
     expect(listed.spaces).toHaveLength(1);
     expect(listed.spaces[0]).toMatchObject({
@@ -32,10 +32,10 @@ describe("spaces and Nodes", () => {
     const personalSpace = listed.spaces[0];
     if (!personalSpace) throw new Error("Personal space is missing");
 
-    const teamSpace = application.spaces.createTeamSpace(alice, {
+    const teamSpace = await application.spaces.createTeamSpace(alice, {
       name: "Product",
     });
-    expect(application.spaces.list(alice).spaces).toHaveLength(2);
+    expect((await application.spaces.list(alice)).spaces).toHaveLength(2);
     expect(teamSpace).toMatchObject({
       type: "team",
       accessRole: "owner",
@@ -87,7 +87,7 @@ describe("spaces and Nodes", () => {
     const application = createTestApplication();
     const alice = await register(application, "alice");
     const bob = await register(application, "bob");
-    const aliceSpace = application.spaces.list(alice).spaces[0];
+    const aliceSpace = (await application.spaces.list(alice)).spaces[0];
     if (!aliceSpace) throw new Error("Personal space is missing");
     const sharedRoot = application.nodes.create(alice, {
       spaceId: aliceSpace.id,
@@ -152,7 +152,7 @@ describe("spaces and Nodes", () => {
   it("allows a Resource Node to own children and rejects cycles", async () => {
     const application = createTestApplication();
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const parent = application.nodes.create(userId, {
       spaceId: space.id,

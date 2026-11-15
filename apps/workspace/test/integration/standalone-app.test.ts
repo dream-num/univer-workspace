@@ -115,7 +115,7 @@ async function createHttpContext() {
     password: "correct horse battery staple",
   });
   const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-  const space = application.spaces.list(issued.view.user.id).spaces[0];
+  const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
   if (!space) throw new Error("Personal space is missing");
   const server = createServer(application.app);
   servers.push(server);

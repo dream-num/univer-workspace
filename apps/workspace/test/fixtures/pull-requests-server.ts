@@ -29,7 +29,7 @@ const issued = await application.identity.registerWithPassword({
   password,
 });
 const userId = issued.view.user.id;
-const space = application.spaces.createTeamSpace(userId, { name: "quarterly-planning" });
+const space = await application.spaces.createTeamSpace(userId, { name: "quarterly-planning" });
 const tasks: Record<string, string> = {};
 for (const [key, name, summary, state] of [
   [

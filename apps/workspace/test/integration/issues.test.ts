@@ -21,12 +21,12 @@ const invalid = expect.objectContaining({ code: "INVALID_INPUT" });
 describe("Issues", () => {
   it("is available only in team spaces", async () => {
     const { application, issues, owner } = await setup();
-    const personal = application.spaces.list(owner).spaces.find((space) => space.type === "personal");
+    const personal = (await application.spaces.list(owner)).spaces.find((space) => space.type === "personal");
     if (!personal) throw new Error("Personal space is missing");
     const conflict = expect.objectContaining({ code: "CONFLICT", status: 409 });
     expect(() => issues.list(owner, personal.id, {})).toThrow(conflict);
     expect(() => issues.create(owner, personal.id, { title: "x" })).toThrow(conflict);
-    expect(application.spaces.get(owner, personal.id).capabilities).toMatchObject({
+    expect((await application.spaces.get(owner, personal.id)).capabilities).toMatchObject({
       createIssue: false,
       triageIssues: false,
       manageIssueLabels: false,
@@ -36,12 +36,12 @@ describe("Issues", () => {
   it("derives Issue rights from the Space role", async () => {
     const { application, issues, team, hidden, owner, admin, editor, viewer, reader, stranger } = await setup();
 
-    const capabilities = (userId: string) => application.spaces.get(userId, team).capabilities;
-    expect(capabilities(owner)).toMatchObject({ createIssue: true, triageIssues: true, manageIssueLabels: true });
-    expect(capabilities(admin)).toMatchObject({ createIssue: true, triageIssues: true, manageIssueLabels: true });
-    expect(capabilities(editor)).toMatchObject({ createIssue: true, triageIssues: true, manageIssueLabels: false });
-    expect(capabilities(viewer)).toMatchObject({ createIssue: true, triageIssues: false, manageIssueLabels: false });
-    expect(capabilities(reader)).toMatchObject({ createIssue: false, triageIssues: false, manageIssueLabels: false });
+    const capabilities = async (userId: string) => (await application.spaces.get(userId, team)).capabilities;
+    expect(await capabilities(owner)).toMatchObject({ createIssue: true, triageIssues: true, manageIssueLabels: true });
+    expect(await capabilities(admin)).toMatchObject({ createIssue: true, triageIssues: true, manageIssueLabels: true });
+    expect(await capabilities(editor)).toMatchObject({ createIssue: true, triageIssues: true, manageIssueLabels: false });
+    expect(await capabilities(viewer)).toMatchObject({ createIssue: true, triageIssues: false, manageIssueLabels: false });
+    expect(await capabilities(reader)).toMatchObject({ createIssue: false, triageIssues: false, manageIssueLabels: false });
 
     const first = issues.create(viewer, team, { title: "  Q3 budget misses East  ", body: "details" });
     expect(first).toMatchObject({
@@ -125,7 +125,7 @@ describe("Issues", () => {
 
   it("validates assignees, labels and referenced files", async () => {
     const { application, issues, team, owner, stranger } = await setup();
-    const other = application.spaces.createTeamSpace(owner, { name: "Other" });
+    const other = await application.spaces.createTeamSpace(owner, { name: "Other" });
     const foreignNode = application.nodes.create(owner, { spaceId: other.id, parentNodeId: null, name: "Elsewhere" });
     const foreignLabel = issues.createLabel(owner, other.id, { name: "foreign", color: "gray" });
     issues.create(owner, team, { title: "base" });
@@ -178,7 +178,7 @@ describe("Issues", () => {
 
   it("lists cross-space Issues only for spaces the caller belongs to", async () => {
     const { application, issues, team, owner, reader } = await setup();
-    const other = application.spaces.createTeamSpace(owner, { name: "Private" });
+    const other = await application.spaces.createTeamSpace(owner, { name: "Private" });
     issues.create(owner, team, { title: "Shared" });
     issues.create(owner, other.id, { title: "Owner only" });
 
@@ -254,12 +254,12 @@ async function setup(changes?: IssueProductChange[]) {
   const viewer = await register(application, "viewer");
   const reader = await register(application, "reader");
   const stranger = await register(application, "stranger");
-  const team = application.spaces.createTeamSpace(owner, { name: "Team", publicRead: true }).id;
+  const { id: team } = await application.spaces.createTeamSpace(owner, { name: "Team", publicRead: true });
   application.permissions.upsertTeamMember(owner, team, admin, { role: "admin" });
   application.permissions.upsertTeamMember(owner, team, editor, { role: "editor" });
   application.permissions.upsertTeamMember(owner, team, viewer, { role: "viewer" });
   // Not public, so `stranger` cannot discover it at all.
-  const hidden = application.spaces.createTeamSpace(owner, { name: "Hidden" }).id;
+  const { id: hidden } = await application.spaces.createTeamSpace(owner, { name: "Hidden" });
   return { application, issues, team, hidden, owner, admin, editor, viewer, reader, stranger };
 }
 

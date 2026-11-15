@@ -33,7 +33,7 @@ describe("Issue change feed", () => {
       const owner = await register("issue-feed-owner");
       const member = await register("issue-feed-member");
       const visitor = await register("issue-feed-visitor");
-      const space = application.spaces.createTeamSpace(owner.view.user.id, { name: "Feed", publicRead: true });
+      const space = await application.spaces.createTeamSpace(owner.view.user.id, { name: "Feed", publicRead: true });
       application.permissions.upsertTeamMember(owner.view.user.id, space.id, member.view.user.id, { role: "viewer" });
 
       const cookie = (session: { cookieValue: string }) => `${application.identity.cookieName}=${session.cookieValue}`;

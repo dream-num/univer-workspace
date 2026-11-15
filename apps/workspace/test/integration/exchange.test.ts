@@ -56,7 +56,7 @@ describe("Universer Exchange protocol", () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "image-export-owner");
     const viewer = await register(application, "image-export-viewer");
-    const space = application.spaces.list(owner.userId).spaces.find(space => space.type === "personal")!;
+    const space = (await application.spaces.list(owner.userId)).spaces.find(space => space.type === "personal")!;
     const carrier = await application.resources.create(owner.userId, randomUUID(), {
       name: "Image source", spaceId: space.id, parentNodeId: null, kind: "univer", unitType: "slide",
     });
@@ -101,8 +101,7 @@ describe("Universer Exchange protocol", () => {
     const owner = await register(application, "exchange-owner");
     const viewer = await register(application, "exchange-viewer");
     const outsider = await register(application, "exchange-outsider");
-    const personalSpace = application.spaces
-      .list(owner.userId)
+    const personalSpace = (await application.spaces.list(owner.userId))
       .spaces.find((space) => space.type === "personal");
     expect(personalSpace).toBeDefined();
     const imports = application.nodes.create(owner.userId, {
@@ -219,8 +218,7 @@ describe("Universer Exchange protocol", () => {
   it("exports a PDF Unit as a PDF file and imports a PDF file as a PDF Unit", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "pdf-owner");
-    const personalSpace = application.spaces
-      .list(owner.userId)
+    const personalSpace = (await application.spaces.list(owner.userId))
       .spaces.find((space) => space.type === "personal");
     expect(personalSpace).toBeDefined();
     const created = await application.resources.create(
@@ -573,7 +571,7 @@ describe("Universer Exchange protocol", () => {
     const owner = await register(application, "ole-convert-owner");
     const viewer = await register(application, "ole-convert-viewer");
     const outsider = await register(application, "ole-convert-outsider");
-    const personalSpace = application.spaces.list(owner.userId).spaces.find((space) => space.type === "personal")!;
+    const personalSpace = (await application.spaces.list(owner.userId)).spaces.find((space) => space.type === "personal")!;
     const folder = application.nodes.create(owner.userId, { spaceId: personalSpace.id, parentNodeId: null, name: "Decks" });
     const uploaded = await uploadExchangeFile(origin, owner.cookie, await oleFixture());
     const imported = await waitForTask(

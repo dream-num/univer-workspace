@@ -49,7 +49,7 @@ describe("Worktrees", () => {
         expect(registered.user).not.toHaveProperty("writeSource");
         const registrationCookie = registration.headers.get("set-cookie")!.split(";", 1)[0]!;
         expectSessionSource(application.database.connection, registrationCookie, "browser");
-        const team = application.spaces.createTeamSpace(registered.user.id, { name: "Attribution" });
+        const team = await application.spaces.createTeamSpace(registered.user.id, { name: "Attribution" });
         const route = source === "agent" ? "/api/auth/cli/password/login" : "/api/auth/password/login";
         const login = await fetch(`${origin}${route}`, {
           method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(credentials),
@@ -176,7 +176,7 @@ describe("Worktrees", () => {
     expect(await application.worktrees.list(owner.id, {})).toMatchObject({
       items: [], hasCreatedWorktree: false,
     });
-    const team = application.spaces.createTeamSpace(owner.id, { name: "Onboarding" });
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Onboarding" });
     application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
     const task = await application.worktrees.create(owner.id, "onboarding-team-task", {
       kind: "team", teamSpaceId: team.id, visibility: "space", name: "Team draft", summary: null,
@@ -204,7 +204,7 @@ describe("Worktrees", () => {
     const application = createTestApplication();
     const owner = await register(application, "summary-owner");
     const editor = await register(application, "summary-editor");
-    const team = application.spaces.createTeamSpace(owner.id, { name: "Summary permissions" });
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Summary permissions" });
     application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
     const resource = await createResource(application, editor.id, team.id);
     const created = await application.worktrees.create(editor.id, "summary-permissions-create", {
@@ -247,7 +247,7 @@ describe("Worktrees", () => {
     const owner = await register(application, "page-owner");
     const viewer = await register(application, "page-viewer");
     const outsider = await register(application, "page-outsider");
-    const team = application.spaces.createTeamSpace(owner.id, { name: "Pagination team" });
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Pagination team" });
     application.permissions.upsertTeamMember(owner.id, team.id, viewer.id, { role: "viewer" });
     const visibleIds: string[] = [];
     for (let i = 0; i < 110; i += 1) {
@@ -288,7 +288,7 @@ describe("Worktrees", () => {
     const backend = new MemoryWorktreeBackend();
     const application = createTestApplication(backend);
     const user = await register(application, "partial-removal-user");
-    const space = application.spaces.list(user.id).spaces[0]!;
+    const space = (await application.spaces.list(user.id)).spaces[0]!;
     const resource = await createResource(application, user.id, space.id);
     const created = await application.worktrees.create(user.id, "partial-removal-create-0001", {
       kind: "user",
@@ -347,7 +347,7 @@ describe("Worktrees", () => {
     const application = createRealTestApplication(directory);
     await application.initialize();
     const user = await register(application, "restart-removal-user");
-    const space = application.spaces.list(user.id).spaces[0]!;
+    const space = (await application.spaces.list(user.id)).spaces[0]!;
     const resource = await createResource(application, user.id, space.id);
     const created = await application.worktrees.create(user.id, "restart-removal-create-0001", {
       kind: "user",
@@ -393,7 +393,7 @@ describe("Worktrees", () => {
   it("finalizes real SDK removal through Trash and preserves restoration across merge recovery", async () => {
     const application = createRealTestApplication();
     const user = await register(application, "real-removal-user");
-    const space = application.spaces.list(user.id).spaces[0];
+    const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const resource = await createResource(application, user.id, space.id);
     const created = await application.worktrees.create(user.id, "real-removal-create-0001", {
@@ -502,7 +502,7 @@ describe("Worktrees", () => {
   it("cancels a new Unit after its target disappears and prevents undo until the target is restored", async () => {
     const application = createRealTestApplication();
     const user = await register(application, "canceled-target-user");
-    const space = application.spaces.list(user.id).spaces[0]!;
+    const space = (await application.spaces.list(user.id)).spaces[0]!;
     const folder = application.nodes.create(user.id, {
       spaceId: space.id,
       parentNodeId: null,
@@ -550,7 +550,7 @@ describe("Worktrees", () => {
     const application = createRealTestApplication();
     const owner = await register(application, "removal-team-owner");
     const editor = await register(application, "removal-team-editor");
-    const team = application.spaces.createTeamSpace(owner.id, { name: "Removal review" });
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Removal review" });
     application.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "editor" });
     const resource = await createResource(application, editor.id, team.id);
     const created = await application.worktrees.create(editor.id, "removal-team-create-0001", {
@@ -589,7 +589,7 @@ describe("Worktrees", () => {
   it("records reversible deletion intent without changing the live document", async () => {
     const application = createTestApplication();
     const user = await register(application, "removal-intent-user");
-    const space = application.spaces.list(user.id).spaces[0];
+    const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const resource = await createResource(application, user.id, space.id);
     const created = await application.worktrees.create(user.id, "create-removal-intent-0001", {
@@ -625,7 +625,7 @@ describe("Worktrees", () => {
   it("creates, edits, readies and merges trunk and local Units", async () => {
     const application = createTestApplication();
     const user = await register(application, "worktree-user");
-    const space = application.spaces.list(user.id).spaces[0];
+    const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const resource = await createResource(application, user.id, space.id);
 
@@ -736,7 +736,7 @@ describe("Worktrees", () => {
       const merge = vi.spyOn(backend, "merge");
       const application = createTestApplication(backend);
       const user = await register(application, "merge-recovery-user");
-      const space = application.spaces.list(user.id).spaces[0]!;
+      const space = (await application.spaces.list(user.id)).spaces[0]!;
       const created = await application.worktrees.create(user.id, "create-merge-recovery-0001", {
         kind: "user",
         name: "Recover publication",
@@ -799,7 +799,7 @@ describe("Worktrees", () => {
     const owner = await register(application, "team-owner");
     const creator = await register(application, "team-editor");
     const viewer = await register(application, "team-viewer");
-    const team = application.spaces.createTeamSpace(owner.id, {
+    const team = await application.spaces.createTeamSpace(owner.id, {
       name: "Product",
     });
     application.permissions.upsertTeamMember(
@@ -895,7 +895,7 @@ describe("Worktrees", () => {
       new WrongIdentityCreateUnitBackend()
     );
     const user = await register(application, "wrong-unit-user");
-    const space = application.spaces.list(user.id).spaces[0];
+    const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.worktrees.create(
       user.id,
@@ -930,7 +930,7 @@ describe("Worktrees", () => {
   it("creates, retries and activates an imported Unit with one stable server identity", async () => {
     const application = createRealTestApplication();
     const user = await register(application, "real-import-user");
-    const space = application.spaces.list(user.id).spaces[0];
+    const space = (await application.spaces.list(user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.worktrees.create(
       user.id,

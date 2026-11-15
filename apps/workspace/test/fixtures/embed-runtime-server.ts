@@ -28,7 +28,7 @@ const issued = await application.identity.registerWithPassword({
   password: randomUUID(),
 });
 const userId = issued.view.user.id;
-const space = application.spaces.list(userId).spaces[0]!;
+const space = (await application.spaces.list(userId)).spaces[0]!;
 const sourceBase = JSON.parse(readFileSync(process.env.EMBED_BASE_SNAPSHOT!, "utf8"));
 const sourceDoc = JSON.parse(readFileSync(process.env.EMBED_DOC_SNAPSHOT!, "utf8"));
 const repository = application.repositories.resources;

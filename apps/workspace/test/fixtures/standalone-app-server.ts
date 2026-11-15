@@ -17,7 +17,7 @@ const application = createSqliteTestApplication({
 }, {unitStore: {async createUnit(input) {return {unitId: input.unitId, headRevision: 1};}}});
 const issued = await application.identity.registerWithPassword({username: "standalone-owner", displayName: "Fixture", password: "standalone fixture password"});
 const userId = issued.view.user.id;
-const space = application.spaces.list(userId).spaces[0]!;
+const space = (await application.spaces.list(userId)).spaces[0]!;
 async function publish(html: string, shared = true) {
   const bytes = Buffer.from(html);
   const {body} = application.blobs.createUpload(interactivePrincipal(userId), randomUUID(), {spaceId: space.id, parentNodeId: null,

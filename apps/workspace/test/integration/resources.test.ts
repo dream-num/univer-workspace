@@ -37,7 +37,7 @@ describe("Resources", () => {
       createdUnits.push(unitId);
     });
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const operationId = "create-resource-operation-0001";
     const input = {
@@ -89,7 +89,7 @@ describe("Resources", () => {
       requested.push(unitType);
     });
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     const created = await application.resources.create(
@@ -128,7 +128,7 @@ describe("Resources", () => {
   it("records recent only after a successful Resource open", async () => {
     const application = createTestApplication(async () => {});
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       userId,
@@ -223,7 +223,7 @@ describe("Resources", () => {
       if (attempt === 1) throw new Error("temporary failure");
     });
     const userId = await register(application, "alice");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const operationId = "create-resource-operation-0003";
     const input = {
@@ -277,7 +277,7 @@ describe("Resources", () => {
       received = input;
     });
     const userId = await register(application, "importer");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const initialData = {
       id: "client-unit-id",
@@ -320,7 +320,7 @@ describe("Resources", () => {
     );
     applications.push(application);
     const userId = await register(application, "identity-mismatch");
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     await expect(

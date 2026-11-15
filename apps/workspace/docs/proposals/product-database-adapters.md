@@ -75,7 +75,7 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 
 ## 事务和第一阶段验收
 
-第一阶段已将空间置顶接口及其调用链改为异步。其他 Repository 保留现有方法的同步或异步签名。接入 PostgreSQL 前，仍需逐模块将同步 I/O 接口和调用方改为异步。
+空间与置顶 Repository 的 I/O 均返回 Promise。创建 Team Space 时，选择可用 slug、插入和回读属于同一次操作。一次设置更新只写请求提供的字段，并在事务内返回结果。其他模块仍有同步 I/O 接口，调整时需同时核对调用方和事务边界。
 
 - **Repository 方法表达业务原子性。** 例如 `replacePins(userId, spaceIds, createdAt): Promise<StoredSpacePins | null>`。实现必须在一次事务内重查置顶资格、删除旧顺序并写入新顺序，成功返回事务内读回的最终列表，有空间无权置顶时返回 `null`。Service 和 Router 均等待结果。
 - **跨表操作保持原子。** 例如 OAuth 兑换中的令牌状态校验与会话签发，由 Identity 提供一个原子操作。重构时逐项核对已有事务，避免拆成若干独立提交。跨产品库、协同服务、BlobStore 的工作继续沿用既有 Operation 和恢复流程。

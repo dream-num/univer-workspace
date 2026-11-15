@@ -84,7 +84,7 @@ Explore 当前不分页，按收藏总数倒序、名称与 ID 排序。公开�
 `SpaceView.affiliation` 由 `SpaceAccess` 推导为 `owner | member | none`，本人列表只允许前两种。
 
 SQLite 适配器维护共享的 Space 可见性 SQL、列与 Membership Join。Access Module 通过 `resolveStoredSpaceAccess` 将读取的权限信息映射为业务权限。
-`SpacesRepository.listViews` 提供 `mine | starred | explore` 三种列表，`SpacePinsRepository` 提供置顶列表及默认回退。它们共用空间访问投影和角色推导，所有 SpaceView 都由 `toSpaceView` 构造。
+`SpacesRepository` 按请求者的可见性查询列表、空间 ID 或完整名称，`SpacePinsRepository` 提供置顶列表及默认回退。它们共用空间访问投影和角色推导。创建 Team Space 时在一个事务内分配 slug。一次设置更新在同一事务内检查权限、写入请求提供的字段并回读结果。
 
 `GET/PUT/DELETE /api/spaces/pins` 管理当前用户有序侧栏选择。可固定本人拥有或加入的 Space，以及已收藏的公开 Space。
 GET 过滤不符合条件的存储行，没有剩余行则返回本人列表前 8 个，`customized = false`。

@@ -94,9 +94,7 @@ describe("worktree change feed", () => {
           { name: "Updated Realtime Worktree" }
         );
       });
-      const personalSpace = application.spaces.list(
-        creator.view.user.id
-      ).spaces[0];
+      const personalSpace = (await application.spaces.list(creator.view.user.id)).spaces[0];
       if (!personalSpace) throw new Error("Personal space is missing");
       let unitId = "";
       await expectChange(creatorSocket, async () => {
@@ -253,7 +251,7 @@ describe("worktree change feed", () => {
         displayName: "Worktree Feed Team Viewer",
         password: "correct horse battery staple",
       });
-      const team = application.spaces.createTeamSpace(owner.view.user.id, {
+      const team = await application.spaces.createTeamSpace(owner.view.user.id, {
         name: "Realtime Team",
       });
       application.permissions.upsertTeamMember(

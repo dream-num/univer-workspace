@@ -17,7 +17,7 @@ describe("Trash Batches", () => {
     const application = createTestApplication();
     const owner = await register(application, "retry-trash-owner");
     const stranger = await register(application, "retry-trash-stranger");
-    const space = application.spaces.list(owner.id).spaces[0];
+    const space = (await application.spaces.list(owner.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const resource = await createResource(application, owner.id, space.id, null, "Retry Sheet");
     const nodeId = resource.node.id;
@@ -56,7 +56,7 @@ describe("Trash Batches", () => {
   it("rolls back the workflow receipt when deleting the Node fails", async () => {
     const application = createTestApplication();
     const owner = await register(application, "atomic-trash-owner");
-    const space = application.spaces.list(owner.id).spaces[0];
+    const space = (await application.spaces.list(owner.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const resource = await createResource(application, owner.id, space.id, null, "Atomic Sheet");
     const batchId = "atomic-workflow-trash-0001";
@@ -81,7 +81,7 @@ describe("Trash Batches", () => {
   it("keeps nested batches independent and restores them in parent-first order", async () => {
     const application = createTestApplication();
     const owner = await register(application, "trash-owner");
-    const space = application.spaces.list(owner.id).spaces[0];
+    const space = (await application.spaces.list(owner.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const groupNode = application.nodes.create(owner.id, {
       spaceId: space.id,
@@ -149,7 +149,7 @@ describe("Trash Batches", () => {
   it("permanently removes a subtree but blocks active Worktree references", async () => {
     const application = createTestApplication();
     const owner = await register(application, "remove-owner");
-    const space = application.spaces.list(owner.id).spaces[0];
+    const space = (await application.spaces.list(owner.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const resource = await createResource(
       application,

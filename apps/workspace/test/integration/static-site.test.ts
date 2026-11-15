@@ -39,9 +39,9 @@ it("previews only Nodes readable through anonymous public-repository and inherit
     username: "link-meta-owner", displayName: "Owner", password: "correct horse battery staple",
   });
   const userId = issued.view.user.id;
-  const personal = workspace.spaces.list(userId).spaces[0];
+  const personal = (await workspace.spaces.list(userId)).spaces[0];
   if (!personal) throw new Error("Personal space is missing");
-  const repository = workspace.spaces.createTeamSpace(userId, { name: "Public repository", publicRead: true });
+  const repository = await workspace.spaces.createTeamSpace(userId, { name: "Public repository", publicRead: true });
   const content = Buffer.from("<!doctype html><title>HTML content is not the metadata source</title>");
   const upload = workspace.blobs.createUpload(interactivePrincipal(userId), crypto.randomUUID(), {
     spaceId: repository.id, parentNodeId: null, name: "Sales.univer.html",
@@ -84,12 +84,12 @@ it("previews only Nodes readable through anonymous public-repository and inherit
 
   workspace.nodes.update(interactivePrincipal(userId), upload.nodeId, { name: '<Sales & "growth">.univer.html' });
   expect(await (await page(upload.nodeId)).text()).toContain("<title>&lt;Sales &amp; &quot;growth&quot;&gt; · Univer Workspace</title>");
-  workspace.spaces.update(userId, repository.id, { publicRead: false });
+  await workspace.spaces.update(userId, repository.id, { publicRead: false });
   const revoked = await page(upload.nodeId, { "If-None-Match": publicResponse.headers.get("etag") ?? "" });
   expect(revoked.status).toBe(200);
   expect(await revoked.text()).toBe(indexHtml);
   expect((await api(upload.nodeId)).status).toBe(404);
-  workspace.spaces.update(userId, repository.id, { publicRead: true });
+  await workspace.spaces.update(userId, repository.id, { publicRead: true });
   workspace.trash.trashNode(userId, upload.nodeId);
   for (const id of [upload.nodeId, "missing"]) {
     expect((await api(id)).status).toBe(404);

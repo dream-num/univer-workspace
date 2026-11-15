@@ -61,7 +61,7 @@ async function harness() {
   });
   const userId = issued.view.user.id;
   const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-  const space = application.spaces.list(userId).spaces[0]!;
+  const space = (await application.spaces.list(userId)).spaces[0]!;
   const server = createServer(application.app);
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));

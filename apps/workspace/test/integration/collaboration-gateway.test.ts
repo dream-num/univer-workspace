@@ -75,7 +75,7 @@ describe("collaboration gateway", () => {
         password: "correct horse battery staple",
       });
       const ownerId = issued.view.user.id;
-      const space = application.spaces.list(ownerId).spaces[0]!;
+      const space = (await application.spaces.list(ownerId)).spaces[0]!;
       const parent = application.nodes.create(ownerId, {
         spaceId: space.id,
         parentNodeId: null,
@@ -106,7 +106,7 @@ describe("collaboration gateway", () => {
           role: "editor",
         });
       } else {
-        application.spaces.update(ownerId, space.id, { publicRead: true });
+        await application.spaces.update(ownerId, space.id, { publicRead: true });
       }
 
       const metadata = await fetch(`${origin}/api/nodes/${node.id}`);
@@ -216,7 +216,7 @@ describe("collaboration gateway", () => {
           role: "editor",
         });
       } else if (policy === "space") {
-        application.spaces.update(ownerId, space.id, { publicRead: false });
+        await application.spaces.update(ownerId, space.id, { publicRead: false });
       } else if (policy === "move") {
         application.nodes.update(interactivePrincipal(ownerId), node.id, { parentNodeId: parent.id });
       } else if (policy === "trash") {
@@ -252,7 +252,7 @@ describe("collaboration gateway", () => {
       `${application.identity.cookieName}=${owner.cookieValue}`;
     const collaboratorCookie =
       `${application.identity.cookieName}=${collaborator.cookieValue}`;
-    const space = application.spaces.list(owner.view.user.id).spaces[0];
+    const space = (await application.spaces.list(owner.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
 
     for (const unitType of [
@@ -434,7 +434,7 @@ describe("collaboration gateway", () => {
     const ownerId = owner.view.user.id;
     const ownerCookie =
       `${application.identity.cookieName}=${owner.cookieValue}`;
-    const space = application.spaces.list(ownerId).spaces[0];
+    const space = (await application.spaces.list(ownerId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const createdUnits: Array<{
       readonly nodeId: string;
@@ -619,7 +619,7 @@ describe("collaboration gateway", () => {
       password: "correct horse battery staple",
     });
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(issued.view.user.id).spaces[0];
+    const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       issued.view.user.id,
@@ -696,7 +696,7 @@ describe("collaboration gateway", () => {
     });
     const userId = issued.view.user.id;
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(userId).spaces[0];
+    const space = (await application.spaces.list(userId)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.worktrees.create(userId, "guard-worktree-create-0001", {
       kind: "user",
@@ -758,7 +758,7 @@ describe("collaboration gateway", () => {
     });
     const userId = issued.view.user.id;
     const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-    const space = application.spaces.list(userId).spaces[0]!;
+    const space = (await application.spaces.list(userId)).spaces[0]!;
     const created = await application.resources.create(userId, "history-resource-0001", {
       kind: "univer", spaceId: space.id, parentNodeId: null, name: "History", unitType: "sheet",
     });
@@ -832,7 +832,7 @@ describe("collaboration gateway", () => {
     application.identity.updateCurrentUser(cookie, {
       avatarUrl: "https://avatars.example/gateway-user.png",
     });
-    const space = application.spaces.list(issued.view.user.id).spaces[0];
+    const space = (await application.spaces.list(issued.view.user.id)).spaces[0];
     if (!space) throw new Error("Personal space is missing");
     const created = await application.resources.create(
       issued.view.user.id,
@@ -1649,7 +1649,7 @@ describe("content permission integration", () => {
     const editor = await account("protection-editor");
     const viewer = await account("protection-viewer");
     const outsider = await account("protection-outsider");
-    const space = application.spaces.list(owner.id).spaces[0]!;
+    const space = (await application.spaces.list(owner.id)).spaces[0]!;
     const created = await application.resources.create(
       owner.id,
       "content-permission-resource-0001",
@@ -1935,9 +1935,10 @@ describe("content permission integration", () => {
   it("closes a suspended agent's Unit to link readers until the suspension ends", async () => {
     const f = await fixture();
     const agent = agentSession(f);
+    const agentSpace = (await f.application.spaces.list(agent.id)).spaces[0]!;
     const created = await f.application.resources.create(agent.id, "suspended-agent-unit-0001", {
       kind: "univer",
-      spaceId: f.application.spaces.list(agent.id).spaces[0]!.id,
+      spaceId: agentSpace.id,
       parentNodeId: null,
       name: "Agent sheet",
       unitType: "sheet",
@@ -2535,7 +2536,7 @@ it('closes existing collaboration sockets when Team membership is removed', asyn
     displayName: 'Revoke Member',
     password: 'correct horse battery staple',
   });
-  const space = application.spaces.createTeamSpace(owner.view.user.id, {
+  const space = await application.spaces.createTeamSpace(owner.view.user.id, {
     name: 'Revoke access',
   });
   application.permissions.upsertTeamMember(

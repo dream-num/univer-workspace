@@ -32,8 +32,8 @@ async function setup() {
   const owner = await register("owner");
   const member = await register("member");
   const outsider = await register("outsider");
-  const space = app.spaces.list(owner).spaces[0]!;
-  const team = app.spaces.createTeamSpace(owner, { name: "Supply" });
+  const space = (await app.spaces.list(owner)).spaces[0]!;
+  const team = await app.spaces.createTeamSpace(owner, { name: "Supply" });
   const db = app.database.connection;
   const insertBlob = (input: {
     actor: string;
@@ -84,7 +84,7 @@ describe("html view list", () => {
     });
     const hidden = insertBlob({
       actor: outsider,
-      spaceId: app.spaces.list(outsider).spaces[0]!.id,
+      spaceId: (await app.spaces.list(outsider)).spaces[0]!.id,
       name: "Hidden",
       filename: "hidden.univer.html",
       updatedAt: 25,

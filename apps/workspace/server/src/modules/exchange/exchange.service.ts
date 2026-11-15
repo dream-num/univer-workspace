@@ -422,7 +422,7 @@ export function createExchangeModule(options: {
         const target =
           !input.spaceId && source.target
             ? source.target
-            : importTarget(options.spaces, userId, input);
+            : await importTarget(options.spaces, userId, input);
         const name = importedName(data, source.filename);
         const created = await options.resources.create(
           userId,
@@ -689,14 +689,14 @@ async function readStream(stream: Readable, maxBytes: number): Promise<Buffer> {
   return Buffer.concat(chunks);
 }
 
-function importTarget(
+async function importTarget(
   spaces: SpacesModule,
   userId: string,
   input: {
     readonly spaceId: string | null;
     readonly parentNodeId: string | null;
   }
-): { readonly spaceId: string; readonly parentNodeId: string | null } {
+): Promise<{ readonly spaceId: string; readonly parentNodeId: string | null }> {
   if (input.spaceId) {
     return { spaceId: input.spaceId, parentNodeId: input.parentNodeId };
   }
@@ -706,11 +706,8 @@ function importTarget(
       "spaceId"
     );
   }
-  const personalSpace = spaces
-    .list(userId)
-    .spaces.find(
-      (space) => space.type === "personal" && space.accessRole === "owner"
-    );
+  const { spaces: available } = await spaces.list(userId);
+  const personalSpace = available.find((space) => space.type === "personal" && space.accessRole === "owner");
   if (!personalSpace) {
     throw new Error("The current user has no Personal Space.");
   }

@@ -48,7 +48,7 @@ async function setup() {
     return { user: issued.view.user, cookie: `workspace_session=${issued.cookieValue}` };
   };
   const owner = await register("activity-owner");
-  const team = application.spaces.createTeamSpace(owner.user.id, { name: "Activity" });
+  const team = await application.spaces.createTeamSpace(owner.user.id, { name: "Activity" });
   const activity = async (spaceId = team.id, cookie = owner.cookie): Promise<RepositoryActivity> => {
     const response = await request(`/spaces/${spaceId}/activity?timeZone=Asia%2FShanghai`, cookie);
     expect(response.status).toBe(200);
@@ -125,7 +125,7 @@ describe("GET Space activity", () => {
     const member = await register("activity-member");
     const reader = await register("activity-reader");
     application.permissions.upsertTeamMember(owner.user.id, team.id, member.user.id, { role: "editor" });
-    application.spaces.update(owner.user.id, team.id, { publicRead: true });
+    await application.spaces.update(owner.user.id, team.id, { publicRead: true });
     await createPull(application, owner.user.id, team.id, "private");
     const shared = await createPull(application, owner.user.id, team.id);
     const result = await activity(team.id, member.cookie);
@@ -139,7 +139,7 @@ describe("GET Space activity", () => {
   it("returns only the owner's User Worktrees for personal Spaces, and hides them from others", async () => {
     const { application, request, register, owner, team, activity } = await setup();
     const other = await register("activity-other");
-    const personal = application.spaces.list(owner.user.id).spaces.find((space) => space.type === "personal");
+    const personal = (await application.spaces.list(owner.user.id)).spaces.find((space) => space.type === "personal");
     if (!personal) throw new Error("Missing personal space");
     const own = await createPull(application, owner.user.id);
     await createPull(application, other.user.id);

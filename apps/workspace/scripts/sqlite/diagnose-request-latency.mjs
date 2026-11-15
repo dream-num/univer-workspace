@@ -85,7 +85,7 @@ try {
   });
   const userId = issued.view.user.id;
   const cookie = `${application.identity.cookieName}=${issued.cookieValue}`;
-  const spaceId = application.spaces.list(userId).spaces[0].id;
+  const spaceId = (await application.spaces.list(userId)).spaces[0].id;
   async function request(path, body) {
     const response = await fetch(origin + path, {
       method: body ? "POST" : "GET",

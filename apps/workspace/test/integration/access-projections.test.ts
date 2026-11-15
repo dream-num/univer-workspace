@@ -34,7 +34,7 @@ async function setup() {
     ).view.user.id;
   const owner = await register("owner");
   const reader = await register("reader");
-  const space = app.spaces.list(owner).spaces[0]!;
+  const space = (await app.spaces.list(owner)).spaces[0]!;
   const folder = app.nodes.create(owner, { spaceId: space.id, parentNodeId: null, name: "Folder" });
   const create = async (spaceId = space.id, parentNodeId: string | null = folder.id) => {
     const result = await app.resources.create(owner, randomUUID(), {
@@ -116,7 +116,7 @@ describe("access projections", () => {
     check(ANONYMOUS_USER_ID, null);
     app.permissions.removeNodeGrant(owner, folder.id, reader);
     check(reader, null);
-    app.spaces.update(owner, space.id, { publicRead: true });
+    await app.spaces.update(owner, space.id, { publicRead: true });
     check(reader, "viewer");
     check(ANONYMOUS_USER_ID, "viewer");
     app.trash.trashNode(owner, node.id);
@@ -127,7 +127,7 @@ describe("access projections", () => {
 
   it("checks team membership afresh and does not treat publicly readable content as owned", async () => {
     const { app, owner, reader, create } = await setup();
-    const team = app.spaces.createTeamSpace(owner, { name: "Team", publicRead: true });
+    const team = await app.spaces.createTeamSpace(owner, { name: "Team", publicRead: true });
     const { resource } = await create(team.id, null);
     for (const role of ["viewer", "editor", "admin"] as const) {
       app.permissions.upsertTeamMember(owner, team.id, reader, { role });
@@ -136,7 +136,7 @@ describe("access projections", () => {
     }
     app.permissions.removeTeamMember(owner, team.id, reader);
     expect(app.access.resolveResourceContent(reader, resource.id)?.role).toBe("viewer");
-    app.spaces.update(owner, team.id, { publicRead: false });
+    await app.spaces.update(owner, team.id, { publicRead: false });
     expect(app.access.resolveResourceContent(reader, resource.id)).toBeNull();
     expect(app.access.resolveOwnedResources(ANONYMOUS_USER_ID, [resource.id]).size).toBe(0);
   });
