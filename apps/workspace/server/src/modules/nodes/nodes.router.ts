@@ -62,6 +62,19 @@ export function createNodesRouter(options: {
     );
   });
 
+  router.post("/nodes/:nodeId/reports", (request, response) => {
+    const session = options.identity.getSession(request.headers.cookie);
+    response.setHeader("Cache-Control", "no-store");
+    response.status(201).json(
+      options.nodes.report(
+        session.authenticated ? session.user.id : ANONYMOUS_USER_ID,
+        requiredParameter(request.params.nodeId),
+        request.body,
+        request.ip
+      )
+    );
+  });
+
   return router;
 }
 

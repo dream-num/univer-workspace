@@ -204,3 +204,21 @@ PatchNode:
       maxLength: 255
     parentNodeId:
       type: [string, "null"]
+
+CreateNodeReport:
+  type: object
+  additionalProperties: false
+  required: [reason]
+  properties:
+    reason:
+      type: string
+      minLength: 1
+      maxLength: 1000
+
+NodeReport:
+  type: object
+  additionalProperties: false
+  required: [id]
+  properties:
+    id:
+      type: string

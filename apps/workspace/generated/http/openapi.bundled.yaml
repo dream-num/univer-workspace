@@ -2376,6 +2376,50 @@ paths:
                 $ref: '#/components/schemas/NodePage'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/nodes/{nodeId}/reports:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      security:
+        - {}
+        - sessionCookie: []
+      tags:
+        - Nodes
+      operationId: reportNode
+      summary: Report a Node for abuse.
+      description: |
+        Needs no credentials. The requester must be able to read the Node, as an
+        anonymous reader or through its session; any other Node returns 404.
+        Reports are limited to 10 per source IP per hour, and an IPv6 source
+        counts as its /64 prefix. The reason is stored for operators and is not
+        shown to anyone else.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateNodeReport'
+      responses:
+        '201':
+          description: Stored report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NodeReport'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '429':
+          description: REPORT_RATE_LIMITED. Too many reports were sent from this source IP in the last hour.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/operations/{operationId}:
     parameters:
       - name: operationId
@@ -6801,6 +6845,24 @@ components:
           type:
             - string
             - 'null'
+    CreateNodeReport:
+      type: object
+      additionalProperties: false
+      required:
+        - reason
+      properties:
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 1000
+    NodeReport:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+      properties:
+        id:
+          type: string
     OperationKind:
       type: string
       enum:

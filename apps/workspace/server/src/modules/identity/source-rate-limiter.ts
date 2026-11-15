@@ -3,16 +3,16 @@ import { isIPv4, isIPv6 } from "node:net";
 const WINDOW_MS = 60 * 60 * 1000;
 const BUCKET_CAPACITY = 10_000;
 
-export interface AgentCreateLimiter {
-  /** Records one creation for the source and returns true, or returns false when the source is over its limit. */
+export interface SourceRateLimiter {
+  /** Records one event for the source and returns true, or returns false when the source is over its limit. */
   take(ip: string | undefined): boolean;
 }
 
-/** In-process sliding one-hour window per source. A limit of 0 refuses every creation. */
-export function createAgentCreateLimiter(
+/** In-process sliding one-hour window per source. A limit of 0 refuses every event. */
+export function createSourceRateLimiter(
   limitPerHour: number,
   now: () => number
-): AgentCreateLimiter {
+): SourceRateLimiter {
   const buckets = new Map<string, number[]>();
   return {
     take(ip) {
@@ -21,7 +21,7 @@ export function createAgentCreateLimiter(
       for (const [key, times] of buckets) {
         if (times.at(-1)! <= windowStart) buckets.delete(key);
       }
-      const key = agentCreateBucket(ip);
+      const key = sourceBucket(ip);
       const recent = (buckets.get(key) ?? []).filter((time) => time > windowStart);
       // At capacity a new source is refused, so the map never outgrows BUCKET_CAPACITY.
       if (recent.length >= limitPerHour || (recent.length === 0 && buckets.size >= BUCKET_CAPACITY)) {
@@ -38,7 +38,7 @@ export function createAgentCreateLimiter(
  * One host owns a whole IPv6 /64, so the bucket is that prefix. IPv4-mapped IPv6 is the IPv4 host.
  * Anything that is not an address shares one bucket, so a forwarded header cannot mint buckets.
  */
-function agentCreateBucket(ip: string | undefined): string {
+function sourceBucket(ip: string | undefined): string {
   const address = (ip ?? "").replace(/%.*$/u, "");
   if (isIPv4(address)) return address;
   if (!isIPv6(address)) return "unknown";

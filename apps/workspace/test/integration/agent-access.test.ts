@@ -5,9 +5,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
 import type { WorkspaceConfig } from "../../server/src/config.js";
+import { logger } from "../../server/src/logging/logger.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
 import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 import { UniverType } from "@univerjs/protocol";
@@ -345,6 +346,75 @@ describe("Link Sharing settings", () => {
       owner: { username: agent.username, kind: "agent", claimed: true },
       expiresAt: null,
     });
+  });
+});
+
+describe("POST /api/nodes/:nodeId/reports", () => {
+  it("stores a report from an anonymous reader or a session and logs it without the reason", async () => {
+    const { origin, application } = await start();
+    const owner = await register(origin, "owner");
+    const reader = await register(origin, "reader");
+    const nodeId = await createFile(origin, owner.cookie, "Shared sheet");
+    await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, owner.cookie);
+    const warn = vi.spyOn(logger, "warn");
+
+    const anonymous = await post(origin, `/api/nodes/${nodeId}/reports`, { reason: "  phishing page  " });
+    expect(anonymous.status).toBe(201);
+    const first = (await anonymous.json()) as { id: string };
+    const signedIn = await post(origin, `/api/nodes/${nodeId}/reports`, { reason: "spam" }, { cookie: reader.cookie });
+    expect(signedIn.status).toBe(201);
+    const second = (await signedIn.json()) as { id: string };
+
+    expect(application.database.connection
+      .prepare("SELECT id, node_id, reporter_user_id, reason FROM node_reports ORDER BY created_at, rowid")
+      .all().map((row) => ({ ...row }))).toEqual([
+      { id: first.id, node_id: nodeId, reporter_user_id: null, reason: "phishing page" },
+      { id: second.id, node_id: nodeId, reporter_user_id: reader.id, reason: "spam" },
+    ]);
+    const logged = warn.mock.calls.filter(([fields]) => (fields as { event?: string }).event === "node_reported");
+    warn.mockRestore();
+    expect(logged.map(([fields]) => fields)).toEqual([
+      { event: "node_reported", nodeId, reportId: first.id },
+      { event: "node_reported", nodeId, reportId: second.id },
+    ]);
+    expect(JSON.stringify(logged)).not.toContain("phishing");
+  });
+
+  it("answers not found for a Node the requester cannot read, and rejects a missing or oversized reason", async () => {
+    const { origin, application } = await start();
+    const owner = await register(origin, "owner");
+    const nodeId = await createFile(origin, owner.cookie, "Private sheet");
+    const stranger = await register(origin, "stranger");
+    for (const headers of [{}, { cookie: stranger.cookie }]) {
+      const hidden = await post(origin, `/api/nodes/${nodeId}/reports`, { reason: "guess" }, headers);
+      expect(hidden.status).toBe(404);
+      expect(await hidden.json()).toEqual(await (await fetch(`${origin}/api/nodes/${nodeId}`, { headers })).json());
+    }
+    expect((await post(origin, `/api/nodes/${randomUUID()}/reports`, { reason: "guess" })).status).toBe(404);
+    for (const body of [{}, { reason: "   " }, { reason: 5 }, { reason: "x".repeat(1001) }]) {
+      const invalid = await post(origin, `/api/nodes/${nodeId}/reports`, body, { cookie: owner.cookie });
+      expect(invalid.status).toBe(400);
+      expect(await invalid.json()).toMatchObject({ error: { code: "INVALID_INPUT", field: "reason" } });
+    }
+    expect(application.database.connection.prepare("SELECT COUNT(*) AS reports FROM node_reports").get()).toMatchObject({ reports: 0 });
+  });
+
+  it("limits reports to 10 per source IP per hour", async () => {
+    const { origin, application } = await start({ trustProxy: true });
+    const owner = await register(origin, "owner");
+    const nodeId = await createFile(origin, owner.cookie, "Shared sheet");
+    await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, owner.cookie);
+    const report = (ip: string, body: unknown = { reason: "spam" }) =>
+      post(origin, `/api/nodes/${nodeId}/reports`, body, { "x-forwarded-for": ip });
+
+    // An invalid report does not spend the limit.
+    expect((await report("203.0.113.7", {})).status).toBe(400);
+    for (let count = 1; count <= 10; count += 1) expect((await report("203.0.113.7")).status).toBe(201);
+    const limited = await report("203.0.113.7");
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toMatchObject({ error: { code: "REPORT_RATE_LIMITED" } });
+    expect((await report("203.0.113.8")).status).toBe(201);
+    expect(application.database.connection.prepare("SELECT COUNT(*) AS reports FROM node_reports").get()).toMatchObject({ reports: 11 });
   });
 });
 

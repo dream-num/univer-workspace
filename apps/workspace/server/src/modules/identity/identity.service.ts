@@ -22,7 +22,7 @@ import {
   type StoredSession,
 } from "./identity.repository.js";
 import { emailLoginMessage } from "./email-login-mail.js";
-import { createAgentCreateLimiter } from "./agent-create-limiter.js";
+import { createSourceRateLimiter } from "./source-rate-limiter.js";
 import type {
   AgentCreation,
   AuthenticatedSession,
@@ -234,7 +234,7 @@ export function createIdentityModule(options: {
   const emailAuthEnabled =
     options.emailAuthEnabled ?? emailSender !== null;
   const trialDeployment = options.trialDeployment ?? false;
-  const agentCreateLimiter = createAgentCreateLimiter(options.agentCreateLimitPerHour ?? 5, now);
+  const agentCreateLimiter = createSourceRateLimiter(options.agentCreateLimitPerHour ?? 5, now);
   const cliAuthorizations = new Map<string, PendingCliAuthorization>();
   const cliAuthorizationDevices = new Map<string, string>();
   const expiredSessionIds = repository.deleteExpiredSessions(now());

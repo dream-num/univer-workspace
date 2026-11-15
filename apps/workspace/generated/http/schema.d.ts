@@ -1331,6 +1331,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/nodes/{nodeId}/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a Node for abuse.
+         * @description Needs no credentials. The requester must be able to read the Node, as an
+         *     anonymous reader or through its session; any other Node returns 404.
+         *     Reports are limited to 10 per source IP per hour, and an IPv6 source
+         *     counts as its /64 prefix. The reason is stored for operators and is not
+         *     shown to anyone else.
+         */
+        post: operations["reportNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operations/{operationId}": {
         parameters: {
             query?: never;
@@ -3185,6 +3211,12 @@ export interface components {
         PatchNode: {
             name?: string;
             parentNodeId?: string | null;
+        };
+        CreateNodeReport: {
+            reason: string;
+        };
+        NodeReport: {
+            id: string;
         };
         /** @enum {string} */
         OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource";
@@ -6073,6 +6105,43 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+        };
+    };
+    reportNode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateNodeReport"];
+            };
+        };
+        responses: {
+            /** @description Stored report. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NodeReport"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            404: components["responses"]["NotFound"];
+            /** @description REPORT_RATE_LIMITED. Too many reports were sent from this source IP in the last hour. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     getOperation: {
