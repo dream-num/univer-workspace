@@ -667,7 +667,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       "Once the result is verified, mark the pull request ready with pr_ready, then merge it with pr_merge.",
     );
     expect(agent).toContain(
-      "Call share with the merged file's nodeId and link viewer, then give the returned url to the user.",
+      "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
     );
     for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(agent).not.toContain(sentence);

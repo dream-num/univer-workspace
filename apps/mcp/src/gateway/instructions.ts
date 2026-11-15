@@ -31,7 +31,7 @@ export function buildServerInstructions(
           `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
           ...(has("share")
             ? [
-                "Call share with the merged file's nodeId and link viewer, then give the returned url to the user.",
+                "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
               ]
             : []),
         ]
