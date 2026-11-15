@@ -36,6 +36,8 @@ export interface ToolDefinition {
   readonly executorAnyOperations?: readonly OpName[];
   readonly name: string;
   readonly toolset: "core" | "files" | "admin";
+  /** The toolsets that list the tool for an agent principal, when not just `toolset`. Empty hides it. */
+  readonly agentToolsets?: readonly ToolDefinition["toolset"][];
   readonly scope: ToolScope;
   readonly title: string;
   readonly description: string;

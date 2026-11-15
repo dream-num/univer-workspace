@@ -107,6 +107,8 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let prState = "draft";
   let prUnits = [unit()];
   let created: Record<string, unknown> = team;
+  let linkSharing = { enabled: false, role: "viewer" };
+  let humanTokenSession = false;
 
   const fetcher: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -152,6 +154,32 @@ describe("space, unit, repository admin, label and merge tools", () => {
       return Response.json(node("created", { name: input.name, parentNodeId: input.parentNodeId }), { status: 201 });
     }
     if (at("PATCH", "/api/nodes/n1")) return Response.json(node("n1", fields));
+    if (at("GET", "/api/nodes/sheet")) {
+      return Response.json({
+        node: node("sheet", { name: "Budget", resource: sheetResource }),
+        space: { id: "team-1", name: "Team" },
+        breadcrumbs: [{ id: "sheet", name: "Budget" }],
+        navigationRootNodeId: null,
+      });
+    }
+    if (target.pathname === "/api/nodes/sheet/link-sharing" && request.method !== "GET" && humanTokenSession) {
+      return Response.json(
+        { error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Change Link Sharing in the browser." } },
+        { status: 403 },
+      );
+    }
+    if (target.pathname === "/api/nodes/sheet/link-sharing") {
+      if (request.method === "PUT") linkSharing = body as typeof linkSharing;
+      return Response.json({
+        ...linkSharing,
+        owner: { username: "budget-x7k2", kind: "agent", claimed: false },
+        expiresAt: "2026-12-14T00:00:00.000Z",
+        createdBy: null,
+        updatedBy: null,
+        createdAt: null,
+        updatedAt: null,
+      });
+    }
     if (at("POST", "/api/nodes/n1/trash")) {
       return Response.json({
         id: "trash-1",
@@ -231,6 +259,8 @@ describe("space, unit, repository admin, label and merge tools", () => {
     requests = [];
     prState = "draft";
     prUnits = [unit()];
+    linkSharing = { enabled: false, role: "viewer" };
+    humanTokenSession = false;
     if (gateway !== undefined) {
       await gateway.close();
       gateway.server.closeAllConnections();
@@ -496,6 +526,52 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined },
       { method: "POST", path: "/api/worktrees/wt-3/discard", body: undefined },
     ]);
+  });
+
+  it("reads Link Sharing without a write, sets each link value and returns the drop", async () => {
+    const client = await connect();
+    const share = async (args: Record<string, unknown>) => await client.callTool({ name: "share", arguments: args });
+    const drop = {
+      url: `${origin}/nodes/sheet`,
+      name: "Budget",
+      owner: { username: "budget-x7k2", kind: "agent", claimed: false },
+      expiresAt: "2026-12-14T00:00:00.000Z",
+    };
+    expect((await share({ node: `${origin}/nodes/sheet` })).structuredContent).toEqual({ ...drop, link: "off" });
+    expect(writesOf()).toEqual([]);
+    for (const [link, body] of [
+      ["editor", { enabled: true, role: "editor" }],
+      ["viewer", { enabled: true, role: "viewer" }],
+      ["off", { enabled: false, role: "viewer" }],
+    ] as const) {
+      requests = [];
+      expect((await share({ node: "sheet", link })).structuredContent).toEqual({ ...drop, link });
+      expect(writesOf()).toEqual([{ method: "PUT", path: "/api/nodes/sheet/link-sharing", body }]);
+    }
+    expect((await share({ node: "sheet", link: "owner" })).structuredContent).toMatchObject({
+      code: "workspace-argument-invalid",
+    });
+    const description = (await client.listTools()).tools.find((tool) => tool.name === "share")!.description!;
+    expect(description).toContain("drop");
+    expect(description).toContain("unit with trunk: true to read, find, inspect, outline or screenshot");
+  });
+
+  it("refuses a file link of another Workspace and sends a person's token session to the browser", async () => {
+    const client = await connect();
+    expect(
+      await client.callTool({ name: "share", arguments: { node: "https://elsewhere.example/nodes/sheet", link: "viewer" } }),
+    ).toMatchObject({ isError: true, structuredContent: { code: "workspace-origin-mismatch" } });
+    expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
+    humanTokenSession = true;
+    const refused = await client.callTool({ name: "share", arguments: { node: "sheet", link: "viewer" } });
+    expect(refused).toMatchObject({
+      isError: true,
+      structuredContent: { code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: `${origin}/nodes/sheet` } },
+      content: [{ type: "text", text: expect.stringContaining(`Ask the user to share the file in the browser: ${origin}/nodes/sheet`) }],
+    });
+    expect((await client.callTool({ name: "share", arguments: { node: "sheet" } })).structuredContent).toMatchObject({
+      link: "off",
+    });
   });
 
   it("states immediate effect, the slug warning and the leave-it-to-the-user rule in the descriptions", async () => {

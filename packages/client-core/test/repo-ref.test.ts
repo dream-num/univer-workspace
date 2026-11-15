@@ -7,6 +7,7 @@ import {
   WorkspaceSpaceFeature,
   WorkspaceWorktreeFeature,
 } from "../src/index.js";
+import { parseNodeReference, resolveNodeReference, shareNode } from "../src/product.js";
 
 interface Call { readonly method: string; readonly path: string; readonly body: unknown }
 
@@ -35,6 +36,108 @@ const view = (overrides: Record<string, unknown> = {}) => ({
 });
 const worktree = (overrides: Record<string, unknown> = {}) => ({
   id: "w1", number: 4, name: "PR", summary: "body", state: "draft", units: [], teamSpace: { id: "s1" }, ...overrides,
+});
+
+const node = (resource: unknown) => ({
+  node: {
+    id: "n1", spaceId: "s1", parentNodeId: null, name: "Budget", hasChildren: false, accessRole: "owner",
+    updatedAt: "2026-11-14T00:00:00.000Z", resource,
+    capabilities: { browseChildren: false, createChildren: false, move: true, rename: true, share: true, trash: true },
+  },
+  space: { id: "s1", name: "Personal" },
+  breadcrumbs: [{ id: "n1", name: "Budget" }],
+  navigationRootNodeId: null,
+});
+const sheet = {
+  id: "r1", kind: "univer", unitId: "u1", unitType: "sheet",
+  capabilities: { downloadContent: false, editContent: true, openContent: true },
+};
+const sharing = (overrides: Record<string, unknown> = {}) => ({
+  enabled: false, role: "viewer", owner: { username: "budget-x7k2", kind: "agent", claimed: false },
+  expiresAt: "2026-12-14T00:00:00.000Z", createdBy: null, updatedBy: null, createdAt: null, updatedAt: null,
+  ...overrides,
+});
+
+describe("file links", () => {
+  const origin = "https://workspace.test";
+
+  it("parses a file link or a Node ID and refuses other URLs", () => {
+    expect(parseNodeReference(`${origin}/nodes/n1`, origin)).toBe("n1");
+    expect(parseNodeReference(` ${origin}/nodes/%E8%A1%A8?x=1#top `, origin)).toBe("表");
+    expect(parseNodeReference("n1", origin)).toBe("n1");
+    expect(() => parseNodeReference("https://other.test/nodes/n1", origin))
+      .toThrowError(expect.objectContaining({ code: "workspace-origin-mismatch" }));
+    for (const bad of ["", `${origin}/spaces/s1`, `${origin}/nodes`, `${origin}/nodes/%ZZ`]) {
+      expect(() => parseNodeReference(bad, origin), bad)
+        .toThrowError(expect.objectContaining({ code: "workspace-argument-invalid" }));
+    }
+  });
+
+  it("resolves a file link to its Space, Node and Unit", async () => {
+    const { spaces, calls } = clients(() => Response.json(node(sheet)));
+    await expect(resolveNodeReference(spaces, `${origin}/nodes/n1`, origin)).resolves.toMatchObject({
+      spaceId: "s1", nodeId: "n1", name: "Budget", resource: { kind: "univer", unitId: "u1" },
+    });
+    await expect(resolveNodeReference(spaces, "https://other.test/nodes/n1", origin))
+      .rejects.toMatchObject({ code: "workspace-origin-mismatch" });
+    expect(calls.map(({ method, path }) => [method, path])).toEqual([["GET", "/api/nodes/n1"]]);
+  });
+
+  it("reads Link Sharing without writing when no link is given", async () => {
+    const { spaces, calls } = clients((call) =>
+      Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
+    await expect(shareNode(spaces, origin, { node: `${origin}/nodes/n1` })).resolves.toEqual({
+      url: `${origin}/nodes/n1`,
+      name: "Budget",
+      link: "off",
+      owner: { username: "budget-x7k2", kind: "agent", claimed: false },
+      expiresAt: "2026-12-14T00:00:00.000Z",
+    });
+    expect(calls.map(({ method, path }) => [method, path])).toEqual([
+      ["GET", "/api/nodes/n1"],
+      ["GET", "/api/nodes/n1/link-sharing"],
+    ]);
+  });
+
+  it.each([
+    ["off", { enabled: false, role: "viewer" }],
+    ["viewer", { enabled: true, role: "viewer" }],
+    ["editor", { enabled: true, role: "editor" }],
+  ] as const)("sets Link Sharing to %s and reports what the server stored", async (link, settings) => {
+    const { spaces, calls } = clients((call) =>
+      Response.json(call.method === "PUT"
+        ? sharing({ ...(call.body as object), owner: { username: "me", kind: "human" }, expiresAt: null })
+        : node(sheet)));
+    await expect(shareNode(spaces, origin, { node: "n1", link })).resolves.toEqual({
+      url: `${origin}/nodes/n1`, name: "Budget", link, owner: { username: "me", kind: "human" },
+    });
+    expect(calls.at(-1)).toEqual({ method: "PUT", path: "/api/nodes/n1/link-sharing", body: settings });
+  });
+
+  it("tells a delegated session to have the user share in the browser", async () => {
+    const { spaces } = clients((call) =>
+      call.method === "PUT"
+        ? Response.json({ error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Use the browser." } }, { status: 403 })
+        : Response.json(node(sheet)));
+    await expect(shareNode(spaces, origin, { node: "n1", link: "viewer" })).rejects.toMatchObject({
+      code: "INTERACTIVE_SESSION_REQUIRED",
+      message: expect.stringContaining(`share the file in the browser: ${origin}/nodes/n1`),
+      detail: { url: `${origin}/nodes/n1` },
+    });
+  });
+
+  it("passes other Link Sharing refusals through and rejects a malformed response", async () => {
+    const forbidden = clients((call) =>
+      call.path.endsWith("/link-sharing")
+        ? Response.json({ error: { code: "FORBIDDEN", message: "Not yours." } }, { status: 403 })
+        : Response.json(node(sheet)));
+    await expect(shareNode(forbidden.spaces, origin, { node: "n1" }))
+      .rejects.toMatchObject({ code: "FORBIDDEN", message: "Not yours." });
+    const malformed = clients((call) =>
+      Response.json(call.path.endsWith("/link-sharing") ? sharing({ role: "owner" }) : node(sheet)));
+    await expect(shareNode(malformed.spaces, origin, { node: "n1" }))
+      .rejects.toMatchObject({ code: "workspace-invalid-response" });
+  });
 });
 
 describe("repository references", () => {

@@ -14,6 +14,7 @@ export const whoamiTool: ToolDefinition = {
   }),
   annotations: readOnlyAnnotations,
   async run(context) {
-    return { output: { origin: context.identityOrigin, subject: context.user }, repo: null };
+    const { id, name } = context.user;
+    return { output: { origin: context.identityOrigin, subject: { id, name } }, repo: null };
   },
 };

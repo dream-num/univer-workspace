@@ -1,6 +1,7 @@
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import { isWorkspaceRecord } from "./http.js";
 import type { WorkspaceSpaceFeature } from "./space.js";
+import type { WorkspaceNode } from "./space-model.js";
 
 /** A repository reference as typed by a user, before any server lookup. */
 export type WorkspaceRepoReference =
@@ -135,19 +136,50 @@ export async function resolveItemTarget(
   throw invalid(`Issue number must look like 12 or #12, got "${argument}".`);
 }
 
-function parseBrowserUrl(value: string): WorkspaceRepoReference {
+/** Accepts a file link `<origin>/nodes/<nodeId>` or a Node ID, and returns the Node ID. */
+export function parseNodeReference(text: string, origin: string): string {
+  const value = text.trim();
+  if (value === "") throw invalid("Node reference must not be empty.");
+  if (!/^https?:\/\//i.test(value)) return value;
+  const { url, segments } = browserUrl(value);
+  if (url.origin !== new URL(origin).origin) {
+    throw workspaceError(
+      "workspace-origin-mismatch",
+      "The URL belongs to a different Workspace than the configured origin.",
+    );
+  }
+  if (segments[0] === "nodes" && segments[1] !== undefined) return segments[1];
+  throw invalid(`"${value}" is not a file link of this Workspace.`);
+}
+
+/**
+ * Reads the Node a file link or Node ID names: its Space in `spaceId`, and its Unit in `resource`
+ * when the file is one. The server decides visibility: hidden and missing are both 404.
+ */
+export async function resolveNodeReference(
+  spaces: Pick<WorkspaceSpaceFeature, "getNode">,
+  reference: string,
+  origin: string,
+): Promise<WorkspaceNode> {
+  return await spaces.getNode(parseNodeReference(reference, origin));
+}
+
+function browserUrl(value: string): { readonly url: URL; readonly segments: readonly string[] } {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     throw invalid(`"${value}" is not a valid URL.`);
   }
-  let segments: string[];
   try {
-    segments = url.pathname.split("/").filter((segment) => segment !== "").map(decodeURIComponent);
+    return { url, segments: url.pathname.split("/").filter((segment) => segment !== "").map(decodeURIComponent) };
   } catch {
     throw invalid("The URL path contains invalid percent encoding.");
   }
+}
+
+function parseBrowserUrl(value: string): WorkspaceRepoReference {
+  const { url, segments } = browserUrl(value);
   if (segments[0] === "spaces" && segments[1] !== undefined) {
     const route = segments[2] as keyof typeof ITEM_ROUTES | undefined;
     const number = segments[3] !== undefined && /^[1-9]\d{0,9}$/.test(segments[3]) ? Number(segments[3]) : undefined;

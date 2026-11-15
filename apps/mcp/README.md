@@ -36,6 +36,9 @@ succeeds no executor operations are available. Protocol-incompatible replicas ar
 visible tools use the intersection of compatible replicas' operations, in registry order.
 Instructions follow each connection's visible tools and direct callers to `?toolsets=files` for available
 file capabilities outside their selected toolsets.
+They also follow the principal kind. A person is told to hand over the pull request link and leave merging to the user.
+An agent that has `pr_merge` in its list is told to mark the verified pull request ready, merge it, call `share` and give
+that link to the user. The core Skill is one text for both and defers to these instructions for an agent identity.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -213,6 +216,8 @@ Docker Desktop without changing those identities.
 `/mcp` defaults to `core`. Use `?toolsets=core,files,admin` to select groups or
 `?toolsets=all` for every group. Unknown names return HTTP 400 with the valid names.
 Tools list in one fixed order: `core`, then `files`, then `admin`, each in the order below.
+The principal kind also selects tools. The token exchange and `/api/session` report it. For an agent User, `pr_merge` is
+listed with `core` as well as `admin`, at its place in the order, and `repo_create` is never listed. A person's list does not change.
 Every object with a Browser page carries `url`; a Node's `url` is its Browser page, a Unit's the pull request page with `?unit=`.
 
 A bare repository slug resolves only when it uniquely matches a repository in `repo_list`.
@@ -239,6 +244,7 @@ and the matching owner/slug candidates when available.
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |
 | `space_find` | Required `repo`, `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
+| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt? }`. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. A person's token session can read but not write: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error asks the user to share in the browser and gives the file `url`. A link of another origin is `workspace-origin-mismatch` |
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
@@ -276,6 +282,11 @@ limit. Narrow the request or omit `json` if the result is too large.
 When more remains, `next` is `{ tool, arguments }`. Pass `arguments` unchanged to
 `tool`; it preserves the Unit, scope and original options with the new cursor.
 The final text line gives the same next call in neutral tool syntax.
+
+`read`, `find`, `inspect`, `outline` and `screenshot` also take a file link, `<identity origin>/nodes/<nodeId>`, as `unit`.
+The gateway reads the Node as the caller and passes its Unit ID on, so the result and `next` carry the Unit ID. This is how a
+caller reads a shared file with `trunk: true`. A link of another origin is `workspace-origin-mismatch`; a link to a file that
+is not a Unit is `workspace-argument-invalid`. The tool descriptions do not mention it; the `share` description does.
 
 The executor resolves each Unit and revision through caller-authenticated Workspace
 HTTP before consulting its one `WorkspaceSheetLensEngine`. Cache keys include the
@@ -316,7 +327,7 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
-| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked |
+| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked, or by an agent for its own work |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
@@ -430,7 +441,7 @@ with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
 `search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
-`pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit` and `space_node`; `worktree:merge` for
+`pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `space_node` and `share`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.

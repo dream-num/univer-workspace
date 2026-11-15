@@ -16,7 +16,8 @@ import { parseGatewayConfig } from "../src/shared/config.js";
 
 const identityOrigin = "https://workspace.example";
 const clientSecret = "gateway-client-secret-do-not-log";
-const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string; clientId: string | null }> = {
+const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string; clientId: string | null; user?: object }> = {
+  uvw_pat_agent: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-3", clientId: null, user: { kind: "agent", claimed: false } },
   uvw_pat_full: { scope: "read write publish worktree:merge nope", kind: "pat", id: "pat-1", clientId: null },
   uvw_pat_readonly: { scope: "read", kind: "pat", id: "pat-2", clientId: null },
   uvw_at_oauth: { scope: "read write", kind: "oauth", id: "grant-1", clientId: "chatgpt" },
@@ -105,7 +106,7 @@ describe("gateway authentication", () => {
                 expires_in: 600,
                 scope: token.scope,
                 subject: { kind: token.kind, id: token.id, client_id: token.clientId },
-                user: { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null },
+                user: { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null, kind: "human", ...token.user },
               }),
             );
           }
@@ -182,6 +183,14 @@ describe("gateway authentication", () => {
   }
 
   const exchangeEnv = { MCP_OAUTH_CLIENT_ID: "univer-workspace-mcp-gateway", MCP_OAUTH_CLIENT_SECRET: clientSecret };
+
+  it("takes the principal kind from the exchange: only an agent's token lists pr_merge by default", async () => {
+    const gateway = await start(exchangeEnv);
+    const names = async (bearer: string) =>
+      (await (await gateway.connect(bearer)).listTools()).tools.map(({ name }) => name);
+    expect(await names("uvw_pat_agent")).toContain("pr_merge");
+    expect(await names("uvw_pat_full")).not.toContain("pr_merge");
+  });
 
   it("exchanges a PAT, sends only the downstream session to product APIs and records pat in the event", async () => {
     const gateway = await start(exchangeEnv);

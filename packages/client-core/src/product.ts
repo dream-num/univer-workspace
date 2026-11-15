@@ -5,6 +5,7 @@
  */
 export {
   completeCliLogin,
+  createGuestAgent,
   loginWithPassword,
   logout,
   startCliLogin,
@@ -61,8 +62,10 @@ export {
 } from "./pull-request.js";
 export {
   parseItemNumber,
+  parseNodeReference,
   parseRepoReference,
   resolveItemTarget,
+  resolveNodeReference,
   resolveRepoReference,
   type ItemTarget,
   type ResolvedWorkspaceRepo,
@@ -82,9 +85,11 @@ export {
   type RepoEditField,
   type WorkspaceResourceKindFilter,
 } from "./space.js";
+export { SHARE_LINKS, shareNode, type WorkspaceShare, type WorkspaceShareLink } from "./share.js";
 export type {
   WorkspaceAccessRole,
   WorkspaceBlobResource,
+  WorkspaceLinkSharing,
   WorkspaceNode,
   WorkspaceNodeSummary,
   WorkspaceSpace,

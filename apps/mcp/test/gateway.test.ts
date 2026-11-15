@@ -137,7 +137,9 @@ describe("gateway over real HTTP and the MCP client", () => {
   let clients: Client[];
   let expireDuringTool: boolean;
   let missingRepoCode: string;
+  let principal: Record<string, unknown>;
   beforeEach(async () => {
+    principal = { kind: "human" };
     clients = [];
     gateway = undefined;
     ready = false;
@@ -168,7 +170,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         response.end(
           JSON.stringify({
             authenticated: true,
-            user: { id: subject.id, displayName: subject.name },
+            user: { id: subject.id, displayName: subject.name, ...principal },
           }),
         );
       } else if (expireDuringTool) {
@@ -621,6 +623,65 @@ describe("gateway over real HTTP and the MCP client", () => {
       });
     }
     expect(events()).toHaveLength(0);
+  });
+
+  it.each([false, true])(
+    "lists pr_merge with core and never repo_create for an agent (claimed: %s)",
+    async (claimed) => {
+      principal = { kind: "agent", claimed };
+      const names = async (suffix: string) =>
+        (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map(
+          (tool) => tool.name,
+        );
+      const agentAdmin = adminNames.filter((name) => name !== "repo_create");
+      expect(await names("")).toEqual([...coreNames, "pr_merge"]);
+      expect(await names("?toolsets=core")).toEqual([...coreNames, "pr_merge"]);
+      expect(await names("?toolsets=files")).toEqual(filesNames);
+      expect(await names("?toolsets=admin")).toEqual(agentAdmin);
+      expect(await names("?toolsets=admin,core")).toEqual([...coreNames, ...agentAdmin]);
+      expect(await names("?toolsets=core,files,admin")).toEqual([
+        ...coreNames,
+        ...filesNames,
+        ...agentAdmin,
+      ]);
+      expect(await names("?toolsets=all")).toEqual([...coreNames, ...filesNames, ...agentAdmin]);
+      const whoami = await (await connect()).callTool({ name: "whoami", arguments: {} });
+      expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject });
+    },
+  );
+
+  it("tells an agent to merge and share, and a person to review, in the server instructions", async () => {
+    const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
+    const review = "Give the user the pull request link so they can review it.";
+    const leave = "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
+    const human = await instructions();
+    expect(human).toContain(review);
+    expect(human).toContain(leave);
+    expect(human).not.toContain("agent identity");
+    expect(human).not.toContain("pr_merge");
+
+    principal = { kind: "agent", claimed: false };
+    const agent = await instructions();
+    expect(agent).toContain("This connection is an agent identity");
+    expect(agent).toContain(
+      "Once the result is verified, mark the pull request ready with pr_ready, then merge it with pr_merge.",
+    );
+    expect(agent).toContain(
+      "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
+    );
+    const limits = "An agent identity cannot create a Team Space or make a repository public";
+    expect(agent).toContain(limits);
+    expect(human).not.toContain(limits);
+    for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
+      expect(agent).not.toContain(sentence);
+    }
+    const adminOnly = await instructions("?toolsets=admin");
+    expect(adminOnly).toContain("Once the result is verified, merge it with pr_merge.");
+    expect(adminOnly).not.toContain("Call share");
+    // Without pr_merge in the list, an agent gets the same hand-off as a person.
+    const filesOnly = await instructions("?toolsets=files");
+    expect(filesOnly).toContain(leave);
+    expect(filesOnly).not.toContain("agent identity");
   });
 
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {

@@ -69,6 +69,20 @@ export interface WorkspaceNode extends WorkspaceNodeSummary {
   readonly path: string;
 }
 
+export interface WorkspaceLinkSharing {
+  readonly enabled: boolean;
+  /** Access for signed-in users. Anonymous visitors always read. */
+  readonly role: "editor" | "viewer";
+  /** Owner of the Space that holds the Node. `claimed` is present only for an agent. */
+  readonly owner: {
+    readonly username: string;
+    readonly kind: "human" | "agent";
+    readonly claimed?: boolean;
+  };
+  /** When the link stops working because its owner, an unclaimed agent, expires. */
+  readonly expiresAt: string | null;
+}
+
 export interface WorkspaceTrashBatch {
   readonly capabilities: {
     readonly removePermanently: boolean;
@@ -224,6 +238,31 @@ export function parseNodeResponse(value: unknown, nodeId: string): WorkspaceNode
     throw invalidResponse("Workspace Node response does not match the requested Node");
   }
   return node;
+}
+
+export function parseLinkSharing(value: Record<string, unknown>): WorkspaceLinkSharing {
+  const owner = value["owner"];
+  if (
+    typeof value["enabled"] !== "boolean" ||
+    (value["role"] !== "editor" && value["role"] !== "viewer") ||
+    !isWorkspaceRecord(owner) ||
+    typeof owner["username"] !== "string" ||
+    (owner["kind"] !== "human" && owner["kind"] !== "agent") ||
+    (owner["claimed"] !== undefined && typeof owner["claimed"] !== "boolean") ||
+    (value["expiresAt"] !== null && typeof value["expiresAt"] !== "string")
+  ) {
+    throw invalidResponse("Workspace response contains invalid Link Sharing settings");
+  }
+  return {
+    enabled: value["enabled"],
+    role: value["role"],
+    owner: {
+      username: owner["username"],
+      kind: owner["kind"],
+      ...(owner["claimed"] === undefined ? {} : { claimed: owner["claimed"] }),
+    },
+    expiresAt: value["expiresAt"],
+  };
 }
 
 export function parseDetachedNode(value: unknown): WorkspaceNodeSummary {

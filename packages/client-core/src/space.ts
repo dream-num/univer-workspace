@@ -6,10 +6,12 @@ import {
 import { isWorkspaceRecord } from "./http.js";
 import {
   parseDetachedNode,
+  parseLinkSharing,
   parseNodePage,
   parseNodeResponse,
   parseSpace,
   parseTrashBatch,
+  type WorkspaceLinkSharing,
   type WorkspaceNode,
   type WorkspaceNodeSummary,
   type WorkspaceNodeResource,
@@ -229,6 +231,29 @@ export class WorkspaceSpaceFeature {
       throw workspaceError("workspace-argument-invalid", "Space find query is required.");
     return (await this.browse({ ...input, recursive: true })).filter((node) =>
       node.name.toLowerCase().includes(query),
+    );
+  }
+
+  public async getNode(nodeId: string): Promise<WorkspaceNode> {
+    const http = await this.authenticatedHttp();
+    return parseNodeResponse(await http.json(`/api/nodes/${encodeURIComponent(nodeId)}`), nodeId);
+  }
+
+  public async getLinkSharing(nodeId: string): Promise<WorkspaceLinkSharing> {
+    const http = await this.authenticatedHttp();
+    return parseLinkSharing(await http.json(`/api/nodes/${encodeURIComponent(nodeId)}/link-sharing`));
+  }
+
+  public async updateLinkSharing(
+    nodeId: string,
+    settings: Pick<WorkspaceLinkSharing, "enabled" | "role">,
+  ): Promise<WorkspaceLinkSharing> {
+    const http = await this.authenticatedHttp();
+    return parseLinkSharing(
+      await http.json(`/api/nodes/${encodeURIComponent(nodeId)}/link-sharing`, {
+        body: settings,
+        method: "PUT",
+      }),
     );
   }
 
