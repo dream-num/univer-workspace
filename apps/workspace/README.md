@@ -1,5 +1,7 @@
 # Univer Workspace
 
+English | [简体中文](README.zh-CN.md)
+
 A deployable React workspace providing Univer
 collaboration, Node hierarchy management, permissions, Trash, recent Resources,
 and Worktrees.

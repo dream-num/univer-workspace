@@ -1,5 +1,7 @@
 # S3 file storage
 
+English | [简体中文](s3-storage.zh-CN.md)
+
 Set `BLOB_STORE=s3` and `BLOB_S3_BUCKET` to use an existing private bucket. Configure its
 region through `BLOB_S3_REGION` or your AWS environment. For S3-compatible services, set
 `BLOB_S3_ENDPOINT` and enable `BLOB_S3_FORCE_PATH_STYLE` if your provider requires it.
