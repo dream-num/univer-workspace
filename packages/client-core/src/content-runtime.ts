@@ -523,6 +523,22 @@ async function acquire(
       await lease.release();
       throw runtimeNotStartedError();
     }
+    // workaround: SDK 1.4 pull() returns before formulas recalculate, so reads, executes and exports
+    // on a warm Sheet runtime behind the selected revision saw empty or stale formula values. A
+    // fresh worker awaits calculation on load. A failing getState is left to synchronize().
+    // Remove once the SDK's pull() awaits formula calculation.
+    if (
+      !coldStart &&
+      target.unitType === "sheet" &&
+      (await lease.getState().then(
+        (state) => state.baseRevision < target.revision,
+        () => false,
+      ))
+    ) {
+      initByKey.delete(key);
+      await lease.invalidate();
+      return await acquire(pool, initByKey, options, target, caller, capacityDeadline, signal);
+    }
     return { acquiredAt: performance.now(), coldStart, init, initEntry: entry, key, lease };
   } catch (error) {
     if (

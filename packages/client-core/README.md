@@ -33,6 +33,8 @@
   每个取得 lease 的调用在 release 或 invalidate 完成后回调一次，操作或清理失败也回调；未取得 lease 的调用不回调。
   `coldStart` 表示本次调用未命中 init 缓存并创建 worker；`workerMs` 是从取得 lease 到清理结束的单调时钟毫秒数，
   不包含排队、凭据解析与 worker 启动耗时，也不表示 CPU 时间。observer 抛错不改变操作结果。
+  临时 workaround：热 Sheet worker 落后于所选 revision 时，本次调用重建 worker 并报告 `coldStart: true`，
+  因为 SDK 的 `pull()` 不等待公式重算；SDK 修复后移除。
   可选 `pool` 选项设定 worker 上限、空闲 TTL、超时与子进程环境（`env` 为精确环境，缺省继承）。未传入时行为与 CLI 一致。
   `pool.queue.timeoutMs`（须同时设定 `maxWorkers`）让新 runtime key 在 worker 满时按 FIFO 等待空位，超时以
   `workspace-runtime-busy`（`detail.retryable: true`）失败；该时限只约束等待空位，不约束操作本身。缺省时 worker
