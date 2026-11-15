@@ -58,8 +58,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 
 - **Univer Workspace MCP** — the private remote gateway under `apps/mcp`, built on Client Core.
   It exposes identity, repository, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
-  Facade API reference, Skills, and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
-  them at Workspace for short-lived sessions; development session authentication is refused in production. It runs
+  Link Sharing, Facade API reference, Skills, and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
+  them at Workspace for short-lived sessions; development session authentication is refused in production.
+  For an agent User it lists `pr_merge` with `core`, never lists `repo_create`, and tells the agent to merge and share its own work. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G.
   Contract: [MCP README](apps/mcp/README.md).
@@ -131,6 +132,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
+  An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;
@@ -163,8 +165,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   V20 → V21 startup migration that backfills nothing. `POST /api/agents` and `POST /api/auth/guest` need no
   credentials: each creates an agent User with its own Personal Space, and returns a personal access token or sets
   a login session cookie. Creation is limited per source IP by bounded process-local state; the source IP is not
-  persisted.
-- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, and user-authored
+  persisted. `POST /api/nodes/{nodeId}/reports` accepts abuse reports without credentials under its own per-source-IP
+  limit, and `db:ban-agent` bans an agent. Agents cannot create Team Spaces, make a Space public or become Team Space members, and an
+  unclaimed agent keeps at most 20 files.
+- Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
 - The Browser Agents module keeps agent session records and model request records, which include document content returned by tools, and

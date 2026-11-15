@@ -172,6 +172,18 @@ Device Code 只能兑换一次，并为 CLI 创建独立、持久化的 `login_s
 取消尚未确认或兑换的请求，但不影响已经签发的 CLI Session。Browser Cookie、密码、邮箱验证码、
 GitHub、Google 和 Discord Token 都不会经过 Agent。
 
+agent 是 `users.kind = 'agent'` 的 User，没有密码或外部身份。Identity 的 `createAgent` 在一个事务里创建
+User、Personal Space 与 `agents` 行。`POST /api/agents` 为它签发个人访问令牌，`POST /api/auth/guest` 为它签发
+`browser` 来源的 Login Session 并写 Cookie；请求已带有效 Session 时后者返回 409。两个入口共用
+`createSourceRateLimiter` 的一个实例，按来源 IP 每小时最多 `AGENT_CREATE_LIMIT_PER_HOUR` 个（默认 5，0 关闭创建），超出返回 429
+`AGENT_CREATE_RATE_LIMITED`。计数只在当前进程内，重启清零，多实例之间不共享。
+
+`requireSession` 返回的 `Principal.user` 带 `kind`，agent 还带认领状态。`principalCategory` 由它推出四种主体类别：
+`anonymous`（没有 User 行的匿名读者）、`agent_unclaimed`、`agent_claimed` 和 `human`。封禁在 Identity 的凭据校验处生效。
+Cookie Session 与 token exchange 都经过同一个检查，被封禁的 agent 分别得到 401 和 `invalid_grant`。过期的 agent
+仍能认证，未认领 agent 每次认证把到期时间顺延 30 天，每天最多写一次。封禁不关闭 agent 已打开的协同 WebSocket，
+该连接在其 Session 结束时才关闭。
+
 ## Access Resolver
 
 产品 HTTP 与 Collaboration Endpoint 共用：
@@ -193,6 +205,33 @@ interface AccessResolver {
 - Trash 状态；
 - Node/Resource 以及对应 Univer/Blob 扩展映射；
 - Resource Node 是否有子 Node（与内容访问彼此独立）。
+
+主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
+
+- Space 所有者是暂停中的 agent（`banned_at` 非空或 `expires_at` 已过）时，所有者以外的请求者得不到任何角色，
+  Space 与其中的 Node 对他们不可发现。暂停每次查询时推出，不落库；
+- 请求者是 `agent_unclaimed` 时，Link Sharing 给出的角色是 `viewer`，与匿名读者相同。
+
+`modules/access/ceilings.ts` 是权限判定的第三层。角色与 Capability 说明主体能做什么，上限只说明无论角色如何都不能做什么，
+不授予任何权限。规则只写在这一个文件里，各模块在动作前调用 `assertCeiling`，不通过时返回 403：
+
+| 动作 | 禁止条件 | 错误码 |
+| --- | --- | --- |
+| `createTeamSpace` | 主体是 agent | `AGENT_NOT_ALLOWED` |
+| `updateSpace` | 主体是 agent 且把 Space 设为公开可读 | `AGENT_NOT_ALLOWED` |
+| `addTeamMember` | 被加入的 User 是 agent | `AGENT_NOT_ALLOWED` |
+| `searchUsers` | 主体是未认领 agent | `AGENT_NOT_ALLOWED` |
+| `createFiles` | 主体是未认领 agent，Personal Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
+| `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
+| `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
+
+文件数包括 Trash 之外有 Resource 的 Node、未完成 Pull request 中的新建文件和仍在进行的创建 Operation；
+重放同一个 Operation 不重复计数。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
+Personal Space 的 Node，因为分享 Capability 只给 Personal Space 的 Owner。用户搜索只返回人。
+
+`POST /api/nodes/{nodeId}/reports` 接受对请求者可读 Node 的举报，登录与否均可，按来源 IP 每小时最多 10 次，
+超出返回 429 `REPORT_RATE_LIMITED`。举报写入 `node_reports`，并以 `warn` 级别记一条只含 Node ID 与举报 ID 的日志。
+封禁没有 HTTP 入口，只能由运维命令 `db:ban-agent` 设置。
 
 `SpaceAccess.member` 区分 Space Owner/成员与只靠 `public_read` 得到 `viewer` 的读者。Issue 写入按它判断，
 SpaceView 的 affiliation 也由该事实推导，权限判断仍使用 Role 和 Capability。

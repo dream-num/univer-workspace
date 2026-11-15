@@ -122,7 +122,10 @@ The gateway never forwards the caller's bearer to Workspace product APIs. A bear
 `uvw_pat_` (personal access token) or `uvw_at_` (MCP OAuth access token) is exchanged with Workspace
 (`POST /api/auth/token`, RFC 8693) as the confidential client `MCP_OAUTH_CLIENT_ID`. The response
 carries a short-lived downstream session, the user and the granted scopes. Product requests send only
-that session. The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
+that session. The user's `kind` is `human` or `agent`, and an agent also carries `claimed`. The gateway
+keeps both for an agent and treats any other user as `human`. The kind selects the listed tools and the
+server instructions. Workspace answers a banned agent's token with `invalid_grant`.
+The gateway caches the result by the SHA-256 of the bearer for at most 30 seconds (and
 never beyond the session's `expires_in` minus 5 seconds). After revocation, `initialize`, `tools/list`,
 tools that make no Workspace request (`whoami`, `api_*`), and resources may still succeed
 from cache for up to 30 seconds. Every Workspace-backed call fails immediately because revocation deletes

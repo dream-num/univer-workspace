@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { AuthCard, validLoginReturnTo } from "../features/auth";
+import { AuthCard, GuestAgentCard, validLoginReturnTo } from "../features/auth";
 
 export const Route = createFileRoute("/login")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -13,7 +13,8 @@ export const Route = createFileRoute("/login")({
 function LoginPage() {
   const { mode, oauthError, returnTo } = Route.useSearch();
   return (
-    <main className="auth-backdrop grid min-h-dvh place-items-center px-5 py-8">
+    <main className="auth-backdrop flex min-h-dvh flex-wrap content-center justify-center gap-6 px-5 py-8">
+      <GuestAgentCard {...(returnTo ? { returnTo } : {})} />
       <AuthCard {...(mode ? { initialMode: mode } : {})} {...(oauthError ? { oauthError } : {})} {...(returnTo ? { returnTo } : {})} />
     </main>
   );

@@ -125,6 +125,7 @@ describe("identity", () => {
         discordOAuthEnabled: false,
         passwordAuthEnabled: true,
         emailAuthEnabled: false,
+        guestAuthEnabled: true,
       });
 
       secondIdentity.logout(cookie);
@@ -135,6 +136,7 @@ describe("identity", () => {
         discordOAuthEnabled: false,
         passwordAuthEnabled: true,
         emailAuthEnabled: false,
+        guestAuthEnabled: true,
       });
     } finally {
       secondDatabase.close();
@@ -690,6 +692,7 @@ describe("identity", () => {
         discordOAuthEnabled: false,
         passwordAuthEnabled: false,
         emailAuthEnabled: false,
+        guestAuthEnabled: true,
       });
       expect(disabled.getSession(cookie)).toMatchObject({
         authenticated: true,

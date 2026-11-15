@@ -2699,6 +2699,8 @@ export interface components {
             discordOAuthEnabled: boolean;
             passwordAuthEnabled: boolean;
             emailAuthEnabled: boolean;
+            /** @description Whether POST /api/auth/guest can create agents. False when AGENT_CREATE_LIMIT_PER_HOUR is 0. */
+            guestAuthEnabled: boolean;
         };
         ExternalIdentitySummary: {
             /** @enum {string} */
@@ -3747,7 +3749,7 @@ export interface components {
          *     insufficient. Three codes name a ceiling that holds whatever the role: `AGENT_NOT_ALLOWED` (an
          *     agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
          *     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
-         *     Personal Space, pending pull-request files included, or store one file above 10 MB) and
+         *     Personal Space, pending pull-request files included, or store one file above 10 MiB) and
          *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
          */
         Forbidden: {

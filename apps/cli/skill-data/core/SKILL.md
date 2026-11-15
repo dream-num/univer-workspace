@@ -252,7 +252,7 @@ uvw auth guest --label "<short task name>" --json
 The command creates a new agent and stores its session. It returns `agent.username` and `repo`, the
 agent's Personal Space repository `<username>/personal`. Pass `repo` with `-R`. A guest agent works
 only in that Personal Space. It cannot create or join a Team Space, and it keeps at most 20 files of
-at most 10 MB each. `uvw auth status --json` reports `subject.kind: "agent"` for a guest session and
+at most 10 MiB each. `uvw auth status --json` reports `subject.kind: "agent"` for a guest session and
 no `kind` for a person.
 
 `uvw auth guest` refuses while a session is stored for the origin, and creates nothing. Do not run

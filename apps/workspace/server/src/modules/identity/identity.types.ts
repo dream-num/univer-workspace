@@ -62,6 +62,7 @@ export type SessionView =
       readonly discordOAuthEnabled: boolean;
       readonly passwordAuthEnabled: boolean;
       readonly emailAuthEnabled: boolean;
+      readonly guestAuthEnabled: boolean;
     }
   | AuthenticatedSession;
 

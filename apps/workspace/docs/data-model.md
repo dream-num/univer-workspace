@@ -106,8 +106,9 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
 不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
 
-未认领 agent 认证成功，或它的 `/nodes/:nodeId` 页面被匿名访问成功时，`last_active_at` 写为当前时间，
-`expires_at` 写为 30 天后；每个 agent 每天最多写一次。`banned_at` 只由运维命令 `db:ban-agent` 写入，
+未认领 agent 认证成功，或 Server 送出它名下一个匿名读者可读的 `/nodes/:nodeId` 页面时，`last_active_at`
+写为当前时间，`expires_at` 写为 30 天后；每个 agent 每天最多写一次，已过期的 agent 认证成功时不受这个间隔限制。页面只在 Server 自己提供 Browser 构建产物时
+经过这一步，Vite 开发服务器送出的页面不顺延。`banned_at` 只由运维命令 `db:ban-agent` 写入，
 已有值不被覆盖。“暂停”不落库：`banned_at` 非空或 `expires_at` 已过时，权限解析对所有者以外的人
 不给出该 agent 的 Space 的任何角色。
 
@@ -324,12 +325,12 @@ Grant。
 
 ### `node_link_sharing`
 
-Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访客固定为 `viewer`。
+Node 的链接分享策略，登录用户角色为 `editor | viewer`；匿名访客与未认领 agent 固定为 `viewer`。
 策略同样按 Node 祖先链继承。
 Trigger 限制它只用于 Personal Space。
 
 匿名读取以保留 ID `workspace:anonymous` 进入 Access Resolver，只使用 Space 公开可读与 Link Sharing；
-不创建 User、Login Session 或 Recent；匿名读取本身不新增持久化状态。
+不创建 User、Login Session 或 Recent。匿名读取唯一的写入是上文 `agents` 的到期顺延。
 
 登录用户的有效 Role 由 Access Resolver 每次按以下来源计算最高权限：
 
@@ -338,10 +339,13 @@ Trigger 限制它只用于 Personal Space。
 3. Node 或祖先的 Direct Grant；
 4. Node 或祖先启用的 Link Sharing。
 
+Space 所有者是暂停中的 agent 时，以上来源对所有者以外的人都不生效。
+
 ### `node_reports`
 
 对一个 Node 的举报：`node_id`、可空的 `reporter_user_id`（空表示匿名举报）、`reason` 与 `created_at`。
-举报随 Node 删除；举报人被删除时 `reporter_user_id` 置空，举报保留。V21 只建表，尚无写入接口。
+举报随 Node 删除；举报人被删除时 `reporter_user_id` 置空，举报保留。`POST /api/nodes/:nodeId/reports`
+是唯一写入口，只接受请求者可读的 Node。不保存来源 IP，它只用作限速的键。
 
 已在 Trash 中的 Node/Resource 不可通过普通浏览或内容接口发现。Repository 不自行拼接
 权限；产品 HTTP 与 Collaboration Endpoint 共用同一 Access Resolver。

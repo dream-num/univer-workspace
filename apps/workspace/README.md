@@ -360,28 +360,34 @@ MCP clients such as opencode, Claude and ChatGPT obtain their tokens through sta
 personal access token with every MCP scope, and `mcpUrl` is the first URL in `MCP_RESOURCE_URLS`, or `null`
 when none is configured. `POST /api/auth/guest` sets the `workspace_session` cookie instead and returns
 `{ agent }`. It answers `409` when the request already carries a valid session, so it cannot replace a
-signed-in session.
+signed-in session. When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth
+sign-in, it shows a card that continues as a guest agent. The card calls `POST /api/auth/guest` and then
+returns to the authorization, where the guest approves the consent page like any signed-in user.
 
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 itself can read its Personal Space, and its links answer as not found. An expired agent can still
-authenticate, which ends the suspension. A banned agent gets `401`, and `invalid_grant` from the token
+authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
 exchange. `pnpm db:ban-agent <username or user id>` bans an agent (`db:ban-agent:production` runs the
 build); it refuses a User that is not an agent, and a second run changes nothing. A collaboration
-socket the agent already holds stays open until its session ends.
+socket the agent already holds stays open until its session ends. The MCP gateway caches a token
+exchange for up to 30 seconds, so for that long a banned agent's token still gets an answer from tools
+that do not call Workspace, such as `whoami`.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
 Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
-keeps at most 20 files in its Personal Space, each of at most 10 MB (`AGENT_QUOTA_EXCEEDED`), and gets
+keeps at most 20 files in its Personal Space, each of at most 10 MiB (`AGENT_QUOTA_EXCEEDED`), and gets
 Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
-Sharing (`INTERACTIVE_SESSION_REQUIRED`). User search does not return agents.
+Sharing (`INTERACTIVE_SESSION_REQUIRED`). User search does not return agents, and refuses an unclaimed
+agent (`AGENT_NOT_ALLOWED`).
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials
 for any Node the caller can read and returns `201` with `{ id }`. Each source IP may send 10 an hour,
 then gets `429` with `REPORT_RATE_LIMITED`. The log line carries the Node and report ids only.
 
 Both endpoints share one in-process limit per source IP: `AGENT_CREATE_LIMIT_PER_HOUR` creations in any
-one hour, default `5`. `0` disables creation. Past the limit the response is `429` with
+one hour, default `5`. `0` disables creation, and the anonymous `GET /api/session` then reports
+`guestAuthEnabled: false`, which hides the guest card. Past the limit the response is `429` with
 `AGENT_CREATE_RATE_LIMITED`. An IPv6 source counts as its /64 prefix. The count lives in the process, so
 it starts again on restart and is not shared between instances.
 
@@ -773,6 +779,7 @@ Space has public read enabled. Folder sharing includes current and future childr
 Space public read allows browsing that Space by URL. Anonymous visitors always have
 viewer access, even when a link grants editors access after sign-in. They cannot
 modify source content, write comments, upload, manage permissions, or access Worktrees.
+An unclaimed agent also gets only viewer access from a link.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
 
 Workspace Browser enables local trial edits in bound HTML pages for anonymous and
@@ -795,6 +802,8 @@ The Vite development server does not generate these previews, and no preview ima
 
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.
+Serving the page of a file that an unclaimed agent owns moves that agent's expiry, at most
+once a day. A banned or expired agent's links answer as not found.
 The public link uses the existing Node URL, including immersive-view parameters.
 Each read request and Unit join checks current permissions. Link Sharing changes
 retain the existing realtime connection invalidation. Space public-read changes,
