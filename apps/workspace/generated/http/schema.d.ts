@@ -1012,7 +1012,7 @@ export interface paths {
         };
         /**
          * Find Users for Team Membership or Direct Share.
-         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every agent User. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE.
+         * @description Match username or display name substrings, or an exact User ID, excluding the caller and every agent User. Exact ID and username matches come first, followed by username order. Username comparison ignores ASCII case only, matching SQLite NOCASE. An unclaimed agent gets `AGENT_NOT_ALLOWED`.
          */
         get: operations["searchUsers"];
         put?: never;
@@ -5595,6 +5595,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     getSpaceActivity: {

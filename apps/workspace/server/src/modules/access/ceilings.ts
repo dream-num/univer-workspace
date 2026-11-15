@@ -9,6 +9,7 @@ export interface CeilingContexts {
   readonly createTeamSpace: Readonly<Record<never, never>>;
   readonly updateSpace: { readonly publicRead: boolean };
   readonly addTeamMember: { readonly member: PrincipalCategory };
+  readonly searchUsers: Readonly<Record<never, never>>;
   /** `held` counts the files the principal's Personal Space already has or is about to get. */
   readonly createFiles: { readonly held: () => number; readonly adding: number };
   readonly storeFile: { readonly byteSize: number };
@@ -46,6 +47,12 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     code: "AGENT_NOT_ALLOWED",
     message: "An agent cannot be a Team Space member.",
     forbids: (_principal, { member }) => isAgent(member),
+  },
+  // Anyone can create an agent, so an unclaimed one must not read the User directory.
+  searchUsers: {
+    code: "AGENT_NOT_ALLOWED",
+    message: "An unclaimed agent cannot search Users.",
+    forbids: (principal) => principal === "agent_unclaimed",
   },
   createFiles: {
     code: "AGENT_QUOTA_EXCEEDED",

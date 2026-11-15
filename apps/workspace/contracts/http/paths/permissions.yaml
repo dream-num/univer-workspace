@@ -8,6 +8,7 @@
       and every agent User.
       Exact ID and username matches come first, followed by username order.
       Username comparison ignores ASCII case only, matching SQLite NOCASE.
+      An unclaimed agent gets `AGENT_NOT_ALLOWED`.
     parameters:
       - name: query
         in: query
@@ -27,6 +28,8 @@
         $ref: ../schemas/common.yaml#/BadRequest
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
 
 /api/team-spaces/{spaceId}/members:
   parameters:

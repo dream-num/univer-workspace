@@ -401,6 +401,15 @@ describe("GET /api/users/search", () => {
     expect(await search(agent.agent.id)).toEqual([]);
     expect(await search(bob.id)).toEqual([bob.id]);
   });
+
+  it("refuses an unclaimed agent, which anyone can create", async () => {
+    const { origin } = await start();
+    await register(origin, "alice");
+    const agent = await createAgent(origin);
+    const response = await fetch(`${origin}/api/users/search?query=alice`, { headers: { cookie: agent.cookie } });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe("AGENT_NOT_ALLOWED");
+  });
 });
 
 describe("Link Sharing settings", () => {

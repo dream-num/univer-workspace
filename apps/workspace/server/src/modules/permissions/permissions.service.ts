@@ -90,6 +90,7 @@ export function createPermissionsModule(options: {
 
   return {
     searchUsers(actorUserId, value) {
+      assertCeiling(options.access.principalCategory(actorUserId), "searchUsers", {});
       const query = validSearch(value);
       return {
         users: options.repository.searchUsers(query, actorUserId),
