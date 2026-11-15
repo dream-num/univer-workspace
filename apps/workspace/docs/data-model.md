@@ -282,6 +282,8 @@ Resource 是内容 API、Recent 和 Worktree 的产品身份。它不重复保�
 保存 BlobStore `object_key`、原始文件名、服务端检测的 MIME、字节数、SHA-256、ETag 与
 `ready | quarantined` 可用状态。文件字节不进入 SQLite，Object Key 不返回客户端。前端
 根据 MIME 与原始文件扩展名选择预览组件；数据库不保存 Preview Kind。
+本地后端以 `object_key` 为文件名，S3 后端将同一个键放在配置的 bucket 与可选前缀下。
+切换后端时按原键迁移字节，产品表中的对象身份和内容校验值保持有效。
 Markdown 只增加只读展示，不新增 Resource kind、Unit 或持久化字段。
 
 ### `blob_upload_sessions`

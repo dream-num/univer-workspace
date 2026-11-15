@@ -1,5 +1,7 @@
 # Univer Workspace
 
+English | [简体中文](README.zh-CN.md)
+
 A deployable React workspace providing Univer
 collaboration, Node hierarchy management, permissions, Trash, recent Resources,
 and Worktrees.
@@ -40,9 +42,12 @@ API documentation is available at:
 - `http://127.0.0.1:3020/openapi.yaml`
 
 Product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
-stored separately in `.data/univer-collaboration.sqlite`, and uploaded Blob
-bytes default to `.data/univer-workspace-blobs`. Thread Comment anchors for
-Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
+stored separately in `.data/univer-collaboration.sqlite`. Uploaded files and attachments
+default to `.data/univer-workspace-blobs`. To use a private S3-compatible bucket, set
+`BLOB_STORE=s3` and `BLOB_S3_BUCKET`. Copy existing files before switching.
+See [S3 setup and migration](docs/s3-storage.md).
+
+Thread Comment anchors for Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
 comment bodies, replies, and solved state use the Comment component in the same
 Collaboration SQLite file. Comment bodies are shared across Trunk, Worktree,
 and Merge Preview editors; only anchors branch and merge with Unit data. The
@@ -508,6 +513,8 @@ docker run --rm \
   -v univer-workspace-data:/app/univer-workspace/.data \
   univer-workspace node dist/server/db/reset.js
 ```
+
+Files stored in S3 survive this reset.
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup

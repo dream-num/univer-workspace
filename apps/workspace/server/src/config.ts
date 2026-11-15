@@ -1,5 +1,6 @@
 import { parseCimdExemptNetworks } from "./modules/identity/client-metadata-document.js";
 import { resolve } from "node:path";
+import type { S3BlobStoreOptions } from "./integrations/blob/s3-blob-store.js";
 import type { EmailConfig } from "./integrations/email/index.js";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
 import { parseMcpResourceUrls, type McpOAuthConfig } from "./modules/identity/mcp-oauth.js";
@@ -16,6 +17,7 @@ export interface WorkspaceConfig {
   readonly databaseFilename: string;
   readonly collaborationDatabaseFilename: string;
   readonly blobDirectory?: string;
+  readonly s3BlobStore?: S3BlobStoreOptions;
   readonly maxBlobBytes?: number;
   readonly secureCookies: boolean;
   readonly sessionTtlMs: number;
@@ -96,9 +98,7 @@ export function loadConfig(
       environment.COLLABORATION_DATABASE_FILE ??
         ".data/univer-collaboration.sqlite"
     ),
-    blobDirectory: resolve(
-      environment.BLOB_DIRECTORY ?? ".data/univer-workspace-blobs"
-    ),
+    ...blobStoreConfig(environment),
     maxBlobBytes: integer(
       environment.MAX_BLOB_BYTES,
       512 * 1024 * 1024,
@@ -132,6 +132,45 @@ export function loadConfig(
     oauthClients: oauthClientsConfig,
     mcpOAuth: mcpOAuthConfig(environment, publicOrigin),
     univerLicense: resolveUniverLicense(environment),
+  };
+}
+
+function blobStoreConfig(environment: NodeJS.ProcessEnv) {
+  const backend = environment.BLOB_STORE ?? "local";
+  if (backend === "local") {
+    return { blobDirectory: resolve(environment.BLOB_DIRECTORY ?? ".data/univer-workspace-blobs") };
+  }
+  if (backend !== "s3") throw new Error("BLOB_STORE must be local or s3");
+
+  const bucket = environment.BLOB_S3_BUCKET?.trim();
+  if (!bucket) throw new Error("BLOB_STORE=s3 requires BLOB_S3_BUCKET");
+  const region = environment.BLOB_S3_REGION?.trim();
+  const endpoint = environment.BLOB_S3_ENDPOINT?.trim();
+  if (endpoint) {
+    const url = URL.canParse(endpoint) ? new URL(endpoint) : null;
+    if (
+      !url || !["http:", "https:"].includes(url.protocol) ||
+      url.username || url.password || url.search || url.hash
+    ) {
+      throw new Error("BLOB_S3_ENDPOINT must be an HTTP(S) URL without credentials, query, or fragment");
+    }
+  }
+  const prefix = (environment.BLOB_S3_PREFIX ?? "").replace(/^\/+|\/+$/gu, "");
+  if (prefix.split("/").some((segment) => segment === "." || segment === "..")) {
+    throw new Error("BLOB_S3_PREFIX must not contain . or .. path segments");
+  }
+  return {
+    s3BlobStore: {
+      bucket,
+      ...(region ? { region } : {}),
+      ...(endpoint ? { endpoint } : {}),
+      forcePathStyle: boolean(
+        environment.BLOB_S3_FORCE_PATH_STYLE || undefined,
+        false,
+        "BLOB_S3_FORCE_PATH_STYLE"
+      ),
+      prefix,
+    },
   };
 }
 

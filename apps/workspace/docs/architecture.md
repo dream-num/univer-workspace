@@ -344,8 +344,9 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 每个测试使用独立的临时数据库文件或内存数据库。
 
 产品数据库保存产品元数据、`unit_id`、Tree Blob 与 Univer Asset 元数据，不保存对象字节、
-snapshot、changeset 或 revision。Tree Blob 和内嵌 Asset 共用注入的 `BlobStore`；当前实现是
-本地目录，未来可替换为 `S3BlobStore` 或迁移包装器。Univer Collaboration Database Adapter
+snapshot、changeset 或 revision。Tree Blob、内嵌 Asset、草稿文件与 Exchange 临时对象共用
+注入的 `BlobStore`。Server 通过 `BLOB_STORE` 选择本地目录（默认）或 S3 兼容存储。
+Univer Collaboration Database Adapter
 独立管理 snapshot、changeset 与 revision；Comment Database Adapter 在同一文件中独立管理
 评论正文、回复和 solved 状态；History Database Adapter 在同一文件中保存可从 Core 创建事实与
 changeset 重建的分段索引。SDK 1.0.0 的 Core/Worktree SQLite Adapter 在写入时以当前 Unix 秒覆盖

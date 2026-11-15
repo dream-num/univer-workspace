@@ -1,6 +1,49 @@
+import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
 import { BUNDLED_UNIVER_LICENSE } from "./integrations/univer/univer-license.js";
+
+describe("Blob storage configuration", () => {
+  it("uses the configured local directory or its existing default", () => {
+    expect(loadConfig({}).blobDirectory).toBe(resolve(".data/univer-workspace-blobs"));
+    const local = loadConfig({ BLOB_STORE: "local", BLOB_DIRECTORY: "objects", BLOB_S3_BUCKET: "unused" });
+    expect(local.blobDirectory).toBe(resolve("objects"));
+    expect(local.s3BlobStore).toBeUndefined();
+  });
+
+  it("selects the S3 bucket without a local directory or custom endpoint", () => {
+    const config = loadConfig({ BLOB_STORE: "s3", BLOB_S3_BUCKET: "workspace", BLOB_DIRECTORY: "unused" });
+    expect(config.s3BlobStore).toEqual({ bucket: "workspace", prefix: "", forcePathStyle: false });
+    expect(config.blobDirectory).toBeUndefined();
+  });
+
+  it("accepts a compatible endpoint and strips the outer slashes from its key prefix", () => {
+    const config = loadConfig({
+      BLOB_STORE: "s3",
+      BLOB_S3_BUCKET: "workspace",
+      BLOB_S3_ENDPOINT: "http://localhost:9000",
+      BLOB_S3_REGION: "us-east-1",
+      BLOB_S3_FORCE_PATH_STYLE: "true",
+      BLOB_S3_PREFIX: "/deployments/test/",
+    });
+    expect(config.s3BlobStore).toEqual({
+      bucket: "workspace",
+      endpoint: "http://localhost:9000",
+      region: "us-east-1",
+      forcePathStyle: true,
+      prefix: "deployments/test",
+    });
+  });
+
+  it("rejects invalid storage settings when S3 is selected", () => {
+    const s3 = { BLOB_STORE: "s3", BLOB_S3_BUCKET: "workspace" };
+    expect(() => loadConfig({ BLOB_STORE: "unknown" })).toThrow("BLOB_STORE");
+    expect(() => loadConfig({ BLOB_STORE: "s3" })).toThrow("BLOB_S3_BUCKET");
+    expect(() => loadConfig({ ...s3, BLOB_S3_ENDPOINT: "file:///tmp/store" })).toThrow("BLOB_S3_ENDPOINT");
+    expect(() => loadConfig({ ...s3, BLOB_S3_FORCE_PATH_STYLE: "yes" })).toThrow("BLOB_S3_FORCE_PATH_STYLE");
+    expect(() => loadConfig({ ...s3, BLOB_S3_PREFIX: "workspace/../shared" })).toThrow("BLOB_S3_PREFIX");
+  });
+});
 
 describe("public origin configuration", () => {
   it("exposes the public origin even without MCP OAuth", () => {

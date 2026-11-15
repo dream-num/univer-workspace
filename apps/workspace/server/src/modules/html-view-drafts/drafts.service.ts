@@ -42,7 +42,7 @@ export function createHtmlViewDraftsModule(options: {
 }) {
   const { repository, access, store } = options;
   const now = options.now ?? Date.now;
-  // LocalBlobStore uses one temporary file per object key; coalesce concurrent retries.
+  // Concurrent retries for the same draft must share one object upload.
   const receiving = new Map<string, Promise<DraftRow>>();
   function requireDraft(userId: string, draftId: string): DraftRow {
     const row = repository.find(draftId);

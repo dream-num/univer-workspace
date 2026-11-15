@@ -8,9 +8,9 @@ import {
   statSync,
   unlinkSync,
 } from "node:fs";
-import { once } from "node:events";
 import { join } from "node:path";
-import type { Readable } from "node:stream";
+import { Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 
 export interface StoredObject {
   readonly byteSize: number;
@@ -22,19 +22,16 @@ export interface StoredBlob extends StoredObject {
   readonly mediaType: string;
 }
 
+interface BlobPutInput {
+  readonly objectKey: string;
+  readonly body: Readable;
+  readonly expectedByteSize: number;
+  readonly detectMediaType?: boolean;
+}
+
 export interface BlobStore {
-  put(input: {
-    readonly objectKey: string;
-    readonly body: Readable;
-    readonly expectedByteSize: number;
-    readonly detectMediaType: false;
-  }): Promise<StoredObject>;
-  put(input: {
-    readonly objectKey: string;
-    readonly body: Readable;
-    readonly expectedByteSize: number;
-    readonly detectMediaType?: true;
-  }): Promise<StoredBlob>;
+  put(input: BlobPutInput & { readonly detectMediaType: false }): Promise<StoredObject>;
+  put(input: BlobPutInput & { readonly detectMediaType?: true }): Promise<StoredBlob>;
   head(objectKey: string): Promise<{ readonly byteSize: number } | null>;
   open(input: {
     readonly objectKey: string;
@@ -47,69 +44,73 @@ export interface BlobStore {
     readonly end: number;
   }>;
   delete(objectKey: string): Promise<void>;
+  /** Releases resources held by the store when its owner shuts down. */
+  dispose?(): void | Promise<void>;
 }
 
-export class LocalBlobStore implements BlobStore {
-  constructor(private readonly _directory: string) {}
+export function validObjectKey(objectKey: string): string {
+  if (!/^[0-9a-f-]{36}$/.test(objectKey)) throw new Error("Invalid Blob object key.");
+  return objectKey;
+}
 
-  put(input: {
-    readonly objectKey: string;
-    readonly body: Readable;
-    readonly expectedByteSize: number;
-    readonly detectMediaType: false;
-  }): Promise<StoredObject>;
-  put(input: {
-    readonly objectKey: string;
-    readonly body: Readable;
-    readonly expectedByteSize: number;
-    readonly detectMediaType?: true;
-  }): Promise<StoredBlob>;
-  async put(input: {
-    readonly objectKey: string;
-    readonly body: Readable;
-    readonly expectedByteSize: number;
-    readonly detectMediaType?: boolean;
-  }): Promise<StoredObject | StoredBlob> {
-    const destination = this._path(input.objectKey);
-    mkdirSync(this._directory, { recursive: true });
-    const temporary = `${destination}.upload`;
-    const output = createWriteStream(temporary, { flags: "w" });
+/** Both stores publish only after consuming and validating the complete input. */
+export abstract class StreamingBlobStore {
+  put(input: BlobPutInput & { readonly detectMediaType: false }): Promise<StoredObject>;
+  put(input: BlobPutInput & { readonly detectMediaType?: true }): Promise<StoredBlob>;
+  async put(input: BlobPutInput): Promise<StoredObject | StoredBlob> {
+    const objectKey = validObjectKey(input.objectKey);
     const hash = createHash("sha256");
-    const sample: Buffer[] | null = input.detectMediaType === false ? null : [];
+    const sample = input.detectMediaType === false ? null : Buffer.alloc(8192);
     let sampleBytes = 0;
     let byteSize = 0;
-    try {
+
+    async function* checkedChunks() {
       for await (const value of input.body) {
         const chunk = Buffer.isBuffer(value) ? value : Buffer.from(value);
-        byteSize += chunk.byteLength;
+        byteSize += chunk.length;
         if (byteSize > input.expectedByteSize) {
           throw new Error("Uploaded content exceeds its reserved byte size.");
         }
         hash.update(chunk);
-        if (sample && sampleBytes < 8_192) {
-          const part = chunk.subarray(0, 8_192 - sampleBytes);
-          sample.push(part);
-          sampleBytes += part.byteLength;
+        if (sample && sampleBytes < sample.length) {
+          sampleBytes += chunk.copy(sample, sampleBytes);
         }
-        if (!output.write(chunk)) await once(output, "drain");
+        yield chunk;
       }
       if (byteSize !== input.expectedByteSize) {
         throw new Error("Uploaded content length does not match its reservation.");
       }
-      output.end();
-      await once(output, "close");
+    }
+
+    const stream = Readable.from(checkedChunks(), { objectMode: false });
+    try {
+      await this.write(objectKey, stream, input.expectedByteSize);
+    } finally {
+      stream.destroy();
+    }
+    const sha256 = hash.digest("hex");
+    const stored = { byteSize, sha256, etag: sha256 };
+    return sample
+      ? { ...stored, mediaType: detectMediaType(sample.subarray(0, sampleBytes), byteSize > sampleBytes) }
+      : stored;
+  }
+
+  protected abstract write(objectKey: string, body: Readable, byteSize: number): Promise<void>;
+}
+
+export class LocalBlobStore extends StreamingBlobStore implements BlobStore {
+  constructor(private readonly _directory: string) {
+    super();
+  }
+
+  protected override async write(objectKey: string, body: Readable): Promise<void> {
+    mkdirSync(this._directory, { recursive: true });
+    const destination = join(this._directory, objectKey);
+    const temporary = `${destination}.upload`;
+    try {
+      await pipeline(body, createWriteStream(temporary));
       renameSync(temporary, destination);
-      const sha256 = hash.digest("hex");
-      const stored: StoredObject = {
-        byteSize,
-        sha256,
-        etag: sha256,
-      };
-      return sample
-        ? { ...stored, mediaType: detectMediaType(Buffer.concat(sample), byteSize > sampleBytes) }
-        : stored;
     } catch (error) {
-      output.destroy();
       rmSync(temporary, { force: true });
       throw error;
     }
@@ -158,10 +159,7 @@ export class LocalBlobStore implements BlobStore {
   }
 
   private _path(objectKey: string): string {
-    if (!/^[0-9a-f-]{36}$/.test(objectKey)) {
-      throw new Error("Invalid Blob object key.");
-    }
-    return join(this._directory, objectKey);
+    return join(this._directory, validObjectKey(objectKey));
   }
 }
 

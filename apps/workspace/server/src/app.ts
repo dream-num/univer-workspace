@@ -26,7 +26,8 @@ import {
 } from "./integrations/univer/unit-store.js";
 import { protocolUser } from "./integrations/univer/protocol-user.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
-import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
+import type { BlobStore } from "./integrations/blob/blob-store.js";
+import { createBlobStore } from "./integrations/blob/create-blob-store.js";
 import {
   createCollaborationGateway,
   type CollaborationGateway,
@@ -169,6 +170,7 @@ export function createWorkspaceApplication(
     readonly unitStore?: UnitStore;
     readonly unitSnapshotStore?: UnitSnapshotStore;
     readonly worktreeBackend?: WorktreeBackend;
+    /** An injected store remains owned by the caller. */
     readonly blobStore?: BlobStore;
     readonly githubOAuthProvider?: GitHubOAuthProvider;
     readonly googleOAuthProvider?: GoogleOAuthProvider;
@@ -257,11 +259,8 @@ export function createWorkspaceApplication(
     access,
     unitStore,
   });
-  const blobStore =
-    dependencies.blobStore ??
-    new LocalBlobStore(
-      config.blobDirectory ?? resolve(".data/univer-workspace-blobs")
-    );
+  const { blobStore: injectedBlobStore } = dependencies;
+  const blobStore = injectedBlobStore ?? createBlobStore(config);
   const skillSources = createSkillSourcesModule({ access, nodes: new NodesRepository(database), store: blobStore, ...(config.githubToken ? { githubToken: config.githubToken } : {}) });
   const skillDrafts = createSkillDraftsModule({ repository: new SkillDraftsRepository(database), access, store: blobStore, sources: skillSources });
   const htmlViewDrafts = createHtmlViewDraftsModule({ repository: new HtmlViewDraftsRepository(database), access, store: blobStore });
@@ -512,7 +511,11 @@ export function createWorkspaceApplication(
           try {
             await collaboration?.dispose();
           } finally {
-            database.close();
+            try {
+              database.close();
+            } finally {
+              if (!injectedBlobStore) await blobStore.dispose?.();
+            }
           }
         }
       }
