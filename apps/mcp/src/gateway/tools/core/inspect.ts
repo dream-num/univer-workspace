@@ -3,9 +3,9 @@ import { z } from "zod";
 import { inspectionOptions, opSpecs } from "../../../shared/executor-protocol.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
-import { worktreeInput } from "./space-support.js";
+import { acceptUnitLink, worktreeInput } from "./space-support.js";
 
-export const inspectTool = executorTool({
+export const inspectTool = acceptUnitLink(executorTool({
   name: "inspect",
   toolset: "core",
   scope: "read",
@@ -36,4 +36,4 @@ export const inspectTool = executorTool({
       },
     };
   },
-});
+}));

@@ -1,13 +1,16 @@
 import {
+  isWorkspaceRecord,
   nodeUrl,
   pullSpaceId,
   pullUrl,
+  resolveNodeReference,
+  workspaceError,
   WorkspaceUnitFeature,
   type WorkspaceUnit,
   type WorkspaceWorktree,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
-import type { ToolContext } from "../definition.js";
+import type { ToolContext, ToolDefinition } from "../definition.js";
 import { spaceFeature, worktreeFeature } from "./pr-support.js";
 
 export const worktreeInput = z
@@ -20,6 +23,26 @@ export const unitTypeInput = z
   .enum(["sheet", "base", "doc", "slide", "board"])
   .describe("Only with resource_kind univer.");
 export const nodeIdInput = (what: string) => z.string().describe(`Node ID of ${what}.`);
+
+/** Lets `unit` be a file link: resolves it to the Unit ID before the tool runs, so results and paging carry the ID. */
+export function acceptUnitLink(tool: ToolDefinition): ToolDefinition {
+  return {
+    ...tool,
+    async run(context, args) {
+      const unit = isWorkspaceRecord(args) ? args["unit"] : undefined;
+      if (typeof unit !== "string" || !/^\s*https?:\/\//i.test(unit)) return tool.run(context, args);
+      const node = await resolveNodeReference(spaceFeature(context), unit, context.identityOrigin);
+      if (node.resource?.kind !== "univer") {
+        throw workspaceError(
+          "workspace-argument-invalid",
+          `The link names "${node.name}", which is not a Unit, so this tool cannot read it.`,
+          { nodeId: node.nodeId },
+        );
+      }
+      return tool.run(context, { ...(args as object), unit: node.resource.unitId });
+    },
+  };
+}
 
 export const unitFeature = (context: ToolContext) =>
   new WorkspaceUnitFeature(async () => context.http);

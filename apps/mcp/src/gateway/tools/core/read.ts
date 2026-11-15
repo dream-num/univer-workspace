@@ -2,6 +2,7 @@ import { z } from "zod";
 import { opSpecs } from "../../../shared/executor-protocol.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
+import { acceptUnitLink } from "./space-support.js";
 import {
   sheetLensTarget,
   sheetLensScope,
@@ -9,7 +10,7 @@ import {
   sheetLensToolOutput,
 } from "./sheet-lens-support.js";
 
-export const readTool = executorTool({
+export const readTool = acceptUnitLink(executorTool({
   name: "read",
   toolset: "core",
   scope: "read",
@@ -42,4 +43,4 @@ export const readTool = executorTool({
     },
   }),
   response: (result, args) => sheetLensResponse(result.output, args),
-});
+}));

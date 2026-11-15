@@ -2,6 +2,7 @@ import { z } from "zod";
 import { opSpecs } from "../../../shared/executor-protocol.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
+import { acceptUnitLink } from "./space-support.js";
 import {
   sheetLensTarget,
   sheetLensScope,
@@ -9,7 +10,7 @@ import {
   sheetLensToolOutput,
 } from "./sheet-lens-support.js";
 
-export const findTool = executorTool({
+export const findTool = acceptUnitLink(executorTool({
   name: "find",
   toolset: "core",
   scope: "read",
@@ -40,4 +41,4 @@ export const findTool = executorTool({
     },
   }),
   response: (result, args) => sheetLensResponse(result.output, args),
-});
+}));

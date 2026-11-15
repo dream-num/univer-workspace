@@ -280,6 +280,11 @@ When more remains, `next` is `{ tool, arguments }`. Pass `arguments` unchanged t
 `tool`; it preserves the Unit, scope and original options with the new cursor.
 The final text line gives the same next call in neutral tool syntax.
 
+`read`, `find`, `inspect`, `outline` and `screenshot` also take a file link, `<identity origin>/nodes/<nodeId>`, as `unit`.
+The gateway reads the Node as the caller and passes its Unit ID on, so the result and `next` carry the Unit ID. This is how a
+caller reads a shared file with `trunk: true`. A link of another origin is `workspace-origin-mismatch`; a link to a file that
+is not a Unit is `workspace-argument-invalid`. The tool descriptions do not mention it; the `share` description does.
+
 The executor resolves each Unit and revision through caller-authenticated Workspace
 HTTP before consulting its one `WorkspaceSheetLensEngine`. Cache keys include the
 user, origin, scope, Unit type, Unit ID and revision. Exports use the existing

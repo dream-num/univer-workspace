@@ -7,7 +7,7 @@ import { downloadSchema } from "../../staging/model.js";
 import { readOnlyAnnotations } from "../definition.js";
 import { executorTool } from "../executor-tool.js";
 import { stagingStore } from "../files/staging-support.js";
-import { worktreeInput } from "./space-support.js";
+import { acceptUnitLink, worktreeInput } from "./space-support.js";
 
 // Images up to this total come back as image content blocks; larger results as download links.
 const INLINE_LIMIT_BYTES = 1024 * 1024;
@@ -15,7 +15,7 @@ const INLINE_LIMIT_BYTES = 1024 * 1024;
 const imageEntry = screenshotImage.omit({ offset: true });
 const text = (what: string) => z.string().describe(what);
 
-export const screenshotTool = executorTool({
+export const screenshotTool = acceptUnitLink(executorTool({
   name: "screenshot",
   toolset: "core",
   scope: "read",
@@ -111,4 +111,4 @@ export const screenshotTool = executorTool({
         : {}),
     };
   },
-});
+}));
