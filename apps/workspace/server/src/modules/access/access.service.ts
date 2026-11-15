@@ -1,4 +1,4 @@
-import { ANONYMOUS_USER_ID } from "../identity/index.js";
+import { ANONYMOUS_USER_ID, principalCategory } from "../identity/index.js";
 import {
   AccessRepository,
   type NodeAuthorizationRow,
@@ -289,8 +289,16 @@ function resolvedRoles(userId: string, row: NodeAuthorizationRow) {
     userId === ANONYMOUS_USER_ID ? null : assignedRole,
     row.public_read ? "viewer" : null,
   );
+  const requester = principalCategory(
+    row.requester_kind === "agent"
+      ? { kind: "agent", claimed: Boolean(row.requester_claimed) }
+      : row.requester_kind && { kind: "human" },
+  );
+  // The anonymous reader and an unclaimed agent cost nothing to create, so a link never lets them edit.
   const linkRole =
-    userId === ANONYMOUS_USER_ID && row.link_sharing_role ? "viewer" : row.link_sharing_role;
+    row.link_sharing_role && (requester === "anonymous" || requester === "agent_unclaimed")
+      ? "viewer"
+      : row.link_sharing_role;
   const role = highestRole(regularRole, linkRole);
   return { regularRole, role };
 }

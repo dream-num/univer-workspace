@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
@@ -68,6 +69,53 @@ describe("a banned agent", () => {
   });
 });
 
+describe("access rules for agents", () => {
+  it("holds an unclaimed agent to Viewer on an Editor link, like the anonymous reader", async () => {
+    const { origin, application } = await start();
+    const owner = await register(origin, "owner");
+    const other = await register(origin, "other");
+    const agent = await createAgent(origin);
+    const nodeId = await createFile(origin, owner.cookie, "Shared sheet");
+    expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "editor" }, owner.cookie)).status).toBe(200);
+
+    expect(await accessRole(origin, nodeId, other.cookie)).toBe("editor");
+    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
+    expect(await accessRole(origin, nodeId, agent.cookie)).toBe("viewer");
+
+    application.database.connection
+      .prepare("UPDATE agents SET owner_user_id = ?, claimed_at = 1 WHERE user_id = ?")
+      .run(owner.id, agent.id);
+    expect(await accessRole(origin, nodeId, agent.cookie)).toBe("editor");
+  });
+
+  it("gives nobody but the owner a role in a suspended agent's Space, in lookups and listings alike", async () => {
+    const { origin, application } = await start();
+    const reader = await register(origin, "reader");
+    const agent = await createAgent(origin);
+    const nodeId = await createFile(origin, agent.cookie, "Agent sheet");
+    expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie)).status).toBe(200);
+    expect((await put(origin, `/api/nodes/${nodeId}/grants/${reader.id}`, { role: "editor" }, agent.cookie)).status).toBe(200);
+    const sharedWithReader = async () =>
+      ((await (await fetch(`${origin}/api/shared-with-me`, { headers: { cookie: reader.cookie } })).json()) as { items: unknown[] }).items.length;
+    const suspend = (column: "expires_at" | "banned_at", value: number | null) =>
+      application.database.connection.prepare(`UPDATE agents SET ${column} = ? WHERE user_id = ?`).run(value, agent.id);
+
+    for (const [column, lifted] of [["expires_at", Date.now() + 60_000], ["banned_at", null]] as const) {
+      expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
+      expect(await accessRole(origin, nodeId, reader.cookie)).toBe("editor");
+      expect(await sharedWithReader()).toBe(1);
+
+      suspend(column, Date.now() - 1);
+      expect(await accessRole(origin, nodeId, undefined)).toBeNull();
+      expect(await accessRole(origin, nodeId, reader.cookie)).toBeNull();
+      expect(await sharedWithReader()).toBe(0);
+      expect(application.access.resolveNode(agent.id, nodeId)?.role).toBe("owner");
+      suspend(column, lifted);
+    }
+    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
+  });
+});
+
 async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: string; application: WorkspaceApplication }> {
   const application = createWorkspaceApplication({
     host: "127.0.0.1",
@@ -114,6 +162,33 @@ async function register(origin: string, username: string): Promise<{ id: string;
   if (response.status !== 201) throw new Error(`Registration failed with ${response.status}`);
   const body = (await response.json()) as { user: { id: string } };
   return { id: body.user.id, cookie: response.headers.get("set-cookie")!.split(";")[0]! };
+}
+
+async function createFile(origin: string, cookie: string, name: string): Promise<string> {
+  const response = await createFileRequest(origin, cookie, name);
+  if (response.status !== 201) throw new Error(`File creation failed with ${response.status}`);
+  return ((await response.json()) as { node: { id: string } }).node.id;
+}
+
+async function createFileRequest(origin: string, cookie: string, name: string): Promise<Response> {
+  const spaces = (await (await fetch(`${origin}/api/spaces`, { headers: { cookie } })).json()) as { spaces: { id: string; type: string }[] };
+  return post(
+    origin,
+    "/api/resources",
+    { kind: "univer", spaceId: spaces.spaces.find((space) => space.type === "personal")!.id, parentNodeId: null, name, unitType: "sheet" },
+    { cookie, "idempotency-key": randomUUID() },
+  );
+}
+
+/** The requester's role on the node, or null when the node route answers not found. */
+async function accessRole(origin: string, nodeId: string, cookie: string | undefined): Promise<string | null> {
+  const response = await fetch(`${origin}/api/nodes/${nodeId}`, { headers: cookie ? { cookie } : {} });
+  if (response.status === 404) return null;
+  return ((await response.json()) as { node: { accessRole: string } }).node.accessRole;
+}
+
+function put(origin: string, path: string, body: unknown, cookie: string): Promise<Response> {
+  return send(origin, "PUT", path, body, { cookie });
 }
 
 async function session(origin: string, cookie: string): Promise<{ authenticated: boolean; user?: unknown }> {

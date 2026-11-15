@@ -31,6 +31,9 @@ export interface ResolvedNodeRow {
   readonly grant_navigation_root_id: string | null;
   readonly link_sharing_role: "editor" | "viewer" | null;
   readonly navigation_root_id: string | null;
+  /** NULL for a requester without a User row: the anonymous reader. */
+  readonly requester_kind: "human" | "agent" | null;
+  readonly requester_claimed: 0 | 1 | null;
 }
 
 export interface SpaceAccessRow {
@@ -50,11 +53,32 @@ export const spaceMemberJoin = `
   LEFT JOIN space_members
     ON space_members.space_id = spaces.id AND space_members.user_id = $userId`;
 
+/**
+ * An agent that is banned or past its expiry is suspended: its Space gives a role to nobody but
+ * itself. Suspension is derived on every read and never stored, so lifting it needs no repair.
+ */
+function ownerSuspendedSql(ownerUserId: string): string {
+  return `EXISTS (
+    SELECT 1 FROM agents
+    WHERE agents.user_id = ${ownerUserId}
+      AND (agents.banned_at IS NOT NULL OR agents.expires_at <= unixepoch('subsec') * 1000)
+  )`;
+}
+
 export const visibleSpaceSql = `(
   spaces.owner_user_id = $userId
-  OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
-  OR spaces.public_read = 1
+  OR (
+    NOT ${ownerSuspendedSql("spaces.owner_user_id")}
+    AND (
+      (spaces.type = 'team' AND space_members.user_id IS NOT NULL)
+      OR spaces.public_read = 1
+    )
+  )
 )`;
+
+const requesterColumns = `
+  (SELECT kind FROM users WHERE id = $userId) AS requester_kind,
+  (SELECT owner_user_id IS NOT NULL FROM agents WHERE user_id = $userId) AS requester_claimed`;
 
 export interface ResourceMappingRow {
   readonly resource_id: string;
@@ -79,6 +103,8 @@ export type NodeAuthorizationRow = Pick<
   | "member_role"
   | "grant_role"
   | "link_sharing_role"
+  | "requester_kind"
+  | "requester_claimed"
 >;
 
 export type OwnedResourceRow = ResolvedNodeRow & ResourceMappingRow;
@@ -181,7 +207,7 @@ export class AccessRepository {
         space.owner_user_id, space.public_read,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
-        NULL AS navigation_root_id
+        NULL AS navigation_root_id, NULL AS requester_kind, NULL AS requester_claimed
       FROM nodes AS node
       JOIN spaces AS space ON space.id = node.space_id
       ${resourceJoins()}
@@ -308,7 +334,8 @@ function nodeAccessQuery(contentOnly: boolean): string {
                ORDER BY visible_root.depth DESC
                LIMIT 1
              )`
-             } AS navigation_root_id
+             } AS navigation_root_id,
+             ${requesterColumns}
            FROM nodes AS node
            JOIN spaces AS space ON space.id = node.space_id
            ${contentOnly ? "" : resourceJoins()}
@@ -319,24 +346,29 @@ function nodeAccessQuery(contentOnly: boolean): string {
              AND node.trash_batch_id IS NULL
              AND (
                space.owner_user_id = $userId
-               OR (space.type = 'team' AND member.user_id IS NOT NULL)
-               OR space.public_read = 1
                OR (
-                 space.type = 'personal'
+                 NOT ${ownerSuspendedSql("space.owner_user_id")}
                  AND (
-                   EXISTS (
-                     SELECT 1
-                     FROM ancestry
-                     JOIN node_grants AS visible_grant
-                       ON visible_grant.node_id = ancestry.id
-                      AND visible_grant.user_id = $userId
-                   )
-                   OR EXISTS (
-                     SELECT 1
-                     FROM ancestry
-                     JOIN node_link_sharing AS visible_link_sharing
-                       ON visible_link_sharing.node_id = ancestry.id
-                      AND visible_link_sharing.enabled = 1
+                   (space.type = 'team' AND member.user_id IS NOT NULL)
+                   OR space.public_read = 1
+                   OR (
+                     space.type = 'personal'
+                     AND (
+                       EXISTS (
+                         SELECT 1
+                         FROM ancestry
+                         JOIN node_grants AS visible_grant
+                           ON visible_grant.node_id = ancestry.id
+                          AND visible_grant.user_id = $userId
+                       )
+                       OR EXISTS (
+                         SELECT 1
+                         FROM ancestry
+                         JOIN node_link_sharing AS visible_link_sharing
+                           ON visible_link_sharing.node_id = ancestry.id
+                          AND visible_link_sharing.enabled = 1
+                       )
+                     )
                    )
                  )
                )
