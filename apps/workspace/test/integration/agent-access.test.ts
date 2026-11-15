@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
@@ -82,6 +83,41 @@ describe("a banned agent", () => {
     const refused = await exchange(origin, agent.token);
     expect(refused.status).toBe(400);
     expect(await refused.json()).toEqual({ error: "invalid_grant" });
+  });
+});
+
+describe("db:ban-agent", () => {
+  it("bans an agent by username or user id, keeps the first ban time and refuses other Users", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "workspace-ban-agent-"));
+    directories.push(directory);
+    const databaseFilename = join(directory, "workspace.sqlite");
+    const { origin, application } = await start({ databaseFilename });
+    const [byName, byId] = [await createAgent(origin), await createAgent(origin)];
+    await register(origin, "alice");
+    const ban = (target: string) => spawnSync(process.execPath, ["--import", "tsx", "server/src/db/ban-agent.ts", target], {
+      cwd: new URL("../../", import.meta.url),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_FILE: databaseFilename },
+      timeout: 30_000,
+    });
+    const bannedAt = (agentId: string) => (application.database.connection
+      .prepare("SELECT banned_at FROM agents WHERE user_id = ?")
+      .get(agentId) as { banned_at: number | null }).banned_at;
+
+    expect(ban(byName.username).status).toBe(0);
+    expect(ban(byId.id).status).toBe(0);
+    for (const agent of [byName, byId]) {
+      expect((await fetch(`${origin}/api/spaces`, { headers: { cookie: agent.cookie } })).status).toBe(401);
+      expect(await (await exchange(origin, agent.token)).json()).toEqual({ error: "invalid_grant" });
+    }
+
+    const first = bannedAt(byName.id);
+    expect(first).toEqual(expect.any(Number));
+    expect(ban(byName.username).status).toBe(0);
+    expect(bannedAt(byName.id)).toBe(first);
+
+    expect(ban("alice")).toMatchObject({ status: 1, stderr: expect.stringContaining("not an agent") });
+    expect(ban("nobody")).toMatchObject({ status: 1, stderr: expect.stringContaining("No User matches") });
   });
 });
 
