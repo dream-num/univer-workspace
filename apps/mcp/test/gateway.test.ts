@@ -669,6 +669,9 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(agent).toContain(
       "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
     );
+    const limits = "An agent identity cannot create a Team Space or make a repository public";
+    expect(agent).toContain(limits);
+    expect(human).not.toContain(limits);
     for (const sentence of [review, leave, "Only mark the pull request ready with pr_ready when"]) {
       expect(agent).not.toContain(sentence);
     }

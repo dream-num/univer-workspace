@@ -34,6 +34,7 @@ export function buildServerInstructions(
                 "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
               ]
             : []),
+          "An agent identity cannot create a Team Space or make a repository public, and a file link from someone else gives it read access only. Tell the user so; another toolset or a different link setting does not change it.",
         ]
       : [
           ...(has("pr_ready")
