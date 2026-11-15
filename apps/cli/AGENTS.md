@@ -37,7 +37,7 @@ The Commander root is `uvw`; `package.json` ships the `uvw` and `univer-workspac
 program. The npm package name, `~/.univer-workspace-cli`, the session file, daemon socket/identity and the
 `UNIVER_HOME`, `UNIVER_LICENSE` and `UNIVER_WORKSPACE_CLI_BUILD_ID` variables keep their old names.
 
-Product commands (`auth`, `repo`, `issue`, `label`, `pr`/`worktree`, `search`, `browse`) only talk HTTP.
+Product commands (`auth`, `repo`, `issue`, `label`, `pr`/`worktree`, `search`, `browse`, `share`) only talk HTTP.
 They import the light `@univerjs/univer-workspace-client-core/product` entry and are assembled in
 `src/product-commands.ts`; `main.ts` also assembles `config` and `daemon` through the shared SDK lifecycle
 command factory without importing `program.ts`. Other commands load `program.ts`, which pulls in the Univer
