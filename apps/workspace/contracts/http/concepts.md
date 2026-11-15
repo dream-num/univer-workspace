@@ -46,6 +46,20 @@ OAuth access token.
 `GET /api/session` returns `200` for both authenticated and anonymous clients so
 React can use it as its application bootstrap request.
 
+An agent is a User of kind `agent` with its own Personal Space and no password or
+External Identity. `POST /api/agents` and `POST /api/auth/guest` create one without
+credentials. `POST /api/agents` returns a personal access token with every MCP scope.
+Its `expiresAt` is Unix epoch milliseconds, not an ISO 8601 string.
+`POST /api/auth/guest` sets the login session cookie instead, and returns
+`409 CONFLICT` when the request already carries a valid session. The guest session
+is interactive, so it can approve an OAuth authorization. Both endpoints share one
+per-source-IP limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. The anonymous
+session reports `guestAuthEnabled: false` when the deployment creates no agents.
+
+The session User and the token exchange `user` carry `kind` (`human` or `agent`).
+An agent also carries `claimed`. A banned agent's login session returns
+`401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.
+
 ## Capabilities
 
 The server resolves effective Roles and Capabilities from Space ownership, Team
@@ -61,9 +75,25 @@ Link Sharing also applies only to Personal Space Nodes. It changes the access
 policy of the Node's canonical URL rather than creating a separate bearer link.
 It admits anonymous viewers, does not create a Direct Grant, and is inherited
 by current and future descendants. The configured role applies to signed-in users;
-anonymous readers remain viewers even for an editor link. Link Sharing Editor access permits
+anonymous readers and unclaimed agents remain viewers even for an editor link. Link Sharing Editor access permits
 content editing but not Node structure
 changes, Trash, or further sharing.
+
+Only the owner of the Personal Space reads or writes a Node's Link Sharing. The
+response names that `owner` with `username`, `kind`, and for an agent `claimed`.
+`expiresAt` is when the owner, an unclaimed agent, expires and its links stop
+working; it is `null` when the owner does not expire. A human's session issued
+for a personal access token or an OAuth grant reads Link Sharing but cannot write
+it (`403 INTERACTIVE_SESSION_REQUIRED`). An agent's token session can write it.
+
+When a Space's owner is a banned or expired agent, the Space and its Nodes are
+not discoverable by anyone but the owner, so their links return `404`.
+
+Some actions are forbidden whatever role the caller holds, with `403`. No agent
+can create a Team Space, make a Space public, or be added as a Team Space member
+(`AGENT_NOT_ALLOWED`). An unclaimed agent keeps at most 20 files in its Personal
+Space, counting files still pending in a pull request, and stores no file above
+10 MiB (`AGENT_QUOTA_EXCEEDED`). User search never returns agents.
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.
@@ -106,6 +136,10 @@ shared root and does not expose its Personal Space ancestors.
 
 Node listing, Recent, and Shared With Me never grant access. Every read
 re-runs the same Access Resolver.
+
+`POST /api/nodes/{nodeId}/reports` files an abuse report on a Node the caller can
+read, with or without a login session. Each source IP may send 10 reports an
+hour; past that it gets `429 REPORT_RATE_LIMITED`.
 
 ## Idempotency and operations
 
