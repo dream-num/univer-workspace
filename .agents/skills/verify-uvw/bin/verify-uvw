@@ -8,7 +8,8 @@ WORKSPACE_APP="$REPO/apps/workspace"
 CLI_MAIN="$REPO/apps/cli/dist/main.js"
 ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
 
-MCP_CALL="$REPO/.agents/skills/verify-uvw/bin/mcp-call.mjs"
+BIN="$REPO/.agents/skills/verify-uvw/bin"
+MCP_CALL="$BIN/mcp-call.mjs"
 MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core apps/cli/skill-data)
 
 die() { echo "verify-uvw: $*" >&2; exit 1; }
@@ -133,11 +134,11 @@ mcp_doctor() {
   if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
     ok "MCP staging directory is private and owned by the gateway uid"
   else bad "MCP staging directory is missing or unsafe"; fi
-  local desktop digest cid inspect mapping gateway_logs who auth=dev
+  local engine digest cid inspect mapping gateway_logs who auth=dev
   [[ "${MCP_PRODUCTION:-0}" != 1 ]] || auth=pat
-  if desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" && [[ "$desktop" == 'Docker Desktop' ]]; then
-    ok "MCP Docker Desktop is available"
-  else bad "MCP Docker Desktop unavailable; start Docker Desktop"; fi
+  if engine="$(node "$BIN/mcp-engine.mjs")"; then
+    ok "MCP container engine is $engine"
+  else bad "MCP needs macOS Docker Desktop or OrbStack; found $engine"; fi
   if digest="$(mcp_digest)" && node -e 'const fs=require("node:fs");process.exit(JSON.parse(fs.readFileSync(process.argv[1])).source_digest===process.argv[2]?0:1)' "$RUN/mcp-build.json" "$digest" 2>/dev/null; then
     ok "MCP image matches build inputs"
   else bad "MCP image is stale or build record missing: down, then up"; fi
@@ -425,12 +426,11 @@ cmd_up() {
   [[ "${VERIFY_UVW_MCP_RENDERER:-1}" =~ ^[01]$ && "${VERIFY_UVW_MCP_PRODUCTION:-0}" =~ ^[01]$ ]] || die "MCP renderer and production flags must be 0 or 1"
   [[ "${VERIFY_UVW_MCP_EXECUTORS:-1}" =~ ^[12]$ ]] || die "VERIFY_UVW_MCP_EXECUTORS must be 1 or 2"
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
-  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" mcp_public_url desktop
+  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" mcp_public_url engine
   if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
     mcp_enabled=1
     [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "MCP run id must match ^[a-z0-9][a-z0-9_-]*$; choose VERIFY_UVW_RUN"
-    desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" || die "start Docker Desktop before MCP verification"
-    [[ "$desktop" == 'Docker Desktop' && "$(uname -s)" == Darwin ]] || die "MCP verification requires macOS Docker Desktop"
+    engine="$(node "$BIN/mcp-engine.mjs")" || die "MCP verification requires macOS Docker Desktop or OrbStack; found $engine"
     [[ "$mcp_port" =~ ^[0-9]+$ && "$mcp_port" -ge 1 && "$mcp_port" -le 65535 ]] || die "choose VERIFY_UVW_MCP_PORT between 1 and 65535"
     [[ "$mcp_port" != "$server_port" && "$mcp_port" != "$web_port" && -z "$(listener_pid "$mcp_port")" ]] || die "MCP port $mcp_port is occupied; choose VERIFY_UVW_MCP_PORT"
   fi

@@ -232,7 +232,7 @@ VERIFY_UVW_RUN=b $V doctor
 
 ## MCP gateway
 
-On macOS Docker Desktop, opt in with `VERIFY_UVW_MCP=1 $V up`. This builds
+On macOS with Docker Desktop or OrbStack, opt in with `VERIFY_UVW_MCP=1 $V up`; `up` refuses any other engine. This builds
 `apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
 port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS=2` at
 `up` to enable a second executor for MX13. The replica count is saved in the run. With MCP enabled, `up` resolves `claude.ai`. Only when an address is in `198.18.0.0/15`,
@@ -345,7 +345,7 @@ status, authentication challenge, and body. Exit codes are 0 for success, 1 for 
 error, 2 for usage, 3 for transport or protocol failure, 4 for HTTP 401, and 5 for a
 completed call with invalid evidence.
 
-`doctor` checks Docker Desktop, the source digest, container health and image identity,
+`doctor` checks the container engine, the source digest, container health and image identity,
 port mapping, container configuration and Workspace access, protected metrics, and,
 after `user`, MCP identity, the PAT token exchange, and session, PAT and client-secret leakage. Rebuild with `down`, then `up` when
 inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
