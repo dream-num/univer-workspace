@@ -374,7 +374,8 @@ export class IdentityRepository {
 
   /**
    * Pushes out the expiry of the unclaimed agent that is `userId`, or that owns the Space of
-   * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write.
+   * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write. An
+   * agent that has already expired is always pushed out, so its next use brings it back.
    */
   touchUnclaimedAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
@@ -386,7 +387,7 @@ export class IdentityRepository {
       .prepare(
         `SELECT user_id FROM agents
          WHERE owner_user_id IS NULL
-           AND last_active_at <= ?
+           AND (last_active_at <= ? OR expires_at <= ?)
            AND user_id = ${
              "userId" in target
                ? "?"
@@ -394,7 +395,7 @@ export class IdentityRepository {
                    JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
            }`
       )
-      .get(staleBefore, "userId" in target ? target.userId : target.nodeId) as
+      .get(staleBefore, at, "userId" in target ? target.userId : target.nodeId) as
       | { readonly user_id: string }
       | undefined;
     if (!stale) return;

@@ -514,10 +514,17 @@ describe("agent expiry", () => {
     expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
 
     // Seen within the day: the next request leaves the row alone.
-    lifecycle.set({ last_active_at: Date.now() - 23 * HOUR, expires_at: 1 });
+    const soon = Date.now() + DAY;
+    lifecycle.set({ last_active_at: Date.now() - 23 * HOUR, expires_at: soon });
     await authenticate();
     await exchange(origin, agent.token);
-    expect(lifecycle.get().expires_at).toBe(1);
+    expect(lifecycle.get().expires_at).toBe(soon);
+
+    // Already expired: the next request brings it back even when it was seen within the day.
+    lifecycle.set({ last_active_at: Date.now() - HOUR, expires_at: Date.now() - HOUR });
+    before = Date.now();
+    expect((await authenticate()).status).toBe(200);
+    expect(lifecycle.get().expires_at).toBeGreaterThanOrEqual(before + 30 * DAY);
 
     lifecycle.set({ last_active_at: Date.now() - 25 * HOUR, expires_at: 1 });
     before = Date.now();
