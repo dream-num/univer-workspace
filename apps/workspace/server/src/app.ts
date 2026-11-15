@@ -27,6 +27,7 @@ import {
 import { protocolUser } from "./integrations/univer/protocol-user.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
 import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
+import { S3BlobStore } from "./integrations/blob/s3-blob-store.js";
 import {
   createCollaborationGateway,
   type CollaborationGateway,
@@ -257,8 +258,12 @@ export function createWorkspaceApplication(
     access,
     unitStore,
   });
+  const s3BlobStore = !dependencies.blobStore && config.s3BlobStore
+    ? new S3BlobStore(config.s3BlobStore)
+    : undefined;
   const blobStore =
     dependencies.blobStore ??
+    s3BlobStore ??
     new LocalBlobStore(
       config.blobDirectory ?? resolve(".data/univer-workspace-blobs")
     );
@@ -512,7 +517,11 @@ export function createWorkspaceApplication(
           try {
             await collaboration?.dispose();
           } finally {
-            database.close();
+            try {
+              database.close();
+            } finally {
+              s3BlobStore?.destroy();
+            }
           }
         }
       }

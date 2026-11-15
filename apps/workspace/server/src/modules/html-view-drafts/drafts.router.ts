@@ -1,3 +1,4 @@
+import { pipeBlobContent } from "../../integrations/blob/blob-http.js";
 import { json, Router } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { IdentityModule } from "../identity/index.js";
@@ -50,9 +51,7 @@ export function createHtmlViewDraftsRouter(options: {
     response.setHeader("X-Content-Type-Options", "nosniff");
     response.setHeader("Cache-Control", "private, no-store");
     response.setHeader("Content-Length", opened.byteSize);
-    opened.stream.on("error", () => response.destroy());
-    response.on("close", () => opened.stream.destroy());
-    opened.stream.pipe(response);
+    pipeBlobContent(opened.stream, response);
   });
   for (const action of ["publish", "reject"] as const) {
     router.post(`/html-view-drafts/:draftId/${action}`, (request, response) => {

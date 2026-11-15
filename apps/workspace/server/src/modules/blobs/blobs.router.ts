@@ -1,5 +1,5 @@
 import { json, Router } from "express";
-import { contentDisposition } from "../../integrations/blob/blob-http.js";
+import { contentDisposition, pipeBlobContent } from "../../integrations/blob/blob-http.js";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../identity/index.js";
 import type { BlobsModule } from "./blobs.service.js";
 
@@ -111,8 +111,7 @@ export function createBlobsRouter(options: {
             `bytes ${opened.start}-${opened.end}/${opened.totalByteSize}`
           );
         }
-        opened.stream.on("error", (error) => response.destroy(error));
-        opened.stream.pipe(response);
+        pipeBlobContent(opened.stream, response);
       }
     );
   }

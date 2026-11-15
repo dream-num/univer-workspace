@@ -40,8 +40,10 @@ API documentation is available at:
 - `http://127.0.0.1:3020/openapi.yaml`
 
 Product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
-stored separately in `.data/univer-collaboration.sqlite`, and uploaded Blob
-bytes default to `.data/univer-workspace-blobs`. Thread Comment anchors for
+stored separately in `.data/univer-collaboration.sqlite`. Uploaded Blob
+bytes default to `.data/univer-workspace-blobs` and can use an S3-compatible
+bucket. For configuration and migration, see [Blob storage](#blob-storage).
+Thread Comment anchors for
 Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
 comment bodies, replies, and solved state use the Comment component in the same
 Collaboration SQLite file. Comment bodies are shared across Trunk, Worktree,
@@ -465,6 +467,47 @@ details, sidebar counts, and Worktree-driven Node/Resource lists refresh without
 a page reload. The connection uses a one-time session ticket and carries no
 Worktree metadata or content.
 
+### Blob storage
+
+The Server stores uploaded files, embedded Univer Assets, draft files and temporary Office Exchange
+objects through one BlobStore. The default `BLOB_STORE=local` uses `BLOB_DIRECTORY`. To use an
+existing private S3 bucket, set `BLOB_STORE=s3` and `BLOB_S3_BUCKET`.
+
+| Optional setting | Use |
+| --- | --- |
+| `BLOB_S3_REGION` | Override the AWS SDK region, otherwise supplied by `AWS_REGION` or the shared AWS config. |
+| `BLOB_S3_ENDPOINT` | Base URL of an S3-compatible service. |
+| `BLOB_S3_FORCE_PATH_STYLE` | Set to `true` for services that expect the bucket in the URL path. |
+| `BLOB_S3_PREFIX` | Place objects under this key prefix, for example `workspace`. By default the UUID is the whole key. |
+
+The Server resolves AWS credentials from workload roles, shared profiles or
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` with `AWS_SESSION_TOKEN` for temporary credentials.
+See the [AWS SDK credential chain](https://docs.aws.amazon.com/sdk-for-javascript/v3/developer-guide/setting-credentials-node.html).
+Grant its role `s3:GetObject`, `s3:PutObject`,
+`s3:AbortMultipartUpload` and `s3:DeleteObject` for the configured objects, and
+`s3:ListBucket` on the bucket so a missing object can be distinguished from a denied read.
+Configure the bucket to expire incomplete multipart uploads left by a process interruption.
+With bucket versioning enabled, Workspace deletes a key by adding a delete marker. The bucket's
+lifecycle policy controls how long the previous bytes are retained. [S3 deletion semantics](https://docs.aws.amazon.com/AmazonS3/latest/API/API_DeleteObject.html)
+Downloads and previews continue through the Workspace Server with its usual access checks.
+
+**Moving an existing local store to S3.** Stop all Workspace Server instances and back up both
+SQLite files and the local Blob directory. Copy the UUID-named files into a fresh destination
+prefix before changing the Server settings. For example, with the AWS CLI configured for your
+endpoint and region, the following copies completed objects, including those awaiting publication.
+It skips temporary `.upload` files.
+
+```bash
+aws s3 sync .data/univer-workspace-blobs/ s3://workspace-objects/workspace/ \
+  --exclude '*' --include '????????-????-????-????-????????????' --no-follow-symlinks
+```
+
+Verify the destination object count, keys and sizes against the source. Configure the same bucket
+and prefix on the Server, restart it, and open an existing file and an embedded Asset. Changing
+the backend, bucket or prefix selects where all object keys resolve. Keep the original store and
+database backups together for rollback. Once writes resume, a switch back also requires copying
+new objects back or restoring the databases and bytes from a matching backup.
+
 ## Docker
 
 Build the image from the repository root:
@@ -500,6 +543,10 @@ docker run --name univer-workspace \
 For a plain HTTP environment, use `-e SECURE_COOKIES=false`. Keep secure
 cookies enabled when the deployment is served over HTTPS.
 
+For S3, pass the Blob storage settings to `docker run` with `-e` or a dedicated
+`--env-file`, and provide the container with its AWS identity. Keep the persistent data volume
+for both SQLite files.
+
 To intentionally erase all product and collaboration data in a disposable
 environment, run the reset command against the volume:
 
@@ -508,6 +555,8 @@ docker run --rm \
   -v univer-workspace-data:/app/univer-workspace/.data \
   univer-workspace node dist/server/db/reset.js
 ```
+
+With `BLOB_STORE=s3`, `db:reset` resets the SQLite databases and leaves the bucket objects in place.
 
 Starting or restarting the application does not recreate the database.
 Do not run the reset command during a normal deployment; application startup

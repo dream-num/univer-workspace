@@ -1,5 +1,5 @@
 import { json, Router, type Request } from "express";
-import { contentDisposition } from "../../integrations/blob/blob-http.js";
+import { contentDisposition, pipeBlobContent } from "../../integrations/blob/blob-http.js";
 import { receiveSingleMultipartFile } from "../../integrations/blob/multipart.js";
 import type { IdentityModule } from "../identity/index.js";
 import {
@@ -126,8 +126,7 @@ export function createExchangeRouter(options: {
     );
     response.setHeader("Cache-Control", "private, no-store");
     response.setHeader("X-Content-Type-Options", "nosniff");
-    opened.stream.on("error", (error) => response.destroy(error));
-    opened.stream.pipe(response);
+    pipeBlobContent(opened.stream, response);
   });
 
   return router;

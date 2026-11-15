@@ -275,7 +275,8 @@ interface ResourcesModule {
 
 Resource 是由 `kind` 判别的联合。现有 `POST /api/resources` 只创建 Univer Resource；
 Blob Module 通过 Upload Session 接收字节，只有 Complete 才发布 Node/Resource。BlobStore
-保存字节，产品数据库保存元数据和删除 Outbox；前端根据服务端检测的 MIME 和原始文件扩展名选择预览。
+保存字节，产品数据库保存元数据和删除 Outbox。部署可选择本地目录或 S3 兼容 bucket，
+两种后端共用 Workspace 授权下载入口，支持按字节范围读取。前端根据服务端检测的 MIME 和原始文件扩展名选择预览。
 `.md`/`.markdown` 使用只读 GFM 预览，保留源码切换与下载；兼容历史 octet-stream 分类时，
 读取后先验证 UTF-8 与控制字符，不把文件名当成内容安全保证。
 

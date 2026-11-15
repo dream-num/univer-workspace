@@ -127,7 +127,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   Workspace owns the offline startup boundary: consistent backup, migration on a copy, validation,
   and atomic replacement before Services start. Rollback requires the matching pre-upgrade backups;
   old and new SDK writers must never share the file. History segment indexing and catch-up belong to the SDK.
-- Uploaded Resource bytes and embedded Univer Asset bytes are stored by the configured BlobStore. Database rows
+- Uploaded Resource bytes and embedded Univer Asset bytes use local disk by default or a configured S3-compatible
+  bucket. Switching stores on an existing deployment requires copying objects under their original keys. Database rows
   retain their identities, metadata, and recovery state. Blob content replacement preserves Resource identity
   and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.

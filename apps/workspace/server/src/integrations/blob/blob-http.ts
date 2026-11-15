@@ -1,3 +1,5 @@
+import type { ServerResponse } from "node:http";
+import type { Readable } from "node:stream";
 import { ApplicationError } from "../../middleware/errors.js";
 
 export function parseByteRange(
@@ -52,4 +54,15 @@ function rangeNotSatisfiable(): ApplicationError {
     416,
     "The requested byte range is not satisfiable."
   );
+}
+
+/** A cancelled download must also release its open BlobStore connection. */
+export function pipeBlobContent(stream: Readable, response: ServerResponse): void {
+  stream.on("error", (error) => response.destroy(error));
+  if (response.destroyed) {
+    stream.destroy();
+    return;
+  }
+  response.once("close", () => stream.destroy());
+  stream.pipe(response);
 }
