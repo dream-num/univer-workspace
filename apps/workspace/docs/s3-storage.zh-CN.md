@@ -2,15 +2,48 @@
 
 [English](s3-storage.md) | 简体中文
 
-设置 `BLOB_STORE=s3`，并将 `BLOB_S3_BUCKET` 设为已有的私有存储桶名称。通过
-`BLOB_S3_REGION` 或 AWS 环境配置指定区域。使用 S3 兼容服务时，可通过
-`BLOB_S3_ENDPOINT` 指定服务地址，按服务商要求启用 `BLOB_S3_FORCE_PATH_STYLE`。
-要为对象键设置统一前缀，使用 `BLOB_S3_PREFIX`。[配置示例](../.env.example)
+## 选择存储方式
 
-为服务端配置 IAM 角色或 AWS 凭据。该身份需要对存储桶有 `s3:ListBucket` 权限，对 Workspace
+**本地目录**是默认方式。要换目录，将 `BLOB_DIRECTORY` 设为服务端可写的路径。
+
+```dotenv
+BLOB_STORE=local
+BLOB_DIRECTORY=.data/univer-workspace-blobs
+```
+
+**AWS S3** 需要一个已有的私有存储桶。将下面的桶名和区域换为实际值。如果已通过 `AWS_REGION`
+或 AWS 配置文件指定区域，可省略 `BLOB_S3_REGION`。`BLOB_S3_PREFIX` 可选，默认将文件存到桶的根路径。
+
+```dotenv
+BLOB_STORE=s3
+BLOB_S3_BUCKET=workspace-objects
+BLOB_S3_REGION=us-east-1
+```
+
+**MinIO** 沿用上面的 S3 配置，再填入 Workspace 服务端可访问的 S3 API 地址。下面的示例使用路径式寻址。
+
+```dotenv
+BLOB_S3_ENDPOINT=http://minio:9000
+BLOB_S3_FORCE_PATH_STYLE=true
+```
+
+可使用工作负载角色，或向服务端注入 `AWS_ACCESS_KEY_ID` 和 `AWS_SECRET_ACCESS_KEY`。临时凭据还需要
+`AWS_SESSION_TOKEN`。该身份需要对存储桶有 `s3:ListBucket` 权限，对 Workspace
 对象有 `s3:GetObject`、`s3:PutObject`、`s3:DeleteObject` 和 `s3:AbortMultipartUpload` 权限。
 可通过存储桶生命周期规则清理未完成的分片上传。如果启用了版本控制，还可以设置已删除对象的历史版本保留时间。
-Docker 部署仍需挂载持久卷来保存两个 SQLite 数据库。
+
+## 部署时在哪里配置
+
+已有部署请先[迁移本地文件](#将已有文件从本地迁移到-s3)，再启用 S3 配置。
+
+- **本地开发**时，首次配置可将 [`.env.example`](../.env.example) 复制为 `apps/workspace/.env`。
+  在该文件中填写存储配置，然后重启 `pnpm workspace:dev:server`。
+- **Docker** 部署时，将存储配置写入 `workspace-storage.env`，在原有的 `docker run` 命令中加上
+  `--env-file ./workspace-storage.env`，重新创建容器。继续将原数据卷挂载到 `/app/univer-workspace/.data`。
+  文件存入 S3 后，两个 SQLite 数据库仍保存在该卷中。
+- **Kubernetes** 部署时，在 Workspace 容器的 `env` 中设置 `BLOB_*`，通过工作负载身份或 Secret 提供凭据，
+  保留原数据 PVC。使用本仓库的 [Deploy Workspace 工作流](../../../.github/workflows/push.yml)时，
+  在发布前修改 `dream-num/helm-chart-private` 仓库 `deploy/colla-workspace/` 目录下目标环境的清单。
 
 ## 将已有文件从本地迁移到 S3
 
