@@ -101,7 +101,7 @@ export class S3BlobStore extends StreamingBlobStore implements BlobStore {
     await this._client.send(new DeleteObjectCommand(this._location(objectKey)));
   }
 
-  destroy(): void {
+  dispose(): void {
     this._client.destroy();
   }
 

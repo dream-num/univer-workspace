@@ -44,6 +44,8 @@ export interface BlobStore {
     readonly end: number;
   }>;
   delete(objectKey: string): Promise<void>;
+  /** Releases resources held by the store when its owner shuts down. */
+  dispose?(): void | Promise<void>;
 }
 
 export function validObjectKey(objectKey: string): string {

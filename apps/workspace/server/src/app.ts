@@ -26,8 +26,8 @@ import {
 } from "./integrations/univer/unit-store.js";
 import { protocolUser } from "./integrations/univer/protocol-user.js";
 import { createWorktreeBackend } from "./integrations/univer/worktree-store.js";
-import { LocalBlobStore, type BlobStore } from "./integrations/blob/blob-store.js";
-import { S3BlobStore } from "./integrations/blob/s3-blob-store.js";
+import type { BlobStore } from "./integrations/blob/blob-store.js";
+import { createBlobStore } from "./integrations/blob/create-blob-store.js";
 import {
   createCollaborationGateway,
   type CollaborationGateway,
@@ -170,6 +170,7 @@ export function createWorkspaceApplication(
     readonly unitStore?: UnitStore;
     readonly unitSnapshotStore?: UnitSnapshotStore;
     readonly worktreeBackend?: WorktreeBackend;
+    /** An injected store remains owned by the caller. */
     readonly blobStore?: BlobStore;
     readonly githubOAuthProvider?: GitHubOAuthProvider;
     readonly googleOAuthProvider?: GoogleOAuthProvider;
@@ -258,15 +259,8 @@ export function createWorkspaceApplication(
     access,
     unitStore,
   });
-  const s3BlobStore = !dependencies.blobStore && config.s3BlobStore
-    ? new S3BlobStore(config.s3BlobStore)
-    : undefined;
-  const blobStore =
-    dependencies.blobStore ??
-    s3BlobStore ??
-    new LocalBlobStore(
-      config.blobDirectory ?? resolve(".data/univer-workspace-blobs")
-    );
+  const { blobStore: injectedBlobStore } = dependencies;
+  const blobStore = injectedBlobStore ?? createBlobStore(config);
   const skillSources = createSkillSourcesModule({ access, nodes: new NodesRepository(database), store: blobStore, ...(config.githubToken ? { githubToken: config.githubToken } : {}) });
   const skillDrafts = createSkillDraftsModule({ repository: new SkillDraftsRepository(database), access, store: blobStore, sources: skillSources });
   const htmlViewDrafts = createHtmlViewDraftsModule({ repository: new HtmlViewDraftsRepository(database), access, store: blobStore });
@@ -520,7 +514,7 @@ export function createWorkspaceApplication(
             try {
               database.close();
             } finally {
-              s3BlobStore?.destroy();
+              if (!injectedBlobStore) await blobStore.dispose?.();
             }
           }
         }

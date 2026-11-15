@@ -2,8 +2,10 @@ import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { expect, it } from "vitest";
+import { S3Client } from "@aws-sdk/client-s3";
+import { expect, it, vi } from "vitest";
 import { createWorkspaceApplication } from "../../server/src/app.js";
+import { loadConfig } from "../../server/src/config.js";
 import { shutdownServer } from "../../server/src/server-lifecycle.js";
 
 it("shuts down while a collaboration WebSocket is connected", async () => {
@@ -56,6 +58,34 @@ it("shuts down while a collaboration WebSocket is connected", async () => {
   await shutdown;
   rmSync(directory, { recursive: true, force: true });
   expect(completedPromptly).toBe(true);
+});
+
+const s3Config = {
+  ...loadConfig({ BLOB_STORE: "s3", BLOB_S3_BUCKET: "test-bucket", BLOB_S3_REGION: "us-east-1" }),
+  databaseFilename: ":memory:",
+  collaborationDatabaseFilename: ":memory:",
+};
+
+it("releases the configured S3 client even when closing the database fails", async () => {
+  const application = createWorkspaceApplication(s3Config);
+  const destroy = vi.spyOn(S3Client.prototype, "destroy");
+  const error = new Error("database shutdown failed");
+  const close = vi.spyOn(application.database, "close").mockImplementationOnce(() => { throw error; });
+  try {
+    await expect(application.close()).rejects.toBe(error);
+    expect(destroy).toHaveBeenCalledOnce();
+  } finally {
+    close.mockRestore();
+    application.database.close();
+    destroy.mockRestore();
+  }
+});
+
+it("leaves disposal of an injected blob store to its owner", async () => {
+  const blobStore = { put: vi.fn(), head: vi.fn(), open: vi.fn(), delete: vi.fn(), dispose: vi.fn() };
+  const application = createWorkspaceApplication(s3Config, { blobStore });
+  await application.close();
+  expect(blobStore.dispose).not.toHaveBeenCalled();
 });
 
 function listen(server: ReturnType<typeof createServer>): Promise<void> {

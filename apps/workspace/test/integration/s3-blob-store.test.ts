@@ -28,7 +28,7 @@ async function serve(
       bucket, region: "us-east-1", endpoint: `http://127.0.0.1:${address.port}`,
       forcePathStyle: true, ...(prefix ? { prefix } : {}),
     });
-    cleanups.push(() => store.destroy());
+    cleanups.push(() => store.dispose());
     return store;
   };
 }
