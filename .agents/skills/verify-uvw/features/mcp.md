@@ -96,14 +96,14 @@ identity, repositories, Issues, pull requests, files, repository administration,
 ## How to get to it (user POV)
 
 Use `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root on macOS
-Docker Desktop. Start with `VERIFY_UVW_MCP=1 $V up`, then `$V user`. The gateway
+Docker Desktop or OrbStack. Start with `VERIFY_UVW_MCP=1 $V up`, then `$V user`. The gateway
 publishes `http://127.0.0.1:3930/mcp`. Parallel runs need their own root and all three
 ports. `eval "$($V env)"` provides the MCP URL and the isolated opencode directory.
 
 ## Driving it with agent-browser and uvw
 
 Use Bash for these commands. Prerequisites are the baseline CLI build and dependencies,
-Docker Desktop, `jq`, and opencode for M11 and MO1. MO1 also needs agent-browser and
+Docker Desktop or OrbStack, `jq`, and opencode for M11 and MO1. MO1 also needs agent-browser and
 a Workspace server with MCP OAuth authorization enabled (PR #216); it signs in through
 the browser. The other MCP journeys do not need browser login. Each MCP call
 checks the usage event and credential leakage automatically. Exit 5 fails the journey.
@@ -3047,7 +3047,7 @@ and developer PIDs are unchanged or absent both times. Evidence and logs survive
 ## Gotchas
 
 - MCP is opt-in at `up`. Setting `VERIFY_UVW_MCP` later does not change an existing run.
-- Only macOS Docker Desktop is supported. The container accesses the loopback Server
+- Only macOS Docker Desktop and OrbStack are supported. The container accesses the loopback Server
   through `host.docker.internal`, bypassing Vite's host checks.
 - `user` gets a separate session from the public CLI login endpoint. It never reads
   uvw's private session file. Every call to `user` creates a fresh opencode directory

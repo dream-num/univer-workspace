@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] <label> mcp|uvw <prompt> | open-anon <label> <url> | secret-check [directory] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -8,7 +8,9 @@ WORKSPACE_APP="$REPO/apps/workspace"
 CLI_MAIN="$REPO/apps/cli/dist/main.js"
 ROOT="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}"
 
-MCP_CALL="$REPO/.agents/skills/verify-uvw/bin/mcp-call.mjs"
+BIN="$REPO/.agents/skills/verify-uvw/bin"
+MCP_CALL="$BIN/mcp-call.mjs"
+OPENCODE_MODEL='console-deepseek/deepseek-flash#high'
 MCP_BUILD_INPUTS=(package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc patches 'tsconfig*.json' apps/mcp packages/client-core apps/cli/skill-data)
 
 die() { echo "verify-uvw: $*" >&2; exit 1; }
@@ -133,11 +135,11 @@ mcp_doctor() {
   if mcp_compose exec -T gateway node -e 'const fs=require("node:fs"),s=fs.lstatSync(process.env.MCP_STAGING_DIRECTORY);process.exit(s.isDirectory()&&s.uid===process.getuid()&&(s.mode&0o077)===0?0:1)' >/dev/null 2>&1; then
     ok "MCP staging directory is private and owned by the gateway uid"
   else bad "MCP staging directory is missing or unsafe"; fi
-  local desktop digest cid inspect mapping gateway_logs who auth=dev
+  local engine digest cid inspect mapping gateway_logs who auth=dev
   [[ "${MCP_PRODUCTION:-0}" != 1 ]] || auth=pat
-  if desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" && [[ "$desktop" == 'Docker Desktop' ]]; then
-    ok "MCP Docker Desktop is available"
-  else bad "MCP Docker Desktop unavailable; start Docker Desktop"; fi
+  if engine="$(node "$BIN/mcp-engine.mjs")"; then
+    ok "MCP container engine is $engine"
+  else bad "MCP needs macOS Docker Desktop or OrbStack; found $engine"; fi
   if digest="$(mcp_digest)" && node -e 'const fs=require("node:fs");process.exit(JSON.parse(fs.readFileSync(process.argv[1])).source_digest===process.argv[2]?0:1)' "$RUN/mcp-build.json" "$digest" 2>/dev/null; then
     ok "MCP image matches build inputs"
   else bad "MCP image is stale or build record missing: down, then up"; fi
@@ -328,6 +330,71 @@ cmd_mcp_token() {
   mcp_token "$@"
 }
 
+cmd_principal() { # name [label]: a new agent principal whose token never leaves home/
+  [[ $# -ge 1 && $# -le 2 && "$1" =~ ^[a-z0-9][a-z0-9_-]{0,31}$ && "$1" != human ]] \
+    || die "usage: verify-uvw principal <name> [label]  (name: a-z, 0-9, _ and -, not human)"
+  load_run
+  [[ ! -e "$RUN/home/principals/$1.token" ]] || die "principal $1 already exists in this run"
+  node --input-type=module - "$RUN" "$ORIGIN" "$@" <<'JS'
+import {mkdirSync,writeFileSync} from 'node:fs';
+const [run,origin,name,label]=process.argv.slice(2);
+const fail=message=>{ console.error('verify-uvw: '+message); process.exit(1); };
+const response=await fetch(origin+'/api/agents',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(label===undefined?{}:{label})});
+if (response.status===429) fail('agent creation is limited to 5 per hour per source IP on this instance; reuse a principal or wait');
+const body=await response.json().catch(()=>null);
+if (response.status!==201 || typeof body?.token!=='string' || typeof body.agent?.id!=='string') fail('POST /api/agents returned '+response.status);
+mkdirSync(run+'/home/principals',{recursive:true,mode:0o700});
+writeFileSync(`${run}/home/principals/${name}.token`,body.token,{mode:0o600});
+writeFileSync(`${run}/home/principals/${name}.id`,body.agent.id,{mode:0o600});
+writeFileSync(`${run}/evidence/principal-${name}.json`,JSON.stringify({name,agent:body.agent,mcpUrl:body.mcpUrl,expiresAt:body.expiresAt},null,2)+'\n');
+console.log(`id:       ${body.agent.id}\nusername: ${body.agent.username}`);
+JS
+}
+
+cmd_secret_check() { # [directory]: fails when evidence holds a token, a session cookie or one of this run's secrets
+  [[ $# -le 1 ]] || die "usage: verify-uvw secret-check [directory]"
+  load_run
+  node "$BIN/secrets.mjs" check "$RUN" "${1:-$RUN/evidence}"
+}
+
+cmd_story() { # [--as identity] [--oauth] label mcp|uvw prompt: one real-agent run in a throwaway opencode home
+  load_run
+  local USERNAME="" mcp_url=""
+  # shellcheck disable=SC1091
+  [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"
+  [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_url="$MCP_URL"
+  node "$BIN/story.mjs" "$REPO" "$RUN" "$ORIGIN" "$mcp_url" "$USERNAME" "$OPENCODE_MODEL" "$@"
+}
+
+cmd_open_anon() { # label url: what a visitor with no cookies sees
+  [[ $# -eq 2 && "$1" =~ ^[A-Za-z0-9._-]{1,64}$ && "$2" =~ ^https?://[^/]+ ]] || die "usage: verify-uvw open-anon <label> <url>"
+  local origin="${BASH_REMATCH[0]}" url="$2"
+  load_run
+  local base="$RUN/evidence/$1" status
+  # A session of its own, closed first, starts with no cookies and leaves the run's browser signed in.
+  export AGENT_BROWSER_SESSION="verify-uvw-$RUN_ID-anon-$1"
+  agent-browser close >/dev/null 2>&1 || true
+  printf 'open-anon %q\n' "$url" >"$base.cmd"
+  agent-browser set viewport 1440 900 >/dev/null
+  agent-browser open about:blank >/dev/null
+  agent-browser cookies clear >/dev/null
+  agent-browser record start "$base.webm" >/dev/null
+  agent-browser open "$url" >/dev/null
+  agent-browser wait 8000 >/dev/null
+  agent-browser screenshot "$base.png" >/dev/null
+  agent-browser get text body | node "$BIN/secrets.mjs" redact "$RUN" >"$base.page.txt"
+  agent-browser record stop >/dev/null
+  agent-browser close >/dev/null
+  if command -v ffmpeg >/dev/null; then
+    ffmpeg -y -loglevel error -i "$base.webm" -pix_fmt yuv420p -movflags +faststart "$base.mp4" </dev/null || echo "warning: ffmpeg could not write $base.mp4" >&2
+  fi
+  if [[ "$url" =~ /nodes/([A-Za-z0-9-]+) ]]; then
+    status="$(curl -sS -o /dev/null -w '%{http_code}' "$origin/api/nodes/${BASH_REMATCH[1]}")"
+    printf 'GET /api/nodes/%s without credentials -> %s\n' "${BASH_REMATCH[1]}" "$status" | tee "$base.node-status"
+  fi
+  echo "[evidence $base.{png,webm,mp4,page.txt}]" >&2
+}
+
 cmd_agent_up() {
   load_run
   [[ -n "${AGENT_PORT:-}" ]] || die "no Agent callback registered; start up with VERIFY_UVW_AGENT_PORT"
@@ -425,12 +492,11 @@ cmd_up() {
   [[ "${VERIFY_UVW_MCP_RENDERER:-1}" =~ ^[01]$ && "${VERIFY_UVW_MCP_PRODUCTION:-0}" =~ ^[01]$ ]] || die "MCP renderer and production flags must be 0 or 1"
   [[ "${VERIFY_UVW_MCP_EXECUTORS:-1}" =~ ^[12]$ ]] || die "VERIFY_UVW_MCP_EXECUTORS must be 1 or 2"
   local id="${VERIFY_UVW_RUN:-$(date +%Y%m%d-%H%M%S)}"
-  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" mcp_public_url desktop
+  local mcp_enabled=0 mcp_port="${VERIFY_UVW_MCP_PORT:-3930}" mcp_public_url engine
   if [[ "${VERIFY_UVW_MCP:-0}" == 1 ]]; then
     mcp_enabled=1
     [[ "$id" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die "MCP run id must match ^[a-z0-9][a-z0-9_-]*$; choose VERIFY_UVW_RUN"
-    desktop="$(docker info --format '{{.OperatingSystem}}' 2>/dev/null)" || die "start Docker Desktop before MCP verification"
-    [[ "$desktop" == 'Docker Desktop' && "$(uname -s)" == Darwin ]] || die "MCP verification requires macOS Docker Desktop"
+    engine="$(node "$BIN/mcp-engine.mjs")" || die "MCP verification requires macOS Docker Desktop or OrbStack; found $engine"
     [[ "$mcp_port" =~ ^[0-9]+$ && "$mcp_port" -ge 1 && "$mcp_port" -le 65535 ]] || die "choose VERIFY_UVW_MCP_PORT between 1 and 65535"
     [[ "$mcp_port" != "$server_port" && "$mcp_port" != "$web_port" && -z "$(listener_pid "$mcp_port")" ]] || die "MCP port $mcp_port is occupied; choose VERIFY_UVW_MCP_PORT"
   fi
@@ -573,10 +639,11 @@ cmd_user() {
 cmd_mcp_oauth() {
   load_run
   [[ "${MCP_ENABLED:-0}" == 1 ]] || die "MCP not enabled for this run; start with VERIFY_UVW_MCP=1"
-  [[ -f "$RUN/user.env" ]] || die "no user; run: verify-uvw user"
+  # login --guest needs no user: it continues through the guest agent card.
+  local USERNAME=""
   # shellcheck disable=SC1091
-  source "$RUN/user.env"
-  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$REPO/.agents/skills/verify-uvw/bin/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
+  [[ ! -f "$RUN/user.env" ]] || source "$RUN/user.env"
+  AGENT_BROWSER_SESSION="$AGENT_BROWSER_SESSION" node "$BIN/mcp-oauth.mjs" "$RUN" "$ORIGIN" "$MCP_URL" "$USERNAME" "$@"
 }
 
 cmd_env() {
@@ -594,7 +661,7 @@ export MCP_URL=$MCP_URL
 export MCP_PROJECT=$MCP_PROJECT
 export MCP_IMAGE=$MCP_IMAGE
 export MCP_OPENCODE_DIR=$(cat "$RUN/home/opencode-dir" 2>/dev/null || true)
-export MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high
+export MCP_OPENCODE_MODEL=$OPENCODE_MODEL
 # opencode: (cd "\$MCP_OPENCODE_DIR" && opencode run --format json -m "\$MCP_OPENCODE_MODEL" "<prompt>" < /dev/null)
 EOF
   fi
@@ -631,6 +698,11 @@ cmd_down() {
   [[ "${MCP_ENABLED:-0}" != 1 ]] || mcp_down
   agent-browser close >/dev/null 2>&1 || true
   uvw_raw daemon stop >/dev/null 2>&1 || true
+  local story_home
+  for story_home in "$RUN"/home/stories/uvw-*/.univer-workspace-cli; do
+    # uvw keys the daemon socket by the UNIVER_HOME string, and a story runs under the real path.
+    [[ ! -d "$story_home" ]] || UNIVER_HOME="$(cd -P "$story_home" && pwd)" uvw_raw daemon stop >/dev/null 2>&1 || true
+  done
   stop_pid "$SERVER_PID" "server/src/main.ts"
   stop_pid "$WEB_PID" "vite.js"
   rm -rf "$RUN/data" "$RUN/home" "$RUN/user.pw"
@@ -642,6 +714,10 @@ case "${1:-}" in
   up) shift; cmd_up "$@" ;;
   doctor) shift; cmd_doctor "$@" ;;
   user) shift; cmd_user "$@" ;;
+  principal) shift; cmd_principal "$@" ;;
+  secret-check) shift; cmd_secret_check "$@" ;;
+  story) shift; cmd_story "$@" ;;
+  open-anon) shift; cmd_open_anon "$@" ;;
   env) shift; cmd_env "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;

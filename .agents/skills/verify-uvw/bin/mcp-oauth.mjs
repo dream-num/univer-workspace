@@ -4,12 +4,13 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { redact as redactSecrets, runSecrets } from './secrets.mjs';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--scopes read,write,...] [--client-id <https-url>]\n       verify-uvw mcp-oauth refresh|reuse|revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>]\n       verify-uvw mcp-oauth refresh|reuse|revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
@@ -17,10 +18,7 @@ const home = name => join(run, 'home', name);
 const secret = name => readFileSync(home(name), 'utf8').trim();
 const keep = (name, value) => writeFileSync(home(name), value, { mode: 0o600 });
 const evidence = join(run, 'evidence', label);
-const secrets = () => ['mcp-oauth-access', 'mcp-oauth-refresh', 'mcp-oauth-refresh-previous', 'mcp-token', 'mcp-session', 'mcp-oauth-secret']
-  .filter(name => existsSync(home(name))).map(secret).filter(Boolean);
-const redact = text => secrets().reduce((value, s) => value.split(s).join('[REDACTED]'), text)
-  .replace(/uvw_(?:at|rt|pat)_[A-Za-z0-9._~-]+/g, '[REDACTED]');
+const redact = text => redactSecrets(text, runSecrets(run));
 const shape = body => body && typeof body === 'object'
   ? Object.fromEntries(Object.entries(body).map(([k, v]) => [k, ['access_token', 'refresh_token'].includes(k) && typeof v === 'string' ? `<${v.slice(0, 7)}… ${v.length} chars>` : v]))
   : body;
@@ -43,14 +41,17 @@ const keepGrant = body => {
 
 if (command === 'login') {
   let scopes = ['read', 'write', 'publish', 'worktree:merge'];
-  let clientId;
+  let clientId, guest = false;
   while (args.length) {
-    const flag = args.shift(), value = args.shift();
+    const flag = args.shift();
+    if (flag === '--guest') { guest = true; continue; }
+    const value = args.shift();
     if (value === undefined) usage(`Missing value for ${flag}`);
     if (flag === '--scopes') scopes = value.split(',').filter(Boolean);
     else if (flag === '--client-id' && URL.canParse(value) && new URL(value).protocol === 'https:') clientId = value;
     else usage(`Unknown or invalid option ${flag}`);
   }
+  if (!guest && !username) usage('No user to sign in as; run verify-uvw user, or pass --guest');
   const callback = createServer();
   await new Promise(resolve => callback.listen(0, '127.0.0.1', resolve));
   const redirectUri = `http://127.0.0.1:${callback.address().port}/callback`;
@@ -80,11 +81,21 @@ if (command === 'login') {
     browser('storage', 'local', 'set', 'univer-workspace-language', 'en-US');
     browser('reload');
     browser('wait', '--text', 'Username');
-    browser('find', 'label', 'Username', 'fill', username);
-    browser('find', 'label', 'Password', 'fill', readFileSync(join(run, 'user.pw'), 'utf8'));
-    browser('click', 'form button[type=submit]');
-    browser('wait', '--url', '**/home');
-    browser('open', authorize.href);
+    if (guest) {
+      // The login page offers the guest agent card only when it was reached from an authorize request.
+      browser('open', authorize.href);
+      browser('wait', '--text', 'Continue as a guest agent');
+      browser('screenshot', `${evidence}-guest-card.png`);
+      browser('find', 'role', 'button', 'click', '--name', 'Continue as a guest agent');
+      browser('wait', '1500');
+      if (browser('get', 'text', 'body').includes('Too many guest agents')) throw new Error('Guest agent creation is limited to 5 per hour per source IP on this instance');
+    } else {
+      browser('find', 'label', 'Username', 'fill', username);
+      browser('find', 'label', 'Password', 'fill', readFileSync(join(run, 'user.pw'), 'utf8'));
+      browser('click', 'form button[type=submit]');
+      browser('wait', '--url', '**/home');
+      browser('open', authorize.href);
+    }
     browser('wait', '--text', 'Connect an AI assistant');
     const readChecks = () => JSON.parse(JSON.parse(browser('eval', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input[name=scope]')].map(i => [i.value, i.checked])))")));
     const clientName = JSON.parse(browser('eval', "document.querySelector('.request strong').textContent"));
@@ -104,7 +115,7 @@ if (command === 'login') {
       keepGrant(token.body);
       keep('mcp-oauth-client-id', clientId);
     }
-    save({ client_id: clientId, client_name: clientName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
+    save({ guest, client_id: clientId, client_name: clientName, callback_code_present: true, callback_state_matches: true, callback_iss: answer.searchParams.get('iss'), offered, submitted, callback_scope: answer.searchParams.get('scope'), token: { ...token, body: shape(token.body) } }, ok);
   } finally {
     callback.close();
   }

@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
+import { redact as redactSecrets } from './secrets.mjs';
 
 const argv = process.argv.slice(2);
 const internal = {};
@@ -12,7 +13,7 @@ for (const name of ['repo', 'run', 'url', 'project', 'image', 'origin', 'server-
   internal[name] = argv.shift();
 }
 const mode = argv.shift();
-let protocol = '2026-07-28', auth, toolsets, expectEvent;
+let protocol = '2026-07-28', auth, toolsets, expectEvent, as, principalId;
 while (argv[0]?.startsWith('--')) {
   const flag = argv.shift(), value = argv.shift();
   if (value === undefined) usage(`Missing value for ${flag}`);
@@ -20,11 +21,14 @@ while (argv[0]?.startsWith('--')) {
   else if (flag === '--auth' && mode !== 'tools') auth = value;
   else if (flag === '--expect-event' && mode === 'call') expectEvent = value;
   else if (flag === '--toolsets') toolsets = value;
+  else if (flag === '--as' && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(value)) as = value;
   else usage(`Unknown option ${flag}`);
 }
 const [label, tool, json = '{}'] = argv;
 // A run with a PAT authenticates through the gateway's token exchange; without one only the development session works.
-auth ??= existsSync(join(internal.run, 'home/mcp-token')) ? 'pat' : 'dev';
+// An agent principal always speaks with the PAT that created it.
+if (as !== undefined && auth !== undefined) usage('--as and --auth exclude each other');
+auth ??= as !== undefined || existsSync(join(internal.run, 'home/mcp-token')) ? 'pat' : 'dev';
 const listing = ['tools', 'resources', 'instructions', 'skills'].includes(mode);
 if (!['call', 'tools', 'doctor', 'resources', 'resource', 'instructions', 'skills'].includes(mode) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '') ||
     !['2026-07-28', '2025-11-25'].includes(protocol) || !['pat', 'oauth', 'dev', 'none', 'invalid'].includes(auth) ||
@@ -34,9 +38,10 @@ try { args = JSON.parse(json); } catch { usage('Tool arguments must be a JSON ob
 if (args === null || typeof args !== 'object' || Array.isArray(args)) usage('Tool arguments must be a JSON object');
 
 function usage(message) {
-  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-skills [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] <label>`);
+  console.error(`${message}\nUsage: verify-uvw mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | --as principal] [--toolsets list] <label> <tool> [json]\n       verify-uvw mcp-tools [--protocol version] [--toolsets list] [--as principal] <label>\n       verify-uvw mcp-skills [--protocol version] [--toolsets list] [--as principal] <label>\n       verify-uvw mcp-resources [--protocol version] [--toolsets list] [--as principal] <label>\n       verify-uvw mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>\n       verify-uvw mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>`);
   process.exit(2);
 }
+const redact = value => redactSecrets(value, [bearer]);
 const requestId = `${label}.${randomBytes(4).toString('hex')}`;
 const url = new URL(internal.url);
 if (toolsets !== undefined) url.searchParams.set('toolsets', toolsets);
@@ -45,9 +50,9 @@ const record = mode !== 'doctor';
 const save = (suffix, value) => { if (record) writeFileSync(`${base}.${suffix}`, value); };
 const pretty = value => `${JSON.stringify(value, null, 2)}\n`;
 const command = ['verify-uvw', mode === 'call' ? 'mcp' : `mcp-${mode}`, '--protocol', protocol,
-  ...(mode === 'call' ? ['--auth', auth] : []), ...(toolsets === undefined ? [] : ['--toolsets', toolsets]), ...(expectEvent === undefined ? [] : ['--expect-event', expectEvent]),
+  ...(as !== undefined ? ['--as', as] : mode === 'call' ? ['--auth', auth] : []), ...(toolsets === undefined ? [] : ['--toolsets', toolsets]), ...(expectEvent === undefined ? [] : ['--expect-event', expectEvent]),
   label, ...(listing ? [] : mode === 'resource' ? [tool] : [tool, json])];
-save('cmd', `${command.map(a => JSON.stringify(a)).join(' ')}\nURL=${url}\nprotocol=${protocol}\nauth=${auth}\n`);
+save('cmd', `${command.map(a => JSON.stringify(a)).join(' ')}\nURL=${url}\nprotocol=${protocol}\nauth=${auth}\n${as === undefined ? '' : `as=${as}\n`}`);
 // A repeated label must not retain an event from an earlier call.
 save('event.json', '');
 if (record && mode !== 'call') {
@@ -57,12 +62,19 @@ if (record && mode !== 'call') {
 let bearer, patId, client, result, negotiated, output, code = 3;
 const errors = [], responses = [];
 try {
-  bearer = auth === 'dev' ? readFileSync(join(internal.run, 'home/mcp-session'), 'utf8').trim()
+  const principal = suffix => {
+    const path = join(internal.run, 'home/principals', `${as}.${suffix}`);
+    if (!existsSync(path)) throw new Error(`No principal ${as}; run verify-uvw principal ${as}`);
+    return readFileSync(path, 'utf8').trim();
+  };
+  if (as !== undefined) principalId = principal('id');
+  bearer = as !== undefined ? principal('token')
+    : auth === 'dev' ? readFileSync(join(internal.run, 'home/mcp-session'), 'utf8').trim()
     : auth === 'pat' ? readFileSync(join(internal.run, 'home/mcp-token'), 'utf8').trim()
     : auth === 'oauth' ? readFileSync(join(internal.run, 'home/mcp-oauth-access'), 'utf8').trim()
     : auth === 'invalid' ? randomBytes(24).toString('hex') : undefined;
   if (auth === 'dev' && !bearer) throw new Error('Missing MCP session; run verify-uvw user');
-  if (auth === 'pat') patId = readFileSync(join(internal.run, 'home/mcp-token-id'), 'utf8').trim();
+  if (auth === 'pat' && as === undefined) patId = readFileSync(join(internal.run, 'home/mcp-token-id'), 'utf8').trim();
   if (auth === 'oauth') patId = readFileSync(join(internal.run, 'home/mcp-oauth-client-id'), 'utf8').trim();
   const require = createRequire(join(internal.repo, 'apps/mcp/package.json'));
   const { Client, StreamableHTTPClientTransport } = require('@modelcontextprotocol/client');
@@ -134,7 +146,6 @@ if (record) {
   const workspaceLines = workspace.split('\n').filter(line => parse(line)?.req?.id === requestId);
   const events = gatewayLines.map(parse).filter(value => value?.event === 'mcp.tool_call' && value.request_id === requestId);
   const leaked = bearer && gateway.includes(bearer);
-  const redact = value => bearer ? value.split(bearer).join('[REDACTED]') : value;
   save('gateway.log', redact(gatewayLines.join('\n') + (gatewayLines.length ? '\n' : '')));
   save('executor.log', redact(executor));
   save('workspace.log', redact(workspaceLines.join('\n') + (workspaceLines.length ? '\n' : '')));
@@ -163,7 +174,6 @@ if (record) {
     if (issues.length) { code = 5; errors.push(...issues); }
   }
 }
-const redact = value => bearer ? value.split(bearer).join('[REDACTED]') : value;
 const out = redact(pretty(output ?? null));
 const err = redact(errors.join('\n') + (errors.length ? '\n' : ''));
 save('out', out);
@@ -188,7 +198,8 @@ function eventIssues(event) {
   }
   if (event.schema_version !== 1 || !['none', 'cold_start', 'warm'].includes(event.executor)) issues.push('Invalid event version or executor');
   const [kind, clientId] = auth === 'pat' || auth === 'oauth' ? [auth, patId] : ['dev', 'dev'];
-  if (event.auth_kind !== kind || event.client_id !== clientId) issues.push(`Event authentication differs from --auth ${auth}`);
+  // POST /api/agents never returns the id of the PAT it issues, so a principal's event is matched by its user instead.
+  if (event.auth_kind !== kind || (principalId === undefined ? event.client_id !== clientId : event.user_id !== principalId)) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
     const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_create', 'compile_markdown', 'compile_typst', 'compile_svg'].includes(tool)) ||
       (key === 'export_bytes' && ['blob_download', 'asset_download', 'export', 'export_markdown', 'html_view_read'].includes(tool));
