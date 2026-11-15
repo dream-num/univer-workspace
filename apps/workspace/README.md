@@ -367,10 +367,12 @@ returns to the authorization, where the guest approves the consent page like any
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
 itself can read its Personal Space, and its links answer as not found. An expired agent can still
-authenticate, which ends the suspension. A banned agent gets `401`, and `invalid_grant` from the token
+authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
 exchange. `pnpm db:ban-agent <username or user id>` bans an agent (`db:ban-agent:production` runs the
 build); it refuses a User that is not an agent, and a second run changes nothing. A collaboration
-socket the agent already holds stays open until its session ends.
+socket the agent already holds stays open until its session ends. The MCP gateway caches a token
+exchange for up to 30 seconds, so for that long a banned agent's token still gets an answer from tools
+that do not call Workspace, such as `whoami`.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
 Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
