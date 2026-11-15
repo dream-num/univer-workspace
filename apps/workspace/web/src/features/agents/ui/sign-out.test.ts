@@ -55,7 +55,7 @@ it("signs out if the lazy Agents UI cannot load", async () => {
   renderToStaticMarkup(createElement(AccountMenu, {
     currentSession: { authenticated: true, githubOAuthEnabled: false, googleOAuthEnabled: false,
       discordOAuthEnabled: false, passwordAuthEnabled: false, emailAuthEnabled: false, trialDeployment: false,
-      user: { id: "user-a", username: "ada", displayName: "Ada", avatarUrl: null },
+      user: { id: "user-a", username: "ada", displayName: "Ada", avatarUrl: null, kind: "human" },
       authenticationMethods: { password: false, email: null, externalIdentities: [] } },
     onProfile: vi.fn(), onPassword: vi.fn(), onAccessTokens: vi.fn(), extraItems: null, logoutPending: false, onLogout,
   }));

@@ -788,7 +788,8 @@ paths:
         cannot create personal access tokens, approve CLI logins, authorize
         OAuth clients or link identities (403). Errors use the RFC 6749 body
         `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
-        body), `invalid_grant` (400), `unauthorized_client` (400, a
+        body), `invalid_grant` (400, including a subject token that belongs
+        to a banned agent), `unauthorized_client` (400, a
         confidential client without `tokenExchange`) or `invalid_client` (401,
         an unknown or public client or a wrong secret).
 
@@ -4139,6 +4140,36 @@ components:
           $ref: '#/components/schemas/Error'
     User:
       type: object
+      description: The authenticated User, with the kind of principal it is.
+      additionalProperties: false
+      required:
+        - id
+        - username
+        - displayName
+        - avatarUrl
+        - kind
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        displayName:
+          type: string
+        avatarUrl:
+          type:
+            - string
+            - 'null'
+          format: uri
+        kind:
+          type: string
+          enum:
+            - human
+            - agent
+        claimed:
+          type: boolean
+          description: Present only for an agent. Whether a human has claimed it.
+    PublicUser:
+      type: object
       additionalProperties: false
       required:
         - id
@@ -4157,8 +4188,6 @@ components:
             - string
             - 'null'
           format: uri
-    PublicUser:
-      $ref: '#/components/schemas/User'
     SessionView:
       oneOf:
         - $ref: '#/components/schemas/AnonymousSession'
@@ -4391,7 +4420,7 @@ components:
               items:
                 $ref: '#/components/schemas/Breadcrumb'
         trashedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         trashedAt:
           type: string
           format: date-time
@@ -4419,11 +4448,11 @@ components:
         - updatedAt
       properties:
         user:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         role:
           $ref: '#/components/schemas/TeamRole'
         grantedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         createdAt:
           type: string
           format: date-time
@@ -4442,13 +4471,13 @@ components:
         - updatedAt
       properties:
         user:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         role:
           $ref: '#/components/schemas/GrantRole'
         effectiveRole:
           $ref: '#/components/schemas/GrantRole'
         grantedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         createdAt:
           type: string
           format: date-time
@@ -4472,11 +4501,11 @@ components:
           $ref: '#/components/schemas/LinkSharingRole'
         createdBy:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         updatedBy:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         createdAt:
           type:
@@ -4547,10 +4576,10 @@ components:
             - $ref: '#/components/schemas/IssueStateReason'
             - type: 'null'
         author:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         closedBy:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         closedAt:
           type:
@@ -4564,7 +4593,7 @@ components:
         assignees:
           type: array
           items:
-            $ref: '#/components/schemas/User'
+            $ref: '#/components/schemas/PublicUser'
         commentCount:
           type: integer
           minimum: 0
@@ -4626,7 +4655,7 @@ components:
         state:
           $ref: '#/components/schemas/WorktreeState'
         creator:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         unitCount:
           type: integer
           minimum: 0
@@ -6121,7 +6150,7 @@ components:
           type: array
           maxItems: 20
           items:
-            $ref: '#/components/schemas/User'
+            $ref: '#/components/schemas/PublicUser'
     WriteSourceCounts:
       type: object
       additionalProperties: false
@@ -6176,7 +6205,7 @@ components:
           format: date-time
         actor:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         writeSource:
           $ref: '#/components/schemas/WriteSource'
@@ -6220,7 +6249,7 @@ components:
           format: date-time
         actor:
           oneOf:
-            - $ref: '#/components/schemas/User'
+            - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
         writeSource:
           $ref: '#/components/schemas/WriteSource'
@@ -7116,7 +7145,7 @@ components:
         node:
           $ref: '#/components/schemas/NodeSummary'
         sharedBy:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         sharedAt:
           type: string
           format: date-time
@@ -7236,7 +7265,7 @@ components:
         - members
       properties:
         owner:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         members:
           type: array
           items:
@@ -7524,7 +7553,7 @@ components:
         id:
           type: string
         author:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         body:
           type: string
         createdAt:
@@ -7564,7 +7593,7 @@ components:
         kind:
           $ref: '#/components/schemas/IssueEventKind'
         actor:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         payload:
           type: object
           additionalProperties: true
@@ -7624,7 +7653,7 @@ components:
         id:
           type: string
         author:
-          $ref: '#/components/schemas/User'
+          $ref: '#/components/schemas/PublicUser'
         body:
           type: string
         createdAt:
@@ -8251,7 +8280,7 @@ components:
           schema:
             $ref: '#/components/schemas/ErrorResponse'
     Unauthorized:
-      description: A valid login session is required.
+      description: A valid login session is required. A session of a banned agent is not valid.
       content:
         application/json:
           schema:

@@ -3,18 +3,22 @@ import type { WorkspaceDatabase } from "../../db/database.js";
 import type {
   AuthenticationMethods,
   ExternalIdentityProvider,
+  PrincipalUser,
   SessionIssuedFor,
   User,
 } from "./identity.types.js";
 import type { WriteSource } from "./write-source.js";
 
-export interface StoredSession extends User {
+/** A banned agent is a User that may no longer authenticate. */
+export type StoredPrincipal = PrincipalUser & { readonly banned: boolean };
+
+export type StoredSession = StoredPrincipal & {
   readonly sessionId: string;
   readonly secretHash: string;
   readonly expiresAt: number;
   readonly writeSource: WriteSource | null;
   readonly tokenIssued: boolean;
-}
+};
 
 export interface StoredCredential extends User {
   readonly passwordHash: string;
@@ -357,6 +361,17 @@ export class IdentityRepository {
     return row ? toUser(row) : null;
   }
 
+  findPrincipal(userId: string): StoredPrincipal | null {
+    const row = this._database.connection
+      .prepare(
+        `SELECT users.id, users.username, users.display_name, users.avatar_url, ${principalColumns}
+         FROM users ${agentJoin}
+         WHERE users.id = ?`
+      )
+      .get(userId) as PrincipalRow | undefined;
+    return row ? toPrincipal(row) : null;
+  }
+
   findUsers(userIds: readonly string[]): readonly User[] {
     const uniqueUserIds = [...new Set(userIds)];
     if (uniqueUserIds.length === 0) return [];
@@ -461,15 +476,17 @@ export class IdentityRepository {
            users.id,
            users.username,
            users.display_name,
-           users.avatar_url
+           users.avatar_url,
+           ${principalColumns}
          FROM login_sessions
          JOIN users ON users.id = login_sessions.user_id
+         ${agentJoin}
          WHERE login_sessions.id = ?`
       )
       .get(sessionId) as SessionRow | undefined;
     return row
       ? {
-          ...toUser(row),
+          ...toPrincipal(row),
           sessionId: row.session_id,
           secretHash: row.secret_hash,
           expiresAt: row.expires_at,
@@ -669,7 +686,18 @@ interface CredentialRow extends UserRow {
   readonly password_hash: string;
 }
 
-interface SessionRow extends UserRow {
+interface PrincipalRow extends UserRow {
+  readonly kind: "human" | "agent";
+  readonly claimed: number;
+  readonly banned: number;
+}
+
+const principalColumns = `users.kind,
+  agents.owner_user_id IS NOT NULL AS claimed,
+  agents.banned_at IS NOT NULL AS banned`;
+const agentJoin = "LEFT JOIN agents ON agents.user_id = users.id";
+
+interface SessionRow extends PrincipalRow {
   readonly write_source: WriteSource | null;
   readonly token_issued: number;
   readonly session_id: string;
@@ -710,6 +738,16 @@ function insertSession(
       session.issuedFor?.kind === "pat" ? session.issuedFor.id : null,
       session.issuedFor?.kind === "oauth" ? session.issuedFor.id : null
     );
+}
+
+function toPrincipal(row: PrincipalRow): StoredPrincipal {
+  return {
+    ...toUser(row),
+    ...(row.kind === "agent"
+      ? { kind: "agent", claimed: row.claimed === 1 }
+      : { kind: "human" }),
+    banned: row.banned === 1,
+  };
 }
 
 function toUser(row: UserRow): User {

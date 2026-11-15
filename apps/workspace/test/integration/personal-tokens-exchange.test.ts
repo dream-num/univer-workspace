@@ -208,7 +208,7 @@ describe("token exchange", () => {
       expires_in: 600,
       scope: "read write",
       subject: { kind: "pat", id: record.id, client_id: null },
-      user: { id: alice.userId, username: "alice", displayName: "alice", avatarUrl: null },
+      user: { id: alice.userId, username: "alice", displayName: "alice", avatarUrl: null, kind: "human" },
     });
     expect(Object.keys(body.user).sort()).toEqual(contractRequired("User").sort());
     expect(Object.keys(body.subject).sort()).toEqual(contractRequired("TokenExchangeSubject").sort());

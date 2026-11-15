@@ -15,7 +15,12 @@ import {
 import { logger } from "../../logging/logger.js";
 import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
-import { IdentityRepository, type NewPasswordUser, type StoredSession } from "./identity.repository.js";
+import {
+  IdentityRepository,
+  type NewPasswordUser,
+  type StoredPrincipal,
+  type StoredSession,
+} from "./identity.repository.js";
 import { emailLoginMessage } from "./email-login-mail.js";
 import { createAgentCreateLimiter } from "./agent-create-limiter.js";
 import type {
@@ -23,6 +28,7 @@ import type {
   AuthenticatedSession,
   CreatedAgent,
   Principal,
+  PrincipalUser,
   CliAuthorizationExchange,
   CliAuthorizationStart,
   EmailLogin,
@@ -117,7 +123,7 @@ export interface IdentityModule {
   updateCurrentUser(
     cookieHeader: string | undefined,
     patch: UserProfilePatch
-  ): User;
+  ): PrincipalUser;
   startGitHubOAuth(input: {
     readonly intent: "login" | "link";
     readonly returnTo: unknown;
@@ -176,6 +182,8 @@ export interface IdentityModule {
   }>;
   unlinkDiscord(cookieHeader: string | undefined): AuthenticatedSession;
   findUsers(userIds: readonly string[]): readonly User[];
+  /** The User a verified access token belongs to, or null when it is missing or a banned agent. */
+  authenticateUser(userId: string): PrincipalUser | null;
   /**
    * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
    * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
@@ -257,7 +265,7 @@ export function createIdentityModule(options: {
     return emailSender;
   }
 
-  function authenticatedSession(user: User): AuthenticatedSession {
+  function authenticatedSession(user: User | PrincipalUser): AuthenticatedSession {
     return {
       authenticated: true,
       githubOAuthEnabled,
@@ -266,13 +274,23 @@ export function createIdentityModule(options: {
       passwordAuthEnabled,
       emailAuthEnabled,
       trialDeployment,
-      user: {
-        id: user.id,
-        username: user.username,
-        displayName: user.displayName,
-        avatarUrl: user.avatarUrl,
-      },
+      user: principalUser(user),
       authenticationMethods: repository.authenticationMethods(user.id),
+    };
+  }
+
+  /** The User as sessions and the token exchange show it: the profile plus its principal kind. */
+  function principalUser(user: User | PrincipalUser): PrincipalUser {
+    const stored = "kind" in user ? user : repository.findPrincipal(user.id);
+    if (!stored) throw new Error("Session User is missing");
+    return {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      ...(stored.kind === "agent"
+        ? { kind: "agent", claimed: stored.claimed }
+        : { kind: "human" }),
     };
   }
 
@@ -287,6 +305,12 @@ export function createIdentityModule(options: {
       return null;
     }
     if (!secretMatches(token.secret, stored.secretHash)) return null;
+    return authenticated(stored);
+  }
+
+  /** Every verified credential ends here, so a banned agent cannot authenticate by any path. */
+  function authenticated<T extends StoredPrincipal>(stored: T | null): T | null {
+    if (!stored || stored.banned) return null;
     return stored;
   }
 
@@ -320,12 +344,7 @@ export function createIdentityModule(options: {
       );
     }
     return {
-      user: {
-        id: stored.id,
-        username: stored.username,
-        displayName: stored.displayName,
-        avatarUrl: stored.avatarUrl,
-      },
+      user: principalUser(stored),
       writeSource: stored.writeSource,
       tokenIssued: stored.tokenIssued,
     };
@@ -363,6 +382,11 @@ export function createIdentityModule(options: {
 
     findUsers(userIds) {
       return repository.findUsers(userIds);
+    },
+
+    authenticateUser(userId) {
+      const stored = authenticated(repository.findPrincipal(userId));
+      return stored && principalUser(stored);
     },
 
     async registerWithPassword(input) {
@@ -855,8 +879,8 @@ export function createIdentityModule(options: {
         );
       }
 
-      const user: User = {
-        id: session.user.id,
+      const user: PrincipalUser = {
+        ...session.user,
         username:
           patch.username === undefined
             ? session.user.username

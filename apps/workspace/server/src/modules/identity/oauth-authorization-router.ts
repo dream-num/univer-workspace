@@ -414,11 +414,11 @@ export function createOAuthAuthorizationRouter(options: {
     const subjectToken = body.subject_token;
     const resource = body.resource ?? "";
     // One transaction: a revoke cannot land between the revocation check and the session insert.
-    const exchanged = options.database.transaction((): { subject: SubjectToken; user: User; issued: IssuedSession; ttlMs: number } | null => {
+    const exchanged = options.database.transaction((): { subject: SubjectToken; issued: IssuedSession; ttlMs: number } | null => {
       const subject = options.accessTokens.verifySubjectToken(subjectToken, { resource });
       if (subject === null) return null;
-      const user = options.identity.findUsers([subject.userId])[0];
-      if (user === undefined) return null;
+      const user = options.identity.authenticateUser(subject.userId);
+      if (user === null) return null;
       const ttlMs = Math.min(
         DOWNSTREAM_SESSION_TTL_MS,
         options.identity.sessionTtlMs,
@@ -429,13 +429,13 @@ export function createOAuthAuthorizationRouter(options: {
         ttlMs,
         issuedFor: { kind: subject.kind, id: subject.id },
       });
-      return { subject, user, issued, ttlMs };
+      return { subject, issued, ttlMs };
     });
     if (exchanged === null) {
       fail(400, "invalid_grant");
       return;
     }
-    const { subject, user, issued, ttlMs } = exchanged;
+    const { subject, issued, ttlMs } = exchanged;
     response.json({
       access_token: issued.cookieValue,
       issued_token_type: WORKSPACE_SESSION_TOKEN_TYPE,
@@ -447,7 +447,7 @@ export function createOAuthAuthorizationRouter(options: {
         id: subject.id,
         client_id: subject.kind === "oauth" ? subject.clientId : null,
       },
-      user: { id: user.id, username: user.username, displayName: user.displayName, avatarUrl: user.avatarUrl },
+      user: issued.view.user,
     });
   }
 

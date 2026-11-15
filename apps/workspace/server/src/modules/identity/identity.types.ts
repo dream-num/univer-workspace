@@ -2,7 +2,7 @@ import type { WriteSource } from "./write-source.js";
 
 export interface Principal {
   readonly tokenIssued: boolean;
-  readonly user: User;
+  readonly user: PrincipalUser;
   readonly writeSource: WriteSource | null;
 }
 
@@ -12,6 +12,15 @@ export interface User {
   readonly displayName: string;
   readonly avatarUrl: string | null;
 }
+
+/** What kind of principal a User is. Only an agent can be claimed by a human. */
+export type PrincipalKind =
+  | { readonly kind: "human" }
+  | { readonly kind: "agent"; readonly claimed: boolean };
+
+export type PrincipalUser = User & PrincipalKind;
+
+export type PrincipalCategory = "anonymous" | "agent_unclaimed" | "agent_claimed" | "human";
 
 export interface AgentCreation {
   readonly label: string | undefined;
@@ -41,7 +50,7 @@ export interface AuthenticatedSession {
   readonly passwordAuthEnabled: boolean;
   readonly emailAuthEnabled: boolean;
   readonly trialDeployment: boolean;
-  readonly user: User;
+  readonly user: PrincipalUser;
   readonly authenticationMethods: AuthenticationMethods;
 }
 

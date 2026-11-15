@@ -16,7 +16,7 @@ let draft: components["schemas"]["HtmlViewDraft"] = {
 };
 const page = (title: string) => `<!doctype html><html><head><style>body{margin:0;padding:48px;background:#edf6ff;color:#173a5b;font:20px system-ui}h1{font-size:40px}input{padding:10px;font:inherit}</style></head><body><h1>${title}</h1><p>Review this page before publishing.</p><label>Local preview <input value="Not saved"></label></body></html>`;
 const session: components["schemas"]["AuthenticatedSession"] = {
-  authenticated: true, user: { id: "fixture-owner", username: "alice", displayName: "Fixture Owner", avatarUrl: null },
+  authenticated: true, user: { id: "fixture-owner", username: "alice", displayName: "Fixture Owner", avatarUrl: null, kind: "human" },
   githubOAuthEnabled: false, googleOAuthEnabled: false, discordOAuthEnabled: false, passwordAuthEnabled: true,
   emailAuthEnabled: false, trialDeployment: false, authenticationMethods: { password: true, email: null, externalIdentities: [] },
 };

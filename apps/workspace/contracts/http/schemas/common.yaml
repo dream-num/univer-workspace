@@ -65,7 +65,7 @@ BadRequest:
         $ref: "#/ErrorResponse"
 
 Unauthorized:
-  description: A valid login session is required.
+  description: A valid login session is required. A session of a banned agent is not valid.
   content:
     application/json:
       schema:

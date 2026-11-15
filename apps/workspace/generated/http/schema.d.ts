@@ -376,7 +376,8 @@ export interface paths {
          *     cannot create personal access tokens, approve CLI logins, authorize
          *     OAuth clients or link identities (403). Errors use the RFC 6749 body
          *     `{ "error": "<code>" }`: `invalid_request` (400, including a JSON
-         *     body), `invalid_grant` (400), `unauthorized_client` (400, a
+         *     body), `invalid_grant` (400, including a subject token that belongs
+         *     to a banned agent), `unauthorized_client` (400, a
          *     confidential client without `tokenExchange`) or `invalid_client` (401,
          *     an unknown or public client or a wrong secret).
          *
@@ -2238,14 +2239,25 @@ export interface components {
         ErrorResponse: {
             error: components["schemas"]["Error"];
         };
+        /** @description The authenticated User, with the kind of principal it is. */
         User: {
             id: string;
             username: string;
             displayName: string;
             /** Format: uri */
             avatarUrl: string | null;
+            /** @enum {string} */
+            kind: "human" | "agent";
+            /** @description Present only for an agent. Whether a human has claimed it. */
+            claimed?: boolean;
         };
-        PublicUser: components["schemas"]["User"];
+        PublicUser: {
+            id: string;
+            username: string;
+            displayName: string;
+            /** Format: uri */
+            avatarUrl: string | null;
+        };
         SessionView: components["schemas"]["AnonymousSession"] | components["schemas"]["AuthenticatedSession"];
         SpaceView: components["schemas"]["SpaceSummary"] & {
             /** @description URL-safe name unique among the owner's Team Spaces (case-insensitive). Null for a Personal Space and for a Team Space created before slugs existed. */
@@ -2320,7 +2332,7 @@ export interface components {
             originalLocation: {
                 breadcrumbs: components["schemas"]["Breadcrumb"][];
             };
-            trashedBy: components["schemas"]["User"];
+            trashedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             trashedAt: string;
             nodeCount: number;
@@ -2329,19 +2341,19 @@ export interface components {
             removeBlockedBy: components["schemas"]["TrashBlocker"] | null;
         };
         TeamMembership: {
-            user: components["schemas"]["User"];
+            user: components["schemas"]["PublicUser"];
             role: components["schemas"]["TeamRole"];
-            grantedBy: components["schemas"]["User"];
+            grantedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
         NodeGrant: {
-            user: components["schemas"]["User"];
+            user: components["schemas"]["PublicUser"];
             role: components["schemas"]["GrantRole"];
             effectiveRole: components["schemas"]["GrantRole"];
-            grantedBy: components["schemas"]["User"];
+            grantedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -2350,8 +2362,8 @@ export interface components {
         NodeLinkSharing: {
             enabled: boolean;
             role: components["schemas"]["LinkSharingRole"];
-            createdBy: components["schemas"]["User"] | null;
-            updatedBy: components["schemas"]["User"] | null;
+            createdBy: components["schemas"]["PublicUser"] | null;
+            updatedBy: components["schemas"]["PublicUser"] | null;
             /** Format: date-time */
             createdAt: string | null;
             /** Format: date-time */
@@ -2372,12 +2384,12 @@ export interface components {
             title: string;
             state: components["schemas"]["IssueState"];
             stateReason: components["schemas"]["IssueStateReason"] | null;
-            author: components["schemas"]["User"];
-            closedBy: components["schemas"]["User"] | null;
+            author: components["schemas"]["PublicUser"];
+            closedBy: components["schemas"]["PublicUser"] | null;
             /** Format: date-time */
             closedAt: string | null;
             labels: components["schemas"]["IssueLabel"][];
-            assignees: components["schemas"]["User"][];
+            assignees: components["schemas"]["PublicUser"][];
             commentCount: number;
             referenceCount: number;
             /** Format: date-time */
@@ -2399,7 +2411,7 @@ export interface components {
             teamSpace: components["schemas"]["SpaceSummary"] | null;
             visibility: components["schemas"]["WorktreeVisibility"];
             state: components["schemas"]["WorktreeState"];
-            creator: components["schemas"]["User"];
+            creator: components["schemas"]["PublicUser"];
             unitCount: number;
             /** Format: date-time */
             processedAt: string | null;
@@ -2936,7 +2948,7 @@ export interface components {
             avatarUrl?: string | null;
         };
         UserSearchResult: {
-            users: components["schemas"]["User"][];
+            users: components["schemas"]["PublicUser"][];
         };
         WriteSourceCounts: {
             browser: number;
@@ -2954,7 +2966,7 @@ export interface components {
             kind: "pull-opened" | "pull-merged";
             /** Format: date-time */
             at: string;
-            actor: components["schemas"]["User"] | null;
+            actor: components["schemas"]["PublicUser"] | null;
             /** @description Source of this write; `unknown` for merges (not recorded). */
             writeSource: components["schemas"]["WriteSource"];
             pull: {
@@ -2969,7 +2981,7 @@ export interface components {
             kind: "issue-opened" | "issue-closed";
             /** Format: date-time */
             at: string;
-            actor: components["schemas"]["User"] | null;
+            actor: components["schemas"]["PublicUser"] | null;
             /** @description Source of this write; `unknown` for closes (not recorded). */
             writeSource: components["schemas"]["WriteSource"];
             issue: {
@@ -3290,7 +3302,7 @@ export interface components {
         };
         SharedItem: {
             node: components["schemas"]["NodeSummary"];
-            sharedBy: components["schemas"]["User"];
+            sharedBy: components["schemas"]["PublicUser"];
             /** Format: date-time */
             sharedAt: string;
         };
@@ -3330,7 +3342,7 @@ export interface components {
         /** @enum {string} */
         TeamRole: "admin" | "editor" | "viewer";
         TeamMemberList: {
-            owner: components["schemas"]["User"];
+            owner: components["schemas"]["PublicUser"];
             members: components["schemas"]["TeamMembership"][];
         };
         UpsertTeamMembership: {
@@ -3438,7 +3450,7 @@ export interface components {
              */
             type: "comment";
             id: string;
-            author: components["schemas"]["User"];
+            author: components["schemas"]["PublicUser"];
             body: string;
             /** Format: date-time */
             createdAt: string;
@@ -3455,7 +3467,7 @@ export interface components {
             type: "event";
             id: string;
             kind: components["schemas"]["IssueEventKind"];
-            actor: components["schemas"]["User"];
+            actor: components["schemas"]["PublicUser"];
             /**
              * @description Snapshot taken when the event happened. `closed` carries `reason`;
              *     `renamed` carries `from` and `to`; `labeled` and `unlabeled` carry
@@ -3479,7 +3491,7 @@ export interface components {
         };
         IssueComment: {
             id: string;
-            author: components["schemas"]["User"];
+            author: components["schemas"]["PublicUser"];
             body: string;
             /** Format: date-time */
             createdAt: string;
@@ -3674,7 +3686,7 @@ export interface components {
                 "application/json": components["schemas"]["ErrorResponse"];
             };
         };
-        /** @description A valid login session is required. */
+        /** @description A valid login session is required. A session of a banned agent is not valid. */
         Unauthorized: {
             headers: {
                 [name: string]: unknown;
