@@ -42,6 +42,7 @@ import { searchTool } from "./core/search.js";
 import { browseTool } from "./core/browse.js";
 import { spaceBrowseTool } from "./core/space-browse.js";
 import { spaceFindTool } from "./core/space-find.js";
+import { shareTool } from "./core/share.js";
 import { unitListTool } from "./core/unit-list.js";
 import { unitAddTool } from "./core/unit-add.js";
 import { unitCreateTool } from "./core/unit-create.js";
@@ -84,6 +85,7 @@ export const tools: readonly ToolDefinition[] = [
   browseTool,
   spaceBrowseTool,
   spaceFindTool,
+  shareTool,
   unitListTool,
   unitAddTool,
   unitCreateTool,
