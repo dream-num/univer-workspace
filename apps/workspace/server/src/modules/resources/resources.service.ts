@@ -265,6 +265,10 @@ export function createResourcesModule(options: {
           "Only a failed operation can be retried."
         );
       }
+      assertCeiling(options.access.principalCategory(userId), "createFiles", {
+        held: () => options.access.countPersonalFiles(userId, operationId),
+        adding: 1,
+      });
       options.repository.retry(operationId, userId, now());
       const reservation = options.repository.reserveCreateResource({
         operationId,

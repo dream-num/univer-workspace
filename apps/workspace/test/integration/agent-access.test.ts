@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorkspaceApplication, type WorkspaceApplication } from "../../server/src/app.js";
 import type { WorkspaceConfig } from "../../server/src/config.js";
 import { logger } from "../../server/src/logging/logger.js";
+import { UnitStoreError } from "../../server/src/integrations/univer/unit-store.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
 import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 import { UniverType } from "@univerjs/protocol";
@@ -32,12 +33,15 @@ const servers: Server[] = [];
 const directories: string[] = [];
 /** How long the stub Unit store takes, so that concurrent creations overlap. */
 let unitStoreDelayMs = 0;
+/** Makes the stub Unit store fail for good, leaving a failed Operation behind. */
+let unitStoreFails = false;
 
 afterEach(async () => {
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
   for (const directory of directories.splice(0)) rmSync(directory, { recursive: true, force: true });
   unitStoreDelayMs = 0;
+  unitStoreFails = false;
 });
 
 describe("principal kind", () => {
@@ -217,6 +221,30 @@ describe("ceilings", () => {
     expect(upload.status).toBe(201);
     const { FileId } = (await upload.json()) as { FileId: string };
     await expectRefused(post(origin, "/universer-api/exchange/import", { fileID: FileId, outputType: 1 }, { cookie: agent.cookie }), "AGENT_QUOTA_EXCEEDED");
+  });
+
+  it("counts a failed creation again when it is replayed or retried", async () => {
+    const { origin } = await start();
+    const agent = await createAgent(origin);
+    const nodeIds: string[] = [];
+    for (let index = 1; index <= 19; index += 1) nodeIds.push(await createFile(origin, agent.cookie, `File ${index}`));
+    const key = randomUUID();
+    unitStoreFails = true;
+    const failed = await createFileRequest(origin, agent.cookie, "File 20", key);
+    expect(failed.status).toBe(202);
+    expect(await failed.json()).toMatchObject({ operation: { state: "failed" } });
+    unitStoreFails = false;
+    await createFile(origin, agent.cookie, "Another file 20");
+
+    const retry = () => post(origin, `/api/operations/${key}/retry`, undefined, { cookie: agent.cookie });
+    await expectRefused(createFileRequest(origin, agent.cookie, "File 20", key), "AGENT_QUOTA_EXCEEDED");
+    await expectRefused(retry(), "AGENT_QUOTA_EXCEEDED");
+
+    expect((await post(origin, `/api/nodes/${nodeIds[0]}/trash`, undefined, { cookie: agent.cookie })).status).toBe(201);
+    const retried = await retry();
+    expect(retried.status).toBe(202);
+    expect(await retried.json()).toMatchObject({ state: "completed" });
+    await expectRefused(createFileRequest(origin, agent.cookie, "File 21"), "AGENT_QUOTA_EXCEEDED");
   });
 
   it("holds the limit when creations race", async () => {
@@ -607,6 +635,7 @@ async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: s
     unitStore: {
       async createUnit(input) {
         await delay(unitStoreDelayMs);
+        if (unitStoreFails) throw new UnitStoreError("UNIT_STORE_DOWN", "The Unit store is down.", false);
         return { unitId: input.unitId, headRevision: 1 };
       },
     },
