@@ -69,7 +69,9 @@ export function RepositoryShell(props: WorkspaceShellProps) {
     },
   });
 
-  if (session.isPending || (props.selectedSpaceId !== undefined && selected.isPending))
+  // A shared document can be accessible without access to its containing Space.
+  // Keep its content mounted while optional Space metadata loads or retries.
+  if (session.isPending || (frame.kind === "repository" && selected.isPending))
     return <LoadingScreen />;
   if (session.error) throw session.error;
   if (!session.data?.authenticated)
