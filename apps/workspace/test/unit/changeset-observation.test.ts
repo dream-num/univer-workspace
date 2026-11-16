@@ -3,26 +3,21 @@ import { setFinalMutationSize } from "../../server/src/integrations/univer/chang
 
 describe("changeset observation metadata", () => {
   it("measures the compact mutations JSON in UTF-8 bytes", () => {
-    const changeset: {
-      readonly mutations: readonly unknown[];
-      mutationSize?: number;
-    } = {
+    const changeset = Object.freeze({
       mutations: [{ id: "mutation", data: "你好🌍" }],
-      mutationSize: 1,
-    };
+      metadata: { mutationSize: 1 },
+    });
 
     setFinalMutationSize(changeset);
 
-    expect(changeset.mutationSize).toBe(
+    expect(changeset.metadata.mutationSize).toBe(
       Buffer.byteLength(JSON.stringify(changeset.mutations), "utf8")
     );
   });
 
   it("counts an empty mutations array as two bytes", () => {
-    const changeset: { readonly mutations: readonly unknown[]; mutationSize?: number } = {
-      mutations: [],
-    };
+    const changeset = { mutations: [], metadata: {} as Record<string, unknown> };
     setFinalMutationSize(changeset);
-    expect(changeset.mutationSize).toBe(2);
+    expect(changeset.metadata.mutationSize).toBe(2);
   });
 });

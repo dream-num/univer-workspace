@@ -123,7 +123,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 - Workspace product metadata and authentication state are stored in the configured SQLite or PostgreSQL product database. Univer snapshot,
   changeset, revision, and Thread Comment data are stored separately in component-owned tables in the Collaboration
   SQLite file. Thread Comment anchors remain in Unit data while bodies, replies, and solved state use the Comment Adapter.
-- SDK 1.0.0 upgrades the Collaboration file through published Core, Worktree, and History migrations.
+- Workspace upgrades the Collaboration file through the published Core, Worktree, and History migrations.
   Workspace owns the offline startup boundary: consistent backup, migration on a copy, validation,
   and atomic replacement before Services start. Rollback requires the matching pre-upgrade backups;
   old and new SDK writers must never share the file. History segment indexing and catch-up belong to the SDK.

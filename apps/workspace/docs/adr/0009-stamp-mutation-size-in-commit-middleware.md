@@ -4,8 +4,6 @@ status: accepted
 
 # 在 Commit Middleware 中写入 Mutation Size
 
-Workspace 在 Trunk 与 Worktree 的 `commitChangeset` middleware 中，以 OT 变换后 candidate
-的 Mutations 紧凑 JSON UTF-8 字节数写入 `mutationSize`。尽管 SDK Context 的类型是
-`Readonly<IChangeset>`，这里仍有意修改它，使持久化活动无需等待新 SDK Release 即可获得权威
-最终大小。类型逃逸必须集中在一个位置并由集成测试覆盖；SDK 提供受支持的最终 candidate
-元数据 Hook 后应移除该逃逸。
+Workspace 在 Trunk 与 Worktree 的 `commitChangeset` middleware 中计算 OT 变换后最终 mutations 的紧凑 JSON UTF-8 字节数。
+从 SDK 1.5.2 起，通过公开的 `changeset.metadata.mutationSize` 将它与修订一同提交。Worktree 产品 HTTP 响应继续使用顶层
+`mutationSize`；升级前的记录保留原协议载荷中的值。

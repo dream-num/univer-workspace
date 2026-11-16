@@ -18,7 +18,8 @@ Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一�
 Trunk、Worktree 和 Merge Preview 读写同一份 `collaboration_comments` 数据；只有 anchor 作为 Unit
 resource 随 Worktree snapshot/changeset 分支与合并（见 application-design.md "评论与 Worktree"）。
 
-当前 Collaboration SQLite 组件版本为 `core=3`、`worktree=3`、`history=2` 和 `comment=1`。
+当前 Collaboration SQLite 组件版本为 `core=4`、`worktree=4`、`history=2` 和 `comment=1`。
+SDK 1.5.2 的 v3→v4 迁移为主线与草稿的 Unit、Changeset 写入空元数据对象，保留已有修订与协议载荷。
 SDK 1.0.0 把组件升到 `core=2`、`worktree=3`、`history=2`；SDK 1.4.0 把 Core 升到 v3：协议对象
 改为 MessagePack `BLOB` 保存，硬删除的 Unit 以 `deleted_status='hard'` 标记行保留在
 `collaboration_units`，不再有 tombstone 表。Core 与 Worktree 保存 Unit 创建者、创建时间及 changeset 提交时间；
@@ -28,10 +29,10 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
 启动入口先将产品数据库准备到 V21，再在构造 Service/Adapter 前集中调用已发布 SDK 的
-Core V1→V2、Worktree V1→V2→V3 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
+Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
-一致性备份，在副本上按 Core→Worktree→History 顺序迁移，保留旧 History 的创建事实供前两个组件
-使用；通过 Adapter Schema 校验、外键和完整性检查后原子替换文件，并保持原 journal mode。失败
+一致性备份。旧版 Core 和 Worktree 在暂存副本上完成创建信息迁移后，才升级 History，随后执行 Core 的载荷转换及 V4 元数据迁移。
+通过 Adapter Schema 校验、外键和完整性检查后原子替换文件，并保持原 journal mode。失败
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其

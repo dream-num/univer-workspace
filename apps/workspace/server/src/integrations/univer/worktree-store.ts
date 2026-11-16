@@ -122,7 +122,13 @@ export function createWorktreeBackend(service: UniverCollabWorktreeService): Wor
         options
       );
       if (!("error" in result)) {
-        return result;
+        const { metadata, ...committed } = result.changeset;
+        // The product HTTP contract exposes the final size at the top level.
+        // Records migrated from older SDKs already carry it in the protocol payload.
+        if (typeof metadata.mutationSize === "number") {
+          committed.mutationSize = metadata.mutationSize;
+        }
+        return { status: result.status, changeset: committed };
       }
       return {
         status: result.status,

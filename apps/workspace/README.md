@@ -529,10 +529,9 @@ While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
-The Collaboration components are `core=3`, `worktree=3`, `history=2` and
-`comment=1`. SDK 1.0.0 brought `core=2`, `worktree=3` and `history=2`; SDK 1.4.0
-raises Core to v3, which stores protocol objects as MessagePack and inlines
-deletion state into `collaboration_units` instead of a tombstone table. Product V19 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
+The Collaboration components are `core=4`, `worktree=4`, `history=2` and
+`comment=1`. SDK 1.5.2 adds metadata to Trunk and Worktree Units and changesets.
+Existing records receive `{}` and retain their contents and revisions. Product V19 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
 and Issue source columns without backfilling existing rows. V15 added ordered Space
 pins and a per-user stars index. V14 added Email identities and Email login codes;
 V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
@@ -550,8 +549,8 @@ application Services, the server entry point prepares the Collaboration file:
    If another process still has a WAL-mode file open, or holds any lock on it,
    startup fails before the backup. An idle rollback-journal connection holds no
    lock and cannot be detected, so step 1 remains required.
-3. The published SDK migrations run on a staging copy in Core v1→v2 → Worktree →
-   History → Core v2→v3 order while the lock is held. Schema validation, `foreign_key_check`, and
+3. The server runs the published SDK migrations on a staging copy while holding the lock.
+   Schema validation, `foreign_key_check`, and
    `integrity_check` must pass before the copy atomically replaces the original.
    A failed migration leaves the original database, its journal mode, and the
    backup available; startup fails before accepting traffic.
@@ -559,7 +558,7 @@ application Services, the server entry point prepares the Collaboration file:
    Subsequent startups read the component versions without rerunning the full
    integrity and foreign-key scans, migrations, or backup.
 
-Core V1, Worktree V1/V2, and History V1 are supported; fresh files are initialized
+Core V1–V3, Worktree V1–V3, and History V1 are supported; fresh files are initialized
 by the current Adapters. Unit creator and creation time come from History V1
 revision 1, then from the product database: the Trunk Node for a Unit, or the
 Worktree node intent for a Unit created in a Worktree. Only when both lack a value

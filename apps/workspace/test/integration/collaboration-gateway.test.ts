@@ -1315,6 +1315,7 @@ describe("collaboration gateway", () => {
             baseRev: 1,
             revision: 2,
             sid: "product-api-submit",
+            mutationSize: 1000,
             reqId: 1,
             userID: "",
             memberID: "",
@@ -1340,6 +1341,7 @@ describe("collaboration gateway", () => {
         mutationSize: 2,
       },
     });
+    expect(submitBody.changeset).not.toHaveProperty("metadata");
     expectUnixSecondsWithin(
       submitBody.changeset.createTime,
       beforeWorktreeSubmit,
@@ -1603,23 +1605,20 @@ function readStoredChangesetMetadata(
 ) {
   const database = new DatabaseSync(filename, { readOnly: true });
   try {
-    // Core v3 stores changesets as MessagePack `payload`; Worktree v3 still stores JSON text.
     const row = worktreeId
       ? database
           .prepare(
-            `SELECT payload_json AS payload FROM ${table} WHERE worktree_id = ? AND unit_id = ?`
+            `SELECT payload_json AS payload, metadata_json AS metadata FROM ${table} WHERE worktree_id = ? AND unit_id = ?`
           )
           .get(worktreeId, unitId)
-      : database
-          .prepare(`SELECT payload FROM ${table} WHERE unit_id = ?`)
-          .get(unitId);
+      : database.prepare(`SELECT payload, metadata FROM ${table} WHERE unit_id = ?`).get(unitId);
     if (!row) throw new Error("Stored changeset is missing");
-    const payload = row.payload;
-    return (
-      payload instanceof Uint8Array ? decode(payload) : JSON.parse(String(payload))
-    ) as {
-      readonly createTime?: number;
-      readonly mutationSize?: number;
+    const changeset = (
+      row.payload instanceof Uint8Array ? decode(row.payload) : JSON.parse(String(row.payload))
+    ) as { readonly createTime?: number };
+    return {
+      createTime: changeset.createTime,
+      mutationSize: JSON.parse(String(row.metadata)).mutationSize,
     };
   } finally {
     database.close();

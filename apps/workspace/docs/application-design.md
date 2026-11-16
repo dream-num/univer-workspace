@@ -128,7 +128,7 @@ Worktree，不调用 Issues 模块，其他用户得到 404。每个来源最多
 ## Collaboration SDK 升级边界
 
 启动时先准备产品数据库，再运行隔离的 `prepareCollaborationDatabase`，最后构造应用 Service
-（自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
+（自 SDK 1.0.0 起；SDK 1.4.0 增加 Core v2→v3，SDK 1.5.2 增加 Core 和 Worktree v3→v4）。Core/Worktree/History 的 schema 和迁移由已发布 SDK 拥有；Workspace 负责停写
 部署、迁移期间的协同文件排他锁、一致性备份、从产品 Node 与 Worktree node intent 只读补充
 Unit 创建事实、迁移副本验证和原子替换。组件版本为 Core 3、Worktree 3、History 2；
 Comment 1 不变。产品数据库先准备到 V21，协同迁移再从中读取创建事实。任何组件迁移失败均不发布副本，原库与备份保留，启动失败。

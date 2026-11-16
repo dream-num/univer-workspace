@@ -7,11 +7,13 @@ import {
   SQLiteDatabaseAdapter,
   migrateSQLiteCoreV1ToV2,
   migrateSQLiteCoreV2ToV3,
+  migrateSQLiteCoreV3ToV4,
 } from "@univerjs-pro/collaboration-database-sqlite";
 import {
   SQLiteWorktreeDatabaseAdapter,
   migrateSQLiteWorktreeV1ToV2,
   migrateSQLiteWorktreeV2ToV3,
+  migrateSQLiteWorktreeV3ToV4,
 } from "@univerjs-pro/collaboration-worktree-database-sqlite";
 import {
   SQLiteHistoryDatabaseAdapter,
@@ -19,13 +21,12 @@ import {
 } from "@univerjs-pro/collaboration-history-database-sqlite";
 import { readUnitCreationFacts } from "./unit-creation-facts.js";
 
-const TARGET = { core: 3, worktree: 3, history: 2, comment: 1 } as const;
+const TARGET = { core: 4, worktree: 4, history: 2, comment: 1 } as const;
 
 type ComponentVersions = ReadonlyMap<string, number>;
 
 /**
- * Offline startup boundary for the published SDK schema migrations (Core and
- * Worktree since SDK 1.0.0, Core v3 since SDK 1.4.0). Stop every writer before
+ * Offline startup boundary for the published SDK schema migrations. Stop every writer before
  * calling this. Prepare the product database first and construct collaboration Services/Adapters
  * after migration. The SDK owns schema migrations; we migrate a consistent
  * copy so a failure in any component leaves the original usable by the
@@ -144,9 +145,14 @@ async function migrateCopy(
   productFacts: UnitCreationFactsReader,
   journalMode: string,
 ): Promise<string> {
-  const creation = await startupStageAsync("collaboration.creation-facts.read", () =>
-    readUnitCreationFacts(source, productFacts, Date.now()),
-  );
+  const coreVersion = versions.get("core") ?? TARGET.core;
+  const worktreeVersion = versions.get("worktree") ?? TARGET.worktree;
+  const creation =
+    coreVersion === 1 || worktreeVersion < 3
+      ? await startupStageAsync("collaboration.creation-facts.read", () =>
+          readUnitCreationFacts(source, productFacts, Date.now()),
+        )
+      : undefined;
   const backupFilename = `${filename}.pre-sdk-migration-${Date.now()}-${randomUUID()}.bak`;
   startupStage("collaboration.backup", () => source.prepare("VACUUM INTO ?").run(backupFilename));
   chmodSync(backupFilename, 0o600);
@@ -154,18 +160,18 @@ async function migrateCopy(
   const stagedFilename = `${backupFilename}.migrating`;
   try {
     startupStage("collaboration.staging.copy", () => copyFileSync(backupFilename, stagedFilename));
-    if (versions.get("core") === 1)
+    if (coreVersion === 1 && creation)
       await startupStageAsync("collaboration.core.v1-to-v2", () =>
         migrateSQLiteCoreV1ToV2({
           filename: stagedFilename,
           resolveUnitCreation: creation.resolveUnitCreation,
         }),
       );
-    if (versions.get("worktree") === 1)
+    if (worktreeVersion === 1)
       startupStage("collaboration.worktree.v1-to-v2", () =>
         migrateSQLiteWorktreeV1ToV2({ filename: stagedFilename }),
       );
-    if ((versions.get("worktree") ?? 3) < 3)
+    if (worktreeVersion < 3 && creation)
       await startupStageAsync("collaboration.worktree.v2-to-v3", () =>
         migrateSQLiteWorktreeV2ToV3({
           filename: stagedFilename,
@@ -180,9 +186,18 @@ async function migrateCopy(
     // Core v3 (SDK 1.4.0) re-encodes protocol payloads as MessagePack and keeps
     // hard-deleted Units as marker rows instead of a tombstone table. It reads
     // no other component, so it runs after they have read the v2 Core tables.
-    if ((versions.get("core") ?? TARGET.core) < 3)
+    if (coreVersion < 3)
       await startupStageAsync("collaboration.core.v2-to-v3", () =>
         migrateSQLiteCoreV2ToV3({ filename: stagedFilename }),
+      );
+
+    if (coreVersion < 4)
+      await startupStageAsync("collaboration.core.v3-to-v4", () =>
+        migrateSQLiteCoreV3ToV4({ filename: stagedFilename }),
+      );
+    if (worktreeVersion < 4)
+      startupStage("collaboration.worktree.v3-to-v4", () =>
+        migrateSQLiteWorktreeV3ToV4({ filename: stagedFilename }),
       );
 
     // Public Adapter constructors validate their own schema fingerprints. They

@@ -101,11 +101,15 @@ export async function verifyCollaborationMigration(
         );
       backup.close();
       const migrated = new DatabaseSync(filename);
-      assert.deepEqual(versions(migrated), { core: 3, worktree: 3, history: 2 });
+      assert.deepEqual(versions(migrated), { core: 4, worktree: 4, history: 2 });
       assert.deepEqual(migrated.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(migrated.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
       assert.equal(migrated.prepare("PRAGMA journal_mode").get()?.journal_mode, "wal");
       if (populated) {
+        for (const [table, column] of metadataColumns) {
+          const rows = migrated.prepare(`SELECT DISTINCT ${column} AS value FROM ${table}`).all();
+          assert.deepEqual(rows.map((row) => JSON.parse(String(row.value))), [{}]);
+        }
         const unitCreation = (unitId: string) =>
           migrated
             .prepare(
@@ -202,7 +206,10 @@ export async function verifyCollaborationMigration(
           1,
         );
       }
+      const v3Filename = join(directory, `v3-${populated}.sqlite`);
+      migrated.prepare("VACUUM INTO ?").run(v3Filename);
       migrated.close();
+      await verifyV3Upgrade(v3Filename, prepare, populated);
       const files = readdirSync(directory).sort();
       assert.deepEqual(await prepareWithProduct(filename), { status: "current" });
       assert.deepEqual(readdirSync(directory).sort(), files);
@@ -342,6 +349,70 @@ export async function verifyCollaborationMigration(
     product.close();
     rmSync(directory, { recursive: true, force: true });
   }
+}
+
+// V4 adds exactly one metadata column to each of these V3 tables.
+const metadataColumns = [
+  ["collaboration_units", "metadata"],
+  ["collaboration_changesets", "metadata"],
+  ["collaboration_worktree_units", "metadata_json"],
+  ["collaboration_worktree_changesets", "metadata_json"],
+] as const;
+
+async function verifyV3Upgrade(
+  filename: string,
+  prepare: typeof prepareCollaborationDatabase,
+  populated: boolean,
+): Promise<void> {
+  const db = new DatabaseSync(filename);
+  for (const [table, column] of metadataColumns) {
+    db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
+  }
+  db.exec("UPDATE collaboration_schema_versions SET version = 3 WHERE component IN ('core', 'worktree')");
+  const trunkPayloads = (connection: DatabaseSync) =>
+    connection.prepare("SELECT payload FROM collaboration_changesets ORDER BY unit_id, revision").all();
+  const original = trunkPayloads(db);
+  const upgrade = () =>
+    prepare(filename, { read: async () => assert.fail("V3 already has creation facts") });
+  if (populated) {
+    // Fail Worktree V3→V4 after Core's migration has run on the staged copy.
+    db.exec("ALTER TABLE collaboration_worktree_changesets RENAME TO unavailable_changesets");
+    db.close();
+    await assert.rejects(upgrade(), /original database is unchanged/);
+    const retry = new DatabaseSync(filename);
+    assert.deepEqual(
+      retry
+        .prepare("SELECT version FROM collaboration_schema_versions WHERE component IN ('core', 'worktree')")
+        .all()
+        .map((row) => row.version),
+      [3, 3],
+    );
+    retry.exec("ALTER TABLE unavailable_changesets RENAME TO collaboration_worktree_changesets");
+    retry.close();
+  } else {
+    db.close();
+  }
+
+  const result = await upgrade();
+  if (result.status !== "migrated") assert.fail("Expected a V3 backup");
+  const backup = new DatabaseSync(result.backupFilename, { readOnly: true });
+  const current = new DatabaseSync(filename, { readOnly: true });
+  try {
+    for (const [table, column] of metadataColumns) {
+      assert.equal(
+        backup.prepare("SELECT 1 FROM pragma_table_info(?) WHERE name = ?").get(table, column),
+        undefined,
+      );
+      const rows = current.prepare(`SELECT DISTINCT ${column} AS value FROM ${table}`).all();
+      assert.deepEqual(rows.map((row) => JSON.parse(String(row.value))), populated ? [{}] : []);
+    }
+    assert.deepEqual(trunkPayloads(backup), original);
+    assert.deepEqual(trunkPayloads(current), original);
+  } finally {
+    backup.close();
+    current.close();
+  }
+  assert.deepEqual(await upgrade(), { status: "current" });
 }
 
 function createProductDatabase(filename: string): string {
