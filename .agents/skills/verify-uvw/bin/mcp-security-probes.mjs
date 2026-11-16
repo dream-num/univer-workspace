@@ -112,7 +112,7 @@ function loadRun(runId) {
   if (env.MCP_ENABLED !== '1') throw new Error('MCP is not enabled for this run');
   const secret = name => readFileSync(join(dir, 'home', name), 'utf8').trim();
   if (!existsSync(join(dir, 'home/mcp-token')) || !existsSync(join(dir, 'user.env'))) throw new Error('run has no user; run: verify-uvw user');
-  return { dir, env, secret, origin: `http://127.0.0.1:${env.WEB_PORT}`, mcpUrl: new URL(`http://127.0.0.1:${env.MCP_PORT}/mcp`),
+  return { dir, env, secret, origin: `http://127.0.0.1:${env.WEB_PORT}`, mcpUrl: new URL(env.MCP_PUBLIC_URL || `http://127.0.0.1:${env.MCP_PORT}/mcp`),
     username: readFileSync(join(dir, 'user.env'), 'utf8').match(/USERNAME=(.*)/)[1].trim() };
 }
 

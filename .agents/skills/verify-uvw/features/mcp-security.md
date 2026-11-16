@@ -30,7 +30,7 @@ configuration refuses to start.
 - MG8 (requirement 3) has A hold every worker slot (`EXECUTOR_MAX_WORKERS`, default 4) with 12 s scripts on distinct Units while B calls
   `execute` on a Unit it has not opened. `contained` if B is served.
 - MG9 (requirement 6) reads `/proc/self/mountinfo` in the executor and renderer containers and from a script. `contained` if no mount other than
-  the standard container mounts has a mount point or source containing `staging`, `data`, `workspace`, `sqlite`, `blob` or `verify-uvw`. The
+  the standard container mounts has a mount point or mount root containing `staging`, `data`, `workspace`, `sqlite`, `blob` or `verify-uvw`. The
   gateway's `/staging` mount is recorded as a control that the detector sees.
 - MG10 (requirement 7) starts the run's image as executor and as renderer with `NODE_ENV=production`, session credentials, `runc`, the image's
   Chromium launch (`--no-sandbox`) on a throwaway internal network with no published ports. The executor also gets
@@ -66,7 +66,8 @@ The probe prints one JSON line per check on stdout and a one-line reason per che
 ```
 
 `result` is `contained`, `exposed` or `inconclusive` (a probe that could not work, with the reason in its evidence file). `evidence` is relative
-to the run directory. The exit status is 0 whatever the results, and 2 only when the stack cannot be reached. Run MG1 and MG3 from the
+to the run directory. The exit status is 0 whatever the results, and 2 when the probe cannot start: no run or user, Docker unavailable, an
+unknown flag, or a reserved or unknown ID in `--only`. Run MG1 and MG3 from the
 implementation tests that ship with the fix PRs; the script rejects them in `--only`.
 
 Pass condition for the program: every implemented check reports `contained`, and MG1 and MG3 pass in the implementation tests. A fix PR
@@ -109,6 +110,8 @@ Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker
   lazily) both users share it by construction; the evidence records how many browser processes existed.
 - MG10 runs `docker run` with this run's image and `--internal` networking. If the probe is killed mid-run, remove `mg10-*` containers and
   networks by hand (`docker rm -f $(docker ps -aq --filter name=mg10-)`).
-- The probes assume Docker Desktop's executor and renderer share the compose network `default` and `render`. The Workspace transport target is
-  `http://host.docker.internal:<server port>`.
+- The probes assume the compose networks of `apps/mcp/docker/compose.verify.yml`: the executor joins `default` and the internal `render`
+  network, and the renderer joins only `render`. The Workspace transport target is `http://host.docker.internal:<server port>`.
+- The probes connect to the run's `MCP_PUBLIC_URL`, so they also work on a `VERIFY_UVW_MCP_SAME_ORIGIN=1` run, where the gateway port's own
+  `/mcp` answers 403.
 - Never point the probes at another run's ports, the developer's `:3020`/`:5173` instance or a real host.

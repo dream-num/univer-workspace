@@ -50,10 +50,11 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 
 ## Features
 
-- [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded requests, timing, tool results, search, and rewritten history.
-
-- [Browser Agent skills](./agent-skills.md): AS1-AS15 cover the mock provider, catalog
-  reminders, rail, slash menus in both composers, invocation gates, and stable request prefixes.
+- [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded
+  requests, timing, tool results, search, and rewritten history.
+- [Browser Agent skills](./agent-skills.md): AS1-AS22 cover the mock provider, catalog
+  reminders, rail, slash menus in both composers, invocation gates, stable request prefixes,
+  Skill draft review, publication and rejection, and the built-in skill-creator.
 - [Accounts and sign-in](./auth.md): browser registration, browser password sign-in,
   uvw password login and status.
 - [Create and edit a document](./create-document.md): New menu in the browser, Spreadsheet
@@ -71,10 +72,12 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   compilers, the G0 production shape with the `*` allowlist, usage evidence, opencode, and cleanup.
 - [Read Sheet Units](./sheet-lens.md): SLC1-SLC10 cover `uvw outline`, `read` and `find` on the
   seeded sales, ledger and Doc Units: zoom, continuations, typed JSON, large-sheet notes,
-  revisions, errors, trunk reads and access.
+  revisions, errors, trunk reads and access. SLM1-SLM10 cover the MCP tools.
 - [MCP executor and renderer isolation](./mcp-security.md): stage G sandbox baseline, MG1-MG11
   checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
   configuration and renderer separation, each reported `contained` or `exposed`.
+- [Link sharing](./link-sharing.md): LS1-LS4 cover `uvw share`, the browser Share dialog, and what an
+  anonymous visitor sees with the link set to `viewer` or `off`.
 
 ## Helper scripts
 

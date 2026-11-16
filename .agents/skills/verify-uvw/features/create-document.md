@@ -15,7 +15,7 @@ there after a reload and from the CLI.
 
 - Home → `New` (`Create a document to start collaborating`) → choose a type → name → `Create`.
 - Sidebar → `Personal Space` region → `New` → choose a type. Its menu names differ from
-  Home: `Document`, `Sheet`, `Slides`, `Board`, `Base`, `Upload file`, `Folder`.
+  Home: `Document`, `Sheet`, `Slides`, `Board`, `Base`, `PDF`, `Upload file`, `Folder`.
 - Find it later in the sidebar under `Personal Space`, or with `uvw space find <name> --space <owner>/personal`.
 
 ## Driving it with agent-browser and uvw
@@ -33,13 +33,6 @@ Preconditions:
   then `agent-browser find label "Document name" fill "Verify Budget"`, then
   `agent-browser find role button click --name "Create" --exact`. The URL becomes
   `$ORIGIN/nodes/<nodeId>`, the heading reads `Verify Budget`, and the sidebar lists it.
-- **Sidebar entry.** Run `agent-browser find role button click --name "New" --exact --nth 0`,
-  then `agent-browser find role menuitem click --name "Slides"`. A dialog `Create Slides` has
-  a `File name` textbox (default `Untitled Slides`). Run
-  `agent-browser find label "File name" fill "Sidebar Slides"` and
-  `agent-browser find role button click --name "Create" --exact`. The URL becomes `$ORIGIN/nodes/<nodeId>`, a
-  `File created` toast shows, and `$V cli doc-new-sidebar-find space find "Sidebar Slides" --space "verify-$VERIFY_UVW_RUN/personal" --json`
-  returns a node with `unitType: "slide"` and `path: "/Sidebar Slides"`.
 - **Wait for the editor.** Run `agent-browser wait canvas`, then `agent-browser wait 3000`.
   The `Start`/`Insert`/`Formulas` ribbon is visible and A1 is selected.
 - **Edit cells.** Run `agent-browser keyboard type "Rent"`, `agent-browser press Tab`,
@@ -52,6 +45,14 @@ Preconditions:
   and take `nodes[0].resource.unitId`. Then run
   `$V cli doc-readback-cli inspect range A1:B1 --unit <unitId> --trunk --worksheet index:1`.
   Output shows `"Rent"	"1200"`.
+- **Sidebar entry.** Run this after the Sheet steps: it leaves the browser on the new Slides page.
+  Run `agent-browser find role button click --name "New" --exact --nth 0`,
+  then `agent-browser find role menuitem click --name "Slides"`. A dialog `Create Slides` has
+  a `File name` textbox (default `Untitled Slides`). Run
+  `agent-browser find label "File name" fill "Sidebar Slides"` and
+  `agent-browser find role button click --name "Create" --exact`. The URL becomes `$ORIGIN/nodes/<nodeId>`, a
+  `File created` toast shows, and `$V cli doc-new-sidebar-find space find "Sidebar Slides" --space "verify-$VERIFY_UVW_RUN/personal" --json`
+  returns a node with `unitType: "slide"` and `path: "/Sidebar Slides"`.
 
 ## Gotchas
 

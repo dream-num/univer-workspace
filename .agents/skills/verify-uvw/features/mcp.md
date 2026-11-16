@@ -45,7 +45,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MC2 finds SVG resources against the CLI.
 - MC3 exports one and two SVG resources and compares the text with the files the CLI writes.
 - MC4 preserves unknown handles in `failed` and an unknown registry error against the CLI.
-- MR1 lists the ten MCP Skills and compares shared get/full content with its source.
+- MR1 lists the twelve MCP Skills and compares shared get/full content with its source.
 - MR2 reads a shared Skill resource through `skills_read`, checks MCP read instructions, and confirms MCP core differs from CLI core.
 - MR3 and MR4 search and show Facade API symbols against the CLI and the reference library.
 - MR5 lists and reads Skill files as MCP resources against the CLI.
@@ -54,6 +54,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MR8 rejects a cursor reused with other arguments and an unknown Skill.
 - MR13 seeds personal and repository custom Skills and checks discovery sources, metadata, duplicate diagnostics and repository event attribution.
 - MR14 creates a Skill draft through MCP, publishes through an interactive HTTP Session, and reads the new Skill.
+- MR15 imports a pinned external Skill from GitHub as a draft and publishes it after browser review.
 - MA1 calls the gateway with the default personal access token (PAT) and records `auth_kind: pat`.
 - MA2 reads the protected-resource metadata without credentials.
 - MA3 refuses a write tool to a read-only PAT.
@@ -198,8 +199,8 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","screenshot","import","export","job_get","api_find","api_show","skills_read"]'
-FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","html_view_validate","html_view_create","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_validate","html_view_create","html_view_read","html_view_replace","html_view_draft_get"]'
+FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
 jq -e --argjson want "$FILES" 'map(.name) == $want' "$EVIDENCE/mcp-tools-files.out"
@@ -209,24 +210,24 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|screenshot|export|job_get|api_(find|show)|skills_read|blob_get|blob_download|asset_download|html_view_validate|export_markdown|print_pdf|lint|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|unit_(add|create)|file_upload_create|blob_upload|html_view_create|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|validate|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|share|unit_(add|create)|file_upload_create|skill_draft_create|blob_upload|html_view_(create|replace)|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:31]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:44]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
 jq -e 'all(.[]; .description | test("\\buvw\\b") | not)' "$EVIDENCE/mcp-tools-all.out"
-jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 11 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
+jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 13 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
 ```
 
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 31 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; no tool description
-names `uvw`; the 11 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
+first 44 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; no tool description
+names `uvw`; the 13 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -971,25 +972,26 @@ jq -e '.tool == "resources_find" and .outcome == "tool_error" and .error_code ==
 Pass when the failed handles equal the CLI's `failed` and the good handle is still returned in the MCP result, the unknown registry fails in
 MCP and CLI with the same code (`resource-registry-not-found`), and the event carries that code.
 
-**MR1. Skills list and get fallback.** MCP serves its own core and nine shared domain Skills.
+**MR1. Skills list and get fallback.** MCP serves its own `core`, `html-view-creator` and `skill-creator` and nine
+shared domain Skills.
 
 ```bash
 REF='const {createRequire}=require("node:module");const r=createRequire(process.cwd()+"/apps/mcp/package.json")("@univer-cli/api-reference").createStandardApiReference();'
 $V mcp mcp-skills-list skills_read
-jq -e '[.skills[].name] == ["base","blob","board","core","cross-unit-formula","doc","embed","html-view","sheet","slide"] and all(.skills[]; (.description | length) > 0)' "$EVIDENCE/mcp-skills-list.out"
+jq -e '[.skills[].name] == ["base","blob","board","core","cross-unit-formula","doc","embed","html-view-creator","html-view","sheet","skill-creator","slide"] and all(.skills[]; (.description | length) > 0)' "$EVIDENCE/mcp-skills-list.out"
 $V mcp mcp-skills-get skills_read '{"name":"html-view"}'
 $V mcp mcp-skills-full skills_read '{"name":"html-view","full":true}'
 test $? -eq 1
 jq -e '.code == "workspace-result-too-large"' "$EVIDENCE/mcp-skills-full.out"
 jq -e '.outcome == "tool_error" and .error_code == "workspace-result-too-large"' "$EVIDENCE/mcp-skills-full.event.json"
-$V mcp mcp-skills-board-full skills_read '{"name":"board","full":true}'
-node --input-type=module - "$EVIDENCE/mcp-skills-get.out" "$EVIDENCE/mcp-skills-board-full.out" <<'JS'
+$V mcp mcp-skills-doc-full skills_read '{"name":"doc","full":true}'
+node --input-type=module - "$EVIDENCE/mcp-skills-get.out" "$EVIDENCE/mcp-skills-doc-full.out" <<'JS'
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 const get = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 assert.equal(get.content, readFileSync('apps/cli/skill-data/html-view/SKILL.md', 'utf8'));
 const skill = JSON.parse(readFileSync(process.argv[3], 'utf8'));
-const root = 'apps/cli/skill-data/board/';
+const root = 'apps/cli/skill-data/doc/';
 assert.equal(skill.content, readFileSync(root + 'SKILL.md', 'utf8'));
 assert.ok(skill.files.length > 0);
 assert.equal(skill.files.length, skill.resources.length);
@@ -997,10 +999,10 @@ for (const file of skill.files) assert.equal(file.content, readFileSync(root + f
 JS
 ```
 
-Pass when the fallback lists ten names with descriptions, `html-view` get preserves
+Pass when the fallback lists twelve names with descriptions, `html-view` get preserves
 its source, and `html-view` full exits 1 with `workspace-result-too-large` in the result
-and event. Board full must exit 0 and preserve every shared file. HTML View's combined
-full result exceeds the 100,000-character result limit.
+and event. Doc full must exit 0 and preserve every shared file. The combined full results of HTML View and Board
+exceed the 100,000-character result limit, so `board` full also exits 1.
 
 **MR2. Skill resource and MCP core bindings.**
 
@@ -1055,14 +1057,16 @@ Pass when the result equals the library output, an unknown symbol is a `not-foun
 
 ```bash
 $V mcp-skills mcp-skills-extension
-jq -e '.supported and (.extensions | has("io.modelcontextprotocol/skills")) and (.skills | length == 10) and all(.skills[]; (.resources | type == "array") and all(.resources[]; (.uri | startswith("skill://univer-workspace/")) and (.digest | test("^sha256:[a-f0-9]{64}$"))))' "$EVIDENCE/mcp-skills-extension.out"
+jq -e '.supported and (.extensions | has("io.modelcontextprotocol/skills")) and (.skills | length == 12) and all(.skills[]; (.resources | type == "array") and all(.resources[]; (.uri | startswith("skill://univer-workspace/")) and (.digest | test("^sha256:[a-f0-9]{64}$"))))' "$EVIDENCE/mcp-skills-extension.out"
 diff <(jq -r '.skills[].frontmatter.name' "$EVIDENCE/mcp-skills-extension.out") <(jq -r '.skills[].name' "$EVIDENCE/mcp-skills-list.out")
 $V mcp-resources mcp-resources-list
 diff <(jq -r '.[].uri' "$EVIDENCE/mcp-resources-list.out" | sort) <(jq -r '.skills[].uri' "$EVIDENCE/mcp-skills-extension.out" | sort)
 jq -e 'all(.[]; .mimeType == "text/markdown")' "$EVIDENCE/mcp-resources-list.out"
-$V mcp-resource mcp-resource-core skill://univer-workspace/core/SKILL.md
-node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1]))[0].text)' "$EVIDENCE/mcp-resource-core.out" > "$EVIDENCE/mcp-resource-core.md"
-cmp "$EVIDENCE/mcp-resource-core.md" apps/mcp/skills/core/SKILL.md
+for n in core html-view-creator skill-creator; do
+  $V mcp-resource "mcp-resource-$n" "skill://univer-workspace/$n/SKILL.md"
+  node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1]))[0].text)' "$EVIDENCE/mcp-resource-$n.out" > "$EVIDENCE/mcp-resource-$n.md"
+  cmp "$EVIDENCE/mcp-resource-$n.md" "apps/mcp/skills/$n/SKILL.md"
+done
 for n in base blob board cross-unit-formula doc embed html-view sheet slide; do
   $V mcp-resource "mcp-resource-$n" "skill://univer-workspace/$n/SKILL.md"
   node -e 'const fs=require("node:fs");process.stdout.write(JSON.parse(fs.readFileSync(process.argv[1]))[0].text)' "$EVIDENCE/mcp-resource-$n.out" > "$EVIDENCE/mcp-resource-$n.md"
@@ -1078,7 +1082,7 @@ $V mcp-resource mcp-resource-missing skill://univer-workspace/core/references/mi
 test $? -eq 3
 ```
 
-Pass when the extension declares ten static Skills, the resource entry points match the catalog, MCP core equals its own source, all nine shared Skills equal their sources, both protocols read the same core, and admin connections expose the same catalog. Unknown resources exit 3. Resource and extension calls have no tool event file.
+Pass when the extension declares twelve static Skills, the resource entry points match the catalog, MCP core, `html-view-creator` and `skill-creator` equal their sources in `apps/mcp/skills`, all nine shared Skills equal their sources, both protocols read the same core, and admin connections expose the same catalog. Unknown resources exit 3. Resource and extension calls have no tool event file.
 
 **MR6. Server instructions.**
 
@@ -2723,7 +2727,7 @@ Pass when, for one SVG with Latin and Chinese text, left, centred and right-anch
 ### MR13 custom Skills
 
 Start the MCP run, run `user` and `doctor`, then seed one Skill in each layer.
-Run MR13 after MR1 or on a fresh run: MR1 expects only the ten built-in Skills.
+Run MR13 after MR1 or on a fresh run: MR1 expects only the twelve built-in Skills.
 The seeder creates missing folders and uploads files recursively. Re-runs skip existing
 Blob names and never delete or replace existing data. Use a new name to seed changed bytes.
 
@@ -2888,7 +2892,7 @@ The script replaces the executor allowlist with the run user's ID through `$V mc
 
 - MB1 compares ordered `tools/list` names for `core`, `files`, `admin`, `core,files`, `core,admin`, `files,admin` and `all` with literal expected lists in the script. These are the full lists minus `screenshot`, `print_pdf` and `lint`.
 - MB2 checks instructions for all seven connections and rejects those three hidden tool names.
-- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 40 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
+- MB3 registers another Workspace user through the public API and creates a PAT in memory. This user receives exactly 47 non-executor tools in registry order for `all`. `execute` fails identically to an unknown tool, `repo_list` succeeds, and instructions contain `Editing document contents is not enabled for this account`. No credential enters evidence.
 - MB4 runs MX1 through MX3 above with PAT authentication. It compares MCP and CLI write/readback results, checks cold/warm usage events, verifies the Ready error, runs doctor, and stops only this run's executor to check the unavailable error. A `finally` restarts it even after a failed assertion.
 - MB5 checks `/readyz` for 200. It stops the executor, then uses `$V mcp-gateway-restart` to recreate only the gateway and clear its remembered capabilities. `/readyz` must return 503 naming the `executor` check, then 200 within ten seconds after the executor restarts. Stopping an executor after successful discovery alone does not make the gateway unready, because HTTP tools remain usable. The optional Workspace stop/restart check is recorded as not run because `verify-uvw` has no independent server restart command. A base older than `/readyz` (#276) returns 404 and records MB5 as `not_run` in `mb.json`; it does not claim readiness passed. Other unexpected statuses fail the script.
 
@@ -2901,12 +2905,12 @@ $V mcp-allow-users someone-else
 $V mcp-tools --toolsets all mb-star-before
 $V mcp-allow-users '*'
 $V mcp-tools --toolsets all mb-star-after
-jq -e 'map(.name) | index("execute") == null and length == 40' "$EVIDENCE/mb-star-before.out"
-jq -e 'map(.name) | index("execute") != null and length == 51' "$EVIDENCE/mb-star-after.out"
+jq -e 'map(.name) | index("execute") == null and length == 47' "$EVIDENCE/mb-star-before.out"
+jq -e 'map(.name) | index("execute") != null and length == 62' "$EVIDENCE/mb-star-after.out"
 $V doctor
 ```
 
-Pass when the run user, outside an explicit allowlist, gets the 40 non-executor tools, then all 51 renderer-less tools with
+Pass when the run user, outside an explicit allowlist, gets the 47 non-executor tools, then all 62 renderer-less tools with
 `*`, and doctor reports the allowlist matches the run. Running `$V user` again keeps `*`.
 
 `VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.

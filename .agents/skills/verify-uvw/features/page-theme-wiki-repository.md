@@ -3,7 +3,7 @@
 A signed-in user picks the page theme in Application settings. `Repository` (the default) is a
 repository-style workspace with a top bar (OfficeLab mark, search, Home, Pull requests, Issues,
 Recent and Pages) over the same data. `Wiki` is a file-tree workspace with a sidebar of Personal
-Space, Team Spaces and Apps. The choice is stored per browser and survives a reload.
+Space, Team Spaces and Pages. The choice is stored per browser and survives a reload.
 
 ## Sub-features
 
@@ -92,11 +92,13 @@ Preconditions:
   `find` may report two matches. On `/repositories` use the placeholder `Find a name or description…`.
 - Issues and pull requests share `#N`. After creating Issue `#1`, the seeded PR is `#2`, not
   `#1`. Take the number from `pr create --json`.
-- `/repositories` writes its search into the URL (`?q=`). The `/worktrees` search box does not
-  change the URL, so do not assert on it.
+- `/repositories` writes its search into the URL (`?q=`) as you type. The `/worktrees` search box changes
+  the URL only when its form submits (`/worktrees?q=…`). `agent-browser press Enter` in the box did not
+  submit it, so assert on the list, or submit with
+  `agent-browser eval 'document.querySelector("form.repository-toolbar").requestSubmit()'`.
 - The slug in `New repository` is derived from the name (`UI Created` becomes `ui-created`).
   Proof is the `repo list` readback, not the toast or the redirect.
 - The `Page theme` buttons are named exactly `Wiki` and `Repository`; there is no `(experimental)`
   suffix any more.
 - The Repository top bar also has icon links `Issues` and `Pull requests` beside `Main navigation`, so
-  `find role link --name "Issues"` matches twice, and a `Light`/`Dark` color-scheme button sits before `Account`.
+  `find role link --name "Issues"` matches twice, and a `Light`/`Dark` color-scheme button and an `Agents` button sit before `Account`.

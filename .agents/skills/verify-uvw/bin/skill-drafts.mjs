@@ -9,7 +9,7 @@ assert(
   ["create", "replace", "check"].includes(action),
   "Usage: skill-drafts.mjs create|replace|check",
 );
-const run = `${process.env.VERIFY_UVW_ROOT}/${process.env.VERIFY_UVW_RUN}`;
+const run = `${process.env.VERIFY_UVW_ROOT ?? "/tmp/verify-uvw"}/${process.env.VERIFY_UVW_RUN}`;
 const origin = process.env.ORIGIN;
 const evidence = process.env.EVIDENCE;
 assert(origin && evidence && process.env.VERIFY_UVW_RUN, 'Run eval "$($V env)" first');

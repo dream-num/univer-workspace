@@ -21,6 +21,11 @@ and the model can read instructions on demand without changing earlier request p
 - AS13 permits explicit manual-only invocation and resource reads, but denies model invocation.
 - AS14 hides model-only skills from the menu while allowing model reads.
 - AS15 queues slash text as steering while a slow model step runs.
+- AS16 reviews a valid HTTP draft with Markdown, its file rows, a verified quote and an omitted fake quote.
+- AS17 blocks publication for invalid frontmatter and explains why.
+- AS18 compares a replacement against current files and lists files moved to Trash.
+- AS19 publishes through the browser, discovers the Skill in the slash menu and verifies its invocation body in the mock request.
+- AS20 rejects through the browser and reads back the rejected state.
 - AS21 invokes the built-in skill-creator, interviews, creates a real draft in Auto and publishes it.
 - AS22 denies the same draft creation in Ask with the switch-to-Auto message.
 
@@ -162,14 +167,15 @@ repo
 send 'AS3 catalog please.'
 agent-browser wait --text 'AS3 complete.'
 shot as3-collapsed
-agent-browser find role button click --name 'Show 1 more skills'
+agent-browser find role button click --name 'Show 3 more Skills' --exact
 shot as3-expanded
-agent-browser find role button click --name 'Show fewer skills'
+agent-browser find role button click --name 'Show fewer skills' --exact
 shot as3-collapsed-again
 ```
 
-Pass when exactly three skills appear initially, all four appear after expansion,
-and three remain after collapse. The button's `aria-expanded` follows the state.
+Pass when exactly three skills appear initially, all six appear after expansion (the four seeded skills
+plus the user-invocable built-ins `html-view-creator` and `skill-creator`), and three remain after
+collapse. The button's `aria-expanded` follows the state.
 
 **AS4. Model reads a skill.**
 
@@ -208,7 +214,7 @@ agent-browser wait --text 'AS6 complete.'
 shot as6
 node "$A" requests "$EVIDENCE/as4-requests.jsonl" | tee "$EVIDENCE/as6-requests.txt"
 node "$A" prefix "$EVIDENCE/as4-requests.jsonl" 3 4 | tee "$EVIDENCE/as6-prefix.txt"
-agent-browser find role button click --name 'Show 3 more skills'
+agent-browser find role button click --name 'Show 5 more Skills' --exact
 shot as6-expanded
 ```
 
@@ -316,10 +322,9 @@ agent-browser wait --text 'AS9 complete.'
 agent-browser snapshot -i -c
 ```
 
-Expand the rail. The count includes earlier journeys' valid skills. Save the expanded rail and requests.
+The rail always shows diagnostics in its **Needs attention** section, without expanding. Save the rail and requests.
 
 ```bash
-agent-browser click 'aside.agent-session-rail button.agent-steps-window'
 agent-browser wait --text Overridden
 shot as9
 node "$A" requests "$EVIDENCE/as9-requests.jsonl" | tee "$EVIDENCE/as9-requests.txt"
@@ -327,7 +332,7 @@ $V mcp as9-catalog skills_read "{\"repo\":\"$REPO\"}"
 jq -e '([.diagnostics[].problem] | sort) == ["invalid-skill","reserved-name","shadowed"] and ([.skills[] | select(.name == "as9-shadow") | .source] == ["repository"])' "$EVIDENCE/as9-catalog.out"
 ```
 
-Pass when the expanded rail lists **Overridden**, **Built-in name reserved**, and **Invalid skill**,
+Pass when **Needs attention** lists **Overridden**, **Built-in name reserved**, and **Invalid skill**,
 each with its `.agents/skills/.../SKILL.md` path. The reminder has exactly one
 `as9-shadow (repository)` entry, no user shadow, no `sheet`, and no `as9-invalid`.
 
@@ -491,39 +496,7 @@ wait "$MODEL_PID" || true
 $V down
 ```
 
-## Gotchas
-
-- Wait for **Settings saved** before closing Model settings. Use fresh snapshot refs
-  for the new provider's key and Save button. Broad selectors can hit the DeepSeek
-  form or fail while the provider form changes state.
-- The Lexical composer reports typing through `beforeinput`, not `input`. Use `edit`
-  to select all and delete through keyboard commands before filling. `agent-browser fill`
-  can append when the Lexical editor already contains text. Setting `textContent` and
-  dispatching `input` does not update its state. The follow-up composer is a textarea.
-- The menu caches catalogs for its scope while the page lives. Reload the page after
-  seeding a skill when testing menu discovery. Each run fetches a fresh catalog.
-- If a skill is deleted after menu selection but before sending, the fresh run catalog
-  no longer matches it. The message is sent as plain text. If it disappears after
-  catalog loading but during its by-name read, the run reports a read error.
-- Approval flows are unreachable in this browser journey because publish tools are not
-  in the browser Agent's core toolset. Do not script a publish tool as an approval test.
-- Compare system messages across instances only after replacing each instance's Space
-  IDs. For example, `node "$A" system trunk.jsonl:1 head.jsonl:1 --replace "$TRUNK_SPACE=SPACE" --replace "$HEAD_SPACE=SPACE"`.
-  `prefix` compares within a session and does not normalize anything.
-- A browser renderer can go blank and drop session storage. Re-sign-in and re-add the
-  provider before continuing, then start that journey with a new mock log label.
-- Mock cache counts are synthetic. A 50% UI ratio proves usage display, while
-  `agent-requests prefix` proves the actual message, system, and tool invariants.
-- Requests include full prompts and tool output. Keep the JSONL logs in local evidence.
-  Never add real provider credentials to a mock script or evidence.
-
-## Skill draft review and publication
-
-- AS16 reviews a valid HTTP draft with Markdown, an expandable reference, a verified quote and an omitted fake quote.
-- AS17 blocks publication for invalid frontmatter and explains why.
-- AS18 compares a replacement against current files and lists files moved to Trash.
-- AS19 publishes through the browser, discovers the Skill in the slash menu and verifies its invocation body in the mock request.
-- AS20 rejects through the browser and reads back the rejected state.
+### Skill draft review and publication
 
 Run with MCP and the same-origin proxy enabled, as for AS1. Choose free ports with
 `lsof` and keep one persistent shell for the instance and mock provider. Use the
@@ -540,21 +513,22 @@ node "$B/skill-drafts.mjs" create | tee "$EVIDENCE/sb2-create.txt"
 ```
 
 **AS16. Review evidence.** Open `draft.previewPath` from `sb2-draft.json` at
-`$ORIGIN`. Wait for **Partially available**, rendered **Browser draft** and
-**1 unverified**. Expand `references/guide.md` and capture `sb2-review.png`.
+`$ORIGIN`. Wait for **Partly works in Workspace**, rendered **Browser draft** and
+**1 unverified**. Files are rows (`references/guide.md 60 B`) that load into one viewer with
+**Preview** and **Source**. Capture `sb2-review.png`.
 The verified finding links to `SKILL.md:9`, quotes the real instruction and gives
-its impact and suggestion. Click that link. Source lines expand and line 9 gains
+its impact and suggestion. Click that link. Line 9 of the source gains
 focus. Save `sb2-finding-line.png`. The Skill description appears under the page title. Preview starts at the Markdown
 body, without YAML frontmatter. Click **Source** and verify it retains the original
 frontmatter; the source line numbers and replacement diff also use the raw text.
-The English headline uses **1 issue found** for one finding.
 The fake quote is absent, the destination is
-`.agents/skills/sb2-review/`, and **Publish** is enabled.
+`.agents/skills/sb2-review`, and **Publish** is enabled.
 
 **AS17. Invalid frontmatter.** Open the path in `sb2-invalid.json`. Capture
-`sb2-invalid.png`. **Blocking** lists `frontmatter-invalid`, **Publish** is disabled,
-and **Resolve the blocking findings before publishing.** explains the disabled
-control. No files have been published.
+`sb2-invalid.png`. The decision heading is **Cannot publish**, the **Blocking** finding is
+**Invalid Skill details**, **Publish** is disabled, and its `aria-describedby` text
+**1 blocking finding. Ask the Agent to revise the draft.** explains the disabled control.
+No files have been published.
 
 **AS19. Publish and invoke.** Return to the AS16 draft and click **Publish**.
 Wait for **Published**, reload and capture `sb2-published.png`. Click **Agents**
@@ -577,10 +551,11 @@ only verify usage display.
 node "$B/skill-drafts.mjs" replace | tee "$EVIDENCE/sb2-replace.txt"
 ```
 
-Open the path from `sb2-replace.json` and capture `sb2-replace.png`. The `SKILL.md`
-Changes section shows `- SB2_SKILL_BODY` and `+ SB2_REVISED_BODY`.
-**Files moved to Trash on publish** lists `references/guide.md`. The helper checks
-that the complete replacement base contains two files. Leave this draft pending.
+Open the path from `sb2-replace.json`, click **Changes** (the view starts on **Preview**) and capture
+`sb2-replace.png`. `SKILL.md` shows `−SB2_SKILL_BODY` (U+2212 minus) and `+SB2_REVISED_BODY`.
+The **Files** heading reads `1 removed · 0 kept`, and the `references/guide.md` row carries a `removed`
+chip: it moves to Trash on publish. The helper checks that the complete replacement base contains two
+files. Leave this draft pending.
 
 **AS20. Reject.** Open the path in `sb2-reject.json`, click **Reject**, wait for
 **Rejected**, reload and capture `sb2-rejected.png`. Read both decisions back
@@ -596,7 +571,7 @@ $V down
 The helper asserts the AS19 draft is `published` and AS20 draft is `rejected`.
 Keep JSON readbacks, screenshots, mock JSONL and summary text with the run evidence.
 
-## Built-in Skill authoring
+### Built-in Skill authoring
 
 Use the AS1 provider and shell helpers with an MCP image built from this checkout.
 Use free ports and a disposable run, for example server 3933, Vite 5983 and MCP 3943
@@ -640,9 +615,7 @@ containing the observed preview URL and the instruction to publish there. Send
 scripts and logs, including the initial interview log, as evidence.
 
 Open that URL, capture `as21-draft.png`, click **Publish**, wait for **Published**,
-reload and capture `as21-published.png`. If this checkout lacks the draft page,
-record the missing route and publish through the public HTTP decision endpoint
-using the author's interactive Session, then read back the published state.
+reload and capture `as21-published.png`.
 Reload Home, type `/as21` and capture `as21-published-menu.png`. Its personal
 `/as21-weekly` option proves that publication entered live discovery.
 
@@ -659,3 +632,29 @@ request summary. The tool result must say `This connection is not authorized for
 write access. In the Workspace Agent's Ask mode, switch to Auto and try again.`
 No successful draft result may appear. Stop this
 run's mock and use `verify-uvw down` after collecting evidence.
+
+## Gotchas
+
+- Wait for **Settings saved** before closing Model settings. Use fresh snapshot refs
+  for the new provider's key and Save button. Broad selectors can hit the DeepSeek
+  form or fail while the provider form changes state.
+- The Lexical composer reports typing through `beforeinput`, not `input`. Use `edit`
+  to select all and delete through keyboard commands before filling. `agent-browser fill`
+  can append when the Lexical editor already contains text. Setting `textContent` and
+  dispatching `input` does not update its state. The follow-up composer is a textarea.
+- The menu caches catalogs for its scope while the page lives. Reload the page after
+  seeding a skill when testing menu discovery. Each run fetches a fresh catalog.
+- If a skill is deleted after menu selection but before sending, the fresh run catalog
+  no longer matches it. The message is sent as plain text. If it disappears after
+  catalog loading but during its by-name read, the run reports a read error.
+- These journeys do not cover tool approval. The `share` tool (publish scope) is in the core toolset the
+  browser Agent receives; an approval test needs its own journey.
+- Compare system messages across instances only after replacing each instance's Space
+  IDs. For example, `node "$A" system trunk.jsonl:1 head.jsonl:1 --replace "$TRUNK_SPACE=SPACE" --replace "$HEAD_SPACE=SPACE"`.
+  `prefix` compares within a session and does not normalize anything.
+- A browser renderer can go blank and drop session storage. Re-sign-in and re-add the
+  provider before continuing, then start that journey with a new mock log label.
+- Mock cache counts are synthetic. A 50% UI ratio proves usage display, while
+  `agent-requests prefix` proves the actual message, system, and tool invariants.
+- Requests include full prompts and tool output. Keep the JSONL logs in local evidence.
+  Never add real provider credentials to a mock script or evidence.
