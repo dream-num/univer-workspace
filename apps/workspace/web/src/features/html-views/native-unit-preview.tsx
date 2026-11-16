@@ -15,8 +15,8 @@ export function useNativeUnitPreview(source: string, identityKey: string, writeM
   const root = useRef<HTMLDivElement>(null);
   const viewerRoot = useRef<HTMLDivElement>(null);
   const nativeFrame = useRef<HTMLIFrameElement>(null);
-  const nonce = useMemo(() => crypto.randomUUID(), [source, identityKey]);
-  const html = useMemo(() => enabled ? withNativePreviewClient(source, nonce) : source, [source, nonce, enabled]);
+  const nonce = useMemo(() => crypto.randomUUID(), [source, identityKey, enabled]);
+  const html = useMemo(() => withNativePreviewClient(source, nonce, enabled), [source, nonce, enabled]);
   const [request, setRequest] = useState<(PreviewRequest & { generation: string }) | null>(null);
   const [opened, setOpened] = useState<Opened | null>(null);
   const [error, setError] = useState(false);
@@ -37,13 +37,23 @@ export function useNativeUnitPreview(source: string, identityKey: string, writeM
 
   useEffect(() => {
     setRequest(null); setSharing(false);
-    if (!enabled) return;
     const receive = (event: MessageEvent) => {
+      const data = event.data;
+      if (data?.channel !== HTML_PREVIEW_CHANNEL || data?.nonce !== nonce) return;
       const frame = findHtmlFrame(viewerRoot.current);
       // Opaque sandbox origins are not identity. Pin the actual viewer Window and generation.
       if (!frame || event.source !== frame.contentWindow) return;
-      const data = event.data;
-      if (data?.channel === HTML_PREVIEW_CHANNEL && data?.nonce === nonce && data?.action === "write-mode" &&
+      if (data.action === "open-external-link") {
+        const tree = frame.getRootNode() as Document | ShadowRoot;
+        if (!navigator.userActivation?.isActive || tree.activeElement !== frame || typeof data.href !== "string") return;
+        const url = URL.parse(data.href);
+        if (url && (url.protocol === "https:" || url.protocol === "http:") && url.origin !== location.origin) {
+          window.open(url.href, "_blank", "noopener,noreferrer");
+        }
+        return;
+      }
+      if (!enabled) return;
+      if (data.action === "write-mode" &&
           typeof data.unitId === "string" && /^[\w-]{1,128}$/.test(data.unitId) &&
           typeof data.requestId === "string" && /^[\w-]{1,128}$/.test(data.requestId)) {
         frame.contentWindow?.postMessage({ channel: HTML_PREVIEW_CHANNEL, nonce, action: "write-mode",

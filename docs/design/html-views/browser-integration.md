@@ -38,6 +38,12 @@ SDK 自身包含 iframe 程序，管理 iframe sandbox、CSP、握手与 Message
 `https://cdn.jsdelivr.net`，用于按需加载 ECharts 等前端库。其他外部来源需要宿主显式配置。
 身份、授权和协同配置保留在宿主侧。
 
+内嵌页面中的跨源 HTTP(S) 链接默认在新标签页打开，例如
+`<a href="https://example.com/report">查看报告</a>`。也可显式写 `target="_blank"`。
+Workspace 宿主在用户点击或通过键盘激活链接后打开目标，使用 `noopener,noreferrer`。
+该行为适用于普通视图、沉浸视图和草稿预览。页内锚点、同源导航、下载链接、
+已取消的点击和显式指定其他 target 的链接继续采用原页面行为。
+
 ### 引用 Workspace 中的媒体文件
 
 `<video>`、`<audio>`、`<source>` 与 `<img>` 可以写 `data-workspace-src="<nodeId>"` 引用

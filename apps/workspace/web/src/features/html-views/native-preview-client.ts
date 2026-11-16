@@ -2,7 +2,18 @@ import { HTML_PREVIEW_CHANNEL } from "./native-preview-protocol";
 import type { HtmlViewWriteMode } from "@univerjs/univer-workspace-html-viewer/engine";
 
 /** Serialized into the untrusted template. This function must have no module closures. */
-function previewClient(channel: string, nonce: string) {
+function previewClient(channel: string, nonce: string, workspaceOrigin: string, nativePreview: boolean) {
+  const openExternalLink = (event: MouseEvent) => {
+    if (!event.isTrusted || event.defaultPrevented || event.button !== (event.type === "auxclick" ? 1 : 0)) return;
+    const link = event.composedPath().find((node): node is HTMLAnchorElement => node instanceof HTMLAnchorElement);
+    if (!link || link.hasAttribute("download") || (link.target && link.target.toLowerCase() !== "_blank")) return;
+    if (!["http:", "https:"].includes(link.protocol) || link.origin === workspaceOrigin) return;
+    event.preventDefault();
+    parent.postMessage({ channel, nonce, action: "open-external-link", href: link.href }, workspaceOrigin);
+  };
+  window.addEventListener("click", openExternalLink);
+  window.addEventListener("auxclick", openExternalLink);
+  if (!nativePreview) return;
   let slot: HTMLElement | null = null;
   let unitId = "";
   let requestId = "";
@@ -72,10 +83,11 @@ function previewClient(channel: string, nonce: string) {
 }
 
 /** Add Workspace navigation only; SDK still owns sandbox, binding runtime and CSP. */
-export function withNativePreviewClient(source: string, nonce: string): string {
+export function withNativePreviewClient(source: string, nonce: string, nativePreview: boolean): string {
   const document = new DOMParser().parseFromString(source, "text/html");
   const script = document.createElement("script");
-  script.textContent = `(${previewClient.toString()})(${JSON.stringify(HTML_PREVIEW_CHANNEL)},${JSON.stringify(nonce)});`;
+  const args = [HTML_PREVIEW_CHANNEL, nonce, window.location.origin, nativePreview];
+  script.textContent = `(${previewClient.toString()})(...${JSON.stringify(args)});`;
   document.head.prepend(script);
   return `<!doctype html>\n${document.documentElement.outerHTML}`;
 }
