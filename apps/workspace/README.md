@@ -550,6 +550,7 @@ application Services, the server entry point prepares the Collaboration file:
    startup fails before the backup. An idle rollback-journal connection holds no
    lock and cannot be detected, so step 1 remains required.
 3. The server runs the published SDK migrations on a staging copy while holding the lock.
+   Allow disk space for the pre-upgrade backup, the staging copy, and one temporary component backup.
    Schema validation, `foreign_key_check`, and
    `integrity_check` must pass before the copy atomically replaces the original.
    A failed migration leaves the original database, its journal mode, and the

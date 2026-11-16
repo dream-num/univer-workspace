@@ -1,26 +1,32 @@
 import type { UnitCreationFactsReader } from "../../../db/index.js";
 import { startupStage, startupStageAsync } from "../../../logging/startup.js";
 import { randomUUID } from "node:crypto";
-import { chmodSync, copyFileSync, existsSync, renameSync, rmSync, statSync } from "node:fs";
+import {
+  chmodSync,
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from "node:fs";
+import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import {
   SQLiteDatabaseAdapter,
-  migrateSQLiteCoreV1ToV2,
-  migrateSQLiteCoreV2ToV3,
-  migrateSQLiteCoreV3ToV4,
+  migrateSQLiteCore,
 } from "@univerjs-pro/collaboration-database-sqlite";
 import {
   SQLiteWorktreeDatabaseAdapter,
-  migrateSQLiteWorktreeV1ToV2,
-  migrateSQLiteWorktreeV2ToV3,
-  migrateSQLiteWorktreeV3ToV4,
+  migrateSQLiteWorktree,
 } from "@univerjs-pro/collaboration-worktree-database-sqlite";
 import {
   SQLiteHistoryDatabaseAdapter,
-  migrateSQLiteHistoryV1ToV2,
+  migrateSQLiteHistory,
 } from "@univerjs-pro/collaboration-history-database-sqlite";
 import { readUnitCreationFacts } from "./unit-creation-facts.js";
 
+// Read-only startup preflight. The SDK migration entry points open writable connections.
 const TARGET = { core: 4, worktree: 4, history: 2, comment: 1 } as const;
 
 type ComponentVersions = ReadonlyMap<string, number>;
@@ -46,7 +52,9 @@ export async function prepareCollaborationDatabase(
   const source = new DatabaseSync(filename);
   try {
     source.exec("PRAGMA busy_timeout = 5000");
-    const versions = startupStage("collaboration.versions.read", () => readComponentVersions(source));
+    const versions = startupStage("collaboration.versions.read", () =>
+      readComponentVersions(source),
+    );
     if (!versions) return { status: "fresh" };
     if (
       !Object.entries(TARGET).some(([component, target]) => {
@@ -145,10 +153,8 @@ async function migrateCopy(
   productFacts: UnitCreationFactsReader,
   journalMode: string,
 ): Promise<string> {
-  const coreVersion = versions.get("core") ?? TARGET.core;
-  const worktreeVersion = versions.get("worktree") ?? TARGET.worktree;
   const creation =
-    coreVersion === 1 || worktreeVersion < 3
+    versions.get("core") === 1 || (versions.get("worktree") ?? TARGET.worktree) < 3
       ? await startupStageAsync("collaboration.creation-facts.read", () =>
           readUnitCreationFacts(source, productFacts, Date.now()),
         )
@@ -157,56 +163,44 @@ async function migrateCopy(
   startupStage("collaboration.backup", () => source.prepare("VACUUM INTO ?").run(backupFilename));
   chmodSync(backupFilename, 0o600);
 
-  const stagedFilename = `${backupFilename}.migrating`;
+  const stagingDirectory = `${backupFilename}.migrating`;
+  const stagedFilename = join(stagingDirectory, "collaboration.sqlite");
+  const options = {
+    filename: stagedFilename,
+    backupFilename: join(stagingDirectory, "component.bak"),
+  };
   try {
+    mkdirSync(stagingDirectory, { mode: 0o700 });
     startupStage("collaboration.staging.copy", () => copyFileSync(backupFilename, stagedFilename));
-    if (coreVersion === 1 && creation)
-      await startupStageAsync("collaboration.core.v1-to-v2", () =>
-        migrateSQLiteCoreV1ToV2({
-          filename: stagedFilename,
-          resolveUnitCreation: creation.resolveUnitCreation,
-        }),
-      );
-    if (worktreeVersion === 1)
-      startupStage("collaboration.worktree.v1-to-v2", () =>
-        migrateSQLiteWorktreeV1ToV2({ filename: stagedFilename }),
-      );
-    if (worktreeVersion < 3 && creation)
-      await startupStageAsync("collaboration.worktree.v2-to-v3", () =>
-        migrateSQLiteWorktreeV2ToV3({
-          filename: stagedFilename,
-          resolveUnitCreation: creation.resolveWorktreeUnitCreation,
-        }),
-      );
-    // Core and Worktree migrations must read V1 History creation facts first.
-    if (versions.get("history") === 1)
-      await startupStageAsync("collaboration.history.v1-to-v2", () =>
-        migrateSQLiteHistoryV1ToV2({ filename: stagedFilename }),
-      );
-    // Core v3 (SDK 1.4.0) re-encodes protocol payloads as MessagePack and keeps
-    // hard-deleted Units as marker rows instead of a tombstone table. It reads
-    // no other component, so it runs after they have read the v2 Core tables.
-    if (coreVersion < 3)
-      await startupStageAsync("collaboration.core.v2-to-v3", () =>
-        migrateSQLiteCoreV2ToV3({ filename: stagedFilename }),
-      );
 
-    if (coreVersion < 4)
-      await startupStageAsync("collaboration.core.v3-to-v4", () =>
-        migrateSQLiteCoreV3ToV4({ filename: stagedFilename }),
-      );
-    if (worktreeVersion < 4)
-      startupStage("collaboration.worktree.v3-to-v4", () =>
-        migrateSQLiteWorktreeV3ToV4({ filename: stagedFilename }),
-      );
-
-    // Public Adapter constructors validate their own schema fingerprints. They
-    // also initialize components missing from older deployments on the copy.
-    for (const [component, Adapter] of [
-      ["core", SQLiteDatabaseAdapter],
-      ["worktree", SQLiteWorktreeDatabaseAdapter],
-      ["history", SQLiteHistoryDatabaseAdapter],
+    // Core and Worktree consume legacy creation facts before History replaces its V1 rows.
+    for (const [component, migrate, Adapter] of [
+      [
+        "core",
+        () =>
+          migrateSQLiteCore({
+            ...options,
+            ...(creation && { resolveUnitCreation: creation.resolveUnitCreation }),
+          }),
+        SQLiteDatabaseAdapter,
+      ],
+      [
+        "worktree",
+        () =>
+          migrateSQLiteWorktree({
+            ...options,
+            ...(creation && { resolveUnitCreation: creation.resolveWorktreeUnitCreation }),
+          }),
+        SQLiteWorktreeDatabaseAdapter,
+      ],
+      ["history", () => migrateSQLiteHistory(options), SQLiteHistoryDatabaseAdapter],
     ] as const) {
+      if (versions.has(component)) {
+        await startupStageAsync(`collaboration.${component}.migrate`, migrate);
+        // The whole-file backup is authoritative. Reuse scratch space between SDK backups.
+        rmSync(options.backupFilename, { force: true });
+      }
+      // The constructor also initializes components absent from older deployments.
       await startupStageAsync(`collaboration.adapter.${component}.validate`, async () => {
         await new Adapter({ filename: stagedFilename }).dispose();
       });
@@ -227,8 +221,7 @@ async function migrateCopy(
       { cause: error },
     );
   } finally {
-    for (const suffix of ["", "-wal", "-shm", "-journal"])
-      rmSync(`${stagedFilename}${suffix}`, { force: true });
+    rmSync(stagingDirectory, { recursive: true, force: true });
   }
 }
 

@@ -31,7 +31,7 @@ Worktree 和 Merge Preview 不读取或写入 Trunk History。
 启动入口先将产品数据库准备到 V21，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
-一致性备份。旧版 Core 和 Worktree 在暂存副本上完成创建信息迁移后，才升级 History，随后执行 Core 的载荷转换及 V4 元数据迁移。
+一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
 通过 Adapter Schema 校验、外键和完整性检查后原子替换文件，并保持原 journal mode。失败
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建

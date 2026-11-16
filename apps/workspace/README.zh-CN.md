@@ -243,7 +243,7 @@ docker run --name univer-workspace \
 
 1. 停止**所有**会写入 Workspace 的旧实例，备份产品数据库、协同 SQLite 文件和 Blob 存储。Kubernetes 部署使用单副本及 `Recreate` 策略。
 2. 启动一个新实例。服务先将产品数据库准备到 V21，再读取协同组件版本。需要迁移时，服务获取排他锁，检查源文件的完整性和外键，并在数据库旁创建一致性备份 `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak`。如果其他进程仍打开 WAL 模式的文件或持有任何锁，启动会在备份前失败。空闲的 rollback-journal 连接不持锁，无法通过锁检测，因此必须执行第 1 步。
-3. 服务持锁期间，在暂存副本上执行已发布的 SDK 迁移。Schema 校验、`foreign_key_check` 和 `integrity_check` 全部通过后，才用副本原子替换原文件。如果迁移失败，服务在接收流量前终止启动，原库、日志模式和备份均保留。
+3. 服务持锁期间，在暂存副本上执行已发布的 SDK 迁移。为升级前备份、暂存副本和一份临时组件备份预留磁盘空间。Schema 校验、`foreign_key_check` 和 `integrity_check` 全部通过后，才用副本原子替换原文件。如果迁移失败，服务在接收流量前终止启动，原库、日志模式和备份均保留。
 4. 确认启动正常、文档和 Worktree 均可访问后，恢复服务。后续启动只读取组件版本，无需重复完整性和外键扫描、迁移或备份。
 
 支持从 Core V1–V3、Worktree V1–V3 和 History V1 升级。新数据库由当前适配器初始化。迁移优先从 History V1 的修订 1 读取 Unit 创建者和时间，缺失时查询产品数据库。主线 Unit 取其 Trunk Node，Worktree 内创建的 Unit 取对应的节点意图。两个来源均缺少信息时，以 `anonymous` 和迁移时间补缺，不能据此还原真实的创建信息。Changeset 时间沿用 SDK 默认值。
