@@ -112,7 +112,7 @@ with a generic error and close control. Close and reopen to retry.
   HTML cannot grant editing. Anonymous previews have no export action.
 - Targets are published **Trunk** Units. This interface does not select draft or
   merge-preview scopes, and the HTML Blob remains outside Unit Worktree review.
-- The template can supply only identity, geometry and bounded navigation. It
+- For an Office preview the template can supply only identity, geometry and bounded navigation. It
   cannot supply a URL, user, permission, editor mode, SDK command, or credential.
 - HTML remains inside the SDK's opaque-origin sandbox. The host pins messages to
   that viewer's actual iframe Window and per-source nonce. Placement is constrained

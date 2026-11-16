@@ -424,8 +424,10 @@ HTML 与引用来源继续分别鉴权，无专用匿名授权规则。
 The Browser's `features/html-views` owns a narrow template navigation bridge and
 one clipped native preview surface per HTML viewer. The shared HTML viewer and
 SDK continue to own the binding runtime, sandbox and save lifecycle. Template
-messages are pinned to the renderer frame and source generation; they carry only
-Unit identity, geometry and bounded navigation, never URLs or authority.
+messages are pinned to the renderer frame and source generation. Office preview
+requests carry Unit identity, geometry and bounded navigation. A separate link
+action opens cross-origin HTTP(S) destinations in a new tab while the viewer
+has focus and the browser reports transient user activation.
 
 `features/resources/native-unit-open.ts` resolves and opens each target through
 existing product APIs. `/preview/$unitId` repeats authorization and mounts the

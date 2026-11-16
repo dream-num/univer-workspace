@@ -7,6 +7,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, expect, it, vi } from "vitest";
 import type { WorkspaceHtmlViewer } from "@univerjs/univer-workspace-html-viewer";
 import { LanguageProvider } from "../../shared/i18n";
+import { HTML_PREVIEW_CHANNEL } from "./native-preview-protocol";
 
 const mocks = await vi.hoisted(async () => {
   const { execFileSync } = await import("node:child_process");
@@ -19,7 +20,7 @@ const mocks = await vi.hoisted(async () => {
   ], { encoding: "utf8" }).trim());
   return { core: resolvePeer("@univerjs/core"), facade: resolvePeer("@univerjs/core/facade"),
     binding: resolvePeer("@univerjs-labs/binding-engine"),
-    collaborationUI: resolvePeer("@univerjs-pro/collaboration-client-ui"), bridge: vi.fn((source: string) => source + "<!-- native bridge -->"), GET: vi.fn(), POST: vi.fn(), render: vi.fn(), cell: vi.fn(), flush: vi.fn(), editable: vi.fn(),
+    collaborationUI: resolvePeer("@univerjs-pro/collaboration-client-ui"), bridge: vi.fn((source: string, _nonce: string, _nativePreview: boolean) => source + "<!-- navigation bridge -->"), GET: vi.fn(), POST: vi.fn(), render: vi.fn(), cell: vi.fn(), flush: vi.fn(), editable: vi.fn(),
     service: { setCurrentUser: vi.fn(), dispose: vi.fn(), updatePermissionPoint: vi.fn() } };
 });
 vi.mock("../../shared/api/client", () => ({ api: { GET: mocks.GET, POST: mocks.POST } }));
@@ -69,8 +70,8 @@ it.each([true, false])("renders draft=%s with the real engine's write policy and
   const markup = renderToStaticMarkup(createElement(LanguageProvider, null,
     createElement(HtmlView, { source, draft, immersive: true, actionsContainer: null })));
   const props: ComponentProps<typeof WorkspaceHtmlViewer> = mocks.render.mock.calls[0]![0];
-  expect(props.source === source).toBe(draft);
-  expect(mocks.bridge).toHaveBeenCalledTimes(draft ? 0 : 1);
+  expect(props.source).toBe(mocks.bridge.mock.results[0]!.value);
+  expect(mocks.bridge).toHaveBeenCalledWith(source, expect.any(String), !draft);
   if (draft) expect(markup).toContain("Draft, not published. Preview changes are not saved.");
   const engine = await props.loadEngine("unit", new AbortController().signal);
   expect(engine).toMatchObject({ writeMode: draft ? "trial" : "saved" });
@@ -80,6 +81,43 @@ it.each([true, false])("renders draft=%s with the real engine's write policy and
   expect(mocks.flush).toHaveBeenCalledTimes(draft ? 0 : 1);
   expect(mocks.service.dispose).toHaveBeenCalledTimes(draft ? 2 : 0);
   engine.dispose();
+});
+
+it("opens only activated external web links from the focused viewer and current source", async () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  const open = vi.spyOn(window, "open").mockImplementation(() => null);
+  const activation = { isActive: false };
+  Object.defineProperty(navigator, "userActivation", { configurable: true, value: activation });
+  mocks.render.mockImplementation(() => createElement("iframe"));
+  try {
+    await act(async () => root.render(createElement(LanguageProvider, null,
+      createElement(HtmlView, { source: "<p>Links</p>", draft: true, immersive: false, actionsContainer: null }))));
+    const frame = container.querySelector("iframe")!;
+    const nonce = mocks.bridge.mock.lastCall![1];
+    const href = "https://example.org/report?file=1#summary";
+    const send = (url: string, generation = nonce, sender = frame.contentWindow) =>
+      window.dispatchEvent(new MessageEvent("message", { source: sender, data: {
+        channel: HTML_PREVIEW_CHANNEL, nonce: generation, action: "open-external-link", href: url,
+      } }));
+    frame.focus();
+    send(href);
+    activation.isActive = true;
+    send(href, "previous-source");
+    send(href, nonce, window);
+    for (const url of ["#section", location.href, "data:text/plain,Hello", "javascript:void(0)"]) send(url);
+    frame.blur();
+    send(href);
+    expect(open).not.toHaveBeenCalled();
+    frame.focus();
+    send(href);
+    expect(open).toHaveBeenCalledExactlyOnceWith(href, "_blank", "noopener,noreferrer");
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
+    Reflect.deleteProperty(navigator, "userActivation");
+    open.mockRestore();
+  }
 });
 
 it.each([
