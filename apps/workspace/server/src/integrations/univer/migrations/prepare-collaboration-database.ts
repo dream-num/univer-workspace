@@ -169,42 +169,48 @@ async function migrateCopy(
     filename: stagedFilename,
     backupFilename: join(stagingDirectory, "component.bak"),
   };
+
+  async function migrateIfPresent(
+    component: "core" | "worktree" | "history",
+    migrate: () => Promise<unknown>,
+  ) {
+    if (!versions.has(component)) return;
+    await startupStageAsync(`collaboration.${component}.migrate`, migrate);
+    // The whole-file backup is authoritative. Reuse scratch space between SDK backups.
+    rmSync(options.backupFilename, { force: true });
+  }
+
   try {
     mkdirSync(stagingDirectory, { mode: 0o700 });
     startupStage("collaboration.staging.copy", () => copyFileSync(backupFilename, stagedFilename));
 
-    // Core and Worktree consume legacy creation facts before History replaces its V1 rows.
-    for (const [component, migrate, Adapter] of [
-      [
-        "core",
-        () =>
-          migrateSQLiteCore({
-            ...options,
-            ...(creation && { resolveUnitCreation: creation.resolveUnitCreation }),
-          }),
-        SQLiteDatabaseAdapter,
-      ],
-      [
-        "worktree",
-        () =>
-          migrateSQLiteWorktree({
-            ...options,
-            ...(creation && { resolveUnitCreation: creation.resolveWorktreeUnitCreation }),
-          }),
-        SQLiteWorktreeDatabaseAdapter,
-      ],
-      ["history", () => migrateSQLiteHistory(options), SQLiteHistoryDatabaseAdapter],
-    ] as const) {
-      if (versions.has(component)) {
-        await startupStageAsync(`collaboration.${component}.migrate`, migrate);
-        // The whole-file backup is authoritative. Reuse scratch space between SDK backups.
-        rmSync(options.backupFilename, { force: true });
-      }
-      // The constructor also initializes components absent from older deployments.
-      await startupStageAsync(`collaboration.adapter.${component}.validate`, async () => {
-        await new Adapter({ filename: stagedFilename }).dispose();
-      });
-    }
+    // Validate each component on the copy. Opening its adapter also initializes a missing schema.
+    await migrateIfPresent("core", () =>
+      migrateSQLiteCore({
+        ...options,
+        ...(creation && { resolveUnitCreation: creation.resolveUnitCreation }),
+      }),
+    );
+    await startupStageAsync("collaboration.adapter.core.validate", () =>
+      new SQLiteDatabaseAdapter({ filename: stagedFilename }).dispose(),
+    );
+
+    await migrateIfPresent("worktree", () =>
+      migrateSQLiteWorktree({
+        ...options,
+        ...(creation && { resolveUnitCreation: creation.resolveWorktreeUnitCreation }),
+      }),
+    );
+    await startupStageAsync("collaboration.adapter.worktree.validate", () =>
+      new SQLiteWorktreeDatabaseAdapter({ filename: stagedFilename }).dispose(),
+    );
+
+    // History V1 contains creation facts consumed by the Core and Worktree migrations.
+    await migrateIfPresent("history", () => migrateSQLiteHistory(options));
+    await startupStageAsync("collaboration.adapter.history.validate", () =>
+      new SQLiteHistoryDatabaseAdapter({ filename: stagedFilename }).dispose(),
+    );
+
     const staged = new DatabaseSync(stagedFilename);
     try {
       startupStage("collaboration.staging.validate", () => assertIntegrity(staged));
