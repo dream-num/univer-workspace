@@ -8,7 +8,7 @@ runnable `uvw` continuation. Other Unit types are refused and pointed to `inspec
 
 ## Sub-features
 
-- SLC1 keeps `inspect` output unchanged and stamps `outline` with the revision.
+- SLC1 reads the seeded Unit with `inspect` at the PR head and stamps `outline` with the revision.
 - SLC2 zooms into the Orders table: 10 columns, the Amount formula pattern, its conditional
   format and the Status list validation.
 - SLC3 pages a budgeted outline through its continuation without repeated refs.
@@ -20,6 +20,7 @@ runnable `uvw` continuation. Other Unit types are refused and pointed to `inspec
 - SLC8 keeps the revision across repeated calls and moves it after a write.
 - SLC9 reports the three Sheet Lens errors.
 - SLC10 reads trunk after merge and refuses a user without access.
+- SLM1-SLM10 run the same reads through the MCP `outline`, `read` and `find` tools; see MCP Sheet reading (SL2).
 
 ## How to get to it (user POV)
 
@@ -48,8 +49,9 @@ Seeding takes about two and a half minutes. Record every command with
 Before you compare two outputs, check that both files are non-empty.
 
 - SLC1. Run `inspect workbook` and `inspect range A1:C9 --worksheet name:Orders --json` on the
-  sales Unit at trunk and at the PR head, then `outline` at the head. Pass when both `inspect`
-  outputs are byte-identical and `outline` exits 0 with `rev=` on its first line.
+  sales Unit at the PR head (`--worktree "$W"`), then `outline` at the head. Pass when both
+  `inspect` calls and `outline` exit 0 and `outline` has `rev=` on its first line. The seed puts the
+  Unit only in the Worktree, so `--trunk` reads fail with `Cannot read this unit.` until SLC10 merges it.
 - SLC2. Run `$V cli slc2-workbook outline --unit "$SALES" --worktree "$W"`. Check that its
   first line is `unit <sales-id> [worktree <worktree-id>, rev=…]`, its workbook line has
   `sheets=4`, and it includes `table "OrdersTbl" [ref=s2.t1, A1:J1001, rows=1000, via=table]`.
@@ -123,17 +125,7 @@ Before you compare two outputs, check that both files are non-empty.
 
 Terminal screenshots: open `$EVIDENCE/<label>.out` with `agent-browser` and capture it.
 
-## Gotchas
-
-- `uvw import` of a 2,000-row xlsx returns 500 `PayloadTooLargeError`. The seed script imports
-  only the 1,000-row sales workbook and writes the ledgers with `execute`.
-- Workspace does not recalculate on load. The seed script triggers calculation once. A formula
-  without a cached value shows as `uncached=N` with a `note:` line.
-- The shell is zsh. An unquoted `$args` does not split into words; quote arrays explicitly.
-- The daemon caches per user and revision. After a rebuild, run `uvw daemon stop` so a stale
-  daemon does not answer.
-
-## MCP Sheet reading (SL2)
+### MCP Sheet reading (SL2)
 
 Start a separate instance with `VERIFY_UVW_MCP=1` and, for SLM8,
 `VERIFY_UVW_MCP_SAME_ORIGIN=1`. Use the free-port recipe above, then run `$V user`,
@@ -260,3 +252,13 @@ $V mcp slm-outline outline "$(args "$SALES")"
 Run `$V down` after the journeys, including after failures. Keep only this run's
 results and redacted events. The `.event.json` cache and stage timing fields contain
 no document text or arguments.
+
+## Gotchas
+
+- `uvw import` of a 2,000-row xlsx returns 500 `PayloadTooLargeError`. The seed script imports
+  the 1,000-row sales workbook and the small `elements.xlsx` fixture, and writes the ledgers with `execute`.
+- Workspace does not recalculate on load. The seed script triggers calculation once. A formula
+  without a cached value shows as `uncached=N` with a `note:` line.
+- The shell is zsh. An unquoted `$args` does not split into words; quote arrays explicitly.
+- The daemon caches per user and revision. After a rebuild, run `uvw daemon stop` so a stale
+  daemon does not answer.
