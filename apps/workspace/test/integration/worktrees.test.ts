@@ -1224,8 +1224,7 @@ async function createTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
-      productDatabase: { provider: "sqlite", filename: ":memory:" },
-      collaborationDatabaseFilename: ":memory:",
+      database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
       secureCookies: false,
       sessionTtlMs: 60_000,
     },
@@ -1246,8 +1245,7 @@ async function createRealTestApplication(directory?: string): Promise<SqliteTest
   const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    productDatabase: { provider: "sqlite", filename: directory ? join(directory, "product.sqlite") : ":memory:" },
-    collaborationDatabaseFilename: directory ? join(directory, "collaboration.sqlite") : ":memory:",
+    database: { provider: "sqlite", filename: directory ? join(directory, "product.sqlite") : ":memory:", collaborationFilename: directory ? join(directory, "collaboration.sqlite") : ":memory:" },
     ...(directory ? { blobDirectory: join(directory, "blobs") } : {}),
     secureCookies: false,
     sessionTtlMs: 60_000,

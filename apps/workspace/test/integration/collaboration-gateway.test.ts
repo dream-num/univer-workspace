@@ -1537,8 +1537,7 @@ async function startApplication(existingDirectory?: string): Promise<{
   const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-    collaborationDatabaseFilename,
+    database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: collaborationDatabaseFilename },
     secureCookies: false,
     sessionTtlMs: 60_000,
   });

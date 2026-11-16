@@ -1,3 +1,4 @@
+import { openCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/open-collaboration-database.ts";
 // Run from apps/workspace: LOG_LEVEL=silent node --import tsx scripts/sqlite/diagnose-request-latency.mjs
 // Uses only newly created temporary databases and the installed published SDK.
 import assert from "node:assert/strict";
@@ -52,9 +53,9 @@ const config = loadConfig({
   BLOB_DIRECTORY: join(directory, "blobs"),
   SESSION_TTL_MS: "3600000",
 });
-const product = await openProductDatabase(config.productDatabase);
+const product = await openProductDatabase(config.database);
 const access = product.repositories.access;
-const db = new DatabaseSync(config.productDatabase.filename);
+const db = new DatabaseSync(config.database.filename);
 let accessCalls = 0;
 let accessMs = 0;
 const restoreAccess = [];
@@ -72,7 +73,8 @@ for (const name of ["resolveNode", "resolveNodeAuthorization", "resolveOwnedReso
   };
   restoreAccess.push(() => { access[name] = original; });
 }
-const application = createWorkspaceApplication(config, product.repositories);
+const collaboration = await openCollaborationDatabase(config.database, product.unitCreationFacts);
+const application = createWorkspaceApplication(config, product.repositories, collaboration);
 const server = createServer(application.app);
 let socket;
 try {
@@ -211,6 +213,7 @@ try {
   server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));
   await application.close();
+  await collaboration.close();
   db.close();
   await product.close();
   for (const restore of restoreAccess) restore();

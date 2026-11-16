@@ -5,17 +5,15 @@ SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 21`
 PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 1 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
-Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
-`COLLABORATION_DATABASE_FILE` 指向的 Collaboration SQLite 文件，不属于产品数据库 V21
-Schema。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
+`DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
 
 五类 Unit 的 Thread Comment anchor 属于 Unit snapshot/changeset；评论正文、回复、solved
-状态与并发 generation 保存在同一文件的 `collaboration_comments` 表中，并由
+状态与并发 generation 由 Comment Adapter 保存。在 SQLite 中使用 `collaboration_comments` 表，并由
 `collaboration_schema_versions` 的 `comment=1` 组件版本管理。Comment Adapter 首次启动时
 幂等创建该附加 Schema，不改变产品数据库，也不要求执行产品迁移命令。评论正文不分支：
-Trunk、Worktree 和 Merge Preview 读写同一份 `collaboration_comments` 数据；只有 anchor 作为 Unit
+Trunk、Worktree 和 Merge Preview 读写同一份评论数据；只有 anchor 作为 Unit
 resource 随 Worktree snapshot/changeset 分支与合并（见 application-design.md "评论与 Worktree"）。
 
 当前 Collaboration SQLite 组件版本为 `core=4`、`worktree=4`、`history=2` 和 `comment=1`。
@@ -28,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-启动入口先将产品数据库准备到 V21，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V21，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。

@@ -686,8 +686,7 @@ async function startApplication(): Promise<{
   const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-    collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+    database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
     blobDirectory: join(directory, "objects"),
     secureCookies: false,
     sessionTtlMs: 60_000,

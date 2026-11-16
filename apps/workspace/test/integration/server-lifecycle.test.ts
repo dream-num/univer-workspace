@@ -1,3 +1,4 @@
+import { openCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/open-collaboration-database.js";
 import { createServer } from "node:http";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,8 +16,7 @@ it("shuts down while a collaboration WebSocket is connected", async () => {
   const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-    collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+    database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
     secureCookies: false,
     sessionTtlMs: 60_000,
   });
@@ -64,13 +64,13 @@ it("shuts down while a collaboration WebSocket is connected", async () => {
 
 const s3Config = {
   ...loadConfig({ BLOB_STORE: "s3", BLOB_S3_BUCKET: "test-bucket", BLOB_S3_REGION: "us-east-1" }),
-  productDatabase: { provider: "sqlite", filename: ":memory:" },
-  collaborationDatabaseFilename: ":memory:",
+  database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
 } satisfies WorkspaceConfig;
 
 it("releases its configured S3 client and leaves the product database to its caller", async () => {
-  const database = await openProductDatabase(s3Config.productDatabase);
-  const application = createWorkspaceApplication(s3Config, database.repositories);
+  const database = await openProductDatabase(s3Config.database);
+  const collaboration = await openCollaborationDatabase(s3Config.database, database.unitCreationFacts);
+  const application = createWorkspaceApplication(s3Config, database.repositories, collaboration);
   const destroy = vi.spyOn(S3Client.prototype, "destroy");
   try {
     await application.close();
@@ -78,6 +78,7 @@ it("releases its configured S3 client and leaves the product database to its cal
     await expect(database.unitCreationFacts.read()).resolves.toEqual({ units: [], worktreeUnits: [] });
   } finally {
     destroy.mockRestore();
+    await collaboration.close();
     await database.close();
   }
 });

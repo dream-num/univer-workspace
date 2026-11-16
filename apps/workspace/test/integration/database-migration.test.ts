@@ -370,11 +370,7 @@ describe("automatic product database migration to V21", () => {
       {
         host: "127.0.0.1",
         port: 0,
-        productDatabase: { provider: "sqlite", filename: filename },
-        collaborationDatabaseFilename: join(
-          directory,
-          "collaboration.sqlite"
-        ),
+        database: { provider: "sqlite", filename: filename, collaborationFilename: join(directory, "collaboration.sqlite") },
         secureCookies: false,
         sessionTtlMs: 60_000,
       },
@@ -680,8 +676,7 @@ describe("automatic product database migration to V21", () => {
       {
         host: "127.0.0.1",
         port: 0,
-        productDatabase: { provider: "sqlite", filename: filename },
-        collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+        database: { provider: "sqlite", filename: filename, collaborationFilename: join(directory, "collaboration.sqlite") },
         blobDirectory: join(directory, "objects"),
         secureCookies: false,
         sessionTtlMs: 60_000,

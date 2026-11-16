@@ -1,7 +1,6 @@
 import { parseCimdExemptNetworks } from "./modules/identity/client-metadata-document.js";
 import { resolve } from "node:path";
 import type { S3BlobStoreOptions } from "./integrations/blob/s3-blob-store.js";
-import type { ProductDatabaseConfig } from "./db/index.js";
 import type { EmailConfig } from "./integrations/email/index.js";
 import type { OAuthClientConfig } from "./modules/identity/oauth-clients.js";
 import { parseMcpResourceUrls, type McpOAuthConfig } from "./modules/identity/mcp-oauth.js";
@@ -10,13 +9,16 @@ import {
   type UniverLicenseCredentials,
 } from "./integrations/univer/univer-license.js";
 
+export type WorkspaceDatabaseConfig =
+  | { readonly provider: "sqlite"; readonly filename: string; readonly collaborationFilename: string }
+  | { readonly provider: "postgres"; readonly connectionString: string };
+
 export interface WorkspaceConfig {
   readonly host: string;
   readonly port: number;
   readonly publicOrigin?: string | null;
   readonly metricsToken?: string;
-  readonly productDatabase: ProductDatabaseConfig;
-  readonly collaborationDatabaseFilename: string;
+  readonly database: WorkspaceDatabaseConfig;
   readonly blobDirectory?: string;
   readonly s3BlobStore?: S3BlobStoreOptions;
   readonly maxBlobBytes?: number;
@@ -92,11 +94,7 @@ export function loadConfig(
     host: environment.HOST ?? "127.0.0.1",
     port: integer(environment.PORT, 3020, "PORT"),
     publicOrigin,
-    productDatabase: productDatabaseConfig(environment),
-    collaborationDatabaseFilename: resolve(
-      environment.COLLABORATION_DATABASE_FILE ??
-        ".data/univer-collaboration.sqlite"
-    ),
+    database: databaseConfig(environment),
     ...blobStoreConfig(environment),
     maxBlobBytes: integer(
       environment.MAX_BLOB_BYTES,
@@ -499,15 +497,22 @@ function integer(
 }
 
 
-function productDatabaseConfig(environment: NodeJS.ProcessEnv): ProductDatabaseConfig {
-  const provider = environment.PRODUCT_DATABASE_PROVIDER ?? "sqlite";
-  if (provider === "sqlite") {
-    return { provider, filename: resolve(environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite") };
+function databaseConfig(environment: NodeJS.ProcessEnv): WorkspaceDatabaseConfig {
+  if (environment.PRODUCT_DATABASE_PROVIDER !== undefined) {
+    throw new Error("Remove PRODUCT_DATABASE_PROVIDER and set DATABASE_PROVIDER for both product and collaboration data.");
   }
-  if (provider !== "postgres") throw new Error("PRODUCT_DATABASE_PROVIDER must be sqlite or postgres");
+  const provider = environment.DATABASE_PROVIDER ?? "sqlite";
+  if (provider === "sqlite") {
+    return {
+      provider,
+      filename: resolve(environment.DATABASE_FILE ?? ".data/univer-workspace.sqlite"),
+      collaborationFilename: resolve(environment.COLLABORATION_DATABASE_FILE ?? ".data/univer-collaboration.sqlite"),
+    };
+  }
+  if (provider !== "postgres") throw new Error("DATABASE_PROVIDER must be sqlite or postgres");
   const connectionString = environment.DATABASE_URL?.trim();
   if (!connectionString || !/^postgres(?:ql)?:\/\//i.test(connectionString)) {
-    throw new Error("DATABASE_URL must be a PostgreSQL connection URL when PRODUCT_DATABASE_PROVIDER=postgres");
+    throw new Error("DATABASE_URL must be a PostgreSQL connection URL when DATABASE_PROVIDER=postgres");
   }
   return { provider, connectionString };
 }

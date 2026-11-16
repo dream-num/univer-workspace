@@ -269,7 +269,7 @@ Collaboration、Worktree、导出与对比共用的 Unit runtime 使用 SDK 1.1.
 启动一套 SDK（约一秒），因此 `UnitSnapshotMaterializer` 由 `createCollaborationRuntime` 按需创建一次、
 随 runtime 释放，导出与对比共用它，不按请求创建；每个进程只付一次启动成本。
 Collaboration Gateway 同时组合 Core、Comment、History 与 Worktree Endpoint。Comment Service 使用
-同一 `COLLABORATION_DATABASE_FILE` 中由 Comment Adapter 独立拥有的表，并通过 Identity
+协同库中由 Comment Adapter 独立拥有的表，并通过 Identity
 Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、回复、solved 和编辑都要求打开
 权限，不要求内容编辑权限；`UnitAction.Comment` 与 `View` 放在同一组。编辑正文由 Comment Service
 限定为作者本人，删除还要求评论作者或 Resource Owner/Admin。未登录请求只放行评论列表。Browser 在 Trunk、Worktree
@@ -278,10 +278,10 @@ Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、�
 无 UI 的 headless runtime（Client Core content worker、DSH worker 与 Viewer）只注册五类 Unit 的评论 model，
 使 anchor resource 在 replay 与 export 中保留；SDK 1.1.0 的 headless factory 自带五类 model。
 
-History Service 使用同一文件中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
+History Service 使用协同库中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
 批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service 和 lifecycle；SDK 1.0.0 的
 History Service 自行订阅 Core 创建与提交事件，并在读取时从 Core 创建事实与 changeset 追赶分段索引。
-启动入口先通过独立的 `integrations/univer/migrations` 边界备份并迁移协同数据库，再装配 Runtime。
+启动入口通过 `integrations/univer/collaboration-database/open-collaboration-database.ts` 打开与产品库同后端的四个 SDK 适配器，再装配 Runtime。SQLite 的备份和旧库迁移位于该目录的 `sqlite/migrations/`；PostgreSQL 适配器共享协同库持有的连接池。
 History Endpoint 复用 Unit 打开权限；恢复版本仍通过普通 Collaboration changeset 写入并
 要求内容编辑权限。Browser 按 Unit 类型只为 Trunk Sheet、Doc、Slide、Base 和 Board 注册标准
 SDK History UI，Worktree 与 Merge Preview 不注册。
@@ -306,7 +306,7 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-服务端入口将 `config.productDatabase` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务和封禁 Agent 的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
+服务端入口将 `config.database` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务和封禁 Agent 的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
 
 `db/sqlite/schema.sql` 定义完整 V21 结构，`db/sqlite/initialize.ts`
 负责在业务 Module 初始化前识别数据库状态：空数据库应用 V21；V21 校验指纹；V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0

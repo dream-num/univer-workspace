@@ -22,11 +22,7 @@ try {
     {
       host: "127.0.0.1",
       port: 0,
-      productDatabase: { provider: "sqlite", filename: databaseFilename },
-      collaborationDatabaseFilename: join(
-        directory,
-        "collaboration.sqlite"
-      ),
+      database: { provider: "sqlite", filename: databaseFilename, collaborationFilename: join(directory, "collaboration.sqlite") },
       secureCookies: false,
       sessionTtlMs: 60_000,
     },

@@ -550,8 +550,7 @@ async function start(options: { sessionTtlMs?: number; mcpOAuth?: boolean } = {}
   application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-    collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+    database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
     secureCookies: false,
     ...(options.mcpOAuth ? { mcpOAuth: { issuer: "https://space.example.test", resources: [RESOURCE], maxRegisteredClients: 100 } } : {}),
     sessionTtlMs: options.sessionTtlMs ?? 24 * 60 * 60_000,

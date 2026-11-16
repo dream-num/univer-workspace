@@ -95,7 +95,7 @@ describe("db:ban-agent", () => {
     const directory = mkdtempSync(join(tmpdir(), "workspace-ban-agent-"));
     directories.push(directory);
     const databaseFilename = join(directory, "workspace.sqlite");
-    const { origin, application } = await start({ productDatabase: { provider: "sqlite", filename: databaseFilename } });
+    const { origin, application } = await start({ database: { provider: "sqlite", filename: databaseFilename, collaborationFilename: ":memory:" } });
     const [byName, byId] = [await createAgent(origin), await createAgent(origin)];
     await register(origin, "alice");
     const ban = (target: string) => spawnSync(process.execPath, ["--import", "tsx", "server/src/db/ban-agent.ts", target], {
@@ -636,8 +636,7 @@ async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: s
   const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    productDatabase: { provider: "sqlite", filename: ":memory:" },
-    collaborationDatabaseFilename: ":memory:",
+    database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,
     passwordAuthEnabled: true,

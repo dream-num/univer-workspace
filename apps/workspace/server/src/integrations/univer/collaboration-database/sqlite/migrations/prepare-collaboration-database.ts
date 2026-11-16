@@ -1,5 +1,5 @@
-import type { UnitCreationFactsReader } from "../../../db/index.js";
-import { startupStage, startupStageAsync } from "../../../logging/startup.js";
+import type { UnitCreationFactsReader } from "../../../../../db/index.js";
+import { startupStage, startupStageAsync } from "../../../../../logging/startup.js";
 import { randomUUID } from "node:crypto";
 import {
   chmodSync,

@@ -14,7 +14,7 @@ branch, step 2 fails until you bring that version in.
 
 ```bash
 git diff --stat origin/main -- apps/workspace/server/src/db \
-  apps/workspace/server/src/integrations/univer/migrations pnpm-lock.yaml
+  apps/workspace/server/src/integrations/univer/collaboration-database pnpm-lock.yaml
 ```
 
 - Anything under `server/src/db` changed: run steps 2 to 5.
@@ -22,7 +22,7 @@ git diff --stat origin/main -- apps/workspace/server/src/db \
   bump and a `sqlite/migrations/v<N-1>-to-v<N>/migrate.ts`. Step 3 applies to a new migration and to
   any changed behavior of an existing one or of `prepare-current-database.ts`,
   `sqlite/connection.ts` or `sqlite/initialize.ts`.
-- Only the SDK baseline or `integrations/univer/migrations` changed: run steps 4 and 5. Step 4
+- Only the SDK baseline or `integrations/univer/collaboration-database` changed: run steps 4 and 5. Step 4
   includes the Collaboration matrix (`test/production-collaboration-migration.ts`).
 
 ## 2. Schema parity

@@ -566,8 +566,7 @@ async function createTestApplication(): Promise<SqliteTestApplication> {
     {
       host: "127.0.0.1",
       port: 3020,
-      productDatabase: { provider: "sqlite", filename: ":memory:" },
-      collaborationDatabaseFilename: ":memory:",
+      database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
       secureCookies: false,
       sessionTtlMs: 60_000,
     },

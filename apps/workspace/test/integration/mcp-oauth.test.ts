@@ -714,8 +714,7 @@ async function start(options: { maxRegisteredClients?: number; disabled?: boolea
   application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 3020,
-    productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-    collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+    database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,
     passwordAuthEnabled: true,

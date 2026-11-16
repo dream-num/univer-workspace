@@ -1,3 +1,4 @@
+import type { CollaborationDatabase } from "./integrations/univer/collaboration-database/collaboration-database.js";
 import { createServer } from "node:http";
 import { loadConfig } from "./config.js";
 import { openProductDatabase, type ProductDatabase } from "./db/index.js";
@@ -8,9 +9,9 @@ import { logger } from "./logging/logger.js";
 import { beginStartupStage, startupStage, startupStageAsync } from "./logging/startup.js";
 
 // 只在 SDK 和应用模块加载边界保留动态导入，以记录初始化前的失败。
-const { prepareCollaborationDatabase } = await startupStageAsync(
-  "modules.collaboration-migrations",
-  () => import("./integrations/univer/migrations/prepare-collaboration-database.js"),
+const { openCollaborationDatabase } = await startupStageAsync(
+  "modules.collaboration-database",
+  () => import("./integrations/univer/collaboration-database/open-collaboration-database.js"),
 );
 const { createWorkspaceApplication } = await startupStageAsync(
   "modules.application",
@@ -23,20 +24,24 @@ if (config.emailAuth?.provider === "console") {
   );
 }
 const database = await startupStageAsync("database.product.prepare", () =>
-  openProductDatabase(config.productDatabase),
+  openProductDatabase(config.database),
 );
 try {
-  await serve(database);
+  const collaboration = await startupStageAsync("database.collaboration.prepare", () =>
+    openCollaborationDatabase(config.database, database.unitCreationFacts),
+  );
+  try {
+    await serve(database, collaboration);
+  } finally {
+    await collaboration.close();
+  }
 } finally {
   await database.close();
 }
 
-async function serve(product: ProductDatabase): Promise<void> {
-  await startupStageAsync("database.collaboration.prepare", () =>
-    prepareCollaborationDatabase(config.collaborationDatabaseFilename, product.unitCreationFacts),
-  );
+async function serve(product: ProductDatabase, collaboration: CollaborationDatabase): Promise<void> {
   const application = startupStage("application.create", () =>
-    createWorkspaceApplication(config, product.repositories),
+    createWorkspaceApplication(config, product.repositories, collaboration),
   );
   const server = createServer(application.app);
   const jobs: OperationRecovery[] = [];

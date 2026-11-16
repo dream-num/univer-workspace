@@ -7,7 +7,7 @@ SQLite 和 PostgreSQL 实现同一组产品 Repository 接口。协同库和文�
 以下路径相对于 `apps/workspace/server/src/`。以空间置顶举例，其他领域按现有模块归属组织。
 
 ```text
-config.ts                            读取环境变量，产出 WorkspaceConfig.productDatabase
+config.ts                            读取环境变量，产出 WorkspaceConfig.database
 main.ts                              打开产品库、准备协同库、装配应用、管理关闭顺序
 app.ts                               接收已打开的产品库接口，给各服务注入所需 Repository
 modules/
@@ -50,16 +50,16 @@ db/
 
 | 调用位置 | 允许的依赖 |
 | --- | --- |
-| `main.ts`、需要打开产品库的运维命令 | 从 `db/index.ts` 导入 `openProductDatabase(config.productDatabase)`，得到已经就绪的 `ProductDatabase` 接口 |
+| `main.ts`、需要打开产品库的运维命令 | 从 `db/index.ts` 导入 `openProductDatabase(config.database)`，得到已经就绪的 `ProductDatabase` 接口 |
 | `app.ts` | 接收已装配的 Repository 集合，向各模块分别注入所需接口 |
 | 业务 Service、Router、后台任务 | 使用本模块的 Repository 接口或其他模块公开的 Service 接口 |
 | `db/open-product-database.ts` | 按配置选择一个后端的 `open.ts`；各后端在自己的 `open.ts` 绑定具体实现和连接 |
 
-例如，`createSpacesModule` 收到 `SpacePinsRepository`，类型来自 `modules/spaces/index.ts` 的 `export type`。实现类、SQL、驱动语句和连接均为后端私有。Repository 接口中的数据投影由领域模块定义。`WorkspaceApplication` 只接收 Repository 集合，产品库的打开和关闭由启动入口管理。测试若需构造 SQLite 历史数据，在 SQLite 专用 fixture 中使用原生连接。
+例如，`createSpacesModule` 收到 `SpacePinsRepository`，类型来自 `modules/spaces/index.ts` 的 `export type`。实现类、SQL、驱动语句和连接均为后端私有。Repository 接口中的数据投影由领域模块定义。`WorkspaceApplication` 通过 Repository 集合访问产品数据，产品库的打开和关闭由启动入口管理。测试若需构造 SQLite 历史数据，在 SQLite 专用 fixture 中使用原生连接。
 
 ## 配置和生命周期
 
-`loadConfig()` 负责把环境变量解析为有判别字段的配置。SQLite 沿用 `DATABASE_FILE` 及其默认值，产出 `{ provider: "sqlite", filename }`。设置 `PRODUCT_DATABASE_PROVIDER=postgres` 后，从 `DATABASE_URL` 读取连接地址，产出 `{ provider: "postgres", connectionString }`。以下签名给启动入口生命周期控制权，`app.ts` 只接收 `database.repositories`。
+`loadConfig()` 负责把环境变量解析为有判别字段的配置。SQLite 沿用 `DATABASE_FILE` 及其默认值，产出 `{ provider: "sqlite", filename, collaborationFilename }`。设置 `DATABASE_PROVIDER=postgres` 后，从 `DATABASE_URL` 读取连接地址，产出 `{ provider: "postgres", connectionString }`。以下签名给启动入口生命周期控制权，`app.ts` 接收产品 Repository 和协同适配器。
 
 ```ts
 export interface ProductDatabase {
@@ -71,9 +71,9 @@ export interface ProductDatabase {
 export declare function openProductDatabase(config: ProductDatabaseConfig): Promise<ProductDatabase>;
 ```
 
-服务启动顺序为「产品库准备并打开 → 协同库升级 → 装配并启动应用」。工厂在构造 Repository 前完成产品库准备。启动入口只把 `unitCreationFacts` 交给协同迁移，需要升级时才读取创建人和时间。打开产品库的入口负责在后续启动失败或正常退出时关闭它，正常退出先等待使用数据库的任务和请求结束。[当前启动顺序](../../server/src/main.ts) · [旧库创建信息读取](../../server/src/integrations/univer/migrations/unit-creation-facts.ts)
+服务启动顺序为「产品库准备并打开 → 协同库升级 → 装配并启动应用」。工厂在构造 Repository 前完成产品库准备。启动入口只把 `unitCreationFacts` 交给协同迁移，需要升级时才读取创建人和时间。打开产品库的入口负责在后续启动失败或正常退出时关闭它，正常退出先等待使用数据库的任务和请求结束。[当前启动顺序](../../server/src/main.ts) · [旧库创建信息读取](../../server/src/integrations/univer/collaboration-database/sqlite/migrations/unit-creation-facts.ts)
 
-`db:ban-agent` 也通过工厂和业务接口执行。产品库的选择独立于 `COLLABORATION_DATABASE_FILE` 和 `BLOB_STORE`。
+`db:ban-agent` 也通过工厂和业务接口执行。产品库和协同库共用 `DATABASE_PROVIDER`；文件字节仍由 `BLOB_STORE` 选择的后端持有。
 
 ## Repository 与事务
 
@@ -90,7 +90,7 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 
 `withPostgresTransaction` 在一个池连接上运行可串行化事务。序列化失败或死锁时，重试整个业务操作。事务回调只通过传入的连接访问产品库，外部通知和文件操作放在事务之外。
 
-共享的应用用例覆盖 HTTP、权限、文件、草稿、Issue 和 Worktree，空间与置顶另有并发契约用例。提供 `WORKSPACE_TEST_POSTGRES_URL` 后，可用以下命令运行 PostgreSQL 套件，包括建库、重启及结构漂移检查。测试账号需要创建和删除独立 schema 的权限。
+共享的应用用例覆盖 HTTP、权限、文件、草稿、Issue 和 Worktree，空间与置顶另有并发契约用例。提供 `WORKSPACE_TEST_POSTGRES_URL` 后，可用以下命令运行 PostgreSQL 套件，包括建库、重启及结构漂移检查。产品库测试使用独立 schema，同时启动产品和协同服务的测试使用临时数据库。测试账号需要相应的建库和建 schema 权限。
 
 ```bash
 pnpm --filter @univerjs/univer-workspace test:postgres
