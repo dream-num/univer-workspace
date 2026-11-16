@@ -237,16 +237,16 @@ docker run --name univer-workspace \
 
 需要全新的本地测试实例时，挂载一个新的空数据卷即可。启动会保留已有数据，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
 
-协同数据库各组件的版本为 `core=3`、`worktree=3`、`history=2`、`comment=1`。SDK 1.0.0 引入 `core=2`、`worktree=3` 和 `history=2`。SDK 1.4.0 将 Core 升至 v3，以 MessagePack 保存协议对象，并将原 tombstone 表的删除状态直接存入 `collaboration_units`。
+协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`、`comment=1`。SDK 1.5.2 为主线和 Worktree 的 Unit、Changeset 增加元数据，已有记录的初始值为 `{}`，内容和修订号保留。
 
 服务端入口会在创建应用服务前准备协同数据库。升级顺序如下。
 
 1. 停止**所有**会写入 Workspace 的旧实例，备份产品数据库、协同 SQLite 文件和 Blob 存储。Kubernetes 部署使用单副本及 `Recreate` 策略。
 2. 启动一个新实例。服务先将产品数据库准备到 V21，再读取协同组件版本。需要迁移时，服务获取排他锁，检查源文件的完整性和外键，并在数据库旁创建一致性备份 `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak`。如果其他进程仍打开 WAL 模式的文件或持有任何锁，启动会在备份前失败。空闲的 rollback-journal 连接不持锁，无法通过锁检测，因此必须执行第 1 步。
-3. 服务持锁期间，已发布的 SDK 迁移依次在暂存副本上执行 Core v1→v2、Worktree、History、Core v2→v3。Schema 校验、`foreign_key_check` 和 `integrity_check` 全部通过后，才用副本原子替换原文件。如果迁移失败，服务在接收流量前终止启动，原库、日志模式和备份均保留。
+3. 服务持锁期间，在暂存副本上执行已发布的 SDK 迁移。为升级前备份、暂存副本和一份临时组件备份预留磁盘空间。Schema 校验、`foreign_key_check` 和 `integrity_check` 全部通过后，才用副本原子替换原文件。如果迁移失败，服务在接收流量前终止启动，原库、日志模式和备份均保留。
 4. 确认启动正常、文档和 Worktree 均可访问后，恢复服务。后续启动只读取组件版本，无需重复完整性和外键扫描、迁移或备份。
 
-支持从 Core V1、Worktree V1/V2 和 History V1 升级。新数据库由当前适配器初始化。迁移优先从 History V1 的修订 1 读取 Unit 创建者和时间，缺失时查询产品数据库。主线 Unit 取其 Trunk Node，Worktree 内创建的 Unit 取对应的节点意图。两个来源均缺少信息时，以 `anonymous` 和迁移时间补缺，不能据此还原真实的创建信息。Changeset 时间沿用 SDK 默认值。
+支持从 Core V1–V3、Worktree V1–V3 和 History V1 升级。新数据库由当前适配器初始化。迁移优先从 History V1 的修订 1 读取 Unit 创建者和时间，缺失时查询产品数据库。主线 Unit 取其 Trunk Node，Worktree 内创建的 Unit 取对应的节点意图。两个来源均缺少信息时，以 `anonymous` 和迁移时间补缺，不能据此还原真实的创建信息。Changeset 时间沿用 SDK 默认值。
 
 自定义服务端入口先调用 `openProductDatabase(config.productDatabase)`，将其 `unitCreationFacts` 交给 `prepareCollaborationDatabase`，再将 `repositories` 传入 `createWorkspaceApplication`。应用关闭后释放产品库。新旧 SDK 实例不能同时写入。回滚时停止新实例，同时还原同一批次的升级前产品库、协同库与 Blob 备份。只换回旧镜像无法还原数据，备份应保留到部署验收完成。
 
