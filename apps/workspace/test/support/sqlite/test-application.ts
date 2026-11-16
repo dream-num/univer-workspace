@@ -11,6 +11,7 @@ export async function createSqliteTestApplication(
   dependencies?: Parameters<typeof createWorkspaceApplication>[2],
 ) {
   const config = { ...loadConfig({}), ...settings };
+  if (config.productDatabase.provider !== "sqlite") throw new Error("Expected a SQLite fixture");
   const database = openWorkspaceDatabase(config.productDatabase.filename);
   try {
     const repositories = createSqliteRepositories(database);

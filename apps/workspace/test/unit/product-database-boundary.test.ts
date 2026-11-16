@@ -7,7 +7,7 @@ import { importReferences, sourceFiles } from "../support/source-dependencies.js
 
 const root = fileURLToPath(new URL("../../server/src/", import.meta.url));
 const sources = sourceFiles(root).filter((path) => !path.endsWith(".test.ts"));
-const sqlite = "db/sqlite/";
+const adapters = ["db/sqlite/", "db/postgres/"];
 const factory = "db/open-product-database";
 const commands = ["main", "db/ban-agent"];
 
@@ -19,19 +19,22 @@ function readSource(path: string): ts.SourceFile {
   return ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
 }
 
-it("keeps the SQLite product adapter private and selects it at the product database factory", () => {
+it("keeps product database adapters private and selects them at the factory", () => {
   const violations: string[] = [];
   for (const path of sources) {
     const name = sourceName(path);
     const ast = readSource(path);
     for (const { specifier, kind } of importReferences(ast)) {
       const target = specifier.startsWith(".") ? sourceName(resolve(dirname(path), specifier)) : specifier;
+      const adapter = adapters.find((prefix) => target.startsWith(prefix));
       if (target === "node:sqlite") {
-        if (!name.startsWith(sqlite) && !name.startsWith("integrations/univer/migrations/")) {
+        if (!name.startsWith("db/sqlite/") && !name.startsWith("integrations/univer/migrations/")) {
           violations.push(`${name} → ${target}`);
         }
-      } else if (target.startsWith(sqlite) && !name.startsWith(sqlite)) {
-        if (name !== factory || target !== "db/sqlite/open") {
+      } else if ((target === "pg" || target.startsWith("pg/")) && !name.startsWith("db/postgres/")) {
+        violations.push(`${name} → ${target}`);
+      } else if (adapter && !name.startsWith(adapter)) {
+        if (name !== factory || target !== `${adapter}open`) {
           violations.push(`${name} → ${target}`);
         }
       } else if (!name.startsWith("db/") && target.startsWith("db/") && target !== "db/index") {

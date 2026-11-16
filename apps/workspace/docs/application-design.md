@@ -71,7 +71,7 @@ V12 为 Team Space 增加 `slug`、为 Worktree 增加仓库级 `number`，供 B
 Spaces Module 在创建时校验或生成 slug（`POST /api/team-spaces` 的 `slug` 可选，供 DSH 插件等未更新的调用方继续使用），
 `PATCH /api/spaces/{spaceId}` 可修改，`GET /api/spaces/lookup?owner=&slug=` 解析 `owner/slug` 与 `owner/personal`，
 不可见与不存在同样返回 404。`SpaceView.slug/fullName` 由服务端统一计算。Team Worktree 与 Issue 共用 Space 编号序列，
-Issue 分配逻辑与 Worktree 创建都在 `BEGIN IMMEDIATE` 事务内取最大值；编号不跨越产品库与协同库事务。
+Issue 与 Worktree 在同一空间内分配编号，SQLite 使用 `BEGIN IMMEDIATE`，PostgreSQL 使用可串行化事务并在并发冲突时重新分配；编号不跨越产品库与协同库事务。
 `GET /api/spaces/{spaceId}/worktrees/{number}` 按编号读取 Worktree，`GET /api/worktrees` 增加可重复的 `state` 过滤
 （状态来自协同服务，故按候选批次扫描至页满）。产品模型仍使用 Space 与 Worktree，Repository 与 Pull request 只是展示名称。
 Browser 的公共 Repository Header 与 Tabs 供 Code、Issues、PR、Pages 和 Settings 页面复用；
@@ -518,7 +518,7 @@ V20 的 `modules/skill-drafts` 提供 `/api/skill-drafts` 提交、作者读取�
 version=current 重新检查实时权限并读取当前文件，供逐文件差异审阅。响应使用纯文本、CSP sandbox、nosniff 与 private/no-store。
 基础字节不做快照。当前文件不存在时返回 404，已过期或终态草稿字节返回 409。
 
-只有作者的交互式 Session 能发布或拒绝。发布从 BlobStore 重新扫描，然后在一个 SQLite 事务中重新检查实时 ACL、
+只有作者的交互式 Session 能发布或拒绝。发布从 BlobStore 重新扫描，然后在一个产品库事务中重新检查实时 ACL、
 目标重名和完整基础版本，采用对象、替换文件、将移除文件送入 Trash 并记录结果。失败全部回滚，不创建 Operation。
 block 或目标重名保持 pending，基础冲突进入 conflicted。Blob 维护任务同时过期 Skill 草稿并处理对象删除任务。
 服务器事件和日志不包含 Skill 正文或审查原文。

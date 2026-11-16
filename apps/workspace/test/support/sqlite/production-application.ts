@@ -7,6 +7,7 @@ export async function createProductionTestApplication(
   config: Parameters<typeof createWorkspaceApplication>[0],
   dependencies: Parameters<typeof createWorkspaceApplication>[2],
 ) {
+  if (config.productDatabase.provider !== "sqlite") throw new Error("Expected a SQLite fixture");
   const product = await openProductDatabase(config.productDatabase);
   const cleanup = new AsyncDisposableStack();
   cleanup.defer(() => product.close());

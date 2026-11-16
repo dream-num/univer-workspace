@@ -178,6 +178,23 @@ commands load this file automatically. GitHub OAuth is enabled only when
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_CALLBACK_URL` are all
 configured.
 
+SQLite is the default product database. Set `DATABASE_FILE` to change its location.
+To use PostgreSQL, create a dedicated empty database on PostgreSQL 17 and give the
+Workspace role permission to create tables, indexes, sequences and functions in its schema.
+Pass both settings to the server or container at runtime:
+
+```dotenv
+PRODUCT_DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace@db/workspace
+```
+
+Workspace initializes the schema on first start. Switching providers selects an independent
+database. Existing SQLite deployments keep their data in `DATABASE_FILE`; changing these
+settings does not copy it. Keep the Collaboration SQLite volume and Blob storage. For a
+consistent backup, stop all writers and take a PostgreSQL dump together with the matching
+Collaboration file and Blob objects. Restore the dump into an empty database with the same
+schema name before starting one Workspace instance.
+
 `GITHUB_TOKEN` is optional and unset by default. Skill source imports use this
 server token only for `api.github.com`, independently of GitHub OAuth. Without
 it, all imports share GitHub's 60 API requests per hour per server IP. A configured
@@ -523,7 +540,7 @@ V11 added the Space description; V10 added Space stars; V9 added Issue tables
 and V8 added content-permission tables. Before creating
 application Services, the server entry point prepares the Collaboration file:
 
-1. Stop **all** old Workspace writers and back up both SQLite files and Blob storage.
+1. Stop **all** old Workspace writers and back up the product database, Collaboration SQLite file and Blob storage.
    With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
 2. Start a single new instance. Startup first prepares the product database to V21,
    then reads the Collaboration component versions. If migration is needed, it takes
@@ -860,7 +877,7 @@ extraction. Requests time out after 15 seconds and follow at most five redirects
 only within `api.github.com`, `raw.githubusercontent.com` and `clawhub.ai`.
 
 Publication rescans stored bytes, checks the complete replacement base, and adopts all file objects
-into `.agents/skills/<name>/` in one SQLite transaction. Removed files move to Trash. Failed writes
+into `.agents/skills/<name>/` in one product database transaction. Removed files move to Trash. Failed writes
 roll back together. No Operation or publication recovery step is added. Receiving drafts expire after
 one hour and pending drafts after seven days. Rejected, expired and conflicted drafts enqueue every
 file object for deletion through Blob maintenance.

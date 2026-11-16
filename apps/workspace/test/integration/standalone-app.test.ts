@@ -5,9 +5,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
+import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
-const applications: SqliteTestApplication[] = [];
+const applications: ProductTestApplication[] = [];
 const servers: Server[] = [];
 const directories: string[] = [];
 
@@ -90,11 +90,11 @@ async function publish(ctx: Awaited<ReturnType<typeof createHttpContext>>, html:
 async function createHttpContext() {
   const directory = mkdtempSync(join(tmpdir(), "workspace-http-blob-"));
   directories.push(directory);
-  const application = await createSqliteTestApplication(
+  const application = await createProductTestApplication(
     {
       host: "127.0.0.1",
       port: 0,
-      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
+      productFilename: join(directory, "product.sqlite"),
       collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
       blobDirectory: join(directory, "objects"),
       secureCookies: false,

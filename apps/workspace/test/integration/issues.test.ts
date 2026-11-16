@@ -1,14 +1,14 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  createSqliteTestApplication,
-  type SqliteTestApplication,
-} from "../support/sqlite/test-application.js";
+  createProductTestApplication,
+  type ProductTestApplication,
+} from "../support/product-test-application.js";
 import {
   createIssuesModule,
   type IssueProductChange,
 } from "../../server/src/modules/issues/index.js";
 
-const applications: SqliteTestApplication[] = [];
+const applications: ProductTestApplication[] = [];
 
 afterEach(async () => {
   await Promise.all(applications.splice(0).map((application) => application.close()));
@@ -249,12 +249,22 @@ describe("Issues", () => {
     expect(edits.map(({ body }) => body)).toEqual(["first", "second"]);
   });
 
+  it("allocates distinct issue numbers for concurrent authors", async () => {
+    const { issues, team, owner, editor } = await setup();
+    const rows = await Promise.all([owner, editor].map(userId => issues.create(userId, team, { title: "Concurrent" })));
+    expect(rows.map(row => row.number).sort()).toEqual([1, 2]);
+  });
+
   it("rechecks Issue permissions when membership changes before the write", async () => {
     const { application, issues, team, owner, editor } = await setup();
     const issue = await issues.create(owner, team, { title: "original" });
-    const pending = issues.update(editor, team, issue.number, { title: "edited" });
-    await application.permissions.removeTeamMember(owner, team, editor);
-    await expect(pending).rejects.toThrow(forbidden);
+    const repository = application.repositories.issues;
+    const update = repository.updateIssue.bind(repository);
+    vi.spyOn(repository, "updateIssue").mockImplementationOnce(async (...args) => {
+      await application.permissions.removeTeamMember(owner, team, editor);
+      return update(...args);
+    });
+    await expect(issues.update(editor, team, issue.number, { title: "edited" })).rejects.toThrow(forbidden);
     expect((await issues.get(owner, team, issue.number)).title).toBe("original");
   });
 
@@ -297,12 +307,12 @@ async function setup(changes?: IssueProductChange[]) {
   return { application, issues, team, hidden, owner, admin, editor, viewer, reader, stranger };
 }
 
-async function createApplication(): Promise<SqliteTestApplication> {
-  const application = await createSqliteTestApplication(
+async function createApplication(): Promise<ProductTestApplication> {
+  const application = await createProductTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
-      productDatabase: { provider: "sqlite", filename: ":memory:" },
+      productFilename: ":memory:",
       collaborationDatabaseFilename: ":memory:",
       secureCookies: false,
       sessionTtlMs: 60_000,
@@ -313,7 +323,7 @@ async function createApplication(): Promise<SqliteTestApplication> {
   return application;
 }
 
-async function register(application: SqliteTestApplication, username: string): Promise<string> {
+async function register(application: ProductTestApplication, username: string): Promise<string> {
   return (
     await application.identity.registerWithPassword({
       username,

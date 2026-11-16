@@ -16,10 +16,9 @@ import type { ViewsRepository } from "../modules/views/index.js";
 import type { WorktreesRepository } from "../modules/worktrees/index.js";
 import type { UnitCreationFactsReader } from "./unit-creation-facts.js";
 
-export interface ProductDatabaseConfig {
-  readonly provider: "sqlite";
-  readonly filename: string;
-}
+export type ProductDatabaseConfig =
+  | { readonly provider: "sqlite"; readonly filename: string }
+  | { readonly provider: "postgres"; readonly connectionString: string };
 
 export interface ProductRepositories {
   readonly access: AccessRepository;

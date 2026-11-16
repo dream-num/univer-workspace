@@ -46,7 +46,7 @@ export function createSqliteRepositories(database: SqliteDatabase): ProductRepos
   };
 }
 
-export function openSqliteProductDatabase({ filename }: ProductDatabaseConfig): ProductDatabase {
+export function openSqliteProductDatabase({ filename }: Extract<ProductDatabaseConfig, { provider: "sqlite" }>): ProductDatabase {
   const database = openWorkspaceDatabase(filename);
   try {
     return {

@@ -1,11 +1,8 @@
 # Univer Workspace 数据模型
 
-状态：V21，已实现
-
-权威定义：`server/src/db/sqlite/schema.sql`
-
-产品数据库使用 SQLite，开启 Foreign Key，Schema 版本为
-`PRAGMA user_version = 21`。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+产品库支持 SQLite 和 PostgreSQL，两个后端分别维护 schema 版本和外键约束。
+SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 21`。
+PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 1 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿另存于
@@ -280,7 +277,7 @@ Resource 是内容 API、Recent 和 Worktree 的产品身份。它不重复保�
 ### `blob_resources`
 
 保存 BlobStore `object_key`、原始文件名、服务端检测的 MIME、字节数、SHA-256、ETag 与
-`ready | quarantined` 可用状态。文件字节不进入 SQLite，Object Key 不返回客户端。前端
+`ready | quarantined` 可用状态。文件字节不进入产品库，Object Key 不返回客户端。前端
 根据 MIME 与原始文件扩展名选择预览组件；数据库不保存 Preview Kind。
 本地后端以 `object_key` 为文件名，S3 后端将同一个键放在配置的 bucket 与可选前缀下。
 切换后端时按原键迁移字节，产品表中的对象身份和内容校验值保持有效。
@@ -313,8 +310,8 @@ Unit Scope；字节完整写入 BlobStore 后记录 Hash 与 ETag，再在一个
 
 ### `object_deletion_jobs`
 
-BlobStore 与 SQLite 不能共享事务。Blob Abort/过期、Asset Upload 放弃和 Unit/Resource
-永久删除时，先在同一 SQLite 事务写通用删除 Outbox，再由后台 Worker 幂等删除对象并重试
+BlobStore 与产品库 不能共享事务。Blob Abort/过期、Asset Upload 放弃和 Unit/Resource
+永久删除时，先在同一产品库事务写通用删除 Outbox，再由后台 Worker 幂等删除对象并重试
 失败任务。V3 已将旧 `blob_deletion_jobs` 泛化为本表。
 
 ## 权限与分享
@@ -502,7 +499,7 @@ Node。
 
 1. `POST /api/blob-upload-sessions` 按 Idempotency Key 预留 Session、Node、Resource 和 Object ID；
 2. `PUT .../content` 流式写入 BlobStore，同时校验长度、计算 Hash 并检测 MIME；
-3. `POST .../complete` 校验对象后，在单个 SQLite 事务中发布 Node/Resource；
+3. `POST .../complete` 校验对象后，在单个产品库事务中发布 Node/Resource；
 4. `content` 与 `download` 都重新解析 Node 权限并支持单段 Byte Range。
 
 ### 替换 Blob 内容
@@ -665,7 +662,7 @@ V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述四张表，并
 只有作者的交互式 Session 可 publish 或 reject。终态为 `published`、`rejected`、`expired`、
 `conflicted`。读取派生过期和 ETag 冲突，发布或维护任务持久化终态。
 
-发布在单个 SQLite 事务中把草稿 object key 交给 Blob Resource，不复制字节、不创建 Operation。
+发布在单个产品库事务中把草稿 object key 交给 Blob Resource，不复制字节、不创建 Operation。
 替换复用 Blob 交换逻辑，旧对象进入 `blob_content_replaced` 删除任务；拒绝、过期、冲突把草稿
 对象交给 `blob_upload_abandoned` 删除任务。同一 key 只属于接收中或待决草稿、已发布 Blob 或删除
 任务之一。终态行保留为幂等 tombstone，不设置保留期限或草稿数量上限。

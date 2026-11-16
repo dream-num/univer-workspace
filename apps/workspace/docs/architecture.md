@@ -15,7 +15,7 @@ SQLite 数据目录。
 | Web 本地状态   | React 本地状态                              |
 | HTTP           | Express 5                                   |
 | 产品实时失效   | 认证 WebSocket、TanStack Query invalidation |
-| 产品数据库     | Node `node:sqlite`、显式 SQL schema         |
+| 产品数据库     | SQLite（`node:sqlite`）或 PostgreSQL（`pg`），各自维护 SQL schema         |
 | API 客户端     | `openapi-typescript`、`openapi-fetch`       |
 | API 文档       | OpenAPI 3.1、Redocly CLI、Scalar            |
 | 单元与集成测试 | Vitest                                      |
@@ -306,7 +306,7 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 ## 产品数据库
 
-服务端入口将 `config.productDatabase` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务和封禁 Agent 的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
+服务端入口将 `config.productDatabase` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务和封禁 Agent 的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
 
 `db/sqlite/schema.sql` 定义完整 V21 结构，`db/sqlite/initialize.ts`
 负责在业务 Module 初始化前识别数据库状态：空数据库应用 V21；V21 校验指纹；V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
