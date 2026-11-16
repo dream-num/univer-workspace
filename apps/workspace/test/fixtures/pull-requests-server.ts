@@ -13,8 +13,7 @@ const port = Number(process.env.PORT ?? 3020);
 const application = await createSqliteTestApplication({
   host: "127.0.0.1",
   port,
-  productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-  collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+  database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
   blobDirectory: join(directory, "blobs"),
   secureCookies: false,
   sessionTtlMs: 3_600_000,

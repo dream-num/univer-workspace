@@ -33,3 +33,28 @@ export async function createPostgresTestSchema(connectionString: string) {
     throw error;
   }
 }
+
+// The SDK uses the fixed collaboration schema. A disposable database isolates it along with product tables.
+export async function createPostgresTestDatabase(connectionString: string) {
+  const name = `uvw_test_${randomUUID().replaceAll("-", "")}`;
+  const scoped = new URL(connectionString);
+  scoped.pathname = `/${name}`;
+  const admin = new Client({ connectionString });
+  await admin.connect();
+  try {
+    await admin.query(`CREATE DATABASE "${name}"`);
+  } catch (error) {
+    await admin.end();
+    throw error;
+  }
+  return {
+    connectionString: scoped.href,
+    async close() {
+      try {
+        await admin.query(`DROP DATABASE "${name}"`);
+      } finally {
+        await admin.end();
+      }
+    },
+  };
+}

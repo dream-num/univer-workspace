@@ -41,7 +41,7 @@ API documentation is available at:
 - `http://127.0.0.1:3020/api-docs`
 - `http://127.0.0.1:3020/openapi.yaml`
 
-Product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
+By default, product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
 stored separately in `.data/univer-collaboration.sqlite`. Uploaded files and attachments
 default to `.data/univer-workspace-blobs`. To use a private S3-compatible bucket, set
 `BLOB_STORE=s3` and `BLOB_S3_BUCKET`. Copy existing files before switching.
@@ -49,13 +49,13 @@ See [S3 setup and migration](docs/s3-storage.md).
 
 Thread Comment anchors for Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
 comment bodies, replies, and solved state use the Comment component in the same
-Collaboration SQLite file. Comment bodies are shared across Trunk, Worktree,
+collaboration database. Comment bodies are shared across Trunk, Worktree,
 and Merge Preview editors; only anchors branch and merge with Unit data. The
 Comment protocol has no Worktree semantics, so a comment deleted from a
 Worktree disappears for Trunk as well. See `docs/application-design.md`
 ("评论与 Worktree") for the known behaviors and follow-up directions.
 
-The same Collaboration SQLite file stores a persistent History segment index.
+The same collaboration database stores a persistent History segment index.
 SDK 1.0.0 owns automatic indexing from authoritative Core creation facts and
 changesets. When History has no records, reads calculate segments and persist
 them in the background.
@@ -178,22 +178,23 @@ commands load this file automatically. GitHub OAuth is enabled only when
 `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_CALLBACK_URL` are all
 configured.
 
-SQLite is the default product database. Set `DATABASE_FILE` to change its location.
-To use PostgreSQL, create a dedicated empty database on PostgreSQL 17 and give the
-Workspace role permission to create tables, indexes, sequences and functions in its schema.
+`DATABASE_PROVIDER` selects the backend for both product and collaboration data. The default is
+`sqlite`, with separate files configured by `DATABASE_FILE` and `COLLABORATION_DATABASE_FILE`.
+For PostgreSQL 17, create a dedicated database. The Workspace role needs permission to create the
+`collaboration` schema and objects in both the product schema (normally `public`) and `collaboration`.
 Pass both settings to the server or container at runtime:
 
 ```dotenv
-PRODUCT_DATABASE_PROVIDER=postgres
+DATABASE_PROVIDER=postgres
 DATABASE_URL=postgresql://workspace@db/workspace
 ```
 
-Workspace initializes the schema on first start. Switching providers selects an independent
-database. Existing SQLite deployments keep their data in `DATABASE_FILE`; changing these
-settings does not copy it. Keep the Collaboration SQLite volume and Blob storage. For a
-consistent backup, stop all writers and take a PostgreSQL dump together with the matching
-Collaboration file and Blob objects. Restore the dump into an empty database with the same
-schema name before starting one Workspace instance.
+Both schemas are initialized on first start. To back up PostgreSQL, stop writers and save a
+full database dump and the matching BlobStore contents. Restore both before starting one instance.
+
+Changing the provider opens the selected backend. Migrate existing SQLite data separately before
+switching. Deployments previously using `PRODUCT_DATABASE_PROVIDER=postgres` already have product
+rows in PostgreSQL and must migrate their collaboration SQLite data before replacing the old setting.
 
 `GITHUB_TOKEN` is optional and unset by default. Skill source imports use this
 server token only for `api.github.com`, independently of GitHub OAuth. Without
@@ -529,7 +530,7 @@ While the container runs, touch its SQLite files only from inside it
 (`docker exec … node`). The product database is in WAL mode: opening it from
 the host with another SQLite build — even just to read it — can corrupt the
 file. Stop the container before inspecting or copying `.data`.
-The Collaboration components are `core=4`, `worktree=4`, `history=2` and
+The SQLite Collaboration components are `core=4`, `worktree=4`, `history=2` and
 `comment=1`. SDK 1.5.2 adds metadata to Trunk and Worktree Units and changesets.
 Existing records receive `{}` and retain their contents and revisions. Product V19 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
 and Issue source columns without backfilling existing rows. V15 added ordered Space
@@ -565,9 +566,6 @@ revision 1, then from the product database: the Trunk Node for a Unit, or the
 Worktree node intent for a Unit created in a Worktree. Only when both lack a value
 does the migration use `anonymous` and the migration time; these values are
 fallbacks, not reconstructed authorship. Changeset times keep the SDK defaults.
-Custom server entry points call `openProductDatabase(config.productDatabase)`, pass its
-`unitCreationFacts` reader to `prepareCollaborationDatabase`, then pass its `repositories`
-to `createWorkspaceApplication`. Close the product database after the application shuts down.
 Never run old and new SDK writers together. To roll back, stop the new instance
 and restore the matching pre-upgrade product/Collaboration/Blob backups; changing
 only the application image is insufficient. Retain backups until rollout is accepted.

@@ -1,3 +1,4 @@
+import type { openSqliteCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/sqlite/open.js";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -5,12 +6,13 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { decode } from "@msgpack/msgpack";
 import type { UnitCreationFactsReader } from "../../server/src/db/index.js";
-import type { prepareCollaborationDatabase } from "../../server/src/integrations/univer/migrations/prepare-collaboration-database.js";
+import type { prepareCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/sqlite/migrations/prepare-collaboration-database.js";
 import type { createCollaborationRuntime } from "../../server/src/integrations/univer/unit-store.js";
 
 export async function verifyCollaborationMigration(
   prepare: typeof prepareCollaborationDatabase,
   createRuntime: typeof createCollaborationRuntime,
+  openDatabase: typeof openSqliteCollaborationDatabase,
   createProductFactsReader: (db: DatabaseSync) => UnitCreationFactsReader,
 ): Promise<void> {
   const directory = mkdtempSync(join(tmpdir(), "workspace-sdk-migration-"));
@@ -227,7 +229,8 @@ export async function verifyCollaborationMigration(
         cleanup.exec("DELETE FROM collaboration_resources WHERE resource_id = 'orphan'");
         cleanup.close();
       }
-      const runtime = createRuntime(filename);
+      const adapters = await openDatabase(filename, createProductFactsReader(product));
+      const runtime = createRuntime(adapters);
       try {
         if (populated) {
           const history = await runtime.historyService.getHistoryList(
@@ -243,6 +246,7 @@ export async function verifyCollaborationMigration(
         }
       } finally {
         await runtime.dispose();
+        await adapters.close();
       }
     }
 
@@ -260,8 +264,10 @@ export async function verifyCollaborationMigration(
       }
       legacy.db.close();
       assert.equal((await prepareWithProduct(legacy.filename)).status, "migrated");
-      const runtime = createRuntime(legacy.filename);
+      const adapters = await openDatabase(legacy.filename, createProductFactsReader(product));
+      const runtime = createRuntime(adapters);
       await runtime.dispose();
+      await adapters.close();
       assert.equal((await prepareWithProduct(legacy.filename)).status, "current");
     }
 

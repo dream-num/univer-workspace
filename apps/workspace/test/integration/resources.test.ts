@@ -1,3 +1,4 @@
+import { createSqliteTestRuntime } from "../support/sqlite/collaboration-runtime.js";
 import { randomUUID } from "node:crypto";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -10,7 +11,6 @@ import {
 import {
   blankUnitData,
   collaborationCallOptions,
-  createCollaborationRuntime,
   createUnitData,
   UnitStoreError,
   type UnitStore,
@@ -471,7 +471,7 @@ describe("Univer unit store", () => {
   it("creates blank collaboration units for every supported product type", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-collaboration-"));
     temporaryDirectories.push(directory);
-    const runtime = createCollaborationRuntime(
+    const runtime = await createSqliteTestRuntime(
       join(directory, "collaboration.sqlite")
     );
     const types: readonly UnitType[] = [
@@ -501,7 +501,7 @@ describe("Univer unit store", () => {
   it("creates imported Units under the server identity for every product type", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-imported-units-"));
     temporaryDirectories.push(directory);
-    const runtime = createCollaborationRuntime(
+    const runtime = await createSqliteTestRuntime(
       join(directory, "collaboration.sqlite")
     );
     const types: readonly UnitType[] = [
@@ -558,7 +558,7 @@ describe("Univer unit store", () => {
   it("creates imported Worktree Units under the server identity", async () => {
     const directory = mkdtempSync(join(tmpdir(), "univer-worktree-units-"));
     temporaryDirectories.push(directory);
-    const runtime = createCollaborationRuntime(
+    const runtime = await createSqliteTestRuntime(
       join(directory, "collaboration.sqlite")
     );
     const backend = createWorktreeBackend(runtime.worktreeService);
@@ -633,8 +633,7 @@ function testConfig() {
   return {
     host: "127.0.0.1",
     port: 3020,
-    productDatabase: { provider: "sqlite", filename: ":memory:" },
-    collaborationDatabaseFilename: ":memory:",
+    database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
     secureCookies: false,
     sessionTtlMs: 60_000,
   } as const;

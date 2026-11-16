@@ -10,8 +10,7 @@ it("persists per-user Space stars across restart and enforces access at the HTTP
   const config = {
     host: "127.0.0.1",
     port: 0,
-    productDatabase: { provider: "sqlite", filename: join(root, "product.sqlite") },
-    collaborationDatabaseFilename: ":memory:",
+    database: { provider: "sqlite", filename: join(root, "product.sqlite"), collaborationFilename: ":memory:" },
     blobDirectory: join(root, "blobs"),
     secureCookies: false,
     sessionTtlMs: 60_000,

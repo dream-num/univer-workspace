@@ -1,28 +1,31 @@
+import { openCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/open-collaboration-database.js";
 import { createWorkspaceApplication } from "../../server/src/app.js";
 import { loadConfig, type WorkspaceConfig } from "../../server/src/config.js";
 import { openProductDatabase } from "../../server/src/db/index.js";
-import { createPostgresTestSchema } from "./postgres/schema.js";
+import { createPostgresTestDatabase } from "./postgres/schema.js";
 
 export type ProductTestApplication = Awaited<ReturnType<typeof createProductTestApplication>>;
 
 export async function createProductTestApplication(
-  { productFilename, ...settings }: Partial<Omit<WorkspaceConfig, "productDatabase">> & { productFilename: string },
-  dependencies?: Parameters<typeof createWorkspaceApplication>[2],
+  { productFilename, collaborationDatabaseFilename, ...settings }: Partial<Omit<WorkspaceConfig, "database">> & { productFilename: string; collaborationDatabaseFilename: string },
+  dependencies?: Parameters<typeof createWorkspaceApplication>[3],
 ) {
   const url = process.env.WORKSPACE_TEST_POSTGRES_URL;
-  const schema = url ? await createPostgresTestSchema(url) : undefined;
+  const postgres = url ? await createPostgresTestDatabase(url) : undefined;
   const config: WorkspaceConfig = {
     ...loadConfig({}), ...settings,
-    productDatabase: schema
-      ? { provider: "postgres", connectionString: schema.connectionString }
-      : { provider: "sqlite", filename: productFilename },
+    database: postgres
+      ? { provider: "postgres", connectionString: postgres.connectionString }
+      : { provider: "sqlite", filename: productFilename, collaborationFilename: collaborationDatabaseFilename },
   };
   const cleanup = new AsyncDisposableStack();
-  if (schema) cleanup.defer(schema.close);
+  if (postgres) cleanup.defer(postgres.close);
   try {
-    const database = await openProductDatabase(config.productDatabase);
+    const database = await openProductDatabase(config.database);
     cleanup.defer(() => database.close());
-    const application = createWorkspaceApplication(config, database.repositories, dependencies);
+    const collaboration = await openCollaborationDatabase(config.database, database.unitCreationFacts);
+    cleanup.defer(() => collaboration.close());
+    const application = createWorkspaceApplication(config, database.repositories, collaboration, dependencies);
     cleanup.defer(() => application.close());
     await application.initialize();
     return { ...application, repositories: database.repositories, close: () => cleanup.disposeAsync() };

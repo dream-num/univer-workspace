@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { UnitCreationFactsReader } from "../../../db/index.js";
+import type { UnitCreationFactsReader } from "../../../../../db/index.js";
 
 export interface UnitCreation {
   readonly creatorID: string;

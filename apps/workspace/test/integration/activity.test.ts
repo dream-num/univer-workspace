@@ -28,7 +28,7 @@ async function setup() {
     addUnit: unused, createUnit: unused, setUnitRemoved: unused, submitChangeset: unused,
   };
   const application = await createSqliteTestApplication({
-    host: "127.0.0.1", port: 0, productDatabase: { provider: "sqlite", filename: ":memory:" }, collaborationDatabaseFilename: ":memory:",
+    host: "127.0.0.1", port: 0, database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
     secureCookies: false, sessionTtlMs: 600_000,
   }, { unitStore: { async createUnit(input) { return { unitId: input.unitId, headRevision: 1 }; } }, worktreeBackend: backend });
   cleanups.push(() => application.close());

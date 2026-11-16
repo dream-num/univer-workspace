@@ -745,6 +745,9 @@ importers:
       '@univerjs-pro/collaboration-client-ui':
         specifier: 1.5.2
         version: 1.5.2(@types/react-dom@19.2.4(@types/react@19.2.18))(@types/react@19.2.18)(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/collaboration-comment-database-postgres':
+        specifier: 1.5.2
+        version: 1.5.2(@univerjs-pro/collaboration-comment-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)(pg@8.23.1)
       '@univerjs-pro/collaboration-comment-database-sqlite':
         specifier: 1.5.2
         version: 1.5.2(@univerjs-pro/collaboration-comment-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)
@@ -754,12 +757,18 @@ importers:
       '@univerjs-pro/collaboration-comment-service':
         specifier: 1.5.2
         version: 1.5.2(react@19.2.8)
+      '@univerjs-pro/collaboration-database-postgres':
+        specifier: 1.5.2
+        version: 1.5.2(@univerjs-pro/collaboration-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)(pg@8.23.1)
       '@univerjs-pro/collaboration-database-sqlite':
         specifier: 1.5.2
         version: 1.5.2(@univerjs-pro/collaboration-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)
       '@univerjs-pro/collaboration-endpoint':
         specifier: 1.5.2
         version: 1.5.2(react@19.2.8)
+      '@univerjs-pro/collaboration-history-database-postgres':
+        specifier: 1.5.2
+        version: 1.5.2(@univerjs-pro/collaboration-history-service@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(pg@8.23.1)
       '@univerjs-pro/collaboration-history-database-sqlite':
         specifier: 1.5.2
         version: 1.5.2(@univerjs-pro/collaboration-history-service@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))
@@ -778,6 +787,9 @@ importers:
       '@univerjs-pro/collaboration-worktree-client':
         specifier: 1.5.2
         version: 1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs-pro/collaboration-worktree-database-postgres':
+        specifier: 1.5.2
+        version: 1.5.2(@univerjs-pro/collaboration-service@1.5.2(react@19.2.8))(@univerjs-pro/collaboration-worktree-service@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs/protocol@1.5.2)(pg@8.23.1)
       '@univerjs-pro/collaboration-worktree-database-sqlite':
         specifier: 1.5.2
         version: 1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
@@ -6042,6 +6054,14 @@ packages:
     peerDependencies:
       rxjs: '>=7.0.0'
 
+  '@univerjs-pro/collaboration-comment-database-postgres@1.5.2':
+    resolution: {integrity: sha512-82/3Upy+ehgbCQSvTG0U8DLZ0J8+4jw/HzhbcWxyAf10tfRvEEp/MGNdtdIvwEPkzoALfBlU50zBDIBRL4Wfsw==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-comment-database-postgres/-/collaboration-comment-database-postgres-1.5.2.tgz}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@univerjs-pro/collaboration-comment-service': 1.5.2
+      '@univerjs/protocol': 1.5.2
+      pg: ^8.11.0
+
   '@univerjs-pro/collaboration-comment-database-sqlite@1.5.2':
     resolution: {integrity: sha512-2Nu2VgD6rK6mSaZP0L1ginf73Iev2U7F1OzdpjTTJzCdPE7FMRzYLLMm25w0P3zHNgvkGZUK//oTSrMvsqcIpw==}
     engines: {node: '>=22'}
@@ -6055,6 +6075,14 @@ packages:
   '@univerjs-pro/collaboration-comment-service@1.5.2':
     resolution: {integrity: sha512-IHVAqWZ28rQXA/ge8SsXLAD6QHU7fwkO5e9k6frImcNsMCjfTliyKyzcBkL2TOMsLTNI8NDyyJfHT0uokxLGlw==}
 
+  '@univerjs-pro/collaboration-database-postgres@1.5.2':
+    resolution: {integrity: sha512-aXeBr6Bx9UdVetmWI/rr4VP2EB7VTNBEU0JKfAleL8ZlX6HN7sXHEZ2CZUhwVINaJmmWMfHcy7tdP1OzYjng0w==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-database-postgres/-/collaboration-database-postgres-1.5.2.tgz}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@univerjs-pro/collaboration-service': 1.5.2
+      '@univerjs/protocol': 1.5.2
+      pg: ^8.11.0
+
   '@univerjs-pro/collaboration-database-sqlite@1.5.2':
     resolution: {integrity: sha512-58hEn45SJtqM2ioqjW0XhAtilqkJQy/RCMwoNDQXYR0fdbOI+5zgaLJRsHmJ9Lv3lkBbVzUoEV6rQOEcW0EbcA==}
     engines: {node: '>=22'}
@@ -6067,6 +6095,13 @@ packages:
 
   '@univerjs-pro/collaboration-endpoint@1.5.2':
     resolution: {integrity: sha512-J7WQAQF970NFnbzk/Mb7TI//wJXS668U1JOWkBDQCGGQhGm6KtINPPODtYD+rTZTdTAZGtyLIKoVskN96yKbbw==}
+
+  '@univerjs-pro/collaboration-history-database-postgres@1.5.2':
+    resolution: {integrity: sha512-5mAKj2CVJaOV+qh9W0mGvqXwJKkS2to2MCmfF64FVKAO2yzsMpYIcpb6rtYxBPsKtf21ol1Bm1La1585Cs04Ng==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-history-database-postgres/-/collaboration-history-database-postgres-1.5.2.tgz}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@univerjs-pro/collaboration-history-service': 1.5.2
+      pg: ^8.11.0
 
   '@univerjs-pro/collaboration-history-database-sqlite@1.5.2':
     resolution: {integrity: sha512-oAhHydX5nmYhcBNAH5u35NtgAgNwc8LiaFQxCN6Y0cOkwZU9rsHqYbTGYigKvQpf4DQmCJ2+NinOS3mLN0oxOA==}
@@ -6088,6 +6123,15 @@ packages:
 
   '@univerjs-pro/collaboration-worktree-client@1.5.2':
     resolution: {integrity: sha512-d7T2Wb9PhArnH3Cmyef36MNqh0Zcw0rvWK9qwgA4U0I9sGrMTh16qQcGTNjTcxurjbc39sjPhpJDtqeQIi3PbQ==}
+
+  '@univerjs-pro/collaboration-worktree-database-postgres@1.5.2':
+    resolution: {integrity: sha512-rDnxvS7sWtVnCaAtBS5kXZumxwWAmrbbPhCx6UNxfQovn+UEa9FggY5r+wAbxq2sxSYfSt5JnLgnY/csMTcF0Q==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-worktree-database-postgres/-/collaboration-worktree-database-postgres-1.5.2.tgz}
+    engines: {node: '>=22'}
+    peerDependencies:
+      '@univerjs-pro/collaboration-service': 1.5.2
+      '@univerjs-pro/collaboration-worktree-service': 1.5.2
+      '@univerjs/protocol': 1.5.2
+      pg: ^8.11.0
 
   '@univerjs-pro/collaboration-worktree-database-sqlite@1.5.2':
     resolution: {integrity: sha512-voUyl/ntzKq3Mk9xDywvHRH95ATSKTd+HuLb8DabCTVUA2qgEqAPJ5/ii/8FcAo6cmPaWnn6Y+Mpsx7c4KMKdg==}
@@ -16045,6 +16089,12 @@ snapshots:
       - '@univerjs-pro/embed'
       - react
 
+  '@univerjs-pro/collaboration-comment-database-postgres@1.5.2(@univerjs-pro/collaboration-comment-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)(pg@8.23.1)':
+    dependencies:
+      '@univerjs-pro/collaboration-comment-service': 1.5.2(react@19.2.8)
+      '@univerjs/protocol': 1.5.2
+      pg: 8.23.1
+
   '@univerjs-pro/collaboration-comment-database-sqlite@1.5.2(@univerjs-pro/collaboration-comment-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)':
     dependencies:
       '@univerjs-pro/collaboration-comment-service': 1.5.2(react@19.2.8)
@@ -16069,6 +16119,13 @@ snapshots:
       '@univerjs/protocol': 1.5.2
     transitivePeerDependencies:
       - react
+
+  '@univerjs-pro/collaboration-database-postgres@1.5.2(@univerjs-pro/collaboration-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)(pg@8.23.1)':
+    dependencies:
+      '@msgpack/msgpack': 3.1.3
+      '@univerjs-pro/collaboration-service': 1.5.2(react@19.2.8)
+      '@univerjs/protocol': 1.5.2
+      pg: 8.23.1
 
   '@univerjs-pro/collaboration-database-sqlite@1.5.2(@univerjs-pro/collaboration-service@1.5.2(react@19.2.8))(@univerjs/protocol@1.5.2)':
     dependencies:
@@ -16097,6 +16154,11 @@ snapshots:
       - bufferutil
       - react
       - utf-8-validate
+
+  '@univerjs-pro/collaboration-history-database-postgres@1.5.2(@univerjs-pro/collaboration-history-service@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(pg@8.23.1)':
+    dependencies:
+      '@univerjs-pro/collaboration-history-service': 1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+      pg: 8.23.1
 
   '@univerjs-pro/collaboration-history-database-sqlite@1.5.2(@univerjs-pro/collaboration-history-service@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))':
     dependencies:
@@ -16278,6 +16340,14 @@ snapshots:
       - '@univerjs-pro/embed'
       - react
       - rxjs
+
+  '@univerjs-pro/collaboration-worktree-database-postgres@1.5.2(@univerjs-pro/collaboration-service@1.5.2(react@19.2.8))(@univerjs-pro/collaboration-worktree-service@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2))(@univerjs/protocol@1.5.2)(pg@8.23.1)':
+    dependencies:
+      '@msgpack/msgpack': 3.1.3
+      '@univerjs-pro/collaboration-service': 1.5.2(react@19.2.8)
+      '@univerjs-pro/collaboration-worktree-service': 1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)
+      '@univerjs/protocol': 1.5.2
+      pg: 8.23.1
 
   '@univerjs-pro/collaboration-worktree-database-sqlite@1.5.2(@univerjs-pro/embed@1.5.2(react@19.2.8)(rxjs@7.8.2))(react@19.2.8)(rxjs@7.8.2)':
     dependencies:

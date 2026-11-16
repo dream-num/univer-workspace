@@ -9,8 +9,7 @@ it("separates affiliation, discovery and stars and persists eligible ordered pin
   const root = mkdtempSync(join(tmpdir(), "workspace-space-lists-"));
   const config = {
     host: "127.0.0.1", port: 0,
-    productDatabase: { provider: "sqlite", filename: join(root, "product.sqlite") },
-    collaborationDatabaseFilename: ":memory:", blobDirectory: join(root, "blobs"),
+    database: { provider: "sqlite", filename: join(root, "product.sqlite"), collaborationFilename: ":memory:" }, blobDirectory: join(root, "blobs"),
     secureCookies: false, sessionTtlMs: 60_000, passwordAuthEnabled: true, oauthClients: null,
   };
   const dependencies = {

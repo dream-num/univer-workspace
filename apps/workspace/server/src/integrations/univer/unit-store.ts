@@ -1,16 +1,13 @@
+import type { CollaborationDatabase } from "./collaboration-database/collaboration-database.js";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { availableParallelism } from "node:os";
 import type * as BoardsModule from "@univerjs-pro/boards";
-import type * as CommentDatabaseModule from "@univerjs-pro/collaboration-comment-database-sqlite";
 import type * as CommentServiceModule from "@univerjs-pro/collaboration-comment-service";
-import type * as CollaborationDatabaseModule from "@univerjs-pro/collaboration-database-sqlite";
-import type * as HistoryDatabaseModule from "@univerjs-pro/collaboration-history-database-sqlite";
 import type * as HistoryServiceModule from "@univerjs-pro/collaboration-history-service";
 import type * as PdfsModule from "@univerjs-pro/pdfs";
 import type * as CollaborationServiceModule from "@univerjs-pro/collaboration-service";
 import type * as WorktreeServiceModule from "@univerjs-pro/collaboration-worktree-service";
-import type * as WorktreeDatabaseModule from "@univerjs-pro/collaboration-worktree-database-sqlite";
 import type * as SlidesModule from "@univerjs-pro/slides";
 import type * as CoreModule from "@univerjs/core";
 import type * as ProtocolModule from "@univerjs/protocol";
@@ -24,18 +21,9 @@ const moduleRequire = createRequire(import.meta.url);
 const { getBoardsEmptySnapshot } = moduleRequire(
   "@univerjs-pro/boards"
 ) as typeof BoardsModule;
-const { SQLiteCommentDatabaseAdapter } = moduleRequire(
-  "@univerjs-pro/collaboration-comment-database-sqlite"
-) as typeof CommentDatabaseModule;
 const { UniverCommentService } = moduleRequire(
   "@univerjs-pro/collaboration-comment-service"
 ) as typeof CommentServiceModule;
-const { SQLiteDatabaseAdapter } = moduleRequire(
-  "@univerjs-pro/collaboration-database-sqlite"
-) as typeof CollaborationDatabaseModule;
-const { SQLiteHistoryDatabaseAdapter } = moduleRequire(
-  "@univerjs-pro/collaboration-history-database-sqlite"
-) as typeof HistoryDatabaseModule;
 const { UniverHistoryService } = moduleRequire(
   "@univerjs-pro/collaboration-history-service"
 ) as typeof HistoryServiceModule;
@@ -70,9 +58,6 @@ const UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
 const WORKTREE_UNIT_RUNTIME: CollaborationServiceModule.UnitRuntimeConfig = {
   execution: { mode: "worker", workerCount: 1 },
 };
-const { SQLiteWorktreeDatabaseAdapter } = moduleRequire(
-  "@univerjs-pro/collaboration-worktree-database-sqlite"
-) as typeof WorktreeDatabaseModule;
 const { getSlidesEmptySnapshot } = moduleRequire(
   "@univerjs-pro/slides"
 ) as typeof SlidesModule;
@@ -137,46 +122,42 @@ export interface CollaborationRuntime {
 }
 
 export function createCollaborationRuntime(
-  filename: string,
+  database: CollaborationDatabase,
   options: {
     readonly commentUserProvider?: CommentServiceModule.ICommentUserProvider;
     readonly historyUserProvider?: HistoryServiceModule.IHistoryUserProvider;
     readonly license?: UniverLicenseCredentials;
   } = {}
 ): CollaborationRuntime {
-  const database = new SQLiteDatabaseAdapter({ filename });
   const { license, licenseKey } = options.license ?? BUNDLED_UNIVER_LICENSE;
   const service = new UniverCollabService({
-    dbAdapter: database,
+    dbAdapter: database.core,
     enableUnitPermissionAnalysis: true,
     runtime: UNIT_RUNTIME,
     license,
     licenseKey,
   });
-  const historyDatabase = new SQLiteHistoryDatabaseAdapter({ filename });
   const historyService = new UniverHistoryService({
     collabService: service,
-    dbAdapter: historyDatabase,
+    dbAdapter: database.history,
     ...(options.historyUserProvider
       ? { userProvider: options.historyUserProvider }
       : {}),
   });
 
-  const commentDatabase = new SQLiteCommentDatabaseAdapter({ filename });
   const commentService = new UniverCommentService({
-    database: commentDatabase,
+    database: database.comment,
     ...(options.commentUserProvider
       ? { userProvider: options.commentUserProvider }
       : {}),
   });
-  const worktreeDatabase = new SQLiteWorktreeDatabaseAdapter({ filename });
   const worktreeService = new UniverCollabWorktreeService({
     enableUnitPermissionAnalysis: true,
     trunk: {
       service,
-      dbAdapter: database,
+      dbAdapter: database.core,
     },
-    dbAdapter: worktreeDatabase,
+    dbAdapter: database.worktree,
     runtime: WORKTREE_UNIT_RUNTIME,
   });
   const unitStore: UnitStore = {
@@ -257,13 +238,9 @@ export function createCollaborationRuntime(
     async dispose() {
       await snapshotMaterializer.dispose();
       await worktreeService.dispose();
-      await worktreeDatabase.dispose();
       await commentService.dispose();
-      await commentDatabase.dispose();
       await historyService.dispose();
-      await historyDatabase.dispose();
       await service.dispose();
-      await database.dispose();
     },
   };
 }

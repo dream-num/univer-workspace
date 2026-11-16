@@ -10,7 +10,7 @@ import { createSqliteTestApplication } from "../support/sqlite/test-application.
 import { interactivePrincipal } from "./principal.js";
 const directory = mkdtempSync(join(tmpdir(), "workspace-native-preview-"));
 const application = await createSqliteTestApplication({ host: "127.0.0.1", port: 3091,
-  productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") }, collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+  database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
   blobDirectory: join(directory, "blobs"), secureCookies: false, sessionTtlMs: 3_600_000,
   passwordAuthEnabled: true, oauthClients: null });
 await application.initialize();

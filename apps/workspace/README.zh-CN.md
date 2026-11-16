@@ -25,7 +25,7 @@ Vite 还将 `/mcp` 代理到 `WORKSPACE_DEV_MCP_PORT` 指定的本地 MCP 网关
 - `http://127.0.0.1:3020/api-docs` 提供交互式文档。
 - `http://127.0.0.1:3020/openapi.yaml` 提供 OpenAPI 定义。
 
-产品数据保存在 `.data/univer-workspace.sqlite`，Univer Unit 的协同数据单独保存在 `.data/univer-collaboration.sqlite`。上传文件和附件默认保存在 `.data/univer-workspace-blobs`。使用私有 S3 兼容存储桶时，设置 `BLOB_STORE=s3` 和 `BLOB_S3_BUCKET`。已有部署须先复制文件，再切换存储。[S3 配置与迁移](docs/s3-storage.zh-CN.md)
+默认情况下，产品数据保存在 `.data/univer-workspace.sqlite`，Univer Unit 的协同数据单独保存在 `.data/univer-collaboration.sqlite`。上传文件和附件默认保存在 `.data/univer-workspace-blobs`。使用私有 S3 兼容存储桶时，设置 `BLOB_STORE=s3` 和 `BLOB_S3_BUCKET`。已有部署须先复制文件，再切换存储。[S3 配置与迁移](docs/s3-storage.zh-CN.md)
 
 Sheet、Doc、Slide、Base 和 Board 的评论锚点保存在 Unit 快照与变更集中。评论正文、回复和解决状态由同一协同数据库中的 Comment 组件保存。主线（Trunk）、Worktree 和合并预览共享评论正文，只有锚点随 Unit 数据分支和合并。在 Worktree 删除评论也会删除主线上的同一条评论。详见 `docs/application-design.md` 的“评论与 Worktree”一节。
 
@@ -190,16 +190,18 @@ CIMD URL 必须使用 HTTPS，含根目录以外的路径，并省略凭据、�
 
 已登录的浏览器会保持一个 `/api/worktree-events` WebSocket 连接。AI 或 CLI 对 Worktree 的写入在协同及产品操作均完成后通知浏览器刷新缓存。活动和已处理任务列表、详情、侧栏计数及受 Worktree 影响的节点与资源列表会自动更新。连接使用一次性会话票据，通知不含 Worktree 元数据或正文。
 
-### 产品数据库
+### 数据库
 
-默认产品库为 SQLite，文件位置由 `DATABASE_FILE` 指定。使用 PostgreSQL 17 时，先建一个专用空库，给 Workspace 账号授予在目标 schema 创建表、索引、序列和函数的权限。给服务进程或容器传入：
+`DATABASE_PROVIDER` 同时选择产品库和协同库的后端。默认值为 `sqlite`，两个文件的位置分别由 `DATABASE_FILE` 和 `COLLABORATION_DATABASE_FILE` 指定。使用 PostgreSQL 17 时，先建一个专用数据库，给 Workspace 账号授予创建 `collaboration` schema 以及在产品 schema（通常为 `public`）和 `collaboration` 中创建对象的权限。给服务进程或容器传入：
 
 ```dotenv
-PRODUCT_DATABASE_PROVIDER=postgres
+DATABASE_PROVIDER=postgres
 DATABASE_URL=postgresql://workspace@db/workspace
 ```
 
-首次启动自动建表。切换后端会打开独立的产品库，已有 SQLite 数据仍在原文件中，需要另行迁移。协同库继续使用 `COLLABORATION_DATABASE_FILE`，文件字节继续使用配置的 BlobStore。备份时停掉全部写入实例，同时保留 PostgreSQL 逻辑备份、协同文件及 Blob 对象。恢复时将备份还原到具有相同 schema 名称的空库，再启动一个 Workspace 实例。
+首次启动自动创建产品表和协同表。备份时停止全部写入实例，保存整个 PostgreSQL 数据库的逻辑备份和配套的 BlobStore 内容。恢复两者后再启动一个实例。
+
+切换后端前需单独迁移已有的 SQLite 数据。此前使用 `PRODUCT_DATABASE_PROVIDER=postgres` 的部署，产品数据已在 PostgreSQL 中，需先迁移协同 SQLite 文件中的数据，再替换旧配置。
 
 ## Docker
 
@@ -237,7 +239,7 @@ docker run --name univer-workspace \
 
 需要全新的本地测试实例时，挂载一个新的空数据卷即可。启动会保留已有数据，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
 
-协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`、`comment=1`。SDK 1.5.2 为主线和 Worktree 的 Unit、Changeset 增加元数据，已有记录的初始值为 `{}`，内容和修订号保留。
+SQLite 协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`、`comment=1`。SDK 1.5.2 为主线和 Worktree 的 Unit、Changeset 增加元数据，已有记录的初始值为 `{}`，内容和修订号保留。
 
 服务端入口会在创建应用服务前准备协同数据库。升级顺序如下。
 
@@ -248,7 +250,7 @@ docker run --name univer-workspace \
 
 支持从 Core V1–V3、Worktree V1–V3 和 History V1 升级。新数据库由当前适配器初始化。迁移优先从 History V1 的修订 1 读取 Unit 创建者和时间，缺失时查询产品数据库。主线 Unit 取其 Trunk Node，Worktree 内创建的 Unit 取对应的节点意图。两个来源均缺少信息时，以 `anonymous` 和迁移时间补缺，不能据此还原真实的创建信息。Changeset 时间沿用 SDK 默认值。
 
-自定义服务端入口先调用 `openProductDatabase(config.productDatabase)`，将其 `unitCreationFacts` 交给 `prepareCollaborationDatabase`，再将 `repositories` 传入 `createWorkspaceApplication`。应用关闭后释放产品库。新旧 SDK 实例不能同时写入。回滚时停止新实例，同时还原同一批次的升级前产品库、协同库与 Blob 备份。只换回旧镜像无法还原数据，备份应保留到部署验收完成。
+新旧 SDK 实例不能同时写入。回滚时停止新实例，同时还原同一批次的升级前产品库、协同库与 Blob 备份。只换回旧镜像无法还原数据，备份应保留到部署验收完成。
 
 各版本的产品数据库变更如下。
 

@@ -195,8 +195,7 @@ async function start(config: Partial<WorkspaceConfig> = {}): Promise<{ origin: s
   const application = await createSqliteTestApplication({
     host: "127.0.0.1",
     port: 0,
-    productDatabase: { provider: "sqlite", filename: ":memory:" },
-    collaborationDatabaseFilename: ":memory:",
+    database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
     secureCookies: false,
     sessionTtlMs: 24 * 60 * 60_000,
     passwordAuthEnabled: true,

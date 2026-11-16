@@ -1,3 +1,4 @@
+import type { CollaborationDatabase } from "./integrations/univer/collaboration-database/collaboration-database.js";
 import { createSkillSourcesModule } from "./modules/skill-drafts/sources.service.js";
 import { createSkillDraftsModule, createSkillDraftsRouter, type SkillDraftsModule } from "./modules/skill-drafts/index.js";
 import { createHtmlViewDraftsModule, createHtmlViewDraftsRouter, type HtmlViewDraftsModule } from "./modules/html-view-drafts/index.js";
@@ -151,6 +152,7 @@ export interface WorkspaceApplication {
 export function createWorkspaceApplication(
   config: WorkspaceConfig,
   repositories: ProductRepositories,
+  collaborationDatabase: CollaborationDatabase,
   dependencies: {
     readonly unitStore?: UnitStore;
     readonly unitSnapshotStore?: UnitSnapshotStore;
@@ -213,7 +215,7 @@ export function createWorkspaceApplication(
   const unitStore =
     dependencies.unitStore ??
     (collaboration = createCollaborationRuntime(
-      config.collaborationDatabaseFilename,
+      collaborationDatabase,
       {
         ...(config.univerLicense ? { license: config.univerLicense } : {}),
         commentUserProvider: {

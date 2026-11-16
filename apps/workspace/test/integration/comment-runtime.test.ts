@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { afterEach, describe, expect, it } from "vitest";
-import { createCollaborationRuntime } from "../../server/src/integrations/univer/unit-store.js";
+import { createSqliteTestRuntime } from "../support/sqlite/collaboration-runtime.js";
 
 const temporaryDirectories: string[] = [];
 
@@ -23,7 +23,7 @@ describe("comment collaboration runtime", () => {
       readonly threadId: string;
       readonly content: string;
     }> = [];
-    let runtime = createCollaborationRuntime(filename);
+    let runtime = await createSqliteTestRuntime(filename);
     for (const unitType of [
       "sheet",
       "doc",
@@ -77,7 +77,7 @@ describe("comment collaboration runtime", () => {
       database.close();
     }
 
-    runtime = createCollaborationRuntime(filename);
+    runtime = await createSqliteTestRuntime(filename);
     for (const comment of comments) {
       const listed = await runtime.commentService.listComments(
         { unitID: comment.unitId, threadIDs: [comment.threadId] },

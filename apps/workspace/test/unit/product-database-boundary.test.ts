@@ -28,10 +28,10 @@ it("keeps product database adapters private and selects them at the factory", ()
       const target = specifier.startsWith(".") ? sourceName(resolve(dirname(path), specifier)) : specifier;
       const adapter = adapters.find((prefix) => target.startsWith(prefix));
       if (target === "node:sqlite") {
-        if (!name.startsWith("db/sqlite/") && !name.startsWith("integrations/univer/migrations/")) {
+        if (!name.startsWith("db/sqlite/") && !name.startsWith("integrations/univer/collaboration-database/sqlite/migrations/")) {
           violations.push(`${name} → ${target}`);
         }
-      } else if ((target === "pg" || target.startsWith("pg/")) && !name.startsWith("db/postgres/")) {
+      } else if ((target === "pg" || target.startsWith("pg/")) && !name.startsWith("db/postgres/") && !name.startsWith("integrations/univer/collaboration-database/postgres/")) {
         violations.push(`${name} → ${target}`);
       } else if (adapter && !name.startsWith(adapter)) {
         if (name !== factory || target !== `${adapter}open`) {

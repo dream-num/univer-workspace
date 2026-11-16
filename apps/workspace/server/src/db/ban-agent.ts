@@ -7,7 +7,7 @@ if (!target) {
   process.exit(1);
 }
 
-const database = await openProductDatabase(loadConfig().productDatabase);
+const database = await openProductDatabase(loadConfig().database);
 try {
   const result = await database.repositories.identity.banAgent(target, Date.now());
   if (result?.status === "banned") {

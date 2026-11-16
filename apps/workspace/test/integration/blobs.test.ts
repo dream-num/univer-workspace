@@ -321,8 +321,7 @@ describe("Blob Resources", () => {
     const config = {
       host: "127.0.0.1",
       port: 0,
-      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-      collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+      database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
       blobDirectory,
       maxBlobBytes: 1024,
       secureCookies: false,
@@ -748,8 +747,7 @@ async function createTestApplication(existingDirectory?: string): Promise<{
     {
       host: "127.0.0.1",
       port: 0,
-      productDatabase: { provider: "sqlite", filename: join(directory, "product.sqlite") },
-      collaborationDatabaseFilename: join(directory, "collaboration.sqlite"),
+      database: { provider: "sqlite", filename: join(directory, "product.sqlite"), collaborationFilename: join(directory, "collaboration.sqlite") },
       blobDirectory,
       maxBlobBytes: 1024,
       secureCookies: false,

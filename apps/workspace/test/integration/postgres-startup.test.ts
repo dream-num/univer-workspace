@@ -6,11 +6,12 @@ import { createPostgresTestSchema } from "../support/postgres/schema.js";
 const url = process.env.WORKSPACE_TEST_POSTGRES_URL;
 
 it("requires an explicit PostgreSQL provider and connection URL", () => {
-  expect(loadConfig({ DATABASE_URL: "postgres://host/db" }).productDatabase.provider).toBe("sqlite");
-  expect(() => loadConfig({ PRODUCT_DATABASE_PROVIDER: "other" })).toThrow(/PROVIDER/);
-  expect(() => loadConfig({ PRODUCT_DATABASE_PROVIDER: "postgres" })).toThrow(/DATABASE_URL/);
-  expect(() => loadConfig({ PRODUCT_DATABASE_PROVIDER: "postgres", DATABASE_URL: "file:///tmp/db" })).toThrow(/DATABASE_URL/);
-  expect(loadConfig({ PRODUCT_DATABASE_PROVIDER: "postgres", DATABASE_URL: "postgres://host/db" }).productDatabase)
+  expect(loadConfig({ DATABASE_URL: "postgres://host/db" }).database.provider).toBe("sqlite");
+  expect(() => loadConfig({ PRODUCT_DATABASE_PROVIDER: "postgres" })).toThrow(/Remove PRODUCT_DATABASE_PROVIDER/);
+  expect(() => loadConfig({ DATABASE_PROVIDER: "other" })).toThrow(/PROVIDER/);
+  expect(() => loadConfig({ DATABASE_PROVIDER: "postgres" })).toThrow(/DATABASE_URL/);
+  expect(() => loadConfig({ DATABASE_PROVIDER: "postgres", DATABASE_URL: "file:///tmp/db" })).toThrow(/DATABASE_URL/);
+  expect(loadConfig({ DATABASE_PROVIDER: "postgres", DATABASE_URL: "postgres://host/db" }).database)
     .toEqual({ provider: "postgres", connectionString: "postgres://host/db" });
 });
 
