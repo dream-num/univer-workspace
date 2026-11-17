@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { act, createElement, useEffect } from "react";
+import { act, createElement, useEffect, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkspaceShellProps } from "../shell.types";
@@ -24,7 +24,12 @@ vi.mock("../../features/spaces", () => ({
   }),
 }));
 vi.mock("../../features/worktrees", () => ({ useWorktreeChangeFeed: () => {} }));
-vi.mock("@tanstack/react-router", () => ({ useNavigate: () => vi.fn(), Navigate: () => null }));
+vi.mock("@tanstack/react-router", () => ({
+  useNavigate: () => vi.fn(),
+  Navigate: () => null,
+  Link: ({ to, children, className }: { to: string; children: ReactNode; className?: string }) =>
+    createElement("a", { href: to, className }, children),
+}));
 vi.mock("../../shared/i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("../../shared/ui", () => ({
   LoadingScreen: () => createElement("div", { "data-testid": "loading" }),
@@ -120,6 +125,15 @@ it.each([false, true])("keeps authorized content mounted while optional Space me
   expect(container.querySelector('[data-testid="document"]')).toBe(document);
   expect(mounts).toBe(1);
   expect(unmounts).toBe(0);
+});
+
+it.each([true, false])("offers one link home in place of the top bar only when immersive (immersive=%s)", async (immersive) => {
+  fetchSpace.mockResolvedValue({ id: "space", type: "personal", name: "Personal" });
+  await open({ selectedSpaceId: "space", selectedNodeId: "sheet", contentMode: "editor", immersive });
+  const home = [...container.querySelectorAll('a[href="/home"]')];
+  expect(home.map((link) => link.textContent)).toEqual(immersive ? ["home"] : []);
+  expect(container.querySelectorAll("header").length).toBe(1);
+  expect(container.querySelector('[data-testid="document"]')).not.toBeNull();
 });
 
 it("still waits for Space details on repository pages and renders them after success", async () => {

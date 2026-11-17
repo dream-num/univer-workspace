@@ -22,15 +22,17 @@ vi.mock("@tanstack/react-router", () => ({
   },
 }));
 vi.mock("./registry", () => ({
-  useModeDefinition: () => ({ Shell: () => createElement("div", null, "Signed-in shell") }),
+  useModeDefinition: () => ({
+    Shell: ({ children }: { children?: ReactNode }) => createElement("div", null, "Signed-in shell", children),
+  }),
 }));
 vi.mock("../features/shell", () => ({ WorkspaceHeaderSearch: () => null }));
 vi.mock("../features/spaces", () => ({ CreateTeamDialog: () => null }));
 vi.mock("../shared/ui-mode", () => ({ useUiMode: () => ({ mode: "repository" }) }));
-vi.mock("../shared/ui", async () => {
-  const { Button, buttonVariants } = await import("../shared/ui/button");
+vi.mock("../shared/ui", async (importOriginal) => {
+  const { Button } = await import("../shared/ui/button");
   return {
-    buttonVariants,
+    ...(await importOriginal<object>()),
     LoadingScreen: () => null,
     Button: (props: Omit<ComponentProps<typeof Button>, "onClick"> & { onClick?: () => unknown }) => {
       if (props.onClick) controls.set(props["aria-label"] ?? "copy", props.onClick);
@@ -62,17 +64,78 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderLayout(authenticated = false, immersive = true) {
+type NodeOwner = { displayName: string; kind: "human" } | { displayName: string; kind: "agent"; claimed: boolean };
+
+function renderLayout(authenticated = false, immersive = true, owner?: NodeOwner | null, accessRole = "viewer") {
   controls.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   client.setQueryData(sessionQueryKey, { authenticated });
+  if (owner !== undefined) client.setQueryData(["nodes", "one"], { owner, node: { id: "one", accessRole, resource: { id: "r" } } });
   return renderToStaticMarkup(createElement(QueryClientProvider, { client },
     createElement(LanguageProvider, null,
-      createElement(WorkspaceLayout, { immersive }, createElement("iframe", { title: "Shared app" })),
+      createElement(WorkspaceLayout, { immersive, ...(owner === undefined ? {} : { selectedNodeId: "one" }) },
+        createElement("iframe", { title: "Shared app" })),
     ),
   ));
 }
+
+const unverifiedAgent: NodeOwner = { displayName: "Budget bot", kind: "agent", claimed: false };
+
+describe("share page header", () => {
+  it.each([false, true])("names the author, links the brand and offers Report to a signed-out visitor (immersive: %s)", (immersive) => {
+    const html = renderLayout(false, immersive, unverifiedAgent);
+    const bar = html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
+    expect(bar).toContain(">By Budget bot<");
+    expect(bar).toContain(">Unverified agent<");
+    expect(bar).toContain('href="https://github.com/dream-num/univer-workspace" target="_blank" rel="noopener noreferrer">Made with Univer Workspace');
+    expect(bar).toContain('href="https://space.univer.ai" target="_blank" rel="noopener noreferrer">space.univer.ai');
+    expect(bar).toMatch(/<button[^>]*>.*Report<\/button>/);
+    expect(bar).toContain('title="By Budget bot"');
+    expect(bar).toContain('Made with Univer Workspace<span class="sr-only"> (opens in a new tab)</span>');
+    expect(bar).toContain('space.univer.ai<span class="sr-only"> (opens in a new tab)</span>');
+    expect(bar.includes("Sign up free")).toBe(immersive);
+    expect(bar.includes('aria-label="Collapse sign-up bar"')).toBe(immersive);
+    expect(bar.includes('role="status"')).toBe(immersive);
+    expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<main"));
+  });
+
+  it("marks only an unclaimed agent as unverified", () => {
+    const human = renderLayout(false, false, { displayName: "Alice", kind: "human" });
+    expect(human).toContain(">By Alice<");
+    expect(human).not.toContain("Unverified agent");
+    expect(human).not.toContain(">Agent<");
+    const claimed = renderLayout(false, false, { ...unverifiedAgent, claimed: true });
+    expect(claimed).toContain(">Agent<");
+    expect(claimed).not.toContain("Unverified agent");
+  });
+
+  it("names no author in a Team Space but still links the brand and offers Report", () => {
+    const html = renderLayout(false, false, null);
+    expect(html).not.toContain(">By ");
+    expect(html).toContain("Made with Univer Workspace");
+    expect(html).toContain("Report");
+  });
+
+  it("shows a signed-in reader of someone else's Personal Space file the bar without sign-up", () => {
+    const html = renderLayout(true, false, unverifiedAgent, "editor");
+    expect(html).toContain("Signed-in shell");
+    expect(html).toContain(">By Budget bot<");
+    expect(html).toContain(">Unverified agent<");
+    expect(html).toMatch(/<button[^>]*>.*Report<\/button>/);
+    expect(html).not.toContain("Sign up");
+    expect(html).not.toContain("Sign in");
+    expect(html).not.toContain('role="status"');
+    expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<iframe"));
+  });
+
+  it("leaves the owner's and Team Space members' signed-in view unchanged", () => {
+    for (const html of [renderLayout(true, false, unverifiedAgent, "owner"), renderLayout(true, false, null, "editor")]) {
+      expect(html).toContain("Signed-in shell");
+      expect(html).not.toContain("<aside");
+    }
+  });
+});
 
 describe("visitor sign-up bar", () => {
   it("renders between the header and main area for signed-out immersive visitors", () => {

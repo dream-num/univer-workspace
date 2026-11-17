@@ -23,6 +23,29 @@ afterEach(async () => {
 });
 
 describe("Node/Resource HTTP API", () => {
+  it("names the owner of a Personal Space Node as its author", async () => {
+    const application = await createProductTestApplication({
+      productFilename: ":memory:",
+      collaborationDatabaseFilename: ":memory:",
+    });
+    applications.push(application);
+    const human = await application.identity.registerWithPassword({
+      username: "author",
+      displayName: "Author",
+      password: "correct horse battery staple",
+    });
+    const agent = await application.identity.createAgent({ label: "Budget bot", originIp: undefined });
+    const authorOfNewNode = async (userId: string) => {
+      const space = (await application.spaces.list(userId)).spaces[0];
+      if (!space) throw new Error("Personal space was not created.");
+      const node = await application.nodes.create(userId, { spaceId: space.id, parentNodeId: null, name: "Plans" });
+      return (await application.nodes.get(userId, node.id)).owner;
+    };
+
+    expect(await authorOfNewNode(human.view.user.id)).toEqual({ displayName: "Author", kind: "human" });
+    expect(await authorOfNewNode(agent.user.id)).toEqual({ displayName: "Budget bot", kind: "agent", claimed: false });
+  });
+
   it("supports Resource Nodes as parents and exposes no legacy routes", async () => {
     const application = await createProductTestApplication(
       {

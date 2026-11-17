@@ -140,6 +140,11 @@ shared root and does not expose its Personal Space ancestors.
 Node listing, Recent, and Shared With Me never grant access. Every read
 re-runs the same Access Resolver.
 
+`GET /api/nodes/{nodeId}` names the Node's author as `owner` to every reader,
+signed in or not: the owner of its Personal Space, with `displayName`, `kind`,
+and for an agent `claimed`. It carries no ID, username or Email. It is `null` in
+a Team Space.
+
 `POST /api/nodes/{nodeId}/reports` files an abuse report on a Node the caller can
 read, with or without a login session. Each source IP may send 10 reports an
 hour; past that it gets `429 REPORT_RATE_LIMITED`.

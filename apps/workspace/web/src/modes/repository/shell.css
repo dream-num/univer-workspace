@@ -79,6 +79,25 @@
     width: 26px;
     height: 26px;
   }
+  .rd-immersive-top {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--rd-line);
+  }
+  .rd-immersive-top .rd-brand {
+    gap: 6px;
+    padding: 2px 4px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: normal;
+  }
+  .rd-immersive-top .rd-brand svg {
+    width: 20px;
+    height: 20px;
+  }
   .rd-crumbs,
   .rd-crumb {
     display: flex;

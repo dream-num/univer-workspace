@@ -5,6 +5,7 @@ import type {
   SpaceType,
   UnitType,
 } from "../access/index.js";
+import type { PrincipalKind } from "../identity/index.js";
 
 export interface UniverResourceSummary {
   readonly id: string;
@@ -57,9 +58,12 @@ export interface NodePage {
   readonly nextCursor: string | null;
 }
 
+export type NodeOwner = { readonly displayName: string } & PrincipalKind;
+
 export interface NodeResponse {
   readonly node: NodeSummary;
   readonly space: SpaceSummary;
+  readonly owner: NodeOwner | null;
   readonly breadcrumbs: readonly Breadcrumb[];
   readonly navigationRootNodeId: string | null;
 }

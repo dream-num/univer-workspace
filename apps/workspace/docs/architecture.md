@@ -418,6 +418,9 @@ Pins 保存在产品库 V16 的 `space_pins`，不进入协同库。其资格校
 
 Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录时使用轻量访客布局，不加载工作台
 导航、Space 列表或 Worktree 事件连接。登录入口保留当前 URL（含沉浸视图参数）。
+访客布局在每个 Node 页面渲染 `VisitorBar`：作者（`GET /api/nodes/{nodeId}` 的 `owner`）、未认领 agent 的
+未验证标记、品牌链接和举报。沉浸视图隐藏顶栏，注册、登录和复制链接因此也放进这一栏，并可折叠。
+已登录用户读到别人 Personal Space 里的文件时，`WorkspaceLayout` 在 mode Shell 的内容上方渲染同一个 `VisitorBar`，不含注册、登录和复制链接。
 身份仍由 Session API 判断；SDK 的访客显示身份不赋予任何权限。服务端在明确开放的读取入口
 传入匿名身份，统一由 Access Resolver 根据链接分享和 Space 公开可读判定 viewer 权限。
 HTML 与引用来源继续分别鉴权，无专用匿名授权规则。

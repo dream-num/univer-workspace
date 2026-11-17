@@ -163,15 +163,37 @@ NodePage:
     nextCursor:
       type: [string, "null"]
 
+NodeOwner:
+  type: object
+  description: |
+    Owner of the Personal Space that holds the Node, shown to every reader as the file's author.
+    It carries no ID, username or Email.
+  additionalProperties: false
+  required: [displayName, kind]
+  properties:
+    displayName:
+      type: string
+    kind:
+      type: string
+      enum: [human, agent]
+    claimed:
+      type: boolean
+      description: Present only for an agent. Whether a human has claimed it.
+
 NodeResponse:
   type: object
   additionalProperties: false
-  required: [node, space, breadcrumbs, navigationRootNodeId]
+  required: [node, space, owner, breadcrumbs, navigationRootNodeId]
   properties:
     node:
       $ref: "#/NodeSummary"
     space:
       $ref: ./spaces.yaml#/SpaceSummary
+    owner:
+      description: Null for a Node in a Team Space, which has no single author.
+      oneOf:
+        - $ref: "#/NodeOwner"
+        - type: "null"
     breadcrumbs:
       type: array
       items:

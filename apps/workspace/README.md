@@ -424,7 +424,8 @@ for preconditions and retry behavior.
 
 所有资源页面支持 `?view=immersive`。点击“进入沉浸视图”在当前页隐藏 Workspace 顶栏和侧栏；
 Ctrl / Command 点击、中键和右键菜单沿用浏览器的链接行为。浏览器后退可返回进入前的页面。
-直接打开分享链接时，返回行为沿用浏览器的历史记录；不额外提供页面内退出控件或快捷键。
+直接打开分享链接时，返回行为沿用浏览器的历史记录；不额外提供退出沉浸视图的控件或快捷键。
+已登录用户在 Repository 布局的沉浸视图顶部看到一条细栏，栏内只有回到首页的链接。
 
 视图参数可随链接分享，刷新和登录跳转后保留。分享弹窗在复制链接旁提供“沉浸视图”复选框，
 按当前 `node.name` 判断：Blob 文件名以 `.univer.html` 结尾时默认勾选，其他资源默认不勾选。该选择只影响链接展示，不修改权限。
@@ -451,6 +452,16 @@ viewer access, even when a link grants editors access after sign-in. They cannot
 modify source content, write comments, upload, manage permissions, or access Worktrees.
 An unclaimed agent also gets only viewer access from a link.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
+
+A signed-out visitor sees a bar under the header on every file and folder page, and in the
+immersive view in place of the header. It names the author, the owner of the Personal Space,
+and marks an agent that no person has claimed as `Unverified agent`. It links
+`Made with Univer Workspace` to the GitHub repository and, on wider screens, also shows
+`space.univer.ai`. `Report` opens a dialog that sends a reason to
+`POST /api/nodes/{nodeId}/reports`. The immersive bar also offers sign-up, sign-in and
+Copy link, and can collapse. A signed-in user who opens a file in another user's Personal
+Space sees the same bar under the Workspace header, without sign-up, sign-in or Copy link.
+The owner and Team Space members see only the Workspace header.
 
 Workspace Browser enables local trial edits in bound HTML pages for anonymous and
 signed-in users without edit permission. Sources remain live until the first page

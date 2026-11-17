@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Navigate, useNavigate } from "@tanstack/react-router";
+import { Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { Settings } from "lucide-react";
 import { useEffect, useState } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
@@ -19,7 +19,7 @@ import {
 } from "../../features/account";
 import { ModeSettings } from "../mode-settings";
 import type { WorkspaceShellProps } from "../shell.types";
-import { BRAND } from "./brand";
+import { BRAND, OfficeLabMark } from "./brand";
 import { spaceDisplayName } from "./space-name";
 import { resolveFrame } from "./shell/frame";
 import { TopBar } from "./shell/top-bar";
@@ -96,7 +96,16 @@ export function RepositoryShell(props: WorkspaceShellProps) {
   return (
     <>
       <div className="workspace-shell rd-app" data-frame={frame.kind}>
-        {frame.kind !== "immersive" ? <TopBar {...props} frame={frame} account={account} /> : null}
+        {frame.kind === "immersive" ? (
+          <header className="rd-immersive-top">
+            <Link className="rd-brand" to="/home">
+              <OfficeLabMark />
+              {t("home")}
+            </Link>
+          </header>
+        ) : (
+          <TopBar {...props} frame={frame} account={account} />
+        )}
         <div className="rd-viewport">
           {frame.kind === "repository" ? (
             <RepositoryMasthead spaceId={frame.spaceId} tab={frame.tab} />
