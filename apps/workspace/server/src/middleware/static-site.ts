@@ -5,12 +5,13 @@ import express, { type Router } from "express";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../modules/identity/index.js";
 import type { NodesModule, NodeSummary } from "../modules/nodes/index.js";
 import type { PermissionsModule } from "../modules/permissions/index.js";
+import { logger } from "../logging/logger.js";
 import { notFoundHandler } from "./errors.js";
 import { recordLoopEvent } from "./loop-metrics.js";
 
 export function createStaticSiteRouter(publicDirectory: string, options?: {
   readonly nodes: Pick<NodesModule, "get">;
-  readonly identity: Pick<IdentityModule, "recordAgentPageView" | "getSession">;
+  readonly identity: Pick<IdentityModule, "recordAgentPageView" | "hasSession">;
   readonly permissions: Pick<PermissionsModule, "nodeOwnerCategory">;
   readonly publicOrigin?: string | null | undefined;
 }): Router {
@@ -39,10 +40,24 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
     }
     // Only a page the anonymous reader got: an expired agent's page stays closed until the agent returns.
     await options.identity.recordAgentPageView(node.id);
-    recordLoopEvent("workspace.share_page", {
-      session: (await options.identity.getSession(request.headers.cookie)).authenticated ? "signed_in" : "signed_out",
-      owner_category: await options.permissions.nodeOwnerCategory(node.id),
-    }, { node_id: node.id, user_agent: request.get("user-agent") ?? null });
+    if (request.method === "GET") {
+      // Not awaited: counting must neither fail nor delay the page.
+      const { identity, permissions } = options;
+      void (async () => {
+        try {
+          const [signedIn, owner] = await Promise.all([
+            identity.hasSession(request.headers.cookie),
+            permissions.nodeOwnerCategory(node.id),
+          ]);
+          recordLoopEvent("workspace.share_page", { session: signedIn ? "signed_in" : "signed_out", owner_category: owner }, {
+            node_id: node.id,
+            user_agent: request.get("user-agent") ?? null,
+          });
+        } catch (error) {
+          logger.warn({ err: error, node_id: node.id }, "Share page view not counted");
+        }
+      })();
+    }
     const htmlView = node.resource?.kind === "blob" && isHtmlViewFilename(node.name);
     const name = htmlView ? node.name.slice(0, -".univer.html".length) : node.name;
     const title = escapeHtml(`${name} · Univer Workspace`);

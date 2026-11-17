@@ -736,7 +736,7 @@ low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line 
 | Counter | Counts | Labels |
 | --- | --- | --- |
 | `workspace_link_sharing_changes_total` | Link Sharing turned on or off. A role change while sharing stays on does not count | `state` (`on`, `off`), `role` (`viewer`, `editor`), `owner_category` |
-| `workspace_share_page_views_total` | A page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open. In-app navigation does not count | `session` (`signed_in`, `signed_out`), `owner_category` |
+| `workspace_share_page_views_total` | A `GET` page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open, including a `304` revalidation, which is a real open. `HEAD` and in-app navigation do not count | `session` (`signed_in`, `signed_out`), `owner_category` |
 | `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
 
@@ -759,6 +759,15 @@ these fields:
 Every label combination starts at zero, so `increase()` counts the first event after a restart.
 Counts live in the process and start again on restart; Prometheus keeps the history. Link preview
 crawlers of chat apps also load share pages. Filter them by `user_agent` in the log lines.
+
+Known limits:
+
+- A password or email sign-up takes its `source` from the same-origin `Referer` of `/login`. A client
+  or proxy that strips the `Referer` counts the sign-up as `direct`.
+- The page reload after a sign-up and the owner's own loads of the page count as `signed_in` views.
+- `role` on an `off` event is the role stored with the setting, not one a reader gets.
+- Counting does not hold up the page. If it fails, the page is still served, the view is not
+  counted, and the server logs a warning.
 
 ## Commands
 

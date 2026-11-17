@@ -13,7 +13,7 @@ let directory: string;
 let server: Server;
 let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
-const identity = { recordAgentPageView: vi.fn(), getSession: vi.fn().mockResolvedValue({ authenticated: false }) };
+const identity = { recordAgentPageView: vi.fn(), hasSession: vi.fn().mockResolvedValue(false) };
 const permissions = { nodeOwnerCategory: vi.fn().mockResolvedValue("human") };
 const getNode = vi.fn(async (userId: string, nodeId: string) => {
   if (["private", "missing", "deleted", "failure"].includes(nodeId)) {
@@ -81,6 +81,17 @@ describe("public Node link metadata", () => {
     expect(identity.recordAgentPageView).not.toHaveBeenCalledWith(nodeId);
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     expect(response.headers.get("vary")).toBeNull();
+  });
+
+  it.each([
+    ["throws", () => { throw new Error("owner row is missing"); }],
+    ["rejects", async () => { throw new Error("database is unavailable"); }],
+  ])("serves the page when the owner lookup %s", async (_, failure) => {
+    permissions.nodeOwnerCategory.mockImplementationOnce(failure);
+    const response = await fetch(`${origin}/nodes/public`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("<title>Dashboard · Univer Workspace</title>");
+    expect(permissions.nodeOwnerCategory).toHaveBeenCalledWith("public");
   });
 
   it("escapes names in both title text and attribute values", async () => {

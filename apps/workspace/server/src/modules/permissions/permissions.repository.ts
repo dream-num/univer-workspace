@@ -81,5 +81,5 @@ export interface PermissionsRepository {
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean }>;
+  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }>;
 }

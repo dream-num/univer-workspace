@@ -66,7 +66,6 @@ export interface PermissionsModule {
     nodeId: string,
     input: unknown
   ): Promise<NodeLinkSharing>;
-  /** The category of the User who owns the Node's Space. */
   nodeOwnerCategory(nodeId: string): Promise<Exclude<PrincipalCategory, "anonymous">>;
 }
 
@@ -164,8 +163,7 @@ export function createPermissionsModule(options: {
     async updateNodeLinkSharing(actorUserId, nodeId, input) {
       requireShare(await options.access.resolveNode(actorUserId, nodeId));
       const settings = validLinkSharing(input);
-      const wasEnabled = (await options.repository.findLinkSharing(nodeId))?.enabled === 1;
-      const { row, owner, changed } = await options.repository.upsertLinkSharing({
+      const { row, owner, changed, wasEnabled } = await options.repository.upsertLinkSharing({
         nodeId,
         ...settings,
         actorUserId,

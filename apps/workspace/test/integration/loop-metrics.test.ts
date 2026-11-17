@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { afterEach, expect, it, vi } from "vitest";
+import type { EmailMessage } from "../../server/src/integrations/email/index.js";
 import { logger } from "../../server/src/logging/logger.js";
 import { createStaticSiteRouter } from "../../server/src/middleware/static-site.js";
 import { createSqliteTestApplication, type SqliteTestApplication } from "../support/sqlite/test-application.js";
@@ -12,6 +13,8 @@ const METRICS_TOKEN = "loop-metrics-test-token";
 let application: SqliteTestApplication | undefined;
 let server: Server | undefined;
 let directory: string | undefined;
+const emails: EmailMessage[] = [];
+let oauthUsers = 0;
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -35,15 +38,37 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const agentId = ((await guest.json()) as { agent: { id: string } }).agent.id;
   const personal = (await application!.spaces.list(agentId)).spaces[0]!;
   const node = await application!.nodes.create(agentId, { spaceId: personal.id, parentNodeId: null, name: "Budget" });
-  for (const enabled of [true, true, false, true]) {
+  const share = async (enabled: boolean, role = "viewer") => {
     const response = await fetch(`${origin}/api/nodes/${node.id}/link-sharing`, {
       method: "PUT",
       headers: { cookie, "content-type": "application/json" },
-      body: JSON.stringify({ enabled, role: "viewer" }),
+      body: JSON.stringify({ enabled, role }),
     });
     expect(response.status).toBe(200);
-  }
-  await fetch(`${origin}/nodes/${node.id}`, { headers: { "user-agent": "Slackbot-LinkExpanding 1.0" } });
+  };
+  // Hold both writes until both requests reach the store, so two concurrent enables race for real.
+  const repository = application!.repositories.permissions;
+  const upsert = repository.upsertLinkSharing.bind(repository);
+  let arrived = 0;
+  let release!: () => void;
+  const bothArrived = new Promise<void>((resolve) => (release = resolve));
+  vi.spyOn(repository, "upsertLinkSharing").mockImplementation(async (input) => {
+    if (++arrived === 2) release();
+    await bothArrived;
+    return await upsert(input);
+  });
+  await Promise.all([share(true), share(true)]);
+  vi.mocked(repository.upsertLinkSharing).mockRestore();
+  await share(false);
+  await share(true);
+  await share(true, "editor");
+  const page = await fetch(`${origin}/nodes/${node.id}`, { headers: { "user-agent": "Slackbot-LinkExpanding 1.0" } });
+  // A browser reload; without an explicit Cache-Control, fetch adds no-cache and the server never answers 304.
+  const revalidated = await fetch(`${origin}/nodes/${node.id}`, {
+    headers: { "if-none-match": page.headers.get("etag")!, "cache-control": "max-age=0" },
+  });
+  expect(revalidated.status).toBe(304);
+  expect((await fetch(`${origin}/nodes/${node.id}`, { method: "HEAD" })).status).toBe(200);
   await fetch(`${origin}/nodes/${node.id}?view=immersive`, { headers: { cookie } });
   const register = async (username: string, returnTo?: string) => {
     const referer = returnTo === undefined ? {} : { referer: `${origin}/login?mode=register&returnTo=${encodeURIComponent(returnTo)}` };
@@ -54,31 +79,62 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const reader = await register("reader", `/nodes/${node.id}?view=immersive`);
   await register("consenting", "/api/auth/authorize/consent?client_id=cli");
   await register("direct");
+  const emailSignup = async (email: string, referer?: string) => {
+    expect((await post("/api/auth/email/code", { email })).status).toBe(202);
+    const code = /\b(\d{6})\b/u.exec(emails.at(-1)!.text)![1]!;
+    expect((await post("/api/auth/email/login", { email, code }, referer === undefined ? {} : { referer })).status).toBe(200);
+  };
+  await emailSignup("shared@example.com", `${origin}/login?returnTo=${encodeURIComponent(`/nodes/${node.id}`)}`);
+  await emailSignup("direct@example.com");
+  const oauthSignup = async (returnTo: string) => {
+    const started = await fetch(`${origin}/api/auth/github/login?returnTo=${encodeURIComponent(returnTo)}`, { redirect: "manual" });
+    const state = new URL(started.headers.get("location")!).searchParams.get("state")!;
+    const finished = await fetch(`${origin}/api/auth/github/callback?code=code&state=${encodeURIComponent(state)}`, {
+      redirect: "manual",
+      headers: { cookie: started.headers.get("set-cookie")!.split(";")[0]! },
+    });
+    expect(finished.headers.get("location")).toBe(returnTo);
+  };
+  await oauthSignup(`/nodes/${node.id}`);
+  await oauthSignup("/api/auth/authorize?client_id=cli");
 
-  const after = await scrape();
+  // Share pages are counted beside the response, so wait for the counts to land.
+  const after = await vi.waitFor(async () => {
+    const metrics = await scrape();
+    const views = (session: string) => {
+      const series = `workspace_share_page_views_total{session="${session}",owner_category="agent_unclaimed"}`;
+      return value(metrics, series) - value(before, series);
+    };
+    expect({ signedOut: views("signed_out"), signedIn: views("signed_in") }).toEqual({ signedOut: 2, signedIn: 1 });
+    return metrics;
+  });
   const added = (series: string) => value(after, series) - value(before, series);
   expect({
     agentsFromApi: added('workspace_guest_agents_created_total{entry="api_agents"}'),
     agentsFromGuestCard: added('workspace_guest_agents_created_total{entry="auth_guest"}'),
     sharingOn: added('workspace_link_sharing_changes_total{state="on",role="viewer",owner_category="agent_unclaimed"}'),
+    sharingOnByRoleChange: added('workspace_link_sharing_changes_total{state="on",role="editor",owner_category="agent_unclaimed"}'),
     sharingOff: added('workspace_link_sharing_changes_total{state="off",role="viewer",owner_category="agent_unclaimed"}'),
-    pagesSignedOut: added('workspace_share_page_views_total{session="signed_out",owner_category="agent_unclaimed"}'),
-    pagesSignedIn: added('workspace_share_page_views_total{session="signed_in",owner_category="agent_unclaimed"}'),
     signupsFromShareLink: added('workspace_signups_total{method="password",source="share_link"}'),
     signupsFromConsent: added('workspace_signups_total{method="password",source="oauth_consent"}'),
     signupsDirect: added('workspace_signups_total{method="password",source="direct"}'),
-    emailSignups: value(after, 'workspace_signups_total{method="email",source="share_link"}'),
+    emailFromShareLink: added('workspace_signups_total{method="email",source="share_link"}'),
+    emailDirect: added('workspace_signups_total{method="email",source="direct"}'),
+    oauthFromShareLink: added('workspace_signups_total{method="github",source="share_link"}'),
+    oauthFromConsent: added('workspace_signups_total{method="github",source="oauth_consent"}'),
   }).toEqual({
     agentsFromApi: 1,
     agentsFromGuestCard: 1,
     sharingOn: 2,
+    sharingOnByRoleChange: 0,
     sharingOff: 1,
-    pagesSignedOut: 1,
-    pagesSignedIn: 1,
     signupsFromShareLink: 1,
     signupsFromConsent: 1,
     signupsDirect: 1,
-    emailSignups: 0,
+    emailFromShareLink: 1,
+    emailDirect: 1,
+    oauthFromShareLink: 1,
+    oauthFromConsent: 1,
   });
   for (const identifying of [node.id, agentId, reader, "Slackbot"]) expect(after).not.toContain(identifying);
 
@@ -114,6 +170,15 @@ async function start(): Promise<string> {
     metricsToken: METRICS_TOKEN,
   }, {
     unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
+    emailSender: { send: async (message) => void emails.push(message) },
+    githubOAuthProvider: {
+      authorizationUrl: ({ state }) => `https://github.example/authorize?state=${state}`,
+      exchangeCode: async () => {
+        oauthUsers += 1;
+        return { subject: `github-${oauthUsers}`, username: `github${oauthUsers}`, displayName: "GitHub", avatarUrl: null };
+      },
+    },
+    oauthStateSecret: "loop-metrics-oauth-state-secret",
   });
   directory = mkdtempSync(join(tmpdir(), "workspace-loop-metrics-"));
   writeFileSync(join(directory, "index.html"), "<!doctype html><html><head><title>Univer Workspace</title></head><body></body></html>");

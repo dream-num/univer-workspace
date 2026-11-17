@@ -273,9 +273,10 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean }> {
+  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }> {
     return this._database.transaction(() => {
       requireShare(this.access.readNodeAccess(input.actorUserId, input.nodeId));
+      const wasEnabled = this.readLinkSharing(input.nodeId)?.enabled === 1;
       const result = this._database.connection
         .prepare(
           `INSERT INTO node_link_sharing
@@ -309,7 +310,7 @@ export class SqlitePermissionsRepository implements PermissionsRepository {
         );
       const row = this.readLinkSharing(input.nodeId);
       if (!row) throw new Error("Updated Link Sharing settings are missing");
-      return { row, owner: this.readNodeOwner(input.nodeId), changed: result.changes > 0 };
+      return { row, owner: this.readNodeOwner(input.nodeId), changed: result.changes > 0, wasEnabled };
     });
   }
 }

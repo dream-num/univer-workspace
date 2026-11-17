@@ -188,6 +188,8 @@ export interface IdentityModule {
    * moves 30 days out, as when the agent authenticates; either happens at most once a day.
    */
   recordAgentPageView(nodeId: string): Promise<void>;
+  /** Whether the cookie holds a valid session, without the cleanup and agent activity that reading one causes. */
+  hasSession(cookieHeader: string | undefined): Promise<boolean>;
   /**
    * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
    * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
@@ -298,12 +300,13 @@ export function createIdentityModule(options: {
     };
   }
 
-  async function storedSession(cookieHeader: string | undefined): Promise<StoredSession | null> {
+  async function storedSession(cookieHeader: string | undefined, readOnly = false): Promise<StoredSession | null> {
     const token = readSessionToken(cookieHeader);
     if (!token) return null;
     const stored = await repository.findSession(token.id);
     if (!stored) return null;
     if (stored.expiresAt <= now()) {
+      if (readOnly) return null;
       await repository.deleteSession(stored.sessionId);
       options.onSessionsDeleted?.([stored.sessionId]);
       return null;
@@ -311,7 +314,7 @@ export function createIdentityModule(options: {
     if (!secretMatches(token.secret, stored.secretHash)) return null;
     const authenticated = authenticateStoredPrincipal(stored, now());
     if (!authenticated) return null;
-    if (authenticated.activity) {
+    if (authenticated.activity && !readOnly) {
       const { at, staleBefore, expiresAt } = authenticated.activity;
       await repository.touchUnclaimedAgent({ userId: stored.id }, at, staleBefore, expiresAt);
     }
@@ -390,6 +393,10 @@ export function createIdentityModule(options: {
 
     async findUsers(userIds) {
       return repository.findUsers(userIds);
+    },
+
+    async hasSession(cookieHeader) {
+      return (await storedSession(cookieHeader, true)) !== null;
     },
 
     async recordAgentPageView(nodeId) {

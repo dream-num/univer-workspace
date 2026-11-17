@@ -50,7 +50,7 @@
     {
       "id": 3,
       "title": "分享页带来的注册",
-      "description": "returnTo 指向 /nodes/ 的注册数，以及它除以无会话打开数的转化率。",
+      "description": "returnTo 指向 /nodes/ 的注册数，以及它除以无会话打开数的转化率。没有无会话打开时转化率显示无数据。",
       "type": "stat",
       "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
       "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
@@ -76,7 +76,7 @@
         {
           "refId": "B",
           "instant": true,
-          "expr": "sum(increase(workspace_signups_total{source=\"share_link\"}[$__range])) / sum(increase(workspace_share_page_views_total{session=\"signed_out\"}[$__range]))",
+          "expr": "sum(increase(workspace_signups_total{source=\"share_link\"}[$__range])) / (sum(increase(workspace_share_page_views_total{session=\"signed_out\"}[$__range])) > 0)",
           "legendFormat": "转化率"
         }
       ]
