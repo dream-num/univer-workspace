@@ -162,7 +162,10 @@ export class WorkspaceWorktreeFeature {
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
         ...(action === "merge" || action === "discard"
-          ? { idempotencyKey: stableKey(action, id) }
+          ? {
+              // A merge of another revision, or the creator's merge without one, gets its own key.
+              idempotencyKey: stableKey(action, id, ...(action === "merge" && revision !== undefined ? [revision] : [])),
+            }
           : {}),
         ...(action === "merge" && revision !== undefined ? { body: { revision } } : {}),
         method: "POST",

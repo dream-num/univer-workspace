@@ -319,6 +319,24 @@ describe("Workspace Worktree model and workflow", () => {
     expect(stableKey("merge", "wt-1")).not.toBe(stableKey("discard", "wt-1"));
     expect(stableKey("merge", "wt-1")).not.toBe(stableKey("merge", "wt-2"));
   });
+
+  it("keys a merge by the revision it names, so only a retry of that merge shares its key", async () => {
+    const posted: { key: string | null; body: string }[] = [];
+    const feature = worktrees(async (input, init) => {
+      const request = new Request(input, init);
+      if (request.method === "GET") return Response.json({ worktree: rawWorktree("wt-1", "ready") });
+      posted.push({ key: request.headers.get("idempotency-key"), body: await request.text() });
+      return Response.json({ worktree: rawWorktree("wt-1", "merged") });
+    });
+    for (const revision of ["r1", "r1", "r2", undefined]) await feature.transition("wt-1", "merge", revision);
+
+    expect(posted.map(({ body }) => body)).toEqual([
+      JSON.stringify({ revision: "r1" }), JSON.stringify({ revision: "r1" }), JSON.stringify({ revision: "r2" }), "",
+    ]);
+    const [first, retry, other, creator] = posted.map(({ key }) => key);
+    expect(retry).toBe(first);
+    expect(new Set([first, other, creator]).size).toBe(3);
+  });
 });
 
 describe("Workspace Worktree Unit membership", () => {
