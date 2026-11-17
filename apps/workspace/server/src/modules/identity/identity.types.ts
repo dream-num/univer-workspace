@@ -24,6 +24,8 @@ export type PrincipalCategory = "anonymous" | "agent_unclaimed" | "agent_claimed
 
 export interface AgentCreation {
   readonly label: string | undefined;
+  /** The registered OAuth client's self-chosen name. Names the agent when no label is given. */
+  readonly clientName?: string | null;
   /** Only the creation rate limit reads it; it is never stored. */
   readonly originIp: string | undefined;
 }

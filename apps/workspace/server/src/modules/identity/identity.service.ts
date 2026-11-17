@@ -66,6 +66,7 @@ const EMAIL_CODE_WINDOW_MS = 60 * 60 * 1000;
 const EMAIL_CODE_WINDOW_LIMIT = 5;
 const EMAIL_CODE_MAX_ATTEMPTS = 5;
 const DEFAULT_AGENT_LABEL = "agent";
+const MAX_AGENT_CLIENT_NAME_LENGTH = 40;
 
 interface PendingCliAuthorization {
   readonly deviceCodeHash: string;
@@ -606,14 +607,17 @@ export function createIdentityModule(options: {
           "Too many agents were created from this address. Try again later."
         );
       }
-      const label = input.label?.trim() || DEFAULT_AGENT_LABEL;
+      const clientName = input.label?.trim() ? undefined : agentClientName(input.clientName);
+      const label = clientName ?? (input.label?.trim() || DEFAULT_AGENT_LABEL);
       const createdAt = now();
       const expiresAt = createdAt + AGENT_TTL_MS;
       for (let attempt = 0; attempt < 5; attempt += 1) {
+        const username = agentUsername(label);
         const user: User = {
           id: randomUUID(),
-          username: agentUsername(label),
-          displayName: label,
+          username,
+          // Many agents share one client name; the username's random suffix tells them apart.
+          displayName: clientName === undefined ? label : `${clientName} · ${username.slice(-4)}`,
           avatarUrl: null,
         };
         try {
@@ -1525,6 +1529,16 @@ function agentUsername(label: string): string {
   // shortcut: 36^4 suffixes per slug, so the five retries start failing near a million agents with one label; widen the suffix then.
   const suffix = randomInt(36 ** 4).toString(36).padStart(4, "0");
   return `${slug || DEFAULT_AGENT_LABEL}-${suffix}`;
+}
+
+/** Any caller registers a client under any name, so keep it one short line without controls or bidi marks. */
+function agentClientName(name: string | null | undefined): string | undefined {
+  const cleaned = (name ?? "")
+    .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ")
+    .replace(/[\p{Cf}\p{Cs}]/gu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  return Array.from(cleaned).slice(0, MAX_AGENT_CLIENT_NAME_LENGTH).join("").trim() || undefined;
 }
 
 function displayNameFromEmail(email: string): string {

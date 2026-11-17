@@ -546,7 +546,7 @@
       content:
         application/json:
           schema:
-            $ref: ../schemas/identity.yaml#/AgentCreate
+            $ref: ../schemas/identity.yaml#/GuestAgentCreate
     responses:
       "201":
         description: Created agent. The response sets the session cookie.

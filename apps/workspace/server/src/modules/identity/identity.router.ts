@@ -7,6 +7,8 @@ import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
 
 const WORKSPACE_AGENTS_CLIENT_ID = "univer-workspace-agents";
 const MAX_AGENT_LABEL_LENGTH = 64;
+// Dynamic registration issues UUID client IDs; static and metadata-document clients have no stored name.
+const REGISTERED_CLIENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
@@ -97,8 +99,13 @@ export function createIdentityRouter(options: {
         "Sign out before continuing as a guest agent."
       );
     }
+    const clientId: unknown = request.body?.oauthClientId;
     const { user } = await identity.createAgent({
       label: agentLabel(request.body?.label),
+      // The name is read from the registered client, never from the request.
+      clientName: typeof clientId === "string" && REGISTERED_CLIENT_ID.test(clientId)
+        ? (await options.accessTokens.getClient(clientId))?.clientName ?? null
+        : null,
       originIp: request.ip,
     });
     const issued = await identity.issueSession(user, "browser");
