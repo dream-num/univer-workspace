@@ -256,6 +256,14 @@ Merge results are stored per Unit. Successful Units do not roll back if another
 Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
+A merge applies the revision its reviewer saw. The Worktree detail carries a
+`revision` derived from its title, summary and each Unit's draft revision and
+change; ready and reopen leave it unchanged. Merging a Worktree someone else
+created requires that `revision` in the request body. A missing or outdated
+revision returns 412 `PRECONDITION_FAILED` and merges nothing. The creator may
+omit it, because nobody else can change what they would merge. A merge checks
+each target with the merger's access only, for User and Team Worktrees alike.
+
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an
 agent creator, can also discover and review them and read their Worktree-local Units.

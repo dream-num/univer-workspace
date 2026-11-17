@@ -216,6 +216,17 @@ agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于�
 重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
 它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。
 
+Merge 只应用决定者看过的版本。Worktree 详情返回 `revision`，它由标题、摘要以及每个 Unit 的 ID、草稿 head
+revision 和变更类型计算得出，不另存状态，Ready 与 Reopen 不改变它。合并别人创建的 Pull request（认领人合并
+agent 的，Team Owner、Admin 或 Editor 合并其他成员的）时，请求体必须带上看过的 `revision`。缺失或已过时都返回
+412 `PRECONDITION_FAILED`，不执行任何合并，错误信息给出当前 `revision`，决定者重新查看后再决定。创建者合并
+自己的 Pull request 可以不带，因为别人改不了它的内容；带了也同样校验。Browser 记住打开 Pull request 时的
+`revision`，之后内容有变化就隐藏合并按钮并提示任务已改动，决定者确认看过最新内容后才按新的 `revision` 合并。
+
+Merge 只按执行者的权限校验每个目标，不叠加创建者当前的权限，User 与 Team Worktree 相同。执行者对结果负责，
+Operation 与 Activity 记录的是他，他也可以直接写入同样的内容；创建者的权限已在编辑和添加文件时校验。叠加创建者
+的权限会让失去权限的成员或 agent 留下的 Pull request 谁都合并不了，只能丢弃。
+
 主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
 
 - Space 所有者是暂停中的 agent（`banned_at` 非空或 `expires_at` 已过）时，Owner 以外的请求者得不到任何角色，

@@ -695,8 +695,9 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async merge(userId, worktreeId, operationIdValue) {
+    async merge(userId, worktreeId, operationIdValue, inputValue) {
       const operationId = validOperationId(operationIdValue);
+      const reviewed = validReviewedRevision(inputValue);
       const value = await context(userId, worktreeId);
       const existing = await options.repository.getOperation(operationId);
       if (existing) {
@@ -715,6 +716,7 @@ export function createWorktreesModule(options: {
       ) {
         throw forbidden();
       }
+      if (value.state === "ready") assertReviewedRevision(userId, value, reviewed);
       if (existing?.state !== "completed" && value.row.processed_at === null) {
         await validateAllTargets(userId, value.row, value.units, options);
       }
@@ -1229,8 +1231,37 @@ function summaryView(
 function detailView(value: WorktreeContext): WorktreeDetail {
   return {
     ...summaryView(value.row, value.state, value.capabilities),
+    revision: worktreeRevision(value),
     units: value.canSeeUnits ? value.units : [],
   };
+}
+
+function worktreeRevision({ row, units }: Pick<WorktreeContext, "row" | "units">): string {
+  return createHash("sha256")
+    .update(JSON.stringify([
+      row.name,
+      row.summary,
+      units.map((unit) => [unit.unitId, unit.draftHeadRevision, unit.change]),
+    ]))
+    .digest("hex");
+}
+
+/** Only the creator may merge without naming a revision: nobody else can change what they would merge. */
+function assertReviewedRevision(
+  userId: string,
+  value: WorktreeContext,
+  reviewed: string | null,
+): void {
+  const current = worktreeRevision(value);
+  if (reviewed === current || (reviewed === null && value.row.creator_user_id === userId)) return;
+  throw new ApplicationError(
+    "PRECONDITION_FAILED",
+    412,
+    reviewed === null
+      ? `Merging someone else's pull request requires the revision you reviewed. Its current revision is ${current}; review it, then merge with that revision.`
+      : `The pull request changed since the revision you reviewed, so nothing was merged. Its current revision is ${current}; review it again before merging.`,
+    "revision",
+  );
 }
 
 function requireMappedUnit(
@@ -1365,6 +1396,16 @@ function validAddUnit(value: unknown):
     ),
     ...(initialData === undefined ? {} : { initialData }),
   };
+}
+
+function validReviewedRevision(value: unknown): string | null {
+  if (value === undefined) return null;
+  const { revision } = requiredRecord(value);
+  if (revision === undefined) return null;
+  if (typeof revision !== "string" || revision === "") {
+    throw invalidInput("revision must be a non-empty string.", "revision");
+  }
+  return revision;
 }
 
 function validOpenMode(value: unknown): "draft" | "trunk" | "mergePreview" {

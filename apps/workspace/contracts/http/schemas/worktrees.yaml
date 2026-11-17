@@ -178,12 +178,28 @@ WorktreeDetail:
   allOf:
     - $ref: "#/WorktreeSummary"
     - type: object
-      required: [units]
+      required: [revision, units]
       properties:
+        revision:
+          $ref: "#/WorktreeRevision"
         units:
           type: array
           items:
             $ref: "#/WorktreeUnit"
+
+WorktreeRevision:
+  type: string
+  minLength: 1
+  description: |
+    Opaque value naming what a reviewer decides on: the title, the summary, and each Unit's draft revision and change.
+    It changes whenever any of them changes, and stays the same across ready and reopen.
+
+MergeWorktree:
+  type: object
+  additionalProperties: false
+  properties:
+    revision:
+      $ref: "#/WorktreeRevision"
 
 WorktreeEnvelope:
   type: object

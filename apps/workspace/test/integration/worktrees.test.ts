@@ -832,6 +832,47 @@ describe("Worktrees", () => {
     },
   );
 
+  it("merges a member's Team pull request only at the revision an admin reviewed", async () => {
+    const backend = new MemoryWorktreeBackend();
+    const merge = vi.spyOn(backend, "merge");
+    const application = await createTestApplication(backend);
+    const owner = await register(application, "revision-team-owner");
+    const admin = await register(application, "revision-team-admin");
+    const member = await register(application, "revision-team-member");
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Reviewed" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
+    const resource = await createResource(application, member.id, team.id);
+    const id = (await application.worktrees.create(member.id, "revision-team-create-0001", {
+      kind: "team", teamSpaceId: team.id, visibility: "space", name: "Budget", summary: null,
+    })).body.id;
+    const { unit } = (await application.worktrees.addUnit(member.id, id, "revision-team-add-0001", {
+      source: "trunk", resourceId: resource.id,
+    })).body;
+    await application.worktrees.markReady(member.id, id);
+    const reviewed = (await application.worktrees.get(admin.id, id)).worktree.revision;
+
+    await application.worktrees.reopen(member.id, id);
+    await application.worktrees.submitChangeset(member.id, id, unit.unitId, {
+      changeset: { unitID: unit.unitId, type: UniverType.UNIVER_SHEET, baseRev: 1, revision: 2, sid: "member", reqId: 1, mutations: [] },
+    });
+    await application.worktrees.markReady(member.id, id);
+    const current = (await application.worktrees.get(admin.id, id)).worktree.revision;
+    expect(current).not.toBe(reviewed);
+
+    for (const [key, input] of [["revision-team-stale-0001", { revision: reviewed }], ["revision-team-blank-0001", undefined]] as const) {
+      await expect(application.worktrees.merge(admin.id, id, key, input)).rejects.toMatchObject({
+        code: "PRECONDITION_FAILED", status: 412,
+      });
+    }
+    expect(merge).not.toHaveBeenCalled();
+    expect((await application.worktrees.get(admin.id, id)).worktree.state).toBe("ready");
+    await expect(
+      application.worktrees.merge(admin.id, id, "revision-team-merge-0001", { revision: current }),
+    ).resolves.toMatchObject({ worktree: { state: "merged" } });
+    expect(merge).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps private Team Worktree Units hidden from administrators", async () => {
     const application = await createTestApplication();
     const owner = await register(application, "team-owner");
@@ -1141,10 +1182,17 @@ class MemoryWorktreeBackend implements WorktreeBackend {
   }
 
   async submitChangeset(
-    _worktreeId: string,
+    worktreeId: string,
     changeset: Parameters<WorktreeBackend["submitChangeset"]>[1],
     userId: string
   ): ReturnType<WorktreeBackend["submitChangeset"]> {
+    const current = this._require(worktreeId);
+    this._set(worktreeId, {
+      ...current,
+      units: current.units.map((unit) =>
+        unit.unitID === changeset.unitID ? { ...unit, draftHeadRevision: changeset.revision } : unit,
+      ),
+    });
     return {
       status: "committed",
       changeset: {

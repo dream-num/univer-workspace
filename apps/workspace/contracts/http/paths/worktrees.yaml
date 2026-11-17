@@ -375,8 +375,18 @@
     tags: [Worktrees]
     operationId: mergeWorktree
     summary: Merge Worktree Units and activate successful local Units.
+    description: |
+      A merge applies the revision its reviewer saw. Send the `revision` of the Worktree detail you reviewed.
+      It is required unless you created the Worktree. A merge whose revision is missing or no longer current
+      fails with 412 and changes nothing; read the Worktree again and decide on its current revision.
     parameters:
       - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/worktrees.yaml#/MergeWorktree
     responses:
       "200":
         description: Merge attempt reached a stable result.
@@ -395,6 +405,8 @@
           application/json:
             schema:
               $ref: ../schemas/operations.yaml#/OperationEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
       "403":
@@ -403,6 +415,12 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+      "412":
+        description: The revision is missing for someone else's Worktree, or the Worktree changed since it. Nothing was merged.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/worktrees/{worktreeId}/discard:
   parameters:

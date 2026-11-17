@@ -16,7 +16,7 @@ export function pull(overrides: Partial<Worktree> = {}): Worktree {
 }
 
 export function detail(overrides: Partial<WorktreeDetail> = {}): WorktreeDetail {
-  return { ...pull(), units: [unit()], ...overrides };
+  return { ...pull(), revision: "revision-1", units: [unit()], ...overrides };
 }
 
 export function unit(overrides: Partial<WorktreeDetail["units"][number]> = {}): WorktreeDetail["units"][number] {

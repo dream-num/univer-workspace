@@ -4275,8 +4275,18 @@ paths:
         - Worktrees
       operationId: mergeWorktree
       summary: Merge Worktree Units and activate successful local Units.
+      description: |
+        A merge applies the revision its reviewer saw. Send the `revision` of the Worktree detail you reviewed.
+        It is required unless you created the Worktree. A merge whose revision is missing or no longer current
+        fails with 412 and changes nothing; read the Worktree again and decide on its current revision.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeWorktree'
       responses:
         '200':
           description: Merge attempt reached a stable result.
@@ -4295,6 +4305,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
@@ -4303,6 +4315,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          description: The revision is missing for someone else's Worktree, or the Worktree changed since it. Nothing was merged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/worktrees/{worktreeId}/discard:
     parameters:
       - name: worktreeId
@@ -4986,8 +5004,11 @@ components:
         - $ref: '#/components/schemas/WorktreeSummary'
         - type: object
           required:
+            - revision
             - units
           properties:
+            revision:
+              $ref: '#/components/schemas/WorktreeRevision'
             units:
               type: array
               items:
@@ -6960,6 +6981,12 @@ components:
           type: boolean
         discard:
           type: boolean
+    WorktreeRevision:
+      type: string
+      minLength: 1
+      description: |
+        Opaque value naming what a reviewer decides on: the title, the summary, and each Unit's draft revision and change.
+        It changes whenever any of them changes, and stays the same across ready and reopen.
     UnitType:
       type: string
       enum:
@@ -8634,6 +8661,12 @@ components:
       properties:
         worktree:
           $ref: '#/components/schemas/WorktreeSummary'
+    MergeWorktree:
+      type: object
+      additionalProperties: false
+      properties:
+        revision:
+          $ref: '#/components/schemas/WorktreeRevision'
     WorktreeOperationResponse:
       type: object
       additionalProperties: false

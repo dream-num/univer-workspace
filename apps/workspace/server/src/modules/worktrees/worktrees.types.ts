@@ -81,6 +81,7 @@ export interface WorktreeUnit {
 }
 
 export interface WorktreeDetail extends WorktreeSummary {
+  readonly revision: string;
   readonly units: readonly WorktreeUnit[];
 }
 
@@ -282,7 +283,8 @@ export interface WorktreesModule {
   merge(
     userId: string,
     worktreeId: string,
-    operationId: unknown
+    operationId: unknown,
+    input?: unknown
   ): Promise<{
     readonly operation: WorktreeOperationView;
     readonly worktree: WorktreeSummary;

@@ -214,7 +214,7 @@ describe("the claimer deciding the agent's pull requests", () => {
     expect(await transition(origin, kept.id, "reopen", alice.cookie)).toBe("draft");
     expect(await transition(origin, kept.id, "ready", alice.cookie)).toBe("ready");
     const mergeKey = randomUUID();
-    expect(await transition(origin, kept.id, "merge", alice.cookie, mergeKey)).toBe("merged");
+    expect(await transition(origin, kept.id, "merge", alice.cookie, mergeKey, { revision: await revisionOf(origin, kept.id, alice.cookie) })).toBe("merged");
     const discardKey = randomUUID();
     expect(await transition(origin, dropped.id, "discard", alice.cookie, discardKey)).toBe("discarded");
 
@@ -226,6 +226,55 @@ describe("the claimer deciding the agent's pull requests", () => {
       expect.objectContaining({ actor: expect.objectContaining({ id: aliceId }), pull: expect.objectContaining({ id: kept.id }) }),
     ]);
     expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Budget sheet"]);
+  });
+
+  it("merges only the revision the claimer reviewed, and nothing when the agent changed it since", async () => {
+    const origin = await start({ realtime: true });
+    const agent = await guestAgent(origin);
+    const agentSpaceId = await personalSpaceId(origin, agent.cookie);
+    const pull = await createPull(origin, agent.cookie, "Reviewed title");
+    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "Reviewed file");
+    expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
+    const alice = await register(origin, "alice");
+    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+    const reviewed = await revisionOf(origin, pull.id, alice.cookie);
+    expect(await revisionOf(origin, pull.id, agent.cookie)).toBe(reviewed);
+
+    expect(await transition(origin, pull.id, "reopen", agent.cookie)).toBe("draft");
+    expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
+    expect(await revisionOf(origin, pull.id, alice.cookie)).toBe(reviewed);
+    expect((await send(origin, "PATCH", `/api/worktrees/${pull.id}`, { name: "Looks harmless" }, agent.cookie)).status).toBe(200);
+    const renamed = await revisionOf(origin, pull.id, alice.cookie);
+    expect(renamed).not.toBe(reviewed);
+    expect(await transition(origin, pull.id, "reopen", agent.cookie)).toBe("draft");
+    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "Unreviewed file");
+    expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
+    const current = await revisionOf(origin, pull.id, alice.cookie);
+    expect(current).not.toBe(renamed);
+
+    for (const body of [{ revision: reviewed }, { revision: renamed }, undefined, {}]) {
+      await expectError(send(origin, "POST", `/api/worktrees/${pull.id}/merge`, body, alice.cookie, { "idempotency-key": randomUUID() }), 412, "PRECONDITION_FAILED");
+    }
+    await expectError(send(origin, "POST", `/api/worktrees/${pull.id}/merge`, { revision: 7 }, alice.cookie, { "idempotency-key": randomUUID() }), 400, "INVALID_INPUT");
+    expect(await capabilities(origin, pull.id, alice.cookie)).toMatchObject({ merge: true });
+    expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual([]);
+
+    expect(await transition(origin, pull.id, "merge", alice.cookie, randomUUID(), { revision: current })).toBe("merged");
+    expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Reviewed file", "Unreviewed file"]);
+  });
+
+  it("lets the creator merge its own pull request without naming a revision, but never a stale one", async () => {
+    const origin = await start({ realtime: true });
+    const agent = await guestAgent(origin);
+    const agentSpaceId = await personalSpaceId(origin, agent.cookie);
+    const pull = await createPull(origin, agent.cookie, "Own work");
+    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "Own file");
+    const before = await revisionOf(origin, pull.id, agent.cookie);
+    expect((await send(origin, "PATCH", `/api/worktrees/${pull.id}`, { summary: "Edited" }, agent.cookie)).status).toBe(200);
+    expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
+    await expectError(send(origin, "POST", `/api/worktrees/${pull.id}/merge`, { revision: before }, agent.cookie, { "idempotency-key": randomUUID() }), 412, "PRECONDITION_FAILED");
+    expect(await transition(origin, pull.id, "merge", agent.cookie)).toBe("merged");
+    expect(await spaceFileNames(origin, agentSpaceId, agent.cookie)).toEqual(["Own file"]);
   });
 
   it("lets the claimer finish a stopped agent's pull requests and gives everyone else the unknown-pull-request answer", async () => {
@@ -252,7 +301,7 @@ describe("the claimer deciding the agent's pull requests", () => {
     }
 
     expect(await transition(origin, kept.id, "ready", alice.cookie)).toBe("ready");
-    expect(await transition(origin, kept.id, "merge", alice.cookie)).toBe("merged");
+    expect(await transition(origin, kept.id, "merge", alice.cookie, randomUUID(), { revision: await revisionOf(origin, kept.id, alice.cookie) })).toBe("merged");
     expect(await transition(origin, dropped.id, "discard", alice.cookie)).toBe("discarded");
     expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Budget sheet"]);
   });
@@ -352,12 +401,16 @@ async function addLocalSheet(origin: string, cookie: string, worktreeId: string,
   return ((await response.json()) as { unit: { unitId: string } }).unit.unitId;
 }
 
+async function revisionOf(origin: string, worktreeId: string, cookie: string): Promise<string> {
+  return ((await (await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, cookie)).json()) as { worktree: { revision: string } }).worktree.revision;
+}
+
 async function capabilities(origin: string, worktreeId: string, cookie: string): Promise<unknown> {
   return ((await (await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, cookie)).json()) as { worktree: { capabilities: unknown } }).worktree.capabilities;
 }
 
-async function transition(origin: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard", cookie: string, key = randomUUID()): Promise<string> {
-  const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/${action}`, undefined, cookie, { "idempotency-key": key });
+async function transition(origin: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard", cookie: string, key = randomUUID(), body?: unknown): Promise<string> {
+  const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/${action}`, body, cookie, { "idempotency-key": key });
   if (response.status !== 200) throw new Error(`${action} failed with ${response.status}: ${await response.text()}`);
   return ((await response.json()) as { worktree: { state: string } }).worktree.state;
 }

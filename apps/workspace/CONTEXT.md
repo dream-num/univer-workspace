@@ -162,6 +162,12 @@ _Avoid_: Staged Resource, temporary Resource
 **Draft**:
 The isolated state of a Worktree Unit before it is merged into trunk.
 
+**Worktree Revision**:
+A value naming what a reviewer decides on: a Worktree's title, summary, and each
+Unit's draft revision and change. A merge of someone else's Worktree names the
+revision its reviewer saw and applies nothing once the Worktree has moved on.
+_Avoid_: Version, head commit
+
 **Activation**:
 The product operation that creates a Node and Resource for a successfully
 merged Worktree-local Unit.

@@ -2319,7 +2319,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Merge Worktree Units and activate successful local Units. */
+        /**
+         * Merge Worktree Units and activate successful local Units.
+         * @description A merge applies the revision its reviewer saw. Send the `revision` of the Worktree detail you reviewed.
+         *     It is required unless you created the Worktree. A merge whose revision is missing or no longer current
+         *     fails with 412 and changes nothing; read the Worktree again and decide on its current revision.
+         */
         post: operations["mergeWorktree"];
         delete?: never;
         options?: never;
@@ -2576,6 +2581,7 @@ export interface components {
             capabilities: components["schemas"]["WorktreeCapabilities"];
         };
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
+            revision: components["schemas"]["WorktreeRevision"];
             units: components["schemas"]["WorktreeUnit"][];
         };
         ResolvedSkillSource: {
@@ -3335,6 +3341,11 @@ export interface components {
             merge: boolean;
             discard: boolean;
         };
+        /**
+         * @description Opaque value naming what a reviewer decides on: the title, the summary, and each Unit's draft revision and change.
+         *     It changes whenever any of them changes, and stays the same across ready and reopen.
+         */
+        WorktreeRevision: string;
         /** @enum {string} */
         UnitType: "sheet" | "doc" | "slide" | "board" | "base" | "pdf";
         WorktreeUnitTarget: {
@@ -3943,6 +3954,9 @@ export interface components {
         };
         WorktreeSummaryEnvelope: {
             worktree: components["schemas"]["WorktreeSummary"];
+        };
+        MergeWorktree: {
+            revision?: components["schemas"]["WorktreeRevision"];
         };
         WorktreeOperationResponse: {
             operation: components["schemas"]["OperationView"];
@@ -8277,7 +8291,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["MergeWorktree"];
+            };
+        };
         responses: {
             /** @description Merge attempt reached a stable result. */
             200: {
@@ -8298,10 +8316,20 @@ export interface operations {
                     "application/json": components["schemas"]["OperationEnvelope"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            /** @description The revision is missing for someone else's Worktree, or the Worktree changed since it. Nothing was merged. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     discardWorktree: {
