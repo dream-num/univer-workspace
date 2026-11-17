@@ -1,8 +1,8 @@
 # Univer Workspace 数据模型
 
 产品库支持 SQLite 和 PostgreSQL，两个后端分别维护 schema 版本和外键约束。
-SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 21`。
-PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 1 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
+SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 22`。
+PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 2 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
 `DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。Core 使用 `core-s3` V1：快照引用保存在 `snapshots.block_ids`，`sheet_blocks` 记录 Unit 与块 ID，块内容由协同适配器写入 S3。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
@@ -26,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-SQLite 启动入口先将产品数据库准备到 V21，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V22，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
@@ -34,7 +34,7 @@ Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V21，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V22，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -94,11 +94,13 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 `kind`（V21，`'human' | 'agent'`，非空，默认 `'human'`）区分人和 agent。它与
 `login_sessions.write_source = 'agent'` 无关：后者标记凭据签发的 Session，人的个人访问令牌也会产生。
 
+`display_name` 对所有打开该 User 共享文件的人可见，人和 agent 的每一次写入都经过同一条显示名规则（`server/src/modules/identity/display-name.ts`）：控制字符、行与段分隔符和 U+2800 变为空格；格式字符（双向控制、零宽字符）、默认可忽略码位（如韩文填充符）、未配对代理项与 U+FFFD 被删除；连续空白合并为一个空格并去除首尾空白。用户亲自输入的名字（密码注册、修改资料）清理后为空、含邮箱地址（`local@domain.tld`）或超过 100 个 UTF-16 码元时返回 400，由本人改正，而不是被悄悄改成别的名字。来自 GitHub、Google、Discord、Discord Bot、邮箱登录、agent 标签和 OAuth 客户端名的派生名字没有人当场改正，因此不拒绝：邮箱地址只保留本地部分，超长时按完整字素截断，结果为空时回退为 Provider 用户名、`Workspace User` 或 `agent`。Google 未提供姓名时取邮箱本地部分。
+
 ### `agents`
 
 每个 `kind = 'agent'` 的 User 对应一行，是该 agent 生命周期的唯一来源。`user_id` 是主键并随 User 删除。
 `owner_user_id` 与 `claimed_at` 同时为空（未认领）或同时非空（已认领），由表级 CHECK 保证；
-被引用为主人的 User 不能删除。`origin_label` 是创建时提交并清理后的标签；访客入口未提交标签时，是清理后的 OAuth 客户端名。清理会移除控制字符与双向文本格式字符并合并空白。`last_active_at` 是最近活跃时间。
+被引用为主人的 User 不能删除。`origin_label` 是创建时提交并清理后的标签；访客入口未提交标签时，是清理后的 OAuth 客户端名。清理遵循 `users.display_name` 的显示名规则；客户端名按完整字素截断到 40 个 UTF-16 码元。`last_active_at` 是最近活跃时间。
 `expires_at` 为空表示不过期，`banned_at` 非空表示已封禁。全部时间为毫秒时间戳。不保存来源 IP。
 
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
@@ -187,6 +189,9 @@ Personal Access Token（PAT）：`id`、`user_id`（`ON DELETE CASCADE`）、`na
 ### `spaces`
 
 `type` 为 `personal | team`。一个 User 最多拥有一个 Personal Space。
+Personal Space 创建时名为 `<display_name> 的个人空间`。User 修改 `display_name` 时，若其 Personal Space
+名仍等于 `<原 display_name> 的个人空间`，同一事务内改为新名；改过名的 Personal Space 保持不变。
+是否仍为默认名只按这条等式判断，不另存标记。
 `public_read` 默认关闭；开启后，任意访问者（含匿名访客）无需 Membership 或 Node Grant 即可按
 `viewer` 浏览 Space 树并打开其中内容。已有更高权限优先，公开策略不授予任何写能力。
 `description` 是 Space 的纯文本简介（`TEXT NOT NULL DEFAULT ''`，修剪空白后至多 350 字符），
@@ -543,11 +548,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V21，不备份；
-2. 完整 V21：校验指纹后正常启动，不重复备份；
-3. 完整 V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V21；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V21；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V21；
+1. 不存在或空文件：创建 V22，不备份；
+2. 完整 V22：校验指纹后正常启动，不重复备份；
+3. 完整 V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V22；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V22；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V22；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -575,12 +580,13 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V15 → V16 仅新增可空的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`，CHECK 允许 `browser` 或 `agent`；已有行均为 `NULL`，无默认值、回填或新索引；
 - V16 → V17 重建 `univer_resources` 与 `worktree_node_intents`，`unit_type` CHECK 增加 `pdf`；既有行、`univer_resources_kind_guard` 触发器、入向外键、Blob 身份与恢复状态不变；
 - V17 → V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens`、各自索引，以及 `login_sessions.issued_for_pat_id`、`issued_for_grant_id` 两个可空列和两个部分索引；既有 Session 行、有效期与其它行不变，无需重建任何表；
-- 旧表全部删除且 `user_version = 21`。
+- V21 → V22 不改结构，只按显示名规则改写 `users.display_name` 与仍为默认名的 Personal Space 名；
+- 旧表全部删除且 `user_version = 22`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
 一致性备份始终保留，下一次启动可继续升级或由运维恢复。错误中会给出备份路径。
 迁移实现是唯一兼容边界；线上数据库全部完成升级后，可以删除 `migrations/`、
-`legacy-v0/` 及初始化函数中的一次调用，不影响 V21 Schema 或业务代码。
+`legacy-v0/` 及初始化函数中的一次调用，不影响 V22 Schema 或业务代码。
 
 V6 → V7 只重建 Operation 和删除任务表以扩展 CHECK 枚举，完整保留所有行和恢复字段；
 Blob 及上传会话表不变。升级前自动创建一致性备份；停旧实例后由单个新实例完成迁移。
@@ -632,13 +638,13 @@ V12 → V13 只重建 `external_identities`，把 Provider CHECK 从 `('github',
 `('github', 'google', 'discord')`；SQLite 不能原地修改 CHECK，因此迁移在同一事务内外键关闭后重命名旧表、
 创建新表并按原值复制，再逐行比对新旧 External Identity，确认列、约束和行完全保留。准备阶段在业务 Repository
 初始化前校验 V12 指纹、生成并验证一致性备份；事务提交前重新开启外键，检查 `foreign_key_check` 与
-`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V21。失败事务回滚至 V12，备份保留且
+`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V22。失败事务回滚至 V12，备份保留且
 启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V13 实例完成迁移和健康检查后恢复服务；
 回退须停新实例并恢复 V12 备份。
 
 V14 → V15 在单个事务内新增 `space_pins` 和 `space_stars_user` 索引，不改写已有表、业务行、Blob 身份或恢复状态。
 准备阶段在业务 Repository 初始化前校验 V14 指纹，生成并验证一致性备份；事务提交前检查外键与完整性，
-随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V21。失败事务回滚至 V14，备份保留，启动失败。
+随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V22。失败事务回滚至 V14，备份保留，启动失败。
 重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V15 实例完成迁移和健康检查后恢复服务；
 回退先停止新实例，再恢复 V14 备份，不允许新旧版本同时写同一 SQLite 文件。
 
@@ -708,3 +714,18 @@ V20→V21 给 `users` 末尾追加 `kind` 列，并新增 `agents` 与 `node_rep
 既有 User 经列默认值读作 `'human'`，其它行、对象身份及恢复状态保持原样。启动前停止旧实例，启动一个 V21 实例
 完成一致性备份、版本化迁移、指纹、外键和完整性校验，再恢复服务。失败事务回滚至 V20。再次启动不重复迁移或备份。
 回退先停止 V21，再恢复 V20 备份。禁止新旧进程同时写同一 SQLite 文件。
+
+## 显示名修复（V22）
+
+V21→V22 不改 Schema，只按显示名规则改写数据；PostgreSQL 的同一修复对应 `workspace_product_schema`
+版本 1→2。每个 User 的 `display_name` 套用派生规则，为空时回退为 username：邮箱形状的名字变为本地部分，
+危险或不可见字符被清除。Personal Space 名以 ` 的个人空间` 结尾，且前半部分等于 owner 原显示名或会被规则
+改写（例如改名前留下的邮箱）时，改为 `<新显示名> 的个人空间`。其它 Space 名、各行 `updated_at` 与其它表
+保持不变，Team Space 不受影响。
+
+`server/src/db/display-name-repair.ts` 的 `planDisplayNameRepair` 是唯一入口，SQLite 的 V21→V22 与 V0
+迁移、PostgreSQL 的 `initialize.ts` 版本升级都调用它；对自身输出再执行一次不产生改动。SQLite 在一致性备份后于
+单个 `BEGIN IMMEDIATE` 事务中完成修复、版本号、外键与完整性检查，失败回滚至 V21，备份保留，启动失败。
+PostgreSQL 在 advisory lock 下把修复与版本行放在同一事务提交，失败时版本仍为 1；升级前由运维备份。再次
+启动不重复迁移或备份。回退先停止 V22，再恢复 V21 备份。禁止新旧进程同时写同一 SQLite 文件。
+所有线上库到达 V22 后，可随其它迁移入口一同删除。

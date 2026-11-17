@@ -3008,7 +3008,10 @@ export interface components {
             agents: components["schemas"]["AgentSummary"][];
         };
         AgentCreate: {
-            /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`. */
+            /**
+             * @description Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
+             *     address keeps only its local part. Blank, omitted or nothing left means `agent`.
+             */
             label?: string;
         };
         AgentIdentity: {
@@ -3049,16 +3052,21 @@ export interface components {
             agent: components["schemas"]["AgentSummary"];
         };
         GuestAgentCreate: {
-            /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name. */
+            /**
+             * @description Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
+             *     address keeps only its local part. Blank, omitted or nothing left means `agent`, or the OAuth
+             *     client's name.
+             */
             label?: string;
             /**
              * @description The `client_id` of the OAuth authorization the guest continues. When
              *     `label` is blank or omitted and this names a dynamically registered
              *     client with a name, the agent is named after that client: the
-             *     server reads the name from the registration, removes control and
-             *     bidi characters, keeps at most 40 characters, and appends ` · ` and
-             *     the username's four-character suffix to the display name. Any other
-             *     value is ignored.
+             *     server reads the name from the registration, cleans it as
+             *     `PasswordRegistration.displayName` describes, keeps only the local
+             *     part of an email address, cuts it to 40 UTF-16 code units between
+             *     whole characters, and appends ` · ` and the username's four-character
+             *     suffix to the display name. Any other value is ignored.
              */
             oauthClientId?: string;
         };
@@ -3067,6 +3075,15 @@ export interface components {
         };
         PasswordRegistration: {
             username: string;
+            /**
+             * @description Shown to everyone who opens the User's shared files. The server first replaces control
+             *     characters, line and paragraph separators and U+2800 with a space, removes format characters
+             *     (bidi controls, zero-width characters), default-ignorable code points (Hangul fillers),
+             *     unpaired surrogates and U+FFFD, collapses whitespace runs to one space and trims the ends.
+             *     The result is stored. It fails with 400 `INVALID_INPUT` on `displayName` when nothing is
+             *     left, when it contains an email address (`local@domain.tld`), or when it is longer than 100
+             *     UTF-16 code units.
+             */
             displayName: string;
             password: string;
         };
@@ -3117,12 +3134,21 @@ export interface components {
             /** @description Stable Discord snowflake User ID from a trusted Bot event. */
             discordUserId: string;
             username?: string;
+            /**
+             * @description Cleaned as `PasswordRegistration.displayName` describes, but never refused: an email address
+             *     keeps only its local part and a longer name is cut to 100 UTF-16 code units between whole
+             *     characters. A name with nothing left falls back to the Discord username.
+             */
             displayName?: string;
             /** Format: uri */
             avatarUrl?: string | null;
         };
         UserProfilePatch: {
             username?: string;
+            /**
+             * @description Follows the rule in `PasswordRegistration.displayName`. A Personal Space still named
+             *     `<old display name> 的个人空间` is renamed to match; a renamed Personal Space keeps its name.
+             */
             displayName?: string;
             /** Format: uri */
             avatarUrl?: string | null;

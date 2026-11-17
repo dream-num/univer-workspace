@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { Pool, PoolClient } from "pg";
+import { planDisplayNameRepair, type StoredDisplayName, type StoredPersonalSpaceName } from "../display-name-repair.js";
 
 async function fingerprint(client: PoolClient): Promise<string> {
   const { rows } = await client.query<{ definition: string }>(`
@@ -22,6 +23,17 @@ async function fingerprint(client: PoolClient): Promise<string> {
   return createHash("sha256").update(JSON.stringify(rows)).digest("hex");
 }
 
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames];
+const VERSION = UPGRADES.length + 1;
+
+async function repairDisplayNames(client: PoolClient): Promise<void> {
+  const users = await client.query<StoredDisplayName>("SELECT id, username, display_name FROM users");
+  const spaces = await client.query<StoredPersonalSpaceName>("SELECT id, owner_user_id, name FROM spaces WHERE type = 'personal'");
+  const repair = planDisplayNameRepair(users.rows, spaces.rows);
+  for (const { id, displayName } of repair.users) await client.query("UPDATE users SET display_name = $2 WHERE id = $1", [id, displayName]);
+  for (const { id, name } of repair.spaces) await client.query("UPDATE spaces SET name = $2 WHERE id = $1", [id, name]);
+}
+
 export async function initializePostgresSchema(pool: Pool): Promise<void> {
   const sql = await readFile(new URL("./schema.sql", import.meta.url), "utf8");
   const client = await pool.connect();
@@ -35,14 +47,19 @@ export async function initializePostgresSchema(pool: Pool): Promise<void> {
     if (!tables.rowCount) {
       await client.query(sql);
       await client.query("CREATE TABLE workspace_product_schema (version integer PRIMARY KEY, fingerprint text NOT NULL)");
-      await client.query("INSERT INTO workspace_product_schema VALUES (1, $1)", [await fingerprint(client)]);
+      await client.query("INSERT INTO workspace_product_schema VALUES ($1, $2)", [VERSION, await fingerprint(client)]);
     } else {
       if (!tables.rows.some((row) => row.relname === "workspace_product_schema")) {
         throw new Error("PostgreSQL product database requires an empty schema or an initialized Workspace schema");
       }
       const { rows } = await client.query("SELECT version, fingerprint FROM workspace_product_schema");
-      if (rows.length !== 1 || rows[0].version !== 1 || rows[0].fingerprint !== await fingerprint(client)) {
+      const stored = rows.length === 1 ? rows[0] : undefined;
+      if (!stored || !Number.isInteger(stored.version) || stored.version < 1 || stored.version > VERSION || stored.fingerprint !== await fingerprint(client)) {
         throw new Error("Unsupported or modified PostgreSQL product schema");
+      }
+      if (stored.version < VERSION) {
+        for (const upgrade of UPGRADES.slice(stored.version - 1)) await upgrade(client);
+        await client.query("UPDATE workspace_product_schema SET version = $1, fingerprint = $2", [VERSION, await fingerprint(client)]);
       }
     }
     await client.query("COMMIT");

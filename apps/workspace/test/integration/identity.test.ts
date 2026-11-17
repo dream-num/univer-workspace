@@ -652,6 +652,7 @@ describe("identity", () => {
           ],
         },
       });
+      expect(database.connection.prepare("SELECT name FROM spaces").all()).toEqual([{ name: "Alice on Discord 的个人空间" }]);
       expect(tableCount(database, "users")).toBe(1);
       expect(tableCount(database, "spaces")).toBe(1);
       expect(tableCount(database, "external_identities")).toBe(1);

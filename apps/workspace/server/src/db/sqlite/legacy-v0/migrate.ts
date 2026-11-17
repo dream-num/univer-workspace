@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { fileURLToPath } from "node:url";
+import { repairDisplayNames } from "../migrations/v21-to-v22/migrate.js";
 
 interface LegacyFileRow {
   readonly entry_id: string;
@@ -116,6 +117,7 @@ export function migrateLegacyV0(database: DatabaseSync): void {
     copyCoreData(database, files, resourceByNode);
     copyWorktreeData(database, worktreeUnits, resourceByWorktreeUnit);
     copyOperations(database, operations, resourceByNode, resourceByWorktreeUnit);
+    repairDisplayNames(database);
     dropLegacyTables(database);
     validateMigrated(database, legacyCounts);
     database.exec("COMMIT");
@@ -537,9 +539,9 @@ function validateMigrated(
   const version = database.prepare("PRAGMA user_version").get() as
     | { readonly user_version?: unknown }
     | undefined;
-  if (version?.user_version !== 21) {
+  if (version?.user_version !== 22) {
     throw new Error(
-      `Migrated database has user_version ${String(version?.user_version)} instead of 21.`
+      `Migrated database has user_version ${String(version?.user_version)} instead of 22.`
     );
   }
 }

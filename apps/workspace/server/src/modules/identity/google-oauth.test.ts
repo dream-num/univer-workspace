@@ -58,8 +58,18 @@ describe("Google OAuth", () => {
     await expect(provider.exchangeCode("code", "verifier")).resolves.toMatchObject({
       subject: "1234567890",
       username: "google-1234567890",
-      displayName: "+++@gmail.com",
+      displayName: "+++",
       avatarUrl: null,
+    });
+  });
+
+  it("names an account without a profile name after its email local part", async () => {
+    vi.stubGlobal("fetch", googleFetch({ sub: "42", email: "alice.example@gmail.com" }));
+    const provider = createGoogleOAuthProvider(config());
+
+    await expect(provider.exchangeCode("code", "verifier")).resolves.toMatchObject({
+      username: "alice.example",
+      displayName: "alice.example",
     });
   });
 

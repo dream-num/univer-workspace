@@ -68,7 +68,7 @@ export function createGoogleOAuthProvider(config: {
         displayName:
           typeof user.name === "string" && user.name.trim()
             ? user.name.trim()
-            : email || username,
+            : email.split("@")[0] || username,
         avatarUrl:
           typeof user.picture === "string" ? user.picture : null,
       };

@@ -3,7 +3,8 @@ import { randomBytes } from "node:crypto";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord } from "./access-tokens.js";
-import { cleanCallerName, type IdentityModule } from "./identity.service.js";
+import { deriveDisplayName } from "./display-name.js";
+import type { IdentityModule } from "./identity.service.js";
 import type { User } from "./identity.types.js";
 import {
   authorizeRedirectTarget,
@@ -570,7 +571,7 @@ function renderMcpConsentPage(
   consentToken: string,
 ): string {
   const client = request.client;
-  const clientName = cleanCallerName(client.clientName);
+  const clientName = deriveDisplayName(client.clientName);
   const name = escapeHtml("host" in client ? (clientName === "" ? client.host : `${clientName} (${client.host})`) : clientName || "An unnamed application");
   const callback = new URL(request.redirectUri);
   const returnsTo = escapeHtml(callback.origin === "null" ? callback.protocol : callback.origin);
