@@ -46,6 +46,13 @@ const personal = {
   owner: { id: "user-1", username: "user-1" },
   slug: null,
 };
+const claimedAgentSpace = {
+  ...personal,
+  id: "personal-agent",
+  name: "agent-1",
+  fullName: "agent-1/personal",
+  owner: { id: "agent-1", username: "agent-1" },
+};
 const rawWorktree = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   name: `PR ${id}`,
@@ -99,8 +106,10 @@ describe("Issue tools and gateway infrastructure", () => {
     if (target.pathname === "/api/spaces") return Response.json({ spaces: [personal, team] });
     if (target.pathname === "/api/spaces/team-1/star") return Response.json({ starCount: 0, starred: false });
     if (target.pathname === "/api/spaces/lookup") {
+      if (target.searchParams.get("owner") === "agent-1") return Response.json(claimedAgentSpace);
       return Response.json(target.searchParams.get("slug") === "personal" ? personal : team);
     }
+    if (target.pathname === "/api/spaces/personal-agent") return Response.json(claimedAgentSpace);
     if (target.pathname === "/api/spaces/team-1" || target.pathname === "/api/spaces/personal-1") {
       return Response.json(target.pathname.endsWith("team-1") ? team : personal);
     }
@@ -477,6 +486,17 @@ describe("Issue tools and gateway infrastructure", () => {
       "/api/worktrees?scope=active&kind=user&limit=100",
     );
     expect(events().map((event) => event["repo"])).toEqual(["team-1", "personal-1"]);
+  });
+
+  it("lists the pull requests of an agent the person claimed and opens none in its Space", async () => {
+    await start();
+    const listed = await call("pr_list", { repo: "agent-1/personal" });
+    expect(listed.structuredContent).toEqual({
+      prs: [expect.objectContaining({ id: "wt-claimed-agent", url: `${identityOrigin}/spaces/personal-agent/pulls/1` })],
+    });
+    const created = await call("pr_create", { repo: "agent-1/personal", title: "Mine" });
+    expect(created).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+    expect(writesOf()).toEqual([]);
   });
 
   it("views a pull request by number, URL and Worktree ID", async () => {

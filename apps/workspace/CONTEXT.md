@@ -140,7 +140,8 @@ _Avoid_: Task, branch
 **User Worktree**:
 A creator-owned, creator-private Worktree that may contain any Resources the
 creator can edit, even when those Resources belong to different Spaces. The
-human who claimed the creating agent can also see and review it.
+human who claimed the creating agent can also see, review, ready, reopen,
+merge and discard it, but not edit it.
 _Avoid_: User-space Worktree, Personal Worktree
 
 **Team Worktree**:

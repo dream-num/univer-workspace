@@ -5,6 +5,7 @@ import { type PostgresAccessRepository, assertFileQuota, ownsSpaceSql, spaceOwne
 import type { PostgresDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
+import type { PublicUser } from "../../../modules/permissions/index.js";
 import type { WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
 import type {
   WorktreeCursor,
@@ -505,6 +506,21 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
         .prepare("SELECT 1 FROM trash_batches WHERE id = ? AND created_by = ?")
         .get(this._removalBatchIdSync(worktreeId, unitId), userId),
     );
+  }
+
+  async mergers(worktreeIds: readonly string[]): Promise<ReadonlyMap<string, PublicUser>> {
+    const rows = await this._database
+      .prepare(
+        `SELECT operation.payload_json::jsonb ->> 'worktreeId' AS "worktreeId",
+                merger.id, merger.username, merger.display_name AS "displayName", merger.avatar_url AS "avatarUrl"
+         FROM operations AS operation
+         JOIN users AS merger ON merger.id = operation.actor_user_id
+         WHERE operation.kind = 'merge_worktree' AND operation.state = 'completed'
+           AND operation.payload_json::jsonb ->> 'worktreeId' IN (SELECT jsonb_array_elements_text(?::jsonb))
+         ORDER BY operation.updated_at`
+      )
+      .all(JSON.stringify(worktreeIds)) as unknown as Array<PublicUser & { readonly worktreeId: string }>;
+    return new Map(rows.map(({ worktreeId, ...merger }) => [worktreeId, merger]));
   }
 
   async getOperation(operationId: string): Promise<WorktreeOperationRow | null> {

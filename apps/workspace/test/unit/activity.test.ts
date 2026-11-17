@@ -4,8 +4,9 @@ import type { IssueActivity } from "../../server/src/modules/issues/index.js";
 import type { WorktreeActivity } from "../../server/src/modules/worktrees/index.js";
 
 const actor = { id: "u", username: "user", displayName: "User", avatarUrl: null };
+const merger = { id: "m", username: "merger", displayName: "Merger", avatarUrl: null };
 const at = Date.parse("2026-11-01T04:00:00Z");
-const pull: WorktreeActivity = { id: "w", number: 1, name: "Pull", creator: actor, createdVia: "browser", createdAt: at, mergedAt: at + 1 };
+const pull: WorktreeActivity = { id: "w", number: 1, name: "Pull", creator: actor, createdVia: "browser", createdAt: at, mergedAt: at + 1, mergedBy: merger };
 const issue: IssueActivity = { number: 2, title: "Issue", author: actor, createdVia: "agent", createdAt: at, closedAt: at + 2, closedBy: actor };
 
 describe("Repository activity calendar", () => {
@@ -57,7 +58,7 @@ describe("Repository activity facts", () => {
     expect(result.days.at(-1)).toEqual({ day: "2026-11-01", opened: { browser: 1, agent: 1, unknown: 1 }, merged: 1 });
     expect(result.events.map((event) => event.kind)).toEqual(["issue-closed", "pull-merged", "issue-opened", "pull-opened", "pull-opened"]);
     expect(result.events[0]).toMatchObject({ actor, writeSource: "unknown", issue: { spaceId: "space" } });
-    expect(result.events[1]).toMatchObject({ actor: null, writeSource: "unknown", pull: { spaceId: "space" } });
+    expect(result.events[1]).toMatchObject({ actor: merger, writeSource: "unknown", pull: { spaceId: "space" } });
     expect(summarize([], []).days.every((day) => day.merged === 0 && Object.values(day.opened).every((count) => count === 0))).toBe(true);
   });
 

@@ -29,7 +29,7 @@ export const prListTool: ToolDefinition = {
   async run(context, args) {
     const { repo, state, author, search, limit } = inputSchema.parse(args);
     const spaceId = await resolveRepo(context, repo);
-    const space = await pullRequestSpace(spaceFeature(context), async () => context.user.id, spaceId);
+    const space = await pullRequestSpace(spaceFeature(context), async () => context.user.id, spaceId, "list");
     const prs = await listPullRequests(
       { userId: async () => context.user.id, worktrees: worktreeFeature(context) },
       {

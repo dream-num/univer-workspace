@@ -6576,6 +6576,7 @@ components:
           type: string
           format: date-time
         actor:
+          description: Who opened or merged the pull request. A merge names the user whose merge Operation completed, who may be the human who claimed the agent that opened it; `null` when no such Operation is recorded.
           oneOf:
             - $ref: '#/components/schemas/PublicUser'
             - type: 'null'

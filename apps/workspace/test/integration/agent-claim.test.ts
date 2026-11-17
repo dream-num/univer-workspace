@@ -185,6 +185,79 @@ describe("claiming an agent", () => {
   });
 });
 
+describe("the claimer deciding the agent's pull requests", () => {
+  it("readies, reopens, merges and discards them as the recorded actor, without editing them", async () => {
+    const origin = await start({ realtime: true });
+    const { repositories } = applications.at(-1)!;
+    const agent = await guestAgent(origin);
+    const agentSpaceId = await personalSpaceId(origin, agent.cookie);
+    const kept = await createPull(origin, agent.cookie, "Budget");
+    const sheet = await addLocalSheet(origin, agent.cookie, kept.id, agentSpaceId, "Budget sheet");
+    const dropped = await createPull(origin, agent.cookie, "Scratch");
+    await addLocalSheet(origin, agent.cookie, dropped.id, agentSpaceId, "Scratch sheet");
+    const alice = await register(origin, "alice");
+    const aliceId = ((await sessionUser(origin, alice.cookie)) as { id: string }).id;
+    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+
+    expect(await capabilities(origin, kept.id, alice.cookie)).toEqual({
+      review: true, editDraft: false, addUnit: false, changeVisibility: false,
+      markReady: true, reopen: false, merge: false, discard: true,
+    });
+    for (const write of claimerEdits(kept.id, sheet, agentSpaceId)) {
+      await expectError(send(origin, write.method, write.path, write.body, alice.cookie, { "idempotency-key": randomUUID() }), 403, "FORBIDDEN");
+    }
+    const draft = await send(origin, "POST", `/api/worktrees/${kept.id}/units/${sheet}/open`, { mode: "draft" }, alice.cookie);
+    expect(await draft.json()).toMatchObject({ unit: { editorMode: "readOnly" } });
+
+    expect(await transition(origin, kept.id, "ready", alice.cookie)).toBe("ready");
+    expect(await capabilities(origin, kept.id, alice.cookie)).toMatchObject({ editDraft: false, reopen: true, merge: true, discard: true });
+    expect(await transition(origin, kept.id, "reopen", alice.cookie)).toBe("draft");
+    expect(await transition(origin, kept.id, "ready", alice.cookie)).toBe("ready");
+    const mergeKey = randomUUID();
+    expect(await transition(origin, kept.id, "merge", alice.cookie, mergeKey)).toBe("merged");
+    const discardKey = randomUUID();
+    expect(await transition(origin, dropped.id, "discard", alice.cookie, discardKey)).toBe("discarded");
+
+    expect((await repositories.worktrees.getOperation(mergeKey))?.actor_user_id).toBe(aliceId);
+    expect((await repositories.worktrees.getOperation(discardKey))?.actor_user_id).toBe(aliceId);
+    const activity = await send(origin, "GET", `/api/spaces/${agentSpaceId}/activity?timeZone=UTC`, undefined, alice.cookie);
+    const { events } = (await activity.json()) as { events: { kind: string; actor: { id: string } | null; pull: { id: string } }[] };
+    expect(events.filter((event) => event.kind === "pull-merged")).toEqual([
+      expect.objectContaining({ actor: expect.objectContaining({ id: aliceId }), pull: expect.objectContaining({ id: kept.id }) }),
+    ]);
+    expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Budget sheet"]);
+  });
+
+  it("lets the claimer finish a stopped agent's pull requests and gives everyone else the unknown-pull-request answer", async () => {
+    const origin = await start({ realtime: true });
+    const agent = await guestAgent(origin);
+    const agentSpaceId = await personalSpaceId(origin, agent.cookie);
+    const kept = await createPull(origin, agent.cookie, "Budget");
+    const sheet = await addLocalSheet(origin, agent.cookie, kept.id, agentSpaceId, "Budget sheet");
+    const dropped = await createPull(origin, agent.cookie, "Scratch");
+    const alice = await register(origin, "alice");
+    const bob = await register(origin, "bob");
+    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+    expect((await send(origin, "POST", `/api/agents/${agent.id}/stop`, undefined, alice.cookie)).status).toBe(204);
+
+    const unknown = { id: randomUUID(), number: 99 };
+    for (const pull of [kept, dropped]) {
+      for (const action of strangerActions(pull, agentSpaceId, sheet)) {
+        const asStranger = await send(origin, action.method, action.path, action.body, bob.cookie, { "idempotency-key": randomUUID() });
+        const asUnknown = await send(origin, action.method, action.of(unknown), action.body, bob.cookie, { "idempotency-key": randomUUID() });
+        expect({ action: action.name, status: asStranger.status, body: await asStranger.json() })
+          .toEqual({ action: action.name, status: asUnknown.status, body: await asUnknown.json() });
+        expect(asStranger.status, action.name).toBe(404);
+      }
+    }
+
+    expect(await transition(origin, kept.id, "ready", alice.cookie)).toBe("ready");
+    expect(await transition(origin, kept.id, "merge", alice.cookie)).toBe("merged");
+    expect(await transition(origin, dropped.id, "discard", alice.cookie)).toBe("discarded");
+    expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Budget sheet"]);
+  });
+});
+
 const PASSWORD = "correct horse battery staple";
 
 async function start(options: { readonly realtime?: boolean } = {}): Promise<string> {
@@ -269,6 +342,57 @@ async function createPull(origin: string, cookie: string, name: string): Promise
     cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 201) throw new Error(`Pull request creation failed with ${response.status}`);
   return (await response.json()) as { id: string; number: number };
+}
+
+async function addLocalSheet(origin: string, cookie: string, worktreeId: string, spaceId: string, name: string): Promise<string> {
+  const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/units`,
+    { source: "worktree", name, unitType: "sheet", targetSpaceId: spaceId, targetParentNodeId: null },
+    cookie, { "idempotency-key": randomUUID() });
+  if (response.status !== 201) throw new Error(`Adding a Sheet failed with ${response.status}`);
+  return ((await response.json()) as { unit: { unitId: string } }).unit.unitId;
+}
+
+async function capabilities(origin: string, worktreeId: string, cookie: string): Promise<unknown> {
+  return ((await (await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, cookie)).json()) as { worktree: { capabilities: unknown } }).worktree.capabilities;
+}
+
+async function transition(origin: string, worktreeId: string, action: "ready" | "reopen" | "merge" | "discard", cookie: string, key = randomUUID()): Promise<string> {
+  const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/${action}`, undefined, cookie, { "idempotency-key": key });
+  if (response.status !== 200) throw new Error(`${action} failed with ${response.status}: ${await response.text()}`);
+  return ((await response.json()) as { worktree: { state: string } }).worktree.state;
+}
+
+function claimerEdits(worktreeId: string, unitId: string, spaceId: string) {
+  return [
+    { method: "PATCH", path: `/api/worktrees/${worktreeId}`, body: { name: "Renamed" } },
+    { method: "POST", path: `/api/worktrees/${worktreeId}/units`, body: { source: "worktree", name: "Extra", unitType: "sheet", targetSpaceId: spaceId, targetParentNodeId: null } },
+    { method: "POST", path: `/api/worktrees/${worktreeId}/units/${unitId}/removal`, body: { removed: true } },
+    { method: "POST", path: `/api/worktrees/${worktreeId}/units/${unitId}/changesets`, body: {} },
+  ];
+}
+
+function strangerActions(pull: { id: string; number: number }, spaceId: string, unitId: string) {
+  const byId = (name: string, method: string, tail: string, body?: unknown) =>
+    ({ name, method, body, path: `/api/worktrees/${pull.id}${tail}`, of: (other: { id: string }) => `/api/worktrees/${other.id}${tail}` });
+  return [
+    byId("view", "GET", ""),
+    { name: "view by number", method: "GET", body: undefined, path: `/api/spaces/${spaceId}/worktrees/${pull.number}`,
+      of: (other: { number: number }) => `/api/spaces/${spaceId}/worktrees/${other.number}` },
+    byId("edit", "PATCH", "", { name: "Renamed" }),
+    byId("add a file", "POST", "/units", { source: "worktree", name: "Extra", unitType: "sheet", targetSpaceId: spaceId, targetParentNodeId: null }),
+    byId("open a file", "POST", `/units/${unitId}/open`, { mode: "draft" }),
+    byId("remove a file", "POST", `/units/${unitId}/removal`, { removed: true }),
+    byId("edit cells", "POST", `/units/${unitId}/changesets`, {}),
+    byId("ready", "POST", "/ready"),
+    byId("reopen", "POST", "/reopen"),
+    byId("merge", "POST", "/merge"),
+    byId("discard", "POST", "/discard"),
+  ];
+}
+
+async function spaceFileNames(origin: string, spaceId: string, cookie: string): Promise<string[]> {
+  const { nodes } = (await (await send(origin, "GET", `/api/spaces/${spaceId}/nodes`, undefined, cookie)).json()) as { nodes: { name: string }[] };
+  return nodes.map((node) => node.name).sort();
 }
 
 async function userPullIds(origin: string, cookie: string): Promise<string[]> {

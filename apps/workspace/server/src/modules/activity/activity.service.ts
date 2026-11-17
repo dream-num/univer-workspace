@@ -115,7 +115,7 @@ export function summarizeActivity(input: {
       const merged = buckets.get(input.dayOf(worktree.mergedAt));
       if (merged) {
         merged.merged += 1;
-        events.push({ kind: "pull-merged", at: new Date(worktree.mergedAt).toISOString(), actor: null, writeSource: "unknown", pull });
+        events.push({ kind: "pull-merged", at: new Date(worktree.mergedAt).toISOString(), actor: worktree.mergedBy, writeSource: "unknown", pull });
       }
     }
   }

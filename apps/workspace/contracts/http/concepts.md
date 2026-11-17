@@ -236,8 +236,10 @@ Node only after its Activation Operation completes.
 
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an
-agent creator, can also discover and review them and read their Worktree-local Units;
-every write action stays with the creator. Team Worktrees belong to one Team Space. Their Visibility controls who
+agent creator, can also discover and review them and read their Worktree-local Units.
+They can also mark them ready, reopen, merge and discard them, as themselves: a merge
+checks each target with their own access, and the Operation names them as its actor.
+Editing the draft, its Units, name and summary stays with the creator. Team Worktrees belong to one Team Space. Their Visibility controls who
 may Review; Visibility never grants Resource Access.
 
 The Creator can discover and Review a private Team Worktree. The Team Space

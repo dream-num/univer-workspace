@@ -31,25 +31,35 @@ export function pullRequestView(state: PullRequestState): {
   }
 }
 
-/** A repository's Space, refusing a Personal Space the signed-in user does not own. */
+/**
+ * A repository's Space. Any owner may list a Personal Space, a claimer included; only its own user
+ * may create there, since a User Worktree lands in its creator's Personal Space.
+ */
 export async function pullRequestSpace(
   spaces: Pick<WorkspaceSpaceFeature, "get">,
   userId: () => Promise<string>,
   spaceId: string,
+  purpose: "list" | "create",
 ): Promise<WorkspaceSpace> {
   const space = await spaces.get(spaceId);
-  if (space.type === "personal" && space.owner?.id !== (await userId())) {
-    throw workspaceError(
-      "workspace-argument-invalid",
-      "Personal Space pull requests must target the signed-in user's own Space.",
-    );
+  if (
+    space.type !== "personal" ||
+    space.owner?.id === (await userId()) ||
+    (purpose === "list" && (space.affiliation ?? space.accessRole) === "owner")
+  ) {
+    return space;
   }
-  return space;
+  throw workspaceError(
+    "workspace-argument-invalid",
+    purpose === "list"
+      ? "Personal Space pull requests are listed only for a Space the signed-in user owns."
+      : "Personal Space pull requests must target the signed-in user's own Space.",
+  );
 }
 
 /**
  * Pull requests of one repository (`space`) or, without `space`, of every repository the user can
- * see. A Personal Space lists the user's own User Worktrees; a Team Space lists its Worktrees.
+ * see. A Personal Space lists the User Worktrees of its owner; a Team Space lists its Worktrees.
  */
 export async function listPullRequests(
   deps: { readonly userId: () => Promise<string>; readonly worktrees: Pick<WorkspaceWorktreeFeature, "list"> },
@@ -57,7 +67,7 @@ export async function listPullRequests(
     readonly author?: string;
     readonly limit: number;
     readonly search?: string;
-    readonly space?: Pick<WorkspaceSpace, "id" | "type">;
+    readonly space?: Pick<WorkspaceSpace, "id" | "owner" | "type">;
     readonly state: PullRequestState;
   },
 ): Promise<readonly WorkspaceWorktree[]> {
@@ -66,7 +76,7 @@ export async function listPullRequests(
     ...(space === undefined
       ? {}
       : space.type === "personal"
-        ? { scope: "user" as const, creatorId: await deps.userId() }
+        ? { scope: "user" as const, creatorId: space.owner?.id ?? (await deps.userId()) }
         : { scope: "space" as const, spaceId: space.id }),
     ...pullRequestView(input.state),
     limit: input.limit,

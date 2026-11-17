@@ -309,7 +309,7 @@ describe("uvw repository and Issue commands", () => {
 });
 
 describe("uvw pr and the worktree alias", () => {
-  function pullRequestCommands(options: { env?: NodeJS.ProcessEnv; ownerId?: string } = {}) {
+  function pullRequestCommands(options: { accessRole?: "owner" | "viewer"; env?: NodeJS.ProcessEnv; ownerId?: string } = {}) {
     const { repoContext } = context(options.env);
     const calls: [string, ...unknown[]][] = [];
     const record = (name: string, result: unknown) =>
@@ -327,6 +327,7 @@ describe("uvw pr and the worktree alias", () => {
     } as unknown as WorkspaceWorktreeFeature;
     const spaces = { get: vi.fn(async (id: string) => ({
       ...teamSpace,
+      accessRole: options.accessRole ?? teamSpace.accessRole,
       id,
       owner: { id: options.ownerId ?? "u1", username: "alice" },
       type: id === "personal-1" ? "personal" : "team",
@@ -395,7 +396,7 @@ describe("uvw pr and the worktree alias", () => {
     ["pr", "list"], ["pr", "create"], ["alias", "list"], ["alias", "create"],
   ] as const)("rejects another owner's Personal Space before %s %s reads or writes User Worktrees", async (group, verb) => {
     for (const [reference, repoArgs, env] of PERSONAL_REFS) {
-      const commands = pullRequestCommands({ env, ownerId: "u2" });
+      const commands = pullRequestCommands({ accessRole: "viewer", env, ownerId: "u2" });
       const args = [verb, ...repoArgs, ...(verb === "create" ? ["-t", "Wrong target"] : []), "--json"];
       const error = await run(commands[group], args).catch((caught: unknown) => caught);
       expect(error, reference).toMatchObject({
@@ -403,6 +404,16 @@ describe("uvw pr and the worktree alias", () => {
         message: expect.stringContaining("Personal Space"),
       });
       expect(commands.calls, reference).toEqual([]);
+    }
+  });
+
+  it.each(PERSONAL_REFS)("lists a claimed agent's User Worktrees via %s but opens none there", async (reference, repoArgs, env) => {
+    for (const group of ["pr", "alias"] as const) {
+      const commands = pullRequestCommands({ env, ownerId: "agent-1" });
+      await run(commands[group], ["list", ...repoArgs, "--json"]);
+      const error = await run(commands[group], ["create", ...repoArgs, "-t", "Mine", "--json"]).catch((caught: unknown) => caught);
+      expect(error, reference).toMatchObject({ exitCode: 1, message: expect.stringContaining("own Space") });
+      expect(commands.calls).toEqual([["list", { creatorId: "agent-1", limit: 30, scope: "user", view: "active" }]]);
     }
   });
 

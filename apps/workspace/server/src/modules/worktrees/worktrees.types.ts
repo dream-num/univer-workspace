@@ -179,6 +179,7 @@ export interface WorktreeActivity {
   readonly createdVia: WriteSource | null;
   readonly createdAt: number;
   readonly mergedAt: number | null;
+  readonly mergedBy: PublicUser | null;
 }
 
 export type WorktreeActivityScope =

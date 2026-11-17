@@ -117,7 +117,8 @@ Session 仍可获取协同票据；票据按具体 Session 绑定，不把用户
 时区、截至该时区今天的 14 个日桶和窗口内最新 20 条事件。`opened` 按 `browser`、`agent`、
 `unknown` 汇总 Pull request 与 Issue 创建；`merged` 仅统计协同服务确认已合入的 Worktree。
 事件类型为 `pull-opened`、`pull-merged`、`issue-opened`、`issue-closed`，合入与关闭的来源均为
-`unknown`，不从创建来源推断。日桶使用时区的日历日期计算，跨月、闰日与 DST 不依赖固定 24 小时间隔。
+`unknown`，不从创建来源推断。`pull-merged` 的执行者取自该 Worktree 已完成的 `merge_worktree`
+Operation 的 `actor_user_id`，没有这样的 Operation 时为 `null`。日桶使用时区的日历日期计算，跨月、闰日与 DST 不依赖固定 24 小时间隔。
 
 Worktrees 模块复用列表候选查询与 discoverability，Issues 模块复用 `requireSpace`；Team Space
 只汇总调用者可发现的 Worktree 与该 Space 的 Issue。Personal Space 仅向 Owner 返回其 User
@@ -202,8 +203,13 @@ interface AccessResolver {
 Space 的 Owner 关系有两种来源：`spaces.owner_user_id`，以及认领了该 Space 所有者 agent 的人
 （`agents.owner_user_id`）。两者都得到 `owner` 角色。这个关系是单向的，agent 不因此得到主人的任何权限。
 它只写在 Access Repository 的 `ownsSpaceSql` 里，可见性和角色都从这里读；Space 列表、Owned by me、
-Activity、User Worktree 的发现与 Review 也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
+Activity、User Worktree 的发现、Review 与决定也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
 （内容权限候选人、Worktree 实时推送对象）用同一处的 `spaceOwnerIdsSql`。
+
+User Worktree 的 Ready、Reopen、Merge 和 Discard 交给创建者 Personal Space 的全部 Owner，所以认领人可以决定
+agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
+重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
+它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。
 
 主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
 
