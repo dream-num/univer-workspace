@@ -457,10 +457,14 @@ describe("copying a file", () => {
     const createDraftOnce = h.worktreeBackend.createUnit.bind(h.worktreeBackend);
     const worktreeId = (await h.application.worktrees.create(reader.id, randomUUID(), { kind: "user", name: "Draft", summary: null })).body.id;
 
-    vi.spyOn(h.store, "put").mockImplementationOnce(never);
+    const copyingObjects = signal();
+    vi.spyOn(h.store, "put").mockImplementationOnce(() => {
+      copyingObjects.resolve();
+      return never();
+    });
     const whileCopying = randomUUID();
     void h.application.copies.copy(reader.principal, source.nodeId, whileCopying, toPersonalSpace);
-    await vi.waitFor(() => expect(h.store.put).toHaveBeenCalled());
+    await copyingObjects.promise;
     await editSourceCell(h, source, owner.id, 999);
     expect(await h.application.copies.copy(reader.principal, source.nodeId, whileCopying, toPersonalSpace))
       .toMatchObject({ status: 202, body: { operation: { state: "pending" } } });
