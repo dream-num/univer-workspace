@@ -28,7 +28,7 @@ const exchangeResponse = z.object({
     kind: z.enum(["human", "agent"]).optional(),
     claimed: z.boolean().optional(),
   }),
-  executor_access: z.literal(true).optional(),
+  executor_access: z.boolean().optional(),
 });
 const maxCacheMs = 30_000;
 const negativeCacheMs = 5_000;

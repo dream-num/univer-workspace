@@ -35,6 +35,7 @@ const quota = z
   .regex(/^\d+$/)
   .transform(Number)
   .pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
+// The ID list predates Workspace grants; remove it once every deployment sets `workspace` or `*`.
 const allowedUserIdList = z
   .string()
   .transform((value) => value.split(",").map((id) => id.trim()))
@@ -44,7 +45,10 @@ const allowedUserIdList = z
         z
           .string()
           .min(1)
-          .refine((id) => id !== "*" && id !== "workspace", "* and workspace must stand alone"),
+          .refine(
+            (id) => !id.includes("*") && id.toLowerCase() !== "workspace",
+            "* and workspace must stand alone, spelled exactly; user IDs contain neither",
+          ),
       )
       .min(1),
   )
