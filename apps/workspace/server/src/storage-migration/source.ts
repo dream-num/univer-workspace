@@ -1,7 +1,7 @@
 import { copyFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { openWorkspaceDatabase } from "../db/sqlite/initialize.js";
+import { assertV21Fingerprint } from "../db/sqlite/migrations/prepare-current-database.js";
 import { createSqliteUnitCreationFactsReader } from "../db/sqlite/unit-creation-facts.js";
 import { openSqliteCollaborationDatabase } from "../integrations/univer/collaboration-database/sqlite/open.js";
 
@@ -62,20 +62,19 @@ export async function prepareSource(
   const productPath = join(directory, "product.sqlite");
   const collaborationPath = join(directory, "collaboration.sqlite");
   await copyStoppedDatabase(productFile, productPath);
-  await copyStoppedDatabase(collaborationFile, collaborationPath);
-
-  await checkSourceStopped();
-  const versionCheck = new DatabaseSync(productPath);
-  try {
-    const version = versionCheck.prepare("PRAGMA user_version").get()?.user_version;
-    if (![19, 20, 21].includes(Number(version)))
-      throw new Error(`Expected a V19–V21 product database, got V${version}`);
-    checkIntegrity(versionCheck);
-  } finally {
-    versionCheck.close();
-  }
-  const product = openWorkspaceDatabase(productPath);
+  const product = new DatabaseSync(productPath);
   resources.defer(() => product.close());
+  const version = product.prepare("PRAGMA user_version").get()?.user_version;
+  if (version !== 21) {
+    throw new Error(
+      `Expected a V21 SQLite product database, got V${version}. For older versions, upgrade on SQLite before migrating.`,
+    );
+  }
+  assertV21Fingerprint(product);
+  checkIntegrity(product);
+
+  await copyStoppedDatabase(collaborationFile, collaborationPath);
+  await checkSourceStopped();
   const preflight = new DatabaseSync(collaborationPath);
   try {
     checkIntegrity(preflight);
@@ -97,16 +96,15 @@ export async function prepareSource(
   }
   const adapters = await openSqliteCollaborationDatabase(
     collaborationPath,
-    createSqliteUnitCreationFactsReader(product.connection),
+    createSqliteUnitCreationFactsReader(product),
   );
   resources.defer(() => adapters.close());
   // SDK migrations can replace the staging file. Open this reader after they finish.
   const collaboration = new DatabaseSync(collaborationPath, { readOnly: true });
   resources.defer(() => collaboration.close());
-  checkIntegrity(product.connection);
   checkIntegrity(collaboration);
   return {
-    product: product.connection,
+    product,
     collaboration,
     worktree: adapters.worktree,
     checkSourceStopped,

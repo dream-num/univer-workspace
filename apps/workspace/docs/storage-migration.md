@@ -4,10 +4,10 @@ English | [简体中文](storage-migration.zh-CN.md)
 
 ## Migrate SQLite and local files to PostgreSQL and S3
 
-Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The command accepts V19, V20 and V21 product databases. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [Workspace configuration](configuration.md#deployment-configurations) for target settings, credentials and bucket permissions.
+Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The source product database must be V21. For an older version, first [upgrade on SQLite](#sqlite-upgrades-and-recovery) and stop the upgraded instance before cutover. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [Workspace configuration](configuration.md#deployment-configurations) for target settings, credentials and bucket permissions.
 
 1. Stop all Workspace writers. Keep a backup of both SQLite databases (including any WAL or journal files) and the file directory from the same recovery point. Keep user traffic closed until validation passes.
-2. Supply the target PostgreSQL + S3 settings to the migration process. Point `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE` and `BLOB_DIRECTORY` at the existing source data, or use the [default source paths](configuration.md#databases). A read-only source mount is sufficient. Allow temporary disk space for both databases, upgrade copies and their backups.
+2. Supply the target PostgreSQL + S3 settings to the migration process. Point `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE` and `BLOB_DIRECTORY` at the existing source data, or use the [default source paths](configuration.md#databases). A read-only source mount is sufficient. Allow temporary disk space for both SQLite copies and any collaboration upgrade backups and staging files.
 3. For a source checkout with dependencies installed, run the following from the repository root. The script reads the Workspace `.env` file.
 
    ```bash
@@ -25,7 +25,7 @@ Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The 
 
 4. Wait for a successful exit and the committed row counts. Start one instance with the target configuration. Through HTTP, sign in with an existing account, check a document, Worktree, history, comments and attachment, edit a document and upload a file. Restart, read back the edit and upload, then reopen traffic.
 
-The command upgrades SQLite copies in a private temporary directory and reads the originals only. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, then imports product data and all four collaboration components in one PostgreSQL transaction. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
+The command reads the V21 product database and prepares the collaboration database on private temporary copies, preserving the originals and their journals. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, then imports product data and all four collaboration components in one PostgreSQL transaction. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
 
 **Interruption and rollback.** Keep source writers stopped after a failure. Empty target tables and some S3 objects may remain. The database import transaction rolls back as a unit. Fix the cause and rerun with the same source and destination. The command verifies and reuses identical objects and rejects mismatched or unrelated objects and populated target tables. It also rejects legacy collaboration resource data the target SDK cannot represent. If the connection drops during commit, inspect the target before reopening traffic or retrying. Before reopening traffic, you can stop the target and restart the source with its original configuration. After traffic resumes, rollback also requires transferring subsequent writes.
 

@@ -1287,7 +1287,7 @@ function assertV20Fingerprint(database: DatabaseSync, userColumns: readonly stri
   if (!hasObject(database, "index", "skill_drafts_due") || !sql.includes("UNIQUE (author_user_id, idempotency_key)") || !sql.includes("json_valid(files)") || !sql.includes("(state = 'published') = (result_folder_node_id IS NOT NULL)")) throw new Error("Product database V20 fingerprint mismatch (Skill drafts).");
 }
 
-function assertV21Fingerprint(database: DatabaseSync): void {
+export function assertV21Fingerprint(database: DatabaseSync): void {
   assertV20Fingerprint(database, [...USER_COLUMNS, "kind"]);
   assertColumns(database, "agents", ["user_id", "owner_user_id", "claimed_at", "origin_label", "created_at", "last_active_at", "expires_at", "banned_at"], 21);
   assertColumns(database, "node_reports", ["id", "node_id", "reporter_user_id", "reason", "created_at"], 21);

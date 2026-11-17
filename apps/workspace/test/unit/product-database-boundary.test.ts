@@ -15,7 +15,7 @@ const commands = ["main", "db/ban-agent"];
 // List individual edges so new dependencies still require review.
 const migrationImports: Readonly<Record<string, readonly string[]>> = {
   "storage-migration/main": ["pg", "db/postgres/initialize"],
-  "storage-migration/source": ["node:sqlite", "db/sqlite/initialize", "db/sqlite/unit-creation-facts"],
+  "storage-migration/source": ["node:sqlite", "db/sqlite/migrations/prepare-current-database", "db/sqlite/unit-creation-facts"],
   "storage-migration/product": ["node:sqlite", "pg"],
   "storage-migration/objects": ["node:sqlite"],
   "storage-migration/collaboration": ["pg"],
