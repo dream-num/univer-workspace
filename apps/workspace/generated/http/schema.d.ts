@@ -3010,7 +3010,7 @@ export interface components {
         AgentCreate: {
             /**
              * @description Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
-             *     address keeps only its local part. Blank, omitted or nothing left means `agent`.
+             *     address keeps only its local part. Blank, omitted or no visible character means `agent`.
              */
             label?: string;
         };
@@ -3054,7 +3054,7 @@ export interface components {
         GuestAgentCreate: {
             /**
              * @description Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
-             *     address keeps only its local part. Blank, omitted or nothing left means `agent`, or the OAuth
+             *     address keeps only its local part. Blank, omitted or no visible character means `agent`, or the OAuth
              *     client's name.
              */
             label?: string;
@@ -3064,8 +3064,8 @@ export interface components {
              *     client with a name, the agent is named after that client: the
              *     server reads the name from the registration, cleans it as
              *     `PasswordRegistration.displayName` describes, keeps only the local
-             *     part of an email address, cuts it to 40 UTF-16 code units between
-             *     whole characters, and appends ` · ` and the username's four-character
+             *     part of an email address, cuts it to 40 characters between whole
+             *     graphemes, and appends ` · ` and the username's four-character
              *     suffix to the display name. Any other value is ignored.
              */
             oauthClientId?: string;
@@ -3074,15 +3074,21 @@ export interface components {
             agent: components["schemas"]["AgentIdentity"];
         };
         PasswordRegistration: {
+            /** @description A Hangul filler or another invisible character fails with 400 `INVALID_INPUT` on `username`. */
             username: string;
             /**
-             * @description Shown to everyone who opens the User's shared files. The server first replaces control
-             *     characters, line and paragraph separators and U+2800 with a space, removes format characters
-             *     (bidi controls, zero-width characters), default-ignorable code points (Hangul fillers),
-             *     unpaired surrogates and U+FFFD, collapses whitespace runs to one space and trims the ends.
-             *     The result is stored. It fails with 400 `INVALID_INPUT` on `displayName` when nothing is
-             *     left, when it contains an email address (`local@domain.tld`), or when it is longer than 100
-             *     UTF-16 code units.
+             * @description Shown to everyone who opens the User's shared files. A value longer than 100 characters (code
+             *     points) fails first. The server then replaces control characters, line and paragraph separators,
+             *     U+2800 and U+1D159 with a space, and removes bidi controls, Hangul fillers, the other
+             *     default-ignorable code points, unpaired surrogates and U+FFFD. It keeps a zero-width joiner or
+             *     non-joiner between two characters, a variation selector after a character and a flag tag
+             *     sequence, so emoji, Persian and Indic names keep their bytes. Whitespace runs collapse to one
+             *     space and the ends are trimmed. The result is stored. It fails with 400 `INVALID_INPUT` on
+             *     `displayName` when it has no visible character (spaces, combining marks, U+FFFC and private-use
+             *     characters alone are not visible) or when it contains an email address. An address is
+             *     `local@domain.tld`, also with spaces on both sides of `@`, repeated `@`, U+FF20 or U+FE6B for
+             *     `@`, U+3002, U+FF0E or U+FF61 for the dot, a `mailto:` prefix, or an invisible local part.
+             *     `alice [at] example.com`, `alice(at)example.com` and `alice@example` are not detected.
              */
             displayName: string;
             password: string;
@@ -3133,17 +3139,23 @@ export interface components {
         DiscordBotLogin: {
             /** @description Stable Discord snowflake User ID from a trusted Bot event. */
             discordUserId: string;
+            /**
+             * @description A new User's username drops invisible characters, and is `discord-<discordUserId>` when none
+             *     is left.
+             */
             username?: string;
             /**
              * @description Cleaned as `PasswordRegistration.displayName` describes, but never refused: an email address
-             *     keeps only its local part and a longer name is cut to 100 UTF-16 code units between whole
-             *     characters. A name with nothing left falls back to the Discord username.
+             *     keeps only its local part and a longer name is cut to 100 characters between whole graphemes.
+             *     A name with no visible character falls back to the Discord username, cleaned the same way, and
+             *     then to `Workspace User`.
              */
             displayName?: string;
             /** Format: uri */
             avatarUrl?: string | null;
         };
         UserProfilePatch: {
+            /** @description A changed username follows the rule in `PasswordRegistration.username`. */
             username?: string;
             /**
              * @description Follows the rule in `PasswordRegistration.displayName`. A Personal Space still named
