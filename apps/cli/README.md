@@ -193,11 +193,14 @@ means sign-in is required. `pr discard` is irreversible; there is no `pr close` 
 server records the person as the one who acted. Editing an agent's pull request, or opening one in its Space,
 is refused.
 
-A merge applies the revision you reviewed. `uvw pr view <n> -R <repo>` shows it, as does `--json revision`, and
-`uvw pr merge <n> -R <repo> --revision <revision>` merges only if the pull request is still at that revision.
+A merge decides on the revision you reviewed: the title, the summary and the drafts of its files, not trunk edits
+made since. When you can review the pull request, `uvw pr view <n> -R <repo>` shows it, as does `--json revision`,
+and `uvw pr merge <n> -R <repo> --revision <revision>` merges only if the pull request is still at that revision.
 Merging someone else's pull request, such as a claimed agent's or a Team member's, requires `--revision`;
 without it, or after the pull request changed, the merge is refused and nothing is merged. View it again before
-you decide. Merging your own pull request does not need `--revision`.
+you decide. Merging your own pull request does not need `--revision`. A Team Owner or Admin cannot review or merge a
+private Team pull request someone else created until `uvw pr edit <n> -R <repo> --visibility space` shows it to the
+Team.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

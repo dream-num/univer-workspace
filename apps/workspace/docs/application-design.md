@@ -216,20 +216,29 @@ agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于�
 重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
 它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。
 
-Merge 只应用决定者看过的版本。Worktree 详情返回 `revision`，它由标题、摘要以及每个 Unit 的 ID、草稿 head
-revision 和变更类型计算得出，不另存状态，Ready 与 Reopen 不改变它。合并别人创建的 Pull request（认领人合并
-agent 的，Team Owner、Admin 或 Editor 合并其他成员的）时，执行者必须能审阅它（`capabilities.review`），请求体
-必须带上看过的 `revision`。缺失或已过时都返回 412 `PRECONDITION_FAILED`，不执行任何合并；错误信息只说明
-Pull request 已改动，决定者重新查看后再决定。创建者合并自己的 Pull request 可以不带，因为只有创建者能改它的
-Unit；带了也同样校验。服务端在收到请求时校验一次，交给 Collaboration 合并前再校验一次；修改标题或摘要、
-Reopen 和 Ready 发现该 Worktree 的合并正在进行时返回 409。通过 Operations API 重试失败的合并时，按那次合并带的 `revision`
-再校验。私有 Team Pull request 对不是创建者的 Owner 与 Admin 隐藏内容，所以他们不能合并，只能 Reopen、
-Discard，或改为 Space 可见后审阅再合并。
+Merge 按决定者看过的版本决定。Worktree 详情返回 `revision`，它由标题、摘要以及每个 Unit 的 ID、草稿 head
+revision 和变更类型计算得出，不另存状态，Ready 与 Reopen 不改变它；它随 Unit 变化，所以只返回给能审阅的人
+（`capabilities.review`）。`revision` 只覆盖草稿、标题和摘要，不覆盖 trunk：审阅之后进入 trunk 的修改，合并时照常
+与草稿合在一起。合并别人创建的 Pull request（认领人合并 agent 的，Team Owner、Admin 或 Editor 合并其他成员的）时，
+执行者必须能审阅它，请求体必须带上看过的 `revision`。缺失或已过时都返回 412 `PRECONDITION_FAILED`，不执行任何
+合并；错误信息只说明 Pull request 已改动，决定者重新查看后再决定。创建者合并自己的 Pull request 可以不带，因为
+只有创建者能改它的 Unit；带了也同样校验。通过 Operations API 重试失败的合并时，按那次合并带的 `revision` 再校验。
+
+服务端在收到请求时校验一次，预留合并 Operation，交给 Collaboration 合并前再校验一次。PostgreSQL 上，预留与修改
+标题或摘要都先锁住 Worktree 的产品行，Reopen 和 Ready 也在同一把锁下检查预留；SQLite 的写入本来就串行。所以
+在审阅之后、预留之前到达的修改标题或摘要、Reopen 和 Ready 让合并失败、不合并任何内容，预留之后到达的返回 409。
+预留持续 60 秒且不续期，合并结束前这些请求返回 409，最多 60 秒，合并崩溃后也一样。
+
+私有 Team Pull request 对不是创建者的 Owner 与 Admin 隐藏内容，所以他们不能合并，只能 Reopen、Discard，或改为
+Space 可见后审阅再合并。他们合并时得到 403 `REVIEW_REQUIRED`，信息说明这一步；Browser 在审阅面板说明原因和
+修改可见性的 `uvw pr edit` 命令。
 
 Browser 记住打开 Pull request 时的 `revision`，之后内容有变化就隐藏合并按钮并提示任务已改动，决定者确认看过
 最新内容后才按新的 `revision` 合并；创建者自己的 Pull request 不提示，也不发送 `revision`。`uvw pr view` 与
-MCP `pr_view` 显示 `revision`，`uvw pr merge --revision` 与 `pr_merge` 带上它。Workspace Agent 的审阅面板发送
-点击合并时显示的 `revision`，`univer_worktree` 工具合并前先读取详情，再按读到的 `revision` 合并。
+MCP `pr_view` 对能审阅的人显示 `revision`，`uvw pr merge --revision` 与 `pr_merge` 带上它。Workspace Agent 的审阅
+面板发送点击合并时显示的 `revision`，`univer_worktree` 工具合并前先读取详情，再按读到的 `revision` 合并。
+`uvw` 与 MCP 合并时的幂等键包含带上的 `revision`：按同一个 `revision` 重试沿用同一个键；按另一个 `revision`
+合并，或创建者不带 `revision` 合并，用的是另一个键。
 
 Merge 只按执行者的权限校验每个目标，不叠加创建者当前的权限，User 与 Team Worktree 相同。执行者对结果负责，
 Operation 与 Activity 记录的是他，他也可以直接写入同样的内容；创建者的权限已在编辑和添加文件时校验。叠加创建者

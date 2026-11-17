@@ -256,19 +256,27 @@ Merge results are stored per Unit. Successful Units do not roll back if another
 Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
-A merge applies the revision its reviewer saw. The Worktree detail carries a
+A merge decides on the revision its reviewer saw. The Worktree detail carries a
 `revision` derived from its title, summary and each Unit's draft revision and
-change; ready and reopen leave it unchanged. Merging a Worktree someone else
-created requires that `revision` in the request body and `capabilities.review`.
-A missing or outdated revision returns 412 `PRECONDITION_FAILED` and merges
-nothing. The creator may omit it, because only the creator changes the
-Worktree's Units. The server compares the revision when the request arrives and
-again right before the Collaboration merge. Changing the title or summary,
-reopening and marking ready return 409 when they find a merge of the Worktree
-in progress. Retrying a failed
-merge through the Operations API compares the revision that merge named. A
-merge checks each target with the merger's access only, for User and Team
-Worktrees alike.
+change, shown only to an actor whose `capabilities.review` is true; ready and
+reopen leave it unchanged. The revision covers the draft, not trunk: trunk
+edits made after the review are merged with the draft as usual. Merging a
+Worktree someone else created requires that `revision` in the request body and
+`capabilities.review`. A Team Owner or Admin who cannot review a private Team
+Worktree someone else created gets 403 `REVIEW_REQUIRED`; once its visibility is
+Space they can review it and merge. A missing or outdated revision returns 412
+`PRECONDITION_FAILED` and merges nothing. The creator may omit it, because only
+the creator changes the Worktree's Units.
+
+The server compares the revision when the request arrives, reserves the merge,
+and compares again right before the Collaboration merge. A title or summary
+change, a reopen or a mark-ready that reaches the Worktree after the reservation
+returns 409; one that lands between the review and the reservation makes the
+merge fail and merge nothing. The reservation holds for 60 seconds and is not
+renewed, so these requests return 409 until the merge finishes, for at most that
+long, also after a merge that crashed. Retrying a failed merge through the
+Operations API compares the revision that merge named. A merge checks each
+target with the merger's access only, for User and Team Worktrees alike.
 
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an
