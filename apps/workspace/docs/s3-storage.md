@@ -2,7 +2,7 @@
 
 English | [简体中文](s3-storage.zh-CN.md)
 
-For a PostgreSQL + S3 deployment, use this page for bucket permissions and the file copy command. The [Workspace configuration guide](configuration.md#migrate-from-sqlite-and-local-storage) covers both backends, downtime, database import and cutover checks.
+For a PostgreSQL + S3 deployment, use this page for bucket permissions and endpoint settings. The [Workspace configuration guide](configuration.md#migrate-from-sqlite-and-local-storage) covers both backends, downtime, database import and cutover checks.
 
 **MinIO** uses the S3 settings in the configuration guide. Add the S3 API endpoint reachable from the Workspace server.
 This example uses path-style addressing.
@@ -28,11 +28,4 @@ for versioned buckets, to control how long deleted versions are retained.
 
 ## Move existing files from local storage
 
-After stopping the source writers and taking the backup, copy from the actual `BLOB_DIRECTORY` to an empty prefix. This example uses the default local directory and the destination from the configuration guide.
-
-```bash
-aws s3 sync .data/univer-workspace-blobs/ s3://workspace-objects/workspace/ \
-  --exclude '*' --include '????????-????-????-????-????????????' --no-follow-symlinks
-```
-
-Keep the original UUID filenames. Compare object names, counts and sizes, then import the product and collaboration databases. Start the target for validation once both steps are complete.
+Run the [SQLite + local storage migration command](configuration.md#migrate-from-sqlite-and-local-storage). It copies the files, verifies S3 objects and imports both databases in one outage. Start with an empty prefix. Keep any copied objects when retrying an interrupted migration.

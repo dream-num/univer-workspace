@@ -23,16 +23,29 @@ BLOB_S3_PREFIX=workspace
 
 ### Migrate from SQLite and local storage
 
-Plan one outage for an existing deployment. **The repository does not currently provide a command to import the two SQLite databases into PostgreSQL.** Before scheduling downtime, rehearse the offline import and the checks below with a backup copy, an isolated target database and a separate bucket prefix.
+Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The command accepts V19, V20 and V21 product databases. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [S3 file storage](s3-storage.md) for credentials and permissions.
 
-Stop all Workspace writers. Back up both SQLite files and the local file directory at the same recovery point. Keep user traffic closed and complete both steps from that data:
+1. Stop all Workspace writers. Keep a backup of both SQLite databases (including any WAL or journal files) and the file directory from the same recovery point. Keep user traffic closed until validation passes.
+2. Set the PostgreSQL + S3 settings above for the migration process. Point `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE` and `BLOB_DIRECTORY` at the existing source data, or use the local defaults below. A read-only source mount is sufficient. Allow temporary disk space for both databases, upgrade copies and their backups.
+3. From the repository root, run the command once:
 
-1. **Copy files to S3.** Copy the local files under their original UUIDs to an empty destination prefix. Compare object names, counts and sizes. See the [S3 copy command](s3-storage.md#move-existing-files-from-local-storage).
-2. **Import both databases.** Initialize the target schemas with the same Workspace and SDK versions. Stop the target instance and use the rehearsed importer to load product data into the product schema and Core, Worktree, History and Comment data into the `collaboration` schema. Check resource IDs, object keys, document revisions and Worktree-to-document references.
+   ```bash
+   pnpm --filter @univerjs/univer-workspace db:migrate-to-postgres-s3
+   ```
 
-Once both steps pass, start one target instance with the PostgreSQL + S3 settings above. Through HTTP, sign in with an existing account and open an existing document, Worktree, history, comment and attachment. Edit a document and upload a file. Restart, read back the edit and the upload, then reopen user traffic.
+   With the Workspace image, run a one-off container from the same image. Here `workspace.env` supplies the target database and S3 settings, and the source volume is mounted at the default paths. Use the same network and credentials as the target deployment.
 
-If validation fails before traffic resumes, stop the target and restart the original deployment with SQLite and local files from the same recovery point. After traffic resumes the old backups lack new edits and uploads. Preserve those changes by migrating them back before rollback.
+   ```bash
+   docker run --rm --network workspace --env-file ./workspace.env \
+     -v univer-workspace-data:/app/univer-workspace/.data:ro \
+     univer-workspace node dist/server/storage-migration/main.js
+   ```
+
+4. Wait for a successful exit and the committed row counts. Start one instance with the target configuration. Through HTTP, sign in with an existing account, check a document, Worktree, history, comments and attachment, edit a document and upload a file. Restart, read back the edit and upload, then reopen traffic.
+
+The command upgrades SQLite copies in a private temporary directory and reads the originals only. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, then imports product data and all four collaboration components in one PostgreSQL transaction. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
+
+**Interruption and rollback.** Keep source writers stopped after a failure. Empty target tables and some S3 objects may remain. The database import transaction rolls back as a unit. Fix the cause and rerun with the same source and destination. The command verifies and reuses identical objects and rejects mismatched or unrelated objects and populated target tables. It also rejects legacy collaboration resource data the target SDK cannot represent. If the connection drops during commit, inspect the target before reopening traffic or retrying. Before reopening traffic, you can stop the target and restart the source with its original configuration. After traffic resumes, rollback also requires transferring subsequent writes.
 
 ## Databases
 

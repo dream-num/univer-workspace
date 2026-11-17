@@ -2,6 +2,8 @@
 
 SQLite 和 PostgreSQL 实现同一组产品 Repository 接口。协同库和文件存储各自管理数据。
 
+离线迁移命令位于 `server/src/storage-migration/`，只在显式执行时装配源与目标适配器。[操作说明](../configuration.zh-CN.md#从-sqlite-和本地目录迁移)
+
 ## 目录与文件
 
 以下路径相对于 `apps/workspace/server/src/`。以空间置顶举例，其他领域按现有模块归属组织。

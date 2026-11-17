@@ -23,16 +23,29 @@ BLOB_S3_PREFIX=workspace
 
 ### 从 SQLite 和本地目录迁移
 
-已有数据的部署需要一个停机窗口。**仓库目前没有将两个 SQLite 库导入 PostgreSQL 的命令。** 安排停机前，先用备份副本和隔离的目标库、桶前缀演练离线导入及下述验收。确认导入能保留数据后，再执行正式迁移。
+在一个停机窗口内完成 **SQLite + 本地目录 → PostgreSQL + S3**。命令支持 V19、V20、V21 产品库。先准备专用的空 PostgreSQL 数据库、私有桶和空前缀。S3 凭据和权限见 [S3 文件存储](s3-storage.zh-CN.md)。
 
-停止所有 Workspace 写入实例，将两个 SQLite 文件和本地文件目录备份为同一恢复点。保持用户流量关闭，从这份数据完成两步：
+1. 停止所有 Workspace 写入实例，保留同一时间点的两个 SQLite 数据库（包括仍存在的 WAL 或 journal）和文件目录备份。验收前保持用户流量关闭。
+2. 将上面的 PostgreSQL + S3 配置写入迁移进程的环境。用 `DATABASE_FILE`、`COLLABORATION_DATABASE_FILE` 和 `BLOB_DIRECTORY` 指向现有源数据。未覆盖时使用下表中的本地默认路径。源目录可以只读挂载。为临时目录预留容纳两个数据库、升级副本及备份的空间。
+3. 从仓库根目录执行一次：
 
-1. **复制文件到 S3。** 将本地文件按原有 UUID 复制到空的目标前缀，核对对象名称、数量和大小。操作命令见 [S3 文件复制](s3-storage.zh-CN.md#将已有文件从本地迁移到-s3)。
-2. **导入两个数据库。** 目标表结构由同版本 Workspace 和 SDK 初始化。停止目标实例，使用已演练的导入工具，将产品数据写入产品 schema，将 Core、Worktree、History 和 Comment 写入 `collaboration` schema。核对资源 ID、文件对象键、文档修订号以及 Worktree 与文档的关联。
+   ```bash
+   pnpm --filter @univerjs/univer-workspace db:migrate-to-postgres-s3
+   ```
 
-两步都通过后，使用上面的 PostgreSQL + S3 配置启动一个目标实例。通过 HTTP 以原账号打开已有文档、Worktree、历史、评论和附件，做一次文档编辑和文件上传。重启实例，回读编辑结果和上传文件，再开放用户流量。
+   使用 Workspace 镜像时，从同一镜像运行一次性容器。下面的 `workspace.env` 使用目标数据库和 S3 的配置；源数据卷挂在默认路径。使用与目标部署相同的网络和凭据。
 
-开放流量前验收失败，可停止目标实例，使用同一恢复点的 SQLite 和本地目录启动原部署。开放流量后，旧备份缺少新写入的文档和文件，回退前需先迁回这些增量。
+   ```bash
+   docker run --rm --network workspace --env-file ./workspace.env \
+     -v univer-workspace-data:/app/univer-workspace/.data:ro \
+     univer-workspace node dist/server/storage-migration/main.js
+   ```
+
+4. 等待命令成功退出并打印提交行数。用目标配置启动一个实例，通过 HTTP 登录原账号，核对已有文档、Worktree、历史、评论和附件，编辑文档并上传一个文件。重启实例，回读编辑和上传结果后再开放流量。
+
+命令在私有临时目录升级 SQLite 副本，原库只读。它按原对象键复制本地文件并从 S3 回读校验 SHA-256，然后在一个 PostgreSQL 事务中导入产品库和四个协同组件。Worktree 内新建的 Unit 在 SQLite 中的基线占位值 `1` 会转换为 PostgreSQL 的 `NULL`，主线派生的 Unit 保留真实基线。草稿修订号、初始快照和合并数据一并保留。
+
+**中断与回退。** 失败时保持源实例停写。目标可能已有空表和部分 S3 对象，数据库导入事务会整体回滚。修复原因后用相同源数据和目标重跑；命令校验并复用内容一致的对象，遇到不匹配对象、无关对象或非空目标业务表会报错。包含目标 SDK 无法保存的旧协同资源数据也会报错。若连接在提交时中断，先检查目标数据再决定恢复服务或重试。恢复流量前可以停止目标实例，恢复原配置并启动源实例；恢复流量后回退需要另行迁回新增数据。
 
 ## 数据库
 

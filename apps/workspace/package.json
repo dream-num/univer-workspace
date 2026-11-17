@@ -18,6 +18,7 @@
     "build": "pnpm api:lint && pnpm api:generate && pnpm routes:generate && pnpm build:web && pnpm build:server",
     "typecheck": "pnpm api:lint && pnpm routes:generate && tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "start": "node --env-file-if-exists=.env dist/server/main.js",
+    "db:migrate-to-postgres-s3": "node --env-file-if-exists=.env --import tsx server/src/storage-migration/main.ts",
     "db:ban-agent": "node --env-file-if-exists=.env --import tsx server/src/db/ban-agent.ts",
     "db:ban-agent:production": "node --env-file-if-exists=.env dist/server/db/ban-agent.js",
     "test:postgres": "node -e \"if (!process.env.WORKSPACE_TEST_POSTGRES_URL) throw Error('Set WORKSPACE_TEST_POSTGRES_URL to a test database')\" && vitest related --run test/support/postgres/schema.ts",
@@ -37,6 +38,7 @@
     "@fontsource-variable/inter": "^5.3.0",
     "@fontsource-variable/plus-jakarta-sans": "^5.3.0",
     "@lexical/react": "0.53.0",
+    "@msgpack/msgpack": "3.1.3",
     "@modelcontextprotocol/server": "2.4.0",
     "@scalar/express-api-reference": "^0.10.11",
     "@tailwindcss/vite": "^4.3.3",
@@ -251,7 +253,6 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
-    "@msgpack/msgpack": "3.1.3",
     "@redocly/cli": "^2.41.0",
     "@tanstack/router-cli": "^1.167.21",
     "@tanstack/router-plugin": "^1.168.23",

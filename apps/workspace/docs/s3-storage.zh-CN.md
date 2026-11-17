@@ -2,7 +2,7 @@
 
 [English](s3-storage.md) | 简体中文
 
-本页说明 PostgreSQL + S3 部署所需的对象存储权限和文件复制命令。数据库与文件存储的完整配置、停机顺序、数据库导入和切换验收见 [Workspace 配置指南](configuration.zh-CN.md#从-sqlite-和本地目录迁移)。
+本页说明 PostgreSQL + S3 部署所需的对象存储权限。数据库与文件存储的完整配置、停机顺序、数据库导入和切换验收见 [Workspace 配置指南](configuration.zh-CN.md#从-sqlite-和本地目录迁移)。
 
 **MinIO** 沿用配置指南中的 S3 配置，再填入 Workspace 服务端可访问的 S3 API 地址。下面的示例使用路径式寻址。
 
@@ -26,11 +26,4 @@ BLOB_S3_FORCE_PATH_STYLE=true
 
 ## 将已有文件从本地迁移到 S3
 
-源实例停写并完成备份后，从实际的 `BLOB_DIRECTORY` 复制到空前缀。下面使用默认本地目录，目标与配置示例一致。
-
-```bash
-aws s3 sync .data/univer-workspace-blobs/ s3://workspace-objects/workspace/ \
-  --exclude '*' --include '????????-????-????-????-????????????' --no-follow-symlinks
-```
-
-保留原有 UUID 文件名。核对对象名称、数量和大小后，继续导入产品库和协同库，两步都完成后再启动目标服务验收。
+使用 [SQLite + 本地目录迁移命令](configuration.zh-CN.md#从-sqlite-和本地目录迁移)。命令在同一停机窗口内复制文件、校验 S3 对象并导入两个数据库。首次运行使用空前缀；中断后重跑时保留已复制的对象。
