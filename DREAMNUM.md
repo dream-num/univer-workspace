@@ -134,7 +134,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
-  An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent.
+  An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent and the human who claimed it.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;
