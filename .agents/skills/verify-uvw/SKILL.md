@@ -67,15 +67,19 @@ Prerequisites, checked by `up` and `doctor`, each with its fix:
    and `PUBLIC_ORIGIN=http://127.0.0.1:<web port>` for Workspace MCP OAuth authorization.
 2. Starts Vite on 5973 with `WORKSPACE_DEV_API_PORT=3920`; it proxies `/api` and
    `/universer-api` (including WebSockets) to the server.
-3. Waits until `GET /api/session` answers on both ports. The server creates and migrates
+3. Sets `workspace.origin` to `http://127.0.0.1:5973` (the web port) in the run's
+   `UNIVER_HOME`. Unset, uvw would target its production default origin.
+4. Waits until `GET /api/session` answers on both ports. The server creates and migrates
    the empty databases before it listens, so a 200 there means usable.
+
+Every helper command that runs uvw (`cli`, `uvw`, `user`, `doctor`) first checks that
+the run's `UNIVER_HOME` resolves this run's origin, and refuses otherwise.
 
 Ready output prints the run id, both URLs and the evidence directory. Typical start is
 under 10 s. On failure it tails the log; run `$V down` before retrying.
 
 `$V user [name]` registers `verify-<run-id>` (display name `Verify <run-id>`) through
-`POST /api/auth/password/register`, writes its random password to `user.pw`, sets
-`workspace.origin` to `http://127.0.0.1:5973` in the run's `UNIVER_HOME`, and runs
+`POST /api/auth/password/register`, writes its random password to `user.pw`, and runs
 `uvw auth login --username … --password-stdin`. Rerunning it only signs uvw in again. The
 user owns Personal Space `verify-<run-id>/personal`.
 

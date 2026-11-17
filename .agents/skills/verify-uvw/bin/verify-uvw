@@ -54,7 +54,12 @@ wait_http() { # url timeout-seconds
   return 1
 }
 
-uvw_raw() { node "$CLI_MAIN" "$@"; }
+# Without workspace.origin uvw targets production, so refuse unless the CLI home resolves this run's origin.
+uvw_raw() {
+  [[ "$(node "$CLI_MAIN" config get workspace.origin --json 2>/dev/null)" == *"\"value\": \"$ORIGIN\""* ]] \
+    || { echo "verify-uvw: refusing uvw: workspace.origin in $UNIVER_HOME is not $ORIGIN; run: verify-uvw down, then up" >&2; return 1; }
+  node "$CLI_MAIN" "$@"
+}
 
 mcp_digest() {
   local context="${MCP_BUILD_CONTEXT:-$REPO}"
@@ -563,6 +568,8 @@ EOF
     printf 'MCP_PORT=%s\nMCP_PUBLIC_URL=%s\nMCP_PROJECT=verify-uvw-%s\nMCP_IMAGE=univer-workspace-mcp:verify-%s\nMCP_EXECUTORS=%s\n' "$mcp_port" "$mcp_public_url" "$id" "$id" "${VERIFY_UVW_MCP_EXECUTORS:-1}" >>"$run/run.env"
   fi
   ln -sfn "$run" "$ROOT/current"
+  UNIVER_HOME="$run/home" node "$CLI_MAIN" config set workspace.origin "http://127.0.0.1:$web_port" >/dev/null \
+    || die "cannot set workspace.origin in $run/home; run: verify-uvw down"
 
   wait_http "http://127.0.0.1:$server_port/api/session" 120 \
     || { tail -n 40 "$run/logs/server.log" >&2; die "server not ready; see $run/logs/server.log (run: verify-uvw down)"; }
@@ -629,7 +636,6 @@ cmd_user() {
   fi
   # shellcheck disable=SC1091
   source "$RUN/user.env"
-  uvw_raw config set workspace.origin "$ORIGIN" >/dev/null
   uvw_raw auth login --username "$USERNAME" --password-stdin --json <"$RUN/user.pw"
   if [[ "${MCP_ENABLED:-0}" == 1 ]]; then
     mcp_user
