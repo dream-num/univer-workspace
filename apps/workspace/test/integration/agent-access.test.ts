@@ -440,6 +440,32 @@ describe("Link Sharing settings", () => {
   });
 });
 
+describe("GET /api/nodes/:nodeId", () => {
+  it("names the Personal Space owner as the author to every reader, and nobody in a Team Space", async () => {
+    const { origin, application } = await start();
+    const human = await register(origin, "alice");
+    const reader = await register(origin, "reader");
+    const agent = await createAgent(origin);
+    const author = async (nodeId: string, cookie?: string) =>
+      ((await (await fetch(`${origin}/api/nodes/${nodeId}`, { headers: cookie ? { cookie } : {} })).json()) as { owner: unknown }).owner;
+
+    const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
+    await put(origin, `/api/nodes/${agentNodeId}/link-sharing`, { enabled: true, role: "viewer" }, agent.cookie);
+    const unclaimed = { displayName: "agent", kind: "agent", claimed: false };
+    for (const cookie of [undefined, reader.cookie, agent.cookie]) expect(await author(agentNodeId, cookie)).toEqual(unclaimed);
+    claim(application, agent.id, human.id);
+    expect(await author(agentNodeId)).toEqual({ ...unclaimed, claimed: true });
+
+    const humanNodeId = await createFile(origin, human.cookie, "Human sheet");
+    await put(origin, `/api/nodes/${humanNodeId}/link-sharing`, { enabled: true, role: "viewer" }, human.cookie);
+    expect(await author(humanNodeId)).toEqual({ displayName: "alice", kind: "human" });
+
+    const team = (await (await post(origin, "/api/team-spaces", { name: "Team", publicRead: true }, { cookie: human.cookie })).json()) as { id: string };
+    const folder = (await (await post(origin, "/api/nodes", { spaceId: team.id, parentNodeId: null, name: "Plans" }, { cookie: human.cookie })).json()) as { id: string };
+    expect(await author(folder.id)).toBeNull();
+  });
+});
+
 describe("POST /api/nodes/:nodeId/reports", () => {
   it("stores a report from an anonymous reader or a session and logs it without the reason", async () => {
     const { origin, application } = await start();

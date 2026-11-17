@@ -6819,12 +6819,33 @@ components:
           type: string
           minLength: 1
           maxLength: 255
+    NodeOwner:
+      type: object
+      description: |
+        Owner of the Personal Space that holds the Node, shown to every reader as the file's author.
+        It carries no ID, username or Email.
+      additionalProperties: false
+      required:
+        - displayName
+        - kind
+      properties:
+        displayName:
+          type: string
+        kind:
+          type: string
+          enum:
+            - human
+            - agent
+        claimed:
+          type: boolean
+          description: Present only for an agent. Whether a human has claimed it.
     NodeResponse:
       type: object
       additionalProperties: false
       required:
         - node
         - space
+        - owner
         - breadcrumbs
         - navigationRootNodeId
       properties:
@@ -6832,6 +6853,11 @@ components:
           $ref: '#/components/schemas/NodeSummary'
         space:
           $ref: '#/components/schemas/SpaceSummary'
+        owner:
+          description: Null for a Node in a Team Space, which has no single author.
+          oneOf:
+            - $ref: '#/components/schemas/NodeOwner'
+            - type: 'null'
         breadcrumbs:
           type: array
           items:

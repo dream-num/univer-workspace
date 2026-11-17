@@ -6,10 +6,25 @@ import { nodeForbidden, nodeNotFound } from "../../../modules/nodes/nodes.errors
 import { checkCreateTarget } from "../access/resource-target.js";
 import type { PostgresAccessRepository } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
-import type { NodePatch, NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository } from "../../../modules/nodes/nodes.repository.js";
+import type { NodePatch, NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository, SpaceOwnerRow } from "../../../modules/nodes/nodes.repository.js";
 
 export class PostgresNodesRepository implements NodesRepository {
   constructor(private readonly _database: PostgresDatabase, private readonly access: PostgresAccessRepository) {}
+
+  async findSpaceOwner(spaceId: string): Promise<SpaceOwnerRow> {
+    return await this._database
+      .prepare(
+        `SELECT
+           owner.display_name,
+           owner.kind,
+           (agents.owner_user_id IS NOT NULL)::integer AS claimed
+         FROM spaces
+         JOIN users AS owner ON owner.id = spaces.owner_user_id
+         LEFT JOIN agents ON agents.user_id = owner.id
+         WHERE spaces.id = ?`
+      )
+      .get(spaceId) as unknown as SpaceOwnerRow;
+  }
 
   async createReport(input: {
     readonly id: string;

@@ -6,10 +6,25 @@ import { nodeForbidden, nodeNotFound } from "../../../modules/nodes/nodes.errors
 import { checkCreateTarget } from "../access/resource-target.js";
 import type { SqliteAccessRepository } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
-import type { NodePatch, NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository } from "../../../modules/nodes/nodes.repository.js";
+import type { NodePatch, NodeCursor, NodeListRow, BreadcrumbRow, NodesRepository, SpaceOwnerRow } from "../../../modules/nodes/nodes.repository.js";
 
 export class SqliteNodesRepository implements NodesRepository {
   constructor(private readonly _database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
+
+  async findSpaceOwner(spaceId: string): Promise<SpaceOwnerRow> {
+    return this._database.connection
+      .prepare(
+        `SELECT
+           owner.display_name,
+           owner.kind,
+           agents.owner_user_id IS NOT NULL AS claimed
+         FROM spaces
+         JOIN users AS owner ON owner.id = spaces.owner_user_id
+         LEFT JOIN agents ON agents.user_id = owner.id
+         WHERE spaces.id = ?`
+      )
+      .get(spaceId) as unknown as SpaceOwnerRow;
+  }
 
   async createReport(input: {
     readonly id: string;

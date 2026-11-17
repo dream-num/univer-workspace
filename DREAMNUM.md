@@ -168,7 +168,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   a login session cookie. Creation is limited per source IP by bounded process-local state; the source IP is not
   persisted. `POST /api/nodes/{nodeId}/reports` accepts abuse reports without credentials under its own per-source-IP
   limit, and `db:ban-agent` bans an agent. Agents cannot create Team Spaces, make a Space public or become Team Space members, and an
-  unclaimed agent keeps at most 20 files.
+  unclaimed agent keeps at most 20 files. `GET /api/nodes/{nodeId}` shows every reader of a Personal Space Node,
+  signed in or not, its owner's display name, whether the owner is an agent, and whether a human claimed it; never
+  the owner's ID, username or Email.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

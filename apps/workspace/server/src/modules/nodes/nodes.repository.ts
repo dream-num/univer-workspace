@@ -21,7 +21,14 @@ export interface BreadcrumbRow {
   readonly name: string;
 }
 
+export interface SpaceOwnerRow {
+  readonly display_name: string;
+  readonly kind: "human" | "agent";
+  readonly claimed: 0 | 1;
+}
+
 export interface NodesRepository {
+  findSpaceOwner(spaceId: string): Promise<SpaceOwnerRow>;
   createReport(input: {
     readonly id: string;
     readonly nodeId: string;

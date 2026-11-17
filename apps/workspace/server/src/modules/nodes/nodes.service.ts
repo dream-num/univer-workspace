@@ -14,9 +14,11 @@ import type {
   BreadcrumbRow,
   NodeCursor,
   NodePatch,
+  SpaceOwnerRow,
 } from "./nodes.repository.js";
 import type {
   Breadcrumb,
+  NodeOwner,
   NodePage,
   NodeResponse,
   NodeSummary,
@@ -120,6 +122,9 @@ export function createNodesModule(options: {
       return {
         node: nodeSummary(node),
         space: spaceSummary(space),
+        owner: node.spaceType === "personal"
+          ? nodeOwner(await options.repository.findSpaceOwner(node.spaceId))
+          : null,
         breadcrumbs: visibleBreadcrumbs(
           await options.repository.breadcrumbs(node.id),
           node.navigationRootNodeId
@@ -225,6 +230,12 @@ export function resourceSummary(access: NodeAccess): ResourceSummary | null {
     };
   }
   return null;
+}
+
+function nodeOwner(row: SpaceOwnerRow): NodeOwner {
+  return row.kind === "agent"
+    ? { displayName: row.display_name, kind: "agent", claimed: row.claimed === 1 }
+    : { displayName: row.display_name, kind: "human" };
 }
 
 function syntheticSpace(node: NodeAccess): SpaceAccess {

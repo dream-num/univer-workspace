@@ -3204,9 +3204,22 @@ export interface components {
             parentNodeId: string | null;
             name: string;
         };
+        /**
+         * @description Owner of the Personal Space that holds the Node, shown to every reader as the file's author.
+         *     It carries no ID, username or Email.
+         */
+        NodeOwner: {
+            displayName: string;
+            /** @enum {string} */
+            kind: "human" | "agent";
+            /** @description Present only for an agent. Whether a human has claimed it. */
+            claimed?: boolean;
+        };
         NodeResponse: {
             node: components["schemas"]["NodeSummary"];
             space: components["schemas"]["SpaceSummary"];
+            /** @description Null for a Node in a Team Space, which has no single author. */
+            owner: components["schemas"]["NodeOwner"] | null;
             breadcrumbs: components["schemas"]["Breadcrumb"][];
             navigationRootNodeId: string | null;
         };
