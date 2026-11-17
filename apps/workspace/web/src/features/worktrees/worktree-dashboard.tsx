@@ -678,6 +678,7 @@ export function WorktreeDashboard({
             />
           ) : (
             <WorktreeReviewPanel
+              key={selectedDocument.worktree.id}
               worktree={selectedDocument.worktree}
               selectedUnitId={selectedDocument.unit?.unitId ?? null}
               selectedView={selectedView}

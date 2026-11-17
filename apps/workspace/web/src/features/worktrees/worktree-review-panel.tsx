@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { LocaleType } from "@univerjs/core";
 import {
@@ -19,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { components } from "../../../../generated/http/schema.js";
+import { ApiError } from "../../shared/api/errors";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import {
   Alert,
@@ -98,8 +99,10 @@ export function WorktreeReviewPanel({
     : selectedView;
   const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
 
+  const [reviewedRevision, setReviewedRevision] = useState(worktree.revision);
+  const changedSinceReview = worktree.revision !== reviewedRevision;
   const removal = useToggleUnitRemoval(worktree.id);
-  const action = useWorktreeLifecycle(worktree.id);
+  const action = useWorktreeLifecycle(worktree.id, reviewedRevision);
   const onError = (error: Error) => toast.error(error.message);
   const runAction = (value: ReviewAction) =>
     action.mutate(value, {
@@ -116,11 +119,27 @@ export function WorktreeReviewPanel({
           toast.error(t(feedback.message));
         }
       },
-      onError,
+      onError: (error) =>
+        error instanceof ApiError && error.code === "PRECONDITION_FAILED"
+          ? toast.error(t("mergeRefusedChanged"))
+          : onError(error),
     });
 
   const lifecycleActions = (
     <>
+      {worktree.capabilities.merge && changedSinceReview ? (
+        <Alert className="w-full" variant="warning" title={t("taskChangedSinceReview")}>
+          <p className="m-0">{t("taskChangedSinceReviewDescription")}</p>
+          <Button
+            className="mt-2"
+            size="sm"
+            variant="secondary"
+            onClick={() => setReviewedRevision(worktree.revision)}
+          >
+            {t("reviewedLatestChanges")}
+          </Button>
+        </Alert>
+      ) : null}
       {worktree.capabilities.reopen ? (
         <Button size="sm" disabled={action.isPending} onClick={() => runAction("reopen")}>
           <Pencil />
@@ -142,7 +161,7 @@ export function WorktreeReviewPanel({
           }
         />
       ) : null}
-      {worktree.capabilities.merge && hasMergeConflict ? (
+      {!worktree.capabilities.merge || changedSinceReview ? null : hasMergeConflict ? (
         <Tooltip content={t("mergeConflictBlocksMerge")}>
           <span className="inline-flex max-w-full">
             <Button size="sm" disabled>

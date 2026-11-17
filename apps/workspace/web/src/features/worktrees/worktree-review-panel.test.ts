@@ -1,4 +1,6 @@
-import { createElement, type ComponentProps, type ReactNode } from "react";
+// @vitest-environment jsdom
+import { act, createElement, type ComponentProps, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { WorktreeReviewPanel } from "./worktree-review-panel";
@@ -6,6 +8,7 @@ import { WorktreeReviewPanel } from "./worktree-review-panel";
 const state = vi.hoisted(() => ({
   pending: false,
   clicks: new Map<string, () => void>(),
+  confirms: new Map<string, () => void>(),
   post: vi.fn(),
   invalidate: vi.fn(),
   success: vi.fn(),
@@ -20,6 +23,7 @@ vi.mock("@tanstack/react-query", () => ({
   useMutation: (config: {
     mutationFn: (value: unknown) => Promise<unknown>;
     onSuccess: () => Promise<unknown>;
+    onError?: (error: unknown, value: unknown) => unknown;
   }) => ({
     isPending: state.pending,
     mutate: (value: unknown, callbacks: {
@@ -29,7 +33,10 @@ vi.mock("@tanstack/react-query", () => ({
       void config.mutationFn(value).then(async (result) => {
         await config.onSuccess();
         callbacks.onSuccess(result);
-      }).catch(callbacks.onError);
+      }).catch((error: unknown) => {
+        void config.onError?.(error, value);
+        callbacks.onError(error);
+      });
     },
   }),
 }));
@@ -53,7 +60,10 @@ vi.mock("../../shared/ui", () => {
   const Box = ({ children }: { children?: ReactNode }) => createElement("div", null, children);
   return {
     Alert: Box, Badge: Box, Empty: Box, Segmented: Box, Spinner: Box, Tooltip: Box,
-    ConfirmDialog: ({ trigger }: { trigger: ReactNode }) => trigger,
+    ConfirmDialog: ({ trigger, title, onConfirm }: { trigger: ReactNode; title: string; onConfirm: () => void }) => {
+      state.confirms.set(title, onConfirm);
+      return trigger;
+    },
     Button: ({ children, disabled, onClick }: {
       children: ReactNode;
       disabled: boolean;
@@ -69,7 +79,7 @@ vi.mock("../../shared/ui", () => {
 
 type Worktree = ComponentProps<typeof WorktreeReviewPanel>["worktree"];
 
-function worktree(reopen: boolean): Worktree {
+function worktree(reopen: boolean, overrides: Partial<Worktree> = {}): Worktree {
   return {
     id: "worktree-1",
     number: 1,
@@ -85,6 +95,7 @@ function worktree(reopen: boolean): Worktree {
     processedAt: null,
     createdAt: "2026-11-15T00:00:00Z",
     updatedAt: "2026-11-15T00:00:00Z",
+    revision: "revision-1",
     units: [],
     capabilities: {
       review: true,
@@ -96,12 +107,19 @@ function worktree(reopen: boolean): Worktree {
       merge: false,
       discard: false,
     },
+    ...overrides,
   };
+}
+
+function mergeable(revision: string): Worktree {
+  const base = worktree(false);
+  return { ...base, revision, capabilities: { ...base.capabilities, merge: true } };
 }
 
 beforeEach(() => {
   state.pending = false;
   state.clicks.clear();
+  state.confirms.clear();
   vi.clearAllMocks();
   state.post.mockResolvedValue({ data: { worktree: { state: "draft" } } });
   state.invalidate.mockResolvedValue(undefined);
@@ -143,5 +161,42 @@ describe("Worktree continue editing", () => {
     expect(onSelectedViewChange).not.toHaveBeenCalled();
     expect(state.success).not.toHaveBeenCalled();
     expect(state.invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("Worktree merge of the reviewed revision", () => {
+  it("keeps the revision the person opened and asks them to look again when it changes", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(WorktreeReviewPanel, { worktree: mergeable("r1") })));
+    expect(container.textContent).toContain("confirmMerge");
+    expect(container.textContent).not.toContain("taskChangedSinceReviewDescription");
+
+    await act(async () => root.render(createElement(WorktreeReviewPanel, { worktree: mergeable("r2") })));
+    expect(container.textContent).toContain("taskChangedSinceReviewDescription");
+    expect(container.textContent).not.toContain("confirmMerge");
+
+    await act(async () => state.clicks.get("reviewedLatestChanges")!());
+    expect(container.textContent).not.toContain("taskChangedSinceReviewDescription");
+    state.confirms.get("mergeConfirm")!();
+    await vi.waitFor(() => expect(state.post).toHaveBeenCalledWith(
+      "/api/worktrees/{worktreeId}/merge",
+      expect.objectContaining({ body: { revision: "r2" } }),
+    ));
+    await act(async () => root.unmount());
+  });
+
+  it("reports a refused merge and reloads the pull request", async () => {
+    state.post.mockResolvedValue({ error: { error: { code: "PRECONDITION_FAILED", message: "Changed." } } });
+    renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: mergeable("r1") }));
+    state.confirms.get("mergeConfirm")!();
+    await vi.waitFor(() => expect(state.error).toHaveBeenCalledWith("mergeRefusedChanged"));
+    expect(state.post).toHaveBeenCalledWith(
+      "/api/worktrees/{worktreeId}/merge",
+      expect.objectContaining({ body: { revision: "r1" } }),
+    );
+    expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["worktrees"] });
+    expect(state.success).not.toHaveBeenCalled();
   });
 });

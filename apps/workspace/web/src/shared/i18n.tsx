@@ -553,6 +553,10 @@ export const messages = {
     confirmMerge: "确认合入",
     mergeConfirm: "合入这项任务？",
     mergeDescription: "确认后的内容将进入正式版本。",
+    taskChangedSinceReview: "任务在你打开后有改动",
+    taskChangedSinceReviewDescription: "合入只会应用你查看过的版本。请先查看最新内容，再决定是否合入。",
+    reviewedLatestChanges: "我已查看最新内容",
+    mergeRefusedChanged: "任务在你查看后有改动，没有合入任何内容。请查看最新内容后再决定。",
     taskSubmittedForReview: "任务已提交审核。",
     taskReopened: "任务已恢复为草稿。",
     taskChangesDiscarded: "已丢弃修改。",
@@ -1451,6 +1455,12 @@ export const messages = {
     confirmMerge: "Confirm merge",
     mergeConfirm: "Merge this task?",
     mergeDescription: "Approved content will enter the official version.",
+    taskChangedSinceReview: "This task changed after you opened it",
+    taskChangedSinceReviewDescription:
+      "A merge applies only the version you reviewed. Check the latest content, then decide again.",
+    reviewedLatestChanges: "I've reviewed the latest",
+    mergeRefusedChanged:
+      "The task changed since you reviewed it, so nothing was merged. Check the latest content, then decide again.",
     taskSubmittedForReview: "The task was submitted for review.",
     taskReopened: "The task is a draft again.",
     taskChangesDiscarded: "The changes were discarded.",

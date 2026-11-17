@@ -22,7 +22,7 @@ export function useToggleUnitRemoval(worktreeId: string) {
   });
 }
 
-export function useWorktreeLifecycle(worktreeId: string) {
+export function useWorktreeLifecycle(worktreeId: string, reviewedRevision: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (value: ReviewAction) => {
@@ -43,6 +43,7 @@ export function useWorktreeLifecycle(worktreeId: string) {
                       "Idempotency-Key": createIdempotencyKey(),
                     },
                   },
+                  body: { revision: reviewedRevision },
                 })
               : await api.POST("/api/worktrees/{worktreeId}/discard", {
                   params: {
@@ -59,5 +60,8 @@ export function useWorktreeLifecycle(worktreeId: string) {
       };
     },
     onSuccess: () => client.invalidateQueries({ queryKey: worktreesQueryKey }),
+    // A refused merge usually means the pull request changed; reload it so the person sees the change.
+    onError: (_error, value) =>
+      value === "merge" ? client.invalidateQueries({ queryKey: worktreesQueryKey }) : undefined,
   });
 }
