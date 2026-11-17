@@ -320,8 +320,7 @@ The Server can also serve the latest built Browser from port 3020 when
 <http://127.0.0.1:3020/api-docs> and
 <http://127.0.0.1:3020/openapi.yaml>.
 
-Configuration, authentication, storage, Docker, and database migration details live
-in the [Workspace application guide](apps/workspace/README.md).
+For database, file storage and sign-in settings, see the [Workspace configuration guide](apps/workspace/docs/configuration.md). For Docker deployment and upgrades, see the [Workspace application guide](apps/workspace/README.md).
 
 ## One-Click Deploy
 
@@ -495,7 +494,8 @@ the actual package artifact before publication.
 | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | [Univer Web SDK documentation](https://docs.univer.ai/guides)       | Browser Runtime, presets, plugins, Facade API, and editor capabilities          |
 | [Univer Server SDK documentation](https://docs.univer.ai/server)    | Server SDK: collaboration, import and export, deployment, and license           |
-| [Workspace application guide](apps/workspace/README.md)             | Configuration, authentication, storage, Docker, and upgrades                    |
+| [Workspace application guide](apps/workspace/README.md)             | Running Workspace, Docker deployment and upgrades                              |
+| [Workspace configuration](apps/workspace/docs/configuration.md)      | Environment variables, defaults and deployment examples                        |
 | [Workspace CLI guide](apps/cli/README.md)                           | Installation, login, agent workflows, and package contract                      |
 | [Workspace Agent guide](apps/agent/README.md)                       | Local profile, browser OAuth, sessions, files, Worktree, and identity switching |
 | [Client Core package](packages/client-core/README.md)               | Private Node-hosted client capability boundary                                  |
