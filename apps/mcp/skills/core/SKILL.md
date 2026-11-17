@@ -67,7 +67,7 @@ every rule here that leaves readiness, merging or the link to the user.
 | `browse`                                                                                                     | `browse`               | Generate a review URL                                      |
 | `unit list`                                                                                                  | `unit_list`            | Staged Units in one Worktree                               |
 | `unit add`                                                                                                   | `unit_add`             | Stage an existing Univer Resource                          |
-| `unit create`                                                                                                | `unit_create`          | Create an empty Worktree-local Unit                        |
+| `unit create`                                                                                                | `unit_create`          | Create an empty Unit, or a copy of a file with `from`      |
 | `execute`                                                                                                    | `execute`              | Run Facade code and commit mutations                       |
 | `outline` | `outline` | Sheet only; unit and either trunk true or worktree; zoom with at, continue with from, limit depth and budget |
 | `read` | `read` | Sheet only; unit, scope, and range; content selects both, display, formula, style, or formula+style; max limits cells; json true returns typed values |

@@ -17,7 +17,7 @@ const inputSchema = z.object({
     .string()
     .optional()
     .describe(
-      "Share link or Node ID of a file you can open. The new file is then a copy of it, with its content and images, instead of an empty file. type must be the type of that file. The copy records that file as its source, and readers of the copy can see where it came from.",
+      "Share link or Node ID of a file you can open. The new file is then a copy of it, with its content and images, instead of an empty file. type must be the type of that file. The copy records that file as its source, which only the copy's owner and editors can see.",
     ),
   idempotency_key: z
     .string()
@@ -30,7 +30,7 @@ export const unitCreateTool: ToolDefinition = {
   scope: "write",
   title: "Create file in pull request",
   description:
-    "Create a new empty file (sheet, doc, slide, base or board) in a pull request's Worktree; it joins the repository when the pull request is merged. Generate an idempotency_key before creating and reuse it on retry, so a retry returns the same file instead of a duplicate.",
+    "Create a new file (sheet, doc, slide, base or board) in a pull request's Worktree, empty or, with from, a copy of a file you can open; it joins the repository when the pull request is merged. Generate an idempotency_key before creating and reuse it on retry, so a retry returns the same file instead of a duplicate.",
   inputSchema,
   outputSchema: z.object({ unit: unitWithUrlSchema }),
   annotations: writeAnnotations,

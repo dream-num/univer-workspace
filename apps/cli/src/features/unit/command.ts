@@ -42,7 +42,7 @@ export function createUnitCommand(
     .option("--parent <node>")
     .option(
       "--from <file>",
-      "share link or Node ID of a file you can open: the new file is a copy of it that records it as its source; --type must be its type",
+      "share link or Node ID of a file you can open: the new file is a copy of it that records it as its source, which only the copy's owner and editors can see; --type must be its type",
     )
     .option("--idempotency-key <key>")
     .option("--json")

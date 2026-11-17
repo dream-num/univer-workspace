@@ -360,7 +360,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(tool).toMatchObject({
       title: "Create file in pull request",
       description:
-        "Create a new empty file (sheet, doc, slide, base or board) in a pull request's Worktree; it joins the repository when the pull request is merged. Generate an idempotency_key before creating and reuse it on retry, so a retry returns the same file instead of a duplicate.",
+        "Create a new file (sheet, doc, slide, base or board) in a pull request's Worktree, empty or, with from, a copy of a file you can open; it joins the repository when the pull request is merged. Generate an idempotency_key before creating and reuse it on retry, so a retry returns the same file instead of a duplicate.",
       inputSchema: { required: ["worktree", "space", "type", "name"] },
     });
     expect(Object.keys(tool.inputSchema.properties!)).toEqual(["worktree", "space", "type", "name", "parent", "from", "idempotency_key"]);
