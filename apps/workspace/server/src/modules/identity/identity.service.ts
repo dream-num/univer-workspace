@@ -607,8 +607,9 @@ export function createIdentityModule(options: {
           "Too many agents were created from this address. Try again later."
         );
       }
-      const clientName = input.label?.trim() ? undefined : agentClientName(input.clientName);
-      const label = clientName ?? (input.label?.trim() || DEFAULT_AGENT_LABEL);
+      const explicitLabel = cleanCallerName(input.label);
+      const clientName = explicitLabel ? undefined : agentClientName(input.clientName);
+      const label = explicitLabel || clientName || DEFAULT_AGENT_LABEL;
       const createdAt = now();
       const expiresAt = createdAt + AGENT_TTL_MS;
       for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -1531,14 +1532,17 @@ function agentUsername(label: string): string {
   return `${slug || DEFAULT_AGENT_LABEL}-${suffix}`;
 }
 
-/** Any caller registers a client under any name, so keep it one short line without controls or bidi marks. */
-function agentClientName(name: string | null | undefined): string | undefined {
-  const cleaned = (name ?? "")
+/** Callers choose agent labels and client names freely, so keep them on one line without controls or bidi marks. */
+export function cleanCallerName(name: string | null | undefined): string {
+  return (name ?? "")
     .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ")
     .replace(/[\p{Cf}\p{Cs}]/gu, "")
     .replace(/\s+/gu, " ")
     .trim();
-  return Array.from(cleaned).slice(0, MAX_AGENT_CLIENT_NAME_LENGTH).join("").trim() || undefined;
+}
+
+function agentClientName(name: string | null | undefined): string | undefined {
+  return Array.from(cleanCallerName(name)).slice(0, MAX_AGENT_CLIENT_NAME_LENGTH).join("").trim() || undefined;
 }
 
 function displayNameFromEmail(email: string): string {

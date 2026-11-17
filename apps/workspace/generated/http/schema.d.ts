@@ -2906,7 +2906,7 @@ export interface components {
             resource: string;
         };
         AgentCreate: {
-            /** @description Names the agent. Blank or omitted means `agent`. */
+            /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`. */
             label?: string;
         };
         AgentIdentity: {
@@ -2926,7 +2926,7 @@ export interface components {
             expiresAt: number;
         };
         GuestAgentCreate: {
-            /** @description Names the agent. Blank or omitted means `agent`, or the OAuth client's name. */
+            /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name. */
             label?: string;
             /**
              * @description The `client_id` of the OAuth authorization the guest continues. When

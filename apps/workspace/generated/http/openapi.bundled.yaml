@@ -5996,7 +5996,7 @@ components:
         label:
           type: string
           maxLength: 64
-          description: Names the agent. Blank or omitted means `agent`.
+          description: Names the agent after control and bidi characters are removed. Blank or omitted means `agent`.
     AgentIdentity:
       type: object
       additionalProperties: false
@@ -6038,7 +6038,7 @@ components:
         label:
           type: string
           maxLength: 64
-          description: Names the agent. Blank or omitted means `agent`, or the OAuth client's name.
+          description: Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name.
         oauthClientId:
           type: string
           description: |

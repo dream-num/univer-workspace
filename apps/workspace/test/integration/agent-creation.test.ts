@@ -88,6 +88,28 @@ describe("POST /api/agents", () => {
     expect(new Set(agents.map(({ agent }) => agent.id)).size).toBe(30);
   });
 
+  it("removes control and bidi characters from an explicit label on both creation endpoints", async () => {
+    const { origin, application } = await start({ agentCreateLimitPerHour: 100 });
+    const sessionUser = async (cookie: string) =>
+      ((await (await fetch(`${origin}/api/session`, { headers: { cookie } })).json()) as { user: Agent & { displayName: string } }).user;
+    const viaApi = async (label: string) => {
+      const { token } = (await (await post(origin, "/api/agents", { label })).json()) as { token: string };
+      const { access_token } = (await (await exchange(origin, token)).json()) as { access_token: string };
+      return sessionUser(`workspace_session=${access_token}`);
+    };
+    const viaGuest = async (label: string) =>
+      sessionUser((await post(origin, "/api/auth/guest", { label })).headers.get("set-cookie")!.split(";", 1)[0]!);
+
+    for (const create of [viaApi, viaGuest]) {
+      const agent = await create("‮Budget\nbot​\u0000");
+      expect(agent.displayName).toBe("Budget bot");
+      expect(agent.username).toMatch(/^budget-bot-[a-z0-9]{4}$/u);
+      expect(application.database.connection.prepare("SELECT origin_label FROM agents WHERE user_id = ?").get(agent.id))
+        .toEqual({ origin_label: "Budget bot" });
+      expect(await create("‮⁦\r\n")).toMatchObject({ displayName: "agent", username: expect.stringMatching(/^agent-[a-z0-9]{4}$/u) });
+    }
+  });
+
   it("rejects a label that is not a string of at most 64 characters without spending the rate limit", async () => {
     const { origin } = await start({ agentCreateLimitPerHour: 1 });
     for (const label of [5, null, ["a"], "x".repeat(65)]) {

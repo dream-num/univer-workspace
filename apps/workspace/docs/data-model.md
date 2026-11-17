@@ -96,7 +96,7 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 
 每个 `kind = 'agent'` 的 User 对应一行，是该 agent 生命周期的唯一来源。`user_id` 是主键并随 User 删除。
 `owner_user_id` 与 `claimed_at` 同时为空（未认领）或同时非空（已认领），由表级 CHECK 保证；
-被引用为主人的 User 不能删除。`origin_label` 是创建时提交的标签；访客入口未提交标签时，是清理后的 OAuth 客户端名。`last_active_at` 是最近活跃时间。
+被引用为主人的 User 不能删除。`origin_label` 是创建时提交并清理后的标签；访客入口未提交标签时，是清理后的 OAuth 客户端名。清理会移除控制字符与双向文本格式字符并合并空白。`last_active_at` 是最近活跃时间。
 `expires_at` 为空表示不过期，`banned_at` 非空表示已封禁。全部时间为毫秒时间戳。不保存来源 IP。
 
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
