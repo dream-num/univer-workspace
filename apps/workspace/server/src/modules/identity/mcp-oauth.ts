@@ -90,7 +90,7 @@ export function parseClientRegistration(body: unknown): RegistrationResult {
     return invalid(`scope must be a subset of: ${MCP_SCOPES.join(" ")}.`);
   }
   const name = metadata.client_name;
-  if (name !== undefined && (typeof name !== "string" || name.trim().length > MAX_CLIENT_NAME_LENGTH)) {
+  if (name !== undefined && (typeof name !== "string" || [...name.trim()].length > MAX_CLIENT_NAME_LENGTH)) {
     return invalid(`client_name must be a string of at most ${MAX_CLIENT_NAME_LENGTH} characters.`);
   }
   return {

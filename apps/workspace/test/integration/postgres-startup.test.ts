@@ -30,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=5");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=6");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=4");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=5");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -110,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 4 }]);
+    expect(fresh.version).toMatchObject([{ version: 5 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -191,6 +191,53 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
       UPDATE nodes SET copied_from_node_id = 'source' WHERE id = 'n';
       DELETE FROM nodes WHERE id = 'source'`);
     expect((await schema.pool.query("SELECT copied_from_node_id FROM nodes WHERE id = 'n'")).rows).toEqual([{ copied_from_node_id: null }]);
+  });
+
+  it("upgrades version 4 by converging display names an earlier repair left, and rolls back a failed upgrade", async ({ onTestFinished }) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const config = { provider: "postgres" as const, connectionString: schema.connectionString };
+    await (await openProductDatabase(config)).close();
+    const fresh = (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows;
+    const owners = [
+      ["r1", "Al\uFFF9i\uFFFAc\uFFFBe", "Alice"],
+      ["r2", "alice@example\u2024com", "alice"],
+      ["r3", "\u0D05\u0D35\u0D28\u0D4D", "\u0D05\u0D35\u0D28\u0D4D"],
+      ["r4", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} Smith", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} Smith"],
+      ["r5", "\u{1F3F4}\u{E0068}\u{E0069}\u{E007F}", "\u{1F3F4}"],
+    ] as const;
+    for (const [id, name] of owners) {
+      await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ($1, $1, $2, 1, 2)", [id, name]);
+      await schema.pool.query("INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ($1, 'personal', $2, $3, 3, 4)", [`s-${id}`, `${name} 的个人空间`, id]);
+    }
+    await schema.pool.query("UPDATE workspace_product_schema SET version = 4");
+    const snapshot = async () => ({
+      users: (await schema.pool.query("SELECT id, display_name, updated_at FROM users ORDER BY id")).rows,
+      spaces: (await schema.pool.query("SELECT id, name, updated_at FROM spaces ORDER BY id")).rows,
+      schema: (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows,
+    });
+    const before = await snapshot();
+
+    const holder = await schema.pool.connect();
+    await holder.query("BEGIN");
+    await holder.query("LOCK TABLE spaces IN SHARE MODE");
+    const timed = new URL(schema.connectionString);
+    timed.searchParams.set("options", `${timed.searchParams.get("options")} -c lock_timeout=500`);
+    await expect(openProductDatabase({ ...config, connectionString: timed.href })).rejects.toThrow(/lock timeout/);
+    await holder.query("ROLLBACK");
+    holder.release();
+    expect(await snapshot()).toEqual(before);
+
+    await (await openProductDatabase(config)).close();
+    const after = await snapshot();
+    expect(after.users).toEqual(owners.map(([id, , name]) => ({ id, display_name: name, updated_at: "2" })));
+    expect(after.spaces).toEqual(owners.map(([id, , name]) => ({ id: `s-${id}`, name: `${name} 的个人空间`, updated_at: "4" })));
+    expect(after.schema).toEqual(fresh);
+    await (await openProductDatabase(config)).close();
+    expect(await snapshot()).toEqual(after);
+    await schema.pool.query("UPDATE workspace_product_schema SET version = 4");
+    await (await openProductDatabase(config)).close();
+    expect(await snapshot()).toEqual(after);
   });
 
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {

@@ -379,7 +379,6 @@ export function AuthCard(props: {
                 id="auth-username"
                 autoComplete="username"
                 className="h-10 pl-9"
-                maxLength={64}
                 value={username}
                 invalid={Boolean(fieldErrors.username)}
                 onChange={(event) => setUsername(event.target.value)}

@@ -175,7 +175,12 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   the owner's ID, username or Email.
 - Product V22 keeps the V21 structure. A backed-up V21 → V22 startup migration, and on PostgreSQL the
   product schema version 1 → 2 upgrade, rewrites only a stored display name that holds an email address,
-  a control, bidi, filler or stray zero-width character, or nothing visible; every other name stays byte
+  nothing visible, a control, a line or paragraph separator, U+2800 or U+1D159 (these become spaces), a
+  default-ignorable character (bidi controls, Hangul fillers, zero-width spaces), another format character
+  except a prepended concatenation mark such as U+0600, an unpaired surrogate or U+FFFD. Joiners between two
+  non-space characters, a zero-width joiner after a virama, variation selectors after a character and
+  England, Scotland or Wales flag tags stay, while a zero-width non-joiner after a virama at the end of a name
+  is removed; every other name stays byte
   for byte. Typed names that break the rule are refused; provider, Email sign-in and agent names are
   reduced to it. A Personal Space still named `<display name> 的个人空间`
   follows its owner's rename.
@@ -191,6 +196,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   recoverable `copy_node` Operation. The copy records only its source Node, which `GET /api/nodes/{nodeId}` returns to
   the copy's owner and editors and to no other reader, because a link-shared source's Node ID is its access link. It
   does not take over the source's permissions, sharing settings, comments or history.
+- Product V25 (PostgreSQL product schema version 5) keeps the V24 structure. A backed-up V24 → V25 startup step
+  runs the V22 display-name repair again over every User and Personal Space. A database whose V22 ran the earlier
+  rule deployed from 47dc9277 converges to the current rule; after the current V22 the step changes nothing. Joiners
+  that earlier rule removed from legitimate names come back only from that environment's backup taken before V22.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

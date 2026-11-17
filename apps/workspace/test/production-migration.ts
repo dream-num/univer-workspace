@@ -39,7 +39,7 @@ try {
     const version = application.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 24);
+    assert.equal(version.user_version, 25);
     const resource = (await application.nodes.get("alice", "doc-node")).node.resource;
     assert.equal(resource?.kind, "univer");
     assert.equal(resource?.kind === "univer" ? resource.unitType : null, "doc");

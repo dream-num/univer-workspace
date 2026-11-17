@@ -146,7 +146,7 @@ describe("rendering", () => {
     );
   });
   test("control characters cannot break a line or a column", () => {
-    const nasty = ["a\nb x", "tab\there x", 'say "x"', "ls ps x", "nel\u0085x"];
+    const nasty = ["a\nb x", "tab\there x", 'say "x"', "ls\u2028ps x", "nel\u0085x"];
     const r = run([{ cells: Object.fromEntries(nasty.map((v, i) => [i, { 0: text(v) }])) }], {
       terms: ["x"],
     });

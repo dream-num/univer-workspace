@@ -20,13 +20,17 @@ export interface DisplayNameRepair {
 const DEFAULT_NAME_SUFFIX = personalSpaceName("");
 
 /**
- * Single entry of the product V22 data repair (SQLite V21 → V22 and V0, PostgreSQL schema version 1 → 2).
+ * Single entry of the display-name data repair. Two product versions run it over every User and Personal Space:
+ * V22 (SQLite V21 → V22 and V0, PostgreSQL schema version 1 → 2) and V25 (SQLite V24 → V25, PostgreSQL 4 → 5).
+ * V25 converges a database whose V22 ran an earlier rule (deployed from 47dc9277) and kept names that rule
+ * missed; after the current V22 its plan is empty. Neither run can bring back a joiner that earlier rule removed
+ * from a legitimate name: only that environment's backup from before V22 holds it.
  * Scope: a `users.display_name` holding an email address, a misleading character or nothing visible, and a
  * Personal Space whose default name holds its owner's old display name or such a name. Every other value
  * stays byte-identical, and a plan over its own output is empty. Callers commit the plan with the version
  * change in one transaction, so a failure keeps the old version. Exit: once every deployed SQLite database
- * is on V22 and every deployed PostgreSQL product schema on version 2, delete this file with the SQLite
- * migrations and leave the PostgreSQL version 2 upgrade empty.
+ * is on V25 and every deployed PostgreSQL product schema on version 5, delete this file with the SQLite
+ * migrations and leave the PostgreSQL version 2 and 5 upgrades empty.
  */
 export function planDisplayNameRepair(
   users: readonly StoredDisplayName[],

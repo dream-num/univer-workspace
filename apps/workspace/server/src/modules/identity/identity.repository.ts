@@ -82,7 +82,7 @@ export interface ExecutorAccessEntry extends NamedUser {
 
 export interface IdentityRepository {
   isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean>;
-  /** The User whose ID is `target` and the User whose username equals it ignoring case; the same User when both match. */
+  /** The User whose ID and the User whose username equal `target` ignoring ASCII case; the same User when both match. */
   findUsersByIdOrUsername(target: string): Promise<readonly NamedUser[]>;
   banAgent(agentUserId: string, at: number): Promise<void>;
   findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]>;

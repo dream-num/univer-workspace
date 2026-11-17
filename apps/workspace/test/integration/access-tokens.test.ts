@@ -94,6 +94,8 @@ describe("personal access tokens", () => {
     await expect(tokens.createPersonalToken({ userId: "u1", name: "Bad", scopes: ["admin"] })).rejects.toThrow(/scope/);
     await expect(tokens.createPersonalToken({ userId: "u1", name: "Bad", scopes: [] })).rejects.toThrow(/scope/);
     await expect(tokens.createPersonalToken({ userId: "u1", name: "  " })).rejects.toThrow(/name/);
+    expect((await tokens.createPersonalToken({ userId: "u1", name: "\u{1F511}".repeat(100) })).record.name).toBe("\u{1F511}".repeat(100));
+    await expect(tokens.createPersonalToken({ userId: "u1", name: "\u{1F511}".repeat(101) })).rejects.toThrow("Token name must be 1 to 100 characters.");
   });
 
   it("rejects a non-integer or past expiry", async () => {

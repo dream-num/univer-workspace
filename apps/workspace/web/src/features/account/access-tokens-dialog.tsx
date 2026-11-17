@@ -5,7 +5,7 @@ import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Alert, Button, ConfirmDialog, Dialog, Field, Input, Select } from "../../shared/ui";
 import { createAccessToken, revokeAccessToken } from "./access-tokens.commands";
 import { accessTokensQueryOptions } from "./access-tokens.queries";
-import { isAccessTokenExpired } from "./access-tokens.rules";
+import { isAccessTokenExpired, isAccessTokenName } from "./access-tokens.rules";
 
 type McpScope = components["schemas"]["McpScope"];
 type TokenView = { kind: "list" } | { kind: "new" } | { kind: "created"; token: string };
@@ -83,7 +83,7 @@ function AccessTokensDialogContent({
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (busy) return;
-    if (!name.trim() || name.trim().length > 100) {
+    if (!isAccessTokenName(name)) {
       setValidationError(t("accessTokenNameRequired"));
       return;
     }
@@ -216,7 +216,6 @@ function AccessTokensDialogContent({
             <Input
               id="access-token-name"
               value={name}
-              maxLength={100}
               required
               disabled={busy}
               onChange={(event) => setName(event.target.value)}

@@ -155,7 +155,6 @@ export function ProfileDialog({
         <Field label={t("username")} htmlFor="profile-username" required>
           <Input
             id="profile-username"
-            maxLength={64}
             value={username}
             onChange={(event) => setUsername(event.target.value)}
           />

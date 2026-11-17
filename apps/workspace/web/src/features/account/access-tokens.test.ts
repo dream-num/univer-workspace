@@ -4,7 +4,7 @@ import type { components } from "../../../../generated/http/schema.js";
 import { api } from "../../shared/api/client";
 import { createAccessToken, revokeAccessToken } from "./access-tokens.commands";
 import { accessTokensQueryOptions } from "./access-tokens.queries";
-import { isAccessTokenExpired } from "./access-tokens.rules";
+import { isAccessTokenExpired, isAccessTokenName } from "./access-tokens.rules";
 
 const record = {
   id: "pat-1",
@@ -26,6 +26,17 @@ describe("access tokens", () => {
     { expiresAt: record.createdAt + 1, expired: false },
   ])("marks expiry $expiresAt as expired=$expired", ({ expiresAt, expired }) => {
     expect(isAccessTokenExpired(expiresAt, record.createdAt)).toBe(expired);
+  });
+
+  it.each([
+    { name: "\u{1F511}".repeat(100), valid: true },
+    { name: ` ${"\u{20000}".repeat(100)} `, valid: true },
+    { name: "a".repeat(100), valid: true },
+    { name: "\u{1F511}".repeat(101), valid: false },
+    { name: "a".repeat(101), valid: false },
+    { name: " ", valid: false },
+  ])("accepts a name of 1 to 100 characters, counting each emoji once: %#", ({ name, valid }) => {
+    expect(isAccessTokenName(name)).toBe(valid);
   });
 
   it("loads metadata through the account's cookie-authenticated API", async () => {

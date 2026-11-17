@@ -28,7 +28,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
 
   async findUsersByIdOrUsername(target: string): Promise<readonly NamedUser[]> {
     return this._database.connection
-      .prepare("SELECT id, username, kind FROM users WHERE id = ? OR username = ?")
+      .prepare("SELECT id, username, kind FROM users WHERE id = ? COLLATE NOCASE OR username = ?")
       .all(target, target)
       .map(namedUser);
   }

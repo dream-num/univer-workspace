@@ -80,6 +80,18 @@ describe("display names", () => {
     expect(await bot.json()).toMatchObject({ user: { username: "discord-100000000000000009", displayName: "Workspace User" } });
   });
 
+  it("counts a chosen username in characters", async () => {
+    const origin = await start();
+    const register = (username: string) =>
+      call(origin, "POST", "/api/auth/password/register", { username, displayName: "Long", password: "correct horse battery staple" });
+    const kept = await register("\u{20000}".repeat(64));
+    expect(kept.status).toBe(201);
+    expect(await kept.json()).toMatchObject({ user: { username: "\u{20000}".repeat(64) } });
+    const refused = await register("\u{20000}".repeat(65));
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ error: { code: "INVALID_INPUT", field: "username", message: "username must contain between 1 and 64 characters." } });
+  });
+
   it("refuses a chosen username shaped like a user ID, keeps a stored one signing in and suffixes a provider one", async () => {
     const origin = await start({ discordBotApiKey: BOT_KEY });
     const userId = "22222222-BBBB-4bbb-8bbb-222222222222";

@@ -94,7 +94,7 @@ export function createAccessTokenService(options: {
       readonly expiresAt?: number | null;
     }): Promise<{ readonly token: string; readonly record: PersonalTokenRecord }> {
       const name = input.name.trim();
-      if (name.length === 0 || name.length > MAX_TOKEN_NAME_LENGTH) {
+      if (name.length === 0 || [...name].length > MAX_TOKEN_NAME_LENGTH) {
         throw new ApplicationError("INVALID_INPUT", 400, `Token name must be 1 to ${MAX_TOKEN_NAME_LENGTH} characters.`, "name");
       }
       const scopes = normalizeScopes(input.scopes ?? MCP_SCOPES);
