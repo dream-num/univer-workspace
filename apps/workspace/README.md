@@ -41,11 +41,22 @@ API documentation is available at:
 - `http://127.0.0.1:3020/api-docs`
 - `http://127.0.0.1:3020/openapi.yaml`
 
-By default, product data is stored in `.data/univer-workspace.sqlite`. Univer unit data is
-stored separately in `.data/univer-collaboration.sqlite`. Uploaded files and attachments
-default to `.data/univer-workspace-blobs`. To use a private S3-compatible bucket, set
-`BLOB_STORE=s3` and `BLOB_S3_BUCKET`. Copy existing files before switching.
-See [S3 setup and migration](docs/s3-storage.md).
+### Configuration
+
+For a first local installation, copy [`.env.example`](.env.example) to `.env` in the same directory. Workspace defaults to SQLite, local file storage and password sign-in, with data under `.data/`.
+
+#### Database
+
+To use PostgreSQL for both product and collaboration data, set both variables below in `.env`. Migrate any existing data before switching.
+
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
+```
+
+For database permissions, S3, sign-in, reverse proxies and the full environment variable reference, see the [Workspace configuration guide](docs/configuration.md).
+
+### Collaboration and workbench
 
 Thread Comment anchors for Sheet, Doc, Slide, Base, and Board remain in Unit snapshots and changesets;
 comment bodies, replies, and solved state use the Comment component in the same
@@ -63,6 +74,13 @@ Trunk Sheet, Doc, Slide, Base, and Board editors use the standard SDK
 version-history UI. Viewers can inspect versions, while users with content edit
 permission can restore one. Worktree and merge-preview editors do not expose
 Trunk History.
+
+An authenticated Browser keeps one `/api/worktree-events` WebSocket open. AI or
+CLI Worktree writes publish a cache-invalidation signal only after the combined
+Collaboration and product operation completes, so active/processed task lists,
+details, sidebar counts, and Worktree-driven Node/Resource lists refresh without
+a page reload. The connection uses a one-time session ticket and carries no
+Worktree metadata or content.
 
 The smart workbench offers Workspace Agent downloads and CLI/Skill installation guidance
 when the signed-in user has never created a Worktree and has no visible tasks. Users with
@@ -171,139 +189,7 @@ Raw HTML is shown as text; relative file/image paths are not resolved. External
 images load only after a click. Markdown stays a Blob and does not become a
 collaborative Univer Doc. The Agent remote-file viewer uses the same renderer.
 
-### Configuration
-
-Copy `.env.example` to `.env`. Development, database, and production start
-commands load this file automatically. GitHub OAuth is enabled only when
-`GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, and `GITHUB_CALLBACK_URL` are all
-configured.
-
-`DATABASE_PROVIDER` selects the backend for both product and collaboration data. The default is
-`sqlite`, with separate files configured by `DATABASE_FILE` and `COLLABORATION_DATABASE_FILE`.
-For PostgreSQL 17, create a dedicated database. The Workspace role needs permission to create the
-`collaboration` schema and objects in both the product schema (normally `public`) and `collaboration`.
-Pass both settings to the server or container at runtime:
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace@db/workspace
-```
-
-Both schemas are initialized on first start. To back up PostgreSQL, stop writers and save a
-full database dump and the matching BlobStore contents. Restore both before starting one instance.
-
-Changing the provider opens the selected backend. Migrate existing SQLite data separately before
-switching. Deployments previously using `PRODUCT_DATABASE_PROVIDER=postgres` already have product
-rows in PostgreSQL and must migrate their collaboration SQLite data before replacing the old setting.
-
-`GITHUB_TOKEN` is optional and unset by default. Skill source imports use this
-server token only for `api.github.com`, independently of GitHub OAuth. Without
-it, all imports share GitHub's 60 API requests per hour per server IP. A configured
-token uses its authenticated quota. Raw Skill bytes come from
-`raw.githubusercontent.com` without the token. If the API quota is exhausted,
-ask the user to download the Skill zip and upload it to Space instead.
-
-Create a GitHub OAuth App for each environment. GitHub OAuth Apps accept only
-one callback URL, so local development and production should not share the
-same app. For local development, use:
-
-```text
-Homepage URL: http://127.0.0.1:5173
-Authorization callback URL: http://127.0.0.1:5173/api/auth/github/callback
-```
-
-For the production deployment, create a separate production OAuth App with your own
-deployment domain:
-
-```text
-Homepage URL: https://workspace.example.com/
-Authorization callback URL: https://workspace.example.com/api/auth/github/callback
-```
-
-The callback URL configured in GitHub must exactly match
-`GITHUB_CALLBACK_URL`.
-
-Once configured, the sign-in page shows **Continue with GitHub**. A first-time
-GitHub login creates the product User and Personal Space; an existing signed-in
-User can link GitHub from the account menu. Access tokens are used only to load
-the GitHub profile during sign-in and are not persisted.
-
-Set `GITHUB_ALLOWED_ORGANIZATIONS` to a comma-separated list of GitHub
-organization names to require active membership in at least one listed
-organization for GitHub login, first-time registration, and account linking.
-This enables the GitHub `read:org` OAuth scope and checks membership during every
-GitHub OAuth callback. Existing Workspace sessions remain valid until they expire
-or are logged out. This setting restricts only GitHub OAuth; password registration,
-Google login, Discord login, and trusted Discord Bot login remain separate
-authentication paths.
-
-Password registration, password login, and password changes stay available unless
-`PASSWORD_AUTH_ENABLED` is `false`. A restricted deployment sets that value
-together with `GITHUB_ALLOWED_ORGANIZATIONS` and leaves Google and Discord
-unset, so the only browser sign-in path is GitHub membership in a listed
-organization. The process refuses to start when password authentication is off
-and no Email, GitHub, Google, or Discord sign-in method is configured. Existing sessions remain valid until they
-expire or are logged out. A user who only has a password cannot sign in again
-after that, and a stored password no longer counts as a remaining sign-in
-method when unlinking GitHub, Google, or Discord.
-
-Passwordless Email sign-in is enabled when `EMAIL_AUTH_ENABLED=true` or when any
-`EMAIL_SMTP_*` or `EMAIL_FROM` value is configured. The browser requests a
-six-digit code, and the first successful verification creates the User and
-Personal Space. Codes expire after ten minutes, allow five incorrect attempts,
-and can be requested at most once per minute and five times per hour per address.
-Requests never reveal whether an address already has an account.
-`EMAIL_PROVIDER=console` writes codes to the server log and is intended for local
-development only. For production, point SMTP at your provider; any SMTP provider
-works, including the AWS SES SMTP endpoint:
-
-```text
-EMAIL_PROVIDER=smtp
-EMAIL_FROM=no-reply@example.com
-EMAIL_FROM_NAME=Univer Workspace
-EMAIL_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
-EMAIL_SMTP_PORT=587
-EMAIL_SMTP_USER=<SES SMTP username>
-EMAIL_SMTP_PASSWORD=<SES SMTP password>
-```
-
-The verification email itself is English-only and does not follow the browser
-interface language. `EMAIL_SMTP_USER` and `EMAIL_SMTP_PASSWORD` are written
-exactly as the provider shows them; the SMTP client performs the AUTH encoding, so do not Base64-encode
-or URL-escape them yourself. SES SMTP credentials are separate from IAM access
-keys; create them in the SES console after verifying the sending domain or address. A sandbox SES account can
-only send to verified recipients. `EMAIL_SMTP_PORT=465` enables implicit TLS and
-is used when `EMAIL_SMTP_SECURE` is unset.
-
-An `Invalid login: 535 5.7.8 Authentication Credentials Invalid` response from
-SES means the credentials, not the message, were rejected. Check in this order:
-the SMTP username is the access key ID shown when generating SES SMTP
-credentials (not an IAM user name or IAM secret key), the SMTP password is the
-generated value for that username, and both were created in the same region as
-`EMAIL_SMTP_HOST` (SES SMTP credentials are region-scoped). Regenerating the
-IAM access key invalidates the derived SMTP password. To isolate the deployment
-from the mail settings, verify the same values directly:
-
-```bash
-node --env-file=.env --input-type=module -e '
-import nodemailer from "nodemailer";
-const transport = nodemailer.createTransport({
-  host: process.env.EMAIL_SMTP_HOST,
-  port: Number(process.env.EMAIL_SMTP_PORT ?? 587),
-  secure: process.env.EMAIL_SMTP_SECURE === "true",
-  auth: { user: process.env.EMAIL_SMTP_USER, pass: process.env.EMAIL_SMTP_PASSWORD },
-});
-await transport.verify();
-console.log("SMTP authentication succeeded");
-'
-```
-
-Set `TRIAL_DEPLOYMENT=true` on a public trial deployment. After signing in, each
-User sees a dialog stating that the environment does not guarantee data
-durability and linking to the open-source repository for self-hosting. The
-acknowledgement is stored in the browser's `localStorage` per User, so the
-dialog appears again in a new browser or after site data is cleared. Visitors
-and the sign-in page do not show the notice. The flag defaults to `false`.
+### CLI sign-in and Agent access
 
 Workspace CLI uses browser approval by default. `uvw auth login`
 creates a ten-minute, one-time authorization request and prints a `/cli-login`
@@ -316,64 +202,6 @@ normal `workspace_session`; it never
 receives the browser cookie, Workspace password, or provider access token.
 Pending authorization requests are process-local and intentionally disappear
 on server restart; completed CLI sessions remain normal persisted login sessions.
-
-Google OAuth login and account linking are enabled when
-`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, and `GOOGLE_CALLBACK_URL` are all
-configured. Create an OAuth 2.0 Client ID of type **Web application** in Google
-Cloud Console and register both redirect URIs you use:
-
-```text
-http://127.0.0.1:5173/api/auth/google/callback
-https://workspace.example.com/api/auth/google/callback
-```
-
-The redirect must exactly match `GOOGLE_CALLBACK_URL`. Workspace requests the
-`openid email profile` scopes, sends PKCE plus the client secret on the token
-exchange, and stores the stable OpenID Connect `sub` claim as the Provider
-Subject. The access token is used only to load the Google profile during
-sign-in and is not persisted. Google login does not identify or automatically
-link a User by email address; the same person who signs in both with Google and
-with an Email code gets two separate Workspace accounts.
-
-Discord OAuth login and account linking are enabled when
-`DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, and `DISCORD_CALLBACK_URL` are
-all configured. Add this redirect in the Discord Developer Portal for local
-development:
-
-```text
-http://127.0.0.1:5173/api/auth/discord/callback
-```
-
-The redirect must exactly match `DISCORD_CALLBACK_URL`. Workspace requests
-only the `identify` scope, stores the stable Discord User ID and username, and
-does not persist the access token. A separate Discord App integration can use
-that stable ID to map Discord users to Workspace users.
-
-A trusted Discord Bot server can log a Discord user into Workspace through
-`POST /api/auth/discord/bot-login`. Configure the same random secret of at
-least 32 characters as `DISCORD_BOT_API_KEY` in Workspace and send it from the
-Bot server as the `x-api-key` header. The request must contain the stable
-`discordUserId`; `username`, `displayName`, and `avatarUrl` are optional. The
-endpoint resolves or creates the Workspace User and Personal Space, then
-returns the normal authenticated session response and `workspace_session`
-cookie. Only the trusted Bot server may call this endpoint; never expose the
-shared key to a Discord client or browser. If the Bot initially supplies only
-`discordUserId`, Workspace creates placeholder profile fields; a later Discord
-OAuth login fills those placeholders from the verified Discord profile without
-replacing profile fields that the User has already customized.
-
-Workspace exposes a generic OAuth-style authorization capability. A registered
-external client starts `GET /api/auth/authorize`; the authorize endpoint reuses
-`workspace_session`, redirecting through the existing login page only when the
-session is absent, then returns a one-time short-lived code to the registered
-redirect URI. `POST /api/auth/token` validates the client secret, the registered
-redirect URI, the PKCE verifier, expiry, and one-time use before returning the
-Workspace identity. Registration is deployment-supplied via `OAUTH_CLIENTS_JSON`.
-External browser clients should use `clientType: "public"`, PKCE, and `requiresConsent: true`; they omit `clientSecret` and use an exact registered callback URL. The local Workspace Agent callback is `http://127.0.0.1:3101/auth/oauth/callback`. Internal service clients may remain confidential and use the existing no-consent behavior.
-
-A confidential client with `"tokenExchange": true` (for example the MCP gateway) may call the RFC 8693 grant on `POST /api/auth/token` to turn a personal access token or an MCP OAuth access token into a Workspace login session of at most 10 minutes (shorter when the token or the deployment session lifetime ends sooner); the grant takes a form body only, and the flag is rejected on public clients. Signed-in users manage personal access tokens with `GET`/`POST /api/auth/tokens` and `DELETE /api/auth/tokens/:id`; the plaintext token is returned only at creation, and a session issued by token exchange cannot create tokens, approve CLI logins, authorize OAuth clients or link identities (`403`), so no access it creates can outlive the token.
-
-MCP clients such as opencode, Claude and ChatGPT obtain their tokens through standard OAuth once `MCP_RESOURCE_URLS` lists the MCP server URLs they may request (comma-separated, for example `https://space.example.com/mcp`). A requested resource must equal one of them, or equal one after its query is removed, so clients configured with `https://space.example.com/mcp?toolsets=all` are bound to `https://space.example.com/mcp`. It requires `PUBLIC_ORIGIN`, the Workspace origin those clients reach (for example `https://space.example.com`), which becomes the issuer of `GET /.well-known/oauth-authorization-server` (RFC 8414). Clients register themselves with `POST /api/auth/register` (RFC 7591, public clients only: loopback `http` or `https` redirect URIs, or reverse-domain or allowlisted private-use schemes (currently `cursor`), no secret; registration stops with `503` at `MCP_MAX_REGISTERED_CLIENTS`, default 10,000), then use `GET /api/auth/authorize` with PKCE `S256` and `resource`. A loopback redirect URI matches with any port. The user always sees a consent page listing `read`, `write`, `publish` and `worktree:merge`, each of which can be unchecked. `POST /api/auth/token` then returns a one-hour `uvw_at_` access token bound to that resource and a rotating 30-day `uvw_rt_` refresh token, and `POST /api/auth/revoke` (RFC 7009) revokes the grant. Without `MCP_RESOURCE_URLS` none of this is served and static clients behave as before; with it, static clients keep their exact rules. In development set `PUBLIC_ORIGIN=http://127.0.0.1:5173`; the Vite server proxies `/.well-known` to the API.
 
 `POST /api/auth/agent-token` lets the browser Agents module use an interactive `workspace_session` cookie to request `{ "scopes": ["read"] }`, `{ "scopes": ["read", "write"] }`, or `{ "scopes": ["read", "publish"] }`, in either order without duplicates. It returns `201` with `{ token, expiresAt, scopes, resource }` and `Cache-Control: no-store`. The `uvw_at_` token lasts one hour, belongs to the first-party `univer-workspace-agents` client and is bound to `/mcp` at `PUBLIC_ORIGIN`, which must be listed in `MCP_RESOURCE_URLS`. Missing MCP OAuth configuration or a missing same-origin resource returns `503`; no cookie returns `401`, a token-exchanged session returns `403`, and invalid scopes return `400`. Normal Agent calls use `[read]` in Ask mode or `[read, write]` in Auto mode. Publish-scope calls in Auto mode pause for explicit user approval; each approved call uses its own `[read, publish]` token and MCP client, disposed after the call. The full-screen draft preview uses local trial calculations and cannot edit source Sheets or open a native editor. A new user message denies pending approvals so the agent can revise the draft. The endpoint never grants `worktree:merge`, returns no refresh token and does not add a personal access token to the account list. The gateway uses its existing token exchange.
 
@@ -408,86 +236,6 @@ agent (`AGENT_NOT_ALLOWED`).
 for any Node the caller can read and returns `201` with `{ id }`. Each source IP may send 10 an hour,
 then gets `429` with `REPORT_RATE_LIMITED`. The log line carries the Node and report ids only.
 
-Both endpoints share one in-process limit per source IP: `AGENT_CREATE_LIMIT_PER_HOUR` creations in any
-one hour, default `5`. `0` disables creation, and the anonymous `GET /api/session` then reports
-`guestAuthEnabled: false`, which hides the guest card. Past the limit the response is `429` with
-`AGENT_CREATE_RATE_LIMITED`. An IPv6 source counts as its /64 prefix. The count lives in the process, so
-it starts again on restart and is not shared between instances.
-
-The source IP is the TCP peer unless `TRUST_PROXY` is set. Behind a reverse proxy the peer is the proxy,
-so all clients share one limit until you set it. `TRUST_PROXY` becomes the Express `trust proxy` setting:
-the number of proxy hops in front of Workspace (for example `1`), or a comma-separated list of proxy
-addresses and subnets (for example `loopback, 10.0.0.0/8`). `true` trusts every `X-Forwarded-For` value,
-which lets a client that reaches Workspace directly choose its own source IP.
-
-HTTPS `client_id` URLs can identify public MCP clients through Client ID Metadata Documents
-(CIMD), without dynamic registration or a row in `oauth_clients`. With MCP OAuth enabled,
-CIMD is on by default and discovery advertises `client_id_metadata_document_supported`
-and `authorization_response_iss_parameter_supported`. All MCP authorization callbacks
-(success, error and deny) include `iss`; static client callbacks remain unchanged.
-Set `MCP_CIMD_ENABLED=0` for deployments without outbound HTTPS: discovery omits CIMD
-support and URL client IDs are treated as unknown clients, while DCR remains available.
-
-CIMD URLs must use HTTPS, contain a non-root path, and omit credentials, query,
-fragment and dot segments. Metadata is fetched only after interactive sign-in, with
-connection-level public-address checks, no environment proxy or redirects, a 5 KB body
-limit and a five-second total deadline. Requests for the same URL coalesce; each user
-may have one fetch in flight and the process allows 32. Valid documents are cached for
-5 minutes to 24 hours (at most 1000 entries); a previously valid document can survive a
-temporary fetch failure for up to 24 hours from its fetch. Consent shows the client name
-and hostname. Fetch failures stay on Workspace with 400 (invalid) or 503 (temporary).
-Token exchange, refresh and revocation do not fetch metadata; a removed document does
-not revoke an existing refresh grant, whose lifetime is at most 30 days.
-
-`MCP_CIMD_EXEMPT_NETWORKS` accepts comma-separated CIDRs (default empty) for deployments
-whose fake-IP or TUN resolver maps public hosts into a blocked network, for example
-`198.18.0.0/15`. Exemptions allow outbound metadata connections to those networks;
-configure only the required proxy network. Behind such a resolver the proxy, not Workspace, resolves the real
-address, so internal hosts the proxy can reach by name are not blocked; use it only where that proxy cannot
-reach internal services. Startup rejects any exemption overlapping
-IPv4/IPv6 loopback or link-local networks, which remain blocked in every environment.
-
-
-The Agent client is not enabled by default: the entry in `.env.example` is only a
-commented example. For the exact active configuration and the local server, browser,
-account registration, and Agent connection steps, see
-[Connect to a local Workspace](../agent/README.md#connect-to-a-local-workspace).
-
-Existing Workspace login, OAuth callbacks, Cookie behavior, and product APIs
-remain unchanged. The capability is additive and does not add a proxy or
-deployment component.
-
-When the granted scope includes `session` (a scope the deployment registers
-per client), the token response also carries a Workspace login session token
-in `access_token` with its remaining lifetime in `expires_in`. The client
-presents that value as the `workspace_session` cookie on product and
-collaboration endpoints and acts with the authorizing User's permissions
-until the session expires; there is no refresh grant, so an expired token
-means starting the authorization flow again. Granting `session` is a
-deployment trust decision made at client registration, which is why code
-issuance itself stays silent exactly like identity-only grants.
-
-The browser uses the same built-in runtime development license as Workspace
-CLI. Both copies are rotated every 90 days and are application credentials, not
-the repository software license. The built-in credential authorizes the domains
-listed in its generated `license.ts` comment; set `VITE_UNIVER_LICENSE` at build
-time for any other deployment host or to override it locally. The Collaboration
-endpoint rejects browser pages served from an unlisted host with 403 (code 9018).
-
-The server passes a license and its key to the Collaboration service and to
-Office exchange; without them both SDKs run on their free tier (one
-collaboration node, three editing connections and ten exports per month). It
-uses the bundled development pair unless `UNIVER_LICENSE` and
-`UNIVER_LICENSE_KEY` are set, which must be configured together. Server,
-database, GitHub, and Discord settings are runtime values.
-
-An authenticated Browser keeps one `/api/worktree-events` WebSocket open. AI or
-CLI Worktree writes publish a cache-invalidation signal only after the combined
-Collaboration and product operation completes, so active/processed task lists,
-details, sidebar counts, and Worktree-driven Node/Resource lists refresh without
-a page reload. The connection uses a one-time session ticket and carries no
-Worktree metadata or content.
-
 ## Docker
 
 Build the image from the repository root:
@@ -499,31 +247,21 @@ docker build \
   -t univer-workspace .
 ```
 
-Run it with a persistent data volume:
+For local HTTP access, run the container with a persistent data volume:
 
 ```bash
 docker run --name univer-workspace \
-  -p 3020:3020 \
+  -p 127.0.0.1:3020:3020 \
   -v univer-workspace-data:/app/univer-workspace/.data \
-  -e GITHUB_CLIENT_ID \
-  -e GITHUB_CLIENT_SECRET \
-  -e GITHUB_CALLBACK_URL=https://workspace.example.com/api/auth/github/callback \
-  -e GITHUB_ALLOWED_ORGANIZATIONS \
-  -e GOOGLE_CLIENT_ID \
-  -e GOOGLE_CLIENT_SECRET \
-  -e GOOGLE_CALLBACK_URL=https://workspace.example.com/api/auth/google/callback \
-  -e DISCORD_CLIENT_ID \
-  -e DISCORD_CLIENT_SECRET \
-  -e DISCORD_CALLBACK_URL=https://workspace.example.com/api/auth/discord/callback \
-  -e OAUTH_CLIENTS_JSON \
-  -e SECURE_COOKIES=true \
+  -e SECURE_COOKIES=false \
   univer-workspace
 ```
 
-For a plain HTTP environment, use `-e SECURE_COOKIES=false`. Keep secure
-cookies enabled when the deployment is served over HTTPS.
+For HTTPS deployments, omit `-e SECURE_COOKIES=false` to keep the image’s secure cookie default. Pass runtime settings with `--env-file ./workspace.env` when creating the container.
 
-For a fresh local test instance, mount a new empty data volume. On startup,
+### SQLite upgrades and recovery
+
+For a fresh local SQLite test instance, mount a new empty data volume. On startup,
 the application preserves existing data and automatically backs up and migrates
 supported V0 through V20 product databases to V21.
 While the container runs, touch its SQLite files only from inside it
@@ -643,7 +381,7 @@ restoring service. Startup validates V17, creates a readable `.v17-backup-…sql
 backup, then migrates with foreign-key and integrity checks. A failed transaction rolls
 back; successful restarts do not repeat migration or backup. To roll back, stop V19 and
 restore the V17 backup. Never run V17 and V19 writers on the same SQLite file. The
-personal access token, MCP OAuth and token exchange routes described above use the new tables.
+personal access token, MCP OAuth and token exchange routes use the new tables.
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.

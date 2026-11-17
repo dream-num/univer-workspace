@@ -40,14 +40,14 @@ BLOB_S3_FORCE_PATH_STYLE=true
   在该文件中填写存储配置，然后重启 `pnpm workspace:dev:server`。
 - **Docker** 部署时，将存储配置写入 `workspace-storage.env`，在原有的 `docker run` 命令中加上
   `--env-file ./workspace-storage.env`，重新创建容器。继续将原数据卷挂载到 `/app/univer-workspace/.data`。
-  文件存入 S3 后，两个 SQLite 数据库仍保存在该卷中。
+  使用 SQLite 时，文件存入 S3 后两个数据库仍保存在该卷中。
 - **Kubernetes** 部署时，在 Workspace 容器的 `env` 中设置 `BLOB_*`，通过工作负载身份或 Secret 提供凭据，
   保留原数据 PVC。使用本仓库的 [Deploy Workspace 工作流](../../../.github/workflows/push.yml)时，
   在发布前修改 `dream-num/helm-chart-private` 仓库 `deploy/colla-workspace/` 目录下目标环境的清单。
 
 ## 将已有文件从本地迁移到 S3
 
-1. 停止所有 Workspace 服务实例，备份两个 SQLite 数据库以及 `BLOB_DIRECTORY` 指定的目录。
+1. 停止所有 Workspace 服务实例，备份两个 SQLite 数据库或导出整个 PostgreSQL 数据库，并备份 `BLOB_DIRECTORY` 指定的目录。
 2. 将以 UUID 命名的文件原名复制到空的目标位置。例如，下面的命令将默认本地目录中的文件复制到
    `workspace-objects` 存储桶下的 `workspace` 前缀。
 
