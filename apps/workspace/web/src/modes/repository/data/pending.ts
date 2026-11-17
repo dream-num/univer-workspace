@@ -1,7 +1,7 @@
 import { worktreeBelongsToSpace } from "../../../features/worktrees/worktree.rules";
 import { actorOf } from "./actor";
 import { pullRef } from "./activity";
-import type { Page, PendingChange, PendingChangeIndex, Space, Worktree, WorktreeDetail } from "./types";
+import type { Page, PendingChange, PendingChangeIndex, SpaceView, Worktree, WorktreeDetail } from "./types";
 
 export const MAX_PENDING_DETAILS = 20;
 export const MAX_PENDING_ANCESTRY = 40;
@@ -11,7 +11,7 @@ export interface NodeAncestry {
   readonly complete: boolean;
 }
 
-export function pendingDetailPlan(space: Space, page: Page<Worktree>) {
+export function pendingDetailPlan(space: Pick<SpaceView, "id" | "type" | "owner">, page: Page<Worktree>) {
   const open = page.items.filter((item) => worktreeBelongsToSpace(item, space) &&
     (item.state === "draft" || item.state === "ready" || item.state === "merging"));
   const reviewable = open.filter((item) => item.capabilities.review)

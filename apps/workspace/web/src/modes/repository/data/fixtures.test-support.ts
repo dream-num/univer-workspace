@@ -1,7 +1,7 @@
 import type { Issue, RecentResource, Worktree, WorktreeDetail } from "./types";
 
 export const user = { id: "me", username: "me", displayName: "Me", avatarUrl: null };
-export const space = { id: "alpha", name: "Alpha", type: "team", publicRead: false } as const;
+export const space = { id: "alpha", name: "Alpha", type: "team", publicRead: false, owner: { id: user.id, username: user.username } } as const;
 export const now = new Date(2026, 10, 6, 12);
 export const at = (day: number, hour = 12) => new Date(2026, 10, day, hour).toISOString();
 

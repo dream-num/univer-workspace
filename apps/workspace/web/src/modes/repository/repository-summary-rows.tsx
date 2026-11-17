@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import type { components } from "../../../../generated/http/schema.js";
 import { TypeBadge } from "./code/repository-file-table";
 import { mySpacesQueryOptions } from "../../features/spaces";
+import { worktreeBelongsToSpace } from "../../features/worktrees/worktree.rules";
 import type { WorktreeListFilters } from "../../features/worktrees/worktrees.queries";
 import { useI18n } from "../../shared/i18n";
 import { formatRelativeDate } from "../../shared/format-relative-date";
@@ -65,12 +66,12 @@ export function RepositoryWorktreeRows({
   readonly spaceId?: string;
 }) {
   const spaces = useQuery(mySpacesQueryOptions);
-  const personal = spaces.data?.spaces.find(
-    (s) => s.type === "personal" && s.accessRole === "owner",
-  );
   return (
     <ul className="rd-mcards repository-pull-cards">
       {items.map((task) => {
+        const personal = task.kind === "user"
+          ? spaces.data?.spaces.find((space) => worktreeBelongsToSpace(task, space))
+          : undefined;
         const search = repositoryWorktreeSearch(task, personal?.id);
         return (
           <li key={task.id}>
@@ -84,7 +85,7 @@ export function RepositoryWorktreeRows({
                   state: task.state,
                   spaceId: spaceId ?? search?.spaceId ?? null,
                 },
-                space: task.teamSpace ?? (task.kind === "user" ? personal ?? null : null),
+                space: task.teamSpace ?? personal ?? null,
                 actor: actorOf(task.creator, task.createdVia),
                 canReview: task.capabilities.review,
                 files: task.unitCount,

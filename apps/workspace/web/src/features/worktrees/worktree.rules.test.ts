@@ -3,10 +3,11 @@ import type { components } from "../../../../generated/http/schema.js";
 import { isOpenWorktree, worktreeBelongsToSpace } from "./worktree.rules.js";
 
 type WorktreeSummary = components["schemas"]["WorktreeSummary"];
-type Worktree = Pick<WorktreeSummary, "kind" | "teamSpace">;
+type Worktree = Pick<WorktreeSummary, "kind" | "teamSpace" | "creator">;
 
-const personalSpace = { id: "personal-1", type: "personal" } as const;
-const teamSpace = { id: "team-1", type: "team" } as const;
+const owner = { id: "user-1", username: "user-1" };
+const personalSpace = { id: "personal-1", type: "personal", owner } as const;
+const teamSpace = { id: "team-1", type: "team", owner } as const;
 
 describe("isOpenWorktree", () => {
   it.each([
@@ -20,10 +21,11 @@ describe("isOpenWorktree", () => {
   });
 });
 
-function worktree(kind: Worktree["kind"], teamSpaceId: string | null): Worktree {
+function worktree(kind: Worktree["kind"], teamSpaceId: string | null, creatorId = owner.id): Worktree {
   return {
     kind,
     teamSpace: teamSpaceId === null ? null : ({ id: teamSpaceId } as WorktreeSummary["teamSpace"]),
+    creator: { id: creatorId, username: creatorId, displayName: creatorId, avatarUrl: null },
   };
 }
 
@@ -36,8 +38,12 @@ describe("worktreeBelongsToSpace", () => {
     expect(worktreeBelongsToSpace(worktree("team", "team-2"), teamSpace)).toBe(false);
   });
 
-  it("matches a personal worktree to the personal space", () => {
+  it("matches a personal worktree to its creator's personal space", () => {
     expect(worktreeBelongsToSpace(worktree("user", null), personalSpace)).toBe(true);
+  });
+
+  it("does not match another user's personal worktree to the personal space", () => {
+    expect(worktreeBelongsToSpace(worktree("user", null, "agent-1"), personalSpace)).toBe(false);
   });
 
   it("does not match a team worktree to the personal space", () => {

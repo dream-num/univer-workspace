@@ -106,7 +106,9 @@ describe("Issue tools and gateway infrastructure", () => {
     }
     if (target.pathname === "/api/worktrees" && request.method === "GET") {
       return Response.json({
-        items: target.searchParams.get("kind") === "team" ? [rawWorktree("wt-3")] : [rawUserWorktree("wt-u2", 2)],
+        items: target.searchParams.get("kind") === "team"
+          ? [rawWorktree("wt-3")]
+          : [rawUserWorktree("wt-u2", 2), { ...rawUserWorktree("wt-claimed-agent", 1), creator: user("agent-1") }],
         nextCursor: null,
       });
     }
@@ -470,9 +472,9 @@ describe("Issue tools and gateway infrastructure", () => {
     );
     requests.length = 0;
     const personalList = await client.callTool({ name: "pr_list", arguments: { repo: "user-1/personal" } });
-    expect(personalList.structuredContent).toMatchObject({ prs: [{ id: "wt-u2", url: personalUrl }] });
+    expect(personalList.structuredContent).toEqual({ prs: [expect.objectContaining({ id: "wt-u2", url: personalUrl })] });
     expect(requests.find((r) => r.path.startsWith("/api/worktrees?"))!.path).toBe(
-      "/api/worktrees?scope=active&kind=user&limit=30",
+      "/api/worktrees?scope=active&kind=user&limit=100",
     );
     expect(events().map((event) => event["repo"])).toEqual(["team-1", "personal-1"]);
   });

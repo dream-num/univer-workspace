@@ -377,7 +377,7 @@ describe("uvw pr and the worktree alias", () => {
     expect(calls).toEqual([
       ["getByNumber", "space-1", 12],
       ["list", { limit: 30, scope: "space", spaceId: "space-1", states: ["discarded"], view: "processed" }],
-      ["list", { limit: 30, scope: "user", view: "active" }],
+      ["list", { creatorId: "u1", limit: 30, scope: "user", view: "active" }],
       ["create", { name: "Mine", scope: { kind: "user" }, summary: "body" }],
       ["getByNumber", "space-1", 12],
       ["transition", "wt-1", "reopen"],
@@ -412,7 +412,7 @@ describe("uvw pr and the worktree alias", () => {
       await run(commands[group], ["list", ...repoArgs, "--json"]);
       await run(commands[group], ["create", ...repoArgs, "-t", "Mine", "--json"]);
       expect(commands.calls).toEqual([
-        ["list", { limit: 30, scope: "user", view: "active" }],
+        ["list", { creatorId: "u1", limit: 30, scope: "user", view: "active" }],
         ["create", { name: "Mine", scope: { kind: "user" } }],
       ]);
     }

@@ -107,7 +107,8 @@ export type Worktree = components["schemas"]["WorktreeSummary"];
 export type WorktreeDetail = components["schemas"]["WorktreeDetail"];
 export type Issue = components["schemas"]["IssueSummary"];
 export type RecentResource = components["schemas"]["RecentResourceItem"];
-export type Space = Pick<components["schemas"]["SpaceView"], "id" | "type">;
+export type SpaceView = components["schemas"]["SpaceView"];
+export type Space = Pick<SpaceView, "id" | "type">;
 export interface Page<T> {
   readonly items: readonly T[];
   readonly nextCursor: string | null;
