@@ -88,6 +88,8 @@ export interface WorktreeSummaryView {
 }
 
 export interface WorktreeStateView extends WorktreeSummaryView {
+  /** What a merge of someone else's Worktree must name; absent only from a server that predates it. */
+  readonly revision?: string;
   readonly units: readonly WorktreeUnitView[];
 }
 

@@ -1055,6 +1055,11 @@ export function createBrowserApiHandler(
         jsonResponse(res, 401, { error: "workspace_connection_required" });
         return;
       }
+      const body = actionMatch[2] === "merge" ? await readJsonBody(req).catch(() => undefined) : undefined;
+      const revision =
+        typeof body === "object" && body !== null && "revision" in body && typeof body.revision === "string"
+          ? body.revision
+          : undefined;
       try {
         const summary = await ctx
           .get("univerWorkspace")!
@@ -1062,6 +1067,7 @@ export function createBrowserApiHandler(
             user.userId,
             actionMatch[1]!,
             actionMatch[2] as "ready" | "reopen" | "merge" | "discard",
+            revision,
           );
         jsonResponse(res, 200, { worktree: summary });
       } catch (error) {

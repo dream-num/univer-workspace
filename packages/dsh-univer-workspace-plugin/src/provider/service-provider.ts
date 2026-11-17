@@ -303,9 +303,9 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     return await discardWorktree(client, worktreeId);
   }
 
-  async mergeWorktree(userId: string, worktreeId: string) {
+  async mergeWorktree(userId: string, worktreeId: string, revision?: string) {
     const client = this.requireClient(userId);
-    return await mergeWorktree(client, worktreeId);
+    return await mergeWorktree(client, worktreeId, revision);
   }
 
   async reopenWorktree(userId: string, worktreeId: string) {
@@ -327,10 +327,11 @@ class UniverWorkspaceServiceImpl extends UniverWorkspaceService {
     userId: string,
     worktreeId: string,
     action: "ready" | "reopen" | "merge" | "discard",
+    revision?: string,
   ) {
     const client = this.requireClient(userId);
     if (action === "ready") return await markWorktreeReady(client, worktreeId);
-    if (action === "merge") return await mergeWorktree(client, worktreeId);
+    if (action === "merge") return await mergeWorktree(client, worktreeId, revision);
     if (action === "discard") return await discardWorktree(client, worktreeId);
     return await reopenWorktree(client, worktreeId);
   }

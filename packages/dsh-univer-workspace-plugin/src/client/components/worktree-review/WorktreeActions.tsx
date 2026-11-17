@@ -16,6 +16,8 @@ export function WorktreeActions(props: {
   const root = useRef<HTMLDivElement>(null);
   const [wide, setWide] = useState(false);
   const [pending, setPending] = useState<WorktreeAction | null>(null);
+  // The revision on screen when Merge was clicked, so a change while the dialog is open is refused.
+  const [shownRevision, setShownRevision] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { worktree, t } = props;
@@ -37,7 +39,7 @@ export function WorktreeActions(props: {
     setBusy(true);
     setError(null);
     try {
-      await postWorktreeAction(worktree.worktreeId, pending);
+      await postWorktreeAction(worktree.worktreeId, pending, pending === "merge" ? shownRevision : undefined);
       setPending(null);
       props.onActionSettled?.();
     } catch (reason) {
@@ -50,7 +52,7 @@ export function WorktreeActions(props: {
     {worktree.capabilities.markReady ? <Button size="sm" disabled={busy}
       onClick={() => setPending("ready")}><SendIcon />{t("viewer.submitForReview")}</Button> : null}
     {worktree.capabilities.merge && worktree.status === "ready" ? <Button variant="success" size="sm" disabled={busy}
-      onClick={() => setPending("merge")}><CheckIcon />{t("viewer.mergeToCurrent")}</Button> : null}
+      onClick={() => { setShownRevision(worktree.revision); setPending("merge"); }}><CheckIcon />{t("viewer.mergeToCurrent")}</Button> : null}
     {reopen || menuDiscard ? <MenuRoot>
       <MenuTrigger render={<Button variant="ghost" size="icon-sm" />} disabled={busy} aria-label={t("worktree.moreActions")}>
         <EllipsisIcon />

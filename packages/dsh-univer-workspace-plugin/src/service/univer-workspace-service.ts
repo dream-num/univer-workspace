@@ -174,8 +174,8 @@ export abstract class UniverWorkspaceService extends Service {
   /** Discard a Worktree. */
   abstract discardWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
 
-  /** Merge a Worktree. */
-  abstract mergeWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
+  /** Merge a Worktree; someone else's needs the `revision` of the detail that was reviewed. */
+  abstract mergeWorktree(userId: string, worktreeId: string, revision?: string): Promise<WorktreeSummary>;
 
   /** Reopen a ready Worktree back to draft. */
   abstract reopenWorktree(userId: string, worktreeId: string): Promise<WorktreeSummary>;
@@ -231,6 +231,7 @@ export abstract class UniverWorkspaceService extends Service {
     userId: string,
     worktreeId: string,
     action: "ready" | "reopen" | "merge" | "discard",
+    revision?: string,
   ): Promise<WorktreeSummary>;
 
   /** Read one Unit's data with the Facade API. */

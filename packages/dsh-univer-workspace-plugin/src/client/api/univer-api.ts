@@ -196,17 +196,21 @@ export function isMissingDocument(error: unknown): boolean {
 
 /** Whether an error came from a missing document (the caller hides the surface). */
 
-/** Drive a review transition on one worktree. */
+/** Drive a review transition on one worktree; a merge names the `revision` the person saw. */
 export async function postWorktreeAction(
   worktreeId: string,
   action: WorktreeAction,
+  revision?: string,
 ): Promise<void> {
   const response = await fetch(
     `/univer-workspace/api/worktrees/${encodeURIComponent(worktreeId)}/${action}`,
-    {
-      method: "POST",
-      headers: { accept: "application/json" },
-    },
+    revision === undefined
+      ? { method: "POST", headers: { accept: "application/json" } }
+      : {
+          method: "POST",
+          headers: { accept: "application/json", "content-type": "application/json" },
+          body: JSON.stringify({ revision }),
+        },
   );
   if (!response.ok) {
     let detail = "";
@@ -224,6 +228,8 @@ export async function postWorktreeAction(
     } catch {
       /* retain the status-only fallback */
     }
+    // A refused merge usually means the pull request changed; reload it so the person sees the change.
+    if (action === "merge") invalidateFileState(`wt:${worktreeId}`);
     throw new Error(`worktree ${action} answered ${response.status}${detail}`);
   }
   invalidateFileState(`wt:${worktreeId}`);

@@ -173,8 +173,11 @@ export function registerWorktreeTools(ctx: Context): () => void {
         switch (args.action) {
           case "ready":
             return await ctx.get("univerWorkspace")!.markWorktreeReady(userId, args.worktreeId);
-          case "merge":
-            return await ctx.get("univerWorkspace")!.mergeWorktree(userId, args.worktreeId);
+          case "merge": {
+            // Merge what this call views, so a change after the view is refused rather than merged.
+            const { revision } = await ctx.get("univerWorkspace")!.getWorktreeDetail(userId, args.worktreeId);
+            return await ctx.get("univerWorkspace")!.mergeWorktree(userId, args.worktreeId, revision);
+          }
           case "discard":
             return await ctx.get("univerWorkspace")!.discardWorktree(userId, args.worktreeId);
           case "reopen":

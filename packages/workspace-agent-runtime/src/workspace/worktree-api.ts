@@ -685,15 +685,16 @@ export async function discardWorktree(
   return narrowWorktreeSummary(raw);
 }
 
-/** Merge a Worktree. */
+/** Merge a Worktree; someone else's needs the `revision` of the detail that was reviewed. */
 export async function mergeWorktree(
   client: WorkspaceHttpClient,
   worktreeId: string,
+  revision?: string,
 ): Promise<WorktreeSummary> {
   const raw = await readJson(
     await client.request(
       `/api/worktrees/${encodeURIComponent(worktreeId)}/merge`,
-      jsonWithIdempotency({}),
+      jsonWithIdempotency(revision === undefined ? {} : { revision }),
     ),
     "worktree merge",
   );
@@ -772,6 +773,7 @@ export function narrowWorktreeDetail(raw: unknown): WorktreeStateView {
     createdAt: summary.createdAt,
     updatedAt: summary.updatedAt,
     capabilities: summary.capabilities,
+    ...(typeof worktree.revision === "string" ? { revision: worktree.revision } : {}),
     units,
   };
 }
