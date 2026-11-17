@@ -3146,6 +3146,7 @@ export interface components {
             kind: "pull-opened" | "pull-merged";
             /** Format: date-time */
             at: string;
+            /** @description Who opened or merged the pull request. A merge names the user whose merge Operation completed, who may be the human who claimed the agent that opened it; `null` when no such Operation is recorded. */
             actor: components["schemas"]["PublicUser"] | null;
             /** @description Source of this write; `unknown` for merges (not recorded). */
             writeSource: components["schemas"]["WriteSource"];

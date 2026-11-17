@@ -1,5 +1,6 @@
 import type { UnitType } from "../access/index.js";
 import type { WriteSource } from "../identity/index.js";
+import type { PublicUser } from "../permissions/index.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type { WorktreeKind, WorktreeVisibility } from "./worktrees.types.js";
 
@@ -162,6 +163,7 @@ export interface WorktreesRepository {
   markLocalUnitDiscarded(worktreeId: string, unitId: string, discardedAt: number): Promise<void>;
   removalBatchId(worktreeId: string, unitId: string): Promise<string>;
   hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): Promise<boolean>;
+  mergers(worktreeIds: readonly string[]): Promise<ReadonlyMap<string, PublicUser>>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;
   reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
   completeOperation(

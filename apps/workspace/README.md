@@ -230,7 +230,10 @@ CLI login and a token session get `403`. A used code answers `409 AGENT_ALREADY_
 the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
 code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
 `claimed_at` and clears the expiry. The claimer becomes an owner of the agent's Personal Space and
-manages its files in the browser; the agent gets no access to the claimer's files. `GET /api/agents`
+manages its files in the browser; the agent gets no access to the claimer's files. The claimer also
+decides the agent's pull requests: they can mark one ready, reopen, merge or discard it, in the browser,
+with `uvw` and through MCP, and are recorded as the one who did it. Only the agent edits its pull
+requests. A stopped agent's pull requests stay with the claimer to merge or discard. `GET /api/agents`
 lists the claimer's agents with file count and last activity, and `POST /api/agents/{agentId}/stop`
 stops one: it bans the agent, so its links stop working for everyone but its owners, and closes the
 collaboration sockets the agent holds. There is no undo.

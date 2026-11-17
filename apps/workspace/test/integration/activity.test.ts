@@ -113,7 +113,7 @@ describe("GET Space activity", () => {
     const result = await activity();
     expect(result.days.reduce((sum, day) => sum + day.merged, 0)).toBe(1);
     expect(result.events.filter((event) => event.kind === "pull-merged")).toEqual([
-      expect.objectContaining({ actor: null, writeSource: "unknown", pull: expect.objectContaining({ id: merged.id }) }),
+      expect.objectContaining({ actor: expect.objectContaining({ id: owner.user.id }), writeSource: "unknown", pull: expect.objectContaining({ id: merged.id }) }),
     ]);
     expect(result.complete).toBe(true);
     expect(result.days.every((day) => Object.values(day.opened).every((count) => count === 0))).toBe(true);

@@ -166,6 +166,7 @@ export function createWorktreesModule(options: {
           complete = false;
         }
       }
+      const mergers = await options.repository.mergers([...merged]);
       return {
         items: visible.map((row) => ({
           id: row.id, number: row.number, name: row.name,
@@ -175,6 +176,7 @@ export function createWorktreesModule(options: {
           },
           createdVia: row.created_via, createdAt: row.created_at,
           mergedAt: merged.has(row.id) ? row.processed_at : null,
+          mergedBy: mergers.get(row.id) ?? null,
         })),
         complete,
       };
@@ -918,6 +920,8 @@ async function worktreeCapabilities(
   const admin =
     row.kind === "team" &&
     (teamRole === "owner" || teamRole === "admin");
+  // A claimer owns the agent's Space, so decides the agent's pull requests; only the creator edits them.
+  const decides = row.kind === "user" ? Boolean(row.actor_owns_creator_space) : creator || admin;
   return {
     canSeeUnits: review,
     capabilities: {
@@ -925,20 +929,16 @@ async function worktreeCapabilities(
       editDraft: state === "draft" && creatorCanEdit,
       addUnit: state === "draft" && creatorCanEdit,
       changeVisibility: row.kind === "team" && (creator || admin),
-      markReady: state === "draft" && creatorCanEdit,
-      reopen:
-        state === "ready" &&
-        (row.kind === "user" ? creator : creator || admin),
+      markReady: state === "draft" && (row.kind === "user" ? decides && unitEdit : creatorCanEdit),
+      reopen: state === "ready" && decides,
       merge: state === "ready" && unitEdit && canMergeAsActor(userId, row),
-      discard:
-        (state === "draft" || state === "ready") &&
-        (row.kind === "user" ? creator : creator || admin),
+      discard: (state === "draft" || state === "ready") && decides,
     },
   };
 }
 
 function canMergeAsActor(userId: string, row: WorktreeRow): boolean {
-  if (row.kind === "user") return row.creator_user_id === userId;
+  if (row.kind === "user") return Boolean(row.actor_owns_creator_space);
   return (
     row.team_owner_user_id === userId ||
     row.actor_member_role === "admin" ||

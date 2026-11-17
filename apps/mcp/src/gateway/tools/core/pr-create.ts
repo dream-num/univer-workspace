@@ -31,6 +31,7 @@ export const prCreateTool: ToolDefinition = {
       spaceFeature(context),
       async () => context.user.id,
       await resolveRepo(context, repo),
+      "create",
     );
     const worktree = await worktreeFeature(context).create({
       name: title,

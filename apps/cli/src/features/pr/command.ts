@@ -84,8 +84,8 @@ function build(
   const { context, origin, spaces, userId, worktrees } = deps;
   const root = new Command(name).description(description);
 
-  const repoSpace = async (repo: string | undefined) =>
-    await pullRequestSpace(spaces, userId, (await context.repo(repo)).spaceId);
+  const repoSpace = async (repo: string | undefined, purpose: "list" | "create") =>
+    await pullRequestSpace(spaces, userId, (await context.repo(repo)).spaceId, purpose);
 
   const find = async (argument: string, repo: string | undefined) =>
     await findPullRequest(worktrees, argument, origin, () => context.repo(repo));
@@ -122,7 +122,7 @@ function build(
         const items = await executeCommand(list, async () => {
           const state = oneOf(options.state, PULL_REQUEST_STATES, "--state");
           const limit = limitOf(options.limit);
-          const space = await repoSpace(options.repo);
+          const space = await repoSpace(options.repo, "list");
           return await listPullRequests(
             { userId, worktrees },
             {
@@ -204,7 +204,7 @@ function build(
           },
       ) => {
         const { worktree, url } = await executeCommand(create, async () => {
-          const space = await repoSpace(options.repo);
+          const space = await repoSpace(options.repo, "create");
           const body = await readText(options.body, options.bodyFile, "--body or --body-file");
           const base = options.json === undefined ? await origin() : undefined;
           const worktree = await worktrees.create({

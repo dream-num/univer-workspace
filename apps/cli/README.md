@@ -188,7 +188,10 @@ uniquely matches `uvw repo list`. Unknown or ambiguous slugs return
 `--json [fields]` prints the bare object or array, optionally narrowed to the listed fields. Exit code 4
 means sign-in is required. `pr discard` is irreversible; there is no `pr close` or `pr reopen`
 (use `pr ready --undo` to return to draft). Content commands take `--worktree <id>`, the `id` from
-`uvw pr view <n> -R <repo> --json id`.
+`uvw pr view <n> -R <repo> --json id`. A person who claimed an agent works on the agent's pull requests with
+`-R <agent>/personal`: `pr list`, `view`, `ready` (and `--undo`), `merge` and `discard` work there, and the
+server records the person as the one who acted. Editing an agent's pull request, or opening one in its Space,
+is refused.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

@@ -54,6 +54,10 @@ PullActivityEvent:
     kind: { type: string, enum: [pull-opened, pull-merged] }
     at: { type: string, format: date-time }
     actor:
+      description: >-
+        Who opened or merged the pull request. A merge names the user whose merge Operation
+        completed, who may be the human who claimed the agent that opened it; `null` when no
+        such Operation is recorded.
       oneOf: [{ $ref: ./identity.yaml#/PublicUser }, { type: "null" }]
     writeSource:
       $ref: ./identity.yaml#/WriteSource

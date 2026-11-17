@@ -5,6 +5,7 @@ import { type SqliteAccessRepository, assertFileQuota, ownsSpaceSql, spaceOwnerI
 import type { SqliteDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
+import type { PublicUser } from "../../../modules/permissions/index.js";
 import type { WorktreeKind, WorktreeVisibility } from "../../../modules/worktrees/worktrees.types.js";
 import type {
   WorktreeCursor,
@@ -505,6 +506,21 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
         .prepare("SELECT 1 FROM trash_batches WHERE id = ? AND created_by = ?")
         .get(this._removalBatchIdSync(worktreeId, unitId), userId),
     );
+  }
+
+  async mergers(worktreeIds: readonly string[]): Promise<ReadonlyMap<string, PublicUser>> {
+    const rows = this._database.connection
+      .prepare(
+        `SELECT json_extract(operation.payload_json, '$.worktreeId') AS worktreeId,
+                merger.id, merger.username, merger.display_name AS displayName, merger.avatar_url AS avatarUrl
+         FROM operations AS operation
+         JOIN users AS merger ON merger.id = operation.actor_user_id
+         WHERE operation.kind = 'merge_worktree' AND operation.state = 'completed'
+           AND json_extract(operation.payload_json, '$.worktreeId') IN (SELECT value FROM json_each(?))
+         ORDER BY operation.updated_at`
+      )
+      .all(JSON.stringify(worktreeIds)) as unknown as Array<PublicUser & { readonly worktreeId: string }>;
+    return new Map(rows.map(({ worktreeId, ...merger }) => [worktreeId, merger]));
   }
 
   async getOperation(operationId: string): Promise<WorktreeOperationRow | null> {

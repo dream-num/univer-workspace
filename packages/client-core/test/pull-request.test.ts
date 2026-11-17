@@ -24,12 +24,14 @@ describe("listPullRequests", () => {
   const list = vi.fn(async (_input: unknown) => [worktree()]);
   const deps = { userId, worktrees: { list } as Pick<WorkspaceWorktreeFeature, "list"> };
 
-  it("scopes a Personal Space to the user and a Team Space to the space", async () => {
+  it("scopes a Personal Space to its owner and a Team Space to the space", async () => {
     await listPullRequests(deps, { space: { id: "p1", type: "personal" }, state: "open", limit: 5 });
+    await listPullRequests(deps, { space: { id: "p2", type: "personal", owner: { id: "agent", username: "bot" } }, state: "open", limit: 5 });
     await listPullRequests(deps, { space: { id: "t1", type: "team" }, state: "merged", limit: 5 });
     await listPullRequests(deps, { state: "discarded", limit: 5, search: "q" });
     expect(list.mock.calls.map(([input]) => input)).toEqual([
       { scope: "user", creatorId: "u1", view: "active", limit: 5 },
+      { scope: "user", creatorId: "agent", view: "active", limit: 5 },
       { scope: "space", spaceId: "t1", view: "processed", states: ["merged"], limit: 5 },
       { view: "processed", states: ["discarded"], limit: 5, search: "q" },
     ]);
@@ -48,14 +50,23 @@ describe("listPullRequests", () => {
 
 describe("pullRequestSpace", () => {
   const spaces = (space: Partial<WorkspaceSpace>) => ({ get: async () => ({ id: "s", name: "s", ...space }) });
-  it("refuses another user's Personal Space", async () => {
-    await expect(
-      pullRequestSpace(spaces({ type: "personal", owner: { id: "u2", username: "bob" } }), userId, "s"),
-    ).rejects.toMatchObject({ code: "workspace-argument-invalid" });
-    expect(
-      await pullRequestSpace(spaces({ type: "personal", owner: { id: "u1", username: "me" } }), userId, "s"),
-    ).toMatchObject({ id: "s" });
-    expect(await pullRequestSpace(spaces({ type: "team" }), userId, "s")).toMatchObject({ id: "s" });
+  const accepts = async (space: Partial<WorkspaceSpace>, purpose: "list" | "create") =>
+    await pullRequestSpace(spaces(space), userId, "s", purpose).then(
+      () => true,
+      (error: unknown) => {
+        expect(error).toMatchObject({ code: "workspace-argument-invalid" });
+        return false;
+      },
+    );
+  const own = { type: "personal", owner: { id: "u1", username: "me" } } as const;
+  const claimedAgent = { type: "personal", accessRole: "owner", affiliation: "owner", owner: { id: "a1", username: "bot" } } as const;
+  const stranger = { type: "personal", accessRole: "viewer", affiliation: "none", owner: { id: "u2", username: "bob" } } as const;
+
+  it("lists a claimed agent's Personal Space but opens new pull requests only in the user's own", async () => {
+    expect({ list: await accepts(own, "list"), create: await accepts(own, "create") }).toEqual({ list: true, create: true });
+    expect({ list: await accepts(claimedAgent, "list"), create: await accepts(claimedAgent, "create") }).toEqual({ list: true, create: false });
+    expect({ list: await accepts(stranger, "list"), create: await accepts(stranger, "create") }).toEqual({ list: false, create: false });
+    expect({ list: await accepts({ type: "team" }, "list"), create: await accepts({ type: "team" }, "create") }).toEqual({ list: true, create: true });
   });
 });
 
