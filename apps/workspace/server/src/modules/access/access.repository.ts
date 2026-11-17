@@ -16,7 +16,6 @@ export interface ResolvedNodeRow {
   readonly updated_at: number;
   readonly space_type: SpaceType;
   readonly space_name: string;
-  /** The requester is the Space owner or the human who claimed the agent that owns it. */
   readonly requester_owns: 0 | 1;
   readonly public_read: 0 | 1;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
@@ -34,7 +33,6 @@ export interface StoredSpaceAccess {
   readonly type: SpaceType;
   readonly name: string;
   readonly ownerUserId: string;
-  /** The requester is the owner or the human who claimed the agent that owns the Space. */
   readonly owned: boolean;
   readonly publicRead: boolean;
   readonly memberRole: Exclude<AccessRole, "owner"> | null;

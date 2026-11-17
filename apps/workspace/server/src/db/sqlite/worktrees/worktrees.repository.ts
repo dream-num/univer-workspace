@@ -82,54 +82,49 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
           : "worktree.processed_at IS NOT NULL",
     ];
     const orderColumn = input.order === "createdAtDesc" ? "created_at" : "updated_at";
-    // worktreeSelect() binds the actor three times and the visibility test four more.
-    const parameters: Array<string | number> = Array<string>(7).fill(input.userId);
+    const parameters: Record<string, string | number> = { userId: input.userId, limit: input.limit };
     if (input.kind) {
-      predicates.push("worktree.kind = ?");
-      parameters.push(input.kind);
+      predicates.push("worktree.kind = $kind");
+      parameters.kind = input.kind;
     }
     if (input.teamSpaceId) {
-      predicates.push("worktree.team_space_id = ?");
-      parameters.push(input.teamSpaceId);
+      predicates.push("worktree.team_space_id = $teamSpaceId");
+      parameters.teamSpaceId = input.teamSpaceId;
     }
     if (input.creatorUserId) {
-      predicates.push("worktree.creator_user_id = ?");
-      parameters.push(input.creatorUserId);
+      predicates.push("worktree.creator_user_id = $creatorUserId");
+      parameters.creatorUserId = input.creatorUserId;
     }
     if (input.touchedSince !== undefined) {
-      predicates.push("(worktree.created_at >= ? OR worktree.processed_at >= ?)");
-      parameters.push(input.touchedSince, input.touchedSince);
+      predicates.push("(worktree.created_at >= $touchedSince OR worktree.processed_at >= $touchedSince)");
+      parameters.touchedSince = input.touchedSince;
     }
     if (input.search) {
       predicates.push(`(
-        instr(lower(worktree.name), lower(?)) > 0
-        OR instr(lower(coalesce(worktree.summary, '')), lower(?)) > 0
-        OR instr(lower(creator.display_name), lower(?)) > 0
-        OR instr(lower(creator.username), lower(?)) > 0
-        OR instr(lower(coalesce(team.name, '')), lower(?)) > 0
+        instr(lower(worktree.name), lower($search)) > 0
+        OR instr(lower(coalesce(worktree.summary, '')), lower($search)) > 0
+        OR instr(lower(creator.display_name), lower($search)) > 0
+        OR instr(lower(creator.username), lower($search)) > 0
+        OR instr(lower(coalesce(team.name, '')), lower($search)) > 0
       )`);
-      parameters.push(...Array<string>(5).fill(input.search));
+      parameters.search = input.search;
     }
     if (input.cursor) {
       predicates.push(
-        `(worktree.${orderColumn} < ?
-          OR (worktree.${orderColumn} = ? AND worktree.id > ?))`
+        `(worktree.${orderColumn} < $cursorTimestamp
+          OR (worktree.${orderColumn} = $cursorTimestamp AND worktree.id > $cursorId))`
       );
-      parameters.push(
-        input.cursor.timestamp,
-        input.cursor.timestamp,
-        input.cursor.id
-      );
+      parameters.cursorTimestamp = input.cursor.timestamp;
+      parameters.cursorId = input.cursor.id;
     }
-    parameters.push(input.limit);
     return this._database.connection
       .prepare(
         `${worktreeSelect()}
          WHERE (
-           (worktree.kind = 'user' AND ${ownsSpaceSql("worktree.creator_user_id", "?")})
+           (worktree.kind = 'user' AND ${ownsSpaceSql("worktree.creator_user_id")})
            OR (worktree.kind = 'team' AND (
-             worktree.creator_user_id = ?
-             OR team.owner_user_id = ?
+             worktree.creator_user_id = $userId
+             OR team.owner_user_id = $userId
              OR (member.user_id IS NOT NULL AND (
                worktree.visibility = 'space' OR member.role = 'admin'
              ))
@@ -137,9 +132,9 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
          )
            AND ${predicates.join(" AND ")}
          ORDER BY worktree.${orderColumn} DESC, worktree.id
-         LIMIT ?`
+         LIMIT $limit`
       )
-      .all(...parameters) as unknown as WorktreeRow[];
+      .all(parameters) as unknown as WorktreeRow[];
   }
 
   async get(worktreeId: string, userId: string): Promise<WorktreeRow | null> {
@@ -147,9 +142,9 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
       (this._database.connection
         .prepare(
           `${worktreeSelect()}
-           WHERE worktree.id = ?`
+           WHERE worktree.id = $worktreeId`
         )
-        .get(userId, userId, userId, worktreeId) as WorktreeRow | undefined) ?? null
+        .get({ userId, worktreeId }) as WorktreeRow | undefined) ?? null
     );
   }
 
@@ -628,7 +623,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
 function worktreeSelect(): string {
   return `SELECT
             worktree.*,
-            ${ownsSpaceSql("worktree.creator_user_id", "?")} AS actor_owns_creator_space,
+            ${ownsSpaceSql("worktree.creator_user_id")} AS actor_owns_creator_space,
             creator.username AS creator_username,
             creator.display_name AS creator_display_name,
             creator.avatar_url AS creator_avatar_url,
@@ -645,5 +640,5 @@ function worktreeSelect(): string {
           LEFT JOIN spaces AS team ON team.id = worktree.team_space_id
           LEFT JOIN space_members AS member
             ON member.space_id = worktree.team_space_id
-           AND member.user_id = ?`;
+           AND member.user_id = $userId`;
 }

@@ -16,12 +16,9 @@ interface PendingClaim {
 
 export interface AgentClaims {
   createCode(cookieHeader: string | undefined): Promise<AgentClaimCode>;
-  /** `claimed` is true once the signed-in human owns the agent. */
   inspect(cookieHeader: string | undefined, code: unknown): Promise<{ readonly agent: AgentView; readonly claimed: boolean }>;
-  /** Repeating it as the owner changes nothing. */
   claim(cookieHeader: string | undefined, code: unknown): Promise<{ readonly agent: AgentView }>;
   list(cookieHeader: string | undefined): Promise<{ readonly agents: readonly AgentView[] }>;
-  /** Bans the agent for good: it can no longer sign in, and only its owners see its Space. */
   stop(cookieHeader: string | undefined, agentUserId: string): Promise<void>;
 }
 

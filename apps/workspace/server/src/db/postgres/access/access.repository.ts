@@ -9,17 +9,13 @@ import type {
   AccessRepository,
 } from "../../../modules/access/access.repository.js";
 
-/**
- * The requester owns the Space: it is the Space owner, or the human who claimed the agent that owns
- * it. The relation runs one way, so a claimed agent gains nothing of its human's.
- */
+/** The human who claimed an agent owns the agent's Spaces too, but a claimed agent gains nothing of its human's. */
 export function ownsSpaceSql(ownerUserId: string, userId = "$userId"): string {
   return `(${ownerUserId} = ${userId} OR EXISTS (
     SELECT 1 FROM agents WHERE agents.user_id = ${ownerUserId} AND agents.owner_user_id = ${userId}
   ))`;
 }
 
-/** Everyone `ownsSpaceSql` holds for on the Spaces owned by the users that `ownerIdsSql` selects. */
 export function spaceOwnerIdsSql(ownerIdsSql: string): string {
   return `${ownerIdsSql}
     UNION SELECT owner_user_id FROM agents WHERE owner_user_id IS NOT NULL AND user_id IN (${ownerIdsSql})`;
