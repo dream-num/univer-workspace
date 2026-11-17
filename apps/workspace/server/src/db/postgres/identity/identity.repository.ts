@@ -28,7 +28,7 @@ export class PostgresIdentityRepository implements IdentityRepository {
 
   async findUsersByIdOrUsername(target: string): Promise<readonly NamedUser[]> {
     const rows = await this._database
-      .prepare("SELECT id, username, kind FROM users WHERE id = ? OR lower(username COLLATE \"C\") = lower(?::text COLLATE \"C\")")
+      .prepare("SELECT id, username, kind FROM users WHERE lower(id COLLATE \"C\") = lower(?::text COLLATE \"C\") OR lower(username COLLATE \"C\") = lower(?::text COLLATE \"C\")")
       .all(target, target);
     return rows.map(namedUser);
   }

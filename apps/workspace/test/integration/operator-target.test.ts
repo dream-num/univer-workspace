@@ -75,6 +75,11 @@ for (const { name, open } of backends) {
       expect(await granted()).toEqual([]);
       await backend.query(`INSERT INTO executor_access (user_id, granted_at) VALUES ('${hubert}', 5)`);
       expect(run("executor-access", "revoke", hubert)).toMatchObject({ status: 1, stdout: "", stderr: expect.stringContaining(hubertAmbiguity) });
+      expect(run("executor-access", "revoke", hubert.toUpperCase())).toMatchObject({
+        status: 1,
+        stdout: "",
+        stderr: expect.stringContaining(`${hubert.toUpperCase()} is the user ID of hubert (${hubert}) and the username of ${hubert.toUpperCase()} (mallory-id). Nothing changed`),
+      });
       expect(await granted()).toEqual([hubert]);
 
       expect(run("executor-access", "revoke", "HUBERT")).toMatchObject({ status: 0, stdout: `hubert (${hubert}) no longer has executor access\n` });
@@ -85,6 +90,11 @@ for (const { name, open } of backends) {
         status: 1,
         stdout: "",
         stderr: expect.stringContaining(`${robot} is the user ID of robot-0a1b (${robot}) and the username of ${robot} (eve-id). Nothing changed`),
+      });
+      expect(run("ban-agent", robot.toUpperCase())).toMatchObject({
+        status: 1,
+        stdout: "",
+        stderr: expect.stringContaining(`${robot.toUpperCase()} is the user ID of robot-0a1b (${robot}) and the username of ${robot} (eve-id). Nothing changed`),
       });
       expect(await banned()).toBe(false);
       expect(run("ban-agent", "eve-id")).toMatchObject({ status: 1, stderr: expect.stringContaining(`${robot} is not an agent`) });

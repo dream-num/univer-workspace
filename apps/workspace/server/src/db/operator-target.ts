@@ -5,8 +5,8 @@ export const describeUser = (user: NamedUser) => `${user.username} (${user.id})`
 /** A username can equal another User's ID, so a target naming two Users resolves to neither; it prints both and fails. */
 export async function resolveOperatorTarget(identity: IdentityRepository, target: string): Promise<NamedUser | null> {
   const matches = await identity.findUsersByIdOrUsername(target);
-  const byId = matches.find((user) => user.id === target);
-  const byUsername = matches.find((user) => user.id !== target);
+  const byId = matches.find((user) => user.id.toLowerCase() === target.toLowerCase());
+  const byUsername = matches.find((user) => user !== byId);
   if (byId && byUsername) {
     console.error(
       `${target} is the user ID of ${describeUser(byId)} and the username of ${describeUser(byUsername)}. ` +

@@ -217,7 +217,7 @@ and the human who claimed it can read its Personal Space, and its links answer a
 authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
 exchange. `pnpm db:ban-agent <username or user id>` bans an agent (`db:ban-agent:production` runs the
 build); it refuses a User that is not an agent, and a second run changes nothing. When the value is one
-User's ID and another User's username, it names both and changes nothing; use the other identifier. It runs outside the
+User's ID and another User's username, both compared ignoring case, it names both and changes nothing; use the other identifier. It runs outside the
 server, so a collaboration socket the agent already holds stays open until its session ends. The MCP gateway caches a token
 exchange for up to 30 seconds, so for that long a banned agent's token still gets an answer from tools
 that do not call Workspace, such as `whoami`.
