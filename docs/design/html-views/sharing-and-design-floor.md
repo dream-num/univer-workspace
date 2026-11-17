@@ -114,7 +114,8 @@ HTML View Skill 增加 “Share the page” 一节，要求 Agent 把 `shareUrl`
 链接被贴进 Slack、飞书、微信时，预览今天只显示应用外壳的通用标题。生产服务器返回 SPA `index.html` 时，
 对匿名身份可读的 `/nodes/{id}`，在 head 里写入页面名称和一句描述（`og:title`、`og:description` 等），
 中文 `Accept-Language` 用中文描述。私有或不存在的节点返回原样的 `index.html`，不泄露任何信息。
-这次不生成预览图片。
+配置了 `PUBLIC_ORIGIN` 时，再按节点类型附一张静态预览图（`og:image`，`twitter:card` 为 `summary_large_image`）；
+按页面内容生成的截图不在这里做。
 
 ### 提高观感下限
 

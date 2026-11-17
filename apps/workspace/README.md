@@ -806,9 +806,14 @@ In production, `/nodes/<nodeId>` links (including `?view=immersive`) include the
 title and a short description in the HTML head for chat previews when anonymous access
 is allowed. HTML views omit `.univer.html` from the display title. Descriptions follow
 `Accept-Language` (English or Chinese); responses vary by that header and retain the
-app shell's revalidation policy. Set `PUBLIC_ORIGIN` to include an absolute `og:url`;
-otherwise it is omitted. Private, deleted and missing Nodes keep the generic app shell.
-The Vite development server does not generate these previews, and no preview image is provided.
+app shell's revalidation policy. Set `PUBLIC_ORIGIN` to include an absolute `og:url` and a
+1200x630 preview image for the Node's kind (Sheet, Doc, Slide, HTML view, folder, or any
+other file) with a large-image card. Without `PUBLIC_ORIGIN` both are omitted, because
+Open Graph requires absolute image URLs and the request host is not trusted.
+Private, deleted and missing Nodes keep the generic app shell.
+The images are static files in `web/public/link-preview`; rebuild them with
+`node scripts/render-link-preview-images.mjs`, which needs Google Chrome and ImageMagick.
+The Vite development server does not generate these previews.
 
 These rules apply to existing enabled settings after upgrade. No anonymous accounts,
 login sessions, Recent entries, schema changes or database migration are introduced.

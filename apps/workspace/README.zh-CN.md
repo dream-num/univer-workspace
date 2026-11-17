@@ -344,7 +344,7 @@ pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.
 
 匿名访客和已登录的只读用户可以在 Workspace 浏览器内试算绑定了 Sheet 的 HTML 页面。首次编辑某个来源时，该来源断开协同连接，公式在访客浏览器中重新计算。试算结果只在本地生效，所有者后续的修改也暂时不会同步到这里。刷新后恢复实时数据。宿主会在首次编辑时显示试算提示，页面可通过 `window.univerWorkspace.getWriteMode(unitId)` 判断能否将修改标记为已保存。原生 Office 预览对这些用户始终只读。Workspace Agent 等其他宿主需显式启用 HTML 试算，否则会拒绝写入。
 
-生产部署中，允许匿名访问的 `/nodes/<nodeId>` 链接（含 `?view=immersive`）在聊天预览里会显示页面标题和简短描述。HTML 视图的标题省略 `.univer.html` 后缀。描述按 `Accept-Language` 返回中文或英文，缓存按该请求头区分，沿用应用页面的重新验证策略。配置 `PUBLIC_ORIGIN` 后才会生成绝对地址 `og:url`。私有、已删除或不存在的节点显示通用应用页面。Vite 开发服务器不生成此类预览，预览也不含图片。
+生产部署中，允许匿名访问的 `/nodes/<nodeId>` 链接（含 `?view=immersive`）在聊天预览里会显示页面标题和简短描述。HTML 视图的标题省略 `.univer.html` 后缀。描述按 `Accept-Language` 返回中文或英文，缓存按该请求头区分，沿用应用页面的重新验证策略。配置 `PUBLIC_ORIGIN` 后才会生成绝对地址 `og:url`，并按节点类型（Sheet、Doc、Slide、HTML 视图、文件夹或其他文件）附上一张 1200x630 的预览图，卡片为大图样式。未配置时两者都省略，因为 Open Graph 要求图片使用绝对地址，而请求的 Host 不可信。私有、已删除或不存在的节点显示通用应用页面。预览图是 `web/public/link-preview` 下的静态文件，可用 `node scripts/render-link-preview-images.mjs` 重新生成，需要 Google Chrome 和 ImageMagick。Vite 开发服务器不生成此类预览。
 
 升级后，原有分享设置继续生效。匿名访问不会创建账号、登录会话或最近访问记录，也无需变更 schema 或迁移数据库。
 访问未认领 Agent 拥有的文件页面会延后该 Agent 的过期时间，每天最多更新一次。被封禁或已过期的 Agent 所分享的链接返回“未找到”。
