@@ -263,3 +263,11 @@ V22→V23 只新增空的 `executor_access` 表；PostgreSQL 产品 schema 以�
 停止全部旧实例，启动一个 V23 实例，待备份、迁移和健康检查通过后再恢复服务。已有数据、对象键和未完成的恢复状态均会保留。
 迁移失败会回滚，成功后重启不会重复迁移或备份。如需回退，停止 V23 并恢复 V22 备份（PostgreSQL 恢复升级前的数据库备份）。旧实例遇到 V23 会拒绝启动。
 先升级 Workspace，再把 MCP 执行层设为 `workspace`：旧版 Workspace 不报告授权，执行层会在升级前拒绝所有人。
+
+### 复制来源与产品数据库 V24
+
+V23→V24 新增 `nodes.copied_from_node_id`、`worktree_node_intents.copied_from_node_id`、`node_link_sharing.unverified_role`（已有行读作 `viewer`）和 `node_link_sharing.making_of_note`，并重建 `operations` 表，使其 kind CHECK 接受 `copy_node`。
+停止全部旧实例，启动一个 V24 实例，待一致性备份、迁移和健康检查通过后再恢复服务。已有产品数据、对象键和未完成的恢复状态均会保留。
+迁移失败会回滚，成功后重启不会重复迁移或备份。如需回退，停止 V24 并恢复 V23 备份。V23 和 V24 不得同时写入同一 SQLite 文件。
+
+PostgreSQL 部署在启动时用一个事务把产品 schema 从版本 3 升级到版本 4。升级失败会回滚并停留在版本 3。服务端不备份 PostgreSQL，启动新版本前请先备份数据库并停止全部旧实例。

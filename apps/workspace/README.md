@@ -626,3 +626,17 @@ state are preserved. Failed migration rolls back; successful restarts do not rep
 back, stop V23 and restore the V22 backup (PostgreSQL: the database backup taken before the upgrade). An older
 instance refuses to start on V23. Upgrade Workspace before setting the MCP executor to `workspace`: an older
 Workspace reports no access, so the executor would refuse everyone until the upgrade.
+
+### Copy source and product database V24
+
+V23→V24 appends `nodes.copied_from_node_id`, `worktree_node_intents.copied_from_node_id`,
+`node_link_sharing.unverified_role` (existing rows read `viewer`) and `node_link_sharing.making_of_note`,
+and rebuilds `operations` so that its kind CHECK accepts `copy_node`. Stop every old instance, start one
+V24 instance, and wait for its consistent backup, migration and health checks before restoring service.
+Existing product rows, object keys and unfinished recovery state are preserved. Failed migration rolls
+back; successful restarts do not repeat migration or backup. To roll back, stop V24 and restore the V23
+backup. Never run V23 and V24 writers on the same SQLite file.
+
+A PostgreSQL deployment upgrades product schema version 3 to version 4 in one transaction at startup. A
+failed upgrade rolls back and leaves version 3. The server does not back up PostgreSQL, so back up the
+database and stop every old instance before you start the new version.

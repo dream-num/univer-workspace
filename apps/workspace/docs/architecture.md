@@ -312,11 +312,13 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 服务端入口将 `config.database` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务、封禁 Agent 与授予执行层的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
 
-`db/sqlite/schema.sql` 定义完整 V23 结构，`db/sqlite/initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V23；V23 校验指纹；V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
+`db/sqlite/schema.sql` 定义完整 V24 结构，`db/sqlite/initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V24；V24 校验指纹；V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 V23 新增 `executor_access` 表，记录运维授予共享 MCP 执行层的 User。
+V24 给 `nodes` 与 `worktree_node_intents` 追加 `copied_from_node_id`，给 `node_link_sharing` 追加 `unverified_role` 与 `making_of_note`，新增 `nodes_copied_from` 部分索引，并重建 `operations` 使 `kind` CHECK 接受 `copy_node`。
+PostgreSQL 的 `db/postgres/initialize.ts` 在同一事务内把指纹相符的版本 3 升级到版本 4，结构与全新安装一致。
 V21 给 `users` 追加 `kind` 列，并新增 `agents` 与 `node_reports` 两张表。V22 不改结构，只改写含邮箱地址、误导字符或没有可见字符的显示名，以及仍为默认名的 Personal Space。
 V19 新增 `html_view_drafts` 及到期索引；发布在产品事务中接管草稿 BlobStore key，拒绝、过期和冲突复用对象删除任务。
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
@@ -345,7 +347,7 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V23 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V24 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 

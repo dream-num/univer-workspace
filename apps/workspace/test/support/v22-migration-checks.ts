@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
+import { DROP_V24_SQL, withoutV24Columns } from "./v24-downgrade.js";
 
 export function verifyV22Migration(open: (filename: string) => SqliteDatabase): void {
   const root = mkdtempSync(join(tmpdir(), "workspace-v22-"));
@@ -11,6 +12,7 @@ export function verifyV22Migration(open: (filename: string) => SqliteDatabase): 
   const fixture = (filename: string, seeded: boolean) => {
     const db = new DatabaseSync(filename);
     db.exec(schema);
+    db.exec(DROP_V24_SQL);
     db.exec("DROP TABLE executor_access; PRAGMA user_version = 22");
     if (seeded)
       db.exec(`
@@ -33,7 +35,7 @@ export function verifyV22Migration(open: (filename: string) => SqliteDatabase): 
     db
       .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'executor_access' ORDER BY name")
       .all()
-      .map(({ name }) => [name, db.prepare(`SELECT * FROM ${name}`).all()]);
+      .map(({ name }) => [name, withoutV24Columns(String(name), db.prepare(`SELECT * FROM ${name}`).all())]);
   const hasTable = (db: DatabaseSync) =>
     db.prepare("SELECT 1 FROM sqlite_master WHERE name = 'executor_access'").get() !== undefined;
   try {
@@ -46,7 +48,7 @@ export function verifyV22Migration(open: (filename: string) => SqliteDatabase): 
       const migrated = open(filename);
       const db = migrated.connection;
       assert.deepEqual(rows(db), before);
-      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 23);
+      assert.equal(db.prepare("PRAGMA user_version").get()?.user_version, 24);
       assert.equal(db.prepare("SELECT count(*) AS n FROM executor_access").get()?.n, 0);
       if (seeded) {
         db.exec(`
@@ -87,7 +89,7 @@ export function verifyV22Migration(open: (filename: string) => SqliteDatabase): 
     );
     const before = rows(broken);
     broken.close();
-    assert.throws(() => open(filename), /V22 to V23 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V22 to V24 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v22-backup-"))!,
