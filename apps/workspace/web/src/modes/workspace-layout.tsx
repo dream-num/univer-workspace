@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
 import { sessionQueryOptions } from "../features/auth";
+import { nodeQueryOptions } from "../features/nodes/nodes.queries";
 import { VisitorBar } from "./visitor-bar";
 import { useModeDefinition } from "./registry";
 import type { WorkspaceShellProps as WorkspaceLayoutProps } from "./shell.types";
@@ -32,10 +33,12 @@ function VisitorLayout({
   headerTitle,
   headerContent,
   headerActions,
-  immersive,
+  immersive = false,
+  selectedNodeId,
 }: WorkspaceLayoutProps) {
   const { t } = useI18n();
   const location = useLocation();
+  const node = useQuery({ ...nodeQueryOptions(selectedNodeId ?? ""), enabled: selectedNodeId !== undefined });
   return (
     <div className="workspace-shell flex h-dvh flex-col overflow-hidden bg-background">
       <header
@@ -66,7 +69,9 @@ function VisitorLayout({
           {t("signIn")}
         </Link>
       </header>
-      {immersive ? <VisitorBar /> : null}
+      {immersive || selectedNodeId ? (
+        <VisitorBar immersive={immersive} nodeId={selectedNodeId} owner={node.data?.owner} />
+      ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
     </div>
   );

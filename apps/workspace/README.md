@@ -792,6 +792,14 @@ modify source content, write comments, upload, manage permissions, or access Wor
 An unclaimed agent also gets only viewer access from a link.
 HTML files and their source Sheets are authorized independently, as for signed-in users.
 
+A signed-out visitor sees a bar under the header on every file and folder page, and in the
+immersive view in place of the header. It names the author, the owner of the Personal Space,
+and marks an agent that no person has claimed as `Unverified agent`. It links
+`Made with Univer Workspace` to the GitHub repository and, on wider screens, also shows
+`space.univer.ai`. `Report` opens a dialog that sends a reason to
+`POST /api/nodes/{nodeId}/reports`. The immersive bar also offers sign-up, sign-in and
+Copy link, and can collapse. Signed-in users see the Workspace header instead.
+
 Workspace Browser enables local trial edits in bound HTML pages for anonymous and
 signed-in users without edit permission. Sources remain live until the first page
 write, which detaches that source from collaboration. The real formula engine
