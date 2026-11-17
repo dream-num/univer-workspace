@@ -64,7 +64,8 @@ known to precede delivery can fail over. A disconnected or timed-out write retur
 remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export, screenshots, PDF printing and Typst compilation continue under a four-minute job deadline, with an earlier executor deadline.
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
-receive an explicit environment containing only `NODE_ENV=production`. The gateway issues
+receive an explicit environment containing only `NODE_ENV=production` and
+`NODE_OPTIONS=--disable-sigusr1`. The gateway issues
 session grants with the exchanged session's expiry; dev grants last 10 minutes, matching the
 downstream session lifetime used by token exchange. The executor verifies the session's user through
 Workspace `whoami` before dispatch, using the transport URL. Successful identity checks share a SHA-256 session cache capped at
@@ -181,7 +182,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_RESOURCE_CACHE_DIRECTORY` | `<OS temp dir>/univer-workspace-mcp-<uid>/resources` | Private directory where the SVG resource catalog caches downloaded SVG files. Public data shared by gateway users under the same uid |
 | `MCP_OAUTH_CLIENT_ID`, `MCP_OAUTH_CLIENT_SECRET` | Unset | Confidential Workspace client with `tokenExchange` enabled. Set both or neither. Enables PAT and OAuth access token authentication |
 | `MCP_DEV_SESSION_PASSTHROUGH` | Unset | `1` enables development session authentication. At least one of this and the client pair is required |
-| `NODE_ENV` | Inherited | `production` forbids development authentication. The image sets `production` |
+| `NODE_ENV` | Inherited | `production` forbids development authentication, and on the executor Node inspector flags (`--inspect*`) on the command line or in `NODE_OPTIONS`. The image sets `production` |
 | `MCP_EXECUTOR_URLS`, `MCP_EXECUTOR_TOKEN` | Unset on gateway | Comma-separated executor HTTP(S) origins and the gateway-to-executor token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_ALLOWED_USER_IDS` | Unset | Comma-separated Workspace user IDs, trimmed, or `*` alone for every user. Empty values or entries are errors. Set the same trusted-user list on the gateway and executor. Required in production on the executor and on gateways with `MCP_EXECUTOR_URLS`. Unset outside production allows every user |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
@@ -683,8 +684,8 @@ Aborted transfers produce one info-level failure log.
 Office conversion runs in a fresh forked process per operation with advanced binary IPC.
 The parent resolves Workspace targets, exports UnitData and image bytes, and creates Units
 through Client Core. Import children receive only bytes and conversion options. Export children also receive the license pair.
-Its explicit environment contains `NODE_ENV=production`, `HOME`, `XDG_STATE_HOME` and `TMPDIR`.
-The last three point at a private per-job temporary directory that is removed after exit.
+Its explicit environment contains `NODE_ENV=production`, `NODE_OPTIONS=--disable-sigusr1`, `HOME`,
+`XDG_STATE_HOME` and `TMPDIR`. The last three point at a private per-job temporary directory that is removed after exit.
 It receives no session, grant, Workspace URL, internal token or inherited Node flags.
 The call's remaining deadline includes its wait for a conversion slot and kills the child.
 A conversion crash returns `workspace-job-crashed`, including a child killed by its heap cap.
@@ -703,7 +704,9 @@ No conversion cache is needed. Workspace compares the full creation intent and r
 Export download names use the Unit's product name.
 
 Children exit on IPC disconnect. Startup removes private job directories owned by dead executors,
-and each completed or failed job removes its own directory. The executor ignores SIGUSR1.
+and each completed or failed job removes its own directory. The executor ignores SIGUSR1. The image
+starts every role with `--disable-sigusr1`, and worker and conversion children start with it too, so
+the signal never opens the Node inspector.
 Only known exchange, Typst and `LICENSE_*` errors cross the child boundary. Other codes become
 `workspace-exchange-conversion-failed`, and absolute paths are removed from error messages.
 

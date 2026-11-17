@@ -7,7 +7,7 @@ import {
 } from "@univerjs/univer-workspace-client-core";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { ExecutorCallError, resultUnknown } from "../shared/errors.js";
-import type { ExecutorConfig } from "../shared/config-executor.js";
+import { EXECUTOR_CHILD_NODE_OPTIONS, type ExecutorConfig } from "../shared/config-executor.js";
 import {
   executorGrantSchema,
   type ExecutorGrant,
@@ -18,7 +18,10 @@ import type { BoundRuntime } from "./context.js";
 import { grantCookie, resolveGrant } from "./credentials.js";
 import { UNIVER_LICENSE } from "./license.js";
 
-export const workerEnvironment = { NODE_ENV: "production" };
+export const workerEnvironment = {
+  NODE_ENV: "production",
+  NODE_OPTIONS: EXECUTOR_CHILD_NODE_OPTIONS,
+};
 
 const workerForCaller = new WeakMap<WorkspaceRuntimeCaller, WorkspaceRuntimeCaller>();
 const rejectedWorkers = new WeakSet<WorkspaceRuntimeCaller>();

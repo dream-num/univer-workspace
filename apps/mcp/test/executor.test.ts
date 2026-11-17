@@ -126,7 +126,10 @@ describe("executor protocol boundaries", () => {
     expect(output).not.toContain(token);
     expect(output).not.toContain(rendererToken);
     expect(output).not.toContain("private-allowlist-id");
-    expect(workerEnvironment).toEqual({ NODE_ENV: "production" });
+    expect(workerEnvironment).toEqual({
+      NODE_ENV: "production",
+      NODE_OPTIONS: "--disable-sigusr1",
+    });
   });
 
   it("binds distinct caller keys for two users on the same Unit", async () => {
