@@ -91,6 +91,7 @@ describe("share page header", () => {
     expect(bar).toContain('href="https://github.com/dream-num/univer-workspace" target="_blank" rel="noopener noreferrer">Made with Univer Workspace');
     expect(bar).toContain('href="https://space.univer.ai" target="_blank" rel="noopener noreferrer">space.univer.ai');
     expect(bar).toMatch(/<button[^>]*>.*Report<\/button>/);
+    expect(bar).toMatch(/<button[^>]*>.*Hand to my agent<\/span><\/button>/);
     expect(bar).toContain('title="By Budget bot"');
     expect(bar).toContain('Made with Univer Workspace<span class="sr-only"> (opens in a new tab)</span>');
     expect(bar).toContain('space.univer.ai<span class="sr-only"> (opens in a new tab)</span>');
@@ -123,6 +124,7 @@ describe("share page header", () => {
     expect(html).toContain(">By Budget bot<");
     expect(html).toContain(">Unverified agent<");
     expect(html).toMatch(/<button[^>]*>.*Report<\/button>/);
+    expect(html).toContain("Hand to my agent");
     expect(html).not.toContain("Sign up");
     expect(html).not.toContain("Sign in");
     expect(html).not.toContain('role="status"');
