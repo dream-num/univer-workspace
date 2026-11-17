@@ -18,7 +18,7 @@ export function AppSettingsDialog({ open, onOpenChange, layoutSettings }: {
       open={open}
       onOpenChange={onOpenChange}
       title={t("appSettings")}
-      width="sm"
+      width="md"
     >
       <div className="-my-1 divide-y divide-border">
         {layoutSettings}

@@ -38,6 +38,9 @@ export interface ModeDefinition {
   };
   readonly Shell: ComponentType<WorkspaceShellProps>;
   readonly label: MessageKey;
+  readonly description: MessageKey;
+  readonly shortDescription: MessageKey;
+  readonly preview: string;
   readonly messages: ModeMessages;
 }
 
@@ -57,6 +60,7 @@ export function useModeDefinition() {
 export type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";
 export { parseRepositorySearch } from "./repository/repository-directory";
 
+export { ModeOnboarding } from "./mode-onboarding";
 export { WorkspaceLayout } from "./workspace-layout";
 export type { WorkspaceShellProps } from "./shell.types";
 export type { IssuePageProps, HomeView, SpacePageView } from "./page.types";

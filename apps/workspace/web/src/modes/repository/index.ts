@@ -1,3 +1,4 @@
+import preview from "./view-preview.webp";
 import "@fontsource-variable/plus-jakarta-sans";
 import "@fontsource-variable/geist-mono";
 import "./theme.css";
@@ -46,6 +47,9 @@ export const repositoryMode = {
     home: RepositoryHomePage,
   },
   label: "repositoryTheme",
+  description: "repositoryViewDescription",
+  shortDescription: "repositoryViewSummary",
+  preview,
   Shell: RepositoryShell,
   messages: repositoryMessages,
 } as const satisfies ModeDefinition;
