@@ -80,6 +80,33 @@ describe("display names", () => {
     expect(await bot.json()).toMatchObject({ user: { username: "discord-100000000000000009", displayName: "Workspace User" } });
   });
 
+  it("refuses a chosen username shaped like a user ID, keeps a stored one signing in and suffixes a provider one", async () => {
+    const origin = await start({ discordBotApiKey: BOT_KEY });
+    const userId = "22222222-BBBB-4bbb-8bbb-222222222222";
+    const refused = { error: { code: "INVALID_INPUT", field: "username", message: "Username cannot look like a user ID." } };
+    const password = "correct horse battery staple";
+    const register = await call(origin, "POST", "/api/auth/password/register", { username: userId, displayName: "Spoof", password });
+    expect(register.status).toBe(400);
+    expect(await register.json()).toMatchObject(refused);
+
+    const registered = await call(origin, "POST", "/api/auth/password/register", { username: "legacy", displayName: "Legacy", password });
+    const cookie = registered.headers.get("set-cookie")!.split(";", 1)[0]!;
+    const rename = await call(origin, "PATCH", "/api/users/me", { username: userId.toLowerCase() }, { cookie });
+    expect(rename.status).toBe(400);
+    expect(await rename.json()).toMatchObject(refused);
+
+    applications.at(-1)!.database.connection.prepare("UPDATE users SET username = ? WHERE username = 'legacy'").run(userId);
+    const login = await call(origin, "POST", "/api/auth/password/login", { username: userId, password });
+    expect(login.status).toBe(200);
+    const kept = await call(origin, "PATCH", "/api/users/me", { username: userId, displayName: "Still legacy" }, { cookie });
+    expect(kept.status).toBe(200);
+    expect(await kept.json()).toMatchObject({ username: userId });
+
+    const bot = await call(origin, "POST", "/api/auth/discord/bot-login", { discordUserId: "100000000000000010", username: userId }, { "x-api-key": BOT_KEY });
+    expect(bot.status).toBe(200);
+    expect(await bot.json()).toMatchObject({ user: { username: `${userId}-0000000010` } });
+  });
+
   it("renames a default-named Personal Space with its owner and leaves a renamed one alone", async () => {
     const origin = await start();
     const registered = await call(origin, "POST", "/api/auth/password/register", { username: "alice", displayName: "Alice", password: "correct horse battery staple" });

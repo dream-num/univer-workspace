@@ -83,7 +83,7 @@ Object Deletion Job ── idempotent delete ── BlobStore Object
 
 ### `users`
 
-用户的稳定身份和公开资料。`username` 使用 `NOCASE UNIQUE`。它出现在 Space 全名和其他人看到的列表里，因此注册或修改资料时新选择的 username 不得含韩文填充符等不可见字符；由邮箱或 Provider 派生的 username 删除这些字符，删空时回退为 `user` 或 `<provider>-<subject>`。已存储的 username 保持不变，照常登录。
+用户的稳定身份和公开资料。`username` 使用 `NOCASE UNIQUE`。它出现在 Space 全名和其他人看到的列表里，因此注册或修改资料时新选择的 username 不得含韩文填充符等不可见字符，也不得是 User ID 的 UUID 形状；由邮箱或 Provider 派生的 username 删除这些字符，删空时回退为 `user` 或 `<provider>-<subject>`，是 UUID 形状时追加后缀。已存储的 username 保持不变，照常登录。
 
 `email`（V14，`TEXT COLLATE NOCASE`，可空）是邮箱验证码登录使用的已验证地址，通过部分唯一索引
 `users_email`（`WHERE email IS NOT NULL`）保证非空值全局唯一；未使用邮箱登录的 User 保持 `NULL`，

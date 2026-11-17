@@ -110,6 +110,21 @@ describe("Email sign-in HTTP API", () => {
       authenticated: true,
       user: { id: session.user.id },
     });
+
+    const shapedLikeId = "22222222-bbbb-4bbb-8bbb-222222222222@example.com";
+    await fetch(`${base}/api/auth/email/code`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: shapedLikeId }),
+    });
+    const suffixed = await fetch(`${base}/api/auth/email/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: shapedLikeId, code: codeFrom(sent[1]!) }),
+    });
+    expect(await suffixed.json()).toMatchObject({
+      user: { username: expect.stringMatching(/^22222222-bbbb-4bbb-8bbb-222222222222-[0-9a-f]{6}$/u) },
+    });
   });
 
   it("reports Email sign-in as disabled when no provider is configured", async () => {
