@@ -37,17 +37,20 @@ https://github.com/deepseek-ai/deepseek-harness
 
 ## Get the package
 
-There is no public Space GitHub Release yet. The current temporary entry is the **Space
-Plugin** GitHub Actions workflow artifact, which contains a `.tgz` package, `SHA256SUMS`
-and `build-info.json`, and is retained by Actions for 30 days:
-https://github.com/dream-num/univer-workspace/actions/workflows/space-plugin-build.yml
+Download the `.tgz` package, `SHA256SUMS` and `build-info.json` from the
+[Space Plugin 0.18.4-preview.1 public preview](https://github.com/dream-num/univer-workspace/releases/tag/space-plugin-v0.18.4-preview.1).
+Space Plugin previews are distributed as GitHub Prereleases with `space-plugin-v` tags.
 
-The planned distribution channel is a GitHub Prerelease built from a `space-plugin-v`
-tag.
+If a Space Plugin version is not available in Releases, use the **Space Plugin** GitHub
+Actions workflow artifact from a successful build run as a temporary evaluation entry.
+It contains the same three types of files, requires a GitHub login to download, and is
+retained by Actions for 30 days:
+https://github.com/dream-num/univer-workspace/actions/workflows/space-plugin-build.yml
 
 ## Install and connect in three steps
 
-1. Download the `.tgz` package from the workflow artifact and verify it with
+1. Download the `.tgz` package and `SHA256SUMS` from the same release, keep them in the
+   same directory, and verify the package with
    `shasum -a 256 -c SHA256SUMS` (macOS) or `sha256sum -c SHA256SUMS` (Linux).
 2. In DSH, open Plugins, choose Add plugin, paste the tarball's path into Package name
    or address, install, then fully quit and restart DSH.

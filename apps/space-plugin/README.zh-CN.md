@@ -34,17 +34,19 @@ https://github.com/deepseek-ai/deepseek-harness
 
 ## 获取安装包
 
-目前还没有公开的 Space GitHub Release。当前的临时入口是 **Space Plugin** GitHub Actions
-workflow artifact，它包含一个 `.tgz` 安装包、`SHA256SUMS` 和 `build-info.json`，由 Actions
-保留 30 天：
-https://github.com/dream-num/univer-workspace/actions/workflows/space-plugin-build.yml
+从 [Space Plugin 0.18.4-preview.1 公开预览](https://github.com/dream-num/univer-workspace/releases/tag/space-plugin-v0.18.4-preview.1)
+下载 `.tgz` 安装包、`SHA256SUMS` 和 `build-info.json`。Space Plugin 预览通过带有
+`space-plugin-v` 标签的 GitHub Prerelease 分发。
 
-规划中的分发通道是基于 `space-plugin-v` 标签构建的 GitHub Prerelease。
+如果 Releases 中没有所需的 Space Plugin 版本，可临时使用 **Space Plugin** GitHub Actions
+工作流成功构建 run 的 artifact 进行评估。它包含相同的三类文件，下载需要 GitHub 登录，且由
+Actions 保留 30 天：
+https://github.com/dream-num/univer-workspace/actions/workflows/space-plugin-build.yml
 
 ## 三步安装并连接
 
-1. 从 workflow artifact 下载 `.tgz` 安装包，并用 macOS 的 `shasum -a 256 -c SHA256SUMS` 或
-   Linux 的 `sha256sum -c SHA256SUMS` 校验。
+1. 从同一 Release 下载 `.tgz` 安装包和 `SHA256SUMS`，放在同一目录中，并用 macOS 的
+   `shasum -a 256 -c SHA256SUMS` 或 Linux 的 `sha256sum -c SHA256SUMS` 校验。
 2. 在 DSH 中打开 Plugins，选择 Add plugin，把 tarball 路径粘贴到 Package name or
    address，安装，然后完全退出并重新启动 DSH。
 3. 选择 Space 并选择 Sign in to Univer，在系统浏览器中完成授权。
