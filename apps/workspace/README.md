@@ -621,10 +621,13 @@ the same SQLite file.
 ### Display names and product database V22
 
 V21→V22 keeps the schema and repairs data to the display-name rule. On PostgreSQL the same repair moves
-`workspace_product_schema` from version 1 to 2. Only a display name that holds an email address, a control,
-bidi or filler character, a stray zero-width character, or nothing visible is rewritten: an address keeps
-its local part and those characters are removed. Every other name stays byte for byte, emoji and joined
-scripts included. A Personal Space still named after its owner's old display name, such as
+`workspace_product_schema` from version 1 to 2. Only a display name that holds an email address, nothing
+visible or a misleading character is rewritten. Controls, line and paragraph separators, U+2800 and U+1D159
+become spaces. Default-ignorable characters such as bidi controls, Hangul fillers and zero-width spaces,
+other format characters except prepended concatenation marks such as U+0600, unpaired surrogates and U+FFFD
+are removed. A zero-width joiner or non-joiner between two characters or after a virama, a variation
+selector after a character, and the tag characters of an England, Scotland or Wales flag stay. An address
+keeps its local part. Every other name stays byte for byte, emoji and joined scripts included. A Personal Space still named after its owner's old display name, such as
 `alice@example.com 的个人空间`, is renamed with it. Other names and rows are preserved. Stop every old
 instance, start one V22 instance, and wait for its consistent backup, migration and health checks before
 restoring service. Back up PostgreSQL before the upgrade. Failed migration rolls

@@ -175,7 +175,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   the owner's ID, username or Email.
 - Product V22 keeps the V21 structure. A backed-up V21 → V22 startup migration, and on PostgreSQL the
   product schema version 1 → 2 upgrade, rewrites only a stored display name that holds an email address,
-  a control, bidi, filler or stray zero-width character, or nothing visible; every other name stays byte
+  nothing visible, a control or line separator, a default-ignorable character (bidi controls, Hangul
+  fillers, zero-width spaces), another format character except a prepended concatenation mark such as
+  U+0600, an unpaired surrogate or U+FFFD. Joiners between two characters or after a virama, variation
+  selectors after a character and England, Scotland or Wales flag tags stay; every other name stays byte
   for byte. Typed names that break the rule are refused; provider, Email sign-in and agent names are
   reduced to it. A Personal Space still named `<display name> 的个人空间`
   follows its owner's rename.
