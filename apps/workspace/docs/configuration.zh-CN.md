@@ -21,31 +21,7 @@ BLOB_S3_REGION=us-east-1
 BLOB_S3_PREFIX=workspace
 ```
 
-### 从 SQLite 和本地目录迁移
-
-在一个停机窗口内完成 **SQLite + 本地目录 → PostgreSQL + S3**。命令支持 V19、V20、V21 产品库。先准备专用的空 PostgreSQL 数据库、私有桶和空前缀。S3 凭据和权限见 [S3 文件存储](s3-storage.zh-CN.md)。
-
-1. 停止所有 Workspace 写入实例，保留同一时间点的两个 SQLite 数据库（包括仍存在的 WAL 或 journal）和文件目录备份。验收前保持用户流量关闭。
-2. 将上面的 PostgreSQL + S3 配置写入迁移进程的环境。用 `DATABASE_FILE`、`COLLABORATION_DATABASE_FILE` 和 `BLOB_DIRECTORY` 指向现有源数据。未覆盖时使用下表中的本地默认路径。源目录可以只读挂载。为临时目录预留容纳两个数据库、升级副本及备份的空间。
-3. 从仓库根目录执行一次：
-
-   ```bash
-   pnpm --filter @univerjs/univer-workspace db:migrate-to-postgres-s3
-   ```
-
-   使用 Workspace 镜像时，从同一镜像运行一次性容器。下面的 `workspace.env` 使用目标数据库和 S3 的配置；源数据卷挂在默认路径。使用与目标部署相同的网络和凭据。
-
-   ```bash
-   docker run --rm --network workspace --env-file ./workspace.env \
-     -v univer-workspace-data:/app/univer-workspace/.data:ro \
-     univer-workspace node dist/server/storage-migration/main.js
-   ```
-
-4. 等待命令成功退出并打印提交行数。用目标配置启动一个实例，通过 HTTP 登录原账号，核对已有文档、Worktree、历史、评论和附件，编辑文档并上传一个文件。重启实例，回读编辑和上传结果后再开放流量。
-
-命令在私有临时目录升级 SQLite 副本，原库只读。它按原对象键复制本地文件并从 S3 回读校验 SHA-256，然后在一个 PostgreSQL 事务中导入产品库和四个协同组件。Worktree 内新建的 Unit 在 SQLite 中的基线占位值 `1` 会转换为 PostgreSQL 的 `NULL`，主线派生的 Unit 保留真实基线。草稿修订号、初始快照和合并数据一并保留。
-
-**中断与回退。** 失败时保持源实例停写。目标可能已有空表和部分 S3 对象，数据库导入事务会整体回滚。修复原因后用相同源数据和目标重跑；命令校验并复用内容一致的对象，遇到不匹配对象、无关对象或非空目标业务表会报错。包含目标 SDK 无法保存的旧协同资源数据也会报错。若连接在提交时中断，先检查目标数据再决定恢复服务或重试。恢复流量前可以停止目标实例，恢复原配置并启动源实例；恢复流量后回退需要另行迁回新增数据。
+已有 SQLite 和本地文件的部署，请按[存储迁移指南](storage-migration.zh-CN.md)停机切换。
 
 ## 数据库
 
@@ -72,7 +48,19 @@ Workspace 账号需要有权创建 `collaboration` schema，并在产品 schema�
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | 服务要求在 URL 路径中传递桶名时设为 `true`。 |
 | `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_SESSION_TOKEN` | AWS SDK 凭据链 | 可使用工作负载角色，也可提供访问密钥对。临时凭据还需提供会话令牌。 |
 
-所需权限、MinIO 示例及切换前复制现有文件的操作见 [S3 文件存储指南](s3-storage.zh-CN.md)。
+**MinIO**  需要填写 Workspace 服务端可访问的 S3 API 地址。下面的示例使用路径式寻址。
+
+```dotenv
+BLOB_S3_ENDPOINT=http://minio:9000
+BLOB_S3_FORCE_PATH_STYLE=true
+```
+
+该身份需要对存储桶有 `s3:ListBucket` 权限，对 Workspace
+对象有 `s3:GetObject`、`s3:PutObject`、`s3:DeleteObject` 和 `s3:AbortMultipartUpload` 权限。
+可通过存储桶生命周期规则清理未完成的分片上传。如果启用了版本控制，还可以设置已删除对象的历史版本保留时间。
+
+**Kubernetes** 部署时，在 Workspace 容器的 `env` 中设置数据库和 S3 环境变量，通过工作负载身份或 Secret 提供凭据，保留原数据 PVC。使用本仓库的 [Deploy Workspace 工作流](../../../.github/workflows/push.yml)时，
+在发布前修改 `dream-num/helm-chart-private` 仓库 `deploy/colla-workspace/` 目录下目标环境的清单。
 
 ## 认证
 

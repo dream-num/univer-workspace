@@ -31,7 +31,7 @@ Vite 还将 `/mcp` 代理到 `WORKSPACE_DEV_MCP_PORT` 指定的本地 MCP 网关
 
 #### 数据库
 
-部署 PostgreSQL + S3 时，产品库和协同库一起使用 PostgreSQL，上传文件和内嵌附件保存在 S3。完整环境变量和示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。已有数据的实例请按[迁移步骤](docs/configuration.zh-CN.md#从-sqlite-和本地目录迁移)在一次停机窗口内切换。
+部署 PostgreSQL + S3 时，产品库和协同库一起使用 PostgreSQL，上传文件和内嵌附件保存在 S3。完整环境变量和示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。已有数据的实例请按[迁移步骤](docs/storage-migration.zh-CN.md)在一次停机窗口内切换。
 
 ### 协同与工作台
 
@@ -116,35 +116,7 @@ docker run --name univer-workspace \
 
 ### SQLite 升级与恢复
 
-需要全新的本地 SQLite 测试实例时，挂载一个新的空数据卷即可。启动会保留已有数据，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
-
-SQLite 协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`、`comment=1`。SDK 1.5.2 为主线和 Worktree 的 Unit、Changeset 增加元数据，已有记录的初始值为 `{}`，内容和修订号保留。
-
-服务端入口会在创建应用服务前准备协同数据库。升级顺序如下。
-
-1. 停止**所有**会写入 Workspace 的旧实例，备份产品数据库、协同 SQLite 文件和 Blob 存储。Kubernetes 部署使用单副本及 `Recreate` 策略。
-2. 启动一个新实例。服务先将产品数据库准备到 V21，再读取协同组件版本。需要迁移时，服务获取排他锁，检查源文件的完整性和外键，并在数据库旁创建一致性备份 `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak`。如果其他进程仍打开 WAL 模式的文件或持有任何锁，启动会在备份前失败。空闲的 rollback-journal 连接不持锁，无法通过锁检测，因此必须执行第 1 步。
-3. 服务持锁期间，在暂存副本上执行已发布的 SDK 迁移。为升级前备份、暂存副本和一份临时组件备份预留磁盘空间。Schema 校验、`foreign_key_check` 和 `integrity_check` 全部通过后，才用副本原子替换原文件。如果迁移失败，服务在接收流量前终止启动，原库、日志模式和备份均保留。
-4. 确认启动正常、文档和 Worktree 均可访问后，恢复服务。后续启动只读取组件版本，无需重复完整性和外键扫描、迁移或备份。
-
-支持从 Core V1–V3、Worktree V1–V3 和 History V1 升级。新数据库由当前适配器初始化。迁移优先从 History V1 的修订 1 读取 Unit 创建者和时间，缺失时查询产品数据库。主线 Unit 取其 Trunk Node，Worktree 内创建的 Unit 取对应的节点意图。两个来源均缺少信息时，以 `anonymous` 和迁移时间补缺，不能据此还原真实的创建信息。Changeset 时间沿用 SDK 默认值。
-
-新旧 SDK 实例不能同时写入。回滚时停止新实例，同时还原同一批次的升级前产品库、协同库与 Blob 备份。只换回旧镜像无法还原数据，备份应保留到部署验收完成。
-
-各版本的产品数据库变更如下。
-
-- **V7** 扩展 Operation 类型和对象删除原因以支持替换 Blob，保留既有 Blob 行和上传会话。
-- **V8** 新增内容权限对象和协作者，保留原有表。
-- **V9** 新增 Space 范围内的 Issue、评论、事件、标签、负责人和文件引用，保留原有表。
-- **V10** 新增 `space_stars`，保留已有 Space、内容、Blob 和恢复记录。
-- **V11** 新增 `spaces.description TEXT NOT NULL DEFAULT ''`，已有 Space 的描述为空字符串，其余行不变。有权重命名 Space 的用户可编辑描述。描述是最多 350 个字符的纯文本，写入时去除首尾空白。
-- **V12** 新增可空的 `spaces.slug`、`worktrees.number` 及部分唯一索引。迁移不改写既有行。旧 Space 和 Worktree 的新字段保留 `NULL`，继续按 ID 访问。管理员可在设置中给旧团队空间指定 slug。团队空间的 slug 在同一所有者下唯一，忽略大小写，与用户名组成 `owner/slug`。个人空间使用 `owner/personal`。团队 Worktree 与 Issue 共用 Space 内的 `#N` 编号序列。升级时停止全部旧实例，启动一个 V12 实例，等待迁移和健康检查通过后恢复服务。禁止 V11 与 V12 同时写同一 SQLite 文件。启动会在 V11 → V12 事务前创建并校验 `.v11-backup-…sqlite`。失败会回滚，成功后重启不会重复迁移或备份。回滚必须停止 V12 并还原升级前的产品数据库备份。
-- **V13** 扩展外部身份提供方的 CHECK 约束以允许 `google`。迁移仅重建 `external_identities`，保留已有行、列和约束。
-- **V14** 新增可空的 `users.email` 列和 `email_login_codes` 表，支持无密码邮箱登录。已有表和行无需重写。停止全部旧实例，启动一个 V14 实例，等待迁移和健康检查通过后恢复服务。禁止 V13 与 V14 同时写同一 SQLite 文件。启动会在 V13 → V14 事务前创建并校验 `.v13-backup-…sqlite`。回滚时停止 V14，还原升级前的产品库备份。
-- **V15** 新增 `space_pins` 和 `space_stars_user`，支持按序置顶及按用户索引收藏。已有行、内容、Blob 标识和恢复状态均保留。停止全部旧实例，启动一个 V15 实例，等待迁移和健康检查通过后恢复服务。启动先校验 V14，创建可读的 `.v14-backup-…sqlite` 备份，再在一个事务中建表、建索引并执行外键和完整性检查。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V15 并还原 V14 备份。禁止 V14 与 V15 同时写同一 SQLite 文件。
-- **V16** 新增 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`。三列均可空、无默认值，CHECK 允许 `browser` 和 `agent`。已有行保留 `NULL`，表示来源未知。签发会话时将入口记入 `write_source`。通过 HTTP 创建 Worktree 或 Issue 时把来源写入 `created_via`，由 `createdVia` 返回 `browser`、`agent` 或 `unknown`。重试创建 Worktree 的 Operation 会保留首次预留的来源。停止全部旧写入实例，启动一个 V16 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V15，并在事务前创建可读的 `.v15-backup-…sqlite`，失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V16 并还原 V15 备份。禁止 V15 与 V16 同时写同一 SQLite 文件。
-- **V17** 扩展 `univer_resources` 和 `worktree_node_intents` 的 Unit 类型，允许 `pdf`。SQLite 无法直接修改 CHECK 约束，迁移在一个事务中重建这两张表，保留全部行、`univer_resources_kind_guard` 触发器，以及 `content_permission_objects` 对它的外键引用。内容、Blob 标识和恢复状态均保留。停止全部旧实例，启动一个 V17 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V16，创建可读的 `.v16-backup-…sqlite` 备份，再重建表并检查外键和完整性。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V17 并还原 V16 备份。禁止 V16 与 V17 同时写同一 SQLite 文件。
-- **V19** 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens`，分别保存动态注册的 OAuth 客户端、MCP OAuth 授权（访问令牌及轮换刷新令牌的哈希）、已淘汰刷新令牌的哈希（用于检测重复使用），以及个人访问令牌（以哈希保存，可撤销）。`login_sessions` 新增 `login_sessions.issued_for_pat_id` 和 `issued_for_grant_id` 两个可空列，将下游会话关联到签发它的令牌。迁移仅新增表、索引和列，既有会话、有效期和登录均保留。停止全部旧实例，启动一个 V19 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V17，创建可读的 `.v17-backup-…sqlite` 备份，再执行迁移及外键、完整性检查。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V19 并还原 V17 备份。禁止 V17 与 V19 同时写同一 SQLite 文件。个人访问令牌、MCP OAuth 和令牌交换路由使用这些新表。
+停旧实例、备份和回退步骤见[SQLite 升级与恢复](docs/storage-migration.zh-CN.md#sqlite-升级与恢复)。
 
 将 `univer-workspace-cli` 升级到按 `owner/slug` 寻址仓库的版本前，先部署新版 Workspace 服务端。
 

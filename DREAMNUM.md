@@ -129,7 +129,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   old and new SDK writers must never share the file. History segment indexing and catch-up belong to the SDK.
 - Uploaded Resource bytes and embedded Univer Asset bytes use local disk by default or a configured S3-compatible
   bucket. Switching stores on an existing deployment requires copying objects under their original keys. Database rows
-  retain their identities, metadata, and recovery state. The [offline cutover command](apps/workspace/docs/configuration.md#migrate-from-sqlite-and-local-storage) migrates SQLite and local files to PostgreSQL and S3 together during one outage.
+  retain their identities, metadata, and recovery state. The [offline cutover command](apps/workspace/docs/storage-migration.md) migrates SQLite and local files to PostgreSQL and S3 together during one outage.
   Blob content replacement preserves Resource identity
   and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.

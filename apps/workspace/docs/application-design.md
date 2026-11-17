@@ -3,8 +3,6 @@
 本文定义产品 HTTP、Univer Collaboration Endpoint 与 V21 Node/Resource/Asset 数据模型之间的
 模块边界。具体 HTTP 契约以 `contracts/http/openapi.yaml` 为准。
 
-一次性离线命令从只读 SQLite 与本地文件迁移到 PostgreSQL 与 S3。文件校验完成后，命令在同一目标数据库中提交产品与协同数据，再由操作者启动服务验收。[操作说明](configuration.zh-CN.md#从-sqlite-和本地目录迁移)
-
 ## 模块
 
 ```text

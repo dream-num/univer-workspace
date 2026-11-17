@@ -18,7 +18,6 @@
     "build": "pnpm api:lint && pnpm api:generate && pnpm routes:generate && pnpm build:web && pnpm build:server",
     "typecheck": "pnpm api:lint && pnpm routes:generate && tsc -p tsconfig.web.json --noEmit && tsc -p tsconfig.server.json --noEmit",
     "start": "node --env-file-if-exists=.env dist/server/main.js",
-    "db:migrate-to-postgres-s3": "node --env-file-if-exists=.env --import tsx server/src/storage-migration/main.ts",
     "db:ban-agent": "node --env-file-if-exists=.env --import tsx server/src/db/ban-agent.ts",
     "db:ban-agent:production": "node --env-file-if-exists=.env dist/server/db/ban-agent.js",
     "test:postgres": "node -e \"if (!process.env.WORKSPACE_TEST_POSTGRES_URL) throw Error('Set WORKSPACE_TEST_POSTGRES_URL to a test database')\" && vitest related --run test/support/postgres/schema.ts",

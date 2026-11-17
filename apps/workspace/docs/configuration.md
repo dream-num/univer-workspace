@@ -21,31 +21,7 @@ BLOB_S3_REGION=us-east-1
 BLOB_S3_PREFIX=workspace
 ```
 
-### Migrate from SQLite and local storage
-
-Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The command accepts V19, V20 and V21 product databases. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [S3 file storage](s3-storage.md) for credentials and permissions.
-
-1. Stop all Workspace writers. Keep a backup of both SQLite databases (including any WAL or journal files) and the file directory from the same recovery point. Keep user traffic closed until validation passes.
-2. Set the PostgreSQL + S3 settings above for the migration process. Point `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE` and `BLOB_DIRECTORY` at the existing source data, or use the local defaults below. A read-only source mount is sufficient. Allow temporary disk space for both databases, upgrade copies and their backups.
-3. From the repository root, run the command once:
-
-   ```bash
-   pnpm --filter @univerjs/univer-workspace db:migrate-to-postgres-s3
-   ```
-
-   With the Workspace image, run a one-off container from the same image. Here `workspace.env` supplies the target database and S3 settings, and the source volume is mounted at the default paths. Use the same network and credentials as the target deployment.
-
-   ```bash
-   docker run --rm --network workspace --env-file ./workspace.env \
-     -v univer-workspace-data:/app/univer-workspace/.data:ro \
-     univer-workspace node dist/server/storage-migration/main.js
-   ```
-
-4. Wait for a successful exit and the committed row counts. Start one instance with the target configuration. Through HTTP, sign in with an existing account, check a document, Worktree, history, comments and attachment, edit a document and upload a file. Restart, read back the edit and upload, then reopen traffic.
-
-The command upgrades SQLite copies in a private temporary directory and reads the originals only. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, then imports product data and all four collaboration components in one PostgreSQL transaction. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
-
-**Interruption and rollback.** Keep source writers stopped after a failure. Empty target tables and some S3 objects may remain. The database import transaction rolls back as a unit. Fix the cause and rerun with the same source and destination. The command verifies and reuses identical objects and rejects mismatched or unrelated objects and populated target tables. It also rejects legacy collaboration resource data the target SDK cannot represent. If the connection drops during commit, inspect the target before reopening traffic or retrying. Before reopening traffic, you can stop the target and restart the source with its original configuration. After traffic resumes, rollback also requires transferring subsequent writes.
+For an existing SQLite deployment with local files, follow the [storage migration guide](storage-migration.md) before starting the target.
 
 ## Databases
 
@@ -72,7 +48,22 @@ The Workspace role needs permission to create the `collaboration` schema and obj
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | Set to `true` if the endpoint needs the bucket in the URL path. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | AWS SDK credential chain | Use a workload role, or supply a key pair. Temporary credentials also require the session token. |
 
-For required permissions, MinIO settings and copying existing files before switching, see [S3 file storage](s3-storage.md).
+**MinIO** requires the S3 API endpoint reachable from the Workspace server.
+This example uses path-style addressing.
+
+```dotenv
+BLOB_S3_ENDPOINT=http://minio:9000
+BLOB_S3_FORCE_PATH_STYLE=true
+```
+
+Grant `s3:ListBucket` on the bucket and
+`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its
+Workspace objects. Use bucket lifecycle rules to expire incomplete multipart uploads and,
+for versioned buckets, to control how long deleted versions are retained.
+
+**Kubernetes** — Put the database and S3 settings in the Workspace container's `env`, use a workload identity or a Secret
+for credentials, and keep the existing data PVC. For this repository's [Deploy Workspace workflow](../../../.github/workflows/push.yml),
+edit the target manifest under `deploy/colla-workspace/` in `dream-num/helm-chart-private` before rollout.
 
 ## Authentication
 

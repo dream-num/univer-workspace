@@ -47,7 +47,7 @@ For a first local installation, copy [`.env.example`](.env.example) to `.env` in
 
 #### Database
 
-With PostgreSQL + S3, product and collaboration data use PostgreSQL, and uploads and embedded assets use S3. See the [Workspace configuration guide](docs/configuration.md) for settings and examples. For an existing deployment, follow the [migration steps](docs/configuration.md#migrate-from-sqlite-and-local-storage) to switch in one outage.
+With PostgreSQL + S3, product and collaboration data use PostgreSQL, and uploads and embedded assets use S3. See the [Workspace configuration guide](docs/configuration.md) for settings and examples. For an existing deployment, follow the [migration steps](docs/storage-migration.md) to switch in one outage.
 
 ### Collaboration and workbench
 
@@ -254,127 +254,7 @@ For HTTPS deployments, omit `-e SECURE_COOKIES=false` to keep the image’s secu
 
 ### SQLite upgrades and recovery
 
-For a fresh local SQLite test instance, mount a new empty data volume. On startup,
-the application preserves existing data and automatically backs up and migrates
-supported V0 through V20 product databases to V21.
-While the container runs, touch its SQLite files only from inside it
-(`docker exec … node`). The product database is in WAL mode: opening it from
-the host with another SQLite build — even just to read it — can corrupt the
-file. Stop the container before inspecting or copying `.data`.
-The SQLite Collaboration components are `core=4`, `worktree=4`, `history=2` and
-`comment=1`. SDK 1.5.2 adds metadata to Trunk and Worktree Units and changesets.
-Existing records receive `{}` and retain their contents and revisions. Product V19 adds the MCP OAuth client, OAuth grant and personal access token tables and two nullable `login_sessions` columns. V17 admits the PDF Unit type. V16 adds nullable Session, Worktree
-and Issue source columns without backfilling existing rows. V15 added ordered Space
-pins and a per-user stars index. V14 added Email identities and Email login codes;
-V13 added the Google Provider; V12 added Space slugs and Worktree numbers;
-V11 added the Space description; V10 added Space stars; V9 added Issue tables
-and V8 added content-permission tables. Before creating
-application Services, the server entry point prepares the Collaboration file:
-
-1. Stop **all** old Workspace writers and back up the product database, Collaboration SQLite file and Blob storage.
-   With Kubernetes, use a single replica with the `Recreate` strategy for this rollout.
-2. Start a single new instance. Startup first prepares the product database to V21,
-   then reads the Collaboration component versions. If migration is needed, it takes
-   an exclusive lock, checks the source file's integrity and foreign keys, and
-   creates a consistent
-   `<collaboration-file>.pre-sdk-migration-<timestamp>-<uuid>.bak` beside the database.
-   If another process still has a WAL-mode file open, or holds any lock on it,
-   startup fails before the backup. An idle rollback-journal connection holds no
-   lock and cannot be detected, so step 1 remains required.
-3. The server runs the published SDK migrations on a staging copy while holding the lock.
-   Allow disk space for the pre-upgrade backup, the staging copy, and one temporary component backup.
-   Schema validation, `foreign_key_check`, and
-   `integrity_check` must pass before the copy atomically replaces the original.
-   A failed migration leaves the original database, its journal mode, and the
-   backup available; startup fails before accepting traffic.
-4. Verify startup and document/Worktree access, then restore normal service.
-   Subsequent startups read the component versions without rerunning the full
-   integrity and foreign-key scans, migrations, or backup.
-
-Core V1–V3, Worktree V1–V3, and History V1 are supported; fresh files are initialized
-by the current Adapters. Unit creator and creation time come from History V1
-revision 1, then from the product database: the Trunk Node for a Unit, or the
-Worktree node intent for a Unit created in a Worktree. Only when both lack a value
-does the migration use `anonymous` and the migration time; these values are
-fallbacks, not reconstructed authorship. Changeset times keep the SDK defaults.
-Never run old and new SDK writers together. To roll back, stop the new instance
-and restore the matching pre-upgrade product/Collaboration/Blob backups; changing
-only the application image is insufficient. Retain backups until rollout is accepted.
-V7 extends the Operation kind and object deletion reason for Blob replacement; existing
-Blob rows and upload sessions are preserved.
-V8 adds content permission objects and collaborators without rewriting existing tables.
-V9 adds Space-scoped Issues, comments, events, labels, assignees and file references
-without rewriting existing tables.
-V10 adds `space_stars` without changing existing Space, content, Blob or recovery rows.
-V11 adds `spaces.description TEXT NOT NULL DEFAULT ''`; existing Spaces get the empty
-description and no other row changes. The description is plain text of at most 350
-characters, trimmed on write, and editable by users who can rename the Space.
-V12 adds `spaces.slug` and `worktrees.number` (both nullable) with partial unique
-indexes; no existing row is rewritten. Spaces and Worktrees created before V12 keep
-`NULL` and are addressed by ID; an administrator can set a slug for an old Team Space
-in Settings. A Team Space slug is unique per owner (case-insensitive) and, with the
-owner's username, forms `owner/slug`; every Personal Space is `owner/personal`.
-Team Worktrees share the Space's `#N` sequence with Issues.
-For a V12 rollout, stop every old Workspace instance, start one V12 instance and
-wait for migration and health checks to succeed, then restore normal service;
-do not let V11 and V12 processes write the same SQLite file concurrently.
-Startup creates and validates a `.v11-backup-…sqlite` backup before the V11 → V12
-transaction. A failed step rolls back; subsequent successful startups do not
-repeat migration or backup. Rollback requires stopping V12 and restoring the
-pre-upgrade product backup, not just running the old application image.
-V13 extends the External Identity Provider CHECK to allow `google`. The migration
-rebuilds only `external_identities` and preserves every existing row, column and
-constraint.
-V14 adds an optional `users.email` column and `email_login_codes` for passwordless Email sign-in.
-The migration is additive: no existing table or row is rewritten. For a V14
-rollout, stop every old Workspace instance, start one V14 instance and wait for
-migration and health checks to succeed, then restore normal service; do not let
-V13 and V14 processes write the same SQLite file concurrently. Startup creates and
-validates a `.v13-backup-…sqlite` backup before the V13 → V14 transaction.
-Rollback requires stopping V14 and restoring the pre-upgrade product backup.
-
-V15 adds `space_pins` and `space_stars_user` without changing existing rows, content,
-Blob identities, or recovery state. Stop every old instance, start one V15 instance,
-and wait for migration and health checks before restoring service. Startup validates
-V14, creates a readable `.v14-backup-…sqlite` backup, then creates the table and index
-in one transaction with foreign-key and integrity checks. A failed transaction rolls
-back; successful restarts do not repeat migration or backup. To roll back, stop V15
-and restore the V14 backup. Never run V14 and V15 writers on the same SQLite file.
-
-V16 adds `login_sessions.write_source`, `worktrees.created_via`, and `issues.created_via`
-with CHECK constraints allowing `browser` or `agent`. All are nullable with no default;
-existing rows stay `NULL`, meaning unknown. Session issuance records its entry point
-in `write_source`. HTTP Worktree and Issue creation copy it into `created_via`, exposed as `createdVia` (`browser`, `agent`, or
-`unknown`). Operation retries preserve the source reserved by the first Worktree create.
-Stop all old writers, start one V16 instance, and wait for migration and health checks
-before restoring service. Startup validates V15 and creates a readable
-`.v15-backup-…sqlite` before the transaction. A failure rolls back; successful restarts
-do not repeat migration or backup. To roll back, stop V16 and restore the V15 backup.
-Never run V15 and V16 writers on the same SQLite file.
-
-V17 admits `pdf` as a Unit type on `univer_resources` and `worktree_node_intents`. SQLite
-cannot alter a CHECK, so both tables are rebuilt in one transaction with every row,
-the `univer_resources_kind_guard` trigger, and the inbound `content_permission_objects`
-foreign key preserved; no content, Blob identity, or recovery state changes. Stop every
-old instance, start one V17 instance, and wait for migration and health checks before
-restoring service. Startup validates V16, creates a readable `.v16-backup-…sqlite`
-backup, then rebuilds the tables with foreign-key and integrity checks. A failed
-transaction rolls back; successful restarts do not repeat migration or backup. To roll
-back, stop V17 and restore the V16 backup. Never run V16 and V17 writers on the same
-SQLite file.
-
-V19 adds `oauth_clients`, `oauth_grants`, `oauth_refresh_history` and `personal_access_tokens`, which store
-dynamically registered OAuth clients, MCP OAuth grants (hashed access and rotating
-refresh tokens), the hashes of retired refresh tokens (reuse detection) and personal access tokens (hashed, revocable). It also appends
-nullable `login_sessions.issued_for_pat_id` and `issued_for_grant_id` columns that tie a
-downstream session to the token it was issued for. The migration only adds tables, indexes
-and columns, so existing sessions, expiries and logins are untouched. Stop every old
-instance, start one V19 instance, and wait for migration and health checks before
-restoring service. Startup validates V17, creates a readable `.v17-backup-…sqlite`
-backup, then migrates with foreign-key and integrity checks. A failed transaction rolls
-back; successful restarts do not repeat migration or backup. To roll back, stop V19 and
-restore the V17 backup. Never run V17 and V19 writers on the same SQLite file. The
-personal access token, MCP OAuth and token exchange routes use the new tables.
+For the backup, rollout and rollback procedure, see [SQLite upgrades and recovery](docs/storage-migration.md#sqlite-upgrades-and-recovery).
 
 Deploy the Workspace server before upgrading `univer-workspace-cli` to a release that
 addresses repositories by `owner/slug`.
