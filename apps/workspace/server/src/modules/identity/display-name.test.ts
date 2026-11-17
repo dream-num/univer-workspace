@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveDisplayName, validDisplayName } from "./display-name.js";
+import { deriveDisplayName, deriveUserDisplayName, isUnsafeDisplayName, validDisplayName } from "./display-name.js";
 
 const HOSTILE: readonly (readonly [string, string, string])[] = [
   ["a right-to-left override", "Alice‮txt.exe", "Alicetxt.exe"],
@@ -16,7 +16,6 @@ const HOSTILE: readonly (readonly [string, string, string])[] = [
   ["variation selectors without a base", "️Sam ️️", "Sam"],
   ["tag characters outside a flag", "Eve\u{E0068}\u{E0069}\u{E007F} \u{1F600}\u{E0061}\u{E007F}", "Eve \u{1F600}"],
   ["an unterminated flag tag sequence", "\u{1F3F4}\u{E0067}\u{E0062} Eng", "\u{1F3F4} Eng"],
-  ["CJK and spacing", "  克劳德   代码  ", "克劳德 代码"],
 ];
 
 const LEGITIMATE = [
@@ -76,6 +75,26 @@ describe("display-name rule", () => {
     expect(deriveDisplayName(name)).toBe(name);
   });
 
+  it("collapses whitespace but does not flag a stored name for it", () => {
+    expect(validDisplayName("  克劳德   代码  ")).toBe("克劳德 代码");
+    expect(deriveDisplayName("  克劳德   代码  ")).toBe("克劳德 代码");
+    expect(isUnsafeDisplayName("  克劳德\u3000\u3000代码  ")).toBe(false);
+  });
+
+  it("flags a stored name only for an address, a misleading character or nothing visible", () => {
+    for (const name of LEGITIMATE) expect(isUnsafeDisplayName(name)).toBe(false);
+    for (const name of [...HOSTILE.map(([, raw]) => raw), ...INVISIBLE, ...ADDRESSES.map(([raw]) => raw)]) {
+      expect(isUnsafeDisplayName(name)).toBe(true);
+    }
+  });
+
+  it("falls back through the rule to the next candidate and then to Workspace User", () => {
+    expect(deriveUserDisplayName("bob@example.com", "bob")).toBe("bob");
+    expect(deriveUserDisplayName("\u2800", "\u3164carol")).toBe("carol");
+    expect(deriveUserDisplayName(undefined, "dave\u202E")).toBe("dave");
+    expect(deriveUserDisplayName("\u3164", "\u1160")).toBe("Workspace User");
+  });
+
   it.each(INVISIBLE)("refuses a typed name with nothing visible and derives nothing from it (%j)", (raw) => {
     expect(() => validDisplayName(raw)).toThrow(expect.objectContaining({
       code: "INVALID_INPUT", status: 400, field: "displayName", message: "Display name must contain a visible character.",
@@ -103,10 +122,12 @@ describe("display-name rule", () => {
   });
 
   it("answers a very long name within a small time budget", () => {
-    const long = "a".repeat(50_000);
     const started = performance.now();
-    expect(() => validDisplayName(long)).toThrow(expect.objectContaining({ field: "displayName", message: "displayName must contain between 1 and 100 characters." }));
-    expect(deriveDisplayName(long)).toBe("a".repeat(100));
+    for (const long of ["a".repeat(50_000), "a\u200D".repeat(25_000), "a @ ".repeat(12_500)]) {
+      expect(() => validDisplayName(long)).toThrow(expect.objectContaining({ field: "displayName", message: "displayName must contain between 1 and 100 characters." }));
+      expect([...deriveDisplayName(long)].length).toBeGreaterThan(90);
+      expect(isUnsafeDisplayName(long)).toBe(long.startsWith("a\u200D"));
+    }
     expect(performance.now() - started).toBeLessThan(100);
   });
 
@@ -119,6 +140,7 @@ describe("display-name rule", () => {
       const derived = deriveDisplayName(raw);
       expect(deriveDisplayName(derived)).toBe(derived);
       if (derived) expect(validDisplayName(derived)).toBe(derived);
+      if (derived) expect(isUnsafeDisplayName(derived)).toBe(false);
     }
   });
 });
