@@ -22,6 +22,7 @@ export const prViewTool: ToolDefinition = {
   async run(context, args) {
     const { repo, number } = inputSchema.parse(args);
     const { worktree, spaceId } = await findPr(context, repo, number);
-    return { output: { ...prWithUrl(context, worktree, spaceId), revision: worktree.revision }, repo: spaceId };
+    const shown = prWithUrl(context, worktree, spaceId);
+    return { output: worktree.revision === undefined ? shown : { ...shown, revision: worktree.revision }, repo: spaceId };
   },
 };

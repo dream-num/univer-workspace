@@ -107,6 +107,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let requests: { method: string; path: string; body: unknown; key: string | null }[] = [];
   let prState = "draft";
   let prUnits = [unit()];
+  let prHidden = false;
   let created: Record<string, unknown> = team;
   let linkSharing = { enabled: false, role: "viewer" };
   let humanTokenSession = false;
@@ -201,6 +202,10 @@ describe("space, unit, repository admin, label and merge tools", () => {
         trashedBy: { id: "user-1", username: "user-1", displayName: "user-1", avatarUrl: null },
       });
     }
+    if (prHidden && request.method === "GET" && ["/api/worktrees/wt-3", "/api/spaces/team-1/worktrees/3"].includes(target.pathname)) {
+      const { revision: _revision, ...hidden } = worktree(prState);
+      return Response.json({ worktree: hidden });
+    }
     if (at("GET", "/api/worktrees/wt-3")) return Response.json({ worktree: worktree(prState, prUnits) });
     if (at("GET", "/api/spaces/team-1/worktrees/3")) return Response.json({ worktree: worktree(prState, prUnits) });
     if (at("POST", "/api/worktrees/wt-3/units")) {
@@ -212,6 +217,12 @@ describe("space, unit, repository admin, label and merge tools", () => {
     }
     if (at("POST", "/api/nodes/sheet/copies")) return Response.json({ operation: { id: "k2" }, unit: unit() }, { status: 201 });
     if (at("POST", "/api/worktrees/wt-3/merge")) {
+      if (prHidden) {
+        return Response.json({ error: {
+          code: "REVIEW_REQUIRED",
+          message: "Only someone who can review a pull request merges it, and this private Team pull request hides its files from you. Change its visibility to Space, review it, then merge.",
+        } }, { status: 403 });
+      }
       if (fields["revision"] === "rev-stale") {
         return Response.json({ error: {
           code: "PRECONDITION_FAILED",
@@ -274,6 +285,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     requests = [];
     prState = "draft";
     prUnits = [unit()];
+    prHidden = false;
     linkSharing = { enabled: false, role: "viewer" };
     humanTokenSession = false;
     sessionUser = user;
@@ -598,6 +610,20 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { method: "POST", path: "/api/worktrees/wt-3/merge", body: { revision: "rev-stale" } },
       { method: "POST", path: "/api/worktrees/wt-3/merge", body: { revision: "rev-current" } },
     ]);
+  });
+
+  it("views a pull request it cannot review without a revision and says how to become able to merge it", async () => {
+    const client = await connect();
+    prState = "ready";
+    prHidden = true;
+    const viewed = await client.callTool({ name: "pr_view", arguments: { repo: "bob/team", number: "3" } });
+    expect(viewed.isError).not.toBe(true);
+    expect(viewed.structuredContent).toMatchObject({ id: "wt-3", state: "ready", units: [] });
+    expect(viewed.structuredContent).not.toHaveProperty("revision");
+    expect(await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number: "3" } })).toMatchObject({
+      isError: true,
+      structuredContent: { code: "REVIEW_REQUIRED", message: expect.stringContaining("Change its visibility to Space, review it, then merge.") },
+    });
   });
 
   it("reads Link Sharing without a write, sets each link value and returns the drop with a claim link", async () => {
