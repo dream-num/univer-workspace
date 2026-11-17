@@ -83,7 +83,7 @@ Object Deletion Job ── idempotent delete ── BlobStore Object
 
 ### `users`
 
-用户的稳定身份和公开资料。`username` 使用 `NOCASE UNIQUE`。
+用户的稳定身份和公开资料。`username` 使用 `NOCASE UNIQUE`。它出现在 Space 全名和其他人看到的列表里，因此注册或修改资料时新选择的 username 不得含韩文填充符等不可见字符；由邮箱或 Provider 派生的 username 删除这些字符，删空时回退为 `user` 或 `<provider>-<subject>`。已存储的 username 保持不变，照常登录。
 
 `email`（V14，`TEXT COLLATE NOCASE`，可空）是邮箱验证码登录使用的已验证地址，通过部分唯一索引
 `users_email`（`WHERE email IS NOT NULL`）保证非空值全局唯一；未使用邮箱登录的 User 保持 `NULL`，
@@ -94,13 +94,13 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 `kind`（V21，`'human' | 'agent'`，非空，默认 `'human'`）区分人和 agent。它与
 `login_sessions.write_source = 'agent'` 无关：后者标记凭据签发的 Session，人的个人访问令牌也会产生。
 
-`display_name` 对所有打开该 User 共享文件的人可见，人和 agent 的每一次写入都经过同一条显示名规则（`server/src/modules/identity/display-name.ts`）：控制字符、行与段分隔符和 U+2800 变为空格；格式字符（双向控制、零宽字符）、默认可忽略码位（如韩文填充符）、未配对代理项与 U+FFFD 被删除；连续空白合并为一个空格并去除首尾空白。用户亲自输入的名字（密码注册、修改资料）清理后为空、含邮箱地址（`local@domain.tld`）或超过 100 个 UTF-16 码元时返回 400，由本人改正，而不是被悄悄改成别的名字。来自 GitHub、Google、Discord、Discord Bot、邮箱登录、agent 标签和 OAuth 客户端名的派生名字没有人当场改正，因此不拒绝：邮箱地址只保留本地部分，超长时按完整字素截断，结果为空时回退为 Provider 用户名、`Workspace User` 或 `agent`。Google 未提供姓名时取邮箱本地部分。
+`display_name` 对所有打开该 User 共享文件的人可见，人和 agent 的每一次写入都经过同一条显示名规则（`server/src/modules/identity/display-name.ts`），规则在任何匹配之前先限定输入长度。控制字符、行与段分隔符、U+2800 和 U+1D159 变为空格；双向控制、韩文填充符等默认可忽略码位、未配对代理项与 U+FFFD 被删除。两个字符之间的零宽连接符与零宽非连接符、紧跟字符的变体选择符和旗帜标签序列保留，因此 emoji、波斯文和印度系文字的名字逐字节不变。连续空白合并为一个空格并去除首尾空白。长度按 Unicode 码位计算。用户亲自输入的名字（密码注册、修改资料）超过 100 个码位、没有可见字符（只有空白、组合附加符、U+FFFC 或私用区字符）或含邮箱地址时返回 400，由本人改正，而不是被悄悄改成别的名字。邮箱地址指 `local@domain.tld`，也包括 `@` 两侧带空格、连续的 `@`、以 U+FF20 或 U+FE6B 代替 `@`、以 U+3002、U+FF0E 或 U+FF61 代替点、`mailto:` 前缀和不可见的本地部分；`alice [at] example.com`、`alice(at)example.com` 与 `alice@example` 不在识别范围内。来自 GitHub、Google、Discord、Discord Bot、邮箱登录、agent 标签和 OAuth 客户端名的派生名字没有人当场改正，因此不拒绝：邮箱地址只保留本地部分，超长时按完整字素截断，没有可见字符时依次回退为同样经过规则的 Provider 用户名、`Workspace User` 或 `agent`。Google 未提供姓名时取邮箱本地部分。
 
 ### `agents`
 
 每个 `kind = 'agent'` 的 User 对应一行，是该 agent 生命周期的唯一来源。`user_id` 是主键并随 User 删除。
 `owner_user_id` 与 `claimed_at` 同时为空（未认领）或同时非空（已认领），由表级 CHECK 保证；
-被引用为主人的 User 不能删除。`origin_label` 是创建时提交并清理后的标签；访客入口未提交标签时，是清理后的 OAuth 客户端名。清理遵循 `users.display_name` 的显示名规则；客户端名按完整字素截断到 40 个 UTF-16 码元。`last_active_at` 是最近活跃时间。
+被引用为主人的 User 不能删除。`origin_label` 记录创建时提交的标签；访客入口未提交标签时，记录 OAuth 客户端名。V22 起写入前按 `users.display_name` 的显示名规则清理，客户端名按完整字素截断到 40 个码位；V22 之前写入的值保持原样，V22 修复不改写它。该列只作记录，任何接口都不返回或展示它。`last_active_at` 是最近活跃时间。
 `expires_at` 为空表示不过期，`banned_at` 非空表示已封禁。全部时间为毫秒时间戳。不保存来源 IP。
 
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
@@ -580,7 +580,7 @@ Operation JSON。V0 迁移前要求没有 Pending/Failed Operation；后续版�
 - V15 → V16 仅新增可空的 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`，CHECK 允许 `browser` 或 `agent`；已有行均为 `NULL`，无默认值、回填或新索引；
 - V16 → V17 重建 `univer_resources` 与 `worktree_node_intents`，`unit_type` CHECK 增加 `pdf`；既有行、`univer_resources_kind_guard` 触发器、入向外键、Blob 身份与恢复状态不变；
 - V17 → V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens`、各自索引，以及 `login_sessions.issued_for_pat_id`、`issued_for_grant_id` 两个可空列和两个部分索引；既有 Session 行、有效期与其它行不变，无需重建任何表；
-- V21 → V22 不改结构，只按显示名规则改写 `users.display_name` 与仍为默认名的 Personal Space 名；
+- V21 → V22 不改结构，只改写含邮箱地址、误导字符或没有可见字符的 `users.display_name` 与仍为默认名的 Personal Space 名；
 - 旧表全部删除且 `user_version = 22`。
 
 失败步骤会回滚且应用不启动；V1/V2 链式升级可能已提交有效的中间版本，但启动前生成的
@@ -717,15 +717,18 @@ V20→V21 给 `users` 末尾追加 `kind` 列，并新增 `agents` 与 `node_rep
 
 ## 显示名修复（V22）
 
-V21→V22 不改 Schema，只按显示名规则改写数据；PostgreSQL 的同一修复对应 `workspace_product_schema`
-版本 1→2。每个 User 的 `display_name` 套用派生规则，为空时回退为 username：邮箱形状的名字变为本地部分，
-危险或不可见字符被清除。Personal Space 名以 ` 的个人空间` 结尾，且前半部分等于 owner 原显示名或会被规则
-改写（例如改名前留下的邮箱）时，改为 `<新显示名> 的个人空间`。其它 Space 名、各行 `updated_at` 与其它表
-保持不变，Team Space 不受影响。
+V21→V22 不改 Schema，只按显示名规则修复数据；PostgreSQL 的同一修复对应 `workspace_product_schema`
+版本 1→2。只有含邮箱地址、误导字符（控制、双向、填充字符，未配对代理项、U+FFFD，或不连接任何字符的零宽字符）
+或没有可见字符的 `display_name` 会被改写为派生名字：邮箱地址只保留本地部分，误导字符被清除，没有可见字符时
+依次回退为同样经过规则的 username 和 `Workspace User`。其它名字逐字节不变，包括 emoji、波斯文和印度系文字中的
+连接符与变体选择符。Personal Space 名以 ` 的个人空间` 结尾，且前半部分等于 owner 原显示名或本身会被改写
+（例如改名前留下的邮箱）时，改为 `<新显示名> 的个人空间`。其它 Space 名、各行 `updated_at` 与其它表保持不变，
+`agents.origin_label` 和 Team Space 不受影响。
 
 `server/src/db/display-name-repair.ts` 的 `planDisplayNameRepair` 是唯一入口，SQLite 的 V21→V22 与 V0
 迁移、PostgreSQL 的 `initialize.ts` 版本升级都调用它；对自身输出再执行一次不产生改动。SQLite 在一致性备份后于
 单个 `BEGIN IMMEDIATE` 事务中完成修复、版本号、外键与完整性检查，失败回滚至 V21，备份保留，启动失败。
 PostgreSQL 在 advisory lock 下把修复与版本行放在同一事务提交，失败时版本仍为 1；升级前由运维备份。再次
 启动不重复迁移或备份。回退先停止 V22，再恢复 V21 备份。禁止新旧进程同时写同一 SQLite 文件。
-所有线上库到达 V22 后，可随其它迁移入口一同删除。
+退出条件：所有线上 SQLite 库到达 V22、所有线上 PostgreSQL 产品库到达版本 2 后，删除 `display-name-repair.ts` 与其它
+SQLite 迁移入口，PostgreSQL 版本 2 的升级步骤保留为空操作，以免改变版本号。

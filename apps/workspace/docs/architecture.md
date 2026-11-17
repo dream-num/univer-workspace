@@ -316,7 +316,7 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 负责在业务 Module 初始化前识别数据库状态：空数据库应用 V22；V22 校验指纹；V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
-V21 给 `users` 追加 `kind` 列，并新增 `agents` 与 `node_reports` 两张表。V22 不改结构，只按显示名规则改写已有显示名与默认名的 Personal Space。
+V21 给 `users` 追加 `kind` 列，并新增 `agents` 与 `node_reports` 两张表。V22 不改结构，只改写含邮箱地址、误导字符或没有可见字符的显示名，以及仍为默认名的 Personal Space。
 V19 新增 `html_view_drafts` 及到期索引；发布在产品事务中接管草稿 BlobStore key，拒绝、过期和冲突复用对象删除任务。
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
 可空的 `issued_for_pat_id`、`issued_for_grant_id`；迁移只追加，不重建表。

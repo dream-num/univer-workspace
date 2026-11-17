@@ -1,26 +1,98 @@
 import { describe, expect, it } from "vitest";
-import { deriveDisplayName, validDisplayName } from "./display-name.js";
+import { deriveDisplayName, deriveUserDisplayName, isUnsafeDisplayName, validDisplayName } from "./display-name.js";
 
 const HOSTILE: readonly (readonly [string, string, string])[] = [
-  ["a right-to-left override", "Alice\u202Etxt.exe", "Alicetxt.exe"],
-  ["isolates and embeddings", "\u2066a\u2068b\u202Ac\u202Bd\u202Ce", "abcde"],
+  ["a right-to-left override", "Alice‮txt.exe", "Alicetxt.exe"],
+  ["isolates and embeddings", "⁦a⁨b‪c‫d‬e", "abcde"],
   ["newlines and tabs", "Alice\r\n\tBob", "Alice Bob"],
-  ["line and paragraph separators", "A\u2028B\u2029C", "A B C"],
+  ["line and paragraph separators", "A B C", "A B C"],
   ["C0 and C1 controls", "a\u0000b\u001Bc\u0085d", "a b c d"],
-  ["zero-width characters and the soft hyphen", "Cl\u200Ba\u200Cu\u200Dd\u2060e\uFEFF\u00AD", "Claude"],
-  ["a Hangul filler between letters", "a\u3164b", "ab"],
-  ["the blank Braille pattern", "a\u2800b", "a b"],
-  ["a replacement character", "Claude\uFFFDCode", "ClaudeCode"],
+  ["zero-width characters that join nothing", "‍Cl​a⁠u﻿d­e‌", "Claude"],
+  ["joiners next to a space or a removed character", "Ann ‍Lee​‌x", "Ann Leex"],
+  ["Hangul fillers between letters", "aㅤbᅠcﾠdᅟe", "abcde"],
+  ["the blank Braille pattern", "a⠀b", "a b"],
+  ["a replacement character", "Claude�Code", "ClaudeCode"],
   ["a lone surrogate", "Claude\uD800Code", "ClaudeCode"],
-  ["CJK and spacing", "  克劳德   代码  ", "克劳德 代码"],
+  ["variation selectors without a base", "️Sam ️️", "Sam"],
+  ["tag characters outside a flag", "Eve\u{E0068}\u{E0069}\u{E007F} \u{1F600}\u{E0061}\u{E007F}", "Eve \u{1F600}"],
+  ["an unterminated flag tag sequence", "\u{1F3F4}\u{E0067}\u{E0062} Eng", "\u{1F3F4} Eng"],
 ];
 
-const INVISIBLE = ["\u3164", "\u2800", "\u115F\u1160", "\uFFA0", "\uFE0F", "\u200B\u202E\n", "\u3000 \u00A0"];
+const LEGITIMATE = [
+  "\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466} Smith",
+  "\u{1F3F3}️‍\u{1F308} Pride",
+  "\u{1F1E8}\u{1F1F3} Beijing",
+  "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F} Eng",
+  "Sam ❤️",
+  "#️⃣ first",
+  "\u{1F9D1}\u{1F3FD}‍\u{1F4BB}",
+  "نامه‌ای",
+  "क्‍षिति",
+  "葛\u{E0100}城",
+  "Café",
+  "Sean O’Brien",
+  "@handle",
+  "C@rl",
+  "Team @acme.io",
+  "me@home",
+];
+
+const INVISIBLE = [
+  "ㅤ", "⠀", "ᅟᅠ", "ﾠ", "️", "​‮\n", "　  ", "‍‌",
+  "́́́", "￼", "", "\u{F0000}́",
+];
+
+const ADDRESSES: readonly (readonly [string, string])[] = [
+  ["alice@example.com", "alice"],
+  ["Alice <alice@example.com>", "Alice <alice>"],
+  ["Alice (alice@example.com)", "Alice (alice)"],
+  ["x@y.com@z.org", "x"],
+  ["odd@under_score.com", "odd"],
+  ["a​@example.com", "a"],
+  ["‮alice@example.com‬", "alice"],
+  ["alice @ example.com", "alice"],
+  ["alice@ example.com", "alice"],
+  ["alice⠀@⠀example.com", "alice"],
+  ["alice@@example.com", "alice"],
+  ["alice＠example.com", "alice"],
+  ["alice﹫example.com", "alice"],
+  ["alice@example。com", "alice"],
+  ["alice＠example．com", "alice"],
+  ["mailto:alice@example.com", "alice"],
+  ["MAILTO:alice@example.com", "alice"],
+  ["ㅤ@example.com", ""],
+  ["​ @ example.com", ""],
+];
 
 describe("display-name rule", () => {
   it.each(HOSTILE)("removes %s from typed and derived names", (_, raw, expected) => {
     expect(validDisplayName(raw)).toBe(expected);
     expect(deriveDisplayName(raw)).toBe(expected);
+  });
+
+  it.each(LEGITIMATE)("keeps %j byte for byte", (name) => {
+    expect(validDisplayName(name)).toBe(name);
+    expect(deriveDisplayName(name)).toBe(name);
+  });
+
+  it("collapses whitespace but does not flag a stored name for it", () => {
+    expect(validDisplayName("  克劳德   代码  ")).toBe("克劳德 代码");
+    expect(deriveDisplayName("  克劳德   代码  ")).toBe("克劳德 代码");
+    expect(isUnsafeDisplayName("  克劳德\u3000\u3000代码  ")).toBe(false);
+  });
+
+  it("flags a stored name only for an address, a misleading character or nothing visible", () => {
+    for (const name of LEGITIMATE) expect(isUnsafeDisplayName(name)).toBe(false);
+    for (const name of [...HOSTILE.map(([, raw]) => raw), ...INVISIBLE, ...ADDRESSES.map(([raw]) => raw)]) {
+      expect(isUnsafeDisplayName(name)).toBe(true);
+    }
+  });
+
+  it("falls back through the rule to the next candidate and then to Workspace User", () => {
+    expect(deriveUserDisplayName("bob@example.com", "bob")).toBe("bob");
+    expect(deriveUserDisplayName("\u2800", "\u3164carol")).toBe("carol");
+    expect(deriveUserDisplayName(undefined, "dave\u202E")).toBe("dave");
+    expect(deriveUserDisplayName("\u3164", "\u1160")).toBe("Workspace User");
   });
 
   it.each(INVISIBLE)("refuses a typed name with nothing visible and derives nothing from it (%j)", (raw) => {
@@ -30,34 +102,45 @@ describe("display-name rule", () => {
     expect(deriveDisplayName(raw)).toBe("");
   });
 
-  it("refuses a typed email address and keeps only the local part of a derived one", () => {
-    for (const typed of ["alice@example.com", "Alice <alice@example.com>", "a\u200B@example.com"]) {
-      expect(() => validDisplayName(typed)).toThrow(expect.objectContaining({ field: "displayName", message: expect.stringMatching(/cannot contain an email address/u) }));
-    }
-    expect(deriveDisplayName("alice@example.com")).toBe("alice");
-    expect(deriveDisplayName("Alice (alice@example.com)")).toBe("Alice (alice)");
-    expect(deriveDisplayName("x@y.com@z.org")).toBe("x");
-    expect(deriveDisplayName("odd@under_score.com")).toBe("odd");
-    expect(validDisplayName("Team @acme.io")).toBe("Team @acme.io");
-    expect(validDisplayName("me@home")).toBe("me@home");
+  it.each(ADDRESSES)("refuses a typed address %j and keeps only its local part when derived", (raw, derived) => {
+    expect(() => validDisplayName(raw)).toThrow(expect.objectContaining({ field: "displayName", message: expect.stringMatching(/cannot contain an email address/u) }));
+    expect(deriveDisplayName(raw)).toBe(derived);
   });
 
-  it("refuses a typed name over 100 characters and cuts a derived one between graphemes", () => {
-    expect(() => validDisplayName("x".repeat(101))).toThrow(expect.objectContaining({ field: "displayName" }));
+  it("counts characters, refuses a typed name over 100 and cuts a derived one between graphemes", () => {
     expect(validDisplayName("x".repeat(100))).toBe("x".repeat(100));
+    expect(validDisplayName("\u{1F600}".repeat(100))).toBe("\u{1F600}".repeat(100));
+    for (const long of ["x".repeat(101), "\u{1F600}".repeat(101)]) {
+      expect(() => validDisplayName(long)).toThrow(expect.objectContaining({ field: "displayName", message: "displayName must contain between 1 and 100 characters." }));
+    }
     expect(deriveDisplayName("x".repeat(150))).toBe("x".repeat(100));
+    expect(deriveDisplayName(`${"a".repeat(38)}🇨🇳`, 40)).toBe(`${"a".repeat(38)}🇨🇳`);
     expect(deriveDisplayName(`${"a".repeat(39)}🇨🇳`, 40)).toBe("a".repeat(39));
-    expect(deriveDisplayName(`${"a".repeat(36)}🇨🇳🇺🇸`, 40)).toBe(`${"a".repeat(36)}🇨🇳`);
-    expect(deriveDisplayName(`${"a".repeat(37)}👍🏽`, 40)).toBe("a".repeat(37));
+    expect(deriveDisplayName(`${"a".repeat(39)}👍🏽`, 40)).toBe("a".repeat(39));
     expect(deriveDisplayName(`${"a".repeat(39)} ${"b".repeat(5)}`, 40)).toBe("a".repeat(39));
+    expect(deriveDisplayName(`${"a".repeat(38)}ه‌ا`, 40)).toBe(`${"a".repeat(38)}ه`);
+  });
+
+  it("answers a very long name within a small time budget", () => {
+    const started = performance.now();
+    for (const long of ["a".repeat(50_000), "a\u200D".repeat(25_000), "a @ ".repeat(12_500)]) {
+      expect(() => validDisplayName(long)).toThrow(expect.objectContaining({ field: "displayName", message: "displayName must contain between 1 and 100 characters." }));
+      expect([...deriveDisplayName(long)].length).toBeGreaterThan(90);
+      expect(isUnsafeDisplayName(long)).toBe(long.startsWith("a\u200D"));
+    }
+    expect(performance.now() - started).toBeLessThan(100);
   });
 
   it("derives the same name again from a derived name", () => {
-    const samples = [...HOSTILE.map(([, raw]) => raw), ...INVISIBLE, "alice@example.com", "x@y.com@z.org", "Alice (alice@example.com)", "🇨🇳".repeat(60)];
+    const samples = [
+      ...HOSTILE.map(([, raw]) => raw), ...LEGITIMATE, ...INVISIBLE, ...ADDRESSES.map(([raw]) => raw),
+      "🇨🇳".repeat(60), `${"ه‌".repeat(60)}`,
+    ];
     for (const raw of samples) {
       const derived = deriveDisplayName(raw);
       expect(deriveDisplayName(derived)).toBe(derived);
       if (derived) expect(validDisplayName(derived)).toBe(derived);
+      if (derived) expect(isUnsafeDisplayName(derived)).toBe(false);
     }
   });
 });

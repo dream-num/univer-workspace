@@ -50,6 +50,17 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
         ('s-plain', 'personal', 'Grace 的个人空间', 'plain', 3, 4);
       UPDATE workspace_product_schema SET version = 1;
     `);
+    const owners = [
+      ["blank", "ᅠ", "ㅤ"],
+      ...["\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466} Smith", "Sam ❤️", "نامه‌ای", "क्‍ष", " Ann  Lee "]
+        .map((name, index) => [`kept${index}`, `kept${index}`, name]),
+    ];
+    for (const [id, username, name] of owners) {
+      await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ($1, $2, $3, 1, 2)", [id, username, name]);
+      await schema.pool.query("INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ($1, 'personal', $2, $3, 3, 4)", [`s-${id}`, `${name} 的个人空间`, id]);
+    }
+    const kept = <T extends { id: string }>(rows: T[]) => rows.filter(({ id }) => id.includes("kept"));
+    const repaired = <T extends { id: string }>(rows: T[]) => rows.filter(({ id }) => !id.includes("kept"));
     const snapshot = async () => ({
       users: (await schema.pool.query("SELECT id, display_name, updated_at FROM users ORDER BY id")).rows,
       spaces: (await schema.pool.query("SELECT id, name, updated_at FROM spaces ORDER BY id")).rows,
@@ -58,16 +69,21 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const before = await snapshot();
     await (await openProductDatabase(config)).close();
     const after = await snapshot();
-    expect(after.users).toEqual([
+    expect(repaired(after.users)).toEqual([
+      { id: "blank", display_name: "Workspace User", updated_at: "2" },
       { id: "custom", display_name: "Erin <erin>", updated_at: "2" }, { id: "filler", display_name: "dave", updated_at: "2" },
       { id: "google", display_name: "alice", updated_at: "2" }, { id: "hostile", display_name: "Carolevil name", updated_at: "2" },
       { id: "plain", display_name: "Grace", updated_at: "2" },
     ]);
-    expect(after.spaces).toEqual([
+    expect(repaired(after.spaces)).toEqual([
+      { id: "s-blank", name: "Workspace User 的个人空间", updated_at: "4" },
       { id: "s-custom", name: "Erin's drafts", updated_at: "4" }, { id: "s-filler", name: "dave 的个人空间", updated_at: "4" },
       { id: "s-google", name: "alice 的个人空间", updated_at: "4" }, { id: "s-hostile", name: "Carolevil name 的个人空间", updated_at: "4" },
       { id: "s-plain", name: "Grace 的个人空间", updated_at: "4" },
     ]);
+    expect(kept(after.users)).toEqual(kept(before.users));
+    expect(kept(after.spaces)).toEqual(kept(before.spaces));
+    expect(kept(after.users)).toHaveLength(5);
     expect(after.schema).toEqual([{ ...before.schema[0], version: 2 }]);
 
     await (await openProductDatabase(config)).close();

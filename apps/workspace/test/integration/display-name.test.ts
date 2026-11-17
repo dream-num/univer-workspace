@@ -31,9 +31,16 @@ describe("display names", () => {
 
     for (const [username, displayName, message] of [
       ["alice", "alice@example.com", /cannot contain an email address/u],
+      ["spaced", "alice @ example.com", /cannot contain an email address/u],
+      ["fullwidth", "alice\uFF20example\u3002com", /cannot contain an email address/u],
+      ["mailto", "mailto:alice@example.com", /cannot contain an email address/u],
+      ["hidden", "\u3164@example.com", /cannot contain an email address/u],
       ["filler", "\u3164", /visible character/u],
       ["braille", "\u2800\u2800", /visible character/u],
       ["isolate", "\u2066\u202E\n", /visible character/u],
+      ["marks", "\u0301\u0301", /visible character/u],
+      ["private", "\uE000\uFFFC", /visible character/u],
+      ["long", "\u{1F600}".repeat(101), /between 1 and 100 characters/u],
     ] as const) {
       const refused = await register(username, displayName);
       expect(refused.status).toBe(400);
@@ -41,6 +48,36 @@ describe("display names", () => {
     }
     const signedUp = (await (await call(origin, "GET", "/api/session", undefined, { cookie })).json()) as { user: { username: string } };
     expect(signedUp.user.username).toBe("mallory");
+
+    for (const [username, displayName] of [
+      ["family", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466} Smith"],
+      ["persian", "\u0646\u0627\u0645\u0647\u200C\u0627\u06CC"],
+      ["emoji", "\u{1F600}".repeat(100)],
+    ]) {
+      const kept = await register(username, displayName);
+      expect(kept.status).toBe(201);
+      expect(await kept.json()).toMatchObject({ user: { displayName } });
+    }
+  });
+
+  it("refuses a chosen username with a Hangul filler and drops one from a provider username", async () => {
+    const origin = await start({ discordBotApiKey: BOT_KEY });
+    const refused = { error: { code: "INVALID_INPUT", field: "username", message: "Username cannot contain invisible characters." } };
+    const register = await call(origin, "POST", "/api/auth/password/register", { username: "\u3164", displayName: "Hidden", password: "correct horse battery staple" });
+    expect(register.status).toBe(400);
+    expect(await register.json()).toMatchObject(refused);
+
+    const registered = await call(origin, "POST", "/api/auth/password/register", { username: "visible", displayName: "Visible", password: "correct horse battery staple" });
+    const cookie = registered.headers.get("set-cookie")!.split(";", 1)[0]!;
+    const rename = await call(origin, "PATCH", "/api/users/me", { username: "vis\u1160ible" }, { cookie });
+    expect(rename.status).toBe(400);
+    expect(await rename.json()).toMatchObject(refused);
+    const unchanged = await call(origin, "PATCH", "/api/users/me", { username: "visible", displayName: "Still visible" }, { cookie });
+    expect(unchanged.status).toBe(200);
+
+    const bot = await call(origin, "POST", "/api/auth/discord/bot-login", { discordUserId: "100000000000000009", username: "\u3164" }, { "x-api-key": BOT_KEY });
+    expect(bot.status).toBe(200);
+    expect(await bot.json()).toMatchObject({ user: { username: "discord-100000000000000009", displayName: "Workspace User" } });
   });
 
   it("renames a default-named Personal Space with its owner and leaves a renamed one alone", async () => {
@@ -64,13 +101,14 @@ describe("display names", () => {
 
   it("derives a clean name for the Discord bot instead of refusing the profile it relays", async () => {
     const origin = await start({ discordBotApiKey: BOT_KEY });
-    const login = async (discordUserId: string, displayName: unknown) => {
-      const response = await call(origin, "POST", "/api/auth/discord/bot-login", { discordUserId, displayName }, { "x-api-key": BOT_KEY });
+    const login = async (discordUserId: string, displayName: unknown, username?: string) => {
+      const response = await call(origin, "POST", "/api/auth/discord/bot-login", { discordUserId, displayName, username }, { "x-api-key": BOT_KEY });
       expect(response.status).toBe(200);
       return ((await response.json()) as { user: { displayName: string } }).user.displayName;
     };
     expect(await login("100000000000000001", "\u202Ebob@example.com\n")).toBe("bob");
     expect(await login("100000000000000002", "\u3164\u2800")).toBe("discord-100000000000000002");
+    expect(await login("100000000000000003", "\u200B", "bob")).toBe("bob");
   });
 
   it("names a Google account without a profile name after its email local part", async () => {

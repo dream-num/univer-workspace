@@ -22,7 +22,7 @@ import type {
   IdentityRepository,
   StoredSession,
 } from "./identity.repository.js";
-import { deriveDisplayName, personalSpaceName, validDisplayName } from "./display-name.js";
+import { deriveDisplayName, deriveUserDisplayName, personalSpaceName, validDisplayName } from "./display-name.js";
 import { emailLoginMessage } from "./email-login-mail.js";
 import { createSourceRateLimiter } from "./source-rate-limiter.js";
 import type {
@@ -408,7 +408,7 @@ export function createIdentityModule(options: {
 
     async registerWithPassword(input) {
       requirePasswordAuth();
-      const username = validUsername(input.username);
+      const username = chosenUsername(input.username);
       const displayName = validDisplayName(input.displayName);
       const password = validPassword(input.password);
       const createdAt = now();
@@ -575,7 +575,7 @@ export function createIdentityModule(options: {
         const user: User = {
           id: randomUUID(),
           username: usernameFromEmail(email, attempt),
-          displayName: deriveDisplayName(email.split("@")[0]) || "Workspace User",
+          displayName: deriveUserDisplayName(email.split("@")[0]),
           avatarUrl: null,
         };
         try {
@@ -683,8 +683,10 @@ export function createIdentityModule(options: {
 
       const providerUsername =
         suppliedUsername ?? `discord-${discordUserId}`;
-      const displayName =
-        (typeof input.displayName === "string" && deriveDisplayName(input.displayName)) || providerUsername;
+      const displayName = deriveUserDisplayName(
+        typeof input.displayName === "string" ? input.displayName : null,
+        providerUsername
+      );
       const avatarUrl =
         input.avatarUrl === undefined
           ? null
@@ -908,7 +910,9 @@ export function createIdentityModule(options: {
       }
 
       const fields = {
-        ...(patch.username !== undefined && { username: validUsername(patch.username) }),
+        ...(patch.username !== undefined && {
+          username: patch.username === session.user.username ? session.user.username : chosenUsername(patch.username),
+        }),
         ...(patch.displayName !== undefined && { displayName: validDisplayName(patch.displayName) }),
         ...(patch.avatarUrl !== undefined && { avatarUrl: validAvatarUrl(patch.avatarUrl) }),
       };
@@ -1119,7 +1123,7 @@ export function createIdentityModule(options: {
         provider,
         repository
       ),
-      displayName: deriveDisplayName(identity.displayName) || identity.username,
+      displayName: deriveUserDisplayName(identity.displayName, identity.username),
       avatarUrl: validAvatarUrl(identity.avatarUrl),
     };
     const token = createSessionToken(
@@ -1185,7 +1189,7 @@ export function createIdentityModule(options: {
     }
     const patch = {
       ...(usernameIsPlaceholder && { username: await availableExternalUsername(identity.username, identity.subject, "discord", repository) }),
-      ...(displayNameIsPlaceholder && { displayName: deriveDisplayName(identity.displayName) || identity.username }),
+      ...(displayNameIsPlaceholder && { displayName: deriveUserDisplayName(identity.displayName, identity.username) }),
       ...(avatarIsMissing && { avatarUrl: identity.avatarUrl }),
     };
     return repository.updateUser(user.id, patch, now(), user);
@@ -1351,7 +1355,7 @@ async function availableExternalUsername(
   provider: ExternalIdentityProvider,
   repository: IdentityRepository
 ): Promise<string> {
-  const base = preferred.slice(0, 64);
+  const base = (preferred.replaceAll(/\p{Default_Ignorable_Code_Point}/gu, "") || `${provider}-${subject}`).slice(0, 64);
   if (!(await repository.usernameExists(base))) return base;
   const suffix = `-${subject.replaceAll(/[^A-Za-z0-9]/g, "").slice(-10) || provider}`;
   const candidate = `${base.slice(0, 64 - suffix.length)}${suffix}`;
@@ -1473,6 +1477,15 @@ function validUsername(value: unknown): string {
   return username;
 }
 
+// Sign-in keeps accepting a stored username; a newly chosen one must be visible to the people shown it.
+function chosenUsername(value: unknown): string {
+  const username = validUsername(value);
+  if (/\p{Default_Ignorable_Code_Point}/u.test(username)) {
+    throw invalidInput("Username cannot contain invisible characters.", "username");
+  }
+  return username;
+}
+
 function validDiscordUserId(value: unknown): string {
   if (
     typeof value !== "string" ||
@@ -1516,7 +1529,7 @@ function invalidEmailCode(): ApplicationError {
 function usernameFromEmail(email: string, attempt: number): string {
   const local = (email.split("@")[0] ?? "")
     .normalize("NFKC")
-    .replace(/[^\p{L}\p{N}._-]+/gu, ".")
+    .replace(/(?:[^\p{L}\p{N}._-]|\p{Default_Ignorable_Code_Point})+/gu, ".")
     .replace(/^[._-]+|[._-]+$/gu, "")
     .slice(0, 48);
   const base = local || "user";

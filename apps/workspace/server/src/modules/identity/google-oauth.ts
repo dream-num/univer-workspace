@@ -84,7 +84,7 @@ export function createGoogleOAuthProvider(config: {
 function googleUsername(email: string, subject: string): string {
   const localPart = email.split("@")[0] ?? "";
   const sanitized = localPart
-    .replaceAll(/[^\p{L}\p{N}._-]/gu, "")
+    .replaceAll(/[^\p{L}\p{N}._-]|\p{Default_Ignorable_Code_Point}/gu, "")
     .slice(0, 64);
   return sanitized || `google-${subject}`;
 }

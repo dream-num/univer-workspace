@@ -6198,7 +6198,7 @@ components:
           maxLength: 64
           description: |
             Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
-            address keeps only its local part. Blank, omitted or nothing left means `agent`.
+            address keeps only its local part. Blank, omitted or no visible character means `agent`.
     AgentIdentity:
       type: object
       additionalProperties: false
@@ -6289,7 +6289,7 @@ components:
           maxLength: 64
           description: |
             Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
-            address keeps only its local part. Blank, omitted or nothing left means `agent`, or the OAuth
+            address keeps only its local part. Blank, omitted or no visible character means `agent`, or the OAuth
             client's name.
         oauthClientId:
           type: string
@@ -6299,8 +6299,8 @@ components:
             client with a name, the agent is named after that client: the
             server reads the name from the registration, cleans it as
             `PasswordRegistration.displayName` describes, keeps only the local
-            part of an email address, cuts it to 40 UTF-16 code units between
-            whole characters, and appends ` · ` and the username's four-character
+            part of an email address, cuts it to 40 characters between whole
+            graphemes, and appends ` · ` and the username's four-character
             suffix to the display name. Any other value is ignored.
     GuestAgentCreated:
       type: object
@@ -6323,18 +6323,24 @@ components:
           minLength: 1
           maxLength: 64
           pattern: ^[\p{L}\p{N}._-]+$
+          description: A Hangul filler or another invisible character fails with 400 `INVALID_INPUT` on `username`.
         displayName:
           type: string
           minLength: 1
           maxLength: 100
           description: |
-            Shown to everyone who opens the User's shared files. The server first replaces control
-            characters, line and paragraph separators and U+2800 with a space, removes format characters
-            (bidi controls, zero-width characters), default-ignorable code points (Hangul fillers),
-            unpaired surrogates and U+FFFD, collapses whitespace runs to one space and trims the ends.
-            The result is stored. It fails with 400 `INVALID_INPUT` on `displayName` when nothing is
-            left, when it contains an email address (`local@domain.tld`), or when it is longer than 100
-            UTF-16 code units.
+            Shown to everyone who opens the User's shared files. A value longer than 100 characters (code
+            points) fails first. The server then replaces control characters, line and paragraph separators,
+            U+2800 and U+1D159 with a space, and removes bidi controls, Hangul fillers, the other
+            default-ignorable code points, unpaired surrogates and U+FFFD. It keeps a zero-width joiner or
+            non-joiner between two characters, a variation selector after a character and a flag tag
+            sequence, so emoji, Persian and Indic names keep their bytes. Whitespace runs collapse to one
+            space and the ends are trimmed. The result is stored. It fails with 400 `INVALID_INPUT` on
+            `displayName` when it has no visible character (spaces, combining marks, U+FFFC and private-use
+            characters alone are not visible) or when it contains an email address. An address is
+            `local@domain.tld`, also with spaces on both sides of `@`, repeated `@`, U+FF20 or U+FE6B for
+            `@`, U+3002, U+FF0E or U+FF61 for the dot, a `mailto:` prefix, or an invisible local part.
+            `alice [at] example.com`, `alice(at)example.com` and `alice@example` are not detected.
         password:
           type: string
           minLength: 8
@@ -6477,14 +6483,18 @@ components:
           minLength: 1
           maxLength: 64
           pattern: ^[\p{L}\p{N}._-]+$
+          description: |
+            A new User's username drops invisible characters, and is `discord-<discordUserId>` when none
+            is left.
         displayName:
           type: string
           minLength: 1
           maxLength: 100
           description: |
             Cleaned as `PasswordRegistration.displayName` describes, but never refused: an email address
-            keeps only its local part and a longer name is cut to 100 UTF-16 code units between whole
-            characters. A name with nothing left falls back to the Discord username.
+            keeps only its local part and a longer name is cut to 100 characters between whole graphemes.
+            A name with no visible character falls back to the Discord username, cleaned the same way, and
+            then to `Workspace User`.
         avatarUrl:
           type:
             - string
@@ -6500,6 +6510,7 @@ components:
           minLength: 1
           maxLength: 64
           pattern: ^[\p{L}\p{N}._-]+$
+          description: A changed username follows the rule in `PasswordRegistration.username`.
         displayName:
           type: string
           minLength: 1
