@@ -11,6 +11,17 @@ const adapters = ["db/sqlite/", "db/postgres/"];
 const factory = "db/open-product-database";
 const commands = ["main", "db/ban-agent"];
 
+// This offline command converts physical rows between formats. It never runs during server startup.
+// List individual edges so new dependencies still require review.
+const migrationImports: Readonly<Record<string, readonly string[]>> = {
+  "storage-migration/main": ["pg", "db/postgres/initialize"],
+  "storage-migration/source": ["node:sqlite", "db/sqlite/initialize", "db/sqlite/unit-creation-facts"],
+  "storage-migration/product": ["node:sqlite", "pg"],
+  "storage-migration/objects": ["node:sqlite"],
+  "storage-migration/collaboration": ["pg"],
+  "storage-migration/rows": ["pg"],
+};
+
 function sourceName(path: string): string {
   return relative(root, path).replaceAll("\\", "/").replace(/\.[jt]sx?$/, "");
 }
@@ -26,6 +37,10 @@ it("keeps product database adapters private and selects them at the factory", ()
     const ast = readSource(path);
     for (const { specifier, kind } of importReferences(ast)) {
       const target = specifier.startsWith(".") ? sourceName(resolve(dirname(path), specifier)) : specifier;
+      if (target.startsWith("storage-migration/") && !name.startsWith("storage-migration/")) {
+        violations.push(`${name} → ${target} (offline command)`);
+      }
+      if (migrationImports[name]?.includes(target)) continue;
       const adapter = adapters.find((prefix) => target.startsWith(prefix));
       if (target === "node:sqlite") {
         if (!name.startsWith("db/sqlite/") && !name.startsWith("integrations/univer/collaboration-database/sqlite/migrations/")) {
