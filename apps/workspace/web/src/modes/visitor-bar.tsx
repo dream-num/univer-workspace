@@ -15,13 +15,12 @@ const externalLinkClass = "inline-flex items-center gap-1 text-foreground underl
 
 type NodeOwner = components["schemas"]["NodeOwner"];
 
-// The immersive view hides the Workspace header, so only there does this bar carry sign-up and collapse.
 export function VisitorBar({
-  immersive,
+  offerSignUp,
   nodeId,
   owner,
 }: {
-  readonly immersive: boolean;
+  readonly offerSignUp: boolean;
   readonly nodeId: string | undefined;
   readonly owner: NodeOwner | null | undefined;
 }) {
@@ -34,7 +33,8 @@ export function VisitorBar({
       return false;
     }
   });
-  const collapsed = immersive && collapsedPreference;
+  const collapsed = offerSignUp && collapsedPreference;
+  const author = owner ? t("sharePageAuthor", { name: owner.displayName }) : "";
   const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
 
   function toggleCollapsed() {
@@ -70,8 +70,8 @@ export function VisitorBar({
             <UniverCliIcon aria-hidden="true" className="size-5 shrink-0 text-foreground" />
             {owner ? (
               <>
-                <span className="min-w-0 truncate font-medium text-foreground">
-                  {t("sharePageAuthor", { name: owner.displayName })}
+                <span className="min-w-0 truncate font-medium text-foreground" title={author}>
+                  {author}
                 </span>
                 {owner.kind === "agent" ? (
                   <Badge variant={owner.claimed ? "default" : "warning"}>
@@ -82,17 +82,19 @@ export function VisitorBar({
             ) : null}
             <a className={externalLinkClass} href={BRAND_URL} target="_blank" rel="noopener noreferrer">
               {t("madeWithWorkspace")}
+              <span className="sr-only">{t("opensInNewTab")}</span>
               <ExternalLink aria-hidden="true" />
             </a>
             <a className={cn(externalLinkClass, "max-md:hidden")} href={HOSTED_URL} target="_blank" rel="noopener noreferrer">
               space.univer.ai
+              <span className="sr-only">{t("opensInNewTab")}</span>
               <ExternalLink aria-hidden="true" />
             </a>
           </p>
           <div className="col-start-2 row-start-1 flex items-center gap-1">
             {nodeId ? <ReportNodeButton nodeId={nodeId} /> : null}
           </div>
-          {immersive ? (
+          {offerSignUp ? (
             <nav aria-label={t("signUp")} className="col-span-full row-start-2 flex items-center gap-1">
               <Link
                 to="/login"
@@ -116,23 +118,25 @@ export function VisitorBar({
           ) : null}
         </>
       ) : null}
-      {immersive ? (
-        <Button
-          variant="ghost"
-          size={collapsed ? "sm" : "icon"}
-          className={collapsed ? "rounded-full border border-border" : "col-start-3 row-start-1"}
-          aria-label={t(collapsed ? "expandVisitorBar" : "collapseVisitorBar")}
-          aria-expanded={!collapsed}
-          onClick={toggleCollapsed}
-        >
-          {collapsed ? (
-            <><UniverCliIcon aria-hidden="true" />Univer Workspace<ChevronDown aria-hidden="true" /></>
-          ) : <ChevronUp aria-hidden="true" />}
-        </Button>
+      {offerSignUp ? (
+        <>
+          <Button
+            variant="ghost"
+            size={collapsed ? "sm" : "icon"}
+            className={collapsed ? "rounded-full border border-border" : "col-start-3 row-start-1"}
+            aria-label={t(collapsed ? "expandVisitorBar" : "collapseVisitorBar")}
+            aria-expanded={!collapsed}
+            onClick={toggleCollapsed}
+          >
+            {collapsed ? (
+              <><UniverCliIcon aria-hidden="true" />Univer Workspace<ChevronDown aria-hidden="true" /></>
+            ) : <ChevronUp aria-hidden="true" />}
+          </Button>
+          <span role="status" className={cn("col-span-full text-xs text-muted-foreground", (collapsed || copyState === "idle") && "sr-only")}>
+            {!collapsed && copyState !== "idle" ? t(copyState === "copied" ? "linkCopied" : "copyLinkFailed") : null}
+          </span>
+        </>
       ) : null}
-      <span role="status" className={cn("col-span-full text-xs text-muted-foreground", (collapsed || copyState === "idle") && "sr-only")}>
-        {!collapsed && copyState !== "idle" ? t(copyState === "copied" ? "linkCopied" : "copyLinkFailed") : null}
-      </span>
     </aside>
   );
 }

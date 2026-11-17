@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "@tanstack/react-router";
 import { Lock } from "lucide-react";
+import type { components } from "../../../generated/http/schema.js";
 import { sessionQueryOptions } from "../features/auth";
 import { nodeQueryOptions } from "../features/nodes/nodes.queries";
 import { VisitorBar } from "./visitor-bar";
@@ -19,12 +20,19 @@ export function WorkspaceLayout(props: WorkspaceLayoutProps) {
   const { mode } = useUiMode();
   const { Shell } = useModeDefinition();
   const session = useQuery(sessionQueryOptions);
+  const node = useQuery({ ...nodeQueryOptions(props.selectedNodeId ?? ""), enabled: props.selectedNodeId !== undefined });
   if (session.isPending) return <LoadingScreen />;
   if (session.error) throw session.error;
-  return session.data?.authenticated ? (
-    <Shell key={mode} {...props} />
-  ) : (
-    <VisitorLayout {...props} />
+  if (!session.data?.authenticated) return <VisitorLayout {...props} owner={node.data?.owner} />;
+  const detail = node.data;
+  return (
+    <Shell key={mode} {...props}>
+      {/* A Personal Space has no members, so anyone there but its owner is an outside reader. */}
+      {detail?.node.resource && detail.owner && detail.node.accessRole !== "owner" ? (
+        <VisitorBar offerSignUp={false} nodeId={detail.node.id} owner={detail.owner} />
+      ) : null}
+      {props.children}
+    </Shell>
   );
 }
 
@@ -35,10 +43,10 @@ function VisitorLayout({
   headerActions,
   immersive = false,
   selectedNodeId,
-}: WorkspaceLayoutProps) {
+  owner,
+}: WorkspaceLayoutProps & { readonly owner: components["schemas"]["NodeOwner"] | null | undefined }) {
   const { t } = useI18n();
   const location = useLocation();
-  const node = useQuery({ ...nodeQueryOptions(selectedNodeId ?? ""), enabled: selectedNodeId !== undefined });
   return (
     <div className="workspace-shell flex h-dvh flex-col overflow-hidden bg-background">
       <header
@@ -70,7 +78,8 @@ function VisitorLayout({
         </Link>
       </header>
       {immersive || selectedNodeId ? (
-        <VisitorBar immersive={immersive} nodeId={selectedNodeId} owner={node.data?.owner} />
+        // The immersive view hides this header, so the bar carries sign-up there.
+        <VisitorBar offerSignUp={immersive} nodeId={selectedNodeId} owner={owner} />
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
     </div>
