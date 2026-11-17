@@ -6,6 +6,8 @@ English | [简体中文](storage-migration.zh-CN.md)
 
 Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The source product database must be V22. For an older version, first [upgrade on SQLite](#sqlite-upgrades-and-recovery) and stop the upgraded instance before cutover. Prepare a dedicated empty PostgreSQL database, a private bucket and an empty prefix. See [Workspace configuration](configuration.md#deployment-configurations) for target settings, credentials and bucket permissions.
 
+For an Alibaba Cloud OSS regional endpoint, use a bucket on which versioning has never been enabled. The migration reads the bucket versioning status (`oss:GetBucketVersioning`) before using the OSS no-overwrite header for uploads, including multipart completion.
+
 1. Stop all Workspace writers. Keep a backup of both SQLite databases (including any WAL or journal files) and the file directory from the same recovery point. Keep user traffic closed until validation passes.
 2. Supply the target PostgreSQL + S3 settings to the migration process. Point `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE` and `BLOB_DIRECTORY` at the existing source data, or use the [default source paths](configuration.md#databases). A read-only source mount is sufficient. Allow temporary disk space for both SQLite copies and any collaboration upgrade backups and staging files.
 3. For a source checkout with dependencies installed, run the following from the repository root. The script reads the Workspace `.env` file.

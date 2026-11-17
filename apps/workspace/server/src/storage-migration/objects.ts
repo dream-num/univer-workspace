@@ -1,3 +1,4 @@
+import { prepareMigrationWrites } from "./conditional-writes.js";
 import { reportProgress } from "./progress.js";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
@@ -33,6 +34,7 @@ export async function copyObjects(
   const client = new S3Client(clientOptions);
   const prefixPath = prefix ? prefix + "/" : "";
   try {
+    await prepareMigrationWrites(client, options);
     const local = new Set<string>();
     // LocalBlobStore creates the directory on the first upload; a fresh installation may lack it.
     const entries = await readdir(directory, { withFileTypes: true }).catch(

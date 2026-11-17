@@ -1,3 +1,4 @@
+import { prepareMigrationWrites } from "./conditional-writes.js";
 import { reportProgress } from "./progress.js";
 import { GetObjectCommand, paginateListObjectsV2, PutObjectCommand } from "@aws-sdk/client-s3";
 import type { S3BlobStoreOptions } from "../integrations/blob/s3-blob-store.js";
@@ -8,6 +9,7 @@ import type { Source } from "./source.js";
 export async function copySheetBlocks(source: Source, options: S3BlobStoreOptions): Promise<number> {
   const { client, bucket, prefix } = sheetBlockStorage(options);
   try {
+    await prepareMigrationWrites(client, options);
     const existing = new Set<string>();
     for await (const page of paginateListObjectsV2({ client }, { Bucket: bucket, Prefix: prefix + "/" })) {
       for (const item of page.Contents ?? []) existing.add(item.Key!);
