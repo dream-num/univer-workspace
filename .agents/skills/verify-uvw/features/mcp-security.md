@@ -38,6 +38,11 @@ configuration refuses to start.
   30 s. The containers and the network are removed afterwards.
 - MG11 (requirement 1) has A and B each call `screenshot`, then attributes each call to a Chromium browser process of the renderer by the CPU time
   that process tree used. `contained` if the two users were served by different browser processes.
+- MG12 (requirement 1) measures whether A's `execute` worker can reach the memory of B's `execute` worker, where B's Workspace session cookie and
+  loaded document live. It records presence only, never a secret value. It reads `ptrace_scope`, tries one 64-byte read of B's worker
+  `/proc/<pid>/mem`, and sends `SIGUSR1` to B's worker, then looks for a V8 inspector on `127.0.0.1:9229-9233` reachable from A. `exposed` if the
+  direct read succeeds or the inspector opens; an open, attachable inspector lets A read B's session and document. `--as <principal>` runs A as an
+  agent principal so the check matches a guest agent sharing the executor with a human. The probe does not attach to the inspector or dump memory.
 
 ## How to get to it (user POV)
 
@@ -96,6 +101,13 @@ Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker
 | MG10 | exposed | With the allowlist set to `*`, the executor becomes healthy with session grants; the renderer becomes healthy with `--no-sandbox`. |
 | MG11 | exposed | One Chromium browser process serves both users; each call gets a context in the shared browser. |
 
+MG12 on `main` 79f0029b (2026-11-17) with a production-mode stack (`NODE_ENV=production`, `MCP_EXECUTOR_ALLOWED_USER_IDS=*`, `runc`, one
+executor), A a guest agent principal and B a human user, run on this Mac through OrbStack:
+
+| Check | Result | Reason |
+|---|---|---|
+| MG12 | exposed | Direct `/proc/<pid>/mem` of B's worker is EACCES under `ptrace_scope=1`, but A signals B's worker with `SIGUSR1`, which opens a V8 inspector on `127.0.0.1:9229`. The port is reachable from A in the shared executor network namespace, so A can attach and read B's session cookie and loaded document. The worker child installs no `SIGUSR1` handler, so the default inspector start is live. |
+
 ## Gotchas
 
 - The second user is `verify-<run-id>-b`. It is registered through `/api/auth/password/register` and its password and PAT live in
@@ -108,6 +120,8 @@ Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker
 - MG8 drains nothing: B's script runs on a Unit that was never opened, so it needs a worker slot whether workers are keyed per Unit or per user.
 - MG11 reads CPU time per process tree in the renderer container. With only one Chromium browser process alive (the renderer warms runtimes
   lazily) both users share it by construction; the evidence records how many browser processes existed.
+- MG12 leaves B's worker with its inspector open on 9229 until it idles out. It scans 9229-9233 so a second run finds a free port. A later signalled
+  worker can reuse 9229. `down` removes everything. The probe stops at the inspector's `/json/list`; it never attaches or reads memory content.
 - MG10 runs `docker run` with this run's image and `--internal` networking. If the probe is killed mid-run, remove `mg10-*` containers and
   networks by hand (`docker rm -f $(docker ps -aq --filter name=mg10-)`).
 - The probes assume the compose networks of `apps/mcp/docker/compose.verify.yml`: the executor joins `default` and the internal `render`

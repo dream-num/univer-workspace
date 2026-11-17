@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Stage G isolation baseline for the MCP executor and renderer (features/mcp-security.md).
-// Usage: node mcp-security-probes.mjs [--run <run-id>] [--only MG2,MG6,...]
+// Usage: node mcp-security-probes.mjs [--run <run-id>] [--only MG2,MG6,...] [--as <principal>]
 // Prints one JSON line per probe on stdout, details on stderr, evidence under <run>/evidence/mcp-security/.
 // Exit 0 whatever the results; 2 only when the stack cannot be reached. Records names and presence, never secret values.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -12,7 +12,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 
 export const SENSITIVE_NAME = /^(MCP_EXECUTOR_TOKEN|MCP_RENDERER_TOKEN|UNIVER_LICENSE.*|.*_SECRET|.*_TOKEN|.*_KEY)$/;
 export const REQUIREMENTS = {
-  MG1: [1, 2], MG2: [1], MG3: [1, 5], MG4: [5], MG5: [1], MG6: [3, 4], MG7: [3, 4], MG8: [3], MG9: [6], MG10: [7], MG11: [1],
+  MG1: [1, 2], MG2: [1], MG3: [1, 5], MG4: [5], MG5: [1], MG6: [3, 4], MG7: [3, 4], MG8: [3], MG9: [6], MG10: [7], MG11: [1], MG12: [1],
 };
 export const RESERVED = ['MG1', 'MG3'];
 export const IMPLEMENTED = Object.keys(REQUIREMENTS).filter(id => !RESERVED.includes(id));
@@ -93,6 +93,17 @@ export function classifyMg11({ a, b, browsers }) {
   return a === b
     ? { result: 'exposed', reason: `both users were served by Chromium browser pid ${a} (${browsers} browser process(es) in the renderer)` }
     : { result: 'contained', reason: `A used browser pid ${a}, B used ${b}` };
+}
+// Requirement 1 asks whether A's script can reach the memory of B's worker, where B's loaded
+// document and session cookie live. The probe measures reachability, never reads a secret value:
+// a readable cross-sibling /proc/<pid>/mem, or a V8 inspector that A can force open on the shared
+// loopback by signalling B's worker, each means A can attach and read B's session and data.
+export function classifyMg12({ memReadable, inspectorOpened, signalable }) {
+  const routes = [memReadable && "a sibling's /proc/<pid>/mem is readable", inspectorOpened && "A forced B's worker to open its V8 inspector, reachable on the shared loopback"].filter(Boolean);
+  if (routes.length) return { result: 'exposed', reason: `A can reach the memory of B's worker: ${routes.join('; ')}. Its session cookie and loaded document are readable.` };
+  return signalable
+    ? { result: 'inconclusive', reason: "A cannot read B's worker memory directly and no inspector opened in the window, yet A can signal B's worker; the route is not closed" }
+    : { result: 'contained', reason: "A can neither read nor signal B's worker" };
 }
 
 
@@ -367,23 +378,77 @@ const PROBES = {
         b: { ok: !b.r.isError, ms: b.r.ms, error: b.r.isError ? b.r.out?.code ?? b.r.thrown : undefined, servedByBrowserPid: b.root, cpuTickDelta: b.delta },
         method: 'CPU ticks (own plus reaped children) summed per Chromium browser process tree, before and after each call' } };
   },
+
+  // Can A's worker reach the memory of B's worker, where B's session cookie and loaded document live?
+  // The probe measures two capabilities and records presence only: whether a sibling's /proc/<pid>/mem
+  // is readable, and whether A can force B's worker to open its V8 inspector on the shared loopback. It
+  // does not attach to the inspector or read any secret value; the open, attachable port is the finding.
+  async MG12(ctx) {
+    const [ua] = await units(ctx, ctx.A, 1), [ub] = await units(ctx, ctx.B, 1);
+    const [idA, idB] = [(await need(ctx, ctx.A, 'whoami', {})).subject.id, (await need(ctx, ctx.B, 'whoami', {})).subject.id];
+    const pidB = value(await run(ctx, ctx.B, ub, "workbook.getActiveSheet().getRange('A1').setValue('mg12-document'); return process.pid"));
+    if (!pidB) return { result: 'inconclusive', reason: "B's worker did not start", data: null };
+    const a = await run(ctx, ctx.A, ua, `
+      const fs=process.getBuiltinModule('fs'), started=Date.now(), target=${pidB};
+      const out={self:process.pid,target};
+      try{out.ptraceScope=fs.readFileSync('/proc/sys/kernel/yama/ptrace_scope','utf8').trim()}catch(e){out.ptraceScope='unreadable '+e.code}
+      out.targetVisible=fs.existsSync('/proc/'+target+'/cmdline');
+      try{process.kill(target,0);out.signalable=true}catch(e){out.signalable=false;out.signalError=e.code}
+      // Capability check only: open the sibling's /proc/<pid>/mem and attempt one 64-byte read at its
+      // first writable region. Record whether the kernel permits it; do not scan or keep any content.
+      out.memory='not-attempted';
+      try{
+        const region=fs.readFileSync('/proc/'+target+'/maps','utf8').split('\\n').map(l=>/^([0-9a-f]+)-[0-9a-f]+ rw-p/.exec(l)).find(Boolean);
+        if(!region) out.memory='no-writable-region';
+        else { const fd=fs.openSync('/proc/'+target+'/mem','r');
+          try{ fs.readSync(fd,Buffer.allocUnsafe(64),0,64,parseInt(region[1],16)); out.memory='readable'; }
+          catch(e){ out.memory=e.code||'read-error'; } finally{ fs.closeSync(fd); } }
+      }catch(e){ out.memory=e.code||'maps-error'; }
+      // Forced-inspector route: signal B's worker, then look for a debuggable target on loopback. A
+      // Node worker with no SIGUSR1 handler starts the inspector on 127.0.0.1:9229. Record its presence.
+      out.inspector={opened:false};
+      if(out.signalable){
+        try{process.kill(target,'SIGUSR1')}catch(e){out.inspector.signalError=e.code}
+        const list=async port=>{try{const r=await fetch('http://127.0.0.1:'+port+'/json/list',{signal:AbortSignal.timeout(1500)});return r.ok?await r.json():null}catch{return null}};
+        while(Date.now()-started<8000 && !out.inspector.opened){
+          for(const port of [9229,9230,9231,9232,9233]){
+            const l=await list(port);
+            if(Array.isArray(l)&&l.length){ out.inspector={opened:true,port,targets:l.length,entry:String(l[0]?.url||'').slice(0,120)}; break; }
+          }
+          if(!out.inspector.opened) await new Promise(r=>setTimeout(r,500));
+        }
+      }
+      out.scanMs=Date.now()-started;
+      return out;`);
+    const v = value(a);
+    if (!v) return { result: 'inconclusive', reason: `A's execute failed: ${JSON.stringify(a.out ?? a.thrown).slice(0, 200)}`, data: a };
+    if (!v.targetVisible) return { result: 'inconclusive', reason: "B's worker was not visible to A when it probed", data: { pidB, a: v } };
+    const memReadable = v.memory === 'readable', inspectorOpened = v.inspector.opened === true;
+    return { ...classifyMg12({ memReadable, inspectorOpened, signalable: v.signalable }),
+      data: { a: { userId: idA, username: ctx.A.username, workerPid: v.self }, b: { userId: idB, username: ctx.B.username, workerPid: pidB },
+        ptraceScope: v.ptraceScope, targetVisible: v.targetVisible, signalable: v.signalable, signalError: v.signalError, memory: v.memory, inspector: v.inspector, scanMs: v.scanMs,
+        method: "A measures two capabilities against B's worker: a 64-byte /proc/<pid>/mem read, and whether SIGUSR1 opens an attachable V8 inspector on the shared loopback. Presence only; no memory content or credential is read or kept." } };
+  },
 };
 
 
 async function main() {
   const argv = process.argv.slice(2);
-  let runId = process.env.VERIFY_UVW_RUN, only;
+  let runId = process.env.VERIFY_UVW_RUN, only, as;
   while (argv.length) {
     const flag = argv.shift(), v = argv.shift();
-    if (flag === '--run') runId = v; else if (flag === '--only') only = v; else throw new Error(`Unknown option ${flag}`);
+    if (flag === '--run') runId = v; else if (flag === '--only') only = v; else if (flag === '--as') as = v; else throw new Error(`Unknown option ${flag}`);
   }
+  if (as !== undefined && !/^[a-z0-9][a-z0-9_-]{0,31}$/.test(as)) throw new Error('--as takes a principal name from: verify-uvw principal <name>');
   const ids = parseOnly(only);
   const ctx = { ...loadRun(runId), suffix: rand(3) };
   docker(['version', '--format', '{{.Server.Version}}']);
   ctx.sdk = createRequire(join(repo, 'apps/mcp/package.json'))('@modelcontextprotocol/client');
   const evidenceDir = join(ctx.dir, 'evidence/mcp-security');
   mkdirSync(evidenceDir, { recursive: true });
-  ctx.A = { name: 'a', username: ctx.username, token: ctx.secret('mcp-token') };
+  ctx.A = as === undefined
+    ? { name: 'a', username: ctx.username, token: ctx.secret('mcp-token') }
+    : { name: 'a', username: JSON.parse(readFileSync(join(ctx.dir, `evidence/principal-${as}.json`), 'utf8')).agent.username, token: ctx.secret(`principals/${as}.token`) };
   const needsB = ids.some(id => id !== 'MG2' && id !== 'MG4' && id !== 'MG9' && id !== 'MG10');
   if (needsB) ctx.B = { name: 'b', ...await ensureUserB(ctx) };
   for (const id of ids) {

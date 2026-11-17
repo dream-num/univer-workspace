@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  browserTrees, classifyMg2, classifyMg4, classifyMg5, classifyMg8, classifyMg9, classifyMg10, classifyMg11, classifyReclaim,
+  browserTrees, classifyMg2, classifyMg4, classifyMg5, classifyMg8, classifyMg9, classifyMg10, classifyMg11, classifyMg12, classifyReclaim,
   extraMounts, parseOnly, sensitiveNames, servedBy, suspectMounts,
 } from './mcp-security-probes.mjs';
 
@@ -13,8 +13,15 @@ test('sensitive names match the Stage G patterns and nothing else', () => {
 });
 test('--only keeps probe order and rejects reserved or unknown ids', () => {
   assert.deepEqual(parseOnly('mg7, MG6'), ['MG6', 'MG7']);
-  assert.equal(parseOnly(undefined).length, 9);
-  for (const bad of ['MG1', 'MG3', 'MG12', '']) assert.throws(() => parseOnly(bad));
+  assert.equal(parseOnly(undefined).length, 10);
+  for (const bad of ['MG1', 'MG3', 'MG13', '']) assert.throws(() => parseOnly(bad));
+});
+test('MG12 is exposed on a reachable memory route, contained only when A cannot even signal B', () => {
+  const none = { memReadable: false, inspectorOpened: false, signalable: false };
+  assert.equal(classifyMg12(none).result, 'contained');
+  assert.equal(classifyMg12({ ...none, memReadable: true }).result, 'exposed');
+  assert.equal(classifyMg12({ ...none, inspectorOpened: true }).result, 'exposed');
+  assert.equal(classifyMg12({ ...none, signalable: true }).result, 'inconclusive');
 });
 test('network, isolation and reclamation verdicts', () => {
   assert.equal(classifyMg4({ targets: { a: 'unreachable', b: 'unreachable' } }).result, 'contained');
