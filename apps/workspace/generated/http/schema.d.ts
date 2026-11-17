@@ -3436,7 +3436,7 @@ export interface components {
             owner: components["schemas"]["NodeOwner"] | null;
             breadcrumbs: components["schemas"]["Breadcrumb"][];
             navigationRootNodeId: string | null;
-            /** @description The Node this file was copied from. Null for a file that is not a copy, and after the source is permanently deleted. The reader may be unable to open the source. */
+            /** @description The Node this file was copied from, returned only to the copy's owner and editors. Every other reader, anonymous included, gets null, because a link-shared source's Node ID is its access link. Also null for a file that is not a copy, and after the source is permanently deleted. The reader may be unable to open the source. */
             copiedFromNodeId: string | null;
         };
         PatchNode: {

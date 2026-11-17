@@ -632,7 +632,7 @@ Workspace reports no access, so the executor would refuse everyone until the upg
 `POST /api/nodes/{nodeId}/copies` turns a Sheet, Doc, Slide or Blob file the requester can open into a
 file of their own, at the root of their Personal Space or as a new file in a draft pull request. The copy
 gets its own content and its own embedded images, and `GET /api/nodes/{nodeId}` returns its source as
-`copiedFromNodeId`. A copy whose request is interrupted finishes in the
+`copiedFromNodeId` to the copy's owner and editors. A copy whose request is interrupted finishes in the
 background. A copy that cannot finish removes what it created.
 [HTTP concepts](contracts/http/concepts.md#copying-a-file)
 

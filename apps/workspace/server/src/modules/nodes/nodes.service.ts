@@ -130,7 +130,8 @@ export function createNodesModule(options: {
           node.navigationRootNodeId
         ),
         navigationRootNodeId: node.navigationRootNodeId,
-        copiedFromNodeId: await options.repository.copiedFrom(node.id),
+        // A link-shared source's Node ID is its access link, so only those who can edit the copy learn it.
+        copiedFromNodeId: node.role === "viewer" ? null : await options.repository.copiedFrom(node.id),
       };
     },
 

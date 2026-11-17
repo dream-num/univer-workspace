@@ -189,7 +189,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   takes no in-app backup. `POST /api/nodes/{nodeId}/copies` copies a Sheet, Doc, Slide or Blob file the requester can
   open, with its embedded images, to the root of the requester's Personal Space or into a draft pull request, as one
   recoverable `copy_node` Operation. The copy records only its source Node, which `GET /api/nodes/{nodeId}` returns to
-  every reader of the copy. It does not take over the source's permissions, sharing settings, comments or history.
+  the copy's owner and editors and to no other reader, because a link-shared source's Node ID is its access link. It
+  does not take over the source's permissions, sharing settings, comments or history.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

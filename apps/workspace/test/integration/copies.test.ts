@@ -443,6 +443,13 @@ describe("copying a file", () => {
     expect((await copy(source.nodeId, reader.cookie, key)).status).toBe(200);
     const fetched = await fetch(`${origin}/api/nodes/${node.id}`, { headers: { cookie: reader.cookie } });
     expect(await fetched.json()).toMatchObject({ node: { id: node.id, spaceId: reader.spaceId }, copiedFromNodeId: source.nodeId });
+    const provenance = async (cookie?: string) =>
+      ((await (await fetch(`${origin}/api/nodes/${node.id}`, { headers: cookie ? { cookie } : {} })).json()) as { copiedFromNodeId: unknown }).copiedFromNodeId;
+    await shareByLink(h, reader.id, node.id);
+    expect(await provenance()).toBeNull();
+    expect(await provenance(owner.cookie)).toBeNull();
+    await h.application.permissions.upsertNodeGrant(reader.id, node.id, owner.id, { role: "editor" });
+    expect(await provenance(owner.cookie)).toBe(source.nodeId);
     const stored = await fetch(`${origin}/api/operations/${key}`, { headers: { cookie: reader.cookie } });
     expect(await stored.json()).toMatchObject({ kind: "copyNode", state: "completed", result: { nodeId: node.id } });
   }, 120_000);

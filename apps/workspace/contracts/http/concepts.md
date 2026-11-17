@@ -215,7 +215,8 @@ The copy has its own content and its own embedded images, so it stays readable a
 sharing the source. It does not take over the source's permissions, sharing settings, comments or
 history. A copied HTML View is a copy of the page only: it stays bound to the Sheets the source page
 names and shows their data only while its reader can open them. `GET /api/nodes/{nodeId}` returns the
-source as `copiedFromNodeId`. A copy made in a pull
+source as `copiedFromNodeId` to the copy's owner and editors. Every other reader, anonymous included,
+gets `null`, because a link-shared source's Node ID is its access link. A copy made in a pull
 request gets its source when the pull request merges. The value becomes `null` when the source is
 permanently deleted, and the reader may be unable to open the source.
 
