@@ -1,6 +1,8 @@
 # Agent Hub 实施规格
 
-> 状态：待实施。日期 2026-11-14。
+> 状态：阶段 1 已实施。日期 2026-11-14。
+> 阶段 1 按第 4.4 节的 PR stack 合入，依次是 [#402](https://github.com/dream-num/univer-workspace/pull/402)、[#403](https://github.com/dream-num/univer-workspace/pull/403)、[#404](https://github.com/dream-num/univer-workspace/pull/404)、[#405](https://github.com/dream-num/univer-workspace/pull/405)、[#406](https://github.com/dream-num/univer-workspace/pull/406)。
+> 阶段 2 及以后按 [传播回路实施方案](../agent-growth-loop/plan.zh-CN.md) 的顺序实施，它取代第 5.3 节的 PR 顺序。功能点和验收仍以本文为准。
 > 背景、取舍和被否决的方案见 [README](README.zh-CN.md)。两者不一致时以本文为准。
 > 界面参考是一次性原型 `.verification/agent-hub-prototype/index.html`，它不进仓库，文中“原型第 N 屏”指它。
 
