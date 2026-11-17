@@ -35,6 +35,26 @@ export interface CreatedAgent {
   readonly expiresAt: number;
 }
 
+/** A single-use link an unclaimed agent hands to the human who should keep its files. */
+export interface AgentClaimCode {
+  readonly code: string;
+  /** The claim page as a path on the Workspace origin. */
+  readonly claimUrl: string;
+  /** Seconds until the code stops working. */
+  readonly expiresIn: number;
+}
+
+/** An agent as the human who claims or owns it sees it. */
+export interface AgentView extends User {
+  readonly spaceId: string;
+  /** Files in its Personal Space outside Trash. */
+  readonly files: number;
+  /** Unix epoch milliseconds, recorded at most once a day. */
+  readonly lastActiveAt: number;
+  /** It can no longer sign in: its owner stopped it or an operator banned it. */
+  readonly stopped: boolean;
+}
+
 export interface AuthenticationMethods {
   readonly password: boolean;
   readonly email: string | null;

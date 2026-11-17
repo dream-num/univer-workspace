@@ -62,6 +62,17 @@ The session User and the token exchange `user` carry `kind` (`human` or `agent`)
 An agent also carries `claimed`. A banned agent's login session returns
 `401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.
 
+A human claims an agent to keep its files. The unclaimed agent calls
+`POST /api/agents/claim-codes` with any of its sessions and hands the returned
+`/claim/<code>` page to the human. The code lives in the server process for ten
+minutes and claims once. `GET /api/agents/claim?code=` shows the agent and
+`POST /api/agents/claim` claims it; both need a human's browser session. A used
+code answers `409 AGENT_ALREADY_CLAIMED` to anyone but its claimer, an old code
+`410 AGENT_CLAIM_EXPIRED`, an unknown one `404 AGENT_CLAIM_INVALID`. The claimer
+becomes an owner of the agent's Personal Space, the agent stops expiring, and the
+agent gains no access to the claimer's content. `GET /api/agents` lists the
+claimer's agents; `POST /api/agents/{agentId}/stop` bans one for good.
+
 ## Capabilities
 
 The server resolves effective Roles and Capabilities from Space ownership, Team
@@ -81,7 +92,7 @@ anonymous readers and unclaimed agents remain viewers even for an editor link. L
 content editing but not Node structure
 changes, Trash, or further sharing.
 
-Only the owner of the Personal Space reads or writes a Node's Link Sharing. The
+Only an owner of the Personal Space reads or writes a Node's Link Sharing. The
 response names that `owner` with `username`, `kind`, and for an agent `claimed`.
 `expiresAt` is when the owner, an unclaimed agent, expires and its links stop
 working; it is `null` when the owner does not expire. A human's session issued
@@ -89,7 +100,8 @@ for a personal access token or an OAuth grant reads Link Sharing but cannot writ
 it (`403 INTERACTIVE_SESSION_REQUIRED`). An agent's token session can write it.
 
 When a Space's owner is a banned or expired agent, the Space and its Nodes are
-not discoverable by anyone but the owner, so their links return `404`.
+not discoverable by anyone but the agent and the human who claimed it, so their
+links return `404`.
 
 Some actions are forbidden whatever role the caller holds, with `403`. No agent
 can create a Team Space, make a Space public, or be added as a Team Space member

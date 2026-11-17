@@ -521,7 +521,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List the agents the current human claimed.
+         * @description Needs a human's browser login session; an agent or a session issued by
+         *     token exchange or a CLI login gets 403. Agents come oldest claim first.
+         *     All responses have Cache-Control: no-store.
+         */
+        get: operations["listClaimedAgents"];
         put?: never;
         /**
          * Create an agent User and a personal access token for it.
@@ -536,6 +542,83 @@ export interface paths {
          *     All responses have Cache-Control: no-store.
          */
         post: operations["createAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/claim-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a link that lets a human claim the current agent.
+         * @description Needs the login session of an unclaimed agent, from any credential. The
+         *     code lives in this server process for ten minutes and claims the agent
+         *     once; a restart invalidates it. An agent holds at most ten live codes, and
+         *     an eleventh replaces its oldest. All responses have Cache-Control:
+         *     no-store.
+         */
+        post: operations["createAgentClaimCode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Show the agent a claim code names, before the current human claims it.
+         * @description Needs a human's browser login session, like POST, and fails the same way
+         *     for a code that cannot claim. All responses have Cache-Control: no-store.
+         */
+        get: operations["inspectAgentClaim"];
+        put?: never;
+        /**
+         * Make the current human the owner of the agent a claim code names.
+         * @description Needs a human's browser login session. An agent, or a session issued by
+         *     token exchange or a CLI login, gets 403. The agent gets an owner and a
+         *     claim time and stops expiring. The owner holds the owner role in the
+         *     agent's Personal Space; the agent gains no access to the owner's
+         *     content. Claiming again as the same owner returns the agent unchanged.
+         *     All responses have Cache-Control: no-store.
+         */
+        post: operations["claimAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/agents/{agentId}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Stop an agent the current human claimed.
+         * @description Needs a human's browser login session. Bans the agent: its sessions and
+         *     tokens stop working, and its Personal Space, shared links included,
+         *     gives a role to nobody but its owners. Its files stay. There is no undo.
+         *     Stopping a stopped agent succeeds again.
+         */
+        post: operations["stopClaimedAgent"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2905,6 +2988,25 @@ export interface components {
              */
             resource: string;
         };
+        /** @description An agent as the human who claims or owns it sees it. */
+        AgentSummary: {
+            id: string;
+            username: string;
+            displayName: string;
+            /** Format: uri */
+            avatarUrl: string | null;
+            /** @description The agent's Personal Space. */
+            spaceId: string;
+            /** @description Files in the agent's Personal Space outside Trash. */
+            files: number;
+            /** @description Unix epoch milliseconds when the agent last signed in or, before its claim, a reader opened one of its shared pages. Recorded at most once a day. */
+            lastActiveAt: number;
+            /** @description The agent can no longer sign in. Its owner stopped it, or an operator banned it. */
+            stopped: boolean;
+        };
+        ClaimedAgents: {
+            agents: components["schemas"]["AgentSummary"][];
+        };
         AgentCreate: {
             /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`. */
             label?: string;
@@ -2924,6 +3026,27 @@ export interface components {
             mcpUrl: string | null;
             /** @description Unix epoch milliseconds when the unclaimed agent expires, 30 days after creation. */
             expiresAt: number;
+        };
+        AgentClaimCode: {
+            code: string;
+            /** @description The claim page as a path on this Workspace origin. */
+            claimUrl: string;
+            /**
+             * @description Seconds until the code stops working.
+             * @constant
+             */
+            expiresIn: 600;
+        };
+        AgentClaimPreview: {
+            agent: components["schemas"]["AgentSummary"];
+            /** @description The current human already owns the agent. */
+            claimed: boolean;
+        };
+        AgentClaim: {
+            code: string;
+        };
+        AgentClaimed: {
+            agent: components["schemas"]["AgentSummary"];
         };
         GuestAgentCreate: {
             /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name. */
@@ -3816,6 +3939,33 @@ export interface components {
         };
         /** @description The requested byte range cannot be served. */
         RangeNotSatisfiable: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description AGENT_ALREADY_CLAIMED. Another human already claimed the agent, through this code or another. */
+        AgentAlreadyClaimed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description AGENT_CLAIM_INVALID. The code is unknown, expired over ten minutes ago, predates a server restart, or names a banned agent. */
+        AgentClaimInvalid: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["ErrorResponse"];
+            };
+        };
+        /** @description AGENT_CLAIM_EXPIRED. The code is more than ten minutes old. */
+        AgentClaimExpired: {
             headers: {
                 [name: string]: unknown;
             };
@@ -4753,6 +4903,28 @@ export interface operations {
             };
         };
     };
+    listClaimedAgents: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The claimed agents. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimedAgents"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     createAgent: {
         parameters: {
             query?: never;
@@ -4779,6 +4951,133 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    createAgentClaimCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The claim code and the page that uses it. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClaimCode"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description FORBIDDEN. The current User is a human. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            409: components["responses"]["AgentAlreadyClaimed"];
+            /** @description AGENT_CLAIM_UNAVAILABLE. The server holds too many pending codes. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    inspectAgentClaim: {
+        parameters: {
+            query: {
+                code: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent, and whether the current human already owns it. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClaimPreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["AgentClaimInvalid"];
+            409: components["responses"]["AgentAlreadyClaimed"];
+            410: components["responses"]["AgentClaimExpired"];
+        };
+    };
+    claimAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AgentClaim"];
+            };
+        };
+        responses: {
+            /** @description The claimed agent. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentClaimed"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["AgentClaimInvalid"];
+            409: components["responses"]["AgentAlreadyClaimed"];
+            410: components["responses"]["AgentClaimExpired"];
+        };
+    };
+    stopClaimedAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The agent is stopped. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            /** @description The current human did not claim this agent. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

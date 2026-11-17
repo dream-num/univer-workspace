@@ -1,13 +1,15 @@
 import type { Pool, PoolClient } from "pg";
 import type { SpaceListEntry, SpaceListScope } from "../../../modules/spaces/spaces.repository.js";
 import type { SpaceStar } from "../../../modules/spaces/spaces.types.js";
+import { ownsSpaceSql } from "../access/access.repository.js";
 
 type Connection = Pool | PoolClient;
 
 const memberJoin = `LEFT JOIN space_members
   ON space_members.space_id = spaces.id AND space_members.user_id = $1`;
 const mine = `(spaces.owner_user_id = $1 OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
-const visible = `(spaces.owner_user_id = $1 OR (
+const owned = ownsSpaceSql("spaces.owner_user_id", "$1");
+const visible = `(${owned} OR (
   NOT EXISTS (
     SELECT 1 FROM agents WHERE agents.user_id = spaces.owner_user_id
       AND (agents.banned_at IS NOT NULL OR agents.expires_at <= EXTRACT(EPOCH FROM CURRENT_TIMESTAMP) * 1000)
@@ -44,7 +46,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
 };
 
 const selectSpaceView = `
-  SELECT spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId",
+  SELECT spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId", ${owned} AS "owned",
     spaces.public_read AS "publicRead", space_members.role AS "memberRole",
     users.username AS "ownerUsername", spaces.description, spaces.slug
   FROM spaces JOIN users ON users.id = spaces.owner_user_id

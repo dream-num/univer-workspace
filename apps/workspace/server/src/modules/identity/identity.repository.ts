@@ -67,9 +67,26 @@ export interface AgentBanResult {
   readonly id: string;
 }
 
+/** An agent with what its claim page and its owner's list show. */
+export interface StoredAgent {
+  readonly user: User;
+  readonly spaceId: string;
+  readonly ownerUserId: string | null;
+  readonly lastActiveAt: number;
+  readonly banned: boolean;
+  /** Files in its Personal Space outside Trash. */
+  readonly files: number;
+}
+
 export interface IdentityRepository {
   isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean>;
   banAgent(target: string, at: number): Promise<AgentBanResult | null>;
+  /** The agent `userId`, or the agents `ownerUserId` claimed, oldest claim first. */
+  findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]>;
+  /** Makes `ownerUserId` the agent's owner and lifts its expiry unless it has an owner or is banned. */
+  claimAgent(agentUserId: string, ownerUserId: string, at: number): Promise<boolean>;
+  /** Bans the agent when `ownerUserId` claimed it, keeping an earlier ban time. */
+  banClaimedAgent(ownerUserId: string, agentUserId: string, at: number): Promise<boolean>;
   createPasswordUser(input: NewPasswordUser): Promise<void>;
   createExternalUser(input: {
     readonly provider: ExternalIdentityProvider;
@@ -110,7 +127,7 @@ export interface IdentityRepository {
   usernameExists(username: string): Promise<boolean>;
   findUser(userId: string): Promise<User | null>;
   findPrincipal(userId: string): Promise<StoredPrincipal | null>;
-  touchUnclaimedAgent(
+  touchAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,

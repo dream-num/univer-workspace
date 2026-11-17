@@ -16,7 +16,8 @@ export interface ResolvedNodeRow {
   readonly updated_at: number;
   readonly space_type: SpaceType;
   readonly space_name: string;
-  readonly owner_user_id: string;
+  /** The requester is the Space owner or the human who claimed the agent that owns it. */
+  readonly requester_owns: 0 | 1;
   readonly public_read: 0 | 1;
   readonly member_role: Exclude<AccessRole, "owner"> | null;
   readonly grant_role: "editor" | "viewer" | null;
@@ -33,6 +34,8 @@ export interface StoredSpaceAccess {
   readonly type: SpaceType;
   readonly name: string;
   readonly ownerUserId: string;
+  /** The requester is the owner or the human who claimed the agent that owns the Space. */
+  readonly owned: boolean;
   readonly publicRead: boolean;
   readonly memberRole: Exclude<AccessRole, "owner"> | null;
 }
@@ -54,7 +57,7 @@ export interface ResourceMappingRow {
 
 export type NodeAuthorizationRow = Pick<
   ResolvedNodeRow,
-  | "owner_user_id"
+  | "requester_owns"
   | "space_type"
   | "public_read"
   | "member_role"

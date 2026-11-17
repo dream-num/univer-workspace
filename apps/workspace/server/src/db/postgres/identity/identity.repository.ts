@@ -12,6 +12,7 @@ import type {
   AgentBanResult,
   IdentityConflict,
   IdentityRepository,
+  StoredAgent,
 } from "../../../modules/identity/identity.repository.js";
 
 export class PostgresIdentityRepository implements IdentityRepository {
@@ -33,6 +34,42 @@ export class PostgresIdentityRepository implements IdentityRepository {
       await db.prepare("UPDATE agents SET banned_at = COALESCE(banned_at, ?) WHERE user_id = ?").run(at, id);
       return { status: "banned", id, username };
     });
+  }
+
+  async findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]> {
+    // shortcut: no index on agents.owner_user_id, so listing an owner's agents scans the table; add one with the next migration if it grows large.
+    const rows = await this._database
+      .prepare(
+        `SELECT users.id, users.username, users.display_name, users.avatar_url,
+           spaces.id AS space_id, agents.owner_user_id, agents.last_active_at,
+           agents.banned_at IS NOT NULL AS banned,
+           (SELECT COUNT(*) FROM nodes JOIN resources ON resources.node_id = nodes.id
+            WHERE nodes.space_id = spaces.id AND nodes.trash_batch_id IS NULL) AS files
+         FROM agents
+         JOIN users ON users.id = agents.user_id
+         JOIN spaces ON spaces.owner_user_id = agents.user_id AND spaces.type = 'personal'
+         WHERE ${"userId" in filter ? "agents.user_id" : "agents.owner_user_id"} = ?
+         ORDER BY agents.claimed_at, agents.user_id COLLATE "C"`
+      )
+      .all("userId" in filter ? filter.userId : filter.ownerUserId) as unknown as readonly AgentRow[];
+    return rows.map(toStoredAgent);
+  }
+
+  async claimAgent(agentUserId: string, ownerUserId: string, at: number): Promise<boolean> {
+    const result = await this._database
+      .prepare(
+        `UPDATE agents SET owner_user_id = ?, claimed_at = ?, expires_at = NULL
+         WHERE user_id = ? AND owner_user_id IS NULL AND banned_at IS NULL`
+      )
+      .run(ownerUserId, at, agentUserId);
+    return result.changes > 0;
+  }
+
+  async banClaimedAgent(ownerUserId: string, agentUserId: string, at: number): Promise<boolean> {
+    const result = await this._database
+      .prepare("UPDATE agents SET banned_at = COALESCE(banned_at, ?) WHERE user_id = ? AND owner_user_id = ?")
+      .run(at, agentUserId, ownerUserId);
+    return result.changes > 0;
   }
 
   async createPasswordUser(input: NewPasswordUser): Promise<void> {
@@ -338,17 +375,18 @@ export class PostgresIdentityRepository implements IdentityRepository {
   }
 
   /**
-   * Pushes out the expiry of the unclaimed agent that is `userId`, or that owns the Space of
-   * `nodeId`. It reads first, so an agent already seen since `staleBefore` costs no write. An
-   * agent that has already expired is always pushed out, so its next use brings it back.
+   * Records activity of the agent that is `userId`, or of the unclaimed agent that owns the Space of
+   * `nodeId`, and pushes out an unclaimed agent's expiry. It reads first, so an agent already seen
+   * since `staleBefore` costs no write. An agent that has already expired is always pushed out, so
+   * its next use brings it back.
    */
-  async touchUnclaimedAgent(
+  async touchAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,
     expiresAt: number
   ): Promise<void> {
-    await touchUnclaimedAgent(this._database, target, at, staleBefore, expiresAt);
+    await touchAgent(this._database, target, at, staleBefore, expiresAt);
   }
 
   async findUsers(userIds: readonly string[]): Promise<readonly User[]> {
@@ -715,9 +753,9 @@ export async function findPrincipal(
   return row ? toPrincipal(row) : null;
 }
 
-export async function touchUnclaimedAgent(
+export async function touchAgent(
   db: PostgresDatabase,
-  target: Parameters<IdentityRepository["touchUnclaimedAgent"]>[0],
+  target: Parameters<IdentityRepository["touchAgent"]>[0],
   at: number,
   staleBefore: number,
   expiresAt: number,
@@ -725,12 +763,11 @@ export async function touchUnclaimedAgent(
   const stale = await db
     .prepare(
       `SELECT user_id FROM agents
-       WHERE owner_user_id IS NULL
-         AND (last_active_at <= ? OR expires_at <= ?)
-         AND user_id = ${
+       WHERE (last_active_at <= ? OR expires_at <= ?)
+         AND ${
            "userId" in target
-             ? "?"
-             : `(SELECT spaces.owner_user_id FROM nodes
+             ? "user_id = ?"
+             : `owner_user_id IS NULL AND user_id = (SELECT spaces.owner_user_id FROM nodes
                  JOIN spaces ON spaces.id = nodes.space_id WHERE nodes.id = ?)`
          }`
     )
@@ -739,7 +776,9 @@ export async function touchUnclaimedAgent(
     | undefined;
   if (!stale) return;
   await db
-    .prepare("UPDATE agents SET last_active_at = ?, expires_at = ? WHERE user_id = ?")
+    .prepare(
+      "UPDATE agents SET last_active_at = ?, expires_at = CASE WHEN owner_user_id IS NULL THEN ?::bigint END WHERE user_id = ?"
+    )
     .run(at, expiresAt, stale.user_id);
 }
 
@@ -783,5 +822,24 @@ function toUser(row: UserRow): User {
     username: row.username,
     displayName: row.display_name,
     avatarUrl: row.avatar_url,
+  };
+}
+
+interface AgentRow extends UserRow {
+  readonly space_id: string;
+  readonly owner_user_id: string | null;
+  readonly last_active_at: number;
+  readonly banned: boolean;
+  readonly files: number;
+}
+
+function toStoredAgent(row: AgentRow): StoredAgent {
+  return {
+    user: toUser(row),
+    spaceId: row.space_id,
+    ownerUserId: row.owner_user_id,
+    lastActiveAt: row.last_active_at,
+    banned: row.banned,
+    files: row.files,
   };
 }

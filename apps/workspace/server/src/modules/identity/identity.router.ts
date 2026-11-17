@@ -3,6 +3,7 @@ import { json, Router, type Request, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
+import type { AgentClaims } from "./agent-claims.js";
 import type { IdentityModule } from "./identity.service.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
 
@@ -13,6 +14,7 @@ const REGISTERED_CLIENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
+  readonly agentClaims: AgentClaims;
   readonly accessTokens: AccessTokenService;
   readonly mcpOAuth: McpOAuthConfig | null;
   readonly secureCookies: boolean;
@@ -91,6 +93,31 @@ export function createIdentityRouter(options: {
       mcpUrl: options.mcpOAuth?.resources[0] ?? null,
       expiresAt,
     });
+  });
+
+  router.get("/agents", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.json(await options.agentClaims.list(request.headers.cookie));
+  });
+
+  router.post("/agents/claim-codes", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.status(201).json(await options.agentClaims.createCode(request.headers.cookie));
+  });
+
+  router.get("/agents/claim", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.json(await options.agentClaims.inspect(request.headers.cookie, request.query.code));
+  });
+
+  router.post("/agents/claim", async (request, response) => {
+    response.set("Cache-Control", "no-store");
+    response.json(await options.agentClaims.claim(request.headers.cookie, request.body?.code));
+  });
+
+  router.post("/agents/:agentId/stop", async (request, response) => {
+    await options.agentClaims.stop(request.headers.cookie, request.params.agentId);
+    response.status(204).end();
   });
 
   router.post("/auth/guest", async (request, response) => {

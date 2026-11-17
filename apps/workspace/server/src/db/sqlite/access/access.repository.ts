@@ -10,15 +10,29 @@ import type {
   AccessRepository,
 } from "../../../modules/access/access.repository.js";
 
+/**
+ * The requester owns the Space: it is the Space owner, or the human who claimed the agent that owns
+ * it. The relation runs one way, so a claimed agent gains nothing of its human's.
+ */
+function ownsSpaceSql(ownerUserId: string): string {
+  return `(${ownerUserId} = $userId OR EXISTS (
+    SELECT 1 FROM agents WHERE agents.user_id = ${ownerUserId} AND agents.owner_user_id = $userId
+  ))`;
+}
+
 export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS ownerUserId,
+  ${ownsSpaceSql("spaces.owner_user_id")} AS owned,
   spaces.public_read AS publicRead, space_members.role AS memberRole`;
 
-export type SqliteSpaceAccessRow = Omit<StoredSpaceAccess, "publicRead"> & { readonly publicRead: 0 | 1 };
+export type SqliteSpaceAccessRow = Omit<StoredSpaceAccess, "publicRead" | "owned"> & {
+  readonly publicRead: 0 | 1;
+  readonly owned: 0 | 1;
+};
 
 export function storedSpaceAccess(row: SqliteSpaceAccessRow): StoredSpaceAccess {
   return {
-    id: row.id, type: row.type, name: row.name, ownerUserId: row.ownerUserId,
+    id: row.id, type: row.type, name: row.name, ownerUserId: row.ownerUserId, owned: Boolean(row.owned),
     memberRole: row.memberRole, publicRead: Boolean(row.publicRead),
   };
 }
@@ -29,7 +43,7 @@ export const spaceMemberJoin = `
 
 /**
  * An agent that is banned or past its expiry is suspended: its Space gives a role to nobody but
- * itself. Suspension is derived on every read and never stored, so lifting it needs no repair.
+ * its owners. Suspension is derived on every read and never stored, so lifting it needs no repair.
  */
 function ownerSuspendedSql(ownerUserId: string): string {
   return `EXISTS (
@@ -40,7 +54,7 @@ function ownerSuspendedSql(ownerUserId: string): string {
 }
 
 export const visibleSpaceSql = `(
-  spaces.owner_user_id = $userId
+  ${ownsSpaceSql("spaces.owner_user_id")}
   OR (
     NOT ${ownerSuspendedSql("spaces.owner_user_id")}
     AND (
@@ -249,7 +263,7 @@ export class SqliteAccessRepository implements AccessRepository {
       .prepare(`
       SELECT ${nodeDisplayColumns()}
         space.type AS space_type, space.name AS space_name,
-        space.owner_user_id, space.public_read,
+        1 AS requester_owns, space.public_read,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
         NULL AS navigation_root_id, NULL AS requester_kind, NULL AS requester_claimed
@@ -320,7 +334,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
              ${contentOnly ? "" : nodeDisplayColumns()}
              space.type AS space_type,
              ${contentOnly ? "" : "space.name AS space_name,"}
-             space.owner_user_id,
+             ${ownsSpaceSql("space.owner_user_id")} AS requester_owns,
              space.public_read,
              member.role AS member_role,
              (
@@ -390,7 +404,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
            WHERE node.id = $nodeId
              AND node.trash_batch_id IS NULL
              AND (
-               space.owner_user_id = $userId
+               ${ownsSpaceSql("space.owner_user_id")}
                OR (
                  NOT ${ownerSuspendedSql("space.owner_user_id")}
                  AND (

@@ -202,7 +202,7 @@ export function requesterCategory(
 }
 
 export function resolveStoredSpaceAccess(userId: string, row: StoredSpaceAccess): SpaceAccess | null {
-  const assignedRole = row.ownerUserId === userId ? "owner" : row.memberRole;
+  const assignedRole = row.owned ? "owner" : row.memberRole;
   const member = userId !== ANONYMOUS_USER_ID && assignedRole !== null;
   const role = highestRole(
     userId === ANONYMOUS_USER_ID ? null : assignedRole,
@@ -312,7 +312,7 @@ function mergeNodeCapabilities(left: NodeCapabilities, right: NodeCapabilities):
 
 function resolvedRoles(userId: string, row: NodeAuthorizationRow) {
   const assignedRole =
-    row.owner_user_id === userId
+    row.requester_owns
       ? "owner"
       : row.space_type === "team"
         ? row.member_role
