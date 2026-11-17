@@ -492,6 +492,7 @@ create_worktree_unit
 merge_worktree
 discard_worktree
 activate_worktree_resource
+copy_node
 ```
 
 状态为 `pending | completed | failed`。`payload_json` 在首次请求时固化服务器生成的稳定
@@ -545,6 +546,33 @@ Node。
 4. 读取先由 `sign-url` 返回同域 `/content` 地址；每次 Content 请求重新验证当前 Unit/Worktree
    权限，使用 `private, no-store` 并支持单段 Byte Range；
 5. Worktree Merge 只把成功合入或未变化 Unit 的 Asset 发布到 Trunk。
+
+### 复制文件
+
+`POST /api/nodes/{nodeId}/copies` 把请求者能打开的 Sheet、Doc、Slide 或 Blob 文件复制成请求者自己的新文件。
+目标是请求者 Personal Space 的根级，或请求者可添加 Unit 的草稿 PR。Blob 不进入 Worktree，只能复制到 Personal Space。
+来源不可读时与读取该 Node 一样返回 404。
+
+1. 校验来源、目标和创建上限后，按 Idempotency Key 预留 `copy_node` Operation。`payload_json` 只固化来源 Node、目标、
+   新的 Node/Resource/Unit/Asset ID、对象 Key 与对象元数据，以及预留时来源 Unit 的 Revision，不保存 Unit 内容；
+2. `reserved`：把来源 Blob 对象或来源 Unit 引用的 Asset 对象复制到新的 Object Key，并校验 SHA-256；
+3. `objects_copied`：按预留时固定的 Revision 重新读取来源 Unit，把内容中的 Unit ID 和 Asset ID 换成新 ID，
+   在 Trunk 或目标 Worktree 创建新 Unit。Blob 没有这一步；
+4. `unit_created`：一个产品事务发布结果。目标为 Personal Space 时写 Node、Resource、类型扩展行、Asset 行和
+   `nodes.copied_from_node_id`；目标为草稿 PR 时写 `worktree_units`、带 `copied_from_node_id` 的
+   `worktree_node_intents` 和 Worktree Asset 行，PR 合入激活 Node 时再写入来源。
+
+每一步都可重复执行：对象写入同一 Key，重复创建同一 Unit 视为成功。请求中断后，后台恢复领取 Lease 到期的 Pending
+复制继续执行。可重试错误按指数退避最多尝试 5 次。不可重试或超过次数时进入 `abandoning`：硬删除已创建的 Trunk Unit
+（Collaboration SDK 不提供删除草稿 Unit 的接口，草稿 PR 内的 Unit 改为标记移除），把已复制的对象写入
+`object_deletion_jobs`，Operation 标记 Failed。Failed 的复制不接受 Operation Retry，须用新的 Idempotency Key 重新复制。
+相同 Key 且相同意图回放结果，不同意图返回 409。
+
+副本只记录来源 Node ID，不复制权限、分享设置、评论和历史版本。来源 Unit 引用了其它 Unit 的 Asset 时，只复制请求者
+能打开的那些 Unit 的 Asset。复制完成后副本与来源互不影响：来源关闭分享、进入回收站或被永久删除，副本及其图片照常可读；
+来源被永久删除时 `copied_from_node_id` 置 `NULL`。HTML View 是 Blob，复制只复制页面字节：副本页面仍绑定来源页面引用的 Sheet，
+读者能打开这些 Sheet 时才显示数据。未认领 Agent 的单文件大小上限按一次复制的全部 Asset 字节之和计算，
+文件数上限把 Pending 的复制计入。
 
 ### Rename 与 Move
 

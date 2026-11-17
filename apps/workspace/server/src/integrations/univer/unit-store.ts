@@ -99,14 +99,21 @@ export interface UnitStore {
     readonly unitId: string;
     readonly headRevision: number;
   }>;
+  /**
+   * Hard-deletes a Unit that never became a file. Optional, because a store that keeps no Units
+   * has nothing to delete.
+   */
+  deleteUnit?(input: { readonly unitId: string; readonly userId: string }): Promise<void>;
 }
 
 export interface UnitSnapshotStore {
+  /** Trunk content at `revision`, or at the head when it is omitted. Reports the revision read. */
   materialize(input: {
     readonly unitId: string;
     readonly unitType: UnitType;
     readonly userId: string;
-  }): Promise<CollaborationServiceModule.ISnapshotWithBlocks>;
+    readonly revision?: number;
+  }): Promise<CollaborationServiceModule.ISnapshotWithBlocks & { readonly revision: number }>;
 }
 
 export interface CollaborationRuntime {
@@ -187,16 +194,17 @@ export function createCollaborationRuntime(
           headRevision: loaded.targetRevision,
         };
       } catch (error) {
-        if (error instanceof UnitStoreError) throw error;
-        if (error instanceof CollabError) {
-          throw new UnitStoreError(
-            error.code,
-            error.message,
-            error.retryable,
-            { cause: error }
-          );
-        }
-        throw error;
+        throw unitStoreError(error);
+      }
+    },
+    async deleteUnit(input) {
+      try {
+        await service.deleteUnits(
+          { unitIDs: [input.unitId], hardDelete: true },
+          collaborationCallOptions(input.userId)
+        );
+      } catch (error) {
+        throw unitStoreError(error);
       }
     },
   };
@@ -216,14 +224,17 @@ export function createCollaborationRuntime(
         {
           unitID: input.unitId,
           type: univerType(input.unitType),
-          revision: 0,
+          revision: input.revision ?? 0,
         },
         {
           userID: input.userId,
           customData: { source: "workspace-exchange" },
         }
       );
-      return snapshotMaterializer.materializeSnapshot(loadData);
+      return {
+        ...(await snapshotMaterializer.materializeSnapshot(loadData)),
+        revision: loadData.targetRevision,
+      };
     },
   };
 
@@ -346,6 +357,12 @@ export function createUnitData(input: {
       rev: 1,
     },
   } as CollaborationServiceModule.CreateUnitFromDataInput;
+}
+
+function unitStoreError(error: unknown): unknown {
+  return error instanceof CollabError
+    ? new UnitStoreError(error.code, error.message, error.retryable, { cause: error })
+    : error;
 }
 
 function unitIdentityMismatch(unitId: string): UnitStoreError {

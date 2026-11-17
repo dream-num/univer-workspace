@@ -9,7 +9,8 @@ export type OperationDatabaseKind =
   | "create_worktree_unit"
   | "merge_worktree"
   | "discard_worktree"
-  | "activate_worktree_resource";
+  | "activate_worktree_resource"
+  | "copy_node";
 
 export interface OperationRow {
   readonly id: string;

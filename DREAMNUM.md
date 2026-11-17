@@ -184,6 +184,12 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   revokes a User's use of the shared MCP executor; no HTTP route writes it. The session and the token exchange report
   the grant, and an MCP deployment with `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` follows it without a restart.
   Deployments upgrade Workspace and grant the users who use the executor today before switching MCP to `workspace`.
+- Product V24 (PostgreSQL product schema version 4) adds the copy source, `nodes.copied_from_node_id`, through a
+  backed-up V23 → V24 startup migration that backfills nothing. PostgreSQL upgrades in place in one transaction and
+  takes no in-app backup. `POST /api/nodes/{nodeId}/copies` copies a Sheet, Doc, Slide or Blob file the requester can
+  open, with its embedded images, to the root of the requester's Personal Space or into a draft pull request, as one
+  recoverable `copy_node` Operation. The copy records only its source Node, which `GET /api/nodes/{nodeId}` returns to
+  every reader of the copy. It does not take over the source's permissions, sharing settings, comments or history.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

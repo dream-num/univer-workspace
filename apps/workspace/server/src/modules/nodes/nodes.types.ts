@@ -66,4 +66,5 @@ export interface NodeResponse {
   readonly owner: NodeOwner | null;
   readonly breadcrumbs: readonly Breadcrumb[];
   readonly navigationRootNodeId: string | null;
+  readonly copiedFromNodeId: string | null;
 }

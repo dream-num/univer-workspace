@@ -10,6 +10,7 @@ OperationKind:
     - mergeWorktree
     - discardWorktree
     - activateWorktreeResource
+    - copyNode
 
 OperationState:
   type: string

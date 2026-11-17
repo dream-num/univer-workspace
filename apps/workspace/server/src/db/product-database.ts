@@ -1,6 +1,7 @@
 import type { AccessRepository } from "../modules/access/index.js";
 import type { BlobsRepository } from "../modules/blobs/index.js";
 import type { ContentPermissionsRepository } from "../modules/content-permissions/index.js";
+import type { CopiesRepository } from "../modules/copies/index.js";
 import type { HtmlViewDraftsRepository } from "../modules/html-view-drafts/index.js";
 import type { AccessTokenRepository, IdentityRepository } from "../modules/identity/index.js";
 import type { IssuesRepository } from "../modules/issues/index.js";
@@ -24,6 +25,7 @@ export interface ProductRepositories {
   readonly access: AccessRepository;
   readonly blobs: BlobsRepository;
   readonly contentPermissions: ContentPermissionsRepository;
+  readonly copies: CopiesRepository;
   readonly htmlViewDrafts: HtmlViewDraftsRepository;
   readonly identity: IdentityRepository;
   readonly accessTokens: AccessTokenRepository;

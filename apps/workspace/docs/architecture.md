@@ -74,6 +74,7 @@ apps/workspace/
 │       │   ├── exchange/
 │       │   ├── univer-assets/
 │       │   ├── operations/
+│       │   ├── copies/
 │       │   ├── trash/
 │       │   ├── permissions/
 │       │   ├── worktrees/
@@ -267,6 +268,11 @@ Cookie、OAuth callback 和产品 API 保持原有行为；外部 client 只通�
 
 跨产品数据库和 Collaboration Service 的写入由 `operations` Module 持久化和恢复，不用
 一次 SQLite transaction 假装覆盖两个系统。
+
+`copies` Module 拥有文件复制：一个 `copy_node` Operation 依次复制对象、创建 Unit、发布产品行，并由
+`jobs/operation-recovery.ts` 续跑。它通过 `UnitSnapshotStore.materialize` 按固定 Revision 读取来源，通过
+`UnitStore` 或 `WorktreeBackend` 创建 Unit，不直接调用 SDK。内容中的 Unit ID 与 Asset ID 替换集中在
+`modules/copies/unit-id-remap.ts`：它替换内容里所有等于来源 ID 的字符串，已知局限和删除条件写在该文件的注释中。
 
 Collaboration、Worktree、导出与对比共用的 Unit runtime 使用 SDK 1.1.0 的 `worker` 执行模式：changeset
 应用与快照物化在 worker 线程池中执行，不占用 HTTP/WebSocket 事件循环。线程池在首次使用时为每个 worker

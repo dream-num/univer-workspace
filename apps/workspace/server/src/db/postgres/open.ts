@@ -7,6 +7,7 @@ import { createPostgresUnitCreationFactsReader } from "./unit-creation-facts.js"
 import { PostgresAccessRepository } from "./access/access.repository.js";
 import { PostgresBlobsRepository } from "./blobs/blobs.repository.js";
 import { PostgresContentPermissionsRepository } from "./content-permissions/content-permissions.repository.js";
+import { PostgresCopiesRepository } from "./copies/copies.repository.js";
 import { PostgresHtmlViewDraftsRepository } from "./html-view-drafts/drafts.repository.js";
 import { PostgresIdentityRepository } from "./identity/identity.repository.js";
 import { PostgresAccessTokenRepository } from "./identity/access-token.repository.js";
@@ -30,6 +31,7 @@ export function createPostgresRepositories(database: PostgresDatabase): ProductR
     access,
     blobs: new PostgresBlobsRepository(database, access),
     contentPermissions: new PostgresContentPermissionsRepository(database, access),
+    copies: new PostgresCopiesRepository(database, access),
     htmlViewDrafts: new PostgresHtmlViewDraftsRepository(database, access),
     identity,
     accessTokens: new PostgresAccessTokenRepository(database),

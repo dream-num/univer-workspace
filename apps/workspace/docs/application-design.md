@@ -19,6 +19,7 @@ React
   │           ├── Permissions / Trash / Views
   │           ├── Issues
   │           ├── Worktrees
+  │           ├── Copies
   │           └── Operations
   ├── Worktree Change Feed
   │     └── Authenticated WebSocket cache invalidation
@@ -457,6 +458,12 @@ Issue 写入不是跨系统写入，不使用 Operation，也不接受 `Idempote
 - 同 Key 不同意图返回 Conflict；
 - Retryable 错误保留 Pending 并由 Recovery Job 续跑；
 - Non-retryable 错误进入 Failed，由显式 Retry 重新排队。
+
+复制文件（`copy_node`）跨三个系统：BlobStore、Collaboration Service 和产品数据库。它按“复制对象、创建 Unit、
+发布产品行”的顺序推进，产品行最后写入，因此中途失败时没有可见的半成品文件。失败的复制自行撤销：删除新 Unit，
+把已复制对象交给对象删除任务，然后进入 Failed。它已清除自己创建的内容，所以不接受显式 Retry，调用方用新 Key 重新复制。
+副本归请求者所有，只记录来源 Node，不继承来源的权限、分享设置、评论和历史。步骤与表见
+[data-model.md](./data-model.md) 的“复制文件”。
 
 业务代码没有旧字段回退、旧表 Union、双写或旧 Route 转发。
 

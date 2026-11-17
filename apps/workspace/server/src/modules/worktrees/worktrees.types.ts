@@ -240,6 +240,13 @@ export interface WorktreesModule {
     operationId: unknown,
     input: unknown
   ): Promise<{ readonly status: 201; readonly body: { readonly unit: WorktreeUnit } }>;
+  /** Throws unless the User may create a file in this pull request that lands at the target. */
+  assertCanCreateUnit(
+    userId: string,
+    worktreeId: string,
+    targetSpaceId: string,
+    targetParentNodeId: string | null
+  ): Promise<void>;
   openUnit(
     userId: string,
     worktreeId: string,

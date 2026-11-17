@@ -51,6 +51,8 @@ export interface NodesRepository {
     limit: number
   ): Promise<NodeListRow[]>;
   breadcrumbs(nodeId: string): Promise<BreadcrumbRow[]>;
+  /** The Node this one was copied from, while that Node still exists. */
+  copiedFrom(nodeId: string): Promise<string | null>;
   /** Authorize and apply the patch together so concurrent moves cannot form a cycle. */
   updateNode(actor: Principal, nodeId: string, patch: NodePatch, updatedAt: number): Promise<NodeAccess>;
 }

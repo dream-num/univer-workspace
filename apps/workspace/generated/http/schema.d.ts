@@ -1440,6 +1440,36 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/nodes/{nodeId}/copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Copy a file into a file of the caller's own.
+         * @description Copies a Sheet, Doc, Slide or Blob file the caller can open, with its
+         *     embedded images. The copy lands at the root of the caller's Personal
+         *     Space, or as a new file in a draft pull request the caller can add files
+         *     to. It starts a history of its own and records its source, which
+         *     `getNode` returns as `copiedFromNodeId`. Comments, history, grants and
+         *     Link Sharing are not copied. A folder returns 400. A source the caller
+         *     cannot open returns the same 404 as reading it. For an unclaimed agent
+         *     the copied images of one file count together against the stored-file
+         *     size ceiling.
+         */
+        post: operations["copyNode"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/operations/{operationId}": {
         parameters: {
             query?: never;
@@ -3406,6 +3436,8 @@ export interface components {
             owner: components["schemas"]["NodeOwner"] | null;
             breadcrumbs: components["schemas"]["Breadcrumb"][];
             navigationRootNodeId: string | null;
+            /** @description The Node this file was copied from. Null for a file that is not a copy, and after the source is permanently deleted. The reader may be unable to open the source. */
+            copiedFromNodeId: string | null;
         };
         PatchNode: {
             name?: string;
@@ -3417,13 +3449,49 @@ export interface components {
         NodeReport: {
             id: string;
         };
+        /** @description The root of the caller's Personal Space. */
+        CopyToPersonalSpace: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "personalSpace";
+        };
+        /** @description A new file in a draft pull request, which lands at the given place when the pull request is merged. Sheet, Doc and Slide only. */
+        CopyToWorktree: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "worktree";
+            worktreeId: string;
+            spaceId: string;
+            parentNodeId: string | null;
+        };
+        CopyNode: {
+            /** @description Name of the copy. Defaults to the name of the source. */
+            name?: string;
+            target: components["schemas"]["CopyToPersonalSpace"] | components["schemas"]["CopyToWorktree"];
+        };
         /** @enum {string} */
-        OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource";
+        OperationKind: "createResource" | "createBlobResource" | "replaceBlobContent" | "createWorktree" | "addWorktreeUnit" | "createWorktreeUnit" | "mergeWorktree" | "discardWorktree" | "activateWorktreeResource" | "copyNode";
         /** @enum {string} */
         OperationState: "pending" | "completed" | "failed";
         OperationError: {
             code: string;
             message: string;
+        };
+        ResourceCreateResponse: {
+            operation: components["schemas"]["OperationView"];
+            node: components["schemas"]["NodeSummary"];
+        };
+        CopyIntoWorktreeResponse: {
+            operation: components["schemas"]["OperationView"];
+            unit: components["schemas"]["WorktreeUnit"];
+        };
+        CopyNodeResponse: components["schemas"]["ResourceCreateResponse"] | components["schemas"]["CopyIntoWorktreeResponse"];
+        OperationEnvelope: {
+            operation: components["schemas"]["OperationView"];
         };
         CreateResource: {
             /** @constant */
@@ -3436,13 +3504,6 @@ export interface components {
             initialData?: {
                 [key: string]: unknown;
             };
-        };
-        ResourceCreateResponse: {
-            operation: components["schemas"]["OperationView"];
-            node: components["schemas"]["NodeSummary"];
-        };
-        OperationEnvelope: {
-            operation: components["schemas"]["OperationView"];
         };
         ResourceResponse: {
             resource: components["schemas"]["ResourceSummary"];
@@ -6525,6 +6586,67 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+        };
+    };
+    copyNode: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Random opaque key representing one user intent. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKeyParameter"];
+            };
+            path: {
+                nodeId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CopyNode"];
+            };
+        };
+        responses: {
+            /** @description Existing completed result for the Idempotency Key. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyNodeResponse"];
+                };
+            };
+            /** @description Copy created during the initial attempt. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CopyNodeResponse"];
+                };
+            };
+            /** @description The copy remains pending, or failed and removed what it had created. */
+            202: {
+                headers: {
+                    Location: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OperationEnvelope"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            /** @description Insufficient permission on the target, a ceiling, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session copies a .univer.html page. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getOperation: {

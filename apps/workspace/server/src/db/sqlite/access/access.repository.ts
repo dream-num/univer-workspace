@@ -102,7 +102,7 @@ function countPersonalFiles(database: DatabaseSync, userId: string, operationId:
             FROM operations
             WHERE actor_user_id = $userId
               AND state = 'pending'
-              AND kind IN ('create_resource', 'create_blob_resource', 'create_worktree_unit'))
+              AND kind IN ('create_resource', 'create_blob_resource', 'create_worktree_unit', 'copy_node'))
          - EXISTS (
              SELECT 1 FROM operations
              WHERE id = $operationId AND actor_user_id = $userId AND state <> 'failed'

@@ -130,6 +130,7 @@ export function createNodesModule(options: {
           node.navigationRootNodeId
         ),
         navigationRootNodeId: node.navigationRootNodeId,
+        copiedFromNodeId: await options.repository.copiedFrom(node.id),
       };
     },
 
