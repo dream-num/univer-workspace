@@ -7,9 +7,11 @@ import { createProductTestApplication, type ProductTestApplication } from "../su
 const HOUR = 60 * 60 * 1000;
 const applications: ProductTestApplication[] = [];
 const servers: Server[] = [];
+const sockets: WebSocket[] = [];
 
 afterEach(async () => {
   vi.useRealTimers();
+  for (const socket of sockets.splice(0)) socket.close();
   await Promise.all(servers.splice(0).map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
@@ -166,11 +168,26 @@ describe("claiming an agent", () => {
     expect(await agents(origin, alice.cookie)).toMatchObject([{ id: agent.id, stopped: true }]);
     expect((await send(origin, "POST", `/api/agents/${agent.id}/stop`, undefined, alice.cookie)).status).toBe(204);
   });
+
+  it("closes the collaboration sockets the agent holds when its owner stops it", async () => {
+    const origin = await start({ realtime: true });
+    const agent = await guestAgent(origin);
+    const alice = await register(origin, "alice");
+    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+    const held = await connectBoth(origin, agent.cookie);
+    const control = await connectBoth(origin, alice.cookie);
+    const closed = Promise.all(held.map((socket) => socketClosed(socket)));
+
+    expect((await send(origin, "POST", `/api/agents/${agent.id}/stop`, undefined, alice.cookie)).status).toBe(204);
+
+    expect(await closed).toEqual([1008, 1008]);
+    expect(control.map((socket) => socket.readyState)).toEqual([WebSocket.OPEN, WebSocket.OPEN]);
+  });
 });
 
 const PASSWORD = "correct horse battery staple";
 
-async function start(): Promise<string> {
+async function start(options: { readonly realtime?: boolean } = {}): Promise<string> {
   const application = await createProductTestApplication({
     host: "127.0.0.1",
     port: 0,
@@ -180,12 +197,13 @@ async function start(): Promise<string> {
     sessionTtlMs: 48 * HOUR,
     passwordAuthEnabled: true,
     agentCreateLimitPerHour: 100,
-  }, {
+  }, options.realtime ? {} : {
     unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
     worktreeBackend: draftWorktreeBackend(),
   });
   applications.push(application);
   const server = createServer(application.app);
+  application.attachWebSocket(server);
   servers.push(server);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
   const address = server.address();
@@ -292,4 +310,24 @@ async function agents(origin: string, cookie: string): Promise<unknown> {
 async function expectError(request: Promise<Response>, status: number, code: string): Promise<void> {
   const response = await request;
   expect({ status: response.status, body: await response.json() }).toMatchObject({ status, body: { error: { code } } });
+}
+
+async function connectBoth(origin: string, cookie: string): Promise<WebSocket[]> {
+  return Promise.all(["/universer-api/comb/connect", "/api/worktree-events"].map(async (path) => {
+    const { ticket } = (await (await send(origin, "GET", "/universer-api/user/session-ticket", undefined, cookie)).json()) as { ticket: string };
+    const socket = new WebSocket(`${origin.replace(/^http/u, "ws")}${path}?sessionTicket=${encodeURIComponent(ticket)}`);
+    sockets.push(socket);
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener("open", () => resolve(), { once: true });
+      socket.addEventListener("error", () => reject(new Error("WebSocket upgrade failed")), { once: true });
+    });
+    return socket;
+  }));
+}
+
+function socketClosed(socket: WebSocket): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("WebSocket did not close within 1 s")), 1000);
+    socket.addEventListener("close", (event) => { clearTimeout(timer); resolve(event.code); }, { once: true });
+  });
 }

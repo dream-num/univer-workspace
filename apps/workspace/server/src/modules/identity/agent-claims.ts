@@ -28,6 +28,7 @@ export interface AgentClaims {
 export function createAgentClaims(options: {
   readonly identity: Pick<IdentityModule, "requireSession" | "requireInteractiveSession">;
   readonly repository: Pick<IdentityRepository, "findAgents" | "claimAgent" | "banClaimedAgent">;
+  readonly onAgentStopped: (agentUserId: string) => void;
   readonly now?: () => number;
 }): AgentClaims {
   const { identity, repository } = options;
@@ -111,6 +112,7 @@ export function createAgentClaims(options: {
       if (!(await repository.banClaimedAgent(human.id, agentUserId, now()))) {
         throw new ApplicationError("NOT_FOUND", 404, "The resource was not found.");
       }
+      options.onAgentStopped(agentUserId);
     },
   };
 }

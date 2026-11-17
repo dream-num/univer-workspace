@@ -166,7 +166,8 @@ User、Personal Space 与 `agents` 行。`POST /api/agents` 为它签发个人�
 `anonymous`（没有 User 行的匿名读者）、`agent_unclaimed`、`agent_claimed` 和 `human`。封禁在 Identity 的凭据校验处生效。
 Cookie Session 与 token exchange 都经过同一个检查，被封禁的 agent 分别得到 401 和 `invalid_grant`。过期的 agent
 仍能认证。agent 每次认证记录 `last_active_at`，未认领 agent 同时把到期时间顺延 30 天，每天最多写一次。
-封禁不关闭 agent 已打开的协同 WebSocket，该连接在其 Session 结束时才关闭。
+主人停用 agent 时，服务器立即关闭该 agent 已打开的协同与 Worktree change-feed WebSocket。运维命令 `db:ban-agent`
+在服务器进程之外运行，触达不到这些连接，它们在其 Session 结束时才关闭。
 
 认领由 `modules/identity/agent-claims.ts` 负责，是 CLI Device Flow 的反向：未认领 agent 的任意 Session 调用
 `POST /api/agents/claim-codes` 取得认领码，人的浏览器 Session 用 `GET`、`POST /api/agents/claim` 查看和认领。

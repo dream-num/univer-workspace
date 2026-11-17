@@ -216,8 +216,8 @@ expiry to 30 days ahead, at most once a day. An expired or banned agent is suspe
 and the human who claimed it can read its Personal Space, and its links answer as not found. An expired agent can still
 authenticate, which ends the suspension at once, whenever it was last seen. A banned agent gets `401`, and `invalid_grant` from the token
 exchange. `pnpm db:ban-agent <username or user id>` bans an agent (`db:ban-agent:production` runs the
-build); it refuses a User that is not an agent, and a second run changes nothing. A collaboration
-socket the agent already holds stays open until its session ends. The MCP gateway caches a token
+build); it refuses a User that is not an agent, and a second run changes nothing. It runs outside the
+server, so a collaboration socket the agent already holds stays open until its session ends. The MCP gateway caches a token
 exchange for up to 30 seconds, so for that long a banned agent's token still gets an answer from tools
 that do not call Workspace, such as `whoami`.
 
@@ -232,7 +232,8 @@ code `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and `claimed_at` a
 The claimer becomes an owner of the agent's Personal Space and manages its files in the browser; the
 agent gets no access to the claimer's files. `GET /api/agents` lists the claimer's agents with file
 count and last activity, and `POST /api/agents/{agentId}/stop` stops one: it bans the agent, so its
-links stop working for everyone but its owners. There is no undo.
+links stop working for everyone but its owners, and closes the collaboration sockets the agent holds.
+There is no undo.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
 Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
