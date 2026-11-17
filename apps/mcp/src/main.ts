@@ -10,7 +10,7 @@ async function createRole(role: string | undefined) {
   if (role === "executor") {
     process.on("SIGUSR1", () => {});
     await (await import("./executor/jobs/directories.js")).sweepJobDirectories();
-    const config = parseExecutorConfig(process.env);
+    const config = parseExecutorConfig(process.env, process.execArgv);
     return { config, app: (await import("./executor/server.js")).createExecutor(config) };
   }
   if (role === "renderer") {

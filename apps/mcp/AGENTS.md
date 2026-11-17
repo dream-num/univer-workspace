@@ -34,6 +34,8 @@ Validate Docker changes against the built image and `docker compose config`.
   allowlisted trusted users; public executor access still requires Stage G.
   Grant secrets are read only by `executor/credentials.ts`.
 - Worker environments are explicit and exclude `MCP_EXECUTOR_TOKEN`, `MCP_RENDERER_TOKEN`, metrics tokens, license keys and OAuth secrets.
+- Every process the executor starts gets `EXECUTOR_CHILD_NODE_OPTIONS` (`--disable-sigusr1`) in its explicit environment, and the image starts
+  the roles with the same flag. The production executor refuses Node inspector flags. A new child process keeps both rules.
 - `renderer/` has no route to Workspace: it must not import the gateway, Client Core, `@univerjs-pro/*` or the executor (except the generated `executor/license.ts`), and must not mention Workspace origins, grants or sessions. The import-boundary test enforces it.
 - `shared/renderer-protocol.ts` owns the renderer operation list and its schemas; the executor imports it later. The render page ships in `dist/render-runtime` (copied from Client Core at build).
 - The renderer pool reuses runtimes across requests and users. That deviates from architecture 7.1 until Stage G; keep it local and single-user.

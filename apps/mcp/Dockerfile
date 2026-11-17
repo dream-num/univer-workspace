@@ -49,4 +49,4 @@ WORKDIR /app/univer-workspace-mcp
 COPY --from=build /app/deploy ./
 USER node
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["node", "--disable-sigusr1", "dist/main.js"]

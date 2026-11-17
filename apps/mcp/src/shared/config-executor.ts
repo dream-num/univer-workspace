@@ -23,11 +23,22 @@ const environment = z.object({
   UNIVER_LICENSE_KEY: z.string().trim().min(1).optional(),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
-export function parseExecutorConfig(env: NodeJS.ProcessEnv) {
+/** Node options of every process the executor starts: SIGUSR1 never opens a debugger. */
+export const EXECUTOR_CHILD_NODE_OPTIONS = "--disable-sigusr1";
+
+export function parseExecutorConfig(env: NodeJS.ProcessEnv, execArgv: readonly string[] = []) {
   if (env["NODE_ENV"] === "production" && env["MCP_EXECUTOR_ALLOWED_USER_IDS"] === undefined)
     throw new Error(
       "NODE_ENV=production requires MCP_EXECUTOR_ALLOWED_USER_IDS for session grants",
     );
+  // Workers inherit the executor's command-line flags.
+  if (
+    env["NODE_ENV"] === "production" &&
+    [...execArgv, ...(env["NODE_OPTIONS"] ?? "").split(/\s+/)].some((flag) =>
+      flag.startsWith("--inspect"),
+    )
+  )
+    throw new Error("NODE_ENV=production forbids Node inspector flags on the executor");
   const config = environment.parse(env);
   if ((config.UNIVER_LICENSE === undefined) !== (config.UNIVER_LICENSE_KEY === undefined))
     throw new Error("UNIVER_LICENSE and UNIVER_LICENSE_KEY must be set together");

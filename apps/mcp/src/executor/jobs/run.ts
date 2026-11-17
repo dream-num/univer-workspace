@@ -9,6 +9,7 @@ import {
   workspaceError,
 } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
+import { EXECUTOR_CHILD_NODE_OPTIONS } from "../../shared/config-executor.js";
 import { conversionError, rewriteJobPaths } from "./errors.js";
 import type { ConversionJob, JobCredentials } from "./protocol.js";
 
@@ -28,7 +29,13 @@ const replySchema = z.discriminatedUnion("ok", [
 ]);
 
 export function jobEnvironment(directory: string): NodeJS.ProcessEnv {
-  return { NODE_ENV: "production", HOME: directory, XDG_STATE_HOME: directory, TMPDIR: directory };
+  return {
+    NODE_ENV: "production",
+    NODE_OPTIONS: EXECUTOR_CHILD_NODE_OPTIONS,
+    HOME: directory,
+    XDG_STATE_HOME: directory,
+    TMPDIR: directory,
+  };
 }
 
 export function runConversionJob(
