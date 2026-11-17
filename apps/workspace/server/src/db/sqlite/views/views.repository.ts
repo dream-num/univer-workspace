@@ -1,4 +1,5 @@
 import type { SqliteDatabase } from "../connection.js";
+import { ownsSpaceSql } from "../access/access.repository.js";
 import type {
   RecentCursor,
   RecentRow,
@@ -82,15 +83,15 @@ export class SqliteViewsRepository implements ViewsRepository {
            )`;
     const parameters =
       cursor === null
-        ? [userId, limit]
-        : [userId, cursor.timestamp, cursor.timestamp, cursor.id, limit];
+        ? [userId, userId, limit]
+        : [userId, userId, cursor.timestamp, cursor.timestamp, cursor.id, limit];
     return this._database.connection
       .prepare(
         `SELECT resource.id AS resource_id, node.updated_at
          FROM resources AS resource
          JOIN nodes AS node ON node.id = resource.node_id
          JOIN spaces AS space ON space.id = node.space_id
-         WHERE space.owner_user_id = ?
+         WHERE ${ownsSpaceSql("space.owner_user_id", "?")}
            AND node.trash_batch_id IS NULL
            ${cursorClause}
          ORDER BY node.updated_at DESC, resource.id

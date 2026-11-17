@@ -19,6 +19,12 @@ export function ownsSpaceSql(ownerUserId: string, userId = "$userId"): string {
   ))`;
 }
 
+/** Everyone `ownsSpaceSql` holds for on the Spaces owned by the users that `ownerIdsSql` selects. */
+export function spaceOwnerIdsSql(ownerIdsSql: string): string {
+  return `${ownerIdsSql}
+    UNION SELECT owner_user_id FROM agents WHERE owner_user_id IS NOT NULL AND user_id IN (${ownerIdsSql})`;
+}
+
 export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId",
   ${ownsSpaceSql("spaces.owner_user_id")} AS "owned",
@@ -258,10 +264,10 @@ export class PostgresAccessRepository implements AccessRepository {
       JOIN spaces AS space ON space.id = node.space_id
       ${resourceJoins()}
       WHERE resource.id IN (${resourceIds.map(() => "?").join(", ")})
-        AND space.owner_user_id = ?
+        AND ${ownsSpaceSql("space.owner_user_id", "?")}
         AND node.trash_batch_id IS NULL
     `)
-      .all(...resourceIds, userId) as unknown as OwnedResourceRow[];
+      .all(...resourceIds, userId, userId) as unknown as OwnedResourceRow[];
   }
 }
 

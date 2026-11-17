@@ -1,11 +1,11 @@
 import type { SqliteDatabase } from "../connection.js";
 import {
-  spaceAccessColumns, spaceMemberJoin, storedSpaceAccess, visibleSpaceSql, type SqliteSpaceAccessRow,
+  ownsSpaceSql, spaceAccessColumns, spaceMemberJoin, storedSpaceAccess, visibleSpaceSql, type SqliteSpaceAccessRow,
 } from "../access/access.repository.js";
 import type { SpaceListScope, SpaceListEntry } from "../../../modules/spaces/spaces.repository.js";
 
-const mineSql = `(spaces.owner_user_id = $userId
-  OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
+const ownedSql = ownsSpaceSql("spaces.owner_user_id");
+const mineSql = `(${ownedSql} OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
 
 export const pinnableSql = `(${mineSql} OR (spaces.public_read = 1 AND EXISTS (
   SELECT 1 FROM space_stars WHERE space_stars.space_id = spaces.id AND space_stars.user_id = $userId
@@ -16,7 +16,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
     join: "",
     where: mineSql,
     order: `CASE WHEN spaces.type = 'personal' AND spaces.owner_user_id = $userId THEN 0
-      WHEN spaces.owner_user_id = $userId THEN 1 ELSE 2 END, spaces.name COLLATE NOCASE, spaces.id`,
+      WHEN ${ownedSql} THEN 1 ELSE 2 END, spaces.name COLLATE NOCASE, spaces.id`,
   },
   starred: {
     join: "JOIN space_stars ON space_stars.space_id = spaces.id AND space_stars.user_id = $userId",
@@ -25,7 +25,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
   },
   explore: {
     join: "",
-    where: "spaces.public_read = 1 AND spaces.owner_user_id <> $userId AND space_members.user_id IS NULL",
+    where: `spaces.public_read = 1 AND NOT ${ownedSql} AND space_members.user_id IS NULL`,
     // ponytail: Explore is unpaginated; add pagination when instance size requires it.
     order: `(SELECT COUNT(*) FROM space_stars WHERE space_stars.space_id = spaces.id) DESC,
       spaces.name COLLATE NOCASE, spaces.id`,

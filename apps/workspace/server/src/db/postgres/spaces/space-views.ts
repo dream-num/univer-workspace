@@ -7,8 +7,8 @@ type Connection = Pool | PoolClient;
 
 const memberJoin = `LEFT JOIN space_members
   ON space_members.space_id = spaces.id AND space_members.user_id = $1`;
-const mine = `(spaces.owner_user_id = $1 OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
 const owned = ownsSpaceSql("spaces.owner_user_id", "$1");
+const mine = `(${owned} OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`;
 const visible = `(${owned} OR (
   NOT EXISTS (
     SELECT 1 FROM agents WHERE agents.user_id = spaces.owner_user_id
@@ -26,7 +26,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
     join: "",
     where: mine,
     order: `CASE WHEN spaces.type = 'personal' AND spaces.owner_user_id = $1 THEN 0
-      WHEN spaces.owner_user_id = $1 THEN 1 ELSE 2 END, ${nameOrder}`,
+      WHEN ${owned} THEN 1 ELSE 2 END, ${nameOrder}`,
   },
   starred: {
     join: "JOIN space_stars ON space_stars.space_id = spaces.id AND space_stars.user_id = $1",
@@ -35,7 +35,7 @@ const scopes: Record<SpaceListScope | "pins", { join: string; where: string; ord
   },
   explore: {
     join: "",
-    where: "spaces.public_read AND spaces.owner_user_id <> $1 AND space_members.user_id IS NULL",
+    where: `spaces.public_read AND NOT ${owned} AND space_members.user_id IS NULL`,
     order: `${starCount} DESC, ${nameOrder}`,
   },
   pins: {

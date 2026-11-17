@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
 const HOUR = 60 * 60 * 1000;
@@ -92,6 +93,52 @@ describe("claiming an agent", () => {
     expect(await personalSpaceId(origin, alice.cookie)).toBe(aliceSpaceId);
   });
 
+  it("makes the human an owner of the agent's Space wherever ownership decides, and the agent nothing of the human's", async () => {
+    const origin = await start();
+    const { repositories } = applications.at(-1)!;
+    const agent = await guestAgent(origin);
+    const agentNodeId = await createFile(origin, agent.cookie, "Agent sheet");
+    const agentPull = await createPull(origin, agent.cookie, "Agent draft");
+    const agentSpaceId = await personalSpaceId(origin, agent.cookie);
+    const alice = await register(origin, "alice");
+    const aliceId = ((await sessionUser(origin, alice.cookie)) as { id: string }).id;
+    const aliceNodeId = await createFile(origin, alice.cookie, "Private");
+    const alicePull = await createPull(origin, alice.cookie, "Alice draft");
+    const aliceSpaceId = await personalSpaceId(origin, alice.cookie);
+    const bob = await register(origin, "bob");
+    const agentPullByNumber = `/api/spaces/${agentSpaceId}/worktrees/${agentPull.number}`;
+    expect((await send(origin, "GET", agentPullByNumber, undefined, alice.cookie)).status).toBe(404);
+
+    expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
+
+    expect(await mine(origin, alice.cookie)).toEqual([
+      { id: aliceSpaceId, affiliation: "owner", accessRole: "owner" },
+      { id: agentSpaceId, affiliation: "owner", accessRole: "owner" },
+    ]);
+    expect(await ownedNodeIds(origin, alice.cookie)).toEqual([aliceNodeId, agentNodeId].sort());
+    const activity = await send(origin, "GET", `/api/spaces/${agentSpaceId}/activity?timeZone=UTC`, undefined, alice.cookie);
+    expect(activity.status).toBe(200);
+    expect(((await activity.json()) as { events: { pull?: { id: string } }[] }).events.map((event) => event.pull?.id)).toEqual([agentPull.id]);
+    const byNumber = await send(origin, "GET", agentPullByNumber, undefined, alice.cookie);
+    expect(await byNumber.json()).toMatchObject({ worktree: { id: agentPull.id, capabilities: { review: true, editDraft: false } } });
+    expect(await userPullIds(origin, alice.cookie)).toEqual([agentPull.id, alicePull.id].sort());
+    expect(await repositories.worktrees.audience(agentPull.id)).toContain(aliceId);
+    expect(await repositories.contentPermissions.candidateUserIds(await unitIdOf(origin, agentNodeId, alice.cookie))).toContain(aliceId);
+    expect((await send(origin, "PATCH", `/api/spaces/${agentSpaceId}`, { publicRead: true }, alice.cookie)).status).toBe(200);
+    expect(await exploreIds(origin, alice.cookie)).toEqual([]);
+    expect(await exploreIds(origin, bob.cookie)).toEqual([agentSpaceId]);
+
+    expect(await mine(origin, agent.cookie)).toEqual([{ id: agentSpaceId, affiliation: "owner", accessRole: "owner" }]);
+    expect(await ownedNodeIds(origin, agent.cookie)).toEqual([agentNodeId]);
+    expect((await send(origin, "GET", `/api/spaces/${aliceSpaceId}/activity?timeZone=UTC`, undefined, agent.cookie)).status).toBe(404);
+    expect((await send(origin, "GET", `/api/spaces/${aliceSpaceId}/worktrees/${alicePull.number}`, undefined, agent.cookie)).status).toBe(404);
+    expect((await send(origin, "GET", `/api/worktrees/${alicePull.id}`, undefined, agent.cookie)).status).toBe(404);
+    expect(await userPullIds(origin, agent.cookie)).toEqual([agentPull.id]);
+    expect(await repositories.worktrees.audience(alicePull.id)).toEqual([aliceId]);
+    const agentId = ((await sessionUser(origin, agent.cookie)) as { id: string }).id;
+    expect(await repositories.contentPermissions.candidateUserIds(await unitIdOf(origin, aliceNodeId, alice.cookie))).not.toContain(agentId);
+  });
+
   it("lists the human's agents with their last activity and lets the human stop one", async () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     const origin = await start();
@@ -135,6 +182,7 @@ async function start(): Promise<string> {
     agentCreateLimitPerHour: 100,
   }, {
     unitStore: { createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }) },
+    worktreeBackend: draftWorktreeBackend(),
   });
   applications.push(application);
   const server = createServer(application.app);
@@ -173,11 +221,50 @@ async function claimCode(origin: string, cookie: string): Promise<string> {
   return ((await (await send(origin, "POST", "/api/agents/claim-codes", undefined, cookie)).json()) as { code: string }).code;
 }
 
+/** The caller's own Personal Space, which the Space list puts first. */
 async function personalSpaceId(origin: string, cookie: string): Promise<string> {
   const { spaces } = (await (await send(origin, "GET", "/api/spaces", undefined, cookie)).json()) as { spaces: { id: string; type: string }[] };
-  const personal = spaces.filter((space) => space.type === "personal");
-  expect(personal).toHaveLength(1);
-  return personal[0]!.id;
+  return spaces.find((space) => space.type === "personal")!.id;
+}
+
+async function mine(origin: string, cookie: string): Promise<unknown> {
+  const { spaces } = (await (await send(origin, "GET", "/api/spaces", undefined, cookie)).json()) as { spaces: { id: string; affiliation: string; accessRole: string }[] };
+  return spaces.map(({ id, affiliation, accessRole }) => ({ id, affiliation, accessRole }));
+}
+
+async function exploreIds(origin: string, cookie: string): Promise<string[]> {
+  const { spaces } = (await (await send(origin, "GET", "/api/spaces/explore", undefined, cookie)).json()) as { spaces: { id: string }[] };
+  return spaces.map((space) => space.id);
+}
+
+async function ownedNodeIds(origin: string, cookie: string): Promise<string[]> {
+  const { items } = (await (await send(origin, "GET", "/api/owned-by-me", undefined, cookie)).json()) as { items: { node: { id: string } }[] };
+  return items.map((item) => item.node.id).sort();
+}
+
+async function unitIdOf(origin: string, nodeId: string, cookie: string): Promise<string> {
+  return ((await (await send(origin, "GET", `/api/nodes/${nodeId}`, undefined, cookie)).json()) as { node: { resource: { unitId: string } } }).node.resource.unitId;
+}
+
+async function createPull(origin: string, cookie: string, name: string): Promise<{ id: string; number: number }> {
+  const response = await send(origin, "POST", "/api/worktrees", { kind: "user", name, summary: null, visibility: "private" },
+    cookie, { "idempotency-key": randomUUID() });
+  if (response.status !== 201) throw new Error(`Pull request creation failed with ${response.status}`);
+  return (await response.json()) as { id: string; number: number };
+}
+
+async function userPullIds(origin: string, cookie: string): Promise<string[]> {
+  const { items } = (await (await send(origin, "GET", "/api/worktrees?kind=user", undefined, cookie)).json()) as { items: { id: string }[] };
+  return items.map((item) => item.id).sort();
+}
+
+function draftWorktreeBackend(): WorktreeBackend {
+  const unused = async (): Promise<never> => { throw new Error("Unused by claim tests"); };
+  const draft = async (worktreeID: string) => ({ worktreeID, status: "draft" as const, units: [] });
+  return {
+    createWorktree: draft, getWorktree: draft, addUnit: unused, createUnit: unused, markReady: unused,
+    setUnitRemoved: unused, reopen: unused, merge: unused, discard: unused, submitChangeset: unused,
+  };
 }
 
 async function createFile(origin: string, cookie: string, name: string): Promise<string> {

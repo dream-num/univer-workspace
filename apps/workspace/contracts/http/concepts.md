@@ -123,6 +123,8 @@ HTML and referenced Units retain independent source permission checks.
 
 `GET /api/spaces` returns only owned or joined Spaces, ordered with the caller's
 Personal Space first, then owned Spaces, then joined Spaces, with name and ID as ties.
+The Personal Space of an agent the caller claimed counts as owned, here and in every
+list below.
 Every `SpaceView` has an `affiliation` derived from ownership and membership.
 It is `owner`, `member`, or `none`; Team viewer members remain `member`.
 Public readers are `none` even though both have the effective `viewer` role.
@@ -233,7 +235,9 @@ Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
 User Worktrees are creator-private and may contain editable Resources from different
-Spaces. Team Worktrees belong to one Team Space. Their Visibility controls who
+Spaces. The owners of the creator's Personal Space, that is the human who claimed an
+agent creator, can also discover and review them and read their Worktree-local Units;
+every write action stays with the creator. Team Worktrees belong to one Team Space. Their Visibility controls who
 may Review; Visibility never grants Resource Access.
 
 The Creator can discover and Review a private Team Worktree. The Team Space
@@ -252,7 +256,7 @@ username or slug invalidates the old full name; there is no redirect.
 
 A Team Worktree shares its Space's number sequence with Issues, so `#12` names one object per Space
 (`GET /api/spaces/{spaceId}/worktrees/{number}`). A User Worktree is numbered per creator and addressed through
-the creator's own Personal Space. Worktrees created before numbering existed keep `number: null` and are addressed
+the creator's own Personal Space, by that Space's owners. Worktrees created before numbering existed keep `number: null` and are addressed
 by ID.
 
 ## Issues

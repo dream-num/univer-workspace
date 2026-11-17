@@ -183,7 +183,7 @@ function spaceView(userId: string, row: SpaceListEntry): SpaceView {
     ...fullNameOf(access.type, row.slug, row.ownerUsername),
     owner: { id: access.ownerUserId, username: row.ownerUsername },
     accessRole: access.role,
-    affiliation: access.ownerUserId === userId ? "owner" : access.member ? "member" : "none",
+    affiliation: access.role === "owner" ? "owner" : access.member ? "member" : "none",
     capabilities: access.capabilities,
   };
 }

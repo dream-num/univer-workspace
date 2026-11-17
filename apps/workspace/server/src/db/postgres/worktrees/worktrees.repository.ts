@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
 import { checkCreateTarget } from "../access/resource-target.js";
-import { type PostgresAccessRepository, assertFileQuota } from "../access/access.repository.js";
+import { type PostgresAccessRepository, assertFileQuota, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -31,9 +31,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       .prepare(
         `SELECT audience.user_id
          FROM (
-           SELECT worktree.creator_user_id AS user_id
+           ${spaceOwnerIdsSql(`SELECT worktree.creator_user_id AS user_id
            FROM worktrees AS worktree
-           WHERE worktree.id = ?
+           WHERE worktree.id = ?`)}
 
            UNION
 
@@ -56,7 +56,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
          ) AS audience
          ORDER BY audience.user_id`
       )
-      .all(worktreeId, worktreeId, worktreeId) as unknown as Array<{
+      .all(worktreeId, worktreeId, worktreeId, worktreeId) as unknown as Array<{
       readonly user_id: string;
     }>;
     return rows.map((row) => row.user_id);
@@ -70,6 +70,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     readonly order: "updatedAtDesc" | "createdAtDesc";
     readonly kind: WorktreeKind | null;
     readonly teamSpaceId: string | null;
+    readonly creatorUserId?: string;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
   }): Promise<WorktreeRow[]> {
@@ -81,11 +82,8 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           : "worktree.processed_at IS NOT NULL",
     ];
     const orderColumn = input.order === "createdAtDesc" ? "created_at" : "updated_at";
-    const parameters: Array<string | number> = [
-      input.userId,
-      input.userId,
-      input.userId,
-    ];
+    // worktreeSelect() binds the actor three times and the visibility test four more.
+    const parameters: Array<string | number> = Array<string>(7).fill(input.userId);
     if (input.kind) {
       predicates.push("worktree.kind = ?");
       parameters.push(input.kind);
@@ -93,6 +91,10 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     if (input.teamSpaceId) {
       predicates.push("worktree.team_space_id = ?");
       parameters.push(input.teamSpaceId);
+    }
+    if (input.creatorUserId) {
+      predicates.push("worktree.creator_user_id = ?");
+      parameters.push(input.creatorUserId);
     }
     if (input.touchedSince !== undefined) {
       predicates.push("(worktree.created_at >= ? OR worktree.processed_at >= ?)");
@@ -124,9 +126,10 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       .prepare(
         `${worktreeSelect()}
          WHERE (
-           worktree.creator_user_id = ?
+           (worktree.kind = 'user' AND ${ownsSpaceSql("worktree.creator_user_id", "?")})
            OR (worktree.kind = 'team' AND (
-             team.owner_user_id = ?
+             worktree.creator_user_id = ?
+             OR team.owner_user_id = ?
              OR (member.user_id IS NOT NULL AND (
                worktree.visibility = 'space' OR member.role = 'admin'
              ))
@@ -146,7 +149,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           `${worktreeSelect()}
            WHERE worktree.id = ?`
         )
-        .get(userId, worktreeId) as WorktreeRow | undefined) ?? null
+        .get(userId, userId, userId, worktreeId) as WorktreeRow | undefined) ?? null
     );
   }
 
@@ -625,6 +628,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
 function worktreeSelect(): string {
   return `SELECT
             worktree.*,
+            ${ownsSpaceSql("worktree.creator_user_id", "?")}::integer AS actor_owns_creator_space,
             creator.username AS creator_username,
             creator.display_name AS creator_display_name,
             creator.avatar_url AS creator_avatar_url,

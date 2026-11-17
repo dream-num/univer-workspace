@@ -1,5 +1,5 @@
 import type { SqliteDatabase } from "../connection.js";
-import type { SqliteAccessRepository } from "../access/access.repository.js";
+import { spaceOwnerIdsSql, type SqliteAccessRepository } from "../access/access.repository.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import {
   canManageContentPermission,
@@ -117,7 +117,7 @@ export class SqliteContentPermissionsRepository implements ContentPermissionsRep
         UNION ALL
         SELECT n.id, n.parent_id, n.space_id FROM nodes n JOIN ancestors a ON a.parent_id = n.id
       )
-      SELECT owner_user_id AS id FROM spaces WHERE id IN (SELECT space_id FROM ancestors)
+      ${spaceOwnerIdsSql("SELECT owner_user_id AS id FROM spaces WHERE id IN (SELECT space_id FROM ancestors)")}
       UNION SELECT user_id AS id FROM space_members WHERE space_id IN (SELECT space_id FROM ancestors)
       UNION SELECT user_id AS id FROM node_grants WHERE node_id IN (SELECT id FROM ancestors)
       ORDER BY id

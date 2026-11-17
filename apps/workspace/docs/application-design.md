@@ -199,7 +199,9 @@ interface AccessResolver {
 
 Space 的 Owner 关系有两种来源：`spaces.owner_user_id`，以及认领了该 Space 所有者 agent 的人
 （`agents.owner_user_id`）。两者都得到 `owner` 角色。这个关系是单向的，agent 不因此得到主人的任何权限。
-它只写在 Access Repository 的一个 SQL 片段里，可见性和角色都从这里读。
+它只写在 Access Repository 的 `ownsSpaceSql` 里，可见性和角色都从这里读；Space 列表、Owned by me、
+Activity、User Worktree 的发现与 Review 也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
+（内容权限候选人、Worktree 实时推送对象）用同一处的 `spaceOwnerIdsSql`。
 
 主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
 

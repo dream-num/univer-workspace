@@ -396,7 +396,8 @@ User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑�
 Issue 分配逻辑同样计入 Worktree）；User Worktree 在创建者名下单独编号，经创建者自己的 Personal Space 寻址。
 部分唯一索引 `worktrees_team_number`、`worktrees_user_number` 兜底。V12 之前创建的 Worktree 为 `NULL`，不回填，
 仍以 ID 寻址。Worktree 与 Issue 行只随 Space 级联删除，不会单独删除，因此编号不会复用。
-User Worktree 在 `owner/personal` 下的归属只用于编号与列表，不改变其内容或权限边界。
+User Worktree 在 `owner/personal` 下的归属用于编号与列表；该 Personal Space 的 Owner（创建者本人，以及认领了
+创建者 agent 的人）可以发现、Review 并读取其 Worktree-local Unit，写操作仍只属于创建者。
 创建在协同服务建立 Worktree 之后、同一产品事务内分配编号并插入产品行，幂等重试保留原编号。
 
 ### `worktree_units`

@@ -183,7 +183,7 @@ export interface WorktreeActivity {
 
 export type WorktreeActivityScope =
   | { readonly kind: "team"; readonly teamSpaceId: string }
-  | { readonly kind: "user" };
+  | { readonly kind: "user"; readonly creatorUserId: string };
 
 export interface WorktreesModule {
   activity(userId: string, scope: WorktreeActivityScope, since: number): Promise<{

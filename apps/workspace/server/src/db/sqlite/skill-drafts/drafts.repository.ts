@@ -182,7 +182,7 @@ export class SqliteSkillDraftsRepository implements SkillDraftsRepository {
       else {
         if (row.state !== "pending") throw draftConflict("Draft content is still receiving.");
         const target = this._targetSync(row.space_id, row.name);
-        assertSkillDestination(userId, this.access.readSpaceAccess(userId, row.space_id));
+        assertSkillDestination(this.access.readSpaceAccess(userId, row.space_id));
         if (target.folderNodeId) assertSkillFolder(this.access.readNodeAccess(userId, target.folderNodeId));
         for (const current of target.files) {
           assertSkillFile(this.access.readResourceAccess(userId, current.resourceId), current.nodeId);

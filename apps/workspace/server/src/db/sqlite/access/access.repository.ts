@@ -14,10 +14,16 @@ import type {
  * The requester owns the Space: it is the Space owner, or the human who claimed the agent that owns
  * it. The relation runs one way, so a claimed agent gains nothing of its human's.
  */
-function ownsSpaceSql(ownerUserId: string): string {
-  return `(${ownerUserId} = $userId OR EXISTS (
-    SELECT 1 FROM agents WHERE agents.user_id = ${ownerUserId} AND agents.owner_user_id = $userId
+export function ownsSpaceSql(ownerUserId: string, userId = "$userId"): string {
+  return `(${ownerUserId} = ${userId} OR EXISTS (
+    SELECT 1 FROM agents WHERE agents.user_id = ${ownerUserId} AND agents.owner_user_id = ${userId}
   ))`;
+}
+
+/** Everyone `ownsSpaceSql` holds for on the Spaces owned by the users that `ownerIdsSql` selects. */
+export function spaceOwnerIdsSql(ownerIdsSql: string): string {
+  return `${ownerIdsSql}
+    UNION SELECT owner_user_id FROM agents WHERE owner_user_id IS NOT NULL AND user_id IN (${ownerIdsSql})`;
 }
 
 export const spaceAccessColumns = `
@@ -271,10 +277,10 @@ export class SqliteAccessRepository implements AccessRepository {
       JOIN spaces AS space ON space.id = node.space_id
       ${resourceJoins()}
       WHERE resource.id IN (${resourceIds.map(() => "?").join(", ")})
-        AND space.owner_user_id = ?
+        AND ${ownsSpaceSql("space.owner_user_id", "?")}
         AND node.trash_batch_id IS NULL
     `)
-      .all(...resourceIds, userId) as unknown as OwnedResourceRow[];
+      .all(...resourceIds, userId, userId) as unknown as OwnedResourceRow[];
   }
 }
 
