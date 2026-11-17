@@ -27,7 +27,7 @@ For an existing SQLite deployment with local files, follow the [storage migratio
 
 | Variable | Default | When to set it |
 | --- | --- | --- |
-| `DATABASE_PROVIDER` | `sqlite` | Select `sqlite` or `postgres` for **both** product and collaboration data. |
+| `DATABASE_PROVIDER` | `sqlite` | Select `sqlite` or `postgres` for **both** product and collaboration data. PostgreSQL requires `BLOB_STORE=s3` for Sheet blocks. |
 | `DATABASE_FILE` | `.data/univer-workspace.sqlite` | SQLite product database for users, spaces, files and permissions. |
 | `COLLABORATION_DATABASE_FILE` | `.data/univer-collaboration.sqlite` | SQLite collaboration database for document edits, Worktrees, history and comments. |
 | `DATABASE_URL` | Unset | Required with `postgres`. Supply a `postgres://` or `postgresql://` connection URI for a dedicated database. |
@@ -43,7 +43,7 @@ The Workspace role needs permission to create the `collaboration` schema and obj
 | `MAX_BLOB_BYTES` | `536870912` (512 MiB) | Maximum size in bytes for one blob. |
 | `BLOB_S3_BUCKET` | Unset | Required for S3. Supply an existing private bucket. |
 | `BLOB_S3_REGION` | AWS SDK region | Override the region resolved from `AWS_REGION` or an AWS profile. |
-| `BLOB_S3_PREFIX` | Empty (bucket root) | Object key prefix within the bucket. |
+| `BLOB_S3_PREFIX` | Empty (bucket root) | Root prefix for Workspace objects. Files use their original object keys under this prefix. Collaboration Sheet blocks use its `sheet-blocks/` subdirectory. |
 | `BLOB_S3_ENDPOINT` | Regional AWS endpoint | S3 API URL for MinIO or another compatible service. |
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | Set to `true` if the endpoint needs the bucket in the URL path. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | AWS SDK credential chain | Use a workload role, or supply a key pair. Temporary credentials also require the session token. |

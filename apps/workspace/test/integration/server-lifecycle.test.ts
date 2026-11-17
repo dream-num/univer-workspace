@@ -69,7 +69,7 @@ const s3Config = {
 
 it("releases its configured S3 client and leaves the product database to its caller", async () => {
   const database = await openProductDatabase(s3Config.database);
-  const collaboration = await openCollaborationDatabase(s3Config.database, database.unitCreationFacts);
+  const collaboration = await openCollaborationDatabase(s3Config, database.unitCreationFacts);
   const application = createWorkspaceApplication(s3Config, database.repositories, collaboration);
   const destroy = vi.spyOn(S3Client.prototype, "destroy");
   try {

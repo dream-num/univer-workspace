@@ -10,7 +10,7 @@ import { createPostgresTestDatabase } from "../support/postgres/schema.js";
 const url = process.env.WORKSPACE_TEST_POSTGRES_URL;
 
 it.skipIf(!url)(
-  "opens all four PostgreSQL adapters and upgrades an existing Core on restart",
+  "opens all four PostgreSQL adapters and preserves Core metadata on restart",
   async () => {
     const database = await createPostgresTestDatabase(url!);
     const resources = new AsyncDisposableStack();
@@ -19,12 +19,13 @@ it.skipIf(!url)(
       const directory = await mkdtemp(join(tmpdir(), "univer-pg-collaboration-"));
       resources.defer(() => rm(directory, { recursive: true, force: true }));
       const config = loadConfig({
+        BLOB_STORE: "s3", BLOB_S3_BUCKET: "test-bucket",
         DATABASE_PROVIDER: "postgres",
         DATABASE_URL: database.connectionString,
         COLLABORATION_DATABASE_FILE: join(directory, "unused.sqlite"),
       });
       const open = () =>
-        openCollaborationDatabase(config.database, {
+        openCollaborationDatabase(config, {
           async read() {
             throw new Error("Only legacy SQLite migrations need product creation facts");
           },
@@ -38,9 +39,6 @@ it.skipIf(!url)(
       await client.connect();
       resources.defer(() => client.end());
       await client.query(`
-        ALTER TABLE collaboration.units DROP COLUMN metadata;
-        ALTER TABLE collaboration.changesets DROP COLUMN metadata;
-        UPDATE collaboration.schema_versions SET version = 1 WHERE component = 'core';
         INSERT INTO collaboration.units(unit_id, type, head_revision, creator_id, created_at_ms)
         VALUES ('existing-doc', 1, 2, 'author', 1700000000000);
       `);
@@ -50,7 +48,7 @@ it.skipIf(!url)(
         "SELECT component, version FROM collaboration.schema_versions",
       );
       expect(Object.fromEntries(versions.rows.map((row) => [row.component, row.version]))).toEqual({
-        core: 2,
+        "core-s3": 1,
         worktree: 1,
         history: 1,
         comment: 1,

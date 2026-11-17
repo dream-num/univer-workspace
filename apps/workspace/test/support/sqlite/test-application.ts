@@ -19,7 +19,7 @@ export async function createSqliteTestApplication(
   cleanup.defer(() => database.close());
   try {
     const repositories = createSqliteRepositories(database);
-    const collaboration = await openCollaborationDatabase(config.database, createSqliteUnitCreationFactsReader(database.connection));
+    const collaboration = await openCollaborationDatabase(config, createSqliteUnitCreationFactsReader(database.connection));
     cleanup.defer(() => collaboration.close());
     const application = createWorkspaceApplication(config, repositories, collaboration, dependencies);
     cleanup.defer(() => application.close());

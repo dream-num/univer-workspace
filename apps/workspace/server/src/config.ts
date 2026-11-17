@@ -90,12 +90,17 @@ export function loadConfig(
   if (metricsToken && !/^[a-zA-Z0-9._~+/-]+=*$/.test(metricsToken)) {
     throw new Error("METRICS_TOKEN must be a valid Bearer token without whitespace");
   }
+  const database = databaseConfig(environment);
+  const storage = blobStoreConfig(environment);
+  if (database.provider === "postgres" && !storage.s3BlobStore) {
+    throw new Error("DATABASE_PROVIDER=postgres requires BLOB_STORE=s3 for collaboration Sheet blocks");
+  }
   return {
     host: environment.HOST ?? "127.0.0.1",
     port: integer(environment.PORT, 3020, "PORT"),
     publicOrigin,
-    database: databaseConfig(environment),
-    ...blobStoreConfig(environment),
+    database,
+    ...storage,
     maxBlobBytes: integer(
       environment.MAX_BLOB_BYTES,
       512 * 1024 * 1024,

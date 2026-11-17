@@ -47,7 +47,7 @@ For a first local installation, copy [`.env.example`](.env.example) to `.env` in
 
 #### Database
 
-With PostgreSQL + S3, product and collaboration data use PostgreSQL, and uploads and embedded assets use S3. See the [Workspace configuration guide](docs/configuration.md) for settings and examples. For an existing deployment, follow the [migration steps](docs/storage-migration.md) to switch in one outage.
+With PostgreSQL + S3, product and collaboration data use PostgreSQL, and Sheet cell blocks, uploads and embedded assets use S3. See the [Workspace configuration guide](docs/configuration.md) for settings and examples. For an existing deployment, follow the [migration steps](docs/storage-migration.md) to switch in one outage.
 
 ### Collaboration and workbench
 

@@ -6,6 +6,7 @@ import { loadConfig } from "../config.js";
 import { initializePostgresSchema } from "../db/postgres/initialize.js";
 import { openPostgresCollaborationDatabase } from "../integrations/univer/collaboration-database/postgres/open.js";
 import { importCollaboration } from "./collaboration.js";
+import { copySheetBlocks } from "./sheet-blocks.js";
 import { copyObjects } from "./objects.js";
 import { importProduct } from "./product.js";
 import { identifier } from "./rows.js";
@@ -75,7 +76,7 @@ async function migrate() {
     throw new Error("A separate product schema is required");
   await requireEmptyTarget(client, target.schema, false);
   await initializePostgresSchema(pool);
-  const adapters = await openPostgresCollaborationDatabase(database.connectionString);
+  const adapters = await openPostgresCollaborationDatabase(database.connectionString, s3BlobStore);
   await adapters.close();
 
   const objects = await copyObjects(
@@ -83,7 +84,8 @@ async function migrate() {
     resolve(process.env.BLOB_DIRECTORY ?? ".data/univer-workspace-blobs"),
     s3BlobStore,
   );
-  console.log(`Verified ${objects} S3 objects. Importing product and collaboration rows.`);
+  const blocks = await copySheetBlocks(source, s3BlobStore);
+  console.log(`Verified ${objects} files and ${blocks} Sheet blocks in S3. Importing product and collaboration rows.`);
   await client.query("BEGIN");
   try {
     await requireEmptyTarget(client, target.schema, true);
@@ -92,7 +94,7 @@ async function migrate() {
     await source.checkSourceStopped();
     await client.query("COMMIT");
     console.log(
-      `Migration committed: ${product} product rows, ${collaboration} collaboration rows, ${objects} objects.`,
+      `Migration committed: ${product} product rows, ${collaboration} collaboration rows, ${objects} files, ${blocks} Sheet blocks.`,
     );
   } catch (error) {
     await client.query("ROLLBACK");

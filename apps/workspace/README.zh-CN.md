@@ -31,7 +31,7 @@ Vite 还将 `/mcp` 代理到 `WORKSPACE_DEV_MCP_PORT` 指定的本地 MCP 网关
 
 #### 数据库
 
-部署 PostgreSQL + S3 时，产品库和协同库一起使用 PostgreSQL，上传文件和内嵌附件保存在 S3。完整环境变量和示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。已有数据的实例请按[迁移步骤](docs/storage-migration.zh-CN.md)在一次停机窗口内切换。
+部署 PostgreSQL + S3 时，产品库和协同库一起使用 PostgreSQL，Sheet 单元格数据块、上传文件和内嵌附件保存在 S3。完整环境变量和示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。已有数据的实例请按[迁移步骤](docs/storage-migration.zh-CN.md)在一次停机窗口内切换。
 
 ### 协同与工作台
 

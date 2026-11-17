@@ -5,6 +5,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { GetObjectCommand, paginateListObjectsV2, S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
+import { SHEET_BLOCK_DIRECTORY } from "../integrations/univer/collaboration-database/postgres/sheet-block-storage.js";
 import type { S3BlobStoreOptions } from "../integrations/blob/s3-blob-store.js";
 
 async function digest(stream: AsyncIterable<Uint8Array>) {
@@ -55,6 +56,7 @@ export async function copyObjects(
     )) {
       for (const item of page.Contents ?? []) {
         const name = item.Key!.slice(prefixPath.length);
+        if (name.startsWith(SHEET_BLOCK_DIRECTORY + "/")) continue; // Validated by copySheetBlocks.
         if (!local.has(name))
           throw new Error("Destination S3 prefix contains an object outside this migration");
         existing.add(name);

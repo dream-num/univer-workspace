@@ -1,4 +1,5 @@
-import { encode } from "@msgpack/msgpack";
+import type { ISnapshot } from "@univerjs/protocol";
+import { decode, encode } from "@msgpack/msgpack";
 import type { PoolClient } from "pg";
 import type { Source } from "./source.js";
 import { identifier, importTable, type Row } from "./rows.js";
@@ -14,6 +15,20 @@ const dataTables = [
 ];
 const packed = (value: object) => Buffer.from(encode(value, { ignoreUndefined: true }));
 const context = { userID: "", customData: {}, request: {} };
+
+function* snapshots(source: Source): Generator<Row> {
+  const db = source.collaboration;
+  const block = db.prepare("SELECT 1 FROM collaboration_sheet_blocks WHERE unit_id = ? AND block_id = ?");
+  for (const row of db.prepare("SELECT * FROM collaboration_snapshots").iterate()) {
+    if (!(row.payload instanceof Uint8Array)) throw new Error("Expected a MessagePack snapshot");
+    const snapshot = decode(row.payload) as ISnapshot;
+    const ids = Object.values(snapshot.workbook?.blockMeta ?? {}).flatMap(sheet => sheet.blocks);
+    for (const id of ids) {
+      if (!block.get(String(row.unit_id), id)) throw new Error(`Missing Sheet block ${id} for Unit ${row.unit_id}`);
+    }
+    yield { ...row, block_ids: ids };
+  }
+}
 
 async function* worktreeUnits(source: Source): AsyncGenerator<Row> {
   for (const row of source.collaboration
@@ -99,7 +114,10 @@ export async function importCollaboration(source: Source, client: PoolClient): P
   let total = 0;
   for (const table of dataTables) {
     let rows: Iterable<Row> | AsyncIterable<Row>;
-    if (table === "worktree_units") rows = worktreeUnits(source);
+    if (table === "snapshots") rows = snapshots(source);
+    else if (table === "sheet_blocks") {
+      rows = db.prepare("SELECT unit_id, block_id, NULL AS unreferenced_at_ms FROM collaboration_sheet_blocks").iterate();
+    } else if (table === "worktree_units") rows = worktreeUnits(source);
     else if (table === "worktree_changesets") rows = draftChangesets(source);
     else if (table === "comments") rows = comments(source);
     else rows = db.prepare("SELECT * FROM " + identifier("collaboration_" + table)).iterate();

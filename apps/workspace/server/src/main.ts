@@ -28,7 +28,7 @@ const database = await startupStageAsync("database.product.prepare", () =>
 );
 try {
   const collaboration = await startupStageAsync("database.collaboration.prepare", () =>
-    openCollaborationDatabase(config.database, database.unitCreationFacts),
+    openCollaborationDatabase(config, database.unitCreationFacts),
   );
   try {
     await serve(database, collaboration);

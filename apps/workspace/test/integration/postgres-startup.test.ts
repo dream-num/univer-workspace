@@ -11,7 +11,8 @@ it("requires an explicit PostgreSQL provider and connection URL", () => {
   expect(() => loadConfig({ DATABASE_PROVIDER: "other" })).toThrow(/PROVIDER/);
   expect(() => loadConfig({ DATABASE_PROVIDER: "postgres" })).toThrow(/DATABASE_URL/);
   expect(() => loadConfig({ DATABASE_PROVIDER: "postgres", DATABASE_URL: "file:///tmp/db" })).toThrow(/DATABASE_URL/);
-  expect(loadConfig({ DATABASE_PROVIDER: "postgres", DATABASE_URL: "postgres://host/db" }).database)
+  expect(() => loadConfig({ DATABASE_PROVIDER: "postgres", DATABASE_URL: "postgres://host/db" })).toThrow(/BLOB_STORE=s3/);
+  expect(loadConfig({ DATABASE_PROVIDER: "postgres", DATABASE_URL: "postgres://host/db", BLOB_STORE: "s3", BLOB_S3_BUCKET: "test" }).database)
     .toEqual({ provider: "postgres", connectionString: "postgres://host/db" });
 });
 
