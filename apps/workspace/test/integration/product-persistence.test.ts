@@ -76,8 +76,8 @@ it("revokes the downstream session when its personal access token is revoked", a
 it("enforces the OAuth client limit and rotates a refresh token once under concurrent requests", async ({ onTestFinished }) => {
   const { app, owner } = await setup(onTestFinished);
   const tokens = createAccessTokenService({ repository: app.repositories.accessTokens, now: Date.now });
-  const clients = await Promise.all(["one", "two"].map(clientName =>
-    tokens.registerClient({ clientName, redirectUris: ["https://client.example/callback"] }, 1)));
+  const clients = await Promise.all(Array.from({ length: 10 }, (_, index) =>
+    tokens.registerClient({ clientName: `client-${index}`, redirectUris: ["https://client.example/callback"] }, 1)));
   expect(clients.filter(Boolean)).toHaveLength(1);
   const clientId = clients.find(client => client !== null)!.clientId;
   const resource = "https://workspace.example/mcp";

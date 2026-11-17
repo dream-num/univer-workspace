@@ -155,6 +155,9 @@ export class PostgresAccessTokenRepository implements AccessTokenRepository {
 
   async insertClient(client: OAuthClientRecord, limit: number | null): Promise<boolean> {
     return this.database.transaction(async (db) => {
+      // Take the lock before the first snapshot so a waiter counts the committed registration.
+      if (limit !== null) await db.query("LOCK TABLE oauth_clients IN SHARE ROW EXCLUSIVE MODE", []);
+
       const result = await db.prepare(`
         INSERT INTO oauth_clients (client_id, client_name, redirect_uris, created_at)
         SELECT $clientId, $clientName, $redirectUris, $createdAt
