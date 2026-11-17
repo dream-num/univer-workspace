@@ -184,7 +184,7 @@ export function parseClientMetadataDocument(clientId: CimdClientId, response: Cl
   const ttl = /(?:^|,)\s*no-(?:store|cache)\b/iu.test(control) || seconds === undefined ? MIN_TTL : Math.max(MIN_TTL, Math.min(MAX_TTL, Number(seconds) * 1000));
   return {
     clientId, host: new URL(clientId).hostname,
-    clientName: typeof doc.client_name === "string" && doc.client_name.length <= MAX_CLIENT_NAME_LENGTH && doc.client_name.trim() !== "" ? doc.client_name : null,
+    clientName: typeof doc.client_name === "string" && [...doc.client_name].length <= MAX_CLIENT_NAME_LENGTH && doc.client_name.trim() !== "" ? doc.client_name : null,
     redirectUris,
     grantTypes: (["authorization_code", "refresh_token"] as const).filter((grant) => grants.includes(grant)),
     expiresAt: now + ttl,

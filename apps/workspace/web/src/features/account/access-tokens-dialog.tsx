@@ -216,7 +216,6 @@ function AccessTokensDialogContent({
             <Input
               id="access-token-name"
               value={name}
-              maxLength={100}
               required
               disabled={busy}
               onChange={(event) => setName(event.target.value)}

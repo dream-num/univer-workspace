@@ -1596,7 +1596,7 @@ function requiredText(
     throw invalidInput(`${field} is required.`, field);
   }
   const text = value.trim();
-  if (!text || text.length > maxLength) {
+  if (!text || [...text].length > maxLength) {
     throw invalidInput(
       `${field} must contain between 1 and ${maxLength} characters.`,
       field

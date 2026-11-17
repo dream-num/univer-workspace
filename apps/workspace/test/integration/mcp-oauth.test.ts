@@ -410,6 +410,7 @@ describe("MCP OAuth", () => {
     await rejected({ ...OPENCODE_REGISTRATION, response_types: ["token"] }, "invalid_client_metadata");
     await rejected({ ...OPENCODE_REGISTRATION, scope: "read admin" }, "invalid_client_metadata");
     await rejected({ ...OPENCODE_REGISTRATION, client_name: "x".repeat(101) }, "invalid_client_metadata");
+    await rejected({ ...OPENCODE_REGISTRATION, client_name: "\u{1F916}".repeat(101) }, "invalid_client_metadata");
     await rejected([OPENCODE_REGISTRATION], "invalid_client_metadata");
     const form = await fetch(`${origin}/api/auth/register`, { method: "POST", body: new URLSearchParams({ redirect_uris: "https://a.test/cb" }) });
     expect(form.status).toBe(400);
@@ -417,9 +418,10 @@ describe("MCP OAuth", () => {
     expect(oversized.status).toBe(413);
     expect(((await oversized.json()) as { error: string }).error).toBe("invalid_client_metadata");
 
-    const minimal = await registerClient(origin, { redirect_uris: ["com.example.app:/oauth", "http://[::1]/cb"] });
+    const minimal = await registerClient(origin, { redirect_uris: ["com.example.app:/oauth", "http://[::1]/cb"], client_name: "\u{1F916}".repeat(100) });
     expect(minimal.status).toBe(201);
     expect(await minimal.json()).toMatchObject({
+      client_name: "\u{1F916}".repeat(100),
       redirect_uris: ["com.example.app:/oauth", "http://[::1]/cb"],
       grant_types: ["authorization_code", "refresh_token"],
       token_endpoint_auth_method: "none",

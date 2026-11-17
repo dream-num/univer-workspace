@@ -46,7 +46,8 @@ describe("CIMD URL and document validation", () => {
   it("defaults capabilities, ignores unsupported values and invalid names, and uses the DCR redirect policy", () => {
     expect(() => parseClientMetadataDocument(id(), { body: "{" })).toThrow();
     expect(parseClientMetadataDocument(id(), response()).grantTypes).toEqual(["authorization_code"]);
-    for (const name of [42, null, "x".repeat(101), ""]) expect(parseClientMetadataDocument(id(), response(id(), { client_name: name })).clientName).toBeNull();
+    for (const name of [42, null, "x".repeat(101), "\u{1F916}".repeat(101), ""]) expect(parseClientMetadataDocument(id(), response(id(), { client_name: name })).clientName).toBeNull();
+    expect(parseClientMetadataDocument(id(), response(id(), { client_name: "\u{1F916}".repeat(100) })).clientName).toBe("\u{1F916}".repeat(100));
     const client = parseClientMetadataDocument(id(), response(id(), {
       client_name: "Claude Code", token_endpoint_auth_method: "none", token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
       grant_types: ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:device_code"], response_types: ["code", "token"],
