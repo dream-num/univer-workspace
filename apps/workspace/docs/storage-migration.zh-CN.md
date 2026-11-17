@@ -6,6 +6,8 @@
 
 在一个停机窗口内完成 **SQLite + 本地目录 → PostgreSQL + S3**。源产品库必须为 V22。如果版本较旧，先按 [SQLite 升级步骤](#sqlite-升级与恢复)升至 V22，停掉升级后的实例再切换。先准备专用的空 PostgreSQL 数据库、私有桶和空前缀。目标配置、凭据和桶权限见 [Workspace 配置指南](configuration.zh-CN.md#部署组合)。
 
+使用阿里云 OSS 区域 Endpoint 时，目标桶须从未开启版本控制。迁移命令读取桶的版本控制状态（`oss:GetBucketVersioning`），然后对普通上传和分片完成请求使用 OSS 的禁止覆盖请求头。
+
 1. 停止所有 Workspace 写入实例，保留同一时间点的两个 SQLite 数据库（包括仍存在的 WAL 或 journal）和文件目录备份。验收前保持用户流量关闭。
 2. 为迁移进程设置目标 PostgreSQL + S3 环境变量。用 `DATABASE_FILE`、`COLLABORATION_DATABASE_FILE` 和 `BLOB_DIRECTORY` 指向现有源数据。默认路径见[数据库和文件存储配置](configuration.zh-CN.md#数据库)。源目录可以只读挂载。为临时目录预留两个 SQLite 副本所需的空间；协同库需要升级时，还需容纳其暂存文件和备份。
 3. 使用已安装依赖的源码部署时，在仓库根目录执行以下命令。脚本读取 Workspace 的 `.env`。
