@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { UniverType } from "@univerjs/protocol";
 import type { WorktreeData } from "@univerjs-pro/collaboration-worktree-service";
+import { Client } from "pg";
 import { afterEach, describe, expect, it } from "vitest";
 import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
 const applications: ProductTestApplication[] = [];
+const sessions: Client[] = [];
 afterEach(async () => {
+  await Promise.all(sessions.splice(0).map((session) => session.end().catch(() => undefined)));
   await Promise.all(applications.splice(0).map((application) => application.close()));
 });
 
@@ -241,5 +244,68 @@ describe("merging the revision a reviewer viewed", () => {
     await application.worktrees.update(second.member.id, second.id, { summary: "Changed before the retry" });
     await expect(application.operations.retry(second.admin.id, changed)).rejects.toMatchObject({ status: 412 });
     expect(await viewed(application, second.admin.id, second.id)).toMatchObject({ state: "ready" });
+  });
+});
+
+/** A second PostgreSQL session holding the Worktree's row, as a concurrent merge reservation or rename does. */
+async function holdRow(application: ProductTestApplication, worktreeId: string) {
+  const session = new Client({ connectionString: application.postgresUrl });
+  const observer = new Client({ connectionString: application.postgresUrl });
+  sessions.push(session, observer);
+  await Promise.all([session.connect(), observer.connect()]);
+  await session.query("BEGIN");
+  await session.query("SELECT id FROM worktrees WHERE id = $1 FOR UPDATE", [worktreeId]);
+  return {
+    query: (text: string, values: unknown[]) => session.query(text, values),
+    async waiter() {
+      for (let attempt = 0; attempt < 300; attempt++) {
+        const { rows } = await observer.query(
+          "SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock'",
+        );
+        if (rows.length > 0) return;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      throw new Error("Nothing waited for the Worktree row.");
+    },
+    end: () => session.query("COMMIT"),
+  };
+}
+
+const settled = (promise: Promise<unknown>) =>
+  promise.then(() => "applied", (error: { status?: number; code?: string }) => ({ status: error.status, code: error.code }));
+
+describe.skipIf(!process.env.WORKSPACE_TEST_POSTGRES_URL)("a merge and a title change at the same moment on PostgreSQL", () => {
+  it("refuses a title change that waited for a merge being reserved", async () => {
+    const application = await start(new HookedBackend());
+    const { admin, member, id } = await readyTeamPull(application);
+    const merge = await holdRow(application, id);
+    const renamed = settled(application.worktrees.update(member.id, id, { name: "Renamed" }));
+    await merge.waiter();
+    const now = Date.now();
+    await merge.query(
+      `INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at,
+         lease_owner, lease_expires_at, created_at, updated_at)
+       VALUES ($1, 'merge_worktree', $2, 'reserved', 'pending', $3, 0, $4, 'product-api', $5, $4, $4)`,
+      [randomUUID(), admin.id, JSON.stringify({ worktreeId: id }), now, now + 60_000],
+    );
+    await merge.end();
+
+    expect(await renamed).toEqual({ status: 409, code: "CONFLICT" });
+    expect(await viewed(application, admin.id, id)).toMatchObject({ name: "Budget" });
+  });
+
+  it("refuses a merge whose reservation waited for a title change", async () => {
+    const backend = new HookedBackend();
+    const application = await start(backend);
+    const { admin, id } = await readyTeamPull(application);
+    const reviewed = (await viewed(application, admin.id, id)).revision;
+    const rename = await holdRow(application, id);
+    await rename.query("UPDATE worktrees SET name = 'Renamed' WHERE id = $1", [id]);
+    const merged = settled(application.worktrees.merge(admin.id, id, randomUUID(), { revision: reviewed }));
+    await rename.waiter();
+    await rename.end();
+
+    expect(await merged).toEqual({ status: 412, code: "PRECONDITION_FAILED" });
+    expect(backend.merged).toBeNull();
   });
 });

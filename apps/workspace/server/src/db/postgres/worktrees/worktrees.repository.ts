@@ -237,34 +237,46 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     return row?.id ?? null;
   }
 
-  async update(input: Parameters<WorktreesRepository["update"]>[0]): Promise<boolean> {
-    const result = await this._database.prepare(`
-      UPDATE worktrees
-      SET name = COALESCE($name, name),
-          summary = CASE WHEN $setSummary = 1 THEN $summary ELSE summary END,
-          visibility = COALESCE($visibility, visibility),
-          updated_at = $updatedAt
-      WHERE id = $id AND (
-        creator_user_id = $actorId OR
-        EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND owner_user_id = $actorId) OR
-        EXISTS (SELECT 1 FROM space_members
-                WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin')
-      ) AND ($describes = 0 OR NOT EXISTS (
-        SELECT 1 FROM operations
-        WHERE kind = 'merge_worktree' AND state = 'pending' AND lease_expires_at > $updatedAt
-          AND payload_json::jsonb ->> 'worktreeId' = $id
-      ))
-    `).run({
-      id: input.id,
-      actorId: input.actorId,
-      describes: Number(input.name !== undefined || input.summary !== undefined),
-      name: input.name ?? null,
-      setSummary: Number(input.summary !== undefined),
-      summary: input.summary ?? null,
-      visibility: input.visibility ?? null,
-      updatedAt: input.updatedAt,
+  /** Runs `operation` holding the Worktree's row, so it waits for a merge being reserved and then sees it. */
+  private async withRowLocked<T>(worktreeId: string, operation: () => Promise<T>): Promise<T> {
+    return await this._database.transaction(async (database) => {
+      // Read committed, so each statement after the lock reads what committed while it waited.
+      await database.prepare("SET TRANSACTION ISOLATION LEVEL READ COMMITTED").run();
+      await database.prepare("SELECT id FROM worktrees WHERE id = ? FOR UPDATE").get(worktreeId);
+      return await operation();
     });
-    return Number(result.changes) === 1;
+  }
+
+  async update(input: Parameters<WorktreesRepository["update"]>[0]): Promise<boolean> {
+    return await this.withRowLocked(input.id, async () => {
+      const result = await this._database.prepare(`
+        UPDATE worktrees
+        SET name = COALESCE($name, name),
+            summary = CASE WHEN $setSummary = 1 THEN $summary ELSE summary END,
+            visibility = COALESCE($visibility, visibility),
+            updated_at = $updatedAt
+        WHERE id = $id AND (
+          creator_user_id = $actorId OR
+          EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND owner_user_id = $actorId) OR
+          EXISTS (SELECT 1 FROM space_members
+                  WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin')
+        ) AND ($describes = 0 OR NOT EXISTS (
+          SELECT 1 FROM operations
+          WHERE kind = 'merge_worktree' AND state = 'pending' AND lease_expires_at > $updatedAt
+            AND payload_json::jsonb ->> 'worktreeId' = $id
+        ))
+      `).run({
+        id: input.id,
+        actorId: input.actorId,
+        describes: Number(input.name !== undefined || input.summary !== undefined),
+        name: input.name ?? null,
+        setSummary: Number(input.summary !== undefined),
+        summary: input.summary ?? null,
+        visibility: input.visibility ?? null,
+        updatedAt: input.updatedAt,
+      });
+      return Number(result.changes) === 1;
+    });
   }
 
   async units(worktreeId: string): Promise<WorktreeUnitRow[]> {
@@ -539,7 +551,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
   }
 
   async mergeInProgress(worktreeId: string, at: number): Promise<boolean> {
-    return Boolean(
+    return await this.withRowLocked(worktreeId, async () => Boolean(
       await this._database
         .prepare(
           `SELECT 1 FROM operations
@@ -547,7 +559,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
              AND payload_json::jsonb ->> 'worktreeId' = ?`
         )
         .get(at, worktreeId),
-    );
+    ));
   }
 
   private async requireTarget(userId: string, spaceId: string, parentNodeId: string | null): Promise<void> {
@@ -571,6 +583,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
         const resource = await this.access.readResourceAccess(input.actorUserId, input.payload.resourceId);
         if (!resource || resource.kind !== "univer") throw notFound();
         if (!resource.capabilities.editContent) throw forbidden();
+      } else if (input.kind === "merge_worktree") {
+        // A title or summary change waits for this lock, then sees the pending merge; one that holds it first commits first.
+        await database.prepare("SELECT id FROM worktrees WHERE id = ? FOR UPDATE").get(input.payload.worktreeId);
       }
       await database
         .prepare(

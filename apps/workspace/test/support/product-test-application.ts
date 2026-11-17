@@ -30,7 +30,12 @@ export async function createProductTestApplication(
     const application = createWorkspaceApplication(config, database.repositories, collaboration, dependencies);
     cleanup.defer(() => application.close());
     await application.initialize();
-    return { ...application, repositories: database.repositories, close: () => cleanup.disposeAsync() };
+    return {
+      ...application,
+      repositories: database.repositories,
+      postgresUrl: postgres?.connectionString,
+      close: () => cleanup.disposeAsync(),
+    };
   } catch (error) {
     await cleanup.disposeAsync();
     throw error;
