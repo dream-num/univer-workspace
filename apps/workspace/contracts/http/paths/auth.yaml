@@ -324,6 +324,12 @@
                       $ref: ../schemas/identity.yaml#/TokenExchangeSubject
                     user:
                       $ref: ../schemas/identity.yaml#/User
+                    executor_access:
+                      const: true
+                      description: |
+                        Token exchange only. Present only when an operator
+                        granted the user the shared MCP executor with
+                        `db:executor-access`.
       "400":
         description: Workspace error for static clients or when MCP OAuth is disabled; otherwise `invalid_request`, `unsupported_grant_type` or `invalid_grant`. Token exchange may also return `unauthorized_client`.
         content:

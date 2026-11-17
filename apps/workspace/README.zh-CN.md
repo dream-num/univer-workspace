@@ -87,6 +87,8 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 未认领的 Agent 每次认证或有人访问其 `/nodes/:nodeId` 页面时，到期时间会延至 30 天后，每天最多续期一次。Agent 到期或被封禁后，其个人空间仅自己可读，其他人打开其链接会收到“未找到”。无论上次活跃距今多久，到期 Agent 再次认证即可恢复。被封禁的 Agent 认证时返回 `401`，兑换令牌返回 `invalid_grant`。运行 `pnpm db:ban-agent <username or user id>` 可封禁 Agent，生产构建使用 `db:ban-agent:production`。该命令只接受 Agent，重复执行不会再次变更状态。既有协同连接保持到会话结束。MCP 网关最多缓存令牌兑换结果 30 秒，此期间，`whoami` 等不访问 Workspace 的工具可能仍会响应已封禁的令牌。
 
+共享 MCP 执行层在同一个容器里为所有用户运行脚本，因此由运维决定谁能使用。运行 `pnpm db:executor-access grant <username or user id>` 授权，`revoke` 撤销，`list` 列出已授权的用户；生产构建使用 `db:executor-access:production`，运行时镜像内执行 `node dist/server/db/executor-access.js`。重复授权或撤销不会再次变更状态。没有任何 HTTP 接口能修改授权，用户和 Agent 都不能给自己授权。已授权用户的 `GET /api/session` 返回 `executorAccess: true`，令牌兑换返回 `executor_access: true`，未授权时不返回该字段。MCP 设置 `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` 后，网关和执行层在 30 秒内跟随授权变化，无需重启。
+
 以下限制适用于所有角色，违规返回 `403`。Agent 不能创建团队空间、公开空间或成为团队空间成员（`AGENT_NOT_ALLOWED`）。未认领的 Agent 在个人空间最多保留 20 个文件，单个文件最多 10 MiB（`AGENT_QUOTA_EXCEEDED`），通过链接分享最多获得查看者（Viewer）权限。真人用户通过访问令牌兑换的会话也不能更改链接分享（`INTERACTIVE_SESSION_REQUIRED`）。用户搜索结果不含 Agent，未认领 Agent 发起搜索会收到 `AGENT_NOT_ALLOWED`。
 
 可免凭据调用 `POST /api/nodes/:nodeId/reports` 举报调用方可读的节点。请求体为 `{ "reason" }`，最多 1,000 个字符，成功返回 `201` 和 `{ id }`。每个来源 IP 每小时最多举报十次，超出返回 `429` 和 `REPORT_RATE_LIMITED`。日志仅记录节点及举报 ID。
@@ -161,6 +163,8 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm db:ban-agent <username or user id>
+pnpm db:executor-access grant|revoke <username or user id>
+pnpm db:executor-access list
 ```
 
 设计说明见[技术架构](docs/architecture.md)、[数据模型](docs/data-model.md)和[应用设计](docs/application-design.md)。
@@ -252,3 +256,10 @@ V21→V22 不改 Schema，只按显示名规则改写数据；PostgreSQL 的同�
 命名的个人空间（例如 `alice@example.com 的个人空间`）随之改名，其它名字和数据保持不变。停止全部旧实例，启动一个 V22 实例，
 待一致性备份、迁移和健康检查通过后再恢复服务。PostgreSQL 需在升级前自行备份。迁移失败会回滚，成功后重启
 不会重复迁移或备份。如需回退，停止 V22 并恢复 V21 备份。V21 和 V22 不得同时写入同一 SQLite 文件。
+
+### 执行层授权与产品数据库 V23
+
+V22→V23 只新增空的 `executor_access` 表；PostgreSQL 产品 schema 以同样方式在启动时的一个事务内从版本 2 升到 3。
+停止全部旧实例，启动一个 V23 实例，待备份、迁移和健康检查通过后再恢复服务。已有数据、对象键和未完成的恢复状态均会保留。
+迁移失败会回滚，成功后重启不会重复迁移或备份。如需回退，停止 V23 并恢复 V22 备份（PostgreSQL 恢复升级前的数据库备份）。旧实例遇到 V23 会拒绝启动。
+先升级 Workspace，再把 MCP 执行层设为 `workspace`：旧版 Workspace 不报告授权，执行层会在升级前拒绝所有人。

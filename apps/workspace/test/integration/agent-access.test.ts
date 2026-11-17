@@ -125,6 +125,50 @@ describe("db:ban-agent", () => {
   });
 });
 
+describe("db:executor-access", () => {
+  it("grants, lists and revokes by username or user id, and reports it in the session and the token exchange", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "workspace-executor-access-"));
+    directories.push(directory);
+    const databaseFilename = join(directory, "workspace.sqlite");
+    const { origin } = await start({ database: { provider: "sqlite", filename: databaseFilename, collaborationFilename: ":memory:" } });
+    const alice = await register(origin, "alice");
+    const agent = await createAgent(origin);
+    const pat = ((await (await post(origin, "/api/auth/tokens", { name: "mcp" }, { cookie: alice.cookie })).json()) as { token: string }).token;
+    const run = (...args: string[]) => spawnSync(process.execPath, ["--import", "tsx", "server/src/db/executor-access.ts", ...args], {
+      cwd: new URL("../../", import.meta.url),
+      encoding: "utf8",
+      env: { ...process.env, DATABASE_FILE: databaseFilename },
+      timeout: 30_000,
+    });
+    const reported = async () => ({
+      session: ((await session(origin, alice.cookie)) as { executorAccess?: unknown }).executorAccess,
+      exchange: ((await (await exchange(origin, pat)).json()) as { executor_access?: unknown }).executor_access,
+      agentSession: ((await session(origin, agent.cookie)) as { executorAccess?: unknown }).executorAccess,
+    });
+
+    expect(await reported()).toEqual({ session: undefined, exchange: undefined, agentSession: undefined });
+    expect(run("list")).toMatchObject({ status: 0, stdout: "" });
+    expect(run("grant", "alice")).toMatchObject({ status: 0, stdout: `alice (${alice.id}) now has executor access\n` });
+    expect(run("grant", alice.id)).toMatchObject({ status: 0, stdout: `alice (${alice.id}) already has executor access\n` });
+    expect(await reported()).toEqual({ session: true, exchange: true, agentSession: undefined });
+    expect(run("list").stdout).toMatch(new RegExp(`^alice\\t${alice.id}\\thuman\\t\\d{4}-\\d\\d-\\d\\dT[\\d:.]+Z\\n$`));
+
+    const selfGrant = await send(origin, "PATCH", "/api/users/me", { executorAccess: true }, { cookie: agent.cookie });
+    expect(selfGrant.status).toBe(400);
+    expect((await session(origin, agent.cookie)) as { executorAccess?: unknown }).not.toHaveProperty("executorAccess");
+
+    expect(run("revoke", alice.id)).toMatchObject({ status: 0, stdout: `alice (${alice.id}) no longer has executor access\n` });
+    expect(run("revoke", "alice")).toMatchObject({ status: 0, stdout: `alice (${alice.id}) already has no executor access\n` });
+    expect(await reported()).toEqual({ session: undefined, exchange: undefined, agentSession: undefined });
+    expect(run("list")).toMatchObject({ status: 0, stdout: "" });
+
+    expect(run("grant", "nobody")).toMatchObject({ status: 1, stderr: expect.stringContaining("No User matches nobody") });
+    for (const args of [["grant"], ["list", "alice"], ["allow", "alice"]]) {
+      expect(run(...args)).toMatchObject({ status: 1, stderr: expect.stringContaining("Usage: db:executor-access") });
+    }
+  }, 60_000);
+});
+
 describe("access rules for agents", () => {
   it("holds an unclaimed agent to Viewer on an Editor link, like the anonymous reader", async () => {
     const { origin, application } = await start();

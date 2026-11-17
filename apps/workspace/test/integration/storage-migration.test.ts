@@ -9,12 +9,14 @@ import { copySheetBlocks } from "../../server/src/storage-migration/sheet-blocks
 import { createTestBucket } from "../support/postgres/s3.js";
 import { Pool } from "pg";
 import { expect, it } from "vitest";
+import { initializePostgresSchema } from "../../server/src/db/postgres/initialize.js";
 import { openPostgresCollaborationDatabase } from "../../server/src/integrations/univer/collaboration-database/postgres/open.js";
 import { importCollaboration } from "../../server/src/storage-migration/collaboration.js";
+import { importProduct } from "../../server/src/storage-migration/product.js";
 import { prepareSource } from "../../server/src/storage-migration/source.js";
-import { createPostgresTestDatabase } from "../support/postgres/schema.js";
+import { createPostgresTestDatabase, createPostgresTestSchema } from "../support/postgres/schema.js";
 
-async function v22Source(resources: AsyncDisposableStack) {
+async function v23Source(resources: AsyncDisposableStack) {
   const directory = mkdtempSync(join(tmpdir(), "cutover-test-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
   const productFile = join(directory, "old-product");
@@ -66,15 +68,15 @@ async function v22Source(resources: AsyncDisposableStack) {
   return source;
 }
 
-it("reads committed V22 WAL rows without modifying the source files", async () => {
+it("reads committed V23 WAL rows without modifying the source files", async () => {
   await using resources = new AsyncDisposableStack();
-  const source = await v22Source(resources);
+  const source = await v23Source(resources);
   await source.checkSourceStopped();
-  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(22);
+  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(23);
   expect(source.product.prepare("SELECT kind FROM users WHERE id='u'").get()?.kind).toBe("human");
 });
 
-it.each([20, 21, 23])("rejects product V%i before opening the collaboration database", async (version) => {
+it.each([21, 22, 24])("rejects product V%i before opening the collaboration database", async (version) => {
   await using resources = new AsyncDisposableStack();
   const directory = mkdtempSync(join(tmpdir(), "cutover-version-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
@@ -85,7 +87,7 @@ it.each([20, 21, 23])("rejects product V%i before opening the collaboration data
   const before = readFileSync(path);
 
   await expect(prepareSource(directory, path, join(directory, "missing"), resources))
-    .rejects.toThrow(`Expected a V22 SQLite product database, got V${version}`);
+    .rejects.toThrow(`Expected a V23 SQLite product database, got V${version}`);
   expect(readFileSync(path)).toEqual(before);
 });
 
@@ -94,7 +96,7 @@ it.skipIf(!url)(
   "preserves Sheet blocks, snapshot references, Worktree baselines, seeds and comments",
   async () => {
     await using resources = new AsyncDisposableStack();
-    const source = await v22Source(resources);
+    const source = await v23Source(resources);
     const target = await createPostgresTestDatabase(url!);
     resources.defer(target.close);
     const storage = await createTestBucket(resources);
@@ -135,3 +137,27 @@ it.skipIf(!url)(
     );
   },
 );
+
+it.skipIf(!url)("imports executor access", async () => {
+  await using resources = new AsyncDisposableStack();
+  const product = new DatabaseSync(":memory:");
+  resources.defer(() => product.close());
+  product.exec(
+    readFileSync(new URL("../../server/src/db/sqlite/schema.sql", import.meta.url), "utf8"),
+  );
+  product.exec(`
+    INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
+    INSERT INTO executor_access (user_id, granted_at) VALUES ('u', 1794900000000);
+  `);
+  const target = await createPostgresTestSchema(url!);
+  resources.defer(target.close);
+  await initializePostgresSchema(target.pool);
+  const client = await target.pool.connect();
+  resources.defer(() => client.release());
+  const { rows: [{ schema }] } = await client.query("SELECT current_schema() AS schema");
+
+  expect(await importProduct(product, client, schema)).toBe(2);
+  expect((await client.query("SELECT user_id, granted_at FROM executor_access")).rows).toEqual([
+    { user_id: "u", granted_at: "1794900000000" },
+  ]);
+});

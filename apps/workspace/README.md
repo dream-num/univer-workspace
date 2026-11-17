@@ -238,6 +238,14 @@ lists the claimer's agents with file count and last activity, and `POST /api/age
 stops one: it bans the agent, so its links stop working for everyone but its owners, and closes the
 collaboration sockets the agent holds. There is no undo.
 
+The shared MCP executor runs scripts for every user in one container, so the operator decides who may use it.
+`pnpm db:executor-access grant <username or user id>` grants a User, `revoke` takes the access back and `list` prints
+who has it (`db:executor-access:production` runs the build; inside the runtime image run
+`node dist/server/db/executor-access.js`). Running a grant or revoke twice changes nothing. No HTTP route
+changes the access, so no User or agent can grant itself. `GET /api/session` reports `executorAccess: true` and the
+token exchange `executor_access: true` for a granted User, and leave the field out otherwise. With
+`MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` the MCP gateway and executor follow it within 30 seconds, without a restart.
+
 Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
 Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
 keeps at most 20 files in its Personal Space, each of at most 10 MiB (`AGENT_QUOTA_EXCEEDED`), and gets
@@ -407,6 +415,8 @@ pnpm typecheck
 pnpm test
 pnpm build
 pnpm db:ban-agent <username or user id>
+pnpm db:executor-access grant|revoke <username or user id>
+pnpm db:executor-access list
 ```
 
 See [architecture.md](docs/architecture.md), [data-model.md](docs/data-model.md),
@@ -602,3 +612,13 @@ instance, start one V22 instance, and wait for its consistent backup, migration 
 restoring service. Back up PostgreSQL before the upgrade. Failed migration rolls
 back; successful restarts do not repeat migration or backup. To roll back, stop V22 and restore the V21
 backup. Never run V21 and V22 writers on the same SQLite file.
+
+### Executor access and product database V23
+
+V22→V23 adds only the empty `executor_access` table; PostgreSQL moves from product schema version 2 to 3 the
+same way, in one transaction at startup. Stop every old instance, start one V23 instance, and wait for its
+backup, migration and health checks before restoring service. Existing rows, object keys and unfinished recovery
+state are preserved. Failed migration rolls back; successful restarts do not repeat migration or backup. To roll
+back, stop V23 and restore the V22 backup (PostgreSQL: the database backup taken before the upgrade). An older
+instance refuses to start on V23. Upgrade Workspace before setting the MCP executor to `workspace`: an older
+Workspace reports no access, so the executor would refuse everyone until the upgrade.

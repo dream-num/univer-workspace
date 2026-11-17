@@ -111,6 +111,8 @@ export interface IdentityModule {
     input: PasswordChange
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): Promise<SessionView>;
+  /** Whether the operator granted the User the shared MCP executor (`db:executor-access`). */
+  hasExecutorAccess(userId: string): Promise<boolean>;
   getRealtimeSession(cookieHeader: string | undefined): Promise<{
     readonly user: User;
     readonly sessionId: string;
@@ -286,6 +288,7 @@ export function createIdentityModule(options: {
       trialDeployment,
       user: principalUser(user, stored),
       authenticationMethods: await repository.authenticationMethods(user.id),
+      ...(await repository.hasExecutorAccess(user.id) ? { executorAccess: true } : {}),
     };
   }
 
@@ -868,6 +871,7 @@ export function createIdentityModule(options: {
     },
 
     getSession,
+    hasExecutorAccess: (userId) => repository.hasExecutorAccess(userId),
     async getRealtimeSession(cookieHeader) {
       const stored = await storedSession(cookieHeader);
       if (!stored) return null;

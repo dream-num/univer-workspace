@@ -9,7 +9,7 @@ const root = fileURLToPath(new URL("../../server/src/", import.meta.url));
 const sources = sourceFiles(root).filter((path) => !path.endsWith(".test.ts"));
 const adapters = ["db/sqlite/", "db/postgres/"];
 const factory = "db/open-product-database";
-const commands = ["main", "db/ban-agent"];
+const commands = ["main", "db/ban-agent", "db/executor-access"];
 
 // This offline command converts physical rows between formats. It never runs during server startup.
 // List individual edges so new dependencies still require review.

@@ -76,12 +76,30 @@ export interface StoredAgent {
   readonly files: number;
 }
 
+export interface ExecutorAccessChange {
+  readonly id: string;
+  readonly username: string;
+  /** False when the User already had, or already lacked, the access. */
+  readonly changed: boolean;
+}
+
+export interface ExecutorAccessEntry {
+  readonly id: string;
+  readonly username: string;
+  readonly kind: "human" | "agent";
+  readonly grantedAt: number;
+}
+
 export interface IdentityRepository {
   isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean>;
   banAgent(target: string, at: number): Promise<AgentBanResult | null>;
   findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]>;
   claimAgent(agentUserId: string, ownerUserId: string, at: number): Promise<boolean>;
   banClaimedAgent(ownerUserId: string, agentUserId: string, at: number): Promise<boolean>;
+  /** Grants or revokes the shared MCP executor for a username or user ID; null when no User matches. */
+  setExecutorAccess(target: string, granted: boolean, at: number): Promise<ExecutorAccessChange | null>;
+  hasExecutorAccess(userId: string): Promise<boolean>;
+  listExecutorAccess(): Promise<readonly ExecutorAccessEntry[]>;
   createPasswordUser(input: NewPasswordUser): Promise<void>;
   createExternalUser(input: {
     readonly provider: ExternalIdentityProvider;

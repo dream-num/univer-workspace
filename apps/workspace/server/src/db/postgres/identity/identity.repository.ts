@@ -11,6 +11,8 @@ import type {
   StoredEmailLoginCode,
   ExternalIdentityUser,
   AgentBanResult,
+  ExecutorAccessChange,
+  ExecutorAccessEntry,
   IdentityConflict,
   IdentityRepository,
   StoredAgent,
@@ -71,6 +73,34 @@ export class PostgresIdentityRepository implements IdentityRepository {
       .prepare("UPDATE agents SET banned_at = COALESCE(banned_at, ?) WHERE user_id = ? AND owner_user_id = ?")
       .run(at, agentUserId, ownerUserId);
     return result.changes > 0;
+  }
+
+  async setExecutorAccess(target: string, granted: boolean, at: number): Promise<ExecutorAccessChange | null> {
+    return await this._database.transaction(async (db) => {
+      const user = await db.prepare("SELECT id, username FROM users WHERE id = ? OR lower(username COLLATE \"C\") = lower(?::text COLLATE \"C\")").get(target, target);
+      if (!user) return null;
+      const id = String(user.id);
+      const { changes } = granted
+        ? await db.prepare("INSERT INTO executor_access (user_id, granted_at) VALUES (?, ?) ON CONFLICT DO NOTHING").run(id, at)
+        : await db.prepare("DELETE FROM executor_access WHERE user_id = ?").run(id);
+      return { id, username: String(user.username), changed: changes > 0 };
+    });
+  }
+
+  async hasExecutorAccess(userId: string): Promise<boolean> {
+    return Boolean(await this._database.prepare("SELECT 1 FROM executor_access WHERE user_id = ?").get(userId));
+  }
+
+  async listExecutorAccess(): Promise<readonly ExecutorAccessEntry[]> {
+    const rows = await this._database.prepare(
+      "SELECT u.id, u.username, u.kind, e.granted_at FROM executor_access e JOIN users u ON u.id = e.user_id ORDER BY e.granted_at, u.id"
+    ).all();
+    return rows.map((row) => ({
+      id: String(row.id),
+      username: String(row.username),
+      kind: row.kind === "agent" ? "agent" : "human",
+      grantedAt: Number(row.granted_at),
+    }));
   }
 
   async createPasswordUser(input: NewPasswordUser): Promise<void> {
