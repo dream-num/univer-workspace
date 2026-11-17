@@ -1,35 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { deriveDisplayName, deriveUserDisplayName, isUnsafeDisplayName, validDisplayName } from "./display-name.js";
 
+const tags = (text: string) => [...text].map((letter) => String.fromCodePoint(0xE0000 + letter.codePointAt(0)!)).join("");
+const ENGLAND = `\u{1F3F4}${tags("gbeng")}\u{E007F}`;
+
 const HOSTILE: readonly (readonly [string, string, string])[] = [
-  ["a right-to-left override", "Alice‮txt.exe", "Alicetxt.exe"],
-  ["isolates and embeddings", "⁦a⁨b‪c‫d‬e", "abcde"],
+  ["a right-to-left override", "Alice\u202Etxt.exe", "Alicetxt.exe"],
+  ["isolates and embeddings", "\u2066a\u2068b\u202Ac\u202Bd\u202Ce", "abcde"],
   ["newlines and tabs", "Alice\r\n\tBob", "Alice Bob"],
-  ["line and paragraph separators", "A B C", "A B C"],
+  ["line and paragraph separators", "A\u2028B\u2029C", "A B C"],
   ["C0 and C1 controls", "a\u0000b\u001Bc\u0085d", "a b c d"],
-  ["zero-width characters that join nothing", "‍Cl​a⁠u﻿d­e‌", "Claude"],
-  ["joiners next to a space or a removed character", "Ann ‍Lee​‌x", "Ann Leex"],
-  ["Hangul fillers between letters", "aㅤbᅠcﾠdᅟe", "abcde"],
-  ["the blank Braille pattern", "a⠀b", "a b"],
-  ["a replacement character", "Claude�Code", "ClaudeCode"],
+  ["zero-width characters that join nothing", "\u200DCl\u200Ba\u2060u\uFEFFd\u00ADe\u200C", "Claude"],
+  ["joiners next to a space or a removed character", "Ann \u200DLee\u200B\u200Cx", "Ann Leex"],
+  ["a joiner after a mark that is not a virama", "Cafe\u0301\u200D Bar", "Cafe\u0301 Bar"],
+  ["Hangul fillers between letters", "a\u3164b\u1160c\uFFA0d\u115Fe", "abcde"],
+  ["the blank Braille pattern", "a\u2800b", "a b"],
+  ["a replacement character", "Claude\uFFFDCode", "ClaudeCode"],
   ["a lone surrogate", "Claude\uD800Code", "ClaudeCode"],
-  ["variation selectors without a base", "️Sam ️️", "Sam"],
+  ["variation selectors without a base", "\uFE0FSam \uFE0F\uFE0F", "Sam"],
   ["tag characters outside a flag", "Eve\u{E0068}\u{E0069}\u{E007F} \u{1F600}\u{E0061}\u{E007F}", "Eve \u{1F600}"],
   ["an unterminated flag tag sequence", "\u{1F3F4}\u{E0067}\u{E0062} Eng", "\u{1F3F4} Eng"],
+  ["tag letters after a black flag", `\u{1F3F4}${tags("hello")}\u{E007F} Eve`, "\u{1F3F4} Eve"],
+  ["a subdivision tag sequence that is not RGI", `\u{1F3F4}${tags("usca")}\u{E007F} Cal`, "\u{1F3F4} Cal"],
+  ["tag characters after an RGI flag", `${ENGLAND}${tags("hi")}\u{E007F}`, ENGLAND],
+  ["interlinear annotation characters", "Al\uFFF9i\uFFFAc\uFFFBe", "Alice"],
+  ["Egyptian hieroglyph format controls", "Ra\u{13430}m\u{1343F}ses", "Ramses"],
 ];
 
 const LEGITIMATE = [
-  "\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466} Smith",
-  "\u{1F3F3}️‍\u{1F308} Pride",
+  "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466} Smith",
+  "\u{1F3F3}\uFE0F\u200D\u{1F308} Pride",
   "\u{1F1E8}\u{1F1F3} Beijing",
   "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F} Eng",
-  "Sam ❤️",
-  "#️⃣ first",
-  "\u{1F9D1}\u{1F3FD}‍\u{1F4BB}",
-  "نامه‌ای",
-  "क्‍षिति",
+  `\u{1F3F4}${tags("gbsct")}\u{E007F} \u{1F3F4}${tags("gbwls")}\u{E007F}`,
+  "Sam ❤\uFE0F",
+  "#\uFE0F\u20E3 first",
+  "\u{1F9D1}\u{1F3FD}\u200D\u{1F4BB}",
+  "نامه\u200Cای",
+  "क्\u200Dषिति",
+  "\u0D05\u0D35\u0D28\u0D4D\u200D",
+  "\u0D15\u0D41\u0D2E\u0D3E\u0D30\u0D4D\u200D \u0D15\u0D41\u0D2E\u0D3E\u0D30\u0D4D",
+  "\u0DC1\u0DCA\u200D",
+  "\u0600\u0661\u0662",
   "葛\u{E0100}城",
-  "Café",
+  "Cafe\u0301",
   "Sean O’Brien",
   "@handle",
   "C@rl",
@@ -38,8 +52,8 @@ const LEGITIMATE = [
 ];
 
 const INVISIBLE = [
-  "ㅤ", "⠀", "ᅟᅠ", "ﾠ", "️", "​‮\n", "　  ", "‍‌",
-  "́́́", "￼", "", "\u{F0000}́",
+  "\u3164", "\u2800", "\u115F\u1160", "\uFFA0", "\uFE0F", "\u200B\u202E\n", "\u3000 \u00A0", "\u200D\u200C",
+  "\u0301\u0301\u0301", "\uFFFC", "\uE000", "\u{F0000}\u0301", "\uFFF9\u{13430}", "\u0600", "\u0D4D\u200D",
 ];
 
 const ADDRESSES: readonly (readonly [string, string])[] = [
@@ -48,20 +62,22 @@ const ADDRESSES: readonly (readonly [string, string])[] = [
   ["Alice (alice@example.com)", "Alice (alice)"],
   ["x@y.com@z.org", "x"],
   ["odd@under_score.com", "odd"],
-  ["a​@example.com", "a"],
-  ["‮alice@example.com‬", "alice"],
+  ["a\u200B@example.com", "a"],
+  ["\u202Ealice@example.com\u202C", "alice"],
   ["alice @ example.com", "alice"],
   ["alice@ example.com", "alice"],
-  ["alice⠀@⠀example.com", "alice"],
+  ["alice\u2800@\u2800example.com", "alice"],
   ["alice@@example.com", "alice"],
   ["alice＠example.com", "alice"],
   ["alice﹫example.com", "alice"],
   ["alice@example。com", "alice"],
   ["alice＠example．com", "alice"],
+  ["alice@example\u2024com", "alice"],
+  ["alice@example\uFE52com", "alice"],
   ["mailto:alice@example.com", "alice"],
   ["MAILTO:alice@example.com", "alice"],
-  ["ㅤ@example.com", ""],
-  ["​ @ example.com", ""],
+  ["\u3164@example.com", ""],
+  ["\u200B @ example.com", ""],
 ];
 
 describe("display-name rule", () => {
@@ -118,12 +134,12 @@ describe("display-name rule", () => {
     expect(deriveDisplayName(`${"a".repeat(39)}🇨🇳`, 40)).toBe("a".repeat(39));
     expect(deriveDisplayName(`${"a".repeat(39)}👍🏽`, 40)).toBe("a".repeat(39));
     expect(deriveDisplayName(`${"a".repeat(39)} ${"b".repeat(5)}`, 40)).toBe("a".repeat(39));
-    expect(deriveDisplayName(`${"a".repeat(38)}ه‌ا`, 40)).toBe(`${"a".repeat(38)}ه`);
+    expect(deriveDisplayName(`${"a".repeat(38)}ه\u200Cا`, 40)).toBe(`${"a".repeat(38)}ه`);
   });
 
   it("answers a very long name within a small time budget", () => {
     const started = performance.now();
-    for (const long of ["a".repeat(50_000), "a\u200D".repeat(25_000), "a @ ".repeat(12_500)]) {
+    for (const long of ["a".repeat(50_000), "a\u200D".repeat(25_000), "a @ ".repeat(12_500), "\u0D30\u0D4D\u200D ".repeat(12_500)]) {
       expect(() => validDisplayName(long)).toThrow(expect.objectContaining({ field: "displayName", message: "displayName must contain between 1 and 100 characters." }));
       expect([...deriveDisplayName(long)].length).toBeGreaterThan(90);
       expect(isUnsafeDisplayName(long)).toBe(long.startsWith("a\u200D"));
@@ -134,7 +150,7 @@ describe("display-name rule", () => {
   it("derives the same name again from a derived name", () => {
     const samples = [
       ...HOSTILE.map(([, raw]) => raw), ...LEGITIMATE, ...INVISIBLE, ...ADDRESSES.map(([raw]) => raw),
-      "🇨🇳".repeat(60), `${"ه‌".repeat(60)}`,
+      "🇨🇳".repeat(60), `${"ه\u200C".repeat(60)}`,
     ];
     for (const raw of samples) {
       const derived = deriveDisplayName(raw);

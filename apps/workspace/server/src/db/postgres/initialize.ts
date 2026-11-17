@@ -26,6 +26,7 @@ async function fingerprint(client: PoolClient): Promise<string> {
 const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames];
 const VERSION = UPGRADES.length + 1;
 
+// Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
 async function repairDisplayNames(client: PoolClient): Promise<void> {
   const users = await client.query<StoredDisplayName>("SELECT id, username, display_name FROM users");
   const spaces = await client.query<StoredPersonalSpaceName>("SELECT id, owner_user_id, name FROM spaces WHERE type = 'personal'");

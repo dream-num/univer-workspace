@@ -94,7 +94,7 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 `kind`（V21，`'human' | 'agent'`，非空，默认 `'human'`）区分人和 agent。它与
 `login_sessions.write_source = 'agent'` 无关：后者标记凭据签发的 Session，人的个人访问令牌也会产生。
 
-`display_name` 对所有打开该 User 共享文件的人可见，人和 agent 的每一次写入都经过同一条显示名规则（`server/src/modules/identity/display-name.ts`），规则在任何匹配之前先限定输入长度。控制字符、行与段分隔符、U+2800 和 U+1D159 变为空格；双向控制、韩文填充符等默认可忽略码位、未配对代理项与 U+FFFD 被删除。两个字符之间的零宽连接符与零宽非连接符、紧跟字符的变体选择符和旗帜标签序列保留，因此 emoji、波斯文和印度系文字的名字逐字节不变。连续空白合并为一个空格并去除首尾空白。长度按 Unicode 码位计算。用户亲自输入的名字（密码注册、修改资料）超过 100 个码位、没有可见字符（只有空白、组合附加符、U+FFFC 或私用区字符）或含邮箱地址时返回 400，由本人改正，而不是被悄悄改成别的名字。邮箱地址指 `local@domain.tld`，也包括 `@` 两侧带空格、连续的 `@`、以 U+FF20 或 U+FE6B 代替 `@`、以 U+3002、U+FF0E 或 U+FF61 代替点、`mailto:` 前缀和不可见的本地部分；`alice [at] example.com`、`alice(at)example.com` 与 `alice@example` 不在识别范围内。来自 GitHub、Google、Discord、Discord Bot、邮箱登录、agent 标签和 OAuth 客户端名的派生名字没有人当场改正，因此不拒绝：邮箱地址只保留本地部分，超长时按完整字素截断，没有可见字符时依次回退为同样经过规则的 Provider 用户名、`Workspace User` 或 `agent`。Google 未提供姓名时取邮箱本地部分。
+`display_name` 对所有打开该 User 共享文件的人可见，人和 agent 的每一次写入都经过同一条显示名规则（`server/src/modules/identity/display-name.ts`），规则在任何匹配之前先限定输入长度。控制字符、行与段分隔符、U+2800 和 U+1D159 变为空格；双向控制、韩文填充符等默认可忽略码位、前置连接符号（如 U+0600 阿拉伯数字符号）以外的格式字符、未配对代理项与 U+FFFD 被删除。两个字符之间的零宽连接符与零宽非连接符、紧跟 virama 的零宽连接符、紧跟字符的变体选择符和 RGI 地区旗帜（英格兰、苏格兰、威尔士）的标签字符保留，其它标签字符被删除，因此 emoji、波斯文和印度系文字的名字逐字节不变。连续空白合并为一个空格并去除首尾空白。长度按 Unicode 码位计算。用户亲自输入的名字（密码注册、修改资料）超过 100 个码位、没有可见字符（只有空白、组合附加符、U+FFFC 或私用区字符）或含邮箱地址时返回 400，由本人改正，而不是被悄悄改成别的名字。邮箱地址指 `local@domain.tld`，也包括 `@` 之后或两侧带空格、连续的 `@`、以 U+FF20 或 U+FE6B 代替 `@`、以 U+2024、U+3002、U+FE52、U+FF0E 或 U+FF61 代替点、`mailto:` 前缀和不可见的本地部分（只在 `@` 之前带空格的 `Team @acme.io` 是 handle）；`alice [at] example.com`、`alice(at)example.com` 与 `alice@example` 不在识别范围内。来自 GitHub、Google、Discord、Discord Bot、邮箱登录、agent 标签和 OAuth 客户端名的派生名字没有人当场改正，因此不拒绝：邮箱地址只保留本地部分，超长时按完整字素截断，没有可见字符时依次回退为同样经过规则的 Provider 用户名、`Workspace User` 或 `agent`。Google 未提供姓名时取邮箱本地部分。
 
 ### `agents`
 
@@ -718,7 +718,7 @@ V20→V21 给 `users` 末尾追加 `kind` 列，并新增 `agents` 与 `node_rep
 ## 显示名修复（V22）
 
 V21→V22 不改 Schema，只按显示名规则修复数据；PostgreSQL 的同一修复对应 `workspace_product_schema`
-版本 1→2。只有含邮箱地址、误导字符（控制、双向、填充字符，未配对代理项、U+FFFD，或不连接任何字符的零宽字符）
+版本 1→2。只有含邮箱地址、误导字符（控制、双向、填充、格式字符，地区旗帜以外的标签字符，未配对代理项、U+FFFD，或不连接任何字符的零宽字符）
 或没有可见字符的 `display_name` 会被改写为派生名字：邮箱地址只保留本地部分，误导字符被清除，没有可见字符时
 依次回退为同样经过规则的 username 和 `Workspace User`。其它名字逐字节不变，包括 emoji、波斯文和印度系文字中的
 连接符与变体选择符。Personal Space 名以 ` 的个人空间` 结尾，且前半部分等于 owner 原显示名或本身会被改写

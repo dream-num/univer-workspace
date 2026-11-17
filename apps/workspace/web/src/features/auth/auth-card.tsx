@@ -396,7 +396,6 @@ export function AuthCard(props: {
               <Input
                 id="auth-display-name"
                 className="h-10"
-                maxLength={100}
                 value={displayName}
                 invalid={Boolean(fieldErrors.displayName)}
                 onChange={(event) => setDisplayName(event.target.value)}

@@ -101,12 +101,12 @@ describe("POST /api/agents", () => {
       sessionUser((await post(origin, "/api/auth/guest", { label })).headers.get("set-cookie")!.split(";", 1)[0]!);
 
     for (const create of [viaApi, viaGuest]) {
-      const agent = await create("‮Budget\nbot​\u0000");
+      const agent = await create("\u202EBudget\nbot\u200B\u0000");
       expect(agent.displayName).toBe("Budget bot");
       expect(agent.username).toMatch(/^budget-bot-[a-z0-9]{4}$/u);
       expect(application.database.connection.prepare("SELECT origin_label FROM agents WHERE user_id = ?").get(agent.id))
         .toEqual({ origin_label: "Budget bot" });
-      for (const invisible of ["‮⁦\r\n", "\u3164\u2800", "\u115F\u1160\uFFA0"]) {
+      for (const invisible of ["\u202E\u2066\r\n", "\u3164\u2800", "\u115F\u1160\uFFA0"]) {
         expect(await create(invisible)).toMatchObject({ displayName: "agent", username: expect.stringMatching(/^agent-[a-z0-9]{4}$/u) });
       }
     }
@@ -114,12 +114,12 @@ describe("POST /api/agents", () => {
 
   it("rejects a label that is not a string of at most 64 characters without spending the rate limit", async () => {
     const { origin } = await start({ agentCreateLimitPerHour: 1 });
-    for (const label of [5, null, ["a"], "x".repeat(65)]) {
+    for (const label of [5, null, ["a"], "x".repeat(65), "\u{1F916}".repeat(65)]) {
       const response = await post(origin, "/api/agents", { label });
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ error: { code: "INVALID_INPUT", field: "label" } });
     }
-    expect((await post(origin, "/api/agents", {})).status).toBe(201);
+    expect((await post(origin, "/api/agents", { label: "\u{1F916}".repeat(64) })).status).toBe(201);
   });
 });
 
@@ -168,7 +168,7 @@ describe("POST /api/auth/guest", () => {
     expect(first.displayName).toBe(`Claude Code · ${first.username.slice(-4)}`);
     expect(second.displayName).not.toBe(first.displayName);
 
-    const hostile = await guest({ oauthClientId: await register(`‮Claude\nCode​\u0000 ${"x".repeat(80)}`) });
+    const hostile = await guest({ oauthClientId: await register(`\u202EClaude\nCode\u200B\u0000 ${"x".repeat(80)}`) });
     expect(hostile.displayName).toBe(`Claude Code ${"x".repeat(28)} · ${hostile.username.slice(-4)}`);
 
     const surrogate = await guest({ oauthClientId: await register("Claude\uD800Code") });
@@ -177,7 +177,7 @@ describe("POST /api/auth/guest", () => {
     expect(await guest({ oauthClientId: claudeCode, label: "Budget bot" })).toMatchObject({ displayName: "Budget bot" });
     for (const oauthClientId of [
       await register(),
-      await register("‮⁦\n"),
+      await register("\u202E\u2066\n"),
       await register("\u3164\u2800"),
       "00000000-0000-4000-8000-000000000000",
       GATEWAY_ID,

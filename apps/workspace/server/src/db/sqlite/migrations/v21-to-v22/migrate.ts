@@ -21,6 +21,7 @@ export function migrateV21ToV22(database: DatabaseSync): void {
   }
 }
 
+// Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
 export function repairDisplayNames(database: DatabaseSync): void {
   const repair = planDisplayNameRepair(
     database.prepare("SELECT id, username, display_name FROM users").all() as unknown as StoredDisplayName[],

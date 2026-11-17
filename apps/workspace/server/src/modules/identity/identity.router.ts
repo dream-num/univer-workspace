@@ -508,7 +508,7 @@ function loginReturnTo(request: Request): string | undefined {
 
 function agentLabel(value: unknown): string | undefined {
   if (value === undefined) return undefined;
-  if (typeof value !== "string" || value.length > MAX_AGENT_LABEL_LENGTH) {
+  if (typeof value !== "string" || [...value].length > MAX_AGENT_LABEL_LENGTH) {
     throw new ApplicationError(
       "INVALID_INPUT",
       400,
