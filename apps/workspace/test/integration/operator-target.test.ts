@@ -50,7 +50,7 @@ const robot = "33333333-cccc-4ccc-8ccc-333333333333";
 
 for (const { name, open } of backends) {
   describe.skipIf(!open)(`${name} operator commands`, () => {
-    it("refuse a target that is one User's ID and another's username, and act on an exact ID or username", async ({ onTestFinished }) => {
+    it("refuse a target that names two Users by ID or username, and act on an exact ID or username",async ({ onTestFinished }) => {
       const backend = await open!();
       onTestFinished(backend.close);
       const run = (command: string, ...args: string[]) => spawnSync(process.execPath, ["--import", "tsx", `server/src/db/${command}.ts`, ...args], {
@@ -100,6 +100,17 @@ for (const { name, open } of backends) {
       expect(run("ban-agent", "eve-id")).toMatchObject({ status: 1, stderr: expect.stringContaining(`${robot} is not an agent`) });
       expect(run("ban-agent", "ROBOT-0A1B")).toMatchObject({ status: 0, stdout: `Banned agent robot-0a1b (${robot})\n` });
       expect(await banned()).toBe(true);
+
+      await backend.query("INSERT INTO users (id, username, display_name, kind, created_at, updated_at) VALUES ('legacy-abc', 'first', 'First', 'human', 1, 1), ('LEGACY-ABC', 'second', 'Second', 'human', 1, 1)");
+      for (const target of ["legacy-abc", "LEGACY-ABC"]) {
+        expect(run("executor-access", "grant", target)).toMatchObject({
+          status: 1,
+          stdout: "",
+          stderr: expect.stringContaining(`${target} is the user ID of second (LEGACY-ABC) and the user ID of first (legacy-abc). Nothing changed`),
+        });
+      }
+      expect(await granted()).toEqual(["mallory-id"]);
+      expect(run("executor-access", "grant", "second")).toMatchObject({ status: 0, stdout: "second (LEGACY-ABC) now has executor access\n" });
     }, 120_000);
   });
 }
