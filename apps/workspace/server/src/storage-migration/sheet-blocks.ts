@@ -1,3 +1,4 @@
+import { reportProgress } from "./progress.js";
 import { GetObjectCommand, paginateListObjectsV2, PutObjectCommand } from "@aws-sdk/client-s3";
 import type { S3BlobStoreOptions } from "../integrations/blob/s3-blob-store.js";
 import { sheetBlockStorage } from "../integrations/univer/collaboration-database/postgres/sheet-block-storage.js";
@@ -11,7 +12,9 @@ export async function copySheetBlocks(source: Source, options: S3BlobStoreOption
     for await (const page of paginateListObjectsV2({ client }, { Bucket: bucket, Prefix: prefix + "/" })) {
       for (const item of page.Contents ?? []) existing.add(item.Key!);
     }
+    const progress = reportProgress("Verified Sheet blocks");
     let count = 0;
+    let verifiedBytes = 0;
     for (const row of source.collaboration.prepare("SELECT unit_id, block_id, payload FROM collaboration_sheet_blocks").iterate()) {
       const unit = String(row.unit_id);
       const block = String(row.block_id);
@@ -21,15 +24,22 @@ export async function copySheetBlocks(source: Source, options: S3BlobStoreOption
       const location = { Bucket: bucket, Key: `${prefix}/${encodeURIComponent(unit)}/${encodeURIComponent(block)}` };
       if (!(row.payload instanceof Uint8Array)) throw new Error("Expected a MessagePack Sheet block");
       const bytes = Buffer.from(row.payload);
-      if (!existing.delete(location.Key)) {
-        await client.send(new PutObjectCommand({ ...location, Body: bytes, ContentType: "application/vnd.msgpack", IfNoneMatch: "*" }));
+      try {
+        if (!existing.delete(location.Key)) {
+          await client.send(new PutObjectCommand({ ...location, Body: bytes, ContentType: "application/vnd.msgpack", IfNoneMatch: "*" }));
+        }
+        const response = await client.send(new GetObjectCommand(location));
+        const stored = await response.Body?.transformToByteArray();
+        if (!stored || !bytes.equals(stored)) throw new Error(`Destination S3 contents differ for ${location.Key}`);
+      } catch (error) {
+        throw new Error(`Sheet block ${location.Key}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
-      const response = await client.send(new GetObjectCommand(location));
-      const stored = await response.Body?.transformToByteArray();
-      if (!stored || !bytes.equals(stored)) throw new Error(`Destination S3 contents differ for ${location.Key}`);
       count++;
+      verifiedBytes += bytes.length;
+      progress(count, verifiedBytes);
     }
     if (existing.size) throw new Error("Destination contains Sheet block objects outside this migration");
+    progress(count, verifiedBytes, true);
     return count;
   } finally {
     client.destroy();

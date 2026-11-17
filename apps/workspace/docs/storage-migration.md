@@ -29,6 +29,21 @@ The command reads the V21 product database and prepares the collaboration databa
 
 **Interruption and rollback.** Keep source writers stopped after a failure. Empty target tables and some S3 objects may remain. The database import transaction rolls back as a unit. Fix the cause and rerun with the same source and destination. The command verifies and reuses identical objects and rejects mismatched or unrelated objects and populated target tables. It also rejects legacy collaboration resource data the target SDK cannot represent. If the connection drops during commit, inspect the target before reopening traffic or retrying. Before reopening traffic, you can stop the target and restart the source with its original configuration. After traffic resumes, rollback also requires transferring subsequent writes.
 
+### Capacity and progress
+
+Allow temporary disk for the two SQLite copies, their journals and any collaboration upgrade staging files or backups. Reserve PostgreSQL space for the imported tables, indexes and transaction WAL. The importer reads SQLite rows incrementally and inserts and verifies each row over a database round trip. It streams each local file, uploads missing objects and reads the full contents back from S3. Object key lists and file verification metadata grow with object count. The largest Sheet block or database row must fit in memory. To plan a maintenance window, rehearse with a representative backup, the intended network and an empty target.
+
+The command prints the current phase and table. During copying and import it reports completed files, Sheet blocks, bytes or staged rows at ten-second intervals as work completes. Row counts become durable when PostgreSQL commits.
+
+| Exit | Meaning and next step |
+| --- | --- |
+| 0 | `Migration committed` reports the committed row counts and verified objects. Start one instance for HTTP validation. |
+| 1 | This run did not commit its database import. Read the phase and error, keep the source stopped and fix the cause. Verified S3 objects can be reused. |
+| 2 | PostgreSQL did not confirm the commit outcome. Inspect the target before retrying or reopening traffic. |
+| 3 | PostgreSQL confirmed the commit and cleanup failed. Keep the target data and investigate cleanup. |
+
+If the process is killed or the container disappears without a final status, inspect the target before retrying.
+
 ## SQLite upgrades and recovery
 
 Deployments that stay on SQLite upgrade at server startup. The current product schema is V21. Startup supports upgrades from V0 through V20.

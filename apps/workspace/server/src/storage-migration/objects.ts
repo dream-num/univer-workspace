@@ -1,3 +1,4 @@
+import { reportProgress } from "./progress.js";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
@@ -63,31 +64,39 @@ export async function copyObjects(
       }
     }
     const verified = new Map<string, { sha: string; size: number }>();
+    const progress = reportProgress(`Verified files (of ${local.size})`);
+    let bytes = 0;
     for (const name of local) {
-      const file = join(directory, name);
-      const size = (await stat(file)).size;
-      const location = { Bucket: bucket, Key: prefixPath + name };
-      const sha = await digest(createReadStream(file));
-      if (!existing.has(name)) {
-        await new Upload({
-          client,
-          params: {
-            ...location,
-            IfNoneMatch: "*",
-            Body: createReadStream(file),
-            ContentLength: size,
-          },
-        }).done();
+      try {
+        const file = join(directory, name);
+        const size = (await stat(file)).size;
+        const location = { Bucket: bucket, Key: prefixPath + name };
+        const sha = await digest(createReadStream(file));
+        if (!existing.has(name)) {
+          await new Upload({
+            client,
+            params: {
+              ...location,
+              IfNoneMatch: "*",
+              Body: createReadStream(file),
+              ContentLength: size,
+            },
+          }).done();
+        }
+        const remote = await client.send(new GetObjectCommand(location));
+        if (
+          !remote.Body ||
+          (await digest(remote.Body.transformToWebStream())) !== sha ||
+          remote.ContentLength !== size
+        ) {
+          throw new Error(`Destination S3 contents differ for ${name}`);
+        }
+        verified.set(name, { sha, size });
+        bytes += size;
+      } catch (error) {
+        throw new Error(`File ${name}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
-      const remote = await client.send(new GetObjectCommand(location));
-      if (
-        !remote.Body ||
-        (await digest(remote.Body.transformToWebStream())) !== sha ||
-        remote.ContentLength !== size
-      ) {
-        throw new Error(`Destination S3 contents differ for ${name}`);
-      }
-      verified.set(name, { sha, size });
+      progress(verified.size, bytes, verified.size === local.size);
     }
     for (const row of db.prepare(requiredObjects).iterate()) {
       const actual = verified.get(String(row.object_key));

@@ -1,3 +1,4 @@
+import { reportProgress } from "./progress.js";
 import { isDeepStrictEqual } from "node:util";
 import type { PoolClient } from "pg";
 
@@ -44,6 +45,8 @@ export async function importTable(
   const identity = columns.some((column) => column.identity) ? " OVERRIDING SYSTEM VALUE" : "";
   const placeholders = columns.map((_, index) => "$" + (index + 1)).join(",");
   const sql = `INSERT INTO ${target} (${names})${identity} VALUES (${placeholders}) RETURNING ${names}`;
+  const progress = reportProgress(`Staged rows in ${target}`);
+  console.log(`Importing ${target}`);
   let count = 0;
   for await (const row of rows) {
     if (
@@ -62,9 +65,10 @@ export async function importTable(
         throw new Error(`Readback differs for ${target}.${column.name} at row ${count + 1}`);
       }
     }
-    count++;
+    progress(++count);
   }
   const stored = await client.query(`SELECT count(*) FROM ${target}`);
   if (Number(stored.rows[0].count) !== count) throw new Error(`Row count differs for ${target}`);
+  progress(count, undefined, true);
   return count;
 }
