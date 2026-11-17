@@ -209,6 +209,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
         { status: 201 },
       );
     }
+    if (at("POST", "/api/nodes/sheet/copies")) return Response.json({ operation: { id: "k2" }, unit: unit() }, { status: 201 });
     if (at("POST", "/api/worktrees/wt-3/merge")) {
       prState = "merged";
       return Response.json({ worktree: worktree("merged") });
@@ -351,6 +352,42 @@ describe("space, unit, repository admin, label and merge tools", () => {
       arguments: { worktree: "wt-3", space: "team-1", type: "pdf", name: "x" },
     });
     expect(invalid).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+  });
+
+  it("copies a shared file into a pull request with unit_create from, changing tools/list by that one optional parameter", async () => {
+    const client = await connect();
+    const tool = (await client.listTools()).tools.find(({ name }) => name === "unit_create")!;
+    expect(tool).toMatchObject({
+      title: "Create file in pull request",
+      description:
+        "Create a new empty file (sheet, doc, slide, base or board) in a pull request's Worktree; it joins the repository when the pull request is merged. Generate an idempotency_key before creating and reuse it on retry, so a retry returns the same file instead of a duplicate.",
+      inputSchema: { required: ["worktree", "space", "type", "name"] },
+    });
+    expect(Object.keys(tool.inputSchema.properties!)).toEqual(["worktree", "space", "type", "name", "parent", "from", "idempotency_key"]);
+    expect(tool.inputSchema.properties!["from"]).toMatchObject({
+      type: "string",
+      description: expect.stringContaining("records that file as its source"),
+    });
+
+    const args = { worktree: "wt-3", space: "bob/team", type: "sheet", name: "Budget", parent: "dir", idempotency_key: "k2" };
+    const copied = await client.callTool({ name: "unit_create", arguments: { ...args, from: `${origin}/nodes/sheet` } });
+    expect(copied.structuredContent).toMatchObject({ unit: { name: "Budget", type: "sheet", url: `${prUrl}?unit=u-new` } });
+    expect(requests.filter((request) => request.method === "POST")).toEqual([{
+      method: "POST",
+      path: "/api/nodes/sheet/copies",
+      key: "k2",
+      body: { name: "Budget", target: { kind: "worktree", worktreeId: "wt-3", spaceId: "team-1", parentNodeId: "dir" } },
+    }]);
+
+    requests.length = 0;
+    for (const [bad, code] of [
+      [{ ...args, type: "doc", from: "sheet" }, "workspace-argument-invalid"],
+      [{ ...args, from: "https://elsewhere.example/nodes/sheet" }, "workspace-origin-mismatch"],
+      [{ ...args, from: "hidden" }, "workspace-not-found"],
+    ] as const) {
+      expect(await client.callTool({ name: "unit_create", arguments: bad })).toMatchObject({ isError: true, structuredContent: { code } });
+    }
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
   });
 
   it("gets a Blob's node and resource", async () => {

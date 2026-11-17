@@ -1,9 +1,14 @@
 import { Command } from "commander";
 import type { WorkspaceUnitFeature } from "@univerjs/univer-workspace-client-core";
+import { parseNodeReference } from "@univerjs/univer-workspace-client-core/product";
 import { executeCommand, oneOf, present, type JsonOption } from "../../command.js";
 import type { RepoContext } from "../../repo-context.js";
 
-export function createUnitCommand(feature: WorkspaceUnitFeature, context: RepoContext): Command {
+export function createUnitCommand(
+  feature: WorkspaceUnitFeature,
+  context: RepoContext,
+  origin: () => Promise<string>,
+): Command {
   const root = new Command("unit").description("Manage Worktree Units");
   const list = new Command("list")
     .requiredOption("--worktree <id>")
@@ -35,11 +40,16 @@ export function createUnitCommand(feature: WorkspaceUnitFeature, context: RepoCo
     .requiredOption("--type <type>")
     .requiredOption("--name <name>")
     .option("--parent <node>")
+    .option(
+      "--from <file>",
+      "share link or Node ID of a file you can open: the new file is a copy of it that records it as its source; --type must be its type",
+    )
     .option("--idempotency-key <key>")
     .option("--json")
     .action(
       async (
         options: JsonOption & {
+          readonly from?: string;
           readonly idempotencyKey?: string;
           readonly name: string;
           readonly parent?: string;
@@ -58,6 +68,9 @@ export function createUnitCommand(feature: WorkspaceUnitFeature, context: RepoCo
                 type: oneOf(options.type, ["sheet", "doc", "slide", "base", "board"], "--type"),
                 worktreeId: options.worktree,
                 ...(options.parent === undefined ? {} : { parentNodeId: options.parent }),
+                ...(options.from === undefined
+                  ? {}
+                  : { fromNodeId: parseNodeReference(options.from, await origin()) }),
                 ...(options.idempotencyKey === undefined
                   ? {}
                   : { idempotencyKey: options.idempotencyKey }),

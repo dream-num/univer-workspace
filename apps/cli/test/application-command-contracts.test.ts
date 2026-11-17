@@ -249,7 +249,7 @@ describe("Workspace application Commander adapters", () => {
       add,
       create,
       list: async () => [],
-    } as unknown as WorkspaceUnitFeature, repoContext());
+    } as unknown as WorkspaceUnitFeature, repoContext(), async () => "https://workspace.test");
 
     await run(command, ["add", "--worktree", "wt-1", "--resource", "resource-1"]);
     await run(command, [
@@ -277,6 +277,18 @@ describe("Workspace application Commander adapters", () => {
       type: "doc",
       worktreeId: "wt-1",
     });
+
+    const copy = ["create", "--worktree", "wt-1", "--space", "me/personal", "--type", "sheet", "--name", "Mine"];
+    await run(command, [...copy, "--from", "https://workspace.test/nodes/node-9"]);
+    expect(create).toHaveBeenLastCalledWith({
+      fromNodeId: "node-9",
+      name: "Mine",
+      spaceId: "looked-up",
+      type: "sheet",
+      worktreeId: "wt-1",
+    });
+    await expect(run(command, [...copy, "--from", "https://elsewhere.test/nodes/node-9"])).rejects.toThrow();
+    expect(create).toHaveBeenCalledTimes(2);
   });
 
   it("maps Blob upload/get/download without changing filenames or ids", async () => {

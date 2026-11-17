@@ -207,7 +207,7 @@ export function createProgram(options: WorkspaceCliProgramOptions): Command {
     createSkillsCommand(options.skillDataRoot),
     ...createProductCommands(product),
     createSpaceCommand(spaces, product.repoContext),
-    createUnitCommand(units, product.repoContext),
+    createUnitCommand(units, product.repoContext, product.origin),
     ...createWorkspaceUnitExchangeCommands(exchange),
     createBlobCommand(blobs),
     createHtmlViewCommand(

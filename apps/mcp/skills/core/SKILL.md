@@ -212,9 +212,11 @@ Revise a page with `html_view_read` then `html_view_replace`. Edit the returned 
 and draft with its strong ETag and a new idempotency key. On conflict, read again
 and reconcile. Publishing a revision preserves the page identity and URL.
 
-For a new Unit file, create the Worktree first. Use `unit_create` for an empty Unit,
-`compile_markdown` to create a generated Modern Doc without a placeholder (read
-the `doc` Skill), `compile_typst` for a Typst Doc, or `import` for Office content.
+For a new Unit file, create the Worktree first. Use `unit_create` for an empty Unit, or
+give it `from`, a share link of a file you can open, to start from a copy that records
+that file as its source. Use `compile_markdown` to create a generated Modern Doc without
+a placeholder (read the `doc` Skill), `compile_typst` for a Typst Doc, or `import` for
+Office content.
 Choose the destination Space and stable parent nodeId deliberately. Do not add
 an unrelated Unit to an existing task Worktree.
 
