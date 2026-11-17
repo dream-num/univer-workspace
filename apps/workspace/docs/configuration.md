@@ -6,6 +6,23 @@ For a first local installation, run `cp apps/workspace/.env.example apps/workspa
 
 For Docker, put your runtime settings in a deployment-specific file and pass `--env-file ./workspace.env` when creating the container. Keep the image's bind address and HTTPS cookie defaults unless your deployment needs different values. Browser build settings are listed separately below. See the [Docker instructions](../README.md#docker).
 
+## Deployment configurations
+
+The default **SQLite + local directory** deployment uses `DATABASE_PROVIDER=sqlite` and `BLOB_STORE=local`. Both databases and uploaded files are stored under `.data/`.
+
+For **PostgreSQL + S3**, supply the following settings together. Replace the connection details and bucket name, and give the service credentials for a dedicated PostgreSQL 17 database and an existing private S3 bucket.
+
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
+BLOB_STORE=s3
+BLOB_S3_BUCKET=workspace-objects
+BLOB_S3_REGION=us-east-1
+BLOB_S3_PREFIX=workspace
+```
+
+For an existing SQLite deployment with local files, follow the [storage migration guide](storage-migration.md) before starting the target.
+
 ## Databases
 
 | Variable | Default | When to set it |
@@ -15,18 +32,9 @@ For Docker, put your runtime settings in a deployment-specific file and pass `--
 | `COLLABORATION_DATABASE_FILE` | `.data/univer-collaboration.sqlite` | SQLite collaboration database for document edits, Worktrees, history and comments. |
 | `DATABASE_URL` | Unset | Required with `postgres`. Supply a `postgres://` or `postgresql://` connection URI for a dedicated database. |
 
-For PostgreSQL 17, create the database and give the Workspace role permission to create the `collaboration` schema and objects in both the product schema (normally `public`) and `collaboration`. Workspace initializes both on first startup. Replace the sample connection details with your own.
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
-```
-
-Changing providers opens the selected database. Migrate existing data before switching. If upgrading from `PRODUCT_DATABASE_PROVIDER=postgres`, migrate the collaboration SQLite file first, then remove the old variable and set `DATABASE_PROVIDER=postgres`. For a consistent backup, stop all writers and save both SQLite files or a full PostgreSQL dump, together with the matching file storage. Restore the database and files together before starting one instance.
+The Workspace role needs permission to create the `collaboration` schema and objects in both the product schema (normally `public`) and `collaboration`. Workspace initializes both on first startup. To back up PostgreSQL + S3, stop all writers and save a full database dump and the S3 objects at the same recovery point.
 
 ## File storage
-
-Uploads and embedded assets use their own storage. Either file backend works with either database provider.
 
 | Variable | Default | When to set it |
 | --- | --- | --- |
@@ -40,14 +48,22 @@ Uploads and embedded assets use their own storage. Either file backend works wit
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | Set to `true` if the endpoint needs the bucket in the URL path. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | AWS SDK credential chain | Use a workload role, or supply a key pair. Temporary credentials also require the session token. |
 
+**MinIO** requires the S3 API endpoint reachable from the Workspace server.
+This example uses path-style addressing.
+
 ```dotenv
-BLOB_STORE=s3
-BLOB_S3_BUCKET=workspace-objects
-BLOB_S3_REGION=us-east-1
-BLOB_S3_PREFIX=workspace
+BLOB_S3_ENDPOINT=http://minio:9000
+BLOB_S3_FORCE_PATH_STYLE=true
 ```
 
-For required permissions, MinIO settings and copying existing files before switching, see [S3 file storage](s3-storage.md).
+Grant `s3:ListBucket` on the bucket and
+`s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` and `s3:AbortMultipartUpload` on its
+Workspace objects. Use bucket lifecycle rules to expire incomplete multipart uploads and,
+for versioned buckets, to control how long deleted versions are retained.
+
+**Kubernetes** — Put the database and S3 settings in the Workspace container's `env`, use a workload identity or a Secret
+for credentials, and keep the existing data PVC. For this repository's [Deploy Workspace workflow](../../../.github/workflows/push.yml),
+edit the target manifest under `deploy/colla-workspace/` in `dream-num/helm-chart-private` before rollout.
 
 ## Authentication
 

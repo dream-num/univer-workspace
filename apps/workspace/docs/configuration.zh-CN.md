@@ -6,6 +6,23 @@
 
 使用 Docker 时，将运行时配置写入部署专用的环境文件，创建容器时传入 `--env-file ./workspace.env`。镜像默认监听所有网络接口，并为 HTTPS 启用安全 Cookie。浏览器构建参数见本文最后一节。[Docker 部署说明](../README.zh-CN.md#docker)
 
+## 部署组合
+
+默认部署使用 **SQLite + 本地目录**（`DATABASE_PROVIDER=sqlite`、`BLOB_STORE=local`）。产品库、协同库和上传文件都保存在 `.data/` 下。
+
+使用 **PostgreSQL + S3** 时，将以下配置一起传给服务，连接信息和桶名按实际部署填写。准备一个专用 PostgreSQL 17 数据库和一个已有的私有 S3 桶，并给服务配置访问两者的凭据。
+
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
+BLOB_STORE=s3
+BLOB_S3_BUCKET=workspace-objects
+BLOB_S3_REGION=us-east-1
+BLOB_S3_PREFIX=workspace
+```
+
+已有 SQLite 和本地文件的部署，请按[存储迁移指南](storage-migration.zh-CN.md)停机切换。
+
 ## 数据库
 
 | 环境变量 | 默认值 | 用途 |
@@ -15,18 +32,9 @@
 | `COLLABORATION_DATABASE_FILE` | `.data/univer-collaboration.sqlite` | SQLite 协同库文件，保存文档编辑、Worktree、历史和评论数据。 |
 | `DATABASE_URL` | 未设置 | 选择 `postgres` 时必填。填写专用数据库的 `postgres://` 或 `postgresql://` 连接地址。 |
 
-使用 PostgreSQL 17 时，先创建专用数据库。Workspace 账号需要有权创建 `collaboration` schema，并在产品 schema（通常为 `public`）和 `collaboration` 中创建对象。首次启动会自动初始化两者。将示例中的连接信息替换为实际值。
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
-```
-
-切换后服务会打开所选数据库，已有数据需提前迁移。此前使用 `PRODUCT_DATABASE_PROVIDER=postgres` 的部署，应先迁移协同 SQLite 文件，再移除旧变量并设置 `DATABASE_PROVIDER=postgres`。备份时停止所有写入实例，将两个 SQLite 文件或完整的 PostgreSQL 数据库备份与同一时间点的文件存储一起保存。恢复两者后再启动一个实例。
+Workspace 账号需要有权创建 `collaboration` schema，并在产品 schema（通常为 `public`）和 `collaboration` 中创建对象。首次启动会初始化两者。备份 PostgreSQL + S3 时，先停止写入，再保存完整的数据库备份及同一时点的 S3 对象。
 
 ## 文件存储
-
-上传文件和文档内嵌资源使用独立的文件存储。本地目录和 S3 均可搭配任一数据库后端。
 
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
@@ -40,14 +48,19 @@ DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | 服务要求在 URL 路径中传递桶名时设为 `true`。 |
 | `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_SESSION_TOKEN` | AWS SDK 凭据链 | 可使用工作负载角色，也可提供访问密钥对。临时凭据还需提供会话令牌。 |
 
+**MinIO**  需要填写 Workspace 服务端可访问的 S3 API 地址。下面的示例使用路径式寻址。
+
 ```dotenv
-BLOB_STORE=s3
-BLOB_S3_BUCKET=workspace-objects
-BLOB_S3_REGION=us-east-1
-BLOB_S3_PREFIX=workspace
+BLOB_S3_ENDPOINT=http://minio:9000
+BLOB_S3_FORCE_PATH_STYLE=true
 ```
 
-所需权限、MinIO 示例及切换前复制现有文件的操作见 [S3 文件存储指南](s3-storage.zh-CN.md)。
+该身份需要对存储桶有 `s3:ListBucket` 权限，对 Workspace
+对象有 `s3:GetObject`、`s3:PutObject`、`s3:DeleteObject` 和 `s3:AbortMultipartUpload` 权限。
+可通过存储桶生命周期规则清理未完成的分片上传。如果启用了版本控制，还可以设置已删除对象的历史版本保留时间。
+
+**Kubernetes** 部署时，在 Workspace 容器的 `env` 中设置数据库和 S3 环境变量，通过工作负载身份或 Secret 提供凭据，保留原数据 PVC。使用本仓库的 [Deploy Workspace 工作流](../../../.github/workflows/push.yml)时，
+在发布前修改 `dream-num/helm-chart-private` 仓库 `deploy/colla-workspace/` 目录下目标环境的清单。
 
 ## 认证
 

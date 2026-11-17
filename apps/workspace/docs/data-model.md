@@ -39,6 +39,8 @@ Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
 
+跨后端迁移在一个 PostgreSQL 事务中导入产品及协同记录。对象键保持原值，Worktree 内新建 Unit 的 SQLite 基线占位值 `1` 转为 PostgreSQL 的 `NULL`，草稿修订号保留。[操作说明](storage-migration.zh-CN.md)
+
 ## 核心关系
 
 ```text
