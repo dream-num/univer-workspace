@@ -2324,6 +2324,8 @@ export interface paths {
          * @description A merge applies the revision its reviewer saw. Send the `revision` of the Worktree detail you reviewed.
          *     It is required unless you created the Worktree. A merge whose revision is missing or no longer current
          *     fails with 412 and changes nothing; read the Worktree again and decide on its current revision.
+         *     Someone else's Worktree can be merged only by an actor whose `capabilities.review` is true.
+         *     Changing the title or summary, reopening and marking ready return 409 when they find a merge of the Worktree in progress.
          */
         post: operations["mergeWorktree"];
         delete?: never;
@@ -6715,6 +6717,15 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+            /** @description A merge retry whose Worktree no longer matches the revision the merge named. Nothing was merged. */
+            412: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
         };
     };
     createResource: {

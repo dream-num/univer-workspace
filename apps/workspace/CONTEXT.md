@@ -165,7 +165,8 @@ The isolated state of a Worktree Unit before it is merged into trunk.
 **Worktree Revision**:
 A value naming what a reviewer decides on: a Worktree's title, summary, and each
 Unit's draft revision and change. A merge of someone else's Worktree names the
-revision its reviewer saw and applies nothing once the Worktree has moved on.
+revision its reviewer saw, and the server refuses it, merging nothing, when it
+finds that the Worktree no longer matches that revision.
 _Avoid_: Version, head commit
 
 **Activation**:

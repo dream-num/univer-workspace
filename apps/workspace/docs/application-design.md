@@ -218,10 +218,18 @@ agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于�
 
 Merge 只应用决定者看过的版本。Worktree 详情返回 `revision`，它由标题、摘要以及每个 Unit 的 ID、草稿 head
 revision 和变更类型计算得出，不另存状态，Ready 与 Reopen 不改变它。合并别人创建的 Pull request（认领人合并
-agent 的，Team Owner、Admin 或 Editor 合并其他成员的）时，请求体必须带上看过的 `revision`。缺失或已过时都返回
-412 `PRECONDITION_FAILED`，不执行任何合并，错误信息给出当前 `revision`，决定者重新查看后再决定。创建者合并
-自己的 Pull request 可以不带，因为别人改不了它的内容；带了也同样校验。Browser 记住打开 Pull request 时的
-`revision`，之后内容有变化就隐藏合并按钮并提示任务已改动，决定者确认看过最新内容后才按新的 `revision` 合并。
+agent 的，Team Owner、Admin 或 Editor 合并其他成员的）时，执行者必须能审阅它（`capabilities.review`），请求体
+必须带上看过的 `revision`。缺失或已过时都返回 412 `PRECONDITION_FAILED`，不执行任何合并；错误信息只说明
+Pull request 已改动，决定者重新查看后再决定。创建者合并自己的 Pull request 可以不带，因为只有创建者能改它的
+Unit；带了也同样校验。服务端在收到请求时校验一次，交给 Collaboration 合并前再校验一次；修改标题或摘要、
+Reopen 和 Ready 发现该 Worktree 的合并正在进行时返回 409。通过 Operations API 重试失败的合并时，按那次合并带的 `revision`
+再校验。私有 Team Pull request 对不是创建者的 Owner 与 Admin 隐藏内容，所以他们不能合并，只能 Reopen、
+Discard，或改为 Space 可见后审阅再合并。
+
+Browser 记住打开 Pull request 时的 `revision`，之后内容有变化就隐藏合并按钮并提示任务已改动，决定者确认看过
+最新内容后才按新的 `revision` 合并；创建者自己的 Pull request 不提示，也不发送 `revision`。`uvw pr view` 与
+MCP `pr_view` 显示 `revision`，`uvw pr merge --revision` 与 `pr_merge` 带上它。Workspace Agent 的审阅面板发送
+点击合并时显示的 `revision`，`univer_worktree` 工具合并前先读取详情，再按读到的 `revision` 合并。
 
 Merge 只按执行者的权限校验每个目标，不叠加创建者当前的权限，User 与 Team Worktree 相同。执行者对结果负责，
 Operation 与 Activity 记录的是他，他也可以直接写入同样的内容；创建者的权限已在编辑和添加文件时校验。叠加创建者

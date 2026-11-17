@@ -259,10 +259,16 @@ Node only after its Activation Operation completes.
 A merge applies the revision its reviewer saw. The Worktree detail carries a
 `revision` derived from its title, summary and each Unit's draft revision and
 change; ready and reopen leave it unchanged. Merging a Worktree someone else
-created requires that `revision` in the request body. A missing or outdated
-revision returns 412 `PRECONDITION_FAILED` and merges nothing. The creator may
-omit it, because nobody else can change what they would merge. A merge checks
-each target with the merger's access only, for User and Team Worktrees alike.
+created requires that `revision` in the request body and `capabilities.review`.
+A missing or outdated revision returns 412 `PRECONDITION_FAILED` and merges
+nothing. The creator may omit it, because only the creator changes the
+Worktree's Units. The server compares the revision when the request arrives and
+again right before the Collaboration merge. Changing the title or summary,
+reopening and marking ready return 409 when they find a merge of the Worktree
+in progress. Retrying a failed
+merge through the Operations API compares the revision that merge named. A
+merge checks each target with the merger's access only, for User and Team
+Worktrees alike.
 
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an

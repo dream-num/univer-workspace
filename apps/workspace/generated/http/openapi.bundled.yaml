@@ -2703,6 +2703,12 @@ paths:
           $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+        '412':
+          description: A merge retry whose Worktree no longer matches the revision the merge named. Nothing was merged.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/resources:
     post:
       tags:
@@ -4279,6 +4285,8 @@ paths:
         A merge applies the revision its reviewer saw. Send the `revision` of the Worktree detail you reviewed.
         It is required unless you created the Worktree. A merge whose revision is missing or no longer current
         fails with 412 and changes nothing; read the Worktree again and decide on its current revision.
+        Someone else's Worktree can be merged only by an actor whose `capabilities.review` is true.
+        Changing the title or summary, reopening and marking ready return 409 when they find a merge of the Worktree in progress.
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyParameter'
       requestBody:

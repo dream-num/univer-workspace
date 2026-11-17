@@ -151,7 +151,7 @@ async function retryWorktreeOperation(
       });
       return;
     case "merge_worktree":
-      await worktrees.merge(userId, worktreeId, row.id);
+      await worktrees.merge(userId, worktreeId, row.id, { revision: payload.revision });
       return;
     case "discard_worktree":
       await worktrees.discard(userId, worktreeId, row.id);

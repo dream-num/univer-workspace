@@ -109,6 +109,13 @@ export function createWorktreesModule(options: {
     }
   }
 
+  // shortcut: a reserved merge's 60-second lease is not renewed, so a merge running longer stops blocking; renew it if merges get that slow.
+  async function refuseWhileMerging(worktreeId: string): Promise<void> {
+    if (await options.repository.mergeInProgress(worktreeId, now())) {
+      throw conflict("A merge of this pull request is in progress.");
+    }
+  }
+
   return {
     async setUnitRemoved(userId, worktreeId, unitId, inputValue) {
       const input = requiredRecord(inputValue);
@@ -394,7 +401,10 @@ export function createWorktreesModule(options: {
         ...patch,
         updatedAt: now(),
       });
-      if (!applied) throw forbidden();
+      if (!applied) {
+        await refuseWhileMerging(worktreeId);
+        throw forbidden();
+      }
       const updated = {
         worktree: detailView(await context(userId, worktreeId)),
       };
@@ -664,6 +674,7 @@ export function createWorktreesModule(options: {
     async markReady(userId, worktreeId) {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.markReady) throw forbidden();
+      await refuseWhileMerging(worktreeId);
       const data = await backendCall(() =>
         options.backend.markReady(worktreeId, userId)
       );
@@ -681,6 +692,7 @@ export function createWorktreesModule(options: {
     async reopen(userId, worktreeId) {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.reopen) throw forbidden();
+      await refuseWhileMerging(worktreeId);
       const data = await backendCall(() =>
         options.backend.reopen(worktreeId, userId)
       );
@@ -720,7 +732,8 @@ export function createWorktreesModule(options: {
       if (existing?.state !== "completed" && value.row.processed_at === null) {
         await validateAllTargets(userId, value.row, value.units, options);
       }
-      const payload = { worktreeId };
+      // The revision lets an Operations API retry check the same decision again.
+      const payload = { worktreeId, ...(reviewed === null ? {} : { revision: reviewed }) };
       const reserved = await options.repository.reserveOperation({
         id: operationId,
         kind: "merge_worktree",
@@ -743,6 +756,16 @@ export function createWorktreesModule(options: {
               { worktreeId, state: "merged" },
               now(),
             );
+          }
+          if (value.state === "ready") {
+            // The SDK merge takes no expected revision, so check again as late as the product can.
+            const current = await backendCall(() => options.backend.getWorktree(worktreeId, userId));
+            const units = await options.repository.units(worktreeId);
+            assertReviewedRevision(userId, {
+              row: (await options.repository.get(worktreeId, userId)) ?? value.row,
+              state: current.status,
+              units: await mapUnits(units, current.units, userId, options.access),
+            }, reviewed);
           }
           const data = await backendCall(() =>
             resumeMerged
@@ -939,7 +962,8 @@ async function worktreeCapabilities(
       changeVisibility: row.kind === "team" && (creator || admin),
       markReady: state === "draft" && (row.kind === "user" ? decides && unitEdit : creatorCanEdit),
       reopen: state === "ready" && decides,
-      merge: state === "ready" && unitEdit && canMergeAsActor(userId, row),
+      // Merging someone else's pull request decides on its revision, so the merger must be able to review it.
+      merge: state === "ready" && unitEdit && canMergeAsActor(userId, row) && (creator || review),
       discard: (state === "draft" || state === "ready") && decides,
     },
   };
@@ -1246,20 +1270,25 @@ function worktreeRevision({ row, units }: Pick<WorktreeContext, "row" | "units">
     .digest("hex");
 }
 
-/** Only the creator may merge without naming a revision: nobody else can change what they would merge. */
+/** Only the creator may merge without naming a revision: only the creator changes the files it would merge. */
 function assertReviewedRevision(
   userId: string,
-  value: WorktreeContext,
+  value: Pick<WorktreeContext, "row" | "state" | "units">,
   reviewed: string | null,
 ): void {
-  const current = worktreeRevision(value);
-  if (reviewed === current || (reviewed === null && value.row.creator_user_id === userId)) return;
+  const creator = value.row.creator_user_id === userId;
+  if (
+    value.state === "ready" &&
+    (reviewed === null ? creator : reviewed === worktreeRevision(value))
+  ) {
+    return;
+  }
   throw new ApplicationError(
     "PRECONDITION_FAILED",
     412,
-    reviewed === null
-      ? `Merging someone else's pull request requires the revision you reviewed. Its current revision is ${current}; review it, then merge with that revision.`
-      : `The pull request changed since the revision you reviewed, so nothing was merged. Its current revision is ${current}; review it again before merging.`,
+    reviewed === null && !creator
+      ? "Merging a pull request someone else created needs the revision you viewed. View the pull request, then merge with its revision."
+      : "The pull request changed since you viewed it, so nothing was merged. View it again before you merge.",
     "revision",
   );
 }
@@ -1400,7 +1429,9 @@ function validAddUnit(value: unknown):
 
 function validReviewedRevision(value: unknown): string | null {
   if (value === undefined) return null;
-  const { revision } = requiredRecord(value);
+  const { revision, ...unknown } = requiredRecord(value);
+  const [field] = Object.keys(unknown);
+  if (field !== undefined) throw invalidInput(`${field} is not a merge field.`, field);
   if (revision === undefined) return null;
   if (typeof revision !== "string" || revision === "") {
     throw invalidInput("revision must be a non-empty string.", "revision");

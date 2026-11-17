@@ -249,10 +249,15 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
         EXISTS (SELECT 1 FROM spaces WHERE id = worktrees.team_space_id AND owner_user_id = $actorId) OR
         EXISTS (SELECT 1 FROM space_members
                 WHERE space_id = worktrees.team_space_id AND user_id = $actorId AND role = 'admin')
-      )
+      ) AND ($describes = 0 OR NOT EXISTS (
+        SELECT 1 FROM operations
+        WHERE kind = 'merge_worktree' AND state = 'pending' AND lease_expires_at > $updatedAt
+          AND payload_json::jsonb ->> 'worktreeId' = $id
+      ))
     `).run({
       id: input.id,
       actorId: input.actorId,
+      describes: Number(input.name !== undefined || input.summary !== undefined),
       name: input.name ?? null,
       setSummary: Number(input.summary !== undefined),
       summary: input.summary ?? null,
@@ -530,6 +535,18 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       (await this._database
         .prepare("SELECT * FROM operations WHERE id = ?")
         .get(operationId) as WorktreeOperationRow | undefined) ?? null
+    );
+  }
+
+  async mergeInProgress(worktreeId: string, at: number): Promise<boolean> {
+    return Boolean(
+      await this._database
+        .prepare(
+          `SELECT 1 FROM operations
+           WHERE kind = 'merge_worktree' AND state = 'pending' AND lease_expires_at > ?
+             AND payload_json::jsonb ->> 'worktreeId' = ?`
+        )
+        .get(at, worktreeId),
     );
   }
 

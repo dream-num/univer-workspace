@@ -52,3 +52,9 @@
         $ref: ../schemas/common.yaml#/NotFound
       "409":
         $ref: ../schemas/common.yaml#/Conflict
+      "412":
+        description: A merge retry whose Worktree no longer matches the revision the merge named. Nothing was merged.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse

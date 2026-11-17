@@ -123,6 +123,7 @@ export interface WorktreesRepository {
     number: number
   ): Promise<string | null>;
   /** Apply only the supplied fields while the actor can manage the summary. */
+  /** Changing the name or summary fails while a merge of the Worktree holds its lease at `updatedAt`. */
   update(input: {
     readonly id: string;
     readonly actorId: string;
@@ -165,6 +166,8 @@ export interface WorktreesRepository {
   hasRemovalReceipt(worktreeId: string, unitId: string, userId: string): Promise<boolean>;
   mergers(worktreeIds: readonly string[]): Promise<ReadonlyMap<string, PublicUser>>;
   getOperation(operationId: string): Promise<WorktreeOperationRow | null>;
+  /** Whether a merge of the Worktree is reserved and still holds its lease at `at`. */
+  mergeInProgress(worktreeId: string, at: number): Promise<boolean>;
   reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }>;
   completeOperation(
     operationId: string,

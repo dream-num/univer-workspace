@@ -228,12 +228,12 @@ describe("the claimer deciding the agent's pull requests", () => {
     expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Budget sheet"]);
   });
 
-  it("merges only the revision the claimer reviewed, and nothing when the agent changed it since", async () => {
+  it("merges only the revision the claimer viewed, and nothing after the pull request changed", async () => {
     const origin = await start({ realtime: true });
     const agent = await guestAgent(origin);
     const agentSpaceId = await personalSpaceId(origin, agent.cookie);
-    const pull = await createPull(origin, agent.cookie, "Reviewed title");
-    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "Reviewed file");
+    const pull = await createPull(origin, agent.cookie, "Quarterly budget");
+    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "First sheet");
     expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
     const alice = await register(origin, "alice");
     expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, alice.cookie)).status).toBe(200);
@@ -243,11 +243,11 @@ describe("the claimer deciding the agent's pull requests", () => {
     expect(await transition(origin, pull.id, "reopen", agent.cookie)).toBe("draft");
     expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
     expect(await revisionOf(origin, pull.id, alice.cookie)).toBe(reviewed);
-    expect((await send(origin, "PATCH", `/api/worktrees/${pull.id}`, { name: "Looks harmless" }, agent.cookie)).status).toBe(200);
+    expect((await send(origin, "PATCH", `/api/worktrees/${pull.id}`, { name: "Quarterly budget, renamed" }, agent.cookie)).status).toBe(200);
     const renamed = await revisionOf(origin, pull.id, alice.cookie);
     expect(renamed).not.toBe(reviewed);
     expect(await transition(origin, pull.id, "reopen", agent.cookie)).toBe("draft");
-    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "Unreviewed file");
+    await addLocalSheet(origin, agent.cookie, pull.id, agentSpaceId, "Second sheet");
     expect(await transition(origin, pull.id, "ready", agent.cookie)).toBe("ready");
     const current = await revisionOf(origin, pull.id, alice.cookie);
     expect(current).not.toBe(renamed);
@@ -260,7 +260,7 @@ describe("the claimer deciding the agent's pull requests", () => {
     expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual([]);
 
     expect(await transition(origin, pull.id, "merge", alice.cookie, randomUUID(), { revision: current })).toBe("merged");
-    expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["Reviewed file", "Unreviewed file"]);
+    expect(await spaceFileNames(origin, agentSpaceId, alice.cookie)).toEqual(["First sheet", "Second sheet"]);
   });
 
   it("lets the creator merge its own pull request without naming a revision, but never a stale one", async () => {
