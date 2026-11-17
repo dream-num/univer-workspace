@@ -205,8 +205,11 @@ personal access token with every MCP scope, and `mcpUrl` is the first URL in `MC
 when none is configured. `POST /api/auth/guest` sets the `workspace_session` cookie instead and returns
 `{ agent }`. It answers `409` when the request already carries a valid session, so it cannot replace a
 signed-in session. When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth
-sign-in, it shows a card that continues as a guest agent. The card calls `POST /api/auth/guest` and then
-returns to the authorization, where the guest approves the consent page like any signed-in user.
+sign-in, it shows a card that continues as a guest agent. The card calls `POST /api/auth/guest` with the
+authorization's `client_id` as `oauthClientId` and then returns to the authorization, where the guest
+approves the consent page like any signed-in user. When that client registered itself with a name, the
+server reads the name from the registration and names the guest after it, as in `Claude Code · 7f3k`,
+so agents from one client stay distinguishable. Without a named registered client the guest is `agent`.
 
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent

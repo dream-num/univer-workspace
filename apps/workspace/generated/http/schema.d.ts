@@ -2906,7 +2906,7 @@ export interface components {
             resource: string;
         };
         AgentCreate: {
-            /** @description Names the agent. Blank or omitted means `agent`. */
+            /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`. */
             label?: string;
         };
         AgentIdentity: {
@@ -2924,6 +2924,20 @@ export interface components {
             mcpUrl: string | null;
             /** @description Unix epoch milliseconds when the unclaimed agent expires, 30 days after creation. */
             expiresAt: number;
+        };
+        GuestAgentCreate: {
+            /** @description Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name. */
+            label?: string;
+            /**
+             * @description The `client_id` of the OAuth authorization the guest continues. When
+             *     `label` is blank or omitted and this names a dynamically registered
+             *     client with a name, the agent is named after that client: the
+             *     server reads the name from the registration, removes control and
+             *     bidi characters, keeps at most 40 characters, and appends ` · ` and
+             *     the username's four-character suffix to the display name. Any other
+             *     value is ignored.
+             */
+            oauthClientId?: string;
         };
         GuestAgentCreated: {
             agent: components["schemas"]["AgentIdentity"];
@@ -4770,7 +4784,7 @@ export interface operations {
         };
         requestBody?: {
             content: {
-                "application/json": components["schemas"]["AgentCreate"];
+                "application/json": components["schemas"]["GuestAgentCreate"];
             };
         };
         responses: {

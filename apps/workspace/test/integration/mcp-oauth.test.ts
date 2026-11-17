@@ -574,6 +574,26 @@ describe("MCP OAuth", () => {
     expect((await get({ redirect_uri: "https://unregistered.test/cb" })).status).toBe(400);
   });
 
+  it("shows registered and CIMD client names on the consent page without control or bidi characters", async () => {
+    const clientId = "https://client.example.test/metadata";
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockResolvedValue({ body: JSON.stringify({
+      client_id: clientId, client_name: "⁦Cursor\r\n⁩", redirect_uris: ["cursor://app/cb"],
+    }) });
+    const origin = await start({ fetchDocument });
+    const alice = await registerUser(origin, "alice");
+    const consentPage = async (client: string, redirectUri: string) =>
+      (await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: client, redirect_uri: redirectUri })}`, { headers: { cookie: alice } })).text();
+    const registered = (body: unknown) => registeredClientId(origin, body);
+
+    const named = await consentPage(await registered({ ...OPENCODE_REGISTRATION, client_name: "‮Claude\nCode​\u0000" }), OPENCODE_REGISTRATION.redirect_uris[0]!);
+    expect(named).toContain("<title>Connect Claude Code | Univer Workspace</title>");
+    expect(named).toContain("<p><strong>Claude Code</strong> wants to use Univer Workspace");
+    expect(named).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F​‪-‮⁦-⁩]/u);
+    expect(await consentPage(await registered({ ...OPENCODE_REGISTRATION, client_name: "‮⁦\n" }), OPENCODE_REGISTRATION.redirect_uris[0]!))
+      .toContain("<strong>An unnamed application</strong>");
+    expect(await consentPage(clientId, "cursor://app/cb")).toContain("<strong>Cursor (client.example.test)</strong>");
+  });
+
   it("disables CIMD without disabling DCR and validates network exemptions at startup", async () => {
     const fetchDocument = vi.fn<FetchClientMetadataDocument>();
     const origin = await start({ cimdEnabled: false, fetchDocument });

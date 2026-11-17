@@ -97,7 +97,15 @@ it("creates the guest agent and then continues to the authorization request", as
   await click();
   await waitFor(() => expect(assign).toHaveBeenCalledWith(returnTo));
   expect(guestPosts().map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/guest"]);
+  expect(await guestPosts()[0]!.json()).toEqual({ oauthClientId: "client" });
   expect(button()?.disabled).toBe(true);
+});
+
+it("sends no OAuth client when the authorization names none", async () => {
+  await render("/api/auth/authorize/consent?scope=read");
+  await click();
+  await waitFor(() => expect(assign).toHaveBeenCalled());
+  expect(await guestPosts()[0]!.json()).toEqual({});
 });
 
 it("explains the rate limit in the page language and stays on the page", async () => {

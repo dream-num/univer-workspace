@@ -12,7 +12,10 @@ export function GuestAgentCard({ returnTo }: { readonly returnTo?: string }) {
   const session = useQuery(sessionQueryOptions);
   const guest = useMutation({
     mutationFn: async () => {
-      const { error } = await api.POST("/api/auth/guest");
+      const oauthClientId = new URL(returnTo ?? "", window.location.origin).searchParams.get("client_id");
+      const { error } = await api.POST("/api/auth/guest", {
+        body: oauthClientId === null ? {} : { oauthClientId },
+      });
       if (error) throw apiError(error);
     },
   });

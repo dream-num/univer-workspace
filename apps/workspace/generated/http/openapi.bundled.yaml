@@ -1132,7 +1132,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/AgentCreate'
+              $ref: '#/components/schemas/GuestAgentCreate'
       responses:
         '201':
           description: Created agent. The response sets the session cookie.
@@ -5996,7 +5996,7 @@ components:
         label:
           type: string
           maxLength: 64
-          description: Names the agent. Blank or omitted means `agent`.
+          description: Names the agent after control and bidi characters are removed. Blank or omitted means `agent`.
     AgentIdentity:
       type: object
       additionalProperties: false
@@ -6032,6 +6032,23 @@ components:
         expiresAt:
           type: integer
           description: Unix epoch milliseconds when the unclaimed agent expires, 30 days after creation.
+    GuestAgentCreate:
+      type: object
+      properties:
+        label:
+          type: string
+          maxLength: 64
+          description: Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name.
+        oauthClientId:
+          type: string
+          description: |
+            The `client_id` of the OAuth authorization the guest continues. When
+            `label` is blank or omitted and this names a dynamically registered
+            client with a name, the agent is named after that client: the
+            server reads the name from the registration, removes control and
+            bidi characters, keeps at most 40 characters, and appends ` · ` and
+            the username's four-character suffix to the display name. Any other
+            value is ignored.
     GuestAgentCreated:
       type: object
       additionalProperties: false
