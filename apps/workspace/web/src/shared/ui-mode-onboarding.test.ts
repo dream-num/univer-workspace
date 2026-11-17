@@ -48,8 +48,20 @@ it("keeps first visits pending across reloads until the default is explicitly co
   expect(container.querySelector("button")).toBeNull();
 });
 
-it.each(modes)("preserves a returning browser's %s view without prompting", async (mode) => {
+it.each(modes)("preselects the legacy %s view until confirmed", async (mode) => {
   window.localStorage.setItem(modeKey, mode);
   await load(0);
+  const confirm = container.querySelector("button");
+  expect(confirm?.textContent).toBe(mode);
+  expect(window.localStorage.getItem(completedKey)).toBeNull();
+  await act(async () => confirm!.click());
+  expect(window.localStorage.getItem(completedKey)).toBe("true");
+  await load(1);
   expect(container.querySelector("span")?.textContent).toBe(mode);
+});
+
+it("skips onboarding with a completed marker and no stored view", async () => {
+  window.localStorage.setItem(completedKey, "true");
+  await load(0);
+  expect(container.querySelector("span")?.textContent).toBe("repository");
 });
