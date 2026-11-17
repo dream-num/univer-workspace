@@ -142,11 +142,11 @@ async function main() {
     writeFileSync(join(home, '.local/libexec/shell.sb'), shellSandbox({ root: realpathSync(dirname(run)), realHome: realpathSync(homedir()), home, repo: realpathSync(repo), node: dirname(dirname(node)) }));
     writeFileSync(env.SHELL, `#!/bin/sh\nexec /usr/bin/sandbox-exec -f "${join(home, '.local/libexec/shell.sb')}" /bin/zsh "$@"\n`, { mode: 0o755 });
     cpSync(join(repo, 'skills/univer-workspace-cli'), join(home, '.config/opencode/skills/univer-workspace-cli'), { recursive: true });
-    if (!existsSync(env.UNIVER_HOME)) {
-      const uvw = (args, input) => execFileSync(join(home, '.local/bin/uvw'), args, { env, input, stdio: ['pipe', 'ignore', 'inherit'] });
-      uvw(['config', 'set', 'workspace.origin', origin]);
-      if (as === 'human') uvw(['auth', 'login', '--username', username, '--password-stdin', '--json'], readFileSync(join(run, 'user.pw')));
-    }
+    const uvw = (args, input) => execFileSync(join(home, '.local/bin/uvw'), args, { env, input, stdio: ['pipe', 'ignore', 'inherit'] });
+    const firstStory = !existsSync(env.UNIVER_HOME);
+    // An earlier story's model can rewrite this home's config; without an origin uvw targets production.
+    uvw(['config', 'set', 'workspace.origin', origin]);
+    if (firstStory && as === 'human') uvw(['auth', 'login', '--username', username, '--password-stdin', '--json'], readFileSync(join(run, 'user.pw')));
   }
 
   mkdirSync(scratch);
