@@ -10,8 +10,10 @@ import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { adminNames, coreNames, filesNames } from "./tool-names.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { TOOL_SCOPE_META } from "../src/gateway/tools/definition.js";
-import { tools } from "../src/gateway/tools/registry.js";
+import { tools as registered } from "../src/gateway/tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../src/gateway/tools/schemas.js";
+
+const tools = registered.filter(({ principals }) => principals?.includes("human") ?? true);
 
 const token = "internal-capabilities-token-".repeat(2);
 const allOperations = Object.keys(opSpecs);

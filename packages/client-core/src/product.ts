@@ -86,7 +86,14 @@ export {
   type RepoEditField,
   type WorkspaceResourceKindFilter,
 } from "./space.js";
-export { SHARE_LINKS, shareNode, type WorkspaceShare, type WorkspaceShareLink } from "./share.js";
+export {
+  createClaimLink,
+  SHARE_LINKS,
+  shareNode,
+  type WorkspaceClaimLink,
+  type WorkspaceShare,
+  type WorkspaceShareLink,
+} from "./share.js";
 export type {
   WorkspaceAccessRole,
   WorkspaceBlobResource,

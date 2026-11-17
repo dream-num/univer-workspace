@@ -16,11 +16,33 @@ export interface WorkspaceShare {
   readonly owner: WorkspaceLinkSharing["owner"];
   /** Set when the link stops working on that date unless its owner, an unclaimed agent, stays active. */
   readonly expiresAt?: string;
+  /** Set when the owner is an unclaimed agent: the page where a person claims it and keeps its files. */
+  readonly claimUrl?: string;
+  readonly claimHint?: string;
+}
+
+export interface WorkspaceClaimLink {
+  readonly claimUrl: string;
+  readonly expiresAt: string;
+}
+
+const CLAIM_HINT =
+  "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.";
+
+export async function createClaimLink(
+  spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
+  origin: string,
+): Promise<WorkspaceClaimLink> {
+  const { claimUrl, expiresIn } = await spaces.createAgentClaimCode();
+  return {
+    claimUrl: new URL(claimUrl, origin).toString(),
+    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+  };
 }
 
 /** Reads the Link Sharing of a file, named by its link or Node ID, and sets it first when `link` is given. */
 export async function shareNode(
-  spaces: Pick<WorkspaceSpaceFeature, "getNode" | "getLinkSharing" | "updateLinkSharing">,
+  spaces: Pick<WorkspaceSpaceFeature, "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
   origin: string,
   input: { readonly node: string; readonly link?: WorkspaceShareLink },
 ): Promise<WorkspaceShare> {
@@ -59,5 +81,19 @@ export async function shareNode(
     link: sharing.enabled ? sharing.role : "off",
     owner: sharing.owner,
     ...(sharing.expiresAt === null ? {} : { expiresAt: sharing.expiresAt }),
+    ...(sharing.owner.claimed === false ? await claimFields(spaces, origin) : {}),
   };
+}
+
+async function claimFields(
+  spaces: Pick<WorkspaceSpaceFeature, "createAgentClaimCode">,
+  origin: string,
+): Promise<Pick<WorkspaceShare, "claimUrl" | "claimHint">> {
+  try {
+    return { claimUrl: (await createClaimLink(spaces, origin)).claimUrl, claimHint: CLAIM_HINT };
+  } catch (error) {
+    // A Workspace from before claiming has no claim codes; the share itself already happened.
+    if (error instanceof WorkspaceApplicationError) return {};
+    throw error;
+  }
 }

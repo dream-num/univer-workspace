@@ -96,20 +96,35 @@ describe("file links", () => {
     });
   });
 
-  it("reads Link Sharing without writing when no link is given", async () => {
+  it("reads Link Sharing without writing when no link is given, with a claim link for an unclaimed owner", async () => {
     const { spaces, calls } = clients((call) =>
-      Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
+      call.path === "/api/agents/claim-codes"
+        ? Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 })
+        : Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
     await expect(shareNode(spaces, origin, { node: `${origin}/nodes/n1` })).resolves.toEqual({
       url: `${origin}/nodes/n1`,
       name: "Budget",
       link: "off",
       owner: { username: "budget-x7k2", kind: "agent", claimed: false },
       expiresAt: "2026-12-14T00:00:00.000Z",
+      claimUrl: `${origin}/claim/c0de`,
+      claimHint: "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.",
     });
     expect(calls.map(({ method, path }) => [method, path])).toEqual([
       ["GET", "/api/nodes/n1"],
       ["GET", "/api/nodes/n1/link-sharing"],
+      ["POST", "/api/agents/claim-codes"],
     ]);
+  });
+
+  it("still returns the share when the Workspace cannot make a claim code", async () => {
+    const { spaces } = clients((call) =>
+      call.path === "/api/agents/claim-codes"
+        ? Response.json({ error: { code: "AGENT_CLAIM_UNAVAILABLE", message: "Try again shortly." } }, { status: 503 })
+        : Response.json(call.path.endsWith("/link-sharing") ? sharing() : node(sheet)));
+    const shared = await shareNode(spaces, origin, { node: "n1" });
+    expect(shared).toMatchObject({ link: "off", owner: { claimed: false } });
+    expect(shared).not.toHaveProperty("claimUrl");
   });
 
   it.each([

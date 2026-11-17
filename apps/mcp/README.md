@@ -39,6 +39,8 @@ file capabilities outside their selected toolsets.
 They also follow the principal kind. A person is told to hand over the pull request link and leave merging to the user.
 An agent that has `pr_merge` in its list is told to mark the verified pull request ready, merge it, call `share` and give
 that link to the user. The core Skill is one text for both and defers to these instructions for an agent identity.
+An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
+A person's tool list and instructions stay byte for byte what they were before claiming existed.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -247,7 +249,8 @@ and the matching owner/slug candidates when available.
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |
 | `space_find` | Required `repo`, `query`; optional `resource_kind`, `unit_type` | `{ nodes: [...] }`, names containing the query |
-| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt? }`. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. A person's token session can read but not write: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error asks the user to share in the browser and gives the file `url`. A link of another origin is `workspace-origin-mismatch` |
+| `share` | Required `node` (a file link `<identity origin>/nodes/<nodeId>` or a Node ID); optional `link` (`off`, `viewer`, `editor`) | `{ url, name, link, owner: { username, kind, claimed? }, expiresAt? }`. Without `link` it only reads Link Sharing; with it, it writes first. Scope `publish`. Only the owner of a Personal Space can share. A person's token session can read but not write: the server answers `INTERACTIVE_SESSION_REQUIRED` and the tool error asks the user to share in the browser and gives the file `url`. A link of another origin is `workspace-origin-mismatch`. For an unclaimed agent the result also has `claimUrl` and `claimHint`, one sentence telling the agent to give the link to the user so they can keep the file; a Workspace that cannot make a claim code leaves both out |
+| `claim` | None. Listed only for an unclaimed agent | `{ claimUrl, expiresAt }`: the `<identity origin>/claim/<code>` page where a person signs in and claims the agent. The code works once, for 10 minutes. Scope `publish`, because the person who claims becomes an owner of the agent's files |
 | `unit_list` | Required `worktree` (Worktree ID) | `{ units: [...] }`, each with the pull request page `url` |
 | `unit_add` | Required `worktree`, `resource` (Resource ID of an existing file) | `{ unit }` |
 | `unit_create` | Required `worktree`, `space`, `type` (`sheet`, `doc`, `slide`, `base`, `board`), `name`; optional `parent`, `idempotency_key` | `{ unit }`. Reusing a key returns the same Unit |
@@ -444,7 +447,7 @@ with state `pending`, `published`, `rejected`, `expired` or `conflicted`.
 
 Every tool declares a scope (`read` for `whoami`, `repo_list`, `repo_view`, `issue_list`, `issue_view`, `pr_list`, `pr_view`,
 `search`, `browse`, `space_browse`, `space_find`, `unit_list`, `api_find`, `api_show`, `skills_read`, `html_view_styles`, `skill_source_read`, `skill_draft_get`, `job_get`, `blob_get`, `label_list`, `resources_registries`, `resources_find` and `resources_export`; `write` for the Issue tools, `pr_create`, `pr_edit`,
-`pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `space_node` and `share`; `worktree:merge` for
+`pr_ready`, `unit_add`, `unit_create`, `skill_draft_create` and `label_write`; `publish` for `repo_create`, `repo_edit`, `space_node`, `share` and `claim`; `worktree:merge` for
 `pr_merge` and `pr_discard`) and all three annotations (`readOnlyHint` is true only for the read tools, `destructiveHint` is
 true only for `repo_edit`, `label_write`, `space_node`, `pr_merge` and `pr_discard`, `openWorldHint` is false) and an output schema. The scopes come from the exchange (unknown
 names are ignored); development passthrough grants all of them. A connection without the tool's scope gets the tool error `workspace-scope-required`.

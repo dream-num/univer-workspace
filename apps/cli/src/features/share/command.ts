@@ -1,15 +1,19 @@
 import { Command } from "commander";
 import {
+  createClaimLink,
   SHARE_LINKS,
   shareNode,
+  type WorkspaceClaimLink,
   type WorkspaceShare,
   type WorkspaceShareLink,
   type WorkspaceSpaceFeature,
 } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, oneOf, type JsonFieldsOption } from "../../command.js";
 
-export const SHARE_JSON_FIELDS = ["expiresAt", "link", "name", "owner", "url"] as const satisfies
+export const SHARE_JSON_FIELDS = ["claimHint", "claimUrl", "expiresAt", "link", "name", "owner", "url"] as const satisfies
   readonly (keyof WorkspaceShare)[];
+
+export const CLAIM_JSON_FIELDS = ["claimUrl", "expiresAt"] as const satisfies readonly (keyof WorkspaceClaimLink)[];
 
 const LINK_TEXT: Readonly<Record<WorkspaceShareLink, string>> = {
   off: "off. Only people with access to the repository can open the link.",
@@ -39,8 +43,29 @@ export function createShareCommand(spaces: WorkspaceSpaceFeature, origin: () => 
           ...(shared.link === "off" || shared.expiresAt === undefined
             ? []
             : [`The link stops working on ${shared.expiresAt} unless ${shared.owner.username} stays active.`]),
+          ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
+          ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
         ].join("\n"),
       );
     });
   return share;
+}
+
+export function createClaimCommand(spaces: WorkspaceSpaceFeature, origin: () => Promise<string>): Command {
+  const claim = new Command("claim")
+    .description("Make a link that lets a person claim this guest agent and keep its files")
+    .addOption(jsonFieldsOption(CLAIM_JSON_FIELDS))
+    .action(async (options: JsonFieldsOption) => {
+      const link = await executeCommand(claim, async () => await createClaimLink(spaces, await origin()));
+      emit(
+        claim,
+        options,
+        link,
+        [
+          `Claim link: ${link.claimUrl}`,
+          "Give it to the user. Signing in and opening it within 10 minutes lets them claim this agent and keep its files.",
+        ].join("\n"),
+      );
+    });
+  return claim;
 }

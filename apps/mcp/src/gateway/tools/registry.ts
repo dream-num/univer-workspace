@@ -43,6 +43,7 @@ import { browseTool } from "./core/browse.js";
 import { spaceBrowseTool } from "./core/space-browse.js";
 import { spaceFindTool } from "./core/space-find.js";
 import { shareTool } from "./core/share.js";
+import { claimTool, unclaimedAgentShareTool } from "./core/claim.js";
 import { unitListTool } from "./core/unit-list.js";
 import { unitAddTool } from "./core/unit-add.js";
 import { unitCreateTool } from "./core/unit-create.js";
@@ -64,7 +65,7 @@ import { resourcesRegistriesTool } from "./admin/resources-registries.js";
 import { resourcesFindTool } from "./admin/resources-find.js";
 import { resourcesExportTool } from "./admin/resources-export.js";
 import type { OpName } from "../../shared/executor-protocol.js";
-import type { ToolDefinition } from "./definition.js";
+import type { ToolDefinition, ToolPrincipal } from "./definition.js";
 
 export const tools: readonly ToolDefinition[] = [
   whoamiTool,
@@ -86,6 +87,8 @@ export const tools: readonly ToolDefinition[] = [
   spaceBrowseTool,
   spaceFindTool,
   shareTool,
+  unclaimedAgentShareTool,
+  claimTool,
   unitListTool,
   unitAddTool,
   unitCreateTool,
@@ -138,13 +141,14 @@ export const toolsets = ["core", "files", "admin", "all"] as const;
 export function selectTools(
   value: string | null,
   operations: ReadonlySet<OpName>,
-  principal: "human" | "agent",
+  principal: ToolPrincipal,
 ): readonly ToolDefinition[] | undefined {
   const selected = (value ?? "core").split(",");
   if (selected.some((name) => !toolsets.some((valid) => valid === name))) return undefined;
   return tools.filter((tool) => {
-    const listedIn = (principal === "agent" ? tool.agentToolsets : undefined) ?? [tool.toolset];
+    const listedIn = (principal === "human" ? undefined : tool.agentToolsets) ?? [tool.toolset];
     return (
+      (tool.principals?.includes(principal) ?? true) &&
       listedIn.some((toolset) => selected.includes("all") || selected.includes(toolset)) &&
       toolAvailable(tool, operations)
     );

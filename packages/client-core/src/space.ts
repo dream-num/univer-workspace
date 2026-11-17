@@ -244,6 +244,15 @@ export class WorkspaceSpaceFeature {
     return parseLinkSharing(await http.json(`/api/nodes/${encodeURIComponent(nodeId)}/link-sharing`));
   }
 
+  /** Asks for the claim page of the signed-in agent, as a path on the Workspace origin. */
+  public async createAgentClaimCode(): Promise<{ readonly claimUrl: string; readonly expiresIn: number }> {
+    const body = await (await this.authenticatedHttp()).json("/api/agents/claim-codes", { method: "POST" });
+    const { claimUrl, expiresIn } = body;
+    if (typeof claimUrl !== "string" || !claimUrl.startsWith("/claim/") || typeof expiresIn !== "number")
+      throw invalidResponse("Workspace response is missing the claim link");
+    return { claimUrl, expiresIn };
+  }
+
   public async updateLinkSharing(
     nodeId: string,
     settings: Pick<WorkspaceLinkSharing, "enabled" | "role">,

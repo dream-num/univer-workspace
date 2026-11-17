@@ -14,7 +14,7 @@ import { createLabelCommand } from "./features/label/command.js";
 import { createPullRequestCommands } from "./features/pr/command.js";
 import { createRepoCommand } from "./features/repo/command.js";
 import { createSearchCommand } from "./features/search/command.js";
-import { createShareCommand } from "./features/share/command.js";
+import { createClaimCommand, createShareCommand } from "./features/share/command.js";
 import { RepoContext } from "./repo-context.js";
 import { WORKSPACE_CLI_VERSION } from "./version.js";
 
@@ -33,6 +33,7 @@ export const PRODUCT_COMMAND_NAMES: ReadonlySet<string> = new Set([
   "search",
   "browse",
   "share",
+  "claim",
 ]);
 
 export interface ProductOptions {
@@ -75,6 +76,7 @@ export function createProductCommands(services: ProductServices): readonly Comma
     createSearchCommand(issues, worktrees, userId),
     createBrowseCommand({ context: repoContext, issues, origin, worktrees }),
     createShareCommand(spaces, origin),
+    createClaimCommand(spaces, origin),
   ];
 }
 

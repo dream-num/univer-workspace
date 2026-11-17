@@ -16,6 +16,13 @@ export const TOOL_SCOPE_META = "univer.workspace/scope";
 
 export type ToolScope = "read" | "write" | "publish" | "worktree:merge";
 
+export type ToolPrincipal = "human" | "agent_claimed" | "agent_unclaimed";
+
+export function toolPrincipal(user: WorkspaceSubject): ToolPrincipal {
+  if (user.kind !== "agent") return "human";
+  return user.claimed ? "agent_claimed" : "agent_unclaimed";
+}
+
 export interface ToolContext {
   readonly staging?: StagingStore;
   readonly jobs?: ToolJobs;
@@ -38,6 +45,8 @@ export interface ToolDefinition {
   readonly toolset: "core" | "files" | "admin";
   /** The toolsets that list the tool for an agent principal, when not just `toolset`. Empty hides it. */
   readonly agentToolsets?: readonly ToolDefinition["toolset"][];
+  /** The principals that see the tool, when not every one. */
+  readonly principals?: readonly ToolPrincipal[];
   readonly scope: ToolScope;
   readonly title: string;
   readonly description: string;
