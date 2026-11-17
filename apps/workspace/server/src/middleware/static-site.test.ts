@@ -1,10 +1,11 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import type { Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import express from "express";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import type { UnitType } from "../modules/access/access.types.js";
 import { ANONYMOUS_USER_ID } from "../modules/identity/index.js";
 import type { NodeSummary } from "../modules/nodes/index.js";
 import { createStaticSiteRouter } from "./static-site.js";
@@ -15,6 +16,7 @@ let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
 const identity = { recordAgentPageView: vi.fn(), hasSession: vi.fn().mockResolvedValue(false) };
 const permissions = { nodeOwnerCategory: vi.fn().mockResolvedValue("human") };
+const unitTypes: readonly string[] = ["sheet", "doc", "slide", "board"];
 const getNode = vi.fn(async (userId: string, nodeId: string) => {
   if (["private", "missing", "deleted", "failure"].includes(nodeId)) {
     throw new Error("No metadata may escape this lookup");
@@ -28,8 +30,8 @@ const getNode = vi.fn(async (userId: string, nodeId: string) => {
   const node: NodeSummary = {
     id: nodeId, spaceId: "space", parentNodeId: null,
     name: names[nodeId] ?? "report.txt",
-    resource: nodeId === "folder" ? null : nodeId === "sheet"
-      ? { id: "resource", kind: "univer", unitId: "unit", unitType: "sheet",
+    resource: nodeId === "folder" ? null : unitTypes.includes(nodeId)
+      ? { id: "resource", kind: "univer", unitId: "unit", unitType: nodeId as UnitType,
           capabilities: { openContent: true, editContent: false, downloadContent: true } }
       : { id: "resource", kind: "blob", mediaType: "text/html", byteSize: 10, availability: "ready",
           capabilities: { openContent: true, editContent: false, downloadContent: true } },
@@ -65,7 +67,7 @@ describe("public Node link metadata", () => {
     expect(html).toContain('<meta property="og:description" content="A live data page made with Univer Workspace" />');
     expect(html).toContain('<meta property="og:type" content="website" />');
     expect(html).toContain('<meta property="og:site_name" content="Univer Workspace" />');
-    expect(html).toContain('<meta name="twitter:card" content="summary" />');
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />');
     expect(html).toContain(`<meta property="og:url" content="https://workspace.example/nodes/public${query.replaceAll("&", "&amp;")}" />`);
     expect(html.indexOf('property="og:title"')).toBeLessThan(html.indexOf("</head>"));
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
@@ -120,10 +122,42 @@ describe("public Node link metadata", () => {
     expect(english).toContain('content="Shared from Univer Workspace"');
   });
 
-  it("omits og:url without a configured public origin", async () => {
-    const html = await (await fetch(`${origin}/without-origin/nodes/public`)).text();
-    expect(html).toContain("<title>Dashboard · Univer Workspace</title>");
+  it.each([
+    ["sheet", "sheet", "spreadsheet"],
+    ["doc", "doc", "document"],
+    ["slide", "slide", "slides"],
+    ["public", "page", "live data page"],
+    ["folder", "folder", "folder"],
+    ["text", "file", "file"],
+    ["board", "file", "file"],
+  ])("points %s at the absolute %s preview image", async (nodeId, kind, alt) => {
+    const html = await (await fetch(`${origin}/nodes/${nodeId}`, { headers: { host: "untrusted.example" } })).text();
+    const image = `https://workspace.example/link-preview/${kind}.png`;
+    expect(html).toContain(`<meta property="og:image" content="${image}" />`);
+    expect(html).toContain('<meta property="og:image:width" content="1200" />');
+    expect(html).toContain('<meta property="og:image:height" content="630" />');
+    expect(html).toContain(`<meta property="og:image:alt" content="Univer Workspace ${alt}" />`);
+    expect(html).toContain('<meta name="twitter:card" content="summary_large_image" />');
+    expect(html).toContain(`<meta name="twitter:image" content="${image}" />`);
+  });
+
+  it.each(["sheet", "doc", "slide", "page", "folder", "file"])("ships a 1200x630 %s image under 150 KB", (kind) => {
+    const png = readFileSync(new URL(`../../../web/public/link-preview/${kind}.png`, import.meta.url));
+    expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([1200, 630]);
+    expect(png.byteLength).toBeLessThan(150 * 1024);
+  });
+
+  it("negotiates the image alt text", async () => {
+    const html = await (await fetch(`${origin}/nodes/sheet`, { headers: { "Accept-Language": "zh-CN" } })).text();
+    expect(html).toContain('<meta property="og:image:alt" content="Univer Workspace 表格" />');
+  });
+
+  it("omits og:url and the image without a configured public origin", async () => {
+    const html = await (await fetch(`${origin}/without-origin/nodes/sheet`, { headers: { host: "untrusted.example" } })).text();
+    expect(html).toContain("<title>Budget.univer.html · Univer Workspace</title>");
     expect(html).not.toContain("og:url");
+    expect(html).not.toContain("image");
+    expect(html).toContain('<meta name="twitter:card" content="summary" />');
   });
 
   it.each(["/nodes/public/children", "/worktrees", "/spaces/public"])("leaves other routes unchanged at %s", async (path) => {

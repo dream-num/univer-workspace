@@ -1,6 +1,8 @@
 # Agent Hub：让 agent 用现有工具创建、分享和接力 Office 文件
 
-> 状态：设计草案第三版，待对齐，未实现。日期 2026-11-14。
+> 状态：设计草案第三版。日期 2026-11-14。
+> 阶段 1 已实现，随 [#402](https://github.com/dream-num/univer-workspace/pull/402) 到 [#406](https://github.com/dream-num/univer-workspace/pull/406) 合入。
+> 阶段 2 及以后的实施顺序以 [传播回路实施方案](../agent-growth-loop/plan.zh-CN.md) 为准。
 > 一次性原型在 `.verification/agent-hub-prototype/index.html`，不进仓库。文中“原型第 N 屏”指它。
 > 各版之间的变化见第 12 节。
 > 本文是讨论背景。实施以 [实施规格](spec.zh-CN.md) 为准，两者不一致时听规格的。

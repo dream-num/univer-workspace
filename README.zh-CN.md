@@ -302,8 +302,7 @@ pnpm workspace:dev:web
 产品 API 文档位于 <http://127.0.0.1:3020/api-docs> 和
 <http://127.0.0.1:3020/openapi.yaml>。
 
-配置、认证、存储、Docker 与数据库迁移的详细说明见
-[Workspace 应用指南](apps/workspace/README.zh-CN.md)。
+数据库、文件存储和认证的环境变量与示例见 [Workspace 配置指南](apps/workspace/docs/configuration.zh-CN.md)。Docker 部署和升级步骤见 [Workspace 应用指南](apps/workspace/README.zh-CN.md)。
 
 ## 一键部署
 
@@ -446,7 +445,8 @@ CLI 与 Workspace 部署基于同一份源码，但各自独立交付：
 | ------------------------------------------------------------------- | ----------------------------------------------------------- |
 | [Univer Web SDK 文档](https://docs.univer.ai/zh-CN/guides)          | Browser Runtime、Preset、Plugin、Facade API 与编辑器能力    |
 | [Univer Server SDK 文档](https://docs.univer.ai/zh-CN/server)       | Server SDK：协同、导入导出、部署与 license                  |
-| [Workspace 应用指南](apps/workspace/README.zh-CN.md)                | 配置、认证、存储、Docker 与升级                             |
+| [Workspace 应用指南](apps/workspace/README.zh-CN.md)                | 运行 Workspace、Docker 部署与升级                           |
+| [Workspace 配置指南](apps/workspace/docs/configuration.zh-CN.md)    | 环境变量、默认值与部署示例                                  |
 | [Workspace CLI 指南](apps/cli/README.md)                            | 安装、登录、Agent workflow 与 package 合同                  |
 | [Workspace Agent 指南](apps/agent/README.zh-CN.md)                  | 本地 Profile、浏览器 OAuth、会话、文件、Worktree 与身份切换 |
 | [Client Core package](packages/client-core/README.md)               | 私有 Node-hosted client 能力边界                            |

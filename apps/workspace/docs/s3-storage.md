@@ -43,15 +43,15 @@ If the deployment already has local files, [copy them before switching to S3](#m
   Edit the storage settings there and restart `pnpm workspace:dev:server`.
 - **Docker** — Save the storage settings in `workspace-storage.env` and add `--env-file ./workspace-storage.env`
   to your existing `docker run` command. Recreate the container with the same volume mounted at
-  `/app/univer-workspace/.data`. Both SQLite databases still use that volume when files live in S3.
+  `/app/univer-workspace/.data`. If you use SQLite, both databases still use that volume when files live in S3.
 - **Kubernetes** — Put `BLOB_*` in the Workspace container's `env`, use a workload identity or a Secret
   for credentials, and keep the existing data PVC. For this repository's [Deploy Workspace workflow](../../../.github/workflows/push.yml),
   edit the target manifest under `deploy/colla-workspace/` in `dream-num/helm-chart-private` before rollout.
 
 ## Move existing files from local storage
 
-1. Stop all Workspace servers. Back up both SQLite databases and the directory configured by
-   `BLOB_DIRECTORY`.
+1. Stop all Workspace servers. Back up both SQLite databases or take a full PostgreSQL database dump.
+   Also back up the directory configured by `BLOB_DIRECTORY`.
 2. Copy the UUID-named files to an empty destination, preserving their names. This example uses
    the default local directory, the bucket `workspace-objects` and the prefix `workspace`.
 

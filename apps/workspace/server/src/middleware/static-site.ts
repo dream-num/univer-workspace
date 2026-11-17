@@ -70,12 +70,24 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
       `<meta property="og:description" content="${escapeHtml(description)}" />`,
       '<meta property="og:type" content="website" />',
       '<meta property="og:site_name" content="Univer Workspace" />',
-      '<meta name="twitter:card" content="summary" />',
     ];
     if (options.publicOrigin) {
       const url = new URL(`/nodes/${encodeURIComponent(node.id)}`, options.publicOrigin);
       url.search = new URL(request.originalUrl, options.publicOrigin).search;
-      metadata.push(`<meta property="og:url" content="${escapeHtml(url.href)}" />`);
+      const kind = previewKind(node, htmlView);
+      const image = escapeHtml(new URL(`/link-preview/${kind}.png`, options.publicOrigin).href);
+      metadata.push(
+        `<meta property="og:url" content="${escapeHtml(url.href)}" />`,
+        `<meta property="og:image" content="${image}" />`,
+        '<meta property="og:image:width" content="1200" />',
+        '<meta property="og:image:height" content="630" />',
+        `<meta property="og:image:alt" content="${escapeHtml(`Univer Workspace ${previewAlt[kind][chinese ? 1 : 0]}`)}" />`,
+        '<meta name="twitter:card" content="summary_large_image" />',
+        `<meta name="twitter:image" content="${image}" />`,
+      );
+    } else {
+      // Open Graph requires an absolute image URL, and the request Host is untrusted.
+      metadata.push('<meta name="twitter:card" content="summary" />');
     }
     const html = await readFile(resolve(publicDirectory, "index.html"), "utf8");
     const head = html.replace(/<title>.*?<\/title>/isu, () => `<title>${title}</title>`)
@@ -90,6 +102,24 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
 
   return router;
 }
+
+type PreviewKind = "sheet" | "doc" | "slide" | "page" | "folder" | "file";
+
+function previewKind(node: NodeSummary, htmlView: boolean): PreviewKind {
+  if (htmlView) return "page";
+  if (node.resource === null) return "folder";
+  const unitType = node.resource.kind === "univer" ? node.resource.unitType : null;
+  return unitType === "sheet" || unitType === "doc" || unitType === "slide" ? unitType : "file";
+}
+
+const previewAlt: Record<PreviewKind, readonly [english: string, chinese: string]> = {
+  sheet: ["spreadsheet", "表格"],
+  doc: ["document", "文档"],
+  slide: ["slides", "幻灯片"],
+  page: ["live data page", "实时数据页面"],
+  folder: ["folder", "文件夹"],
+  file: ["file", "文件"],
+};
 
 function escapeHtml(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;")
