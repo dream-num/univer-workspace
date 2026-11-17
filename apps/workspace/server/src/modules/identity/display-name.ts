@@ -12,16 +12,16 @@ const FALLBACK_DISPLAY_NAME = "Workspace User";
 // - A removed character still belongs to the address around it, so an invisible local part cannot hide
 //   one. `Team @acme.io` and `@handle` are handles, not addresses, and stay.
 // - Length counts code points, as JSON Schema `maxLength` does.
-const SPACE_LIKE = /[\p{Cc}\p{Zl}\p{Zp}⠀\u{1D159}]/gu;
-const BASE = String.raw`[^\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cs}�]`;
+const SPACE_LIKE = /[\p{Cc}\p{Zl}\p{Zp}\u2800\u{1D159}]/gu;
+const BASE = String.raw`[^\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cs}\uFFFD]`;
 const INVISIBLE = new RegExp(
   String.raw`(\u{1F3F4}[\u{E0030}-\u{E0039}\u{E0061}-\u{E007A}]{1,7}\u{E007F}` +
     String.raw`|(?<=${BASE}\p{Variation_Selector}?)\p{Join_Control}(?=${BASE})` +
     String.raw`|(?<=${BASE})\p{Variation_Selector})` +
-    String.raw`|[\p{Default_Ignorable_Code_Point}\p{Cs}�]`,
+    String.raw`|[\p{Default_Ignorable_Code_Point}\p{Cs}\uFFFD]`,
   "gu",
 );
-const VISIBLE = /[^\p{White_Space}\p{M}\p{Cf}\p{Co}\p{Default_Ignorable_Code_Point}￼]/u;
+const VISIBLE = /[^\p{White_Space}\p{M}\p{Cf}\p{Co}\p{Default_Ignorable_Code_Point}\uFFFC]/u;
 const AT = String.raw`@﹫＠`;
 const WORD = String.raw`[^\p{White_Space}${AT}]`;
 const EMAIL = new RegExp(

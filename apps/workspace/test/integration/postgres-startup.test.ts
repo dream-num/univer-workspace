@@ -51,8 +51,8 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
       UPDATE workspace_product_schema SET version = 1;
     `);
     const owners = [
-      ["blank", "ᅠ", "ㅤ"],
-      ...["\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466} Smith", "Sam ❤️", "نامه‌ای", "क्‍ष", " Ann  Lee "]
+      ["blank", "\u1160", "\u3164"],
+      ...["\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466} Smith", "Sam ❤\uFE0F", "نامه\u200Cای", "क्\u200Dष", " Ann  Lee "]
         .map((name, index) => [`kept${index}`, `kept${index}`, name]),
     ];
     for (const [id, username, name] of owners) {

@@ -13,13 +13,13 @@ const OWNERS = [
   { id: "custom", username: "erin", stored: "Erin <erin@example.com>", space: "Erin's drafts", repaired: "Erin <erin>", repairedSpace: "Erin's drafts" },
   { id: "stale", username: "frank", stored: "Frank", space: "Old Frank 的个人空间", repaired: "Frank", repairedSpace: "Old Frank 的个人空间" },
   { id: "plain", username: "grace", stored: "Grace", space: "Grace 的个人空间", repaired: "Grace", repairedSpace: "Grace 的个人空间" },
-  { id: "blank", username: "ᅠ", stored: "ㅤ", space: "ㅤ 的个人空间", repaired: "Workspace User", repairedSpace: "Workspace User 的个人空间" },
+  { id: "blank", username: "\u1160", stored: "\u3164", space: "\u3164 的个人空间", repaired: "Workspace User", repairedSpace: "Workspace User 的个人空间" },
   ...[
-    "\u{1F468}‍\u{1F469}‍\u{1F467}‍\u{1F466} Smith",
+    "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466} Smith",
     "\u{1F3F4}\u{E0067}\u{E0062}\u{E0065}\u{E006E}\u{E0067}\u{E007F} \u{1F1E8}\u{1F1F3}",
-    "Sam ❤️",
-    "نامه‌ای",
-    "क्‍षिति",
+    "Sam ❤\uFE0F",
+    "نامه\u200Cای",
+    "क्\u200Dषिति",
     " Ann  Lee ",
   ].map((name, index) => ({
     id: `kept-${index}`, username: `kept${index}`, stored: name, space: `${name} 的个人空间`, repaired: name, repairedSpace: `${name} 的个人空间`,
