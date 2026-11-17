@@ -47,14 +47,7 @@ For a first local installation, copy [`.env.example`](.env.example) to `.env` in
 
 #### Database
 
-To use PostgreSQL for both product and collaboration data, set both variables below in `.env`. Migrate any existing data before switching.
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
-```
-
-For database permissions, S3, sign-in, reverse proxies and the full environment variable reference, see the [Workspace configuration guide](docs/configuration.md).
+With PostgreSQL + S3, product and collaboration data use PostgreSQL, and uploads and embedded assets use S3. See the [Workspace configuration guide](docs/configuration.md) for settings and examples. For an existing deployment, follow the [migration steps](docs/configuration.md#migrate-from-sqlite-and-local-storage) to switch in one outage.
 
 ### Collaboration and workbench
 

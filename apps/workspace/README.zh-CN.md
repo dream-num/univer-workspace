@@ -31,14 +31,7 @@ Vite 还将 `/mcp` 代理到 `WORKSPACE_DEV_MCP_PORT` 指定的本地 MCP 网关
 
 #### 数据库
 
-使用 PostgreSQL 时，在 `.env` 中同时设置以下两项，产品库与协同库会一起切换。已有部署应先迁移数据。
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
-```
-
-数据库权限、S3、认证、反向代理等环境变量的默认值和部署示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。
+部署 PostgreSQL + S3 时，产品库和协同库一起使用 PostgreSQL，上传文件和内嵌附件保存在 S3。完整环境变量和示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。已有数据的实例请按[迁移步骤](docs/configuration.zh-CN.md#从-sqlite-和本地目录迁移)在一次停机窗口内切换。
 
 ### 协同与工作台
 

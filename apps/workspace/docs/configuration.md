@@ -6,6 +6,34 @@ For a first local installation, run `cp apps/workspace/.env.example apps/workspa
 
 For Docker, put your runtime settings in a deployment-specific file and pass `--env-file ./workspace.env` when creating the container. Keep the image's bind address and HTTPS cookie defaults unless your deployment needs different values. Browser build settings are listed separately below. See the [Docker instructions](../README.md#docker).
 
+## Deployment configurations
+
+The default **SQLite + local directory** deployment uses `DATABASE_PROVIDER=sqlite` and `BLOB_STORE=local`. Both databases and uploaded files are stored under `.data/`.
+
+For **PostgreSQL + S3**, supply the following settings together. Replace the connection details and bucket name, and give the service credentials for a dedicated PostgreSQL 17 database and an existing private S3 bucket.
+
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
+BLOB_STORE=s3
+BLOB_S3_BUCKET=workspace-objects
+BLOB_S3_REGION=us-east-1
+BLOB_S3_PREFIX=workspace
+```
+
+### Migrate from SQLite and local storage
+
+Plan one outage for an existing deployment. **The repository does not currently provide a command to import the two SQLite databases into PostgreSQL.** Before scheduling downtime, rehearse the offline import and the checks below with a backup copy, an isolated target database and a separate bucket prefix.
+
+Stop all Workspace writers. Back up both SQLite files and the local file directory at the same recovery point. Keep user traffic closed and complete both steps from that data:
+
+1. **Copy files to S3.** Copy the local files under their original UUIDs to an empty destination prefix. Compare object names, counts and sizes. See the [S3 copy command](s3-storage.md#move-existing-files-from-local-storage).
+2. **Import both databases.** Initialize the target schemas with the same Workspace and SDK versions. Stop the target instance and use the rehearsed importer to load product data into the product schema and Core, Worktree, History and Comment data into the `collaboration` schema. Check resource IDs, object keys, document revisions and Worktree-to-document references.
+
+Once both steps pass, start one target instance with the PostgreSQL + S3 settings above. Through HTTP, sign in with an existing account and open an existing document, Worktree, history, comment and attachment. Edit a document and upload a file. Restart, read back the edit and the upload, then reopen user traffic.
+
+If validation fails before traffic resumes, stop the target and restart the original deployment with SQLite and local files from the same recovery point. After traffic resumes the old backups lack new edits and uploads. Preserve those changes by migrating them back before rollback.
+
 ## Databases
 
 | Variable | Default | When to set it |
@@ -15,18 +43,9 @@ For Docker, put your runtime settings in a deployment-specific file and pass `--
 | `COLLABORATION_DATABASE_FILE` | `.data/univer-collaboration.sqlite` | SQLite collaboration database for document edits, Worktrees, history and comments. |
 | `DATABASE_URL` | Unset | Required with `postgres`. Supply a `postgres://` or `postgresql://` connection URI for a dedicated database. |
 
-For PostgreSQL 17, create the database and give the Workspace role permission to create the `collaboration` schema and objects in both the product schema (normally `public`) and `collaboration`. Workspace initializes both on first startup. Replace the sample connection details with your own.
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
-```
-
-Changing providers opens the selected database. Migrate existing data before switching. If upgrading from `PRODUCT_DATABASE_PROVIDER=postgres`, migrate the collaboration SQLite file first, then remove the old variable and set `DATABASE_PROVIDER=postgres`. For a consistent backup, stop all writers and save both SQLite files or a full PostgreSQL dump, together with the matching file storage. Restore the database and files together before starting one instance.
+The Workspace role needs permission to create the `collaboration` schema and objects in both the product schema (normally `public`) and `collaboration`. Workspace initializes both on first startup. To back up PostgreSQL + S3, stop all writers and save a full database dump and the S3 objects at the same recovery point.
 
 ## File storage
-
-Uploads and embedded assets use their own storage. Either file backend works with either database provider.
 
 | Variable | Default | When to set it |
 | --- | --- | --- |
@@ -39,13 +58,6 @@ Uploads and embedded assets use their own storage. Either file backend works wit
 | `BLOB_S3_ENDPOINT` | Regional AWS endpoint | S3 API URL for MinIO or another compatible service. |
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | Set to `true` if the endpoint needs the bucket in the URL path. |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN` | AWS SDK credential chain | Use a workload role, or supply a key pair. Temporary credentials also require the session token. |
-
-```dotenv
-BLOB_STORE=s3
-BLOB_S3_BUCKET=workspace-objects
-BLOB_S3_REGION=us-east-1
-BLOB_S3_PREFIX=workspace
-```
 
 For required permissions, MinIO settings and copying existing files before switching, see [S3 file storage](s3-storage.md).
 
