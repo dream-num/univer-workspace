@@ -122,6 +122,8 @@ function workspaceCode(error: WorkspaceApiError): string {
 }
 
 function workspaceMessage(error: WorkspaceApiError): string {
+  // This refusal says how to become able to merge, so the agent can tell the person.
+  if (error.status === 403 && error.code === "REVIEW_REQUIRED") return publicMessage(error.message, workspaceCode(error));
   if (error.status === 401 || error.status === 403) return "Workspace authorization was denied.";
   if (error.status === 404) return "The requested Workspace resource was not found.";
   if (error.status === 409)

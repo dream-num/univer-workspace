@@ -216,4 +216,22 @@ describe("Worktree merge of the reviewed revision", () => {
     expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["worktrees"] });
     expect(state.success).not.toHaveBeenCalled();
   });
+
+  it("tells a Team admin how to merge a private pull request it cannot review", () => {
+    const base = worktree(true);
+    const { revision: _revision, ...hidden } = {
+      ...base,
+      kind: "team" as const,
+      creator: { ...base.creator, id: "user-2" },
+      capabilities: { ...base.capabilities, review: false, changeVisibility: true, discard: true },
+    };
+    const html = renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: hidden }));
+    expect(html).toContain("mergeNeedsReviewDescription");
+    expect(html).toContain("uvw pr edit worktree-1 --visibility space");
+    expect(html).not.toContain("confirmMerge");
+
+    const shared = { ...hidden, visibility: "space" as const };
+    expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: shared })))
+      .not.toContain("mergeNeedsReviewDescription");
+  });
 });

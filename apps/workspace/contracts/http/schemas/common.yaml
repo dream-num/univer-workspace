@@ -85,6 +85,8 @@ Forbidden:
     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
     Personal Space, pending pull-request files included, or store one file above 10 MiB) and
     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
+    `REVIEW_REQUIRED` refuses a merge by a Team Owner or Admin who cannot review the private Team
+    pull request someone else created; it can be merged once its visibility is Space.
   content:
     application/json:
       schema:

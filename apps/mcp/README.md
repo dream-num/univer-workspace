@@ -270,7 +270,7 @@ and the matching owner/slug candidates when available.
 | `issue_comment` | Required `repo`, `number`, `body` | Comment |
 | `issue_set_state` | Required `repo`, `number`, `state` (`open` or `closed`); optional `reason` (`completed` or `not_planned`) and `comment`, only with `closed` | Issue |
 | `pr_list` | Required `repo`; optional `state` (`open` default, `merged`, `discarded`, `all`), `author`, `search`, `limit` (default 30) | `{ prs: [...] }`. A Personal Space lists its owner's: the signed-in user's own, or those of an agent the user claimed. `pr_create` opens a pull request only in the user's own Personal Space |
-| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) with its `revision`, which `pr_merge` takes |
+| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) with its `revision` when you can review it, which `pr_merge` takes |
 | `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
 | `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`). Merging stays with the user |

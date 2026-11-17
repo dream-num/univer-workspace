@@ -105,6 +105,13 @@ export function WorktreeReviewPanel({
   const ownPullRequest = session?.authenticated === true && session.user.id === worktree.creator.id;
   const [reviewedRevision, setReviewedRevision] = useState(worktree.revision);
   const changedSinceReview = !ownPullRequest && worktree.revision !== reviewedRevision;
+  // A Team Owner or Admin sees a private pull request someone else created, but merging it needs a review.
+  const mergeNeedsReview =
+    worktree.state === "ready" &&
+    worktree.kind === "team" &&
+    worktree.visibility === "private" &&
+    !worktree.capabilities.review &&
+    !ownPullRequest;
   const removal = useToggleUnitRemoval(worktree.id);
   const action = useWorktreeLifecycle(worktree.id, ownPullRequest ? undefined : reviewedRevision);
   const onError = (error: Error) => toast.error(error.message);
@@ -131,6 +138,12 @@ export function WorktreeReviewPanel({
 
   const lifecycleActions = (
     <>
+      {mergeNeedsReview ? (
+        <Alert className="w-full" variant="info" title={t("mergeNeedsReview")}>
+          <p className="m-0">{t("mergeNeedsReviewDescription")}</p>
+          <code className="mt-2 block break-all text-xs">uvw pr edit {worktree.id} --visibility space</code>
+        </Alert>
+      ) : null}
       {worktree.capabilities.merge && changedSinceReview ? (
         <Alert className="w-full" variant="warning" title={t("taskChangedSinceReview")}>
           <p className="m-0">{t("taskChangedSinceReviewDescription")}</p>

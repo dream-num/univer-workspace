@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { WorkspaceApiError } from "../src/provider/api-errors.ts";
 import { getWorktreeDetail, mergeWorktree } from "../src/provider/workspace-api.ts";
 import { registerWorktreeTools } from "../src/tools/worktree.ts";
 import { createBrowserApiHandler } from "../src/webServer/plugin.ts";
@@ -51,6 +52,17 @@ describe("merging someone else's pull request from the Workspace Agent", () => {
     const exec = { agent: { session: { header: { cwd: "/tmp/session" } } } } as ToolRunContext;
     await tool!.execute({ action: "merge", worktreeId: "wt-1" }, exec);
     expect(service.mergeWorktree).toHaveBeenCalledWith("user-1", "wt-1", "rev-1");
+
+    service.getWorktreeDetail.mockResolvedValue({ worktreeId: "wt-1", units: [] });
+    service.mergeWorktree.mockRejectedValue(new WorkspaceApiError(
+      "workspace worktree merge failed: This private Team pull request hides its files from you. Change its visibility to Space, review it, then merge.",
+      403,
+      "REVIEW_REQUIRED",
+    ));
+    await expect(tool!.execute({ action: "merge", worktreeId: "wt-1" }, exec)).rejects.toMatchObject({
+      code: "WORKSPACE_ACCESS_DENIED",
+      message: expect.stringContaining("Change its visibility to Space, review it, then merge."),
+    });
   });
 
   it("passes the revision the review panel showed through the browser route", async () => {

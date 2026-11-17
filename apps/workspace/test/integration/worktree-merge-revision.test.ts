@@ -171,10 +171,20 @@ describe("merging the revision a reviewer viewed", () => {
     const { admin, member, id } = await readyTeamPull(application, "private");
     const shown = await viewed(application, admin.id, id);
     expect(shown).toMatchObject({ units: [], capabilities: { review: false, merge: false, reopen: true, discard: true } });
-    await expect(application.worktrees.merge(admin.id, id, randomUUID(), { revision: shown.revision })).rejects.toMatchObject({
+    expect(shown).not.toHaveProperty("revision");
+    await expect(application.worktrees.merge(admin.id, id, randomUUID())).rejects.toMatchObject({
       status: 403,
+      code: "REVIEW_REQUIRED",
+      message: expect.stringContaining("Change its visibility to Space, review it, then merge."),
     });
     expect(await viewed(application, member.id, id)).toMatchObject({ capabilities: { review: true, merge: true } });
+
+    await application.worktrees.update(admin.id, id, { visibility: "space" });
+    const reviewed = await viewed(application, admin.id, id);
+    expect(reviewed).toMatchObject({ capabilities: { review: true, merge: true }, revision: expect.any(String) });
+    await expect(application.worktrees.merge(admin.id, id, randomUUID(), { revision: reviewed.revision })).resolves.toMatchObject({
+      worktree: { state: "merged" },
+    });
   });
 
   it("refuses title, summary, reopen and ready while a merge runs and merges what was viewed", async () => {

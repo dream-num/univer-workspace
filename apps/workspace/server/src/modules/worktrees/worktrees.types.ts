@@ -81,7 +81,8 @@ export interface WorktreeUnit {
 }
 
 export interface WorktreeDetail extends WorktreeSummary {
-  readonly revision: string;
+  /** Absent for an actor who cannot review the Units. */
+  readonly revision?: string;
   readonly units: readonly WorktreeUnit[];
 }
 

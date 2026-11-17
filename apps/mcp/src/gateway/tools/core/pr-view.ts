@@ -13,7 +13,10 @@ export const prViewTool: ToolDefinition = {
   description: "Show a pull request with the files it changes.",
   inputSchema,
   outputSchema: worktreeSchema.extend({
-    revision: z.string().describe("What you viewed. Pass it to pr_merge to merge exactly this."),
+    revision: z
+      .string()
+      .optional()
+      .describe("What you viewed. Pass it to pr_merge to merge exactly this. Absent when you cannot review its files."),
   }),
   annotations: readOnlyAnnotations,
   async run(context, args) {

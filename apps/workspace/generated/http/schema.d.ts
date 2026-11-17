@@ -2321,11 +2321,14 @@ export interface paths {
         put?: never;
         /**
          * Merge Worktree Units and activate successful local Units.
-         * @description A merge applies the revision its reviewer saw. Send the `revision` of the Worktree detail you reviewed.
-         *     It is required unless you created the Worktree. A merge whose revision is missing or no longer current
-         *     fails with 412 and changes nothing; read the Worktree again and decide on its current revision.
-         *     Someone else's Worktree can be merged only by an actor whose `capabilities.review` is true.
-         *     Changing the title or summary, reopening and marking ready return 409 when they find a merge of the Worktree in progress.
+         * @description A merge decides on the revision its reviewer saw: the title, the summary and each Unit's draft. Send the
+         *     `revision` of the Worktree detail you reviewed. It is required unless you created the Worktree. A merge whose
+         *     revision is missing or no longer current fails with 412 and changes nothing; read the Worktree again and decide
+         *     on its current revision. The revision does not cover trunk, so trunk edits made after the review are merged
+         *     with the draft as usual. Someone else's Worktree can be merged only by an actor whose `capabilities.review` is
+         *     true; a Team Owner or Admin gets 403 `REVIEW_REQUIRED` for a private Team Worktree someone else created.
+         *     Once the merge is reserved, changing the title or summary, reopening and marking ready return 409 until it
+         *     finishes, for at most 60 seconds; the reservation is not renewed.
          */
         post: operations["mergeWorktree"];
         delete?: never;
@@ -2583,7 +2586,8 @@ export interface components {
             capabilities: components["schemas"]["WorktreeCapabilities"];
         };
         WorktreeDetail: components["schemas"]["WorktreeSummary"] & {
-            revision: components["schemas"]["WorktreeRevision"];
+            /** @description Present only when `capabilities.review` is true, together with the Units it covers. */
+            revision?: components["schemas"]["WorktreeRevision"];
             units: components["schemas"]["WorktreeUnit"][];
         };
         ResolvedSkillSource: {
@@ -3345,7 +3349,7 @@ export interface components {
         };
         /**
          * @description Opaque value naming what a reviewer decides on: the title, the summary, and each Unit's draft revision and change.
-         *     It changes whenever any of them changes, and stays the same across ready and reopen.
+         *     It changes whenever any of them changes, and stays the same across ready and reopen. It does not cover trunk.
          */
         WorktreeRevision: string;
         /** @enum {string} */
@@ -4027,6 +4031,8 @@ export interface components {
          *     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
          *     Personal Space, pending pull-request files included, or store one file above 10 MiB) and
          *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
+         *     `REVIEW_REQUIRED` refuses a merge by a Team Owner or Admin who cannot review the private Team
+         *     pull request someone else created; it can be merged once its visibility is Space.
          */
         Forbidden: {
             headers: {

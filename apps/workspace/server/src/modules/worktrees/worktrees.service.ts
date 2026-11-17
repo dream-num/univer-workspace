@@ -726,8 +726,15 @@ export function createWorktreesModule(options: {
         !value.capabilities.merge &&
         !((resumeMerged || resumeMerging) && canMergeAsActor(userId, value.row))
       ) {
-        throw forbidden();
+        throw hiddenFromMerger(userId, value)
+          ? new ApplicationError(
+              "REVIEW_REQUIRED",
+              403,
+              "Only someone who can review a pull request merges it, and this private Team pull request hides its files from you. Change its visibility to Space, review it, then merge.",
+            )
+          : forbidden();
       }
+      // A resumed merge already passed this check before it reached the Collaboration merge.
       if (value.state === "ready") assertReviewedRevision(userId, value, reviewed);
       if (existing?.state !== "completed" && value.row.processed_at === null) {
         await validateAllTargets(userId, value.row, value.units, options);
@@ -967,6 +974,17 @@ async function worktreeCapabilities(
       discard: (state === "draft" || state === "ready") && decides,
     },
   };
+}
+
+/** A Team Owner or Admin discovers a private Team pull request someone else created, but cannot review it. */
+function hiddenFromMerger(userId: string, value: WorktreeContext): boolean {
+  return (
+    value.state === "ready" &&
+    value.row.kind === "team" &&
+    value.row.visibility === "private" &&
+    value.row.creator_user_id !== userId &&
+    !value.capabilities.review
+  );
 }
 
 function canMergeAsActor(userId: string, row: WorktreeRow): boolean {
@@ -1255,7 +1273,8 @@ function summaryView(
 function detailView(value: WorktreeContext): WorktreeDetail {
   return {
     ...summaryView(value.row, value.state, value.capabilities),
-    revision: worktreeRevision(value),
+    // The revision moves with the Units, so it is shown only with them.
+    ...(value.canSeeUnits ? { revision: worktreeRevision(value) } : {}),
     units: value.canSeeUnits ? value.units : [],
   };
 }
