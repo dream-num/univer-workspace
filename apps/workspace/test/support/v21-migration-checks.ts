@@ -92,7 +92,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
 
       const migrated = open(filename);
       const db = migrated.connection;
-      assert.equal(version(db), 24);
+      assert.equal(version(db), 25);
       assert.deepEqual(tables(db), repaired(before));
       assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(db.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
@@ -118,7 +118,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
       reset.exec("DROP TABLE executor_access; PRAGMA user_version = 21");
       reset.close();
       const second = open(rerun);
-      assert.equal(version(second.connection), 24);
+      assert.equal(version(second.connection), 25);
       assert.deepEqual(tables(second.connection), after);
       second.close();
     }
@@ -128,7 +128,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
     broken.exec("PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)");
     const original = tables(broken);
     broken.close();
-    assert.throws(() => open(filename), /V21 to V24 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V21 to V25 migration failed.*rolled back.*backup/);
     for (const name of ["rollback.sqlite", readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v21-backup-"))!]) {
       const preserved = new DatabaseSync(join(root, name), { readOnly: true });
       assert.equal(version(preserved), 21);

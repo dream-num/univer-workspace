@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.

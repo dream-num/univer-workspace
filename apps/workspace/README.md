@@ -664,3 +664,18 @@ backup. Never run V23 and V24 writers on the same SQLite file.
 A PostgreSQL deployment upgrades product schema version 3 to version 4 in one transaction at startup. A
 failed upgrade rolls back and leaves version 3. The server does not back up PostgreSQL, so back up the
 database and stop every old instance before you start the new version.
+
+### Display names converge at product database V25
+
+V24→V25 keeps the schema and runs the V22 display-name repair again over every User and Personal Space. On
+PostgreSQL the same step moves `workspace_product_schema` from version 4 to 5. A database whose V22 ran the current
+rule changes nothing. A database whose V22 ran the earlier rule deployed from 47dc9277 kept names that rule missed;
+this step rewrites them as V22 now would, with the Personal Spaces still named after them. Every other name and row stays
+byte for byte, and `agents.origin_label` is not touched. That earlier rule also removed the zero-width joiner after
+a virama from legitimate names in scripts such as Devanagari, Tamil, Malayalam and Sinhala. This step cannot bring
+it back: only that environment's backup taken
+before V22 (`*.v21-backup-*.sqlite`, or the PostgreSQL backup taken before the upgrade) still holds those names.
+Stop every old instance, start one V25 instance, and wait for its backup, migration and health checks before
+restoring service. Back up PostgreSQL before the upgrade. Failed migration rolls back; successful restarts do not
+repeat migration or backup. To roll back, stop V25 and restore the V24 backup. Never run V24 and V25 writers on the
+same SQLite file.

@@ -194,6 +194,10 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   recoverable `copy_node` Operation. The copy records only its source Node, which `GET /api/nodes/{nodeId}` returns to
   the copy's owner and editors and to no other reader, because a link-shared source's Node ID is its access link. It
   does not take over the source's permissions, sharing settings, comments or history.
+- Product V25 (PostgreSQL product schema version 5) keeps the V24 structure. A backed-up V24 → V25 startup step
+  runs the V22 display-name repair again over every User and Personal Space. A database whose V22 ran the earlier
+  rule deployed from 47dc9277 converges to the current rule; after the current V22 the step changes nothing. Joiners
+  that earlier rule removed from legitimate names come back only from that environment's backup taken before V22.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

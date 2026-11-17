@@ -46,7 +46,7 @@ async function migrate() {
       "Offline SQLite + local → PostgreSQL + S3 migration. Stop all Workspace writers first.",
     );
     console.log(
-      "Source: V24 SQLite product database required. DATABASE_FILE, COLLABORATION_DATABASE_FILE, BLOB_DIRECTORY (normal SQLite/local defaults).",
+      "Source: V25 SQLite product database required. DATABASE_FILE, COLLABORATION_DATABASE_FILE, BLOB_DIRECTORY (normal SQLite/local defaults).",
     );
     console.log(
       "Target: DATABASE_PROVIDER=postgres, DATABASE_URL, BLOB_STORE=s3 and BLOB_S3_* settings.",

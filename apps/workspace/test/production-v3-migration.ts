@@ -149,7 +149,7 @@ try {
     const version = migrated.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 24);
+    assert.equal(version.user_version, 25);
     const columns = migrated.connection
       .prepare("PRAGMA table_info(univer_asset_uploads)")
       .all() as unknown as Array<{ readonly name: string }>;
