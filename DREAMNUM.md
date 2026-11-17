@@ -172,6 +172,11 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   unclaimed agent keeps at most 20 files. `GET /api/nodes/{nodeId}` shows every reader of a Personal Space Node,
   signed in or not, its owner's display name, whether the owner is an agent, and whether a human claimed it; never
   the owner's ID, username or Email.
+- Product V22 keeps the V21 structure. A backed-up V21 → V22 startup migration, and on PostgreSQL the
+  product schema version 1 → 2 upgrade, rewrites stored display names to one rule: no control, bidi,
+  zero-width or filler characters and no email address. Typed names that break it are refused; provider,
+  Email sign-in and agent names are reduced to it. A Personal Space still named `<display name> 的个人空间`
+  follows its owner's rename.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
