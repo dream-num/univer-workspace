@@ -16,7 +16,8 @@ export type OperationKind =
   | "createWorktreeUnit"
   | "mergeWorktree"
   | "discardWorktree"
-  | "activateWorktreeResource";
+  | "activateWorktreeResource"
+  | "copyNode";
 
 export interface OperationView {
   readonly id: string;
@@ -71,6 +72,13 @@ export function createOperationsModule(options: {
           "CONFLICT",
           409,
           "Blob creation uses its Upload Session; failed replacements require a new Idempotency-Key."
+        );
+      }
+      if (row.kind === "copy_node") {
+        throw new ApplicationError(
+          "CONFLICT",
+          409,
+          "A failed copy has removed what it created; copy again with a new Idempotency-Key."
         );
       }
       if (row.kind === "activate_worktree_resource") {
@@ -152,6 +160,7 @@ async function retryWorktreeOperation(
     case "create_blob_resource":
     case "replace_blob_content":
     case "activate_worktree_resource":
+    case "copy_node":
       return;
   }
 }
@@ -179,7 +188,7 @@ async function requireOperation(
   return row;
 }
 
-function operationView(row: OperationRow): OperationView {
+export function operationView(row: OperationRow): OperationView {
   return {
     id: row.id,
     kind: operationKind(row.kind),
@@ -211,6 +220,7 @@ function operationKind(kind: OperationDatabaseKind): OperationKind {
     merge_worktree: "mergeWorktree",
     discard_worktree: "discardWorktree",
     activate_worktree_resource: "activateWorktreeResource",
+    copy_node: "copyNode",
   };
   return kinds[kind];
 }

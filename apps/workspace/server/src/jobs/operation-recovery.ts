@@ -6,7 +6,7 @@ export interface OperationRecovery {
 }
 
 export function startOperationRecovery(
-  resources: ResourcesModule,
+  resources: Pick<ResourcesModule, "resumeDue">,
   options: {
     readonly intervalMs?: number;
     readonly onError?: (error: unknown) => void;

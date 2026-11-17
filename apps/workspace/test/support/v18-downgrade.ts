@@ -1,3 +1,5 @@
+import { DROP_V24_SQL } from "./v24-downgrade.js";
+
 /**
  * Removes the V18 MCP token tables and the two login_sessions token columns so a
  * schema.sql-built fixture reads as V17. The columns go first because a table
@@ -5,6 +7,7 @@
  * row is untouched.
  */
 export const DROP_V18_SQL = `
+  ${DROP_V24_SQL}
   DROP TABLE IF EXISTS executor_access;
   DROP TABLE IF EXISTS node_reports;
   DROP TABLE IF EXISTS agents;

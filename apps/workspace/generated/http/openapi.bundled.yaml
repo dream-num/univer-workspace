@@ -2580,6 +2580,74 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/nodes/{nodeId}/copies:
+    parameters:
+      - name: nodeId
+        in: path
+        required: true
+        schema:
+          type: string
+    post:
+      tags:
+        - Nodes
+      operationId: copyNode
+      summary: Copy a file into a file of the caller's own.
+      description: |
+        Copies a Sheet, Doc, Slide or Blob file the caller can open, with its
+        embedded images. The copy lands at the root of the caller's Personal
+        Space, or as a new file in a draft pull request the caller can add files
+        to. It starts a history of its own and records its source, which
+        `getNode` returns as `copiedFromNodeId`. Comments, history, grants and
+        Link Sharing are not copied. A folder returns 400. A source the caller
+        cannot open returns the same 404 as reading it. For an unclaimed agent
+        the copied images of one file count together against the stored-file
+        size ceiling.
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyParameter'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CopyNode'
+      responses:
+        '200':
+          description: Existing completed result for the Idempotency Key.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopyNodeResponse'
+        '201':
+          description: Copy created during the initial attempt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CopyNodeResponse'
+        '202':
+          description: The copy remains pending, or failed and removed what it had created.
+          headers:
+            Location:
+              required: true
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationEnvelope'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient permission on the target, a ceiling, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session copies a .univer.html page.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/operations/{operationId}:
     parameters:
       - name: operationId
@@ -7157,6 +7225,8 @@ components:
         - owner
         - breadcrumbs
         - navigationRootNodeId
+        - copiedFromNodeId
+        - copyCount
       properties:
         node:
           $ref: '#/components/schemas/NodeSummary'
@@ -7175,6 +7245,15 @@ components:
           type:
             - string
             - 'null'
+        copiedFromNodeId:
+          description: The Node this file was copied from, returned only to the copy's owner and editors. Every other reader, anonymous included, gets null, because a link-shared source's Node ID is its access link. Also null for a file that is not a copy, and after the source is permanently deleted. The reader may be unable to open the source.
+          type:
+            - string
+            - 'null'
+        copyCount:
+          description: How many files are copies of this one, including copies in the trash. A copy made in a pull request counts once the pull request is merged.
+          type: integer
+          minimum: 0
     PatchNode:
       type: object
       additionalProperties: false
@@ -7206,6 +7285,57 @@ components:
       properties:
         id:
           type: string
+    CopyToPersonalSpace:
+      description: The root of the caller's Personal Space.
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+      properties:
+        kind:
+          type: string
+          const: personalSpace
+    CopyToWorktree:
+      description: A new file in a draft pull request, which lands at the given place when the pull request is merged. Sheet, Doc and Slide only.
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - worktreeId
+        - spaceId
+        - parentNodeId
+      properties:
+        kind:
+          type: string
+          const: worktree
+        worktreeId:
+          type: string
+        spaceId:
+          type: string
+        parentNodeId:
+          type:
+            - string
+            - 'null'
+    CopyNode:
+      type: object
+      additionalProperties: false
+      required:
+        - target
+      properties:
+        name:
+          description: Name of the copy. Defaults to the name of the source.
+          type: string
+          minLength: 1
+          maxLength: 255
+        target:
+          oneOf:
+            - $ref: '#/components/schemas/CopyToPersonalSpace'
+            - $ref: '#/components/schemas/CopyToWorktree'
+          discriminator:
+            propertyName: kind
+            mapping:
+              personalSpace: '#/components/schemas/CopyToPersonalSpace'
+              worktree: '#/components/schemas/CopyToWorktree'
     OperationKind:
       type: string
       enum:
@@ -7218,6 +7348,7 @@ components:
         - mergeWorktree
         - discardWorktree
         - activateWorktreeResource
+        - copyNode
     OperationState:
       type: string
       enum:
@@ -7235,6 +7366,40 @@ components:
           type: string
         message:
           type: string
+    ResourceCreateResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - node
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        node:
+          $ref: '#/components/schemas/NodeSummary'
+    CopyIntoWorktreeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - unit
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        unit:
+          $ref: '#/components/schemas/WorktreeUnit'
+    CopyNodeResponse:
+      oneOf:
+        - $ref: '#/components/schemas/ResourceCreateResponse'
+        - $ref: '#/components/schemas/CopyIntoWorktreeResponse'
+    OperationEnvelope:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
     CreateResource:
       type: object
       additionalProperties: false
@@ -7264,25 +7429,6 @@ components:
           type: object
           description: Complete initial Univer Unit data for unitType. When omitted, the server creates a blank Unit. The server always overrides id with the Unit identity reserved from the Idempotency-Key and resets rev to the initial revision.
           additionalProperties: true
-    ResourceCreateResponse:
-      type: object
-      additionalProperties: false
-      required:
-        - operation
-        - node
-      properties:
-        operation:
-          $ref: '#/components/schemas/OperationView'
-        node:
-          $ref: '#/components/schemas/NodeSummary'
-    OperationEnvelope:
-      type: object
-      additionalProperties: false
-      required:
-        - operation
-      properties:
-        operation:
-          $ref: '#/components/schemas/OperationView'
     ResourceResponse:
       type: object
       additionalProperties: false

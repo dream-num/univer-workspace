@@ -183,7 +183,7 @@ NodeOwner:
 NodeResponse:
   type: object
   additionalProperties: false
-  required: [node, space, owner, breadcrumbs, navigationRootNodeId]
+  required: [node, space, owner, breadcrumbs, navigationRootNodeId, copiedFromNodeId, copyCount]
   properties:
     node:
       $ref: "#/NodeSummary"
@@ -200,6 +200,74 @@ NodeResponse:
         $ref: "#/Breadcrumb"
     navigationRootNodeId:
       type: [string, "null"]
+    copiedFromNodeId:
+      description: The Node this file was copied from, returned only to the copy's owner and editors. Every other reader, anonymous included, gets null, because a link-shared source's Node ID is its access link. Also null for a file that is not a copy, and after the source is permanently deleted. The reader may be unable to open the source.
+      type: [string, "null"]
+    copyCount:
+      description: How many files are copies of this one, including copies in the trash. A copy made in a pull request counts once the pull request is merged.
+      type: integer
+      minimum: 0
+
+CopyNode:
+  type: object
+  additionalProperties: false
+  required: [target]
+  properties:
+    name:
+      description: Name of the copy. Defaults to the name of the source.
+      type: string
+      minLength: 1
+      maxLength: 255
+    target:
+      oneOf:
+        - $ref: "#/CopyToPersonalSpace"
+        - $ref: "#/CopyToWorktree"
+      discriminator:
+        propertyName: kind
+        mapping:
+          personalSpace: "#/CopyToPersonalSpace"
+          worktree: "#/CopyToWorktree"
+
+CopyToPersonalSpace:
+  description: The root of the caller's Personal Space.
+  type: object
+  additionalProperties: false
+  required: [kind]
+  properties:
+    kind:
+      type: string
+      const: personalSpace
+
+CopyToWorktree:
+  description: A new file in a draft pull request, which lands at the given place when the pull request is merged. Sheet, Doc and Slide only.
+  type: object
+  additionalProperties: false
+  required: [kind, worktreeId, spaceId, parentNodeId]
+  properties:
+    kind:
+      type: string
+      const: worktree
+    worktreeId:
+      type: string
+    spaceId:
+      type: string
+    parentNodeId:
+      type: [string, "null"]
+
+CopyNodeResponse:
+  oneOf:
+    - $ref: ./resources.yaml#/ResourceCreateResponse
+    - $ref: "#/CopyIntoWorktreeResponse"
+
+CopyIntoWorktreeResponse:
+  type: object
+  additionalProperties: false
+  required: [operation, unit]
+  properties:
+    operation:
+      $ref: ./operations.yaml#/OperationView
+    unit:
+      $ref: ./worktrees.yaml#/WorktreeUnit
 
 CreateNode:
   type: object

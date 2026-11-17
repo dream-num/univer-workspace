@@ -486,15 +486,26 @@ HTML files and their source Sheets are authorized independently, as for signed-i
 
 A signed-out visitor sees a bar under the header on every file and folder page, and in the
 immersive view in place of the header. It names the author, the owner of the Personal Space,
-and marks an agent that no person has claimed as `Unverified agent`. It links
-`Made with Univer Workspace` to the GitHub repository and, on wider screens, also shows
-`space.univer.ai`. `Report` opens a dialog that sends a reason to
+and marks an agent that no person has claimed as `Unverified agent`. Once a file has been
+copied, the bar shows how many copies were made; the owner sees the same count next to link
+access in the Share dialog. It links `Made with Univer Workspace` to the GitHub repository and,
+on wider screens, also shows `space.univer.ai`. `Report` opens a dialog that sends a reason to
 `POST /api/nodes/{nodeId}/reports`. `Hand to my agent` copies a short English prompt for the
 reader's own agent: the file link, the `uvw` guest commands that read it, and this instance's MCP
 URL for an agent that has MCP and sees a `read` tool. The immersive bar also offers sign-up,
-sign-in and Copy link, and can collapse. A signed-in user who opens a file in another user's Personal Space sees the same
-bar under the Workspace header, without sign-up, sign-in or Copy link. The owner and Team
-Space members see only the Workspace header.
+sign-in and Copy link, and can collapse. A signed-in user who opens a file in another user's
+Personal Space sees the same bar under the Workspace header, without sign-up, sign-in or Copy
+link. The owner and Team Space members see only the Workspace header.
+
+`Remix` in the bar copies the file into a signed-in reader's Personal Space and opens the copy.
+A page is copied with the Sheets it binds, and its copy is bound to their copies; when the
+reader cannot open one of those Sheets, nothing is copied. A signed-out visitor gets two ways
+to a copy: sign up, and the copy is made on return, or hand a short English prompt to their own
+agent. With the same `uvw` guest setup as `Hand to my agent`, that prompt has the agent copy
+the file into a pull request with `uvw unit create --from`, merge it, and give the visitor a
+claim link that makes the copy theirs. An agent cannot copy a page, so for a page the dialog
+offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only
+the sign-up return it was asked from makes it.
 
 Workspace Browser enables local trial edits in bound HTML pages for anonymous and
 signed-in users without edit permission. Sources remain live until the first page
@@ -503,6 +514,9 @@ recalculates in the visitor's browser; trial edits are never saved or sent. That
 source remains frozen against further owner updates until reload restores live data.
 The host displays a trial notice after the first edit, and pages can check
 `window.univerWorkspace.getWriteMode(unitId)` before labeling a write as saved.
+On `/nodes/<nodeId>` the trial notice offers `Save my version`, which copies the page and the
+Sheets it binds the way `Remix` does and opens the copy; a signed-out visitor signs up first.
+Trial edits are not carried into the copy.
 Native Office previews remain read-only for these users. Other hosts, including
 Workspace Agent, retain write rejections unless they explicitly enable HTML trials.
 
@@ -626,3 +640,24 @@ state are preserved. Failed migration rolls back; successful restarts do not rep
 back, stop V23 and restore the V22 backup (PostgreSQL: the database backup taken before the upgrade). An older
 instance refuses to start on V23. Upgrade Workspace before setting the MCP executor to `workspace`: an older
 Workspace reports no access, so the executor would refuse everyone until the upgrade.
+
+### Copy source and product database V24
+
+`POST /api/nodes/{nodeId}/copies` turns a Sheet, Doc, Slide or Blob file the requester can open into a
+file of their own, at the root of their Personal Space or as a new file in a draft pull request. The copy
+gets its own content and its own embedded images, and `GET /api/nodes/{nodeId}` returns its source as
+`copiedFromNodeId` to the copy's owner and editors, and how many files were copied from it as
+`copyCount`. A copy whose request is interrupted finishes in the background. A copy that cannot finish
+removes what it created. [HTTP concepts](contracts/http/concepts.md#copying-a-file)
+
+V23→V24 appends `nodes.copied_from_node_id`, `worktree_node_intents.copied_from_node_id`,
+`node_link_sharing.unverified_role` (existing rows read `viewer`) and `node_link_sharing.making_of_note`,
+and rebuilds `operations` so that its kind CHECK accepts `copy_node`. Stop every old instance, start one
+V24 instance, and wait for its consistent backup, migration and health checks before restoring service.
+Existing product rows, object keys and unfinished recovery state are preserved. Failed migration rolls
+back; successful restarts do not repeat migration or backup. To roll back, stop V24 and restore the V23
+backup. Never run V23 and V24 writers on the same SQLite file.
+
+A PostgreSQL deployment upgrades product schema version 3 to version 4 in one transaction at startup. A
+failed upgrade rolls back and leaves version 3. The server does not back up PostgreSQL, so back up the
+database and stop every old instance before you start the new version.

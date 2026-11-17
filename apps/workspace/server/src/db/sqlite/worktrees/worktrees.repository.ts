@@ -406,7 +406,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     const targetSpaceId = row.target_space_id;
     this._database.transaction((database) => {
       const intent = database.prepare(`
-        SELECT activated_at, discarded_at FROM worktree_node_intents WHERE worktree_id = ? AND unit_id = ?
+        SELECT activated_at, discarded_at, copied_from_node_id FROM worktree_node_intents WHERE worktree_id = ? AND unit_id = ?
       `).get(row.worktree_id, row.unit_id);
       if (!intent || intent.discarded_at !== null) throw notFound();
       if (intent.activated_at !== null) return;
@@ -416,9 +416,9 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
           `INSERT INTO nodes
             (
               id, space_id, parent_id, name, created_by,
-              created_at, updated_at
+              created_at, updated_at, copied_from_node_id
             )
-           VALUES (?, ?, ?, ?, ?, ?, ?)
+           VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT id FROM nodes WHERE id = ?))
            ON CONFLICT (id) DO NOTHING`
         )
         .run(
@@ -428,7 +428,9 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
           row.new_name,
           creatorUserId,
           activatedAt,
-          activatedAt
+          activatedAt,
+          // The subquery drops the link when the source was purged while the pull request was open.
+          intent.copied_from_node_id ?? null
         );
       database
         .prepare(

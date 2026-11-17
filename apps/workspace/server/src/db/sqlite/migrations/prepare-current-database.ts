@@ -2,6 +2,7 @@ import { migrateV19ToV20 } from "./v19-to-v20/migrate.js";
 import { migrateV20ToV21 } from "./v20-to-v21/migrate.js";
 import { migrateV21ToV22 } from "./v21-to-v22/migrate.js";
 import { migrateV22ToV23 } from "./v22-to-v23/migrate.js";
+import { migrateV23ToV24 } from "./v23-to-v24/migrate.js";
 import { startupStage } from "../../../logging/startup.js";
 import { randomUUID } from "node:crypto";
 import { existsSync, statSync } from "node:fs";
@@ -28,7 +29,7 @@ import { migrateV16ToV17 } from "./v16-to-v17/migrate.js";
 import { migrateV18ToV19 } from "./v18-to-v19/migrate.js";
 import { migrateV17ToV18 } from "./v17-to-v18/migrate.js";
 
-const TARGET_VERSION = 23;
+const TARGET_VERSION = 24;
 
 const V1_TABLES = [
   "users",
@@ -126,7 +127,7 @@ type DatabasePreparation =
 /**
  * Temporary rollout boundary for the supported legacy schemas.
  *
- * Delete this migrations directory and the initialization call after every deployed database is on V23. Business repositories never
+ * Delete this migrations directory and the initialization call after every deployed database is on V24. Business repositories never
  * import it.
  */
 export function prepareCurrentDatabase(filename: string): DatabasePreparation {
@@ -143,18 +144,31 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     database.exec("PRAGMA busy_timeout = 5000");
     const version = pragmaNumber(database, "user_version");
     if (version === TARGET_VERSION) {
-      assertV23Fingerprint(database);
+      assertV24Fingerprint(database);
       return { status: "current" };
+    }
+    if (version === 23) {
+      assertV23Fingerprint(database);
+      const backupFilename = createBackup(filename, database, 23);
+      try {
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
+        database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+      } catch (error) {
+        throw new Error(`Workspace V23 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+      }
+      return { status: "migrated", backupFilename };
     }
     if (version === 22) {
       assertV22Fingerprint(database);
       const backupFilename = createBackup(filename, database, 22);
       try {
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V22 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V22 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -164,10 +178,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       try {
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V21 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V21 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -178,10 +193,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V20 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V20 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -193,10 +209,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V19 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V19 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -209,10 +226,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V18 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V18 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -226,10 +244,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V17 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V17 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -244,10 +263,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V16 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V16 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -263,10 +283,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V15 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V15 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -283,10 +304,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V14 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V14 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -305,10 +327,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V12 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V12 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -326,10 +349,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V13 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V13 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -349,10 +373,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V11 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V11 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -373,10 +398,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V10 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V10 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -398,10 +424,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V9 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V9 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -424,10 +451,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V8 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V8 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -451,10 +479,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V7 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V7 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -482,10 +511,11 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
-        throw new Error(`Workspace V6 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
+        throw new Error(`Workspace V6 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`, { cause: error });
       }
       return { status: "migrated", backupFilename };
     }
@@ -514,11 +544,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V5 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V5 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -559,11 +590,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V4 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V4 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -593,11 +625,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V3 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V3 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -628,11 +661,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V2 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V2 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -664,11 +698,12 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
         startupStage("product.v20-to-v21", () => migrateV20ToV21(database));
         startupStage("product.v21-to-v22", () => migrateV21ToV22(database));
         startupStage("product.v22-to-v23", () => migrateV22ToV23(database));
-        assertV23Fingerprint(database);
+        startupStage("product.v23-to-v24", () => migrateV23ToV24(database));
+        assertV24Fingerprint(database);
         database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
       } catch (error) {
         throw new Error(
-          `Workspace V1 to V23 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
+          `Workspace V1 to V24 migration failed. The failing transaction was rolled back and a consistent backup is at ${backupFilename}.`,
           { cause: error }
         );
       }
@@ -676,7 +711,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     }
     if (version !== 0) {
       throw new Error(
-        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, or ${TARGET_VERSION}.`
+        `Unsupported product database version ${version}; expected 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, or ${TARGET_VERSION}.`
       );
     }
     if (!hasTable(database, "catalog_entries") && !hasTable(database, "files")) {
@@ -688,7 +723,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
     const backupFilename = createBackup(filename, database, 0);
 
     try {
-      startupStage("product.v0-to-v23", () => migrateLegacyV0(database));
+      startupStage("product.v0-to-v24", () => migrateLegacyV0(database));
     } catch (error) {
       throw new Error(
         `Legacy Workspace database migration failed. The original V0 database was preserved by the transaction and its consistent backup is at ${backupFilename}.`,
@@ -696,7 +731,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
       );
     }
     try {
-      assertV23Fingerprint(database);
+      assertV24Fingerprint(database);
       database.exec("PRAGMA wal_checkpoint(TRUNCATE)");
     } catch (error) {
       throw new Error(
@@ -713,7 +748,7 @@ export function prepareCurrentDatabase(filename: string): DatabasePreparation {
 function createBackup(
   filename: string,
   database: DatabaseSync,
-  version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22
+  version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23
 ): string {
   const backupFilename = uniqueBackupFilename(filename, version);
   try {
@@ -728,7 +763,7 @@ function createBackup(
   }
 }
 
-function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22): string {
+function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23): string {
   const timestamp = new Date()
     .toISOString()
     .replaceAll(":", "")
@@ -742,7 +777,7 @@ function uniqueBackupFilename(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 |
   );
 }
 
-function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22): void {
+function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16 | 17 | 18 | 19 | 20 | 21 | 22 | 23): void {
   const backup = new DatabaseSync(filename, { readOnly: true });
   try {
     const integrity = backup.prepare("PRAGMA integrity_check").get() as
@@ -764,6 +799,8 @@ function verifyBackup(filename: string, version: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 |
       assertV2Fingerprint(backup);
     } else if (version === 3) {
       assertV3Fingerprint(backup);
+    } else if (version === 23) {
+      assertV23Fingerprint(backup);
     } else if (version === 22) {
       assertV22Fingerprint(backup);
     } else if (version === 21) {
@@ -1226,14 +1263,16 @@ function assertV16Fingerprint(database: DatabaseSync, userColumns: readonly stri
   assertV15Fingerprint(database, [...ISSUE_COLUMNS, "created_via"], userColumns);
 }
 
-function assertV17Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS): void {
+const INTENT_COLUMNS = [
+  "worktree_id", "unit_id", "node_id", "target_space_id", "target_parent_node_id",
+  "name", "unit_type", "created_by", "activated_at", "discarded_at", "created_at",
+  "updated_at",
+];
+
+function assertV17Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS, intentColumns: readonly string[] = INTENT_COLUMNS): void {
   assertV16Fingerprint(database, userColumns);
   assertColumns(database, "univer_resources", ["resource_id", "unit_id", "unit_type"], 17);
-  assertColumns(database, "worktree_node_intents", [
-    "worktree_id", "unit_id", "node_id", "target_space_id", "target_parent_node_id",
-    "name", "unit_type", "created_by", "activated_at", "discarded_at", "created_at",
-    "updated_at",
-  ], 17);
+  assertColumns(database, "worktree_node_intents", intentColumns, 17);
   const unitTypeCheck = "unit_type IN ('sheet', 'doc', 'slide', 'board', 'base', 'pdf')";
   if (
     !objectSql(database, "table", "univer_resources").includes(unitTypeCheck) ||
@@ -1246,8 +1285,8 @@ function assertV17Fingerprint(database: DatabaseSync, userColumns: readonly stri
   }
 }
 
-function assertV18Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS): void {
-  assertV17Fingerprint(database, userColumns);
+function assertV18Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS, intentColumns: readonly string[] = INTENT_COLUMNS): void {
+  assertV17Fingerprint(database, userColumns, intentColumns);
   assertColumns(database, "login_sessions", [
     "id", "secret_hash", "user_id", "created_at", "expires_at", "write_source",
     "issued_for_pat_id", "issued_for_grant_id",
@@ -1345,32 +1384,43 @@ function hasObject(
   );
 }
 
-function assertV19Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS): void {
-  assertV18Fingerprint(database, userColumns);
+function assertV19Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS, intentColumns: readonly string[] = INTENT_COLUMNS): void {
+  assertV18Fingerprint(database, userColumns, intentColumns);
   assertColumns(database, "html_view_drafts", ["id", "author_user_id", "idempotency_key", "kind", "space_id", "parent_node_id", "name", "target_resource_id", "base_etag", "object_key", "byte_size", "sha256", "media_type", "stored_etag", "state", "result_node_id", "result_resource_id", "result_etag", "decided_by", "decided_at", "expires_at", "created_at", "updated_at"], 19);
   if (!hasObject(database, "index", "html_view_drafts_due") || !objectSql(database, "table", "html_view_drafts").includes("UNIQUE (author_user_id, idempotency_key)")) throw new Error("Product database V19 fingerprint mismatch (HTML View drafts).");
 }
 
-function assertV20Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS): void {
-  assertV19Fingerprint(database, userColumns);
+function assertV20Fingerprint(database: DatabaseSync, userColumns: readonly string[] = USER_COLUMNS, intentColumns: readonly string[] = INTENT_COLUMNS): void {
+  assertV19Fingerprint(database, userColumns, intentColumns);
   assertColumns(database, "skill_drafts", ["id", "author_user_id", "idempotency_key", "intent_sha256", "space_id", "name", "target_folder_node_id", "files", "base", "keep", "scan", "review", "source", "unverified_review_count", "state", "result_folder_node_id", "decided_by", "decided_at", "expires_at", "created_at", "updated_at"], 20);
   const sql = objectSql(database, "table", "skill_drafts");
   if (!hasObject(database, "index", "skill_drafts_due") || !sql.includes("UNIQUE (author_user_id, idempotency_key)") || !sql.includes("json_valid(files)") || !sql.includes("(state = 'published') = (result_folder_node_id IS NOT NULL)")) throw new Error("Product database V20 fingerprint mismatch (Skill drafts).");
 }
 
-export function assertV21Fingerprint(database: DatabaseSync): void {
-  assertV20Fingerprint(database, [...USER_COLUMNS, "kind"]);
+export function assertV21Fingerprint(database: DatabaseSync, intentColumns: readonly string[] = INTENT_COLUMNS): void {
+  assertV20Fingerprint(database, [...USER_COLUMNS, "kind"], intentColumns);
   assertColumns(database, "agents", ["user_id", "owner_user_id", "claimed_at", "origin_label", "created_at", "last_active_at", "expires_at", "banned_at"], 21);
   assertColumns(database, "node_reports", ["id", "node_id", "reporter_user_id", "reason", "created_at"], 21);
   if (!objectSql(database, "table", "users").includes("kind TEXT NOT NULL DEFAULT 'human' CHECK (kind IN ('human', 'agent'))") || !objectSql(database, "table", "agents").includes("CHECK ((owner_user_id IS NULL) = (claimed_at IS NULL))")) throw new Error("Product database V21 fingerprint mismatch (User kind or Agents).");
 }
 
-export function assertV22Fingerprint(database: DatabaseSync): void {
-  assertV21Fingerprint(database);
+export function assertV22Fingerprint(database: DatabaseSync, intentColumns: readonly string[] = INTENT_COLUMNS): void {
+  assertV21Fingerprint(database, intentColumns);
 }
 
-export function assertV23Fingerprint(database: DatabaseSync): void {
-  assertV22Fingerprint(database);
+export function assertV23Fingerprint(database: DatabaseSync, intentColumns: readonly string[] = INTENT_COLUMNS): void {
+  assertV22Fingerprint(database, intentColumns);
   assertColumns(database, "executor_access", ["user_id", "granted_at"], 23);
   if (!objectSql(database, "table", "executor_access").includes("user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE")) throw new Error("Product database V23 fingerprint mismatch (executor access).");
+}
+
+export function assertV24Fingerprint(database: DatabaseSync): void {
+  assertV23Fingerprint(database, [...INTENT_COLUMNS, "copied_from_node_id"]);
+  if (
+    !objectSql(database, "table", "nodes").includes("copied_from_node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL") ||
+    !hasObject(database, "index", "nodes_copied_from") ||
+    !objectSql(database, "table", "node_link_sharing").includes("unverified_role TEXT NOT NULL DEFAULT 'viewer' CHECK (unverified_role IN ('editor', 'viewer'))") ||
+    !hasColumn(database, "node_link_sharing", "making_of_note") ||
+    !objectSql(database, "table", "operations").includes("'copy_node'")
+  ) throw new Error("Product database V24 fingerprint mismatch (copy source, Link Sharing columns or the copy Operation kind differ).");
 }

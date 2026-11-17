@@ -85,6 +85,11 @@ import {
   type OperationsModule,
 } from "./modules/operations/index.js";
 import {
+  createCopiesModule,
+  createCopiesRouter,
+  type CopiesModule,
+} from "./modules/copies/index.js";
+import {
   createSpacesModule,
   createSpacesRouter,
   type SpacesModule,
@@ -139,6 +144,7 @@ export interface WorkspaceApplication {
   readonly issues: IssuesModule;
   readonly worktrees: WorktreesModule;
   readonly operations: OperationsModule;
+  readonly copies: CopiesModule;
   readonly blobs: BlobsModule;
   readonly skillDrafts: SkillDraftsModule;
   readonly htmlViewDrafts: HtmlViewDraftsModule;
@@ -285,15 +291,16 @@ export function createWorkspaceApplication(
     access,
     onChanged: (change) => worktreeChangeFeed.publishIssues(change),
   });
+  const worktreeBackend =
+    dependencies.worktreeBackend ??
+    (collaboration
+      ? createWorktreeBackend(collaboration.worktreeService)
+      : unavailableWorktreeBackend());
   const worktrees = createWorktreesModule({
     trash,
     repository: repositories.worktrees,
     access,
-    backend:
-      dependencies.worktreeBackend ??
-      (collaboration
-        ? createWorktreeBackend(collaboration.worktreeService)
-        : unavailableWorktreeBackend()),
+    backend: worktreeBackend,
     async publishMergedAssets(worktreeId, unitIds) {
       await univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds);
     },
@@ -310,6 +317,22 @@ export function createWorkspaceApplication(
     repository: repositories.operations,
     resources,
     worktrees,
+  });
+  const copies = createCopiesModule({
+    repository: repositories.copies,
+    access,
+    worktrees,
+    snapshots: unitSnapshotStore,
+    unitStore,
+    worktreeBackend,
+    store: blobStore,
+    async onWorktreeUnitAdded(worktreeId) {
+      worktreeChangeFeed.publish({
+        kind: "unitAdded",
+        worktreeId,
+        audienceUserIds: await repositories.worktrees.audience(worktreeId),
+      });
+    },
   });
   const exchange = createExchangeModule({
     assets: univerAssets,
@@ -432,6 +455,7 @@ export function createWorkspaceApplication(
     "/api",
     createOperationsRouter({ identity, operations })
   );
+  app.use("/api", createCopiesRouter({ identity, copies }));
   app.use(
     "/api",
     createWorktreesRouter({ identity, worktrees })
@@ -472,6 +496,7 @@ export function createWorkspaceApplication(
     issues,
     worktrees,
     operations,
+    copies,
     blobs,
     htmlViewDrafts,
     skillDrafts,

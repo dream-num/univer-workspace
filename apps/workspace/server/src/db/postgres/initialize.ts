@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -41,6 +41,34 @@ async function createExecutorAccess(client: PoolClient): Promise<void> {
   user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
   granted_at BIGINT NOT NULL
 )`);
+}
+
+// The copy source on Nodes and Worktree intents, two Link Sharing columns and the copy Operation kind.
+// Existing rows read NULL, 'viewer' and NULL.
+async function addCopySource(client: PoolClient): Promise<void> {
+  await client.query(`
+ALTER TABLE nodes ADD COLUMN copied_from_node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL;
+CREATE INDEX nodes_copied_from
+  ON nodes(copied_from_node_id)
+  WHERE copied_from_node_id IS NOT NULL;
+ALTER TABLE worktree_node_intents ADD COLUMN copied_from_node_id TEXT;
+ALTER TABLE node_link_sharing ADD COLUMN unverified_role TEXT NOT NULL DEFAULT 'viewer' CHECK (unverified_role IN ('editor', 'viewer'));
+ALTER TABLE node_link_sharing ADD COLUMN making_of_note TEXT;
+ALTER TABLE operations DROP CONSTRAINT operations_kind_check;
+ALTER TABLE operations ADD CONSTRAINT operations_kind_check CHECK (
+  kind IN (
+    'create_resource',
+    'create_blob_resource',
+    'replace_blob_content',
+    'create_worktree',
+    'add_worktree_unit',
+    'create_worktree_unit',
+    'merge_worktree',
+    'discard_worktree',
+    'activate_worktree_resource',
+    'copy_node'
+  )
+);`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
+import { DROP_V24_SQL, withoutV24Columns } from "./v24-downgrade.js";
 
 // V21 adds users.kind; compare the columns Users already had.
 const USER_COLUMNS = "id, username, display_name, avatar_url, created_at, updated_at, email";
@@ -14,6 +15,7 @@ export function verifyV18Migration(open: (filename: string) => SqliteDatabase): 
   const fixture = (filename: string, seeded: boolean) => {
     const db = new DatabaseSync(filename);
     db.exec(schema);
+    db.exec(DROP_V24_SQL);
     db.exec("DROP TABLE executor_access; DROP TABLE node_reports; DROP TABLE agents; ALTER TABLE users DROP COLUMN kind; DROP TABLE skill_drafts; DROP TABLE html_view_drafts; PRAGMA user_version = 18");
     if (seeded)
       db.exec(`
@@ -36,7 +38,7 @@ export function verifyV18Migration(open: (filename: string) => SqliteDatabase): 
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('html_view_drafts', 'skill_drafts', 'agents', 'node_reports', 'executor_access') ORDER BY name",
       )
       .all()
-      .map(({ name }) => [name, db.prepare(`SELECT ${name === "users" ? USER_COLUMNS : "*"} FROM ${name}`).all()]);
+      .map(({ name }) => [name, withoutV24Columns(String(name), db.prepare(`SELECT ${name === "users" ? USER_COLUMNS : "*"} FROM ${name}`).all())]);
   try {
     for (const seeded of [false, true]) {
       const filename = join(root, `case-${seeded}.sqlite`);
@@ -45,7 +47,7 @@ export function verifyV18Migration(open: (filename: string) => SqliteDatabase): 
       old.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 23);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 24);
       assert.equal(
         migrated.connection.prepare("SELECT count(*) AS n FROM html_view_drafts").get()?.n,
         0,
@@ -87,7 +89,7 @@ export function verifyV18Migration(open: (filename: string) => SqliteDatabase): 
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V18 to V23 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V18 to V24 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v18-backup-"))!,

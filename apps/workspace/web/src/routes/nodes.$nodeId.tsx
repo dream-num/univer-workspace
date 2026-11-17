@@ -15,14 +15,16 @@ import { anonymousUser, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
 import { mySpacesQueryOptions } from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
+import { SaveMyVersionButton, useFinishPendingCopy } from "../features/nodes/remix";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
 import { parseResourceView } from "../features/resource-view/resource-view";
 export const Route = createFileRoute("/nodes/$nodeId")({
-  validateSearch: (search: Readonly<Record<string, unknown>>): { unit?: string; view?: "immersive" | undefined } => ({
+  validateSearch: (search: Readonly<Record<string, unknown>>): { unit?: string; view?: "immersive" | undefined; copy?: string } => ({
     ...(parseResourceView(search.view) ? { view: "immersive" as const } : {}),
     ...(typeof search.unit === "string" && search.unit ? { unit: search.unit } : {}),
+    ...(typeof search.copy === "string" && search.copy ? { copy: search.copy } : {}),
   }),
   loaderDeps: ({ search }) => ({ unit: search.unit }),
   loader: async ({ context, deps, params, location }) => {
@@ -64,7 +66,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
 
 function NodePage() {
   const { nodeId } = Route.useParams();
-  const { view } = Route.useSearch();
+  const { view, copy } = Route.useSearch();
   const query = useQuery(nodeQueryOptions(nodeId));
   const resourceId = query.data?.node.resource?.id;
   const resourceQuery = useQuery({
@@ -72,6 +74,7 @@ function NodePage() {
     enabled: resourceId !== undefined,
   });
   const session = useQuery(sessionQueryOptions);
+  useFinishPendingCopy(nodeId, session.data?.authenticated === true, copy);
   const mode = useModeDefinition();
   const { pages } = mode;
   const [folderSearch, setFolderSearch] = useState({ mode, value: "" });
@@ -143,7 +146,12 @@ function NodePage() {
       {resource ? (
         <section key={resource.id} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
           {resource.kind === "blob" ? (
-            <BlobPreview resource={resource} immersive={view === "immersive"} actionsContainer={htmlActionsContainer} />
+            <BlobPreview
+              resource={resource}
+              immersive={view === "immersive"}
+              actionsContainer={htmlActionsContainer}
+              trialAction={<SaveMyVersionButton nodeId={node.id} />}
+            />
           ) : (
             <ResourceEditor
               unitId={resource.unitId}

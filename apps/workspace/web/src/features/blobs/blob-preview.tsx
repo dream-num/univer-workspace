@@ -1,6 +1,6 @@
 import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import { Download, FileQuestion } from "lucide-react";
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { isMarkdownFile } from "@univerjs/univer-workspace-markdown-viewer/content";
 import { useI18n } from "../../shared/i18n";
 import { buttonVariants } from "../../shared/ui";
@@ -24,14 +24,17 @@ export function BlobPreview({
   resource,
   immersive = false,
   actionsContainer,
+  trialAction,
 }: {
   readonly resource: BlobPreviewResource;
   readonly immersive?: boolean;
   readonly actionsContainer: HTMLElement | null;
+  /** Shown beside the notice once a reader without edit access starts trying out a page. */
+  readonly trialAction?: ReactNode;
 }) {
   if (isHtmlViewFilename(resource.originalFilename))
     return (
-      <HtmlViewFile resource={resource} actionsContainer={actionsContainer} immersive={immersive} />
+      <HtmlViewFile resource={resource} actionsContainer={actionsContainer} immersive={immersive} trialAction={trialAction} />
     );
   const mediaType = resource.mediaType.toLowerCase();
   if (mediaType.startsWith("image/")) {

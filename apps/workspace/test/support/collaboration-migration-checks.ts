@@ -292,7 +292,7 @@ export async function verifyCollaborationMigration(
     try {
       await assert.rejects(
         prepare(needsProduct.filename, createProductFactsReader(v6)),
-        /Prepare the product database to V23/,
+        /Prepare the product database to V24/,
       );
     } finally {
       v6.close();
@@ -434,7 +434,7 @@ function createProductDatabase(filename: string): string {
         ('draft-owner', 'draft-owner', 'Draft Owner', NULL, 1, 1);
       INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at)
       VALUES ('space', 'personal', 'Space', 'product-owner', 1, 1);
-      INSERT INTO nodes VALUES
+      INSERT INTO nodes (id, space_id, parent_id, name, created_by, trash_batch_id, created_at, updated_at) VALUES
         ('legacy-node', 'space', NULL, 'Legacy', 'product-legacy-owner', NULL, 1680000000000, 1680000000000),
         ('product-node', 'space', NULL, 'Product', 'product-owner', NULL, 1690000000000, 1690000000000);
       INSERT INTO resources VALUES

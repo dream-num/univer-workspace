@@ -580,6 +580,12 @@ export function createWorktreesModule(options: {
       return result;
     },
 
+    async assertCanCreateUnit(userId, worktreeId, targetSpaceId, targetParentNodeId) {
+      const value = await context(userId, worktreeId);
+      if (!value.capabilities.addUnit) throw forbidden();
+      await validateTarget(userId, value.row, targetSpaceId, targetParentNodeId, options.access);
+    },
+
     async openUnit(userId, worktreeId, unitId, inputValue) {
       const mode = validOpenMode(inputValue);
       const value = await context(userId, worktreeId);

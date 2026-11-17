@@ -4,6 +4,7 @@ import { openProductDatabase } from "../../server/src/db/index.js";
 import { productSchemaFingerprint } from "../../server/src/db/postgres/initialize.js";
 import { loadConfig } from "../../server/src/config.js";
 import { createPostgresTestSchema } from "../support/postgres/schema.js";
+import { withoutV24Columns } from "../support/v24-downgrade.js";
 
 const url = process.env.WORKSPACE_TEST_POSTGRES_URL;
 
@@ -29,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=4");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=5");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=3");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=4");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -109,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 3 }]);
+    expect(fresh.version).toMatchObject([{ version: 4 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -134,6 +135,64 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     expect((await schema.pool.query("SELECT * FROM executor_access")).rows).toEqual([]);
   });
 
+  it("upgrades version 3 in place to the fresh-install structure, keeps rows, and rolls back a failed upgrade", async ({ onTestFinished }) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const start = async () => (await openProductDatabase({ provider: "postgres", connectionString: schema.connectionString })).close();
+    const structure = async () => ({
+      version: (await schema.pool.query("SELECT version, fingerprint FROM workspace_product_schema")).rows,
+      columns: (await schema.pool.query("SELECT table_name, column_name FROM information_schema.columns WHERE table_schema = current_schema() ORDER BY table_name, ordinal_position")).rows,
+      constraints: (await schema.pool.query("SELECT conname, pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE connamespace = current_schema()::regnamespace ORDER BY conname")).rows,
+    });
+    const tables = ["nodes", "node_link_sharing", "worktree_node_intents", "operations"];
+    const rows = async () => Promise.all(tables.map(async (table) =>
+      withoutV24Columns(table, (await schema.pool.query(`SELECT * FROM ${table} ORDER BY 1`)).rows)));
+
+    await start();
+    const fresh = await structure();
+    await downgrade(schema, 3);
+    await schema.pool.query(`
+      INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
+      INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('s', 'personal', 'Personal', 'u', 1, 1);
+      INSERT INTO nodes (id, space_id, name, created_by, created_at, updated_at) VALUES ('n', 's', 'Budget', 'u', 1, 1);
+      INSERT INTO node_link_sharing (node_id, enabled, role, created_by, updated_by, created_at, updated_at) VALUES ('n', 1, 'editor', 'u', 'u', 1, 1);
+      INSERT INTO worktrees (id, name, creator_user_id, kind, visibility, created_at, updated_at) VALUES ('w', 'Draft', 'u', 'user', 'private', 1, 1);
+      INSERT INTO worktree_units (worktree_id, unit_id, resource_id, source, ordinal, added_at) VALUES ('w', 'unit', 'draft-resource', 'worktree', 0, 1);
+      INSERT INTO worktree_node_intents (worktree_id, unit_id, node_id, target_space_id, name, unit_type, created_by, created_at, updated_at)
+        VALUES ('w', 'unit', 'draft-node', 's', 'Draft sheet', 'sheet', 'u', 1, 1);
+      INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, lease_owner, lease_expires_at, created_at, updated_at)
+        VALUES ('pending', 'create_blob_resource', 'u', 'reserved', 'pending', '{"a":1}', 2, 3, 'product-api', 9, 1, 2);
+    `);
+    const before = await rows();
+    const v3 = await structure();
+    expect(v3.version).toMatchObject([{ version: 3 }]);
+    await expect(schema.pool.query("UPDATE operations SET kind = 'copy_node'")).rejects.toThrow(/operations_kind_check/);
+
+    // A sequence is outside the fingerprint and takes the new index's name, so the upgrade fails midway.
+    await schema.pool.query("CREATE SEQUENCE nodes_copied_from");
+    await expect(start()).rejects.toThrow(/nodes_copied_from/);
+    expect(await structure()).toEqual(v3);
+    expect(await rows()).toEqual(before);
+    await schema.pool.query("DROP SEQUENCE nodes_copied_from");
+
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(before);
+    await start();
+    expect(await structure()).toEqual(fresh);
+    expect(await rows()).toEqual(before);
+
+    await expect(schema.pool.query("UPDATE node_link_sharing SET unverified_role = 'owner'")).rejects.toThrow(/unverified_role/);
+    await expect(schema.pool.query("UPDATE operations SET kind = 'move_node'")).rejects.toThrow(/operations_kind_check/);
+    await schema.pool.query("UPDATE operations SET kind = 'copy_node'");
+    await expect(schema.pool.query("UPDATE nodes SET copied_from_node_id = 'missing'")).rejects.toThrow(/foreign key/);
+    await schema.pool.query(`
+      INSERT INTO nodes (id, space_id, name, created_by, created_at, updated_at) VALUES ('source', 's', 'Source', 'u', 1, 1);
+      UPDATE nodes SET copied_from_node_id = 'source' WHERE id = 'n';
+      DELETE FROM nodes WHERE id = 'source'`);
+    expect((await schema.pool.query("SELECT copied_from_node_id FROM nodes WHERE id = 'n'")).rows).toEqual([{ copied_from_node_id: null }]);
+  });
+
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
     const schema = await createPostgresTestSchema(url!);
     onTestFinished(schema.close);
@@ -144,10 +203,28 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 });
 
 /** Gives a fresh schema the structure a deployed database at an older version has. */
-async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2): Promise<void> {
+async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3): Promise<void> {
   const client = await schema.pool.connect();
   try {
-    await client.query("DROP TABLE executor_access");
+    await client.query(`
+      ALTER TABLE nodes DROP COLUMN copied_from_node_id;
+      ALTER TABLE worktree_node_intents DROP COLUMN copied_from_node_id;
+      ALTER TABLE node_link_sharing DROP COLUMN unverified_role, DROP COLUMN making_of_note;
+      ALTER TABLE operations DROP CONSTRAINT operations_kind_check;
+      ALTER TABLE operations ADD CONSTRAINT operations_kind_check CHECK (
+        kind IN (
+          'create_resource',
+          'create_blob_resource',
+          'replace_blob_content',
+          'create_worktree',
+          'add_worktree_unit',
+          'create_worktree_unit',
+          'merge_worktree',
+          'discard_worktree',
+          'activate_worktree_resource'
+        )
+      )`);
+    if (version < 3) await client.query("DROP TABLE executor_access");
     await client.query("UPDATE workspace_product_schema SET version = $1, fingerprint = $2", [version, await productSchemaFingerprint(client)]);
   } finally {
     client.release();

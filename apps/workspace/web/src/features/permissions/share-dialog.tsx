@@ -18,6 +18,7 @@ import {
   nodeGrantsQueryOptions,
   userSearchQueryOptions,
 } from "./permissions.queries";
+import { nodeQueryOptions } from "../nodes/nodes.queries";
 import { RoleBadge } from "./role-badge";
 import { SourceSheets } from "./source-sheets";
 
@@ -47,6 +48,10 @@ export function ShareDialog(props: {
     enabled: Boolean(props.node),
   });
   const users = useQuery(userSearchQueryOptions(search));
+  const copyCount = useQuery({
+    ...nodeQueryOptions(nodeId),
+    enabled: Boolean(props.node?.resource),
+  }).data?.copyCount ?? 0;
 
   const grant = useSetNodeGrant();
   const grantCallbacks = {
@@ -241,6 +246,9 @@ export function ShareDialog(props: {
                     : "size-1.5 rounded-full bg-subtle-foreground"
                 }
               />
+              {copyCount > 0 ? (
+                <span className="text-xs text-muted-foreground">{t("copyCount", { count: copyCount })}</span>
+              ) : null}
             </div>
             <p className="m-0 mt-1 text-xs leading-5 text-muted-foreground">
               {linkSharingEnabled

@@ -11,6 +11,7 @@ const href = "/nodes/one?view=immersive#chart";
 
 vi.mock("@tanstack/react-router", () => ({
   useLocation: () => ({ href: "/nodes/one?view=immersive#chart" }),
+  useNavigate: () => vi.fn(),
   Link: ({ to, search, children, ...props }: {
     to: string; search: Record<string, string | undefined>; children: ReactNode;
   }) => {
@@ -66,12 +67,12 @@ afterEach(() => {
 
 type NodeOwner = { displayName: string; kind: "human" } | { displayName: string; kind: "agent"; claimed: boolean };
 
-function renderLayout(authenticated = false, immersive = true, owner?: NodeOwner | null, accessRole = "viewer") {
+function renderLayout(authenticated = false, immersive = true, owner?: NodeOwner | null, accessRole = "viewer", copyCount = 0) {
   controls.clear();
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   clients.push(client);
   client.setQueryData(sessionQueryKey, { authenticated });
-  if (owner !== undefined) client.setQueryData(["nodes", "one"], { owner, node: { id: "one", accessRole, resource: { id: "r" } } });
+  if (owner !== undefined) client.setQueryData(["nodes", "one"], { owner, copyCount, node: { id: "one", accessRole, resource: { id: "r" } } });
   return renderToStaticMarkup(createElement(QueryClientProvider, { client },
     createElement(LanguageProvider, null,
       createElement(WorkspaceLayout, { immersive, ...(owner === undefined ? {} : { selectedNodeId: "one" }) },
@@ -92,6 +93,7 @@ describe("share page header", () => {
     expect(bar).toContain('href="https://space.univer.ai" target="_blank" rel="noopener noreferrer">space.univer.ai');
     expect(bar).toMatch(/<button[^>]*>.*Report<\/button>/);
     expect(bar).toMatch(/<button[^>]*>.*Hand to my agent<\/span><\/button>/);
+    expect(bar).toMatch(/<button[^>]*>.*Remix<\/span><\/button>/);
     expect(bar).toContain('title="By Budget bot"');
     expect(bar).toContain('Made with Univer Workspace<span class="sr-only"> (opens in a new tab)</span>');
     expect(bar).toContain('space.univer.ai<span class="sr-only"> (opens in a new tab)</span>');
@@ -99,6 +101,23 @@ describe("share page header", () => {
     expect(bar.includes('aria-label="Collapse sign-up bar"')).toBe(immersive);
     expect(bar.includes('role="status"')).toBe(immersive);
     expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<main"));
+  });
+
+  it("offers no Remix for a folder", () => {
+    const client = new QueryClient();
+    clients.push(client);
+    client.setQueryData(sessionQueryKey, { authenticated: false });
+    client.setQueryData(["nodes", "one"], { owner: null, copyCount: 0, node: { id: "one", accessRole: "viewer", resource: null } });
+    const html = renderToStaticMarkup(createElement(QueryClientProvider, { client },
+      createElement(LanguageProvider, null, createElement(WorkspaceLayout, { immersive: false, selectedNodeId: "one" }))));
+    expect(html).toContain("Report");
+    expect(html).not.toContain("Remix");
+  });
+
+  it("counts the copies of the file once there is one", () => {
+    expect(renderLayout(false, false, unverifiedAgent)).not.toMatch(/\d cop(y|ies)</);
+    expect(renderLayout(false, false, unverifiedAgent, "viewer", 1)).toContain(">1 copy<");
+    expect(renderLayout(true, false, unverifiedAgent, "viewer", 12)).toContain(">12 copies<");
   });
 
   it("marks only an unclaimed agent as unverified", () => {
@@ -125,6 +144,7 @@ describe("share page header", () => {
     expect(html).toContain(">Unverified agent<");
     expect(html).toMatch(/<button[^>]*>.*Report<\/button>/);
     expect(html).toContain("Hand to my agent");
+    expect(html).toMatch(/<button[^>]*>.*Remix<\/span><\/button>/);
     expect(html).not.toContain("Sign up");
     expect(html).not.toContain("Sign in");
     expect(html).not.toContain('role="status"');

@@ -204,6 +204,28 @@ reconcile current content. The Operation records completion for lost-response
 recovery; interrupted replacements fail and their unpublished bytes are queued
 for deletion. There is no Blob Worktree or version-history surface.
 
+## Copying a file
+
+`POST /api/nodes/{nodeId}/copies` turns a Sheet, Doc, Slide or Blob file the requester can open into
+a file of their own. The copy lands at the root of the requester's Personal Space, or as a new file in
+a draft pull request the requester can add files to. A Blob file cannot go into a pull request. A
+source the requester cannot read answers `404`, the same as `GET /api/nodes/{nodeId}`.
+
+The copy has its own content and its own embedded images, so it stays readable after the owner stops
+sharing the source. It does not take over the source's permissions, sharing settings, comments or
+history. A copied HTML View is a copy of the page only: it stays bound to the Sheets the source page
+names and shows their data only while its reader can open them. `GET /api/nodes/{nodeId}` returns the
+source as `copiedFromNodeId` to the copy's owner and editors. Every other reader, anonymous included,
+gets `null`, because a link-shared source's Node ID is its access link. It also returns how many files
+were copied from this one as `copyCount`. A copy made in a pull request gets its source, and counts as a
+copy, when the pull request merges. `copiedFromNodeId` becomes `null` when the source is
+permanently deleted, and the reader may be unable to open the source.
+
+The request requires `Idempotency-Key` and follows the rules above. It returns `201` with the new
+Node, or with the new pull request Unit, and `202` while the copy is still running. A copy that
+cannot finish removes what it created and ends as a failed Operation. It cannot be retried through
+`POST /api/operations/{operationId}/retry`. Copy again with a new key.
+
 ## Trash batches
 
 One recursive trash action creates one Trash Batch. Nodes already in Trash

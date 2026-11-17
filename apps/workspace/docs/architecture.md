@@ -74,6 +74,7 @@ apps/workspace/
 │       │   ├── exchange/
 │       │   ├── univer-assets/
 │       │   ├── operations/
+│       │   ├── copies/
 │       │   ├── trash/
 │       │   ├── permissions/
 │       │   ├── worktrees/
@@ -268,6 +269,13 @@ Cookie、OAuth callback 和产品 API 保持原有行为；外部 client 只通�
 跨产品数据库和 Collaboration Service 的写入由 `operations` Module 持久化和恢复，不用
 一次 SQLite transaction 假装覆盖两个系统。
 
+`copies` Module 拥有文件复制：一个 `copy_node` Operation 依次复制对象、创建 Unit、发布产品行，并由
+`jobs/operation-recovery.ts` 续跑。它通过 `UnitSnapshotStore.materialize` 按固定 Revision 读取来源，通过
+`UnitStore` 或 `WorktreeBackend` 创建 Unit，不直接调用 SDK。内容中的 Unit ID 与 Asset ID 替换集中在
+`modules/copies/unit-id-remap.ts`：它只替换整串等于来源 ID 的值和键，包括 `resources[].data` 中 JSON 文本里的值和键；
+只包含来源 ID 的较长文本保持原样。Sheet、Doc 与 Slide 的图片和附件引用都是这样的整串值。整格文本恰好等于来源 ID 时也会被替换，
+这一局限和删除条件写在该文件的注释中。
+
 Collaboration、Worktree、导出与对比共用的 Unit runtime 使用 SDK 1.1.0 的 `worker` 执行模式：changeset
 应用与快照物化在 worker 线程池中执行，不占用 HTTP/WebSocket 事件循环。线程池在首次使用时为每个 worker
 启动一套 SDK（约一秒），因此 `UnitSnapshotMaterializer` 由 `createCollaborationRuntime` 按需创建一次、
@@ -312,11 +320,13 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 服务端入口将 `config.database` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务、封禁 Agent 与授予执行层的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
 
-`db/sqlite/schema.sql` 定义完整 V23 结构，`db/sqlite/initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V23；V23 校验指纹；V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
+`db/sqlite/schema.sql` 定义完整 V24 结构，`db/sqlite/initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V24；V24 校验指纹；V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 V23 新增 `executor_access` 表，记录运维授予共享 MCP 执行层的 User。
+V24 给 `nodes` 与 `worktree_node_intents` 追加 `copied_from_node_id`，给 `node_link_sharing` 追加 `unverified_role` 与 `making_of_note`，新增 `nodes_copied_from` 部分索引，并重建 `operations` 使 `kind` CHECK 接受 `copy_node`。
+PostgreSQL 的 `db/postgres/initialize.ts` 在同一事务内把指纹相符的版本 3 升级到版本 4，结构与全新安装一致。
 V21 给 `users` 追加 `kind` 列，并新增 `agents` 与 `node_reports` 两张表。V22 不改结构，只改写含邮箱地址、误导字符或没有可见字符的显示名，以及仍为默认名的 Personal Space。
 V19 新增 `html_view_drafts` 及到期索引；发布在产品事务中接管草稿 BlobStore key，拒绝、过期和冲突复用对象删除任务。
 V18 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens` 四张表，并在 `login_sessions` 末尾追加
@@ -345,7 +355,7 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V23 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V24 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 
@@ -421,9 +431,13 @@ Pins 保存在产品库 V16 的 `space_pins`，不进入协同库。其资格校
 Node 与 Space 页面复用现有查询、目录与只读编辑器，未登录时使用轻量访客布局，不加载工作台
 导航、Space 列表或 Worktree 事件连接。登录入口保留当前 URL（含沉浸视图参数）。
 访客布局在每个 Node 页面渲染 `VisitorBar`：作者（`GET /api/nodes/{nodeId}` 的 `owner`）、未认领 agent 的
-未验证标记、品牌链接、“交给我的 Agent”和举报。沉浸视图隐藏顶栏，注册、登录和复制链接因此也放进这一栏，并可折叠。
+未验证标记、副本数（`copyCount`）、品牌链接、Remix、“交给我的 Agent”和举报。所有者在 `ShareDialog` 的链接访问状态旁看到同一个副本数。沉浸视图隐藏顶栏，注册、登录和复制链接因此也放进这一栏，并可折叠。
 已登录用户读到别人 Personal Space 里的文件时，`WorkspaceLayout` 在 mode Shell 的内容上方渲染同一个 `VisitorBar`，不含注册、登录和复制链接。
 “交给我的 Agent”在浏览器内复制 `handToAgentPrompt` 生成的固定英文提示词，只填入当前 origin 和 Node ID，不调用服务端。
+未登录访客的 Remix 对话框用同一模板的复制任务：CLI 设置相同，复制步骤为 `uvw unit create --from`，随后合并 PR 并输出认领链接。
+Remix 与“保存我的版本”都调用 `features/nodes/copy.ts` 的 `copyToPersonalSpace`：页面先解析全部绑定 Sheet 的 Node，
+任一不可读则不创建任何内容；再复制页面和 Sheet，并以 `If-Match` 改写页面副本的绑定。正在进行的复制吸收后续点击，
+一次意图只用一个幂等键。注册前请求的复制存放在 sessionStorage，键随注册返回 URL 的 `copy` 参数带回，只有匹配的返回会执行，15 分钟后失效。
 身份仍由 Session API 判断；SDK 的访客显示身份不赋予任何权限。服务端在明确开放的读取入口
 传入匿名身份，统一由 Access Resolver 根据链接分享和 Space 公开可读判定 viewer 权限。
 HTML 与引用来源继续分别鉴权，无专用匿名授权规则。

@@ -347,12 +347,15 @@ uvw pr create -R <owner>/<slug> -t <task-name> --json
 
 uvw unit create \
   --worktree <new-worktree-id> --space <owner>/<slug> \
-  --type sheet --name <file-name> [--parent <node-id>] [--idempotency-key <key>] --json
+  --type sheet --name <file-name> [--parent <node-id>] [--from <share-link>] \
+  [--idempotency-key <key>] --json
 ```
 
-Use `unit create` for an empty Unit. Use `compile-markdown --apply` for a generated Modern Doc
-without creating a placeholder; load the Doc Skill first. Use `import --file` when an office file
-supplies the initial content. Do not add an unrelated Unit to an existing task Worktree.
+Use `unit create` for an empty Unit. Add `--from <share-link>` to start from a copy of a file you
+can open instead; `--type` must be its type, and the copy records that file as its source. Use
+`compile-markdown --apply` for a generated Modern Doc without creating a placeholder; load the Doc
+Skill first. Use `import --file` when an office file supplies the initial content. Do not add an
+unrelated Unit to an existing task Worktree.
 
 `unit create`, `import`, `compile-markdown --apply`, and `compile-typst --apply` allocate all three
 identities on the server.

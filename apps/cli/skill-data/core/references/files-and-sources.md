@@ -4,7 +4,7 @@ Shared Skills describe operations and parameters by meaning. This reference bind
 
 ## Office import and export
 
-`unit create` takes `--worktree`, `--space`, `--type`, and `--name`. `import --file` converts an existing Office file into an editable Worktree-local Unit. Both return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned Unit ID, never an imported internal ID. Blob upload preserves original bytes instead.
+`unit create` takes `--worktree`, `--space`, `--type`, and `--name`; add `--from <share-link>` to start from a copy of a file you can open, of the same type, that records it as its source. `import --file` converts an existing Office file into an editable Worktree-local Unit. Both return server-owned `unitId`, `resourceId`, and `nodeId`. Use the returned Unit ID, never an imported internal ID. Blob upload preserves original bytes instead.
 
 ```bash
 uvw unit create --worktree <worktree-id> --space <space-id> --type sheet --name <name> --json

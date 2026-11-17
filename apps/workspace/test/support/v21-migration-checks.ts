@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
+import { DROP_V24_SQL, withoutV24Columns } from "./v24-downgrade.js";
 
 const OWNERS = [
   { id: "google", username: "alice", stored: "alice@example.com", space: "alice@example.com 的个人空间", repaired: "alice", repairedSpace: "alice 的个人空间" },
@@ -44,6 +45,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
   const fixture = (filename: string, seeded: boolean) => {
     const db = new DatabaseSync(filename);
     db.exec(schema);
+    db.exec(DROP_V24_SQL);
     db.exec("DROP TABLE executor_access; PRAGMA user_version = 21");
     if (seeded) {
       const user = db.prepare("INSERT INTO users (id, username, display_name, created_at, updated_at, kind) VALUES (?, ?, ?, 1, 2, ?)");
@@ -64,7 +66,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
     }
     return db;
   };
-  const table = (db: DatabaseSync, name: string) => db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all().map((row) => ({ ...row }));
+  const table = (db: DatabaseSync, name: string) => withoutV24Columns(name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all().map((row) => ({ ...row })));
   const tables = (db: DatabaseSync) =>
     db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name <> 'executor_access' ORDER BY name").all()
       .map(({ name }) => [String(name), table(db, String(name))] as const);
@@ -90,7 +92,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
 
       const migrated = open(filename);
       const db = migrated.connection;
-      assert.equal(version(db), 23);
+      assert.equal(version(db), 24);
       assert.deepEqual(tables(db), repaired(before));
       assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
       assert.equal(db.prepare("PRAGMA integrity_check").get()?.integrity_check, "ok");
@@ -112,10 +114,11 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
       const rerun = join(root, `rerun-${seeded}.sqlite`);
       copyFileSync(filename, rerun);
       const reset = new DatabaseSync(rerun);
+      reset.exec(DROP_V24_SQL);
       reset.exec("DROP TABLE executor_access; PRAGMA user_version = 21");
       reset.close();
       const second = open(rerun);
-      assert.equal(version(second.connection), 23);
+      assert.equal(version(second.connection), 24);
       assert.deepEqual(tables(second.connection), after);
       second.close();
     }
@@ -125,7 +128,7 @@ export function verifyV21Migration(open: (filename: string) => SqliteDatabase): 
     broken.exec("PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)");
     const original = tables(broken);
     broken.close();
-    assert.throws(() => open(filename), /V21 to V23 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V21 to V24 migration failed.*rolled back.*backup/);
     for (const name of ["rollback.sqlite", readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v21-backup-"))!]) {
       const preserved = new DatabaseSync(join(root, name), { readOnly: true });
       assert.equal(version(preserved), 21);

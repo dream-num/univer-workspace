@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS nodes (
   trash_batch_id TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  copied_from_node_id TEXT REFERENCES nodes(id) ON DELETE SET NULL,
   FOREIGN KEY (space_id) REFERENCES spaces(id) ON DELETE CASCADE,
   FOREIGN KEY (parent_id) REFERENCES nodes(id) ON DELETE RESTRICT,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
@@ -128,6 +129,9 @@ CREATE INDEX IF NOT EXISTS nodes_parent
   ON nodes(space_id, parent_id, trash_batch_id, name, id);
 CREATE INDEX IF NOT EXISTS nodes_trash
   ON nodes(space_id, trash_batch_id, id);
+CREATE INDEX IF NOT EXISTS nodes_copied_from
+  ON nodes(copied_from_node_id)
+  WHERE copied_from_node_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS resources (
   id TEXT PRIMARY KEY,
@@ -171,6 +175,8 @@ CREATE TABLE IF NOT EXISTS node_link_sharing (
   updated_by TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  unverified_role TEXT NOT NULL DEFAULT 'viewer' CHECK (unverified_role IN ('editor', 'viewer')),
+  making_of_note TEXT,
   FOREIGN KEY (node_id) REFERENCES nodes(id) ON DELETE CASCADE,
   FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT,
   FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE RESTRICT
@@ -261,6 +267,7 @@ CREATE TABLE IF NOT EXISTS worktree_node_intents (
   discarded_at INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
+  copied_from_node_id TEXT,
   PRIMARY KEY (worktree_id, unit_id),
   CHECK (activated_at IS NULL OR discarded_at IS NULL),
   FOREIGN KEY (worktree_id, unit_id)
@@ -283,7 +290,8 @@ CREATE TABLE IF NOT EXISTS operations (
       'create_worktree_unit',
       'merge_worktree',
       'discard_worktree',
-      'activate_worktree_resource'
+      'activate_worktree_resource',
+      'copy_node'
     )
   ),
   actor_user_id TEXT NOT NULL,
@@ -756,7 +764,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 23;
+PRAGMA user_version = 24;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>

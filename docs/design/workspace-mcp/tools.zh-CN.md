@@ -100,7 +100,7 @@ toolset 只决定 `tools/list` 返回哪些工具。权限仍由 scope 和 Works
 | `space_find` | `space find` | `repo`、`query`、`resource_kind`、`unit_type` | 是 | 否 | `read` |
 | `unit_list` | `unit list` | `worktree` | 是 | 否 | `read` |
 | `unit_add` | `unit add` | `worktree`、`resource` | 否 | 否 | `write` |
-| `unit_create` | `unit create` | `worktree`、`space`、`type`、`name`、`parent`、`idempotency_key` | 否 | 否 | `write` |
+| `unit_create` | `unit create` | `worktree`、`space`、`type`、`name`、`parent`、`from`、`idempotency_key` | 否 | 否 | `write` |
 | `execute` | `execute` | `worktree`、`unit`、`code` | 否 | 否 | `write` |
 | `inspect` | `inspect` | `target`（workbook、worksheet、range、document、paragraph、presentation、slide、base、board、board-element）、`selectors`、`unit`、`worksheet`、`trunk` 或 `worktree`、`cursor` | 是 | 否 | `read` |
 | `outline` | `outline` | Sheet 专用。`unit` 与 `trunk: true` 或 `worktree` 二选一；可选 `at`、`from`、`depth`、`budget` | 是 | 否 | `read` |

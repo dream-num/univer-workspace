@@ -205,9 +205,11 @@ pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.
 
 节点开启链接分享，或所在空间开启公开读取后，持有节点链接的人即可查看内容。文件夹分享涵盖现有和将来的子项；公开空间可通过 URL 浏览。即使链接允许登录用户编辑，匿名访客和未被认领的 Agent 通过链接也只有查看权限，无法修改源内容、评论、上传、管理权限或访问 Worktree。HTML 文件与其绑定的来源 Sheet 分别鉴权。
 
-未登录访客在每个文件和文件夹页面的顶栏下方看到一条栏；在沉浸视图中，这条栏取代顶栏。栏中写明作者，即文件所在 Personal Space 的所有者，并把无人认领的 Agent 标为“未验证的 Agent”。“使用 Univer Workspace 制作”链接到 GitHub 仓库，较宽的屏幕上还显示 `space.univer.ai`。“举报”打开一个对话框，把原因发送到 `POST /api/nodes/{nodeId}/reports`。“交给我的 Agent”复制一段简短的英文提示词，交给读者自己的 Agent：内含文件链接、读取它的 `uvw` 访客命令，以及供已接入 MCP 且能看到 `read` 工具的 Agent 使用的本实例 MCP 地址。沉浸视图中的这条栏还提供注册、登录和复制链接，并且可以收起。已登录用户打开别人 Personal Space 里的文件时，在 Workspace 顶栏下方看到同一条栏，但不含注册、登录和复制链接。所有者和团队空间成员只看到 Workspace 顶栏。
+未登录访客在每个文件和文件夹页面的顶栏下方看到一条栏；在沉浸视图中，这条栏取代顶栏。栏中写明作者，即文件所在 Personal Space 的所有者，并把无人认领的 Agent 标为“未验证的 Agent”。文件被复制过后，这条栏显示副本数；所有者在“分享”对话框的链接访问状态旁看到同一个数字。“使用 Univer Workspace 制作”链接到 GitHub 仓库，较宽的屏幕上还显示 `space.univer.ai`。“举报”打开一个对话框，把原因发送到 `POST /api/nodes/{nodeId}/reports`。“交给我的 Agent”复制一段简短的英文提示词，交给读者自己的 Agent：内含文件链接、读取它的 `uvw` 访客命令，以及供已接入 MCP 且能看到 `read` 工具的 Agent 使用的本实例 MCP 地址。沉浸视图中的这条栏还提供注册、登录和复制链接，并且可以收起。已登录用户打开别人 Personal Space 里的文件时，在 Workspace 顶栏下方看到同一条栏，但不含注册、登录和复制链接。所有者和团队空间成员只看到 Workspace 顶栏。
 
-匿名访客和已登录的只读用户可以在 Workspace 浏览器内试算绑定了 Sheet 的 HTML 页面。首次编辑某个来源时，该来源断开协同连接，公式在访客浏览器中重新计算。试算结果只在本地生效，所有者后续的修改也暂时不会同步到这里。刷新后恢复实时数据。宿主会在首次编辑时显示试算提示，页面可通过 `window.univerWorkspace.getWriteMode(unitId)` 判断能否将修改标记为已保存。原生 Office 预览对这些用户始终只读。Workspace Agent 等其他宿主需显式启用 HTML 试算，否则会拒绝写入。
+栏中的“Remix”把文件复制到已登录读者的个人空间并打开副本。页面会连同它绑定的 Sheet 一起复制，页面副本改为绑定这些 Sheet 的副本；读者无法打开其中任一 Sheet 时，什么都不会复制。未登录访客有两种方式得到副本：注册，回来后自动复制；或者把一段简短的英文提示词交给自己的 Agent。这段提示词沿用“交给我的 Agent”的 `uvw` 访客设置，让 Agent 用 `uvw unit create --from` 把文件复制进一个 PR 并合并，再给访客一个认领链接，认领后副本归访客所有。Agent 无法复制页面，因此对页面只提供注册。注册前请求的复制在当前标签页中保留 15 分钟，且只有发起它的那次注册返回才会执行。
+
+匿名访客和已登录的只读用户可以在 Workspace 浏览器内试算绑定了 Sheet 的 HTML 页面。首次编辑某个来源时，该来源断开协同连接，公式在访客浏览器中重新计算。试算结果只在本地生效，所有者后续的修改也暂时不会同步到这里。刷新后恢复实时数据。宿主会在首次编辑时显示试算提示，页面可通过 `window.univerWorkspace.getWriteMode(unitId)` 判断能否将修改标记为已保存。在 `/nodes/<nodeId>` 上，试算提示提供“保存我的版本”：它像“Remix”一样复制页面及其绑定的 Sheet 并打开副本，未登录访客需先注册。试算改动不会带进副本。原生 Office 预览对这些用户始终只读。Workspace Agent 等其他宿主需显式启用 HTML 试算，否则会拒绝写入。
 
 生产部署中，允许匿名访问的 `/nodes/<nodeId>` 链接（含 `?view=immersive`）在聊天预览里会显示页面标题和简短描述。HTML 视图的标题省略 `.univer.html` 后缀。描述按 `Accept-Language` 返回中文或英文，缓存按该请求头区分，沿用应用页面的重新验证策略。配置 `PUBLIC_ORIGIN` 后才会生成绝对地址 `og:url`，并按节点类型（Sheet、Doc、Slide、HTML 视图、文件夹或其他文件）附上一张 1200x630 的预览图，卡片为大图样式。未配置时两者都省略，因为 Open Graph 要求图片使用绝对地址，而请求的 Host 不可信。私有、已删除或不存在的节点显示通用应用页面。预览图是 `web/public/link-preview` 下的静态文件，可用 `node scripts/render-link-preview-images.mjs` 重新生成，需要 Google Chrome 和 ImageMagick。Vite 开发服务器不生成此类预览。
 
@@ -263,3 +265,13 @@ V22→V23 只新增空的 `executor_access` 表；PostgreSQL 产品 schema 以�
 停止全部旧实例，启动一个 V23 实例，待备份、迁移和健康检查通过后再恢复服务。已有数据、对象键和未完成的恢复状态均会保留。
 迁移失败会回滚，成功后重启不会重复迁移或备份。如需回退，停止 V23 并恢复 V22 备份（PostgreSQL 恢复升级前的数据库备份）。旧实例遇到 V23 会拒绝启动。
 先升级 Workspace，再把 MCP 执行层设为 `workspace`：旧版 Workspace 不报告授权，执行层会在升级前拒绝所有人。
+
+### 复制来源与产品数据库 V24
+
+`POST /api/nodes/{nodeId}/copies` 把请求者能打开的 Sheet、Doc、Slide 或 Blob 文件复制成请求者自己的文件，放在其个人空间根级，或作为草稿 PR 中的新文件。副本拥有独立的内容和内嵌图片，`GET /api/nodes/{nodeId}` 只向副本的 owner 和编辑者通过 `copiedFromNodeId` 返回其来源，并通过 `copyCount` 返回从它复制出的文件数。请求中断的复制会在后台完成，无法完成的复制会清除已创建的内容。[HTTP 接口说明](contracts/http/concepts.md#copying-a-file)
+
+V23→V24 新增 `nodes.copied_from_node_id`、`worktree_node_intents.copied_from_node_id`、`node_link_sharing.unverified_role`（已有行读作 `viewer`）和 `node_link_sharing.making_of_note`，并重建 `operations` 表，使其 kind CHECK 接受 `copy_node`。
+停止全部旧实例，启动一个 V24 实例，待一致性备份、迁移和健康检查通过后再恢复服务。已有产品数据、对象键和未完成的恢复状态均会保留。
+迁移失败会回滚，成功后重启不会重复迁移或备份。如需回退，停止 V24 并恢复 V23 备份。V23 和 V24 不得同时写入同一 SQLite 文件。
+
+PostgreSQL 部署在启动时用一个事务把产品 schema 从版本 3 升级到版本 4。升级失败会回滚并停留在版本 3。服务端不备份 PostgreSQL，启动新版本前请先备份数据库并停止全部旧实例。

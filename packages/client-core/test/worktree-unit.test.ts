@@ -435,6 +435,47 @@ describe("Workspace Worktree Unit membership", () => {
     });
   });
 
+  it("copies a file into a Worktree with one key, and refuses a type the source does not have", async () => {
+    const requests: Request[] = [];
+    const sourceNode = (resource: unknown) => Response.json({ node: { id: "node-9", resource } });
+    const copied = { name: "Mine", source: "worktree", target: { parentNodeId: null, spaceId: "space-1" } };
+    let answers = [{ operation: { state: "pending" } }, { unit: rawUnit(copied) }] as Record<string, unknown>[];
+    const feature = units(async (input, init) => {
+      const request = new Request(input, init);
+      requests.push(request.clone());
+      if (request.method === "GET") return sourceNode({ kind: "univer", unitType: "sheet" });
+      return Response.json(answers.shift(), { status: 201 });
+    });
+    const input = { fromNodeId: "node-9", idempotencyKey: "copy-key", name: "Mine", spaceId: "space-1", worktreeId: "wt-1" } as const;
+
+    await expect(feature.create({ ...input, type: "sheet" })).resolves.toMatchObject({ name: "Mine", source: "worktree" });
+    const writes = requests.filter((request) => request.method === "POST");
+    expect(writes.map((request) => [new URL(request.url).pathname, request.headers.get("idempotency-key")])).toEqual([
+      ["/api/nodes/node-9/copies", "copy-key"],
+      ["/api/nodes/node-9/copies", "copy-key"],
+    ]);
+    await expect(writes[0]!.json()).resolves.toEqual({
+      name: "Mine",
+      target: { kind: "worktree", worktreeId: "wt-1", spaceId: "space-1", parentNodeId: null },
+    });
+
+    requests.length = 0;
+    await expect(feature.create({ ...input, type: "doc" })).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+    await expect(feature.create({ ...input, type: "sheet", initialData: {} })).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+    expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
+
+    answers = [{ operation: { state: "failed", error: { code: "LICENSE_INVALID", message: "Refused." } } }];
+    await expect(feature.create({ ...input, type: "sheet" })).rejects.toMatchObject({
+      code: "LICENSE_INVALID",
+      message: "Refused. Copy again with a new idempotency key.",
+    });
+    answers = Array.from({ length: 3 }, () => ({ operation: { state: "pending" } }));
+    await expect(feature.create({ ...input, type: "sheet" })).rejects.toMatchObject({
+      code: "workspace-result-unknown",
+      detail: { request: { fromNodeId: "node-9", idempotencyKey: "copy-key" } },
+    });
+  });
+
   it("generates one local Unit identity and reuses it across retries", async () => {
     const keys: (string | null)[] = [];
     const feature = units(async (_input, init) => {

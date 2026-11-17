@@ -180,3 +180,71 @@
           application/json:
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/nodes/{nodeId}/copies:
+  parameters:
+    - name: nodeId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Nodes]
+    operationId: copyNode
+    summary: Copy a file into a file of the caller's own.
+    description: |
+      Copies a Sheet, Doc, Slide or Blob file the caller can open, with its
+      embedded images. The copy lands at the root of the caller's Personal
+      Space, or as a new file in a draft pull request the caller can add files
+      to. It starts a history of its own and records its source, which
+      `getNode` returns as `copiedFromNodeId`. Comments, history, grants and
+      Link Sharing are not copied. A folder returns 400. A source the caller
+      cannot open returns the same 404 as reading it. For an unclaimed agent
+      the copied images of one file count together against the stored-file
+      size ceiling.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/nodes.yaml#/CopyNode
+    responses:
+      "201":
+        description: Copy created during the initial attempt.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/CopyNodeResponse
+      "200":
+        description: Existing completed result for the Idempotency Key.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/nodes.yaml#/CopyNodeResponse
+      "202":
+        description: The copy remains pending, or failed and removed what it had created.
+        headers:
+          Location:
+            required: true
+            schema:
+              type: string
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/operations.yaml#/OperationEnvelope
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: Insufficient permission on the target, a ceiling, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session copies a .univer.html page.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict
