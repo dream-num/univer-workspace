@@ -21,6 +21,15 @@ uvw inspect presentation --unit ${link} --trunk
 With MCP, you can instead connect to ${origin}/mcp and call \`read\` (\`inspect\` for a Doc or Slide) with the link as \`unit\` and \`trunk: true\`. If it has no \`read\` tool, use the CLI.`;
 }
 
+export async function copyHandToAgentPrompt(nodeId: string, t: ReturnType<typeof useI18n>["t"]): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(handToAgentPrompt(window.location.origin, nodeId));
+    toast.success(t("handToAgentCopied"));
+  } catch {
+    toast.error(t("handToAgentCopyFailed"));
+  }
+}
+
 export function HandToAgentButton({ nodeId }: { readonly nodeId: string }) {
   const { t } = useI18n();
   return (
@@ -28,14 +37,7 @@ export function HandToAgentButton({ nodeId }: { readonly nodeId: string }) {
       variant="ghost"
       size="sm"
       className="max-sm:px-2"
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(handToAgentPrompt(window.location.origin, nodeId));
-          toast.success(t("handToAgentCopied"));
-        } catch {
-          toast.error(t("handToAgentCopyFailed"));
-        }
-      }}
+      onClick={() => copyHandToAgentPrompt(nodeId, t)}
     >
       <Bot aria-hidden="true" />
       <span className="max-sm:sr-only">{t("handToMyAgent")}</span>

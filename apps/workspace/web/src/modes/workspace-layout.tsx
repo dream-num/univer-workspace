@@ -23,13 +23,13 @@ export function WorkspaceLayout(props: WorkspaceLayoutProps) {
   const node = useQuery({ ...nodeQueryOptions(props.selectedNodeId ?? ""), enabled: props.selectedNodeId !== undefined });
   if (session.isPending) return <LoadingScreen />;
   if (session.error) throw session.error;
-  if (!session.data?.authenticated) return <VisitorLayout {...props} owner={node.data?.owner} />;
+  if (!session.data?.authenticated) return <VisitorLayout {...props} node={node.data} />;
   const detail = node.data;
   return (
     <Shell key={mode} {...props}>
       {/* A Personal Space has no members, so anyone there but its owner is an outside reader. */}
       {detail?.node.resource && detail.owner && detail.node.accessRole !== "owner" ? (
-        <VisitorBar offerSignUp={false} nodeId={detail.node.id} owner={detail.owner} />
+        <VisitorBar offerSignUp={false} nodeId={detail.node.id} owner={detail.owner} copyCount={detail.copyCount} copyable />
       ) : null}
       {props.children}
     </Shell>
@@ -43,8 +43,8 @@ function VisitorLayout({
   headerActions,
   immersive = false,
   selectedNodeId,
-  owner,
-}: WorkspaceLayoutProps & { readonly owner: components["schemas"]["NodeOwner"] | null | undefined }) {
+  node,
+}: WorkspaceLayoutProps & { readonly node: components["schemas"]["NodeResponse"] | undefined }) {
   const { t } = useI18n();
   const location = useLocation();
   return (
@@ -79,7 +79,13 @@ function VisitorLayout({
       </header>
       {immersive || selectedNodeId ? (
         // The immersive view hides this header, so the bar carries sign-up there.
-        <VisitorBar offerSignUp={immersive} nodeId={selectedNodeId} owner={owner} />
+        <VisitorBar
+          offerSignUp={immersive}
+          nodeId={selectedNodeId}
+          owner={node?.owner}
+          copyCount={node?.copyCount}
+          copyable={Boolean(node?.node.resource)}
+        />
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
     </div>

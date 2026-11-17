@@ -4,6 +4,7 @@ import { ChevronDown, ChevronUp, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { components } from "../../../generated/http/schema.js";
 import { HandToAgentButton } from "../features/nodes/hand-to-agent";
+import { RemixButton } from "../features/nodes/remix";
 import { ReportNodeButton } from "../features/nodes/report-node-button";
 import { useI18n } from "../shared/i18n";
 import { Badge, Button, buttonVariants } from "../shared/ui";
@@ -20,10 +21,15 @@ export function VisitorBar({
   offerSignUp,
   nodeId,
   owner,
+  copyCount = 0,
+  copyable = false,
 }: {
   readonly offerSignUp: boolean;
   readonly nodeId: string | undefined;
   readonly owner: NodeOwner | null | undefined;
+  readonly copyCount?: number | undefined;
+  /** A file, as opposed to a folder, which cannot be copied. */
+  readonly copyable?: boolean;
 }) {
   const { t } = useI18n();
   const location = useLocation();
@@ -81,6 +87,7 @@ export function VisitorBar({
                 ) : null}
               </>
             ) : null}
+            {copyCount > 0 ? <span className="whitespace-nowrap">{t("copyCount", { count: copyCount })}</span> : null}
             <a className={externalLinkClass} href={BRAND_URL} target="_blank" rel="noopener noreferrer">
               {t("madeWithWorkspace")}
               <span className="sr-only">{t("opensInNewTab")}</span>
@@ -95,6 +102,7 @@ export function VisitorBar({
           <div className="col-start-2 row-start-1 flex items-center gap-1">
             {nodeId ? (
               <>
+                {copyable ? <RemixButton nodeId={nodeId} /> : null}
                 <HandToAgentButton nodeId={nodeId} />
                 <ReportNodeButton nodeId={nodeId} />
               </>

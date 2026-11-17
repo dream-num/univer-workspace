@@ -15,6 +15,7 @@ import { anonymousUser, sessionQueryOptions } from "../features/auth";
 import { resourceOpenQueryOptions } from "../features/resources";
 import { mySpacesQueryOptions } from "../features/spaces";
 import { WorkspaceLayout } from "./-workspace-layout";
+import { SaveMyVersionButton, useFinishPendingCopy } from "../features/nodes/remix";
 import { ResourceEditor } from "../features/editor";
 import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
@@ -72,6 +73,7 @@ function NodePage() {
     enabled: resourceId !== undefined,
   });
   const session = useQuery(sessionQueryOptions);
+  useFinishPendingCopy(nodeId, session.data?.authenticated === true);
   const mode = useModeDefinition();
   const { pages } = mode;
   const [folderSearch, setFolderSearch] = useState({ mode, value: "" });
@@ -143,7 +145,12 @@ function NodePage() {
       {resource ? (
         <section key={resource.id} className="flex h-full min-h-0 min-w-0 flex-1 flex-col bg-background">
           {resource.kind === "blob" ? (
-            <BlobPreview resource={resource} immersive={view === "immersive"} actionsContainer={htmlActionsContainer} />
+            <BlobPreview
+              resource={resource}
+              immersive={view === "immersive"}
+              actionsContainer={htmlActionsContainer}
+              trialAction={<SaveMyVersionButton nodeId={node.id} />}
+            />
           ) : (
             <ResourceEditor
               unitId={resource.unitId}

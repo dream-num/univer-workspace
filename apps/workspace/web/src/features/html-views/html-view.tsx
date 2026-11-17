@@ -1,6 +1,6 @@
 import { ScanSearch } from "lucide-react";
 import { createPortal } from "react-dom";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useBlocker } from "@tanstack/react-router";
 import { CollaborationStatus } from "@univerjs-pro/collaboration-client";
 import type { HtmlViewWriteMode } from "@univerjs/univer-workspace-html-viewer/engine";
@@ -28,12 +28,14 @@ export function HtmlView({
   actionsContainer,
   draft = false,
   onSourceLoaded,
+  trialAction,
 }: {
   source: string;
   immersive: boolean;
   actionsContainer: HTMLElement | null;
   draft?: boolean;
   onSourceLoaded?: (unitId: string) => void;
+  trialAction?: ReactNode;
   allowedOrigins?: readonly string[];
   mediaSources?: readonly string[];
 }) {
@@ -145,9 +147,12 @@ export function HtmlView({
           />
         ) : null}
       </div>
-      {trial && <p role="status" className="m-0 shrink-0 border-t border-border bg-amber-50 px-4 py-2 text-sm text-amber-950">
-        {t("htmlViewTrialNotice")}
-      </p>}
+      {trial && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1 border-t border-border bg-amber-50 px-4 py-2 text-sm text-amber-950">
+          <p role="status" className="m-0 min-w-0 flex-1">{t("htmlViewTrialNotice")}</p>
+          {trialAction}
+        </div>
+      )}
       {!draft && native.preview}
     </div>
   );
@@ -158,11 +163,13 @@ export function HtmlViewFile({
   immersive,
   actionsContainer,
   draft = false,
+  trialAction,
 }: {
   resource: { contentUrl: string; byteSize: number };
   immersive: boolean;
   actionsContainer: HTMLElement | null;
   draft?: boolean;
+  trialAction?: ReactNode;
 }) {
   const [source, setSource] = useState<string | null>(null);
   const [error, setError] = useState("");
@@ -198,6 +205,7 @@ export function HtmlViewFile({
       immersive={immersive}
       actionsContainer={actionsContainer}
       draft={draft}
+      trialAction={trialAction}
     />
   );
 }
