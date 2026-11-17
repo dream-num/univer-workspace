@@ -297,7 +297,7 @@ Client Core 不读取 CLI 的配置和环境变量。`UVW_REPO` 由 CLI 读取�
 | `uvw pr create -R -t <title> [-b\|-F] [--visibility private\|space] [--idempotency-key <key>]` | `worktree create` | Team 仓库创建 Team Worktree，`owner/personal` 创建 User Worktree；新建状态总是 draft；保留原有的 `--idempotency-key`，便于 Agent 安全重试 |
 | `uvw pr edit <n> [-R] [-t] [-b\|-F] [--visibility]` | `worktree update` | |
 | `uvw pr ready <n> [-R] [--undo]` | `worktree ready` / `worktree reopen` | `--undo` 把 Ready 退回 Draft，对应现有的 reopen 接口 |
-| `uvw pr merge <n> [-R]` | `worktree merge` | 没有 `--squash` 等选项，也不提示确认；是否允许 merge 由 Skills 约束 Agent |
+| `uvw pr merge <n> [-R] [--revision <revision>]` | `worktree merge` | 没有 `--squash` 等选项，也不提示确认；是否允许 merge 由 Skills 约束 Agent；合并别人创建的 Pull request 必须带 `pr view` 显示的 `--revision` |
 | `uvw pr discard <n> [-R]` | `worktree discard` | 不可逆 |
 | `uvw search issues [-a @me] [-A] [-s] [-l] [-S] [-L] [--json]` | `issue list`（不带 `--space`） | 跨仓库查询；对应 gh `search issues`，使用现有的 `GET /api/issues` |
 | `uvw search prs [-A @me] [-s] [-S] [-L] [--json]` | `worktree list`（不带 `--space`） | 跨仓库列出可审阅的 Worktree；对应 gh `search prs`，使用现有的 `GET /api/worktrees`（不带 `teamSpaceId`）。`pr list` 必须有仓库上下文，原来跨仓库列出的能力由这个命令承接 |

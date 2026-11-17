@@ -867,7 +867,7 @@ Panel 继续通过 `reviewActionFeedback` 区分成功、待处理和合并未�
 | --- | --- | --- | --- | --- |
 | 标记 / 撤销移除 | POST /api/worktrees/{worktreeId}/units/{unitId}/removal | removed: true / false | 无 | 原页面 |
 | 提交审核 | POST /api/worktrees/{worktreeId}/ready | 无 | 无 | 原页面 |
-| 合并 | POST /api/worktrees/{worktreeId}/merge | 无 | 每次调用生成 | 原页面 |
+| 合并 | POST /api/worktrees/{worktreeId}/merge | 别人创建的 Pull request 为打开时的 `revision`，自己的无 | 每次调用生成 | 原页面 |
 | 丢弃 | POST /api/worktrees/{worktreeId}/discard | 无 | 每次调用生成 | 原页面 |
 
 `test/browser/pull-requests.smoke.mjs` 增加 method/path/body、幂等键和操作后位置的断言；
