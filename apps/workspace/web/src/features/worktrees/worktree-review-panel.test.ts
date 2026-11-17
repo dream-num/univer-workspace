@@ -14,11 +14,14 @@ const state = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
+  session: undefined as unknown,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
+  queryOptions: (options: unknown) => options,
   useQueries: () => [],
-  useQuery: () => ({}),
+  useQuery: (options: { queryKey: readonly unknown[] }) =>
+    options.queryKey[0] === "session" ? { data: state.session } : {},
   useQueryClient: () => ({ invalidateQueries: state.invalidate }),
   useMutation: (config: {
     mutationFn: (value: unknown) => Promise<unknown>;
@@ -79,7 +82,7 @@ vi.mock("../../shared/ui", () => {
 
 type Worktree = ComponentProps<typeof WorktreeReviewPanel>["worktree"];
 
-function worktree(reopen: boolean, overrides: Partial<Worktree> = {}): Worktree {
+function worktree(reopen: boolean): Worktree {
   return {
     id: "worktree-1",
     number: 1,
@@ -107,7 +110,6 @@ function worktree(reopen: boolean, overrides: Partial<Worktree> = {}): Worktree 
       merge: false,
       discard: false,
     },
-    ...overrides,
   };
 }
 
@@ -120,6 +122,7 @@ beforeEach(() => {
   state.pending = false;
   state.clicks.clear();
   state.confirms.clear();
+  state.session = undefined;
   vi.clearAllMocks();
   state.post.mockResolvedValue({ data: { worktree: { state: "draft" } } });
   state.invalidate.mockResolvedValue(undefined);
@@ -184,6 +187,20 @@ describe("Worktree merge of the reviewed revision", () => {
       "/api/worktrees/{worktreeId}/merge",
       expect.objectContaining({ body: { revision: "r2" } }),
     ));
+    await act(async () => root.unmount());
+  });
+
+  it("lets the creator merge its own edited pull request without a notice or a revision", async () => {
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    state.session = { authenticated: true, user: { id: "user-1" } };
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(WorktreeReviewPanel, { worktree: mergeable("r1") })));
+    await act(async () => root.render(createElement(WorktreeReviewPanel, { worktree: mergeable("r2") })));
+    expect(container.textContent).not.toContain("taskChangedSinceReviewDescription");
+    state.confirms.get("mergeConfirm")!();
+    await vi.waitFor(() => expect(state.post).toHaveBeenCalledTimes(1));
+    expect(state.post.mock.calls[0]![1]).not.toHaveProperty("body");
     await act(async () => root.unmount());
   });
 

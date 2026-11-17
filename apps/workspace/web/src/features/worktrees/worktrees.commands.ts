@@ -22,7 +22,8 @@ export function useToggleUnitRemoval(worktreeId: string) {
   });
 }
 
-export function useWorktreeLifecycle(worktreeId: string, reviewedRevision: string) {
+/** `reviewedRevision` is sent with a merge; leave it out for the creator's own pull request. */
+export function useWorktreeLifecycle(worktreeId: string, reviewedRevision: string | undefined) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: async (value: ReviewAction) => {
@@ -43,7 +44,7 @@ export function useWorktreeLifecycle(worktreeId: string, reviewedRevision: strin
                       "Idempotency-Key": createIdempotencyKey(),
                     },
                   },
-                  body: { revision: reviewedRevision },
+                  ...(reviewedRevision === undefined ? {} : { body: { revision: reviewedRevision } }),
                 })
               : await api.POST("/api/worktrees/{worktreeId}/discard", {
                   params: {

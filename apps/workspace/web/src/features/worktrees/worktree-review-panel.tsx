@@ -34,6 +34,7 @@ import {
 } from "../../shared/ui";
 import { useTheme } from "../../shared/theme";
 import { cn } from "../../shared/utils/cn";
+import { sessionQueryOptions } from "../auth/auth.queries";
 import type { MergeReviewStatus } from "../editor/merge-review";
 import { createComparisonUniver } from "../editor/comparison-univer";
 import {
@@ -99,10 +100,13 @@ export function WorktreeReviewPanel({
     : selectedView;
   const showReviewViewControl = worktree.capabilities.review && selectedUnit !== undefined;
 
+  const session = useQuery(sessionQueryOptions).data;
+  // The server checks no revision from the creator, so the creator's own edits need no second look.
+  const ownPullRequest = session?.authenticated === true && session.user.id === worktree.creator.id;
   const [reviewedRevision, setReviewedRevision] = useState(worktree.revision);
-  const changedSinceReview = worktree.revision !== reviewedRevision;
+  const changedSinceReview = !ownPullRequest && worktree.revision !== reviewedRevision;
   const removal = useToggleUnitRemoval(worktree.id);
-  const action = useWorktreeLifecycle(worktree.id, reviewedRevision);
+  const action = useWorktreeLifecycle(worktree.id, ownPullRequest ? undefined : reviewedRevision);
   const onError = (error: Error) => toast.error(error.message);
   const runAction = (value: ReviewAction) =>
     action.mutate(value, {
@@ -170,7 +174,7 @@ export function WorktreeReviewPanel({
             </Button>
           </span>
         </Tooltip>
-      ) : worktree.capabilities.merge ? (
+      ) : (
         <ConfirmDialog
           title={t("mergeConfirm")}
           description={t("mergeDescription")}
@@ -184,7 +188,7 @@ export function WorktreeReviewPanel({
             </Button>
           }
         />
-      ) : null}
+      )}
       {worktree.capabilities.discard ? (
         <ConfirmDialog
           title={t("discardChangesConfirm")}
