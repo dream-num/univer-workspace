@@ -7,15 +7,15 @@ import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
 
 const tags = (text: string) => [...text].map((letter) => String.fromCodePoint(0xE0000 + letter.codePointAt(0)!)).join("");
 
-const MISSED_BY_EARLIER_RULE = [
-  ["annotation", "Al\uFFF9i\uFFFAc\uFFFBe", "Alice"],
-  ["egyptian", "Ra\u{13430}m\u{13439}s\u{1343F}es", "Ramses"],
-  ["tags", `\u{1F3F4}${tags("hello")}\u{E007F}`, "\u{1F3F4}"],
-  ["flag-extra", `\u{1F3F4}${tags("gbengx")}\u{E007F} Eng`, "\u{1F3F4} Eng"],
-  ["dot-leader", "alice@example\u2024com", "alice"],
-  ["small-stop", "alice\uFF20example\uFE52com", "alice"],
+const REWRITTEN = [
+  ["r1", "Al\uFFF9i\uFFFAc\uFFFBe", "Alice"],
+  ["r2", "Ra\u{13430}m\u{13439}s\u{1343F}es", "Ramses"],
+  ["r3", `\u{1F3F4}${tags("hello")}\u{E007F}`, "\u{1F3F4}"],
+  ["r4", `\u{1F3F4}${tags("gbengx")}\u{E007F} Eng`, "\u{1F3F4} Eng"],
+  ["r5", "alice@example\u2024com", "alice"],
+  ["r6", "alice\uFF20example\uFE52com", "alice"],
 ] as const;
-const LEGITIMATE = [
+const KEPT = [
   "\u{1F468}\u200D\u{1F469}\u200D\u{1F467}\u200D\u{1F466} Smith",
   `A \u{1F3F4}${tags("gbeng")}\u{E007F} B`,
   "\u0646\u0627\u0645\u0647\u200C\u0627\u06CC",
@@ -36,11 +36,11 @@ export function verifyV24Migration(open: (filename: string) => SqliteDatabase): 
     if (seeded) {
       const user = db.prepare("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES (?, ?, ?, 1, 2)");
       const space = db.prepare("INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES (?, 'personal', ?, ?, 3, 4)");
-      for (const [id, stored] of MISSED_BY_EARLIER_RULE) {
+      for (const [id, stored] of REWRITTEN) {
         user.run(id, id, stored);
         space.run(`space-${id}`, `${stored} 的个人空间`, id);
       }
-      LEGITIMATE.forEach((name, index) => {
+      KEPT.forEach((name, index) => {
         user.run(`kept-${index}`, `kept${index}`, name);
         space.run(`space-kept-${index}`, `${name} 的个人空间`, `kept-${index}`);
       });
@@ -48,14 +48,14 @@ export function verifyV24Migration(open: (filename: string) => SqliteDatabase): 
         INSERT INTO users (id, username, display_name, created_at, updated_at, kind) VALUES ('agent', 'claude-code-ab12', 'Claude Code \u00B7 ab12', 1, 2, 'agent');
         INSERT INTO agents (user_id, origin_label, created_at, last_active_at, expires_at) VALUES ('agent', 'bot@example\u2024com', 1, 1, 9);
         INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('space-agent', 'personal', 'Claude Code \u00B7 ab12 的个人空间', 'agent', 3, 4);
-        UPDATE spaces SET name = 'Annotated drafts' WHERE id = 'space-annotation';
-        INSERT INTO spaces (id, type, name, owner_user_id, slug, created_at, updated_at) VALUES ('team', 'team', 'Al\uFFF9ice 的个人空间', 'egyptian', 'team', 5, 6);
-        INSERT INTO nodes (id, space_id, name, created_by, created_at, updated_at) VALUES ('n', 'space-egyptian', 'Budget', 'egyptian', 1, 1);
-        INSERT INTO node_link_sharing (node_id, enabled, role, created_by, updated_by, created_at, updated_at) VALUES ('n', 1, 'viewer', 'egyptian', 'egyptian', 1, 1);
-        INSERT INTO login_sessions (id, secret_hash, user_id, created_at, expires_at, write_source) VALUES ('session', 'hash', 'egyptian', 1, 999, 'browser');
-        INSERT INTO executor_access (user_id, granted_at) VALUES ('dot-leader', 5);
+        UPDATE spaces SET name = 'Annotated drafts' WHERE id = 'space-r1';
+        INSERT INTO spaces (id, type, name, owner_user_id, slug, created_at, updated_at) VALUES ('team', 'team', 'Al\uFFF9ice 的个人空间', 'r2', 'team', 5, 6);
+        INSERT INTO nodes (id, space_id, name, created_by, created_at, updated_at) VALUES ('n', 'space-r2', 'Budget', 'r2', 1, 1);
+        INSERT INTO node_link_sharing (node_id, enabled, role, created_by, updated_by, created_at, updated_at) VALUES ('n', 1, 'viewer', 'r2', 'r2', 1, 1);
+        INSERT INTO login_sessions (id, secret_hash, user_id, created_at, expires_at, write_source) VALUES ('session', 'hash', 'r2', 1, 999, 'browser');
+        INSERT INTO executor_access (user_id, granted_at) VALUES ('r5', 5);
         INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, created_at, updated_at)
-          VALUES ('op', 'create_resource', 'tags', 'reserve', 'pending', '{}', 2, 3, 1, 2);
+          VALUES ('op', 'create_resource', 'r3', 'reserve', 'pending', '{}', 2, 3, 1, 2);
       `);
     }
     return db;
@@ -66,9 +66,9 @@ export function verifyV24Migration(open: (filename: string) => SqliteDatabase): 
       .map(({ name }) => [String(name), table(db, String(name))] as const);
   const converged = (before: ReturnType<typeof tables>) =>
     before.map(([name, rows]) => [name, rows.map((row) => {
-      const user = name === "users" && MISSED_BY_EARLIER_RULE.find(([id]) => row.id === id);
+      const user = name === "users" && REWRITTEN.find(([id]) => row.id === id);
       if (user) return { ...row, display_name: user[2] };
-      const space = name === "spaces" && row.name !== "Annotated drafts" && MISSED_BY_EARLIER_RULE.find(([id]) => row.id === `space-${id}`);
+      const space = name === "spaces" && row.name !== "Annotated drafts" && REWRITTEN.find(([id]) => row.id === `space-${id}`);
       return space ? { ...row, name: `${space[2]} 的个人空间` } : row;
     })] as const);
   const version = (db: DatabaseSync) => db.prepare("PRAGMA user_version").get()?.user_version;

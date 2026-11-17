@@ -200,11 +200,11 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     await (await openProductDatabase(config)).close();
     const fresh = (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows;
     const owners = [
-      ["annotation", "Al\uFFF9i\uFFFAc\uFFFBe", "Alice"],
-      ["dot", "alice@example\u2024com", "alice"],
-      ["kept-damaged", "\u0D05\u0D35\u0D28\u0D4D", "\u0D05\u0D35\u0D28\u0D4D"],
-      ["kept-family", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} Smith", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} Smith"],
-      ["tags", "\u{1F3F4}\u{E0068}\u{E0069}\u{E007F}", "\u{1F3F4}"],
+      ["r1", "Al\uFFF9i\uFFFAc\uFFFBe", "Alice"],
+      ["r2", "alice@example\u2024com", "alice"],
+      ["r3", "\u0D05\u0D35\u0D28\u0D4D", "\u0D05\u0D35\u0D28\u0D4D"],
+      ["r4", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} Smith", "\u{1F468}\u200D\u{1F469}\u200D\u{1F467} Smith"],
+      ["r5", "\u{1F3F4}\u{E0068}\u{E0069}\u{E007F}", "\u{1F3F4}"],
     ] as const;
     for (const [id, name] of owners) {
       await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ($1, $1, $2, 1, 2)", [id, name]);
