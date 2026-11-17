@@ -159,4 +159,11 @@ describe("display-name rule", () => {
       if (derived) expect(isUnsafeDisplayName(derived)).toBe(false);
     }
   });
+
+  it("runs on the Unicode data the rule was reviewed against", () => {
+    expect(
+      process.versions.unicode,
+      "Character properties, emoji tag sequences, graphemes and NFD come from Node's ICU. Check what the rule now removes or keeps before raising this version.",
+    ).toBe("17.0");
+  });
 });
