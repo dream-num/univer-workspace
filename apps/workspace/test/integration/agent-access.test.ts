@@ -617,7 +617,7 @@ async function startPages(application: SqliteTestApplication): Promise<string> {
   directories.push(directory);
   writeFileSync(join(directory, "index.html"), "<!doctype html><html><head><title>Univer Workspace</title></head><body></body></html>");
   const app = express();
-  app.use(createStaticSiteRouter(directory, { nodes: application.nodes, identity: application.identity }));
+  app.use(createStaticSiteRouter(directory, { nodes: application.nodes, identity: application.identity, permissions: application.permissions }));
   return listen(createServer(app));
 }
 

@@ -4,11 +4,14 @@ import { isHtmlViewFilename } from "@univerjs-labs/html-view";
 import express, { type Router } from "express";
 import { ANONYMOUS_USER_ID, type IdentityModule } from "../modules/identity/index.js";
 import type { NodesModule, NodeSummary } from "../modules/nodes/index.js";
+import type { PermissionsModule } from "../modules/permissions/index.js";
 import { notFoundHandler } from "./errors.js";
+import { recordLoopEvent } from "./loop-metrics.js";
 
 export function createStaticSiteRouter(publicDirectory: string, options?: {
   readonly nodes: Pick<NodesModule, "get">;
-  readonly identity: Pick<IdentityModule, "recordAgentPageView">;
+  readonly identity: Pick<IdentityModule, "recordAgentPageView" | "getSession">;
+  readonly permissions: Pick<PermissionsModule, "nodeOwnerCategory">;
   readonly publicOrigin?: string | null | undefined;
 }): Router {
   const router = express.Router();
@@ -36,6 +39,10 @@ export function createStaticSiteRouter(publicDirectory: string, options?: {
     }
     // Only a page the anonymous reader got: an expired agent's page stays closed until the agent returns.
     await options.identity.recordAgentPageView(node.id);
+    recordLoopEvent("workspace.share_page", {
+      session: (await options.identity.getSession(request.headers.cookie)).authenticated ? "signed_in" : "signed_out",
+      owner_category: await options.permissions.nodeOwnerCategory(node.id),
+    }, { node_id: node.id, user_agent: request.get("user-agent") ?? null });
     const htmlView = node.resource?.kind === "blob" && isHtmlViewFilename(node.name);
     const name = htmlView ? node.name.slice(0, -".univer.html".length) : node.name;
     const title = escapeHtml(`${name} · Univer Workspace`);

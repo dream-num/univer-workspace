@@ -13,7 +13,8 @@ let directory: string;
 let server: Server;
 let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
-const identity = { recordAgentPageView: vi.fn() };
+const identity = { recordAgentPageView: vi.fn(), getSession: vi.fn().mockResolvedValue({ authenticated: false }) };
+const permissions = { nodeOwnerCategory: vi.fn().mockResolvedValue("human") };
 const getNode = vi.fn(async (userId: string, nodeId: string) => {
   if (["private", "missing", "deleted", "failure"].includes(nodeId)) {
     throw new Error("No metadata may escape this lookup");
@@ -46,8 +47,8 @@ beforeAll(async () => {
   writeFileSync(join(directory, "favicon.ico"), "icon");
 
   const app = express();
-  app.use("/without-origin", createStaticSiteRouter(directory, { nodes: { get: getNode }, identity }));
-  app.use(createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, publicOrigin: "https://workspace.example" }));
+  app.use("/without-origin", createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, permissions }));
+  app.use(createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, permissions, publicOrigin: "https://workspace.example" }));
   server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));
   });

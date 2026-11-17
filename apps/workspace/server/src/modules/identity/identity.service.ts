@@ -15,6 +15,7 @@ import {
   type ApplicationErrorCode,
 } from "../../middleware/errors.js";
 import { logger } from "../../logging/logger.js";
+import { recordSignup } from "../../middleware/loop-metrics.js";
 import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
 import type {
@@ -431,6 +432,7 @@ export function createIdentityModule(options: {
         }
         throw error;
       }
+      recordSignup("password", user.id, input.returnTo);
 
       return {
         cookieValue: issued.cookieValue,
@@ -586,6 +588,7 @@ export function createIdentityModule(options: {
           }
           throw error;
         }
+        recordSignup("email", user.id, input.returnTo);
         return {
           cookieValue: issued.cookieValue,
           view: await authenticatedSession(user),
@@ -715,6 +718,7 @@ export function createIdentityModule(options: {
         }
         throw error;
       }
+      recordSignup("discord_bot", user.id, undefined);
       return {
         cookieValue: token.cookieValue,
         view: await authenticatedSession(user),
@@ -1124,6 +1128,7 @@ export function createIdentityModule(options: {
       session: token.stored,
       createdAt,
     });
+    recordSignup(provider, user.id, oauth.returnTo);
     return {
       returnTo: oauth.returnTo,
       issuedSession: {

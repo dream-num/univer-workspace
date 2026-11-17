@@ -1,6 +1,8 @@
 import { ApplicationError } from "../../middleware/errors.js";
+import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import { conflict, notFound, requireManageMembers, requireShare, requireTeam } from "./permissions.policy.js";
 import { assertCeiling, type AccessResolver } from "../access/index.js";
+import { principalCategory, type PrincipalCategory } from "../identity/index.js";
 import type {
   PermissionsRepository,
   GrantRow,
@@ -64,6 +66,8 @@ export interface PermissionsModule {
     nodeId: string,
     input: unknown
   ): Promise<NodeLinkSharing>;
+  /** The category of the User who owns the Node's Space. */
+  nodeOwnerCategory(nodeId: string): Promise<Exclude<PrincipalCategory, "anonymous">>;
 }
 
 export function createPermissionsModule(options: {
@@ -160,6 +164,7 @@ export function createPermissionsModule(options: {
     async updateNodeLinkSharing(actorUserId, nodeId, input) {
       requireShare(await options.access.resolveNode(actorUserId, nodeId));
       const settings = validLinkSharing(input);
+      const wasEnabled = (await options.repository.findLinkSharing(nodeId))?.enabled === 1;
       const { row, owner, changed } = await options.repository.upsertLinkSharing({
         nodeId,
         ...settings,
@@ -167,7 +172,19 @@ export function createPermissionsModule(options: {
         now: now(),
       });
       if (changed) options.onLinkSharingUpdated?.(nodeId);
-      return { ...linkSharingView(row), ...ownerView(owner) };
+      const sharing = { ...linkSharingView(row), ...ownerView(owner) };
+      if (sharing.enabled !== wasEnabled) {
+        recordLoopEvent(
+          "workspace.link_sharing",
+          { state: sharing.enabled ? "on" : "off", role: sharing.role, owner_category: principalCategory(sharing.owner) },
+          { node_id: nodeId, user_id: actorUserId }
+        );
+      }
+      return sharing;
+    },
+
+    async nodeOwnerCategory(nodeId) {
+      return principalCategory(ownerView(await options.repository.findNodeOwner(nodeId)).owner);
     },
   };
 }

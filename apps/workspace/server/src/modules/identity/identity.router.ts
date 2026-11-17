@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
-import { json, Router, type Response } from "express";
+import { json, Router, type Request, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
+import { recordLoopEvent } from "../../middleware/loop-metrics.js";
 import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js";
 import type { IdentityModule } from "./identity.service.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
@@ -28,6 +29,7 @@ export function createIdentityRouter(options: {
       username: request.body?.username,
       displayName: request.body?.displayName,
       password: request.body?.password,
+      returnTo: loginReturnTo(request),
     });
     setSessionCookie(response, identity, issued.cookieValue, options);
     response.status(201).json(issued.view);
@@ -64,6 +66,7 @@ export function createIdentityRouter(options: {
     const issued = await identity.loginWithEmailCode({
       email: request.body?.email,
       code: request.body?.code,
+      returnTo: loginReturnTo(request),
     });
     setSessionCookie(response, identity, issued.cookieValue, options);
     response.json(issued.view);
@@ -79,6 +82,7 @@ export function createIdentityRouter(options: {
       userId: user.id,
       name: "agent",
     });
+    recordLoopEvent("workspace.guest_agent", { entry: "api_agents" }, { user_id: user.id });
     response.status(201).json({
       agent: { id: user.id, username: user.username },
       token,
@@ -103,6 +107,7 @@ export function createIdentityRouter(options: {
     });
     const issued = await identity.issueSession(user, "browser");
     setSessionCookie(response, identity, issued.cookieValue, options);
+    recordLoopEvent("workspace.guest_agent", { entry: "auth_guest" }, { user_id: user.id });
     response.status(201).json({ agent: { id: user.id, username: user.username } });
   });
 
@@ -460,6 +465,11 @@ function logOAuthFailure(
   error: unknown
 ): void {
   console.error(`[identity] ${provider} OAuth callback failed`, error);
+}
+
+// The browser signs up from /login?returnTo=…, and a same-origin request's Referer keeps that query.
+function loginReturnTo(request: Request): string | undefined {
+  return URL.parse(request.get("referer") ?? "")?.searchParams.get("returnTo") ?? undefined;
 }
 
 function agentLabel(value: unknown): string | undefined {
