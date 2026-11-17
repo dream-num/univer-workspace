@@ -8,15 +8,17 @@ export function handToAgentPrompt(origin: string, nodeId: string): string {
   const link = resourceShareUrl(origin, nodeId, "standard");
   return `Read this Univer Workspace file, then do what I ask: ${link}
 
-With MCP: connect to ${origin}/mcp, then call \`read\` with the link as \`unit\`, \`trunk: true\` and a range such as A1:J50.
-
-Without MCP, use the CLI:
+Use the uvw CLI:
 npm install --global univer-workspace-cli@latest
 uvw config set workspace.origin ${origin}
 uvw auth guest
 uvw read A1:J50 --unit ${link} --trunk
 
-For a Doc or Slide, use \`inspect\` instead of \`read\`.`;
+That reads a Sheet. For a Doc or a Slide, run one of these instead:
+uvw inspect document --unit ${link} --trunk
+uvw inspect presentation --unit ${link} --trunk
+
+With MCP, you can instead connect to ${origin}/mcp and call \`read\` (\`inspect\` for a Doc or Slide) with the link as \`unit\` and \`trunk: true\`. If it has no \`read\` tool, use the CLI.`;
 }
 
 export function HandToAgentButton({ nodeId }: { readonly nodeId: string }) {

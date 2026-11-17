@@ -13,12 +13,19 @@ const origin = "https://space.univer.ai";
 describe("handToAgentPrompt", () => {
   const prompt = handToAgentPrompt(origin, "sheet-node-1");
 
-  it("fills in the share link, the MCP URL and the CLI fallback for this instance", () => {
-    expect(prompt).toContain("Read this Univer Workspace file, then do what I ask: https://space.univer.ai/nodes/sheet-node-1\n");
-    expect(prompt).toContain("connect to https://space.univer.ai/mcp, then call `read` with the link as `unit`, `trunk: true`");
-    expect(prompt).toContain("npm install --global univer-workspace-cli@latest\nuvw config set workspace.origin https://space.univer.ai\nuvw auth guest\n");
-    expect(prompt).toContain("uvw read A1:J50 --unit https://space.univer.ai/nodes/sheet-node-1 --trunk");
-    expect(prompt.length).toBeLessThan(600);
+  it("leads with the complete CLI path for this instance, then offers MCP", () => {
+    const link = "https://space.univer.ai/nodes/sheet-node-1";
+    const commands = prompt.split("\n").filter((line) => /^(npm|uvw) /.test(line));
+    expect(commands).toEqual([
+      "npm install --global univer-workspace-cli@latest",
+      `uvw config set workspace.origin ${origin}`,
+      "uvw auth guest",
+      `uvw read A1:J50 --unit ${link} --trunk`,
+      `uvw inspect document --unit ${link} --trunk`,
+      `uvw inspect presentation --unit ${link} --trunk`,
+    ]);
+    expect(prompt.indexOf(commands.at(-1)!)).toBeLessThan(prompt.indexOf(`${origin}/mcp`));
+    expect(prompt).toContain("no `read` tool, use the CLI");
   });
 
   it("varies only by the file's link, so nothing from the file reaches the agent", () => {
