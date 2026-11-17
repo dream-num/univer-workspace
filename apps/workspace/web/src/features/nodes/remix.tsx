@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { Bot, CopyPlus } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Button, buttonVariants, Dialog, toast } from "../../shared/ui";
@@ -10,26 +10,31 @@ import { sessionQueryOptions } from "../auth";
 import { copyToPersonalSpace } from "./copy";
 import { copyHandToAgentPrompt, handToAgentPrompt } from "./hand-to-agent";
 import { invalidateProductLists } from "./nodes.commands";
+import { nodeQueryOptions } from "./nodes.queries";
 
 // Tab storage, not the return URL, so a link someone sends cannot make a copy in the reader's space.
 const PENDING_COPY = "univer-workspace-pending-copy";
+const PENDING_COPY_TTL_MS = 15 * 60 * 1000;
+const AGENT_COPYABLE_TYPES: readonly string[] = ["sheet", "doc", "slide"];
 
 type PendingCopy = { readonly nodeId: string; readonly key: string; readonly done: MessageKey };
 
 function rememberCopy(pending: PendingCopy) {
   try {
-    window.sessionStorage.setItem(PENDING_COPY, JSON.stringify(pending));
+    window.sessionStorage.setItem(PENDING_COPY, JSON.stringify({ ...pending, expiresAt: Date.now() + PENDING_COPY_TTL_MS }));
   } catch {
     // Without tab storage the reader signs up and asks for the copy again.
   }
 }
 
-function takePendingCopy(nodeId: string): PendingCopy | undefined {
+/** Only the sign-up return that carries the copy's key takes it, and only before it expires. */
+function takePendingCopy(nodeId: string, returnKey: string): PendingCopy | undefined {
   try {
     const value = window.sessionStorage.getItem(PENDING_COPY);
+    const pending = value ? (JSON.parse(value) as PendingCopy & { readonly expiresAt: number }) : undefined;
+    if (pending?.key !== returnKey) return undefined;
     window.sessionStorage.removeItem(PENDING_COPY);
-    const pending = value ? (JSON.parse(value) as PendingCopy) : undefined;
-    return pending?.nodeId === nodeId ? pending : undefined;
+    return pending.nodeId === nodeId && pending.expiresAt > Date.now() ? pending : undefined;
   } catch {
     return undefined;
   }
@@ -39,25 +44,42 @@ function useCopyAndOpen() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const client = useQueryClient();
-  return useMutation({
+  // Clicks that land before the button re-renders as disabled belong to the copy already running.
+  const running = useRef(false);
+  const mutation = useMutation({
     mutationFn: (pending: PendingCopy) =>
-      copyToPersonalSpace(pending.nodeId, pending.key, { failed: t("remixFailed"), continuing: t("remixContinuing") }),
+      copyToPersonalSpace(pending.nodeId, pending.key, {
+        failed: t("remixFailed"),
+        continuing: t("remixContinuing"),
+        sheetUnreadable: t("remixSheetUnreadable"),
+      }),
     onSuccess: async (copyId, pending) => {
       await invalidateProductLists(client, { htmlViews: true });
       toast.success(t(pending.done));
       await navigate({ to: "/nodes/$nodeId", params: { nodeId: copyId } });
     },
     onError: (error) => toast.error(error.message),
+    onSettled: () => {
+      running.current = false;
+    },
   });
+  return {
+    isPending: mutation.isPending,
+    start(pending: PendingCopy) {
+      if (running.current) return;
+      running.current = true;
+      mutation.mutate(pending);
+    },
+  };
 }
 
-export function useFinishPendingCopy(nodeId: string, signedIn: boolean) {
+export function useFinishPendingCopy(nodeId: string, signedIn: boolean, returnKey: string | undefined) {
   const copy = useCopyAndOpen();
   useEffect(() => {
-    if (!signedIn) return;
-    const pending = takePendingCopy(nodeId);
-    if (pending) copy.mutate(pending);
-  }, [nodeId, signedIn]);
+    if (!signedIn || !returnKey) return;
+    const pending = takePendingCopy(nodeId, returnKey);
+    if (pending) copy.start(pending);
+  }, [nodeId, signedIn, returnKey]);
 }
 
 function SignUpThenCopy({ nodeId, done, className, children }: {
@@ -67,12 +89,15 @@ function SignUpThenCopy({ nodeId, done, className, children }: {
   readonly children: string;
 }) {
   const location = useLocation();
+  const [key] = useState(createIdempotencyKey);
+  const returnTo = new URL(location.href, window.location.origin);
+  returnTo.searchParams.set("copy", key);
   return (
     <Link
       to="/login"
-      search={{ mode: "register", oauthError: undefined, returnTo: location.href }}
+      search={{ mode: "register", oauthError: undefined, returnTo: `${returnTo.pathname}${returnTo.search}${returnTo.hash}` }}
       className={cn(className, "no-underline")}
-      onClick={() => rememberCopy({ nodeId, key: createIdempotencyKey(), done })}
+      onClick={() => rememberCopy({ nodeId, key, done })}
     >
       {children}
     </Link>
@@ -82,6 +107,8 @@ function SignUpThenCopy({ nodeId, done, className, children }: {
 export function RemixButton({ nodeId }: { readonly nodeId: string }) {
   const { t } = useI18n();
   const session = useQuery(sessionQueryOptions);
+  const resource = useQuery(nodeQueryOptions(nodeId)).data?.node.resource;
+  const agentCopies = resource?.kind === "univer" && AGENT_COPYABLE_TYPES.includes(resource.unitType);
   const copy = useCopyAndOpen();
   const [guiding, setGuiding] = useState(false);
   return (
@@ -93,7 +120,7 @@ export function RemixButton({ nodeId }: { readonly nodeId: string }) {
         disabled={!session.data || copy.isPending}
         onClick={() =>
           session.data?.authenticated
-            ? copy.mutate({ nodeId, key: createIdempotencyKey(), done: "remixDone" })
+            ? copy.start({ nodeId, key: createIdempotencyKey(), done: "remixDone" })
             : setGuiding(true)
         }
       >
@@ -105,22 +132,24 @@ export function RemixButton({ nodeId }: { readonly nodeId: string }) {
         onOpenChange={setGuiding}
         width="sm"
         title={t("remixTitle")}
-        description={t("remixSignedOutDescription")}
+        description={t(agentCopies ? "remixSignedOutDescription" : "remixSignedOutSignUpDescription")}
         footer={
           <>
-            <SignUpThenCopy nodeId={nodeId} done="remixDone" className={buttonVariants({ variant: "secondary" })}>
+            <SignUpThenCopy nodeId={nodeId} done="remixDone" className={buttonVariants({ variant: agentCopies ? "secondary" : "primary" })}>
               {t("signUpFree")}
             </SignUpThenCopy>
-            <Button onClick={() => copyHandToAgentPrompt(nodeId, t)}>
-              <Bot aria-hidden="true" />
-              {t("handToMyAgent")}
-            </Button>
+            {agentCopies ? (
+              <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "copy")}>
+                <Bot aria-hidden="true" />
+                {t("handToMyAgent")}
+              </Button>
+            ) : null}
           </>
         }
       >
-        {guiding ? (
+        {guiding && agentCopies ? (
           <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs">
-            {handToAgentPrompt(window.location.origin, nodeId)}
+            {handToAgentPrompt(window.location.origin, nodeId, "copy")}
           </pre>
         ) : null}
       </Dialog>
@@ -143,7 +172,7 @@ export function SaveMyVersionButton({ nodeId }: { readonly nodeId: string }) {
     <Button
       size="sm"
       disabled={copy.isPending}
-      onClick={() => copy.mutate({ nodeId, key: createIdempotencyKey(), done: "saveMyVersionDone" })}
+      onClick={() => copy.start({ nodeId, key: createIdempotencyKey(), done: "saveMyVersionDone" })}
     >
       {t(copy.isPending ? "remixCopying" : "saveMyVersion")}
     </Button>

@@ -29,9 +29,29 @@ describe("handToAgentPrompt", () => {
   });
 
   it("varies only by the file's link, so nothing from the file reaches the agent", () => {
-    expect(handToAgentPrompt(origin, "doc-node-2")).toBe(prompt.replaceAll("sheet-node-1", "doc-node-2"));
-    expect(handToAgentPrompt("https://workspace.example", "sheet-node-1"))
-      .toBe(prompt.replaceAll(origin, "https://workspace.example"));
+    for (const task of ["read", "copy"] as const) {
+      const shown = handToAgentPrompt(origin, "sheet-node-1", task);
+      expect(handToAgentPrompt(origin, "doc-node-2", task)).toBe(shown.replaceAll("sheet-node-1", "doc-node-2"));
+      expect(handToAgentPrompt("https://workspace.example", "sheet-node-1", task))
+        .toBe(shown.replaceAll(origin, "https://workspace.example"));
+    }
+  });
+
+  it("asks for a copy with the same CLI setup, copying through unit create --from", () => {
+    const link = "https://space.univer.ai/nodes/sheet-node-1";
+    const copy = handToAgentPrompt(origin, "sheet-node-1", "copy");
+    expect(copy.split("\n").filter((line) => /^(npm|uvw) /.test(line))).toEqual([
+      "npm install --global univer-workspace-cli@latest",
+      `uvw config set workspace.origin ${origin}`,
+      "uvw auth guest",
+      'uvw pr create -R <repo> -t "My copy" --json',
+      `uvw unit create --worktree <id> --space <repo> --type sheet --name "My copy" --from ${link} --json`,
+      "uvw pr ready <id> --json",
+      "uvw pr merge <id> --json",
+      "uvw claim",
+    ]);
+    expect(copy.indexOf("uvw claim")).toBeLessThan(copy.indexOf(`${origin}/mcp`));
+    expect(copy).toContain("`unit_create` with the link as `from`");
   });
 });
 

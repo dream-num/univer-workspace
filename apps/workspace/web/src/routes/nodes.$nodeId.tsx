@@ -21,9 +21,10 @@ import { BlobPreview } from "../features/blobs";
 import { api } from "../shared/api/client";
 import { parseResourceView } from "../features/resource-view/resource-view";
 export const Route = createFileRoute("/nodes/$nodeId")({
-  validateSearch: (search: Readonly<Record<string, unknown>>): { unit?: string; view?: "immersive" | undefined } => ({
+  validateSearch: (search: Readonly<Record<string, unknown>>): { unit?: string; view?: "immersive" | undefined; copy?: string } => ({
     ...(parseResourceView(search.view) ? { view: "immersive" as const } : {}),
     ...(typeof search.unit === "string" && search.unit ? { unit: search.unit } : {}),
+    ...(typeof search.copy === "string" && search.copy ? { copy: search.copy } : {}),
   }),
   loaderDeps: ({ search }) => ({ unit: search.unit }),
   loader: async ({ context, deps, params, location }) => {
@@ -65,7 +66,7 @@ export const Route = createFileRoute("/nodes/$nodeId")({
 
 function NodePage() {
   const { nodeId } = Route.useParams();
-  const { view } = Route.useSearch();
+  const { view, copy } = Route.useSearch();
   const query = useQuery(nodeQueryOptions(nodeId));
   const resourceId = query.data?.node.resource?.id;
   const resourceQuery = useQuery({
@@ -73,7 +74,7 @@ function NodePage() {
     enabled: resourceId !== undefined,
   });
   const session = useQuery(sessionQueryOptions);
-  useFinishPendingCopy(nodeId, session.data?.authenticated === true);
+  useFinishPendingCopy(nodeId, session.data?.authenticated === true, copy);
   const mode = useModeDefinition();
   const { pages } = mode;
   const [folderSearch, setFolderSearch] = useState({ mode, value: "" });
