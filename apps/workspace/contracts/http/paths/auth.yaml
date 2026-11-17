@@ -487,6 +487,25 @@
               $ref: ../schemas/common.yaml#/ErrorResponse
 
 /api/agents:
+  get:
+    tags: [Authentication]
+    operationId: listClaimedAgents
+    summary: List the agents the current human claimed.
+    description: |
+      Needs a human's browser login session; an agent or a session issued by
+      token exchange or a CLI login gets 403. Agents come oldest claim first.
+      All responses have Cache-Control: no-store.
+    responses:
+      "200":
+        description: The claimed agents.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/ClaimedAgents
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
   post:
     tags: [Authentication]
     operationId: createAgent
@@ -524,6 +543,137 @@
         $ref: ../schemas/common.yaml#/BadRequest
       "429":
         description: AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/agents/claim-codes:
+  post:
+    tags: [Authentication]
+    operationId: createAgentClaimCode
+    summary: Create a link that lets a human claim the current agent.
+    description: |
+      Needs the login session of an unclaimed agent, from any credential. The
+      code lives in this server process for ten minutes and claims the agent
+      once; a restart invalidates it. An agent holds at most ten live codes, and
+      an eleventh replaces its oldest. All responses have Cache-Control:
+      no-store.
+    responses:
+      "201":
+        description: The claim code and the page that uses it.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AgentClaimCode
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        description: FORBIDDEN. The current User is a human.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "409":
+        $ref: ../schemas/identity.yaml#/AgentAlreadyClaimed
+      "503":
+        description: AGENT_CLAIM_UNAVAILABLE. The server holds too many pending codes.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+
+/api/agents/claim:
+  get:
+    tags: [Authentication]
+    operationId: inspectAgentClaim
+    summary: Show the agent a claim code names, before the current human claims it.
+    description: |
+      Needs a human's browser login session, like POST, and fails the same way
+      for a code that cannot claim. All responses have Cache-Control: no-store.
+    parameters:
+      - name: code
+        in: query
+        required: true
+        schema:
+          type: string
+    responses:
+      "200":
+        description: The agent, and whether the current human already owns it.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AgentClaimPreview
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/identity.yaml#/AgentClaimInvalid
+      "409":
+        $ref: ../schemas/identity.yaml#/AgentAlreadyClaimed
+      "410":
+        $ref: ../schemas/identity.yaml#/AgentClaimExpired
+  post:
+    tags: [Authentication]
+    operationId: claimAgent
+    summary: Make the current human the owner of the agent a claim code names.
+    description: |
+      Needs a human's browser login session. An agent, or a session issued by
+      token exchange or a CLI login, gets 403. The agent gets an owner and a
+      claim time and stops expiring. The owner holds the owner role in the
+      agent's Personal Space; the agent gains no access to the owner's
+      content. Claiming again as the same owner returns the agent unchanged.
+      All responses have Cache-Control: no-store.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/identity.yaml#/AgentClaim
+    responses:
+      "200":
+        description: The claimed agent.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/identity.yaml#/AgentClaimed
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/identity.yaml#/AgentClaimInvalid
+      "409":
+        $ref: ../schemas/identity.yaml#/AgentAlreadyClaimed
+      "410":
+        $ref: ../schemas/identity.yaml#/AgentClaimExpired
+
+/api/agents/{agentId}/stop:
+  post:
+    tags: [Authentication]
+    operationId: stopClaimedAgent
+    summary: Stop an agent the current human claimed.
+    description: |
+      Needs a human's browser login session. Bans the agent: its sessions and
+      tokens stop working, and its Personal Space, shared links included,
+      gives a role to nobody but its owners. Its files stay. There is no undo.
+      Stopping a stopped agent succeeds again.
+    parameters:
+      - name: agentId
+        in: path
+        required: true
+        schema:
+          type: string
+    responses:
+      "204":
+        description: The agent is stopped.
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        description: The current human did not claim this agent.
         content:
           application/json:
             schema:

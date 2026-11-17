@@ -1,6 +1,6 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { worktreeQueryOptions } from "../../../features/worktrees/worktrees.queries";
-import { mySpacesQueryOptions } from "../../../features/spaces";
+import { mySpacesQueryOptions, spaceQueryOptions } from "../../../features/spaces";
 import { browserTimeZone } from "./days";
 import { buildHomeWork } from "./home-work";
 import { buildIssueFacets } from "./issue-facets";
@@ -22,12 +22,14 @@ export function useRepositoryActivity(space: Space): QueryView<RepositoryActivit
 }
 
 export function usePendingChanges(space: Space): QueryView<PendingChangeIndex> {
+  const view = useQuery(spaceQueryOptions(space.id));
   const plan = useQueries({
     queries: [openWorktreesQueryOptions(space)],
     combine: ([list]): QueryView<ReturnType<typeof pendingDetailPlan>> => {
       if (list.isError) return { status: "error", error: list.error };
-      if (!list.isSuccess) return { status: "pending" };
-      return { status: "success", data: pendingDetailPlan(space, list.data) };
+      if (view.isError) return { status: "error", error: view.error };
+      if (!list.isSuccess || !view.isSuccess) return { status: "pending" };
+      return { status: "success", data: pendingDetailPlan(view.data, list.data) };
     },
   });
   const details = useQueries({
@@ -65,7 +67,6 @@ export function usePendingChanges(space: Space): QueryView<PendingChangeIndex> {
 
 export function useHomeWork(): QueryView<HomeWork> {
   const spaces = useQuery(mySpacesQueryOptions);
-  const personalSpace = spaces.data?.spaces.find((space) => space.type === "personal" && space.accessRole === "owner");
   return useQueries({
     queries: homeQueries,
     combine: ([recent, pulls, issues]) => {
@@ -73,7 +74,7 @@ export function useHomeWork(): QueryView<HomeWork> {
       if (pulls.isError) return { status: "error", error: pulls.error };
       if (issues.isError) return { status: "error", error: issues.error };
       if (!recent.isSuccess || !pulls.isSuccess || !issues.isSuccess) return { status: "pending" };
-      return { status: "success", data: buildHomeWork(pulls.data, issues.data, recent.data.items, personalSpace) };
+      return { status: "success", data: buildHomeWork(pulls.data, issues.data, recent.data.items, spaces.data?.spaces) };
     },
   });
 }

@@ -149,6 +149,7 @@ export function createWorktreesModule(options: {
       const rows = await options.repository.listCandidates({
         userId, scope: "all", kind: scope.kind,
         teamSpaceId: scope.kind === "team" ? scope.teamSpaceId : null,
+        ...(scope.kind === "user" ? { creatorUserId: scope.creatorUserId } : {}),
         search: "", order: "createdAtDesc", cursor: null, limit: MAX_ACTIVITY_ROWS + 1, touchedSince: since,
       });
       const visible = rows.slice(0, MAX_ACTIVITY_ROWS).filter((row) => isDiscoverable(userId, row));
@@ -362,9 +363,9 @@ export function createWorktreesModule(options: {
       let worktreeId = await options.repository.findIdByNumber({ teamSpaceId: spaceId }, number);
       if (!worktreeId) {
         const space = await options.access.resolveSpace(userId, spaceId);
-        // A Personal Space lists its owner's own User Worktrees only.
-        if (space?.type === "personal" && space.ownerUserId === userId) {
-          worktreeId = await options.repository.findIdByNumber({ creatorUserId: userId }, number);
+        // A Personal Space lists the User Worktrees of the User whose Space it is, to its owners.
+        if (space?.type === "personal" && space.role === "owner") {
+          worktreeId = await options.repository.findIdByNumber({ creatorUserId: space.ownerUserId }, number);
         }
       }
       if (!worktreeId) throw notFound();
@@ -890,10 +891,9 @@ async function worktreeCapabilities(
       ? "owner"
       : row.actor_member_role;
   const visibleReview =
-    creator ||
-    (row.kind === "team" &&
-      row.visibility === "space" &&
-      teamRole !== null);
+    row.kind === "user"
+      ? Boolean(row.actor_owns_creator_space)
+      : creator || (row.visibility === "space" && teamRole !== null);
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
   // Share resource lookups only within this capability calculation for one actor.
   const capabilityAccess = cacheResourceContent(access, userId);
@@ -958,7 +958,7 @@ async function canReadUnit(
         .openContent
     );
   }
-  if (row.kind === "user") return row.creator_user_id === userId;
+  if (row.kind === "user") return Boolean(row.actor_owns_creator_space);
   return Boolean(
     unit.target_space_id &&
       (await access.resolveSpace(userId, unit.target_space_id))?.capabilities
@@ -1052,8 +1052,8 @@ async function validateTarget(
 }
 
 function isDiscoverable(userId: string, row: WorktreeRow): boolean {
+  if (row.kind === "user") return Boolean(row.actor_owns_creator_space);
   if (row.creator_user_id === userId) return true;
-  if (row.kind === "user") return false;
   const teamRole =
     row.team_owner_user_id === userId
       ? "owner"

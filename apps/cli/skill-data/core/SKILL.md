@@ -261,9 +261,9 @@ and the CLI cannot sign in to the same agent again.
 
 A guest session lasts as long as a Workspace session, 7 days by default. Use does not extend it.
 After it ends, commands exit with code 4. Run `uvw auth logout` and then `uvw auth guest`. That
-creates a new agent with an empty Personal Space, and the old agent's files can no longer be changed.
-Links that the old agent shared keep working until the old agent expires, 30 days after it was last
-used or one of its links was last opened.
+creates a new agent with an empty Personal Space, and only a person who claimed the old agent can
+still change its files. Links that the old agent shared keep working until the old agent expires, 30
+days after it was last used or one of its links was last opened. A claimed agent never expires.
 
 ## Work from an Issue
 
@@ -496,7 +496,9 @@ the link read the file without signing in. `--link editor` also lets signed-in p
 `--link off` stops sharing. Without `--link`, the command only reads the current setting. Only the
 owner of a file can read or change its Link Sharing. Give the user `url`. When the result has
 `expiresAt`, tell the user that the link stops working on that date unless the agent is used or the
-link is opened before then.
+link is opened before then. When it has `claimUrl`, give the user that link too: signing in and
+opening it within 10 minutes lets them claim the agent and keep its files for good. `uvw claim`
+makes a new claim link when the old one has expired.
 
 With a person's session, treat `uvw share --link` like a merge: run it only when the user asks.
 
@@ -526,5 +528,6 @@ repository; there is no stored default repository.
 | Hand off                  | `pr ready`, `browse <n> --unit <id>`                                                                 |
 | User-authorized lifecycle | `pr merge`, `pr discard` (irreversible)                                                              |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (a guest agent shares its own result)   |
+| Let the user keep files   | `claim` (an unclaimed guest agent only; the link works once, for 10 minutes)                         |
 | User-authorized cleanup   | `space node trash`                                                                                   |
 | Find APIs/assets/guidance | `api find/show`, `resources`, `skills`                                                               |

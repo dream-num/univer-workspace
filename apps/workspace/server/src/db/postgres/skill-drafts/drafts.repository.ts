@@ -161,7 +161,7 @@ export class PostgresSkillDraftsRepository implements SkillDraftsRepository {
       else {
         if (row.state !== "pending") throw draftConflict("Draft content is still receiving.");
         const target = await this.target(row.space_id, row.name);
-        assertSkillDestination(userId, await this.access.readSpaceAccess(userId, row.space_id));
+        assertSkillDestination(await this.access.readSpaceAccess(userId, row.space_id));
         if (target.folderNodeId) assertSkillFolder(await this.access.readNodeAccess(userId, target.folderNodeId));
         for (const current of target.files) {
           assertSkillFile(await this.access.readResourceAccess(userId, current.resourceId), current.nodeId);

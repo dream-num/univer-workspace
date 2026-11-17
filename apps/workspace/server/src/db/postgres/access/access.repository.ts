@@ -9,8 +9,21 @@ import type {
   AccessRepository,
 } from "../../../modules/access/access.repository.js";
 
+/** The human who claimed an agent owns the agent's Spaces too, but a claimed agent gains nothing of its human's. */
+export function ownsSpaceSql(ownerUserId: string, userId = "$userId"): string {
+  return `(${ownerUserId} = ${userId} OR EXISTS (
+    SELECT 1 FROM agents WHERE agents.user_id = ${ownerUserId} AND agents.owner_user_id = ${userId}
+  ))`;
+}
+
+export function spaceOwnerIdsSql(ownerIdsSql: string): string {
+  return `${ownerIdsSql}
+    UNION SELECT owner_user_id FROM agents WHERE owner_user_id IS NOT NULL AND user_id IN (${ownerIdsSql})`;
+}
+
 export const spaceAccessColumns = `
   spaces.id, spaces.type, spaces.name, spaces.owner_user_id AS "ownerUserId",
+  ${ownsSpaceSql("spaces.owner_user_id")} AS "owned",
   spaces.public_read AS "publicRead", space_members.role AS "memberRole"`;
 
 export const spaceMemberJoin = `
@@ -19,7 +32,7 @@ export const spaceMemberJoin = `
 
 /**
  * An agent that is banned or past its expiry is suspended: its Space gives a role to nobody but
- * itself. Suspension is derived on every read and never stored, so lifting it needs no repair.
+ * its owners. Suspension is derived on every read and never stored, so lifting it needs no repair.
  */
 function ownerSuspendedSql(ownerUserId: string): string {
   return `EXISTS (
@@ -30,7 +43,7 @@ function ownerSuspendedSql(ownerUserId: string): string {
 }
 
 export const visibleSpaceSql = `(
-  spaces.owner_user_id = $userId
+  ${ownsSpaceSql("spaces.owner_user_id")}
   OR (
     NOT ${ownerSuspendedSql("spaces.owner_user_id")}
     AND (
@@ -239,7 +252,7 @@ export class PostgresAccessRepository implements AccessRepository {
       .prepare(`
       SELECT ${nodeDisplayColumns()}
         space.type AS space_type, space.name AS space_name,
-        space.owner_user_id, space.public_read::integer AS public_read,
+        1 AS requester_owns, space.public_read::integer AS public_read,
         NULL AS member_role, NULL AS grant_role,
         NULL AS grant_navigation_root_id, NULL AS link_sharing_role,
         NULL AS navigation_root_id, NULL AS requester_kind, NULL AS requester_claimed
@@ -247,10 +260,10 @@ export class PostgresAccessRepository implements AccessRepository {
       JOIN spaces AS space ON space.id = node.space_id
       ${resourceJoins()}
       WHERE resource.id IN (${resourceIds.map(() => "?").join(", ")})
-        AND space.owner_user_id = ?
+        AND ${ownsSpaceSql("space.owner_user_id", "?")}
         AND node.trash_batch_id IS NULL
     `)
-      .all(...resourceIds, userId) as unknown as OwnedResourceRow[];
+      .all(...resourceIds, userId, userId) as unknown as OwnedResourceRow[];
   }
 }
 
@@ -310,7 +323,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
              ${contentOnly ? "" : nodeDisplayColumns()}
              space.type AS space_type,
              ${contentOnly ? "" : "space.name AS space_name,"}
-             space.owner_user_id,
+             ${ownsSpaceSql("space.owner_user_id")}::integer AS requester_owns,
              space.public_read::integer AS public_read,
              member.role AS member_role,
              (
@@ -380,7 +393,7 @@ function nodeAccessQuery(contentOnly: boolean): string {
            WHERE node.id = $nodeId
              AND node.trash_batch_id IS NULL
              AND (
-               space.owner_user_id = $userId
+               ${ownsSpaceSql("space.owner_user_id")}
                OR (
                  NOT ${ownerSuspendedSql("space.owner_user_id")}
                  AND (

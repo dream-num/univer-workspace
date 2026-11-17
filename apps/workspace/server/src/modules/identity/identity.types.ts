@@ -35,6 +35,22 @@ export interface CreatedAgent {
   readonly expiresAt: number;
 }
 
+export interface AgentClaimCode {
+  readonly code: string;
+  /** The claim page as a path on the Workspace origin. */
+  readonly claimUrl: string;
+  /** Seconds until the code stops working. */
+  readonly expiresIn: number;
+}
+
+export interface AgentView extends User {
+  readonly spaceId: string;
+  readonly files: number;
+  /** Unix epoch milliseconds, recorded at most once a day. */
+  readonly lastActiveAt: number;
+  readonly stopped: boolean;
+}
+
 export interface AuthenticationMethods {
   readonly password: boolean;
   readonly email: string | null;

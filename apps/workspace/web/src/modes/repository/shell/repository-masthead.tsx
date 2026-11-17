@@ -19,6 +19,7 @@ import { teamMembersQueryOptions } from "../../../features/permissions/permissio
 import { issueCountsQueryOptions } from "../../../features/issues/issues.queries";
 import { spaceQueryOptions } from "../../../features/spaces";
 import { spaceSupportsIssues } from "../../../features/spaces/space.rules";
+import { worktreeBelongsToSpace } from "../../../features/worktrees/worktree.rules";
 import { formatRelativeDate } from "../../../shared/format-relative-date";
 import { useI18n } from "../../../shared/i18n";
 import { toast } from "../../../shared/ui";
@@ -62,7 +63,7 @@ function Masthead({ space, tab }: { readonly space: Space; readonly tab: Reposit
     space.capabilities.manageMembers ||
     space.capabilities.viewTrash;
   const count = pulls.data
-    ? `${pulls.data.items.length}${pulls.data.nextCursor ? "+" : ""}`
+    ? `${pulls.data.items.filter((item) => worktreeBelongsToSpace(item, space)).length}${pulls.data.nextCursor ? "+" : ""}`
     : undefined;
   return (
     <section className="rd-masthead" aria-label={t("repository")}>

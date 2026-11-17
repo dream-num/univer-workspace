@@ -66,7 +66,7 @@ export async function listPullRequests(
     ...(space === undefined
       ? {}
       : space.type === "personal"
-        ? { scope: "user" as const }
+        ? { scope: "user" as const, creatorId: await deps.userId() }
         : { scope: "space" as const, spaceId: space.id }),
     ...pullRequestView(input.state),
     limit: input.limit,

@@ -570,8 +570,10 @@ describe("agent expiry", () => {
     application.database.connection
       .prepare("UPDATE agents SET owner_user_id = ?, claimed_at = 1, expires_at = NULL, last_active_at = 0 WHERE user_id = ?")
       .run(human.id, agent.id);
+    before = Date.now();
     await authenticate();
-    expect(lifecycle.get()).toEqual({ last_active_at: 0, expires_at: null });
+    expect(lifecycle.get()).toEqual({ last_active_at: expect.any(Number), expires_at: null });
+    expect(lifecycle.get().last_active_at).toBeGreaterThanOrEqual(before);
   });
 
   it("closes an expired agent's link to anonymous readers until the agent is active again", async () => {

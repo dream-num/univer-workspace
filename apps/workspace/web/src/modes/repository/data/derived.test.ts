@@ -191,13 +191,19 @@ describe("Repository Home and issue facets", () => {
   it("handles zero and issue-only totals, partial lists, personal identity and bounded cards", () => {
     expect(buildHomeWork(page([]), page([]), []).totals).toEqual({ pulls: 0, agentPulls: 0, issues: 0 });
     expect(buildHomeWork(page([]), page([issue()]), []).totals).toEqual({ pulls: 0, agentPulls: 0, issues: 1 });
-    const personal = { id: "personal", name: "Personal" };
+    const personal = { id: "personal", name: "Personal", type: "personal", owner: { id: user.id, username: user.username } } as const;
+    const agentSpace = { id: "agent-personal", name: "Agent", type: "personal", owner: { id: "agent", username: "agent" } } as const;
     const userPulls = page([pull({ kind: "user", teamSpace: null })]);
     expect(buildHomeWork(userPulls, page([]), []).complete).toBe(false);
-    const mapped = buildHomeWork(userPulls, page([]), [], personal);
+    const mapped = buildHomeWork(userPulls, page([]), [], [agentSpace, personal]);
     expect(mapped.pulls[0]?.pull.spaceId).toBe("personal");
     expect(mapped.openBySpace.get("personal")).toEqual({ pulls: 1, issues: 0 });
     expect(mapped.complete).toBe(true);
+    const agentPull = pull({ id: "agent-pull", kind: "user", teamSpace: null, creator: { ...user, id: "agent", username: "agent" } });
+    const claimed = buildHomeWork(page([agentPull]), page([]), [], [personal, agentSpace]);
+    expect(claimed.pulls[0]?.pull.spaceId).toBe("agent-personal");
+    expect(claimed.openBySpace.has("personal")).toBe(false);
+    expect(buildHomeWork(page([agentPull]), page([]), [], [personal]).complete).toBe(false);
     const result = buildHomeWork(page(Array.from({ length: 6 }, (_, i) => pull({ teamSpace: { ...space, id: String(i) } })), "more"), page(Array.from({ length: 6 }, () => issue())), [recent("view.univer.html", "blob"), recent("a"), recent("b"), recent("c"), recent("d")]);
     expect(result.pulls).toHaveLength(4);
     expect(result.issues).toHaveLength(4);

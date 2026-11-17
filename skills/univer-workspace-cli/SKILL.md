@@ -101,8 +101,8 @@ repository checkout, guessed installation paths, or a different CLI version's AP
 - Mark it `uvw pr ready` and hand off the verified result with its review URL (`uvw browse <n>`).
   Leave `pr merge` or `pr discard` (irreversible) to the user's decision unless the user has explicitly authorized that action.
 - A guest agent finishes the task itself, because the user cannot open its pull request. It merges
-  its own pull request, turns on Link Sharing with `uvw share`, and returns the file link, as the
-  installed core Skill describes.
+  its own pull request, turns on Link Sharing with `uvw share`, and returns the file link and the
+  claim link from the result, as the installed core Skill describes.
 - When the user gives a file link, read the file with `--unit <file-link> --trunk`.
 - Blob and Space organization writes are direct operations, outside Worktree review. Follow
   their operational guidance rather than implying a Worktree can undo them.

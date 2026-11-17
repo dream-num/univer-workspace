@@ -19,7 +19,7 @@ import {
 } from "../../../modules/identity/access-tokens.js";
 import { authenticateStoredPrincipal } from "../../../modules/identity/agent-activity.js";
 import { createSessionToken, hashSessionSecret, secretMatches } from "../../../modules/identity/session-token.js";
-import { findPrincipal, insertSession, touchUnclaimedAgent } from "./identity.repository.js";
+import { findPrincipal, insertSession, touchAgent } from "./identity.repository.js";
 
 type Row = Record<string, unknown>;
 
@@ -142,7 +142,7 @@ export class SqliteAccessTokenRepository implements AccessTokenRepository {
       const authenticated = authenticateStoredPrincipal(findPrincipal(db, subject.userId), at);
       if (!authenticated) return null;
       const { principal, activity } = authenticated;
-      if (activity) touchUnclaimedAgent(db, { userId: principal.id }, at, activity.staleBefore, activity.expiresAt);
+      if (activity) touchAgent(db, { userId: principal.id }, at, activity.staleBefore, activity.expiresAt);
       const expiresAt = Math.min(at + maxTtlMs, subject.expiresAt ?? Infinity);
       const ttlMs = expiresAt - at;
       if (ttlMs < 1000) return null;

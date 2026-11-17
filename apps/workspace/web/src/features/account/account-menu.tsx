@@ -1,9 +1,10 @@
-import { ChevronDown, KeyRound, Lock, LogOut, Settings, User } from "lucide-react";
+import { Bot, ChevronDown, KeyRound, Lock, LogOut, Settings, User } from "lucide-react";
 import { lazy, Suspense, useState, type ReactNode } from "react";
 import { loadAgentsUi } from "../agents";
 import { useI18n } from "../../shared/i18n";
 import { Avatar, MenuContent, MenuGroup, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "../../shared/ui";
 import type { components } from "../../../../generated/http/schema.js";
+import { ClaimedAgentsDialog } from "./claimed-agents-dialog";
 
 const AgentAccount = lazy(() => loadAgentsUi().then((ui) => ({ default: ui.AgentAccountDialog })));
 
@@ -18,6 +19,7 @@ export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTok
 }) {
   const { t } = useI18n();
   const [agentAction, setAgentAction] = useState<"settings" | "logout" | null>(null);
+  const [claimedAgentsOpen, setClaimedAgentsOpen] = useState(false);
   return (
     <MenuRoot>
       <MenuTrigger
@@ -61,6 +63,12 @@ export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTok
             <KeyRound />
             {t("accessTokens")}
           </MenuItem>
+          {currentSession.user.kind === "human" ? (
+            <MenuItem onClick={() => setClaimedAgentsOpen(true)}>
+              <Bot />
+              {t("myAgents")}
+            </MenuItem>
+          ) : null}
           <MenuItem onClick={() => setAgentAction("settings")}>
             <Settings />
             {t("modelSettings")}
@@ -77,6 +85,7 @@ export function AccountMenu({ currentSession, onProfile, onPassword, onAccessTok
           {t("signOut")}
         </MenuItem>
       </MenuContent>
+      <ClaimedAgentsDialog open={claimedAgentsOpen} onOpenChange={setClaimedAgentsOpen} />
       {agentAction ? (
         <Suspense fallback={null}>
           <AgentAccount action={agentAction} onClose={() => setAgentAction(null)} onLogout={onLogout} />

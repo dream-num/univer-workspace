@@ -62,6 +62,17 @@ The session User and the token exchange `user` carry `kind` (`human` or `agent`)
 An agent also carries `claimed`. A banned agent's login session returns
 `401 UNAUTHENTICATED`, and its token exchange returns `invalid_grant`.
 
+A human claims an agent to keep its files. The unclaimed agent calls
+`POST /api/agents/claim-codes` with any of its sessions and hands the returned
+`/claim/<code>` page to the human. The code lives in the server process for ten
+minutes and claims once. `GET /api/agents/claim?code=` shows the agent and
+`POST /api/agents/claim` claims it; both need a human's browser session. A used
+code answers `409 AGENT_ALREADY_CLAIMED` to anyone but its claimer, an old code
+`410 AGENT_CLAIM_EXPIRED`, an unknown one `404 AGENT_CLAIM_INVALID`. The claimer
+becomes an owner of the agent's Personal Space, the agent stops expiring, and the
+agent gains no access to the claimer's content. `GET /api/agents` lists the
+claimer's agents; `POST /api/agents/{agentId}/stop` bans one for good.
+
 ## Capabilities
 
 The server resolves effective Roles and Capabilities from Space ownership, Team
@@ -81,7 +92,7 @@ anonymous readers and unclaimed agents remain viewers even for an editor link. L
 content editing but not Node structure
 changes, Trash, or further sharing.
 
-Only the owner of the Personal Space reads or writes a Node's Link Sharing. The
+Only an owner of the Personal Space reads or writes a Node's Link Sharing. The
 response names that `owner` with `username`, `kind`, and for an agent `claimed`.
 `expiresAt` is when the owner, an unclaimed agent, expires and its links stop
 working; it is `null` when the owner does not expire. A human's session issued
@@ -89,7 +100,8 @@ for a personal access token or an OAuth grant reads Link Sharing but cannot writ
 it (`403 INTERACTIVE_SESSION_REQUIRED`). An agent's token session can write it.
 
 When a Space's owner is a banned or expired agent, the Space and its Nodes are
-not discoverable by anyone but the owner, so their links return `404`.
+not discoverable by anyone but the agent and the human who claimed it, so their
+links return `404`.
 
 Some actions are forbidden whatever role the caller holds, with `403`. No agent
 can create a Team Space, make a Space public, or be added as a Team Space member
@@ -111,6 +123,8 @@ HTML and referenced Units retain independent source permission checks.
 
 `GET /api/spaces` returns only owned or joined Spaces, ordered with the caller's
 Personal Space first, then owned Spaces, then joined Spaces, with name and ID as ties.
+The Personal Space of an agent the caller claimed counts as owned, here and in every
+list below.
 Every `SpaceView` has an `affiliation` derived from ownership and membership.
 It is `owner`, `member`, or `none`; Team viewer members remain `member`.
 Public readers are `none` even though both have the effective `viewer` role.
@@ -221,7 +235,9 @@ Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
 User Worktrees are creator-private and may contain editable Resources from different
-Spaces. Team Worktrees belong to one Team Space. Their Visibility controls who
+Spaces. The owners of the creator's Personal Space, that is the human who claimed an
+agent creator, can also discover and review them and read their Worktree-local Units;
+every write action stays with the creator. Team Worktrees belong to one Team Space. Their Visibility controls who
 may Review; Visibility never grants Resource Access.
 
 The Creator can discover and Review a private Team Worktree. The Team Space
@@ -240,7 +256,7 @@ username or slug invalidates the old full name; there is no redirect.
 
 A Team Worktree shares its Space's number sequence with Issues, so `#12` names one object per Space
 (`GET /api/spaces/{spaceId}/worktrees/{number}`). A User Worktree is numbered per creator and addressed through
-the creator's own Personal Space. Worktrees created before numbering existed keep `number: null` and are addressed
+the creator's own Personal Space, by that Space's owners. Worktrees created before numbering existed keep `number: null` and are addressed
 by ID.
 
 ## Issues

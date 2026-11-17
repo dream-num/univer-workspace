@@ -414,6 +414,110 @@ GuestAgentCreated:
     agent:
       $ref: "#/AgentIdentity"
 
+AgentClaimCode:
+  type: object
+  additionalProperties: false
+  required: [code, claimUrl, expiresIn]
+  properties:
+    code:
+      type: string
+      pattern: "^[A-Za-z0-9_-]{22}$"
+    claimUrl:
+      type: string
+      pattern: "^/claim/"
+      description: The claim page as a path on this Workspace origin.
+    expiresIn:
+      type: integer
+      const: 600
+      description: Seconds until the code stops working.
+
+AgentClaim:
+  type: object
+  additionalProperties: false
+  required: [code]
+  properties:
+    code:
+      type: string
+
+AgentSummary:
+  type: object
+  description: An agent as the human who claims or owns it sees it.
+  additionalProperties: false
+  required: [id, username, displayName, avatarUrl, spaceId, files, lastActiveAt, stopped]
+  properties:
+    id:
+      type: string
+    username:
+      type: string
+    displayName:
+      type: string
+    avatarUrl:
+      type: [string, "null"]
+      format: uri
+    spaceId:
+      type: string
+      description: The agent's Personal Space.
+    files:
+      type: integer
+      minimum: 0
+      description: Files in the agent's Personal Space outside Trash.
+    lastActiveAt:
+      type: integer
+      description: Unix epoch milliseconds when the agent last signed in or, before its claim, a reader opened one of its shared pages. Recorded at most once a day.
+    stopped:
+      type: boolean
+      description: The agent can no longer sign in. Its owner stopped it, or an operator banned it.
+
+AgentClaimPreview:
+  type: object
+  additionalProperties: false
+  required: [agent, claimed]
+  properties:
+    agent:
+      $ref: "#/AgentSummary"
+    claimed:
+      type: boolean
+      description: The current human already owns the agent.
+
+AgentClaimed:
+  type: object
+  additionalProperties: false
+  required: [agent]
+  properties:
+    agent:
+      $ref: "#/AgentSummary"
+
+AgentClaimInvalid:
+  description: AGENT_CLAIM_INVALID. The code is unknown, expired over ten minutes ago, predates a server restart, or names a banned agent.
+  content:
+    application/json:
+      schema:
+        $ref: common.yaml#/ErrorResponse
+
+AgentClaimExpired:
+  description: AGENT_CLAIM_EXPIRED. The code is more than ten minutes old.
+  content:
+    application/json:
+      schema:
+        $ref: common.yaml#/ErrorResponse
+
+AgentAlreadyClaimed:
+  description: AGENT_ALREADY_CLAIMED. Another human already claimed the agent, through this code or another.
+  content:
+    application/json:
+      schema:
+        $ref: common.yaml#/ErrorResponse
+
+ClaimedAgents:
+  type: object
+  additionalProperties: false
+  required: [agents]
+  properties:
+    agents:
+      type: array
+      items:
+        $ref: "#/AgentSummary"
+
 PersonalAccessToken:
   type: object
   additionalProperties: false

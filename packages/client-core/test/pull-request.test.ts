@@ -29,7 +29,7 @@ describe("listPullRequests", () => {
     await listPullRequests(deps, { space: { id: "t1", type: "team" }, state: "merged", limit: 5 });
     await listPullRequests(deps, { state: "discarded", limit: 5, search: "q" });
     expect(list.mock.calls.map(([input]) => input)).toEqual([
-      { scope: "user", view: "active", limit: 5 },
+      { scope: "user", creatorId: "u1", view: "active", limit: 5 },
       { scope: "space", spaceId: "t1", view: "processed", states: ["merged"], limit: 5 },
       { view: "processed", states: ["discarded"], limit: 5, search: "q" },
     ]);

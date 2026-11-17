@@ -7,6 +7,7 @@ export interface SessionSockets {
   isActive(connection: NodeTransportConnection): boolean;
   untrack(connection: NodeTransportConnection): void;
   closeSessions(sessionIds: readonly string[]): void;
+  closeUser(userId: string): void;
 }
 
 interface Registration {
@@ -17,6 +18,7 @@ interface Registration {
 
 export function createSessionSockets(isSessionActive: (sessionId: string, userId: string) => Promise<boolean>): SessionSockets {
   const sessions = new Map<string, Set<() => void>>();
+  const users = new Map<string, Set<() => void>>();
   // A closed connection can still have an SDK open callback or a database lookup in flight.
   const registrations = new WeakMap<NodeTransportConnection, Registration | null>();
 
@@ -49,13 +51,12 @@ export function createSessionSockets(isSessionActive: (sessionId: string, userId
 
       let timer: ReturnType<typeof setTimeout>;
       state.expiresAt = sessionExpiresAt;
-      const connections = sessions.get(sessionId) ?? new Set();
-      connections.add(close);
-      sessions.set(sessionId, connections);
+      const leaveSession = enroll(sessions, sessionId, close);
+      const leaveUser = enroll(users, ticket.userID, close);
       state.release = () => {
         clearTimeout(timer);
-        connections.delete(close);
-        if (connections.size === 0) sessions.delete(sessionId);
+        leaveSession();
+        leaveUser();
       };
       const schedule = () => {
         const remaining = sessionExpiresAt - Date.now();
@@ -93,5 +94,18 @@ export function createSessionSockets(isSessionActive: (sessionId: string, userId
         for (const close of sessions.get(id) ?? []) close();
       }
     },
+    closeUser(userId) {
+      for (const close of users.get(userId) ?? []) close();
+    },
+  };
+}
+
+function enroll(index: Map<string, Set<() => void>>, key: string, close: () => void): () => void {
+  const closers = index.get(key) ?? new Set();
+  closers.add(close);
+  index.set(key, closers);
+  return () => {
+    closers.delete(close);
+    if (closers.size === 0) index.delete(key);
   };
 }

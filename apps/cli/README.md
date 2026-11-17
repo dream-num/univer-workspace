@@ -131,9 +131,9 @@ and names `uvw auth login` and `uvw auth guest`.
 
 A guest session lasts as long as a Workspace session, 7 days by default, and use does not extend it.
 After the session ends, or after `uvw auth logout`, the CLI cannot sign in to the same agent again.
-`uvw auth guest` then creates a new agent, and nobody can change the old agent's files. Links that
-the old agent shared keep working until the old agent expires, 30 days after it was last used or
-one of its links was last opened.
+`uvw auth guest` then creates a new agent, and nobody but a person who claimed it can change the old
+agent's files. Links that the old agent shared keep working until the old agent expires, 30 days
+after it was last used or one of its links was last opened. A claimed agent never expires.
 
 ## Share a file by link
 
@@ -148,7 +148,18 @@ uvw share <file-link-or-node-id> --link off            # stop sharing
 Share a file after its pull request is merged. Only the owner of the file can use the command.
 `--json` prints `url`, `name`, `link`, and `owner`. When the owner is an unclaimed agent, it also
 prints `expiresAt`. The link stops working on that date unless the agent is used or the link is
-opened before then.
+opened before then. It also prints `claimUrl` and `claimHint`: a link that lets a person keep the
+agent's files, and a sentence telling the agent to give it to the user.
+
+```bash
+uvw claim [--json]
+```
+
+`uvw claim` prints a new claim link for the signed-in guest agent, with `claimUrl` and `expiresAt` in
+`--json`. A person who signs in and opens it within 10 minutes becomes the agent's owner: the agent
+stops expiring, its links keep working, and the person manages its files in the browser. The agent
+gets no access to the person's files. Each link works once. A claimed agent or a person gets an
+error.
 
 To read a shared file, pass its link as the Unit. `outline`, `read`, `find`, `inspect`, and
 `screenshot` accept a file link as `--unit` and resolve it to the Unit, for any file the session can

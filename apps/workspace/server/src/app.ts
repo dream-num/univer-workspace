@@ -60,6 +60,7 @@ import {
 import {
   authorizationServerMetadata,
   createAccessTokenService,
+  createAgentClaims,
   createIdentityModule,
   createIdentityRouter,
   createGitHubOAuthProvider,
@@ -389,6 +390,7 @@ export function createWorkspaceApplication(
     "/api",
     createIdentityRouter({
       identity,
+      agentClaims: createAgentClaims({ identity, repository: identityRepository, onAgentStopped: sessionSockets.closeUser }),
       accessTokens,
       mcpOAuth: mcpOAuth ?? null,
       secureCookies: config.secureCookies,

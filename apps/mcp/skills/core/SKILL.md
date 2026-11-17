@@ -46,6 +46,7 @@ every rule here that leaves readiness, merging or the link to the user.
 | `space browse`                                                                                               | `space_browse`         | Tree discovery                                             |
 | `space find`                                                                                                 | `space_find`           | Name discovery                                             |
 | `share`                                                                                                      | `share`                | Link Sharing of a Personal Space file; pass the url as unit with trunk true to read it |
+| `claim`                                                                                                      | `claim`                | Unclaimed agent only: a link that lets the user keep its files |
 | `space node create`, `space node rename`, `space node move`, `space node trash`                              | `space_node`           | Admin; action selects create, rename, move or trash        |
 | `issue list`                                                                                                 | `issue_list`           | Team Space Issues                                          |
 | `issue view`                                                                                                 | `issue_view`           | Include comments for the full discussion                   |
@@ -366,7 +367,8 @@ admin tools return SVG source for incorporation in the page or document.
 
 Do not merge or discard unless explicitly requested. Discard is irreversible.
 An agent identity follows the server instructions instead: it marks its verified
-pull request ready, merges it with `pr_merge` and returns the `share` url.
+pull request ready, merges it with `pr_merge` and returns the `share` url. While
+unclaimed, it also gives the user the `claimUrl` from `share`, or from `claim`.
 To resume same-task rework, continue draft directly; return ready to draft with
 `pr_ready` and undo true only before an explicitly requested write.
 There is no separate close or reopen tool for a pull request.

@@ -28,6 +28,7 @@ export interface WorktreeRow {
   readonly team_space_name: string | null;
   readonly team_owner_user_id: string | null;
   readonly actor_member_role: "admin" | "editor" | "viewer" | null;
+  readonly actor_owns_creator_space: 0 | 1;
   readonly unit_count: number;
 }
 
@@ -96,6 +97,7 @@ export interface WorktreesRepository {
     readonly order: "updatedAtDesc" | "createdAtDesc";
     readonly kind: WorktreeKind | null;
     readonly teamSpaceId: string | null;
+    readonly creatorUserId?: string;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
   }): Promise<WorktreeRow[]>;

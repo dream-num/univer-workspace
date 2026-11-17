@@ -67,9 +67,21 @@ export interface AgentBanResult {
   readonly id: string;
 }
 
+export interface StoredAgent {
+  readonly user: User;
+  readonly spaceId: string;
+  readonly ownerUserId: string | null;
+  readonly lastActiveAt: number;
+  readonly banned: boolean;
+  readonly files: number;
+}
+
 export interface IdentityRepository {
   isIdentityConflict(error: unknown, field: IdentityConflict): Promise<boolean>;
   banAgent(target: string, at: number): Promise<AgentBanResult | null>;
+  findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]>;
+  claimAgent(agentUserId: string, ownerUserId: string, at: number): Promise<boolean>;
+  banClaimedAgent(ownerUserId: string, agentUserId: string, at: number): Promise<boolean>;
   createPasswordUser(input: NewPasswordUser): Promise<void>;
   createExternalUser(input: {
     readonly provider: ExternalIdentityProvider;
@@ -110,7 +122,7 @@ export interface IdentityRepository {
   usernameExists(username: string): Promise<boolean>;
   findUser(userId: string): Promise<User | null>;
   findPrincipal(userId: string): Promise<StoredPrincipal | null>;
-  touchUnclaimedAgent(
+  touchAgent(
     target: { readonly userId: string } | { readonly nodeId: string },
     at: number,
     staleBefore: number,

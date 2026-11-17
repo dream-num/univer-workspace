@@ -104,11 +104,18 @@ User、`users.email`、Personal Space 与 Session 在同一事务中创建。Goo
 Identity 的 `createAgent` 在同一事务中创建 User、Personal Space 与本行，`expires_at` 为创建后 30 天，
 不创建 Session；凭据由调用方另行签发。用户名是标签的 slug 加 `-` 和 4 位随机字符，冲突时重试。
 
-未认领 agent 认证成功，或 Server 送出它名下一个匿名读者可读的 `/nodes/:nodeId` 页面时，`last_active_at`
-写为当前时间，`expires_at` 写为 30 天后；每个 agent 每天最多写一次，已过期的 agent 认证成功时不受这个间隔限制。页面只在 Server 自己提供 Browser 构建产物时
-经过这一步，Vite 开发服务器送出的页面不顺延。`banned_at` 只由运维命令 `db:ban-agent` 写入，
-已有值不被覆盖。“暂停”不落库：`banned_at` 非空或 `expires_at` 已过时，权限解析对所有者以外的人
-不给出该 agent 的 Space 的任何角色。
+agent 认证成功时 `last_active_at` 写为当前时间；未认领 agent 同时把 `expires_at` 写为 30 天后，Server
+送出它名下一个匿名读者可读的 `/nodes/:nodeId` 页面时也这样写。每个 agent 每天最多写一次，已过期的 agent
+认证成功时不受这个间隔限制。页面只在 Server 自己提供 Browser 构建产物时经过这一步，Vite 开发服务器送出的
+页面不顺延。
+
+人认领 agent 时，一次条件更新在 `owner_user_id` 为空且 `banned_at` 为空时写入 `owner_user_id`、
+`claimed_at` 并把 `expires_at` 置空，所以同一个 agent 只能被认领一次。认领码只在进程内存中，不落库。
+主人是该 agent Personal Space 的 Owner，权限从这一列推出，不写 `space_members` 或 `node_grants`。
+
+`banned_at` 由运维命令 `db:ban-agent` 或主人停用该 agent 时写入，已有值不被覆盖，两种来源不加区分。
+“暂停”不落库：`banned_at` 非空或 `expires_at` 已过时，权限解析对 agent 本人与其主人以外的人不给出该 agent 的
+Space 的任何角色。
 
 ### `password_credentials`
 
@@ -389,7 +396,8 @@ User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑�
 Issue 分配逻辑同样计入 Worktree）；User Worktree 在创建者名下单独编号，经创建者自己的 Personal Space 寻址。
 部分唯一索引 `worktrees_team_number`、`worktrees_user_number` 兜底。V12 之前创建的 Worktree 为 `NULL`，不回填，
 仍以 ID 寻址。Worktree 与 Issue 行只随 Space 级联删除，不会单独删除，因此编号不会复用。
-User Worktree 在 `owner/personal` 下的归属只用于编号与列表，不改变其内容或权限边界。
+User Worktree 在 `owner/personal` 下的归属用于编号与列表；该 Personal Space 的 Owner（创建者本人，以及认领了
+创建者 agent 的人）可以发现、Review 并读取其 Worktree-local Unit，写操作仍只属于创建者。
 创建在协同服务建立 Worktree 之后、同一产品事务内分配编号并插入产品行，幂等重试保留原编号。
 
 ### `worktree_units`

@@ -1,4 +1,5 @@
 import { testStagingDirectory } from "./staging-directory.js";
+import { createHash } from "node:crypto";
 import { once } from "node:events";
 import { createServer, request as httpRequest, type Server } from "node:http";
 import { Writable } from "node:stream";
@@ -668,17 +669,18 @@ describe("gateway over real HTTP and the MCP client", () => {
           (tool) => tool.name,
         );
       const agentAdmin = adminNames.filter((name) => name !== "repo_create");
-      expect(await names("")).toEqual([...coreNames, "pr_merge"]);
-      expect(await names("?toolsets=core")).toEqual([...coreNames, "pr_merge"]);
+      const agentCore = claimed ? coreNames : coreNames.flatMap((name) => (name === "share" ? [name, "claim"] : [name]));
+      expect(await names("")).toEqual([...agentCore, "pr_merge"]);
+      expect(await names("?toolsets=core")).toEqual([...agentCore, "pr_merge"]);
       expect(await names("?toolsets=files")).toEqual(filesNames);
       expect(await names("?toolsets=admin")).toEqual(agentAdmin);
-      expect(await names("?toolsets=admin,core")).toEqual([...coreNames, ...agentAdmin]);
+      expect(await names("?toolsets=admin,core")).toEqual([...agentCore, ...agentAdmin]);
       expect(await names("?toolsets=core,files,admin")).toEqual([
-        ...coreNames,
+        ...agentCore,
         ...filesNames,
         ...agentAdmin,
       ]);
-      expect(await names("?toolsets=all")).toEqual([...coreNames, ...filesNames, ...agentAdmin]);
+      expect(await names("?toolsets=all")).toEqual([...agentCore, ...filesNames, ...agentAdmin]);
       const whoami = await (await connect()).callTool({ name: "whoami", arguments: {} });
       expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject });
     },
@@ -696,6 +698,16 @@ describe("gateway over real HTTP and the MCP client", () => {
       { tool: "whoami", principal_kind: "human", node_id: undefined },
       { tool: "share", principal_kind: "agent", node_id: "node-1" },
     ]);
+  });
+
+  it("gives a person the same tools and instructions as before agents could be claimed", async () => {
+    const surface = [];
+    for (const suffix of ["", "?toolsets=files", "?toolsets=admin", "?toolsets=all"]) {
+      const client = await connect({ pin: "2026-07-28" }, suffix);
+      surface.push({ suffix, instructions: client.getInstructions(), tools: (await client.listTools()).tools });
+    }
+    const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
+    expect(digest).toMatchInlineSnapshot(`"68d29a3f2dd26256ef62e59d506157a646fc56915b9a96ee23fd9e723f0794d3"`);
   });
 
   it("tells an agent to merge and share, and a person to review, in the server instructions", async () => {

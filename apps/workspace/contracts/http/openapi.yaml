@@ -86,6 +86,12 @@ paths:
     $ref: ./paths/auth.yaml#/~1api~1auth~1agent-token
   /api/agents:
     $ref: ./paths/auth.yaml#/~1api~1agents
+  /api/agents/claim-codes:
+    $ref: ./paths/auth.yaml#/~1api~1agents~1claim-codes
+  /api/agents/claim:
+    $ref: ./paths/auth.yaml#/~1api~1agents~1claim
+  /api/agents/{agentId}/stop:
+    $ref: ./paths/auth.yaml#/~1api~1agents~1{agentId}~1stop
   /api/auth/guest:
     $ref: ./paths/auth.yaml#/~1api~1auth~1guest
   /api/auth/tokens/{id}:

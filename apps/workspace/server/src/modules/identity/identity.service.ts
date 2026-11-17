@@ -317,7 +317,7 @@ export function createIdentityModule(options: {
     if (!authenticated) return null;
     if (authenticated.activity && !readOnly) {
       const { at, staleBefore, expiresAt } = authenticated.activity;
-      await repository.touchUnclaimedAgent({ userId: stored.id }, at, staleBefore, expiresAt);
+      await repository.touchAgent({ userId: stored.id }, at, staleBefore, expiresAt);
     }
     return stored;
   }
@@ -402,7 +402,7 @@ export function createIdentityModule(options: {
 
     async recordAgentPageView(nodeId) {
       const { at, staleBefore, expiresAt } = agentActivityWindow(now());
-      await repository.touchUnclaimedAgent({ nodeId }, at, staleBefore, expiresAt);
+      await repository.touchAgent({ nodeId }, at, staleBefore, expiresAt);
     },
 
     async registerWithPassword(input) {

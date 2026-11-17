@@ -3,6 +3,7 @@ import { Link, Navigate } from "@tanstack/react-router";
 import type { WorktreesPageProps } from "../../page.types";
 import { worktreeQueryOptions } from "../../../features/worktrees/worktrees.queries";
 import { mySpacesQueryOptions } from "../../../features/spaces";
+import { worktreeBelongsToSpace } from "../../../features/worktrees/worktree.rules";
 import { useI18n } from "../../../shared/i18n";
 import { WorkspaceLayout } from "../../workspace-layout";
 import { RepositoryQueryState } from "../repository-controls";
@@ -15,10 +16,9 @@ export function RepositoryDirectPullRequest(
   const { t } = useI18n();
   const task = useQuery(worktreeQueryOptions(props.worktree));
   const spaces = useQuery(mySpacesQueryOptions);
-  const personalId = spaces.data?.spaces.find(
-    (space) => space.type === "personal" && space.accessRole === "owner",
-  )?.id;
-  const target = task.data ? repositoryWorktreeSearch(task.data.worktree, personalId) : undefined;
+  const worktree = task.data?.worktree;
+  const personalId = worktree && spaces.data?.spaces.find((space) => worktreeBelongsToSpace(worktree, space))?.id;
+  const target = worktree ? repositoryWorktreeSearch(worktree, personalId) : undefined;
   if (target?.spaceId) return <Navigate to="/worktrees" search={{ ...props, ...target }} replace />;
   return (
     <WorkspaceLayout repositoryView="worktrees" headerTitle={t("repositoryPullRequests")}>

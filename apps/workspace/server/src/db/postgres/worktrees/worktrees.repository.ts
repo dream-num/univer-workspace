@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
 import { checkCreateTarget } from "../access/resource-target.js";
-import { type PostgresAccessRepository, assertFileQuota } from "../access/access.repository.js";
+import { type PostgresAccessRepository, assertFileQuota, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
 import type { WriteSource } from "../../../modules/identity/index.js";
@@ -31,9 +31,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       .prepare(
         `SELECT audience.user_id
          FROM (
-           SELECT worktree.creator_user_id AS user_id
+           ${spaceOwnerIdsSql(`SELECT worktree.creator_user_id AS user_id
            FROM worktrees AS worktree
-           WHERE worktree.id = ?
+           WHERE worktree.id = ?`)}
 
            UNION
 
@@ -56,7 +56,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
          ) AS audience
          ORDER BY audience.user_id`
       )
-      .all(worktreeId, worktreeId, worktreeId) as unknown as Array<{
+      .all(worktreeId, worktreeId, worktreeId, worktreeId) as unknown as Array<{
       readonly user_id: string;
     }>;
     return rows.map((row) => row.user_id);
@@ -70,6 +70,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     readonly order: "updatedAtDesc" | "createdAtDesc";
     readonly kind: WorktreeKind | null;
     readonly teamSpaceId: string | null;
+    readonly creatorUserId?: string;
     readonly cursor: WorktreeCursor | null;
     readonly limit: number;
   }): Promise<WorktreeRow[]> {
@@ -81,52 +82,49 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           : "worktree.processed_at IS NOT NULL",
     ];
     const orderColumn = input.order === "createdAtDesc" ? "created_at" : "updated_at";
-    const parameters: Array<string | number> = [
-      input.userId,
-      input.userId,
-      input.userId,
-    ];
+    const parameters: Record<string, string | number> = { userId: input.userId, limit: input.limit };
     if (input.kind) {
-      predicates.push("worktree.kind = ?");
-      parameters.push(input.kind);
+      predicates.push("worktree.kind = $kind");
+      parameters.kind = input.kind;
     }
     if (input.teamSpaceId) {
-      predicates.push("worktree.team_space_id = ?");
-      parameters.push(input.teamSpaceId);
+      predicates.push("worktree.team_space_id = $teamSpaceId");
+      parameters.teamSpaceId = input.teamSpaceId;
+    }
+    if (input.creatorUserId) {
+      predicates.push("worktree.creator_user_id = $creatorUserId");
+      parameters.creatorUserId = input.creatorUserId;
     }
     if (input.touchedSince !== undefined) {
-      predicates.push("(worktree.created_at >= ? OR worktree.processed_at >= ?)");
-      parameters.push(input.touchedSince, input.touchedSince);
+      predicates.push("(worktree.created_at >= $touchedSince OR worktree.processed_at >= $touchedSince)");
+      parameters.touchedSince = input.touchedSince;
     }
     if (input.search) {
       predicates.push(`(
-        strpos(lower(worktree.name), lower(? COLLATE "C")) > 0
-        OR strpos(lower(coalesce(worktree.summary, '')), lower(? COLLATE "C")) > 0
-        OR strpos(lower(creator.display_name), lower(? COLLATE "C")) > 0
-        OR strpos(lower(creator.username), lower(? COLLATE "C")) > 0
-        OR strpos(lower(coalesce(team.name, '')), lower(? COLLATE "C")) > 0
+        strpos(lower(worktree.name), lower($search COLLATE "C")) > 0
+        OR strpos(lower(coalesce(worktree.summary, '')), lower($search COLLATE "C")) > 0
+        OR strpos(lower(creator.display_name), lower($search COLLATE "C")) > 0
+        OR strpos(lower(creator.username), lower($search COLLATE "C")) > 0
+        OR strpos(lower(coalesce(team.name, '')), lower($search COLLATE "C")) > 0
       )`);
-      parameters.push(...Array<string>(5).fill(input.search));
+      parameters.search = input.search;
     }
     if (input.cursor) {
       predicates.push(
-        `(worktree.${orderColumn} < ?
-          OR (worktree.${orderColumn} = ? AND worktree.id > ?))`
+        `(worktree.${orderColumn} < $cursorTimestamp
+          OR (worktree.${orderColumn} = $cursorTimestamp AND worktree.id > $cursorId))`
       );
-      parameters.push(
-        input.cursor.timestamp,
-        input.cursor.timestamp,
-        input.cursor.id
-      );
+      parameters.cursorTimestamp = input.cursor.timestamp;
+      parameters.cursorId = input.cursor.id;
     }
-    parameters.push(input.limit);
     return await this._database
       .prepare(
         `${worktreeSelect()}
          WHERE (
-           worktree.creator_user_id = ?
+           (worktree.kind = 'user' AND ${ownsSpaceSql("worktree.creator_user_id")})
            OR (worktree.kind = 'team' AND (
-             team.owner_user_id = ?
+             worktree.creator_user_id = $userId
+             OR team.owner_user_id = $userId
              OR (member.user_id IS NOT NULL AND (
                worktree.visibility = 'space' OR member.role = 'admin'
              ))
@@ -134,9 +132,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
          )
            AND ${predicates.join(" AND ")}
          ORDER BY worktree.${orderColumn} DESC, worktree.id
-         LIMIT ?`
+         LIMIT $limit`
       )
-      .all(...parameters) as unknown as WorktreeRow[];
+      .all(parameters) as unknown as WorktreeRow[];
   }
 
   async get(worktreeId: string, userId: string): Promise<WorktreeRow | null> {
@@ -144,9 +142,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       (await this._database
         .prepare(
           `${worktreeSelect()}
-           WHERE worktree.id = ?`
+           WHERE worktree.id = $worktreeId`
         )
-        .get(userId, worktreeId) as WorktreeRow | undefined) ?? null
+        .get({ userId, worktreeId }) as WorktreeRow | undefined) ?? null
     );
   }
 
@@ -625,6 +623,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
 function worktreeSelect(): string {
   return `SELECT
             worktree.*,
+            ${ownsSpaceSql("worktree.creator_user_id")}::integer AS actor_owns_creator_space,
             creator.username AS creator_username,
             creator.display_name AS creator_display_name,
             creator.avatar_url AS creator_avatar_url,
@@ -641,5 +640,5 @@ function worktreeSelect(): string {
           LEFT JOIN spaces AS team ON team.id = worktree.team_space_id
           LEFT JOIN space_members AS member
             ON member.space_id = worktree.team_space_id
-           AND member.user_id = ?`;
+           AND member.user_id = $userId`;
 }

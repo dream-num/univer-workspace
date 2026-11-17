@@ -60,7 +60,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It exposes identity, repository, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
   Link Sharing, Facade API reference, Skills, and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
   them at Workspace for short-lived sessions; development session authentication is refused in production.
-  For an agent User it lists `pr_merge` with `core`, never lists `repo_create`, and tells the agent to merge and share its own work. It runs
+  For an agent User it lists `pr_merge` with `core`, never lists `repo_create`, and tells the agent to merge and share its own work;
+  an unclaimed agent also gets `claim` and a claim link in its `share` result. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G.
   Contract: [MCP README](apps/mcp/README.md).
@@ -134,7 +135,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   and publishes directly; it does not use Worktree review. Sessions issued by token exchange (the MCP gateway)
   cannot create, replace or rename a Blob into a `.univer.html` page; they submit HTML View drafts instead.
 - Link Sharing and Space public read admit anonymous viewers without creating Users or Login Sessions.
-  An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent.
+  An unclaimed agent also gets at most viewer access from a link. A banned or expired agent's Space admits nobody but the agent and the human who claimed it.
   Product writes and Worktree access still require authentication; HTML source permissions remain independent.
 - Space stars are protected product User-Space relations, not memberships or access grants. The authenticated
   `GET/PUT/DELETE /api/spaces/{spaceId}/star` contract returns only the caller's state and an aggregate count;

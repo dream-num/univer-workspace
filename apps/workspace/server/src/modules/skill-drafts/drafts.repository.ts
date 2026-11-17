@@ -54,9 +54,9 @@ export interface SkillDraftsRepository {
   expireDue(now: number, limit: number, active?: readonly string[]): Promise<number>;
 }
 
-export function assertSkillDestination(userId: string, space: SpaceAccess | null): void {
+export function assertSkillDestination(space: SpaceAccess | null): void {
   if (!space) throw new ApplicationError("NOT_FOUND", 404, "Draft destination not found.");
-  if ((space.type === "personal" && space.ownerUserId !== userId) || !space.capabilities.createAtRoot)
+  if (!space.capabilities.createAtRoot)
     throw new ApplicationError("FORBIDDEN", 403, "Cannot create Skills at this destination.");
 }
 

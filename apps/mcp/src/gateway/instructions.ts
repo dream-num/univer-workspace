@@ -1,5 +1,5 @@
 import type { OpName } from "../shared/executor-protocol.js";
-import type { ToolDefinition } from "./tools/definition.js";
+import type { ToolDefinition, ToolPrincipal } from "./tools/definition.js";
 import { tools, toolAvailable } from "./tools/registry.js";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "./tools/schemas.js";
 
@@ -8,12 +8,12 @@ export function buildServerInstructions(
   selected: readonly ToolDefinition[],
   operations: ReadonlySet<OpName>,
   executorRestricted: boolean,
-  principal: "human" | "agent",
+  principal: ToolPrincipal,
 ): string {
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
   // An agent owns its Personal Space and has no reviewer, so it finishes its own pull requests.
-  const agentFinishes = principal === "agent" && has("pr_merge");
+  const agentFinishes = principal !== "human" && has("pr_merge");
   const find = ["space_find", "space_browse"].filter(has);
   const workflow = [
     ...(find.length ? [`Find the file with ${find.join(" or ")}.`] : []),

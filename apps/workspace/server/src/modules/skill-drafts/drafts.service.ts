@@ -71,7 +71,7 @@ export function createSkillDraftsModule(options: {
     return row;
   }
   async function authorize(userId: string, spaceId: string, target?: SkillTarget) {
-    assertSkillDestination(userId, await access.resolveSpace(userId, spaceId));
+    assertSkillDestination(await access.resolveSpace(userId, spaceId));
     if (target?.folderNodeId) assertSkillFolder(await access.resolveNode(userId, target.folderNodeId));
     for (const file of target?.files ?? []) {
       assertSkillFile(await access.resolveResource(userId, file.resourceId), file.nodeId);
