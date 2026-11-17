@@ -27,12 +27,54 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=2");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=3");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=1");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=2");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
+  });
+
+  it("upgrades version 1 by repairing display names and default Personal Space names once", async ({ onTestFinished }) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const config = { provider: "postgres" as const, connectionString: schema.connectionString };
+    await (await openProductDatabase(config)).close();
+    await schema.pool.query(`
+      INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES
+        ('google', 'alice', 'alice@example.com', 1, 2), ('hostile', 'carol', E'Carol\\u202Eevil\\nname', 1, 2),
+        ('filler', 'dave', E'\\u3164', 1, 2), ('custom', 'erin', 'Erin <erin@example.com>', 1, 2), ('plain', 'grace', 'Grace', 1, 2);
+      INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES
+        ('s-google', 'personal', 'alice@example.com 的个人空间', 'google', 3, 4), ('s-hostile', 'personal', E'Carol\\u202Eevil\\nname 的个人空间', 'hostile', 3, 4),
+        ('s-filler', 'personal', E'\\u3164 的个人空间', 'filler', 3, 4), ('s-custom', 'personal', 'Erin''s drafts', 'custom', 3, 4),
+        ('s-plain', 'personal', 'Grace 的个人空间', 'plain', 3, 4);
+      UPDATE workspace_product_schema SET version = 1;
+    `);
+    const snapshot = async () => ({
+      users: (await schema.pool.query("SELECT id, display_name, updated_at FROM users ORDER BY id")).rows,
+      spaces: (await schema.pool.query("SELECT id, name, updated_at FROM spaces ORDER BY id")).rows,
+      schema: (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows,
+    });
+    const before = await snapshot();
+    await (await openProductDatabase(config)).close();
+    const after = await snapshot();
+    expect(after.users).toEqual([
+      { id: "custom", display_name: "Erin <erin>", updated_at: "2" }, { id: "filler", display_name: "dave", updated_at: "2" },
+      { id: "google", display_name: "alice", updated_at: "2" }, { id: "hostile", display_name: "Carolevil name", updated_at: "2" },
+      { id: "plain", display_name: "Grace", updated_at: "2" },
+    ]);
+    expect(after.spaces).toEqual([
+      { id: "s-custom", name: "Erin's drafts", updated_at: "4" }, { id: "s-filler", name: "dave 的个人空间", updated_at: "4" },
+      { id: "s-google", name: "alice 的个人空间", updated_at: "4" }, { id: "s-hostile", name: "Carolevil name 的个人空间", updated_at: "4" },
+      { id: "s-plain", name: "Grace 的个人空间", updated_at: "4" },
+    ]);
+    expect(after.schema).toEqual([{ ...before.schema[0], version: 2 }]);
+
+    await (await openProductDatabase(config)).close();
+    expect(await snapshot()).toEqual(after);
+    await schema.pool.query("UPDATE workspace_product_schema SET version = 1");
+    await (await openProductDatabase(config)).close();
+    expect(await snapshot()).toEqual(after);
   });
 
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
