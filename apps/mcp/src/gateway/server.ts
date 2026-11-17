@@ -12,7 +12,7 @@ import {
 } from "@modelcontextprotocol/server";
 import { toNodeHandler } from "@modelcontextprotocol/node";
 import {
-  whoami,
+  sessionIdentity,
   WorkspaceApplicationError,
   workspaceError,
   WorkspaceHttp,
@@ -30,7 +30,7 @@ import { UsageAccumulator } from "../shared/usage.js";
 import { ExecutorCapabilities } from "./executor/capabilities.js";
 import type { OpName } from "../shared/executor-protocol.js";
 import { createExecutorLinks } from "./tools/executor-tool.js";
-import type { GatewayConfig } from "../shared/config.js";
+import { allowsExecutor, type GatewayConfig } from "../shared/config.js";
 import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { buildServerInstructions } from "./instructions.js";
 import { openResourceLibrary } from "./resources.js";
@@ -413,8 +413,9 @@ export function createGateway(
       fetcher,
     });
     let user: WorkspaceSubject;
+    let executorAccess: boolean;
     try {
-      user = authentication.user ?? (await whoami(http)).subject;
+      ({ subject: user, executorAccess } = authentication.identity ?? (await sessionIdentity(http)));
     } catch (error) {
       if (
         error instanceof WorkspaceApplicationError &&
@@ -426,8 +427,7 @@ export function createGateway(
     await capabilities.ready;
     const executorRestricted =
       config.executor !== null &&
-      config.MCP_EXECUTOR_ALLOWED_USER_IDS !== undefined &&
-      !config.MCP_EXECUTOR_ALLOWED_USER_IDS.has(user.id);
+      !allowsExecutor(config.MCP_EXECUTOR_ALLOWED_USER_IDS, { id: user.id, executorAccess });
     const operations = executorRestricted ? new Set<OpName>() : capabilities.operations;
     const selected = selectTools(url.searchParams.get("toolsets"), operations, toolPrincipal(user));
     if (!selected)

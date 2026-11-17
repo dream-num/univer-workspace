@@ -9,6 +9,7 @@ export {
   loginWithPassword,
   logout,
   startCliLogin,
+  sessionIdentity,
   whoami,
   type CliLoginCompletion,
   type PendingCliLogin,

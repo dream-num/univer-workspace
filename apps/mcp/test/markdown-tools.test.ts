@@ -39,7 +39,7 @@ function context(store: LocalStagingStore): ToolContext {
         session: "session",
         obtainedAt: Date.now(),
         expiresAt: Date.now() + 60_000,
-        user,
+        identity: { subject: user, executorAccess: true },
         scopes: new Set(["read", "write"]),
         clientId: "dev",
       },

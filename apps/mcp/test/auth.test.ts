@@ -16,7 +16,8 @@ import { parseGatewayConfig } from "../src/shared/config.js";
 
 const identityOrigin = "https://workspace.example";
 const clientSecret = "gateway-client-secret-do-not-log";
-const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string; clientId: string | null; user?: object }> = {
+const tokens: Record<string, { scope: string; kind: "pat" | "oauth"; id: string; clientId: string | null; user?: object; executorAccess?: true }> = {
+  uvw_pat_granted: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-4", clientId: null, executorAccess: true },
   uvw_pat_agent: { scope: "read write publish worktree:merge", kind: "pat", id: "pat-3", clientId: null, user: { kind: "agent", claimed: false } },
   uvw_pat_full: { scope: "read write publish worktree:merge nope", kind: "pat", id: "pat-1", clientId: null },
   uvw_pat_readonly: { scope: "read", kind: "pat", id: "pat-2", clientId: null },
@@ -107,6 +108,7 @@ describe("gateway authentication", () => {
                 scope: token.scope,
                 subject: { kind: token.kind, id: token.id, client_id: token.clientId },
                 user: { id: "user-1", username: "alice", displayName: "alice", avatarUrl: null, kind: "human", ...token.user },
+                ...(token.executorAccess ? { executor_access: true } : {}),
               }),
             );
           }
@@ -190,6 +192,15 @@ describe("gateway authentication", () => {
       (await (await gateway.connect(bearer)).listTools()).tools.map(({ name }) => name);
     expect(await names("uvw_pat_agent")).toContain("pr_merge");
     expect(await names("uvw_pat_full")).not.toContain("pr_merge");
+  });
+
+  it("in Workspace mode lists executor tools only when the exchange reports the operator's grant", async () => {
+    const gateway = await start({ ...exchangeEnv, MCP_EXECUTOR_ALLOWED_USER_IDS: "workspace" }, { executor: true });
+    const names = async (bearer: string) =>
+      (await (await gateway.connect(bearer)).listTools()).tools.map(({ name }) => name);
+    expect(await names("uvw_pat_granted")).toContain("execute");
+    expect(await names("uvw_pat_full")).not.toContain("execute");
+    expect(gateway.productCookies).toEqual([]);
   });
 
   it("exchanges a PAT, sends only the downstream session to product APIs and records pat in the event", async () => {

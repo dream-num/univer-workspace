@@ -157,6 +157,16 @@ export async function createGuestAgent(
 export async function whoami(
   http: WorkspaceHttp,
 ): Promise<{ readonly origin: string; readonly subject: WorkspaceSubject }> {
+  const { origin, subject } = await sessionIdentity(http);
+  return { origin, subject };
+}
+
+/** whoami plus whether the Workspace operator granted the User the shared MCP executor. */
+export async function sessionIdentity(http: WorkspaceHttp): Promise<{
+  readonly origin: string;
+  readonly subject: WorkspaceSubject;
+  readonly executorAccess: boolean;
+}> {
   const body = await http.json("/api/session");
   if (body["authenticated"] !== true) {
     throw workspaceError(
@@ -164,7 +174,11 @@ export async function whoami(
       "Workspace Session is missing or expired.",
     );
   }
-  return { origin: http.origin, subject: parseSubject(body["user"]) };
+  return {
+    origin: http.origin,
+    subject: parseSubject(body["user"]),
+    executorAccess: body["executorAccess"] === true,
+  };
 }
 
 export async function logout(

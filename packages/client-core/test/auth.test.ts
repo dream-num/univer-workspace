@@ -8,7 +8,7 @@ import {
   whoami,
   WorkspaceHttp,
 } from "../src/index.js";
-import { createGuestAgent } from "../src/product.js";
+import { createGuestAgent, sessionIdentity } from "../src/product.js";
 
 const origin = "https://workspace.test";
 const fixedNow = 1_787_878_800_000;
@@ -326,6 +326,25 @@ describe("Workspace authentication protocol", () => {
       origin,
       subject: { id: "user-1", name: "Alice", ...expected },
     });
+  });
+
+  it.each([
+    [{ executorAccess: true }, true],
+    [{}, false],
+    [{ executorAccess: "true" }, false],
+  ])("reads executor access %j from the session, and whoami leaves it out", async (sent, expected) => {
+    const http = new WorkspaceHttp({
+      cookie: "workspace_session=test",
+      fetcher: async () => Response.json({ authenticated: true, user: validUser(), ...sent }),
+      origin,
+      role: "client",
+    });
+    await expect(sessionIdentity(http)).resolves.toEqual({
+      origin,
+      subject: { id: "user-1", name: "Alice" },
+      executorAccess: expected,
+    });
+    await expect(whoami(http)).resolves.toEqual({ origin, subject: { id: "user-1", name: "Alice" } });
   });
 
   it("creates a guest agent and returns its Session without sending the current one", async () => {

@@ -45,7 +45,7 @@ function context(store: LocalStagingStore, budget = 1000): ToolContext {
         session: "session",
         obtainedAt: Date.now(),
         expiresAt: Date.now() + 600_000,
-        user,
+        identity: { subject: user, executorAccess: true },
         scopes: new Set(["read", "write"]),
         clientId: "dev",
       },

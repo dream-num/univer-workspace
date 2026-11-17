@@ -89,17 +89,14 @@ async function start(replicas: ReturnType<typeof replica>[] = [], allowedUserIds
       }),
       {
         logger: pino({ level: "silent" }),
-        fetcher: async (_url, init) =>
-          Response.json({
+        fetcher: async (_url, init) => {
+          const listed = new Headers(init?.headers).get("cookie") === "workspace_session=listed";
+          return Response.json({
             authenticated: true,
-            user: {
-              id:
-                new Headers(init?.headers).get("cookie") === "workspace_session=listed"
-                  ? "listed"
-                  : "user",
-              displayName: "User",
-            },
-          }),
+            user: { id: listed ? "listed" : "user", displayName: "User" },
+            ...(listed ? { executorAccess: true } : {}),
+          });
+        },
       },
     ),
   );
@@ -207,17 +204,21 @@ describe("capabilities through MCP tools/list and initialize", () => {
     },
   );
 
-  it.each([undefined, " listed , another "])(
+  it.each([undefined, " listed , another ", "workspace"])(
     "applies the per-user executor allowlist %s through MCP",
     async (allowlist) => {
       const executor = replica();
       const connect = await start([executor], allowlist);
       const withoutExecutor = await start([], allowlist);
+      const unrestricted = await start([replica()]);
       const notice =
         "Editing document contents is not enabled for this account; ask the user to edit in the browser.";
       for (const mode of ["legacy", { pin: "2026-07-28" }] as const) {
         const listed = await connect("all", mode, "listed");
+        const open = await unrestricted("all", mode, "listed");
         expect((await listed.listTools()).tools.map((tool) => tool.name)).toEqual(allNames);
+        expect(JSON.stringify((await listed.listTools()).tools)).toBe(JSON.stringify((await open.listTools()).tools));
+        expect(listed.getInstructions()).toBe(open.getInstructions());
         expect(listed.getInstructions()).not.toContain(notice);
         for (const toolset of ["core", "files", "admin", "all"]) {
           const unlisted = await connect(toolset, mode);
