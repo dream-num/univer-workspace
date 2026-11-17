@@ -551,11 +551,13 @@ The version 1 event has these fields:
 | `request_id` | Non-empty correlation ID |
 | `trace_id` | Request `_meta.traceparent`, or null |
 | `user_id` | Authenticated Workspace user ID |
+| `principal_kind` | `"human"` or `"agent"`, the kind of that user |
 | `auth_kind` | `"pat"`, `"oauth"` or `"dev"` |
 | `client_id` | The PAT ID for `pat`, the OAuth `client_id` for `oauth`, `"dev"` for `dev` |
 | `client_name`, `client_version` | Request clientInfo in 2026-07-28. Both null in stateless 2025-11-25 |
 | `tool`, `toolset` | Tool name and group. Unknown tools use `unknown` and `core` |
 | `repo` | Resolved Space ID for repository-scoped tools, otherwise null |
+| `node_id` | Optional Node ID of the file a successful `share` call read or set; omitted for other calls |
 | `unit_type` | Runtime Unit type for executor tools, otherwise null |
 | `outcome` | `ok`, `tool_error`, `auth_error`, `rate_limited`, `timeout`, or `internal_error` |
 | `error_code` | For `tool_error` or `timeout`, the same code the tool result returns in `structuredContent.code`, including Workspace codes such as `NOT_FOUND`; otherwise null |
@@ -571,7 +573,7 @@ Failure envelopes also carry observed usage, including cold/warm state and Unit 
 `committed_revisions` counts confirmed writes. `worker_peak_rss_mb` and render costs remain zero in this slice. `executor: "none"` permits `upload_bytes` and `export_bytes` for file tools; `worker_cpu_ms`, `worker_peak_rss_mb`, `render_pages` and `committed_revisions` remain zero.
 
 Only `trace_id`, `client_name`, `client_version`, `repo`, `unit_type`, and `error_code`
-can be null. The additive `cache` and `timings` fields are omitted when unavailable. Requests rejected before tool dispatch do not emit a usage event.
+can be null. The additive `cache`, `timings` and `node_id` fields are omitted when unavailable. Requests rejected before tool dispatch do not emit a usage event.
 The gateway owns an isolated Prometheus registry with
 `mcp_tool_calls_total{tool,client,outcome}` and `mcp_tool_duration_seconds{tool}`.
 The `client` label is the `auth_kind` (`pat`, `oauth` or `dev`), never an ID. Unregistered tools use the tool label `unknown`.

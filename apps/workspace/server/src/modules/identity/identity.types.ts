@@ -99,6 +99,8 @@ export interface PasswordRegistration {
   readonly username: unknown;
   readonly displayName: unknown;
   readonly password: unknown;
+  /** Only sign-up attribution reads it; it is never stored. */
+  readonly returnTo?: string | undefined;
 }
 
 export interface PasswordLogin {
@@ -113,6 +115,8 @@ export interface EmailLoginCodeRequest {
 export interface EmailLogin {
   readonly email: unknown;
   readonly code: unknown;
+  /** Only sign-up attribution reads it; it is never stored. */
+  readonly returnTo?: string | undefined;
 }
 
 export interface IssuedEmailLoginCode {

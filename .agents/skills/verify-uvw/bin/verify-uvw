@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] <label> mcp|uvw <prompt> | open-anon <label> <url> | secret-check [directory] | env | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] <label> mcp|uvw <prompt> | open-anon <label> <url> | secret-check [directory] | env | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>... | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -512,6 +512,7 @@ cmd_up() {
     [[ "$agent_port" != "$server_port" && "$agent_port" != "$web_port" && ( "$mcp_enabled" != 1 || "$agent_port" != "$mcp_port" ) && -z "$(listener_pid "$agent_port")" ]] || die "Agent port $agent_port is occupied or shared with this run"
   fi
   mkdir -p "$run"/{data,home,logs,evidence}
+  (umask 077 && openssl rand -hex 24 >"$run/home/workspace-metrics-token")
   if [[ "$mcp_enabled" == 1 ]]; then
     (umask 077 && openssl rand -hex 24 >"$run/home/mcp-oauth-secret")
     mcp_public_url="http://127.0.0.1:$mcp_port/mcp"
@@ -532,6 +533,7 @@ console.log(clients.length ? JSON.stringify({clients}) : "")' "$run/home/mcp-oau
   # env -i keeps the developer's shell and apps/workspace/.env (OAuth, data paths) out of this instance.
   (cd "$WORKSPACE_APP" && exec nohup env -i PATH="$PATH" HOME="$HOME" \
     HOST=127.0.0.1 PORT="$server_port" LOG_LEVEL=info SECURE_COOKIES=false \
+    METRICS_TOKEN="$(cat "$run/home/workspace-metrics-token")" \
     "${server_oauth_env[@]}" \
     DATABASE_FILE="$run/data/univer-workspace.sqlite" \
     COLLABORATION_DATABASE_FILE="$run/data/univer-collaboration.sqlite" \
@@ -667,6 +669,12 @@ EOF
   fi
 }
 
+cmd_metrics() { # the Workspace server's /metrics; the token goes through stdin, never argv
+  load_run
+  printf 'Authorization: Bearer %s\n' "$(cat "$RUN/home/workspace-metrics-token")" \
+    | curl -fsS -H @- "http://127.0.0.1:$SERVER_PORT/metrics"
+}
+
 cmd_cli() {
   [[ $# -ge 2 ]] || die "usage: verify-uvw cli <label> <uvw args...>"
   load_run
@@ -719,6 +727,7 @@ case "${1:-}" in
   story) shift; cmd_story "$@" ;;
   open-anon) shift; cmd_open_anon "$@" ;;
   env) shift; cmd_env "$@" ;;
+  metrics) shift; cmd_metrics "$@" ;;
   uvw) shift; load_run; uvw_raw "$@" ;;
   cli) shift; cmd_cli "$@" ;;
   mcp) shift; cmd_mcp call "$@" ;;

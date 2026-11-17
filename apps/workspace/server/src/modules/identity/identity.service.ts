@@ -15,6 +15,7 @@ import {
   type ApplicationErrorCode,
 } from "../../middleware/errors.js";
 import { logger } from "../../logging/logger.js";
+import { recordSignup } from "../../middleware/loop-metrics.js";
 import type { EmailSender } from "../../integrations/email/index.js";
 import type { WriteSource } from "./write-source.js";
 import type {
@@ -187,6 +188,8 @@ export interface IdentityModule {
    * moves 30 days out, as when the agent authenticates; either happens at most once a day.
    */
   recordAgentPageView(nodeId: string): Promise<void>;
+  /** Whether the cookie holds a valid session, without the cleanup and agent activity that reading one causes. */
+  hasSession(cookieHeader: string | undefined): Promise<boolean>;
   /**
    * Like requireSession, but rejects a downstream session issued for a PAT or MCP grant, so it
    * cannot create access (a token, a CLI login, an OAuth code, a linked identity) that outlives
@@ -297,12 +300,13 @@ export function createIdentityModule(options: {
     };
   }
 
-  async function storedSession(cookieHeader: string | undefined): Promise<StoredSession | null> {
+  async function storedSession(cookieHeader: string | undefined, readOnly = false): Promise<StoredSession | null> {
     const token = readSessionToken(cookieHeader);
     if (!token) return null;
     const stored = await repository.findSession(token.id);
     if (!stored) return null;
     if (stored.expiresAt <= now()) {
+      if (readOnly) return null;
       await repository.deleteSession(stored.sessionId);
       options.onSessionsDeleted?.([stored.sessionId]);
       return null;
@@ -310,7 +314,7 @@ export function createIdentityModule(options: {
     if (!secretMatches(token.secret, stored.secretHash)) return null;
     const authenticated = authenticateStoredPrincipal(stored, now());
     if (!authenticated) return null;
-    if (authenticated.activity) {
+    if (authenticated.activity && !readOnly) {
       const { at, staleBefore, expiresAt } = authenticated.activity;
       await repository.touchUnclaimedAgent({ userId: stored.id }, at, staleBefore, expiresAt);
     }
@@ -391,6 +395,10 @@ export function createIdentityModule(options: {
       return repository.findUsers(userIds);
     },
 
+    async hasSession(cookieHeader) {
+      return (await storedSession(cookieHeader, true)) !== null;
+    },
+
     async recordAgentPageView(nodeId) {
       const { at, staleBefore, expiresAt } = agentActivityWindow(now());
       await repository.touchUnclaimedAgent({ nodeId }, at, staleBefore, expiresAt);
@@ -431,6 +439,7 @@ export function createIdentityModule(options: {
         }
         throw error;
       }
+      recordSignup("password", user.id, input.returnTo);
 
       return {
         cookieValue: issued.cookieValue,
@@ -586,6 +595,7 @@ export function createIdentityModule(options: {
           }
           throw error;
         }
+        recordSignup("email", user.id, input.returnTo);
         return {
           cookieValue: issued.cookieValue,
           view: await authenticatedSession(user),
@@ -715,6 +725,7 @@ export function createIdentityModule(options: {
         }
         throw error;
       }
+      recordSignup("discord_bot", user.id, undefined);
       return {
         cookieValue: token.cookieValue,
         view: await authenticatedSession(user),
@@ -1124,6 +1135,7 @@ export function createIdentityModule(options: {
       session: token.stored,
       createdAt,
     });
+    recordSignup(provider, user.id, oauth.returnTo);
     return {
       returnTo: oauth.returnTo,
       issuedSession: {

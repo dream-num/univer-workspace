@@ -79,6 +79,8 @@ export interface ToolResult {
   /** The durable result: what `job_get` returns for a job that outlived its caller. */
   readonly output: object;
   readonly repo: string | null;
+  /** The file a share call resolved, for the usage event. */
+  readonly nodeId?: string;
   /** Replaces `output` for a caller that waited for the result and adds content blocks after the text line. */
   readonly waiting?: { readonly output: object; readonly content: readonly ImageContent[] };
 }

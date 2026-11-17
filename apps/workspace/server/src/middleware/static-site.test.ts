@@ -14,7 +14,8 @@ let directory: string;
 let server: Server;
 let origin: string;
 const indexHtml = '<!doctype html><html><head><title>app</title></head><body>app</body></html>';
-const identity = { recordAgentPageView: vi.fn() };
+const identity = { recordAgentPageView: vi.fn(), hasSession: vi.fn().mockResolvedValue(false) };
+const permissions = { nodeOwnerCategory: vi.fn().mockResolvedValue("human") };
 const unitTypes: readonly string[] = ["sheet", "doc", "slide", "board"];
 const getNode = vi.fn(async (userId: string, nodeId: string) => {
   if (["private", "missing", "deleted", "failure"].includes(nodeId)) {
@@ -48,8 +49,8 @@ beforeAll(async () => {
   writeFileSync(join(directory, "favicon.ico"), "icon");
 
   const app = express();
-  app.use("/without-origin", createStaticSiteRouter(directory, { nodes: { get: getNode }, identity }));
-  app.use(createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, publicOrigin: "https://workspace.example" }));
+  app.use("/without-origin", createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, permissions }));
+  app.use(createStaticSiteRouter(directory, { nodes: { get: getNode }, identity, permissions, publicOrigin: "https://workspace.example" }));
   server = await new Promise<Server>((resolve) => {
     const listening = app.listen(0, () => resolve(listening));
   });
@@ -82,6 +83,17 @@ describe("public Node link metadata", () => {
     expect(identity.recordAgentPageView).not.toHaveBeenCalledWith(nodeId);
     expect(response.headers.get("cache-control")).toBe("public, max-age=0");
     expect(response.headers.get("vary")).toBeNull();
+  });
+
+  it.each([
+    ["throws", () => { throw new Error("owner row is missing"); }],
+    ["rejects", async () => { throw new Error("database is unavailable"); }],
+  ])("serves the page when the owner lookup %s", async (_, failure) => {
+    permissions.nodeOwnerCategory.mockImplementationOnce(failure);
+    const response = await fetch(`${origin}/nodes/public`);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toContain("<title>Dashboard · Univer Workspace</title>");
+    expect(permissions.nodeOwnerCategory).toHaveBeenCalledWith("public");
   });
 
   it("escapes names in both title text and attribute values", async () => {

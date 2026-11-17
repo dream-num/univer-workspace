@@ -273,9 +273,10 @@ export class PostgresPermissionsRepository implements PermissionsRepository {
     readonly role: GrantRole;
     readonly actorUserId: string;
     readonly now: number;
-  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean }> {
+  }): Promise<{ row: LinkSharingRow; owner: NodeOwnerRow; changed: boolean; wasEnabled: boolean }> {
     return await this._database.transaction(async () => {
       requireShare(await this.access.readNodeAccess(input.actorUserId, input.nodeId));
+      const wasEnabled = (await this.readLinkSharing(input.nodeId))?.enabled === 1;
       const result = await this._database
         .prepare(
           `INSERT INTO node_link_sharing
@@ -309,7 +310,7 @@ export class PostgresPermissionsRepository implements PermissionsRepository {
         );
       const row = await this.readLinkSharing(input.nodeId);
       if (!row) throw new Error("Updated Link Sharing settings are missing");
-      return { row, owner: await this.readNodeOwner(input.nodeId), changed: result.changes > 0 };
+      return { row, owner: await this.readNodeOwner(input.nodeId), changed: result.changes > 0, wasEnabled };
     });
   }
 }

@@ -1,4 +1,4 @@
-import { SHARE_LINKS, shareNode } from "@univerjs/univer-workspace-client-core/product";
+import { parseNodeReference, SHARE_LINKS, shareNode } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
 import { spaceFeature } from "./pr-support.js";
@@ -36,12 +36,14 @@ export const shareTool: ToolDefinition = {
   annotations: writeAnnotations,
   async run(context, args) {
     const { node, link } = inputSchema.parse(args);
+    const nodeId = parseNodeReference(node, context.identityOrigin);
     return {
       output: await shareNode(spaceFeature(context), context.identityOrigin, {
-        node,
+        node: nodeId,
         ...(link === undefined ? {} : { link }),
       }),
       repo: null,
+      nodeId,
     };
   },
 };

@@ -47,7 +47,7 @@ export function runSecrets(run) {
   const univerHomes = [home, ...names(join(home, 'stories')).map(name => join(home, 'stories', name, '.univer-workspace-cli'))];
   return [
     read(join(run, 'user.pw')),
-    ...['mcp-session', 'mcp-token', 'mcp-oauth-access', 'mcp-oauth-refresh', 'mcp-oauth-refresh-previous', 'mcp-oauth-secret', 'metrics-token', 'executor-token', 'renderer-token']
+    ...['mcp-session', 'mcp-token', 'mcp-oauth-access', 'mcp-oauth-refresh', 'mcp-oauth-refresh-previous', 'mcp-oauth-secret', 'metrics-token', 'workspace-metrics-token', 'executor-token', 'renderer-token']
       .map(name => read(join(home, name))),
     ...names(join(home, 'principals')).filter(name => name.endsWith('.token')).map(name => read(join(home, 'principals', name))),
     ...json(join(home, 'opencode-credential.json')),
