@@ -25,6 +25,7 @@ let linkEnabled: boolean;
 let publicPage: boolean;
 let publicPrivateSheet: boolean;
 let publicCheckFails: boolean;
+let copyCount: number;
 const requests: Request[] = [];
 const html = '<!doctype html><html><body><p data-univer-cell-text="public-unit:Sheet1:A1"></p><p data-univer-cell-text="private-unit:Sheet1:A1"></p></body></html>';
 
@@ -33,7 +34,7 @@ beforeEach(() => {
   vi.stubGlobal("Request", http.Request);
   vi.stubGlobal("fetch", http.fetch);
   window.localStorage.setItem("univer-workspace-language", "en-US");
-  metadataFails = false; linkEnabled = true; publicPage = false; publicPrivateSheet = false; publicCheckFails = false;
+  metadataFails = false; linkEnabled = true; publicPage = false; publicPrivateSheet = false; publicCheckFails = false; copyCount = 0;
   requests.length = 0;
   http.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
@@ -47,6 +48,7 @@ beforeEach(() => {
       if (request.credentials === "omit" && !publicPage) return denied();
       return Response.json({ node: { id: "page", resource: { id: "page-resource", kind: "blob" } } });
     }
+    if (path === "/api/nodes/sheet") return Response.json({ node: { id: "sheet", resource: { kind: "univer" } }, copyCount });
     if (path === "/api/resources/page-resource/open") return Response.json({ resource: { kind: "blob", contentUrl: "/page-content" } });
     if (path.startsWith("/api/unit-resources/")) {
       const unitId = path.split("/").at(-1);
@@ -84,6 +86,11 @@ it("keeps an ordinary Sheet's dialog unchanged and does not fetch sources", asyn
   await waitFor(() => expect(document.body.textContent).toContain("Link access is on"));
   expect(section()).toBeNull();
   expect(requests.some((request) => request.url.includes("unit-resources") || request.url.endsWith("/page-content"))).toBe(false);
+});
+it("shows how many copies were made of the file next to its link access", async () => {
+  copyCount = 2;
+  await render(false);
+  await waitFor(() => expect(document.body.textContent).toContain("Link access is on2 copies"));
 });
 it.each(["en-US", "zh-CN"])("marks public and private sources for link visitors and warns in %s", async (language) => {
   window.localStorage.setItem("univer-workspace-language", language);
