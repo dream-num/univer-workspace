@@ -141,14 +141,17 @@ PasswordRegistration:
         Shown to everyone who opens the User's shared files. A value longer than 100 characters (code
         points) fails first. The server then replaces control characters, line and paragraph separators,
         U+2800 and U+1D159 with a space, and removes bidi controls, Hangul fillers, the other
-        default-ignorable code points, unpaired surrogates and U+FFFD. It keeps a zero-width joiner or
-        non-joiner between two characters, a variation selector after a character and a flag tag
-        sequence, so emoji, Persian and Indic names keep their bytes. Whitespace runs collapse to one
-        space and the ends are trimmed. The result is stored. It fails with 400 `INVALID_INPUT` on
-        `displayName` when it has no visible character (spaces, combining marks, U+FFFC and private-use
-        characters alone are not visible) or when it contains an email address. An address is
-        `local@domain.tld`, also with spaces on both sides of `@`, repeated `@`, U+FF20 or U+FE6B for
-        `@`, U+3002, U+FF0E or U+FF61 for the dot, a `mailto:` prefix, or an invisible local part.
+        default-ignorable code points, format characters other than the prepended concatenation marks
+        (such as U+0600 ARABIC NUMBER SIGN), unpaired surrogates and U+FFFD. It keeps a zero-width joiner
+        or non-joiner between two characters, a zero-width joiner after a virama, a variation selector
+        after a character and the tag characters of an RGI subdivision flag (England, Scotland, Wales),
+        so emoji, Persian and Indic names keep their bytes. Whitespace runs collapse to one space and
+        the ends are trimmed. The result is stored. It fails with 400 `INVALID_INPUT` on `displayName`
+        when it has no visible character (spaces, combining marks, U+FFFC and private-use characters
+        alone are not visible) or when it contains an email address. An address is `local@domain.tld`,
+        also with spaces after `@` or on both sides of it, repeated `@`, U+FF20 or U+FE6B for `@`,
+        U+2024, U+3002, U+FE52, U+FF0E or U+FF61 for the dot, a `mailto:` prefix, or an invisible local
+        part. A space only before `@` makes a handle, as in `Team @acme.io`.
         `alice [at] example.com`, `alice(at)example.com` and `alice@example` are not detected.
     password:
       type: string

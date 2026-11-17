@@ -6,26 +6,32 @@ const FALLBACK_DISPLAY_NAME = "Workspace User";
 
 // Why the rule looks like this:
 // - Input is cut or refused at INPUT_LENGTH UTF-16 units before any pattern runs, and every pattern is linear.
-// - Zero-width joiners, variation selectors and flag tag sequences are default-ignorable, but emoji,
-//   Persian, Indic and ideographic-variant names need them, so they stay where they modify a visible
-//   neighbour. Any other tag run goes: it hides text that agents still read.
+// - Zero-width joiners and variation selectors are default-ignorable, but emoji, Persian, Indic and
+//   ideographic-variant names need them, so they stay where they modify a visible neighbour. A joiner
+//   after a virama stays anywhere: Malayalam writes a word-final chillu that way.
+// - Tag characters render as nothing outside an RGI subdivision flag, so only those flags keep them.
+// - Format characters go, except the prepended concatenation marks, which draw a sign over the digits after them.
 // - A removed character still belongs to the address around it, so an invisible local part cannot hide
 //   one. `Team @acme.io` and `@handle` are handles, not addresses, and stay.
 // - Length counts code points, as JSON Schema `maxLength` does.
 const SPACE_LIKE = /[\p{Cc}\p{Zl}\p{Zp}\u2800\u{1D159}]/gu;
-const BASE = String.raw`[^\p{White_Space}\p{Default_Ignorable_Code_Point}\p{Cs}\uFFFD]`;
+const PREPENDED_CONCATENATION_MARK = String.raw`\u0600-\u0605\u06DD\u070F\u0890\u0891\u08E2\u{110BD}\u{110CD}`;
+const REMOVED = String.raw`[\p{Default_Ignorable_Code_Point}\p{Cs}\uFFFD[\p{Cf}--[${PREPENDED_CONCATENATION_MARK}]]]`;
+const BASE = String.raw`[^\p{White_Space}${REMOVED}]`;
 const INVISIBLE = new RegExp(
-  String.raw`(\u{1F3F4}[\u{E0030}-\u{E0039}\u{E0061}-\u{E007A}]{1,7}\u{E007F}` +
+  String.raw`(\p{RGI_Emoji_Tag_Sequence}` +
     String.raw`|(?<=${BASE}\p{Variation_Selector}?)\p{Join_Control}(?=${BASE})` +
     String.raw`|(?<=${BASE})\p{Variation_Selector})` +
-    String.raw`|[\p{Default_Ignorable_Code_Point}\p{Cs}\uFFFD]`,
-  "gu",
+    String.raw`|(?<=(\p{M}))\u200D` +
+    String.raw`|${REMOVED}`,
+  "gv",
 );
 const VISIBLE = /[^\p{White_Space}\p{M}\p{Cf}\p{Co}\p{Default_Ignorable_Code_Point}\uFFFC]/u;
-const AT = String.raw`@﹫＠`;
+const AT = String.raw`@\uFE6B\uFF20`;
+const DOT = String.raw`.\u2024\u3002\uFE52\uFF0E\uFF61`;
 const WORD = String.raw`[^\p{White_Space}${AT}]`;
 const EMAIL = new RegExp(
-  String.raw`(?<!${WORD})${WORD}+(?:\p{White_Space}+[${AT}]+\p{White_Space}+|[${AT}]+\p{White_Space}*)${WORD}+[.。．｡]${WORD}`,
+  String.raw`(?<!${WORD})${WORD}+(?:\p{White_Space}+[${AT}]+\p{White_Space}+|[${AT}]+\p{White_Space}*)${WORD}+[${DOT}]${WORD}`,
   "u",
 );
 const ADDRESS = new RegExp(String.raw`mailto:|[${AT}]+\p{White_Space}*[^\p{White_Space}${AT}()<>[\]{},;:"']*`, "giu");
@@ -72,7 +78,16 @@ export function personalSpaceName(displayName: string): string {
 }
 
 function strip(name: string): string {
-  return name.replace(SPACE_LIKE, " ").replace(INVISIBLE, (_, kept: string | undefined) => kept ?? "");
+  return name
+    .replace(SPACE_LIKE, " ")
+    .replace(INVISIBLE, (match, kept: string | undefined, mark: string | undefined) =>
+      kept ?? (mark !== undefined && isVirama(mark) ? match : ""));
+}
+
+// No regex property names Canonical_Combining_Class 9 (Virama). NFD sorts combining marks by class,
+// so only a virama lands between U+3099 (class 8) and U+05B0 (class 10).
+function isVirama(mark: string): boolean {
+  return mark !== "\u3099" && mark !== "\u05B0" && `\u05B0${mark}\u3099`.normalize("NFD") === `\u3099${mark}\u05B0`;
 }
 
 function clean(name: string): string {
