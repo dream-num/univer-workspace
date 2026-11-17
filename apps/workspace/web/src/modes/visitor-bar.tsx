@@ -3,6 +3,7 @@ import { UniverCliIcon } from "@univerjs/icons";
 import { ChevronDown, ChevronUp, Copy, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { components } from "../../../generated/http/schema.js";
+import { HandToAgentButton } from "../features/nodes/hand-to-agent";
 import { ReportNodeButton } from "../features/nodes/report-node-button";
 import { useI18n } from "../shared/i18n";
 import { Badge, Button, buttonVariants } from "../shared/ui";
@@ -11,7 +12,7 @@ import { cn } from "../shared/utils/cn";
 const STORAGE_KEY = "univer-workspace-visitor-bar-collapsed";
 const BRAND_URL = "https://github.com/dream-num/univer-workspace";
 const HOSTED_URL = "https://space.univer.ai";
-const externalLinkClass = "inline-flex items-center gap-1 text-foreground underline-offset-4 hover:underline [&_svg]:size-3";
+const externalLinkClass = "inline-flex items-center gap-1 whitespace-nowrap text-foreground underline-offset-4 hover:underline [&_svg]:size-3";
 
 type NodeOwner = components["schemas"]["NodeOwner"];
 
@@ -92,7 +93,12 @@ export function VisitorBar({
             </a>
           </p>
           <div className="col-start-2 row-start-1 flex items-center gap-1">
-            {nodeId ? <ReportNodeButton nodeId={nodeId} /> : null}
+            {nodeId ? (
+              <>
+                <HandToAgentButton nodeId={nodeId} />
+                <ReportNodeButton nodeId={nodeId} />
+              </>
+            ) : null}
           </div>
           {offerSignUp ? (
             <nav aria-label={t("signUp")} className="col-span-full row-start-2 flex items-center gap-1">

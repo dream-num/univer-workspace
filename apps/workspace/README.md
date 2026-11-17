@@ -458,10 +458,12 @@ immersive view in place of the header. It names the author, the owner of the Per
 and marks an agent that no person has claimed as `Unverified agent`. It links
 `Made with Univer Workspace` to the GitHub repository and, on wider screens, also shows
 `space.univer.ai`. `Report` opens a dialog that sends a reason to
-`POST /api/nodes/{nodeId}/reports`. The immersive bar also offers sign-up, sign-in and
-Copy link, and can collapse. A signed-in user who opens a file in another user's Personal
-Space sees the same bar under the Workspace header, without sign-up, sign-in or Copy link.
-The owner and Team Space members see only the Workspace header.
+`POST /api/nodes/{nodeId}/reports`. `Hand to my agent` copies a short English prompt for the
+reader's own agent: the file link, this instance's MCP URL, and the `uvw` guest commands for an
+agent without MCP. The immersive bar also offers sign-up, sign-in and Copy link, and can
+collapse. A signed-in user who opens a file in another user's Personal Space sees the same
+bar under the Workspace header, without sign-up, sign-in or Copy link. The owner and Team
+Space members see only the Workspace header.
 
 Workspace Browser enables local trial edits in bound HTML pages for anonymous and
 signed-in users without edit permission. Sources remain live until the first page

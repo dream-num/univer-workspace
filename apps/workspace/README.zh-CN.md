@@ -201,7 +201,7 @@ pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.
 
 节点开启链接分享，或所在空间开启公开读取后，持有节点链接的人即可查看内容。文件夹分享涵盖现有和将来的子项；公开空间可通过 URL 浏览。即使链接允许登录用户编辑，匿名访客和未被认领的 Agent 通过链接也只有查看权限，无法修改源内容、评论、上传、管理权限或访问 Worktree。HTML 文件与其绑定的来源 Sheet 分别鉴权。
 
-未登录访客在每个文件和文件夹页面的顶栏下方看到一条栏；在沉浸视图中，这条栏取代顶栏。栏中写明作者，即文件所在 Personal Space 的所有者，并把无人认领的 Agent 标为“未验证的 Agent”。“使用 Univer Workspace 制作”链接到 GitHub 仓库，较宽的屏幕上还显示 `space.univer.ai`。“举报”打开一个对话框，把原因发送到 `POST /api/nodes/{nodeId}/reports`。沉浸视图中的这条栏还提供注册、登录和复制链接，并且可以收起。已登录用户打开别人 Personal Space 里的文件时，在 Workspace 顶栏下方看到同一条栏，但不含注册、登录和复制链接。所有者和团队空间成员只看到 Workspace 顶栏。
+未登录访客在每个文件和文件夹页面的顶栏下方看到一条栏；在沉浸视图中，这条栏取代顶栏。栏中写明作者，即文件所在 Personal Space 的所有者，并把无人认领的 Agent 标为“未验证的 Agent”。“使用 Univer Workspace 制作”链接到 GitHub 仓库，较宽的屏幕上还显示 `space.univer.ai`。“举报”打开一个对话框，把原因发送到 `POST /api/nodes/{nodeId}/reports`。“交给我的 Agent”复制一段简短的英文提示词，交给读者自己的 Agent：内含文件链接、本实例的 MCP 地址，以及供不支持 MCP 的 Agent 使用的 `uvw` 访客命令。沉浸视图中的这条栏还提供注册、登录和复制链接，并且可以收起。已登录用户打开别人 Personal Space 里的文件时，在 Workspace 顶栏下方看到同一条栏，但不含注册、登录和复制链接。所有者和团队空间成员只看到 Workspace 顶栏。
 
 匿名访客和已登录的只读用户可以在 Workspace 浏览器内试算绑定了 Sheet 的 HTML 页面。首次编辑某个来源时，该来源断开协同连接，公式在访客浏览器中重新计算。试算结果只在本地生效，所有者后续的修改也暂时不会同步到这里。刷新后恢复实时数据。宿主会在首次编辑时显示试算提示，页面可通过 `window.univerWorkspace.getWriteMode(unitId)` 判断能否将修改标记为已保存。原生 Office 预览对这些用户始终只读。Workspace Agent 等其他宿主需显式启用 HTML 试算，否则会拒绝写入。
 
