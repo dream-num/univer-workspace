@@ -215,6 +215,20 @@ async function uploadBlob(h: Harness, owner: { id: string; principal: Principal;
   return (await h.application.blobs.complete(owner.principal, reserved.body.upload.id)).body.node;
 }
 
+async function listen(h: Harness): Promise<string> {
+  const server = createServer(h.application.app);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  cleanups.push(() => new Promise((resolve) => server.close(() => resolve())));
+  return `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+}
+
+const post = (origin: string, path: string, cookie: string | null, body: unknown, key: string | null = randomUUID()) =>
+  fetch(`${origin}${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}), ...(key ? { "idempotency-key": key } : {}) },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+
 const toPersonalSpace = { target: { kind: "personalSpace" } };
 const shareByLink = (h: Harness, ownerId: string, nodeId: string, enabled = true) =>
   h.application.permissions.updateNodeLinkSharing(ownerId, nodeId, { enabled, role: "viewer" });
@@ -409,16 +423,9 @@ describe("copying a file", () => {
     const reader = await h.human("http-reader");
     const source = await createSheet(h, owner);
     const folder = await h.application.nodes.create(owner.id, { spaceId: owner.spaceId, parentNodeId: null, name: "Folder" });
-    const server = createServer(h.application.app);
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-    cleanups.push(() => new Promise((resolve) => server.close(() => resolve())));
-    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const origin = await listen(h);
     const copy = (nodeId: string, cookie: string | null, key: string | null = randomUUID(), body: unknown = toPersonalSpace) =>
-      fetch(`${origin}/api/nodes/${nodeId}/copies`, {
-        method: "POST",
-        headers: { "content-type": "application/json", ...(cookie ? { cookie } : {}), ...(key ? { "idempotency-key": key } : {}) },
-        body: JSON.stringify(body),
-      });
+      post(origin, `/api/nodes/${nodeId}/copies`, cookie, body, key);
 
     const reading = await fetch(`${origin}/api/nodes/${source.nodeId}`, { headers: { cookie: reader.cookie } });
     const refused = await copy(source.nodeId, reader.cookie);
@@ -452,6 +459,30 @@ describe("copying a file", () => {
     expect(await provenance(owner.cookie)).toBe(source.nodeId);
     const stored = await fetch(`${origin}/api/operations/${key}`, { headers: { cookie: reader.cookie } });
     expect(await stored.json()).toMatchObject({ kind: "copyNode", state: "completed", result: { nodeId: node.id } });
+  }, 120_000);
+
+  it("lets a human copy from the Space of an agent they claimed and stopped, and refuses the stopped agent", async () => {
+    const h = await start();
+    const origin = await listen(h);
+    const guest = await post(origin, "/api/auth/guest", null, {});
+    const agentCookie = guest.headers.get("set-cookie")!.split(";")[0]!;
+    const agentId = ((await guest.json()) as { agent: { id: string } }).agent.id;
+    const claimer = await h.human("claimer");
+    const stranger = await h.human("claimer-stranger");
+    const source = await createSheet(h, { id: agentId, spaceId: await h.personal(agentId) });
+    await shareByLink(h, agentId, source.nodeId);
+    const { code } = (await (await post(origin, "/api/agents/claim-codes", agentCookie, undefined)).json()) as { code: string };
+    expect((await post(origin, "/api/agents/claim", claimer.cookie, { code })).status).toBe(200);
+    expect((await post(origin, `/api/agents/${agentId}/stop`, claimer.cookie, undefined)).status).toBe(204);
+
+    expect((await post(origin, `/api/nodes/${source.nodeId}/copies`, agentCookie, toPersonalSpace)).status).toBe(401);
+    expect((await post(origin, `/api/nodes/${source.nodeId}/copies`, stranger.cookie, toPersonalSpace)).status).toBe(404);
+    const copied = await post(origin, `/api/nodes/${source.nodeId}/copies`, claimer.cookie, toPersonalSpace);
+    expect(copied.status).toBe(201);
+    const { node } = (await copied.json()) as { node: NodeSummary };
+    expect(node).toMatchObject({ spaceId: claimer.spaceId, accessRole: "owner" });
+    expect((await h.application.nodes.get(claimer.id, node.id)).copiedFromNodeId).toBe(source.nodeId);
+    expect(sheetFacts(await readUnit(h, (node.resource as { unitId: string }).unitId, "sheet"), source.sheetId).value).toBe(10);
   }, 120_000);
 
   it("finishes a copy whose process died at any step, at the revision it started from", async () => {
