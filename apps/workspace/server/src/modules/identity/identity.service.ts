@@ -22,6 +22,7 @@ import type {
   IdentityRepository,
   StoredSession,
 } from "./identity.repository.js";
+import { deriveDisplayName, personalSpaceName, validDisplayName } from "./display-name.js";
 import { emailLoginMessage } from "./email-login-mail.js";
 import { createSourceRateLimiter } from "./source-rate-limiter.js";
 import type {
@@ -429,7 +430,7 @@ export function createIdentityModule(options: {
           passwordHash: await hashPassword(password),
           personalSpace: {
             id: randomUUID(),
-            name: `${displayName} 的个人空间`,
+            name: personalSpaceName(displayName),
           },
           session: issued.stored,
           createdAt,
@@ -574,7 +575,7 @@ export function createIdentityModule(options: {
         const user: User = {
           id: randomUUID(),
           username: usernameFromEmail(email, attempt),
-          displayName: displayNameFromEmail(email),
+          displayName: deriveDisplayName(email.split("@")[0]) || "Workspace User",
           avatarUrl: null,
         };
         try {
@@ -583,7 +584,7 @@ export function createIdentityModule(options: {
             email,
             personalSpace: {
               id: randomUUID(),
-              name: `${user.displayName} 的个人空间`,
+              name: personalSpaceName(user.displayName),
             },
             session: issued.stored,
             createdAt,
@@ -617,8 +618,8 @@ export function createIdentityModule(options: {
           "Too many agents were created from this address. Try again later."
         );
       }
-      const explicitLabel = cleanCallerName(input.label);
-      const clientName = explicitLabel ? undefined : agentClientName(input.clientName);
+      const explicitLabel = deriveDisplayName(input.label);
+      const clientName = explicitLabel ? undefined : deriveDisplayName(input.clientName, MAX_AGENT_CLIENT_NAME_LENGTH) || undefined;
       const label = explicitLabel || clientName || DEFAULT_AGENT_LABEL;
       const createdAt = now();
       const expiresAt = createdAt + AGENT_TTL_MS;
@@ -636,7 +637,7 @@ export function createIdentityModule(options: {
             user,
             personalSpace: {
               id: randomUUID(),
-              name: `${user.displayName} 的个人空间`,
+              name: personalSpaceName(user.displayName),
             },
             originLabel: label,
             createdAt,
@@ -683,9 +684,7 @@ export function createIdentityModule(options: {
       const providerUsername =
         suppliedUsername ?? `discord-${discordUserId}`;
       const displayName =
-        input.displayName === undefined
-          ? providerUsername
-          : validDisplayName(input.displayName);
+        (typeof input.displayName === "string" && deriveDisplayName(input.displayName)) || providerUsername;
       const avatarUrl =
         input.avatarUrl === undefined
           ? null
@@ -715,7 +714,7 @@ export function createIdentityModule(options: {
           providerUsername,
           personalSpace: {
             id: randomUUID(),
-            name: `${displayName} 的个人空间`,
+            name: personalSpaceName(displayName),
           },
           session: token.stored,
           createdAt,
@@ -1120,7 +1119,7 @@ export function createIdentityModule(options: {
         provider,
         repository
       ),
-      displayName: validDisplayName(identity.displayName),
+      displayName: deriveDisplayName(identity.displayName) || identity.username,
       avatarUrl: validAvatarUrl(identity.avatarUrl),
     };
     const token = createSessionToken(
@@ -1135,7 +1134,7 @@ export function createIdentityModule(options: {
       providerUsername: identity.username,
       personalSpace: {
         id: randomUUID(),
-        name: `${user.displayName} 的个人空间`,
+        name: personalSpaceName(user.displayName),
       },
       session: token.stored,
       createdAt,
@@ -1186,7 +1185,7 @@ export function createIdentityModule(options: {
     }
     const patch = {
       ...(usernameIsPlaceholder && { username: await availableExternalUsername(identity.username, identity.subject, "discord", repository) }),
-      ...(displayNameIsPlaceholder && { displayName: validDisplayName(identity.displayName) }),
+      ...(displayNameIsPlaceholder && { displayName: deriveDisplayName(identity.displayName) || identity.username }),
       ...(avatarIsMissing && { avatarUrl: identity.avatarUrl }),
     };
     return repository.updateUser(user.id, patch, now(), user);
@@ -1487,10 +1486,6 @@ function validDiscordUserId(value: unknown): string {
   return value;
 }
 
-function validDisplayName(value: unknown): string {
-  return requiredText(value, "displayName", 100);
-}
-
 function validEmail(value: unknown): string {
   if (typeof value !== "string") {
     throw invalidInput("Email is required.", "email");
@@ -1542,24 +1537,6 @@ function agentUsername(label: string): string {
   // shortcut: 36^4 suffixes per slug, so the five retries start failing near a million agents with one label; widen the suffix then.
   const suffix = randomInt(36 ** 4).toString(36).padStart(4, "0");
   return `${slug || DEFAULT_AGENT_LABEL}-${suffix}`;
-}
-
-/** Callers choose agent labels and client names freely, so keep them on one line without controls or bidi marks. */
-export function cleanCallerName(name: string | null | undefined): string {
-  return (name ?? "")
-    .replace(/[\p{Cc}\p{Zl}\p{Zp}]/gu, " ")
-    .replace(/[\p{Cf}\p{Cs}]/gu, "")
-    .replace(/\s+/gu, " ")
-    .trim();
-}
-
-function agentClientName(name: string | null | undefined): string | undefined {
-  return Array.from(cleanCallerName(name)).slice(0, MAX_AGENT_CLIENT_NAME_LENGTH).join("").trim() || undefined;
-}
-
-function displayNameFromEmail(email: string): string {
-  const local = (email.split("@")[0] ?? "").trim().slice(0, 100);
-  return local || "Workspace User";
 }
 
 function validPassword(

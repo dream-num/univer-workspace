@@ -1,5 +1,6 @@
 import type { PostgresDatabase } from "../connection.js";
 import type { AuthenticationMethods, ExternalIdentityProvider, User } from "../../../modules/identity/identity.types.js";
+import { personalSpaceName } from "../../../modules/identity/display-name.js";
 import type { WriteSource } from "../../../modules/identity/write-source.js";
 import type {
   StoredPrincipal,
@@ -638,11 +639,18 @@ export class PostgresIdentityRepository implements IdentityRepository {
         values.push(value);
       }
     }
-    const row = await this._database.prepare(`
-      UPDATE users SET ${fields.join(", ")} WHERE id = ? RETURNING id, username, display_name, avatar_url
-    `).get(...values, userId) as UserRow | undefined;
-    if (!row) throw new Error("Authenticated user is missing.");
-    return toUser(row);
+    return this._database.transaction(async (database) => {
+      const before = await database.prepare("SELECT display_name FROM users WHERE id = ?").get(userId) as Pick<UserRow, "display_name"> | undefined;
+      const row = await database.prepare(`
+        UPDATE users SET ${fields.join(", ")} WHERE id = ? RETURNING id, username, display_name, avatar_url
+      `).get(...values, userId) as UserRow | undefined;
+      if (!before || !row) throw new Error("Authenticated user is missing.");
+      if (row.display_name !== before.display_name) {
+        await database.prepare("UPDATE spaces SET name = ?, updated_at = ? WHERE owner_user_id = ? AND type = 'personal' AND name = ?")
+          .run(personalSpaceName(row.display_name), updatedAt, userId, personalSpaceName(before.display_name));
+      }
+      return toUser(row);
+    });
   }
 
   async deleteSession(sessionId: string): Promise<void> {

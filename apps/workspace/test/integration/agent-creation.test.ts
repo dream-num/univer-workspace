@@ -106,7 +106,9 @@ describe("POST /api/agents", () => {
       expect(agent.username).toMatch(/^budget-bot-[a-z0-9]{4}$/u);
       expect(application.database.connection.prepare("SELECT origin_label FROM agents WHERE user_id = ?").get(agent.id))
         .toEqual({ origin_label: "Budget bot" });
-      expect(await create("‮⁦\r\n")).toMatchObject({ displayName: "agent", username: expect.stringMatching(/^agent-[a-z0-9]{4}$/u) });
+      for (const invisible of ["‮⁦\r\n", "\u3164\u2800", "\u115F\u1160\uFFA0"]) {
+        expect(await create(invisible)).toMatchObject({ displayName: "agent", username: expect.stringMatching(/^agent-[a-z0-9]{4}$/u) });
+      }
     }
   });
 
@@ -169,10 +171,14 @@ describe("POST /api/auth/guest", () => {
     const hostile = await guest({ oauthClientId: await register(`‮Claude\nCode​\u0000 ${"x".repeat(80)}`) });
     expect(hostile.displayName).toBe(`Claude Code ${"x".repeat(28)} · ${hostile.username.slice(-4)}`);
 
+    const surrogate = await guest({ oauthClientId: await register("Claude\uD800Code") });
+    expect(surrogate.displayName).toBe(`ClaudeCode · ${surrogate.username.slice(-4)}`);
+
     expect(await guest({ oauthClientId: claudeCode, label: "Budget bot" })).toMatchObject({ displayName: "Budget bot" });
     for (const oauthClientId of [
       await register(),
       await register("‮⁦\n"),
+      await register("\u3164\u2800"),
       "00000000-0000-4000-8000-000000000000",
       GATEWAY_ID,
       42,

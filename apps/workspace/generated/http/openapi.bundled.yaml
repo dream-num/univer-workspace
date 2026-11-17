@@ -5996,7 +5996,9 @@ components:
         label:
           type: string
           maxLength: 64
-          description: Names the agent after control and bidi characters are removed. Blank or omitted means `agent`.
+          description: |
+            Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
+            address keeps only its local part. Blank, omitted or nothing left means `agent`.
     AgentIdentity:
       type: object
       additionalProperties: false
@@ -6038,17 +6040,21 @@ components:
         label:
           type: string
           maxLength: 64
-          description: Names the agent after control and bidi characters are removed. Blank or omitted means `agent`, or the OAuth client's name.
+          description: |
+            Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
+            address keeps only its local part. Blank, omitted or nothing left means `agent`, or the OAuth
+            client's name.
         oauthClientId:
           type: string
           description: |
             The `client_id` of the OAuth authorization the guest continues. When
             `label` is blank or omitted and this names a dynamically registered
             client with a name, the agent is named after that client: the
-            server reads the name from the registration, removes control and
-            bidi characters, keeps at most 40 characters, and appends ` · ` and
-            the username's four-character suffix to the display name. Any other
-            value is ignored.
+            server reads the name from the registration, cleans it as
+            `PasswordRegistration.displayName` describes, keeps only the local
+            part of an email address, cuts it to 40 UTF-16 code units between
+            whole characters, and appends ` · ` and the username's four-character
+            suffix to the display name. Any other value is ignored.
     GuestAgentCreated:
       type: object
       additionalProperties: false
@@ -6074,6 +6080,14 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+          description: |
+            Shown to everyone who opens the User's shared files. The server first replaces control
+            characters, line and paragraph separators and U+2800 with a space, removes format characters
+            (bidi controls, zero-width characters), default-ignorable code points (Hangul fillers),
+            unpaired surrogates and U+FFFD, collapses whitespace runs to one space and trims the ends.
+            The result is stored. It fails with 400 `INVALID_INPUT` on `displayName` when nothing is
+            left, when it contains an email address (`local@domain.tld`), or when it is longer than 100
+            UTF-16 code units.
         password:
           type: string
           minLength: 8
@@ -6220,6 +6234,10 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+          description: |
+            Cleaned as `PasswordRegistration.displayName` describes, but never refused: an email address
+            keeps only its local part and a longer name is cut to 100 UTF-16 code units between whole
+            characters. A name with nothing left falls back to the Discord username.
         avatarUrl:
           type:
             - string
@@ -6239,6 +6257,9 @@ components:
           type: string
           minLength: 1
           maxLength: 100
+          description: |
+            Follows the rule in `PasswordRegistration.displayName`. A Personal Space still named
+            `<old display name> 的个人空间` is renamed to match; a renamed Personal Space keeps its name.
         avatarUrl:
           type:
             - string
