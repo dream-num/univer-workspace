@@ -25,11 +25,28 @@ Vite 还将 `/mcp` 代理到 `WORKSPACE_DEV_MCP_PORT` 指定的本地 MCP 网关
 - `http://127.0.0.1:3020/api-docs` 提供交互式文档。
 - `http://127.0.0.1:3020/openapi.yaml` 提供 OpenAPI 定义。
 
-默认情况下，产品数据保存在 `.data/univer-workspace.sqlite`，Univer Unit 的协同数据单独保存在 `.data/univer-collaboration.sqlite`。上传文件和附件默认保存在 `.data/univer-workspace-blobs`。使用私有 S3 兼容存储桶时，设置 `BLOB_STORE=s3` 和 `BLOB_S3_BUCKET`。已有部署须先复制文件，再切换存储。[S3 配置与迁移](docs/s3-storage.zh-CN.md)
+### 配置
+
+首次本地运行时，将 [`.env.example`](.env.example) 复制为同目录下的 `.env`。默认使用 SQLite、本地文件存储和密码登录，数据保存在 `.data/`。
+
+#### 数据库
+
+使用 PostgreSQL 时，在 `.env` 中同时设置以下两项，产品库与协同库会一起切换。已有部署应先迁移数据。
+
+```dotenv
+DATABASE_PROVIDER=postgres
+DATABASE_URL=postgresql://workspace:replace-me@db:5432/workspace
+```
+
+数据库权限、S3、认证、反向代理等环境变量的默认值和部署示例见 [Workspace 配置指南](docs/configuration.zh-CN.md)。
+
+### 协同与工作台
 
 Sheet、Doc、Slide、Base 和 Board 的评论锚点保存在 Unit 快照与变更集中。评论正文、回复和解决状态由同一协同数据库中的 Comment 组件保存。主线（Trunk）、Worktree 和合并预览共享评论正文，只有锚点随 Unit 数据分支和合并。在 Worktree 删除评论也会删除主线上的同一条评论。详见 `docs/application-design.md` 的“评论与 Worktree”一节。
 
 同一协同数据库还保存历史版本的分段索引。SDK 1.0.0 会根据 Core 记录的创建信息和变更集自动建立索引。如果尚无历史记录，读取时会计算分段并在后台保存。主线上的 Sheet、Doc、Slide、Base 和 Board 编辑器使用 SDK 的版本历史界面。只读用户可以查看版本，有内容编辑权限的用户还可以恢复版本。Worktree 和合并预览编辑器不展示主线的版本历史。
+
+已登录的浏览器会保持一个 `/api/worktree-events` WebSocket 连接。AI 或 CLI 对 Worktree 的写入在协同及产品操作均完成后通知浏览器刷新缓存。活动和已处理任务列表、详情、侧栏计数及受 Worktree 影响的节点与资源列表会自动更新。连接使用一次性会话票据，通知不含 Worktree 元数据或正文。
 
 已登录用户从未创建 Worktree 且没有可见任务时，智能工作台会显示 Workspace Agent 下载入口及 CLI、Skill 安装指南。已有可见团队任务的用户会在任务列表旁看到简短介绍。
 
@@ -65,98 +82,9 @@ Wiki 保留原有首页和内嵌 Apps。Repository 导航在窄屏上使用抽�
 
 上传的 `.md` 和 `.markdown` 文件会打开只读的 CommonMark/GFM 预览。可以切换预览与源码，也可以下载原文件。预览支持表格、任务列表、删除线和脚注。两种视图均完整读取 UTF-8 文本，不截断预览。原始 HTML 按文本显示，相对文件和图片路径不会解析，外部图片只在点击后加载。Markdown 文件以 Blob 保存，无法像 Univer Doc 一样协同编辑。Agent 的远程文件查看器使用相同的渲染器。
 
-### 配置
-
-将 `.env.example` 复制为 `.env`。开发、数据库和生产启动命令会自动加载该文件。
-
-**GitHub 登录。** 同时配置 `GITHUB_CLIENT_ID`、`GITHUB_CLIENT_SECRET` 和 `GITHUB_CALLBACK_URL` 即可启用 GitHub OAuth。每个 GitHub OAuth App 只接受一个回调地址，请为开发和生产环境分别创建 App。本地开发使用以下地址。
-
-```text
-Homepage URL: http://127.0.0.1:5173
-Authorization callback URL: http://127.0.0.1:5173/api/auth/github/callback
-```
-
-生产 App 填写自己的部署域名。
-
-```text
-Homepage URL: https://workspace.example.com/
-Authorization callback URL: https://workspace.example.com/api/auth/github/callback
-```
-
-GitHub 登记的回调地址必须与 `GITHUB_CALLBACK_URL` 完全一致。配置后，登录页会显示 **使用 GitHub 继续**。首次登录会创建 Workspace 用户及个人空间。已登录的用户可以在账户菜单中关联 GitHub。Workspace 仅在登录期间用访问令牌读取 GitHub 资料，随后丢弃令牌。
-
-将允许的 GitHub 组织名用逗号分隔，填入 `GITHUB_ALLOWED_ORGANIZATIONS`，即可限制 GitHub 登录、首次注册和账户关联。Workspace 会申请 `read:org` 权限，并在每次 GitHub OAuth 回调时检查用户是否为至少一个所列组织的有效成员。已有会话在到期或退出前有效。此设置只约束 GitHub OAuth，密码注册、Google、Discord 和受信任的 Discord Bot 各自使用独立的认证方式。
-
-**GitHub Skill 导入。** `GITHUB_TOKEN` 默认留空，与 GitHub OAuth 分开配置。导入 Skill 时，服务器仅在请求 `api.github.com` 时使用这个令牌。未配置时，同一服务器 IP 的所有导入共享每小时 60 次请求的配额，配置后使用令牌的已认证配额。从 `raw.githubusercontent.com` 获取 Skill 原始文件时不携带令牌。配额用尽时，可下载 Skill 的 ZIP 文件，再上传到空间。
-
-**密码与邮箱登录。** `PASSWORD_AUTH_ENABLED` 默认开启，允许密码注册、登录和修改密码。设置 `PASSWORD_AUTH_ENABLED=false` 可关闭这三项。若希望浏览器仅允许指定 GitHub 组织的成员登录，关闭密码认证，配置 `GITHUB_ALLOWED_ORGANIZATIONS`，并保持邮箱、Google 和 Discord 登录关闭。关闭密码认证后，至少要配置邮箱、GitHub、Google 或 Discord 中的一种登录方式，服务才能启动。已有会话在退出或到期前有效。只有密码的账户随后将无法重新登录，解除 GitHub、Google 或 Discord 关联时，已存的密码也不会计作可用登录方式。
-
-设置 `EMAIL_AUTH_ENABLED=true`，或配置任一 `EMAIL_SMTP_*`、`EMAIL_FROM` 值，即可启用邮箱验证码登录。浏览器请求六位验证码，首次验证成功后创建用户和个人空间。验证码有效期为十分钟，最多允许输错五次。每个邮箱每分钟最多请求一次，每小时最多五次。请求结果不会透露该邮箱是否已注册。
-
-本地开发可用 `EMAIL_PROVIDER=console` 将验证码写入服务器日志。生产环境可使用任意 SMTP 服务，例如 AWS SES。
-
-```text
-EMAIL_PROVIDER=smtp
-EMAIL_FROM=no-reply@example.com
-EMAIL_FROM_NAME=Univer Workspace
-EMAIL_SMTP_HOST=email-smtp.us-east-1.amazonaws.com
-EMAIL_SMTP_PORT=587
-EMAIL_SMTP_USER=<SES SMTP username>
-EMAIL_SMTP_PASSWORD=<SES SMTP password>
-```
-
-验证邮件统一使用英语。`EMAIL_SMTP_USER` 和 `EMAIL_SMTP_PASSWORD` 按服务商提供的原值填写，SMTP 客户端会完成 AUTH 编码，无需手动进行 Base64 编码或 URL 转义。使用 SES 时，先验证发件域名或地址，再在 SES 控制台创建专用 SMTP 凭据。沙箱账户只能向已验证的收件人发送邮件。未设置 `EMAIL_SMTP_SECURE` 时，`EMAIL_SMTP_PORT=465` 会启用隐式 TLS。
-
-SES 返回 `Invalid login: 535 5.7.8 Authentication Credentials Invalid` 表示凭据校验失败。依次核对 SMTP 用户名是否为生成 SES SMTP 凭据时显示的访问密钥 ID、密码是否为该用户名对应生成的 SMTP 密码，以及凭据的区域是否与 `EMAIL_SMTP_HOST` 一致。IAM 用户名和 IAM 私密访问密钥均不能充当 SMTP 用户名。重新生成 IAM 访问密钥后，原来派生的 SMTP 密码随即失效。可单独运行以下命令验证邮件配置。
-
-```bash
-node --env-file=.env --input-type=module -e '
-import nodemailer from "nodemailer";
-const transport = nodemailer.createTransport({
-  host: process.env.EMAIL_SMTP_HOST,
-  port: Number(process.env.EMAIL_SMTP_PORT ?? 587),
-  secure: process.env.EMAIL_SMTP_SECURE === "true",
-  auth: { user: process.env.EMAIL_SMTP_USER, pass: process.env.EMAIL_SMTP_PASSWORD },
-});
-await transport.verify();
-console.log("SMTP authentication succeeded");
-'
-```
-
-**公开试用。** `TRIAL_DEPLOYMENT` 默认为 `false`。设为 `TRIAL_DEPLOYMENT=true` 后，用户登录时会看到试用环境无法保证长期保存数据的提示，以及用于自行部署的开源仓库链接。浏览器按用户将确认记录保存在 `localStorage`，更换浏览器或清除站点数据后会再次提示。访客和登录页不显示此提示。
+### CLI 登录与 Agent 访问
 
 **CLI 登录。** 默认由用户在浏览器批准登录。`uvw auth login` 创建有效期十分钟的一次性授权请求，输出 `/cli-login` 地址和验证码，将待完成的请求保存到本地后退出。用户可以先用邮箱验证码、GitHub、Google、Discord 或密码登录，再回到授权页核对并批准验证码。随后由 Agent 运行 `uvw auth login --complete` 兑换一次。两条命令都不会等待或轮询。CLI 获得独立的 `workspace_session`，用户的浏览器 Cookie、Workspace 密码和第三方访问令牌都不会交给 CLI。服务器重启会清除待批准的请求，已建立的 CLI 会话会持久保存。
-
-**Google 登录。** 同时配置 `GOOGLE_CLIENT_ID`、`GOOGLE_CLIENT_SECRET` 和 `GOOGLE_CALLBACK_URL`，即可启用登录和账户关联。在 Google Cloud Console 创建类型为 **Web application** 的 OAuth 2.0 客户端 ID，登记所用的开发和生产重定向 URI。
-
-```text
-http://127.0.0.1:5173/api/auth/google/callback
-https://workspace.example.com/api/auth/google/callback
-```
-
-重定向 URI 必须与 `GOOGLE_CALLBACK_URL` 完全一致。Workspace 申请 `openid email profile`，兑换令牌时同时使用 PKCE 和客户端密钥，并以 OpenID Connect 的稳定 `sub` 声明标识 Google 身份。访问令牌仅用于登录时读取 Google 资料，不会持久保存。Workspace 不按邮箱自动关联账户。同一人分别用 Google 和邮箱验证码登录，会得到两个独立的 Workspace 账户。
-
-**Discord 登录。** 同时配置 `DISCORD_CLIENT_ID`、`DISCORD_CLIENT_SECRET` 和 `DISCORD_CALLBACK_URL`，即可启用登录和账户关联。在 Discord Developer Portal 添加本地回调地址。
-
-```text
-http://127.0.0.1:5173/api/auth/discord/callback
-```
-
-重定向 URI 必须与 `DISCORD_CALLBACK_URL` 完全一致。Workspace 仅申请 `identify` 权限，保存稳定的 Discord 用户 ID 和用户名，不保存访问令牌。独立的 Discord App 可用该 ID 关联 Discord 和 Workspace 用户。
-
-受信任的 Discord Bot 服务器可调用 `POST /api/auth/discord/bot-login` 为用户登录。双方配置同一个至少 32 字符的随机密钥，Workspace 通过 `DISCORD_BOT_API_KEY` 读取，Bot 通过 `x-api-key` 请求头发送。请求必填稳定的 `discordUserId`，可选 `username`、`displayName` 和 `avatarUrl`。接口会查找或创建用户和个人空间，返回标准的已认证会话响应及 `workspace_session` Cookie。仅允许受信任的 Bot 服务器调用此接口，密钥不能交给 Discord 客户端或浏览器。若首次只提供 `discordUserId`，Workspace 会暂用占位资料，日后通过 Discord OAuth 登录时会从已验证的资料补全，并保留用户已自定义的字段。
-
-**外部 OAuth 客户端。** 部署者通过 `OAUTH_CLIENTS_JSON` 注册客户端。已注册的客户端先访问 `GET /api/auth/authorize`。该接口复用 `workspace_session`，缺少会话时转到登录页，再将短期有效的一次性授权码发给已登记的重定向 URI。`POST /api/auth/token` 会验证客户端密钥（如适用）、已登记的重定向 URI、PKCE 校验值、有效期和是否已兑换，然后返回 Workspace 身份。
-
-外部浏览器客户端应使用 `clientType: "public"`、PKCE 和 `requiresConsent: true`，省略 `clientSecret`，回调地址须与登记值完全一致。本地 Workspace Agent 的回调地址为 `http://127.0.0.1:3101/auth/oauth/callback`。内部服务可注册为机密客户端，沿用免确认的授权方式。
-
-机密客户端（如 MCP 网关）配置 `"tokenExchange": true` 后，可在 `POST /api/auth/token` 上使用 RFC 8693 授权，将个人访问令牌或 MCP OAuth 访问令牌兑换为最长十分钟的 Workspace 会话。原令牌或部署的会话期限先到时，兑换的会话同步到期。此接口只接受表单请求体，公开客户端不能配置此选项。已登录用户可以通过 `GET`/`POST /api/auth/tokens` 和 `DELETE /api/auth/tokens/:id` 管理个人访问令牌，令牌明文只在创建时返回。用令牌兑换的会话不能创建令牌、批准 CLI 登录、授权 OAuth 客户端或关联身份（`403`），因此无法再授权超出原令牌有效期的访问。
-
-**MCP OAuth。** opencode、Claude、ChatGPT 等 MCP 客户端可通过标准 OAuth 获取令牌。在 `MCP_RESOURCE_URLS` 中用逗号分隔允许请求的 MCP 服务器地址，例如 `https://space.example.com/mcp`。请求的资源地址须与其中一项完全匹配，或移除查询参数后匹配。例如 `https://space.example.com/mcp?toolsets=all` 会绑定到 `https://space.example.com/mcp`。同时将 `PUBLIC_ORIGIN` 设为客户端可访问的 Workspace 源地址，如 `https://space.example.com`。`GET /.well-known/oauth-authorization-server`（RFC 8414）使用它作为签发者地址。
-
-公开客户端可通过 `POST /api/auth/register`（RFC 7591）自行注册，无需密钥。支持的重定向 URI 包括回环 `http` 地址、`https` 地址，以及使用反向域名或允许名单内自定义协议（目前为 `cursor`）的地址。达到 `MCP_MAX_REGISTERED_CLIENTS` 上限时，注册返回 `503`，默认上限为 10,000。之后客户端通过 `GET /api/auth/authorize` 提交 PKCE `S256` 和 `resource`。回环重定向 URI 可匹配任意端口。用户每次授权都会看到确认页，可以逐项取消 `read`、`write`、`publish` 和 `worktree:merge`。
-
-`POST /api/auth/token` 返回绑定到该资源的 `uvw_at_` 访问令牌（有效期一小时）和轮换的 `uvw_rt_` 刷新令牌（有效期 30 天）。`POST /api/auth/revoke`（RFC 7009）可撤销授权。未设置 `MCP_RESOURCE_URLS` 时，这些 MCP OAuth 能力关闭。静态客户端始终沿用其原有注册规则。本地开发设置 `PUBLIC_ORIGIN=http://127.0.0.1:5173`，Vite 会将 `/.well-known` 代理到 API。
 
 浏览器 Agents 模块可凭交互式 `workspace_session` Cookie 调用 `POST /api/auth/agent-token`。请求可用 `{ "scopes": ["read"] }`、`{ "scopes": ["read", "write"] }` 或 `{ "scopes": ["read", "publish"] }`，权限顺序不限，不可重复。成功返回 `201`、`{ token, expiresAt, scopes, resource }` 以及 `Cache-Control: no-store`。有效期一小时的 `uvw_at_` 令牌属于第一方 `univer-workspace-agents` 客户端，绑定到 `PUBLIC_ORIGIN` 下的 `/mcp`，该地址必须列入 `MCP_RESOURCE_URLS`。缺少 MCP OAuth 配置或同源资源时返回 `503`，没有 Cookie 返回 `401`，使用令牌兑换的会话返回 `403`，申请了无效权限返回 `400`。
 
@@ -170,39 +98,6 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 可免凭据调用 `POST /api/nodes/:nodeId/reports` 举报调用方可读的节点。请求体为 `{ "reason" }`，最多 1,000 个字符，成功返回 `201` 和 `{ id }`。每个来源 IP 每小时最多举报十次，超出返回 `429` 和 `REPORT_RATE_LIMITED`。日志仅记录节点及举报 ID。
 
-两个创建 Agent 的接口共用一个按来源 IP 计算的进程内限额。`AGENT_CREATE_LIMIT_PER_HOUR` 控制任意一小时内可创建的数量，默认为 `5`。设为 `0` 会禁用创建，匿名访问 `GET /api/session` 返回 `guestAuthEnabled: false`，页面随之隐藏访客入口。超过限额返回 `429` 和 `AGENT_CREATE_RATE_LIMITED`。IPv6 来源按 /64 前缀计数。进程重启会重新计数，不同实例独立计数。
-
-默认使用 TCP 对端的 IP。经反向代理部署时，所有客户端会共享代理 IP 的限额，除非设置 `TRUST_PROXY`。其值对应 Express 的 `trust proxy`，可填 Workspace 前方的代理跳数（如 `1`），或用逗号分隔的代理地址和子网（如 `loopback, 10.0.0.0/8`）。取值 `true` 会信任任意 `X-Forwarded-For`，能直连 Workspace 的客户端也能自行指定来源 IP。
-
-**MCP 客户端元数据。** 公开 MCP 客户端可使用 HTTPS `client_id` URL，通过客户端 ID 元数据文档（CIMD）标明身份，无需动态注册或写入 `oauth_clients`。启用 MCP OAuth 时默认启用 CIMD。发现文档会列出 `client_id_metadata_document_supported` 和 `authorization_response_iss_parameter_supported`，所有 MCP 授权回调（成功、出错或拒绝）都包含 `iss`。静态客户端沿用原有的回调行为。无法向外发起 HTTPS 请求的部署可设 `MCP_CIMD_ENABLED=0`。发现文档随后不再声明 CIMD 支持，URL 形式的客户端 ID 视为未知客户端，动态客户端注册（DCR）仍可用。
-
-CIMD URL 必须使用 HTTPS，含根目录以外的路径，并省略凭据、查询、片段及点路径段。仅在交互式登录后获取元数据。连接时检查目标是否为公网地址，不使用环境代理或跟随重定向。响应正文上限为 5 KB，总超时为五秒。同一 URL 的并发请求会合并，每个用户最多有一个进行中的获取请求，进程最多 32 个。有效文档缓存 5 分钟至 24 小时，最多 1,000 条。遇到临时错误时，仍可沿用上次成功获取的文档，最迟到该次获取后的 24 小时。授权确认页显示客户端名称和主机名。获取失败时，页面停留在 Workspace，无效请求返回 400，临时故障返回 503。令牌兑换、刷新和撤销均不获取元数据。删除文档不会撤销已签发的刷新授权，其有效期最长 30 天。
-
-如果 fake-IP 或 TUN 解析器把公网主机映射到被阻止的网段，可用 `MCP_CIMD_EXEMPT_NETWORKS` 为获取元数据的出站连接放行所需代理网段。该选项接受逗号分隔的 CIDR（如 `198.18.0.0/15`），默认空。使用此类解析器时，真实地址由代理解析，Workspace 无法阻止通过主机名访问代理可达的内网服务，因此只能对无法访问内网服务的代理启用此配置。服务器启动时会拒绝与 IPv4 或 IPv6 回环、链路本地网络重叠的例外网段。
-
-默认关闭 Agent 客户端，`.env.example` 里提供了注释示例。完整配置、启动本地服务器和浏览器、注册账户并连接 Agent 的步骤见[连接本地 Workspace](../agent/README.zh-CN.md#连接本地-workspace)。此授权功能复用现有登录、OAuth 回调、Cookie 和产品 API，无需部署额外代理或组件。
-
-部署者可在注册客户端时为其开放 `session` 权限。授予该权限后，令牌响应会在 `access_token` 返回 Workspace 登录会话令牌，`expires_in` 为剩余有效期。客户端将令牌作为 `workspace_session` Cookie 访问产品和协同接口，以授权用户的权限操作。会话到期后需重新授权，不提供刷新授权。客户端注册时已确定是否信任其获取会话，因此签发授权码时沿用仅授权身份时的免确认行为。
-
-**运行时许可证。** 浏览器和 Workspace CLI 使用同一份内置开发凭据，两处副本每 90 天一并轮换。仓库代码的开源许可证另行适用。内置凭据允许的域名列在生成的 `license.ts` 注释中。部署到其他域名或需要本地覆盖时，请在构建时设置 `VITE_UNIVER_LICENSE`。未列入许可的域名提供的页面访问协同接口时会收到 403（错误码 9018）。
-
-服务器同时向 Collaboration 服务和 Office 导入导出传入许可证及密钥，默认使用内置开发凭据。要覆盖须同时配置 `UNIVER_LICENSE` 和 `UNIVER_LICENSE_KEY`。缺少许可证时，两个 SDK 使用免费额度，即一个协同节点、三个编辑连接、每月十次导出。服务器、数据库、GitHub 和 Discord 均使用运行时配置。
-
-已登录的浏览器会保持一个 `/api/worktree-events` WebSocket 连接。AI 或 CLI 对 Worktree 的写入在协同及产品操作均完成后通知浏览器刷新缓存。活动和已处理任务列表、详情、侧栏计数及受 Worktree 影响的节点与资源列表会自动更新。连接使用一次性会话票据，通知不含 Worktree 元数据或正文。
-
-### 数据库
-
-`DATABASE_PROVIDER` 同时选择产品库和协同库的后端。默认值为 `sqlite`，两个文件的位置分别由 `DATABASE_FILE` 和 `COLLABORATION_DATABASE_FILE` 指定。使用 PostgreSQL 17 时，先建一个专用数据库，给 Workspace 账号授予创建 `collaboration` schema 以及在产品 schema（通常为 `public`）和 `collaboration` 中创建对象的权限。给服务进程或容器传入：
-
-```dotenv
-DATABASE_PROVIDER=postgres
-DATABASE_URL=postgresql://workspace@db/workspace
-```
-
-首次启动自动创建产品表和协同表。备份时停止全部写入实例，保存整个 PostgreSQL 数据库的逻辑备份和配套的 BlobStore 内容。恢复两者后再启动一个实例。
-
-切换后端前需单独迁移已有的 SQLite 数据。此前使用 `PRODUCT_DATABASE_PROVIDER=postgres` 的部署，产品数据已在 PostgreSQL 中，需先迁移协同 SQLite 文件中的数据，再替换旧配置。
-
 ## Docker
 
 在仓库根目录构建镜像。
@@ -214,30 +109,21 @@ docker build \
   -t univer-workspace .
 ```
 
-运行容器并挂载持久化数据卷。
+本地通过 HTTP 运行容器并挂载持久化数据卷。
 
 ```bash
 docker run --name univer-workspace \
-  -p 3020:3020 \
+  -p 127.0.0.1:3020:3020 \
   -v univer-workspace-data:/app/univer-workspace/.data \
-  -e GITHUB_CLIENT_ID \
-  -e GITHUB_CLIENT_SECRET \
-  -e GITHUB_CALLBACK_URL=https://workspace.example.com/api/auth/github/callback \
-  -e GITHUB_ALLOWED_ORGANIZATIONS \
-  -e GOOGLE_CLIENT_ID \
-  -e GOOGLE_CLIENT_SECRET \
-  -e GOOGLE_CALLBACK_URL=https://workspace.example.com/api/auth/google/callback \
-  -e DISCORD_CLIENT_ID \
-  -e DISCORD_CLIENT_SECRET \
-  -e DISCORD_CALLBACK_URL=https://workspace.example.com/api/auth/discord/callback \
-  -e OAUTH_CLIENTS_JSON \
-  -e SECURE_COOKIES=true \
+  -e SECURE_COOKIES=false \
   univer-workspace
 ```
 
-通过 HTTPS 部署时保持安全 Cookie 开启。使用明文 HTTP 时，传入 `-e SECURE_COOKIES=false`。
+通过 HTTPS 部署时，移除示例中的 `-e SECURE_COOKIES=false`，保留镜像的安全 Cookie 默认值。运行时配置可通过 `--env-file ./workspace.env` 传入容器。
 
-需要全新的本地测试实例时，挂载一个新的空数据卷即可。启动会保留已有数据，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
+### SQLite 升级与恢复
+
+需要全新的本地 SQLite 测试实例时，挂载一个新的空数据卷即可。启动会保留已有数据，自动备份受支持的 V0 至 V20 产品数据库并迁移至 V21。容器运行期间，只能从容器内部（`docker exec … node`）访问 SQLite 文件。产品数据库采用 WAL 模式，从宿主机用另一套 SQLite 打开文件，即使只读也可能损坏文件。检查或复制 `.data` 前先停止容器。
 
 SQLite 协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`、`comment=1`。SDK 1.5.2 为主线和 Worktree 的 Unit、Changeset 增加元数据，已有记录的初始值为 `{}`，内容和修订号保留。
 
@@ -265,7 +151,7 @@ SQLite 协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`�
 - **V15** 新增 `space_pins` 和 `space_stars_user`，支持按序置顶及按用户索引收藏。已有行、内容、Blob 标识和恢复状态均保留。停止全部旧实例，启动一个 V15 实例，等待迁移和健康检查通过后恢复服务。启动先校验 V14，创建可读的 `.v14-backup-…sqlite` 备份，再在一个事务中建表、建索引并执行外键和完整性检查。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V15 并还原 V14 备份。禁止 V14 与 V15 同时写同一 SQLite 文件。
 - **V16** 新增 `login_sessions.write_source`、`worktrees.created_via` 和 `issues.created_via`。三列均可空、无默认值，CHECK 允许 `browser` 和 `agent`。已有行保留 `NULL`，表示来源未知。签发会话时将入口记入 `write_source`。通过 HTTP 创建 Worktree 或 Issue 时把来源写入 `created_via`，由 `createdVia` 返回 `browser`、`agent` 或 `unknown`。重试创建 Worktree 的 Operation 会保留首次预留的来源。停止全部旧写入实例，启动一个 V16 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V15，并在事务前创建可读的 `.v15-backup-…sqlite`，失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V16 并还原 V15 备份。禁止 V15 与 V16 同时写同一 SQLite 文件。
 - **V17** 扩展 `univer_resources` 和 `worktree_node_intents` 的 Unit 类型，允许 `pdf`。SQLite 无法直接修改 CHECK 约束，迁移在一个事务中重建这两张表，保留全部行、`univer_resources_kind_guard` 触发器，以及 `content_permission_objects` 对它的外键引用。内容、Blob 标识和恢复状态均保留。停止全部旧实例，启动一个 V17 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V16，创建可读的 `.v16-backup-…sqlite` 备份，再重建表并检查外键和完整性。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V17 并还原 V16 备份。禁止 V16 与 V17 同时写同一 SQLite 文件。
-- **V19** 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens`，分别保存动态注册的 OAuth 客户端、MCP OAuth 授权（访问令牌及轮换刷新令牌的哈希）、已淘汰刷新令牌的哈希（用于检测重复使用），以及个人访问令牌（以哈希保存，可撤销）。`login_sessions` 新增 `login_sessions.issued_for_pat_id` 和 `issued_for_grant_id` 两个可空列，将下游会话关联到签发它的令牌。迁移仅新增表、索引和列，既有会话、有效期和登录均保留。停止全部旧实例，启动一个 V19 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V17，创建可读的 `.v17-backup-…sqlite` 备份，再执行迁移及外键、完整性检查。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V19 并还原 V17 备份。禁止 V17 与 V19 同时写同一 SQLite 文件。上文的个人访问令牌、MCP OAuth 和令牌交换路由使用这些新表。
+- **V19** 新增 `oauth_clients`、`oauth_grants`、`oauth_refresh_history`、`personal_access_tokens`，分别保存动态注册的 OAuth 客户端、MCP OAuth 授权（访问令牌及轮换刷新令牌的哈希）、已淘汰刷新令牌的哈希（用于检测重复使用），以及个人访问令牌（以哈希保存，可撤销）。`login_sessions` 新增 `login_sessions.issued_for_pat_id` 和 `issued_for_grant_id` 两个可空列，将下游会话关联到签发它的令牌。迁移仅新增表、索引和列，既有会话、有效期和登录均保留。停止全部旧实例，启动一个 V19 实例，等待迁移和健康检查通过后恢复服务。启动会校验 V17，创建可读的 `.v17-backup-…sqlite` 备份，再执行迁移及外键、完整性检查。事务失败会回滚，成功后重启不会重复迁移或备份。回滚时停止 V19 并还原 V17 备份。禁止 V17 与 V19 同时写同一 SQLite 文件。个人访问令牌、MCP OAuth 和令牌交换路由使用这些新表。
 
 将 `univer-workspace-cli` 升级到按 `owner/slug` 寻址仓库的版本前，先部署新版 Workspace 服务端。
 
@@ -346,7 +232,7 @@ pnpm --filter @univerjs/univer-workspace exec vite --config test/vite.immersive.
 
 匿名访客和已登录的只读用户可以在 Workspace 浏览器内试算绑定了 Sheet 的 HTML 页面。首次编辑某个来源时，该来源断开协同连接，公式在访客浏览器中重新计算。试算结果只在本地生效，所有者后续的修改也暂时不会同步到这里。刷新后恢复实时数据。宿主会在首次编辑时显示试算提示，页面可通过 `window.univerWorkspace.getWriteMode(unitId)` 判断能否将修改标记为已保存。原生 Office 预览对这些用户始终只读。Workspace Agent 等其他宿主需显式启用 HTML 试算，否则会拒绝写入。
 
-生产部署中，允许匿名访问的 `/nodes/<nodeId>` 链接（含 `?view=immersive`）在聊天预览里会显示页面标题和简短描述。HTML 视图的标题省略 `.univer.html` 后缀。描述按 `Accept-Language` 返回中文或英文，缓存按该请求头区分，沿用应用页面的重新验证策略。配置 `PUBLIC_ORIGIN` 后才会生成绝对地址 `og:url`。私有、已删除或不存在的节点显示通用应用页面。Vite 开发服务器不生成此类预览，预览也不含图片。
+生产部署中，允许匿名访问的 `/nodes/<nodeId>` 链接（含 `?view=immersive`）在聊天预览里会显示页面标题和简短描述。HTML 视图的标题省略 `.univer.html` 后缀。描述按 `Accept-Language` 返回中文或英文，缓存按该请求头区分，沿用应用页面的重新验证策略。配置 `PUBLIC_ORIGIN` 后才会生成绝对地址 `og:url`，并按节点类型（Sheet、Doc、Slide、HTML 视图、文件夹或其他文件）附上一张 1200x630 的预览图，卡片为大图样式。未配置时两者都省略，因为 Open Graph 要求图片使用绝对地址，而请求的 Host 不可信。私有、已删除或不存在的节点显示通用应用页面。预览图是 `web/public/link-preview` 下的静态文件，可用 `node scripts/render-link-preview-images.mjs` 重新生成，需要 Google Chrome 和 ImageMagick。Vite 开发服务器不生成此类预览。
 
 升级后，原有分享设置继续生效。匿名访问不会创建账号、登录会话或最近访问记录，也无需变更 schema 或迁移数据库。
 访问未认领 Agent 拥有的文件页面会延后该 Agent 的过期时间，每天最多更新一次。被封禁或已过期的 Agent 所分享的链接返回“未找到”。

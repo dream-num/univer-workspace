@@ -20,7 +20,7 @@
 
 - HTML view 是绑定实时 Sheet 数据的小型应用，不是静态页面。渲染、分享和预览都基于实时数据，
   不做快照、静态导出或内联数据副本。这条规则写进了根 `AGENTS.md` 的 “HTML View” 一节。
-- 访客权限跟随 repository 的文档权限。匿名访客和非成员只读，页面写入一律被拒绝。
+- 访客权限跟随 repository 的文档权限。匿名访客和非成员只读，页面写入不会进入来源 Sheet。
 
 ## 现状
 
@@ -71,7 +71,9 @@ Agent 仍不能用 Unit 截图工具查看 HTML View：MCP 的 `screenshot` 只�
   `public_read`（`access.service.ts:281-296`）。
 - 协同网关用一份 GET 白名单放行匿名的 session ticket、snapshot、评论和历史读取
   （`collaboration-gateway.ts:59-64`），匿名 WebSocket 只能读。
-- 页面写入在共享组件里先被拦下，匿名访客收到 `signInRequired`（`workspace-html-viewer/src/engine.ts:63-68`）。
+- 共享组件在每次写入前检查权限（`packages/workspace-html-viewer/src/engine.ts:91-104`）。Workspace Browser 开启了只读试算
+  （`apps/workspace/web/src/features/html-views/workspace-binding-engine.ts:41`），匿名访客和只读用户的第一次写入会断开协同，
+  之后的改动只在本机计算，不保存也不发送。没有开启试算的宿主仍拒绝写入，匿名访客收到 `signInRequired`。
 
 repository 是 team Space（`spaces.repository.ts:163`），Link Sharing 只能用于 personal Space，
 所以 repository 场景下的匿名入口就是整库公开，用 `uvw repo edit --visibility public` 或 MCP `admin` 工具集中的 `repo_edit` 设置。
@@ -107,15 +109,16 @@ HTML View Skill 增加 “Share the page” 一节，要求 Agent 把 `shareUrl`
   沉浸视图中的细条可以收起成小标签，收起状态只在当前标签页内保留。
 - `/login` 接受 `mode=register`，直接打开“创建账号”；`returnTo` 指回原页面，注册后回到这里。
 - 非沉浸的访客顶栏在“登录”旁加“注册”。
-- 访客尝试修改数据时，提示改为“访客不能修改数据”，并指向底部的注册入口。注册不会让访客成为 repository 成员，
-  所以文案不承诺注册后可以编辑。
+- 访客尝试修改数据时，页面进入试算。改动只在本机计算，不保存，页面下方提示“试算模式，改动不会保存”。
+  注册不会让访客成为 repository 成员，所以文案不承诺注册后可以编辑。
 
 ### 链接预览
 
 链接被贴进 Slack、飞书、微信时，预览今天只显示应用外壳的通用标题。生产服务器返回 SPA `index.html` 时，
 对匿名身份可读的 `/nodes/{id}`，在 head 里写入页面名称和一句描述（`og:title`、`og:description` 等），
 中文 `Accept-Language` 用中文描述。私有或不存在的节点返回原样的 `index.html`，不泄露任何信息。
-这次不生成预览图片。
+配置了 `PUBLIC_ORIGIN` 时，再按节点类型附一张静态预览图（`og:image`，`twitter:card` 为 `summary_large_image`）；
+按页面内容生成的截图不在这里做。
 
 ### 提高观感下限
 
@@ -163,9 +166,9 @@ DSH 插件的 Skill 分叉暂不同步，后续单独处理。
 1. 用 MCP 建 repository 和 Sheet，写入数据。Agent 先读 Skill 和 `design.md`，按上述风格流程在回复中询问并等待回答（用户已指定风格则直接使用，只有用户放权时才默认 Night Gauge（仪表夜航）），从对应模板开始，`html_view_validate` 后 `html_view_create`。
 2. 私有 repository：返回 `repositoryVisibility: private`；匿名会话打开 `shareUrl` 看不到页面。
 3. `repo_edit visibility=public` 后再建一个页面：返回 `public` 且 `privateSourceUnitIds` 为空；
-   匿名会话打开 `shareUrl`，看到实时数据和底部注册条。
+   匿名会话打开 `shareUrl`，看到实时数据和顶部注册条。
 4. 登录用户在另一个会话修改 Sheet，匿名会话中的页面实时更新。
-5. 匿名访客操作页面控件，写入被拒绝，提示指向注册；Sheet 数据不变。
+5. 匿名访客操作页面控件，页面进入试算并显示试算提示；Sheet 数据不变。
 6. 点“免费注册”，打开创建账号页；注册后回到原页面。
 7. 生产构建下 `curl` 公开页面的 `/nodes/{id}`，head 里有页面标题；私有页面的响应与 `index.html` 一致。
 8. 用 CLI 的同名命令重复第 1 到 3 步，确认两边输出一致。
@@ -176,7 +179,7 @@ DSH 插件的 Skill 分叉暂不同步，后续单独处理。
 
 | PR | 内容 |
 | --- | --- |
-| 访客注册引导 | Browser：底部注册条、`/login?mode=register`、访客写入提示 |
+| 访客注册引导 | Browser：注册条、`/login?mode=register`、访客写入提示 |
 | 分享信息 | client-core、CLI、MCP 的 `create` 返回字段，Skill 的分享一节 |
 | 设计指引与模板 | Skill 的必读要求、`design.md` 十种风格目录和十个模板，打包脚本带上 `templates/` |
 | 链接预览 | Server：公开节点的 head meta |
