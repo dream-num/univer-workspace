@@ -172,7 +172,8 @@ Cookie Session 与 token exchange 都经过同一个检查，被封禁的 agent 
 认领由 `modules/identity/agent-claims.ts` 负责，是 CLI Device Flow 的反向：未认领 agent 的任意 Session 调用
 `POST /api/agents/claim-codes` 取得认领码，人的浏览器 Session 用 `GET`、`POST /api/agents/claim` 查看和认领。
 认领码只在当前进程内保存，10 分钟有效，过期后再保留 10 分钟以便回答 410，每个 agent 最多 10 个有效码，
-全进程最多 10000 个。认领码只能用一次，因为认领是一次条件更新：`owner_user_id` 为空且未封禁时才写入主人、
+全进程最多 10000 个有效码，已过期的码不占容量。410 与 404 按读取时的时间判断，不依赖其他 agent 取码。
+认领码只能用一次，因为认领是一次条件更新：`owner_user_id` 为空且未封禁时才写入主人、
 `claimed_at` 并清空 `expires_at`，两个人同时认领只有一个成功，同一个人重复认领直接返回。人在设置里用
 `GET /api/agents` 列出自己的 agent，用 `POST /api/agents/{agentId}/stop` 停用其中一个，停用就是写 `banned_at`。
 

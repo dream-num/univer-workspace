@@ -35,18 +35,24 @@ export function createAgentClaims(options: {
   const now = options.now ?? (() => Date.now());
   const pending = new Map<string, PendingClaim>();
 
-  function sweep(agentUserId: string): void {
+  function sweep(agentUserId: string): number {
     const at = now();
     let oldest: string | undefined;
+    let mine = 0;
     let live = 0;
     for (const [code, claim] of pending) {
       if (claim.expiresAt + EXPIRED_CODE_ANSWERED_FOR_MS <= at) pending.delete(code);
-      else if (claim.agentUserId === agentUserId && claim.expiresAt > at) {
-        oldest ??= code;
+      else if (claim.expiresAt > at) {
         live += 1;
+        if (claim.agentUserId === agentUserId) {
+          oldest ??= code;
+          mine += 1;
+        }
       }
     }
-    if (oldest !== undefined && live >= CLAIM_CODES_PER_AGENT) pending.delete(oldest);
+    if (oldest === undefined || mine < CLAIM_CODES_PER_AGENT) return live;
+    pending.delete(oldest);
+    return live - 1;
   }
 
   async function requireHuman(cookieHeader: string | undefined): Promise<User> {
@@ -62,8 +68,9 @@ export function createAgentClaims(options: {
 
   async function claimable(code: unknown, humanId: string): Promise<{ readonly agent: StoredAgent; readonly claimed: boolean }> {
     const claim = typeof code === "string" ? pending.get(code) : undefined;
-    if (!claim) throw invalidCode();
-    if (claim.expiresAt <= now()) {
+    const at = now();
+    if (!claim || claim.expiresAt + EXPIRED_CODE_ANSWERED_FOR_MS <= at) throw invalidCode();
+    if (claim.expiresAt <= at) {
       throw new ApplicationError("AGENT_CLAIM_EXPIRED", 410, "This claim link has expired. Ask the agent for a new one.");
     }
     const [agent] = await repository.findAgents({ userId: claim.agentUserId });
@@ -80,8 +87,7 @@ export function createAgentClaims(options: {
         throw new ApplicationError("FORBIDDEN", 403, "Only an agent can ask to be claimed.");
       }
       if (user.claimed) throw alreadyClaimed();
-      sweep(user.id);
-      if (pending.size >= CLAIM_CODE_CAPACITY) {
+      if (sweep(user.id) >= CLAIM_CODE_CAPACITY) {
         throw new ApplicationError("AGENT_CLAIM_UNAVAILABLE", 503, "Claim links are temporarily unavailable. Try again shortly.");
       }
       const code = randomBytes(16).toString("base64url");

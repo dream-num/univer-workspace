@@ -228,12 +228,12 @@ claims the agent once. A signed-in person opens the page, which reads `GET /api/
 claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
 CLI login and a token session get `403`. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
 the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
-code `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and `claimed_at` and clears the expiry.
-The claimer becomes an owner of the agent's Personal Space and manages its files in the browser; the
-agent gets no access to the claimer's files. `GET /api/agents` lists the claimer's agents with file
-count and last activity, and `POST /api/agents/{agentId}/stop` stops one: it bans the agent, so its
-links stop working for everyone but its owners, and closes the collaboration sockets the agent holds.
-There is no undo.
+code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
+`claimed_at` and clears the expiry. The claimer becomes an owner of the agent's Personal Space and
+manages its files in the browser; the agent gets no access to the claimer's files. `GET /api/agents`
+lists the claimer's agents with file count and last activity, and `POST /api/agents/{agentId}/stop`
+stops one: it bans the agent, so its links stop working for everyone but its owners, and closes the
+collaboration sockets the agent holds. There is no undo.
 
 Ceilings forbid some actions whatever role the caller holds, each with `403`. No agent can create a
 Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
