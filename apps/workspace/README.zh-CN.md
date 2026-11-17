@@ -85,7 +85,7 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 **访客 Agent。** `POST /api/agents` 和 `POST /api/auth/guest` 都支持免凭据创建 `agent` 类型的用户。Agent 有独立的个人空间，初始有效期为 30 天。`POST /api/agents` 接受可选的 `{ "label" }`，以 `201` 返回 `{ agent: { id, username }, token, mcpUrl, expiresAt }`。`token` 为包含所有 MCP 权限的个人访问令牌，`mcpUrl` 为 `MCP_RESOURCE_URLS` 中的第一个地址，未配置时为 `null`。`POST /api/auth/guest` 会设置 `workspace_session` Cookie 并返回 `{ agent }`。请求已携带有效会话时返回 `409`，避免覆盖当前登录。登录后将返回 `/api/auth/authorize` 时（例如 MCP 客户端的 OAuth 登录），页面会提供访客 Agent 入口。选择后浏览器把授权请求的 `client_id` 作为 `oauthClientId` 传给 `POST /api/auth/guest`，再回到授权页，由访客确认所需权限。该客户端经动态注册登记过名称时，服务端从注册记录读取名称为访客命名，例如 `Claude Code · 7f3k`，同一客户端的多个 Agent 仍可区分；没有带名称的注册客户端时，访客名为 `agent`。
 
-未认领的 Agent 每次认证或有人访问其 `/nodes/:nodeId` 页面时，到期时间会延至 30 天后，每天最多续期一次。Agent 到期或被封禁后，其个人空间仅自己可读，其他人打开其链接会收到“未找到”。无论上次活跃距今多久，到期 Agent 再次认证即可恢复。被封禁的 Agent 认证时返回 `401`，兑换令牌返回 `invalid_grant`。运行 `pnpm db:ban-agent <username or user id>` 可封禁 Agent，生产构建使用 `db:ban-agent:production`。该命令只接受 Agent，重复执行不会再次变更状态。参数既是一个用户的 ID、又是另一个用户的用户名时（两者都忽略大小写比较），命令列出两者并拒绝执行，换用另一个标识即可。既有协同连接保持到会话结束。MCP 网关最多缓存令牌兑换结果 30 秒，此期间，`whoami` 等不访问 Workspace 的工具可能仍会响应已封禁的令牌。
+未认领的 Agent 每次认证或有人访问其 `/nodes/:nodeId` 页面时，到期时间会延至 30 天后，每天最多续期一次。Agent 到期或被封禁后，其个人空间仅自己可读，其他人打开其链接会收到“未找到”。无论上次活跃距今多久，到期 Agent 再次认证即可恢复。被封禁的 Agent 认证时返回 `401`，兑换令牌返回 `invalid_grant`。运行 `pnpm db:ban-agent <username or user id>` 可封禁 Agent，生产构建使用 `db:ban-agent:production`。该命令只接受 Agent，重复执行不会再次变更状态。参数既是一个用户的 ID、又是另一个用户的用户名，或同时是两个仅大小写不同的用户 ID 时（两者都忽略大小写比较），命令按匹配的标识列出每个用户并拒绝执行，换用另一个标识即可。既有协同连接保持到会话结束。MCP 网关最多缓存令牌兑换结果 30 秒，此期间，`whoami` 等不访问 Workspace 的工具可能仍会响应已封禁的令牌。
 
 共享 MCP 执行层在同一个容器里为所有用户运行脚本，因此由运维决定谁能使用。运行 `pnpm db:executor-access grant <username or user id>` 授权，`revoke` 撤销，`list` 列出已授权的用户，没有时提示无人获得授权；生产构建使用 `db:executor-access:production`，运行时镜像内执行 `node dist/server/db/executor-access.js`。重复授权或撤销不会再次变更状态，参数同时指向两个用户时与 `db:ban-agent` 一样拒绝执行。没有任何 HTTP 接口能修改授权，用户和 Agent 都不能给自己授权。已授权用户的 `GET /api/session` 返回 `executorAccess: true`，令牌兑换返回 `executor_access: true`，未授权时不返回该字段。MCP 设置 `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` 后，网关和执行层约 30 秒后跟随授权变化，无需重启。MCP 从 `*` 或用户 ID 列表切换到 `workspace` 之前，先授权当前使用执行层的用户，`workspace` 不放行其他人。
 
@@ -255,8 +255,8 @@ V20→V21 新增 `users.kind`（取值为 `human` 或 `agent`，已有用户视�
 V21→V22 不改 Schema，只按显示名规则改写数据；PostgreSQL 的同一修复把 `workspace_product_schema` 从版本 1
 升到 2。只有含邮箱地址、没有可见字符或含误导字符的显示名会被改写。控制字符、行与段分隔符、U+2800 和 U+1D159
 变为空格；双向控制、韩文填充符、零宽空格等默认可忽略字符，前置连接符号（如 U+0600）以外的其它格式字符，未配对
-代理项和 U+FFFD 被清除。两个字符之间或 virama 之后的零宽连接符与零宽非连接符、紧跟字符的变体选择符，以及英格兰、
-苏格兰、威尔士旗帜的标签字符保留。邮箱地址只保留本地部分。其它名字逐字节不变，包括 emoji 和需要连接符的文字。仍以 owner 原显示名
+代理项和 U+FFFD 被清除。两个非空白字符之间的零宽连接符与零宽非连接符、virama 之后的零宽连接符、紧跟字符的变体选择符，以及英格兰、
+苏格兰、威尔士旗帜的标签字符保留；名字末尾紧随 virama 的零宽非连接符被清除。邮箱地址只保留本地部分。其它名字逐字节不变，包括 emoji 和需要连接符的文字。仍以 owner 原显示名
 命名的个人空间（例如 `alice@example.com 的个人空间`）随之改名，其它名字和数据保持不变。停止全部旧实例，启动一个 V22 实例，
 待一致性备份、迁移和健康检查通过后再恢复服务。PostgreSQL 需在升级前自行备份。迁移失败会回滚，成功后重启
 不会重复迁移或备份。如需回退，停止 V22 并恢复 V21 备份。V21 和 V22 不得同时写入同一 SQLite 文件。
