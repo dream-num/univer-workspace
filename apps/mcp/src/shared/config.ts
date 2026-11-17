@@ -35,15 +35,39 @@ const quota = z
   .regex(/^\d+$/)
   .transform(Number)
   .pipe(z.number().int().positive().max(Number.MAX_SAFE_INTEGER));
+// The ID list predates Workspace grants; remove it once every deployment sets `workspace` or `*`.
 const allowedUserIdList = z
   .string()
   .transform((value) => value.split(",").map((id) => id.trim()))
-  .pipe(z.array(z.string().min(1).refine((id) => id !== "*", "* must stand alone")).min(1))
+  .pipe(
+    z
+      .array(
+        z
+          .string()
+          .min(1)
+          .refine(
+            (id) => !id.includes("*") && id.toLowerCase() !== "workspace",
+            "* and workspace must stand alone, spelled exactly; user IDs contain neither",
+          ),
+      )
+      .min(1),
+  )
   .transform((ids): ReadonlySet<string> => new Set(ids));
+/** Undefined lets everyone use the executor; "workspace" defers to the grant Workspace reports per User. */
 export const executorAllowedUserIds = z.union([
   z.literal("*").transform(() => undefined),
+  z.literal("workspace"),
   allowedUserIdList,
 ]);
+export type ExecutorAccessPolicy = z.output<typeof executorAllowedUserIds> | undefined;
+
+export function allowsExecutor(
+  policy: ExecutorAccessPolicy,
+  user: { readonly id: string; readonly executorAccess: boolean },
+): boolean {
+  if (policy === undefined) return true;
+  return policy === "workspace" ? user.executorAccess : policy.has(user.id);
+}
 const environment = z.object({
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   PORT: z.string().regex(/^\d+$/).transform(Number).pipe(z.int().min(1).max(65535)).default(3000),

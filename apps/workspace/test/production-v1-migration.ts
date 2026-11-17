@@ -125,7 +125,7 @@ try {
     const version = migrated.connection
       .prepare("PRAGMA user_version")
       .get() as { readonly user_version: number };
-    assert.equal(version.user_version, 22);
+    assert.equal(version.user_version, 23);
     const resource = migrated.connection
       .prepare("SELECT id, kind FROM resources")
       .get() as { readonly id: string; readonly kind: string };

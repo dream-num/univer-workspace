@@ -889,3 +889,8 @@ CREATE TABLE node_reports (
   reason TEXT NOT NULL,
   created_at BIGINT NOT NULL
 );
+
+CREATE TABLE executor_access (
+  user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  granted_at BIGINT NOT NULL
+);

@@ -2811,6 +2811,11 @@ export interface components {
             trialDeployment: boolean;
             user: components["schemas"]["User"];
             authenticationMethods: components["schemas"]["AuthenticationMethods"];
+            /**
+             * @description Present only when an operator granted this User the shared MCP executor with `db:executor-access`.
+             * @constant
+             */
+            executorAccess?: true;
         };
         /** @enum {string} */
         McpScope: "read" | "write" | "publish" | "worktree:merge";
@@ -4723,6 +4728,13 @@ export interface operations {
                         scope?: string;
                         subject?: components["schemas"]["TokenExchangeSubject"];
                         user?: components["schemas"]["User"];
+                        /**
+                         * @description Token exchange only. Present only when an operator
+                         *     granted the user the shared MCP executor with
+                         *     `db:executor-access`.
+                         * @constant
+                         */
+                        executor_access?: true;
                     };
                 };
             };

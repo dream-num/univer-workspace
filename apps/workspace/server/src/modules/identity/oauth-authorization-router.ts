@@ -426,6 +426,7 @@ export function createOAuthAuthorizationRouter(options: {
       return;
     }
     const { subject, ttlMs, user, cookieValue } = exchanged;
+    const executorAccess = await options.identity.hasExecutorAccess(user.id);
     response.json({
       access_token: cookieValue,
       issued_token_type: WORKSPACE_SESSION_TOKEN_TYPE,
@@ -438,6 +439,7 @@ export function createOAuthAuthorizationRouter(options: {
         client_id: subject.kind === "oauth" ? subject.clientId : null,
       },
       user,
+      ...(executorAccess ? { executor_access: true } : {}),
     });
   }
 

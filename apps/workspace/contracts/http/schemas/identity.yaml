@@ -116,6 +116,9 @@ AuthenticatedSession:
       $ref: "#/User"
     authenticationMethods:
       $ref: "#/AuthenticationMethods"
+    executorAccess:
+      const: true
+      description: Present only when an operator granted this User the shared MCP executor with `db:executor-access`.
 
 SessionView:
   oneOf:

@@ -2,7 +2,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { PoolClient } from "pg";
 import { identifier, importTable } from "./rows.js";
 
-// Product V22 → PostgreSQL V2. Keep foreign keys and domain triggers enabled during import.
+// Product V23 → PostgreSQL V3. Keep foreign keys and domain triggers enabled during import.
 const tables = [
   "users",
   "password_credentials",
@@ -46,6 +46,7 @@ const tables = [
   "skill_drafts",
   "agents",
   "node_reports",
+  "executor_access",
 ];
 
 // Read parents before children so the parent guard trigger and foreign keys stay active.

@@ -303,7 +303,7 @@ cmd_renderer_restart() { # [max-runtimes]: recreate only this run's renderer, op
 }
 
 cmd_mcp_allow_users() {
-  [[ $# -gt 0 ]] || die "usage: verify-uvw mcp-allow-users <user-id>... | '*'"
+  [[ $# -gt 0 ]] || die "usage: verify-uvw mcp-allow-users <user-id>... | '*' | workspace"
   local id
   if [[ $# -ne 1 || "$1" != '*' ]]; then
     for id in "$@"; do

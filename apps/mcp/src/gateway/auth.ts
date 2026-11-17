@@ -28,6 +28,7 @@ const exchangeResponse = z.object({
     kind: z.enum(["human", "agent"]).optional(),
     claimed: z.boolean().optional(),
   }),
+  executor_access: z.boolean().optional(),
 });
 const maxCacheMs = 30_000;
 const negativeCacheMs = 5_000;
@@ -39,7 +40,8 @@ export interface Authentication {
   readonly session: string;
   readonly obtainedAt: number;
   readonly expiresAt: number;
-  readonly user: WorkspaceSubject | null;
+  /** Null means the gateway reads the identity from the Workspace session itself. */
+  readonly identity: { readonly subject: WorkspaceSubject; readonly executorAccess: boolean } | null;
   readonly scopes: ReadonlySet<ToolScope> | null;
   readonly authKind: "pat" | "oauth" | "dev";
   readonly clientId: string;
@@ -96,16 +98,19 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
       );
       throw new Error("Token exchange failed");
     }
-    const { subject, user, scope, access_token, expires_in } = parsed.data;
+    const { subject, user, scope, access_token, expires_in, executor_access } = parsed.data;
     const identity = { id: user.id, name: user.displayName };
     const value: Authentication = {
       session: access_token,
       obtainedAt: Date.now(),
       expiresAt: Date.now() + expires_in * 1000,
-      user:
-        user.kind === "agent"
-          ? { ...identity, kind: user.kind, claimed: user.claimed === true }
-          : identity,
+      identity: {
+        subject:
+          user.kind === "agent"
+            ? { ...identity, kind: user.kind, claimed: user.claimed === true }
+            : identity,
+        executorAccess: executor_access === true,
+      },
       scopes: new Set(
         scope.split(/\s+/).filter((name): name is ToolScope => allScopes.has(name as ToolScope)),
       ),
@@ -171,7 +176,7 @@ export function createAuthenticator(config: GatewayConfig, logger: Logger, fetch
         session: bearer,
         obtainedAt: Date.now(),
         expiresAt: Date.now() + 600_000,
-        user: null,
+        identity: null,
         scopes: null,
         authKind: "dev",
         clientId: "dev",

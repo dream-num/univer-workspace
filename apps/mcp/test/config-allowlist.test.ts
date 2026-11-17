@@ -47,8 +47,14 @@ describe("executor allowlist configuration", () => {
     expect(parseGatewayConfig({ ...linkedGateway, ...env }).MCP_EXECUTOR_ALLOWED_USER_IDS).toBeUndefined();
   });
 
-  it.each(["", " ", ",", "alice,", ",alice", "alice, ,bob", "alice,,bob", "*,alice", "alice, *"])(
-    "rejects an empty allowlist or entry %j in both roles in every environment",
+  it("lets workspace defer to the grant Workspace reports in production", () => {
+    const env = { NODE_ENV: "production", MCP_EXECUTOR_ALLOWED_USER_IDS: "workspace" };
+    expect(parseExecutorConfig({ ...executor, ...env }).MCP_EXECUTOR_ALLOWED_USER_IDS).toBe("workspace");
+    expect(parseGatewayConfig({ ...linkedGateway, ...env }).MCP_EXECUTOR_ALLOWED_USER_IDS).toBe("workspace");
+  });
+
+  it.each(["", " ", ",", "alice,", ",alice", "alice, ,bob", "alice,,bob", "*,alice", "alice, *", "workspace,alice", "alice, workspace", "Workspace", "WORKSPACE", "**", "'*'", "alice*"])(
+    "rejects an empty allowlist, a misspelled keyword or entry %j in both roles in every environment",
     (value) => {
       for (const NODE_ENV of ["development", "production"]) {
         const env = { NODE_ENV, MCP_EXECUTOR_ALLOWED_USER_IDS: value };

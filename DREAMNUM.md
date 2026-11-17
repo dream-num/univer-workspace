@@ -179,6 +179,11 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   for byte. Typed names that break the rule are refused; provider, Email sign-in and agent names are
   reduced to it. A Personal Space still named `<display name> 的个人空间`
   follows its owner's rename.
+- Product V23 (PostgreSQL product schema version 3) adds the `executor_access` table through a backed-up
+  V22 → V23 startup migration that backfills nothing. Only the operator command `db:executor-access` grants or
+  revokes a User's use of the shared MCP executor; no HTTP route writes it. The session and the token exchange report
+  the grant, and an MCP deployment with `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` follows it without a restart.
+  Deployments upgrade Workspace and grant the users who use the executor today before switching MCP to `workspace`.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.

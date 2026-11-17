@@ -269,7 +269,7 @@ function uploadContext(options: ConstructorParameters<typeof LocalStagingStore>[
     http: f.ctx.http(), identityOrigin: "https://workspace.test", requestId: "html-upload",
     resources: () => { throw new Error("unused"); },
     executor: createExecutorLinks({ urls: ["http://executor.test"], executorToken: "token-".repeat(8) })(
-      { authKind: "dev", session: "session", obtainedAt: Date.now(), expiresAt: Date.now() + 60_000, user, scopes, clientId: "dev" },
+      { authKind: "dev", session: "session", obtainedAt: Date.now(), expiresAt: Date.now() + 60_000, identity: { subject: user, executorAccess: true }, scopes, clientId: "dev" },
       user, "html-upload", Date.now() + 30_000, usage,
     ),
   };

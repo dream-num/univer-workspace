@@ -70,6 +70,8 @@ export interface AuthenticatedSession {
   readonly trialDeployment: boolean;
   readonly user: PrincipalUser;
   readonly authenticationMethods: AuthenticationMethods;
+  /** Present only when the operator granted the User the shared MCP executor. */
+  readonly executorAccess?: true;
 }
 
 export type SessionView =

@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import {
-  whoami,
+  sessionIdentity,
   WorkspaceHttp,
   workspaceError,
 } from "@univerjs/univer-workspace-client-core/product";
 import { executorGrantSchema, type ExecutorGrant } from "../shared/executor-protocol.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
+import { allowsExecutor } from "../shared/config.js";
 
 export function resolveGrant(value: unknown): ExecutorGrant {
   const parsed = executorGrantSchema.safeParse(value);
@@ -29,16 +30,16 @@ export function createGrantVerifier(
   >,
   fetcher: typeof fetch = fetch,
 ) {
-  const sessions = new Map<string, { expiresAt: number; user: Promise<string> }>();
+  const policy = config.MCP_EXECUTOR_ALLOWED_USER_IDS;
+  const denied = () =>
+    workspaceError("workspace-permission-denied", "Executor access is not enabled for this account.");
+  // Cached until the grant expires, so a revoke in Workspace mode takes effect within one grant lifetime.
+  const sessions = new Map<
+    string,
+    { expiresAt: number; user: Promise<{ id: string; executorAccess: boolean }> }
+  >();
   const verify = async (grant: ExecutorGrant, requestId: string): Promise<void> => {
-    if (
-      config.MCP_EXECUTOR_ALLOWED_USER_IDS !== undefined &&
-      !config.MCP_EXECUTOR_ALLOWED_USER_IDS.has(grant.userId)
-    )
-      throw workspaceError(
-        "workspace-permission-denied",
-        "Executor access is not enabled for this account.",
-      );
+    if (policy instanceof Set && !policy.has(grant.userId)) throw denied();
     const key = createHash("sha256").update(grant.session).digest("hex");
     for (const [hash, entry] of sessions) {
       if (entry.expiresAt <= Date.now()) sessions.delete(hash);
@@ -60,7 +61,10 @@ export function createGrantVerifier(
       });
       entry = {
         expiresAt: grant.expiresAt,
-        user: whoami(http).then((identity) => identity.subject.id),
+        user: sessionIdentity(http).then(({ subject, executorAccess }) => ({
+          id: subject.id,
+          executorAccess,
+        })),
       };
       sessions.set(key, entry);
       const created = entry;
@@ -68,12 +72,14 @@ export function createGrantVerifier(
         if (sessions.get(key) === created) sessions.delete(key);
       });
     }
-    if ((await entry.user) !== grant.userId) {
+    const user = await entry.user;
+    if (user.id !== grant.userId) {
       throw workspaceError(
         "workspace-authentication-required",
         "The caller grant does not match the Workspace session.",
       );
     }
+    if (!allowsExecutor(policy, user)) throw denied();
     resolveGrant(grant);
   };
   return Object.assign(verify, {

@@ -867,6 +867,12 @@ paths:
                         $ref: '#/components/schemas/TokenExchangeSubject'
                       user:
                         $ref: '#/components/schemas/User'
+                      executor_access:
+                        const: true
+                        description: |
+                          Token exchange only. Present only when an operator
+                          granted the user the shared MCP executor with
+                          `db:executor-access`.
         '400':
           description: Workspace error for static clients or when MCP OAuth is disabled; otherwise `invalid_request`, `unsupported_grant_type` or `invalid_grant`. Token exchange may also return `unauthorized_client`.
           content:
@@ -5686,6 +5692,9 @@ components:
           $ref: '#/components/schemas/User'
         authenticationMethods:
           $ref: '#/components/schemas/AuthenticationMethods'
+        executorAccess:
+          const: true
+          description: Present only when an operator granted this User the shared MCP executor with `db:executor-access`.
     McpScope:
       type: string
       enum:

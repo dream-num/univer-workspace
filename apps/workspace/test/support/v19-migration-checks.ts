@@ -14,7 +14,7 @@ export function verifyV19Migration(open: (filename: string) => SqliteDatabase): 
   const fixture = (filename: string, seeded: boolean) => {
     const db = new DatabaseSync(filename);
     db.exec(schema);
-    db.exec("DROP TABLE node_reports; DROP TABLE agents; ALTER TABLE users DROP COLUMN kind; DROP TABLE skill_drafts; PRAGMA user_version = 19");
+    db.exec("DROP TABLE executor_access; DROP TABLE node_reports; DROP TABLE agents; ALTER TABLE users DROP COLUMN kind; DROP TABLE skill_drafts; PRAGMA user_version = 19");
     if (seeded)
       db.exec(`
       INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
@@ -37,7 +37,7 @@ export function verifyV19Migration(open: (filename: string) => SqliteDatabase): 
   const rows = (db: DatabaseSync) =>
     db
       .prepare(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('skill_drafts', 'agents', 'node_reports') ORDER BY name",
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT IN ('skill_drafts', 'agents', 'node_reports', 'executor_access') ORDER BY name",
       )
       .all()
       .map(({ name }) => [name, db.prepare(`SELECT ${name === "users" ? USER_COLUMNS : "*"} FROM ${name}`).all()]);
@@ -49,7 +49,7 @@ export function verifyV19Migration(open: (filename: string) => SqliteDatabase): 
       old.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 22);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 23);
       assert.equal(
         migrated.connection.prepare("SELECT count(*) AS n FROM skill_drafts").get()?.n,
         0,
@@ -101,7 +101,7 @@ export function verifyV19Migration(open: (filename: string) => SqliteDatabase): 
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V19 to V22 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V19 to V23 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v19-backup-"))!,

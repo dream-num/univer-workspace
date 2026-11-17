@@ -521,6 +521,34 @@ describe("executor regression boundaries", () => {
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
 
+  it("in Workspace mode admits the User only while Workspace reports the grant, rechecked per grant", async () => {
+    let executorAccess = false;
+    const fetcher = vi.fn<typeof fetch>(async () =>
+      Response.json({
+        authenticated: true,
+        user: { id: "user-1", displayName: "Alice" },
+        ...(executorAccess ? { executorAccess: true } : {}),
+      }),
+    );
+    const verify = createGrantVerifier(
+      {
+        WORKSPACE_ORIGIN: "https://identity.test",
+        WORKSPACE_TRANSPORT_URL: "https://transport.test",
+        MCP_EXECUTOR_ALLOWED_USER_IDS: "workspace",
+      },
+      fetcher,
+    );
+    const denied = { code: "workspace-permission-denied" };
+    await expect(verify(grant, "test")).rejects.toMatchObject(denied);
+    executorAccess = true;
+    await expect(verify(grant, "test")).rejects.toMatchObject(denied);
+    await verify({ ...grant, session: "after-grant" }, "test");
+    executorAccess = false;
+    await verify({ ...grant, session: "after-grant" }, "test");
+    await expect(verify({ ...grant, session: "after-revoke" }, "test")).rejects.toMatchObject(denied);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
+
   it.each([413, 426, 400, 500, 503])(
     "classifies HTTP %s without failover except 503",
     async (status) => {

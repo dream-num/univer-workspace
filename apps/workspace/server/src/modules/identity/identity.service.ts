@@ -111,6 +111,8 @@ export interface IdentityModule {
     input: PasswordChange
   ): Promise<void>;
   getSession(cookieHeader: string | undefined): Promise<SessionView>;
+  /** Whether the operator granted the User the shared MCP executor (`db:executor-access`). */
+  hasExecutorAccess(userId: string): Promise<boolean>;
   getRealtimeSession(cookieHeader: string | undefined): Promise<{
     readonly user: User;
     readonly sessionId: string;
@@ -286,6 +288,7 @@ export function createIdentityModule(options: {
       trialDeployment,
       user: principalUser(user, stored),
       authenticationMethods: await repository.authenticationMethods(user.id),
+      ...(await repository.hasExecutorAccess(user.id) ? { executorAccess: true } : {}),
     };
   }
 
@@ -868,6 +871,7 @@ export function createIdentityModule(options: {
     },
 
     getSession,
+    hasExecutorAccess: (userId) => repository.hasExecutorAccess(userId),
     async getRealtimeSession(cookieHeader) {
       const stored = await storedSession(cookieHeader);
       if (!stored) return null;
@@ -1356,7 +1360,7 @@ async function availableExternalUsername(
   repository: IdentityRepository
 ): Promise<string> {
   const base = (preferred.replaceAll(/\p{Default_Ignorable_Code_Point}/gu, "") || `${provider}-${subject}`).slice(0, 64);
-  if (!(await repository.usernameExists(base))) return base;
+  if (!USER_ID_SHAPE.test(base) && !(await repository.usernameExists(base))) return base;
   const suffix = `-${subject.replaceAll(/[^A-Za-z0-9]/g, "").slice(-10) || provider}`;
   const candidate = `${base.slice(0, 64 - suffix.length)}${suffix}`;
   if (!(await repository.usernameExists(candidate))) return candidate;
@@ -1477,11 +1481,17 @@ function validUsername(value: unknown): string {
   return username;
 }
 
+// User IDs are UUIDs; a username of that shape could pass for another User wherever either names a User.
+const USER_ID_SHAPE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
+
 // Sign-in keeps accepting a stored username; a newly chosen one must be visible to the people shown it.
 function chosenUsername(value: unknown): string {
   const username = validUsername(value);
   if (/\p{Default_Ignorable_Code_Point}/u.test(username)) {
     throw invalidInput("Username cannot contain invisible characters.", "username");
+  }
+  if (USER_ID_SHAPE.test(username)) {
+    throw invalidInput("Username cannot look like a user ID.", "username");
   }
   return username;
 }
@@ -1533,7 +1543,7 @@ function usernameFromEmail(email: string, attempt: number): string {
     .replace(/^[._-]+|[._-]+$/gu, "")
     .slice(0, 48);
   const base = local || "user";
-  return attempt === 0
+  return attempt === 0 && !USER_ID_SHAPE.test(base)
     ? base
     : `${base}-${randomBytes(3).toString("hex")}`;
 }
