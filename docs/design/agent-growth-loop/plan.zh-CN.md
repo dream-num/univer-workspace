@@ -23,8 +23,8 @@
 
 | 步骤 | 断点 | 依据 |
 | --- | --- | --- |
-| 1 做出文件 | 走 MCP 的访客 agent 在生产环境很可能拿不到编辑工具，只能建空文件。CLI 路径不受影响 | `apps/mcp/src/gateway/server.ts:424-427` 只按用户 ID 白名单开放执行层。生产配置待核实，见 A1 |
-| 1 做出文件 | 创建访客 agent 限每 IP 每小时 5 个。没设 `TRUST_PROXY` 时所有人共用这 5 个名额 | `apps/workspace/README.md:417-418`。生产配置待核实，见 A1 |
+| 1 做出文件 | 访客 agent 在生产环境能用执行层，但它和所有人共用同一个执行层实例，没有隔离，也没有配额 | 生产和 staging 的 `MCP_EXECUTOR_ALLOWED_USER_IDS` 都是 `*`，执行层只有 1 个副本。见 A1 |
+| 1 做出文件 | 创建访客 agent 限每 IP 每小时 5 个。生产没设 `TRUST_PROXY`，Workspace 又在代理之后，所以很可能全站共用这 5 个名额 | `apps/workspace/README.md:417-418`。见 A1 |
 | 3 打开 | agent 发出的链接没有品牌条，不显示作者，链接预览没有图 | `share` 返回 `/nodes/<id>`（`packages/client-core/src/urls.ts:7`）。品牌条只在 `?view=immersive` 渲染（`apps/workspace/web/src/modes/workspace-layout.tsx:69`）。`static-site.ts` 不注入 `og:image` |
 | 3 打开 | agent 抓取链接只拿到单页应用的空壳 | `apps/workspace/server/src/middleware/static-site.ts` 只注入标题和 Open Graph |
 | 4 再做一个 | 没有复制、Remix、交给我的 Agent | 全仓库检索无实现。规格 F2.1、F2.3 待实施 |
@@ -73,7 +73,8 @@ M0 和 M1 并行。M1 不依赖执行层开放，可以先交付。
 **A1 核实生产配置。** Ops，0.5 人日。不改代码。
 
 - 查清 `space.univer.ai` 上四个值：`MCP_EXECUTOR_ALLOWED_USER_IDS`、`TRUST_PROXY`、是否开放注册、`AGENT_CREATE_LIMIT_PER_HOUR`。
-- 验收：四个值写回本文第 8 节。`TRUST_PROXY` 没设的话，当周设上并用两个不同出口 IP 验证各自计数。
+- 验收：四个值写回本文第 8 节。已于 2026-11-17 完成，`TRUST_PROXY` 和 `AGENT_CREATE_LIMIT_PER_HOUR` 都没设。
+- 后续：`TRUST_PROXY` 的值是 Workspace 前面会追加 `X-Forwarded-For` 的代理层数。生产在 CloudFront 和 Istio 之后，helm 仓库里查不到层数。先在 staging 的入口网关访问日志里数一次请求的 `X-Forwarded-For` 条目，设好后用两个不同出口 IP 验证各自计数，再由操作者决定是否改生产。设大了，客户端可以伪造来源 IP 绕过限流。
 
 **A2 回路埋点。** Server 2 人日，MCP 1 人日，Ops 1 人日。依赖：无。
 
@@ -88,9 +89,12 @@ M0 和 M1 并行。M1 不依赖执行层开放，可以先交付。
 - 已知偏差：聊天软件的链接预览爬虫也会请求分享页。日志事件带 User-Agent，仪表盘先按原始值展示并注明。
 - 验收：用 `verify-uvw` 跑一遍“访客 agent 做表并分享，无痕窗口打开，从分享页注册”，五个数各自加一。
 
-**A3 执行层对 agent 主体开放。** 规格第 7 节 G1 到 G4。MCP 8 人日，Ops 2 人日。依赖：无。这是整个方案里最大的一项，也是 MCP 路径的前提。
+**A3 把 agent 隔离到自己的执行层池。** 规格第 7 节 G1 到 G4。MCP 8 人日，Ops 2 人日。依赖：无。这是整个方案里最大的一项。
 
-- 顺序是 G1 测量，G2 agent 专用池，G3 执行配额，G4 部署检查。G1 的结果是“A 的脚本读得到 B 的会话”时停下来报告，不带着这个问题上线。
+生产已经对所有人开放执行层（A1），所以这一项的作用从“开放”变成“隔离和限额”：零成本的访客 agent 今天和人共用一个执行层实例。
+
+- 顺序是 G1 测量，G2 agent 专用池，G3 执行配额，G4 部署检查。G1 测的是生产上已经存在的风险。结果是“A 的脚本读得到 B 的会话”时立即报告操作者。
+- G2 要处理现有的 `*`：今天用执行层的人在 G2 之后照常能用，agent 改进 agent 池。会让人和 agent 进同一个池的生产配置要拒绝启动。
 - 增量：`apps/mcp/src/gateway/instructions.ts` 今天在执行层受限且主体是 agent 时，会同时说“不能编辑”和“合并后分享”。改成受限时只说不能编辑，不要求分享空文件。
 - 验收：规格第 7 节的验收。
 
@@ -227,14 +231,14 @@ M0 和 M1 并行。M1 不依赖执行层开放，可以先交付。
 
 ## 8. 待核实与待决定
 
-**待核实（A1 回填）。**
+**生产配置（A1）。** 来源是操作者对私有 helm 仓库的核对。
 
 | 项 | 值 | 核实日期 |
 | --- | --- | --- |
-| 生产的 `MCP_EXECUTOR_ALLOWED_USER_IDS` | 未知 | |
-| 生产的 `TRUST_PROXY` | 未知 | |
-| 生产是否开放注册 | 2026-11-16 探测到 GitHub、Google 和邮箱验证码登录已开，密码登录关闭 | |
-| 生产的 `AGENT_CREATE_LIMIT_PER_HOUR` | 未知，代码默认 5 | |
+| 生产的 `MCP_EXECUTOR_ALLOWED_USER_IDS` | `*`，网关和执行层都是。staging 相同。执行层 1 个副本 | 2026-11-17 |
+| 生产的 `TRUST_PROXY` | 未设置。Workspace 1 个副本，进程内限流不受多实例影响 | 2026-11-17 |
+| 生产是否开放注册 | 已开放。GitHub、Google 和邮箱验证码登录已开，密码登录关闭 | 2026-11-17 |
+| 生产的 `AGENT_CREATE_LIMIT_PER_HOUR` | 未设置，使用代码默认 5 | 2026-11-17 |
 
 **已决定（2026-11-16）。**
 
@@ -256,7 +260,7 @@ A1 需要读私有 helm 仓库，由能访问它的人完成。
 | Agent 卡片把陌生 agent 写的内容交给另一个 agent，注入的指令会沿链接扩散 | C2、D3 | 规格 5.2 的注入验收必须过。文件内容只出现在带标注的预览段 |
 | 零成本身份在我们的域名下发布仿冒页面 | C4 | 未认领 agent 的 Page 只在带页眉的外壳里打开，独立地址返回 403 |
 | 封禁靠运维手动执行，举报只落表 | B1 | 指定一个人每天看 `node_reports`。量大到看不过来再做后台 |
-| G1 的测量显示 agent 之间读得到彼此的会话 | A3 | 停下来报告。MCP 路径推迟，CLI 路径和 M1 照常 |
+| G1 的测量显示执行层里一个主体读得到另一个主体的会话 | A3 | 这是生产上已经存在的风险。立即报告操作者，由操作者决定是否先收紧生产的白名单 |
 | 复制需要上游 Collaboration SDK 的新能力 | C3 | W2 的探查给出结论。需要上游改动时停下来说明，不在本仓库复制上游合同 |
 | 访客的浏览器会话 7 天后失效，人失去对文件的访问 | C1 | C1 不晚于 W4 合入 |
 | 限流计数在进程内存里，多实例时各算各的 | A1 | 单实例部署下不处理。扩成多实例前先解决 |
