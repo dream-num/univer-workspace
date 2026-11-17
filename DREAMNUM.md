@@ -122,7 +122,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
 
 - Workspace product metadata and authentication state are stored in the configured SQLite or PostgreSQL product database. Univer snapshot,
   changeset, revision, and Thread Comment data are stored separately in component-owned tables in the Collaboration
-  SQLite file or the PostgreSQL `collaboration` schema. Both stores follow `DATABASE_PROVIDER`. Thread Comment anchors remain in Unit data while bodies, replies, and solved state use the Comment Adapter.
+  SQLite file or the PostgreSQL `collaboration` schema. Both databases follow `DATABASE_PROVIDER`. PostgreSQL deployments use the SDK’s PG+S3 Core adapter: Sheet block payloads live in the bucket under `sheet-blocks/` within the Workspace prefix, and PostgreSQL holds the block ledger and snapshot references. Thread Comment anchors remain in Unit data while bodies, replies, and solved state use the Comment Adapter.
 - Workspace upgrades the SQLite Collaboration file through the published Core, Worktree, and History migrations.
   Workspace owns the offline startup boundary: consistent backup, migration on a copy, validation,
   and atomic replacement before Services start. Rollback requires the matching pre-upgrade backups;

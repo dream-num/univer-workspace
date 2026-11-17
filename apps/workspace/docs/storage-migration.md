@@ -23,11 +23,26 @@ Use one outage to migrate **SQLite + local directory → PostgreSQL + S3**. The 
      univer-workspace node dist/server/storage-migration/main.js
    ```
 
-4. Wait for a successful exit and the committed row counts. Start one instance with the target configuration. Through HTTP, sign in with an existing account, check a document, Worktree, history, comments and attachment, edit a document and upload a file. Restart, read back the edit and upload, then reopen traffic.
+4. Wait for a successful exit and the committed row counts. Start one instance with the target configuration. Through HTTP, sign in with an existing account, check a document, Worktree, history, comments and attachment, check cell values in an existing spreadsheet, edit a document and upload a file. Restart, read back the cells, edit and upload, then reopen traffic.
 
-The command reads the V21 product database and prepares the collaboration database on private temporary copies, preserving the originals and their journals. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, then imports product data and all four collaboration components in one PostgreSQL transaction. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
+The command reads the V21 product database and prepares the collaboration database on private temporary copies, preserving the originals and their journals. It copies local files under their original object keys, reads them back from S3 to verify SHA-256, and copies Sheet blocks to the `sheet-blocks/` subdirectory, verifying their MessagePack bytes by readback. One PostgreSQL transaction imports the product data, all four collaboration components, the block index and each snapshot’s block references. For Units created inside a Worktree, it translates SQLite’s placeholder baseline `1` to PostgreSQL’s `NULL`. Trunk-derived Units retain their actual baseline. Draft revisions, seed snapshots and merge artifacts are preserved.
 
 **Interruption and rollback.** Keep source writers stopped after a failure. Empty target tables and some S3 objects may remain. The database import transaction rolls back as a unit. Fix the cause and rerun with the same source and destination. The command verifies and reuses identical objects and rejects mismatched or unrelated objects and populated target tables. It also rejects legacy collaboration resource data the target SDK cannot represent. If the connection drops during commit, inspect the target before reopening traffic or retrying. Before reopening traffic, you can stop the target and restart the source with its original configuration. After traffic resumes, rollback also requires transferring subsequent writes.
+
+### Capacity and progress
+
+Allow temporary disk for the two SQLite copies, their journals and any collaboration upgrade staging files or backups. Reserve PostgreSQL space for the imported tables, indexes and transaction WAL. The importer reads SQLite rows incrementally and inserts and verifies each row over a database round trip. It streams each local file, uploads missing objects and reads the full contents back from S3. Object key lists and file verification metadata grow with object count. The largest Sheet block or database row must fit in memory. To plan a maintenance window, rehearse with a representative backup, the intended network and an empty target.
+
+The command prints the current phase and table. During copying and import it reports completed files, Sheet blocks, bytes or staged rows at ten-second intervals as work completes. Row counts become durable when PostgreSQL commits.
+
+| Exit | Meaning and next step |
+| --- | --- |
+| 0 | `Migration committed` reports the committed row counts and verified objects. Start one instance for HTTP validation. |
+| 1 | This run did not commit its database import. Read the phase and error, keep the source stopped and fix the cause. Verified S3 objects can be reused. |
+| 2 | PostgreSQL did not confirm the commit outcome. Inspect the target before retrying or reopening traffic. |
+| 3 | PostgreSQL confirmed the commit and cleanup failed. Keep the target data and investigate cleanup. |
+
+If the process is killed or the container disappears without a final status, inspect the target before retrying.
 
 ## SQLite upgrades and recovery
 

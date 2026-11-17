@@ -74,6 +74,9 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
+      WORKSPACE_TEST_S3_ENDPOINT: http://127.0.0.1:9000
+      AWS_ACCESS_KEY_ID: workspace_test
+      AWS_SECRET_ACCESS_KEY: workspace_test_secret
       WORKSPACE_TEST_POSTGRES_URL: postgresql://postgres:workspace_test@localhost:5432/workspace_test
     steps:
       - uses: actions/checkout@v4
@@ -83,4 +86,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Start disposable S3 storage
+        run: |
+          docker run -d --rm -p 127.0.0.1:9000:9000 \
+            -e MINIO_ROOT_USER="$AWS_ACCESS_KEY_ID" -e MINIO_ROOT_PASSWORD="$AWS_SECRET_ACCESS_KEY" \
+            univerai/minio:2024.8.3-debian-12-r1@sha256:acdd6085371272c8c22200d779bf3a0eedb86d76211245d16cae30d82c605041
+          curl --fail --retry 15 --retry-all-errors --retry-delay 1 "$WORKSPACE_TEST_S3_ENDPOINT/minio/health/ready"
       - run: pnpm --filter @univerjs/univer-workspace test:postgres

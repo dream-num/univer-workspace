@@ -284,7 +284,7 @@ Module 批量解析评论作者资料。五类 Unit 的评论读取、新增、�
 History Service 使用协同库中由 History Adapter 独立拥有的派生索引，并通过 Identity Module
 批量解析版本作者。现有 Collaboration Runtime 统一装配 History Adapter、Service 和 lifecycle；SDK 1.0.0 的
 History Service 自行订阅 Core 创建与提交事件，并在读取时从 Core 创建事实与 changeset 追赶分段索引。
-启动入口通过 `integrations/univer/collaboration-database/open-collaboration-database.ts` 打开与产品库同后端的四个 SDK 适配器，再装配 Runtime。SQLite 的备份和旧库迁移位于该目录的 `sqlite/migrations/`；PostgreSQL 适配器共享协同库持有的连接池。
+启动入口通过 `integrations/univer/collaboration-database/open-collaboration-database.ts` 打开与产品库同后端的四个 SDK 适配器，再装配 Runtime。SQLite 的备份和旧库迁移位于该目录的 `sqlite/migrations/`；PostgreSQL 适配器共享协同库持有的连接池。Core 使用 SDK 的 `PostgresS3DatabaseAdapter`，由协同工厂创建并释放独立的 S3 客户端，和文件存储共用部署配置。
 History Endpoint 复用 Unit 打开权限；恢复版本仍通过普通 Collaboration changeset 写入并
 要求内容编辑权限。Browser 按 Unit 类型只为 Trunk Sheet、Doc、Slide、Base 和 Board 注册标准
 SDK History UI，Worktree 与 Merge Preview 不注册。

@@ -27,7 +27,7 @@ BLOB_S3_PREFIX=workspace
 
 | 环境变量 | 默认值 | 用途 |
 | --- | --- | --- |
-| `DATABASE_PROVIDER` | `sqlite` | 可选 `sqlite` 或 `postgres`，**产品库和协同库一起切换**。 |
+| `DATABASE_PROVIDER` | `sqlite` | 可选 `sqlite` 或 `postgres`，**产品库和协同库一起切换**。PostgreSQL 需要配置 `BLOB_STORE=s3` 保存 Sheet 数据块。 |
 | `DATABASE_FILE` | `.data/univer-workspace.sqlite` | SQLite 产品库文件，保存用户、空间、文件目录和权限。 |
 | `COLLABORATION_DATABASE_FILE` | `.data/univer-collaboration.sqlite` | SQLite 协同库文件，保存文档编辑、Worktree、历史和评论数据。 |
 | `DATABASE_URL` | 未设置 | 选择 `postgres` 时必填。填写专用数据库的 `postgres://` 或 `postgresql://` 连接地址。 |
@@ -43,7 +43,7 @@ Workspace 账号需要有权创建 `collaboration` schema，并在产品 schema�
 | `MAX_BLOB_BYTES` | `536870912`（512 MiB） | 单个 Blob 的大小上限，单位为字节。 |
 | `BLOB_S3_BUCKET` | 未设置 | 使用 S3 时必填，填写已有私有桶的名称。 |
 | `BLOB_S3_REGION` | AWS SDK 解析的区域 | 覆盖从 `AWS_REGION` 或 AWS 配置档案读取的区域。 |
-| `BLOB_S3_PREFIX` | 空（桶根目录） | Workspace 对象在桶内使用的键前缀。 |
+| `BLOB_S3_PREFIX` | 空（桶根目录） | Workspace 对象的根前缀。文件沿用此前缀下的原对象键，协同 Sheet 数据块使用其下的 `sheet-blocks/` 子目录。 |
 | `BLOB_S3_ENDPOINT` | 对应区域的 AWS 端点 | 使用 MinIO 等兼容服务时，填写其 S3 API 地址。 |
 | `BLOB_S3_FORCE_PATH_STYLE` | `false` | 服务要求在 URL 路径中传递桶名时设为 `true`。 |
 | `AWS_ACCESS_KEY_ID`、`AWS_SECRET_ACCESS_KEY`、`AWS_SESSION_TOKEN` | AWS SDK 凭据链 | 可使用工作负载角色，也可提供访问密钥对。临时凭据还需提供会话令牌。 |

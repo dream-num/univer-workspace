@@ -73,7 +73,7 @@ for (const name of ["resolveNode", "resolveNodeAuthorization", "resolveOwnedReso
   };
   restoreAccess.push(() => { access[name] = original; });
 }
-const collaboration = await openCollaborationDatabase(config.database, product.unitCreationFacts);
+const collaboration = await openCollaborationDatabase(config, product.unitCreationFacts);
 const application = createWorkspaceApplication(config, product.repositories, collaboration);
 const server = createServer(application.app);
 let socket;

@@ -1,8 +1,7 @@
 import { Pool } from "pg";
-import {
-  migratePostgresCore,
-  PostgresDatabaseAdapter,
-} from "@univerjs-pro/collaboration-database-postgres";
+import { PostgresS3DatabaseAdapter } from "@univerjs-pro/collaboration-database-postgres-s3";
+import type { S3BlobStoreOptions } from "../../../blob/s3-blob-store.js";
+import { sheetBlockStorage } from "./sheet-block-storage.js";
 import { PostgresWorktreeDatabaseAdapter } from "@univerjs-pro/collaboration-worktree-database-postgres";
 import { PostgresHistoryDatabaseAdapter } from "@univerjs-pro/collaboration-history-database-postgres";
 import { PostgresCommentDatabaseAdapter } from "@univerjs-pro/collaboration-comment-database-postgres";
@@ -11,6 +10,7 @@ import type { CollaborationDatabase } from "../collaboration-database.js";
 
 export async function openPostgresCollaborationDatabase(
   connectionString: string,
+  storage: S3BlobStoreOptions,
 ): Promise<CollaborationDatabase> {
   const pool = new Pool({ connectionString });
   pool.on("error", (error) =>
@@ -22,17 +22,9 @@ export async function openPostgresCollaborationDatabase(
   const resources = new AsyncDisposableStack();
   resources.defer(() => pool.end());
   try {
-    // The SDK migrator accepts initialized Core schemas. create() handles first startup.
-    const versions = await pool.query(
-      "SELECT to_regclass('collaboration.schema_versions') AS registry",
-    );
-    if (versions.rows[0].registry) {
-      const existing = await pool.query(
-        "SELECT 1 FROM collaboration.schema_versions WHERE component = 'core'",
-      );
-      if (existing.rowCount) await migratePostgresCore({ pool });
-    }
-    const core = await PostgresDatabaseAdapter.create({ pool });
+    const s3 = sheetBlockStorage(storage);
+    resources.defer(() => s3.client.destroy());
+    const core = await PostgresS3DatabaseAdapter.create({ pool, s3 });
     const worktree = await PostgresWorktreeDatabaseAdapter.create({ pool });
     resources.defer(() => worktree.dispose());
     const history = await PostgresHistoryDatabaseAdapter.create({ pool });

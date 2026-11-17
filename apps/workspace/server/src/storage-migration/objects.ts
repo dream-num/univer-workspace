@@ -1,3 +1,4 @@
+import { reportProgress } from "./progress.js";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { readdir, stat } from "node:fs/promises";
@@ -5,6 +6,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import { GetObjectCommand, paginateListObjectsV2, S3Client } from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
+import { SHEET_BLOCK_DIRECTORY } from "../integrations/univer/collaboration-database/postgres/sheet-block-storage.js";
 import type { S3BlobStoreOptions } from "../integrations/blob/s3-blob-store.js";
 
 async function digest(stream: AsyncIterable<Uint8Array>) {
@@ -55,37 +57,46 @@ export async function copyObjects(
     )) {
       for (const item of page.Contents ?? []) {
         const name = item.Key!.slice(prefixPath.length);
+        if (name.startsWith(SHEET_BLOCK_DIRECTORY + "/")) continue; // Validated by copySheetBlocks.
         if (!local.has(name))
           throw new Error("Destination S3 prefix contains an object outside this migration");
         existing.add(name);
       }
     }
     const verified = new Map<string, { sha: string; size: number }>();
+    const progress = reportProgress(`Verified files (of ${local.size})`);
+    let bytes = 0;
     for (const name of local) {
-      const file = join(directory, name);
-      const size = (await stat(file)).size;
-      const location = { Bucket: bucket, Key: prefixPath + name };
-      const sha = await digest(createReadStream(file));
-      if (!existing.has(name)) {
-        await new Upload({
-          client,
-          params: {
-            ...location,
-            IfNoneMatch: "*",
-            Body: createReadStream(file),
-            ContentLength: size,
-          },
-        }).done();
+      try {
+        const file = join(directory, name);
+        const size = (await stat(file)).size;
+        const location = { Bucket: bucket, Key: prefixPath + name };
+        const sha = await digest(createReadStream(file));
+        if (!existing.has(name)) {
+          await new Upload({
+            client,
+            params: {
+              ...location,
+              IfNoneMatch: "*",
+              Body: createReadStream(file),
+              ContentLength: size,
+            },
+          }).done();
+        }
+        const remote = await client.send(new GetObjectCommand(location));
+        if (
+          !remote.Body ||
+          (await digest(remote.Body.transformToWebStream())) !== sha ||
+          remote.ContentLength !== size
+        ) {
+          throw new Error(`Destination S3 contents differ for ${name}`);
+        }
+        verified.set(name, { sha, size });
+        bytes += size;
+      } catch (error) {
+        throw new Error(`File ${name}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
       }
-      const remote = await client.send(new GetObjectCommand(location));
-      if (
-        !remote.Body ||
-        (await digest(remote.Body.transformToWebStream())) !== sha ||
-        remote.ContentLength !== size
-      ) {
-        throw new Error(`Destination S3 contents differ for ${name}`);
-      }
-      verified.set(name, { sha, size });
+      progress(verified.size, bytes, verified.size === local.size);
     }
     for (const row of db.prepare(requiredObjects).iterate()) {
       const actual = verified.get(String(row.object_key));

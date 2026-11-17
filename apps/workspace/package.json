@@ -74,7 +74,7 @@
     "@univerjs-pro/collaboration-comment-database-sqlite": "1.5.2",
     "@univerjs-pro/collaboration-comment-endpoint": "1.5.2",
     "@univerjs-pro/collaboration-comment-service": "1.5.2",
-    "@univerjs-pro/collaboration-database-postgres": "1.5.2",
+    "@univerjs-pro/collaboration-database-postgres-s3": "1.5.2",
     "@univerjs-pro/collaboration-database-sqlite": "1.5.2",
     "@univerjs-pro/collaboration-endpoint": "1.5.2",
     "@univerjs-pro/collaboration-history-database-postgres": "1.5.2",

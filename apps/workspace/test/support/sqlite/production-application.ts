@@ -13,7 +13,7 @@ export async function createProductionTestApplication(
   const cleanup = new AsyncDisposableStack();
   cleanup.defer(() => product.close());
   try {
-    const collaboration = await openCollaborationDatabase(config.database, product.unitCreationFacts);
+    const collaboration = await openCollaborationDatabase(config, product.unitCreationFacts);
     cleanup.defer(() => collaboration.close());
     const application = createWorkspaceApplication(config, product.repositories, collaboration, dependencies);
     cleanup.defer(() => application.close());

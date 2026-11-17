@@ -5,7 +5,7 @@ SQLite 由 `server/src/db/sqlite/schema.sql` 定义，`PRAGMA user_version = 21`
 PostgreSQL 由 `server/src/db/postgres/schema.sql` 定义，`workspace_product_schema` 记录版本 1 和结构指纹。本模型以 Node 表达树，以 Resource 表达稳定内容身份；
 Univer Unit 与 Blob 是 Resource 的两种互斥类型扩展，Unit 内嵌 Asset 不进入 Tree。
 
-`DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
+`DATABASE_PROVIDER` 同时选择产品库和协同库。SQLite 将 Univer Unit 的 Snapshot、Changeset、Sheet Block、Resource 与 Worktree 草稿保存到 `COLLABORATION_DATABASE_FILE`。PostgreSQL 将 Core、Worktree、History 与 Comment 保存到同一数据库的 `collaboration` schema，由 SDK 的 `schema_versions` 表分别记录组件版本。Core 使用 `core-s3` V1：快照引用保存在 `snapshots.block_ids`，`sheet_blocks` 记录 Unit 与块 ID，块内容由协同适配器写入 S3。当前 SDK 要求 Base `schemaVersion = 2`，每个 Table 都有唯一的系统字段
 `__record_id`，并把每条 Record ID 投影到该字段；Row/Column/Cell Map 是可从 Field 与 Record
 重建的派生数据。现有持久化 Base Snapshot 均使用该表示。
 

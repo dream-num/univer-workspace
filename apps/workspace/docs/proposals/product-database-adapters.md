@@ -90,7 +90,7 @@ export declare function openProductDatabase(config: ProductDatabaseConfig): Prom
 
 `withPostgresTransaction` 在一个池连接上运行可串行化事务。序列化失败或死锁时，重试整个业务操作。事务回调只通过传入的连接访问产品库，外部通知和文件操作放在事务之外。
 
-共享的应用用例覆盖 HTTP、权限、文件、草稿、Issue 和 Worktree，空间与置顶另有并发契约用例。提供 `WORKSPACE_TEST_POSTGRES_URL` 后，可用以下命令运行 PostgreSQL 套件，包括建库、重启及结构漂移检查。产品库测试使用独立 schema，同时启动产品和协同服务的测试使用临时数据库。测试账号需要相应的建库和建 schema 权限。
+共享的应用用例覆盖 HTTP、权限、文件、草稿、Issue 和 Worktree，空间与置顶另有并发契约用例。设置 `WORKSPACE_TEST_POSTGRES_URL`、`WORKSPACE_TEST_S3_ENDPOINT` 和 AWS 测试凭据（可创建、清空及删除临时桶）后，可用以下命令运行 PostgreSQL 套件，包括建库、重启及结构漂移检查。产品库测试使用独立 schema，同时启动产品和协同服务的测试使用临时数据库。测试账号需要相应的建库和建 schema 权限。
 
 ```bash
 pnpm --filter @univerjs/univer-workspace test:postgres
