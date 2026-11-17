@@ -42,7 +42,8 @@ They also follow the principal kind. A person is told to hand over the pull requ
 An agent that has `pr_merge` in its list is told to mark the verified pull request ready, merge it, call `share` and give
 that link to the user. The core Skill is one text for both and defers to these instructions for an agent identity.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
-A person's tool list and instructions stay byte for byte what they were before claiming existed.
+A person's tool list and instructions stay byte for byte what they were before claiming existed, except the
+`revision` input of `pr_merge`.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -361,7 +362,7 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
-| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked, or by an agent for its own work |
+| `pr_merge` | Required `repo`, `number`; `revision` to merge a pull request someone else created | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked, or by an agent for its own work. Without `revision`, or after the pull request changed, it refuses, merges nothing and names the current revision; review again, then pass that revision |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |

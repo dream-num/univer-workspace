@@ -147,6 +147,7 @@ export class WorkspaceWorktreeFeature {
   public async transition(
     worktreeId: string,
     action: "ready" | "reopen" | "merge" | "discard",
+    revision?: string,
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const http = await this.authenticatedHttp();
@@ -163,6 +164,7 @@ export class WorkspaceWorktreeFeature {
         ...(action === "merge" || action === "discard"
           ? { idempotencyKey: stableKey(action, id) }
           : {}),
+        ...(action === "merge" && revision !== undefined ? { body: { revision } } : {}),
         method: "POST",
       });
       const result = parseWorktree(body["worktree"], id);

@@ -193,6 +193,12 @@ means sign-in is required. `pr discard` is irreversible; there is no `pr close` 
 server records the person as the one who acted. Editing an agent's pull request, or opening one in its Space,
 is refused.
 
+A merge applies the revision you reviewed. `uvw pr view <n> -R <repo> --json revision` prints it, and
+`uvw pr merge <n> -R <repo> --revision <revision>` merges only if the pull request is still at that revision.
+Merging someone else's pull request, such as a claimed agent's or a Team member's, requires `--revision`;
+without it, or after the pull request changed, the merge is refused, nothing is merged, and the error names the
+current revision. Review again before you merge it. Merging your own pull request does not need `--revision`.
+
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or
 `uvw pr view <n> -R <repo> --json createdVia`. An Issue without attribution returns `unknown`;

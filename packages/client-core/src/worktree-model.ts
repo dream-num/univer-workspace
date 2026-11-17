@@ -39,6 +39,8 @@ export interface WorkspaceWorktree {
   readonly createdAt?: string;
   readonly createdVia?: WriteSource;
   readonly updatedAt?: string;
+  /** Present on a single read; absent from lists and lifecycle responses. */
+  readonly revision?: string;
   readonly state: WorkspaceWorktreeState;
   readonly units: readonly WorkspaceUnit[];
 }
@@ -85,6 +87,7 @@ export function parseWorktree(value: unknown, expectedId?: string): WorkspaceWor
     ...parseCreator(value["creator"]),
     ...(typeof value["createdAt"] === "string" ? { createdAt: value["createdAt"] } : {}),
     ...(typeof value["updatedAt"] === "string" ? { updatedAt: value["updatedAt"] } : {}),
+    ...(typeof value["revision"] === "string" ? { revision: value["revision"] } : {}),
   };
 }
 

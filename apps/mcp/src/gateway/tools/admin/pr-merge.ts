@@ -4,7 +4,17 @@ import { worktreeSchema } from "../schemas.js";
 import { repoInput } from "../core/issue-support.js";
 import { pullNumberInput, transitionPr } from "../core/pr-support.js";
 
-const inputSchema = z.object({ repo: repoInput, number: pullNumberInput });
+const inputSchema = z.object({
+  repo: repoInput,
+  number: pullNumberInput,
+  revision: z
+    .string()
+    .min(1)
+    .optional()
+    .describe(
+      "The revision you reviewed. Needed only for a pull request someone else created: without it, or after the pull request changed, pr_merge refuses, merges nothing and names the current revision. Review the pull request again, then call pr_merge with that revision.",
+    ),
+});
 export const prMergeTool: ToolDefinition = {
   name: "pr_merge",
   toolset: "admin",
@@ -18,7 +28,7 @@ export const prMergeTool: ToolDefinition = {
   outputSchema: worktreeSchema,
   annotations: destructiveAnnotations,
   async run(context, args) {
-    const { repo, number } = inputSchema.parse(args);
-    return await transitionPr(context, repo, number, "merge");
+    const { repo, number, revision } = inputSchema.parse(args);
+    return await transitionPr(context, repo, number, "merge", revision);
   },
 };

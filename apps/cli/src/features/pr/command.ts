@@ -23,7 +23,7 @@ import {
 import { REPO_OPTION, type RepoContext } from "../../repo-context.js";
 
 export const PR_JSON_FIELDS = [
-  "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "createdVia", "updatedAt",
+  "id", "name", "state", "units", "number", "summary", "spaceId", "kind", "visibility", "creator", "createdAt", "createdVia", "updatedAt", "revision",
 ] as const satisfies readonly (keyof WorkspaceWorktree)[];
 
 interface RepoOption {
@@ -168,6 +168,7 @@ function build(
         [
           `${label(worktree)} ${worktree.name} [${worktree.state}]`,
           `id: ${worktree.id}${worktree.creator ? ` · created by ${worktree.creator.username}` : ""}`,
+          ...(worktree.revision === undefined ? [] : [`revision: ${worktree.revision}`]),
           ...(worktree.summary ? ["", worktree.summary] : []),
           ...(worktree.units.length
             ? [
@@ -267,13 +268,23 @@ function build(
   ): Command => {
     const command = new Command(commandName).description(text).argument("<pr>").option(...REPO_OPTION);
     if (undoOption) command.option("--undo", "move a ready pull request back to draft");
+    if (action === "merge") {
+      command.option(
+        "--revision <revision>",
+        "the revision you reviewed, from `pr view <pr> --json revision`; required to merge someone else's pull request",
+      );
+    }
     return command.addOption(jsonFieldsOption(PR_JSON_FIELDS)).action(
-      async (argument: string, options: JsonFieldsOption & RepoOption & { undo?: boolean }) => {
+      async (
+        argument: string,
+        options: JsonFieldsOption & RepoOption & { revision?: string; undo?: boolean },
+      ) => {
         const { worktree, url } = await executeCommand(command, async () => {
           const target = await writeTarget(argument, options);
           const worktree = await worktrees.transition(
             target.id,
             options.undo === true ? "reopen" : action,
+            options.revision,
           );
           return { worktree, url: target.url };
         });

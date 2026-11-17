@@ -43,8 +43,10 @@ export function prWithUrl(
   context: ToolContext,
   worktree: WorkspaceWorktree,
   spaceId: string | null,
-): WorkspaceWorktree & { readonly url: string } {
-  return { ...worktree, url: pullUrl(context.identityOrigin, worktree, undefined, spaceId ?? undefined) };
+): Omit<WorkspaceWorktree, "revision"> & { readonly url: string } {
+  // The published output schemas have no revision; pr_merge names it when it refuses.
+  const { revision: _revision, ...shown } = worktree;
+  return { ...shown, url: pullUrl(context.identityOrigin, worktree, undefined, spaceId ?? undefined) };
 }
 
 /** Adds `url` to each Worktree, looking up each creator's Personal Space at most once. */
@@ -73,10 +75,11 @@ export async function transitionPr(
   repo: string,
   number: string,
   action: "merge" | "discard",
+  revision?: string,
 ) {
   const { worktree, spaceId } = await findPr(context, repo, number);
   const worktrees = worktreeFeature(context);
-  const updated = await worktrees.transition(worktree.id, action);
+  const updated = await worktrees.transition(worktree.id, action, revision);
   // The merge response is a summary without Units; read them back to report what entered trunk.
   const result = action === "merge" ? await worktrees.get(worktree.id) : updated;
   return { output: prWithUrl(context, result, spaceId), repo: spaceId };

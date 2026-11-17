@@ -355,6 +355,7 @@ describe("uvw pr and the worktree alias", () => {
     [["ready", "12", "-R", "alice/docs"], ["ready", "12", "-R", "alice/docs"]],
     [["ready", "12", "-R", "alice/docs", "--undo"], ["reopen", "12", "-R", "alice/docs"]],
     [["merge", "12", "-R", "alice/docs"], ["merge", "12", "-R", "alice/docs"]],
+    [["merge", "12", "-R", "alice/docs", "--revision", "r1"], ["merge", "12", "-R", "alice/docs", "--revision", "r1"]],
     [["discard", "12", "-R", "alice/docs"], ["discard", "12", "-R", "alice/docs"]],
   ];
 
@@ -381,8 +382,16 @@ describe("uvw pr and the worktree alias", () => {
       ["list", { creatorId: "u1", limit: 30, scope: "user", view: "active" }],
       ["create", { name: "Mine", scope: { kind: "user" }, summary: "body" }],
       ["getByNumber", "space-1", 12],
-      ["transition", "wt-1", "reopen"],
+      ["transition", "wt-1", "reopen", undefined],
     ]);
+  });
+
+  it("sends the reviewed revision with a merge, the only lifecycle command that takes one", async () => {
+    const { calls, pr } = pullRequestCommands();
+    await run(pr, ["merge", "12", "-R", "alice/docs", "--revision", "r1"]);
+    expect(calls.at(-1)).toEqual(["transition", "wt-1", "merge", "r1"]);
+    expect(pr.commands.find((command) => command.name() === "ready")!.options.map((option) => option.long))
+      .not.toContain("--revision");
   });
 
   const PERSONAL_REFS: readonly (readonly [string, readonly string[], NodeJS.ProcessEnv])[] = [

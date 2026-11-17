@@ -479,7 +479,10 @@ uvw browse <n> -R <owner>/<slug> --unit <unit-id>
 ```
 
 Do not merge or discard unless the user explicitly requests that consequential action. `pr discard` is
-irreversible. There is no `pr close` or `pr reopen`; to take a `ready` pull request back to draft use
+irreversible. A merge of someone else's pull request needs the revision that was reviewed:
+`uvw pr merge <n> -R <repo> --revision <revision>`, with the value from `pr view <n> --json revision`.
+When the merge is refused because the pull request changed, nothing was merged; tell the user and let
+them review it again. There is no `pr close` or `pr reopen`; to take a `ready` pull request back to draft use
 `pr ready <n> --undo`. A later
 same-task correction follows the rework flow above.
 

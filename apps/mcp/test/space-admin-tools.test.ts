@@ -94,6 +94,7 @@ const worktree = (state = "draft", units: unknown[] = []) => ({
   creator: user,
   createdAt: "2026-09-29T00:00:00.000Z",
   updatedAt: "2026-09-29T00:00:00.000Z",
+  revision: "rev-current",
   units,
 });
 const prUrl = `${origin}/spaces/team-1/pulls/3`;
@@ -211,6 +212,13 @@ describe("space, unit, repository admin, label and merge tools", () => {
     }
     if (at("POST", "/api/nodes/sheet/copies")) return Response.json({ operation: { id: "k2" }, unit: unit() }, { status: 201 });
     if (at("POST", "/api/worktrees/wt-3/merge")) {
+      if (fields["revision"] === "rev-stale") {
+        return Response.json({ error: {
+          code: "PRECONDITION_FAILED",
+          message: "The pull request changed since the revision you reviewed, so nothing was merged. Its current revision is rev-current; review it again before merging.",
+          field: "revision",
+        } }, { status: 412 });
+      }
       prState = "merged";
       return Response.json({ worktree: worktree("merged") });
     }
@@ -569,6 +577,24 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(writesOf()).toEqual([
       { method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined },
       { method: "POST", path: "/api/worktrees/wt-3/discard", body: undefined },
+    ]);
+  });
+
+  it("sends the reviewed revision, passes on a refusal that names the current one, and keeps it out of pr_view", async () => {
+    const client = await connect();
+    prState = "ready";
+    const viewed = await client.callTool({ name: "pr_view", arguments: { repo: "bob/team", number: "3" } });
+    expect(viewed.structuredContent).not.toHaveProperty("revision");
+    const refused = await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number: "3", revision: "rev-stale" } });
+    expect(refused).toMatchObject({ isError: true, structuredContent: { code: "PRECONDITION_FAILED" } });
+    expect(JSON.stringify(refused.content)).toContain("rev-current");
+    expect(prState).toBe("ready");
+    const merged = await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number: "3", revision: "rev-current" } });
+    expect(merged.structuredContent).toMatchObject({ state: "merged" });
+    expect(merged.structuredContent).not.toHaveProperty("revision");
+    expect(writesOf()).toEqual([
+      { method: "POST", path: "/api/worktrees/wt-3/merge", body: { revision: "rev-stale" } },
+      { method: "POST", path: "/api/worktrees/wt-3/merge", body: { revision: "rev-current" } },
     ]);
   });
 
