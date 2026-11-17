@@ -18,6 +18,7 @@ $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V principal <name> [label]    # create an agent principal; its token stays private in the run
 $V story [--as <identity>] [--oauth] <label> mcp|uvw '<prompt>'   # one recorded real-model run
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
+$V metrics                     # print the Workspace server's /metrics
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
 $V agent-up  # install/start Agent (requires VERIFY_UVW_AGENT_PORT at up)
 $V agent-down # stop only this run's Agent
@@ -34,6 +35,12 @@ A run lives at `/tmp/verify-uvw/<run-id>/` (`VERIFY_UVW_ROOT` overrides `/tmp/ve
 | `run.env`, `user.env` | ports, PIDs, launch HEAD, username | yes |
 | `logs/` | `server.log`, `web.log`, `register.json` | yes |
 | `evidence/` | screenshots and `cli` transcripts | yes |
+
+`up` starts the server with a random `METRICS_TOKEN` kept in `home/workspace-metrics-token`, and
+`$V metrics` prints the server's Prometheus text with it. Vite serves `/nodes/<id>` itself, so the
+share page counter only moves when the server renders the page. Before `up`, run
+`pnpm --filter '@univerjs/univer-workspace^...' build` and then
+`pnpm --filter @univerjs/univer-workspace build:web`, and open share links on the server port.
 
 `/tmp/verify-uvw/current` points at the latest run. Each Bash tool call is a new shell, so
 start every call that uses agent-browser or uvw with `eval "$($V env)"` (it also sets
