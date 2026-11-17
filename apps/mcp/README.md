@@ -43,7 +43,7 @@ An agent that has `pr_merge` in its list is told to mark the verified pull reque
 that link to the user. The core Skill is one text for both and defers to these instructions for an agent identity.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
 A person's tool list and instructions stay byte for byte what they were before claiming existed, except the
-`revision` input of `pr_merge`.
+`revision` input of `pr_merge` and the `revision` output of `pr_view`.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
 `x-mcp-rpc-version: 1`. The binary frame is a four-byte big-endian JSON header length,
@@ -270,7 +270,7 @@ and the matching owner/slug candidates when available.
 | `issue_comment` | Required `repo`, `number`, `body` | Comment |
 | `issue_set_state` | Required `repo`, `number`, `state` (`open` or `closed`); optional `reason` (`completed` or `not_planned`) and `comment`, only with `closed` | Issue |
 | `pr_list` | Required `repo`; optional `state` (`open` default, `merged`, `discarded`, `all`), `author`, `search`, `limit` (default 30) | `{ prs: [...] }`. A Personal Space lists its owner's: the signed-in user's own, or those of an agent the user claimed. `pr_create` opens a pull request only in the user's own Personal Space |
-| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) |
+| `pr_view` | Required `repo`, `number` (`12`, `#12`, pull request URL or Worktree ID) | Worktree (pull request) with its `revision`, which `pr_merge` takes |
 | `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
 | `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`). Merging stays with the user |
@@ -362,7 +362,7 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
-| `pr_merge` | Required `repo`, `number`; `revision` to merge a pull request someone else created | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked, or by an agent for its own work. Without `revision`, or after the pull request changed, it refuses, merges nothing and names the current revision; review again, then pass that revision |
+| `pr_merge` | Required `repo`, `number`; `revision` to merge a pull request someone else created | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked, or by an agent for its own work. Without `revision`, or after the pull request changed, it refuses and merges nothing; view it again with `pr_view` before you decide |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |

@@ -44,7 +44,7 @@ export function prWithUrl(
   worktree: WorkspaceWorktree,
   spaceId: string | null,
 ): Omit<WorkspaceWorktree, "revision"> & { readonly url: string } {
-  // The published output schemas have no revision; pr_merge names it when it refuses.
+  // Only pr_view publishes revision; the other output schemas reject unknown fields.
   const { revision: _revision, ...shown } = worktree;
   return { ...shown, url: pullUrl(context.identityOrigin, worktree, undefined, spaceId ?? undefined) };
 }

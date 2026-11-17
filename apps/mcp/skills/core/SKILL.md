@@ -58,11 +58,11 @@ every rule here that leaves readiness, merging or the link to the user.
 | `label create`, `label edit`, `label delete`                                                                 | `label_write`          | Admin; action selects create, edit or delete               |
 | `search issues`, `search prs`                                                                                | `search`               | Kind issues or prs                                         |
 | `pr list`, `worktree list`                                                                                   | `pr_list`              | Diagnose tasks                                             |
-| `pr view`, `worktree view`                                                                                   | `pr_view`              | Resolve Worktree id and state                              |
+| `pr view`, `worktree view`                                                                                   | `pr_view`              | Resolve Worktree id, state and revision                    |
 | `pr create`, `worktree create`                                                                               | `pr_create`            | Start a task                                               |
 | `pr edit`, `worktree edit`                                                                                   | `pr_edit`              | Update task metadata                                       |
 | `pr ready`, `worktree ready`                                                                                 | `pr_ready`             | Ready only on explicit user completion/review request; undo true returns ready to draft |
-| `pr merge`, `worktree merge`                                                                                 | `pr_merge`             | Admin; explicit user request only, except for an agent identity |
+| `pr merge`, `worktree merge`                                                                                 | `pr_merge`             | Admin; explicit user request only, except for an agent identity; another creator's needs `revision` from `pr_view` |
 | `pr discard`, `worktree discard`                                                                             | `pr_discard`           | Admin; irreversible, explicit user request only            |
 | `browse`                                                                                                     | `browse`               | Generate a review URL                                      |
 | `unit list`                                                                                                  | `unit_list`            | Staged Units in one Worktree                               |

@@ -12,11 +12,13 @@ export const prViewTool: ToolDefinition = {
   title: "View pull request",
   description: "Show a pull request with the files it changes.",
   inputSchema,
-  outputSchema: worktreeSchema,
+  outputSchema: worktreeSchema.extend({
+    revision: z.string().describe("What you viewed. Pass it to pr_merge to merge exactly this."),
+  }),
   annotations: readOnlyAnnotations,
   async run(context, args) {
     const { repo, number } = inputSchema.parse(args);
     const { worktree, spaceId } = await findPr(context, repo, number);
-    return { output: prWithUrl(context, worktree, spaceId), repo: spaceId };
+    return { output: { ...prWithUrl(context, worktree, spaceId), revision: worktree.revision }, repo: spaceId };
   },
 };

@@ -127,10 +127,10 @@ describe("Issue tools and gateway infrastructure", () => {
       return Response.json(kind === "user" ? rawUserWorktree("wt-u2", 2) : rawWorktree("wt-3"), { status: 201 });
     }
     if (target.pathname === "/api/spaces/team-1/worktrees/3") {
-      return Response.json({ worktree: rawWorktree("wt-3") });
+      return Response.json({ worktree: { ...rawWorktree("wt-3"), revision: "rev-wt-3" } });
     }
     if (target.pathname === "/api/spaces/personal-1/worktrees/2") {
-      return Response.json({ worktree: rawUserWorktree("wt-u2", 2) });
+      return Response.json({ worktree: { ...rawUserWorktree("wt-u2", 2), revision: "rev-wt-u2" } });
     }
     if (target.pathname === "/api/spaces/personal-bob") {
       return Response.json({ ...personal, id: "personal-bob", owner: { id: "u2", username: "bob" } });
@@ -140,6 +140,7 @@ describe("Issue tools and gateway infrastructure", () => {
         worktree: rawWorktree("wt-3", {
           name: request.method === "PATCH" ? "Edited" : "PR wt-3",
           state: wt3State,
+          revision: "rev-wt-3",
         }),
       });
     }
@@ -504,7 +505,7 @@ describe("Issue tools and gateway infrastructure", () => {
     const client = await connect();
     for (const number of ["3", "#3", teamUrl, "wt-3"]) {
       const result = await client.callTool({ name: "pr_view", arguments: { repo: "bob/team", number } });
-      expect(result.structuredContent).toMatchObject({ id: "wt-3", number: 3, url: teamUrl });
+      expect(result.structuredContent).toMatchObject({ id: "wt-3", number: 3, url: teamUrl, revision: "rev-wt-3" });
     }
     const own = await client.callTool({ name: "pr_view", arguments: { repo: "user-1/personal", number: "2" } });
     expect(own.structuredContent).toMatchObject({ id: "wt-u2", url: personalUrl });
