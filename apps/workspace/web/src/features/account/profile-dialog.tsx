@@ -163,7 +163,6 @@ export function ProfileDialog({
         <Field label={t("displayName")} htmlFor="profile-display-name" required>
           <Input
             id="profile-display-name"
-            maxLength={100}
             value={displayName}
             onChange={(event) => setDisplayName(event.target.value)}
           />

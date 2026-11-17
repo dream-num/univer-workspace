@@ -114,12 +114,12 @@ describe("POST /api/agents", () => {
 
   it("rejects a label that is not a string of at most 64 characters without spending the rate limit", async () => {
     const { origin } = await start({ agentCreateLimitPerHour: 1 });
-    for (const label of [5, null, ["a"], "x".repeat(65)]) {
+    for (const label of [5, null, ["a"], "x".repeat(65), "\u{1F916}".repeat(65)]) {
       const response = await post(origin, "/api/agents", { label });
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({ error: { code: "INVALID_INPUT", field: "label" } });
     }
-    expect((await post(origin, "/api/agents", {})).status).toBe(201);
+    expect((await post(origin, "/api/agents", { label: "\u{1F916}".repeat(64) })).status).toBe(201);
   });
 });
 
