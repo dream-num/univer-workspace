@@ -3438,6 +3438,8 @@ export interface components {
             navigationRootNodeId: string | null;
             /** @description The Node this file was copied from, returned only to the copy's owner and editors. Every other reader, anonymous included, gets null, because a link-shared source's Node ID is its access link. Also null for a file that is not a copy, and after the source is permanently deleted. The reader may be unable to open the source. */
             copiedFromNodeId: string | null;
+            /** @description How many files are copies of this one, including copies in the trash. A copy made in a pull request counts once the pull request is merged. */
+            copyCount: number;
         };
         PatchNode: {
             name?: string;

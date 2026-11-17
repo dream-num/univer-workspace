@@ -38,7 +38,7 @@ const getNode = vi.fn(async (userId: string, nodeId: string) => {
     hasChildren: false, updatedAt: "2026-11-11T00:00:00Z", accessRole: "viewer",
     capabilities: { browseChildren: false, createChildren: false, rename: false, move: false, trash: false, share: false },
   };
-  return { node, space: { id: "space", type: "team" as const, name: "Public" }, owner: null, breadcrumbs: [], navigationRootNodeId: null, copiedFromNodeId: null };
+  return { node, space: { id: "space", type: "team" as const, name: "Public" }, owner: null, breadcrumbs: [], navigationRootNodeId: null, copiedFromNodeId: null, copyCount: 0 };
 });
 
 beforeAll(async () => {

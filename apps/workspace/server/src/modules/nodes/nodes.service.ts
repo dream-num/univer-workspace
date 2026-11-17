@@ -119,6 +119,7 @@ export function createNodesModule(options: {
       const space =
         await options.access.resolveSpace(userId, node.spaceId) ??
         syntheticSpace(node);
+      const { copiedFromNodeId, copyCount } = await options.repository.copies(node.id);
       return {
         node: nodeSummary(node),
         space: spaceSummary(space),
@@ -131,7 +132,8 @@ export function createNodesModule(options: {
         ),
         navigationRootNodeId: node.navigationRootNodeId,
         // A link-shared source's Node ID is its access link, so only those who can edit the copy learn it.
-        copiedFromNodeId: node.role === "viewer" ? null : await options.repository.copiedFrom(node.id),
+        copiedFromNodeId: node.role === "viewer" ? null : copiedFromNodeId,
+        copyCount,
       };
     },
 

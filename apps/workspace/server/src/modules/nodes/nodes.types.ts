@@ -67,4 +67,5 @@ export interface NodeResponse {
   readonly breadcrumbs: readonly Breadcrumb[];
   readonly navigationRootNodeId: string | null;
   readonly copiedFromNodeId: string | null;
+  readonly copyCount: number;
 }

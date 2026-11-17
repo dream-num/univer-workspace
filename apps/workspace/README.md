@@ -632,9 +632,9 @@ Workspace reports no access, so the executor would refuse everyone until the upg
 `POST /api/nodes/{nodeId}/copies` turns a Sheet, Doc, Slide or Blob file the requester can open into a
 file of their own, at the root of their Personal Space or as a new file in a draft pull request. The copy
 gets its own content and its own embedded images, and `GET /api/nodes/{nodeId}` returns its source as
-`copiedFromNodeId` to the copy's owner and editors. A copy whose request is interrupted finishes in the
-background. A copy that cannot finish removes what it created.
-[HTTP concepts](contracts/http/concepts.md#copying-a-file)
+`copiedFromNodeId` to the copy's owner and editors, and how many files were copied from it as
+`copyCount`. A copy whose request is interrupted finishes in the background. A copy that cannot finish
+removes what it created. [HTTP concepts](contracts/http/concepts.md#copying-a-file)
 
 V23→V24 appends `nodes.copied_from_node_id`, `worktree_node_intents.copied_from_node_id`,
 `node_link_sharing.unverified_role` (existing rows read `viewer`) and `node_link_sharing.making_of_note`,

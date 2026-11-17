@@ -252,8 +252,8 @@ describe("copying a file", () => {
     const node = copiedNode(await h.application.copies.copy(agent.principal, source.nodeId, key, toPersonalSpace));
 
     expect(node).toMatchObject({ spaceId: agent.spaceId, parentNodeId: null, name: "Budget", accessRole: "owner" });
-    expect((await h.application.nodes.get(agent.id, node.id)).copiedFromNodeId).toBe(source.nodeId);
-    expect((await h.application.nodes.get(owner.id, source.nodeId)).copiedFromNodeId).toBeNull();
+    expect(await h.application.nodes.get(agent.id, node.id)).toMatchObject({ copiedFromNodeId: source.nodeId, copyCount: 0 });
+    expect(await h.application.nodes.get(owner.id, source.nodeId)).toMatchObject({ copiedFromNodeId: null, copyCount: 1 });
     const unitId = (node.resource as { unitId: string }).unitId;
     const copy = await readUnit(h, unitId, "sheet");
     const facts = sheetFacts(copy, source.sheetId);
@@ -311,6 +311,7 @@ describe("copying a file", () => {
     const unit = (result.body as { readonly unit: WorktreeUnit }).unit;
     expect(unit).toMatchObject({ source: "worktree", name: "My budget", unitType: "sheet", target: { spaceId: agent.spaceId, parentNodeId: null } });
     expect(await h.rootNodes(agent.id)).toHaveLength(0);
+    expect((await h.application.nodes.get(owner.id, source.nodeId)).copyCount).toBe(0);
     expect(await h.application.copies.copy(agent.principal, source.nodeId, key, { target, name: "My budget" }))
       .toMatchObject({ status: 200, body: { unit: { unitId: unit.unitId } } });
 
@@ -325,6 +326,7 @@ describe("copying a file", () => {
     const [node] = await h.rootNodes(agent.id);
     expect(node).toMatchObject({ id: unit.nodeId, name: "My budget" });
     expect((await h.application.nodes.get(agent.id, node!.id)).copiedFromNodeId).toBe(source.nodeId);
+    expect((await h.application.nodes.get(owner.id, source.nodeId)).copyCount).toBe(1);
     const facts = sheetFacts(await readUnit(h, unit.unitId, "sheet"), source.sheetId);
     expect(facts).toMatchObject({ value: 10, formula: "=A1*3", imageUnitId: unit.unitId });
     await shareByLink(h, owner.id, source.nodeId, false);

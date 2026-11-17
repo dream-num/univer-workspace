@@ -7226,6 +7226,7 @@ components:
         - breadcrumbs
         - navigationRootNodeId
         - copiedFromNodeId
+        - copyCount
       properties:
         node:
           $ref: '#/components/schemas/NodeSummary'
@@ -7249,6 +7250,10 @@ components:
           type:
             - string
             - 'null'
+        copyCount:
+          description: How many files are copies of this one, including copies in the trash. A copy made in a pull request counts once the pull request is merged.
+          type: integer
+          minimum: 0
     PatchNode:
       type: object
       additionalProperties: false

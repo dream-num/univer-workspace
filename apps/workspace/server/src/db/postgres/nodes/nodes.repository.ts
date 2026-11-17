@@ -112,11 +112,15 @@ export class PostgresNodesRepository implements NodesRepository {
       .all(nodeId) as unknown as BreadcrumbRow[];
   }
 
-  async copiedFrom(nodeId: string): Promise<string | null> {
+  async copies(nodeId: string): Promise<{ readonly copiedFromNodeId: string | null; readonly copyCount: number }> {
     const row = await this._database
-      .prepare("SELECT copied_from_node_id FROM nodes WHERE id = ?")
-      .get(nodeId) as { readonly copied_from_node_id: string | null } | undefined;
-    return row?.copied_from_node_id ?? null;
+      .prepare(
+        `SELECT copied_from_node_id,
+                (SELECT COUNT(*) FROM nodes AS copy WHERE copy.copied_from_node_id = source.id) AS copy_count
+         FROM nodes AS source WHERE source.id = ?`
+      )
+      .get(nodeId) as { readonly copied_from_node_id: string | null; readonly copy_count: number } | undefined;
+    return { copiedFromNodeId: row?.copied_from_node_id ?? null, copyCount: row?.copy_count ?? 0 };
   }
 
   private async isSelfOrDescendant(nodeId: string, candidateId: string): Promise<boolean> {
