@@ -1,6 +1,6 @@
 # 可选的服务观测组件
 
-Workspace 自身负责输出 JSON 日志和采集 HTTP 请求指标。Prometheus 负责抓取并保存指标历史，
+Workspace 自身负责输出 JSON 日志，并采集 HTTP 请求指标和传播回路计数。Prometheus 负责抓取并保存指标历史，
 Grafana 查询 Prometheus 并展示仪表盘。部署环境负责收集和保存应用 JSON 日志。
 三者是独立进程，可以部署在同一台机器或不同位置。本目录提供可选的 Compose 示例，
 由部署方按需启动和管理。
@@ -58,7 +58,8 @@ docker compose -f observability/docker-compose.yml up -d
 
 - Prometheus：<http://127.0.0.1:9090>，在 Targets 页面确认 `univer-workspace` 为 UP。
 - Grafana：<http://127.0.0.1:3000>，首次登录为 `admin / admin`，按页面要求修改密码。
-- 自动配置名为 `Prometheus` 的数据源，仪表盘名为 `Univer Workspace · RED 指标`。
+- 自动配置名为 `Prometheus` 的数据源，以及 `Univer Workspace · RED 指标` 和
+  `Univer Workspace · 传播回路` 两个仪表盘。
 - 先访问几次 Workspace 接口；抓取间隔为 15 秒，速率与分位数图需要积累多个采样点。
 - 收到 401 时核对两侧抓取令牌；收到 404 时检查 `METRICS_TOKEN` 配置并重启 Workspace；
   连接失败时检查目标地址、端口与网络。
@@ -107,6 +108,15 @@ Grafana    → Prometheus 的查询地址
   相同 method 和模板的请求汇总到同一组。
 - 仪表盘：每秒请求数、P95 延迟、每秒 5xx 次数。
   5xx 面板单位为次/秒。
+- 传播回路：Link Sharing 打开或关闭、分享页加载、注册、访客 agent 创建四个计数器。
+  标签只有低基数的类别，Node ID、用户 ID 和 User-Agent 只写入对应的 `workspace.*` 日志行。
+  指标名、标签和日志字段见 [Workspace README](../apps/workspace/README.md#metrics-and-growth-loop-events)。
+- 传播回路仪表盘默认显示本周，回答五个问题：新开了多少分享，其中多少是 agent 的文件，
+  分享页按读者是否登录各被打开多少次，分享页带来多少注册（及其占未登录打开的比例），
+  新建了多少访客 agent（按入口）。
+  `increase()` 会按时间窗口外推，小计数可能出现小数，面板按整数显示；精确计数查日志。
+  聊天软件的链接预览爬虫也会加载分享页，打开数按原始值展示；按 User-Agent 排除需查
+  `workspace.share_page` 日志。
 
 Express 和 Collaboration SDK 各自通过 HTTP 中间件计时，在响应 `finish` 时记录指标。
 Express 请求的耗时从进入 Express 指标中间件开始；SDK 请求的耗时从进入 Transport

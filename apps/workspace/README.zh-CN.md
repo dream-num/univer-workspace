@@ -295,6 +295,12 @@ SQLite 协同数据库的组件版本为 `core=4`、`worktree=4`、`history=2`�
 
 诊断覆盖模块加载、配置读取、产品及协同数据库准备、应用创建和初始化、后台任务、WebSocket 设置及 HTTP 监听。迁移子阶段包括备份、读取创建信息、升级 Core/Worktree/History、校验和发布暂存副本。在 Grafana Loki 中查询 `{container="colla-workspace"} | json | event="workspace.startup"` 并选择相应 Pod。遇到 OOM 时，在同一 `startupId` 下查找最后一个只有 `started`、没有对应 `completed` 或 `failed` 的阶段。致命 OOM 可能来不及写入失败记录。内存数值是阶段边界的采样，无法反映峰值。SDK 执行阻塞工作时没有定时进度日志。
 
+### 指标与传播回路事件
+
+设置 `METRICS_TOKEN` 后，`GET /metrics` 凭 `Authorization: Bearer <token>` 输出 Prometheus 指标，未设置时返回 `404`。抓取方式和仪表盘见 [observability/README.md](../../observability/README.md)。
+
+除 `http_request_duration_seconds` 外，四个计数器度量传播回路：`workspace_link_sharing_changes_total`（Link Sharing 打开或关闭）、`workspace_share_page_views_total`（服务端渲染的分享页加载）、`workspace_signups_total`（注册，按方式和来源）、`workspace_guest_agents_created_total`（访客 agent，按入口）。标签保持低基数。每次计数另写一行 `event` 为 `workspace.*` 的 `info` 日志，Node ID、用户 ID 和 User-Agent 只出现在日志里。标签取值和日志字段见英文版 README。
+
 ## 常用命令
 
 ```bash

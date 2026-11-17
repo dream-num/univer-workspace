@@ -723,6 +723,43 @@ a matching `completed`/`failed` within the same `startupId`; a fatal OOM cannot
 reliably emit a failure record. Stage memory values are boundary samples, not peak
 measurements, and there is no timer-based progress log during blocking SDK work.
 
+### Metrics and growth loop events
+
+Set `METRICS_TOKEN` to serve Prometheus metrics at `GET /metrics` with
+`Authorization: Bearer <token>`. Without it the endpoint answers `404`.
+[observability/README.md](../../observability/README.md) describes scraping and the dashboards.
+
+Besides `http_request_duration_seconds`, four counters measure the growth loop: a file is
+shared, its page is opened, and a reader signs up or connects an agent. Labels stay
+low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line of each count.
+
+| Counter | Counts | Labels |
+| --- | --- | --- |
+| `workspace_link_sharing_changes_total` | Link Sharing turned on or off. A role change while sharing stays on does not count | `state` (`on`, `off`), `role` (`viewer`, `editor`), `owner_category` |
+| `workspace_share_page_views_total` | A page load of `/nodes/<id>` that the server renders for a Node an anonymous reader can open. In-app navigation does not count | `session` (`signed_in`, `signed_out`), `owner_category` |
+| `workspace_signups_total` | An account created by sign-up | `method` (`password`, `email`, `github`, `google`, `discord`, `discord_bot`), `source` |
+| `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
+
+`owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
+`source` is `share_link` when the sign-up returns to `/nodes/…`, `oauth_consent` when it returns
+to `/api/auth/authorize…`, and `direct` otherwise. OAuth sign-ups carry `returnTo` through the
+provider. Password and email sign-ups read it from the `/login?returnTo=…` page in the request's
+`Referer`.
+
+Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
+these fields:
+
+| `event` | Fields |
+| --- | --- |
+| `workspace.link_sharing` | `node_id`, and `user_id` of the User who changed it |
+| `workspace.share_page` | `node_id`, `user_agent` (null when the request has none) |
+| `workspace.signup` | `user_id`, and `node_id` from a `share_link` return path, otherwise null |
+| `workspace.guest_agent` | `user_id` of the agent |
+
+Every label combination starts at zero, so `increase()` counts the first event after a restart.
+Counts live in the process and start again on restart; Prometheus keeps the history. Link preview
+crawlers of chat apps also load share pages. Filter them by `user_agent` in the log lines.
+
 ## Commands
 
 ```bash

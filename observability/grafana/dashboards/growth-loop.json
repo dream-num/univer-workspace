@@ -1,0 +1,102 @@
+{
+  "title": "Univer Workspace · 传播回路",
+  "uid": "univer-workspace-growth-loop",
+  "description": "默认时间范围是本周。分享页打开数含聊天软件链接预览爬虫的请求，按 User-Agent 排除需查 workspace.share_page 日志。",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now/w", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "新开的分享",
+      "description": "Link Sharing 从关闭变为打开的次数。",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": { "defaults": { "decimals": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "expr": "sum(increase(workspace_link_sharing_changes_total{state=\"on\"}[$__range]))",
+          "legendFormat": "全部"
+        },
+        {
+          "refId": "B",
+          "instant": true,
+          "expr": "sum(increase(workspace_link_sharing_changes_total{state=\"on\",owner_category=~\"agent_.*\"}[$__range]))",
+          "legendFormat": "agent 的文件"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "分享页打开次数（按读者会话）",
+      "description": "服务端渲染 /nodes/<id> 的次数。含链接预览爬虫。",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": { "defaults": { "decimals": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "expr": "sum by (session) (increase(workspace_share_page_views_total[$__range]))",
+          "legendFormat": "{{session}}"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "分享页带来的注册",
+      "description": "returnTo 指向 /nodes/ 的注册数，以及它除以无会话打开数的转化率。",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": {
+        "defaults": { "decimals": 0 },
+        "overrides": [
+          {
+            "matcher": { "id": "byFrameRefID", "options": "B" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              { "id": "decimals", "value": 1 }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "expr": "sum(increase(workspace_signups_total{source=\"share_link\"}[$__range]))",
+          "legendFormat": "注册"
+        },
+        {
+          "refId": "B",
+          "instant": true,
+          "expr": "sum(increase(workspace_signups_total{source=\"share_link\"}[$__range])) / sum(increase(workspace_share_page_views_total{session=\"signed_out\"}[$__range]))",
+          "legendFormat": "转化率"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "新建的访客 agent（按入口）",
+      "description": "api_agents 是 POST /api/agents，auth_guest 是登录页的访客卡片。",
+      "type": "stat",
+      "gridPos": { "h": 6, "w": 8, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "PBFA97CFB590B2093" },
+      "fieldConfig": { "defaults": { "decimals": 0 }, "overrides": [] },
+      "targets": [
+        {
+          "refId": "A",
+          "instant": true,
+          "expr": "sum by (entry) (increase(workspace_guest_agents_created_total[$__range]))",
+          "legendFormat": "{{entry}}"
+        }
+      ]
+    }
+  ]
+}
