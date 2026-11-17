@@ -1,5 +1,6 @@
 import { loadConfig } from "../config.js";
 import { openProductDatabase } from "./index.js";
+import { describeUser, resolveOperatorTarget } from "./operator-target.js";
 
 const outcomes = {
   grant: { changed: "now has", unchanged: "already has" },
@@ -17,16 +18,16 @@ const database = await openProductDatabase(loadConfig().database);
 try {
   const identity = database.repositories.identity;
   if (change) {
-    const result = await identity.setExecutorAccess(target!, change === "grant", Date.now());
-    if (result) {
-      const outcome = outcomes[change][result.changed ? "changed" : "unchanged"];
-      console.info(`${result.username} (${result.id}) ${outcome} executor access`);
-    } else {
-      console.error(`No User matches ${target}`);
-      process.exitCode = 1;
+    const user = await resolveOperatorTarget(identity, target!);
+    if (user) {
+      const changed = await identity.setExecutorAccess(user.id, change === "grant", Date.now());
+      console.info(`${describeUser(user)} ${outcomes[change][changed ? "changed" : "unchanged"]} executor access`);
     }
   } else {
-    for (const entry of await identity.listExecutorAccess()) {
+    const entries = await identity.listExecutorAccess();
+    // stderr keeps stdout one tab-separated line per granted User for scripts.
+    if (entries.length === 0) console.error("No users have executor access");
+    for (const entry of entries) {
       console.info(`${entry.username}\t${entry.id}\t${entry.kind}\t${new Date(entry.grantedAt).toISOString()}`);
     }
   }

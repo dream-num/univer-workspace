@@ -147,7 +147,7 @@ describe("db:executor-access", () => {
     });
 
     expect(await reported()).toEqual({ session: undefined, exchange: undefined, agentSession: undefined });
-    expect(run("list")).toMatchObject({ status: 0, stdout: "" });
+    expect(run("list")).toMatchObject({ status: 0, stdout: "", stderr: expect.stringContaining("No users have executor access") });
     expect(run("grant", "alice")).toMatchObject({ status: 0, stdout: `alice (${alice.id}) now has executor access\n` });
     expect(run("grant", alice.id)).toMatchObject({ status: 0, stdout: `alice (${alice.id}) already has executor access\n` });
     expect(await reported()).toEqual({ session: true, exchange: true, agentSession: undefined });

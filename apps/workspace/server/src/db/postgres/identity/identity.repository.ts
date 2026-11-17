@@ -10,11 +10,10 @@ import type {
   NewEmailUser,
   StoredEmailLoginCode,
   ExternalIdentityUser,
-  AgentBanResult,
-  ExecutorAccessChange,
   ExecutorAccessEntry,
   IdentityConflict,
   IdentityRepository,
+  NamedUser,
   StoredAgent,
 } from "../../../modules/identity/identity.repository.js";
 
@@ -27,16 +26,15 @@ export class PostgresIdentityRepository implements IdentityRepository {
     return error.constraint === (field === "username" ? "users_username" : "users_email");
   }
 
-  async banAgent(target: string, at: number): Promise<AgentBanResult | null> {
-    return await this._database.transaction(async (db) => {
-      const user = await db.prepare("SELECT id, username, kind FROM users WHERE id = ? OR lower(username COLLATE \"C\") = lower(?::text COLLATE \"C\")").get(target, target);
-      if (!user) return null;
-      const id = String(user.id);
-      const username = String(user.username);
-      if (user.kind !== "agent") return { status: "not-agent", id, username };
-      await db.prepare("UPDATE agents SET banned_at = COALESCE(banned_at, ?) WHERE user_id = ?").run(at, id);
-      return { status: "banned", id, username };
-    });
+  async findUsersByIdOrUsername(target: string): Promise<readonly NamedUser[]> {
+    const rows = await this._database
+      .prepare("SELECT id, username, kind FROM users WHERE id = ? OR lower(username COLLATE \"C\") = lower(?::text COLLATE \"C\")")
+      .all(target, target);
+    return rows.map(namedUser);
+  }
+
+  async banAgent(agentUserId: string, at: number): Promise<void> {
+    await this._database.prepare("UPDATE agents SET banned_at = COALESCE(banned_at, ?) WHERE user_id = ?").run(at, agentUserId);
   }
 
   async findAgents(filter: { readonly userId: string } | { readonly ownerUserId: string }): Promise<readonly StoredAgent[]> {
@@ -75,16 +73,11 @@ export class PostgresIdentityRepository implements IdentityRepository {
     return result.changes > 0;
   }
 
-  async setExecutorAccess(target: string, granted: boolean, at: number): Promise<ExecutorAccessChange | null> {
-    return await this._database.transaction(async (db) => {
-      const user = await db.prepare("SELECT id, username FROM users WHERE id = ? OR lower(username COLLATE \"C\") = lower(?::text COLLATE \"C\")").get(target, target);
-      if (!user) return null;
-      const id = String(user.id);
-      const { changes } = granted
-        ? await db.prepare("INSERT INTO executor_access (user_id, granted_at) VALUES (?, ?) ON CONFLICT DO NOTHING").run(id, at)
-        : await db.prepare("DELETE FROM executor_access WHERE user_id = ?").run(id);
-      return { id, username: String(user.username), changed: changes > 0 };
-    });
+  async setExecutorAccess(userId: string, granted: boolean, at: number): Promise<boolean> {
+    const { changes } = granted
+      ? await this._database.prepare("INSERT INTO executor_access (user_id, granted_at) VALUES (?, ?) ON CONFLICT DO NOTHING").run(userId, at)
+      : await this._database.prepare("DELETE FROM executor_access WHERE user_id = ?").run(userId);
+    return changes > 0;
   }
 
   async hasExecutorAccess(userId: string): Promise<boolean> {
@@ -95,12 +88,7 @@ export class PostgresIdentityRepository implements IdentityRepository {
     const rows = await this._database.prepare(
       "SELECT u.id, u.username, u.kind, e.granted_at FROM executor_access e JOIN users u ON u.id = e.user_id ORDER BY e.granted_at, u.id"
     ).all();
-    return rows.map((row) => ({
-      id: String(row.id),
-      username: String(row.username),
-      kind: row.kind === "agent" ? "agent" : "human",
-      grantedAt: Number(row.granted_at),
-    }));
+    return rows.map((row) => ({ ...namedUser(row), grantedAt: Number(row.granted_at) }));
   }
 
   async createPasswordUser(input: NewPasswordUser): Promise<void> {
@@ -852,6 +840,10 @@ function toPrincipal(row: PrincipalRow): StoredPrincipal {
       : { kind: "human" }),
     banned: row.banned,
   };
+}
+
+function namedUser(row: Record<string, unknown>): NamedUser {
+  return { id: String(row.id), username: String(row.username), kind: row.kind === "agent" ? "agent" : "human" };
 }
 
 function toUser(row: UserRow): User {
