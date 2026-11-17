@@ -471,11 +471,13 @@ MCP 不连数据库（D12），所以第一版的“统计接口”由两部分�
 | --- | --- |
 | `ts`、`request_id`、`trace_id` | 时间、请求 ID、追踪 ID（来自 `_meta` 的 `traceparent`，如有） |
 | `user_id` | 用户 |
+| `principal_kind` | 用户的主体类型，`human` 或 `agent` |
 | `auth_kind` | `oauth`、`pat`、`dev` |
 | `client_id` | OAuth 客户端 ID 或 PAT 的 ID |
 | `client_name`、`client_version` | 请求里的 `clientInfo` |
 | `tool`、`toolset` | 工具与所属 toolset |
 | `repo`、`unit_type` | 解析后的仓库与 Unit 类型（没有则为空） |
+| `node_id` | 可选，`share` 调用成功时所读或所设文件的 Node ID，其他调用省略 |
 | `outcome` | `ok`、`tool_error`、`auth_error`、`rate_limited`、`timeout`、`internal_error` |
 | `error_code` | 工具错误的错误码，与返回给客户端的 `code` 相同。Workspace 自己的错误码（如 `NOT_FOUND`）原样记录 |
 | `duration_ms` | 网关总耗时 |

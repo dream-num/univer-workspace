@@ -63,6 +63,7 @@ interface RequestState {
   outcome: Outcome;
   errorCode: string | null;
   repo: string | null;
+  nodeId: string | undefined;
   modern: boolean;
   jobUsage?: { completion: Promise<ToolResult> | undefined };
 }
@@ -197,6 +198,7 @@ export function createGateway(
                 );
             }
             state.repo = result.repo;
+            state.nodeId = result.nodeId;
             state.outcome = "ok";
             return {
               content: [
@@ -464,6 +466,7 @@ export function createGateway(
       outcome: "tool_error",
       errorCode: null,
       repo: null,
+      nodeId: undefined,
       modern: false,
     };
     return requests.run(state, async () => {
@@ -502,6 +505,7 @@ export function createGateway(
                   ? meta[TRACEPARENT_META_KEY]
                   : null,
               user_id: user.id,
+              principal_kind: user.kind ?? "human",
               auth_kind: authentication.authKind,
               client_id: authentication.clientId,
               client_name: client?.success ? client.data.name : null,
@@ -509,6 +513,7 @@ export function createGateway(
               tool: tool?.name ?? "unknown",
               toolset: tool?.toolset ?? "core",
               repo: state.repo,
+              ...(state.nodeId === undefined ? {} : { node_id: state.nodeId }),
               unit_type: usage.unitType ?? null,
               outcome: state.outcome,
               error_code: state.errorCode,

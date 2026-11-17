@@ -52,6 +52,7 @@ const observedSchema = z
     request_id: z.string().min(1),
     trace_id: z.string().nullable(),
     user_id: z.string().min(1),
+    principal_kind: z.enum(["human", "agent"]),
     auth_kind: z.literal("dev"),
     client_id: z.literal("dev"),
     client_name: z.string().nullable(),
@@ -59,6 +60,7 @@ const observedSchema = z
     tool: z.string().min(1),
     toolset: z.enum(["core", "files", "admin"]),
     repo: z.string().nullable(),
+    node_id: z.string().min(1).optional(),
     unit_type: z.string().nullable(),
     outcome: z.enum([
       "ok",
@@ -219,6 +221,38 @@ describe("gateway over real HTTP and the MCP client", () => {
           );
       } else if (path.pathname.endsWith("/star")) {
         response.end(JSON.stringify({ starCount: 7, starred: true }));
+      } else if (path.pathname === "/api/nodes/node-1") {
+        response.end(
+          JSON.stringify({
+            node: {
+              id: "node-1",
+              name: "Budget",
+              accessRole: "owner",
+              capabilities: { browseChildren: false, createChildren: false, move: true, rename: true, share: true, trash: true },
+              hasChildren: false,
+              parentNodeId: null,
+              resource: null,
+              spaceId: "personal-1",
+              updatedAt: "2026-11-16T00:00:00.000Z",
+            },
+            space: { id: "personal-1", name: "Personal" },
+            breadcrumbs: [{ id: "node-1", name: "Budget" }],
+            navigationRootNodeId: null,
+          }),
+        );
+      } else if (path.pathname === "/api/nodes/node-1/link-sharing") {
+        response.end(
+          JSON.stringify({
+            enabled: true,
+            role: "viewer",
+            owner: { username: "budget-x7k2", kind: "agent", claimed: false },
+            expiresAt: null,
+            createdBy: null,
+            updatedBy: null,
+            createdAt: null,
+            updatedAt: null,
+          }),
+        );
       } else {
         const space = spaces.find((space) => path.pathname === `/api/spaces/${space.id}`);
         if (space) response.end(JSON.stringify(space));
@@ -649,6 +683,20 @@ describe("gateway over real HTTP and the MCP client", () => {
       expect(whoami.structuredContent).toEqual({ origin: identityOrigin, subject });
     },
   );
+
+  it("records the principal kind on every usage event and the shared file on a share event", async () => {
+    await (await connect()).callTool({ name: "whoami", arguments: {} });
+    principal = { kind: "agent", claimed: false };
+    const shared = await (await connect()).callTool({
+      name: "share",
+      arguments: { node: `${identityOrigin}/nodes/node-1`, link: "viewer" },
+    });
+    expect(shared.isError).not.toBe(true);
+    expect(events().map(({ tool, principal_kind, node_id }) => ({ tool, principal_kind, node_id }))).toEqual([
+      { tool: "whoami", principal_kind: "human", node_id: undefined },
+      { tool: "share", principal_kind: "agent", node_id: "node-1" },
+    ]);
+  });
 
   it("tells an agent to merge and share, and a person to review, in the server instructions", async () => {
     const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
