@@ -444,7 +444,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         queryClient.setQueryData(['mode-switch-probe'], 'retained');
         window.previousModeMain = document.querySelector('main');
       })()`);
-      click("button", nextMode === "wiki" ? "Wiki" : "Repository");
+      browser("click", `[role=dialog] input[type=radio][value="${nextMode}"]`);
       browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
       settle();
       assert.equal(evaluate("previousModeMain.isConnected"), false, "切换 mode 必须重新挂载 shell");
@@ -467,7 +467,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         click("menuitem", "Application settings");
       } else click("button", "Application settings");
       browser("wait", "[role=dialog]");
-      click("button", nextMode === "wiki" ? "Wiki" : "Repository");
+      browser("click", `[role=dialog] input[type=radio][value="${nextMode}"]`);
       browser("wait", "--fn", `document.documentElement.dataset.uiMode === '${nextMode}' && !document.querySelector('[role=dialog]')`);
       settle();
     };

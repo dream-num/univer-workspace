@@ -1,6 +1,6 @@
-# Page theme: Wiki and Repository modes
+# Workspace view: Wiki and Repository modes
 
-A signed-in user picks the page theme in Application settings. `Repository` (the default) is a
+On the first signed-in visit to Home, a new browser offers both views. The user can switch views later in Application settings. `Repository` (the default) is a
 repository-style workspace with a top bar (OfficeLab mark, search, Home, Pull requests, Issues,
 Recent and Pages) over the same data. `Wiki` is a file-tree workspace with a sidebar of Personal
 Space, Team Spaces and Pages. The choice is stored per browser and survives a reload.
@@ -19,7 +19,7 @@ Space, Team Spaces and Pages. The choice is stored per browser and survives a re
 
 - Repository mode: `Account` (avatar, top right) → `Application settings`. The top bar has no gear.
 - Wiki mode: the `Application settings` gear in the page header.
-- Either way the dialog has a `Page theme` control with `Wiki` and `Repository`.
+- Either way the dialog has a `Workspace view` control with `Wiki` and `Repository`.
 - Repository routes: `/home`, `/repositories`, `/worktrees`, `/issues`, `/recent`, `/apps`.
 
 ## Driving it with agent-browser and uvw
@@ -36,7 +36,10 @@ Preconditions:
   `$V cli seed-pr pr create -R $O/verify-team -t "Add Sales sheet" --json` (take `id` as `W`), and
   `$V cli seed-unit unit create --worktree $W --space $S --type sheet --name Sales --json`.
 
-- **Repository default.** After sign-in on `$ORIGIN/home`,
+- **First visit.** On `$ORIGIN/home`, confirm the `Repository` radio is selected. Click
+  `Enter workspace`, then reload and confirm the chooser stays closed. A browser with an existing
+  valid mode goes straight to Home. A direct link to a file opens the file first.
+- **Repository default.** After confirming the default on `$ORIGIN/home`,
   `agent-browser eval 'document.documentElement.dataset.uiMode'` prints `repository`. The top bar
   has a link `OfficeLab`, a searchbox `Find a repository…`, a `Main navigation` with `Home`,
   `Pull requests`, `Issues`, `Recent` and `Pages`, and a button `Account`. The Home rail is the
@@ -44,16 +47,16 @@ Preconditions:
   `agent-browser screenshot "$EVIDENCE/mode-repository-home.png"`.
 - **Open settings.** Run `agent-browser find role button click --name "Account"`, then
   `agent-browser find role menuitem click --name "Application settings"`. The dialog shows
-  `Page theme` with buttons `Wiki` and `Repository`. Run
+  `Workspace view` with compact `Wiki` and `Repository` preview cards. Run
   `agent-browser screenshot "$EVIDENCE/mode-settings-open.png"`.
-- **Switch to Wiki.** Run `agent-browser find role button click --name "Wiki"`.
+- **Switch to Wiki.** Run `agent-browser click '[role=dialog] input[value=wiki]'`.
   `agent-browser storage local get univer-workspace-layout-theme` prints `wiki`. The sidebar has a
   `Personal Space` region and `Team Spaces`, and the header has a button `Application settings`.
   Run `agent-browser screenshot "$EVIDENCE/mode-wiki-home.png"`.
 - **Persist.** Run `agent-browser reload` and `agent-browser wait 2000`.
   `document.documentElement.dataset.uiMode` still prints `wiki`.
 - **Switch back.** Run `agent-browser find role button click --name "Application settings"`, then
-  `agent-browser find role button click --name "Repository"`. The theme key prints `repository`
+  `agent-browser click '[role=dialog] input[value=repository]'`. The theme key prints `repository`
   and the `OfficeLab` link is back in the top bar.
 - **Repository directory.** Run `agent-browser open "$ORIGIN/repositories"` and `agent-browser wait 2000`.
   The heading is `All repositories`, with `Type`, `Visibility` and `Sort` comboboxes. Run
@@ -81,8 +84,8 @@ Preconditions:
 ## Gotchas
 
 - The theme lives in `localStorage` key `univer-workspace-layout-theme`, per browser profile,
-  not per user. A fresh agent-browser session starts in Repository, and the first render writes
-  `repository` to that key.
+  not per user. A fresh agent-browser session previews Repository by default. Confirming a choice
+  saves the mode and sets `univer-workspace-view-onboarding-complete` to `true`.
 - To start another journey in Wiki mode, skip the dialog:
   `agent-browser storage local set univer-workspace-layout-theme wiki`, then open any route. This
   does not replace the dialog journey above, which is the proof of the settings entry.
@@ -98,7 +101,7 @@ Preconditions:
   `agent-browser eval 'document.querySelector("form.repository-toolbar").requestSubmit()'`.
 - The slug in `New repository` is derived from the name (`UI Created` becomes `ui-created`).
   Proof is the `repo list` readback, not the toast or the redirect.
-- The `Page theme` buttons are named exactly `Wiki` and `Repository`; there is no `(experimental)`
+- The `Workspace view` radio options are named exactly `Wiki` and `Repository`; there is no `(experimental)`
   suffix any more.
 - The Repository top bar also has icon links `Issues` and `Pull requests` beside `Main navigation`, so
   `find role link --name "Issues"` matches twice, and a `Light`/`Dark` color-scheme button and an `Agents` button sit before `Account`.

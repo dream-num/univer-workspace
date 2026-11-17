@@ -1,4 +1,5 @@
-import { useModeDefinition } from "../modes/registry";
+import { useUiMode } from "../shared/ui-mode";
+import { ModeOnboarding, useModeDefinition } from "../modes/registry";
 import type { HomeView } from "../modes/registry";
 import { createFileRoute } from "@tanstack/react-router";
 import { requireAuthenticatedSession } from "../features/auth";
@@ -22,5 +23,7 @@ function isHomeView(value: unknown): value is HomeView {
 function HomePage() {
   const props = Route.useSearch();
   const { pages } = useModeDefinition();
+  const { needsOnboarding } = useUiMode();
+  if (needsOnboarding) return <ModeOnboarding />;
   return <pages.home {...props} />;
 }

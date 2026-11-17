@@ -1,3 +1,4 @@
+import preview from "./view-preview.webp";
 import { WikiAgentsPage } from "./pages/agents";
 import { WikiIssueLayout, WikiIssueListPage, WikiIssueDetailPage } from "./pages/issues";
 import { WikiWorktreesPage } from "./pages/worktrees";
@@ -31,6 +32,9 @@ export const wikiMode = {
     home: WikiHomePage,
   },
   label: "wikiTheme",
+  description: "wikiViewDescription",
+  shortDescription: "wikiViewSummary",
+  preview,
   Shell: WikiShell,
   messages: {},
 } as const satisfies ModeDefinition;
