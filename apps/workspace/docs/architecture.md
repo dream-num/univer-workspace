@@ -175,8 +175,9 @@ mode 不依赖 routes 或 app，也不导入另一个 mode。routes 只通过 re
 在首次绘制前设置 html 的 `data-ui-mode`，`app/providers.tsx` 注入 mode 文案覆盖并保持同步，QueryClient
 与产品缓存跨 mode 复用。repository 样式和色彩令牌挂在 `:root[data-ui-mode="repository"]` 上，portal
 中的弹层同样继承；Wiki 不继承其样式，`modes/repository/css-scope.test.ts` 拒绝未限定作用域的规则。
-首次登录后打开 `/home` 时，新浏览器展示 Wiki 和 Repository 的预览，预选 Repository。确认选择或在应用设置中切换视图时，
-Browser 保存 mode 并写入本地完成标记 `univer-workspace-view-onboarding-complete`。已有有效 mode 的浏览器直接沿用原视图。
+登录后打开 `/home` 时，只要本地完成标记 `univer-workspace-view-onboarding-complete` 的值不是 `"true"`，就展示视图选择页。
+选择页预选浏览器当前有效的 mode（包括旧版自动保存的值），缺失或无效时预选 Repository。
+确认选择或在应用设置中切换视图时，Browser 保存 mode 并将完成标记设为 `"true"`，以后在该浏览器中直接进入主页。
 直接打开文档或空间链接时，引导延后到访问主页。
 两种 mode 的通用 feature 通过呈现参数、布局插槽或无界面的模型 hook（如 `useIssueListModel`）复用。
 

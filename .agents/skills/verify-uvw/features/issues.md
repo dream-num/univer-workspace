@@ -24,7 +24,7 @@ close event back from the timeline.
 Preconditions:
 
 - Baseline run with `$V user`. Browser signed in as the baseline user. `O=verify-$VERIFY_UVW_RUN`.
-- Pin the Wiki page theme before opening any route: `agent-browser storage local set univer-workspace-layout-theme wiki`. A fresh session starts in Repository.
+- Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 - No repository `verify-team` exists.
 
 - **Create repo.** Run `$V cli issue-repo-create repo create verify-team --name "Verify Team" --json id,fullName`.

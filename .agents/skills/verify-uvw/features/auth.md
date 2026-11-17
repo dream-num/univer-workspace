@@ -26,7 +26,7 @@ in non-interactively with a username and a password piped on stdin.
 Preconditions:
 
 - Baseline run is up and `$V doctor` is clean. Browser signed out (`agent-browser cookies clear`).
-- Pin the Wiki page theme before opening any route: `agent-browser storage local set univer-workspace-layout-theme wiki`. A fresh session starts in Repository.
+- Set `agent-browser storage local set univer-workspace-layout-theme wiki` on the test origin. Confirm Wiki with `Enter workspace` if Home shows the view choice.
 
 - **Open sign-up.** Run `agent-browser open "$ORIGIN/login"`, `agent-browser wait 1500`,
   then `agent-browser find role button click --name "Create account"`. A `Display name`

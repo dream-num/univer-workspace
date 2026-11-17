@@ -37,8 +37,9 @@ as the recipe.
 - An unreachable entry point is reported with the command tried and the unmet
   precondition. Do not report it as verified through a different path.
 - Page theme is a per-browser `localStorage` value. Each journey states the mode it expects.
-  A fresh session starts in Repository. Journeys that drive the Wiki sidebar pin Wiki first with
-  `agent-browser storage local set univer-workspace-layout-theme wiki`.
+  A fresh session previews Repository. Journeys that drive the Wiki sidebar pin Wiki first with
+  `agent-browser storage local set univer-workspace-layout-theme wiki` and confirm
+  `Enter workspace` when Home first shows the choice.
 - OAuth sign-in (GitHub, Google, Discord) and browser-approved `uvw auth login` need a real
   provider or a human. They are out of scope; report them as skipped.
 

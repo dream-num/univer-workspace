@@ -345,7 +345,11 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       mkdirSync(join(baseline, mode), { recursive: true, mode: 0o700 });
       mkdirSync(join(actual, mode), { recursive: true, mode: 0o700 });
       evaluate(
-        `localStorage.clear(); localStorage.setItem('univer-workspace-layout-theme', '${mode}'); localStorage.setItem('univer-workspace-language', 'en-US'); localStorage.setItem('univer-workspace-theme', '${theme}');`,
+        `localStorage.clear();
+        localStorage.setItem('univer-workspace-layout-theme', '${mode}');
+        localStorage.setItem('univer-workspace-view-onboarding-complete', 'true');
+        localStorage.setItem('univer-workspace-language', 'en-US');
+        localStorage.setItem('univer-workspace-theme', '${theme}');`,
       );
       browser("set", "viewport", "1440", "900");
       // 先打开 Sheet，使第一次运行的 Recent 列表与后续运行相同。

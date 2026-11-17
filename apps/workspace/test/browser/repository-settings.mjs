@@ -39,6 +39,7 @@ test("Repository settings save independently, stay on Settings, and persist afte
       const response = await fetch('/api/team-spaces', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name: 'settings-demo', publicRead: false }) });
       if (!response.ok) throw new Error('Repository creation failed');
       localStorage.setItem('univer-workspace-layout-theme', 'repository');
+      localStorage.setItem('univer-workspace-view-onboarding-complete', 'true');
       localStorage.setItem('univer-workspace-language', 'en-US');
       localStorage.setItem('univer-workspace-theme', 'light');
       return response.json();

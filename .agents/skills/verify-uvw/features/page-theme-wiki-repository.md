@@ -37,8 +37,10 @@ Preconditions:
   `$V cli seed-unit unit create --worktree $W --space $S --type sheet --name Sales --json`.
 
 - **First visit.** On `$ORIGIN/home`, confirm the `Repository` radio is selected. Click
-  `Enter workspace`, then reload and confirm the chooser stays closed. A browser with an existing
-  valid mode goes straight to Home. A direct link to a file opens the file first.
+  `Enter workspace`, then reload and confirm the chooser stays closed. To check an upgrade,
+  remove the completion marker, set the stored mode to Wiki, and reload Home. Wiki should be
+  preselected. Confirm and reload again to verify Wiki Home opens directly. A direct link to
+  a file opens the file first.
 - **Repository default.** After confirming the default on `$ORIGIN/home`,
   `agent-browser eval 'document.documentElement.dataset.uiMode'` prints `repository`. The top bar
   has a link `OfficeLab`, a searchbox `Find a repository…`, a `Main navigation` with `Home`,
@@ -86,9 +88,8 @@ Preconditions:
 - The theme lives in `localStorage` key `univer-workspace-layout-theme`, per browser profile,
   not per user. A fresh agent-browser session previews Repository by default. Confirming a choice
   saves the mode and sets `univer-workspace-view-onboarding-complete` to `true`.
-- To start another journey in Wiki mode, skip the dialog:
-  `agent-browser storage local set univer-workspace-layout-theme wiki`, then open any route. This
-  does not replace the dialog journey above, which is the proof of the settings entry.
+- To start another journey in Wiki mode, set `univer-workspace-layout-theme` to `wiki` on the
+  test origin. On the first visit to Home, confirm Wiki with `Enter workspace`.
 - In Wiki mode `/repositories` and `/recent` redirect to `/home`. `/worktrees`, `/issues` and
   `/apps` stay on their route. Assert on those pages in Repository mode.
 - `Find a repository…` exists twice on Repository Home (top-bar search and the rail filter), so

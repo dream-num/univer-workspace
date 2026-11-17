@@ -31,11 +31,9 @@ export function UiModeProvider<M extends string>({
   const readPreference = useCallback(() => {
     try {
       const stored = window.localStorage.getItem(STORAGE_KEY);
-      const existingMode = modes.find((id) => id === stored);
-      // Earlier releases saved a mode automatically. Returning browsers keep their current view.
       return {
-        mode: existingMode ?? fallback,
-        needsOnboarding: !existingMode && window.localStorage.getItem(ONBOARDING_KEY) !== "true",
+        mode: parseUiMode(stored, modes, fallback),
+        needsOnboarding: window.localStorage.getItem(ONBOARDING_KEY) !== "true",
       };
     } catch {
       return { mode: fallback, needsOnboarding: true };
