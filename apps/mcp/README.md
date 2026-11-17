@@ -176,8 +176,12 @@ can grant itself.
 
 Changes need no restart. The gateway reads the grant from the token exchange it caches for at most 30 seconds, and
 the executor reads it from the Workspace session once per caller grant, which lives 30 seconds. A grant or revoke
-therefore reaches new tool lists and new executor calls within 30 seconds. Calls already running finish, and an MCP
-client may keep showing a tool list it fetched earlier, but its executor calls fail after a revoke.
+therefore reaches new tool lists and new executor calls after about 30 seconds: the cache bound, plus the time until
+the client's next request. Calls already running finish, and an MCP client may keep showing a tool list it fetched
+earlier, but its executor calls fail after a revoke.
+
+`workspace` admits only granted users. Before you switch a deployment from `*` or a user ID list to `workspace`, grant
+every user who uses the executor today, or they lose the executor tools.
 
 The comma-separated user ID list still works. Remove it once production and staging run `workspace` or `*`.
 

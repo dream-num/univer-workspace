@@ -183,7 +183,7 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   V22 → V23 startup migration that backfills nothing. Only the operator command `db:executor-access` grants or
   revokes a User's use of the shared MCP executor; no HTTP route writes it. The session and the token exchange report
   the grant, and an MCP deployment with `MCP_EXECUTOR_ALLOWED_USER_IDS=workspace` follows it without a restart.
-  Deployments upgrade Workspace before switching MCP to `workspace`.
+  Deployments upgrade Workspace and grant the users who use the executor today before switching MCP to `workspace`.
 - Login sessions, password hashes, verified Email addresses, Email verification-code hashes, stable GitHub and Discord user identifiers, ACLs (including Unit content edit protection collaborators and policies), personal access token and OAuth grant hashes, sharing state, agent records, abuse reports, and user-authored
   content are protected application data. Access tokens from external OAuth identity providers are used only during
   sign-in and account linking and are not persisted.
