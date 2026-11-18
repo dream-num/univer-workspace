@@ -455,7 +455,7 @@ export function createGuestAuthorizationCheck(options: {
   readonly accessTokens: AccessTokenService;
   readonly oauthClients: OAuthClientConfig | null;
   readonly mcpOAuth: McpOAuthConfig | null;
-  readonly resolveClientMetadata: (clientId: CimdClientId, requester: string) => Promise<CimdClient>;
+  readonly resolveClientMetadata: (clientId: CimdClientId, requester: string, kind: "anonymous") => Promise<CimdClient>;
 }): (query: string, sourceIp: string | undefined) => Promise<string | null> {
   const clients = new Map((options.oauthClients?.clients ?? []).map((client) => [client.clientId, client]));
   const mcp = options.mcpOAuth;
@@ -472,7 +472,7 @@ export function createGuestAuthorizationCheck(options: {
     if (source.kind === "cimd") {
       try {
         // Keyed by source, as `/authorize` keys it by User: one metadata fetch in flight per requester.
-        client = await options.resolveClientMetadata(source.clientId, `guest ${sourceIp}`);
+        client = await options.resolveClientMetadata(source.clientId, `guest ${sourceIp}`, "anonymous");
       } catch (error) {
         if (!(error instanceof ClientMetadataDocumentError)) throw error;
         // The caller is anonymous, so the cause stays in the fetch log.

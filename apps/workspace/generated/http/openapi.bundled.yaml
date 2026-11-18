@@ -1287,7 +1287,8 @@ paths:
         A source at its limit is refused with 429 before anything is fetched.
         With `oauthAuthorization`, the authorization is checked first, as
         authorize checks it: a Client ID Metadata Document client's metadata is
-        fetched now, one fetch in flight per source, and authorize reuses it.
+        fetched now, one fetch in flight per source and at most 8 for all
+        guests together, and authorize reuses it.
         A request authorize would refuse answers 400 or 503 and creates nothing.
         All responses have Cache-Control: no-store.
       security: []

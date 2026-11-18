@@ -201,8 +201,9 @@ export function createClientMetadataDocumentResolver(options: {
   const cache = new Map<CimdClientId, { client: CimdClient; fetchedAt: number }>();
   const pending = new Map<CimdClientId, Promise<CimdClient>>();
   const users = new Map<string, CimdClientId>();
+  let anonymousPending = 0;
 
-  return async (clientId: CimdClientId, userId: string): Promise<CimdClient> => {
+  return async (clientId: CimdClientId, userId: string, kind: "signed-in" | "anonymous" = "signed-in"): Promise<CimdClient> => {
     if (now() - (cache.get(clientId)?.fetchedAt ?? now()) >= MAX_TTL) cache.delete(clientId);
     const entry = cache.get(clientId);
     if (entry !== undefined && entry.client.expiresAt > now()) return entry.client;
@@ -211,10 +212,13 @@ export function createClientMetadataDocumentResolver(options: {
       throw error;
     };
     let work = pending.get(clientId);
-    if ((users.has(userId) && users.get(userId) !== clientId) || (work === undefined && pending.size >= 32)) {
+    const anonymous = kind === "anonymous";
+    // Anonymous requesters may start only 8 of the 32 fetches, so they cannot starve signed-in authorization.
+    if ((users.has(userId) && users.get(userId) !== clientId) || (work === undefined && (pending.size >= 32 || (anonymous && anonymousPending >= 8)))) {
       return fallback(new ClientMetadataDocumentError(true, "Client metadata fetch capacity is busy. Try again."));
     }
     if (work === undefined) {
+      if (anonymous) anonymousPending += 1;
       const fetchedAt = now();
       work = Promise.resolve().then(async () => {
         let outcome = "success";
@@ -237,6 +241,7 @@ export function createClientMetadataDocumentResolver(options: {
           throw failure;
         } finally {
           pending.delete(clientId);
+          if (anonymous) anonymousPending -= 1;
           for (const [user, id] of users) if (id === clientId) users.delete(user);
           logger.info({ event: "oauth.cimd.fetch", client_id: clientId, outcome, reason }, "Client metadata fetch");
         }
