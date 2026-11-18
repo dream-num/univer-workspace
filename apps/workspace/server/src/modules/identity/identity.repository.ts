@@ -51,7 +51,6 @@ export interface NewEmailUser {
 export interface StoredEmailLoginCode {
   readonly id: string;
   readonly codeHash: string;
-  readonly attempts: number;
 }
 
 export interface ExternalIdentityUser {
@@ -164,7 +163,7 @@ export interface IdentityRepository {
     email: string,
     now: number
   ): Promise<StoredEmailLoginCode | null>;
-  incrementEmailLoginCodeAttempts(id: string): Promise<void>;
+  reserveEmailLoginCodeAttempt(id: string, maxAttempts: number): Promise<boolean>;
   consumeEmailLoginCode(id: string, consumedAt: number): Promise<boolean>;
   consumeOtherEmailLoginCodes(
     email: string,
