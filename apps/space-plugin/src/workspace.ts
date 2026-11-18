@@ -374,24 +374,27 @@ export class WorkspaceConnection {
       } while (cursor);
     }
     const htmlIds = new Set<string>();
-    let htmlCursor = '';
-    do {
-      const page = await read(
-        `/api/html-views?${new URLSearchParams({ limit: '100', ...(htmlCursor ? { cursor: htmlCursor } : {}) })}`,
-      );
-      for (const item of page.items) {
-        htmlIds.add(item.node.id);
-        // Pages can parent Pages. The directory scan above walks Folders only;
-        // retain authorized nested Pages from the existing HTML Views index.
-        if (!seen.has(item.node.id)) {
-          seen.add(item.node.id);
-          nodes.push({ ...item.node, resource: item.resource });
-          if (nodes.length > 2000)
-            throw new SpaceError(413, 'All index exceeds 2,000 items. Browse individual Spaces instead.');
+    // The unscoped list omits Spaces the user reads only as the public, so list those one Space at a time.
+    for (const spaceId of [undefined, ...spaces.filter((space: any) => space.affiliation === 'none').map((space: any) => space.id)]) {
+      let htmlCursor = '';
+      do {
+        const page = await read(
+          `/api/html-views?${new URLSearchParams({ limit: '100', ...(spaceId ? { spaceId } : {}), ...(htmlCursor ? { cursor: htmlCursor } : {}) })}`,
+        );
+        for (const item of page.items) {
+          htmlIds.add(item.node.id);
+          // Pages can parent Pages. The directory scan above walks Folders only;
+          // retain authorized nested Pages from the existing HTML Views index.
+          if (!seen.has(item.node.id)) {
+            seen.add(item.node.id);
+            nodes.push({ ...item.node, resource: item.resource });
+            if (nodes.length > 2000)
+              throw new SpaceError(413, 'All index exceeds 2,000 items. Browse individual Spaces instead.');
+          }
         }
-      }
-      htmlCursor = page.nextCursor ?? '';
-    } while (htmlCursor);
+        htmlCursor = page.nextCursor ?? '';
+      } while (htmlCursor);
+    }
     for (const node of nodes)
       if (htmlIds.has(node.id) && node.resource?.kind === 'blob')
         node.resource = { ...node.resource, htmlView: true };
