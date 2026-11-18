@@ -489,11 +489,11 @@ on someone else's pull request fails with a message naming its author.
 
 ### Hand off as a guest agent
 
-Until a person claims it, nobody else can open a guest agent's pull request, so an unclaimed guest
-agent finishes the task itself. Once claimed (`uvw auth status --json` shows `"claimed": true`), it
-hands off as above: mark the pull request ready and return the review URL, and the person who
-claimed it merges. While unclaimed, after step 4, merge the pull request, turn on Link Sharing for
-the file, and return the link instead of the review URL:
+Until a person claims it, nobody else can open a guest agent's pull request, so a guest agent
+finishes the task itself. A claimed one (`uvw auth status --json` shows `"claimed": true`) hands
+off as above instead when the person who claimed it asked to review the work or the change needs
+a person's decision; that person merges it. Otherwise, after step 4, merge the pull request, turn
+on Link Sharing for the file, and return the link instead of the review URL:
 
 ```bash
 uvw pr merge <n> -R <username>/personal --json

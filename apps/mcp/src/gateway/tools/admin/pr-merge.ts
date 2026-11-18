@@ -8,7 +8,7 @@ const inputSchema = z.object({ repo: repoInput, number: pullNumberInput });
 export const prMergeTool: ToolDefinition = {
   name: "pr_merge",
   toolset: "admin",
-  // An unclaimed agent has no reviewer, so merges its own work; a claimed one merges when its owner asks.
+  // An agent may merge its own work without being asked; only a claimed one has someone to hand it to.
   agentToolsets: ["core", "admin"],
   scope: "worktree:merge",
   title: "Merge pull request",

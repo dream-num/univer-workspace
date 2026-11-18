@@ -62,7 +62,7 @@ every rule here that leaves readiness, merging or the link to the user.
 | `pr create`, `worktree create`                                                                               | `pr_create`            | Start a task                                               |
 | `pr edit`, `worktree edit`                                                                                   | `pr_edit`              | Update task metadata                                       |
 | `pr ready`, `worktree ready`                                                                                 | `pr_ready`             | Ready only on explicit user completion/review request; undo true returns ready to draft |
-| `pr merge`, `worktree merge`                                                                                 | `pr_merge`             | Admin; explicit user request only, except for an unclaimed agent identity |
+| `pr merge`, `worktree merge`                                                                                 | `pr_merge`             | Admin; explicit user request only, except for an agent identity |
 | `pr discard`, `worktree discard`                                                                             | `pr_discard`           | Admin; irreversible, explicit user request only            |
 | `browse`                                                                                                     | `browse`               | Generate a review URL                                      |
 | `unit list`                                                                                                  | `unit_list`            | Staged Units in one Worktree                               |
@@ -367,14 +367,15 @@ admin tools return SVG source for incorporation in the page or document.
 5. Generate the edited Unit's review URL with `browse`.
 6. Return the review URL, pull request number, Worktree id and Unit id to the user.
 
-Do not merge or discard unless explicitly requested. Discard is irreversible.
 A pull request has one author. People and agents collaborate on trunk, each through
 their own pull requests; only the author, or the person who claimed the authoring
 agent, merges one.
-An agent identity follows the server instructions instead. While unclaimed, it marks
-its verified pull request ready, merges it with `pr_merge`, returns the `share` url
-and gives the user the `claimUrl` from `share`, or from `claim`. Once claimed, it marks
-the pull request ready and returns the review URL; the person who claimed it merges.
+Do not merge or discard unless explicitly requested. Discard is irreversible.
+An agent identity follows the server instructions instead: it marks its verified
+pull request ready, merges it with `pr_merge` and returns the `share` url. While
+unclaimed, it also gives the user the `claimUrl` from `share`, or from `claim`.
+Once claimed, it returns the review URL instead of merging when the person who
+claimed it asked to review the work or the change needs a person's decision.
 To resume same-task rework, continue draft directly; return ready to draft with
 `pr_ready` and undo true only before an explicitly requested write.
 There is no separate close or reopen tool for a pull request.
