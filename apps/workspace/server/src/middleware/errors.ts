@@ -45,6 +45,7 @@ export type ApplicationErrorCode =
   | "DISCORD_OAUTH_FAILED"
   | "DISCORD_BOT_AUTH_UNAVAILABLE"
   | "OAUTH_CLIENT_UNAVAILABLE"
+  | "CLIENT_METADATA_BUSY"
   | "INVALID_CLIENT_SECRET"
   | "INVALID_REDIRECT_URI"
   | "INVALID_GRANT"
@@ -59,7 +60,8 @@ export class ApplicationError extends Error {
     readonly code: ApplicationErrorCode,
     readonly status: number,
     message: string,
-    readonly field?: string
+    readonly field?: string,
+    readonly retryAfterSeconds?: number
   ) {
     super(message);
     this.name = "ApplicationError";
@@ -82,6 +84,7 @@ export const errorHandler: ErrorRequestHandler = (
   _next
 ) => {
   if (error instanceof ApplicationError) {
+    if (error.retryAfterSeconds !== undefined) response.set("Retry-After", String(error.retryAfterSeconds));
     response.status(error.status).json({
       error: {
         code: error.code,

@@ -644,8 +644,10 @@ export interface paths {
          *     A source at its limit is refused with 429 before anything is fetched.
          *     With `oauthAuthorization`, the authorization is checked first, as
          *     authorize checks it: a Client ID Metadata Document client's metadata is
-         *     fetched now, one fetch in flight per source and at most 8 for all
-         *     guests together, and authorize reuses it.
+         *     fetched now, and authorize reuses it. Guests may start 8 of the 32
+         *     metadata fetches the server runs at once, one in flight per source, and
+         *     each source may start 10 per hour, failed ones included. A cached
+         *     document or a fetch already in flight costs nothing.
          *     A request authorize would refuse answers 400 or 503 and creates nothing.
          *     All responses have Cache-Control: no-store.
          */
@@ -5248,7 +5250,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled. */
+            /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, the source started 10 metadata fetches in the last hour, or creation is disabled. */
             429: {
                 headers: {
                     [name: string]: unknown;
@@ -5257,9 +5259,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now. */
+            /**
+             * @description OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now.
+             *     CLIENT_METADATA_BUSY, with Retry-After. Every metadata fetch guests may start is in
+             *     use, or this source has another one in flight. Nothing was fetched. Retry after the delay.
+             */
             503: {
                 headers: {
+                    /** @description Seconds to wait, sent only with CLIENT_METADATA_BUSY. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {

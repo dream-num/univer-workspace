@@ -5,6 +5,7 @@ import { Agent, request, type RequestOptions } from "node:https";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 import { logger } from "../../logging/logger.js";
 import { MAX_CLIENT_NAME_LENGTH, MAX_REGISTERED_REDIRECT_URIS, registrableRedirectUri } from "./mcp-oauth.js";
+import { createSourceRateLimiter } from "./source-rate-limiter.js";
 
 export type CimdClientId = string & { readonly __brand: "CimdClientId" };
 export interface CimdClient {
@@ -19,6 +20,8 @@ export interface CimdClient {
 const MIN_TTL = 5 * 60_000;
 const MAX_TTL = 24 * 60 * 60_000;
 const MAX_BODY = 5 * 1024;
+export const FETCH_TIMEOUT_SECONDS = 5;
+const ANONYMOUS_FETCHES_PER_SOURCE_HOUR = 10;
 const blocked = new BlockList();
 for (const [address, prefix] of [
   ["0.0.0.0", 8], ["10.0.0.0", 8], ["100.64.0.0", 10], ["127.0.0.0", 8],
@@ -42,6 +45,13 @@ export class ClientMetadataDocumentError extends Error {
   constructor(readonly temporary: boolean, message: string) {
     super(message);
     this.name = "ClientMetadataDocumentError";
+  }
+}
+
+export class ClientMetadataFetchRefusedError extends ClientMetadataDocumentError {
+  constructor(readonly reason: "busy" | "source_limit", message: string) {
+    super(true, message);
+    this.name = "ClientMetadataFetchRefusedError";
   }
 }
 
@@ -143,9 +153,9 @@ export async function fetchClientMetadataDocument(
         response.on("end", () => resolve({ body: Buffer.concat(chunks).toString("utf8"), ...(response.headers["cache-control"] === undefined ? {} : { cacheControl: response.headers["cache-control"] }) }));
       });
       const timer = setTimeout(() => {
-        reject(new ClientMetadataDocumentError(true, "Client metadata fetch exceeded 5 seconds."));
+        reject(new ClientMetadataDocumentError(true, `Client metadata fetch exceeded ${FETCH_TIMEOUT_SECONDS} seconds.`));
         req.destroy();
-      }, 5000);
+      }, FETCH_TIMEOUT_SECONDS * 1000);
       req.on("error", reject);
       req.on("close", () => clearTimeout(timer));
       req.end();
@@ -202,8 +212,9 @@ export function createClientMetadataDocumentResolver(options: {
   const pending = new Map<CimdClientId, Promise<CimdClient>>();
   const users = new Map<string, CimdClientId>();
   let anonymousPending = 0;
+  const anonymousStarts = createSourceRateLimiter(ANONYMOUS_FETCHES_PER_SOURCE_HOUR, now);
 
-  return async (clientId: CimdClientId, userId: string, kind: "signed-in" | "anonymous" = "signed-in"): Promise<CimdClient> => {
+  return async (clientId: CimdClientId, requester: string, kind: "signed-in" | "anonymous" = "signed-in"): Promise<CimdClient> => {
     if (now() - (cache.get(clientId)?.fetchedAt ?? now()) >= MAX_TTL) cache.delete(clientId);
     const entry = cache.get(clientId);
     if (entry !== undefined && entry.client.expiresAt > now()) return entry.client;
@@ -214,10 +225,13 @@ export function createClientMetadataDocumentResolver(options: {
     let work = pending.get(clientId);
     const anonymous = kind === "anonymous";
     // Anonymous requesters may start only 8 of the 32 fetches, so they cannot starve signed-in authorization.
-    if ((users.has(userId) && users.get(userId) !== clientId) || (work === undefined && (pending.size >= 32 || (anonymous && anonymousPending >= 8)))) {
-      return fallback(new ClientMetadataDocumentError(true, "Client metadata fetch capacity is busy. Try again."));
+    if ((users.has(requester) && users.get(requester) !== clientId) || (work === undefined && (pending.size >= 32 || (anonymous && anonymousPending >= 8)))) {
+      return fallback(new ClientMetadataFetchRefusedError("busy", "Client metadata fetch capacity is busy. Try again."));
     }
     if (work === undefined) {
+      if (anonymous && !anonymousStarts.take(requester)) {
+        return fallback(new ClientMetadataFetchRefusedError("source_limit", "This source started too many client metadata fetches. Try again later."));
+      }
       if (anonymous) anonymousPending += 1;
       const fetchedAt = now();
       work = Promise.resolve().then(async () => {
@@ -248,7 +262,7 @@ export function createClientMetadataDocumentResolver(options: {
       });
       pending.set(clientId, work);
     }
-    users.set(userId, clientId);
+    users.set(requester, clientId);
     try { return await work; }
     catch (error) {
       if (error instanceof ClientMetadataDocumentError) return fallback(error);
