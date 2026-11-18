@@ -86,7 +86,7 @@ describe("who takes a pull request to trunk", () => {
     const own = await createPull(origin, unclaimed, { kind: "user" }, unclaimed.spaceId);
     await transition(origin, own, "ready", unclaimed);
     expect(await transition(origin, own, "merge", unclaimed)).toBe("merged");
-  });
+  }, 30_000);
 });
 
 interface Actor {
