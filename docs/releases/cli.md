@@ -44,6 +44,19 @@ never requests non-dry-run server-side Promotion, which would write through insi
 and retire the source. This workflow retains the source and publishes directly using
 npm OIDC. It neither rebuilds/repackages artifacts nor promotes dependencies.
 
+Insider metadata is read from the complete package packument's `versions[version]`;
+its `/package/version` route redirects to public npm and is not an insider version
+lookup. Original tarballs may redirect from insider to the deployment's public
+OSS origin `https://insider-npm.oss-cn-shenzhen.aliyuncs.com`. These two HTTPS
+origins form an explicit allowlist, not an assumed destination: each target comes
+from the actual `Location` header, without rewriting or assuming a storage path.
+Downloads are credential-free, HTTPS-only,
+limited to three redirects, and reject loops, userinfo, queries and other origins.
+The original SHA-512 and package manifest are verified after download. A storage
+origin change requires code review; metadata and authenticated dry-run requests
+still reject redirects. Diagnostics report the failing stage and safe transport
+code, without printing credentials or arbitrary server/error bodies.
+
 `latest` defaults to **true** and has these explicit semantics:
 
 - **false, new public version:** publish with `--tag=promoted`, including the first

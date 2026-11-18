@@ -9,6 +9,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 import {
   assertPublishContext,
+  downloadInsiderTarball,
   INSIDER,
   npmPublishArguments,
   npmTagArguments,
@@ -95,9 +96,8 @@ async function fixture(
     if (value === `${INSIDER}-/insider/v1/promotions?wait=true&dryRun=true`)
       return Response.json(plan);
     if (value === `${INSIDER}artifact.tgz`) return new Response(bytes);
-    if (value === `${INSIDER}${encoded}/${selectedVersion}`) return Response.json(metadata);
     if (value === `${INSIDER}${encoded}`)
-      return Response.json({ name: packageName, "dist-tags": { latest: state.sourceLatest } });
+      return Response.json({ name: packageName, versions: { [selectedVersion]: metadata }, "dist-tags": { latest: state.sourceLatest } });
     if (value === `${PUBLIC}${encoded}/${selectedVersion}`)
       return state.exists ? Response.json(metadata) : new Response(null, { status: 404 });
     if (value === `${PUBLIC}${encoded}`)
@@ -270,7 +270,7 @@ test("policy, dependency and auth rejection stops immediately without retry and 
           );
         },
       }),
-      new RegExp(`\\(${status}\\).*REJECTED`, "u"),
+      new RegExp(`Insider Promotion dry-run: HTTP ${status}`, "u"),
     );
     assert.equal(calls, 1);
     await assert.rejects(readFile(join(f.directory, "promotion.json")), /ENOENT/u);
@@ -567,4 +567,91 @@ test("credentialed workflow stays manual/default-branch only with configurable p
   );
   assert.match(tests, /npm@11\.21\.0/u);
   assert.doesNotMatch(tests, /secrets\.|id-token: write|--publish/u);
+});
+
+test("real insider protocol selects versions from one packument and follows trusted OSS without credentials", async (t) => {
+  for (const packageName of [PACKAGE, "@scope/tool"]) {
+    const f = await fixture(t, { packageName, latest: true });
+    const oss = "https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/example/versions/0.7.0/package.tgz";
+    const calls = [];
+    const record = await preparePromotion({ ...f, fetcher: async (url, options) => {
+      calls.push({url:String(url), options});
+      if (String(url) === f.metadata.dist.tarball) return new Response(null,{status:302,headers:{location:oss}});
+      if (String(url) === oss) return new Response(f.bytes);
+      return f.fetcher(url, options);
+    }});
+    assert.equal(record.integrity, f.hash);
+    assert.equal(calls.filter(c=>c.url===`${INSIDER}${encodeURIComponent(packageName)}`).length,1);
+    assert.ok(!calls.some(c=>c.url===`${INSIDER}${encodeURIComponent(packageName)}/${version}`));
+    for (const call of calls.filter(c=>c.url===oss||c.url===f.metadata.dist.tarball)) {
+      assert.equal(call.options.headers,undefined);
+      assert.equal(call.options.method,"GET");
+      assert.equal(call.options.redirect,"manual");
+      assert.ok(!JSON.stringify(call).includes(env.INSIDER_TOKEN));
+    }
+  }
+});
+
+test("tarball rejects untrusted, downgrade, userinfo, query, lookalike hosts and loop redirects before following", async () => {
+  for (const target of ["https://evil.invalid/a", "http://insider-npm-registry.univer.work/a", "https://user:secret@insider-npm-registry.univer.work/a", `${INSIDER}a?token=secret`, "https://insider-npm.oss-cn-shenzhen.aliyuncs.com.evil.invalid/other/key", `${INSIDER}artifact.tgz`]) {
+    let calls=0;
+    await assert.rejects(downloadInsiderTarball(`${INSIDER}artifact.tgz`,async()=>{calls++;return new Response(null,{status:302,headers:{location:target}})}),/untrusted|loop/u);
+    assert.equal(calls,1);
+  }
+});
+
+test("tarball redirect limit and missing location stop without credentialed retries", async () => {
+  let calls=0;
+  await assert.rejects(downloadInsiderTarball(`${INSIDER}artifact.tgz`,async()=>new Response(null,{status:302,headers:{location:`${INSIDER}next-${++calls}`}})),/redirect limit/u);
+  assert.equal(calls,4);
+  await assert.rejects(downloadInsiderTarball(`${INSIDER}artifact.tgz`,async()=>new Response(null,{status:302})),/missing location/u);
+});
+
+test("packument redirects, missing version, and corrupted redirected tarball cannot produce a plan", async(t)=>{
+  const f=await fixture(t);const packument=`${INSIDER}${PACKAGE}`;
+  await assert.rejects(preparePromotion({...f,fetcher:async(url,opts)=>String(url)===packument?new Response(null,{status:302,headers:{location:PUBLIC}}):f.fetcher(url,opts)}),/Insider packument: HTTP 302/u);
+  await assert.rejects(preparePromotion({...f,fetcher:async(url,opts)=>String(url)===packument?Response.json({name:PACKAGE,versions:{}}):f.fetcher(url,opts)}),/metadata does not match/u);
+  const oss="https://insider-npm.oss-cn-shenzhen.aliyuncs.com/insider-npm-registry/v1/packages/a";
+  await assert.rejects(preparePromotion({...f,fetcher:async(url,opts)=>String(url)===f.metadata.dist.tarball?new Response(null,{status:302,headers:{location:oss}}):String(url)===oss?new Response("corrupt"):f.fetcher(url,opts)}),/integrity mismatch/u);
+  await assert.rejects(readFile(join(f.directory,"promotion.json")),/ENOENT/u);
+});
+
+test("safe transport diagnostics identify stage and code without echoing tokens, URLs or bodies", async(t)=>{
+  const f=await fixture(t);
+  for (const [cause,pattern] of [[{message:"unexpected redirect"},/unexpected redirect/u],[{code:"ENOTFOUND",message:env.INSIDER_TOKEN},/ENOTFOUND/u],[{message:`secret ${env.INSIDER_TOKEN}`},/fetch failed/u]]) {
+    await assert.rejects(preparePromotion({...f,fetcher:async()=>{throw new TypeError(`secret ${env.INSIDER_TOKEN}`,{cause})}}),e=>{assert.match(e.message,/Insider Promotion dry-run/u);assert.match(e.message,pattern);assert.ok(!e.message.includes(env.INSIDER_TOKEN));return true});
+  }
+  await assert.rejects(preparePromotion({...f,fetcher:async()=>new Response(env.INSIDER_TOKEN,{status:403})}),e=>!e.message.includes(env.INSIDER_TOKEN)&&e.message.includes("HTTP 403"));
+});
+
+test("HTTP 200 invalid JSON never echoes sensitive response prefixes", async (t) => {
+  const secret="synthetic-sensitive-example";
+  for (const stage of ["dry-run", "packument"]) {
+    const f=await fixture(t);
+    await assert.rejects(preparePromotion({...f,fetcher:async(url,opts)=>
+      (stage==="dry-run"&&String(url).includes("promotions?"))||(stage==="packument"&&String(url)===`${INSIDER}${PACKAGE}`)
+        ?new Response(secret):f.fetcher(url,opts)
+    }),e=>{assert.match(e.message,/Insider .*: invalid JSON response/u);assert.ok(!e.message.includes("synthetic"));return true});
+    await assert.rejects(readFile(join(f.directory,"promotion.json")),/ENOENT/u);
+  }
+  const f=await prepared(t);
+  await assert.rejects(publishPromotion({...f,fetcher:async()=>new Response(secret)}),e=>e.message==="Public readback: invalid JSON response");
+  assert.deepEqual(f.state.writes,[]);
+});
+
+
+test("allowlist is not a destination: actual Location and paths stay intact", async () => {
+  for (const target of [
+    `${INSIDER}new-layout/original.tgz`,
+    "https://insider-npm.oss-cn-shenzhen.aliyuncs.com/changed-layout/object-123",
+  ]) {
+    const calls=[];
+    const bytes=await downloadInsiderTarball(`${INSIDER}original.tgz`,async (url,options)=>{
+      calls.push(String(url));
+      assert.equal(options.headers,undefined);
+      return calls.length===1?new Response(null,{status:302,headers:{location:target}}):new Response("original");
+    });
+    assert.deepEqual(calls,[`${INSIDER}original.tgz`,target]);
+    assert.equal(bytes.toString(),"original");
+  }
 });
