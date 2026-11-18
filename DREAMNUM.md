@@ -60,7 +60,8 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   It exposes identity, repository, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
   Link Sharing, Facade API reference, Skills, and SVG resource catalog tools. It authenticates personal access tokens and MCP OAuth access tokens by exchanging
   them at Workspace for short-lived sessions; development session authentication is refused in production.
-  For an agent User it lists `pr_merge` with `core`, never lists `repo_create`, and tells the agent to merge and share its own work;
+  For an agent User it lists `pr_merge` with `core` and never lists `repo_create`. It tells an unclaimed agent to merge and
+  share its own work, and a claimed one to mark its work ready for the person who claimed it, who merges;
   an unclaimed agent also gets `claim` and a claim link in its `share` result. It runs
   apart from Workspace Server and connects to no database. Use is limited to local and internal single-user
   environments until Stage G.

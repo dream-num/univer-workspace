@@ -256,6 +256,12 @@ Merge results are stored per Unit. Successful Units do not roll back if another
 Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
+A Worktree has one author, its creator. People and agents collaborate on trunk, each
+through their own Worktrees. Only the owners of the creator's Personal Space, that is
+the creator and the human who claimed an agent creator, merge a Worktree, User or Team,
+and only with edit access to every target. Anyone else gets `FORBIDDEN` with a message
+that names the author.
+
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an
 agent creator, can also discover and review them and read their Worktree-local Units.
@@ -264,11 +270,12 @@ checks each target with their own access, and the Operation names them as its ac
 Editing the draft, its Units, name and summary stays with the creator. Team Worktrees belong to one Team Space. Their Visibility controls who
 may Review; Visibility never grants Resource Access.
 
-The Creator can discover and Review a private Team Worktree. The Team Space
+The Creator, and the human who claimed an agent creator, can discover, Review, mark
+ready, reopen and discard a private Team Worktree. The Team Space
 Owner and Admin can discover its Summary and perform administrative Reopen or
-Discard actions, but cannot read its Unit list or draft content. Other Members
-cannot discover it. A space-visible Team Worktree can be discovered and reviewed
-read-only by current Space Members.
+Discard actions, but cannot read its Unit list or draft content, and cannot merge it.
+Other Members cannot discover it. A space-visible Team Worktree can be discovered and
+reviewed read-only by current Space Members.
 
 ## Repository names and numbers
 
