@@ -18,7 +18,8 @@ export function createRequestLoggingMiddleware(
       req: (request: Request) => ({
         id: request.id,
         method: request.method,
-        url: request.path,
+        // Claim codes are secrets, and the claim page carries one in its path.
+        url: request.path.replace(/^\/claim\/.+/iu, "/claim/:code"),
       }),
       res: (response: ServerResponse) => ({ statusCode: response.statusCode }),
       err: (error: Error & { type?: string }) => {

@@ -72,6 +72,20 @@ describe("HTTP observation boundaries", () => {
     expect(lines[1].responseTime).toBeTypeOf("number");
   });
 
+  it("keeps claim codes out of request logs", async () => {
+    let output = "";
+    const log = pino({ level: "info" }, { write: (line) => { output += line; } });
+    const app = express();
+    app.use(createRequestLoggingMiddleware(log));
+    app.use((_req, res) => res.end());
+    for (const url of ["/claim/claim-secret-1", "/Claim/claim-secret-2/", "/api/agents/claim?code=claim-secret-3", "/nodes/node-1"]) {
+      await request(app, url);
+    }
+    expect(output).not.toContain("claim-secret");
+    expect(output.trim().split("\n").map((line) => JSON.parse(line).req.url))
+      .toEqual(["/claim/:code", "/claim/:code", "/api/agents/claim", "/nodes/node-1"]);
+  });
+
   it("filters request data carried by JSON parser errors", async () => {
     let output = "";
     const log = pino({ level: "info" }, { write: (line) => { output += line; } });

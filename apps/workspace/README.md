@@ -401,7 +401,7 @@ low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line 
 claim page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
 otherwise. OAuth sign-ups carry `returnTo` through the provider. Password and email sign-ups read it
 from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the claim page
-itself, which has its own sign-in form. The claim code is never logged.
+itself, which has its own sign-in form. The claim code is never logged, here or in request logs.
 
 Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
 these fields:
