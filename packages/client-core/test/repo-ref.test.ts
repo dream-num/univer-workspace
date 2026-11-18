@@ -107,6 +107,7 @@ describe("file links", () => {
       link: "off",
       owner: { username: "budget-x7k2", kind: "agent", claimed: false },
       expiresAt: "2026-12-14T00:00:00.000Z",
+      access: "Only this agent can open the link until a person claims it. Share it again with link viewer so anyone with the link can read it.",
       claimUrl: `${origin}/claim/c0de`,
       claimHint: "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.",
     });
@@ -127,17 +128,29 @@ describe("file links", () => {
     expect(shared).not.toHaveProperty("claimUrl");
   });
 
+  it("says until when an unclaimed agent's shared link works", async () => {
+    const { spaces } = clients((call) =>
+      call.path === "/api/agents/claim-codes"
+        ? Response.json({ code: "c0de", claimUrl: "/claim/c0de", expiresIn: 600 }, { status: 201 })
+        : Response.json(call.method === "PUT" ? sharing({ enabled: true }) : node(sheet)));
+    const shared = await shareNode(spaces, origin, { node: "n1", link: "viewer" });
+    expect(shared.access).toBe(
+      "Anyone with the link can read the file without signing in. The link stops working on 2026-12-14T00:00:00.000Z unless budget-x7k2 stays active.",
+    );
+  });
+
   it.each([
-    ["off", { enabled: false, role: "viewer" }],
-    ["viewer", { enabled: true, role: "viewer" }],
-    ["editor", { enabled: true, role: "editor" }],
-  ] as const)("sets Link Sharing to %s and reports what the server stored", async (link, settings) => {
+    ["off", { enabled: false, role: "viewer" },
+      "Only people with access to the repository can open the link. Share it again with link viewer so anyone with the link can read it."],
+    ["viewer", { enabled: true, role: "viewer" }, "Anyone with the link can read the file without signing in."],
+    ["editor", { enabled: true, role: "editor" }, "Anyone with the link can read the file, and signed-in people can edit it."],
+  ] as const)("sets Link Sharing to %s and reports what the server stored and who can open the link", async (link, settings, access) => {
     const { spaces, calls } = clients((call) =>
       Response.json(call.method === "PUT"
         ? sharing({ ...(call.body as object), owner: { username: "me", kind: "human" }, expiresAt: null })
         : node(sheet)));
     await expect(shareNode(spaces, origin, { node: "n1", link })).resolves.toEqual({
-      url: `${origin}/nodes/n1`, name: "Budget", link, owner: { username: "me", kind: "human" },
+      url: `${origin}/nodes/n1`, name: "Budget", link, owner: { username: "me", kind: "human" }, access,
     });
     expect(calls.at(-1)).toEqual({ method: "PUT", path: "/api/nodes/n1/link-sharing", body: settings });
   });

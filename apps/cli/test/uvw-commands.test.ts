@@ -1100,6 +1100,8 @@ describe("uvw share", () => {
 
   const claimUrl = `${ORIGIN}/claim/c0de`;
   const claimHint = "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.";
+  const privateAccess =
+    "Only this agent can open the link until a person claims it. Share it again with link viewer so anyone with the link can read it.";
 
   function share(updateLinkSharing?: () => Promise<never>) {
     const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner, role });
@@ -1118,12 +1120,15 @@ describe("uvw share", () => {
   it("reads the Link Sharing of a file link or Node ID without changing it", async () => {
     const { command, spaces } = share();
     const text = await run(command, [url]);
-    expect(text).toContain(url);
-    expect(text).toContain("Budget");
-    expect(text).toContain("Link Sharing: off");
-    expect(text).toContain(`Claim link: ${claimUrl}\n${claimHint}`);
+    expect(text.trimEnd()).toBe([
+      `Budget  ${url}`,
+      `Link Sharing: off. ${privateAccess}`,
+      `  uvw share ${url} --link viewer`,
+      `Claim link: ${claimUrl}`,
+      claimHint,
+    ].join("\n"));
     expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
-      claimHint, claimUrl, expiresAt, link: "off", name: "Budget", owner, url,
+      access: privateAccess, claimHint, claimUrl, expiresAt, link: "off", name: "Budget", owner, url,
     });
     expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
     expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
@@ -1138,8 +1143,9 @@ describe("uvw share", () => {
     const text = await run(command, [url, "--link", link]);
     expect(text).toContain(`Link Sharing: ${link}`);
     expect(text.includes(expiresAt)).toBe(link !== "off");
+    expect(text.includes("--link viewer")).toBe(link === "off");
     expect(JSON.parse(await run(command, [url, "--link", link, "--json"]))).toEqual({
-      claimHint, claimUrl, expiresAt, link, name: "Budget", owner, url,
+      access: expect.any(String), claimHint, claimUrl, expiresAt, link, name: "Budget", owner, url,
     });
     expect(JSON.parse(await run(command, [url, "--link", link, "--json", "url,link"]))).toEqual({ link, url });
     expect(spaces.updateLinkSharing).toHaveBeenCalledWith("node-1", written);

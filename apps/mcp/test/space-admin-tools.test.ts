@@ -585,7 +585,14 @@ describe("space, unit, repository admin, label and merge tools", () => {
       claimHint: "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.",
     };
     const claimCode = { method: "POST", path: "/api/agents/claim-codes", body: undefined };
-    expect((await share({ node: `${origin}/nodes/sheet` })).structuredContent).toEqual({ ...drop, link: "off" });
+    const access =
+      "Only this agent can open the link until a person claims it. Share it again with link viewer so anyone with the link can read it.";
+    const read = await share({ node: `${origin}/nodes/sheet` });
+    expect(read.structuredContent).toEqual({ ...drop, link: "off", access });
+    expect(read.content).toEqual([{
+      type: "text",
+      text: `Budget  ${origin}/nodes/sheet\nLink Sharing: off. ${access}\nClaim link: ${drop.claimUrl}\n${drop.claimHint}`,
+    }]);
     expect(writesOf()).toEqual([claimCode]);
     for (const [link, body] of [
       ["editor", { enabled: true, role: "editor" }],
@@ -593,7 +600,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       ["off", { enabled: false, role: "viewer" }],
     ] as const) {
       requests = [];
-      expect((await share({ node: "sheet", link })).structuredContent).toEqual({ ...drop, link });
+      expect((await share({ node: "sheet", link })).structuredContent).toEqual({ ...drop, link, access: expect.any(String) });
       expect(writesOf()).toEqual([{ method: "PUT", path: "/api/nodes/sheet/link-sharing", body }, claimCode]);
     }
     expect((await share({ node: "sheet", link: "owner" })).structuredContent).toMatchObject({
