@@ -374,28 +374,37 @@ export async function publishPromotion({
   } else {
     // No blind retry on publish failure: its outcome may be uncertain.
     await publisher(path, env, record.tag);
-    action = "published";
+    action = "submitted";
   }
-  assertPublicVersion(await publicVersion(packageName, version, fetcher), record);
   if (latest && existing && before.latest !== version) {
     await tagger(packageName, version, env);
     tagUpdated = true;
   }
+  const submission = { ...record, action, tagUpdated, previousLatest: before.latest ?? null,
+    latestVerified: false, publicRegistryWriteVerified: false };
+  await writeFile(join(directory, "submission.json"), `${JSON.stringify(submission, null, 2)}\n`);
+  return submission;
+}
+
+// Separate read-only operation: never invokes a publisher or dist-tag writer.
+export async function verifyPromotion({ packageName, version, latest, directory, fetcher = fetch }) {
+  validateSelection(packageName, version, latest);
+  const record = JSON.parse(await readFile(join(directory, "submission.json"), "utf8"));
+  if (record.package !== packageName || record.version !== version || record.latest !== latest ||
+      record.registry !== PUBLIC || !["submitted", "reused"].includes(record.action) ||
+      !/^sha512-[A-Za-z0-9+/]+={0,2}$/u.test(record.integrity ?? ""))
+    throw new Error("Verification requires the matching submission record.");
+  const metadata = await publicVersion(packageName, version, fetcher);
+  if (metadata === undefined) return { ...record, verification: "pending", latestVerified: false, publicRegistryWriteVerified: false };
+  assertPublicVersion(metadata, record);
   const after = await publicTags(packageName, fetcher);
-  if (latest ? after.latest !== version : after.latest !== before.latest) {
+  if (latest ? after.latest !== version : (after.latest ?? null) !== record.previousLatest)
     throw new Error("Public latest readback does not match the requested intent.");
-  }
-  if (!latest && action === "published" && after.promoted !== version) {
+  if (!latest && record.action === "submitted" && after.promoted !== version)
     throw new Error("Public promoted tag readback does not match the published version.");
-  }
-  if (tagUpdated) assertPublicVersion(await publicVersion(packageName, version, fetcher), record);
-  return {
-    ...record,
-    action,
-    tagUpdated,
-    latestVerified: latest,
-    publicRegistryWriteVerified: action === "published" || tagUpdated,
-  };
+  return { ...record, verification: "verified", latestVerified: latest,
+    publicRegistryWriteVerified: record.action === "submitted" || record.tagUpdated === true };
+
 }
 
 async function main() {
@@ -403,16 +412,18 @@ async function main() {
   const options = { directory: resolve(".promotion") };
   const keys = { package: "packageName", version: "version", latest: "latest" };
   let publish = false;
+  let verify = false;
   const seen = new Set();
   for (const arg of args) {
-    if (arg === "--publish" && !publish) {
+    if (arg === "--verify" && !verify && !publish) { verify = true; continue; }
+    if (arg === "--publish" && !publish && !verify) {
       publish = true;
       continue;
     }
     const match = /^--(package|version|latest)=(.+)$/u.exec(arg);
     if (!match || seen.has(match[1]))
       throw new Error(
-        "Expected --package=<name> --version=<exact> --latest=true|false [--publish].",
+        "Expected --package=<name> --version=<exact> --latest=true|false [--publish | --verify].",
       );
     seen.add(match[1]);
     options[keys[match[1]]] =
@@ -424,7 +435,7 @@ async function main() {
             : undefined
         : match[2];
   }
-  const result = await (publish ? publishPromotion(options) : preparePromotion(options));
+  const result = await (verify ? verifyPromotion(options) : publish ? publishPromotion(options) : preparePromotion(options));
   const report = {
     package: result.package,
     version: result.version,
@@ -433,15 +444,15 @@ async function main() {
     tag: result.tag,
     tagUpdated: result.tagUpdated ?? false,
     latestVerified: result.latestVerified ?? false,
-    mode: publish ? result.action : "validation-only",
+    mode: verify ? result.verification : publish ? result.action : "validation-only",
     publicRegistryWriteVerified: result.publicRegistryWriteVerified === true,
     insiderSourceRetained: true,
   };
-  await writeFile(join(options.directory, "result.json"), `${JSON.stringify(report, null, 2)}\n`);
+  await writeFile(join(options.directory, verify ? "verification.json" : "result.json"), `${JSON.stringify(report, null, 2)}\n`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(
       process.env.GITHUB_STEP_SUMMARY,
-      `## Insider package public promotion\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\`\n\nValidation does not verify public write authority. Insider source is retained.\n`,
+      `## Insider package public promotion\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\`\n\nSubmission is not public availability. Verify separately; do not retry publication to resolve pending review. Insider source is retained.\n`,
     );
   }
   console.log(JSON.stringify(report, null, 2));
