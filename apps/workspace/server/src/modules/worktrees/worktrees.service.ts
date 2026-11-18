@@ -1214,6 +1214,15 @@ function summaryView(
       displayName: row.creator_display_name,
       avatarUrl: row.creator_avatar_url,
     },
+    claimer:
+      row.claimer_user_id !== null && row.claimer_username !== null && row.claimer_display_name !== null
+        ? {
+            id: row.claimer_user_id,
+            username: row.claimer_username,
+            displayName: row.claimer_display_name,
+            avatarUrl: row.claimer_avatar_url,
+          }
+        : null,
     unitCount: row.unit_count,
     processedAt:
       row.processed_at === null

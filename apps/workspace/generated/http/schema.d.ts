@@ -2575,6 +2575,11 @@ export interface components {
             visibility: components["schemas"]["WorktreeVisibility"];
             state: components["schemas"]["WorktreeState"];
             creator: components["schemas"]["PublicUser"];
+            /**
+             * @description The person who claimed the authoring agent, who can merge the pull request as its author can.
+             *     Null when a person or an unclaimed agent is the author.
+             */
+            claimer: components["schemas"]["PublicUser"] | null;
             unitCount: number;
             /** Format: date-time */
             processedAt: string | null;

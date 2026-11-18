@@ -54,6 +54,7 @@ WorktreeSummary:
     - visibility
     - state
     - creator
+    - claimer
     - unitCount
     - processedAt
     - createdAt
@@ -86,6 +87,13 @@ WorktreeSummary:
       $ref: "#/WorktreeState"
     creator:
       $ref: ./identity.yaml#/PublicUser
+    claimer:
+      description: |
+        The person who claimed the authoring agent, who can merge the pull request as its author can.
+        Null when a person or an unclaimed agent is the author.
+      oneOf:
+        - $ref: ./identity.yaml#/PublicUser
+        - type: "null"
     unitCount:
       type: integer
       minimum: 0

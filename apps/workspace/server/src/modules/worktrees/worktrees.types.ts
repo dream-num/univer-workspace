@@ -38,6 +38,7 @@ export interface WorktreeSummary {
   readonly visibility: WorktreeVisibility;
   readonly state: WorktreeState;
   readonly creator: PublicUser;
+  readonly claimer: PublicUser | null;
   readonly unitCount: number;
   readonly processedAt: string | null;
   readonly createdAt: string;

@@ -80,6 +80,7 @@ describe("repository data boundaries", () => {
       visibility: "space",
       teamSpace: { id: "finance", name: "Finance", type: "team", publicRead: false },
       creator: { id: "author", username: "author", displayName: "Author", avatarUrl: null },
+      claimer: null,
       unitCount: 0,
       units: [],
       createdAt: "2026-01-01T00:00:00Z",
