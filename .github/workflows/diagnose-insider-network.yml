@@ -1,0 +1,32 @@
+name: Diagnose insider runner network (no credentials)
+on:
+  push:
+    branches: [debug/insider-runner-network-20261118]
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Diagnose public transport without credentials or publication
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import dns from 'node:dns/promises';
+          const host = 'insider-npm-registry.univer.work';
+          function error(e) { return {name:e?.name,message:e?.message,code:e?.code,cause:e?.cause?error(e.cause):undefined,errors:e?.errors?.map(error)}; }
+          try { console.log('DNS',JSON.stringify(await dns.lookup(host,{all:true}))); } catch(e) { console.log('DNS_ERROR',JSON.stringify(error(e))); }
+          for (const [stage,url,options] of [
+            ['public-control','https://registry.npmjs.org/univer-workspace-cli/0.7.0',{}],
+            ['insider-metadata',`https://${host}/univer-workspace-cli/0.7.0`,{}],
+            ['unauthenticated-dry-run',`https://${host}/-/insider/v1/promotions?wait=true&dryRun=true`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({packages:[{name:'univer-workspace-cli',version:'0.7.0'}]})}],
+          ]) {
+            try { const r=await fetch(url,{...options,redirect:'manual',signal:AbortSignal.timeout(20000)}); console.log(stage,JSON.stringify({status:r.status,location:r.headers.get('location'),server:r.headers.get('server')})); await r.body?.cancel(); }
+            catch(e){console.log(stage,JSON.stringify(error(e)));}
+          }
+          JS
+          curl --max-time 20 --silent --show-error -I https://insider-npm-registry.univer.work/univer-workspace-cli/0.7.0 || true
