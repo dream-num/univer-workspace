@@ -77,12 +77,20 @@ export const notFoundHandler: RequestHandler = (_request, response) => {
   });
 };
 
+// Express's JSON parser rejects a body before any route runs, naming the cause in `type`.
+const bodyErrors: Readonly<Record<string, ApplicationError>> = {
+  "entity.parse.failed": new ApplicationError("INVALID_INPUT", 400, "The request body is not valid JSON."),
+  "entity.too.large": new ApplicationError("PAYLOAD_TOO_LARGE", 413, "The request body is too large."),
+};
+
 export const errorHandler: ErrorRequestHandler = (
-  error: unknown,
+  thrown: unknown,
   request,
   response,
   _next
 ) => {
+  const type = (thrown as { type?: unknown } | null)?.type;
+  const error = typeof type === "string" && Object.hasOwn(bodyErrors, type) ? bodyErrors[type] : thrown;
   if (error instanceof ApplicationError) {
     if (error.retryAfterSeconds !== undefined) response.set("Retry-After", String(error.retryAfterSeconds));
     response.status(error.status).json({

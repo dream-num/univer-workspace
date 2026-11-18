@@ -113,7 +113,7 @@ function describeAccess(
     const target = folder ? "the folder and everything in it" : "the file";
     const who = link === "viewer"
       ? `Anyone with the link can read ${target} without signing in.`
-      : `Anyone with the link can read ${target}, and signed-in people can edit ${folder ? "them" : "it"}.`;
+      : `Anyone with the link can read ${target}, and signed-in people can edit ${folder ? "them" : "it"}. Through the link, an agent can edit only after a person claims that agent.`;
     return expiresAt === null ? who : `${who} The link stops working on ${expiresAt} unless ${owner.username} stays active.`;
   }
   const who = owner.claimed === false

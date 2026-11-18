@@ -10,7 +10,9 @@ explains behavior that spans multiple operations.
 - IDs and cursors are opaque strings.
 - Authentication uses an opaque `HttpOnly` cookie. React never reads a session
   secret or stores a bearer token.
-- Unsafe requests accept JSON and require a same-origin `Origin`.
+- Unsafe requests accept JSON and require a same-origin `Origin`. A body that
+  is not valid JSON returns `400 INVALID_INPUT`, and one over the operation's
+  size limit returns `413 PAYLOAD_TOO_LARGE`.
 - Unauthorized discovery of a Space, Node, Resource, or Worktree returns
   `404 NOT_FOUND`; an absent login session returns `401 UNAUTHENTICATED` on
   operations requiring authentication.

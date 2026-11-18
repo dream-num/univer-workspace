@@ -502,7 +502,8 @@ uvw share <node-id> --link viewer --json
 ```
 
 `share` takes the file link or the `nodeId` from `unit create`. `--link viewer` lets anyone who has
-the link read the file without signing in. `--link editor` also lets signed-in people edit it.
+the link read the file without signing in. `--link editor` also lets signed-in people edit it;
+through the link, an agent can edit only after a person claims that agent.
 `--link off` stops sharing. Without `--link`, the command only reads the current setting. Only the
 owner of a file can read or change its Link Sharing. Give the user `url` and tell them who can open
 it, from `access`. When the result has `expiresAt`, tell the user that the link stops working on
