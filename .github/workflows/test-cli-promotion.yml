@@ -1,0 +1,39 @@
+name: Test CLI promotion scripts
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/promote-cli-public.yml
+      - .github/workflows/test-cli-promotion.yml
+      - scripts/release/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/promote-cli-public.yml
+      - .github/workflows/test-cli-promotion.yml
+      - scripts/release/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: test-cli-promotion-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install the publisher npm version
+        working-directory: ${{ runner.temp }}
+        run: npm install --global npm@11.21.0 --registry=https://registry.npmjs.org/ --ignore-scripts --userconfig=/dev/null
+      - name: Test release policy and isolated npm upload
+        run: node --test scripts/release/*.test.mjs

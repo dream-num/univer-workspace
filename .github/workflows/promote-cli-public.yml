@@ -1,0 +1,77 @@
+name: Promote insider package to public npm (manual)
+run-name: Promote ${{ inputs.package }}@${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || ' (publish)' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package already built on insider-npm
+        required: true
+        type: choice
+        options:
+          - univer-workspace-cli
+      latest:
+        description: Set public latest (false publishes new versions with the promoted tag)
+        required: true
+        type: boolean
+        default: true
+      version:
+        description: Exact version already built on insider-npm
+        required: true
+        type: string
+      dry_run:
+        description: Validate only without publishing to public npm
+        required: true
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-public-promotion-manual
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      PROMOTION_PACKAGE: ${{ inputs.package }}
+      PROMOTION_LATEST: ${{ inputs.latest }}
+      PROMOTION_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Install npm with OIDC dist-tag support
+        working-directory: ${{ runner.temp }}
+        run: npm install --global npm@11.21.0 --registry=https://registry.npmjs.org/ --ignore-scripts --userconfig=/dev/null
+      - name: Validate policy and dependencies, then download and verify original tarball
+        env:
+          # Existing insider credential; never passed to the public npm command.
+          INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/release/promote-cli-public.mjs --package="$PROMOTION_PACKAGE" --version="$PROMOTION_VERSION" --latest="$PROMOTION_LATEST"
+      - name: Publish original tarball with npm OIDC and verify public integrity
+        if: ${{ !inputs.dry_run }}
+        run: node scripts/release/promote-cli-public.mjs --package="$PROMOTION_PACKAGE" --version="$PROMOTION_VERSION" --latest="$PROMOTION_LATEST" --publish
+      - name: Upload promotion evidence and original tarball
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-public-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .promotion/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

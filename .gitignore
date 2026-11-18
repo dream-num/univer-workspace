@@ -3,6 +3,7 @@ dist/
 lib/
 package-dist/
 .release/
+.promotion/
 coverage/
 .data/
 .DS_Store

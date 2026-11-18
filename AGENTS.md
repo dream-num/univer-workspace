@@ -161,7 +161,11 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 - 稳定 `vX.Y.Z` tag 在被选择时是 CLI release 与 Workspace deployment 共享的不可变源码坐标；tag push
   不触发 CI 或发布；CLI 发布必须单独手动触发 workflow。部署 workflow 也可以不选 tag，改为手动部署 workflow dispatch 的精确 commit，并使用
   `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
-- 当前 release workflow 只写 insider-npm；公开 npm Promotion 属于独立后续工作，不得加入该 workflow。
+- `release-cli-manual.yml` 只写 insider-npm；公开 npm Promotion 使用独立的
+  `promote-cli-public.yml`。后者默认仅校验，只有默认分支手动明确选择 `dry_run=false` 才发布
+  下拉选定包的精确版本原包（当前选项为 `univer-workspace-cli`）；`latest=false` 的新版本显式使用
+  `promoted` 标签，`latest=true` 必须验证或写入并回读公开 latest。不重建、不重打包、不自动提升依赖、
+  不删除内部版本。脚本不硬编码仓库或包名，复制到其他仓库只需调整 workflow 的包名选项。
 
 ## 文档维护
 
@@ -172,6 +176,7 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 - `apps/workspace/docs/data-model.md` 是产品数据模型、状态和持久化语义的权威说明。
 - `apps/workspace/docs/adr` 只记录已经接受的架构决策，不把临时计划写成既成事实。
 - `apps/cli/README.md` 记录 CLI 的用户能力、安装方式与对外交付合同。
+- `docs/releases/cli.md` 记录内部 CLI 构建、校验和发布操作；不把维护者发布流程写入用户 README。
 - Package README 必须明确该 package 的职责、非职责和 consumer 边界。
 
 仅当变更影响 `DREAMNUM.md` 已记录的事实时才更新该文件。其他任务无需读取、重写或顺手整理它。
