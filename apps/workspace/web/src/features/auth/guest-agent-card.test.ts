@@ -92,21 +92,17 @@ it("renders nothing when the deployment has guest agents off", async () => {
   expect(container.innerHTML).toBe("");
 });
 
-it("creates the guest agent and then continues to the authorization request", async () => {
-  await render(returnTo);
-  await click();
-  await waitFor(() => expect(assign).toHaveBeenCalledWith(returnTo));
-  expect(guestPosts().map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/guest"]);
-  expect(await guestPosts()[0]!.json()).toEqual({ oauthClientId: "client" });
-  expect(button()?.disabled).toBe(true);
-});
-
-it("sends no OAuth client when the authorization names none", async () => {
-  await render("/api/auth/authorize/consent?scope=read");
-  await click();
-  await waitFor(() => expect(assign).toHaveBeenCalled());
-  expect(await guestPosts()[0]!.json()).toEqual({});
-});
+it.each([returnTo, "/api/auth/authorize/consent?client_id=client&scope=read"])(
+  "sends the authorization request it continues so the server checks it first, then continues to %s",
+  async (target) => {
+    await render(target);
+    await click();
+    await waitFor(() => expect(assign).toHaveBeenCalledWith(target));
+    expect(guestPosts().map((request) => new URL(request.url).pathname)).toEqual(["/api/auth/guest"]);
+    expect(await guestPosts()[0]!.json()).toEqual({ oauthAuthorization: "client_id=client&scope=read" });
+    expect(button()?.disabled).toBe(true);
+  },
+);
 
 it("explains the rate limit in the page language and stays on the page", async () => {
   guestResponse = () => Response.json(

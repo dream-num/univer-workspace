@@ -6,6 +6,8 @@ const BUCKET_CAPACITY = 10_000;
 export interface SourceRateLimiter {
   /** Records one event for the source and returns true, or returns false when the source is over its limit. */
   take(ip: string | undefined): boolean;
+  /** Returns whether `take` would accept the source now, without recording an event. */
+  allows(ip: string | undefined): boolean;
 }
 
 /** In-process sliding one-hour window per source. A limit of 0 refuses every event. */
@@ -14,24 +16,25 @@ export function createSourceRateLimiter(
   now: () => number
 ): SourceRateLimiter {
   const buckets = new Map<string, number[]>();
-  return {
-    take(ip) {
-      const at = now();
-      const windowStart = at - WINDOW_MS;
-      for (const [key, times] of buckets) {
-        if (times.at(-1)! <= windowStart) buckets.delete(key);
-      }
-      const key = sourceBucket(ip);
-      const recent = (buckets.get(key) ?? []).filter((time) => time > windowStart);
-      // At capacity a new source is refused, so the map never outgrows BUCKET_CAPACITY.
-      if (recent.length >= limitPerHour || (recent.length === 0 && buckets.size >= BUCKET_CAPACITY)) {
-        return false;
-      }
+  function admit(ip: string | undefined, record: boolean): boolean {
+    const at = now();
+    const windowStart = at - WINDOW_MS;
+    for (const [key, times] of buckets) {
+      if (times.at(-1)! <= windowStart) buckets.delete(key);
+    }
+    const key = sourceBucket(ip);
+    const recent = (buckets.get(key) ?? []).filter((time) => time > windowStart);
+    // At capacity a new source is refused, so the map never outgrows BUCKET_CAPACITY.
+    if (recent.length >= limitPerHour || (recent.length === 0 && buckets.size >= BUCKET_CAPACITY)) {
+      return false;
+    }
+    if (record) {
       recent.push(at);
       buckets.set(key, recent);
-      return true;
-    },
-  };
+    }
+    return true;
+  }
+  return { take: (ip) => admit(ip, true), allows: (ip) => admit(ip, false) };
 }
 
 /**

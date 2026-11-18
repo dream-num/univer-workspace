@@ -269,7 +269,8 @@ export interface paths {
          *     When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
          *     (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
          *     clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
-         *     disables it. CIMD metadata is fetched only after interactive sign-in; invalid
+         *     disables it. CIMD metadata is fetched only after interactive sign-in, or
+         *     when a browser continues as a guest agent (POST /api/auth/guest); invalid
          *     documents return 400 and temporary fetch failures return 503 here, never a
          *     client redirect. CIMD names are displayed with their URL hostname. They must send
          *     `response_type=code`, `code_challenge_method=S256` and a `resource`
@@ -640,6 +641,12 @@ export interface paths {
          *     under the same per-source limit, but sets a browser login session cookie
          *     and returns no token. A request that already carries a valid login
          *     session is refused with 409, so it cannot replace a signed-in session.
+         *     A source at its limit is refused with 429 before anything is fetched.
+         *     With `oauthAuthorization`, the authorization is checked first, as
+         *     authorize checks it: a Client ID Metadata Document client's metadata is
+         *     fetched now, one fetch in flight per source and at most 8 for all
+         *     guests together, and authorize reuses it.
+         *     A request authorize would refuse answers 400 or 503 and creates nothing.
          *     All responses have Cache-Control: no-store.
          */
         post: operations["continueAsGuestAgent"];
@@ -3094,16 +3101,20 @@ export interface components {
              */
             label?: string;
             /**
-             * @description The `client_id` of the OAuth authorization the guest continues. When
-             *     `label` is blank or omitted and this names a dynamically registered
-             *     client with a name, the agent is named after that client: the
-             *     server reads the name from the registration, cleans it as
+             * @description The query string of the OAuth authorization the guest continues, as
+             *     sent to `/api/auth/authorize`. The server checks it as authorize does
+             *     before it creates anything, so a request that authorize would refuse
+             *     creates no agent and does not count toward the creation limit. When
+             *     `label` is blank or omitted and the request names a dynamically
+             *     registered or Client ID Metadata Document client with a name, the
+             *     agent is named after that client: the server reads the name from the
+             *     registration or the metadata document, cleans it as
              *     `PasswordRegistration.displayName` describes, keeps only the local
              *     part of an email address, cuts it to 40 characters between whole
              *     graphemes, and appends ` · ` and the username's four-character
-             *     suffix to the display name. Any other value is ignored.
+             *     suffix to the display name.
              */
-            oauthClientId?: string;
+            oauthAuthorization?: string;
         };
         GuestAgentCreated: {
             agent: components["schemas"]["AgentIdentity"];
@@ -5239,6 +5250,15 @@ export interface operations {
             };
             /** @description AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled. */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now. */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
