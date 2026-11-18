@@ -710,7 +710,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(digest).toMatchInlineSnapshot(`"8b3bf08751946189d2a5bd8e0355056d28ee3120d3de6a86622265594634c86f"`);
   });
 
-  it("tells an agent to merge and share, and a person to review, in the server instructions", async () => {
+  it("tells an unclaimed agent to merge and share, a claimed one to hand over to its owner, and a person to review", async () => {
     const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
     const review = "Give the user the pull request link so they can review it.";
     const leave = "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
@@ -742,6 +742,18 @@ describe("gateway over real HTTP and the MCP client", () => {
     const filesOnly = await instructions("?toolsets=files");
     expect(filesOnly).toContain(leave);
     expect(filesOnly).not.toContain("agent identity");
+
+    principal = { kind: "agent", claimed: true };
+    const claimed = await instructions();
+    expect(claimed).toContain("This connection is an agent identity that a person has claimed.");
+    expect(claimed).toContain(
+      "Once the result is verified, mark the pull request ready with pr_ready, then give the user the pull request link.",
+    );
+    expect(claimed).toContain("The person who claimed this agent reviews and merges it in the browser.");
+    expect(claimed).toContain(limits);
+    for (const sentence of ["then merge it with pr_merge", "Call share", review, leave, "Only mark the pull request ready with pr_ready when"]) {
+      expect(claimed).not.toContain(sentence);
+    }
   });
 
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {
