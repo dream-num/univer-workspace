@@ -11,7 +11,7 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
-import { assertWorktreeAccessible, resolveToolScope } from "./tool-scope.ts";
+import { assertWorktreeAccessible, assertWorktreeWritable, resolveToolScope } from "./tool-scope.ts";
 import { worktreeSummaryFromDetail } from "../provider/workspace-api.ts";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
@@ -170,6 +170,8 @@ export function registerWorktreeTools(ctx: Context): () => void {
           );
         }
         await assertWorktreeAccessible(ctx, resolved, args.worktreeId);
+        // Merge and discard stay open to any accessible Worktree: each waits for the user's approval.
+        if (args.action === "ready" || args.action === "reopen") assertWorktreeWritable(exec, args.worktreeId);
         switch (args.action) {
           case "ready":
             return await ctx.get("univerWorkspace")!.markWorktreeReady(userId, args.worktreeId);

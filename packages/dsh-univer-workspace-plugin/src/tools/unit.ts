@@ -6,7 +6,7 @@
 import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
-import { resolveToolScope } from "./tool-scope.ts";
+import { assertWorktreeWritable, resolveToolScope } from "./tool-scope.ts";
 import { runUnitOperation, UnitOperationError } from "@univerjs/univer-workspace-agent-runtime/workspace-unit-operations";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
@@ -72,8 +72,14 @@ export function registerUnitTool(ctx: Context): () => void {
         const service = ctx.get("univerWorkspace")!;
         try {
           return await runUnitOperation(args, resolved.spaceId, {
-            setWorktreeUnitRemoved: (worktreeId, unitId, removed) => service.setWorktreeUnitRemoved(userId, worktreeId, unitId, removed),
-            createWorktreeLocalUnit: (input) => service.createWorktreeLocalUnit(userId, input),
+            setWorktreeUnitRemoved: async (worktreeId, unitId, removed) => {
+              assertWorktreeWritable(exec, worktreeId);
+              return await service.setWorktreeUnitRemoved(userId, worktreeId, unitId, removed);
+            },
+            createWorktreeLocalUnit: async (input) => {
+              assertWorktreeWritable(exec, input.worktreeId);
+              return await service.createWorktreeLocalUnit(userId, input);
+            },
           });
         } catch (error) {
           if (error instanceof UnitOperationError) throw new UniverError(error.message, error.code, { cause: error });

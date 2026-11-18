@@ -10,7 +10,7 @@ import { parseDocMarkdownSourceMap } from "@univer-cli/doc-markdown-facade";
 import type { JsonValue } from "../json-value.ts";
 import { assertUnitInScope } from "./edit.ts";
 import { registerUniverTool } from "./presentation.ts";
-import { resolveTargetSpace, resolveToolScope } from "./tool-scope.ts";
+import { assertWorktreeWritable, resolveTargetSpace, resolveToolScope } from "./tool-scope.ts";
 import { UniverError } from "./errors.ts";
 import { existingSessionPath } from "./workspace-path.ts";
 
@@ -53,6 +53,7 @@ export function registerMarkdownTool(
         const resolved = await resolveToolScope(ctx, exec);
         if (args.worktreeId.trim() === "")
           throw new UniverError("A draft worktreeId is required.", "INVALID_REQUEST");
+        assertWorktreeWritable(exec, args.worktreeId);
         const source = await existingSessionPath(exec, args.source);
         const updateRequested = args.unitId !== undefined;
         if (updateRequested && (args.sourceMapFile === undefined || !args.blockIds?.length)) {

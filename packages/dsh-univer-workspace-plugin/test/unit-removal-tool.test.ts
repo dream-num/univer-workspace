@@ -1,7 +1,8 @@
 import type { Context } from "@deepseek-ai/cordis";
-import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
+import type { ToolDefinition } from "@deepseek-ai/dsh-tools";
 import { describe, expect, it, vi } from "vitest";
 import { registerUnitTool } from "../src/tools/unit.ts";
+import { conversation } from "./conversation-exec.ts";
 
 function setup() {
   const service = {
@@ -21,7 +22,7 @@ function setup() {
     },
   } as unknown as Context;
   registerUnitTool(ctx);
-  const exec = { agent: { session: { header: { cwd: "/tmp/session" } } } } as ToolRunContext;
+  const { exec } = conversation("/tmp/session", "wt-1");
   return { service, run: (args: Record<string, unknown>) => tool.execute(args, exec) };
 }
 

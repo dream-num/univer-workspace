@@ -4,7 +4,8 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 import type { Context } from "@deepseek-ai/cordis";
 import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
-import { assertWorktreeAccessible, resolveToolScope } from "./tool-scope.ts";
+import { assertWorktreeAccessible, conversationWorktreeIds, resolveToolScope } from "./tool-scope.ts";
+import type { DocumentFileState } from "../shared/state.ts";
 import { text } from "./documents-common.ts";
 import { runDocumentStatus, StatusOperationError } from "@univerjs/univer-workspace-agent-runtime/workspace-status";
 import { registerUniverTool } from "./presentation.ts";
@@ -62,7 +63,7 @@ export function registerDocumentStatusTools(ctx: Context): () => void {
       defineTool({
         name: "univer_status",
         description:
-          "Read a remote Workspace document or Worktree collaboration status. Provide resourceId for a trunk Resource, or worktreeId for a draft/ready Worktree (resourceId may be omitted for a Worktree-local Unit). Call this before choosing a Unit or continuing prior work.",
+          "Read a remote Workspace document or Worktree collaboration status. Provide resourceId for a trunk Resource, or worktreeId for a draft/ready Worktree (resourceId may be omitted for a Worktree-local Unit). Call this before choosing a Unit or continuing prior work. Continue only a Worktree marked createdInThisConversation; this conversation can read the others but not change them.",
         parameters: {
           resourceId: { type: "string" },
           worktreeId: { type: "string" },
@@ -78,12 +79,20 @@ export function registerDocumentStatusTools(ctx: Context): () => void {
         async execute(args, exec) {
           const resolved = await resolveToolScope(ctx, exec);
           const service = ctx.get("univerWorkspace")!;
+          const own = conversationWorktreeIds(exec);
+          const mark = (state: DocumentFileState): DocumentFileState => ({
+            ...state,
+            worktrees: state.worktrees.map((worktree) => ({
+              ...worktree,
+              createdInThisConversation: own.has(worktree.worktreeId),
+            })),
+          });
           try {
             return await runDocumentStatus(args, {
               resolveUnitResource: (id) => service.resolveUnitResource(resolved.userId, id),
               openDocument: (id) => service.openDocument(resolved.userId, id),
-              getFileState: (id) => service.getFileState(resolved.userId, id),
-              getWorktreeFileState: (id) => service.getWorktreeFileState(resolved.userId, id),
+              getFileState: async (id) => mark(await service.getFileState(resolved.userId, id)),
+              getWorktreeFileState: async (id) => mark(await service.getWorktreeFileState(resolved.userId, id)),
               assertWorktreeAccessible: (id) => assertWorktreeAccessible(ctx, resolved, id),
             });
           } catch (error) {

@@ -15,7 +15,7 @@ import type { ToolRunContext } from "@deepseek-ai/dsh-tools";
 import type { ContentBlock } from "@deepseek-ai/dsh-llm";
 import type { JsonValue } from "../json-value.ts";
 import type { WorkspaceRuntimeScope } from "../runtime/target.js";
-import { resolveToolScope, type ToolSpaceScope } from "./tool-scope.ts";
+import { assertWorktreeWritable, resolveToolScope, type ToolSpaceScope } from "./tool-scope.ts";
 import { existingSessionPath } from "./workspace-path.ts";
 import { registerUniverTool } from "./presentation.ts";
 import { UniverError } from "./errors.ts";
@@ -68,6 +68,7 @@ async function executeUnit(
 ): Promise<JsonValue> {
   const resolved = await resolveToolScope(ctx, exec);
   await assertUnitInScope(ctx, resolved, args.unitId, args.unitType, args.worktreeId);
+  if (mode === "write" && args.worktreeId !== undefined) assertWorktreeWritable(exec, args.worktreeId);
   const runtimeScope: WorkspaceRuntimeScope =
     args.worktreeId === undefined
       ? { kind: "trunk" }
