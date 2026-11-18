@@ -325,6 +325,8 @@ Office Exchange Module 适配 Univer Exchange Client 使用的 Universer 协议�
   任何文件。超过 Asset 上限（20 MB）的文件保持内联。JSON 输出（`outputType: 2`）没有归属 Unit，
   图片与附件保持内联。Unit 已创建而 Asset 尚未写完的窗口只在导入任务内部，任务结果在两者都完成后
   才返回；写入失败时 Unit 保留、对应引用无法解析，任务报错；
+- 转换时将预留的 Unit ID 传入 exchange-node 的 `unitId` 选项，使图表数据源、标题和 drawing 等
+  内部引用从一开始就指向最终 Unit。不能只在创建 Resource 时替换顶层 `data.id`；
 - 附件转在线文档：`POST /universer-api/exchange/{type}/import` 带 `sourceUnitID` 时，
   `fileID` 是该 Unit 的 Trunk Asset 而不是上传。调用者必须能打开宿主 Unit，Asset 必须属于
   `sourceUnitID`，否则 404。新 Unit 默认创建在宿主 Node 的目录（调用者在那里有创建权限时），

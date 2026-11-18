@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { deflateRawSync } from "node:zlib";
 import { Readable } from "node:stream";
-import { transformSnapshotToPdfData, transformSnapshotToSlideData } from "@univerjs-pro/collaboration";
+import { transformSnapshotToPdfData, transformSnapshotToSlideData, transformSnapshotToWorkbookData } from "@univerjs-pro/collaboration";
 import { getSlidesEmptySnapshot, PageElementTypeEnum, type ISlideData } from "@univerjs-pro/slides";
 import {
   getPdfsEmptySnapshot,
@@ -52,6 +52,44 @@ afterEach(async () => {
 });
 
 describe("Universer Exchange protocol", () => {
+  it.each(["/universer-api/exchange/import", `/universer-api/exchange/${UniverType.UNIVER_SHEET}/import`])(
+    "keeps imported chart references on the reserved Unit through %s",
+    async (path) => {
+      const { application, origin } = await startApplication();
+      const owner = await register(application, "chart-import-owner");
+      const bytes = await readFile(new URL("../fixtures/office/charts.xlsx", import.meta.url));
+      const uploaded = await uploadExchangeFile(origin, owner.cookie, new File([bytes], "charts.xlsx"));
+      const imported = await waitForTask(origin, owner.cookie, await startTask(origin, owner.cookie, path, {
+        fileID: uploaded.body.FileId, outputType: 1,
+      }));
+      expect(imported).toMatchObject({ status: "done", error: { code: ErrorCode.OK } });
+      const unitId = imported.import!.unitID;
+      const database = new DatabaseSync(join(directories.at(-1)!, "collaboration.sqlite"), { readOnly: true });
+      try {
+        const row = database.prepare("SELECT payload FROM collaboration_snapshots WHERE unit_id = ? ORDER BY revision DESC LIMIT 1")
+          .get(unitId) as { readonly payload: Uint8Array };
+        const blocks = database.prepare("SELECT payload FROM collaboration_sheet_blocks WHERE unit_id = ?")
+          .all(unitId) as { readonly payload: Uint8Array }[];
+        const workbook = await transformSnapshotToWorkbookData(decode(row.payload) as never, blocks.map(block => decode(block.payload)) as never);
+        expect(workbook.id).toBe(unitId);
+        const charts = JSON.parse(workbook.resources!.find(resource => resource.name === "SHEET_CHART_PLUGIN")!.data);
+        const drawings = JSON.parse(workbook.resources!.find(resource => resource.name === "SHEET_DRAWING_PLUGIN")!.data);
+        const [dataSheet, chartSheet] = workbook.sheetOrder;
+        for (const sheetId of [dataSheet!, chartSheet!]) {
+          expect(charts[sheetId]).toHaveLength(1);
+          expect(charts[sheetId][0].rangeInfo).toMatchObject({
+            rangeInfo: { unitId, subUnitId: dataSheet },
+            header: { titles: { values: { "1": { type: "reference", source: { unitId, subUnitId: dataSheet } } } } },
+          });
+          expect(drawings[sheetId].data[charts[sheetId][0].id]).toMatchObject({ unitId, subUnitId: sheetId });
+        }
+      } finally {
+        database.close();
+      }
+    },
+    20_000,
+  );
+
   it("exports authorized Workspace images in slides and refuses images the viewer cannot read", async () => {
     const { application, origin } = await startApplication();
     const owner = await register(application, "image-export-owner");

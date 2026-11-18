@@ -411,7 +411,9 @@ export function createExchangeModule(options: {
         const files: ImportedUniverAsset[] = [];
         const data = await importUnitData(
           buffer,
-          withImportedFiles(importOptions, unitType, (file) => {
+          // Let the converter use the final identity for chart ranges, drawings and
+          // other internal references; replacing only data.id leaves dangling IDs.
+          withImportedFiles({ ...importOptions, unitId }, unitType, (file) => {
             if (file.size > MAX_UNIVER_ASSET_BYTES) return { mode: "inline" };
             if (unitType === "pdf" && keepsPdfImportFontInline(file)) return { mode: "inline" };
             const assetId = randomUUID();
