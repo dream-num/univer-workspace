@@ -80,6 +80,7 @@ uvw pr merge <id> --json
 uvw claim
 
 <repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link. Tell me to open the claim link first: the copy is mine to edit once I claim it there. Until then, its link may open read-only or not at all.
+Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the nodeId that unit create returns. I open it to edit the copy in the browser.
 
 With MCP, you can instead connect to ${origin}/mcp and call \`pr_create\`, \`unit_create\` with the link as \`from\`, \`pr_ready\`, \`pr_merge\` and \`claim\`. If \`unit_create\` has no \`from\`, use the CLI.`);
   });

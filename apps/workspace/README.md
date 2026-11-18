@@ -521,7 +521,7 @@ to a copy: sign up, and the copy is made on return, or hand a short English prom
 agent, with the same two ways as `Hand to my agent`. Through MCP the agent copies the file into a
 pull request with `unit_create` and `from`, which needs no `read`; through `uvw` it uses
 `uvw unit create --from`. Either way it merges the pull request and gives the visitor a claim
-link that makes the copy theirs; through MCP it also gives the copy's link. Both prompts have the agent tell
+link that makes the copy theirs, and the copy's link. Both prompts have the agent tell
 the visitor to open the claim link first: the copy is theirs to edit once they claim it, and until then its link opens
 only if the agent shared it. An agent cannot copy a page, so for a page the dialog
 offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only

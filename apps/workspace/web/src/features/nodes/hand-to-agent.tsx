@@ -23,7 +23,7 @@ You do not need \`read\` for this. If \`unit_create\` has no \`from\`, tell me t
 
 const TASKS: Record<AgentTask, {
   readonly ask: string;
-  readonly cli: (link: string) => string;
+  readonly cli: (link: string, origin: string) => string;
   readonly mcp: string;
   readonly mcpSteps: (origin: string) => string;
 }> = {
@@ -41,13 +41,14 @@ ${mcpCopySteps(origin)}`,
   },
   copy: {
     ask: "Make me a copy of this Univer Workspace file that I can edit",
-    cli: (link) => `uvw pr create -R <repo> -t "My copy" --json
+    cli: (link, origin) => `uvw pr create -R <repo> -t "My copy" --json
 uvw unit create --worktree <id> --space <repo> --type sheet --name "My copy" --from ${link} --json
 uvw pr ready <id> --json
 uvw pr merge <id> --json
 uvw claim
 
-<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link. ${CLAIM_FIRST}`,
+<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link. ${CLAIM_FIRST}
+Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the nodeId that unit create returns. I open it to edit the copy in the browser.`,
     mcp: "call `pr_create`, `unit_create` with the link as `from`, `pr_ready`, `pr_merge` and `claim`. If `unit_create` has no `from`, use the CLI.",
     mcpSteps: mcpCopySteps,
   },
@@ -73,7 +74,7 @@ Use the uvw CLI:
 npm install --global univer-workspace-cli@latest
 uvw config set workspace.origin ${origin}
 uvw auth guest
-${cli(link)}
+${cli(link, origin)}
 
 With MCP, you can instead connect to ${mcpServerUrl(origin)} and ${mcp}`;
 }
