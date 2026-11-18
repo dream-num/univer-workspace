@@ -226,7 +226,10 @@ Pull request 里协作。Ready、Reopen、Merge 和 Discard 交给创建者 Pers
 这不让任何人开始一次自己不能开始的合并。合并生效并由某个 Operation 记录后，合并人不再改变：之后送达的其他 Merge
 Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的结果。uvw 与 MCP 的稳定 Merge/Discard Key 包含调用者的 User ID，
 因此不会与别人先前的 Operation 冲突，同一调用者重跑时仍复用自己的 Operation。发出 lifecycle 请求前读取 Worktree 或
-调用者身份时网络失败，Client Core 报 `workspace-request-failed`，说明请求没有发出、什么也没改变。
+调用者身份时网络失败，Client Core 报 `workspace-request-failed`，说明请求没有发出、什么也没改变。Client Core 对 `ready`、
+`merging` 和 `merged` 的 Pull request 都发出 Merge，由服务端判断调用者能否完成，只在 `draft` 和 `discarded` 时本地拒绝。
+已处理完的合并被服务端拒绝时，它报告该 Pull request 已经合并。Merge 响应丢失后，只有回读到已处理的 `merged` 才算确认，
+未处理的 `merged` 说明合并停在中途。
 
 主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
 

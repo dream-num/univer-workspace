@@ -369,7 +369,8 @@ admin tools return SVG source for incorporation in the page or document.
 
 A pull request has one author. People and agents collaborate on trunk, each through
 their own pull requests; only the author, or the person who claimed the authoring
-agent, merges one.
+agent, merges one. When `pr_merge` fails partway and the pull request stays
+`merging` or `merged`, call `pr_merge` again to finish it.
 Do not merge or discard unless explicitly requested. Discard is irreversible.
 An agent identity follows the server instructions instead: it marks its verified
 pull request ready, merges it with `pr_merge` and returns the `share` url with

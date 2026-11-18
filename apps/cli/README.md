@@ -198,7 +198,10 @@ server records the person as the one who acted. Editing an agent's pull request,
 is refused. A pull request has one author: only the author, or the person who claimed the authoring agent,
 can `pr merge` it. In a Team Space, the Owner, Admins and Editors get an error naming the author, and the person
 who claimed an agent author, when they try to merge someone else's. The author or that person gets an error saying
-so when they lack edit access to a file or folder the pull request changes.
+so when they lack edit access to a file or folder the pull request changes. A merge that stopped partway leaves the
+pull request `merging`, or `merged` before the server finished it; running `pr merge` again finishes it, for the
+person who started it, the author, or the person who claimed the authoring agent. Once a merge has finished, anyone
+else who runs `pr merge` gets `workspace-lifecycle-invalid` saying it is already merged.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

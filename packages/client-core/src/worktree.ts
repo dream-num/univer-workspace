@@ -3,9 +3,10 @@ import { sessionIdentity } from "./auth.js";
 import {
   executeWithStableIdentity,
   isWorkspaceResultUnknown,
+  WorkspaceApplicationError,
   workspaceError,
 } from "./errors.js";
-import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
+import { isWorkspaceRecord, type AuthenticatedWorkspaceHttp, type WorkspaceHttp } from "./http.js";
 import { rethrowUnlessServerOutdated } from "./space.js";
 import { usernameKey } from "./username.js";
 import {
@@ -145,15 +146,20 @@ export class WorkspaceWorktreeFeature {
     return parseWorktree(body["worktree"], id);
   }
 
-  public async transition(
-    worktreeId: string,
-    action: "ready" | "reopen" | "merge" | "discard",
-  ): Promise<WorkspaceWorktree> {
+  public async transition(worktreeId: string, action: LifecycleAction): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const http = await this.authenticatedHttp();
+    const { from, to } = LIFECYCLE[action];
+    let before: LifecycleRead;
     let keyed: { readonly idempotencyKey?: string };
     try {
-      assertTransition(await getWorktree(http, id), action);
+      before = await readLifecycle(http, id, id);
+      if (!from.includes(before.worktree.state)) {
+        throw workspaceError(
+          "workspace-lifecycle-invalid",
+          `Cannot ${action} pull request ${label(before.worktree)} while it is ${before.worktree.state}.`,
+        );
+      }
       // The server keeps one Operation per key for whoever sent it first, so the key names the caller too.
       keyed = action === "merge" || action === "discard"
         ? { idempotencyKey: stableKey(action, id, (await sessionIdentity(http)).subject.id) }
@@ -166,46 +172,77 @@ export class WorkspaceWorktreeFeature {
         { cause: error.message, worktreeId: id },
       );
     }
-    const expected: Record<typeof action, WorkspaceWorktreeState> = {
-      discard: "discarded",
-      merge: "merged",
-      ready: "ready",
-      reopen: "draft",
-    };
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
         ...keyed,
         method: "POST",
       });
       const result = parseWorktree(body["worktree"], id);
-      if (result.state !== expected[action]) {
+      if (result.state !== to) {
         throw workspaceError(
           "workspace-result-mismatch",
           "Workspace lifecycle response Worktree state does not match the requested operation.",
           {
             actual: { worktree: result },
-            expected: { state: expected[action], worktreeId: id },
+            expected: { state: to, worktreeId: id },
           },
         );
       }
       return result;
     } catch (error) {
+      // Once a merge finished, the server replays only the Operation that recorded it and refuses everyone else.
+      const refused = error instanceof WorkspaceApplicationError && error.code === "FORBIDDEN";
+      if (action === "merge" && before.processed && refused) {
+        throw workspaceError("workspace-lifecycle-invalid", `Pull request ${label(before.worktree)} is already merged.`);
+      }
       if (!isWorkspaceResultUnknown(error)) throw error;
-      const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}`);
-      const confirmed = parseWorktree(body["worktree"]);
-      if (confirmed.id === id && confirmed.state === expected[action]) return confirmed;
+      const confirmed = await readLifecycle(http, id);
+      const { worktree } = confirmed;
+      // A merged pull request that is not processed yet stopped partway, so it does not confirm a merge.
+      if (worktree.id === id && worktree.state === to && (action !== "merge" || confirmed.processed)) return worktree;
       throw workspaceError(
         "workspace-result-unknown",
         "Workspace lifecycle result could not be confirmed from the current Worktree state.",
         {
-          actualId: confirmed.id,
-          actualState: confirmed.state,
-          expectedState: expected[action],
+          actualId: worktree.id,
+          actualState: worktree.state,
+          expectedState: to,
           worktreeId: id,
         },
       );
     }
   }
+}
+
+type LifecycleAction = "ready" | "reopen" | "merge" | "discard";
+
+const LIFECYCLE: Record<
+  LifecycleAction,
+  { readonly from: readonly WorkspaceWorktreeState[]; readonly to: WorkspaceWorktreeState }
+> = {
+  ready: { from: ["draft"], to: "ready" },
+  reopen: { from: ["ready"], to: "draft" },
+  // A merge that stopped partway is finished by sending it again; the server decides who may finish it.
+  merge: { from: ["ready", "merging", "merged"], to: "merged" },
+  discard: { from: ["draft", "ready"], to: "discarded" },
+};
+
+interface LifecycleRead {
+  readonly worktree: WorkspaceWorktree;
+  /** The server finished the merge or discard on its side, including activating the pull request's new files. */
+  readonly processed: boolean;
+}
+
+async function readLifecycle(http: WorkspaceHttp, worktreeId: string, expectedId?: string): Promise<LifecycleRead> {
+  const raw = (await http.json(`/api/worktrees/${encodeURIComponent(worktreeId)}`))["worktree"];
+  return {
+    worktree: parseWorktree(raw, expectedId),
+    processed: isWorkspaceRecord(raw) && typeof raw["processedAt"] === "string",
+  };
+}
+
+function label(worktree: WorkspaceWorktree): string {
+  return worktree.number == null ? worktree.id : `#${String(worktree.number)}`;
 }
 
 export async function getWorktree(
@@ -219,23 +256,6 @@ export async function getWorktree(
 export function stableKey(kind: string, ...parts: readonly string[]): string {
   const hash = createHash("sha256").update(JSON.stringify(parts)).digest("hex");
   return `workspace-${kind}-${hash}`;
-}
-
-function assertTransition(
-  worktree: WorkspaceWorktree,
-  action: "ready" | "reopen" | "merge" | "discard",
-): void {
-  const allowed =
-    (action === "ready" && worktree.state === "draft") ||
-    (action === "reopen" && worktree.state === "ready") ||
-    (action === "merge" && worktree.state === "ready") ||
-    (action === "discard" && (worktree.state === "draft" || worktree.state === "ready"));
-  if (!allowed) {
-    throw workspaceError(
-      "workspace-lifecycle-invalid",
-      `Cannot ${action} Worktree ${worktree.id} from ${worktree.state}.`,
-    );
-  }
 }
 
 function requireId(value: string, label: string): string {
