@@ -76,7 +76,8 @@ Agent 仍不能用 Unit 截图工具查看 HTML View：MCP 的 `screenshot` 只�
   之后的改动只在本机计算，不保存也不发送。没有开启试算的宿主仍拒绝写入，匿名访客收到 `signInRequired`。
 
 repository 是 team Space（`spaces.repository.ts:163`），Link Sharing 只能用于 personal Space，
-所以 repository 场景下的匿名入口就是整库公开，用 `uvw repo edit --visibility public` 或 MCP `admin` 工具集中的 `repo_edit` 设置。
+所以 repository 场景下的匿名入口就是整库公开，由用户在 Browser 的仓库设置里或用 `uvw repo edit --visibility public` 设置。
+MCP 的会话由访问令牌换出，`repo_edit` 不能把仓库设为公开。
 
 ## 方案
 
@@ -165,7 +166,7 @@ DSH 插件的 Skill 分叉暂不同步，后续单独处理。
 
 1. 用 MCP 建 repository 和 Sheet，写入数据。Agent 先读 Skill 和 `design.md`，按上述风格流程在回复中询问并等待回答（用户已指定风格则直接使用，只有用户放权时才默认 Night Gauge（仪表夜航）），从对应模板开始，`html_view_validate` 后 `html_view_create`。
 2. 私有 repository：返回 `repositoryVisibility: private`；匿名会话打开 `shareUrl` 看不到页面。
-3. `repo_edit visibility=public` 后再建一个页面：返回 `public` 且 `privateSourceUnitIds` 为空；
+3. 用户在 Browser 的仓库设置里把仓库设为公开后再建一个页面：返回 `public` 且 `privateSourceUnitIds` 为空；
    匿名会话打开 `shareUrl`，看到实时数据和顶部注册条。
 4. 登录用户在另一个会话修改 Sheet，匿名会话中的页面实时更新。
 5. 匿名访客操作页面控件，页面进入试算并显示试算提示；Sheet 数据不变。

@@ -251,6 +251,7 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 | `createFiles` | 主体是未认领 agent，Personal Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
 | `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
+| `publishSpace` | 主体是人，Session 由个人访问令牌或 OAuth Grant 换出，且创建或更新 Space 时请求 `publicRead: true` | `INTERACTIVE_SESSION_REQUIRED` |
 
 文件数包括 Trash 之外有 Resource 的 Node、未完成 Pull request 中的新建文件和仍在进行的创建 Operation；
 重放同一个 Operation 不重复计数。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己

@@ -15,6 +15,7 @@ export interface CeilingContexts {
   readonly storeFile: { readonly byteSize: number };
   /** `tokenIssued` is true for a session issued for a personal access token or an OAuth grant. */
   readonly writeLinkSharing: { readonly tokenIssued: boolean };
+  readonly publishSpace: { readonly publicRead: boolean; readonly tokenIssued: boolean };
 }
 
 export type CeilingAction = keyof CeilingContexts;
@@ -70,6 +71,11 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
     code: "INTERACTIVE_SESSION_REQUIRED",
     message: "Changing Link Sharing requires an interactive sign-in, not a session issued for an access token.",
     forbids: (principal, { tokenIssued }) => principal === "human" && tokenIssued,
+  },
+  publishSpace: {
+    code: "INTERACTIVE_SESSION_REQUIRED",
+    message: "Making a Space public requires an interactive sign-in, not a session issued for an access token.",
+    forbids: (principal, { publicRead, tokenIssued }) => publicRead && principal === "human" && tokenIssued,
   },
 };
 
