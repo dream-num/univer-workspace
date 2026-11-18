@@ -109,10 +109,13 @@ describe("Remix", () => {
     await render(false, createElement(RemixButton, { nodeId: "sheet" }));
     await act(async () => button("Remix").click());
     expect(mocks.copy).not.toHaveBeenCalled();
-    const prompt = handToAgentPrompt(window.location.origin, "sheet", "copy");
-    expect(document.querySelector("pre")?.textContent).toBe(prompt);
+    const mcp = handToAgentPrompt(window.location.origin, "sheet", "copy", "mcp");
+    expect(document.querySelector("pre")?.textContent).toBe(mcp);
     await act(async () => button("Hand to my agent").click());
-    expect(mocks.writeText).toHaveBeenCalledWith(prompt);
+    expect(mocks.writeText).toHaveBeenLastCalledWith(mcp);
+    await act(async () => button("Command line (uvw)").click());
+    await act(async () => button("Hand to my agent").click());
+    expect(mocks.writeText).toHaveBeenLastCalledWith(handToAgentPrompt(window.location.origin, "sheet", "copy", "cli"));
 
     const signUp = button("Sign up free");
     const returnTo = new URL(new URLSearchParams(signUp.getAttribute("href")!.split("?")[1]).get("returnTo")!, window.location.origin);

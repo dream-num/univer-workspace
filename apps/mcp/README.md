@@ -24,7 +24,8 @@ operator granted with `db:executor-access` receive them (see [Executor access](#
 listed users receive them. `*` admits every user, which is acceptable only where every user of the Workspace is trusted,
 such as an internal staging deployment.
 Other users retain every tool that does not need the executor, and their server instructions
-ask them to edit document contents in the browser. The executor checks each grant on its own: against its list before
+ask them to edit document contents in the browser. An unclaimed agent is also told to give the user an editable copy
+instead, with its claim link and the copy's link. The executor checks each grant on its own: against its list before
 contacting Workspace, and in `workspace` mode against the access Workspace reports for the grant's session.
 
 The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response

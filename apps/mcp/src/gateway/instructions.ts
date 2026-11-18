@@ -68,7 +68,11 @@ export function buildServerInstructions(
       : []),
     ...(executorRestricted
       ? [
-          "Editing document contents is not enabled for this account; ask the user to edit in the browser.",
+          `Editing document contents is not enabled for this account; ask the user to edit in the browser.${
+            agentFinishes && has("claim") && has("unit_create")
+              ? " Reading them is not enabled either. When the user wants a file read or changed, make them a copy they can edit in the browser: in a pull request, create it with unit_create and the file's link as from, merge it, call claim, then give the user the claim link and the copy's link."
+              : ""
+          }`,
         ]
       : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
