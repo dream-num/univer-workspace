@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   WorkspaceIssueFeature,
   WorkspaceSpaceFeature,
+  WorkspaceSubject,
   WorkspaceWorktreeFeature,
 } from "@univerjs/univer-workspace-client-core";
 import { createWorkspaceConfig } from "../src/config.js";
@@ -1103,7 +1104,10 @@ describe("uvw share", () => {
   const privateAccess = (file: string) =>
     `Only this agent can open the link until a person claims it. To let anyone with the link read it, run \`uvw share ${file} --link viewer\`.`;
 
-  function share(updateLinkSharing?: () => Promise<never>, sharedBy: Record<string, unknown> = owner) {
+  const agent = { id: "a1", name: "budget-bot-x7k2", kind: "agent", claimed: false } as const;
+  const person = { id: "u1", name: "ana" };
+
+  function share(updateLinkSharing?: () => Promise<never>, sharedBy: Record<string, unknown> = owner, caller: WorkspaceSubject = agent) {
     const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner: sharedBy, role });
     const spaces = {
       createAgentClaimCode: vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 600 })),
@@ -1114,7 +1118,8 @@ describe("uvw share", () => {
           (async (_id: string, input: { enabled: boolean; role: string }) => sharing(input.enabled, input.role)),
       ),
     };
-    return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN), spaces };
+    const whoami = vi.fn(async () => caller);
+    return { command: createShareCommand(spaces as unknown as WorkspaceSpaceFeature, async () => ORIGIN, whoami), spaces, whoami };
   }
 
   it("reads the Link Sharing of a file link or Node ID without changing it", async () => {
@@ -1151,8 +1156,11 @@ describe("uvw share", () => {
     expect(spaces.getLinkSharing).not.toHaveBeenCalled();
   });
 
-  it("tells a person's session to turn on Link Sharing only when the user asks", async () => {
-    const { command } = share(undefined, { kind: "human", username: "ana" });
+  it.each([
+    ["their own file", { kind: "human", username: "ana" }],
+    ["a file of an agent they claimed", { ...owner, claimed: true }],
+  ])("tells a person reading %s to turn on Link Sharing only when the user asks", async (_file, sharedBy) => {
+    const { command } = share(undefined, sharedBy, person);
     const text = await run(command, [url]);
     expect(text.trimEnd()).toBe([
       `Budget  ${url}`,
@@ -1162,12 +1170,13 @@ describe("uvw share", () => {
   });
 
   it("rejects an unknown --link value before any request", async () => {
-    const { command, spaces } = share();
+    const { command, spaces, whoami } = share();
     await expect(run(command, [url, "--link", "public"])).rejects.toMatchObject({
       exitCode: 1,
       message: expect.stringContaining("off, viewer, editor"),
     });
     expect(spaces.getNode).not.toHaveBeenCalled();
+    expect(whoami).not.toHaveBeenCalled();
   });
 
   it("leaves the claim link out when the Workspace cannot make one", async () => {

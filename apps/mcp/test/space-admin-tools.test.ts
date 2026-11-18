@@ -110,6 +110,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   let linkSharing = { enabled: false, role: "viewer" };
   let humanTokenSession = false;
   let sessionUser: Record<string, unknown> = user;
+  let ownedByClaimedAgent = false;
 
   const fetcher: typeof fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -178,8 +179,8 @@ describe("space, unit, repository admin, label and merge tools", () => {
       if (request.method === "PUT") linkSharing = body as typeof linkSharing;
       return Response.json({
         ...linkSharing,
-        ...(sessionUser["kind"] === "agent"
-          ? { owner: { username: "budget-x7k2", kind: "agent", claimed: sessionUser["claimed"] }, expiresAt: "2026-12-14T00:00:00.000Z" }
+        ...(sessionUser["kind"] === "agent" || ownedByClaimedAgent
+          ? { owner: { username: "budget-x7k2", kind: "agent", claimed: sessionUser["claimed"] ?? true }, expiresAt: "2026-12-14T00:00:00.000Z" }
           : { owner: { username: "user-1", kind: "human" }, expiresAt: null }),
         createdBy: null,
         updatedBy: null,
@@ -270,6 +271,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     linkSharing = { enabled: false, role: "viewer" };
     humanTokenSession = false;
     sessionUser = user;
+    ownedByClaimedAgent = false;
     if (gateway !== undefined) {
       await gateway.close();
       gateway.server.closeAllConnections();
@@ -631,13 +633,16 @@ describe("space, unit, repository admin, label and merge tools", () => {
   });
 
   it.each([
-    ["a claimed agent", { ...user, kind: "agent", claimed: true },
+    ["a claimed agent", { ...user, kind: "agent", claimed: true }, false,
       "Only people with access to the repository can open the link. To let anyone with the link read it, call share with node sheet and link viewer."],
-    ["a person's token session", user,
+    ["a person's token session", user, false,
       "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."],
-  ] as const)("gives %s a next step it can take for a link that is off", async (_caller, principal, access) => {
+    ["a person reading the file of an agent they claimed", user, true,
+      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."],
+  ] as const)("gives %s a next step it can take for a link that is off", async (_caller, principal, agentFile, access) => {
     sessionUser = principal;
     humanTokenSession = principal === user;
+    ownedByClaimedAgent = agentFile;
     const client = await connect();
     const read = await client.callTool({ name: "share", arguments: { node: `${origin}/nodes/sheet` } });
     expect(read.structuredContent).toMatchObject({ link: "off", access });
