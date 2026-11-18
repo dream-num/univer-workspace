@@ -112,7 +112,7 @@ it("explains the rate limit in the page language and stays on the page", async (
   await render(returnTo);
   await click();
   await waitFor(() => expect(container.querySelector('[role="alert"]')?.textContent)
-    .toBe("Too many guest agents were created from this network in the last hour. Try again later, or sign in instead."));
+    .toBe("This network has reached its hourly limit for guest agent requests. Try again later, or sign in instead."));
   expect(assign).not.toHaveBeenCalled();
   expect(button()?.disabled).toBe(false);
 });

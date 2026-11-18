@@ -132,7 +132,7 @@ describe("continuing an OAuth authorization as a guest agent", () => {
     expect((await continueWith(`${CIMD}/new`, "198.51.100.1")).status).toBe(201);
   });
 
-  it("stops a source that keeps starting metadata fetches before it starts another, without spending its guest creations", async () => {
+  it("stops a source that keeps starting metadata fetches before it starts another, without spending its guest creations or limiting its signed-in users", async () => {
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => {
       if (id.includes("/slow/")) throw new ClientMetadataDocumentError(true, "Client metadata fetch exceeded 5 seconds.");
       return { body: JSON.stringify({ client_id: id, redirect_uris: ["http://127.0.0.1/callback"] }) };
@@ -148,6 +148,12 @@ describe("continuing an OAuth authorization as a guest agent", () => {
     expect(limited.headers.get("set-cookie")).toBeNull();
     expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
     expect(fetchDocument).not.toHaveBeenCalledWith(`${CIMD}/new`);
+    const signedIn = await fetch(`${origin}/api/auth/authorize?${authorizeQuery({ client_id: `${CIMD}/signed-in`, redirect_uri: "http://127.0.0.1:51063/callback" })}`, {
+      headers: { cookie: await signIn(origin), "x-forwarded-for": "192.0.2.1" },
+      redirect: "manual",
+    });
+    expect(signedIn.headers.get("location")).toMatch(/^\/api\/auth\/authorize\/consent\?/u);
+    expect(fetchDocument).toHaveBeenCalledWith(`${CIMD}/signed-in`);
     expect((await continueWith(`${CIMD}/cached`, "192.0.2.1")).status).toBe(201);
     expect((await continueWith(`${CIMD}/new`, "192.0.2.2")).status).toBe(201);
   });
