@@ -44,7 +44,7 @@ never requests non-dry-run server-side Promotion, which would write through insi
 and retire the source. This workflow retains the source and publishes directly using
 npm OIDC. It neither rebuilds/repackages artifacts nor promotes dependencies.
 
-`latest` defaults to **false** and has these explicit semantics:
+`latest` defaults to **true** and has these explicit semantics:
 
 - **false, new public version:** publish with `--tag=promoted`, including the first
   version of a package. Read back `promoted` and verify public `latest` did not change.

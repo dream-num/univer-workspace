@@ -557,7 +557,7 @@ test("credentialed workflow stays manual/default-branch only with configurable p
   assert.doesNotMatch(gate, /github.repository ==|\|\|/u);
   assert.doesNotMatch(workflow, /pull_request:|  test:|needs: test|inputs.publish/u);
   assert.match(workflow, /package:[\s\S]*type: choice[\s\S]*options:/u);
-  assert.match(workflow, /latest:[\s\S]*default: false/u);
+  assert.match(workflow.split("      latest:\n")[1].split("      version:")[0], /default: true/u);
   assert.match(workflow, /dry_run:[\s\S]*default: true/u);
   assert.match(workflow, /if: \$\{\{ !inputs.dry_run \}\}/u);
   assert.match(workflow, /npm@11\.21\.0/u);

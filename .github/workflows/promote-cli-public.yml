@@ -14,7 +14,7 @@ on:
         description: Set public latest (false publishes new versions with the promoted tag)
         required: true
         type: boolean
-        default: false
+        default: true
       version:
         description: Exact version already built on insider-npm
         required: true
