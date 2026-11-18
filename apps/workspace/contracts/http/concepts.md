@@ -267,7 +267,9 @@ A merge that has started, so the Worktree is `merging`, or `merged` with Worktre
 Units not yet activated, is a decision already made. The actor who started it finishes it
 with their own Operation, through the same Idempotency Key or Operation Retry. An owner of
 the creator's Personal Space finishes it with any Idempotency Key. This lets nobody start
-a merge they could not start.
+a merge they could not start. Once the merge is applied and an Operation has recorded it,
+that Operation's actor stays the one who merged: any other merge Operation sent afterwards
+gets `FORBIDDEN`, and a completed Operation replays its stored result.
 
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an
