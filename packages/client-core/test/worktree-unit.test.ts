@@ -232,6 +232,31 @@ describe("Workspace Worktree model and workflow", () => {
   });
 
   it.each([
+    ["merge", "/api/session"],
+    ["discard", "/api/session"],
+    ["merge", "/api/worktrees/wt-1"],
+    ["ready", "/api/worktrees/wt-1"],
+  ] as const)("reports %s as never sent when the network drops its %s lookup", async (action, lost) => {
+    const posts: string[] = [];
+    const feature = new WorkspaceWorktreeFeature(async () =>
+      http(async (input, init) => {
+        const request = new Request(input, init);
+        const path = new URL(request.url).pathname;
+        if (path === lost) throw new TypeError("fetch failed");
+        if (request.method === "POST") posts.push(path);
+        return path === "/api/session"
+          ? Response.json({ authenticated: true, user: { id: "user-1", displayName: "user-1" } })
+          : Response.json({ worktree: rawWorktree("wt-1", action === "ready" ? "draft" : "ready") });
+      }),
+    );
+    await expect(feature.transition("wt-1", action)).rejects.toMatchObject({
+      code: "workspace-request-failed",
+      message: expect.stringContaining(`the ${action} request was not sent`),
+    });
+    expect(posts).toEqual([]);
+  });
+
+  it.each([
     ["ready", "ready"],
     ["ready", "merging"],
     ["ready", "merged"],
