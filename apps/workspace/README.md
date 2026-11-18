@@ -491,9 +491,11 @@ and marks an agent that no person has claimed as `Unverified agent`. Once a file
 copied, the bar shows how many copies were made; the owner sees the same count next to link
 access in the Share dialog. It links `Made with Univer Workspace` to the GitHub repository and,
 on wider screens, also shows `space.univer.ai`. `Report` opens a dialog that sends a reason to
-`POST /api/nodes/{nodeId}/reports`. `Hand to my agent` copies a short English prompt for the
-reader's own agent: the file link, the `uvw` guest commands that read it, and this instance's MCP
-URL for an agent that has MCP and sees a `read` tool. The immersive bar also offers sign-up,
+`POST /api/nodes/{nodeId}/reports`. `Hand to my agent` opens a dialog with a short English prompt
+for the reader's own agent, in two ways. `MCP (recommended)`, selected by default, shows this
+instance's MCP URL to add to the agent and a prompt that reads the file with `read` or `inspect`,
+and tells the agent to say so when the server hides those tools. `Command line (uvw)` gives the
+`uvw` guest commands that read it. The immersive bar also offers sign-up,
 sign-in and Copy link, and can collapse. A signed-in user who opens a file in another user's
 Personal Space sees the same bar under the Workspace header, without sign-up, sign-in or Copy
 link. The owner and Team Space members see only the Workspace header.
@@ -502,9 +504,10 @@ link. The owner and Team Space members see only the Workspace header.
 A page is copied with the Sheets it binds, and its copy is bound to their copies; when the
 reader cannot open one of those Sheets, nothing is copied. A signed-out visitor gets two ways
 to a copy: sign up, and the copy is made on return, or hand a short English prompt to their own
-agent. With the same `uvw` guest setup as `Hand to my agent`, that prompt has the agent copy
-the file into a pull request with `uvw unit create --from`, merge it, and give the visitor a
-claim link that makes the copy theirs. An agent cannot copy a page, so for a page the dialog
+agent, with the same two ways as `Hand to my agent`. Through MCP the agent copies the file into a
+pull request with `unit_create` and `from`, which needs no `read`; through `uvw` it uses
+`uvw unit create --from`. Either way it merges the pull request and gives the visitor a claim
+link that makes the copy theirs. An agent cannot copy a page, so for a page the dialog
 offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only
 the sign-up return it was asked from makes it.
 

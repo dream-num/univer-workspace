@@ -8,7 +8,7 @@ import { Button, buttonVariants, Dialog, toast } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { sessionQueryOptions } from "../auth";
 import { copyToPersonalSpace } from "./copy";
-import { copyHandToAgentPrompt, handToAgentPrompt } from "./hand-to-agent";
+import { copyHandToAgentPrompt, HAND_OFFS, HandToAgentChoice, type HandOff } from "./hand-to-agent";
 import { invalidateProductLists } from "./nodes.commands";
 import { nodeQueryOptions } from "./nodes.queries";
 
@@ -111,6 +111,7 @@ export function RemixButton({ nodeId }: { readonly nodeId: string }) {
   const agentCopies = resource?.kind === "univer" && AGENT_COPYABLE_TYPES.includes(resource.unitType);
   const copy = useCopyAndOpen();
   const [guiding, setGuiding] = useState(false);
+  const [way, setWay] = useState<HandOff>(HAND_OFFS[0]);
   return (
     <>
       <Button
@@ -139,7 +140,7 @@ export function RemixButton({ nodeId }: { readonly nodeId: string }) {
               {t("signUpFree")}
             </SignUpThenCopy>
             {agentCopies ? (
-              <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "copy")}>
+              <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "copy", way)}>
                 <Bot aria-hidden="true" />
                 {t("handToMyAgent")}
               </Button>
@@ -147,11 +148,7 @@ export function RemixButton({ nodeId }: { readonly nodeId: string }) {
           </>
         }
       >
-        {guiding && agentCopies ? (
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-md bg-muted p-3 text-xs">
-            {handToAgentPrompt(window.location.origin, nodeId, "copy")}
-          </pre>
-        ) : null}
+        {agentCopies ? <HandToAgentChoice nodeId={nodeId} task="copy" way={way} onWayChange={setWay} /> : null}
       </Dialog>
     </>
   );
