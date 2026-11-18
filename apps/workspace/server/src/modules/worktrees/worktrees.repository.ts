@@ -26,8 +26,10 @@ export interface WorktreeRow {
   readonly creator_username: string;
   readonly creator_display_name: string;
   readonly creator_avatar_url: string | null;
+  readonly claimer_user_id: string | null;
   readonly claimer_username: string | null;
   readonly claimer_display_name: string | null;
+  readonly claimer_avatar_url: string | null;
   readonly team_space_name: string | null;
   readonly team_owner_user_id: string | null;
   readonly actor_member_role: "admin" | "editor" | "viewer" | null;

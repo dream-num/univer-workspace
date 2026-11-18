@@ -215,7 +215,9 @@ Activity、Worktree 的发现、Review、决定与 Merge 也都用它判断所�
 Pull request 里协作。Ready、Reopen、Merge 和 Discard 交给创建者 Personal Space 的全部 Owner，即作者本人和认领了
 作者 agent 的人，User 与 Team Worktree 相同；Merge 仍要求对每个目标有编辑权限。Team Space 的 Owner 和 Admin
 另外保留 Reopen、Discard 和修改可见性用于清理，但与 Editor 一样不能合并别人创建的 Pull request，拒绝信息写明作者，
-作者是已认领的 agent 时也写明认领人。作者或认领人缺少某个目标的编辑权限时，拒绝信息说明缺少编辑权限。
+作者是已认领的 agent 时也写明认领人。Worktree 摘要的 `claimer` 字段把认领人交给能读到这个 Pull request 的人，
+Browser 审阅面板在不能合并的成员面前因此同时写明作者和认领人；拿到 `404` 的人两者都看不到。
+作者或认领人缺少某个目标的编辑权限时，拒绝信息说明缺少编辑权限。
 所以认领人可以决定 agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
 重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
 它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。Worktree 列表与发现使用同一条所有权规则，

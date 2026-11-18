@@ -82,7 +82,7 @@ M0 和 M1 并行。M1 不依赖执行层开放，可以先交付。
 - 服务端加四个计数器，每次计数同时写一条带 `node_id` 的日志事件供下钻：
   - 链接分享被打开或关闭，标签是主体类别和角色。计数点在 Link Sharing 的写入。
   - 分享页被请求，标签是读者是否带会话、所有者的主体类别。计数点在 `static-site.ts` 的 `/nodes/:nodeId` 处理，也就是 `recordAgentPageView` 所在的位置。
-  - 注册成功，标签是登录方式和来源。`returnTo` 指向 `/nodes/` 记为 `share_link`，指向 `/api/auth/authorize` 记为 `oauth_consent`，其余记为 `direct`。
+  - 注册成功，标签是登录方式和来源。`returnTo` 指向 `/nodes/` 记为 `share_link`，指向认领页 `/claim/` 记为 `claim_link`，指向 `/api/auth/authorize` 记为 `oauth_consent`，其余记为 `direct`。
   - 访客 agent 被创建，标签是入口（`/api/agents` 或 `/api/auth/guest`）。
 - 网关的 `mcp.tool_call` 事件加 `principal_kind`，`share` 调用带上 `node_id`。同步 `apps/mcp/README.md` 里的事件合同。
 - `observability/` 里加一块仪表盘，回答五个问题：本周新开了多少分享，其中多少来自 agent，分享页被打开多少次，带来多少注册，新建了多少访客 agent。

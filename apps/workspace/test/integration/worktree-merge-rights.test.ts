@@ -112,6 +112,48 @@ describe("who takes a pull request to trunk", () => {
       message: "You cannot merge this pull request without edit access to every file and folder it changes.",
     });
   }, 30_000);
+
+  it("names the person who claimed an agent author to whoever can see the pull request, and to nobody else", async () => {
+    const { origin, application, repositories } = await start();
+    const [owner, member, claimer, outsider] = await Promise.all(["owner", "member", "claimer", "outsider"].map((name) => person(origin, name)));
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, member.id, { role: "editor" });
+    // No agent can join a Team Space now; this membership stands for one that predates that rule.
+    const agent = await guestAgent(origin);
+    await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
+    await claim(origin, agent, claimer);
+    const unclaimed = await guestAgent(origin);
+    const agentPull = await createPull(origin, agent, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+    const personPull = await createPull(origin, member, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+    const unclaimedPull = await createPull(origin, unclaimed, { kind: "user" }, unclaimed.spaceId);
+    const claimerSeen = async (worktreeId: string, viewer: Actor) => {
+      const response = await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, viewer.cookie);
+      const body = await response.text();
+      if (response.status !== 200) return { status: response.status, namesClaimer: body.includes("claimer") };
+      return (JSON.parse(body) as { worktree: { claimer: { id: string; username: string; displayName: string } | null } }).worktree.claimer;
+    };
+    const named = { id: claimer.id, username: "claimer", displayName: "claimer", avatarUrl: null };
+    expect({
+      "claimed agent's pull, seen by a Space member": await claimerSeen(agentPull, member),
+      "claimed agent's pull, seen by the claimer": await claimerSeen(agentPull, claimer),
+      "claimed agent's pull, seen by the agent": await claimerSeen(agentPull, agent),
+      "claimed agent's pull, asked for by an outsider": await claimerSeen(agentPull, outsider),
+      "person's pull, seen by the Space owner": await claimerSeen(personPull, owner),
+      "unclaimed agent's pull, seen by the agent": await claimerSeen(unclaimedPull, unclaimed),
+    }).toEqual({
+      "claimed agent's pull, seen by a Space member": named,
+      "claimed agent's pull, seen by the claimer": named,
+      "claimed agent's pull, seen by the agent": named,
+      "claimed agent's pull, asked for by an outsider": { status: 404, namesClaimer: false },
+      "person's pull, seen by the Space owner": null,
+      "unclaimed agent's pull, seen by the agent": null,
+    });
+    const listed = (await (await send(origin, "GET", "/api/worktrees?scope=all", undefined, member.cookie)).json()) as {
+      items: { id: string; claimer: { username: string } | null }[];
+    };
+    expect(Object.fromEntries(listed.items.map((item) => [item.id, item.claimer?.username ?? null])))
+      .toEqual({ [agentPull]: "claimer", [personPull]: null });
+  }, 30_000);
 });
 
 describe("finishing a merge started while Team Admins could merge anyone's pull request", () => {

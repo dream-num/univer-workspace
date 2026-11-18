@@ -4952,6 +4952,7 @@ components:
         - visibility
         - state
         - creator
+        - claimer
         - unitCount
         - processedAt
         - createdAt
@@ -4988,6 +4989,13 @@ components:
           $ref: '#/components/schemas/WorktreeState'
         creator:
           $ref: '#/components/schemas/PublicUser'
+        claimer:
+          description: |
+            The person who claimed the authoring agent, who can merge the pull request as its author can.
+            Null when a person or an unclaimed agent is the author.
+          oneOf:
+            - $ref: '#/components/schemas/PublicUser'
+            - type: 'null'
         unitCount:
           type: integer
           minimum: 0

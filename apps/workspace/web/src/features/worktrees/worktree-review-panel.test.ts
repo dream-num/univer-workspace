@@ -40,7 +40,10 @@ vi.mock("@tanstack/react-query", () => ({
 vi.mock("../../shared/api/client", () => ({ api: { POST: state.post } }));
 vi.mock("../auth", () => ({ sessionQueryOptions: { queryKey: ["session"] } }));
 vi.mock("../../shared/i18n", () => ({
-  useI18n: () => ({ language: "en-US", t: (key: string) => key }),
+  useI18n: () => ({
+    language: "en-US",
+    t: (key: string, values?: Record<string, string>) => (values ? `${key}(${Object.values(values).join(", ")})` : key),
+  }),
 }));
 vi.mock("../../shared/theme", () => ({ useTheme: () => ({ resolvedTheme: "light" }) }));
 vi.mock("@univerjs/core", () => ({ LocaleType: { EN_US: "en-US", ZH_CN: "zh-CN" } }));
@@ -86,6 +89,7 @@ function worktree(reopen: boolean): Worktree {
     state: "ready",
     createdVia: "agent",
     creator: { id: "user-1", username: "alice", displayName: "Alice", avatarUrl: null },
+    claimer: null,
     unitCount: 0,
     processedAt: null,
     createdAt: "2026-11-15T00:00:00Z",
@@ -129,6 +133,21 @@ describe("Worktree merge", () => {
     expect(line(team(false)), "an author who lost edit access is not told to ask themself").toBe(false);
     state.me = null;
     expect(line(team(false)), "nothing until the session is known").toBe(false);
+  });
+
+  it("names the person who claimed an agent author beside the agent, except to that person", () => {
+    const html = (value: Worktree) => renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+    const person = { ...worktree(false), kind: "team" as const };
+    const agent: Worktree = {
+      ...person,
+      creator: { id: "agent-1", username: "ada-x1y2", displayName: "Ada", avatarUrl: null },
+      claimer: { id: "user-3", username: "clara", displayName: "Clara", avatarUrl: null },
+    };
+    expect(html(person)).toContain("onlyAuthorMerges(Alice)");
+    expect(html(agent)).toContain("onlyAuthorOrClaimerMerges(Ada, Clara)");
+    expect(html(agent)).not.toContain("onlyAuthorMerges");
+    state.me = "user-3";
+    expect(html(agent), "a claimer who cannot merge is not told to ask themself").not.toContain("Merges(");
   });
 });
 

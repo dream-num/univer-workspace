@@ -8,7 +8,7 @@ export const at = (day: number, hour = 12) => new Date(2026, 10, day, hour).toIS
 export function pull(overrides: Partial<Worktree> = {}): Worktree {
   return {
     createdVia: "unknown", id: "pull", number: 1, name: "Update plan", summary: null, kind: "team", teamSpace: space,
-    visibility: "space", state: "ready", creator: user, unitCount: 7,
+    visibility: "space", state: "ready", creator: user, claimer: null, unitCount: 7,
     createdAt: at(5), updatedAt: at(6), processedAt: null,
     capabilities: { review: true, editDraft: false, addUnit: false, changeVisibility: false, markReady: false, reopen: false, merge: false, discard: false },
     ...overrides,

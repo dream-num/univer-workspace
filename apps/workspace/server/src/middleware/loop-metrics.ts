@@ -25,7 +25,7 @@ const loopEvents = {
     help: "Accounts created by sign-up",
     labels: {
       method: ["password", "email", "github", "google", "discord", "discord_bot"],
-      source: ["share_link", "oauth_consent", "direct"],
+      source: ["share_link", "claim_link", "oauth_consent", "direct"],
     },
     fields: ["user_id", "node_id"],
   },
@@ -63,10 +63,14 @@ export function recordLoopEvent<E extends LoopEvent>(event: E, labels: Labels<E>
   logger.info({ event, schema_version: 1, ts: new Date().toISOString(), ...labels, ...fields });
 }
 
+const signupSources = [
+  ["/nodes/", "share_link"],
+  ["/claim/", "claim_link"],
+  ["/api/auth/authorize", "oauth_consent"],
+] as const;
+
 export function recordSignup(method: SignupMethod, userId: string, returnTo: string | undefined): void {
-  const source = returnTo?.startsWith("/nodes/")
-    ? "share_link"
-    : returnTo?.startsWith("/api/auth/authorize") ? "oauth_consent" : "direct";
+  const source = signupSources.find(([path]) => returnTo?.startsWith(path))?.[1] ?? "direct";
   const nodeId = /^\/nodes\/([\w-]+)/u.exec(returnTo ?? "")?.[1] ?? null;
   recordLoopEvent("workspace.signup", { method, source }, { user_id: userId, node_id: nodeId });
 }

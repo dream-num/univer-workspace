@@ -397,10 +397,11 @@ low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line 
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
-`source` is `share_link` when the sign-up returns to `/nodes/…`, `oauth_consent` when it returns
-to `/api/auth/authorize…`, and `direct` otherwise. OAuth sign-ups carry `returnTo` through the
-provider. Password and email sign-ups read it from the `/login?returnTo=…` page in the request's
-`Referer`.
+`source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
+claim page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
+otherwise. OAuth sign-ups carry `returnTo` through the provider. Password and email sign-ups read it
+from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the claim page
+itself, which has its own sign-in form. The claim code is never logged, here or in request logs.
 
 Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
 these fields:
@@ -520,7 +521,9 @@ to a copy: sign up, and the copy is made on return, or hand a short English prom
 agent, with the same two ways as `Hand to my agent`. Through MCP the agent copies the file into a
 pull request with `unit_create` and `from`, which needs no `read`; through `uvw` it uses
 `uvw unit create --from`. Either way it merges the pull request and gives the visitor a claim
-link that makes the copy theirs; through MCP it also gives the copy's link. An agent cannot copy a page, so for a page the dialog
+link that makes the copy theirs, and the copy's link. Both prompts have the agent tell
+the visitor to open the claim link first: the copy is theirs to edit once they claim it, and until then its link opens
+only if the agent shared it. An agent cannot copy a page, so for a page the dialog
 offers sign-up only. A copy asked for before sign-up waits in the tab for 15 minutes, and only
 the sign-up return it was asked from makes it.
 
