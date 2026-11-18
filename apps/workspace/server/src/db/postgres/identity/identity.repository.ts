@@ -9,6 +9,8 @@ import type {
   NewPasswordUser,
   NewEmailUser,
   StoredEmailLoginCode,
+  EmailLoginCodeLimits,
+  EmailLoginCodeCreation,
   ExternalIdentityUser,
   ExecutorAccessEntry,
   IdentityConflict,
@@ -576,20 +578,33 @@ export class PostgresIdentityRepository implements IdentityRepository {
     readonly codeHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): Promise<void> {
-    await this._database
-      .prepare(
-        `INSERT INTO email_login_codes
-          (id, email, code_hash, attempts, created_at, expires_at)
-         VALUES (?, ?, ?, 0, ?, ?)`
-      )
-      .run(
-        input.id,
-        input.email,
-        input.codeHash,
-        input.createdAt,
-        input.expiresAt
-      );
+  }, limits: EmailLoginCodeLimits): Promise<EmailLoginCodeCreation> {
+    // Serializable isolation commits only one of two concurrent inserts for an address; the other replays and sees it.
+    return this._database.transaction(async (database) => {
+      const recent = await database
+        .prepare(
+          `SELECT MAX(created_at) AS latest, COUNT(*) AS count
+           FROM email_login_codes
+           WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C") AND created_at > ?`
+        )
+        .get(input.email, limits.windowSince) as { readonly latest: number | null; readonly count: number };
+      if (recent.latest !== null && recent.latest > limits.recentSince) return "sent-recently";
+      if (recent.count >= limits.windowLimit) return "too-many";
+      await database
+        .prepare(
+          `INSERT INTO email_login_codes
+            (id, email, code_hash, attempts, created_at, expires_at)
+           VALUES (?, ?, ?, 0, ?, ?)`
+        )
+        .run(
+          input.id,
+          input.email,
+          input.codeHash,
+          input.createdAt,
+          input.expiresAt
+        );
+      return "created";
+    });
   }
 
   async findEmailLoginCode(
@@ -651,28 +666,6 @@ export class PostgresIdentityRepository implements IdentityRepository {
     await this._database
       .prepare("DELETE FROM email_login_codes WHERE id = ?")
       .run(id);
-  }
-
-  async latestEmailLoginCodeCreatedAt(email: string): Promise<number | null> {
-    const row = await this._database
-      .prepare(
-        `SELECT MAX(created_at) AS created_at
-         FROM email_login_codes
-         WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C")`
-      )
-      .get(email) as { readonly created_at: number | null } | undefined;
-    return row?.created_at ?? null;
-  }
-
-  async countEmailLoginCodesSince(email: string, since: number): Promise<number> {
-    const row = await this._database
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM email_login_codes
-         WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C") AND created_at > ?`
-      )
-      .get(email, since) as { readonly count: number };
-    return row.count;
   }
 
   async deleteEmailLoginCodesBefore(cutoff: number): Promise<void> {

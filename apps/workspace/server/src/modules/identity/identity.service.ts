@@ -488,11 +488,20 @@ export function createIdentityModule(options: {
       await repository.deleteEmailLoginCodesBefore(
         requestedAt - EMAIL_CODE_WINDOW_MS
       );
-      const lastRequestedAt = await repository.latestEmailLoginCodeCreatedAt(email);
-      if (
-        lastRequestedAt !== null &&
-        requestedAt - lastRequestedAt < EMAIL_CODE_RESEND_INTERVAL_MS
-      ) {
+      const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
+      const id = randomUUID();
+      const created = await repository.createEmailLoginCode({
+        id,
+        email,
+        codeHash: await hashPassword(code),
+        createdAt: requestedAt,
+        expiresAt: requestedAt + EMAIL_CODE_TTL_MS,
+      }, {
+        recentSince: requestedAt - EMAIL_CODE_RESEND_INTERVAL_MS,
+        windowSince: requestedAt - EMAIL_CODE_WINDOW_MS,
+        windowLimit: EMAIL_CODE_WINDOW_LIMIT,
+      });
+      if (created === "sent-recently") {
         throw new ApplicationError(
           "EMAIL_CODE_RATE_LIMITED",
           429,
@@ -500,12 +509,7 @@ export function createIdentityModule(options: {
           "email"
         );
       }
-      if (
-        await repository.countEmailLoginCodesSince(
-          email,
-          requestedAt - EMAIL_CODE_WINDOW_MS
-        ) >= EMAIL_CODE_WINDOW_LIMIT
-      ) {
+      if (created === "too-many") {
         throw new ApplicationError(
           "EMAIL_CODE_RATE_LIMITED",
           429,
@@ -513,16 +517,6 @@ export function createIdentityModule(options: {
           "email"
         );
       }
-
-      const code = randomInt(0, 1_000_000).toString().padStart(6, "0");
-      const id = randomUUID();
-      await repository.createEmailLoginCode({
-        id,
-        email,
-        codeHash: await hashPassword(code),
-        createdAt: requestedAt,
-        expiresAt: requestedAt + EMAIL_CODE_TTL_MS,
-      });
       try {
         await sender.send(
           emailLoginMessage({
