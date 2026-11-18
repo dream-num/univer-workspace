@@ -116,7 +116,7 @@ function describeAccess(
     ? "Only this agent can open the link until a person claims it."
     : "Only people with access to the repository can open the link.";
   const next = turnOn === undefined
-    ? "If the user wants anyone with the link to read it, they can share it from the link in the browser."
+    ? "If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."
     : owner.kind === "agent"
       ? `To let anyone with the link read it, ${turnOn}.`
       : `Only if the user asks, ${turnOn} to let anyone with the link read it.`;

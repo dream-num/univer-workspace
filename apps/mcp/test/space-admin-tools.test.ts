@@ -634,7 +634,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     ["a claimed agent", { ...user, kind: "agent", claimed: true },
       "Only people with access to the repository can open the link. To let anyone with the link read it, call share with node sheet and link viewer."],
     ["a person's token session", user,
-      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can share it from the link in the browser."],
+      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."],
   ] as const)("gives %s a next step it can take for a link that is off", async (_caller, principal, access) => {
     sessionUser = principal;
     humanTokenSession = principal === user;

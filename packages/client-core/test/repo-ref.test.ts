@@ -164,7 +164,7 @@ describe("file links", () => {
     ["a person who signed in", { username: "me", kind: "human" }, turnOn,
       "Only people with access to the repository can open the link. Only if the user asks, run `uvw share n1 --link viewer` to let anyone with the link read it."],
     ["a person's token session", { username: "me", kind: "human" }, undefined,
-      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can share it from the link in the browser."],
+      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."],
   ] as const)("gives %s a next step it can take for a link that is off", async (_caller, owner, given, access) => {
     const { spaces } = clients((call) =>
       Response.json(call.path.endsWith("/link-sharing") ? sharing({ owner, expiresAt: null }) : node(sheet)));
