@@ -260,7 +260,14 @@ A Worktree has one author, its creator. People and agents collaborate on trunk, 
 through their own Worktrees. Only the owners of the creator's Personal Space, that is
 the creator and the human who claimed an agent creator, merge a Worktree, User or Team,
 and only with edit access to every target. Anyone else gets `FORBIDDEN` with a message
-that names the author.
+that names the author, and the human who claimed an agent author. An owner without edit
+access to a target gets `FORBIDDEN` with a message that says so.
+
+A merge that has started, so the Worktree is `merging`, or `merged` with Worktree-local
+Units not yet activated, is a decision already made. The actor who started it finishes it
+with their own Operation, through the same Idempotency Key or Operation Retry. An owner of
+the creator's Personal Space finishes it with any Idempotency Key. This lets nobody start
+a merge they could not start.
 
 User Worktrees are creator-private and may contain editable Resources from different
 Spaces. The owners of the creator's Personal Space, that is the human who claimed an

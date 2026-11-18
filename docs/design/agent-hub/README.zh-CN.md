@@ -49,7 +49,7 @@
 | 已发布的 Pages 能读到访问者的登录状态吗 | 不能。响应带 `sandbox` 策略且没有 `allow-same-origin`，页面运行在独立的不透明源里 | `modules/views/standalone-app.router.ts:11` |
 | 角色和能力怎么定 | 四个角色 `owner`、`admin`、`editor`、`viewer`。角色来自五种关系，能力由角色经函数算出 | `modules/access/access.service.ts:192-234,281-296` |
 | 权限判定知道主体的类型吗 | 不知道。输入只有 `userId`，匿名是一个保留 ID | `access.service.ts:21-32` |
-| PR 的能力在哪里定 | 另一处。合并规则写在代码里：Personal Space 是创建者，Team Space 是 owner、admin、editor | `modules/worktrees/worktrees.service.ts:913-949` |
+| PR 的能力在哪里定 | 另一处。合并规则写在代码里：Personal Space 和 Team Space 都只有作者，或认领了作者 agent 的人，能合入，且要对每个目标有编辑权限 | `modules/worktrees/worktrees.service.ts` 的 `worktreeCapabilities` 与 `canMergeAsActor` |
 | “必须是浏览器会话”在哪里判断 | 散在三个模块里，各自检查 `tokenIssued` | `blobs/html-view-guard.ts`，`html-view-drafts/drafts.router.ts`，`skill-drafts/drafts.router.ts` |
 | exchange 的文件上限 | 50 MB | `exchange.service.ts:55` |
 

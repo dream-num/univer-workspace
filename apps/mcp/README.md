@@ -44,7 +44,8 @@ that link to the user. A claimed agent is told to give the pull request link to 
 when that person asked to review the work or the change needs a person's decision; nothing enforces either choice.
 The core Skill is one text for both and defers to these instructions for an agent identity.
 A pull request has one author; only the author, or the person who claimed the authoring agent, can merge it. A Team member
-who calls `pr_merge` on someone else's gets `FORBIDDEN` with a message naming the author.
+who calls `pr_merge` on someone else's gets `FORBIDDEN` with a message naming the author, and the person who claimed an
+agent author.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
 A person's tool list and instructions stay byte for byte what they were before claiming existed.
 
