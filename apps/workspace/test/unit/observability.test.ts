@@ -78,12 +78,34 @@ describe("HTTP observation boundaries", () => {
     const app = express();
     app.use(createRequestLoggingMiddleware(log));
     app.use((_req, res) => res.end());
-    for (const url of ["/claim/claim-secret-1", "/Claim/claim-secret-2/", "/api/agents/claim?code=claim-secret-3", "/nodes/node-1"]) {
+    const urls = [
+      "/claim/claim-secret-1",
+      "/Claim/claim-secret-2/",
+      "/api/agents/claim?code=claim-secret-3",
+      "//claim/claim-secret-4",
+      "/%63laim/claim-secret-5",
+      "/claim%2Fclaim-secret-6",
+      "/%63laim/claim-secret-7%E0%A4%A",
+      "/claim/%0Aclaim-secret-8",
+      "/nodes/node-1",
+      "//nodes/%6Eode-2",
+    ];
+    for (const url of urls) {
       await request(app, url);
     }
     expect(output).not.toContain("claim-secret");
-    expect(output.trim().split("\n").map((line) => JSON.parse(line).req.url))
-      .toEqual(["/claim/:code", "/claim/:code", "/api/agents/claim", "/nodes/node-1"]);
+    expect(output.trim().split("\n").map((line) => JSON.parse(line).req.url)).toEqual([
+      "/claim/:code",
+      "/claim/:code",
+      "/api/agents/claim",
+      "/claim/:code",
+      "/claim/:code",
+      "/claim/:code",
+      "/claim/:code",
+      "/claim/:code",
+      "/nodes/node-1",
+      "//nodes/%6Eode-2",
+    ]);
   });
 
   it("filters request data carried by JSON parser errors", async () => {

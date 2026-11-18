@@ -5,6 +5,16 @@ import { pinoHttp } from "pino-http";
 import type { Request, RequestHandler } from "express";
 import { logger } from "../logging/logger.js";
 
+// Claim codes are secrets, and the claim page carries one in its path. The
+// router also reaches it through doubled slashes and percent escapes. Decoding
+// one escape at a time cannot throw on a malformed sequence.
+function isClaimPath(path: string): boolean {
+  const decoded = path.replace(/%([0-9a-f]{2})/giu, (_escape, hex: string) =>
+    String.fromCharCode(Number.parseInt(hex, 16))
+  );
+  return /^\/+claim\/./isu.test(decoded);
+}
+
 // Reuse a valid caller request ID or generate a UUID, and return it in the
 // response headers so callers can correlate a response with its logs.
 export function createRequestLoggingMiddleware(
@@ -18,8 +28,7 @@ export function createRequestLoggingMiddleware(
       req: (request: Request) => ({
         id: request.id,
         method: request.method,
-        // Claim codes are secrets, and the claim page carries one in its path.
-        url: request.path.replace(/^\/claim\/.+/iu, "/claim/:code"),
+        url: isClaimPath(request.path) ? "/claim/:code" : request.path,
       }),
       res: (response: ServerResponse) => ({ statusCode: response.statusCode }),
       err: (error: Error & { type?: string }) => {
