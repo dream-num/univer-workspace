@@ -61,6 +61,42 @@ describe("continuing an OAuth authorization as a guest agent", () => {
     expect(limited.status).toBe(429);
     expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
   });
+
+  it("names the guest after a metadata-document client under the display-name rules", async () => {
+    const names: Record<string, string> = {
+      [`${CIMD}/claude`]: "Claude Code",
+      [`${CIMD}/hostile`]: `\u202EClaude\nCode\u200B ops@claude.ai ${"x".repeat(60)}`,
+      [`${CIMD}/blank`]: "\u202E\u2066\n",
+    };
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => ({
+      body: JSON.stringify({ client_id: id, client_name: names[id], redirect_uris: ["http://127.0.0.1/callback"] }),
+    }));
+    const origin = await start({ agentCreateLimitPerHour: 10, fetchDocument });
+    const continueAs = async (clientId: string, label?: string) => {
+      const query = authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" });
+      const created = await guest(origin, { oauthAuthorization: query, ...(label === undefined ? {} : { label }) });
+      expect(created.status).toBe(201);
+      const cookie = created.headers.get("set-cookie")!.split(";", 1)[0]!;
+      const { user } = (await (await fetch(`${origin}/api/session`, { headers: { cookie } })).json()) as { user: { username: string; displayName: string } };
+      return { ...user, consent: await (await fetch(`${origin}/api/auth/authorize/consent?${query}`, { headers: { cookie } })).text() };
+    };
+
+    const claude = await continueAs(`${CIMD}/claude`);
+    expect(claude.username).toMatch(/^claude-code-[a-z0-9]{4}$/u);
+    expect(claude.displayName).toBe(`Claude Code · ${claude.username.slice(-4)}`);
+    expect(claude.consent).toContain(`wants to use Univer Workspace as <strong>Claude Code · ${claude.username.slice(-4)}</strong>`);
+
+    const hostile = await continueAs(`${CIMD}/hostile`);
+    const suffix = ` · ${hostile.username.slice(-4)}`;
+    expect(hostile.displayName.endsWith(suffix)).toBe(true);
+    const name = hostile.displayName.slice(0, -suffix.length);
+    expect(name.startsWith("Claude Code")).toBe(true);
+    expect(name).not.toMatch(/[@\u0000-\u001F\u200B\u202A-\u202E\u2066-\u2069]|claude\.ai/u);
+    expect([...name].length).toBeLessThanOrEqual(40);
+
+    expect(await continueAs(`${CIMD}/blank`)).toMatchObject({ displayName: "agent", username: expect.stringMatching(/^agent-[a-z0-9]{4}$/u) });
+    expect(await continueAs(`${CIMD}/claude`, "Budget bot")).toMatchObject({ displayName: "Budget bot" });
+  });
 });
 
 async function start(options: { agentCreateLimitPerHour: number; fetchDocument: FetchClientMetadataDocument }): Promise<string> {
