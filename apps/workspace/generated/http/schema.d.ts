@@ -5463,9 +5463,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A code was requested too recently or too often for this address. */
+            /**
+             * @description EMAIL_CODE_RATE_LIMITED. A code was requested too recently or too often for this
+             *     address, or, when the server sets TRUST_PROXY, this source IP made 60 requests in
+             *     the last hour.
+             */
             429: {
                 headers: {
+                    /** @description Seconds to wait, sent only when the source IP is over its limit. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5518,6 +5524,17 @@ export interface operations {
             /** @description Email authentication is disabled for this deployment. */
             403: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP sent 120 requests to this route in the last hour. The code was not checked. */
+            429: {
+                headers: {
+                    /** @description Seconds to wait. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {

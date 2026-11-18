@@ -1500,7 +1500,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: A code was requested too recently or too often for this address.
+          description: |
+            EMAIL_CODE_RATE_LIMITED. A code was requested too recently or too often for this
+            address, or, when the server sets TRUST_PROXY, this source IP made 60 requests in
+            the last hour.
+          headers:
+            Retry-After:
+              description: Seconds to wait, sent only when the source IP is over its limit.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -1543,6 +1551,17 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Email authentication is disabled for this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP sent 120 requests to this route in the last hour. The code was not checked.
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
