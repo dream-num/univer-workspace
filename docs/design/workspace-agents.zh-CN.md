@@ -89,7 +89,7 @@ GitHub 在 2026-10-28 把 coding agent 改名为 Copilot cloud agent（“Copilo
 | 9 | 用量显示 | 会话显示 token 用量，`/usage` 命令 | 会话 token 用量和估算费用 | Phase 2 |
 | 10 | PR 中 `@copilot` 评论迭代 | 在 PR 评论里 @copilot | Workspace 的 PR 没有评论功能 | Phase 3 |
 | 11 | 审阅时“用 Copilot 修复” | diff 评论上的 “Fix with Copilot” | Worktree 审阅面板上“让 Agent 修改” | Phase 3 |
-| 12 | 修复合并冲突 | PR 合并框的 “Fix with Copilot” | Worktree 合并冲突时让 agent 尝试解决 | Phase 3 |
+| 12 | 修复合并冲突 | PR 合并框的 “Fix with Copilot” | Worktree 合并冲突时让创建该 PR 的会话尝试解决 | Phase 3 |
 | 13 | Agent 审阅 PR | 把 Copilot 加为 reviewer | 只读审阅：公式错误、数据不一致、格式问题 | Phase 3 |
 | 14 | PR 描述生成 | PR 描述框的 Copilot 按钮 | 创建 PR 时生成描述 | Phase 3 |
 | 15 | 用 prompt 新建仓库 | 新建仓库时 agent 生成初始内容 | 新建仓库后用 prompt 生成初始表格和文档 | Phase 3 |
@@ -484,7 +484,7 @@ Web 的分层由 `test/unit/web-architecture.test.ts` 强制：`shared → featu
 
 - `AgentScope` 增加 `{ kind: "node"; spaceId: SpaceId; nodeId: NodeId; worktreeId: WorktreeId | null }`。`worktreeId` 是用户正在看的版本：在主线上看就是 `null`，在某个 PR 的版本里看就是该 PR。
 - 系统提示词带上当前文件的 Node ID、Unit 类型和版本，agent 用 `inspect` 或 `execute` 读取内容。
-- “执行”模式写入时，总是写进本会话自己用 `pr_create` 新建的 PR，写入后页面通过协同实时显示变化。一个 PR 只属于创建它的会话，所以用户在别的 PR 的版本里看时，面板只提供“提问”；要改那个 PR，回到创建它的会话继续。
+- “执行”模式写入时，总是写进本会话自己用 `pr_create` 新建的 PR，写入后页面通过协同实时显示变化。一个 PR 只属于创建它的会话，所以用户在别的 PR 的版本里看时，面板只提供“提问”；要改那个 PR，回到创建它的会话继续。会话只存在创建它的浏览器里，所以这一步只能在同一个浏览器里做。
 
 **验收。** 在一张 Sheet 上问“B 列的平均值是多少”，得到正确数字；切到“执行”模式要求“新增一列合计”，
 得到一个 PR，打开 PR 能看到新增的列。
@@ -546,14 +546,14 @@ Phase 3 的场景暂不排期。下表按前提条件分组，写明每项缺什
 
 | # | 场景 | 前提或缺口 | 初步判断 |
 | --- | --- | --- | --- |
-| 11 | 审阅时“让 Agent 修改” | 在 Worktree 审阅面板（`worktree-review-panel.tsx`）上选定一处改动，把修改意见追加到创建该 PR 的会话，由它改自己的 PR；新会话不写别人的 PR | 价值高，依赖 #6 的 `node` 范围 |
-| 12 | 修复合并冲突 | 需要 MCP 暴露冲突详情；当前工具集里没有 | 先确认网关能提供冲突信息 |
+| 11 | 审阅时“让 Agent 修改” | 在 Worktree 审阅面板（`worktree-review-panel.tsx`）上选定一处改动，把修改意见追加到创建该 PR 的会话，由它改自己的 PR。只在同一个人、同一个浏览器、该会话还在时可行。DSH 或 `uvw` 建的 PR 没有浏览器会话，要等会话存到服务端（方案二） | 价值高，依赖 #7 的引用 |
+| 12 | 修复合并冲突 | 需要 MCP 暴露冲突详情；当前工具集里没有。由创建该 PR 的会话在自己的 PR 里解决 | 先确认网关能提供冲突信息 |
 | 13 | Agent 审阅 PR | 只读，“提问”模式即可；需要读 PR 的 diff，当前工具能否给出逐单元格差异待确认 | 成本低，适合作为下一个亮点 |
-| 14 | PR 描述生成 | 同 #13，需要读 diff | 成本低 |
+| 14 | PR 描述生成 | 同 #13，需要读 diff；描述由创建该 PR 的会话写 | 成本低 |
 | 15 | 用 prompt 新建仓库 | `repo_create` 在 admin 工具集，需要 `publish` 权限，和 Phase 1 不给 `publish` 的规则冲突 | 需要单独设计权限 |
 | 16 | 仓库级 `AGENTS.md` | 约定文件名和位置，会话开始时读取 | 成本低 |
 | 17 | 自定义 agent | 预设角色和提示词的存储位置（仓库内文件还是用户本地） | 待需求 |
-| 18 | 交接到 `uvw` 或桌面版 | 会话页给出命令或链接，在那边从 trunk 开一个新 PR 继续；原 PR 先由原会话合入或丢弃，一个 PR 只由创建它的会话写 | 成本低 |
+| 18 | 交接到 `uvw` 或桌面版 | 会话页给出命令或链接，在那边从主线开一个新 PR 继续。原 PR 由它的作者或认领人合入或丢弃；一个 PR 只由创建它的会话写 | 成本低 |
 | 19 | 移动端 | 响应式布局；长任务要求页面一直在前台 | 体验受限 |
 
 ### 5.2 需要服务端运行时的
