@@ -129,6 +129,12 @@ describe("space, unit, repository admin, label and merge tools", () => {
     }
     if (target.pathname === "/api/spaces/lookup") return Response.json(team);
     if (at("GET", "/api/spaces/team-1")) return Response.json(team);
+    if (humanTokenSession && fields["publicRead"] === true) {
+      return Response.json(
+        { error: { code: "INTERACTIVE_SESSION_REQUIRED", message: "Make the Space public in the browser." } },
+        { status: 403 },
+      );
+    }
     if (at("PATCH", "/api/spaces/team-2")) return Response.json({ ...created, ...fields });
     if (at("PATCH", "/api/spaces/team-1")) return Response.json({ ...team, ...fields });
     if (at("POST", "/api/team-spaces")) {
@@ -453,6 +459,25 @@ describe("space, unit, repository admin, label and merge tools", () => {
         body: { name: "Renamed", description: "", publicRead: true, slug: "renamed" },
       },
     ]);
+  });
+
+  it("sends a person's token session to the browser to make a repository public", async () => {
+    const client = await connect();
+    humanTokenSession = true;
+    const settings = `${origin}/spaces/team-1/settings`;
+    expect(await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "public" } })).toMatchObject({
+      isError: true,
+      structuredContent: { code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: settings } },
+      content: [{ type: "text", text: expect.stringContaining(`make it public in its settings in the browser: ${settings}`) }],
+    });
+    expect(await client.callTool({ name: "repo_create", arguments: { slug: "docs", public: true } })).toMatchObject({
+      isError: true,
+      structuredContent: { code: "INTERACTIVE_SESSION_REQUIRED" },
+      content: [{ type: "text", text: expect.stringContaining("Create it private, then ask the user to make it public in its settings in the browser.") }],
+    });
+    expect(
+      (await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "private" } })).structuredContent,
+    ).toMatchObject({ publicRead: false });
   });
 
   it("lists labels with usage and creates, edits and deletes one by name", async () => {

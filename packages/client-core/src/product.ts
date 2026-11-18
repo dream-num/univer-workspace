@@ -76,6 +76,7 @@ export {
 export {
   assertSpaceFilter,
   createRepo,
+  editRepo,
   nodeMoveParent,
   repoEditPatch,
   REPO_DESCRIPTION_MAX,
