@@ -30,3 +30,29 @@ jobs:
           }
           JS
           curl --max-time 20 --silent --show-error -I https://insider-npm-registry.univer.work/univer-workspace-cli/0.7.0 || true
+      - uses: actions/checkout@v4
+        with:
+          ref: 50946be2b4bb6e239dbd3b8fabe675a4a6a733eb
+          persist-credentials: false
+      - name: Verify exact PR470 code against real insider original package (read only)
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import {downloadInsiderTarball, INSIDER} from './scripts/release/promote-cli-public.mjs';
+          import {createHash} from 'node:crypto';
+          import {writeFileSync} from 'node:fs';
+          import {execFileSync} from 'node:child_process';
+          const name='univer-workspace-cli',version='0.7.0';
+          const response=await fetch(INSIDER+name,{redirect:'error'});
+          if(!response.ok)throw Error('packument HTTP '+response.status);
+          const packument=await response.json(),metadata=packument.versions[version];
+          if(metadata?.name!==name||metadata.version!==version)throw Error('metadata identity');
+          const bytes=await downloadInsiderTarball(metadata.dist.tarball);
+          const integrity='sha512-'+createHash('sha512').update(bytes).digest('base64');
+          if(integrity!==metadata.dist.integrity)throw Error('integrity');
+          const path=process.env.RUNNER_TEMP+'/original-readonly.tgz';
+          writeFileSync(path,bytes);
+          const manifest=JSON.parse(execFileSync('tar',['-xOzf',path,'package/package.json'],{encoding:'utf8',maxBuffer:1048576}));
+          if(manifest.name!==name||manifest.version!==version)throw Error('manifest identity');
+          console.log(JSON.stringify({mode:'read-only-no-credentials-no-promotion-no-publish',testedCommit:'50946be2b4bb6e239dbd3b8fabe675a4a6a733eb',name,version,bytes:bytes.length,integrity}));
+          JS
