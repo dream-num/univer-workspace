@@ -205,7 +205,100 @@ describe("Email sign-in HTTP API", () => {
     });
     expect(sent).toHaveLength(0);
   });
+
+  it("refuses a source past 60 code requests an hour and keeps serving other sources", async () => {
+    const sent: EmailMessage[] = [];
+    const base = await serve(await startEmailSignIn(sent));
+
+    for (let index = 0; index < 60; index += 1) {
+      const accepted = await requestCode(base, `person${index}@example.com`, "198.51.100.7");
+      expect(accepted.status).toBe(202);
+    }
+    const refused = await requestCode(base, "late@example.com", "198.51.100.7");
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("retry-after")).toBe("3600");
+    expect(await refused.json()).toMatchObject({ error: { code: "EMAIL_CODE_RATE_LIMITED" } });
+    expect(sent).toHaveLength(60);
+
+    const otherSource = await requestCode(base, "late@example.com", "198.51.100.8");
+    expect(otherSource.status).toBe(202);
+    expect(sent.at(-1)?.to).toBe("late@example.com");
+  }, 60_000);
+
+  it("refuses a source past 120 code checks an hour and keeps serving other sources", async () => {
+    const sent: EmailMessage[] = [];
+    const base = await serve(await startEmailSignIn(sent));
+
+    for (let index = 0; index < 120; index += 1) {
+      const wrong = await checkCode(base, "alice@example.com", "000000", "198.51.100.7");
+      expect(wrong.status).toBe(400);
+    }
+    expect((await requestCode(base, "alice@example.com", "198.51.100.7")).status).toBe(202);
+    const refused = await checkCode(base, "alice@example.com", codeFrom(sent[0]!), "198.51.100.7");
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get("retry-after")).toBe("3600");
+    expect(refused.headers.get("set-cookie")).toBeNull();
+    expect(await refused.json()).toMatchObject({ error: { code: "EMAIL_CODE_RATE_LIMITED" } });
+
+    const otherSource = await checkCode(base, "alice@example.com", codeFrom(sent[0]!), "198.51.100.8");
+    expect(otherSource.status).toBe(200);
+    expect(otherSource.headers.get("set-cookie")).toContain("workspace_session=");
+  }, 60_000);
+
+  it("counts no source while TRUST_PROXY is unset, so clients behind one proxy keep signing in", async () => {
+    const sent: EmailMessage[] = [];
+    const base = await serve(await startEmailSignIn(sent, false));
+
+    for (let index = 0; index < 120; index += 1) {
+      expect((await checkCode(base, "alice@example.com", "000000", "198.51.100.7")).status).toBe(400);
+    }
+    expect((await requestCode(base, "alice@example.com", "198.51.100.7")).status).toBe(202);
+    const accepted = await checkCode(base, "alice@example.com", codeFrom(sent[0]!), "198.51.100.7");
+    expect(accepted.status).toBe(200);
+  }, 60_000);
 });
+
+async function startEmailSignIn(sent: EmailMessage[], trustProxy = true): Promise<ProductTestApplication> {
+  const application = await createProductTestApplication(
+    {
+      host: "127.0.0.1",
+      port: 0,
+      productFilename: ":memory:",
+      collaborationDatabaseFilename: ":memory:",
+      secureCookies: false,
+      sessionTtlMs: 60_000,
+      ...(trustProxy ? { trustProxy: true } : {}),
+    },
+    {
+      unitStore: {
+        createUnit: async (input) => ({ unitId: input.unitId, headRevision: 1 }),
+      },
+      emailSender: {
+        send: async (message) => {
+          sent.push(message);
+        },
+      },
+    }
+  );
+  applications.push(application);
+  return application;
+}
+
+function requestCode(base: string, email: string, source: string): Promise<Response> {
+  return fetch(`${base}/api/auth/email/code`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-forwarded-for": source },
+    body: JSON.stringify({ email }),
+  });
+}
+
+function checkCode(base: string, email: string, code: string, source: string): Promise<Response> {
+  return fetch(`${base}/api/auth/email/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-forwarded-for": source },
+    body: JSON.stringify({ email, code }),
+  });
+}
 
 async function serve(application: ProductTestApplication): Promise<string> {
   const server = createServer(application.app);

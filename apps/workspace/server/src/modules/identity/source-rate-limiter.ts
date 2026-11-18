@@ -1,6 +1,7 @@
 import { isIPv4, isIPv6 } from "node:net";
 
-const WINDOW_MS = 60 * 60 * 1000;
+export const SOURCE_WINDOW_SECONDS = 60 * 60;
+const WINDOW_MS = SOURCE_WINDOW_SECONDS * 1000;
 const BUCKET_CAPACITY = 10_000;
 
 export interface SourceRateLimiter {
