@@ -81,6 +81,7 @@ describe("continuing an OAuth authorization as a guest agent", () => {
     const refused = await guest(origin, { oauthAuthorization: authorizeQuery({ client_id: CIMD, redirect_uri: "http://127.0.0.1:51063/callback" }) });
     expect(refused.status).toBe(429);
     expect(refused.headers.get("set-cookie")).toBeNull();
+    expect(((await refused.json()) as { error: { message: string } }).error.message).toMatch(/turned off/u);
     expect(fetchDocument).not.toHaveBeenCalled();
   });
 
@@ -96,14 +97,59 @@ describe("continuing an OAuth authorization as a guest agent", () => {
       throw detail;
     });
     const origin = await start({ agentCreateLimitPerHour: 3, fetchDocument });
-    const refusals: Array<{ status: number; message: string }> = [];
+    const refusals: Array<{ status: number; message: string; retryAfter: string | null }> = [];
     for (const clientId of Object.keys(details)) {
       const refused = await guest(origin, { oauthAuthorization: authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }) });
-      refusals.push({ status: refused.status, message: ((await refused.json()) as { error: { message: string } }).error.message });
+      refusals.push({ status: refused.status, message: ((await refused.json()) as { error: { message: string } }).error.message, retryAfter: refused.headers.get("retry-after") });
     }
     expect(refusals.map(({ status }) => status)).toEqual([400, 503, 400]);
     expect(new Set(refusals.map(({ message }) => message)).size).toBe(1);
     expect(refusals[0]!.message).not.toMatch(/public network|network request|JSON/u);
+    expect(refusals.map(({ retryAfter }) => retryAfter)).toEqual([null, null, null]);
+  });
+
+  it("tells a guest to retry shortly when the anonymous metadata fetches are all busy", async () => {
+    let release!: () => void;
+    const held = new Promise<void>((done) => { release = done; });
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => {
+      if (id.includes("/held/")) await held;
+      return { body: JSON.stringify({ client_id: id, redirect_uris: ["http://127.0.0.1/callback"] }) };
+    });
+    const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument, trustProxy: true });
+    const continueWith = (clientId: string, source: string) =>
+      guest(origin, { oauthAuthorization: authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }) }, source);
+    const holders = Array.from({ length: 8 }, (_, i) => continueWith(`${CIMD}/held/${i}`, `192.0.2.${i + 1}`));
+    await vi.waitFor(() => expect(fetchDocument).toHaveBeenCalledTimes(8));
+
+    const busy = await continueWith(`${CIMD}/new`, "198.51.100.1");
+    release();
+    await Promise.all(holders);
+    expect(busy.status).toBe(503);
+    expect(busy.headers.get("retry-after")).toBe("5");
+    expect(busy.headers.get("set-cookie")).toBeNull();
+    expect(await busy.json()).toMatchObject({ error: { code: "CLIENT_METADATA_BUSY" } });
+    expect(fetchDocument).not.toHaveBeenCalledWith(`${CIMD}/new`);
+    expect((await continueWith(`${CIMD}/new`, "198.51.100.1")).status).toBe(201);
+  });
+
+  it("stops a source that keeps starting metadata fetches before it starts another, without spending its guest creations", async () => {
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (id) => {
+      if (id.includes("/slow/")) throw new ClientMetadataDocumentError(true, "Client metadata fetch exceeded 5 seconds.");
+      return { body: JSON.stringify({ client_id: id, redirect_uris: ["http://127.0.0.1/callback"] }) };
+    });
+    const origin = await start({ agentCreateLimitPerHour: 1, fetchDocument, trustProxy: true });
+    const continueWith = (clientId: string, source: string) =>
+      guest(origin, { oauthAuthorization: authorizeQuery({ client_id: clientId, redirect_uri: "http://127.0.0.1:51063/callback" }) }, source);
+    expect((await continueWith(`${CIMD}/cached`, "192.0.2.10")).status).toBe(201);
+    for (let i = 0; i < 10; i++) expect((await continueWith(`${CIMD}/slow/${i}`, "192.0.2.1")).status).toBe(503);
+
+    const limited = await continueWith(`${CIMD}/new`, "192.0.2.1");
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get("set-cookie")).toBeNull();
+    expect(await limited.json()).toMatchObject({ error: { code: "AGENT_CREATE_RATE_LIMITED" } });
+    expect(fetchDocument).not.toHaveBeenCalledWith(`${CIMD}/new`);
+    expect((await continueWith(`${CIMD}/cached`, "192.0.2.1")).status).toBe(201);
+    expect((await continueWith(`${CIMD}/new`, "192.0.2.2")).status).toBe(201);
   });
 
   it("keeps signed-in authorization able to fetch a client metadata document while anonymous guests wait on theirs", async () => {

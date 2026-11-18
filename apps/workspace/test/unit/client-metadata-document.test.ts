@@ -216,15 +216,40 @@ describe("CIMD cache and fetch limits", () => {
     const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (clientId) => { await gate; return response(clientId); });
     const resolve = createClientMetadataDocumentResolver({ fetchDocument });
     const outcome = (promise: Promise<unknown>) => promise.then(() => "fetched", (error: unknown) => error);
-    const anonymous = Array.from({ length: 9 }, (_, i) => outcome(resolve(id(`https://guest.test/${i}`), `guest ${i}`, "anonymous")));
-    const joined = outcome(resolve(id("https://guest.test/0"), "guest 9", "anonymous"));
+    const anonymous = Array.from({ length: 9 }, (_, i) => outcome(resolve(id(`https://guest.test/${i}`), `192.0.2.${i}`, "anonymous")));
+    const joined = outcome(resolve(id("https://guest.test/0"), "192.0.2.9", "anonymous"));
     const signedIn = Array.from({ length: 25 }, (_, i) => outcome(resolve(id(`https://user.test/${i}`), `user${i}`)));
     release();
-    const busy = expect.objectContaining({ temporary: true });
+    const busy = expect.objectContaining({ temporary: true, reason: "busy" });
     expect(await Promise.all(anonymous)).toEqual([...Array<string>(8).fill("fetched"), busy]);
     expect(await joined).toBe("fetched");
     expect(await Promise.all(signedIn)).toEqual([...Array<string>(24).fill("fetched"), busy]);
-    expect(await outcome(resolve(id("https://guest.test/8"), "guest 8", "anonymous"))).toBe("fetched");
+    expect(await outcome(resolve(id("https://guest.test/8"), "192.0.2.8", "anonymous"))).toBe("fetched");
+  });
+  it("charges an anonymous source for every fetch it starts, failed ones too, but not for cached or joined documents", async () => {
+    let now = 0;
+    let release!: () => void;
+    const shared = new Promise<void>((done) => { release = done; });
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (clientId) => {
+      if (clientId.startsWith("https://slow.test/")) throw new ClientMetadataDocumentError(true, "Client metadata fetch exceeded 5 seconds.");
+      if (clientId === "https://shared.test/doc") await shared;
+      return response(clientId);
+    });
+    const resolve = createClientMetadataDocumentResolver({ fetchDocument, now: () => now });
+    const cached = await resolve(id(), "192.0.2.1", "anonymous");
+    for (let i = 0; i < 9; i++) {
+      await expect(resolve(id(`https://slow.test/${i}`), "192.0.2.1", "anonymous")).rejects.toMatchObject({ temporary: true });
+    }
+    await expect(resolve(id("https://slow.test/next"), "192.0.2.1", "anonymous")).rejects.toMatchObject({ reason: "source_limit" });
+    expect(fetchDocument).not.toHaveBeenCalledWith(id("https://slow.test/next"));
+    expect(await resolve(id(), "192.0.2.1", "anonymous")).toBe(cached);
+    const started = resolve(id("https://shared.test/doc"), "192.0.2.2", "anonymous");
+    const joined = resolve(id("https://shared.test/doc"), "192.0.2.1", "anonymous");
+    release();
+    expect(await joined).toBe(await started);
+    now = 3_600_001;
+    await expect(resolve(id("https://slow.test/later"), "192.0.2.1", "anonymous")).rejects.toMatchObject({ temporary: true });
+    expect(fetchDocument).toHaveBeenLastCalledWith(id("https://slow.test/later"));
   });
   it("bounds the cache at 1000, evicting expired documents before the oldest insertion", async () => {
     let now = 0;
