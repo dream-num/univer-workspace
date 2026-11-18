@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../shared/i18n";
+import { sessionQueryKey } from "../auth";
 import { HandToAgentButton, handToAgentPrompt } from "./hand-to-agent";
 
 const mocks = vi.hoisted(() => ({ toast: { success: vi.fn(), error: vi.fn() }, writeText: vi.fn() }));
@@ -20,8 +22,21 @@ describe("handToAgentPrompt", () => {
     expect(prompt).toContain(`MCP server ${origin}/mcp`);
     expect(prompt).toContain("Call `read` with the link as `unit`, `trunk: true` and the range A1:J50");
     expect(prompt).toContain("call `inspect` with the link as `unit`, `trunk: true` and `target` set to `document` or `presentation`");
-    expect(prompt).toContain("If you have no `read` or `inspect` tool, this server does not let you read file contents. Tell me so, and that the Command line (uvw) option");
     expect(commands(prompt)).toEqual([]);
+  });
+
+  it("falls back to a copy the person edits in the browser before the command line when the server hides read", () => {
+    const prompt = handToAgentPrompt(origin, "sheet-node-1", "read", "mcp");
+    const order = [
+      "If you have no `read` or `inspect` tool, this server does not let you read file contents. Tell me so, then make me a copy",
+      "`unit_create`",
+      "the link as `from`",
+      "`pr_merge`",
+      "give me the claim link",
+      `give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned`,
+      "tell me to use the Command line (uvw) option of Hand to my agent",
+    ].map((step) => prompt.indexOf(step));
+    expect(order.every((at, index) => at > 0 && (index === 0 || at > order[index - 1]!))).toBe(true);
   });
 
   it("copies through MCP with unit_create from, which needs no read", () => {
@@ -31,38 +46,40 @@ describe("handToAgentPrompt", () => {
     expect(order.every((at, index) => at > 0 && (index === 0 || at > order[index - 1]!))).toBe(true);
     expect(prompt).toContain("You do not need `read` for this.");
     expect(prompt).toContain("If you have no `pr_merge`, give me the pull request link to merge.");
+    expect(prompt.indexOf(`give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned`))
+      .toBeGreaterThan(prompt.indexOf("give me the claim link"));
     expect(commands(prompt)).toEqual([]);
   });
 
-  it("keeps the complete CLI path for this instance, then offers MCP", () => {
-    const prompt = handToAgentPrompt(origin, "sheet-node-1", "read", "cli");
-    const lines = commands(prompt);
-    expect(lines).toEqual([
-      "npm install --global univer-workspace-cli@latest",
-      `uvw config set workspace.origin ${origin}`,
-      "uvw auth guest",
-      `uvw read A1:J50 --unit ${link} --trunk`,
-      `uvw inspect document --unit ${link} --trunk`,
-      `uvw inspect presentation --unit ${link} --trunk`,
-    ]);
-    expect(prompt.indexOf(lines.at(-1)!)).toBeLessThan(prompt.indexOf(`${origin}/mcp`));
-    expect(prompt).toContain("no `read` tool, use the CLI");
-  });
+  it("keeps the command line prompts word for word", () => {
+    expect(handToAgentPrompt(origin, "sheet-node-1", "read", "cli")).toBe(`Read this Univer Workspace file, then do what I ask: ${link}
 
-  it("asks for a copy with the same CLI setup, copying through unit create --from", () => {
-    const copy = handToAgentPrompt(origin, "sheet-node-1", "copy", "cli");
-    expect(commands(copy)).toEqual([
-      "npm install --global univer-workspace-cli@latest",
-      `uvw config set workspace.origin ${origin}`,
-      "uvw auth guest",
-      'uvw pr create -R <repo> -t "My copy" --json',
-      `uvw unit create --worktree <id> --space <repo> --type sheet --name "My copy" --from ${link} --json`,
-      "uvw pr ready <id> --json",
-      "uvw pr merge <id> --json",
-      "uvw claim",
-    ]);
-    expect(copy.indexOf("uvw claim")).toBeLessThan(copy.indexOf(`${origin}/mcp`));
-    expect(copy).toContain("`unit_create` with the link as `from`");
+Use the uvw CLI:
+npm install --global univer-workspace-cli@latest
+uvw config set workspace.origin ${origin}
+uvw auth guest
+uvw read A1:J50 --unit ${link} --trunk
+
+That reads a Sheet. For a Doc or a Slide, run one of these instead:
+uvw inspect document --unit ${link} --trunk
+uvw inspect presentation --unit ${link} --trunk
+
+With MCP, you can instead connect to ${origin}/mcp and call \`read\` (\`inspect\` for a Doc or Slide) with the link as \`unit\` and \`trunk: true\`. If it has no \`read\` tool, use the CLI.`);
+    expect(handToAgentPrompt(origin, "sheet-node-1", "copy", "cli")).toBe(`Make me a copy of this Univer Workspace file that I can edit: ${link}
+
+Use the uvw CLI:
+npm install --global univer-workspace-cli@latest
+uvw config set workspace.origin ${origin}
+uvw auth guest
+uvw pr create -R <repo> -t "My copy" --json
+uvw unit create --worktree <id> --space <repo> --type sheet --name "My copy" --from ${link} --json
+uvw pr ready <id> --json
+uvw pr merge <id> --json
+uvw claim
+
+<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link: when I sign in and open it, the copy is mine.
+
+With MCP, you can instead connect to ${origin}/mcp and call \`pr_create\`, \`unit_create\` with the link as \`from\`, \`pr_ready\`, \`pr_merge\` and \`claim\`. If \`unit_create\` has no \`from\`, use the CLI.`);
   });
 
   it("varies only by the file's link, so nothing from the file reaches the agent", () => {
@@ -104,8 +121,10 @@ describe("HandToAgentButton", () => {
     return found;
   }
 
-  async function open() {
-    await act(async () => root.render(createElement(LanguageProvider, null, createElement(HandToAgentButton, { nodeId: "sheet-node-1" }))));
+  async function open(signedIn = false) {
+    const client = new QueryClient();
+    client.setQueryData(sessionQueryKey, signedIn ? { authenticated: true, user: { id: "reader" } } : { authenticated: false });
+    await act(async () => root.render(createElement(QueryClientProvider, { client }, createElement(LanguageProvider, null, createElement(HandToAgentButton, { nodeId: "sheet-node-1" })))));
     await act(async () => control("Hand to my agent").click());
   }
 
@@ -122,6 +141,12 @@ describe("HandToAgentButton", () => {
     await act(async () => control("Copy prompt").click());
     expect(mocks.writeText).toHaveBeenLastCalledWith(handToAgentPrompt(window.location.origin, "sheet-node-1", "read", "mcp"));
     expect(mocks.toast.success).toHaveBeenLastCalledWith("Prompt copied. Paste it into your agent.");
+  });
+
+  it("offers the guest agent sign-in only to a reader who is not signed in", async () => {
+    await open(true);
+    expect(control("MCP (recommended)").getAttribute("aria-pressed")).toBe("true");
+    expect(document.body.textContent).not.toContain("Continue as a guest agent");
   });
 
   it("copies the CLI prompt once the reader chooses the command line", async () => {

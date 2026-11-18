@@ -1,7 +1,9 @@
+import { useQuery } from "@tanstack/react-query";
 import { Bot, Copy } from "lucide-react";
 import { useState } from "react";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Button, Dialog, Segmented, toast } from "../../shared/ui";
+import { sessionQueryOptions } from "../auth";
 import { resourceShareUrl } from "../resource-view/resource-view";
 
 export type AgentTask = "read" | "copy";
@@ -10,11 +12,18 @@ export type AgentTask = "read" | "copy";
 export const HAND_OFFS = ["mcp", "cli"] as const;
 export type HandOff = (typeof HAND_OFFS)[number];
 
+const mcpCopySteps = (origin: string) => `1. Call \`repo_list\` to find your Personal Space repository, then \`pr_create\` in it with the title "My copy".
+2. Call \`unit_create\` with that pull request's id as \`worktree\`, the repository as \`space\`, \`type\` sheet, the name "My copy" and the link as \`from\`. If the file is a Doc or a Slide, the error says so: use \`type\` doc or slide.
+3. Call \`pr_ready\`, then \`pr_merge\`. If you have no \`pr_merge\`, give me the pull request link to merge.
+4. If you have a \`claim\` tool, call it and give me the claim link: when I sign in and open it, the copy is mine.
+5. Then give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned. I open it to edit the copy in the browser.
+You do not need \`read\` for this. If \`unit_create\` has no \`from\`, tell me to use the Command line (uvw) option of Hand to my agent.`;
+
 const TASKS: Record<AgentTask, {
   readonly ask: string;
   readonly cli: (link: string) => string;
   readonly mcp: string;
-  readonly mcpSteps: string;
+  readonly mcpSteps: (origin: string) => string;
 }> = {
   read: {
     ask: "Read this Univer Workspace file, then do what I ask",
@@ -24,8 +33,9 @@ That reads a Sheet. For a Doc or a Slide, run one of these instead:
 uvw inspect document --unit ${link} --trunk
 uvw inspect presentation --unit ${link} --trunk`,
     mcp: "call `read` (`inspect` for a Doc or Slide) with the link as `unit` and `trunk: true`. If it has no `read` tool, use the CLI.",
-    mcpSteps: `Call \`read\` with the link as \`unit\`, \`trunk: true\` and the range A1:J50. That reads a Sheet. For a Doc or a Slide, call \`inspect\` with the link as \`unit\`, \`trunk: true\` and \`target\` set to \`document\` or \`presentation\`.
-If you have no \`read\` or \`inspect\` tool, this server does not let you read file contents. Tell me so, and that the Command line (uvw) option of Hand to my agent can read it.`,
+    mcpSteps: (origin) => `Call \`read\` with the link as \`unit\`, \`trunk: true\` and the range A1:J50. That reads a Sheet. For a Doc or a Slide, call \`inspect\` with the link as \`unit\`, \`trunk: true\` and \`target\` set to \`document\` or \`presentation\`.
+If you have no \`read\` or \`inspect\` tool, this server does not let you read file contents. Tell me so, then make me a copy that I can open and change in the browser myself:
+${mcpCopySteps(origin)}`,
   },
   copy: {
     ask: "Make me a copy of this Univer Workspace file that I can edit",
@@ -37,15 +47,11 @@ uvw claim
 
 <repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link: when I sign in and open it, the copy is mine.`,
     mcp: "call `pr_create`, `unit_create` with the link as `from`, `pr_ready`, `pr_merge` and `claim`. If `unit_create` has no `from`, use the CLI.",
-    mcpSteps: `1. Call \`repo_list\` to find your Personal Space repository, then \`pr_create\` in it with the title "My copy".
-2. Call \`unit_create\` with that pull request's id as \`worktree\`, the repository as \`space\`, \`type\` sheet, the name "My copy" and the link as \`from\`. If the file is a Doc or a Slide, the error says so: use \`type\` doc or slide.
-3. Call \`pr_ready\`, then \`pr_merge\`. If you have no \`pr_merge\`, give me the pull request link to merge.
-4. If you have a \`claim\` tool, call it and give me the claim link: when I sign in and open it, the copy is mine.
-You do not need \`read\` for this. If \`unit_create\` has no \`from\`, tell me to use the Command line (uvw) option of Hand to my agent.`,
+    mcpSteps: mcpCopySteps,
   },
 };
 
-export function mcpServerUrl(origin: string): string {
+function mcpServerUrl(origin: string): string {
   return `${origin}/mcp`;
 }
 
@@ -57,7 +63,7 @@ export function handToAgentPrompt(origin: string, nodeId: string, task: AgentTas
     return `${ask}: ${link}
 
 Use the Univer Workspace MCP server ${mcpServerUrl(origin)}. If you are not connected to it, ask me to add it, then try again.
-${mcpSteps}`;
+${mcpSteps(origin)}`;
   }
   return `${ask}: ${link}
 
@@ -90,13 +96,16 @@ export function HandToAgentChoice({ nodeId, task, way, onWayChange }: {
   readonly onWayChange: (way: HandOff) => void;
 }) {
   const { t } = useI18n();
+  // A signed-in reader's agent signs in as that reader, so the guest choice is only for readers without a session.
+  const anonymous = useQuery(sessionQueryOptions).data?.authenticated === false;
   const url = mcpServerUrl(window.location.origin);
   return (
-    <div className="flex min-w-0 flex-col gap-3 text-sm">
+    <div className="flex min-h-0 min-w-0 flex-col gap-3 text-sm">
       <Segmented
         aria-label={t("handToAgentWay")}
         size="sm"
-        className="self-start"
+        className="self-start max-sm:self-stretch"
+        itemClassName="max-sm:flex-1 max-sm:px-1.5 max-sm:text-xs"
         value={way}
         onValueChange={onWayChange}
         options={HAND_OFFS.map((value) => ({ value, label: t(value === "mcp" ? "handToAgentMcp" : "handToAgentCli") }))}
@@ -115,10 +124,10 @@ export function HandToAgentChoice({ nodeId, task, way, onWayChange }: {
       ) : (
         <p>{t("handToAgentCliPrompt")}</p>
       )}
-      <pre className="max-h-56 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap break-all">
+      <pre className="max-h-56 min-h-24 overflow-auto rounded-md bg-muted p-3 text-xs whitespace-pre-wrap break-words">
         {handToAgentPrompt(window.location.origin, nodeId, task, way)}
       </pre>
-      {way === "mcp" ? <p className="text-xs text-muted-foreground">{t("handToAgentSignIn", { label: t("continueAsGuestAgent") })}</p> : null}
+      {way === "mcp" && anonymous ? <p className="text-xs text-muted-foreground">{t("handToAgentSignIn", { label: t("continueAsGuestAgent") })}</p> : null}
     </div>
   );
 }
