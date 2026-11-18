@@ -165,6 +165,10 @@ export function WorktreeReviewPanel({
             </Button>
           }
         />
+      ) : worktree.kind === "team" && worktree.state === "ready" ? (
+        <span className="text-sm text-muted-foreground">
+          {t("onlyAuthorMerges", { name: worktree.creator.displayName })}
+        </span>
       ) : null}
       {worktree.capabilities.discard ? (
         <ConfirmDialog

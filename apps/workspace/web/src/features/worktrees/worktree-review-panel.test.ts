@@ -107,6 +107,22 @@ beforeEach(() => {
   state.invalidate.mockResolvedValue(undefined);
 });
 
+describe("Worktree merge", () => {
+  it("tells a Team member who cannot merge a ready pull request that only its author can", () => {
+    const team = (merge: boolean): Worktree => ({
+      ...worktree(false),
+      kind: "team",
+      capabilities: { ...worktree(false).capabilities, merge },
+    });
+    expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: team(false) })))
+      .toContain("onlyAuthorMerges");
+    expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: team(true) })))
+      .not.toContain("onlyAuthorMerges");
+    expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: worktree(false) })))
+      .not.toContain("onlyAuthorMerges");
+  });
+});
+
 describe("Worktree continue editing", () => {
   it("uses the server reopen capability and disables the action while pending", () => {
     expect(renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: worktree(false) })))
