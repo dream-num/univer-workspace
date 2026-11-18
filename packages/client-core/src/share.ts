@@ -16,7 +16,7 @@ export interface WorkspaceShare {
   readonly owner: WorkspaceLinkSharing["owner"];
   /** Set when the link stops working on that date unless its owner, an unclaimed agent, stays active. */
   readonly expiresAt?: string;
-  /** Who can open `url` now, and while `link` is off, how to let anyone with the link read it. */
+  /** Who can open `url` now, and while `link` is off, how the caller lets anyone with the link read it. */
   readonly access: string;
   /** Set when the owner is an unclaimed agent: the page where a person claims it and keeps its files. */
   readonly claimUrl?: string;
@@ -46,9 +46,18 @@ export async function createClaimLink(
 export async function shareNode(
   spaces: Pick<WorkspaceSpaceFeature, "getNode" | "getLinkSharing" | "updateLinkSharing" | "createAgentClaimCode">,
   origin: string,
-  input: { readonly node: string; readonly link?: WorkspaceShareLink },
+  input: {
+    readonly node: string;
+    readonly link?: WorkspaceShareLink;
+    /**
+     * What this session does to let anyone with the link read the file, such as
+     * "run `uvw share <file> --link viewer`". Omit it for a person's token session, which the
+     * server does not let change Link Sharing.
+     */
+    readonly turnOn?: string;
+  },
 ): Promise<WorkspaceShare> {
-  const { nodeId, name } = await resolveNodeReference(spaces, input.node, origin);
+  const { nodeId, name, resource } = await resolveNodeReference(spaces, input.node, origin);
   const url = nodeUrl(origin, nodeId);
   let sharing: WorkspaceLinkSharing;
   try {
@@ -84,23 +93,44 @@ export async function shareNode(
     link,
     owner: sharing.owner,
     ...(sharing.expiresAt === null ? {} : { expiresAt: sharing.expiresAt }),
-    access: describeAccess(link, sharing),
+    access: describeAccess(link, sharing, resource === null, input.turnOn),
     ...(sharing.owner.claimed === false ? await claimFields(spaces, origin) : {}),
   };
 }
 
-function describeAccess(link: WorkspaceShareLink, { owner, expiresAt }: WorkspaceLinkSharing): string {
-  const who = {
-    off: owner.claimed === false
-      ? "Only this agent can open the link until a person claims it."
-      : "Only people with access to the repository can open the link.",
-    viewer: "Anyone with the link can read the file without signing in.",
-    editor: "Anyone with the link can read the file, and signed-in people can edit it.",
-  }[link];
-  const then = link === "off"
-    ? "Share it again with link viewer so anyone with the link can read it."
-    : expiresAt === null ? "" : `The link stops working on ${expiresAt} unless ${owner.username} stays active.`;
-  return `${who} ${then}`.trimEnd();
+// Only the owner can read Link Sharing, so the owner is also the caller.
+function describeAccess(
+  link: WorkspaceShareLink,
+  { owner, expiresAt }: WorkspaceLinkSharing,
+  folder: boolean,
+  turnOn: string | undefined,
+): string {
+  if (link !== "off") {
+    const target = folder ? "the folder and everything in it" : "the file";
+    const who = link === "viewer"
+      ? `Anyone with the link can read ${target} without signing in.`
+      : `Anyone with the link can read ${target}, and signed-in people can edit ${folder ? "them" : "it"}.`;
+    return expiresAt === null ? who : `${who} The link stops working on ${expiresAt} unless ${owner.username} stays active.`;
+  }
+  const who = owner.claimed === false
+    ? "Only this agent can open the link until a person claims it."
+    : "Only people with access to the repository can open the link.";
+  const next = turnOn === undefined
+    ? "If the user wants anyone with the link to read it, they can share it from the link in the browser."
+    : owner.kind === "agent"
+      ? `To let anyone with the link read it, ${turnOn}.`
+      : `Only if the user asks, ${turnOn} to let anyone with the link read it.`;
+  return `${who} ${next}`;
+}
+
+/** The share as the lines a client prints. */
+export function formatShare(shared: WorkspaceShare): string {
+  return [
+    `${shared.name}  ${shared.url}`,
+    `Link Sharing: ${shared.link}. ${shared.access}`,
+    ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
+    ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
+  ].join("\n");
 }
 
 async function claimFields(

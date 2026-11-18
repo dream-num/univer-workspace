@@ -89,6 +89,7 @@ export {
 } from "./space.js";
 export {
   createClaimLink,
+  formatShare,
   SHARE_LINKS,
   shareNode,
   type WorkspaceClaimLink,

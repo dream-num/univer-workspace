@@ -504,10 +504,10 @@ uvw share <node-id> --link viewer --json
 the link read the file without signing in. `--link editor` also lets signed-in people edit it.
 `--link off` stops sharing. Without `--link`, the command only reads the current setting. Only the
 owner of a file can read or change its Link Sharing. Give the user `url` and tell them who can open
-it, from `access`. When the result has `expiresAt`, tell the user that the link stops working on that
-date unless the agent is used or the link is opened before then. When it has `claimUrl`, give the user that link too: signing in and
-opening it within 10 minutes lets them claim the agent and keep its files for good. `uvw claim`
-makes a new claim link when the old one has expired.
+it, from `access`. When the result has `expiresAt`, tell the user that the link stops working on
+that date unless the agent is used or the link is opened before then. When it has `claimUrl`, give
+the user that link too: signing in and opening it within 10 minutes lets them claim the agent and
+keep its files for good. `uvw claim` makes a new claim link when the old one has expired.
 
 With a person's session, treat `uvw share --link` like a merge: run it only when the user asks.
 

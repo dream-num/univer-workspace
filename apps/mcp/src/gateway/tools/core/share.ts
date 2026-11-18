@@ -1,4 +1,4 @@
-import { parseNodeReference, SHARE_LINKS, shareNode } from "@univerjs/univer-workspace-client-core/product";
+import { formatShare, parseNodeReference, SHARE_LINKS, shareNode } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
 import { spaceFeature } from "./pr-support.js";
@@ -42,15 +42,12 @@ export const shareTool: ToolDefinition = {
     const shared = await shareNode(spaceFeature(context), context.identityOrigin, {
       node: nodeId,
       ...(link === undefined ? {} : { link }),
+      // A person reaches the gateway with a token session, which cannot change Link Sharing.
+      ...(context.user.kind === "agent" ? { turnOn: `call share with node ${nodeId} and link viewer` } : {}),
     });
     return {
       output: shared,
-      text: [
-        `${shared.name}  ${shared.url}`,
-        `Link Sharing: ${shared.link}. ${shared.access}`,
-        ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
-        ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
-      ].join("\n"),
+      text: formatShare(shared),
       repo: null,
       nodeId,
     };

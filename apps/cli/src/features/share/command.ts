@@ -1,6 +1,7 @@
 import { Command } from "commander";
 import {
   createClaimLink,
+  formatShare,
   SHARE_LINKS,
   shareNode,
   type WorkspaceClaimLink,
@@ -25,19 +26,9 @@ export function createShareCommand(spaces: WorkspaceSpaceFeature, origin: () => 
         await shareNode(spaces, await origin(), {
           node: target,
           ...(options.link === undefined ? {} : { link: oneOf(options.link, SHARE_LINKS, "--link") }),
+          turnOn: `run \`uvw share ${target} --link viewer\``,
         }));
-      emit(
-        share,
-        options,
-        shared,
-        [
-          `${shared.name}  ${shared.url}`,
-          `Link Sharing: ${shared.link}. ${shared.access}`,
-          ...(shared.link === "off" ? [`  uvw share ${shared.url} --link viewer`] : []),
-          ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
-          ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
-        ].join("\n"),
-      );
+      emit(share, options, shared, formatShare(shared));
     });
   return share;
 }
