@@ -411,7 +411,7 @@ for (const { name, open } of backends) {
       const emailed = [];
       for (let minute = 0; minute < 6; minute += 1) {
         bursts.push(await Promise.allSettled(
-          Array.from({ length: 30 }, () => identity.requestEmailLoginCode({ email: "alice@example.com" }))
+          Array.from({ length: 30 }, (_, i) => identity.requestEmailLoginCode({ email: i % 2 ? "alice@example.com" : "Alice@Example.COM" }))
         ));
         emailed.push(sent.length);
         currentTime += 61_000;

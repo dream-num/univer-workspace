@@ -580,12 +580,14 @@ export class PostgresIdentityRepository implements IdentityRepository {
     readonly expiresAt: number;
   }, limits: EmailLoginCodeLimits): Promise<EmailLoginCodeCreation> {
     // Serializable isolation commits only one of two concurrent inserts for an address; the other replays and sees it.
+    // The service passes lowercased addresses, so plain equality keeps this read on the (email, created_at) index;
+    // a scan would make requests for different addresses conflict.
     return this._database.transaction(async (database) => {
       const recent = await database
         .prepare(
           `SELECT MAX(created_at) AS latest, COUNT(*) AS count
            FROM email_login_codes
-           WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C") AND created_at > ?`
+           WHERE email = ?::text AND created_at > ?`
         )
         .get(input.email, limits.windowSince) as { readonly latest: number | null; readonly count: number };
       if (recent.latest !== null && recent.latest > limits.recentSince) return "sent-recently";
@@ -615,7 +617,7 @@ export class PostgresIdentityRepository implements IdentityRepository {
       .prepare(
         `SELECT id, code_hash
          FROM email_login_codes
-         WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C")
+         WHERE email = ?::text
            AND consumed_at IS NULL
            AND expires_at > ?
          ORDER BY created_at DESC
@@ -655,7 +657,7 @@ export class PostgresIdentityRepository implements IdentityRepository {
       .prepare(
         `UPDATE email_login_codes
          SET consumed_at = ?
-         WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C")
+         WHERE email = ?::text
            AND id <> ?
            AND consumed_at IS NULL`
       )
