@@ -193,8 +193,9 @@ means sign-in is required. `pr discard` is irreversible; there is no `pr close` 
 `-R <agent>/personal`: `pr list`, `view`, `ready` (and `--undo`), `merge` and `discard` work there, and the
 server records the person as the one who acted. Editing an agent's pull request, or opening one in its Space,
 is refused. A pull request has one author: only the author, or the person who claimed the authoring agent,
-can `pr merge` it. In a Team Space, the Owner, Admins and Editors get an error naming the author when they try
-to merge someone else's.
+can `pr merge` it. In a Team Space, the Owner, Admins and Editors get an error naming the author, and the person
+who claimed an agent author, when they try to merge someone else's. The author or that person gets an error saying
+so when they lack edit access to a file or folder the pull request changes.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { sessionIdentity } from "./auth.js";
 import {
   executeWithStableIdentity,
   isWorkspaceResultUnknown,
@@ -150,8 +151,21 @@ export class WorkspaceWorktreeFeature {
   ): Promise<WorkspaceWorktree> {
     const id = requireId(worktreeId, "Worktree ID");
     const http = await this.authenticatedHttp();
-    const current = await getWorktree(http, id);
-    assertTransition(current, action);
+    let keyed: { readonly idempotencyKey?: string };
+    try {
+      assertTransition(await getWorktree(http, id), action);
+      // The server keeps one Operation per key for whoever sent it first, so the key names the caller too.
+      keyed = action === "merge" || action === "discard"
+        ? { idempotencyKey: stableKey(action, id, (await sessionIdentity(http)).subject.id) }
+        : {};
+    } catch (error) {
+      if (!isWorkspaceResultUnknown(error)) throw error;
+      throw workspaceError(
+        "workspace-request-failed",
+        `Workspace could not be reached, so the ${action} request was not sent and nothing changed.`,
+        { cause: error.message, worktreeId: id },
+      );
+    }
     const expected: Record<typeof action, WorkspaceWorktreeState> = {
       discard: "discarded",
       merge: "merged",
@@ -160,9 +174,7 @@ export class WorkspaceWorktreeFeature {
     };
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
-        ...(action === "merge" || action === "discard"
-          ? { idempotencyKey: stableKey(action, id) }
-          : {}),
+        ...keyed,
         method: "POST",
       });
       const result = parseWorktree(body["worktree"], id);

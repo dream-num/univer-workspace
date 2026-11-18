@@ -100,9 +100,12 @@ repository checkout, guessed installation paths, or a different CLI version's AP
   core Skill describes the Issue workflow.
 - Mark it `uvw pr ready` and hand off the verified result with its review URL (`uvw browse <n>`).
   Leave `pr merge` or `pr discard` (irreversible) to the user's decision unless the user has explicitly authorized that action.
-- A guest agent finishes the task itself, because the user cannot open its pull request. It merges
-  its own pull request, turns on Link Sharing with `uvw share`, and returns the file link and the
-  claim link from the result, as the installed core Skill describes.
+- A pull request has one author. Only the author, or the person who claimed the authoring agent, can
+  merge it. Until a person claims a guest agent, nobody else can open its pull request, so the agent
+  finishes the task itself: it merges its own pull request, turns on Link Sharing with `uvw share`,
+  and returns the file link and the claim link from the result. A claimed agent hands off as above
+  instead when the person who claimed it asked to review the work or the change needs a person's
+  decision; that person merges it. The installed core Skill describes both.
 - When the user gives a file link, read the file with `--unit <file-link> --trunk`.
 - Blob and Space organization writes are direct operations, outside Worktree review. Follow
   their operational guidance rather than implying a Worktree can undo them.

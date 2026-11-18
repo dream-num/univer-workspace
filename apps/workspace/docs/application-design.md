@@ -214,10 +214,19 @@ Activity、Worktree 的发现、Review、决定与 Merge 也都用它判断所�
 一个 Pull request 只有一个作者，即创建者。人和 agent 在 Trunk 上协作，各自开自己的 Pull request，不在同一个
 Pull request 里协作。Ready、Reopen、Merge 和 Discard 交给创建者 Personal Space 的全部 Owner，即作者本人和认领了
 作者 agent 的人，User 与 Team Worktree 相同；Merge 仍要求对每个目标有编辑权限。Team Space 的 Owner 和 Admin
-另外保留 Reopen、Discard 和修改可见性用于清理，但与 Editor 一样不能合并别人创建的 Pull request，拒绝信息写明作者。
+另外保留 Reopen、Discard 和修改可见性用于清理，但与 Editor 一样不能合并别人创建的 Pull request，拒绝信息写明作者，
+作者是已认领的 agent 时也写明认领人。作者或认领人缺少某个目标的编辑权限时，拒绝信息说明缺少编辑权限。
 所以认领人可以决定 agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
 重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
-它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。
+它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。Worktree 列表与发现使用同一条所有权规则，
+认领人也能在列表里看到 agent 的 Team Pull request。
+
+已经开始的合并是已做出的决定。Worktree 处于 `merging`，或已 `merged` 但本地新文件尚未激活时，开始合并的执行者
+通过同一个 Idempotency Key 或 Operation Retry 完成自己的 Operation；作者和认领人可以用任意 Idempotency Key 完成它。
+这不让任何人开始一次自己不能开始的合并。合并生效并由某个 Operation 记录后，合并人不再改变：之后送达的其他 Merge
+Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的结果。uvw 与 MCP 的稳定 Merge/Discard Key 包含调用者的 User ID，
+因此不会与别人先前的 Operation 冲突，同一调用者重跑时仍复用自己的 Operation。发出 lifecycle 请求前读取 Worktree 或
+调用者身份时网络失败，Client Core 报 `workspace-request-failed`，说明请求没有发出、什么也没改变。
 
 主体类别带来两条规则，由 Access Repository 的查询和 `resolvedRoles` 实现：
 
