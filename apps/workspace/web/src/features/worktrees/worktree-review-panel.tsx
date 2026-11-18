@@ -171,9 +171,15 @@ export function WorktreeReviewPanel({
       ) : worktree.kind === "team" &&
         worktree.state === "ready" &&
         me !== undefined &&
-        me !== worktree.creator.id ? (
+        me !== worktree.creator.id &&
+        me !== worktree.claimer?.id ? (
         <span className="text-sm text-muted-foreground">
-          {t("onlyAuthorMerges", { name: worktree.creator.displayName })}
+          {worktree.claimer
+            ? t("onlyAuthorOrClaimerMerges", {
+                name: worktree.creator.displayName,
+                claimer: worktree.claimer.displayName,
+              })
+            : t("onlyAuthorMerges", { name: worktree.creator.displayName })}
         </span>
       ) : null}
       {worktree.capabilities.discard ? (

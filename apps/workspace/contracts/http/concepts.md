@@ -265,7 +265,9 @@ through their own Worktrees. Only the owners of the creator's Personal Space, th
 the creator and the human who claimed an agent creator, merge a Worktree, User or Team,
 and only with edit access to every target. Anyone else gets `FORBIDDEN` with a message
 that names the author, and the human who claimed an agent author. An owner without edit
-access to a target gets `FORBIDDEN` with a message that says so.
+access to a target gets `FORBIDDEN` with a message that says so. Every Worktree summary
+carries `claimer`, that human, or `null` when a person or an unclaimed agent is the author,
+so whoever can read the Worktree learns both names; a caller who gets `404` learns neither.
 
 A merge that has started, so the Worktree is `merging`, or `merged` with Worktree-local
 Units not yet activated, is a decision already made. The actor who started it finishes it
