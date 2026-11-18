@@ -400,8 +400,8 @@ low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line 
 `source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
 claim page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
 otherwise. OAuth sign-ups carry `returnTo` through the provider. Password and email sign-ups read it
-from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the page itself when
-it has its own sign-in form, as the claim page does. The claim code is never logged.
+from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the claim page
+itself, which has its own sign-in form. The claim code is never logged.
 
 Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
 these fields:

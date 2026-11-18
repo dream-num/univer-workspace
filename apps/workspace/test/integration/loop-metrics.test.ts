@@ -82,6 +82,9 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const claimPage = `${origin}/claim/c0de-in-path`;
   const claimer = await post("/api/auth/password/register", { username: "claimer", displayName: "claimer", password: "correct horse battery staple" }, { referer: claimPage });
   expect(claimer.status).toBe(201);
+  for (const [username, referer] of [["sharepage", `${origin}/nodes/${node.id}`], ["dotdot", `${origin}/claim/../nodes/${node.id}`]]) {
+    expect((await post("/api/auth/password/register", { username, displayName: username, password: "correct horse battery staple" }, { referer })).status).toBe(201);
+  }
   const emailSignup = async (email: string, referer?: string) => {
     expect((await post("/api/auth/email/code", { email })).status).toBe(202);
     const code = /\b(\d{6})\b/u.exec(emails.at(-1)!.text)![1]!;
@@ -138,7 +141,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     sharingOff: 1,
     signupsFromShareLink: 1,
     signupsFromConsent: 1,
-    signupsDirect: 1,
+    signupsDirect: 3,
     signupsFromClaimLink: 1,
     emailFromShareLink: 1,
     emailDirect: 1,

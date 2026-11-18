@@ -154,7 +154,7 @@ docker run --name univer-workspace \
 
 除 `http_request_duration_seconds` 外，四个计数器度量传播回路：`workspace_link_sharing_changes_total`（Link Sharing 打开或关闭）、`workspace_share_page_views_total`（服务端渲染的分享页 `GET` 加载，含 `304` 再验证，不含 `HEAD`）、`workspace_signups_total`（注册，按方式和来源）、`workspace_guest_agents_created_total`（访客 agent，按入口）。标签保持低基数。每次计数另写一行 `event` 为 `workspace.*` 的 `info` 日志，Node ID、用户 ID 和 User-Agent 只出现在日志里。标签取值和日志字段见英文版 README。
 
-已知局限：密码和邮箱注册从 `/login` 页同源请求的 `Referer` 读取 `source`，客户端或代理去掉 `Referer` 时记为 `direct`。注册后的页面重载和文件所有者自己打开分享页都计为 `signed_in`。`off` 事件的 `role` 是设置中保存的角色，没有实际含义。计数不阻塞页面返回，计数失败时页面照常返回，这次打开不计入，服务端记一条警告日志。
+已知局限：密码和邮箱注册从 `/login` 页或认领页同源请求的 `Referer` 读取 `source`，客户端或代理去掉 `Referer` 时记为 `direct`。注册后的页面重载和文件所有者自己打开分享页都计为 `signed_in`。`off` 事件的 `role` 是设置中保存的角色，没有实际含义。计数不阻塞页面返回，计数失败时页面照常返回，这次打开不计入，服务端记一条警告日志。
 
 ## 常用命令
 

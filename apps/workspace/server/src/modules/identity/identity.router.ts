@@ -508,11 +508,12 @@ function logOAuthFailure(
   console.error(`[identity] ${provider} OAuth callback failed`, error);
 }
 
-// The browser signs up from /login?returnTo=…, or on a page with its own form such as /claim/<code>,
+// The browser signs up from /login?returnTo=…, or on the claim page, which has its own sign-in form,
 // and a same-origin request's Referer keeps that query or that page.
 function loginReturnTo(request: Request): string | undefined {
   const referer = URL.parse(request.get("referer") ?? "");
-  return referer?.searchParams.get("returnTo") ?? referer?.pathname;
+  const claimPage = referer?.pathname.startsWith("/claim/") ? referer.pathname : undefined;
+  return referer?.searchParams.get("returnTo") ?? claimPage;
 }
 
 function agentLabel(value: unknown): string | undefined {
