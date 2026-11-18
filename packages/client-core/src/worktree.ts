@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { sessionIdentity } from "./auth.js";
 import {
   executeWithStableIdentity,
   isWorkspaceResultUnknown,
@@ -158,11 +159,13 @@ export class WorkspaceWorktreeFeature {
       ready: "ready",
       reopen: "draft",
     };
+    // The server keeps one Operation per key for whoever sent it first, so the key names the caller too.
+    const keyed = action === "merge" || action === "discard"
+      ? { idempotencyKey: stableKey(action, id, (await sessionIdentity(http)).subject.id) }
+      : {};
     try {
       const body = await http.json(`/api/worktrees/${encodeURIComponent(id)}/${action}`, {
-        ...(action === "merge" || action === "discard"
-          ? { idempotencyKey: stableKey(action, id) }
-          : {}),
+        ...keyed,
         method: "POST",
       });
       const result = parseWorktree(body["worktree"], id);

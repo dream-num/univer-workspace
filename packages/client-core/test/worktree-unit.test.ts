@@ -211,10 +211,25 @@ describe("Workspace Worktree model and workflow", () => {
       expect(requests.map((request) => request.method)).toEqual(["GET", "POST"]);
       expect(await requests[1]!.text()).toBe("");
       expect(requests[1]!.headers.get("idempotency-key")).toBe(
-        idempotent ? stableKey(action, "wt-1") : null,
+        idempotent ? stableKey(action, "wt-1", "user-1") : null,
       );
     },
   );
+
+  it("keys a merge by its caller, so a rerun reuses the caller's Operation and nobody else's", async () => {
+    const keys: (string | null)[] = [];
+    const fetcher: typeof fetch = async (input, init) => {
+      const request = new Request(input, init);
+      if (request.method === "GET") return Response.json({ worktree: rawWorktree("wt-1", "ready") });
+      keys.push(request.headers.get("idempotency-key"));
+      return Response.json({ worktree: rawWorktree("wt-1", "merged") });
+    };
+    for (const caller of ["author", "author", "admin"]) {
+      await worktrees(fetcher, caller).transition("wt-1", "merge");
+    }
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[2]).not.toBe(keys[0]);
+  });
 
   it.each([
     ["ready", "ready"],
@@ -601,8 +616,14 @@ describe("Workspace review URL", () => {
   });
 });
 
-function worktrees(fetcher: typeof fetch): WorkspaceWorktreeFeature {
-  return new WorkspaceWorktreeFeature(async () => http(fetcher));
+function worktrees(fetcher: typeof fetch, userId = "user-1"): WorkspaceWorktreeFeature {
+  return new WorkspaceWorktreeFeature(async () =>
+    http(async (input, init) =>
+      new URL(new Request(input, init).url).pathname === "/api/session"
+        ? Response.json({ authenticated: true, user: { id: userId, displayName: userId } })
+        : fetcher(input, init),
+    ),
+  );
 }
 
 function units(fetcher: typeof fetch): WorkspaceUnitFeature {
