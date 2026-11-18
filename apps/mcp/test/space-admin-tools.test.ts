@@ -178,8 +178,9 @@ describe("space, unit, repository admin, label and merge tools", () => {
       if (request.method === "PUT") linkSharing = body as typeof linkSharing;
       return Response.json({
         ...linkSharing,
-        owner: { username: "budget-x7k2", kind: "agent", claimed: false },
-        expiresAt: "2026-12-14T00:00:00.000Z",
+        ...(sessionUser["kind"] === "agent"
+          ? { owner: { username: "budget-x7k2", kind: "agent", claimed: sessionUser["claimed"] }, expiresAt: "2026-12-14T00:00:00.000Z" }
+          : { owner: { username: "user-1", kind: "human" }, expiresAt: null }),
         createdBy: null,
         updatedBy: null,
         createdAt: null,
@@ -586,7 +587,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     };
     const claimCode = { method: "POST", path: "/api/agents/claim-codes", body: undefined };
     const access =
-      "Only this agent can open the link until a person claims it. Share it again with link viewer so anyone with the link can read it.";
+      "Only this agent can open the link until a person claims it. To let anyone with the link read it, call share with node sheet and link viewer.";
     const read = await share({ node: `${origin}/nodes/sheet` });
     expect(read.structuredContent).toEqual({ ...drop, link: "off", access });
     expect(read.content).toEqual([{
@@ -627,6 +628,20 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect((await client.callTool({ name: "share", arguments: { node: "sheet" } })).structuredContent).toMatchObject({
       link: "off",
     });
+  });
+
+  it.each([
+    ["a claimed agent", { ...user, kind: "agent", claimed: true },
+      "Only people with access to the repository can open the link. To let anyone with the link read it, call share with node sheet and link viewer."],
+    ["a person's token session", user,
+      "Only people with access to the repository can open the link. If the user wants anyone with the link to read it, they can share it from the link in the browser."],
+  ] as const)("gives %s a next step it can take for a link that is off", async (_caller, principal, access) => {
+    sessionUser = principal;
+    humanTokenSession = principal === user;
+    const client = await connect();
+    const read = await client.callTool({ name: "share", arguments: { node: `${origin}/nodes/sheet` } });
+    expect(read.structuredContent).toMatchObject({ link: "off", access });
+    expect(read.content).toEqual([{ type: "text", text: `Budget  ${origin}/nodes/sheet\nLink Sharing: off. ${access}` }]);
   });
 
   it("hands an unclaimed agent a claim link on this Workspace that lasts ten minutes", async () => {

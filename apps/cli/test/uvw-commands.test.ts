@@ -1100,11 +1100,11 @@ describe("uvw share", () => {
 
   const claimUrl = `${ORIGIN}/claim/c0de`;
   const claimHint = "Give the claim link to the user so they can keep this file. It works once, within 10 minutes.";
-  const privateAccess =
-    "Only this agent can open the link until a person claims it. Share it again with link viewer so anyone with the link can read it.";
+  const privateAccess = (file: string) =>
+    `Only this agent can open the link until a person claims it. To let anyone with the link read it, run \`uvw share ${file} --link viewer\`.`;
 
-  function share(updateLinkSharing?: () => Promise<never>) {
-    const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner, role });
+  function share(updateLinkSharing?: () => Promise<never>, sharedBy: Record<string, unknown> = owner) {
+    const sharing = (enabled: boolean, role: string) => ({ enabled, expiresAt, owner: sharedBy, role });
     const spaces = {
       createAgentClaimCode: vi.fn(async () => ({ claimUrl: "/claim/c0de", expiresIn: 600 })),
       getLinkSharing: vi.fn(async () => sharing(false, "viewer")),
@@ -1122,13 +1122,12 @@ describe("uvw share", () => {
     const text = await run(command, [url]);
     expect(text.trimEnd()).toBe([
       `Budget  ${url}`,
-      `Link Sharing: off. ${privateAccess}`,
-      `  uvw share ${url} --link viewer`,
+      `Link Sharing: off. ${privateAccess(url)}`,
       `Claim link: ${claimUrl}`,
       claimHint,
     ].join("\n"));
     expect(JSON.parse(await run(command, ["node-1", "--json"]))).toEqual({
-      access: privateAccess, claimHint, claimUrl, expiresAt, link: "off", name: "Budget", owner, url,
+      access: privateAccess("node-1"), claimHint, claimUrl, expiresAt, link: "off", name: "Budget", owner, url,
     });
     expect(spaces.getNode.mock.calls).toEqual([["node-1"], ["node-1"]]);
     expect(spaces.updateLinkSharing).not.toHaveBeenCalled();
@@ -1150,6 +1149,16 @@ describe("uvw share", () => {
     expect(JSON.parse(await run(command, [url, "--link", link, "--json", "url,link"]))).toEqual({ link, url });
     expect(spaces.updateLinkSharing).toHaveBeenCalledWith("node-1", written);
     expect(spaces.getLinkSharing).not.toHaveBeenCalled();
+  });
+
+  it("tells a person's session to turn on Link Sharing only when the user asks", async () => {
+    const { command } = share(undefined, { kind: "human", username: "ana" });
+    const text = await run(command, [url]);
+    expect(text.trimEnd()).toBe([
+      `Budget  ${url}`,
+      "Link Sharing: off. Only people with access to the repository can open the link. "
+        + `Only if the user asks, run \`uvw share ${url} --link viewer\` to let anyone with the link read it.`,
+    ].join("\n"));
   });
 
   it("rejects an unknown --link value before any request", async () => {
