@@ -1010,7 +1010,7 @@
             schema:
               $ref: ../schemas/common.yaml#/ErrorResponse
       "429":
-        description: EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP checked 120 codes in the last hour. The code was not checked.
+        description: EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP sent 120 requests to this route in the last hour. The code was not checked.
         headers:
           Retry-After:
             description: Seconds to wait.

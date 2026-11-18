@@ -256,6 +256,23 @@ describe("Email sign-in HTTP API", () => {
     const accepted = await checkCode(base, "alice@example.com", codeFrom(sent[0]!), "198.51.100.7");
     expect(accepted.status).toBe(200);
   }, 60_000);
+
+  it("still emails a code to a new source once 10,000 sources are counted", async () => {
+    const sent: EmailMessage[] = [];
+    const base = await serve(await startEmailSignIn(sent));
+
+    for (let index = 0; index < 10_000; index += 10) {
+      const batch = Array.from({ length: 10 }, (_, offset) =>
+        requestCode(base, "", `10.0.${(index + offset) >> 8}.${(index + offset) & 255}`).then((response) => response.status)
+      );
+      expect(await Promise.all(batch)).toEqual(Array(10).fill(400));
+    }
+    expect(sent).toHaveLength(0);
+
+    const accepted = await requestCode(base, "alice@example.com", "198.51.100.7");
+    expect(accepted.status).toBe(202);
+    expect(sent.at(-1)?.to).toBe("alice@example.com");
+  }, 120_000);
 });
 
 async function startEmailSignIn(sent: EmailMessage[], trustProxy = true): Promise<ProductTestApplication> {

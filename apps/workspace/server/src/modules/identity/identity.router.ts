@@ -62,11 +62,11 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
-  // shortcut: counts live in this process, so each replica allows the full limit; share them when Workspace runs more than one replica.
+  // shortcut: counts live in this process, so each replica allows the full limit, and past 10,000 tracked sources a new source passes uncounted; share them in a store when Workspace runs more than one replica.
   const emailSources = options.emailSourceLimits
     ? {
-        codeRequests: createSourceRateLimiter(EMAIL_CODE_REQUESTS_PER_SOURCE_HOUR, Date.now),
-        codeChecks: createSourceRateLimiter(EMAIL_CODE_CHECKS_PER_SOURCE_HOUR, Date.now),
+        codeRequests: createSourceRateLimiter(EMAIL_CODE_REQUESTS_PER_SOURCE_HOUR, Date.now, "admit"),
+        codeChecks: createSourceRateLimiter(EMAIL_CODE_CHECKS_PER_SOURCE_HOUR, Date.now, "admit"),
       }
     : null;
 

@@ -91,7 +91,7 @@ EMAIL_SMTP_USER=your-smtp-username
 EMAIL_SMTP_PASSWORD=your-smtp-password
 ```
 
-Email codes expire after ten minutes and allow five incorrect attempts. Each address can request one code per minute and up to five per hour. Once `TRUST_PROXY` is set, each source IP can request 60 codes and check 120 codes per hour, per server process. The first successful verification creates the account.
+Email codes expire after ten minutes and allow five incorrect attempts. Each address can request one code per minute and up to five per hour. Once `TRUST_PROXY` is set, each source IP can send 60 requests per hour to the code route and 120 to the login route, per server process. Every request counts, valid or not. The first successful verification creates the account.
 
 For Amazon SES, use SMTP credentials issued for the endpoint's region. If SES returns `535`, check the SMTP username and its matching SMTP password. Sandbox accounts also need a verified recipient.
 

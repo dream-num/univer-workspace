@@ -5525,7 +5525,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP checked 120 codes in the last hour. The code was not checked. */
+            /** @description EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP sent 120 requests to this route in the last hour. The code was not checked. */
             429: {
                 headers: {
                     /** @description Seconds to wait. */

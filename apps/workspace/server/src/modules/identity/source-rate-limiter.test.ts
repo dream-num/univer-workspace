@@ -66,4 +66,13 @@ describe("source rate limiter", () => {
     now = HOUR;
     expect(limiter.take("203.0.113.7")).toBe(true);
   });
+
+  it("admits new sources at capacity when asked to, and still limits the sources it tracks", () => {
+    const limiter = createSourceRateLimiter(1, () => 0, "admit");
+    for (let index = 0; index < 10_000; index += 1) {
+      expect(limiter.take(`10.${index >> 16}.${(index >> 8) & 255}.${index & 255}`)).toBe(true);
+    }
+    expect([limiter.allows("203.0.113.7"), limiter.take("203.0.113.7"), limiter.take("203.0.113.7")]).toEqual([true, true, true]);
+    expect(limiter.take("10.0.0.0")).toBe(false);
+  });
 });

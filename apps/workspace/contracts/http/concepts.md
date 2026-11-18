@@ -30,10 +30,11 @@ single-use code and `POST /api/auth/email/login` exchanges it for a login
 session. A first successful verification creates the User and Personal Space;
 later verifications reuse that User. Codes expire after ten minutes, allow five
 incorrect attempts, and requests are rate limited per address. When the server
-sets `TRUST_PROXY`, each source IP may also request 60 codes and check 120 codes
-an hour, and then gets `429 EMAIL_CODE_RATE_LIMITED` with `Retry-After`. Responses never
-reveal whether an address already has an account. Email sign-in does not merge
-a User into an existing account created with another provider.
+sets `TRUST_PROXY`, each source IP may also send 60 requests an hour to the code
+route and 120 to the login route, valid or not, and then gets
+`429 EMAIL_CODE_RATE_LIMITED` with `Retry-After`. Responses never reveal
+whether an address already has an account. Email sign-in does not merge a User
+into an existing account created with another provider.
 
 External login and explicit linking use different OAuth intents. Both validate
 `state` and PKCE from a short-lived protected cookie. An access token used
