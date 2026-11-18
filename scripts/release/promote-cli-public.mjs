@@ -99,15 +99,18 @@ async function responseJson(result, stage) {
   catch { throw new Error(`${stage}: invalid JSON response`); }
 }
 
-// This is the deployment's public artifact store, not an arbitrary URL from metadata.
-// A storage-origin change requires review; do not follow it automatically.
-const ARTIFACT_ORIGIN = "https://insider-npm.oss-cn-shenzhen.aliyuncs.com";
+// Trust policy only: the download target always comes from the registry's Location.
+// Entries are HTTPS origins, not destination templates or assumed storage paths.
+// New origins require review; seeing a redirect must not expand the allowlist.
+const TRUSTED_TARBALL_ORIGINS = new Set([
+  new URL(INSIDER).origin,
+  "https://insider-npm.oss-cn-shenzhen.aliyuncs.com",
+]);
 export async function downloadInsiderTarball(initial, fetcher = fetch) {
   let url = new URL(initial);
   const visited = new Set();
   for (let hop = 0; hop <= 3; hop++) {
-    const trusted = url.origin === new URL(INSIDER).origin ||
-      (url.origin === ARTIFACT_ORIGIN && url.pathname.startsWith("/insider-npm-registry/v1/packages/"));
+    const trusted = TRUSTED_TARBALL_ORIGINS.has(url.origin);
     if (!trusted || url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
       throw new Error("Insider tarball: untrusted redirect destination");
     if (visited.has(url.href)) throw new Error("Insider tarball: redirect loop");

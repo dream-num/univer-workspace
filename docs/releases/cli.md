@@ -47,8 +47,10 @@ npm OIDC. It neither rebuilds/repackages artifacts nor promotes dependencies.
 Insider metadata is read from the complete package packument's `versions[version]`;
 its `/package/version` route redirects to public npm and is not an insider version
 lookup. Original tarballs may redirect from insider to the deployment's public
-OSS origin `https://insider-npm.oss-cn-shenzhen.aliyuncs.com`, restricted to
-`/insider-npm-registry/v1/packages/`. Downloads are credential-free, HTTPS-only,
+OSS origin `https://insider-npm.oss-cn-shenzhen.aliyuncs.com`. These two HTTPS
+origins form an explicit allowlist, not an assumed destination: each target comes
+from the actual `Location` header, without rewriting or assuming a storage path.
+Downloads are credential-free, HTTPS-only,
 limited to three redirects, and reject loops, userinfo, queries and other origins.
 The original SHA-512 and package manifest are verified after download. A storage
 origin change requires code review; metadata and authenticated dry-run requests

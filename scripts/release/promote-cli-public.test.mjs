@@ -592,8 +592,8 @@ test("real insider protocol selects versions from one packument and follows trus
   }
 });
 
-test("tarball rejects untrusted, downgrade, userinfo, query, wrong storage path and loop redirects before following", async () => {
-  for (const target of ["https://evil.invalid/a", "http://insider-npm-registry.univer.work/a", "https://user:secret@insider-npm-registry.univer.work/a", `${INSIDER}a?token=secret`, "https://insider-npm.oss-cn-shenzhen.aliyuncs.com/other/key", `${INSIDER}artifact.tgz`]) {
+test("tarball rejects untrusted, downgrade, userinfo, query, lookalike hosts and loop redirects before following", async () => {
+  for (const target of ["https://evil.invalid/a", "http://insider-npm-registry.univer.work/a", "https://user:secret@insider-npm-registry.univer.work/a", `${INSIDER}a?token=secret`, "https://insider-npm.oss-cn-shenzhen.aliyuncs.com.evil.invalid/other/key", `${INSIDER}artifact.tgz`]) {
     let calls=0;
     await assert.rejects(downloadInsiderTarball(`${INSIDER}artifact.tgz`,async()=>{calls++;return new Response(null,{status:302,headers:{location:target}})}),/untrusted|loop/u);
     assert.equal(calls,1);
@@ -637,4 +637,21 @@ test("HTTP 200 invalid JSON never echoes sensitive response prefixes", async (t)
   const f=await prepared(t);
   await assert.rejects(publishPromotion({...f,fetcher:async()=>new Response(secret)}),e=>e.message==="Public readback: invalid JSON response");
   assert.deepEqual(f.state.writes,[]);
+});
+
+
+test("allowlist is not a destination: actual Location and paths stay intact", async () => {
+  for (const target of [
+    `${INSIDER}new-layout/original.tgz`,
+    "https://insider-npm.oss-cn-shenzhen.aliyuncs.com/changed-layout/object-123",
+  ]) {
+    const calls=[];
+    const bytes=await downloadInsiderTarball(`${INSIDER}original.tgz`,async (url,options)=>{
+      calls.push(String(url));
+      assert.equal(options.headers,undefined);
+      return calls.length===1?new Response(null,{status:302,headers:{location:target}}):new Response("original");
+    });
+    assert.deepEqual(calls,[`${INSIDER}original.tgz`,target]);
+    assert.equal(bytes.toString(),"original");
+  }
 });
