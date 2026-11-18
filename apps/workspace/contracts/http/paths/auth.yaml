@@ -27,7 +27,8 @@
       When `MCP_RESOURCE_URLS` is set, dynamically registered MCP clients
       (`POST /api/auth/register`) and HTTPS Client ID Metadata Document (CIMD)
       clients may also authorize. CIMD is enabled by default; `MCP_CIMD_ENABLED=0`
-      disables it. CIMD metadata is fetched only after interactive sign-in; invalid
+      disables it. CIMD metadata is fetched only after interactive sign-in, or
+      when a browser continues as a guest agent (POST /api/auth/guest); invalid
       documents return 400 and temporary fetch failures return 503 here, never a
       client redirect. CIMD names are displayed with their URL hostname. They must send
       `response_type=code`, `code_challenge_method=S256` and a `resource`
@@ -695,6 +696,10 @@
       under the same per-source limit, but sets a browser login session cookie
       and returns no token. A request that already carries a valid login
       session is refused with 409, so it cannot replace a signed-in session.
+      With `oauthAuthorization`, the authorization is checked first, as
+      authorize checks it: a Client ID Metadata Document client's metadata is
+      fetched now, one fetch in flight per source, and authorize reuses it.
+      A request authorize would refuse answers 400 or 503 and creates nothing.
       All responses have Cache-Control: no-store.
     security: []
     requestBody:
@@ -725,6 +730,12 @@
               $ref: ../schemas/common.yaml#/ErrorResponse
       "429":
         description: AGENT_CREATE_RATE_LIMITED. Too many agents were created from this source IP in the last hour, or creation is disabled.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/common.yaml#/ErrorResponse
+      "503":
+        description: OAUTH_CLIENT_UNAVAILABLE. The client's metadata document could not be fetched right now.
         content:
           application/json:
             schema:

@@ -1,5 +1,6 @@
 import { ClientMetadataDocumentError, type CimdClient, type CimdClientId } from "./client-metadata-document.js";
 import { randomBytes } from "node:crypto";
+import { parse as parseQuery } from "node:querystring";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
 import { ApplicationError } from "../../middleware/errors.js";
 import { MCP_SCOPES, type AccessTokenService, type IssuedGrant, type McpScope, type OAuthClientRecord } from "./access-tokens.js";
@@ -447,6 +448,45 @@ export function createOAuthAuthorizationRouter(options: {
 }
 
 /**
+ * Checks the authorization a guest agent is about to continue, as `/authorize` would once the guest is
+ * signed in, so a request that would fail creates no agent. Returns the name the guest takes from its client.
+ */
+export function createGuestAuthorizationCheck(options: {
+  readonly accessTokens: AccessTokenService;
+  readonly oauthClients: OAuthClientConfig | null;
+  readonly mcpOAuth: McpOAuthConfig | null;
+  readonly resolveClientMetadata: (clientId: CimdClientId, requester: string) => Promise<CimdClient>;
+}): (query: string, sourceIp: string | undefined) => Promise<string | null> {
+  const clients = new Map((options.oauthClients?.clients ?? []).map((client) => [client.clientId, client]));
+  const mcp = options.mcpOAuth;
+  return async (query, sourceIp) => {
+    const values = parseQuery(query);
+    const clientId = requireQueryString(values.client_id);
+    const source = await resolveClientSource(clientId, clients, options.accessTokens, mcp);
+    if (source?.kind === "static") {
+      parseStaticAuthorizationRequest(source.client, values);
+      return null;
+    }
+    if (mcp === null || source === null) throw unavailableClient(clientId);
+    let client: OAuthClientRecord | CimdClient;
+    if (source.kind === "cimd") {
+      try {
+        // Keyed by source, as `/authorize` keys it by User: one metadata fetch in flight per requester.
+        client = await options.resolveClientMetadata(source.clientId, `guest ${sourceIp}`);
+      } catch (error) {
+        if (!(error instanceof ClientMetadataDocumentError)) throw error;
+        throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", error.temporary ? 503 : 400, error.message, "oauthAuthorization");
+      }
+    } else {
+      client = source.client;
+    }
+    const parsed = parseMcpAuthorizationRequest(mcp, client, values);
+    if ("errorRedirect" in parsed) throw new ApplicationError("INVALID_INPUT", 400, parsed.message, "oauthAuthorization");
+    return source.kind === "dcr" ? client.clientName : null;
+  };
+}
+
+/**
  * RFC 7591 registration for public MCP clients. Mounted ahead of the `/api` routers so its own body limit
  * applies: it is an unauthenticated write to the product database.
  */
@@ -616,7 +656,7 @@ function parseMcpAuthorizationRequest(
   config: McpOAuthConfig,
   client: OAuthClientRecord | CimdClient,
   values: Record<string, unknown>,
-): McpAuthorizationRequest | { readonly errorRedirect: string } {
+): McpAuthorizationRequest | { readonly errorRedirect: string; readonly message: string } {
   const redirectUri = matchRegisteredRedirectUri(values.redirect_uri, client.redirectUris);
   if (redirectUri === null) {
     throw new ApplicationError(
@@ -633,6 +673,7 @@ function parseMcpAuthorizationRequest(
   const state = rawState ?? null;
   const fail = (error: string, description: string) => ({
     errorRedirect: authorizationErrorTarget(redirectUri, state, error, description, config.issuer),
+    message: `${error}: ${description}`,
   });
   if (values.response_type !== "code") return fail("unsupported_response_type", 'response_type must be "code".');
   if (values.code_challenge_method !== "S256") return fail("invalid_request", "PKCE with code_challenge_method S256 is required.");

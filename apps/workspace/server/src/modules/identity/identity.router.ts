@@ -9,13 +9,12 @@ import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
 
 const WORKSPACE_AGENTS_CLIENT_ID = "univer-workspace-agents";
 const MAX_AGENT_LABEL_LENGTH = 64;
-// Dynamic registration issues UUID client IDs; static and metadata-document clients have no stored name.
-const REGISTERED_CLIENT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
   readonly agentClaims: AgentClaims;
   readonly accessTokens: AccessTokenService;
+  readonly checkGuestAuthorization: (query: string, sourceIp: string | undefined) => Promise<string | null>;
   readonly mcpOAuth: McpOAuthConfig | null;
   readonly secureCookies: boolean;
   readonly discordBotApiKey?: string;
@@ -122,21 +121,28 @@ export function createIdentityRouter(options: {
 
   router.post("/auth/guest", async (request, response) => {
     response.set("Cache-Control", "no-store");
+    const session = await identity.getSession(request.headers.cookie);
     // A cross-site POST must not replace the session of a signed-in User.
-    if ((await identity.getSession(request.headers.cookie)).authenticated) {
+    if (session.authenticated) {
       throw new ApplicationError(
         "CONFLICT",
         409,
         "Sign out before continuing as a guest agent."
       );
     }
-    const clientId: unknown = request.body?.oauthClientId;
+    const label = agentLabel(request.body?.label);
+    const authorization: unknown = request.body?.oauthAuthorization;
+    if (authorization !== undefined && typeof authorization !== "string") {
+      throw new ApplicationError("INVALID_INPUT", 400, "oauthAuthorization must be a string.", "oauthAuthorization");
+    }
+    // Checking a metadata-document client fetches it, which a deployment without guests never does anonymously.
+    if (!session.guestAuthEnabled) {
+      throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
+    }
     const { user } = await identity.createAgent({
-      label: agentLabel(request.body?.label),
-      // The name is read from the registered client, never from the request.
-      clientName: typeof clientId === "string" && REGISTERED_CLIENT_ID.test(clientId)
-        ? (await options.accessTokens.getClient(clientId))?.clientName ?? null
-        : null,
+      label,
+      // The name comes from the client the server resolved, never from the request.
+      clientName: authorization === undefined ? null : await options.checkGuestAuthorization(authorization, request.ip),
       originIp: request.ip,
     });
     const issued = await identity.issueSession(user, "browser");

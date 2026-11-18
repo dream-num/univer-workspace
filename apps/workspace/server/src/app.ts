@@ -66,6 +66,7 @@ import {
   createGitHubOAuthProvider,
   createDiscordOAuthProvider,
   createGoogleOAuthProvider,
+  createGuestAuthorizationCheck,
   createMcpClientRegistrationHandler,
   createOAuthAuthorizationRouter,
   type DiscordOAuthProvider,
@@ -406,6 +407,11 @@ export function createWorkspaceApplication(
   if (mcpOAuth) {
     app.post("/api/auth/register", createMcpClientRegistrationHandler({ accessTokens, mcpOAuth }));
   }
+  const oauthClients = config.oauthClients;
+  const resolveClientMetadata = createClientMetadataDocumentResolver({
+    ...(dependencies.fetchClientMetadataDocument === undefined ? {} : { fetchDocument: dependencies.fetchClientMetadataDocument }),
+    ...(mcpOAuth?.cimdExemptNetworks === undefined ? {} : { exemptions: mcpOAuth.cimdExemptNetworks }),
+  });
   // Draft JSON needs escaping headroom before the other routers apply their 1 MiB parser.
   app.use("/api", createSkillDraftsRouter({ identity, drafts: skillDrafts, sources: skillSources }));
   app.use("/api", createHtmlViewDraftsRouter({ identity, drafts: htmlViewDrafts }));
@@ -415,6 +421,7 @@ export function createWorkspaceApplication(
       identity,
       agentClaims: createAgentClaims({ identity, repository: identityRepository, onAgentStopped: sessionSockets.closeUser }),
       accessTokens,
+      checkGuestAuthorization: createGuestAuthorizationCheck({ accessTokens, oauthClients, mcpOAuth: mcpOAuth ?? null, resolveClientMetadata }),
       mcpOAuth: mcpOAuth ?? null,
       secureCookies: config.secureCookies,
       ...(config.discordBotApiKey
@@ -422,7 +429,6 @@ export function createWorkspaceApplication(
         : {}),
     })
   );
-  const oauthClients = config.oauthClients;
   const authorizationStore = new Map<string, IssuedAuthorization>();
   app.use(
     "/api/auth",
@@ -433,10 +439,7 @@ export function createWorkspaceApplication(
       oauthClients,
       authorizationStore,
       mcpOAuth: mcpOAuth ?? null,
-      resolveClientMetadata: createClientMetadataDocumentResolver({
-        ...(dependencies.fetchClientMetadataDocument === undefined ? {} : { fetchDocument: dependencies.fetchClientMetadataDocument }),
-        ...(mcpOAuth?.cimdExemptNetworks === undefined ? {} : { exemptions: mcpOAuth.cimdExemptNetworks }),
-      }),
+      resolveClientMetadata,
     })
   );
   app.use("/api", createSpacesRouter({ identity, spaces }));

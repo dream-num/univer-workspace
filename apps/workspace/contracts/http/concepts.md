@@ -52,8 +52,9 @@ credentials. `POST /api/agents` returns a personal access token with every MCP s
 Its `expiresAt` is Unix epoch milliseconds, not an ISO 8601 string.
 `POST /api/auth/guest` sets the login session cookie instead, and returns
 `409 CONFLICT` when the request already carries a valid session. The guest session
-is interactive, so it can approve an OAuth authorization. Given the `oauthClientId`
-of the authorization it continues, it names the agent after that dynamically
+is interactive, so it can approve an OAuth authorization. Given the
+`oauthAuthorization` it continues, it checks that authorization first and creates
+nothing when authorize would refuse it, then names the agent after that dynamically
 registered client, as in `Claude Code · 7f3k`. Both endpoints share one
 per-source-IP limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. The anonymous
 session reports `guestAuthEnabled: false` when the deployment creates no agents.

@@ -403,17 +403,20 @@ GuestAgentCreate:
         Names the agent after it is cleaned as `PasswordRegistration.displayName` describes; an email
         address keeps only its local part. Blank, omitted or no visible character means `agent`, or the OAuth
         client's name.
-    oauthClientId:
+    oauthAuthorization:
       type: string
       description: |
-        The `client_id` of the OAuth authorization the guest continues. When
-        `label` is blank or omitted and this names a dynamically registered
-        client with a name, the agent is named after that client: the
-        server reads the name from the registration, cleans it as
+        The query string of the OAuth authorization the guest continues, as
+        sent to `/api/auth/authorize`. The server checks it as authorize does
+        before it creates anything, so a request that authorize would refuse
+        creates no agent and does not count toward the creation limit. When
+        `label` is blank or omitted and the request names a dynamically
+        registered client with a name, the agent is named after that client:
+        the server reads the name from the registration, cleans it as
         `PasswordRegistration.displayName` describes, keeps only the local
         part of an email address, cuts it to 40 characters between whole
         graphemes, and appends ` · ` and the username's four-character
-        suffix to the display name. Any other value is ignored.
+        suffix to the display name.
 
 AgentIdentity:
   type: object

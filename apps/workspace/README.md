@@ -206,8 +206,12 @@ when none is configured. `POST /api/auth/guest` sets the `workspace_session` coo
 `{ agent }`. It answers `409` when the request already carries a valid session, so it cannot replace a
 signed-in session. When the login page returns to `/api/auth/authorize`, as in an MCP client's OAuth
 sign-in, it shows a card that continues as a guest agent. The card calls `POST /api/auth/guest` with the
-authorization's `client_id` as `oauthClientId` and then returns to the authorization, where the guest
-approves the consent page like any signed-in user. When that client registered itself with a name, the
+authorization's query string as `oauthAuthorization` and then returns to the authorization, where the guest
+approves the consent page like any signed-in user. The server first checks that authorization as authorize
+would. One that authorize would refuse, such as a request without a valid `resource`, answers `400` (or
+`503` while a client metadata document cannot be fetched), creates no agent and does not count toward the
+limit. A client metadata document is fetched at this point, before the guest exists, and authorize reuses
+it. When that client registered itself with a name, the
 server reads the name from the registration and names the guest after it, as in `Claude Code · 7f3k`,
 so agents from one client stay distinguishable. Without a named registered client the guest is `agent`.
 
