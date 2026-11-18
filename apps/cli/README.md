@@ -141,7 +141,7 @@ after it was last used or one of its links was last opened. A claimed agent neve
 ```bash
 uvw share <file-link-or-node-id>                       # read the current setting
 uvw share <file-link-or-node-id> --link viewer         # anyone who has the link can read
-uvw share <file-link-or-node-id> --link editor         # signed-in people can also edit
+uvw share <file-link-or-node-id> --link editor         # signed-in people and claimed agents can also edit
 uvw share <file-link-or-node-id> --link off            # stop sharing
 ```
 
