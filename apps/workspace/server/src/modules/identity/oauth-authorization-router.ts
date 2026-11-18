@@ -475,7 +475,8 @@ export function createGuestAuthorizationCheck(options: {
         client = await options.resolveClientMetadata(source.clientId, `guest ${sourceIp}`);
       } catch (error) {
         if (!(error instanceof ClientMetadataDocumentError)) throw error;
-        throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", error.temporary ? 503 : 400, error.message, "oauthAuthorization");
+        // The caller is anonymous, so the cause stays in the fetch log.
+        throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", error.temporary ? 503 : 400, "The client's metadata document could not be checked.", "oauthAuthorization");
       }
     } else {
       client = source.client;

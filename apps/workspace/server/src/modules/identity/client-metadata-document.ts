@@ -218,6 +218,7 @@ export function createClientMetadataDocumentResolver(options: {
       const fetchedAt = now();
       work = Promise.resolve().then(async () => {
         let outcome = "success";
+        let reason: string | undefined;
         try {
           const client = parseClientMetadataDocument(clientId, await fetchDocument(clientId), fetchedAt);
           cache.delete(clientId);
@@ -231,12 +232,13 @@ export function createClientMetadataDocumentResolver(options: {
         } catch (error) {
           const failure = error instanceof ClientMetadataDocumentError ? error : new ClientMetadataDocumentError(true, "Client metadata network request failed.");
           outcome = failure.temporary ? "temporarily_unavailable" : "invalid_client";
+          reason = failure.message;
           if (!failure.temporary) cache.delete(clientId);
           throw failure;
         } finally {
           pending.delete(clientId);
           for (const [user, id] of users) if (id === clientId) users.delete(user);
-          logger.info({ event: "oauth.cimd.fetch", client_id: clientId, outcome }, "Client metadata fetch");
+          logger.info({ event: "oauth.cimd.fetch", client_id: clientId, outcome, reason }, "Client metadata fetch");
         }
       });
       pending.set(clientId, work);
