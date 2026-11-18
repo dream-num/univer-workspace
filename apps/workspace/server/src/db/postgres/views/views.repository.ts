@@ -89,7 +89,7 @@ export class PostgresViewsRepository implements ViewsRepository {
            ${spaceMemberJoin}
            JOIN nodes AS space_node ON space_node.space_id = spaces.id
            WHERE ${visibleSpaceSql} ${mySpaces}
-           UNION ALL
+           UNION
            SELECT id FROM granted
          )
          SELECT html.resource_id, html.updated_at

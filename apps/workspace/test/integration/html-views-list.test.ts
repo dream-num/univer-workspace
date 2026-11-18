@@ -254,5 +254,11 @@ describe("html view list", () => {
       expect(await list(reader)).toEqual([]);
       expect(await list(reader, personal)).toEqual([]);
     }
+
+    await app.spaces.update(owner, personal, { publicRead: true });
+    const personalViews = ids(grantedOld, linkedChild, linked, own, grantedNew);
+    expect(await list(grantee, personal)).toEqual(personalViews);
+    const onePage = await app.views.listHtmlViews(grantee, { limit: 10, cursor: undefined, spaceId: personal });
+    expect(onePage.items.map((item) => item.resource.id).sort()).toEqual(personalViews);
   });
 });

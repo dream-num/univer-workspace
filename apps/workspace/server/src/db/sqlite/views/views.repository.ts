@@ -87,7 +87,7 @@ export class SqliteViewsRepository implements ViewsRepository {
            ${spaceMemberJoin}
            CROSS JOIN nodes AS space_node ON space_node.space_id = spaces.id
            WHERE ${visibleSpaceSql} ${mySpaces}
-           UNION ALL
+           UNION
            SELECT id FROM granted
          )
          SELECT resource.id AS resource_id, node.updated_at
