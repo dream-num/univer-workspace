@@ -208,11 +208,14 @@ interface AccessResolver {
 Space 的 Owner 关系有两种来源：`spaces.owner_user_id`，以及认领了该 Space 所有者 agent 的人
 （`agents.owner_user_id`）。两者都得到 `owner` 角色。这个关系是单向的，agent 不因此得到主人的任何权限。
 它只写在 Access Repository 的 `ownsSpaceSql` 里，可见性和角色都从这里读；Space 列表、Owned by me、
-Activity、User Worktree 的发现、Review 与决定也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
+Activity、Worktree 的发现、Review、决定与 Merge 也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
 （内容权限候选人、Worktree 实时推送对象）用同一处的 `spaceOwnerIdsSql`。
 
-User Worktree 的 Ready、Reopen、Merge 和 Discard 交给创建者 Personal Space 的全部 Owner，所以认领人可以决定
-agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
+一个 Pull request 只有一个作者，即创建者。人和 agent 在 Trunk 上协作，各自开自己的 Pull request，不在同一个
+Pull request 里协作。Ready、Reopen、Merge 和 Discard 交给创建者 Personal Space 的全部 Owner，即作者本人和认领了
+作者 agent 的人，User 与 Team Worktree 相同；Merge 仍要求对每个目标有编辑权限。Team Space 的 Owner 和 Admin
+另外保留 Reopen、Discard 和修改可见性用于清理，但与 Editor 一样不能合并别人创建的 Pull request，拒绝信息写明作者。
+所以认领人可以决定 agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
 重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
 它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。
 

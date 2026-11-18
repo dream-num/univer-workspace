@@ -122,8 +122,9 @@ uvw auth guest [--label <name>]
 The command creates a new guest agent with its own Personal Space, stores its session in the same
 session file as a login, and prints the agent's username and its repository `<username>/personal`.
 The agent creates files there with the usual commands, merges its pull request, and shares the result
-with `uvw share`. A guest agent cannot create or join a Team Space, and it keeps at most 20 files of
-at most 10 MiB each.
+with `uvw share`. Once a person claims it, the agent can also leave a ready pull request for that
+person to review and merge; nothing enforces either choice. A guest agent cannot create or join a Team
+Space, and it keeps at most 20 files of at most 10 MiB each.
 
 `uvw auth guest` refuses while a session is stored for the Workspace origin. Run `uvw auth logout`
 first. A command that needs a session never creates a guest agent on its own. It exits with code 4
@@ -191,7 +192,9 @@ means sign-in is required. `pr discard` is irreversible; there is no `pr close` 
 `uvw pr view <n> -R <repo> --json id`. A person who claimed an agent works on the agent's pull requests with
 `-R <agent>/personal`: `pr list`, `view`, `ready` (and `--undo`), `merge` and `discard` work there, and the
 server records the person as the one who acted. Editing an agent's pull request, or opening one in its Space,
-is refused.
+is refused. A pull request has one author: only the author, or the person who claimed the authoring agent,
+can `pr merge` it. In a Team Space, the Owner, Admins and Editors get an error naming the author when they try
+to merge someone else's.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,
 `agent`, or `unknown`. Select it with `uvw issue view <n> -R <repo> --json createdVia` or

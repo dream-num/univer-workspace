@@ -710,7 +710,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     expect(digest).toMatchInlineSnapshot(`"8b3bf08751946189d2a5bd8e0355056d28ee3120d3de6a86622265594634c86f"`);
   });
 
-  it("tells an agent to merge and share, and a person to review, in the server instructions", async () => {
+  it("tells an agent to merge and share, a claimed one when to hand over to its owner instead, and a person to review", async () => {
     const instructions = async (suffix = "") => (await connect({ pin: "2026-07-28" }, suffix)).getInstructions()!;
     const review = "Give the user the pull request link so they can review it.";
     const leave = "Leave merging and discarding to the user in the browser, unless they explicitly ask you to do it.";
@@ -742,6 +742,22 @@ describe("gateway over real HTTP and the MCP client", () => {
     const filesOnly = await instructions("?toolsets=files");
     expect(filesOnly).toContain(leave);
     expect(filesOnly).not.toContain("agent identity");
+
+    principal = { kind: "agent", claimed: true };
+    const claimed = await instructions();
+    expect(claimed).toContain(
+      "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person",
+    );
+    expect(claimed).toContain(
+      "7) Once the result is verified, mark the pull request ready with pr_ready. 8) If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser. 9) Otherwise, merge it with pr_merge. 10) Call share with node set to the merged file's nodeId",
+    );
+    expect(claimed).toContain(limits);
+    for (const sentence of ["nobody else reviews or merges", review, leave, "Only mark the pull request ready with pr_ready when"]) {
+      expect(claimed).not.toContain(sentence);
+    }
+    const claimedAdminOnly = await instructions("?toolsets=admin");
+    expect(claimedAdminOnly).toContain("they merge it in the browser. 4) Otherwise, merge it with pr_merge.");
+    expect(claimedAdminOnly).not.toContain("pr_ready");
   });
 
   it("checks Host, Origin, bearer, session, and toolsets in that order", async () => {

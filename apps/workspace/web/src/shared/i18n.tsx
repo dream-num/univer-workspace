@@ -606,6 +606,7 @@ export const messages = {
     trunkAdvancedPreviewReady: "正式版本已有新更新，系统已自动合并并生成预览。请确认合入结果。",
     mergeConflictTip: "正式版本与 AI 修改版本存在无法自动解决的冲突，暂时不能合入。",
     mergeConflictBlocksMerge: "请先处理无法自动解决的合入冲突。",
+    onlyAuthorMerges: "只有作者 {name} 可以合并这个 Pull request。",
     mergePreviewCheckFailed: "暂时无法检查正式版本是否领先，请稍后重试。",
     checkingMergePreview: "正在检查正式版本更新…",
     readOnlyPreview: "只读预览",
@@ -1509,6 +1510,7 @@ export const messages = {
     mergeConflictTip:
       "The official version and AI changes have conflicts that cannot be resolved automatically. Merge is currently unavailable.",
     mergeConflictBlocksMerge: "Resolve the merge conflicts before merging.",
+    onlyAuthorMerges: "Only the author, {name}, can merge this pull request.",
     mergePreviewCheckFailed:
       "Could not check whether the official version is ahead. Try again later.",
     checkingMergePreview: "Checking the official version for updates…",

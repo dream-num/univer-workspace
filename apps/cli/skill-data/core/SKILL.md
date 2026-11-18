@@ -483,11 +483,17 @@ irreversible. There is no `pr close` or `pr reopen`; to take a `ready` pull requ
 `pr ready <n> --undo`. A later
 same-task correction follows the rework flow above.
 
+A pull request has one author. People and agents collaborate on trunk, each through their own pull
+requests; only the author, or the person who claimed the authoring agent, can merge one. `pr merge`
+on someone else's pull request fails with a message naming its author.
+
 ### Hand off as a guest agent
 
-The user cannot open a guest agent's pull request, so a guest agent finishes the task itself. After
-step 4, merge the pull request, turn on Link Sharing for the file, and return the link instead of
-the review URL:
+Until a person claims it, nobody else can open a guest agent's pull request, so a guest agent
+finishes the task itself. A claimed one (`uvw auth status --json` shows `"claimed": true`) hands
+off as above instead when the person who claimed it asked to review the work or the change needs
+a person's decision; that person merges it. Otherwise, after step 4, merge the pull request, turn
+on Link Sharing for the file, and return the link instead of the review URL:
 
 ```bash
 uvw pr merge <n> -R <username>/personal --json
@@ -529,7 +535,7 @@ repository; there is no stored default repository.
 | Verify                    | `inspect`, `screenshot`                                                                              |
 | Deliver output            | `export`, `print-pdf`                                                                                |
 | Hand off                  | `pr ready`, `browse <n> --unit <id>`                                                                 |
-| User-authorized lifecycle | `pr merge`, `pr discard` (irreversible)                                                              |
+| User-authorized lifecycle | `pr merge` (the author, or the person who claimed it), `pr discard` (irreversible)                   |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (a guest agent shares its own result)   |
 | Let the user keep files   | `claim` (an unclaimed guest agent only; the link works once, for 10 minutes)                         |
 | User-authorized cleanup   | `space node trash`                                                                                   |

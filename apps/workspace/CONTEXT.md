@@ -134,7 +134,10 @@ The current shared state of a Unit outside any Worktree.
 _Avoid_: Main branch, production
 
 **Worktree**:
-A user-created container for isolated draft changes to one or more Units.
+A user-created container for isolated draft changes to one or more Units. It has
+exactly one author, its creator. People and agents collaborate on Trunk, each in
+their own Worktrees, not inside one Worktree. Only the author, or the human who
+claimed the authoring agent, merges it.
 _Avoid_: Task, branch
 
 **User Worktree**:
@@ -146,8 +149,9 @@ _Avoid_: User-space Worktree, Personal Worktree
 
 **Team Worktree**:
 A Worktree belonging to one Team Space whose visibility may be creator-private
-or shared with current Space Members. Space Owners and Admins may manage a
-private Team Worktree without gaining access to its draft content.
+or shared with current Space Members. Space Owners and Admins may reopen,
+discard or change the visibility of a Team Worktree, without gaining access to
+the draft content of a private one, but do not merge one someone else created.
 _Avoid_: Space-scoped Worktree, Team branch
 
 **Worktree Unit**:

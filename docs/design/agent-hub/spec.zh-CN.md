@@ -116,7 +116,8 @@
   - 服务端返回 `INTERACTIVE_SESSION_REQUIRED` 时，工具错误说明“请用户在浏览器里分享”。阶段 3 改成返回 `confirmUrl`。
   - 工具描述里用 drop 指代分享出去的文件。
 - `read`、`find`、`inspect`、`outline`、`screenshot` 的 `unit` 参数接受分享链接，配合 `trunk: true`。
-- `buildServerInstructions` 多一个 agent 变体。主体是 agent 时，“把合并留给用户”和“把 PR 链接交给用户”两句换成“验证后用 `pr_merge` 合并，再用 `share` 取得链接交给用户”。
+- `buildServerInstructions` 多一个 agent 变体。主体是 agent 时，“把合并留给用户”和“把 PR 链接交给用户”两句换成“验证后用 `pr_merge` 合并，再用 `share` 取得链接交给用户”。已认领 agent 视情况二选一：认领人要求评审或改动需要人来决定时，标记 ready、把 PR 链接交给认领人并停下，由认领人合入；否则照样自己合入并分享。系统不强制任何一种。
+- 一个 PR 只有一个作者，即创建者；人和 agent 在 Trunk 上协作，各自开自己的 PR。只有作者，或认领了作者 agent 的人，能合入它。
 - 同步 `apps/mcp/skills/core` 的 Skill 文本。
 
 **F1.10 CLI。**

@@ -11,11 +11,15 @@ const state = vi.hoisted(() => ({
   success: vi.fn(),
   error: vi.fn(),
   info: vi.fn(),
+  me: "user-2" as string | null,
 }));
 
 vi.mock("@tanstack/react-query", () => ({
   useQueries: () => [],
-  useQuery: () => ({}),
+  useQuery: (options: { queryKey?: readonly unknown[] }) =>
+    options.queryKey?.[0] === "session" && state.me
+      ? { data: { authenticated: true, user: { id: state.me } } }
+      : {},
   useQueryClient: () => ({ invalidateQueries: state.invalidate }),
   useMutation: (config: {
     mutationFn: (value: unknown) => Promise<unknown>;
@@ -34,6 +38,7 @@ vi.mock("@tanstack/react-query", () => ({
   }),
 }));
 vi.mock("../../shared/api/client", () => ({ api: { POST: state.post } }));
+vi.mock("../auth", () => ({ sessionQueryOptions: { queryKey: ["session"] } }));
 vi.mock("../../shared/i18n", () => ({
   useI18n: () => ({ language: "en-US", t: (key: string) => key }),
 }));
@@ -101,10 +106,30 @@ function worktree(reopen: boolean): Worktree {
 
 beforeEach(() => {
   state.pending = false;
+  state.me = "user-2";
   state.clicks.clear();
   vi.clearAllMocks();
   state.post.mockResolvedValue({ data: { worktree: { state: "draft" } } });
   state.invalidate.mockResolvedValue(undefined);
+});
+
+describe("Worktree merge", () => {
+  it("tells a Team member who cannot merge a ready pull request that only its author can", () => {
+    const team = (merge: boolean): Worktree => ({
+      ...worktree(false),
+      kind: "team",
+      capabilities: { ...worktree(false).capabilities, merge },
+    });
+    const line = (value: Worktree) =>
+      renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value })).includes("onlyAuthorMerges");
+    expect(line(team(false))).toBe(true);
+    expect(line(team(true))).toBe(false);
+    expect(line(worktree(false))).toBe(false);
+    state.me = "user-1";
+    expect(line(team(false)), "an author who lost edit access is not told to ask themself").toBe(false);
+    state.me = null;
+    expect(line(team(false)), "nothing until the session is known").toBe(false);
+  });
 });
 
 describe("Worktree continue editing", () => {

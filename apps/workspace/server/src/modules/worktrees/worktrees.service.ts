@@ -32,7 +32,7 @@ import type {
   WorktreeUnit,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { forbidden, notFound } from "./worktrees.errors.js";
+import { forbidden, notFound, onlyAuthorMerges } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -709,6 +709,7 @@ export function createWorktreesModule(options: {
       }
       const resumeMerged = existing !== null && value.state === "merged";
       const resumeMerging = existing !== null && value.state === "merging";
+      if (!value.row.actor_owns_creator_space) throw onlyAuthorMerges(value.row);
       if (
         !value.capabilities.merge &&
         !((resumeMerged || resumeMerging) && canMergeAsActor(userId, value.row))
@@ -894,14 +895,13 @@ async function worktreeCapabilities(
   readonly canSeeUnits: boolean;
 }> {
   const creator = row.creator_user_id === userId;
+  const ownsAuthorSpace = Boolean(row.actor_owns_creator_space);
   const teamRole =
     row.team_owner_user_id === userId
       ? "owner"
       : row.actor_member_role;
   const visibleReview =
-    row.kind === "user"
-      ? Boolean(row.actor_owns_creator_space)
-      : creator || (row.visibility === "space" && teamRole !== null);
+    ownsAuthorSpace || (row.kind === "team" && row.visibility === "space" && teamRole !== null);
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
   // Share resource lookups only within this capability calculation for one actor.
   const capabilityAccess = cacheResourceContent(access, userId);
@@ -916,18 +916,13 @@ async function worktreeCapabilities(
     if (!unitRead && !unitEdit) break;
   }
   const review = visibleReview && unitRead;
-  const creatorCanEdit =
-    creator &&
-    (row.kind === "user" ||
-      teamRole === "owner" ||
-      teamRole === "admin" ||
-      teamRole === "editor") &&
-    unitEdit;
+  const lands = canMergeAsActor(userId, row) && unitEdit;
+  const creatorCanEdit = creator && lands;
   const admin =
     row.kind === "team" &&
     (teamRole === "owner" || teamRole === "admin");
   // A claimer owns the agent's Space, so decides the agent's pull requests; only the creator edits them.
-  const decides = row.kind === "user" ? Boolean(row.actor_owns_creator_space) : creator || admin;
+  const decides = ownsAuthorSpace || admin;
   return {
     canSeeUnits: review,
     capabilities: {
@@ -935,17 +930,18 @@ async function worktreeCapabilities(
       editDraft: state === "draft" && creatorCanEdit,
       addUnit: state === "draft" && creatorCanEdit,
       changeVisibility: row.kind === "team" && (creator || admin),
-      markReady: state === "draft" && (row.kind === "user" ? decides && unitEdit : creatorCanEdit),
+      markReady: state === "draft" && lands,
       reopen: state === "ready" && decides,
-      merge: state === "ready" && unitEdit && canMergeAsActor(userId, row),
+      merge: state === "ready" && lands,
       discard: (state === "draft" || state === "ready") && decides,
     },
   };
 }
 
 function canMergeAsActor(userId: string, row: WorktreeRow): boolean {
-  if (row.kind === "user") return Boolean(row.actor_owns_creator_space);
+  if (row.creator_user_id !== userId) return Boolean(row.actor_owns_creator_space);
   return (
+    row.kind === "user" ||
     row.team_owner_user_id === userId ||
     row.actor_member_role === "admin" ||
     row.actor_member_role === "editor"
@@ -1058,8 +1054,8 @@ async function validateTarget(
 }
 
 function isDiscoverable(userId: string, row: WorktreeRow): boolean {
-  if (row.kind === "user") return Boolean(row.actor_owns_creator_space);
-  if (row.creator_user_id === userId) return true;
+  if (row.actor_owns_creator_space) return true;
+  if (row.kind === "user") return false;
   const teamRole =
     row.team_owner_user_id === userId
       ? "owner"

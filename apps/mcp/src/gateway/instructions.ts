@@ -12,8 +12,9 @@ export function buildServerInstructions(
 ): string {
   const visible = new Set(selected.map((tool) => tool.name));
   const has = (name: string) => visible.has(name);
-  // An agent owns its Personal Space and has no reviewer, so it finishes its own pull requests.
+  // An unclaimed agent has no reviewer, so it finishes its own pull requests; a claimed one may hand one to its owner.
   const agentFinishes = principal !== "human" && has("pr_merge");
+  const claimed = principal === "agent_claimed";
   const find = ["space_find", "space_browse"].filter(has);
   const workflow = [
     ...(find.length ? [`Find the file with ${find.join(" or ")}.`] : []),
@@ -28,7 +29,17 @@ export function buildServerInstructions(
     "Read the result back to verify it before you report success.",
     ...(agentFinishes
       ? [
-          `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
+          ...(claimed
+            ? [
+                ...(has("pr_ready")
+                  ? ["Once the result is verified, mark the pull request ready with pr_ready."]
+                  : []),
+                "If the person who claimed this agent asked to review the work, or the change needs a person's decision, give them the pull request link and stop there; they merge it in the browser.",
+                "Otherwise, merge it with pr_merge.",
+              ]
+            : [
+                `Once the result is verified, ${has("pr_ready") ? "mark the pull request ready with pr_ready, then " : ""}merge it with pr_merge.`,
+              ]),
           ...(has("share")
             ? [
                 "Call share with node set to the merged file's nodeId and link set to viewer, then give the returned url to the user.",
@@ -50,7 +61,9 @@ export function buildServerInstructions(
     "This server operates a Univer Workspace on behalf of the signed-in user. Every change to Unit files goes through a pull request (a Worktree), never straight into the shared files.",
     ...(agentFinishes
       ? [
-          "This connection is an agent identity that works in its own Personal Space, where nobody else reviews or merges. Finish your own pull requests as the workflow says, even where a tool description or a Skill leaves readiness, merging or the link to the user.",
+          claimed
+            ? "This connection is an agent identity that a person has claimed. Merge your own pull request, or hand it to that person, as the workflow says, even where a tool description or a Skill leaves readiness, merging or the link to the user."
+            : "This connection is an agent identity that works in its own Personal Space, where nobody else reviews or merges. Finish your own pull requests as the workflow says, even where a tool description or a Skill leaves readiness, merging or the link to the user.",
         ]
       : []),
     ...(executorRestricted

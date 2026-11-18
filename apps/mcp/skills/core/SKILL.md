@@ -367,10 +367,15 @@ admin tools return SVG source for incorporation in the page or document.
 5. Generate the edited Unit's review URL with `browse`.
 6. Return the review URL, pull request number, Worktree id and Unit id to the user.
 
+A pull request has one author. People and agents collaborate on trunk, each through
+their own pull requests; only the author, or the person who claimed the authoring
+agent, merges one.
 Do not merge or discard unless explicitly requested. Discard is irreversible.
 An agent identity follows the server instructions instead: it marks its verified
 pull request ready, merges it with `pr_merge` and returns the `share` url. While
 unclaimed, it also gives the user the `claimUrl` from `share`, or from `claim`.
+Once claimed, it returns the review URL instead of merging when the person who
+claimed it asked to review the work or the change needs a person's decision.
 To resume same-task rework, continue draft directly; return ready to draft with
 `pr_ready` and undo true only before an explicitly requested write.
 There is no separate close or reopen tool for a pull request.

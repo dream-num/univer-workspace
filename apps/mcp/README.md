@@ -40,7 +40,11 @@ Instructions follow each connection's visible tools and direct callers to `?tool
 file capabilities outside their selected toolsets.
 They also follow the principal kind. A person is told to hand over the pull request link and leave merging to the user.
 An agent that has `pr_merge` in its list is told to mark the verified pull request ready, merge it, call `share` and give
-that link to the user. The core Skill is one text for both and defers to these instructions for an agent identity.
+that link to the user. A claimed agent is told to give the pull request link to the person who claimed it instead, and stop,
+when that person asked to review the work or the change needs a person's decision; nothing enforces either choice.
+The core Skill is one text for both and defers to these instructions for an agent identity.
+A pull request has one author; only the author, or the person who claimed the authoring agent, can merge it. A Team member
+who calls `pr_merge` on someone else's gets `FORBIDDEN` with a message naming the author.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
 A person's tool list and instructions stay byte for byte what they were before claiming existed.
 
@@ -361,7 +365,7 @@ uncached warning. Modelling runs on the executor's main thread (issue #369).
 | `label_list` | Required `repo` | `{ labels: [...] }` with `openIssueCount` |
 | `label_write` | Required `repo`, `action` (`create`, `edit`, `delete`), `name`; `color` for create; optional `new_name`, `color`, `description` | Label, or `{ deleted }` |
 | `space_node` | Required `action` (`create`, `rename`, `move`, `trash`); `repo` and `name` for create, `node` for the rest, `name` for rename, exactly one of `parent` and `root` for move | `{ node }`, or `{ trashBatch }` for trash. Takes effect immediately |
-| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only when the user asked, or by an agent for its own work |
+| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Only the author, or the person who claimed the authoring agent. Only when the user asked, or by an agent for its own work |
 | `pr_discard` | Required `repo`, `number` | Worktree, now `discarded`. Cannot be undone. Only when the user asked |
 | `resources_registries` | None | `{ registries: [{ id, resourceCount, groupCount, tagCount, colorEditableCount }] }` |
 | `resources_find` | Required `query`; optional `registry`, `limit` (default 30) | `{ query: { queries, registries }, resources: [...], total, limit }`, equal to `uvw resources find --json` |
