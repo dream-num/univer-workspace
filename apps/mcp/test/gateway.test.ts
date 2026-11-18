@@ -700,11 +700,17 @@ describe("gateway over real HTTP and the MCP client", () => {
     ]);
   });
 
-  it("gives a person the same tools and instructions as before agents could be claimed", async () => {
+  it("gives a person the same tools and instructions as before agents could be claimed, apart from share's access", async () => {
     const surface = [];
     for (const suffix of ["", "?toolsets=files", "?toolsets=admin", "?toolsets=all"]) {
       const client = await connect({ pin: "2026-07-28" }, suffix);
-      surface.push({ suffix, instructions: client.getInstructions(), tools: (await client.listTools()).tools });
+      const tools = (await client.listTools()).tools.map((tool) => {
+        if (tool.name !== "share") return tool;
+        const { access, ...properties } = tool.outputSchema!.properties as Record<string, unknown>;
+        expect(access).toEqual({ type: "string" });
+        return { ...tool, outputSchema: { ...tool.outputSchema!, properties } };
+      });
+      surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
     expect(digest).toMatchInlineSnapshot(`"8b3bf08751946189d2a5bd8e0355056d28ee3120d3de6a86622265594634c86f"`);

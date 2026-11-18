@@ -1,4 +1,4 @@
-import { parseNodeReference, SHARE_LINKS, shareNode } from "@univerjs/univer-workspace-client-core/product";
+import { formatShare, parseNodeReference, SHARE_LINKS, shareNode } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { writeAnnotations, type ToolDefinition } from "../definition.js";
 import { spaceFeature } from "./pr-support.js";
@@ -24,6 +24,7 @@ export const shareOutputSchema = z.object({
     claimed: z.boolean().optional(),
   }),
   expiresAt: z.string().optional(),
+  access: z.string().optional(),
 });
 export const shareTool: ToolDefinition = {
   name: "share",
@@ -39,11 +40,16 @@ export const shareTool: ToolDefinition = {
   async run(context, args) {
     const { node, link } = inputSchema.parse(args);
     const nodeId = parseNodeReference(node, context.identityOrigin);
+    const shared = await shareNode(spaceFeature(context), context.identityOrigin, {
+      node: nodeId,
+      ...(link === undefined ? {} : { link }),
+      caller: context.user,
+      // A person reaches the gateway with a token session, which cannot change Link Sharing.
+      ...(context.user.kind === "agent" ? { turnOn: `call share with node ${nodeId} and link viewer` } : {}),
+    });
     return {
-      output: await shareNode(spaceFeature(context), context.identityOrigin, {
-        node: nodeId,
-        ...(link === undefined ? {} : { link }),
-      }),
+      output: shared,
+      text: formatShare(shared),
       repo: null,
       nodeId,
     };

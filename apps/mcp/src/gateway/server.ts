@@ -224,7 +224,7 @@ export function createGateway(
                             "text" in structuredContent &&
                             typeof structuredContent.text === "string"
                           ? structuredContent.text
-                          : `${tool.name} completed.`,
+                          : (result.text ?? `${tool.name} completed.`),
                 },
                 ...delivered.content,
               ],
