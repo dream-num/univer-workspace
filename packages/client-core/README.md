@@ -13,7 +13,8 @@
 - 提供仓库引用解析（`owner/slug`、`owner/personal`、可列出仓库中唯一匹配的裸 slug、Space ID、Browser URL）与 `#N` 编号参数解析；
   服务端不支持时返回 `workspace-server-capability-missing`。
 - 提供文件链接（`<origin>/nodes/<nodeId>`）与 Node ID 的解析，以及读取和设置 Link Sharing 的 `shareNode` workflow；
-  CLI 与 MCP 共用这一实现。
+  结果的 `access` 说明谁能打开链接，链接关闭时再给出调用方能走的下一步，措辞按 Client 传入的会话主体（agent 或人）而定，
+  不按文件 owner。`formatShare` 把结果排成 Client 打印的文本。CLI 与 MCP 共用这一实现。
 - 提供 Worktree lifecycle、Worktree Unit membership 与 review URL workflow。
 - 提供 Blob/Asset 协议、bounded recovery，以及同进程 local Node filesystem 的原子文件传输。
 - 提供 runtime target、Worktree/Trunk source resolution、Snapshot read adapter 与 referenced-Unit policy。
