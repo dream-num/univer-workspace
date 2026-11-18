@@ -79,6 +79,9 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   const reader = await register("reader", `/nodes/${node.id}?view=immersive`);
   await register("consenting", "/api/auth/authorize/consent?client_id=cli");
   await register("direct");
+  const claimPage = `${origin}/claim/c0de-in-path`;
+  const claimer = await post("/api/auth/password/register", { username: "claimer", displayName: "claimer", password: "correct horse battery staple" }, { referer: claimPage });
+  expect(claimer.status).toBe(201);
   const emailSignup = async (email: string, referer?: string) => {
     expect((await post("/api/auth/email/code", { email })).status).toBe(202);
     const code = /\b(\d{6})\b/u.exec(emails.at(-1)!.text)![1]!;
@@ -86,6 +89,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   };
   await emailSignup("shared@example.com", `${origin}/login?returnTo=${encodeURIComponent(`/nodes/${node.id}`)}`);
   await emailSignup("direct@example.com");
+  await emailSignup("claimer@example.com", claimPage);
   const oauthSignup = async (returnTo: string) => {
     const started = await fetch(`${origin}/api/auth/github/login?returnTo=${encodeURIComponent(returnTo)}`, { redirect: "manual" });
     const state = new URL(started.headers.get("location")!).searchParams.get("state")!;
@@ -97,6 +101,7 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
   };
   await oauthSignup(`/nodes/${node.id}`);
   await oauthSignup("/api/auth/authorize?client_id=cli");
+  await oauthSignup("/claim/c0de-in-path");
 
   // Share pages are counted beside the response, so wait for the counts to land.
   const after = await vi.waitFor(async () => {
@@ -118,10 +123,13 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     signupsFromShareLink: added('workspace_signups_total{method="password",source="share_link"}'),
     signupsFromConsent: added('workspace_signups_total{method="password",source="oauth_consent"}'),
     signupsDirect: added('workspace_signups_total{method="password",source="direct"}'),
+    signupsFromClaimLink: added('workspace_signups_total{method="password",source="claim_link"}'),
     emailFromShareLink: added('workspace_signups_total{method="email",source="share_link"}'),
     emailDirect: added('workspace_signups_total{method="email",source="direct"}'),
+    emailFromClaimLink: added('workspace_signups_total{method="email",source="claim_link"}'),
     oauthFromShareLink: added('workspace_signups_total{method="github",source="share_link"}'),
     oauthFromConsent: added('workspace_signups_total{method="github",source="oauth_consent"}'),
+    oauthFromClaimLink: added('workspace_signups_total{method="github",source="claim_link"}'),
   }).toEqual({
     agentsFromApi: 1,
     agentsFromGuestCard: 1,
@@ -131,12 +139,15 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     signupsFromShareLink: 1,
     signupsFromConsent: 1,
     signupsDirect: 1,
+    signupsFromClaimLink: 1,
     emailFromShareLink: 1,
     emailDirect: 1,
+    emailFromClaimLink: 1,
     oauthFromShareLink: 1,
     oauthFromConsent: 1,
+    oauthFromClaimLink: 1,
   });
-  for (const identifying of [node.id, agentId, reader, "Slackbot"]) expect(after).not.toContain(identifying);
+  for (const identifying of [node.id, agentId, reader, "Slackbot", "c0de-in-path"]) expect(after).not.toContain(identifying);
 
   const logged = events.mock.calls.map(([line]) => line as Record<string, unknown>)
     .filter((line) => typeof line.event === "string" && line.event.startsWith("workspace."));
@@ -150,6 +161,10 @@ it("counts each step of the loop and keeps IDs and User-Agents out of the labels
     event: "workspace.link_sharing", state: "off", node_id: node.id, user_id: agentId,
   }));
   expect(logged.filter((line) => line.event === "workspace.guest_agent")).toHaveLength(2);
+  const claimSignups = logged.filter((line) => line.event === "workspace.signup" && line.source === "claim_link");
+  expect(claimSignups).toHaveLength(3);
+  expect(claimSignups.every((line) => line.node_id === null)).toBe(true);
+  expect(JSON.stringify(logged)).not.toContain("c0de-in-path");
 });
 
 function value(metrics: string, series: string): number {

@@ -397,10 +397,11 @@ low-cardinality. Node IDs, user IDs and User-Agents appear only in the log line 
 | `workspace_guest_agents_created_total` | A guest agent created | `entry` (`api_agents` for `POST /api/agents`, `auth_guest` for `POST /api/auth/guest`) |
 
 `owner_category` is `human`, `agent_claimed` or `agent_unclaimed`: the owner of the file's Space.
-`source` is `share_link` when the sign-up returns to `/nodes/…`, `oauth_consent` when it returns
-to `/api/auth/authorize…`, and `direct` otherwise. OAuth sign-ups carry `returnTo` through the
-provider. Password and email sign-ups read it from the `/login?returnTo=…` page in the request's
-`Referer`.
+`source` is `share_link` when the sign-up returns to `/nodes/…`, `claim_link` when it returns to a
+claim page `/claim/…`, `oauth_consent` when it returns to `/api/auth/authorize…`, and `direct`
+otherwise. OAuth sign-ups carry `returnTo` through the provider. Password and email sign-ups read it
+from the request's `Referer`: the `returnTo` of the `/login?returnTo=…` page, or the page itself when
+it has its own sign-in form, as the claim page does. The claim code is never logged.
 
 Each count writes one `info` line with `event`, `schema_version` (`1`), `ts`, the labels and
 these fields:
