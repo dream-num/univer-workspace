@@ -623,3 +623,18 @@ test("safe transport diagnostics identify stage and code without echoing tokens,
   }
   await assert.rejects(preparePromotion({...f,fetcher:async()=>new Response(env.INSIDER_TOKEN,{status:403})}),e=>!e.message.includes(env.INSIDER_TOKEN)&&e.message.includes("HTTP 403"));
 });
+
+test("HTTP 200 invalid JSON never echoes sensitive response prefixes", async (t) => {
+  const secret="synthetic-sensitive-example";
+  for (const stage of ["dry-run", "packument"]) {
+    const f=await fixture(t);
+    await assert.rejects(preparePromotion({...f,fetcher:async(url,opts)=>
+      (stage==="dry-run"&&String(url).includes("promotions?"))||(stage==="packument"&&String(url)===`${INSIDER}${PACKAGE}`)
+        ?new Response(secret):f.fetcher(url,opts)
+    }),e=>{assert.match(e.message,/Insider .*: invalid JSON response/u);assert.ok(!e.message.includes("synthetic"));return true});
+    await assert.rejects(readFile(join(f.directory,"promotion.json")),/ENOENT/u);
+  }
+  const f=await prepared(t);
+  await assert.rejects(publishPromotion({...f,fetcher:async()=>new Response(secret)}),e=>e.message==="Public readback: invalid JSON response");
+  assert.deepEqual(f.state.writes,[]);
+});

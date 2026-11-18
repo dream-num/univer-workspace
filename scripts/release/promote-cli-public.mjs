@@ -94,6 +94,11 @@ async function response(url, options, fetcher, stage = "Registry request") {
   return result;
 }
 
+async function responseJson(result, stage) {
+  try { return await result.json(); }
+  catch { throw new Error(`${stage}: invalid JSON response`); }
+}
+
 // This is the deployment's public artifact store, not an arbitrary URL from metadata.
 // A storage-origin change requires review; do not follow it automatically.
 const ARTIFACT_ORIGIN = "https://insider-npm.oss-cn-shenzhen.aliyuncs.com";
@@ -168,7 +173,7 @@ export async function preparePromotion({
   await mkdir(directory, { recursive: true });
   // Remove stale output first: a failed preparation must never leave a publishable record.
   await rm(join(directory, RECORD), { force: true });
-  const plan = await (
+  const plan = await responseJson(
     await response(
       `${INSIDER}-/insider/v1/promotions?wait=true&dryRun=true`,
       {
@@ -181,12 +186,14 @@ export async function preparePromotion({
       },
       fetcher,
       "Insider Promotion dry-run",
-    )
-  ).json();
+    ),
+    "Insider Promotion dry-run",
+  );
   assertPlan(plan, packageName, version);
-  const packument = await (
-    await response(packageUrl(INSIDER, packageName), {}, fetcher, "Insider packument")
-  ).json();
+  const packument = await responseJson(
+    await response(packageUrl(INSIDER, packageName), {}, fetcher, "Insider packument"),
+    "Insider packument",
+  );
   const metadata = Object.hasOwn(packument.versions ?? {}, version) ? packument.versions[version] : undefined;
   if (packument.name !== packageName || metadata?.name !== packageName || metadata.version !== version) {
     throw new Error("Insider metadata does not match the selected version.");
@@ -293,7 +300,7 @@ async function publicVersion(packageName, version, fetcher) {
   });
   if (result.status === 404) return undefined;
   if (!result.ok) throw new Error(`Public version readback failed (${result.status}).`);
-  return result.json();
+  return responseJson(result, "Public readback");
 }
 
 async function publicTags(packageName, fetcher) {
