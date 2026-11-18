@@ -708,13 +708,15 @@ export function createWorktreesModule(options: {
         if (input.worktreeId !== worktreeId) throw idempotencyConflict();
       }
       const resumeMerged = value.state === "merged";
+      const unfinished = value.row.processed_at === null && (value.state === "merging" || resumeMerged);
       // A started merge is a decision already made, so its starter, or anyone who may merge, can finish it.
-      const resumes =
-        (value.state === "merging" || resumeMerged) &&
-        (existing !== null || (value.row.processed_at === null && canMergeAsActor(userId, value.row)));
-      if (!value.capabilities.merge && !resumes) {
+      const finishes = unfinished && (existing !== null || canMergeAsActor(userId, value.row));
+      // An applied merge keeps its recorded merger; only an Operation cut off before anyone was recorded completes.
+      const recordsApplied = resumeMerged && !unfinished && existing !== null &&
+        !(await options.repository.mergers([worktreeId])).has(worktreeId);
+      if (!value.capabilities.merge && existing?.state !== "completed" && !finishes && !recordsApplied) {
         if (!value.row.actor_owns_creator_space) throw onlyAuthorMerges(value.row);
-        if (value.state === "ready") throw mergeNeedsEditAccess();
+        if (value.state === "ready" || unfinished) throw mergeNeedsEditAccess();
         throw forbidden();
       }
       if (existing?.state !== "completed" && value.row.processed_at === null) {
