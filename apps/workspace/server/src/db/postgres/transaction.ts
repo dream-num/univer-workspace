@@ -1,6 +1,8 @@
 import type { Pool, PoolClient } from "pg";
 
-const MAX_ATTEMPTS = 5;
+const MAX_ATTEMPTS = 10;
+const BACKOFF_BASE_MS = 5;
+const BACKOFF_CAP_MS = 250;
 
 /** The callback can be replayed. All its reads and writes must use this client. */
 export async function withPostgresTransaction<T>(
@@ -26,6 +28,9 @@ export async function withPostgresTransaction<T>(
     } finally {
       client.release(discard);
     }
+    // An immediate replay meets the same concurrent transactions and loses again; random waits spread the losers out.
+    const backoffMs = Math.random() * Math.min(BACKOFF_CAP_MS, BACKOFF_BASE_MS * 2 ** attempt);
+    await new Promise((resolve) => setTimeout(resolve, backoffMs));
   }
 }
 
