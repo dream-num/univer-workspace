@@ -174,6 +174,7 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
 - `apps/workspace/docs/data-model.md` 是产品数据模型、状态和持久化语义的权威说明。
 - `apps/workspace/docs/adr` 只记录已经接受的架构决策，不把临时计划写成既成事实。
 - `apps/cli/README.md` 记录 CLI 的用户能力、安装方式与对外交付合同。
+- `docs/releases/cli.md` 记录内部 CLI 构建、校验和发布操作；不把维护者发布流程写入用户 README。
 - Package README 必须明确该 package 的职责、非职责和 consumer 边界。
 
 仅当变更影响 `DREAMNUM.md` 已记录的事实时才更新该文件。其他任务无需读取、重写或顺手整理它。
