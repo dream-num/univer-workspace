@@ -411,8 +411,9 @@ GuestAgentCreate:
         before it creates anything, so a request that authorize would refuse
         creates no agent and does not count toward the creation limit. When
         `label` is blank or omitted and the request names a dynamically
-        registered client with a name, the agent is named after that client:
-        the server reads the name from the registration, cleans it as
+        registered or Client ID Metadata Document client with a name, the
+        agent is named after that client: the server reads the name from the
+        registration or the metadata document, cleans it as
         `PasswordRegistration.displayName` describes, keeps only the local
         part of an email address, cuts it to 40 characters between whole
         graphemes, and appends ` · ` and the username's four-character

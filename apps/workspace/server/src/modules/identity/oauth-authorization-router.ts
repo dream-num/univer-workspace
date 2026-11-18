@@ -482,7 +482,7 @@ export function createGuestAuthorizationCheck(options: {
     }
     const parsed = parseMcpAuthorizationRequest(mcp, client, values);
     if ("errorRedirect" in parsed) throw new ApplicationError("INVALID_INPUT", 400, parsed.message, "oauthAuthorization");
-    return source.kind === "dcr" ? client.clientName : null;
+    return client.clientName;
   };
 }
 

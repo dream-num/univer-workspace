@@ -211,9 +211,10 @@ approves the consent page like any signed-in user. The server first checks that 
 would. One that authorize would refuse, such as a request without a valid `resource`, answers `400` (or
 `503` while a client metadata document cannot be fetched), creates no agent and does not count toward the
 limit. A client metadata document is fetched at this point, before the guest exists, and authorize reuses
-it. When that client registered itself with a name, the
-server reads the name from the registration and names the guest after it, as in `Claude Code · 7f3k`,
-so agents from one client stay distinguishable. Without a named registered client the guest is `agent`.
+it. When that client named itself in its registration or its client metadata document, as Claude Code
+does, the server names the guest after it, as in `Claude Code · 7f3k`, so agents from one client stay
+distinguishable. The name follows the display-name rules: no email address, no control, invisible or
+direction-changing characters, at most 40 characters. Without a client name the guest is `agent`.
 
 While an agent is unclaimed, authenticating it or serving one of its `/nodes/:nodeId` pages moves its
 expiry to 30 days ahead, at most once a day. An expired or banned agent is suspended: only the agent
