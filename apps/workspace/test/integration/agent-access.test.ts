@@ -367,6 +367,38 @@ describe("ceilings", () => {
     // The ceiling grants nothing: the human's file is readable through its link, not shareable.
     expect((await put(origin, `/api/nodes/${nodeId}/link-sharing`, { enabled: true, role: "editor" }, agent.cookie)).status).toBe(403);
   });
+
+  it("requires an interactive session for a human to make a Space public, and lets a token session unpublish and rename", async () => {
+    const { origin } = await start();
+    const human = await register(origin, "owner");
+    const personal = await personalSpaceId(origin, human.cookie);
+    const nodeId = await createFile(origin, human.cookie, "Private sheet");
+    const pat = ((await (await post(origin, "/api/auth/tokens", { name: "mcp" }, { cookie: human.cookie })).json()) as { token: string }).token;
+    const delegated = await tokenSession(origin, pat);
+    const created = await post(origin, "/api/team-spaces", { name: "Team" }, { cookie: delegated });
+    expect(created.status).toBe(201);
+    const team = (await created.json()) as { id: string };
+    const spaces = async () => ((await (await fetch(`${origin}/api/spaces`, { headers: { cookie: human.cookie } })).json()) as { spaces: unknown[] }).spaces;
+    const before = await spaces();
+
+    for (const spaceId of [personal, team.id]) {
+      for (const settings of [{ publicRead: true }, { name: "Published", publicRead: true }]) {
+        await expectRefused(send(origin, "PATCH", `/api/spaces/${spaceId}`, settings, { cookie: delegated }), "INTERACTIVE_SESSION_REQUIRED");
+      }
+    }
+    await expectRefused(post(origin, "/api/team-spaces", { name: "Public team", publicRead: true }, { cookie: delegated }), "INTERACTIVE_SESSION_REQUIRED");
+    expect(await spaces()).toEqual(before);
+    expect(await accessRole(origin, nodeId, undefined)).toBeNull();
+
+    expect((await send(origin, "PATCH", `/api/spaces/${personal}`, { publicRead: true }, { cookie: human.cookie })).status).toBe(200);
+    expect(await accessRole(origin, nodeId, undefined)).toBe("viewer");
+    const unpublished = await send(origin, "PATCH", `/api/spaces/${personal}`, { name: "Renamed", publicRead: false }, { cookie: delegated });
+    expect(unpublished.status).toBe(200);
+    expect(await unpublished.json()).toMatchObject({ name: "Renamed", publicRead: false });
+    expect(await accessRole(origin, nodeId, undefined)).toBeNull();
+    expect((await send(origin, "PATCH", `/api/spaces/${team.id}`, { description: "Notes" }, { cookie: delegated })).status).toBe(200);
+    expect((await post(origin, "/api/team-spaces", { name: "Public team", publicRead: true }, { cookie: human.cookie })).status).toBe(201);
+  });
 });
 
 function claim(application: SqliteTestApplication, agentId: string, ownerId: string): void {
