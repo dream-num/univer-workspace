@@ -392,6 +392,41 @@ for (const { name, open } of backends) {
       expect(await product.repositories.identity.findUserByEmail("alice@example.com")).toBeNull();
     });
   });
+
+  describe.skipIf(!open)(`${name} Email sign-in code requests`, () => {
+    it("emails one code a minute and five an hour to simultaneous requests", async ({ onTestFinished }) => {
+      const product = await open!();
+      onTestFinished(() => product.close());
+      const sent: EmailMessage[] = [];
+      let currentTime = 1_000_000;
+      const identity = createIdentityModule({
+        repository: product.repositories.identity,
+        sessionTtlMs: 60_000,
+        emailSender: { send: async (message) => { sent.push(message); } },
+        now: () => currentTime,
+      });
+      await identity.initialize();
+
+      const bursts = [];
+      const emailed = [];
+      for (let minute = 0; minute < 6; minute += 1) {
+        bursts.push(await Promise.allSettled(
+          Array.from({ length: 30 }, () => identity.requestEmailLoginCode({ email: "alice@example.com" }))
+        ));
+        emailed.push(sent.length);
+        currentTime += 61_000;
+      }
+
+      expect(bursts.map((burst) => burst.filter(({ status }) => status === "fulfilled").length)).toEqual([1, 1, 1, 1, 1, 0]);
+      expect(emailed).toEqual([1, 2, 3, 4, 5, 5]);
+      const rateLimited = (message: string) => ({
+        status: "rejected",
+        reason: expect.objectContaining({ code: "EMAIL_CODE_RATE_LIMITED", status: 429, message: expect.stringContaining(message) }),
+      });
+      expect(bursts[0]!.filter(({ status }) => status === "rejected")).toEqual(Array(29).fill(rateLimited("sent recently")));
+      expect(bursts[5]).toEqual(Array(30).fill(rateLimited("Too many sign-in codes")));
+    });
+  });
 }
 
 async function createHarness(
