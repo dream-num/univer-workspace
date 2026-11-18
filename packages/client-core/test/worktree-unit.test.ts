@@ -192,6 +192,8 @@ describe("Workspace Worktree model and workflow", () => {
     ["ready", "draft", "ready", false],
     ["reopen", "ready", "draft", false],
     ["merge", "ready", "merged", true],
+    ["merge", "merging", "merged", true],
+    ["merge", "merged", "merged", true],
     ["discard", "draft", "discarded", true],
     ["discard", "ready", "discarded", true],
   ] as const)(
@@ -266,8 +268,6 @@ describe("Workspace Worktree model and workflow", () => {
     ["reopen", "merged"],
     ["reopen", "discarded"],
     ["merge", "draft"],
-    ["merge", "merging"],
-    ["merge", "merged"],
     ["merge", "discarded"],
     ["discard", "merging"],
     ["discard", "merged"],
@@ -280,6 +280,49 @@ describe("Workspace Worktree model and workflow", () => {
       code: "workspace-lifecycle-invalid",
     });
     expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
+  it("names the pull request and its state when it refuses a transition", async () => {
+    const draft = worktrees(async () => Response.json({ worktree: { ...rawWorktree("wt-1", "draft"), number: 3 } }));
+    await expect(draft.transition("wt-1", "merge")).rejects.toMatchObject({
+      message: "Cannot merge pull request #3 while it is draft.",
+    });
+  });
+
+  it("says a finished merge is already merged when the server refuses it, and keeps the server's reason for one that stopped", async () => {
+    const refused = (processedAt: string | null) =>
+      worktrees(async (_input, init) =>
+        (init?.method ?? "GET") === "GET"
+          ? Response.json({ worktree: { ...rawWorktree("wt-1", "merged"), number: 3, processedAt } })
+          : Response.json(
+              { error: { code: "FORBIDDEN", message: "Only the author, Ada (@ada), can merge this pull request." } },
+              { status: 403 },
+            ),
+      );
+    await expect(refused("2026-11-18T00:00:00.000Z").transition("wt-1", "merge")).rejects.toMatchObject({
+      code: "workspace-lifecycle-invalid",
+      message: "Pull request #3 is already merged.",
+    });
+    await expect(refused(null).transition("wt-1", "merge")).rejects.toMatchObject({
+      code: "FORBIDDEN",
+      message: "Only the author, Ada (@ada), can merge this pull request.",
+    });
+  });
+
+  it.each([
+    ["merging", null, "workspace-result-unknown"],
+    ["merged", null, "workspace-result-unknown"],
+    ["merged", "2026-11-18T00:00:00.000Z", undefined],
+  ] as const)("confirms a merge whose response was lost only from a %s read-back processed at %s", async (state, processedAt, code) => {
+    let gets = 0;
+    const feature = worktrees(async (_input, init) => {
+      if ((init?.method ?? "GET") === "POST") throw new Error("response lost");
+      gets += 1;
+      return Response.json({ worktree: gets === 1 ? rawWorktree("wt-1", "merging") : { ...rawWorktree("wt-1", state), processedAt } });
+    });
+    const result = feature.transition("wt-1", "merge");
+    if (code === undefined) await expect(result).resolves.toMatchObject({ state: "merged" });
+    else await expect(result).rejects.toMatchObject({ code, detail: { actualState: state } });
   });
 
   it("rejects lifecycle identity/state mismatches without read-back", async () => {
@@ -314,7 +357,9 @@ describe("Workspace Worktree model and workflow", () => {
       }
       getCount += 1;
       return Response.json({
-        worktree: rawWorktree("wt-1", getCount === 1 ? "ready" : "merged"),
+        worktree: getCount === 1
+          ? rawWorktree("wt-1", "ready")
+          : { ...rawWorktree("wt-1", "merged"), processedAt: "2026-11-18T00:00:00.000Z" },
       });
     });
     await expect(confirmed.transition("wt-1", "merge")).resolves.toMatchObject({
