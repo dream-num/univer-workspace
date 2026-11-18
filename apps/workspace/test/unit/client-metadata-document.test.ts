@@ -208,6 +208,23 @@ describe("CIMD cache and fetch limits", () => {
     await expect(resolve(id(), "user")).rejects.toThrow("offline");
     await expect(resolve(id(), "user")).rejects.toThrow("offline");
     expect(fetchDocument).toHaveBeenCalledTimes(7);
+    expect(logger.info).toHaveBeenCalledWith({ event: "oauth.cimd.fetch", client_id: id(), outcome: "temporarily_unavailable", reason: "offline" }, "Client metadata fetch");
+  });
+  it("lets anonymous requesters start at most 8 of the 32 fetches, so signed-in users keep the rest", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((done) => { release = done; });
+    const fetchDocument = vi.fn<FetchClientMetadataDocument>().mockImplementation(async (clientId) => { await gate; return response(clientId); });
+    const resolve = createClientMetadataDocumentResolver({ fetchDocument });
+    const outcome = (promise: Promise<unknown>) => promise.then(() => "fetched", (error: unknown) => error);
+    const anonymous = Array.from({ length: 9 }, (_, i) => outcome(resolve(id(`https://guest.test/${i}`), `guest ${i}`, "anonymous")));
+    const joined = outcome(resolve(id("https://guest.test/0"), "guest 9", "anonymous"));
+    const signedIn = Array.from({ length: 25 }, (_, i) => outcome(resolve(id(`https://user.test/${i}`), `user${i}`)));
+    release();
+    const busy = expect.objectContaining({ temporary: true });
+    expect(await Promise.all(anonymous)).toEqual([...Array<string>(8).fill("fetched"), busy]);
+    expect(await joined).toBe("fetched");
+    expect(await Promise.all(signedIn)).toEqual([...Array<string>(24).fill("fetched"), busy]);
+    expect(await outcome(resolve(id("https://guest.test/8"), "guest 8", "anonymous"))).toBe("fetched");
   });
   it("bounds the cache at 1000, evicting expired documents before the oldest insertion", async () => {
     let now = 0;
