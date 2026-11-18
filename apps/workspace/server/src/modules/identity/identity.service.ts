@@ -557,7 +557,12 @@ export function createIdentityModule(options: {
       if (stored === null) {
         throw invalidEmailCode();
       }
-      if (stored.attempts >= EMAIL_CODE_MAX_ATTEMPTS) {
+      if (
+        !(await repository.reserveEmailLoginCodeAttempt(
+          stored.id,
+          EMAIL_CODE_MAX_ATTEMPTS
+        ))
+      ) {
         await repository.deleteEmailLoginCode(stored.id);
         throw new ApplicationError(
           "INVALID_EMAIL_CODE",
@@ -567,7 +572,6 @@ export function createIdentityModule(options: {
         );
       }
       if (!(await verifyPassword(code, stored.codeHash))) {
-        await repository.incrementEmailLoginCodeAttempts(stored.id);
         throw invalidEmailCode();
       }
       if (!(await repository.consumeEmailLoginCode(stored.id, verifiedAt))) {

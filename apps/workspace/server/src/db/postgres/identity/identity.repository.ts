@@ -598,7 +598,7 @@ export class PostgresIdentityRepository implements IdentityRepository {
   ): Promise<StoredEmailLoginCode | null> {
     const row = await this._database
       .prepare(
-        `SELECT id, code_hash, attempts
+        `SELECT id, code_hash
          FROM email_login_codes
          WHERE lower(email COLLATE "C") = lower(?::text COLLATE "C")
            AND consumed_at IS NULL
@@ -607,17 +607,17 @@ export class PostgresIdentityRepository implements IdentityRepository {
          LIMIT 1`
       )
       .get(email, now) as EmailLoginCodeRow | undefined;
-    return row
-      ? { id: row.id, codeHash: row.code_hash, attempts: row.attempts }
-      : null;
+    return row ? { id: row.id, codeHash: row.code_hash } : null;
   }
 
-  async incrementEmailLoginCodeAttempts(id: string): Promise<void> {
-    await this._database
+  async reserveEmailLoginCodeAttempt(id: string, maxAttempts: number): Promise<boolean> {
+    const result = await this._database
       .prepare(
-        `UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?`
+        `UPDATE email_login_codes SET attempts = attempts + 1
+         WHERE id = ? AND attempts < ?`
       )
-      .run(id);
+      .run(id, maxAttempts);
+    return Number(result.changes) > 0;
   }
 
   async consumeEmailLoginCode(id: string, consumedAt: number): Promise<boolean> {
@@ -762,7 +762,6 @@ interface ExternalIdentityRow {
 interface EmailLoginCodeRow {
   readonly id: string;
   readonly code_hash: string;
-  readonly attempts: number;
 }
 
 export async function findPrincipal(
