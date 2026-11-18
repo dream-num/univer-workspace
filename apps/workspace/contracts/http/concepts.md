@@ -56,7 +56,10 @@ is interactive, so it can approve an OAuth authorization. Given the
 `oauthAuthorization` it continues, it checks that authorization first and creates
 nothing when authorize would refuse it, then names the agent after that dynamically
 registered or metadata-document client, as in `Claude Code · 7f3k`. Both endpoints share one
-per-source-IP limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. The anonymous
+per-source-IP limit and return `429 AGENT_CREATE_RATE_LIMITED` past it. `POST /api/auth/guest`
+also lets each source start 10 client metadata fetches per hour and returns the same `429`
+past that budget. When every metadata fetch guests may start is in use, or the source already
+has another in flight, it returns `503 CLIENT_METADATA_BUSY` with `Retry-After` and fetches nothing. The anonymous
 session reports `guestAuthEnabled: false` when the deployment creates no agents.
 
 The session User and the token exchange `user` carry `kind` (`human` or `agent`).

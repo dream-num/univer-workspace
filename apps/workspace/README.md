@@ -211,7 +211,12 @@ approves the consent page like any signed-in user. The server first checks that 
 would. One that authorize would refuse, such as a request without a valid `resource`, answers `400` (or
 `503` while a client metadata document cannot be fetched), creates no agent and does not count toward the
 limit. A client metadata document is fetched at this point, before the guest exists, and authorize reuses
-it. A source already at the limit gets `429` before anything is fetched. When that client named itself in its registration or its client metadata document, as Claude Code
+it. A source already at the limit gets `429` before anything is fetched. Guests may start 8 of the 32
+metadata fetches the server runs at once, one in flight per source, so signed-in authorization keeps the
+other 24. Each source may start 10 fetches per hour, failed or slow ones included, and then gets `429`
+before anything is fetched. A cached document or a fetch already in flight costs nothing. When every
+guest fetch is in use, or this source already has another fetch in flight, the request answers
+`503 CLIENT_METADATA_BUSY` with `Retry-After` and fetches nothing. When that client named itself in its registration or its client metadata document, as Claude Code
 does, the server names the guest after it, as in `Claude Code · 7f3k`, so agents from one client stay
 distinguishable. The name follows the display-name rules: no email address, no control, invisible or
 direction-changing characters, at most 40 characters. Without a client name the guest is `agent`.

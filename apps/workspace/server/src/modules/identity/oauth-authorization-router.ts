@@ -1,4 +1,4 @@
-import { ClientMetadataDocumentError, type CimdClient, type CimdClientId } from "./client-metadata-document.js";
+import { ClientMetadataDocumentError, ClientMetadataFetchRefusedError, FETCH_TIMEOUT_SECONDS, type CimdClient, type CimdClientId } from "./client-metadata-document.js";
 import { randomBytes } from "node:crypto";
 import { parse as parseQuery } from "node:querystring";
 import { json, Router, urlencoded, type Request, type RequestHandler, type Response } from "express";
@@ -472,8 +472,13 @@ export function createGuestAuthorizationCheck(options: {
     if (source.kind === "cimd") {
       try {
         // Keyed by source, as `/authorize` keys it by User: one metadata fetch in flight per requester.
-        client = await options.resolveClientMetadata(source.clientId, `guest ${sourceIp}`, "anonymous");
+        client = await options.resolveClientMetadata(source.clientId, sourceIp ?? "", "anonymous");
       } catch (error) {
+        if (error instanceof ClientMetadataFetchRefusedError) {
+          throw error.reason === "busy"
+            ? new ApplicationError("CLIENT_METADATA_BUSY", 503, "This Workspace is busy checking client metadata. Try again in a few seconds.", "oauthAuthorization", FETCH_TIMEOUT_SECONDS)
+            : new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Too many client metadata checks came from this address. Try again later.");
+        }
         if (!(error instanceof ClientMetadataDocumentError)) throw error;
         // The caller is anonymous, so the cause stays in the fetch log.
         throw new ApplicationError("OAUTH_CLIENT_UNAVAILABLE", error.temporary ? 503 : 400, "The client's metadata document could not be checked.", "oauthAuthorization");

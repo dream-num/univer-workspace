@@ -660,7 +660,7 @@ export const messages = {
     guestAgentPrivate: "读不到任何人的私有文件",
     guestAgentExpiry: "文件 30 天不用会过期",
     continueAsGuestAgent: "以访客 Agent 继续",
-    guestAgentRateLimited: "这个网络在过去一小时内创建的访客 Agent 太多了。请稍后再试，或登录后继续。",
+    guestAgentRateLimited: "这个网络已达到每小时访客 Agent 请求的上限。请稍后再试，或登录后继续。",
     cliLoginTitle: "授权 Workspace CLI",
     cliLoginDescription: "确认验证码，将当前账户安全地登录到发起请求的 CLI。",
     cliLoginLoading: "正在加载 CLI 登录请求",
@@ -1577,7 +1577,7 @@ export const messages = {
     guestAgentPrivate: "It cannot read anyone's private files",
     guestAgentExpiry: "Files expire after 30 days without use",
     continueAsGuestAgent: "Continue as a guest agent",
-    guestAgentRateLimited: "Too many guest agents were created from this network in the last hour. Try again later, or sign in instead.",
+    guestAgentRateLimited: "This network has reached its hourly limit for guest agent requests. Try again later, or sign in instead.",
     cliLoginTitle: "Authorize Workspace CLI",
     cliLoginDescription:
       "Confirm the code to securely sign the requesting CLI in with your current account.",
