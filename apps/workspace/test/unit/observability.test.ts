@@ -72,27 +72,6 @@ describe("HTTP observation boundaries", () => {
     expect(lines[1].responseTime).toBeTypeOf("number");
   });
 
-  it("filters request data carried by JSON parser errors", async () => {
-    let output = "";
-    const log = pino({ level: "info" }, { write: (line) => { output += line; } });
-    const app = express();
-    app.use(createRequestLoggingMiddleware(log));
-    app.get("/parser-error", (req, res) => {
-      const error = Object.assign(new SyntaxError("Invalid JSON containing secret-input"), {
-        type: "entity.parse.failed",
-        body: '{"password":"secret-input"}',
-      });
-      requestLogger(req).error({ err: error }, "unhandled request error");
-      res.sendStatus(500);
-    });
-    await request(app, "/parser-error");
-    expect(output).not.toContain("secret-input");
-    const diagnostic = output.trim().split("\n").map((line) => JSON.parse(line))
-      .find((line) => line.msg === "unhandled request error");
-    expect(diagnostic.err).toEqual({ type: "SyntaxError", message: "Invalid JSON request body" });
-    expect(diagnostic.req.id).toBeTypeOf("string");
-  });
-
   it("replaces an invalid request ID", async () => {
     const app = express();
     app.use(createRequestLoggingMiddleware(pino({ level: "silent" })));

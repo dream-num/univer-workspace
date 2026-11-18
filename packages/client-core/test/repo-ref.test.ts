@@ -146,7 +146,7 @@ describe("file links", () => {
     ["off", { enabled: false, role: "viewer" },
       "Only people with access to the repository can open the link. Only if the user asks, run `uvw share n1 --link viewer` to let anyone with the link read it."],
     ["viewer", { enabled: true, role: "viewer" }, "Anyone with the link can read the file without signing in."],
-    ["editor", { enabled: true, role: "editor" }, "Anyone with the link can read the file, and signed-in people can edit it. An agent can edit only after a person claims it."],
+    ["editor", { enabled: true, role: "editor" }, "Anyone with the link can read the file, and signed-in people can edit it. Through the link, an agent can edit only after a person claims that agent."],
   ] as const)("sets Link Sharing to %s and reports what the server stored and who can open the link", async (link, settings, access) => {
     const { spaces, calls } = clients((call) =>
       Response.json(call.method === "PUT"
@@ -180,7 +180,7 @@ describe("file links", () => {
 
   it.each([
     ["viewer", "Anyone with the link can read the folder and everything in it without signing in."],
-    ["editor", "Anyone with the link can read the folder and everything in it, and signed-in people can edit them. An agent can edit only after a person claims it."],
+    ["editor", "Anyone with the link can read the folder and everything in it, and signed-in people can edit them. Through the link, an agent can edit only after a person claims that agent."],
   ] as const)("says a folder's %s link opens everything in it", async (role, access) => {
     const { spaces } = clients((call) =>
       Response.json(call.path.endsWith("/link-sharing")

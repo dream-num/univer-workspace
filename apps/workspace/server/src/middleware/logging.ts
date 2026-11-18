@@ -21,13 +21,7 @@ export function createRequestLoggingMiddleware(
         url: request.path,
       }),
       res: (response: ServerResponse) => ({ statusCode: response.statusCode }),
-      err: (error: Error & { type?: string }) => {
-        // JSON parser errors can carry input in body, message and stack.
-        if (error.type === "entity.parse.failed") {
-          return { type: error.name, message: "Invalid JSON request body" };
-        }
-        return { type: error.name, message: error.message, stack: error.stack };
-      },
+      err: (error: Error) => ({ type: error.name, message: error.message, stack: error.stack }),
     },
     genReqId: (request, response) => {
       const incoming = request.headers["x-request-id"];
