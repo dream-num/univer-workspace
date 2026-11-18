@@ -7,6 +7,7 @@ import {
   type WorkspaceClaimLink,
   type WorkspaceShare,
   type WorkspaceSpaceFeature,
+  type WorkspaceSubject,
 } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, oneOf, type JsonFieldsOption } from "../../command.js";
 
@@ -15,19 +16,26 @@ export const SHARE_JSON_FIELDS = ["access", "claimHint", "claimUrl", "expiresAt"
 
 export const CLAIM_JSON_FIELDS = ["claimUrl", "expiresAt"] as const satisfies readonly (keyof WorkspaceClaimLink)[];
 
-export function createShareCommand(spaces: WorkspaceSpaceFeature, origin: () => Promise<string>): Command {
+export function createShareCommand(
+  spaces: WorkspaceSpaceFeature,
+  origin: () => Promise<string>,
+  caller: () => Promise<WorkspaceSubject>,
+): Command {
   const share = new Command("share")
     .description("Show a file's link and its Link Sharing, or set it with --link")
     .argument("<target>", "file link or Node ID")
     .option("--link <state>", `set Link Sharing: ${SHARE_LINKS.join(", ")}`)
     .addOption(jsonFieldsOption(SHARE_JSON_FIELDS))
     .action(async (target: string, options: JsonFieldsOption & { readonly link?: string }) => {
-      const shared = await executeCommand(share, async () =>
-        await shareNode(spaces, await origin(), {
+      const shared = await executeCommand(share, async () => {
+        const link = options.link === undefined ? undefined : oneOf(options.link, SHARE_LINKS, "--link");
+        return await shareNode(spaces, await origin(), {
           node: target,
-          ...(options.link === undefined ? {} : { link: oneOf(options.link, SHARE_LINKS, "--link") }),
+          ...(link === undefined ? {} : { link }),
+          caller: await caller(),
           turnOn: `run \`uvw share ${target} --link viewer\``,
-        }));
+        });
+      });
       emit(share, options, shared, formatShare(shared));
     });
   return share;

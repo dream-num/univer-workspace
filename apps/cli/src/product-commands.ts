@@ -75,7 +75,7 @@ export function createProductCommands(services: ProductServices): readonly Comma
     ...createPullRequestCommands({ context: repoContext, origin, spaces, userId, worktrees }),
     createSearchCommand(issues, worktrees, userId),
     createBrowseCommand({ context: repoContext, issues, origin, worktrees }),
-    createShareCommand(spaces, origin),
+    createShareCommand(spaces, origin, async () => (await auth.whoami()).subject),
     createClaimCommand(spaces, origin),
   ];
 }

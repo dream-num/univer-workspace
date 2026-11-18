@@ -43,6 +43,7 @@ export const shareTool: ToolDefinition = {
     const shared = await shareNode(spaceFeature(context), context.identityOrigin, {
       node: nodeId,
       ...(link === undefined ? {} : { link }),
+      caller: context.user,
       // A person reaches the gateway with a token session, which cannot change Link Sharing.
       ...(context.user.kind === "agent" ? { turnOn: `call share with node ${nodeId} and link viewer` } : {}),
     });

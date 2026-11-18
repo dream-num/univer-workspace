@@ -1,3 +1,4 @@
+import type { WorkspaceSubject } from "./auth.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import { resolveNodeReference } from "./repo-ref.js";
 import type { WorkspaceSpaceFeature } from "./space.js";
@@ -49,6 +50,8 @@ export async function shareNode(
   input: {
     readonly node: string;
     readonly link?: WorkspaceShareLink;
+    /** Who this session signs in as. An agent takes the next step itself; a person's client waits for the user to ask. */
+    readonly caller: WorkspaceSubject;
     /**
      * What this session does to let anyone with the link read the file, such as
      * "run `uvw share <file> --link viewer`". Omit it for a person's token session, which the
@@ -93,16 +96,17 @@ export async function shareNode(
     link,
     owner: sharing.owner,
     ...(sharing.expiresAt === null ? {} : { expiresAt: sharing.expiresAt }),
-    access: describeAccess(link, sharing, resource === null, input.turnOn),
+    access: describeAccess(link, sharing, resource === null, input.caller, input.turnOn),
     ...(sharing.owner.claimed === false ? await claimFields(spaces, origin) : {}),
   };
 }
 
-// Only the owner can read Link Sharing, so the owner is also the caller.
+// The owner and the caller differ when a person reads the file of an agent they claimed.
 function describeAccess(
   link: WorkspaceShareLink,
   { owner, expiresAt }: WorkspaceLinkSharing,
   folder: boolean,
+  caller: WorkspaceSubject,
   turnOn: string | undefined,
 ): string {
   if (link !== "off") {
@@ -117,7 +121,7 @@ function describeAccess(
     : "Only people with access to the repository can open the link.";
   const next = turnOn === undefined
     ? "If the user wants anyone with the link to read it, they can turn on Link Sharing for it in the browser."
-    : owner.kind === "agent"
+    : caller.kind === "agent"
       ? `To let anyone with the link read it, ${turnOn}.`
       : `Only if the user asks, ${turnOn} to let anyone with the link read it.`;
   return `${who} ${next}`;
