@@ -135,10 +135,11 @@ export function createIdentityRouter(options: {
     if (authorization !== undefined && typeof authorization !== "string") {
       throw new ApplicationError("INVALID_INPUT", 400, "oauthAuthorization must be a string.", "oauthAuthorization");
     }
-    // Checking a metadata-document client fetches it, which a deployment without guests never does anonymously.
+    // Checking a metadata-document client fetches it, so first refuse a source that could not create a guest.
     if (!session.guestAuthEnabled) {
       throw new ApplicationError("AGENT_CREATE_RATE_LIMITED", 429, "Guest agents are turned off on this Workspace.");
     }
+    identity.assertAgentCreationAllowed(request.ip);
     const { user } = await identity.createAgent({
       label,
       // The name comes from the client the server resolved, never from the request.

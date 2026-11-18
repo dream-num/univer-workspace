@@ -1284,6 +1284,7 @@ paths:
         under the same per-source limit, but sets a browser login session cookie
         and returns no token. A request that already carries a valid login
         session is refused with 409, so it cannot replace a signed-in session.
+        A source at its limit is refused with 429 before anything is fetched.
         With `oauthAuthorization`, the authorization is checked first, as
         authorize checks it: a Client ID Metadata Document client's metadata is
         fetched now, one fetch in flight per source, and authorize reuses it.
