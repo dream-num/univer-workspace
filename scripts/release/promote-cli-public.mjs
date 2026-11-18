@@ -73,18 +73,59 @@ function integrity(bytes) {
   return `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 }
 
-async function response(url, options, fetcher) {
-  const result = await fetcher(url, {
-    ...options,
-    redirect: "error",
-    signal: AbortSignal.timeout(120_000),
-  });
+// Never log request headers, server bodies, arbitrary error messages, or signed URLs.
+function transportError(stage, error) {
+  const code = error?.cause?.code ?? error?.code;
+  const detail = error?.cause?.message === "unexpected redirect"
+    ? "unexpected redirect"
+    : new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"]).has(code) ? code : "fetch failed";
+  return new Error(`${stage}: ${detail}`);
+}
+
+async function response(url, options, fetcher, stage = "Registry request") {
+  let result;
+  try {
+    result = await fetcher(url, { ...options, redirect: "error", signal: AbortSignal.timeout(120_000) });
+  } catch (error) { throw transportError(stage, error); }
   if (!result.ok) {
-    // Registry errors are public diagnostics; never print request headers or credentials.
-    const body = await result.text();
-    throw new Error(`Registry request failed (${result.status}): ${body}`);
+    await result.body?.cancel();
+    throw new Error(`${stage}: HTTP ${result.status}`);
   }
   return result;
+}
+
+// This is the deployment's public artifact store, not an arbitrary URL from metadata.
+// A storage-origin change requires review; do not follow it automatically.
+const ARTIFACT_ORIGIN = "https://insider-npm.oss-cn-shenzhen.aliyuncs.com";
+export async function downloadInsiderTarball(initial, fetcher = fetch) {
+  let url = new URL(initial);
+  const visited = new Set();
+  for (let hop = 0; hop <= 3; hop++) {
+    const trusted = url.origin === new URL(INSIDER).origin ||
+      (url.origin === ARTIFACT_ORIGIN && url.pathname.startsWith("/insider-npm-registry/v1/packages/"));
+    if (!trusted || url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
+      throw new Error("Insider tarball: untrusted redirect destination");
+    if (visited.has(url.href)) throw new Error("Insider tarball: redirect loop");
+    visited.add(url.href);
+    let result;
+    try {
+      // No credentials, cookies, or caller options may cross this boundary.
+      result = await fetcher(url, { method: "GET", redirect: "manual", signal: AbortSignal.timeout(120_000) });
+    } catch (error) { throw transportError("Insider tarball", error); }
+    if ([301, 302, 303, 307, 308].includes(result.status)) {
+      const location = result.headers.get("location");
+      await result.body?.cancel();
+      if (!location || hop === 3) throw new Error("Insider tarball: redirect limit or missing location");
+      try { url = new URL(location, url); }
+      catch { throw new Error("Insider tarball: invalid redirect destination"); }
+      continue;
+    }
+    if (!result.ok) {
+      await result.body?.cancel();
+      throw new Error(`Insider tarball: HTTP ${result.status}`);
+    }
+    return Buffer.from(await result.arrayBuffer());
+  }
 }
 
 function assertPlan(plan, packageName, version) {
@@ -139,28 +180,25 @@ export async function preparePromotion({
         body: JSON.stringify({ packages: [{ name: packageName, version }] }),
       },
       fetcher,
+      "Insider Promotion dry-run",
     )
   ).json();
   assertPlan(plan, packageName, version);
-  const metadata = await (
-    await response(packageUrl(INSIDER, packageName, version), {}, fetcher)
+  const packument = await (
+    await response(packageUrl(INSIDER, packageName), {}, fetcher, "Insider packument")
   ).json();
-  if (metadata.name !== packageName || metadata.version !== version) {
+  const metadata = Object.hasOwn(packument.versions ?? {}, version) ? packument.versions[version] : undefined;
+  if (packument.name !== packageName || metadata?.name !== packageName || metadata.version !== version) {
     throw new Error("Insider metadata does not match the selected version.");
   }
-  // Promotion dry-run validates the SOURCE tag; its body has no destination-tag option.
-  // A latest intent therefore requires the current stable insider latest, not an rc/beta.
-  if (latest) {
-    const packument = await (await response(packageUrl(INSIDER, packageName), {}, fetcher)).json();
-    if (packument.name !== packageName || packument["dist-tags"]?.latest !== version) {
-      throw new Error("latest requires the selected version to be the current insider latest.");
-    }
+  if (latest && packument["dist-tags"]?.latest !== version) {
+    throw new Error("latest requires the selected version to be the current insider latest.");
   }
   const tarballUrl = new URL(metadata.dist?.tarball);
   if (tarballUrl.origin !== new URL(INSIDER).origin || tarballUrl.username || tarballUrl.password) {
     throw new Error("The selected tarball must still be hosted by insider-npm.");
   }
-  const bytes = Buffer.from(await (await response(tarballUrl, {}, fetcher)).arrayBuffer());
+  const bytes = await downloadInsiderTarball(tarballUrl, fetcher);
   const hash = integrity(bytes);
   if (hash !== metadata.dist?.integrity) throw new Error("Original tarball integrity mismatch.");
   const tarballPath = join(directory, TARBALL);
