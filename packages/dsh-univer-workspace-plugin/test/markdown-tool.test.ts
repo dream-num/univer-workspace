@@ -2,9 +2,10 @@ import { mkdtemp, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Context } from "@deepseek-ai/cordis";
-import type { ToolDefinition, ToolRunContext } from "@deepseek-ai/dsh-tools";
+import type { ToolDefinition } from "@deepseek-ai/dsh-tools";
 import { describe, expect, it, vi } from "vitest";
 import { registerMarkdownTool } from "../src/tools/markdown.ts";
+import { conversation } from "./conversation-exec.ts";
 
 const core = vi.hoisted(() => ({ compile: vi.fn(), materialize: vi.fn() }));
 vi.mock("@univerjs/univer-workspace-client-core/markdown", () => ({
@@ -47,7 +48,7 @@ async function setup() {
     },
   } as unknown as Context;
   registerMarkdownTool(ctx, { license: "test-license" });
-  const exec = { agent: { session: { header: { cwd: directory } } } } as ToolRunContext;
+  const { exec } = conversation(directory, "wt");
   return {
     directory,
     service,

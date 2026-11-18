@@ -224,6 +224,19 @@ Existing documents enter a new Worktree by passing their `resourceId` to
 `univer_worktree`. Verify the content, mark the draft ready, and let the user
 review it before merge.
 
+Each conversation writes only in the Worktrees it created. The tools read that
+list from the conversation's own DSH log: successful `univer_worktree`
+`create` results, including those inside `run_code`. A forked or template
+conversation does not inherit its parent's Worktrees. Content writes
+(`univer_execute`, `univer_edit` `mode=write`, `univer_compile_markdown`,
+`univer_compile_svg`, `univer_import`, `univer_unit`) and `ready`/`reopen` on
+any other Worktree fail with `WORKTREE_NOT_IN_CONVERSATION`, even when the same
+user created it in another conversation or client. Reads stay open to every
+Worktree the user can access. `merge` and `discard` stay open as well, because
+each one waits for the user's approval. `univer_status` marks each listed
+Worktree with `createdInThisConversation`, and the `univer` skill continues
+only those.
+
 `univer_new` and `univer_create` create documents directly in trunk and are for
 explicit requests to publish immediately. Worktree changes support new, modified, and deleted documents. Use
 `univer_unit` with `action: "remove"` to mark a document for deletion and

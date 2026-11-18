@@ -25,7 +25,7 @@ import {
   type LlmServiceLike,
 } from "@univerjs/univer-workspace-agent-runtime/workspace-screenshot";
 import { SessionPathError } from "@univerjs/univer-workspace-agent-runtime/workspace-session-path";
-import { resolveToolScope } from "./tool-scope.ts";
+import { assertWorktreeWritable, resolveToolScope } from "./tool-scope.ts";
 import { assertUnitInScope } from "./edit.ts";
 import { existingSessionPath } from "./workspace-path.ts";
 import { registerUniverTool } from "./presentation.ts";
@@ -248,6 +248,7 @@ export function registerRenderTools(
       async execute(args: CompileSvgArguments, exec: ToolRunContext): Promise<JsonValue> {
         const resolved = await resolveToolScope(ctx, exec);
         await assertUnitInScope(ctx, resolved, args.unitId, "slide", args.worktreeId);
+        assertWorktreeWritable(exec, args.worktreeId);
         const source = await existingSessionPath(exec, args.source);
         const compiled = await compileSvg({
           source: source.path,

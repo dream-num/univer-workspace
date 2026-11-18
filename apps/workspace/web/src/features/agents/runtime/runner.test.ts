@@ -566,7 +566,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const skills = vi.fn((args: unknown) => ({ content: [], structuredContent: z.object({ name: z.string() }).safeParse(args).success
       ? { content, resources: [{ path: "guide.md", readCommand: "Read guide.md with skills_read." }] } : personalSkills }));
     const test = await setup({ skills, model: () => modelStream() });
-    const started = await test.runner.start({ ...test.input, text, scope: { kind: "repository", spaceId: "repo", baseWorktreeId: null } });
+    const started = await test.runner.start({ ...test.input, text, scope: { kind: "repository", spaceId: "repo" } });
     const done = (await test.finished(started.id))!;
     expect(done.status).toBe("idle");
     const message = done.messages[0]!;
@@ -774,7 +774,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const skills = vi.fn(() => ({ content: [], structuredContent: { ...personalSkills, skills: [...personalSkills.skills,
       { ...personalSkills.skills[0]!, name: "core", source: "builtin", userInvocable: false }] } }));
     const test = await setup({ skills });
-    expect(await test.runner.skills({ kind: "repository", spaceId: "repo", baseWorktreeId: null })).toEqual(personalSkills);
+    expect(await test.runner.skills({ kind: "repository", spaceId: "repo" })).toEqual(personalSkills);
     expect(skills).toHaveBeenCalledExactlyOnceWith({ repo: "repo" });
     expect(test.requests.find((request) => request.url === "/api/auth/agent-token")?.body).toBe(JSON.stringify({ scopes: ["read"] }));
     expect(test.requests.some((request) => request.method === "DELETE")).toBe(true);
@@ -807,7 +807,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const secondBody = JSON.parse(test.modelBodies[2]!);
     expect(secondBody.messages.slice(0, firstBody.messages.length)).toEqual(firstBody.messages);
     catalog = { ...personalSkills, repository: "loaded", skills: personalSkills.skills.map((skill) => ({ ...skill, source: "repository", description: "Repository report." })) };
-    await test.runner.send(started.id, "Use repository", { ...test.input, scope: { kind: "repository", spaceId: "repo-2", baseWorktreeId: null } });
+    await test.runner.send(started.id, "Use repository", { ...test.input, scope: { kind: "repository", spaceId: "repo-2" } });
     const third = (await test.finished(started.id))!;
     const thirdBody = JSON.parse(test.modelBodies[3]!);
     expect(thirdBody.messages.slice(0, secondBody.messages.length)).toEqual(secondBody.messages);
@@ -1162,7 +1162,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const test = await setup({ model: () => modelStream() });
     const started = await test.runner.start({ ...test.input, mode: "ask" });
     const previous = await test.finished(started.id);
-    const settings: AgentSettings = { ...test.input, mode: "auto", scope: { kind: "repository", spaceId: "repo-2", baseWorktreeId: "base-2" } };
+    const settings: AgentSettings = { ...test.input, mode: "auto", scope: { kind: "repository", spaceId: "repo-2" } };
     await test.runner.send(started.id, "Edit this repository", settings);
     const done = await test.finished(started.id);
     const schema = z.object({ messages: z.array(z.object({ role: z.string(), content: z.unknown() })) });
@@ -1170,33 +1170,30 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     const second = schema.parse(JSON.parse(test.modelBodies[1]!)).messages;
     expect(second.slice(0, first.length)).toEqual(first);
     expect(second[0]).toEqual(first[0]);
-    const reminder = '\n\n<system-reminder>\nThe user changed the session settings. These lines replace the earlier scope and mode instructions.\nWork only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.\nAuto mode: write only in the base pull request Worktree "base-2" for file edits. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.\n</system-reminder>';
+    const reminder = '\n\n<system-reminder>\nThe user changed the session settings. These lines replace the earlier scope and mode instructions.\nWork only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.\nAuto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace. Never merge; a person reviews and merges.\n</system-reminder>';
     expect(second.at(-1)).toEqual({ role: "user", content: `Edit this repository${reminder}` });
     expect(done?.messages.slice(0, previous?.messages.length)).toEqual(previous?.messages);
     expect(done?.messages.filter((message) => message.role === "user").at(-1)?.parts).toEqual([
       { type: "text", text: "Edit this repository" }, { type: "text", text: reminder },
     ]);
     expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").map((request) => JSON.parse(request.body).scopes)).toEqual([["read"], ["read", "write"]]);
-    expect(done).toMatchObject({ mode: "auto", scope: settings.scope, worktreeIds: ["base-2"], status: "idle" });
+    expect(done).toMatchObject({ mode: "auto", scope: settings.scope, worktreeIds: [], status: "idle" });
     const reloaded = createAgentRunner({ ...test.deps, sessions: createSessionStore(test.storage) });
     await reloaded.send(started.id, "Keep going", settings);
     await vi.waitFor(() => expect(reloaded.isRunningHere(started.id)).toBe(false));
     const third = schema.parse(JSON.parse(test.modelBodies[2]!)).messages;
     expect(third.slice(0, second.length)).toEqual(second);
     expect(third[0]).toEqual(first[0]);
-    expect((await createSessionStore(test.storage).get(started.id))?.worktreeIds).toEqual(["base-2"]);
+    expect((await createSessionStore(test.storage).get(started.id))?.worktreeIds).toEqual([]);
   });
 
   it.each([
     { previous: { scope: { kind: "global" as const }, mode: "ask" as const },
-      next: { scope: { kind: "repository" as const, spaceId: "repo-2", baseWorktreeId: null }, mode: "ask" as const },
+      next: { scope: { kind: "repository" as const, spaceId: "repo-2" }, mode: "ask" as const },
       line: 'Work only in the repository whose Space ID is "repo-2"; tools accept this ID as repo.' },
     { previous: { scope: { kind: "global" as const }, mode: "auto" as const },
       next: { scope: { kind: "global" as const }, mode: "ask" as const },
       line: "Ask mode: read only. Never call a write tool." },
-    { previous: { scope: { kind: "repository" as const, spaceId: "repo-1", baseWorktreeId: "base-1" }, mode: "auto" as const },
-      next: { scope: { kind: "repository" as const, spaceId: "repo-1", baseWorktreeId: "base-2" }, mode: "auto" as const },
-      line: 'Auto mode: write only in the base pull request Worktree "base-2" for file edits. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.' },
   ])("includes only the changed instruction line ($line)", async ({ previous, next, line }) => {
     const test = await setup({ model: () => modelStream() });
     const started = await test.runner.start({ ...test.input, ...previous });
@@ -1711,12 +1708,12 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(JSON.parse(test.modelBodies[0]!)).not.toHaveProperty("reasoning_effort");
   });
 
-  it("starts repository sessions with the base Worktree and reuses tools on a new run", async () => {
+  it("starts repository sessions without a pull request and reuses tools on a new run", async () => {
     const test = await setup({ model: () => modelStream() });
-    const started = await test.runner.start({ ...test.input, scope: { kind: "repository", spaceId: "repo-1", baseWorktreeId: "base-1" }, model: { ...test.input.model, thinking: "max" } });
-    expect((await test.finished(started.id))?.worktreeIds).toEqual(["base-1"]);
+    const started = await test.runner.start({ ...test.input, scope: { kind: "repository", spaceId: "repo-1" }, model: { ...test.input.model, thinking: "max" } });
+    expect((await test.finished(started.id))?.worktreeIds).toEqual([]);
     expect(test.modelBodies[0]).toContain("repo-1");
-    expect(test.modelBodies[0]).toContain("write only in the base pull request Worktree");
+    expect(test.modelBodies[0]).toContain("Call pr_create before the first file edit");
     expect(JSON.parse(test.modelBodies[0]!).reasoning_effort).toBe("max");
     await test.runner.send(started.id, "One more turn");
     await test.finished(started.id);

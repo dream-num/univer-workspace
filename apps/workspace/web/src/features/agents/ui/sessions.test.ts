@@ -22,7 +22,7 @@ afterEach(() => { clients.splice(0).forEach((client) => client.clear()); vi.unst
 const items = Array.from({ length: 4 }, (_, index) => session({
   id: agentSessionIdSchema.parse(`session-${index}`),
   createdAt: `2026-11-${10 + index}T00:00:00.000Z`,
-  scope: index === 3 ? { kind: "repository", spaceId: "repo", baseWorktreeId: null } : { kind: "global" },
+  scope: index === 3 ? { kind: "repository", spaceId: "repo" } : { kind: "global" },
   messages: [{ id: `message-${index}`, role: "user", parts: [{ type: "text", text: `Session ${index}` }] }],
 }));
 function render(content: ReactNode) {

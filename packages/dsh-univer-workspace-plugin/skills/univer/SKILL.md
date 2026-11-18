@@ -9,7 +9,7 @@ Use the structured `univer_*` tools whenever the task creates, reads, changes, c
 
 ## Start immediately
 
-- Existing document: discover it with `univer_documents` and open its `resourceId` with `univer_open`; call `univer_status` with that identity before selecting a Unit or continuing a worktree.
+- Existing document: discover it with `univer_documents` and open its `resourceId` with `univer_open`; call `univer_status` with that identity before selecting a Unit or continuing a worktree this conversation created.
 - New Modern Doc: create an empty draft Worktree, load `univer-doc`, then call
   `univer_compile_markdown` with a session Markdown file. It creates the Doc Unit; no placeholder
   is needed. Use `univer_export_markdown` before editing selected current native blocks.
@@ -27,6 +27,7 @@ Use the structured `univer_*` tools whenever the task creates, reads, changes, c
 - Sheet names, pages, paragraphs, tables, ranges, shapes, fields, records, and views live inside a Unit; none substitutes for `unitId`.
 - `trunk` is the reviewed main line. A worktree is an isolated scope for agent changes. There is no implicit current worktree.
 - Every content write requires the complete address: draft `worktreeId` and `unitId` (plus `unitType` where required by the tool).
+- A conversation writes only in Worktrees it created. It can read every Worktree the user can access, including one the same user started in another conversation or client.
 - `univer_execute` persists only when Facade mutations occurred. A read-only execution produces no revision.
 - `ready` rejects writes until `reopen`. `merged` and `discarded` are terminal; never reuse them.
 - Tool success is not correctness evidence. Read the changed model back and verify task-specific assertions.
@@ -67,7 +68,7 @@ Issue writes are not idempotent. If a `create` or `comment` fails with an unknow
 For document deletion, use `univer_unit` with `action: "remove"`, `worktreeId`, and `unitId`. This only records draft intent; use `action: "restore"` to undo it before Ready. Existing documents enter Trash after an approved merge, and canceled new draft Units are never published. Do not use permanent deletion or filesystem operations for this workflow.
 
 1. Discover existing documents through `univer_spaces`, `univer_documents`, and `univer_open`. For an existing scope, call `univer_status` with `resourceId` or `worktreeId`; it is not an unscoped listing tool.
-2. Use one Worktree for the ongoing task, including follow-up requests that add another document type. For example, adding a presentation based on a draft spreadsheet belongs in the same Worktree. Check the existing task Worktree with `univer_status`; reuse it if draft, or call `univer_worktree` with `action: "reopen"` if ready. Create a new Worktree only for an independent task or after the previous one was merged or discarded. For new documents, omit `resourceId`; for an existing document, supply its `resourceId` when creating the worktree. Continue an existing worktree only after confirming its state.
+2. Use one Worktree for the ongoing task, including follow-up requests that add another document type. For example, adding a presentation based on a draft spreadsheet belongs in the same Worktree. Continue only a Worktree that `univer_status` marks `createdInThisConversation: true`: reuse it if draft, or call `univer_worktree` with `action: "reopen"` if ready. Never continue another Worktree that touches the same document, even when the same user created it; create a new Worktree instead. Also create a new Worktree for an independent task or after the previous one was merged or discarded. For new documents, omit `resourceId`; for an existing document, supply its `resourceId` when creating the worktree. Continue an existing worktree only after confirming its state.
 3. For a new Modern Doc, let `univer_compile_markdown` create the Unit. For other new documents,
    use `univer_unit` or `univer_import`. For an existing document, use its returned Unit identity;
    do not create a duplicate.
@@ -88,7 +89,7 @@ Merge or discard only when the user explicitly requests that outcome. Both opera
 
 ## Rework after feedback
 
-Continue in the same worktree only for changes to the same task and only after `univer_status` confirms that it is still `ready` or `draft`.
+Continue in the same worktree only for changes to the same task, only when this conversation created it, and only after `univer_status` confirms that it is still `ready` or `draft`.
 
 1. If it is `ready`, call `univer_worktree` with `action: "reopen"`.
 2. If it is already `draft`, continue directly.
@@ -158,3 +159,4 @@ Tool failures use `Error [CODE]: message`. Route recovery by the code, not free 
 - For `GATEWAY_UNAVAILABLE` or `GATEWAY_REQUEST_TIMEOUT`, retry one `univer_status` read. After a write timeout, inspect status and content before continuing.
 - For `FILE_PERMISSION_DENIED` or `SESSION_SCOPE_DENIED`, use an accessible in-workspace path or ask the user to correct access; do not retry the same path.
 - For worktree or Unit state errors, refresh with `univer_status`; reopen `ready` worktrees and replace terminal ones.
+- For `WORKTREE_NOT_IN_CONVERSATION`, do not retry. The Worktree belongs to another conversation; create a new Worktree for this conversation's changes.

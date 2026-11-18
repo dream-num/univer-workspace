@@ -21,6 +21,7 @@ import type { JsonValue } from "../json-value.ts";
 import type { LocalExchangeUnitType } from "../provider/local-exchange.ts";
 import {
   assertWorktreeAccessible,
+  assertWorktreeWritable,
   resolveTargetSpace,
   resolveToolScope,
   type ToolSpaceScope,
@@ -132,6 +133,7 @@ export function registerExchangeTools(
           );
         }
         await assertWorktreeAccessible(ctx, resolved, worktreeId);
+        assertWorktreeWritable(exec, worktreeId);
         const targetSpaceId = resolveTargetSpace(resolved, args.spaceId);
         const source = await existingSessionPath(exec, args.source);
         const explicitType = explicitImportType(args.unitType, args.type);

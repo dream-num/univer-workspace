@@ -1,14 +1,11 @@
-import type { components } from "../../../../../generated/http/schema.js";
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUp, Plus } from "lucide-react";
 import { useRef, useState } from "react";
 import { sessionQueryOptions } from "../../auth";
 import { spaceQueryOptions } from "../../spaces/spaces.queries";
-import { worktreePagesQueryOptions } from "../../worktrees/worktrees.queries";
 import { Alert } from "../../../shared/ui/alert";
 import { Button } from "../../../shared/ui/button";
-import { Select } from "../../../shared/ui/select";
 import { $createParagraphNode, $createTextNode, $getRoot } from "lexical";
 import { SkillMenu, useSkillMenu } from "./skill-menu";
 import type { RangeSelection } from "lexical";
@@ -28,13 +25,12 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
   const [picker, setPicker] = useState<{ trigger: RangeSelection | null } | null>(null);
   const [mode, setMode] = useState<AgentMode>("ask");
   const [repository, setRepository] = useState("");
-  const [base, setBase] = useState("");
   const model = useAgentModel();
   const { selected, thinking } = model;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const input = useRef<ComposerEditorHandle | null>(null);
-  const skillMenu = useSkillMenu(text, spaceId || repository ? { kind: "repository", spaceId: spaceId || repository, baseWorktreeId: null } : { kind: "global" }, busy, (value) => {
+  const skillMenu = useSkillMenu(text, spaceId || repository ? { kind: "repository", spaceId: spaceId || repository } : { kind: "global" }, busy, (value) => {
     input.current?.editor.update(() => {
       const root = $getRoot(); root.clear(); root.append($createParagraphNode().append($createTextNode(value))); root.selectEnd();
     });
@@ -54,8 +50,7 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
     setBusy(true); setError(""); setPicker(null);
     try {
       const session = await (await client.runner()).start({
-        scope: spaceId ? { kind: "repository", spaceId, baseWorktreeId: base || null }
-          : repository ? { kind: "repository", spaceId: repository, baseWorktreeId: null } : { kind: "global" },
+        scope: spaceId || repository ? { kind: "repository", spaceId: spaceId || repository } : { kind: "global" },
         references, mode, model: { providerId: selected.provider.id, modelId: selected.modelId, thinking: selected.provider.kind === "deepseek" ? thinking : null }, text: text.trim(),
       });
       setPicker(null);
@@ -75,7 +70,7 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
         <div className="agent-composer-controls">
           <Button variant="ghost" size="icon" aria-label={m.addContext} aria-expanded={picker !== null} disabled={busy} onClick={() => picker ? closePicker() : setPicker({ trigger: null })}><Plus aria-hidden="true" /></Button>
           <AgentModelControls mode={mode} setMode={setMode} model={model} disabled={busy}>
-            {spaceId ? <RepositoryBase spaceId={spaceId} base={base} setBase={setBase} /> : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
+            {spaceId ? null : <AgentRepositorySelect repository={repository} setRepository={setRepository} disabled={busy} />}
           </AgentModelControls>
           <Button className="agent-send" aria-keyshortcuts="Enter" aria-label={selected ? m.send : m.setup} disabled={busy || Boolean(selected && !text.trim())} onClick={() => void send()}>
             {selected ? <><ArrowUp aria-hidden="true" /><span>{m.send}</span><kbd aria-hidden="true">↵</kbd></> : m.setup}
@@ -87,16 +82,4 @@ export function AgentComposer({ spaceId, starter, focus }: { readonly spaceId?: 
       {error ? <Alert variant="destructive">{error}</Alert> : null}
     </section>
   );
-}
-function RepositoryBase({ spaceId, base, setBase }: { readonly spaceId: string; readonly base: string; readonly setBase: (value: string) => void }) {
-  const m = useAgentMessages();
-  const space = useQuery(spaceQueryOptions(spaceId));
-  return space.data ? <BaseChoices space={space.data} base={base} setBase={setBase} /> : <p role="status">{m.loading}</p>;
-}
-function BaseChoices({ space, base, setBase }: { readonly space: components["schemas"]["SpaceView"]; readonly base: string; readonly setBase: (value: string) => void }) {
-  const m = useAgentMessages();
-  const pulls = useInfiniteQuery(worktreePagesQueryOptions(space.type === "team" ? { teamSpaceId: space.id } : { kind: "user" }));
-  return <div className="agent-scope"><Select aria-label={m.basedOn} value={base || "new"} onValueChange={(value) => setBase(value === "new" ? "" : value)} options={[
-    { value: "new", label: m.choice(m.basedOn, m.newPr) }, ...(pulls.data?.pages.flatMap((page) => page.items) ?? []).filter((pull) => pull.state === "draft" || pull.state === "ready").map((pull) => ({ value: pull.id, label: m.choice(m.basedOn, `#${pull.number} ${pull.name}`) })),
-  ]} />{pulls.hasNextPage ? <Button variant="secondary" disabled={pulls.isFetchingNextPage} onClick={() => void pulls.fetchNextPage()}>{m.more}</Button> : null}{pulls.error ? <Alert variant="destructive">{pulls.error.message}</Alert> : null}</div>;
 }

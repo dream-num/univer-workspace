@@ -149,7 +149,7 @@ it.each(["en-US", "zh-CN"])("fills and focuses a style reply without sending or 
 });
 
 it("opens at the bottom and follows late-rendered content until a user scrolls away, then resumes at the bottom", async () => {
-  current = session({ scope: { kind: "repository", spaceId: "repo", baseWorktreeId: null } });
+  current = session({ scope: { kind: "repository", spaceId: "repo" } });
   await renderSession();
   expect(container.scrollTop).toBe(2447);
   expect(observe).toHaveBeenCalledExactlyOnceWith(container.querySelector(".agent-conversation"));
@@ -407,13 +407,13 @@ it("caches menu catalogs separately for global scope and each repository", async
   await type("/");
   expect(runner.skills).toHaveBeenLastCalledWith({ kind: "global" });
   for (const spaceId of ["repo-a", "repo-b", "repo-a"]) {
-    current = { ...current, scope: { kind: "repository", spaceId, baseWorktreeId: null } };
+    current = { ...current, scope: { kind: "repository", spaceId } };
     await renderSession();
     expect(container.querySelector('[role="listbox"]')).not.toBeNull();
   }
   expect(runner.skills.mock.calls).toEqual([
-    [{ kind: "global" }], [{ kind: "repository", spaceId: "repo-a", baseWorktreeId: null }],
-    [{ kind: "repository", spaceId: "repo-b", baseWorktreeId: null }],
+    [{ kind: "global" }], [{ kind: "repository", spaceId: "repo-a" }],
+    [{ kind: "repository", spaceId: "repo-b" }],
   ]);
 });
 
