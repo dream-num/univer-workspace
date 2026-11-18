@@ -152,8 +152,12 @@ describe("POST /api/auth/guest", () => {
       expect(response.status).toBe(201);
       return ((await response.json()) as { client_id: string }).client_id;
     };
-    const guest = async (body: unknown) => {
-      const response = await post(origin, "/api/auth/guest", body);
+    const guest = async (clientId: string, label?: string) => {
+      const oauthAuthorization = new URLSearchParams({
+        response_type: "code", client_id: clientId, redirect_uri: "http://127.0.0.1:9/callback", resource: RESOURCE,
+        code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", code_challenge_method: "S256",
+      }).toString();
+      const response = await post(origin, "/api/auth/guest", { oauthAuthorization, ...(label === undefined ? {} : { label }) });
       expect(response.status).toBe(201);
       const cookie = response.headers.get("set-cookie")!.split(";", 1)[0]!;
       return ((await (await fetch(`${origin}/api/session`, { headers: { cookie } })).json()) as {
@@ -162,28 +166,21 @@ describe("POST /api/auth/guest", () => {
     };
 
     const claudeCode = await register("Claude Code");
-    const first = await guest({ oauthClientId: claudeCode });
-    const second = await guest({ oauthClientId: claudeCode });
+    const first = await guest(claudeCode);
+    const second = await guest(claudeCode);
     expect(first.username).toMatch(/^claude-code-[a-z0-9]{4}$/u);
     expect(first.displayName).toBe(`Claude Code · ${first.username.slice(-4)}`);
     expect(second.displayName).not.toBe(first.displayName);
 
-    const hostile = await guest({ oauthClientId: await register(`\u202EClaude\nCode\u200B\u0000 ${"x".repeat(80)}`) });
+    const hostile = await guest(await register(`\u202EClaude\nCode\u200B\u0000 ${"x".repeat(80)}`));
     expect(hostile.displayName).toBe(`Claude Code ${"x".repeat(28)} · ${hostile.username.slice(-4)}`);
 
-    const surrogate = await guest({ oauthClientId: await register("Claude\uD800Code") });
+    const surrogate = await guest(await register("Claude\uD800Code"));
     expect(surrogate.displayName).toBe(`ClaudeCode · ${surrogate.username.slice(-4)}`);
 
-    expect(await guest({ oauthClientId: claudeCode, label: "Budget bot" })).toMatchObject({ displayName: "Budget bot" });
-    for (const oauthClientId of [
-      await register(),
-      await register("\u202E\u2066\n"),
-      await register("\u3164\u2800"),
-      "00000000-0000-4000-8000-000000000000",
-      GATEWAY_ID,
-      42,
-    ]) {
-      const unnamed = await guest({ oauthClientId });
+    expect(await guest(claudeCode, "Budget bot")).toMatchObject({ displayName: "Budget bot" });
+    for (const clientId of [await register(), await register("\u202E\u2066\n"), await register("\u3164\u2800")]) {
+      const unnamed = await guest(clientId);
       expect(unnamed.username).toMatch(/^agent-[a-z0-9]{4}$/u);
       expect(unnamed.displayName).toBe("agent");
     }
