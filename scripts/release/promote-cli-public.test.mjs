@@ -14,6 +14,7 @@ import {
   npmPublishArguments,
   npmTagArguments,
   preparePromotion,
+  reportPromotionFailure,
   PUBLIC,
   publishPromotion,
   publishTarball,
@@ -366,7 +367,7 @@ test("wrong version/tag readback and tag write failures cannot report success", 
         throw new Error("tag denied");
       },
     }),
-    /tag denied/u,
+    (e) => e.stage === "npm-latest-command" && !e.message.includes("tag denied"),
   );
   assert.equal(writes, 1);
   const changedIntegrity = await prepared(t, { latest: true });
@@ -426,7 +427,7 @@ test("public read failures and uncertain upload failures stop without retry", as
         throw new Error("uncertain upload");
       },
     }),
-    /uncertain upload/u,
+    (e) => e.stage === "npm-upload-command" && e.message.includes("do not blindly retry"),
   );
   assert.equal(calls, 1);
 });
@@ -653,5 +654,125 @@ test("allowlist is not a destination: actual Location and paths stay intact", as
     });
     assert.deepEqual(calls,[`${INSIDER}original.tgz`,target]);
     assert.equal(bytes.toString(),"original");
+  }
+});
+
+test("failed post-upload verification preserves command stage and removes stale validation result", async (t) => {
+  const f = await prepared(t);
+  f.state.exists = false;
+  await writeFile(join(f.directory, "result.json"), '{"mode":"validation-only"}');
+  let calls = 0;
+  await assert.rejects(publishPromotion({ ...f, publisher: async () => { calls++; } }), (e) => {
+    assert.equal(e.stage, "post-publish-version-check");
+    assert.match(e.message, /version missing \(HTTP 404\)/u);
+    return true;
+  });
+  assert.equal(calls, 1);
+  const journal = (await readFile(join(f.directory, "stages.jsonl"), "utf8")).trim().split("\n").map(JSON.parse);
+  assert.ok(journal.some(x => x.stage === "npm-upload-command" && x.status === "completed"));
+  assert.equal(journal.at(-1).stage, "post-publish-version-check");
+  assert.equal(journal.at(-1).status, "failed");
+  await assert.rejects(readFile(join(f.directory, "result.json")), /ENOENT/u);
+});
+
+test("pre-upload mismatch identifies the field and never reaches npm", async (t) => {
+  const f = await prepared(t);
+  f.metadata.dist.integrity = "synthetic-sensitive-response";
+  await assert.rejects(publishPromotion(f), (e) => {
+    assert.equal(e.stage, "pre-publish-existing-version-check");
+    assert.match(e.message, /SHA-512 integrity mismatch/u);
+    assert.ok(!e.message.includes("synthetic-sensitive-response"));
+    return true;
+  });
+  const journal = await readFile(join(f.directory, "stages.jsonl"), "utf8");
+  assert.ok(!journal.includes("npm-upload-command"));
+  assert.deepEqual(f.state.writes, []);
+});
+
+test("Actions annotation, summary and artifact expose safe stage diagnosis, never raw npm output", async (t) => {
+  const f = await prepared(t);
+  f.state.exists = false;
+  const secret = "synthetic-secret%\r\n::error::injection";
+  let failure;
+  try {
+    await publishPromotion({ ...f, publisher: async () => {
+      throw Object.assign(new Error(secret), { code: 1, stderr: `npm error code E403\n${secret}`, stdout: secret });
+    }});
+  } catch (e) { failure = e; }
+  const output = [];
+  const summary = join(f.directory, "summary.md");
+  const diagnostic = await reportPromotionFailure(failure, { directory: f.directory, env: { GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summary }, output: x => output.push(x) });
+  assert.equal(diagnostic.stage, "npm-upload-command");
+  assert.match(diagnostic.message, /exit 1.*npm E403/u);
+  assert.equal(output.filter(x => x.startsWith("::error title=")).length, 1);
+  assert.match(output[1], /npm-upload-command/u);
+  for (const content of [output.join("\n"), await readFile(summary, "utf8"), await readFile(join(f.directory, "failure.json"), "utf8"), await readFile(join(f.directory, "stages.jsonl"), "utf8")]) {
+    assert.ok(!content.includes("synthetic-secret"));
+    assert.ok(!content.includes("::error::injection"));
+  }
+  assert.match(await readFile(summary, "utf8"), /before any write retry/u);
+});
+
+test("actual CLI failure writes a visible annotation and summary with exit one without network or credentials", async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), "promotion-cli-diagnostic-"));
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const script = new URL("./promote-cli-public.mjs", import.meta.url).pathname;
+  const summary = join(dir, "summary.md");
+  await assert.rejects(execute(process.execPath, [script, `--package=${PACKAGE}`, `--version=${version}`, "--latest=true"], {
+    cwd: dir, env: { PATH: process.env.PATH, GITHUB_ACTIONS: "true", GITHUB_STEP_SUMMARY: summary },
+  }), (e) => {
+    assert.equal(e.code, 1);
+    assert.match(e.stderr, /::error title=Public npm promotion failed::.*INSIDER_TOKEN is required/u);
+    return true;
+  });
+  assert.match(await readFile(summary, "utf8"), /INSIDER_TOKEN is required/u);
+  assert.equal(JSON.parse(await readFile(join(dir, ".promotion/failure.json"), "utf8")).publicRegistryWriteVerified, false);
+});
+
+test("journal failure cannot replace an upload error or mislabel a returned command", async (t) => {
+  for (const throws of [true, false]) {
+    const f = await prepared(t);
+    f.state.exists = false;
+    const journal = join(f.directory, "stages.jsonl");
+    await assert.rejects(publishPromotion({ ...f, publisher: async () => {
+      await rm(journal);
+      await mkdir(journal);
+      if (throws) throw Object.assign(new Error("secret-response"), { code: 1 });
+    }}), e => {
+      assert.equal(e.stage, throws ? "npm-upload-command" : "npm-upload-command-diagnostics");
+      assert.match(e.message, throws ? /exit 1/u : /Operation returned successfully/u);
+      assert.ok(!e.message.includes("secret-response"));
+      return true;
+    });
+  }
+});
+
+test("context validation failure clears preparation result before rejecting", async (t) => {
+  const f = await prepared(t);
+  await writeFile(join(f.directory, "result.json"), '{"mode":"validation-only"}');
+  await assert.rejects(publishPromotion({ ...f, env: {} }), /manual dispatch/u);
+  await assert.rejects(readFile(join(f.directory, "result.json")), /ENOENT/u);
+});
+
+test("HTTP 200 null metadata is not reported as HTTP 404", async (t) => {
+  const f = await prepared(t);
+  let exactReads = 0;
+  await assert.rejects(publishPromotion({ ...f, fetcher: async (url, opts) => {
+    if (String(url) === `${PUBLIC}${PACKAGE}/${version}` && ++exactReads === 2) return Response.json(null);
+    return f.fetcher(url, opts);
+  }}), e => {
+    assert.equal(e.stage, "post-publish-version-check");
+    assert.match(e.message, /invalid version metadata/u);
+    assert.ok(!e.message.includes("404"));
+    return true;
+  });
+});
+
+test("malformed successful public metadata never becomes a missing-version write decision", async (t) => {
+  for (const body of [null, false, [], "untrusted response"]) {
+    const f = await prepared(t);
+    let writes = 0;
+    await assert.rejects(publishPromotion({ ...f, fetcher: async () => Response.json(body), publisher: async () => writes++ }), e => e.stage === "pre-publish-version-read" && /invalid version metadata/u.test(e.message));
+    assert.equal(writes, 0);
   }
 });

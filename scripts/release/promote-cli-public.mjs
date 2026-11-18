@@ -12,6 +12,65 @@ export const PUBLIC = "https://registry.npmjs.org/";
 const TARBALL = "original.tgz";
 const RECORD = "promotion.json";
 
+// Only messages constructed here are safe to expose; never print subprocess/server errors.
+class PromotionError extends Error {}
+
+function safeFailure(error) {
+  if (error instanceof PromotionError) return error;
+  const code = typeof error?.code === "number" ? ` (exit ${error.code})` : "";
+  const npmCode = /(?:^|\n)npm (?:error|ERR!) code (E[A-Z0-9_]+)(?:\r?\n|$)/u.exec(error?.stderr ?? "")?.[1];
+  const allowed = new Set(["ENEEDAUTH", "E401", "E403", "E404", "EOTP", "EPUBLISHCONFLICT", "EPRIVATE", "EINTEGRITY", "ETIMEDOUT", "ECONNRESET"]);
+  return new PromotionError(`Operation failed${code}${allowed.has(npmCode) ? `; npm ${npmCode}` : ""}. Raw output omitted; do not blindly retry a write.`);
+}
+
+async function stage(directory, name, operation) {
+  const record = async (status, message) => {
+    const entry = { stage: name, status, ...(message ? { message } : {}) };
+    await appendFile(join(directory, "stages.jsonl"), `${JSON.stringify(entry)}\n`);
+    console.log(`[promotion] ${name}: ${status}${message ? `: ${message}` : ""}`);
+  };
+  try { await record("started"); }
+  catch {
+    const failure = new PromotionError("Could not persist the stage start; operation was not called.");
+    failure.stage = `${name}-diagnostics`;
+    throw failure;
+  }
+  let value;
+  try { value = await operation(); }
+  catch (error) {
+    const failure = safeFailure(error);
+    failure.stage = name;
+    try { await record("failed", failure.message); }
+    catch { console.error("Could not persist the failed stage; original failure retained."); }
+    throw failure;
+  }
+  try { await record("completed"); }
+  catch {
+    const failure = new PromotionError("Operation returned successfully, but its completion journal could not be persisted. Verify external state before any write retry.");
+    failure.stage = `${name}-diagnostics`;
+    throw failure;
+  }
+  return value;
+}
+
+const escapeCommand = (text) => text.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A").replaceAll(",", "%2C").replaceAll(":", "%3A");
+
+export async function reportPromotionFailure(error, { directory = resolve(".promotion"), env = process.env, output = console.error } = {}) {
+  const failure = safeFailure(error);
+  const diagnostic = { stage: failure.stage ?? "configuration-or-preparation", message: failure.message, publicRegistryWriteVerified: false,
+    nextAction: "Inspect the failed stage and npm publication/review status before any write retry. Command completion alone is not proof of public availability." };
+  const text = `${diagnostic.stage}: ${diagnostic.message}`;
+  output(text);
+  if (env.GITHUB_ACTIONS === "true") output(`::error title=Public npm promotion failed::${escapeCommand(text)}`);
+  // Reporting failures must not hide the original error or change its exit status.
+  try {
+    await mkdir(directory, { recursive: true });
+    await writeFile(join(directory, "failure.json"), `${JSON.stringify(diagnostic, null, 2)}\n`);
+    if (env.GITHUB_STEP_SUMMARY) await appendFile(env.GITHUB_STEP_SUMMARY, `## Public npm promotion failed\n\nStage: ${diagnostic.stage}\n\n${diagnostic.message}\n\n${diagnostic.nextAction}\n`);
+  } catch { output("Could not persist failure diagnostics; the annotation above remains authoritative for this failure."); }
+  return diagnostic;
+}
+
 export function validatePackageName(name) {
   const part = "[a-z0-9][a-z0-9._-]*";
   if (
@@ -21,7 +80,7 @@ export function validatePackageName(name) {
     !new RegExp(`^(?:@${part}/)?${part}$`, "u").test(name) ||
     ["node_modules", "favicon.ico"].includes(name)
   ) {
-    throw new Error("A valid npm package name is required (unscoped or @scope/name).");
+    throw new PromotionError("A valid npm package name is required (unscoped or @scope/name).");
   }
   return name;
 }
@@ -36,15 +95,15 @@ export function validateVersion(version) {
     !new RegExp(pattern, "u").test(version) ||
     version.length > 256
   )
-    throw new Error("An exact SemVer version is required.");
+    throw new PromotionError("An exact SemVer version is required.");
   return version;
 }
 
 function validateSelection(packageName, version, latest) {
   validatePackageName(packageName);
   validateVersion(version);
-  if (typeof latest !== "boolean") throw new Error("latest must be an explicit boolean.");
-  if (latest && /[-+]/u.test(version)) throw new Error("latest requires a stable X.Y.Z version.");
+  if (typeof latest !== "boolean") throw new PromotionError("latest must be an explicit boolean.");
+  if (latest && /[-+]/u.test(version)) throw new PromotionError("latest requires a stable X.Y.Z version.");
 }
 
 export function assertPublishContext(env) {
@@ -59,7 +118,7 @@ export function assertPublishContext(env) {
     !env.ACTIONS_ID_TOKEN_REQUEST_URL ||
     !env.ACTIONS_ID_TOKEN_REQUEST_TOKEN
   ) {
-    throw new Error(
+    throw new PromotionError(
       "Public publication requires manual dispatch of promote-cli-public.yml on the default branch with OIDC.",
     );
   }
@@ -79,7 +138,7 @@ function transportError(stage, error) {
   const detail = error?.cause?.message === "unexpected redirect"
     ? "unexpected redirect"
     : new Set(["ENOTFOUND", "EAI_AGAIN", "ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET", "CERT_HAS_EXPIRED", "UNABLE_TO_VERIFY_LEAF_SIGNATURE"]).has(code) ? code : "fetch failed";
-  return new Error(`${stage}: ${detail}`);
+  return new PromotionError(`${stage}: ${detail}`);
 }
 
 async function response(url, options, fetcher, stage = "Registry request") {
@@ -89,14 +148,14 @@ async function response(url, options, fetcher, stage = "Registry request") {
   } catch (error) { throw transportError(stage, error); }
   if (!result.ok) {
     await result.body?.cancel();
-    throw new Error(`${stage}: HTTP ${result.status}`);
+    throw new PromotionError(`${stage}: HTTP ${result.status}`);
   }
   return result;
 }
 
 async function responseJson(result, stage) {
   try { return await result.json(); }
-  catch { throw new Error(`${stage}: invalid JSON response`); }
+  catch { throw new PromotionError(`${stage}: invalid JSON response`); }
 }
 
 // Trust policy only: the download target always comes from the registry's Location.
@@ -112,8 +171,8 @@ export async function downloadInsiderTarball(initial, fetcher = fetch) {
   for (let hop = 0; hop <= 3; hop++) {
     const trusted = TRUSTED_TARBALL_ORIGINS.has(url.origin);
     if (!trusted || url.protocol !== "https:" || url.username || url.password || url.search || url.hash)
-      throw new Error("Insider tarball: untrusted redirect destination");
-    if (visited.has(url.href)) throw new Error("Insider tarball: redirect loop");
+      throw new PromotionError("Insider tarball: untrusted redirect destination");
+    if (visited.has(url.href)) throw new PromotionError("Insider tarball: redirect loop");
     visited.add(url.href);
     let result;
     try {
@@ -123,14 +182,14 @@ export async function downloadInsiderTarball(initial, fetcher = fetch) {
     if ([301, 302, 303, 307, 308].includes(result.status)) {
       const location = result.headers.get("location");
       await result.body?.cancel();
-      if (!location || hop === 3) throw new Error("Insider tarball: redirect limit or missing location");
+      if (!location || hop === 3) throw new PromotionError("Insider tarball: redirect limit or missing location");
       try { url = new URL(location, url); }
-      catch { throw new Error("Insider tarball: invalid redirect destination"); }
+      catch { throw new PromotionError("Insider tarball: invalid redirect destination"); }
       continue;
     }
     if (!result.ok) {
       await result.body?.cancel();
-      throw new Error(`Insider tarball: HTTP ${result.status}`);
+      throw new PromotionError(`Insider tarball: HTTP ${result.status}`);
     }
     return Buffer.from(await result.arrayBuffer());
   }
@@ -148,7 +207,7 @@ function assertPlan(plan, packageName, version) {
     selected.version !== version ||
     !["publish", "reuse"].includes(selected.publicVersion)
   ) {
-    throw new Error("Promotion dry-run did not return the exact completed single-package plan.");
+    throw new PromotionError("Promotion dry-run did not return the exact completed single-package plan.");
   }
 }
 
@@ -158,7 +217,7 @@ async function readTarball(path, packageName, version) {
   });
   const manifest = JSON.parse(stdout);
   if (manifest.name !== packageName || manifest.version !== version || manifest.private === true) {
-    throw new Error("Original tarball manifest does not match the publishable selected version.");
+    throw new PromotionError("Original tarball manifest does not match the publishable selected version.");
   }
   return manifest;
 }
@@ -172,7 +231,7 @@ export async function preparePromotion({
   fetcher = fetch,
 }) {
   validateSelection(packageName, version, latest);
-  if (!env.INSIDER_TOKEN) throw new Error("INSIDER_TOKEN is required for Promotion dry-run.");
+  if (!env.INSIDER_TOKEN) throw new PromotionError("INSIDER_TOKEN is required for Promotion dry-run.");
   await mkdir(directory, { recursive: true });
   // Remove stale output first: a failed preparation must never leave a publishable record.
   await rm(join(directory, RECORD), { force: true });
@@ -199,18 +258,18 @@ export async function preparePromotion({
   );
   const metadata = Object.hasOwn(packument.versions ?? {}, version) ? packument.versions[version] : undefined;
   if (packument.name !== packageName || metadata?.name !== packageName || metadata.version !== version) {
-    throw new Error("Insider metadata does not match the selected version.");
+    throw new PromotionError("Insider metadata does not match the selected version.");
   }
   if (latest && packument["dist-tags"]?.latest !== version) {
-    throw new Error("latest requires the selected version to be the current insider latest.");
+    throw new PromotionError("latest requires the selected version to be the current insider latest.");
   }
   const tarballUrl = new URL(metadata.dist?.tarball);
   if (tarballUrl.origin !== new URL(INSIDER).origin || tarballUrl.username || tarballUrl.password) {
-    throw new Error("The selected tarball must still be hosted by insider-npm.");
+    throw new PromotionError("The selected tarball must still be hosted by insider-npm.");
   }
   const bytes = await downloadInsiderTarball(tarballUrl, fetcher);
   const hash = integrity(bytes);
-  if (hash !== metadata.dist?.integrity) throw new Error("Original tarball integrity mismatch.");
+  if (hash !== metadata.dist?.integrity) throw new PromotionError("Original tarball integrity mismatch.");
   const tarballPath = join(directory, TARBALL);
   await writeFile(tarballPath, bytes);
   await readTarball(tarballPath, packageName, version);
@@ -236,7 +295,7 @@ export async function preparePromotion({
 
 // Explicit flags override publishConfig from the original manifest. No repacking.
 export function npmPublishArguments(tarball, tag, registry = PUBLIC) {
-  if (!["latest", "promoted"].includes(tag)) throw new Error("Unsupported promotion tag.");
+  if (!["latest", "promoted"].includes(tag)) throw new PromotionError("Unsupported promotion tag.");
   return [
     "publish",
     tarball,
@@ -302,8 +361,11 @@ async function publicVersion(packageName, version, fetcher) {
     headers: { "cache-control": "no-cache" },
   });
   if (result.status === 404) return undefined;
-  if (!result.ok) throw new Error(`Public version readback failed (${result.status}).`);
-  return responseJson(result, "Public readback");
+  if (!result.ok) throw new PromotionError(`Public version readback failed (${result.status}).`);
+  const metadata = await responseJson(result, "Public readback");
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata))
+    throw new PromotionError(`Public readback: invalid version metadata (HTTP ${result.status}).`);
+  return metadata;
 }
 
 async function publicTags(packageName, fetcher) {
@@ -315,7 +377,7 @@ async function publicTags(packageName, fetcher) {
     typeof packument["dist-tags"] !== "object" ||
     Array.isArray(packument["dist-tags"])
   ) {
-    throw new Error("Public dist-tag readback is invalid.");
+    throw new PromotionError("Public dist-tag readback is invalid.");
   }
   return packument["dist-tags"];
 }
@@ -326,7 +388,8 @@ function assertPublicVersion(metadata, record) {
     metadata.version !== record.version ||
     metadata.dist?.integrity !== record.integrity
   ) {
-    throw new Error("Public exact-version/integrity readback does not match the original tarball.");
+    const reason = metadata === undefined ? "version missing (HTTP 404)" : !metadata || typeof metadata !== "object" || Array.isArray(metadata) ? "invalid version metadata" : metadata.name !== record.package ? "package name mismatch" : metadata.version !== record.version ? "version mismatch" : "SHA-512 integrity mismatch";
+    throw new PromotionError(`Public exact-version/integrity readback does not match the original tarball: ${reason}.`);
   }
 }
 
@@ -340,6 +403,10 @@ export async function publishPromotion({
   publisher = publishTarball,
   tagger = setLatest,
 }) {
+  // Clear the previous phase's success before any publication-attempt validation.
+  await rm(join(directory, "result.json"), { force: true });
+  await rm(join(directory, "failure.json"), { force: true });
+  await writeFile(join(directory, "stages.jsonl"), "");
   validateSelection(packageName, version, latest);
   assertPublishContext(env);
   const record = JSON.parse(await readFile(join(directory, RECORD), "utf8"));
@@ -360,35 +427,37 @@ export async function publishPromotion({
     !env.GITHUB_RUN_ATTEMPT ||
     record.runAttempt !== env.GITHUB_RUN_ATTEMPT
   )
-    throw new Error("Prepared promotion must belong to this workflow run and exact version.");
+    throw new PromotionError("Prepared promotion must belong to this workflow run and exact version.");
   const path = join(directory, TARBALL);
   if (integrity(await readFile(path)) !== record.integrity)
-    throw new Error("Prepared tarball integrity mismatch.");
+    throw new PromotionError("Prepared tarball integrity mismatch.");
   await readTarball(path, packageName, version);
-  const existing = await publicVersion(packageName, version, fetcher);
-  const before = await publicTags(packageName, fetcher);
+  const existing = await stage(directory, "pre-publish-version-read", () => publicVersion(packageName, version, fetcher));
+  const before = await stage(directory, "pre-publish-tags-read", () => publicTags(packageName, fetcher));
   let action = "reused";
   let tagUpdated = false;
   if (existing) {
-    assertPublicVersion(existing, record);
+    await stage(directory, "pre-publish-existing-version-check", () => assertPublicVersion(existing, record));
   } else {
     // No blind retry on publish failure: its outcome may be uncertain.
-    await publisher(path, env, record.tag);
+    await stage(directory, "npm-upload-command", () => publisher(path, env, record.tag));
     action = "published";
   }
-  assertPublicVersion(await publicVersion(packageName, version, fetcher), record);
+  await stage(directory, "post-publish-version-check", async () => assertPublicVersion(await publicVersion(packageName, version, fetcher), record));
   if (latest && existing && before.latest !== version) {
-    await tagger(packageName, version, env);
+    await stage(directory, "npm-latest-command", () => tagger(packageName, version, env));
     tagUpdated = true;
   }
-  const after = await publicTags(packageName, fetcher);
+  const after = await stage(directory, "post-publish-tags-read", () => publicTags(packageName, fetcher));
+  await stage(directory, "post-publish-tags-check", () => {
   if (latest ? after.latest !== version : after.latest !== before.latest) {
-    throw new Error("Public latest readback does not match the requested intent.");
+    throw new PromotionError("Public latest readback does not match the requested intent.");
   }
   if (!latest && action === "published" && after.promoted !== version) {
-    throw new Error("Public promoted tag readback does not match the published version.");
+    throw new PromotionError("Public promoted tag readback does not match the published version.");
   }
-  if (tagUpdated) assertPublicVersion(await publicVersion(packageName, version, fetcher), record);
+  });
+  if (tagUpdated) await stage(directory, "post-tag-version-check", async () => assertPublicVersion(await publicVersion(packageName, version, fetcher), record));
   return {
     ...record,
     action,
@@ -411,7 +480,7 @@ async function main() {
     }
     const match = /^--(package|version|latest)=(.+)$/u.exec(arg);
     if (!match || seen.has(match[1]))
-      throw new Error(
+      throw new PromotionError(
         "Expected --package=<name> --version=<exact> --latest=true|false [--publish].",
       );
     seen.add(match[1]);
@@ -448,8 +517,8 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  main().catch((error) => {
-    console.error(error.message);
+  main().catch(async (error) => {
+    await reportPromotionFailure(error);
     process.exitCode = 1;
   });
 }

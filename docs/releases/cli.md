@@ -80,6 +80,24 @@ an original insider `publishConfig.registry` or `publishConfig.tag` without chan
 its bytes. CI artifacts bind package, exact version, latest intent, repository,
 workflow, commit, run/attempt, and original tarball hash, and record verified results.
 
+### Failure diagnostics and uncertain publication outcomes
+
+A promotion failure appears directly in the Actions run's **Annotations** and
+**job summary**, not only inside the step log. It identifies the failing stage
+(pre-publish read/check, npm upload command, post-publish version/integrity check,
+or dist-tag command/readback), safe HTTP/npm error codes when available, and the
+next action. Version, package-name and SHA-512 mismatches are distinguished without
+printing a registry body, credentials, signed URLs or raw npm stdout/stderr.
+
+The artifact includes `stages.jsonl` and, on failure, `failure.json`. An upload
+command's `completed` entry means only that the command returned successfully;
+it does not prove public availability. An incomplete/failed write must not be
+retried blindly. Inspect npm's publication/review status first, including a pending
+review if npm reports one. A missing version during readback can coexist with a
+publication awaiting review. The preparation-only `result.json` is removed when
+publication begins, so it cannot be mistaken for this attempt's publication result.
+Only successful final version/integrity/tag checks produce a publication result.
+
 Each selected npm package needs its own externally configured Trusted Publisher for
 the destination repository and filename `promote-cli-public.yml`. Public publication
 requires direct-publish permission; updating `latest` on an existing version also
