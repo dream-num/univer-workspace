@@ -563,7 +563,6 @@ export function createIdentityModule(options: {
           EMAIL_CODE_MAX_ATTEMPTS
         ))
       ) {
-        await repository.deleteEmailLoginCode(stored.id);
         throw new ApplicationError(
           "INVALID_EMAIL_CODE",
           400,

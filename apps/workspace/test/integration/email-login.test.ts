@@ -170,18 +170,63 @@ describe("passwordless Email sign-in", () => {
         })
       ).rejects.toMatchObject({ code: "INVALID_EMAIL_CODE", status: 400 });
     }
-    await expect(
-      harness.identity.loginWithEmailCode({
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(
+        harness.identity.loginWithEmailCode({
+          email: "alice@example.com",
+          code,
+        })
+      ).rejects.toMatchObject({
+        code: "INVALID_EMAIL_CODE",
+        status: 400,
+        message: expect.stringContaining("Too many incorrect attempts"),
+      });
+    }
+    expect(tableCount(harness.database, "users")).toBe(0);
+  });
+
+  it("keeps counting a locked code toward the request limits", async () => {
+    const harness = await createHarness();
+    for (let request = 0; request < 5; request += 1) {
+      harness.advance(61_000);
+      await harness.identity.requestEmailLoginCode({
         email: "alice@example.com",
-        code,
-      })
+      });
+    }
+    const code = codeFrom(harness.sent[4]!);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await expect(
+        harness.identity.loginWithEmailCode({
+          email: "alice@example.com",
+          code: wrongCode(code, attempt),
+        })
+      ).rejects.toMatchObject({ code: "INVALID_EMAIL_CODE", status: 400 });
+    }
+    await expect(
+      harness.identity.loginWithEmailCode({ email: "alice@example.com", code })
     ).rejects.toMatchObject({
-      code: "INVALID_EMAIL_CODE",
-      status: 400,
       message: expect.stringContaining("Too many incorrect attempts"),
     });
-    expect(tableCount(harness.database, "users")).toBe(0);
-    expect(tableCount(harness.database, "email_login_codes")).toBe(0);
+
+    await expect(
+      harness.identity.requestEmailLoginCode({ email: "alice@example.com" })
+    ).rejects.toMatchObject({
+      code: "EMAIL_CODE_RATE_LIMITED",
+      message: expect.stringContaining("sent recently"),
+    });
+    harness.advance(61_000);
+    await expect(
+      harness.identity.requestEmailLoginCode({ email: "alice@example.com" })
+    ).rejects.toMatchObject({
+      code: "EMAIL_CODE_RATE_LIMITED",
+      message: expect.stringContaining("Too many sign-in codes"),
+    });
+    expect(harness.sent).toHaveLength(5);
+
+    harness.advance(60 * 60 * 1_000);
+    await expect(signIn(harness, "alice@example.com")).resolves.toMatchObject({
+      view: { authenticated: true },
+    });
   });
 
   it("rejects an expired code", async () => {
