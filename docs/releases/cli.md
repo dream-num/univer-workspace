@@ -87,8 +87,14 @@ requires the separate **Allow npm dist-tag** permission. This workflow changes
 neither npm nor GitHub permissions. See [npm's dist-tag/OIDC requirements](https://docs.npmjs.com/adding-dist-tags-to-packages/).
 Validation-only runs do **not** verify either public write permission or clear npm's
 pending validation. A no-write reuse also does not verify OIDC write authority.
-OIDC authentication is independent of provenance; this original-artifact promotion
-explicitly disables provenance and requires no repository visibility change.
+OIDC authentication is independent of provenance. New public versions explicitly
+request provenance and require a public publishing repository matching the original
+package's `repository` metadata. The subprocess retains `RUNNER_ENVIRONMENT` for
+npm's builder identity. This attests the promotion workflow/commit and tarball hash,
+not the full earlier insider build; it neither rebuilds nor modifies the tarball.
+Existing versions are reused without republishing or retroactively adding provenance.
+The local loopback test disables signing only in its fixture; actual Sigstore/OIDC
+acceptance must be verified on a separately authorized new-version publication.
 
 The isolated release-script tests (including a loopback-only npm upload) run in
 `test-cli-promotion.yml`, separately from the manual release workflow, on pull

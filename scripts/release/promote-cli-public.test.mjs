@@ -443,6 +443,8 @@ test("public npm upload and dist-tag subprocesses keep OIDC without token/config
   const context = {
     ...env,
     PATH: bin,
+    RUNNER_ENVIRONMENT: "github-hosted",
+    RUNNER_SECRET: "synthetic-runner-secret",
     NPM_TOKEN: "synthetic-secret",
     NODE_AUTH_TOKEN: "synthetic-secret",
     NPM_CONFIG_REGISTRY: INSIDER,
@@ -457,6 +459,7 @@ test("public npm upload and dist-tag subprocesses keep OIDC without token/config
   ]) {
     const observed = JSON.parse(result.stdout);
     for (const key of [
+      "RUNNER_SECRET",
       "INSIDER_TOKEN",
       "NPM_TOKEN",
       "NODE_AUTH_TOKEN",
@@ -464,6 +467,7 @@ test("public npm upload and dist-tag subprocesses keep OIDC without token/config
       "NPM_CONFIG_USERCONFIG",
     ])
       assert.equal(observed.env[key], undefined);
+    assert.equal(observed.env.RUNNER_ENVIRONMENT, "github-hosted");
     assert.equal(observed.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
     assert.deepEqual(observed.args, args);
     assert.notEqual(observed.cwd, process.cwd());
@@ -499,6 +503,8 @@ test("real npm uploads unchanged tarball to loopback, overriding insider registr
       "npm",
       [
         ...npmPublishArguments(f.tarball, tag, registry),
+        // This fixture verifies upload bytes/tags only, not Sigstore signing.
+        "--provenance=false",
         `--//127.0.0.1:${port}/:_authToken=synthetic-loopback-only`,
       ],
       {
@@ -654,4 +660,10 @@ test("allowlist is not a destination: actual Location and paths stay intact", as
     assert.deepEqual(calls,[`${INSIDER}original.tgz`,target]);
     assert.equal(bytes.toString(),"original");
   }
+});
+
+test("public publication explicitly requests provenance", () => {
+  const args = npmPublishArguments("original.tgz", "latest");
+  assert.ok(args.includes("--provenance=true"));
+  assert.ok(!args.includes("--provenance=false"));
 });

@@ -244,7 +244,7 @@ export function npmPublishArguments(tarball, tag, registry = PUBLIC) {
     `--tag=${tag}`,
     "--access=public",
     "--ignore-scripts",
-    "--provenance=false",
+    "--provenance=true",
     "--userconfig=/dev/null",
   ];
 }
@@ -267,7 +267,7 @@ async function runPublicNpm(args, env) {
     // Only runner/OIDC context reaches npm; no checkout .npmrc or token credentials.
     const cleanEnv = Object.fromEntries(
       Object.entries(env).filter(
-        ([key]) => ["PATH", "CI", "SYSTEMROOT"].includes(key) || /^(GITHUB_|ACTIONS_)/u.test(key),
+        ([key]) => ["PATH", "CI", "SYSTEMROOT", "RUNNER_ENVIRONMENT"].includes(key) || /^(GITHUB_|ACTIONS_)/u.test(key),
       ),
     );
     Object.assign(cleanEnv, {
