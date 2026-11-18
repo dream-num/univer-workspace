@@ -27,7 +27,7 @@ and Workspace deployment are separate operations.
 Run **Promote CLI to public npm (manual)** (`promote-cli-public.yml`) with the exact
 stable `X.Y.Z` already present on insider-npm, selecting the default branch.
 Both validation and publication require that branch before any insider credential
-is made available. `publish` defaults to **false**:
+is made available. `dry_run` defaults to **true**:
 validation calls the insider Promotion API with `dryRun=true`, checks the completed
 CLI-only plan (including version policy and public dependency availability), then
 downloads the original tarball and verifies its integrity and package identity.
@@ -36,7 +36,7 @@ Any rejection stops the run. It neither rebuilds the CLI nor promotes dependenci
 The validation step uses the existing insider `NPM_TOKEN` repository secret only
 for the insider dry-run request. It is not passed to the public npm subprocess.
 After reviewing validation evidence, an explicitly authorized public release can
-select the default branch and set `publish=true`. A GitHub-hosted Node 24 runner
+select the default branch and set `dry_run=false`. A GitHub-hosted Node 24 runner
 publishes that exact tarball using npm Trusted Publishing/OIDC, with no npm token
 or lifecycle scripts. Explicit npm flags override the original tarball's insider
 `publishConfig.registry` without changing its bytes. The publisher checks the public
@@ -50,16 +50,17 @@ a separately authorized successful real publish. OIDC authentication is independ
 of provenance; this original-artifact promotion explicitly disables provenance and
 does not require changing repository visibility.
 
-The isolated release tests (including a loopback-only npm upload) run on pull
-requests touching the promotion workflow or release scripts, without registry
-credentials or public writes:
+The isolated release-script tests (including a loopback-only npm upload) run in
+`test-cli-promotion.yml`, separately from the manual release workflow, on pull
+requests touching the promotion workflows or release scripts and on matching main
+pushes. They use no registry credentials or public writes:
 
 ```bash
 node --test scripts/release/*.test.mjs
 ```
 
-The `pull_request.paths` trigger runs only isolated policy tests when release code
-changes; it never starts the credentialed promotion job. Path-filtered workflows
+The test workflow uses `pull_request.paths` for isolated policy tests when release
+code changes. The release workflow has only `workflow_dispatch` and no test job. Path-filtered workflows
 should not be required universally for merging, since unrelated changes skip them.
 These in-workflow guards prevent accidental invocation, not a repository writer
 from changing the workflow itself. Required reviews/checks and protected deployment

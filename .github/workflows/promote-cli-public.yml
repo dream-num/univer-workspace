@@ -1,5 +1,5 @@
 name: Promote CLI to public npm (manual)
-run-name: Promote CLI ${{ inputs.version }}${{ inputs.publish && ' (publish)' || ' (validation only)' }}
+run-name: Promote CLI ${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || ' (publish)' }}
 
 on:
   workflow_dispatch:
@@ -8,46 +8,25 @@ on:
         description: Exact stable CLI version already built on insider-npm (X.Y.Z)
         required: true
         type: string
-      publish:
-        description: Publish the original tarball to public npm (requires default branch)
+      dry_run:
+        description: Validate only without publishing to public npm
         required: true
         type: boolean
-        default: false
-  # PRs exercise isolated tests only; the credentialed promote job never runs.
-  # Do not require this path-filtered workflow as a universal merge check.
-  pull_request:
-    paths:
-      - .github/workflows/promote-cli-public.yml
-      - scripts/release/**
+        default: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: cli-public-promotion-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'manual' }}
+  group: cli-public-promotion-manual
   cancel-in-progress: false
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          package-manager-cache: false
-      - name: Test release policy and isolated npm upload
-        run: node --test scripts/release/*.test.mjs
-
   promote:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.repository == 'dream-num/univer-workspace' &&
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
-    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -70,7 +49,7 @@ jobs:
           INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/release/promote-cli-public.mjs --version="$PROMOTION_VERSION"
       - name: Publish original tarball with npm OIDC and verify public integrity
-        if: inputs.publish
+        if: ${{ !inputs.dry_run }}
         run: node scripts/release/promote-cli-public.mjs --version="$PROMOTION_VERSION" --publish
       - name: Upload promotion evidence and original tarball
         if: always()

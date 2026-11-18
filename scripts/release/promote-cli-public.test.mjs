@@ -362,11 +362,14 @@ test("real npm overrides the tarball insider publishConfig and uploads byte-iden
 
 test("credentialed workflow is manual/default-branch only, even for validation", async () => {
   const workflow = await readFile(new URL("../../.github/workflows/promote-cli-public.yml", import.meta.url), "utf8");
-  const gate = workflow.split("  promote:\n")[1].split("    needs:")[0];
+  const gate = workflow.split("  promote:\n")[1].split("    runs-on:")[0];
   assert.match(gate, /github.event_name == 'workflow_dispatch'/);
   assert.match(gate, /github.repository == 'dream-num\/univer-workspace'/);
   assert.match(gate, /github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
   assert.doesNotMatch(gate, /inputs.publish|\|\|/);
-  const tests = workflow.split("  test:\n")[1].split("  promote:")[0];
+  assert.doesNotMatch(workflow, /pull_request:|  test:|needs: test|inputs.publish/);
+  assert.match(workflow, /dry_run:[\s\S]*default: true/);
+  assert.match(workflow, /if: \$\{\{ !inputs.dry_run \}\}/);
+  const tests = await readFile(new URL("../../.github/workflows/test-cli-promotion.yml", import.meta.url), "utf8");
   assert.doesNotMatch(tests, /secrets\.|id-token: write|--publish/);
 });
