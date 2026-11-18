@@ -13,6 +13,8 @@ on:
         required: true
         type: boolean
         default: false
+  # PRs exercise isolated tests only; the credentialed promote job never runs.
+  # Do not require this path-filtered workflow as a universal merge check.
   pull_request:
     paths:
       - .github/workflows/promote-cli-public.yml
@@ -44,7 +46,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' &&
       github.repository == 'dream-num/univer-workspace' &&
-      (!inputs.publish || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 15

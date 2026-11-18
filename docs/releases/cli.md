@@ -25,7 +25,9 @@ and Workspace deployment are separate operations.
 ## Promote an existing stable CLI to public npm
 
 Run **Promote CLI to public npm (manual)** (`promote-cli-public.yml`) with the exact
-stable `X.Y.Z` already present on insider-npm. `publish` defaults to **false**:
+stable `X.Y.Z` already present on insider-npm, selecting the default branch.
+Both validation and publication require that branch before any insider credential
+is made available. `publish` defaults to **false**:
 validation calls the insider Promotion API with `dryRun=true`, checks the completed
 CLI-only plan (including version policy and public dependency availability), then
 downloads the original tarball and verifies its integrity and package identity.
@@ -55,3 +57,10 @@ credentials or public writes:
 ```bash
 node --test scripts/release/*.test.mjs
 ```
+
+The `pull_request.paths` trigger runs only isolated policy tests when release code
+changes; it never starts the credentialed promotion job. Path-filtered workflows
+should not be required universally for merging, since unrelated changes skip them.
+These in-workflow guards prevent accidental invocation, not a repository writer
+from changing the workflow itself. Required reviews/checks and protected deployment
+environments are separate repository policies; this workflow does not configure them.
