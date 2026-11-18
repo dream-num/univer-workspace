@@ -11,7 +11,8 @@ import { z } from "zod";
 import type { ToolContext } from "../definition.js";
 import { resolveRepo } from "./issue-support.js";
 
-export const pullNumberInput = z
+// Coerced so a model that sends 12 as a number reaches pull request 12, while the advertised schema stays a string.
+export const pullNumberInput = z.coerce
   .string()
   .describe(
     "Pull request number (12 or #12), its Workspace URL, or a Worktree ID. A URL names its own repository and wins over repo.",
