@@ -1772,7 +1772,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List .univer.html Blobs the current user can open, newest node update first. */
+        /**
+         * List .univer.html Blobs in the current user's Spaces and directly granted Nodes, newest node update first.
+         * @description Without spaceId, lists HTML Views in Spaces the user owns or belongs to as a Team member, and in
+         *     Nodes granted to the user directly. Link sharing and public Spaces do not add HTML Views here.
+         *     With spaceId, lists the HTML Views the user sees when browsing that Space, a public Space included.
+         */
         get: operations["listHtmlViews"];
         put?: never;
         post?: never;
@@ -7195,7 +7200,7 @@ export interface operations {
                 /** @description Opaque cursor returned by the previous page. */
                 cursor?: components["parameters"]["CursorParameter"];
                 limit?: components["parameters"]["LimitParameter"];
-                /** @description Restrict results to one accessible Space. */
+                /** @description Restrict results to one Space the user can browse, or to the Nodes granted in it. */
                 spaceId?: string;
             };
             header?: never;

@@ -6,7 +6,9 @@
 
 [Blob 预览入口](../../../apps/workspace/web/src/features/blobs/blob-preview.tsx) 使用 SDK 的
 `isHtmlViewFilename()` 将 `.univer.html` 交给 `HtmlViewFile`。
-侧栏 Apps 跟在团队空间后面，通过 `GET /api/html-views` 列出当前用户能打开的这类 Blob。
+侧栏 Apps 跟在团队空间后面，通过 `GET /api/html-views` 列出当前用户自己的空间（拥有的空间和所在的团队空间）
+以及直接授权给他的节点中的这类 Blob。链接分享和公开空间不会把页面加入这个列表；按空间筛选时，
+结果与浏览该空间时看到的相同，公开空间也包括在内。
 主区域使用和 Node 页相同的 HTML 视图与顶栏操作；沉浸视图仍进入
 `/nodes/{nodeId}?view=immersive`。
 `HtmlViewFile` 携带当前会话读取 `contentUrl`，`HtmlView` 组合私有共享组件

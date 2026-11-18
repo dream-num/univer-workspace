@@ -3153,14 +3153,18 @@ paths:
       tags:
         - Views
       operationId: listHtmlViews
-      summary: List .univer.html Blobs the current user can open, newest node update first.
+      summary: List .univer.html Blobs in the current user's Spaces and directly granted Nodes, newest node update first.
+      description: |
+        Without spaceId, lists HTML Views in Spaces the user owns or belongs to as a Team member, and in
+        Nodes granted to the user directly. Link sharing and public Spaces do not add HTML Views here.
+        With spaceId, lists the HTML Views the user sees when browsing that Space, a public Space included.
       parameters:
         - $ref: '#/components/parameters/CursorParameter'
         - $ref: '#/components/parameters/LimitParameter'
         - name: spaceId
           in: query
           required: false
-          description: Restrict results to one accessible Space.
+          description: Restrict results to one Space the user can browse, or to the Nodes granted in it.
           schema:
             type: string
             minLength: 1
