@@ -24,6 +24,7 @@ export const shareOutputSchema = z.object({
     claimed: z.boolean().optional(),
   }),
   expiresAt: z.string().optional(),
+  access: z.string().optional(),
 });
 export const shareTool: ToolDefinition = {
   name: "share",
