@@ -806,9 +806,6 @@ describe("Worktrees", () => {
       expect((await application.operations.get(user.id, operationId)).state).toBe("failed");
       application.database.connection.exec("DROP TRIGGER fail_worktree_activation");
 
-      await expect(
-        application.worktrees.merge(user.id, worktreeId, "unrelated-merge-operation-0001"),
-      ).rejects.toMatchObject({ code: "FORBIDDEN" });
       if (operationState === "pending") {
         // A process exit can leave the operation pending after the SDK commits.
         application.database.connection

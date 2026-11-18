@@ -32,7 +32,7 @@ import type {
   WorktreeUnit,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { forbidden, notFound, onlyAuthorMerges } from "./worktrees.errors.js";
+import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -707,13 +707,14 @@ export function createWorktreesModule(options: {
         );
         if (input.worktreeId !== worktreeId) throw idempotencyConflict();
       }
-      const resumeMerged = existing !== null && value.state === "merged";
-      const resumeMerging = existing !== null && value.state === "merging";
-      if (!value.row.actor_owns_creator_space) throw onlyAuthorMerges(value.row);
-      if (
-        !value.capabilities.merge &&
-        !((resumeMerged || resumeMerging) && canMergeAsActor(userId, value.row))
-      ) {
+      const resumeMerged = value.state === "merged";
+      // A started merge is a decision already made, so its starter, or anyone who may merge, can finish it.
+      const resumes =
+        (value.state === "merging" || resumeMerged) &&
+        (existing !== null || (value.row.processed_at === null && canMergeAsActor(userId, value.row)));
+      if (!value.capabilities.merge && !resumes) {
+        if (!value.row.actor_owns_creator_space) throw onlyAuthorMerges(value.row);
+        if (value.state === "ready") throw mergeNeedsEditAccess();
         throw forbidden();
       }
       if (existing?.state !== "completed" && value.row.processed_at === null) {
@@ -1015,11 +1016,11 @@ async function validateAllTargets(
         unit.node_id === null ||
         !(await options.access.resolveNode(userId, unit.node_id))?.capabilities.trash
       )
-        throw forbidden();
+        throw mergeNeedsEditAccess();
       continue;
     }
     if (!(await canEditUnit(userId, row, unit, options.access))) {
-      throw forbidden();
+      throw mergeNeedsEditAccess();
     }
   }
 }

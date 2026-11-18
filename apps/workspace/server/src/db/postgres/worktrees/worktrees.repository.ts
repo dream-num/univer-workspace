@@ -122,10 +122,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
       .prepare(
         `${worktreeSelect()}
          WHERE (
-           (worktree.kind = 'user' AND ${ownsSpaceSql("worktree.creator_user_id")})
+           ${ownsSpaceSql("worktree.creator_user_id")}
            OR (worktree.kind = 'team' AND (
-             worktree.creator_user_id = $userId
-             OR team.owner_user_id = $userId
+             team.owner_user_id = $userId
              OR (member.user_id IS NOT NULL AND (
                worktree.visibility = 'space' OR member.role = 'admin'
              ))
@@ -645,6 +644,8 @@ function worktreeSelect(): string {
             creator.username AS creator_username,
             creator.display_name AS creator_display_name,
             creator.avatar_url AS creator_avatar_url,
+            claimer.username AS claimer_username,
+            claimer.display_name AS claimer_display_name,
             team.name AS team_space_name,
             team.owner_user_id AS team_owner_user_id,
             member.role AS actor_member_role,
@@ -655,6 +656,8 @@ function worktreeSelect(): string {
             ) AS unit_count
           FROM worktrees AS worktree
           JOIN users AS creator ON creator.id = worktree.creator_user_id
+          LEFT JOIN agents AS agent ON agent.user_id = worktree.creator_user_id
+          LEFT JOIN users AS claimer ON claimer.id = agent.owner_user_id
           LEFT JOIN spaces AS team ON team.id = worktree.team_space_id
           LEFT JOIN space_members AS member
             ON member.space_id = worktree.team_space_id

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { createServer, type Server } from "node:http";
+import { UniverType } from "@univerjs/protocol";
 import { afterEach, describe, expect, it } from "vitest";
+import type { WorktreeBackend } from "../../server/src/modules/worktrees/index.js";
 import { createProductTestApplication, type ProductTestApplication } from "../support/product-test-application.js";
 
 const applications: ProductTestApplication[] = [];
@@ -87,14 +89,150 @@ describe("who takes a pull request to trunk", () => {
     await transition(origin, own, "ready", unclaimed);
     expect(await transition(origin, own, "merge", unclaimed)).toBe("merged");
   }, 30_000);
+
+  it("names the agent's owner when refusing, tells an owner without edit access why, and lists the pull request to that owner", async () => {
+    const { origin, application, repositories } = await start();
+    const [owner, claimer] = await Promise.all(["owner", "claimer"].map((name) => person(origin, name)));
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
+    // No agent can join a Team Space now; this membership stands for one that predates that rule.
+    const agent = await guestAgent(origin);
+    await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
+    await claim(origin, agent, claimer);
+    const pull = await createPull(origin, agent, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
+    await transition(origin, pull, "ready", agent);
+
+    const listed = (await (await send(origin, "GET", "/api/worktrees?scope=all", undefined, claimer.cookie)).json()) as { items: { id: string }[] };
+    expect(listed.items.map((item) => item.id)).toEqual([pull]);
+    expect(await mergeAs(origin, pull, owner, randomUUID())).toEqual({
+      status: 403,
+      message: `Only the author, ${agent.displayName} (@${agent.username}), or claimer (@claimer) who claimed it, can merge this pull request.`,
+    });
+    expect(await mergeAs(origin, pull, claimer, randomUUID())).toEqual({
+      status: 403,
+      message: "You cannot merge this pull request without edit access to every file and folder it changes.",
+    });
+  }, 30_000);
+});
+
+describe("finishing a merge started while Team Admins could merge anyone's pull request", () => {
+  it.each(["merging", "merged"] as const)(
+    "lets the author, the agent's owner and the Admin who started it finish a %s pull request, and nobody else",
+    async (stage) => {
+      const stopped = stoppedBackend();
+      const { origin, application, repositories } = await start(stopped.backend);
+      const [owner, admin, author, claimer] = await Promise.all(["owner", "admin", "author", "claimer"].map((name) => person(origin, name)));
+      const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
+      await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
+      await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
+      await application.permissions.upsertTeamMember(owner.id, team.id, claimer.id, { role: "editor" });
+      const agent = await guestAgent(origin);
+      await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
+      await claim(origin, agent, claimer);
+      const startedByAdmin = async (creator: Actor) => {
+        const id = await createPull(origin, creator, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+        await transition(origin, id, "ready", creator);
+        const operationId = randomUUID();
+        await repositories.worktrees.reserveOperation({ id: operationId, kind: "merge_worktree", actorUserId: admin.id, payload: { worktreeId: id }, createdAt: Date.now() });
+        stopped.stop(id, stage);
+        return { id, operationId };
+      };
+      const finished = { state: "merged", files: ["completed"] };
+
+      const refused = await startedByAdmin(author);
+      for (const actor of [owner, admin]) {
+        expect(await mergeAs(origin, refused.id, actor, randomUUID())).toEqual({
+          status: 403,
+          message: "Only the author, author (@author), can merge this pull request.",
+        });
+      }
+      expect(await outcome(origin, refused.id, author)).toEqual({ state: stage, files: [stage === "merged" ? "pending" : "waitingForMerge"] });
+
+      const byAuthor = await startedByAdmin(author);
+      expect((await mergeAs(origin, byAuthor.id, author, randomUUID())).status).toBe(200);
+      expect(await outcome(origin, byAuthor.id, author)).toEqual(finished);
+
+      const byClaimer = await startedByAdmin(agent);
+      expect((await mergeAs(origin, byClaimer.id, claimer, randomUUID())).status).toBe(200);
+      expect(await outcome(origin, byClaimer.id, agent)).toEqual(finished);
+
+      const byStarter = await startedByAdmin(author);
+      expect((await mergeAs(origin, byStarter.id, admin, byStarter.operationId)).status).toBe(200);
+      expect(await outcome(origin, byStarter.id, author)).toEqual(finished);
+
+      const byRetry = await startedByAdmin(author);
+      await repositories.worktrees.failOperation(byRetry.operationId, { code: "INTERNAL_ERROR", message: "Interrupted" }, Date.now());
+      const retried = await send(origin, "POST", `/api/operations/${byRetry.operationId}/retry`, undefined, admin.cookie);
+      expect({ status: retried.status, state: ((await retried.json()) as { state: string }).state }).toEqual({ status: 202, state: "completed" });
+      expect(await outcome(origin, byRetry.id, author)).toEqual(finished);
+    },
+    30_000,
+  );
+
+  it("does not let the Admin begin a merge that never reached the collaboration service", async () => {
+    const { origin, application, repositories } = await start(stoppedBackend().backend);
+    const [owner, admin, author] = await Promise.all(["owner", "admin", "author"].map((name) => person(origin, name)));
+    const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
+    await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
+    const pull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+    await transition(origin, pull, "ready", author);
+    const operationId = randomUUID();
+    await repositories.worktrees.reserveOperation({ id: operationId, kind: "merge_worktree", actorUserId: admin.id, payload: { worktreeId: pull }, createdAt: Date.now() });
+
+    expect(await mergeAs(origin, pull, admin, operationId)).toEqual({
+      status: 403,
+      message: "Only the author, author (@author), can merge this pull request.",
+    });
+    expect(await outcome(origin, pull, author)).toEqual({ state: "ready", files: ["waitingForMerge"] });
+    expect((await mergeAs(origin, pull, author, randomUUID())).status).toBe(200);
+  }, 30_000);
 });
 
 interface Actor {
   readonly id: string;
   readonly cookie: string;
+  readonly username: string;
+  readonly displayName: string;
 }
 
-async function start() {
+/** Pull requests that a test can leave mid-merge, as an interrupted merge leaves them. */
+function stoppedBackend() {
+  type Worktree = Awaited<ReturnType<WorktreeBackend["getWorktree"]>>;
+  const worktrees = new Map<string, Worktree>();
+  const save = (worktree: Worktree) => {
+    worktrees.set(worktree.worktreeID, worktree);
+    return worktree;
+  };
+  const merged = (worktreeID: string): Worktree => {
+    const current = worktrees.get(worktreeID)!;
+    return { ...current, status: "merged", units: current.units.map((unit) => ({ ...unit, mergeResult: { status: "merged", trunkRevision: 2 } })) } as Worktree;
+  };
+  const backend: Pick<WorktreeBackend, "createWorktree" | "getWorktree" | "createUnit" | "markReady" | "merge"> = {
+    async createWorktree(worktreeID) {
+      return save({ worktreeID, status: "draft", units: [] });
+    },
+    async getWorktree(worktreeID) {
+      return worktrees.get(worktreeID)!;
+    },
+    async createUnit(input) {
+      const current = worktrees.get(input.worktreeId)!;
+      return save({ ...current, units: [...current.units, { unitID: input.unitId, type: UniverType.UNIVER_SHEET, source: "worktree", draftHeadRevision: 1 }] } as Worktree);
+    },
+    async markReady(worktreeID) {
+      return save({ ...worktrees.get(worktreeID)!, status: "ready" });
+    },
+    async merge(worktreeID) {
+      return save(merged(worktreeID));
+    },
+  };
+  return {
+    backend: backend as WorktreeBackend,
+    stop: (worktreeID: string, stage: "merging" | "merged") =>
+      save(stage === "merged" ? merged(worktreeID) : { ...worktrees.get(worktreeID)!, status: "merging" }),
+  };
+}
+
+async function start(worktreeBackend?: WorktreeBackend) {
   const application = await createProductTestApplication({
     host: "127.0.0.1",
     port: 0,
@@ -103,6 +241,9 @@ async function start() {
     secureCookies: false,
     passwordAuthEnabled: true,
     agentCreateLimitPerHour: 100,
+  }, worktreeBackend && {
+    unitStore: { async createUnit(input) { return { unitId: input.unitId, headRevision: 1 }; } },
+    worktreeBackend,
   });
   applications.push(application);
   const server = createServer(application.app);
@@ -123,8 +264,10 @@ function send(origin: string, method: string, path: string, body?: unknown, cook
 
 async function signedIn(response: Response): Promise<Actor> {
   const cookie = response.headers.get("set-cookie")!.split(";")[0]!;
-  const { user } = (await (await send(new URL(response.url).origin, "GET", "/api/session", undefined, cookie)).json()) as { user: { id: string } };
-  return { id: user.id, cookie };
+  const { user } = (await (await send(new URL(response.url).origin, "GET", "/api/session", undefined, cookie)).json()) as {
+    user: { id: string; username: string; displayName: string };
+  };
+  return { id: user.id, cookie, username: user.username, displayName: user.displayName };
 }
 
 async function person(origin: string, username: string): Promise<Actor> {
@@ -163,6 +306,18 @@ async function granted(origin: string, worktreeId: string, actor: Actor): Promis
   if (response.status === 404) return "not found";
   const { worktree } = (await response.json()) as { worktree: { capabilities: Record<string, boolean> } };
   return Object.entries(worktree.capabilities).filter(([, allowed]) => allowed).map(([name]) => name).join(" ");
+}
+
+async function mergeAs(origin: string, worktreeId: string, actor: Actor, key: string): Promise<{ status: number; message?: string }> {
+  const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/merge`, undefined, actor.cookie, { "idempotency-key": key });
+  const body = (await response.json()) as { error?: { message: string } };
+  return response.status === 200 ? { status: 200 } : { status: response.status, message: body.error?.message };
+}
+
+async function outcome(origin: string, worktreeId: string, actor: Actor): Promise<{ state: string; files: string[] }> {
+  const response = await send(origin, "GET", `/api/worktrees/${worktreeId}`, undefined, actor.cookie);
+  const { worktree } = (await response.json()) as { worktree: { state: string; units: { activationState: string }[] } };
+  return { state: worktree.state, files: worktree.units.map((unit) => unit.activationState) };
 }
 
 async function transition(origin: string, worktreeId: string, action: "ready" | "merge", actor: Actor): Promise<string> {
