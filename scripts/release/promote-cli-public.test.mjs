@@ -692,3 +692,12 @@ test("independent verification rejects mismatches and network failures, not pend
   f.metadata.dist.integrity = "sha512-different";
   await assert.rejects(verifyPromotion(f), /integrity readback/u);
 });
+
+test("a failed new submission clears a previous receipt without deleting the prepared artifact", async (t) => {
+  const f = await prepared(t);
+  await publishPromotion(f);
+  await assert.rejects(publishPromotion({ ...f, env: {} }), /manual dispatch/u);
+  await assert.rejects(readFile(join(f.directory, "submission.json")), /ENOENT/u);
+  assert.deepEqual(await readFile(join(f.directory, "original.tgz")), f.bytes);
+  assert.equal(JSON.parse(await readFile(join(f.directory, "promotion.json"), "utf8")).version, version);
+});

@@ -340,6 +340,8 @@ export async function publishPromotion({
   publisher = publishTarball,
   tagger = setLatest,
 }) {
+  // A failed new attempt must not leave a previous successful submission receipt.
+  await rm(join(directory, "submission.json"), { force: true });
   validateSelection(packageName, version, latest);
   assertPublishContext(env);
   const record = JSON.parse(await readFile(join(directory, RECORD), "utf8"));

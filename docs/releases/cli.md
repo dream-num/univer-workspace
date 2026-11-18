@@ -129,3 +129,6 @@ errors fail this separate check. It never uploads, retries publication, or chang
 Npm upload failure remains failure with potentially unknown outcome; do not blindly
 retry. Notifications may independently consume submitted and verified results, but
 are not part of this workflow. No automatic poller or notification service is added.
+
+Verification observes current tags; it does not prove no other actor changed them
+between submission and verification, and it never repairs them automatically.
