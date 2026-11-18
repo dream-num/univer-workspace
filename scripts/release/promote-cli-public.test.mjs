@@ -701,3 +701,21 @@ test("a failed new submission clears a previous receipt without deleting the pre
   assert.deepEqual(await readFile(join(f.directory, "original.tgz")), f.bytes);
   assert.equal(JSON.parse(await readFile(join(f.directory, "promotion.json"), "utf8")).version, version);
 });
+
+test("failed verification and a new submission remove stale verified output", async (t) => {
+  const f = await prepared(t);
+  await publishPromotion(f);
+  const path = join(f.directory, "verification.json");
+  for (const fetcher of [async () => { throw new Error("offline"); }, async () => new Response(null, { status: 503 }), async () => Response.json({ name: PACKAGE, version, dist: { integrity: "wrong" } })]) {
+    await writeFile(path, '{"mode":"verified"}');
+    await assert.rejects(verifyPromotion({ ...f, fetcher }));
+    await assert.rejects(readFile(path), /ENOENT/u);
+  }
+  f.state.tags.latest = "unexpected";
+  await writeFile(path, '{"mode":"verified"}');
+  await assert.rejects(verifyPromotion(f), /latest readback/u);
+  await assert.rejects(readFile(path), /ENOENT/u);
+  await writeFile(path, '{"mode":"verified"}');
+  await assert.rejects(publishPromotion({ ...f, env: {} }), /manual dispatch/u);
+  await assert.rejects(readFile(path), /ENOENT/u);
+});

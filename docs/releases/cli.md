@@ -132,3 +132,8 @@ are not part of this workflow. No automatic poller or notification service is ad
 
 Verification observes current tags; it does not prove no other actor changed them
 between submission and verification, and it never repairs them automatically.
+
+There is no cross-run duplicate-submission gate. While a version is pending, a
+manual second `--publish` can still attempt another upload. Do not resubmit;
+use `--verify` or inspect npm's authoritative status. No automatic retry is added.
+Each verification and new submission clears stale `verification.json` first.

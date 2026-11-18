@@ -342,6 +342,7 @@ export async function publishPromotion({
 }) {
   // A failed new attempt must not leave a previous successful submission receipt.
   await rm(join(directory, "submission.json"), { force: true });
+  await rm(join(directory, "verification.json"), { force: true });
   validateSelection(packageName, version, latest);
   assertPublishContext(env);
   const record = JSON.parse(await readFile(join(directory, RECORD), "utf8"));
@@ -390,6 +391,7 @@ export async function publishPromotion({
 
 // Separate read-only operation: never invokes a publisher or dist-tag writer.
 export async function verifyPromotion({ packageName, version, latest, directory, fetcher = fetch }) {
+  await rm(join(directory, "verification.json"), { force: true });
   validateSelection(packageName, version, latest);
   const record = JSON.parse(await readFile(join(directory, "submission.json"), "utf8"));
   if (record.package !== packageName || record.version !== version || record.latest !== latest ||
