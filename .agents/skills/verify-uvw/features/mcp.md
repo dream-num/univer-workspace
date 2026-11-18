@@ -843,11 +843,10 @@ jq -e --arg repo "$T" '.tool == "pr_merge" and .repo == $repo and .outcome == "o
 $V cli mcp-ms-forecast space find forecast --space "$O/verify-team" --json
 jq -e '.nodes | length == 1 and .[0].name == "Forecast"' "$EVIDENCE/mcp-ms-forecast.out"
 $V mcp --toolsets all mcp-pr-merge-again pr_merge "{\"repo\":\"$O/verify-team\",\"number\":\"$NB\"}"
-test $? -eq 1
 $V cli mcp-pr-merge-again-cli pr merge "$NB" -R "$O/verify-team" --json
-test $? -eq 1
-code=$(jq -r '.code' "$EVIDENCE/mcp-pr-merge-again.out")
-test "$(cut -d: -f1 < "$EVIDENCE/mcp-pr-merge-again-cli.err" | head -n1)" = "$code"
+id=$(jq -r '.id' "$EVIDENCE/mcp-pr-merge.out")
+jq -e --arg id "$id" '.id == $id and .state == "merged"' "$EVIDENCE/mcp-pr-merge-again.out"
+jq -e --arg id "$id" '.id == $id and .state == "merged"' "$EVIDENCE/mcp-pr-merge-again-cli.out"
 $V mcp --toolsets all mcp-pr-discard pr_discard "{\"repo\":\"$O/verify-team\",\"number\":\"$AN\"}"
 $V cli mcp-pr-discard-cli pr view "$AN" -R "$O/verify-team" --json
 diff <(jq -S 'del(.url, .units)' "$EVIDENCE/mcp-pr-discard.out") <(jq -S 'del(.units)' "$EVIDENCE/mcp-pr-discard-cli.out")
@@ -856,8 +855,8 @@ jq -e --arg repo "$T" '.tool == "pr_discard" and .repo == $repo and .outcome == 
 ```
 
 Pass when the ready pull request merges and the draft pull request `AN` from MS7 is discarded with results equal to the CLI view. Lifecycle transitions (ready, merge, discard) return the Worktree with an empty `units`, as the matching `uvw pr` commands do; the CLI view lists the Units, so `units` is compared through the view
-without `url`, the merged Unit appears in the Space as `Forecast`, merging a second time fails in
-MCP and CLI with the same code (`workspace-lifecycle-invalid`), and the events carry the Team Space ID.
+without `url`, the merged Unit appears in the Space as `Forecast`, merging a second time as the same user
+succeeds in MCP and CLI and returns the same merged pull request, and the events carry the Team Space ID.
 
 **MS11. Stage B product journey.** An agent files an Issue, opens a pull request, adds a sheet and hands it over.
 

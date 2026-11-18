@@ -565,6 +565,17 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(writesOf()).toEqual([{ method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined }]);
   });
 
+  it("refuses a pull request number that is neither a string nor a non-negative integer", async () => {
+    const client = await connect();
+    prState = "ready";
+    for (const number of [null, true, {}, [], [3], 1.5, -3, 1e21, undefined]) {
+      const result = await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number } });
+      expect(result).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+      expect(JSON.stringify(result.content)).toContain("expected string");
+    }
+    expect(writesOf()).toEqual([]);
+  });
+
   it("merges a ready pull request, discards a draft one and refuses an invalid transition", async () => {
     const client = await connect();
     const call = async (name: string, number = "3") =>
