@@ -1,4 +1,4 @@
-import { repoEditPatch, repoUrl } from "@univerjs/univer-workspace-client-core/product";
+import { editRepo, repoEditPatch, repoUrl } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { destructiveAnnotations, type ToolDefinition } from "../definition.js";
 import { repoSchema } from "../schemas.js";
@@ -31,7 +31,7 @@ export const repoEditTool: ToolDefinition = {
       ...(slug === undefined ? {} : { slug }),
     });
     const spaceId = await resolveRepo(context, repo);
-    const space = await spaceFeature(context).update(spaceId, patch);
+    const space = await editRepo(spaceFeature(context), context.identityOrigin, spaceId, patch);
     return { output: { ...space, url: repoUrl(context.identityOrigin, space.id) }, repo: spaceId };
   },
 };

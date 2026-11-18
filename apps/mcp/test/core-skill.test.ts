@@ -80,6 +80,14 @@ describe("MCP core Skill tool bindings", () => {
     expect(content).toContain("An agent identity follows the server instructions instead");
   });
 
+  it("leaves making a repository public to the user in the browser", async () => {
+    const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    expect(content).toContain(
+      "This connection cannot make a repository public. When the user wants anyone with the link to open the page, give them the repository `url` and ask them to make it public in its settings in the browser",
+    );
+    expect(content).not.toContain("`repo_edit` to make a repository public");
+  });
+
   it("states the shared idempotency key rule", async () => {
     const content = await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8");
     expect(content.replace(/\s+/gu, " ")).toContain(IDEMPOTENCY_KEY_DESCRIPTION);
