@@ -1,9 +1,10 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Bot, ShieldCheck } from "lucide-react";
 import { agentClaimQueryOptions, claimAgent } from "../features/account/claimed-agents.queries";
 import { AuthCard, sessionQueryOptions } from "../features/auth";
-import { ApiError } from "../shared/api/errors";
+import { api } from "../shared/api/client";
+import { ApiError, apiError } from "../shared/api/errors";
 import { useI18n, type MessageKey } from "../shared/i18n";
 import { Alert, Button, Spinner } from "../shared/ui";
 
@@ -37,6 +38,15 @@ function ClaimAgentPage() {
   const claim = useMutation({
     mutationFn: () => claimAgent(code),
     onSuccess: ({ agent }) => openSpace(agent.spaceId),
+  });
+  const queryClient = useQueryClient();
+  // Staying on this page keeps the claim link; resetting drops everything cached for the agent.
+  const signOut = useMutation({
+    mutationFn: async () => {
+      const { error } = await api.POST("/api/auth/logout");
+      if (error) throw apiError(error);
+    },
+    onSuccess: () => queryClient.resetQueries(),
   });
 
   if (session.isPending || (signedIn && preview.isPending)) {
@@ -88,6 +98,12 @@ function ClaimAgentPage() {
         {!agent ? (
           <div className="grid gap-5">
             <Alert variant="destructive">{errorText(preview.error)}</Alert>
+            {signOut.error ? <Alert variant="destructive">{signOut.error.message}</Alert> : null}
+            {claimErrorKey(preview.error) === "claimAgentNotHuman" ? (
+              <Button className="w-full" size="lg" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
+                {t("claimAgentSignOut")}
+              </Button>
+            ) : null}
             <Button className="w-full" size="lg" variant="secondary" onClick={() => void navigate({ to: "/home" })}>
               {t("backToHome")}
             </Button>

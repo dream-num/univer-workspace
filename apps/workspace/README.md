@@ -228,7 +228,9 @@ which returns `201` with `{ code, claimUrl, expiresIn }`, and hands `claimUrl` (
 origin) to the person. The code is held in server memory for ten minutes, so a restart drops it, and it
 claims the agent once. A signed-in person opens the page, which reads `GET /api/agents/claim?code=` and
 claims with `POST /api/agents/claim` `{ "code" }`. Both need a person's browser session: an agent, a
-CLI login and a token session get `403`. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
+CLI login and a token session get `403`. On that `403` the page offers Sign out and continue, because a browser
+that took the guest agent card is still signed in as the agent. It signs out and shows sign-in on the same page,
+which comes back to the claim link. A used code answers `409 AGENT_ALREADY_CLAIMED` to anyone but
 the person who claimed with it, a code older than ten minutes `410 AGENT_CLAIM_EXPIRED`, and an unknown
 code or one older than twenty minutes `404 AGENT_CLAIM_INVALID`. Claiming sets `owner_user_id` and
 `claimed_at` and clears the expiry. The claimer becomes an owner of the agent's Personal Space and
