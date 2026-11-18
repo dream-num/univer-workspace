@@ -11,11 +11,18 @@ import { z } from "zod";
 import type { ToolContext } from "../definition.js";
 import { resolveRepo } from "./issue-support.js";
 
+// A model that sends 12 as a number reaches pull request 12, and any other non-string keeps the string error.
+// The description sits on the string and nonoptional keeps it required, so the advertised schema stays main's.
 export const pullNumberInput = z
-  .string()
-  .describe(
-    "Pull request number (12 or #12), its Workspace URL, or a Worktree ID. A URL names its own repository and wins over repo.",
-  );
+  .preprocess(
+    (value) => (Number.isSafeInteger(value) && Number(value) >= 0 ? String(value) : value),
+    z
+      .string()
+      .describe(
+        "Pull request number (12 or #12), its Workspace URL, or a Worktree ID. A URL names its own repository and wins over repo.",
+      ),
+  )
+  .nonoptional();
 export const visibilityInput = z
   .enum(["private", "space"])
   .describe("Team Space repositories only.");

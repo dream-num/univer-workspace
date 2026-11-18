@@ -289,7 +289,7 @@ function build(
     root.addCommand(transition("ready", "ready", "Mark a draft pull request ready for review", false));
     root.addCommand(transition(names.reopen, "reopen", "Move a ready pull request back to draft", false));
   }
-  root.addCommand(transition("merge", "merge", "Merge a ready pull request into its repository", false));
+  root.addCommand(transition("merge", "merge", "Merge a ready pull request into its repository, or finish a merge that stopped", false));
   root.addCommand(transition("discard", "discard", "Discard a pull request. This cannot be undone", false));
 
   if (guardGhVerbs) {

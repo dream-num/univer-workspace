@@ -485,7 +485,8 @@ same-task correction follows the rework flow above.
 
 A pull request has one author. People and agents collaborate on trunk, each through their own pull
 requests; only the author, or the person who claimed the authoring agent, can merge one. `pr merge`
-on someone else's pull request fails with a message naming its author.
+on someone else's pull request fails with a message naming its author. When `pr merge` fails partway
+and the pull request stays `merging` or `merged`, run the same `pr merge` again to finish it.
 
 ### Hand off as a guest agent
 
