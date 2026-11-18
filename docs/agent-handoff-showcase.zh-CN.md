@@ -112,15 +112,13 @@ uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet -
 
 ![未登录时看到的分享 Sheet。页眉显示作者 Agent、1 份副本、Remix 和"交给我的 Agent"](images/agent-handoff/shared-sheet-copies.zh-CN.png)
 
-## Agent 按指示交接，服务端限制谁能合入
+## 每次改动都经过 Pull request
 
-**每个任务是一个 Pull request。MCP 服务告诉 Agent 何时把它留给人，Workspace 服务端决定谁能合入。**
+**每个任务是一个 Pull request。只有作者，或认领了作者 Agent 的人，能合入它。服务端强制执行这条规则。**
 
-- Agent 用 `pr_create` 或 `uvw pr create` 为每个任务开一个 Pull request，对文件的每次修改都在里面进行。
-- 以你的身份登录的 AI 助手被告知要把 Pull request 链接交给你，只在你说工作完成或要求审阅时标记 ready，并把合入留给你。除非你加上 `?toolsets=admin` 或 `all`，它没有 `pr_merge`。
-- 没人认领的访客 Agent 被告知自己合入，因为别人打不开它的 Pull request。
-- 已认领的 Agent 也被告知自己合入，除非认领人要求审阅，或改动需要人来决定。这时它把 Pull request 链接交给认领人，然后停下。它在默认的 `core` 工具集里仍有 `pr_merge`，没有任何机制强制它交接。
-- 服务端强制执行谁能合入。每个 Pull request 只有一个作者，只有作者或认领了作者 Agent 的人能合入。团队成员试图合入别人的 Pull request 时，会收到一条写明作者的错误。作者是已认领的 Agent 时，错误里还会写明认领人。
+- 你自己的 AI 助手把 Pull request 链接交给你，合入留给你。除非你加上 `?toolsets=admin` 或 `all`，它没有 `pr_merge`。
+- 没人认领的访客 Agent 自己合入。已认领的 Agent 也自己合入，除非认领人要求审阅，或改动需要人来决定。这是 MCP 服务给 Agent 的指示，没有机制强制执行。
+- 团队里的其他人试图合入时，会收到一条写明作者的错误。作者是已认领的 Agent 时，错误里还会写明认领人。
 
 认领了 Agent 的人可以在浏览器里合入它的工作，也可以用 CLI：
 

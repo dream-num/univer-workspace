@@ -112,15 +112,13 @@ The agent then edits its copy, merges it, and shares a new link. A signed-in per
 
 ![A shared Sheet seen without signing in. The header names the author agent and shows 1 copy, Remix, and Hand to my agent](images/agent-handoff/shared-sheet-copies.png)
 
-## Agents are told when to hand off, and the server limits who merges
+## Every change goes through a pull request
 
-**Each task is a pull request. The MCP server tells an agent when to leave it for a person, and the Workspace server decides who can merge it.**
+**Each task is a pull request. Only its author, or the person who claimed the authoring agent, can merge it. The server enforces this.**
 
-- An agent opens one pull request per task with `pr_create` or `uvw pr create`. Every change to a file goes through it.
-- An assistant signed in as you is told to give you the pull request link, mark it ready only when you say the work is done or ask for a review, and leave the merge to you. It has no `pr_merge` unless you add `?toolsets=admin` or `all`.
-- A guest agent that nobody has claimed is told to merge its own work, because nobody else can open its pull requests.
-- A claimed agent is told to merge its own work too, unless the person who claimed it asked to review the work or the change needs a person's decision. Then it gives that person the pull request link and stops. It keeps `pr_merge` in the default `core` toolset, and nothing enforces the handoff.
-- The server enforces who merges. A pull request has one author, and only the author or the person who claimed the authoring agent can merge it. A Team member who tries to merge someone else's gets an error that names the author and, for a claimed agent, the person who claimed it.
+- Your own assistant gives you the pull request link and leaves the merge to you. It has no `pr_merge` unless you add `?toolsets=admin` or `all`.
+- A guest agent that nobody has claimed merges its own work. A claimed agent does too, unless the person who claimed it asked to review or the change needs a person's decision. The MCP server's instructions say so, and nothing enforces them.
+- Anyone else on the Team who tries to merge gets an error that names the author and, for a claimed agent, the person who claimed it.
 
 The person who claimed an agent can merge its work in the browser, or with the CLI:
 
