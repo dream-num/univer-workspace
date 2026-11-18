@@ -488,6 +488,12 @@ The CLI and Workspace deployment are delivered independently from the same sourc
 Stable CLI releases validate the repository-wide SDK baseline and test
 the actual package artifact before publication.
 
+Public npm promotion is a separate manual workflow, `promote-cli-public.yml`.
+It defaults to validation only and accepts one exact stable CLI version already
+on insider-npm. Explicit publication from the default branch uses npm OIDC to
+upload the verified original tarball, retains the insider version, and checks
+public integrity. See the [maintainer guide](apps/cli/README.md#promote-an-existing-stable-cli-to-public-npm).
+
 ## Documentation
 
 | Resource                                                            | Scope                                                                           |

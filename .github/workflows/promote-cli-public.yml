@@ -1,0 +1,81 @@
+name: Promote CLI to public npm (manual)
+run-name: Promote CLI ${{ inputs.version }}${{ inputs.publish && ' (publish)' || ' (validation only)' }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Exact stable CLI version already built on insider-npm (X.Y.Z)
+        required: true
+        type: string
+      publish:
+        description: Publish the original tarball to public npm (requires default branch)
+        required: true
+        type: boolean
+        default: false
+  pull_request:
+    paths:
+      - .github/workflows/promote-cli-public.yml
+      - scripts/release/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cli-public-promotion-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'manual' }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Test release policy and isolated npm upload
+        run: node --test scripts/release/*.test.mjs
+
+  promote:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'dream-num/univer-workspace' &&
+      (!inputs.publish || github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      PROMOTION_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - name: Validate policy and dependencies, then download and verify original tarball
+        env:
+          # Existing insider credential; never passed to the public npm command.
+          INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/release/promote-cli-public.mjs --version="$PROMOTION_VERSION"
+      - name: Publish original tarball with npm OIDC and verify public integrity
+        if: inputs.publish
+        run: node scripts/release/promote-cli-public.mjs --version="$PROMOTION_VERSION" --publish
+      - name: Upload promotion evidence and original tarball
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cli-public-promotion-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .promotion/
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 14

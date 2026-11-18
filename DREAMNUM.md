@@ -55,6 +55,9 @@ Pro SDK dependencies, and artifact delivery retain their separately defined poli
   download, ETag-guarded content replacement, and HTML View validation/publication, with browser-approved
   passwordless CLI session handoff for password, Email-code, and external-identity users. Contract:
   [CLI README](apps/cli/README.md) and [release workflow](.github/workflows/release-cli-manual.yml).
+  The separate [public promotion workflow](.github/workflows/promote-cli-public.yml) validates one exact stable
+  insider CLI version by default; explicit default-branch publication uploads the original tarball through npm OIDC,
+  verifies public integrity, and retains the insider version without rebuilding or promoting dependencies.
 
 - **Univer Workspace MCP** — the private remote gateway under `apps/mcp`, built on Client Core.
   It exposes identity, repository, Issue, pull request, Space, Unit, Sheet `outline`/`read`/`find`, Blob, label, merge,
