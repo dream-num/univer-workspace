@@ -33,6 +33,7 @@ describe("handToAgentPrompt", () => {
       "the link as `from`",
       "`pr_merge`",
       "give me the claim link",
+      "Tell me to open the claim link first: the copy is mine to open and edit only after I sign in there and claim it.",
       `give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned`,
       "tell me to use the Command line (uvw) option of Hand to my agent",
     ].map((step) => prompt.indexOf(step));
@@ -46,8 +47,9 @@ describe("handToAgentPrompt", () => {
     expect(order.every((at, index) => at > 0 && (index === 0 || at > order[index - 1]!))).toBe(true);
     expect(prompt).toContain("You do not need `read` for this.");
     expect(prompt).toContain("If you have no `pr_merge`, give me the pull request link to merge.");
-    expect(prompt.indexOf(`give me the copy's link too: ${origin}/nodes/<nodeId>, with the \`nodeId\` that \`unit_create\` returned`))
-      .toBeGreaterThan(prompt.indexOf("give me the claim link"));
+    const links = ["give me the claim link", "Tell me to open the claim link first", `give me the copy's link too: ${origin}/nodes/<nodeId>`]
+      .map((step) => prompt.indexOf(step));
+    expect(links.every((at, index) => at > 0 && (index === 0 || at > links[index - 1]!))).toBe(true);
     expect(commands(prompt)).toEqual([]);
   });
 
@@ -77,7 +79,7 @@ uvw pr ready <id> --json
 uvw pr merge <id> --json
 uvw claim
 
-<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link: when I sign in and open it, the copy is mine.
+<repo> is the Personal Space repository that auth guest prints, and <id> is the id that pr create returns. That copies a Sheet. For a Doc or a Slide, use --type doc or --type slide. Then give me the claim link. Tell me to open the claim link first: the copy is mine to open and edit only after I sign in there and claim it.
 
 With MCP, you can instead connect to ${origin}/mcp and call \`pr_create\`, \`unit_create\` with the link as \`from\`, \`pr_ready\`, \`pr_merge\` and \`claim\`. If \`unit_create\` has no \`from\`, use the CLI.`);
   });

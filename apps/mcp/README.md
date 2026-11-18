@@ -25,7 +25,8 @@ listed users receive them. `*` admits every user, which is acceptable only where
 such as an internal staging deployment.
 Other users retain every tool that does not need the executor, and their server instructions
 ask them to edit document contents in the browser. An unclaimed agent is also told to give the user an editable copy
-instead, with its claim link and the copy's link. The executor checks each grant on its own: against its list before
+instead, with its claim link and the copy's link, and to tell the user to open the claim link first: the copy's
+link opens for them only after they claim. The executor checks each grant on its own: against its list before
 contacting Workspace, and in `workspace` mode against the access Workspace reports for the grant's session.
 
 The executor serves `GET /rpc/v1/capabilities` with the same internal bearer. Its JSON response
