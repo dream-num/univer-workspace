@@ -19,6 +19,7 @@ import {
   Trash2,
 } from "lucide-react";
 import type { components } from "../../../../generated/http/schema.js";
+import { sessionQueryOptions } from "../auth";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import {
   Alert,
@@ -70,6 +71,8 @@ export function WorktreeReviewPanel({
   readonly layout?: (parts: { readonly review: ReactNode; readonly actions: ReactNode }) => ReactNode;
 }) {
   const { t } = useI18n();
+  const session = useQuery(sessionQueryOptions);
+  const me = session.data?.authenticated ? session.data.user.id : undefined;
   const selectedUnit =
     selectedUnitId === undefined || selectedUnitId === null
       ? worktree.units[0]
@@ -165,7 +168,10 @@ export function WorktreeReviewPanel({
             </Button>
           }
         />
-      ) : worktree.kind === "team" && worktree.state === "ready" ? (
+      ) : worktree.kind === "team" &&
+        worktree.state === "ready" &&
+        me !== undefined &&
+        me !== worktree.creator.id ? (
         <span className="text-sm text-muted-foreground">
           {t("onlyAuthorMerges", { name: worktree.creator.displayName })}
         </span>
