@@ -644,6 +644,18 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect(read.content).toEqual([{ type: "text", text: `Budget  ${origin}/nodes/sheet\nLink Sharing: off. ${access}` }]);
   });
 
+  it.each([
+    ["a person", user],
+    ["a claimed agent", { ...user, kind: "agent", claimed: true }],
+    ["an unclaimed agent", { ...user, kind: "agent", claimed: false }],
+  ] as const)("gives %s a share result that the outputSchema in tools/list accepts", async (_caller, principal) => {
+    sessionUser = principal;
+    const client = await connect();
+    await client.listTools();
+    const read = await client.callTool({ name: "share", arguments: { node: "sheet" } });
+    expect(read.structuredContent).toMatchObject({ link: "off", access: expect.stringContaining("Only") });
+  });
+
   it("hands an unclaimed agent a claim link on this Workspace that lasts ten minutes", async () => {
     sessionUser = { ...user, kind: "agent", claimed: false };
     const client = await connect();
