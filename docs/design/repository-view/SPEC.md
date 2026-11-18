@@ -68,7 +68,7 @@ Required behavior:
 
 - `GET /api/spaces` continues to return Team Spaces. The Browser labels a Team Space as a repository only in repository mode.
 - Existing Space and Node endpoints remain the authority for identity, data, and permissions.
-- Existing `GET /api/html-views` returns all readable `.univer.html` Apps. Add an optional `spaceId` filter only if the current response cannot be filtered client-side without loading unrelated spaces.
+- Existing `GET /api/html-views` lists `.univer.html` Apps in the Spaces the user owns or belongs to and in Nodes granted to the user directly. Repository pages pass its optional `spaceId` filter, which returns the Apps the user sees when browsing that Team Space, a public one included.
 - Existing Worktree list endpoints remain the source for PR/MR entries. Add a Team Space filter only if the current query cannot already express it.
 
 All new or changed HTTP behavior must update OpenAPI source, generated types, server routes, Browser queries, and focused tests together.
