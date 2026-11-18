@@ -5,21 +5,14 @@ import {
   shareNode,
   type WorkspaceClaimLink,
   type WorkspaceShare,
-  type WorkspaceShareLink,
   type WorkspaceSpaceFeature,
 } from "@univerjs/univer-workspace-client-core/product";
 import { emit, executeCommand, jsonFieldsOption, oneOf, type JsonFieldsOption } from "../../command.js";
 
-export const SHARE_JSON_FIELDS = ["claimHint", "claimUrl", "expiresAt", "link", "name", "owner", "url"] as const satisfies
+export const SHARE_JSON_FIELDS = ["access", "claimHint", "claimUrl", "expiresAt", "link", "name", "owner", "url"] as const satisfies
   readonly (keyof WorkspaceShare)[];
 
 export const CLAIM_JSON_FIELDS = ["claimUrl", "expiresAt"] as const satisfies readonly (keyof WorkspaceClaimLink)[];
-
-const LINK_TEXT: Readonly<Record<WorkspaceShareLink, string>> = {
-  off: "off. Only people with access to the repository can open the link.",
-  viewer: "viewer. Anyone with the link can read.",
-  editor: "editor. Anyone with the link can read, and signed-in people can edit.",
-};
 
 export function createShareCommand(spaces: WorkspaceSpaceFeature, origin: () => Promise<string>): Command {
   const share = new Command("share")
@@ -39,10 +32,8 @@ export function createShareCommand(spaces: WorkspaceSpaceFeature, origin: () => 
         shared,
         [
           `${shared.name}  ${shared.url}`,
-          `Link Sharing: ${LINK_TEXT[shared.link]}`,
-          ...(shared.link === "off" || shared.expiresAt === undefined
-            ? []
-            : [`The link stops working on ${shared.expiresAt} unless ${shared.owner.username} stays active.`]),
+          `Link Sharing: ${shared.link}. ${shared.access}`,
+          ...(shared.link === "off" ? [`  uvw share ${shared.url} --link viewer`] : []),
           ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
           ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
         ].join("\n"),

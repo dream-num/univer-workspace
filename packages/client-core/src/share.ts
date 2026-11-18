@@ -16,6 +16,8 @@ export interface WorkspaceShare {
   readonly owner: WorkspaceLinkSharing["owner"];
   /** Set when the link stops working on that date unless its owner, an unclaimed agent, stays active. */
   readonly expiresAt?: string;
+  /** Who can open `url` now, and while `link` is off, how to let anyone with the link read it. */
+  readonly access: string;
   /** Set when the owner is an unclaimed agent: the page where a person claims it and keeps its files. */
   readonly claimUrl?: string;
   readonly claimHint?: string;
@@ -75,14 +77,30 @@ export async function shareNode(
     }
     throw error;
   }
+  const link = sharing.enabled ? sharing.role : "off";
   return {
     url,
     name,
-    link: sharing.enabled ? sharing.role : "off",
+    link,
     owner: sharing.owner,
     ...(sharing.expiresAt === null ? {} : { expiresAt: sharing.expiresAt }),
+    access: describeAccess(link, sharing),
     ...(sharing.owner.claimed === false ? await claimFields(spaces, origin) : {}),
   };
+}
+
+function describeAccess(link: WorkspaceShareLink, { owner, expiresAt }: WorkspaceLinkSharing): string {
+  const who = {
+    off: owner.claimed === false
+      ? "Only this agent can open the link until a person claims it."
+      : "Only people with access to the repository can open the link.",
+    viewer: "Anyone with the link can read the file without signing in.",
+    editor: "Anyone with the link can read the file, and signed-in people can edit it.",
+  }[link];
+  const then = link === "off"
+    ? "Share it again with link viewer so anyone with the link can read it."
+    : expiresAt === null ? "" : `The link stops working on ${expiresAt} unless ${owner.username} stays active.`;
+  return `${who} ${then}`.trimEnd();
 }
 
 async function claimFields(

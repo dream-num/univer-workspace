@@ -39,11 +39,18 @@ export const shareTool: ToolDefinition = {
   async run(context, args) {
     const { node, link } = inputSchema.parse(args);
     const nodeId = parseNodeReference(node, context.identityOrigin);
+    const shared = await shareNode(spaceFeature(context), context.identityOrigin, {
+      node: nodeId,
+      ...(link === undefined ? {} : { link }),
+    });
     return {
-      output: await shareNode(spaceFeature(context), context.identityOrigin, {
-        node: nodeId,
-        ...(link === undefined ? {} : { link }),
-      }),
+      output: shared,
+      text: [
+        `${shared.name}  ${shared.url}`,
+        `Link Sharing: ${shared.link}. ${shared.access}`,
+        ...(shared.claimUrl === undefined ? [] : [`Claim link: ${shared.claimUrl}`]),
+        ...(shared.claimHint === undefined ? [] : [shared.claimHint]),
+      ].join("\n"),
       repo: null,
       nodeId,
     };

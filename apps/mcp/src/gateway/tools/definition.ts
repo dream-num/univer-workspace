@@ -90,6 +90,8 @@ export interface ToolResult {
   readonly repo: string | null;
   /** The file a share call resolved, for the usage event. */
   readonly nodeId?: string;
+  /** Replaces the `<tool> completed.` text line. */
+  readonly text?: string;
   /** Replaces `output` for a caller that waited for the result and adds content blocks after the text line. */
   readonly waiting?: { readonly output: object; readonly content: readonly ImageContent[] };
 }

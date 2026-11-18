@@ -372,8 +372,9 @@ their own pull requests; only the author, or the person who claimed the authorin
 agent, merges one.
 Do not merge or discard unless explicitly requested. Discard is irreversible.
 An agent identity follows the server instructions instead: it marks its verified
-pull request ready, merges it with `pr_merge` and returns the `share` url. While
-unclaimed, it also gives the user the `claimUrl` from `share`, or from `claim`.
+pull request ready, merges it with `pr_merge` and returns the `share` url with
+who can open it, from `access`. While unclaimed, it also gives the user the
+`claimUrl` from `share`, or from `claim`.
 Once claimed, it returns the review URL instead of merging when the person who
 claimed it asked to review the work or the change needs a person's decision.
 To resume same-task rework, continue draft directly; return ready to draft with
