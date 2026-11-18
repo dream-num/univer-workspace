@@ -62,6 +62,8 @@ Workspace 提供远程 [MCP](https://modelcontextprotocol.io) 服务。连上它
 [![Install in Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=univer-workspace&config=eyJ1cmwiOiJodHRwczovL3NwYWNlLnVuaXZlci5haS9tY3AifQ%3D%3D)
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Univer_Workspace-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=univer-workspace&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fspace.univer.ai%2Fmcp%22%7D)
 
+查看 [Agent 交接效果展示](docs/agent-handoff-showcase.zh-CN.md)：访客 Agent、链接分享、认领、副本，以及通过 Pull request 审阅。
+
 | 项目     | 值                                                                                                                       |
 | -------- | ------------------------------------------------------------------------------------------------------------------------ |
 | 服务 URL | `https://space.univer.ai/mcp`。自己部署时为 `https://<你的 Workspace>/mcp`（见 [MCP 服务说明](apps/mcp/README.md)）    |
