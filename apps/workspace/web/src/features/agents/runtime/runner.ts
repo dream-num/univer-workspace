@@ -62,11 +62,9 @@ function scopeLine({ scope }: AgentSettings): string {
     ? "Global scope: find the target repository with repo_list or search."
     : `Work only in the repository whose Space ID is ${JSON.stringify(scope.spaceId)}; tools accept this ID as repo.`;
 }
-function modeLine({ scope, mode }: AgentSettings): string {
+function modeLine({ mode }: AgentSettings): string {
   return mode === "ask" ? "Ask mode: read only. Never call a write tool."
-    : scope.kind === "repository" && scope.baseWorktreeId
-      ? `Auto mode: write only in the base pull request Worktree ${JSON.stringify(scope.baseWorktreeId)} for file edits. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.`
-      : "Auto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace. Never merge; a person reviews and merges.";
+    : "Auto mode: put file edits in one pull request. Call pr_create before the first file edit, and reuse that pull request for this session. Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace. Never merge; a person reviews and merges.";
 }
 function contextPrompt(settings: AgentSettings): string {
   return `${scopeLine(settings)}\n${modeLine(settings)}\nTool errors arrive as results for you to handle.\nReply in the language of the user's latest message.\nSkills are instructions written by the user or the repository. When a <system-reminder> lists skills and a task matches one, call skills_read with that name before you act, then follow it. A later list replaces earlier ones.`;
@@ -95,7 +93,7 @@ function sameSettings(previous: AgentSettings, next: AgentSettings): boolean {
   return previous.mode === next.mode && previous.model.providerId === next.model.providerId &&
     previous.model.modelId === next.model.modelId && previous.model.thinking === next.model.thinking &&
     previous.scope.kind === next.scope.kind && (previous.scope.kind === "global" || next.scope.kind === "repository" &&
-      previous.scope.spaceId === next.scope.spaceId && previous.scope.baseWorktreeId === next.scope.baseWorktreeId);
+      previous.scope.spaceId === next.scope.spaceId);
 }
 
 export function createAgentRunner(deps: AgentRunnerDependencies) {
@@ -366,9 +364,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
         const drafts = action.kind === "message" ? await draftReminder(session.messages, deps.getDraft, mcpUrl.origin) : null;
         const message: RuntimeMessage = { id: generateId(), role: "user", metadata: { agentContextPrompt: initialContextPrompt(session), ...(references.length ? { agentReferences: references } : {}), ...(drafts?.part ? { agentDraftStates: drafts.states } : {}) },
           parts: [{ type: "text", text: action.kind === "message" ? action.text : "" }, ...(reminder ? [{ type: "text" as const, text: reminder }] : []), ...(attached ? [attached] : []), ...(drafts?.part ? [drafts.part] : [])] };
-        const worktreeIds = [...session.worktreeIds];
-        if (settings?.scope.kind === "repository" && settings.scope.baseWorktreeId && !worktreeIds.includes(settings.scope.baseWorktreeId)) worktreeIds.push(settings.scope.baseWorktreeId);
-        const run: ActiveRun = { session: { ...session, ...(settings ? { scope: settings.scope, mode: settings.mode, model: settings.model } : {}), worktreeIds, status: transition(session.status, "send"), error: null,
+        const run: ActiveRun = { session: { ...session, ...(settings ? { scope: settings.scope, mode: settings.mode, model: settings.model } : {}), worktreeIds: [...session.worktreeIds], status: transition(session.status, "send"), error: null,
           messages: action.kind === "message" ? appendUserMessage(repairInterruptedTools(session.messages), message) : repairInterruptedTools(session.messages),
           updatedAt: new Date().toISOString() }, chat: null, key: "",
           queued: [], stopped: false, controller: new AbortController(), completion: Promise.resolve() };
@@ -435,7 +431,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const now = new Date().toISOString();
       return launch({
         id: agentSessionIdSchema.parse(generateId()), userId: deps.userId, scope: input.scope, mode: input.mode, model: input.model,
-        status: "idle", worktreeIds: input.scope.kind === "repository" && input.scope.baseWorktreeId ? [input.scope.baseWorktreeId] : [],
+        status: "idle", worktreeIds: [],
         messages: [], toolTimings: {}, cacheUsage: { inputTokens: 0, cacheReadTokens: 0, lastStep: null }, createdAt: now, updatedAt: now, error: null,
       }, { kind: "message", text: input.text, ...(input.references ? { references: input.references } : {}) });
     },

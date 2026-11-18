@@ -7,7 +7,7 @@ export type AgentSessionId = z.infer<typeof agentSessionIdSchema>;
 export type ProviderId = z.infer<typeof providerIdSchema>;
 export const scopeSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("global") }),
-  z.object({ kind: z.literal("repository"), spaceId: z.string().min(1), baseWorktreeId: z.string().nullable() }),
+  z.object({ kind: z.literal("repository"), spaceId: z.string().min(1) }),
 ]);
 export type AgentScope = z.infer<typeof scopeSchema>;
 export const agentReferenceSchema = z.discriminatedUnion("kind", [

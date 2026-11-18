@@ -133,12 +133,13 @@ GitHub 在 2026-10-28 把 coding agent 改名为 Copilot cloud agent（“Copilo
 │                                                              │
 │ ＋   提问 ▾    deepseek-flash · 高 ▾                      ➤  │
 └──────────────────────────────────────────────────────────────┘
-  仓库: mini-crm ▾   基于: 新建 PR ▾                      ⚙ 模型设置
+  仓库: mini-crm ▾                                    ⚙ 模型设置
 ```
 
 - 模式只有两种：“提问”（英文 Ask）只读，不会产生任何写入；“执行”（英文 Auto）可以写入，写入落在 PR 里。对应 GitHub 的 Interactive 和 Autopilot，但我们按权限划分，不按是否打断用户划分，因为对文档用户来说“会不会改我的文件”比“会不会中途问我”更重要。
 - 模型：列出用户配置的提供商和模型。DeepSeek 额外显示思考强度（关闭、高、最高）。
-- 范围行：全局入口显示“仓库”选择（默认“自动”）；Agents tab 固定为当前仓库，只显示“基于”选择：新建 PR，或已有的某个未合并 PR。
+- 范围行：全局入口显示“仓库”选择（默认“自动”）；Agents tab 固定为当前仓库，不显示范围选择。
+- 每个会话写入自己用 `pr_create` 新建的 PR，不提供“基于已有 PR”的选择。同一个人在两个会话里改同一个文件，得到两个 PR，各自只有本会话的改动。接着做之前的工作，就回到那个会话追加消息，它继续写同一个 PR。
 - 没有配置模型时，发送按钮变成“配置模型”，点击打开第 3.5 节的设置对话框，配置完回到输入框，输入内容不丢。
 - 快捷键沿用 `IssueComposer`：Ctrl/Cmd+Enter 发送。
 - `＋` 按钮在 Phase 1 不显示。扩展点：Phase 2 的 @ 引用（#7）从这里和 `@` 键进入。
@@ -305,7 +306,7 @@ GitHub 的安全模型在 Workspace 里都有现成对应：
 ```ts
 type AgentScope =
 	| { kind: "global" }
-	| { kind: "repository"; spaceId: SpaceId; baseWorktreeId: WorktreeId | null };
+	| { kind: "repository"; spaceId: SpaceId };
 
 type AgentMode = "ask" | "auto";
 

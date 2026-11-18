@@ -96,7 +96,7 @@ function SessionContent({ session, hidden }: { readonly session: AgentSession; r
   const [error, setError] = useState("");
   const [busyElsewhere, setBusyElsewhere] = useState(false);
   const [pending, setPending] = useState(false);
-  const skillMenu = useSkillMenu(text, repository ? { kind: "repository", spaceId: repository, baseWorktreeId: null } : { kind: "global" }, pending || session.status === "running", setText);
+  const skillMenu = useSkillMenu(text, repository ? { kind: "repository", spaceId: repository } : { kind: "global" }, pending || session.status === "running", setText);
   const action = session.status === "running" && !text.trim() ? "stop" : "send";
   const conversation = useRef<HTMLDivElement>(null);
   function fill(value: string) {
@@ -131,8 +131,7 @@ function SessionContent({ session, hidden }: { readonly session: AgentSession; r
     setPending(true); setError("");
     try {
       await (await client.runner()).send(agentSessionIdSchema.parse(session.id), value.trim(), session.status === "running" || !selected ? session : {
-        mode, scope: repository ? { kind: "repository", spaceId: repository,
-          baseWorktreeId: session.scope.kind === "repository" && session.scope.spaceId === repository ? session.scope.baseWorktreeId : null } : { kind: "global" },
+        mode, scope: repository ? { kind: "repository", spaceId: repository } : { kind: "global" },
         model: { providerId: selected.provider.id, modelId: selected.modelId, thinking: selected.provider.kind === "deepseek" ? thinking : null },
       });
       setText("");

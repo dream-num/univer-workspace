@@ -93,8 +93,8 @@ describe("Agent tool cards", () => {
   });
   it("shows newest sessions first and isolates repository sessions", () => {
     const older = session({ id: agentSessionIdSchema.parse("older") });
-    const newer = session({ id: agentSessionIdSchema.parse("newer"), createdAt: "2026-11-11T01:00:00.000Z", scope: { kind: "repository", spaceId: "space-a", baseWorktreeId: null } });
-    const other = session({ id: agentSessionIdSchema.parse("other"), scope: { kind: "repository", spaceId: "space-b", baseWorktreeId: null } });
+    const newer = session({ id: agentSessionIdSchema.parse("newer"), createdAt: "2026-11-11T01:00:00.000Z", scope: { kind: "repository", spaceId: "space-a" } });
+    const other = session({ id: agentSessionIdSchema.parse("other"), scope: { kind: "repository", spaceId: "space-b" } });
     const all = [older, newer, other];
     expect(newestSessions(all).map((item) => item.id)).toEqual(["newer", "older", "other"]);
     expect(newestSessions(all, "space-a").map((item) => item.id)).toEqual(["newer"]);
@@ -103,7 +103,7 @@ describe("Agent tool cards", () => {
   it("searches session titles across scopes and statuses without changing newest-first order", () => {
     const titled = (id: string, title: string) => session({ id: agentSessionIdSchema.parse(id), messages: [{ id: `message-${id}`, role: "user", parts: [{ type: "text", text: title }, { type: "text", text: "<system-reminder>hidden scope</system-reminder>" }] }] });
     const older = titled("older", "Budget summary");
-    const newer = { ...titled("newer", "BUDGET formulas"), status: "failed", createdAt: "2026-11-12T01:00:00.000Z", scope: { kind: "repository", spaceId: "other", baseWorktreeId: null } } satisfies ReturnType<typeof session>;
+    const newer = { ...titled("newer", "BUDGET formulas"), status: "failed", createdAt: "2026-11-12T01:00:00.000Z", scope: { kind: "repository", spaceId: "other" } } satisfies ReturnType<typeof session>;
     const all = [older, titled("other", "Other work"), newer];
     expect(visibleSessions(all, " budget ", "en-US").map((item) => item.id)).toEqual(["newer", "older"]);
     expect(visibleSessions(all, "hidden scope", "en-US")).toEqual([]);

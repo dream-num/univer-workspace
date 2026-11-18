@@ -22,7 +22,7 @@ export function useSkillMenu(text: string, scope: AgentScope, disabled: boolean,
     let request = cache.current.get(key);
     if (!request) {
       request = client.runner().then((runner) => runner.skills(scopeKey === null ? { kind: "global" }
-        : { kind: "repository", spaceId: scopeKey, baseWorktreeId: null })).catch(() => { cache.current.delete(key); return null; });
+        : { kind: "repository", spaceId: scopeKey })).catch(() => { cache.current.delete(key); return null; });
       cache.current.set(key, request);
     }
     void request.then((catalog) => { if (!cancelled) setLoaded({ key, catalog }); });
