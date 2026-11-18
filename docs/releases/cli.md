@@ -5,7 +5,6 @@ This document is for release maintainers. Installation and usage belong in the
 
 ## Build and release to insider-npm
 
-
 Creating or pushing a tag never starts CI or publishes a package. In GitHub
 Actions, manually run **Build and release CLI (manual)**:
 
@@ -22,33 +21,61 @@ The channel is derived from the version; there is no channel input.
 verified tarball to insider-npm. The source manifest remains `0.0.0`; public npm promotion
 and Workspace deployment are separate operations.
 
-## Promote an existing stable CLI to public npm
+## Promote one insider package to public npm
 
-Run **Promote CLI to public npm (manual)** (`promote-cli-public.yml`) with the exact
-stable `X.Y.Z` already present on insider-npm, selecting the default branch.
-Both validation and publication require that branch before any insider credential
-is made available. `dry_run` defaults to **true**:
-validation calls the insider Promotion API with `dryRun=true`, checks the completed
-CLI-only plan (including version policy and public dependency availability), then
-downloads the original tarball and verifies its integrity and package identity.
-Any rejection stops the run. It neither rebuilds the CLI nor promotes dependencies.
+Run **Promote insider package to public npm (manual)** (`promote-cli-public.yml`)
+on the repository's default branch. Choose `package` from the dropdown (currently
+`univer-workspace-cli`), enter its exact version, choose `latest`, and keep
+`dry_run=true` for validation. Both validation and publication require the default
+branch before any insider credential is made available.
+
+The workflow and `scripts/release/promote-cli-public.mjs` can be copied together to
+another repository without changing the script: only edit the workflow's package
+option list. The script accepts unscoped and scoped npm package names, encodes them
+for registry requests, and verifies the running repository and default-branch
+workflow context dynamically. It has no Workspace application dependencies.
+
+Validation calls the insider Promotion API with exactly one `{name, version}` and
+`dryRun=true`, requires a completed matching plan, then downloads and verifies the
+original tarball, manifest identity, and SHA-512 integrity. The API performs source
+version policy and public dependency checks; it has no destination-tag or `latest`
+request parameter. Its source-tag checks apply even when `latest=false`. The workflow
+never requests non-dry-run server-side Promotion, which would write through insider
+and retire the source. This workflow retains the source and publishes directly using
+npm OIDC. It neither rebuilds/repackages artifacts nor promotes dependencies.
+
+`latest` defaults to **false** and has these explicit semantics:
+
+- **false, new public version:** publish with `--tag=promoted`, including the first
+  version of a package. Read back `promoted` and verify public `latest` did not change.
+- **false, existing public version:** verify identical original-package integrity,
+  reuse it, and leave dist-tags unchanged. This does not remove an existing `latest`.
+- **true:** require a stable `X.Y.Z` equal to insider's current `latest`, so an
+  rc/beta source cannot bypass the source latest-policy check. Publish a missing
+  version with `--tag=latest`. For an identical existing version whose public
+  `latest` differs, actually run `npm dist-tag add <name>@<version> latest` and read
+  back `latest`; if it already matches, no write is needed. Any failed write or
+  mismatching public version, integrity, or tag readback fails the run.
 
 The validation step uses the existing insider `NPM_TOKEN` repository secret only
-for the insider dry-run request. It is not passed to the public npm subprocess.
-After reviewing validation evidence, an explicitly authorized public release can
-select the default branch and set `dry_run=false`. A GitHub-hosted Node 24 runner
-publishes that exact tarball using npm Trusted Publishing/OIDC, with no npm token
-or lifecycle scripts. Explicit npm flags override the original tarball's insider
-`publishConfig.registry` without changing its bytes. The publisher checks the public
-exact version and integrity; an identical existing version is reused without a write.
-The internal version is retained. CI artifacts and the job summary record the result.
+for the insider dry-run request. After separately authorizing a public release,
+select the default branch and explicitly set `dry_run=false`. The GitHub-hosted
+Node 24 runner uses pinned **npm 11.21.0** for both publishing and dist-tag changes.
+The public subprocess receives OIDC context, no npm token or user/checkout npm
+configuration, and executes no artifact lifecycle scripts. Explicit flags override
+an original insider `publishConfig.registry` or `publishConfig.tag` without changing
+its bytes. CI artifacts bind package, exact version, latest intent, repository,
+workflow, commit, run/attempt, and original tarball hash, and record verified results.
 
-Configure npm's Trusted Publisher for organization `dream-num`, repository
-`univer-workspace`, and filename `promote-cli-public.yml`. Validation-only runs do
-**not** verify public write authority or clear npm's pending validation: that requires
-a separately authorized successful real publish. OIDC authentication is independent
-of provenance; this original-artifact promotion explicitly disables provenance and
-does not require changing repository visibility.
+Each selected npm package needs its own externally configured Trusted Publisher for
+the destination repository and filename `promote-cli-public.yml`. Public publication
+requires direct-publish permission; updating `latest` on an existing version also
+requires the separate **Allow npm dist-tag** permission. This workflow changes
+neither npm nor GitHub permissions. See [npm's dist-tag/OIDC requirements](https://docs.npmjs.com/adding-dist-tags-to-packages/).
+Validation-only runs do **not** verify either public write permission or clear npm's
+pending validation. A no-write reuse also does not verify OIDC write authority.
+OIDC authentication is independent of provenance; this original-artifact promotion
+explicitly disables provenance and requires no repository visibility change.
 
 The isolated release-script tests (including a loopback-only npm upload) run in
 `test-cli-promotion.yml`, separately from the manual release workflow, on pull

@@ -11,15 +11,18 @@ import {
   assertPublishContext,
   INSIDER,
   npmPublishArguments,
-  PACKAGE,
+  npmTagArguments,
   preparePromotion,
   PUBLIC,
   publishPromotion,
   publishTarball,
+  setLatest,
+  validatePackageName,
   validateVersion,
 } from "./promote-cli-public.mjs";
 
 const execute = promisify(execFile);
+const PACKAGE = "univer-workspace-cli";
 const version = "0.7.0";
 const env = {
   GITHUB_ACTIONS: "true",
@@ -37,65 +40,146 @@ const env = {
   INSIDER_TOKEN: "synthetic-insider",
 };
 
-async function fixture(t, manifest = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "cli-promotion-test-"));
+async function fixture(
+  t,
+  {
+    packageName = PACKAGE,
+    selectedVersion = version,
+    latest = false,
+    manifest = {},
+    context = env,
+  } = {},
+) {
+  const directory = await mkdtemp(join(tmpdir(), "promotion-test-"));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const source = join(directory, "source");
   await mkdir(join(source, "package"), { recursive: true });
   await writeFile(
     join(source, "package/package.json"),
     JSON.stringify({
-      name: PACKAGE,
-      version,
-      publishConfig: { registry: INSIDER },
+      name: packageName,
+      version: selectedVersion,
+      publishConfig: { registry: INSIDER, tag: "latest" },
       scripts: { prepublishOnly: "exit 91", publish: "exit 92", postpublish: "exit 93" },
       ...manifest,
     }),
   );
-  const tarball = join(directory, "original.tgz");
+  const tarball = join(directory, "source.tgz");
   await execute("tar", ["-czf", tarball, "-C", source, "package"]);
   const bytes = await readFile(tarball);
   const hash = `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
   const metadata = {
-    name: PACKAGE,
-    version,
-    dist: {
-      tarball: `${INSIDER}${PACKAGE}/-/${PACKAGE}-${version}.tgz`,
-      integrity: hash,
-    },
+    name: packageName,
+    version: selectedVersion,
+    dist: { tarball: `${INSIDER}artifact.tgz`, integrity: hash },
   };
   const plan = {
     status: "completed",
     dryRun: true,
     publicRegistryWriteVerified: false,
     packageCount: 1,
-    packages: [{ name: PACKAGE, version, publicVersion: "publish" }],
+    packages: [{ name: packageName, version: selectedVersion, publicVersion: "publish" }],
+  };
+  const state = {
+    exists: true,
+    packageExists: true,
+    sourceLatest: selectedVersion,
+    tags: { latest: "0.6.0" },
+    writes: [],
   };
   const calls = [];
+  const encoded = encodeURIComponent(packageName);
   const fetcher = async (url, options) => {
-    calls.push({ url: String(url), options });
-    if (String(url).includes("/promotions?")) return Response.json(plan);
-    if (String(url).endsWith(".tgz")) return new Response(bytes);
-    return Response.json(metadata);
+    const value = String(url);
+    calls.push({ url: value, options });
+    if (value === `${INSIDER}-/insider/v1/promotions?wait=true&dryRun=true`)
+      return Response.json(plan);
+    if (value === `${INSIDER}artifact.tgz`) return new Response(bytes);
+    if (value === `${INSIDER}${encoded}/${selectedVersion}`) return Response.json(metadata);
+    if (value === `${INSIDER}${encoded}`)
+      return Response.json({ name: packageName, "dist-tags": { latest: state.sourceLatest } });
+    if (value === `${PUBLIC}${encoded}/${selectedVersion}`)
+      return state.exists ? Response.json(metadata) : new Response(null, { status: 404 });
+    if (value === `${PUBLIC}${encoded}`)
+      return state.packageExists
+        ? Response.json({ name: packageName, "dist-tags": state.tags })
+        : new Response(null, { status: 404 });
+    assert.fail(`Unexpected URL ${value}`);
   };
-  return { directory, bytes, tarball, hash, metadata, plan, calls, fetcher };
+  const publisher = async (path, ignoredEnv, tag) => {
+    assert.deepEqual(await readFile(path), bytes);
+    state.writes.push(`publish:${tag}`);
+    state.exists = true;
+    state.packageExists = true;
+    state.tags[tag] = selectedVersion;
+  };
+  const tagger = async (name, exactVersion) => {
+    assert.equal(name, packageName);
+    assert.equal(exactVersion, selectedVersion);
+    state.writes.push("latest");
+    state.tags.latest = selectedVersion;
+  };
+  return {
+    packageName,
+    version: selectedVersion,
+    latest,
+    directory,
+    env: context,
+    fetcher,
+    publisher,
+    tagger,
+    state,
+    calls,
+    metadata,
+    plan,
+    bytes,
+    hash,
+    tarball,
+  };
 }
 
-test("accepts only exact stable versions and gates public writes to the configured manual workflow", () => {
-  assert.equal(validateVersion(version), version);
+async function prepared(t, options) {
+  const f = await fixture(t, options);
+  await preparePromotion(f);
+  return f;
+}
+
+test("validates package names, exact SemVer, and matching default-branch workflow context", () => {
+  for (const name of [PACKAGE, "@another-scope/tool", "another.tool"])
+    assert.equal(validatePackageName(name), name);
+  for (const name of [
+    undefined,
+    "",
+    "../x",
+    "@scope/../x",
+    "pkg/path",
+    "@scope/name/extra",
+    "https://evil",
+    "foo%2fbar",
+    "a?x=1",
+    "a#b",
+    "A",
+    "a\n",
+    "--flag",
+    "@scope/.hidden",
+    "node_modules",
+    "x".repeat(215),
+  ]) {
+    assert.throws(() => validatePackageName(name), /valid npm package/u);
+  }
+  for (const value of [version, "1.2.3-rc.1", "1.2.3+build.2"])
+    assert.equal(validateVersion(value), value);
   for (const value of [
     undefined,
     "latest",
     "^0.7.0",
     "v0.7.0",
-    "0.7.0-dev.1",
-    "0.7.0-insider.1",
-    "0.7.0+abc",
     "01.7.0",
+    "1.2.3-01",
     "0.7.0\n",
-  ]) {
-    assert.throws(() => validateVersion(value), /exact stable/u);
-  }
+    "1.2.3/../../x",
+  ])
+    assert.throws(() => validateVersion(value), /exact SemVer/u);
   assert.doesNotThrow(() => assertPublishContext(env));
   for (const change of [
     { GITHUB_ACTIONS: "false" },
@@ -103,7 +187,8 @@ test("accepts only exact stable versions and gates public writes to the configur
     { GITHUB_EVENT_NAME: "push" },
     { GITHUB_REF: "refs/heads/feature" },
     { GITHUB_REF: "refs/tags/v0.7.0" },
-    { GITHUB_REPOSITORY: "someone/fork" },
+    { GITHUB_REPOSITORY: "another/repo" },
+    { GITHUB_REPOSITORY: "../repo" },
     {
       GITHUB_WORKFLOW_REF: "dream-num/univer-workspace/.github/workflows/other.yml@refs/heads/main",
     },
@@ -112,22 +197,64 @@ test("accepts only exact stable versions and gates public writes to the configur
     assert.throws(() => assertPublishContext({ ...env, ...change }), /manual dispatch/u);
 });
 
-test("validation sends one dry-run request, preserves original bytes, and never calls public writes", async (t) => {
-  const f = await fixture(t);
-  const record = await preparePromotion({ ...f, version, env });
-  assert.equal(record.integrity, f.hash);
-  assert.deepEqual(await readFile(join(f.directory, record.tarball)), f.bytes);
-  assert.equal(record.plan.publicRegistryWriteVerified, false);
-  assert.equal(f.calls.length, 3);
-  const request = f.calls[0];
-  assert.equal(request.url, `${INSIDER}-/insider/v1/promotions?wait=true&dryRun=true`);
-  assert.deepEqual(JSON.parse(request.options.body), { packages: [{ name: PACKAGE, version }] });
-  assert.equal(request.options.headers.authorization, "Bearer synthetic-insider");
-  assert.equal(f.calls[2].options.headers, undefined);
-  assert.ok(!JSON.stringify(record).includes("synthetic-insider"));
+test("dry-run validates only one package and retains bytes without public registry writes", async (t) => {
+  for (const latest of [true, false]) {
+    const f = await fixture(t, { latest });
+    const record = await preparePromotion(f);
+    assert.equal(record.integrity, f.hash);
+    assert.equal(record.tag, latest ? "latest" : "promoted");
+    assert.deepEqual(await readFile(join(f.directory, record.tarball)), f.bytes);
+    assert.deepEqual(f.state.writes, []);
+    assert.equal(record.plan.publicRegistryWriteVerified, false);
+    assert.ok(f.calls.every(({ url }) => url.startsWith(INSIDER)));
+    const request = f.calls[0];
+    assert.deepEqual(JSON.parse(request.options.body), { packages: [{ name: PACKAGE, version }] });
+    assert.equal(request.options.headers.authorization, "Bearer synthetic-insider");
+    assert.ok(!JSON.stringify(record).includes("synthetic-insider"));
+    assert.equal(f.calls.at(-1).options.headers, undefined);
+  }
 });
 
-test("policy/dependency/auth rejection stops immediately and invalidates stale preparation", async (t) => {
+test("copies to another repository and scoped package without code changes", async (t) => {
+  const context = {
+    ...env,
+    GITHUB_REPOSITORY: "other-org/other-repo",
+    BASE_BRANCH: "trunk",
+    GITHUB_REF: "refs/heads/trunk",
+    GITHUB_WORKFLOW_REF:
+      "other-org/other-repo/.github/workflows/promote-cli-public.yml@refs/heads/trunk",
+  };
+  const f = await prepared(t, { packageName: "@other-scope/tool", context, latest: true });
+  f.state.exists = false;
+  const result = await publishPromotion(f);
+  assert.equal(result.package, "@other-scope/tool");
+  assert.equal(result.latestVerified, true);
+  assert.deepEqual(f.state.writes, ["publish:latest"]);
+  assert.ok(f.calls.some(({ url }) => url === `${PUBLIC}%40other-scope%2Ftool/${version}`));
+  await assert.rejects(publishPromotion({ ...f, env }), /this workflow run/u);
+});
+
+test("rejects malicious input before any registry request and binds latest intent", async (t) => {
+  const f = await prepared(t);
+  for (const change of [{ packageName: "../../bad" }, { version: "../x" }, { latest: undefined }]) {
+    await assert.rejects(
+      preparePromotion({ ...f, ...change, fetcher: () => assert.fail("no request") }),
+    );
+  }
+  await assert.rejects(publishPromotion({ ...f, latest: true }), /this workflow run/u);
+});
+
+test("latest requires a stable version matching insider latest; non-latest can use a policy-approved prerelease", async (t) => {
+  const f = await fixture(t, { latest: true });
+  f.state.sourceLatest = "0.8.0";
+  await assert.rejects(preparePromotion(f), /current insider latest/u);
+  assert.ok(f.calls.every(({ url }) => !url.endsWith(".tgz")));
+  const prerelease = await fixture(t, { selectedVersion: "1.2.3-rc.1", latest: true });
+  await assert.rejects(preparePromotion(prerelease), /stable X.Y.Z/u);
+  await preparePromotion({ ...prerelease, latest: false });
+});
+
+test("policy, dependency and auth rejection stops immediately without retry and deletes stale record", async (t) => {
   for (const status of [401, 403, 409, 500]) {
     const f = await fixture(t);
     await writeFile(join(f.directory, "promotion.json"), "stale");
@@ -135,8 +262,6 @@ test("policy/dependency/auth rejection stops immediately and invalidates stale p
     await assert.rejects(
       preparePromotion({
         ...f,
-        version,
-        env,
         fetcher: async () => {
           calls += 1;
           return Response.json(
@@ -152,9 +277,9 @@ test("policy/dependency/auth rejection stops immediately and invalidates stale p
   }
 });
 
-test("rejects missing credentials, incomplete or expanded plans, tampering, and non-insider sources", async (t) => {
+test("rejects missing credentials, expanded plans, corrupt bytes, and wrong source manifests", async (t) => {
   const f = await fixture(t);
-  await assert.rejects(preparePromotion({ ...f, version, env: {} }), /INSIDER_TOKEN/u);
+  await assert.rejects(preparePromotion({ ...f, env: {} }), /INSIDER_TOKEN/u);
   for (const change of [
     { status: "running" },
     { dryRun: false },
@@ -162,125 +287,151 @@ test("rejects missing credentials, incomplete or expanded plans, tampering, and 
     { packageCount: 2 },
     { packages: [{ name: "other", version, publicVersion: "publish" }] },
     { packages: [{ name: PACKAGE, version: "0.8.0", publicVersion: "publish" }] },
-  ]) {
+  ])
     await assert.rejects(
-      preparePromotion({
-        ...f,
-        version,
-        env,
-        fetcher: async () => Response.json({ ...f.plan, ...change }),
-      }),
-      /exact completed CLI-only plan/u,
+      preparePromotion({ ...f, fetcher: async () => Response.json({ ...f.plan, ...change }) }),
+      /exact completed single-package plan/u,
     );
-  }
   f.metadata.dist.integrity = "sha512-wrong";
-  await assert.rejects(preparePromotion({ ...f, version, env }), /integrity mismatch/u);
-  f.metadata.dist.tarball = `${PUBLIC}${PACKAGE}/-/original.tgz`;
-  await assert.rejects(preparePromotion({ ...f, version, env }), /still be hosted/u);
-  const wrong = await fixture(t, { name: "another-package" });
-  await assert.rejects(preparePromotion({ ...wrong, version, env }), /tarball manifest/u);
-  const privatePackage = await fixture(t, { private: true });
-  await assert.rejects(preparePromotion({ ...privatePackage, version, env }), /tarball manifest/u);
+  await assert.rejects(preparePromotion(f), /integrity mismatch/u);
+  f.metadata.dist.tarball = `${PUBLIC}original.tgz`;
+  await assert.rejects(preparePromotion(f), /still be hosted/u);
+  for (const manifest of [{ name: "other" }, { version: "0.9.0" }, { private: true }]) {
+    await assert.rejects(preparePromotion(await fixture(t, { manifest })), /tarball manifest/u);
+  }
 });
 
-test("publishes only the reviewed tarball then verifies public version and integrity", async (t) => {
-  const f = await fixture(t);
-  await preparePromotion({ ...f, version, env });
-  let reads = 0;
-  let publishes = 0;
-  const result = await publishPromotion({
-    ...f,
-    version,
-    env,
-    fetcher: async (url) => {
-      assert.equal(url, `${PUBLIC}${PACKAGE}/${version}`);
-      return ++reads === 1 ? new Response(null, { status: 404 }) : Response.json(f.metadata);
-    },
-    publisher: async (path) => {
-      publishes += 1;
-      assert.deepEqual(await readFile(path), f.bytes);
-    },
-  });
-  assert.equal(publishes, 1);
-  assert.equal(result.action, "published");
-  assert.equal(result.publicRegistryWriteVerified, true);
+test("new versions and first publication use an explicit tag and read back latest intent", async (t) => {
+  for (const latest of [true, false])
+    for (const newPackage of [true, false]) {
+      const f = await prepared(t, { latest });
+      f.state.exists = false;
+      if (newPackage) {
+        f.state.packageExists = false;
+        f.state.tags = {};
+      }
+      const result = await publishPromotion(f);
+      assert.equal(result.action, "published");
+      assert.equal(result.latestVerified, latest);
+      assert.equal(result.publicRegistryWriteVerified, true);
+      assert.deepEqual(f.state.writes, [`publish:${latest ? "latest" : "promoted"}`]);
+      assert.equal(f.state.tags.latest, latest ? version : newPackage ? undefined : "0.6.0");
+    }
 });
 
-test("reuses an identical public artifact without claiming OIDC writes were verified", async (t) => {
-  const f = await fixture(t);
-  await preparePromotion({ ...f, version, env });
-  const result = await publishPromotion({
-    ...f,
-    version,
-    env,
-    publisher: () => assert.fail("must not publish"),
-  });
-  assert.equal(result.action, "reused");
-  assert.equal(result.publicRegistryWriteVerified, false);
+test("existing identical version updates latest only when requested and needed", async (t) => {
+  for (const latest of [true, false])
+    for (const alreadyLatest of [true, false]) {
+      const f = await prepared(t, { latest });
+      f.state.tags.latest = alreadyLatest ? version : "0.6.0";
+      const result = await publishPromotion(f);
+      const shouldWrite = latest && !alreadyLatest;
+      assert.equal(result.action, "reused");
+      assert.equal(result.tagUpdated, shouldWrite);
+      assert.equal(result.publicRegistryWriteVerified, shouldWrite);
+      assert.deepEqual(f.state.writes, shouldWrite ? ["latest"] : []);
+      assert.equal(f.state.tags.latest, latest || alreadyLatest ? version : "0.6.0");
+    }
 });
 
-test("rejects context, run, version, bytes and public conflicts before publishing", async (t) => {
-  const f = await fixture(t);
-  await preparePromotion({ ...f, version, env });
-  const options = { ...f, version, env, publisher: () => assert.fail("must not publish") };
+test("rejects context/run/version/hash/public conflicts before any write", async (t) => {
+  const f = await prepared(t);
   for (const change of [
     { GITHUB_RUN_ID: "13" },
     { GITHUB_RUN_ATTEMPT: "2" },
     { GITHUB_SHA: "b".repeat(40) },
   ]) {
     await assert.rejects(
-      publishPromotion({ ...options, env: { ...env, ...change } }),
+      publishPromotion({ ...f, env: { ...env, ...change } }),
       /this workflow run/u,
     );
   }
-  await assert.rejects(publishPromotion({ ...options, version: "0.8.0" }), /exact completed/u);
+  await assert.rejects(publishPromotion({ ...f, version: "0.8.0" }), /exact completed/u);
   f.metadata.dist.integrity = "sha512-conflict";
-  await assert.rejects(publishPromotion(options), /readback does not match/u);
-  await writeFile(join(f.directory, "univer-workspace-cli.tgz"), "tampered");
-  await assert.rejects(publishPromotion(options), /integrity mismatch/u);
+  await assert.rejects(publishPromotion(f), /readback does not match/u);
+  await writeFile(join(f.directory, "original.tgz"), "tampered");
+  await assert.rejects(publishPromotion(f), /integrity mismatch/u);
+  assert.deepEqual(f.state.writes, []);
 });
 
-test("public read failure, publish failure, and wrong final integrity fail closed without retries", async (t) => {
-  const f = await fixture(t);
-  await preparePromotion({ ...f, version, env });
+test("wrong version/tag readback and tag write failures cannot report success", async (t) => {
+  const f = await prepared(t, { latest: true });
+  await assert.rejects(publishPromotion({ ...f, tagger: async () => {} }), /latest readback/u);
+  let writes = 0;
   await assert.rejects(
     publishPromotion({
       ...f,
-      version,
-      env,
-      fetcher: async () => new Response(null, { status: 403 }),
-      publisher: () => assert.fail("must not publish"),
+      tagger: async () => {
+        writes += 1;
+        throw new Error("tag denied");
+      },
     }),
+    /tag denied/u,
+  );
+  assert.equal(writes, 1);
+  const changedIntegrity = await prepared(t, { latest: true });
+  await assert.rejects(
+    publishPromotion({
+      ...changedIntegrity,
+      tagger: async (...args) => {
+        await changedIntegrity.tagger(...args);
+        changedIntegrity.metadata.dist.integrity = "sha512-wrong-after-tag-write";
+      },
+    }),
+    /exact-version\/integrity readback/u,
+  );
+  f.state.exists = false;
+  await assert.rejects(
+    publishPromotion({ ...f, publisher: async () => {} }),
+    /exact-version\/integrity readback/u,
+  );
+  const noLatest = await prepared(t);
+  noLatest.state.exists = false;
+  await assert.rejects(
+    publishPromotion({
+      ...noLatest,
+      publisher: async () => {
+        noLatest.state.exists = true;
+      },
+    }),
+    /promoted tag readback/u,
+  );
+  const changedLatest = await prepared(t);
+  changedLatest.state.exists = false;
+  await assert.rejects(
+    publishPromotion({
+      ...changedLatest,
+      publisher: async (...args) => {
+        await changedLatest.publisher(...args);
+        changedLatest.state.tags.latest = version;
+      },
+    }),
+    /latest readback/u,
+  );
+});
+
+test("public read failures and uncertain upload failures stop without retry", async (t) => {
+  const f = await prepared(t);
+  await assert.rejects(
+    publishPromotion({ ...f, fetcher: async () => new Response(null, { status: 403 }) }),
     /readback failed \(403\)/u,
   );
-  let publishes = 0;
+  f.state.exists = false;
+  let calls = 0;
   await assert.rejects(
     publishPromotion({
       ...f,
-      version,
-      env,
-      fetcher: async () => new Response(null, { status: 404 }),
-      publisher: () => {
-        publishes += 1;
+      publisher: async () => {
+        calls += 1;
         throw new Error("uncertain upload");
       },
     }),
     /uncertain upload/u,
   );
-  assert.equal(publishes, 1);
-  await assert.rejects(
-    publishPromotion({
-      ...f,
-      version,
-      env,
-      fetcher: async () => new Response(null, { status: 404 }),
-      publisher: async () => {},
-    }),
-    /readback does not match/u,
-  );
+  assert.equal(calls, 1);
 });
 
-test("public npm subprocess receives OIDC context without insider or token credentials", async (t) => {
+test("public npm upload and dist-tag subprocesses keep OIDC without token/config credentials", async (t) => {
   const f = await fixture(t);
   const bin = join(f.directory, "bin");
   await mkdir(bin);
@@ -289,31 +440,38 @@ test("public npm subprocess receives OIDC context without insider or token crede
     `#!${process.execPath}\nconsole.log(JSON.stringify({env:process.env,args:process.argv.slice(2),cwd:process.cwd()}));\n`,
   );
   await chmod(join(bin, "npm"), 0o755);
-  const result = await publishTarball(f.tarball, {
+  const context = {
     ...env,
     PATH: bin,
     NPM_TOKEN: "synthetic-secret",
     NODE_AUTH_TOKEN: "synthetic-secret",
     NPM_CONFIG_REGISTRY: INSIDER,
     NPM_CONFIG_USERCONFIG: "/private/npmrc",
-  });
-  const observed = JSON.parse(result.stdout);
-  for (const key of [
-    "INSIDER_TOKEN",
-    "NPM_TOKEN",
-    "NODE_AUTH_TOKEN",
-    "NPM_CONFIG_REGISTRY",
-    "NPM_CONFIG_USERCONFIG",
+  };
+  for (const [result, args] of [
+    [
+      await publishTarball(f.tarball, context, "promoted"),
+      npmPublishArguments(f.tarball, "promoted"),
+    ],
+    [await setLatest(PACKAGE, version, context), npmTagArguments(PACKAGE, version)],
   ]) {
-    assert.equal(observed.env[key], undefined);
+    const observed = JSON.parse(result.stdout);
+    for (const key of [
+      "INSIDER_TOKEN",
+      "NPM_TOKEN",
+      "NODE_AUTH_TOKEN",
+      "NPM_CONFIG_REGISTRY",
+      "NPM_CONFIG_USERCONFIG",
+    ])
+      assert.equal(observed.env[key], undefined);
+    assert.equal(observed.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
+    assert.deepEqual(observed.args, args);
+    assert.notEqual(observed.cwd, process.cwd());
   }
-  assert.equal(observed.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
-  assert.deepEqual(observed.args, npmPublishArguments(f.tarball));
-  assert.notEqual(observed.cwd, process.cwd());
 });
 
-test("real npm overrides the tarball insider publishConfig and uploads byte-identical original to loopback", async (t) => {
-  const f = await fixture(t);
+test("real npm uploads unchanged tarball to loopback, overriding insider registry and manifest latest tag", async (t) => {
+  const f = await fixture(t, { packageName: "@loopback/tool" });
   const requests = [];
   const server = createServer(async (request, reply) => {
     const chunks = [];
@@ -324,7 +482,9 @@ test("real npm overrides the tarball insider publishConfig and uploads byte-iden
       body: Buffer.concat(chunks).toString(),
     });
     reply.setHeader("content-type", "application/json");
-    if (request.method === "PUT") reply.end(JSON.stringify({ ok: true }));
+    if (request.method === "GET" && request.url.endsWith("/dist-tags")) {
+      reply.end(JSON.stringify({ latest: "0.6.0" }));
+    } else if (request.method === "PUT") reply.end(JSON.stringify({ ok: true }));
     else {
       reply.statusCode = 404;
       reply.end(JSON.stringify({ error: "not_found" }));
@@ -334,42 +494,77 @@ test("real npm overrides the tarball insider publishConfig and uploads byte-iden
   t.after(() => new Promise((done) => server.close(done)));
   const port = server.address().port;
   const registry = `http://127.0.0.1:${port}/`;
-  const args = [
-    ...npmPublishArguments(f.tarball, registry),
-    `--//127.0.0.1:${port}/:_authToken=synthetic-loopback-only`,
-  ];
-  await execute("npm", args, {
-    cwd: f.directory,
-    timeout: 60_000,
-    env: {
-      PATH: process.env.PATH,
-      HOME: f.directory,
-      NPM_CONFIG_CACHE: join(f.directory, "cache"),
-      NPM_CONFIG_GLOBALCONFIG: join(f.directory, "empty-global.npmrc"),
+  for (const tag of ["promoted", "latest"]) {
+    await execute(
+      "npm",
+      [
+        ...npmPublishArguments(f.tarball, tag, registry),
+        `--//127.0.0.1:${port}/:_authToken=synthetic-loopback-only`,
+      ],
+      {
+        cwd: f.directory,
+        timeout: 60_000,
+        env: {
+          PATH: process.env.PATH,
+          HOME: f.directory,
+          NPM_CONFIG_CACHE: join(f.directory, "cache"),
+          NPM_CONFIG_GLOBALCONFIG: join(f.directory, "empty-global.npmrc"),
+        },
+      },
+    );
+    const document = JSON.parse(requests.filter(({ method }) => method === "PUT").at(-1).body);
+    assert.deepEqual(document["dist-tags"], { [tag]: version });
+    assert.deepEqual(Buffer.from(Object.values(document._attachments)[0].data, "base64"), f.bytes);
+    assert.equal(document.versions[version].dist.integrity, f.hash);
+    assert.equal(document.versions[version].publishConfig.registry, INSIDER);
+  }
+  await execute(
+    "npm",
+    [
+      ...npmTagArguments(f.packageName, version, registry),
+      `--//127.0.0.1:${port}/:_authToken=synthetic-loopback-only`,
+    ],
+    {
+      cwd: f.directory,
+      timeout: 60_000,
+      env: {
+        PATH: process.env.PATH,
+        HOME: f.directory,
+        NPM_CONFIG_CACHE: join(f.directory, "cache"),
+        NPM_CONFIG_GLOBALCONFIG: join(f.directory, "empty-global.npmrc"),
+      },
     },
-  });
-  const uploads = requests.filter((request) => request.method === "PUT");
-  assert.equal(uploads.length, 1);
-  assert.equal(uploads[0].url, `/${PACKAGE}`);
-  const document = JSON.parse(uploads[0].body);
-  const attachment = Object.values(document._attachments)[0];
-  assert.deepEqual(Buffer.from(attachment.data, "base64"), f.bytes);
-  assert.equal(document.versions[version].dist.integrity, f.hash);
-  assert.equal(document.versions[version].publishConfig.registry, INSIDER);
+  );
+  const tagWrite = requests.find(
+    ({ method, url }) => method === "PUT" && url.endsWith("/dist-tags/latest"),
+  );
+  assert.equal(JSON.parse(tagWrite.body), version);
+  assert.match(decodeURIComponent(tagWrite.url), /@loopback\/tool/u);
   assert.deepEqual(await readFile(f.tarball), f.bytes);
 });
 
-
-test("credentialed workflow is manual/default-branch only, even for validation", async () => {
-  const workflow = await readFile(new URL("../../.github/workflows/promote-cli-public.yml", import.meta.url), "utf8");
+test("credentialed workflow stays manual/default-branch only with configurable package and pinned npm", async () => {
+  const workflow = await readFile(
+    new URL("../../.github/workflows/promote-cli-public.yml", import.meta.url),
+    "utf8",
+  );
   const gate = workflow.split("  promote:\n")[1].split("    runs-on:")[0];
-  assert.match(gate, /github.event_name == 'workflow_dispatch'/);
-  assert.match(gate, /github.repository == 'dream-num\/univer-workspace'/);
-  assert.match(gate, /github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/);
-  assert.doesNotMatch(gate, /inputs.publish|\|\|/);
-  assert.doesNotMatch(workflow, /pull_request:|  test:|needs: test|inputs.publish/);
-  assert.match(workflow, /dry_run:[\s\S]*default: true/);
-  assert.match(workflow, /if: \$\{\{ !inputs.dry_run \}\}/);
-  const tests = await readFile(new URL("../../.github/workflows/test-cli-promotion.yml", import.meta.url), "utf8");
-  assert.doesNotMatch(tests, /secrets\.|id-token: write|--publish/);
+  assert.match(gate, /github.event_name == 'workflow_dispatch'/u);
+  assert.match(
+    gate,
+    /github.ref == format\('refs\/heads\/\{0\}', github.event.repository.default_branch\)/u,
+  );
+  assert.doesNotMatch(gate, /github.repository ==|\|\|/u);
+  assert.doesNotMatch(workflow, /pull_request:|  test:|needs: test|inputs.publish/u);
+  assert.match(workflow, /package:[\s\S]*type: choice[\s\S]*options:/u);
+  assert.match(workflow, /latest:[\s\S]*default: false/u);
+  assert.match(workflow, /dry_run:[\s\S]*default: true/u);
+  assert.match(workflow, /if: \$\{\{ !inputs.dry_run \}\}/u);
+  assert.match(workflow, /npm@11\.21\.0/u);
+  const tests = await readFile(
+    new URL("../../.github/workflows/test-cli-promotion.yml", import.meta.url),
+    "utf8",
+  );
+  assert.match(tests, /npm@11\.21\.0/u);
+  assert.doesNotMatch(tests, /secrets\.|id-token: write|--publish/u);
 });

@@ -32,6 +32,8 @@ jobs:
         with:
           node-version: 24
           package-manager-cache: false
+      - name: Install the publisher npm version
+        working-directory: ${{ runner.temp }}
+        run: npm install --global npm@11.21.0 --registry=https://registry.npmjs.org/ --ignore-scripts --userconfig=/dev/null
       - name: Test release policy and isolated npm upload
         run: node --test scripts/release/*.test.mjs
-

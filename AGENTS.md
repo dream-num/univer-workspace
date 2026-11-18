@@ -163,7 +163,9 @@ CLI 打包脚本从 wrapper manifest 读取绑定版本写入 artifact 运行时
   `sha-<commit>` image tag。Docker image 和 CLI artifact 的交付时机与执行流程仍然独立。
 - `release-cli-manual.yml` 只写 insider-npm；公开 npm Promotion 使用独立的
   `promote-cli-public.yml`。后者默认仅校验，只有默认分支手动明确选择 `dry_run=false` 才发布
-  `univer-workspace-cli` 的精确稳定版本原包；不重建、不重打包、不自动提升依赖、不删除内部版本。
+  下拉选定包的精确版本原包（当前选项为 `univer-workspace-cli`）；`latest=false` 的新版本显式使用
+  `promoted` 标签，`latest=true` 必须验证或写入并回读公开 latest。不重建、不重打包、不自动提升依赖、
+  不删除内部版本。脚本不硬编码仓库或包名，复制到其他仓库只需调整 workflow 的包名选项。
 
 ## 文档维护
 
