@@ -1,6 +1,8 @@
 import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { scrypt } from "node:crypto";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
+import { openProductDatabase } from "../../server/src/db/index.js";
 import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
 import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
 import type { EmailMessage, EmailSender } from "../../server/src/integrations/email/index.js";
@@ -10,6 +12,13 @@ import {
 } from "../../server/src/modules/identity/index.js";
 
 import { expectSessionSource } from "../fixtures/session-source.js";
+import { createPostgresTestSchema } from "../support/postgres/schema.js";
+
+// Each check of a guess derives the code hash once, so scrypt calls count the guesses checked.
+vi.mock("node:crypto", async (importOriginal) => {
+  const crypto = await importOriginal<typeof import("node:crypto")>();
+  return { ...crypto, scrypt: vi.fn(crypto.scrypt) };
+});
 
 const workspaces: SqliteDatabase[] = [];
 
@@ -263,6 +272,82 @@ describe("passwordless Email sign-in", () => {
     expect(harness.sent).toHaveLength(0);
   });
 });
+
+const postgresUrl = process.env.WORKSPACE_TEST_POSTGRES_URL;
+const backends = [
+  {
+    name: "SQLite",
+    open: () => openProductDatabase({ provider: "sqlite", filename: ":memory:" }),
+  },
+  {
+    name: "PostgreSQL",
+    open: postgresUrl
+      ? async () => {
+          const schema = await createPostgresTestSchema(postgresUrl);
+          const product = await openProductDatabase({
+            provider: "postgres",
+            connectionString: schema.connectionString,
+          }).catch(async (error: unknown) => {
+            await schema.close();
+            throw error;
+          });
+          return {
+            repositories: product.repositories,
+            async close() {
+              try { await product.close(); } finally { await schema.close(); }
+            },
+          };
+        }
+      : undefined,
+  },
+];
+
+for (const { name, open } of backends) {
+  describe.skipIf(!open)(`${name} Email sign-in attempts`, () => {
+    it("checks at most five guesses against one code", async ({ onTestFinished }) => {
+      const product = await open!();
+      onTestFinished(() => product.close());
+      const sent: EmailMessage[] = [];
+      const identity = createIdentityModule({
+        repository: product.repositories.identity,
+        sessionTtlMs: 60_000,
+        emailSender: { send: async (message) => { sent.push(message); } },
+        now: () => 1_000_000,
+      });
+      await identity.initialize();
+      await identity.requestEmailLoginCode({ email: "alice@example.com" });
+      const code = codeFrom(sent[0]!);
+      vi.mocked(scrypt).mockClear();
+
+      const guesses = await Promise.allSettled(
+        Array.from({ length: 20 }, (_, guess) =>
+          identity.loginWithEmailCode({
+            email: "alice@example.com",
+            code: String((Number(code) + 1 + guess) % 1_000_000).padStart(6, "0"),
+          })
+        )
+      );
+
+      expect(scrypt).toHaveBeenCalledTimes(5);
+      for (const guess of guesses) {
+        expect(guess).toMatchObject({
+          status: "rejected",
+          reason: { code: "INVALID_EMAIL_CODE", status: 400 },
+        });
+      }
+      expect(guesses).toContainEqual(expect.objectContaining({
+        reason: expect.objectContaining({
+          message: expect.stringContaining("Too many incorrect attempts"),
+        }),
+      }));
+      await expect(
+        identity.loginWithEmailCode({ email: "alice@example.com", code })
+      ).rejects.toMatchObject({ code: "INVALID_EMAIL_CODE", status: 400 });
+      expect(scrypt).toHaveBeenCalledTimes(5);
+      expect(await product.repositories.identity.findUserByEmail("alice@example.com")).toBeNull();
+    });
+  });
+}
 
 async function createHarness(
   options: { readonly sender?: EmailSender | null; readonly send?: EmailSender["send"] } = {}
