@@ -2,15 +2,18 @@
 
 [English](agent-handoff-showcase.md)
 
-在 Univer Workspace 里，AI Agent 制作 office 文件，再交给人和其他 Agent。Agent 通过 MCP 或 `uvw` CLI 接入，在 Pull request 里创建 Sheet、Doc 或 Slide，再用链接分享结果。拿到链接的人或另一个 Agent 都能打开它，并以它为基础做出下一个文件。文件交到人手里时，由人审阅和决策。
+在 Univer Workspace 里，AI Agent 制作 office 文件，再交给人和其他 Agent。Agent 通过 MCP 或 `uvw` CLI 接入，在 Pull request 里创建 Sheet、Doc 或 Slide，再用链接分享结果。
+
+🤖 Agent 做文件，🧑 人在节点上做决定，链接把文件带到下一个人或 Agent 手里。
 
 ```mermaid
-flowchart LR
-    Make["Agent 在 Pull request 里<br/>创建文件"] --> Merge["Pull request<br/>合入"]
-    Merge --> Link["Agent 分享链接"]
-    Link --> Person["人认领 Agent<br/>或审阅它的工作"]
-    Link --> Next["另一个 Agent<br/>从链接复制文件"]
-    Next --> Make
+flowchart TB
+    Asst["🤖 你的 AI 助手<br/>以你的身份登录"] -- Pull request --> You
+    Guest["🤖 访客 Agent<br/>没有账号"] -- 文件链接和认领链接 --> You
+    You(["🧑 你<br/>认领 Agent<br/>合入、分享"]) -- 文件链接 --> Other(["🧑 别人<br/>交给 Agent<br/>合入、分享"])
+    Other -- 文件链接 --> OtherAgent["🤖 别人的 Agent<br/>复制成新文件"]
+    OtherAgent -- Pull request --> Other
+    Other -. 新文件的链接 .-> Next(["🧑 下一个人"])
 ```
 
 下面的内容都已在 `main` 上可用。截图来自一个带示例数据的本地 Workspace，图中的访客 Agent 用 Claude Code 的客户端 ID 登录。
@@ -22,6 +25,45 @@ flowchart LR
 
 > [!NOTE]
 > 在 `space.univer.ai` 上，`read`、`execute` 等读取或编辑文件内容的工具目前只对受邀账号开放。所有账号都可以复制、分享和认领文件。自己部署时由你决定谁能使用这些工具，方法见 [Executor access](../apps/mcp/README.md#executor-access)（英文）。
+
+## 人和 Agent 怎样协作
+
+**Mia 让一个没有账号的 Agent 做了一份预算，同事 Leo 以它为基础做出自己的版本。灰底的步骤由人决定。**
+
+```mermaid
+sequenceDiagram
+    participant G as 🤖 访客 Agent
+    actor M as 🧑 Mia
+    actor L as 🧑 Leo
+    participant A as 🤖 Leo 的 AI 助手
+    Note over G: 在 Pull request 里<br/>做 Sheet，自己合入
+    G->>M: share：文件链接和认领链接
+    rect rgba(128, 128, 128, 0.25)
+    Note over M: 认领 Agent
+    end
+    M->>L: 发出文件链接
+    rect rgba(128, 128, 128, 0.25)
+    L->>A: 交给我的 Agent
+    end
+    Note over A: unit_create 带 from<br/>复制成 Leo 的 Sheet 并修改
+    A->>L: Pull request 链接
+    rect rgba(128, 128, 128, 0.25)
+    Note over L: 审阅并合入<br/>在浏览器里分享新文件
+    end
+```
+
+人在这些地方做决定：
+
+| 决定                    | 谁，在哪里                                           | Agent 能不能做                                             |
+| ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
+| 让 Agent 不用账号开始   | 人在 MCP 登录页点 **以访客 Agent 继续**              | Agent 也可以自己运行 `uvw auth guest`                      |
+| 认领 Agent              | 打开认领链接的人，在浏览器里                         | 不能                                                       |
+| 审阅并合入 Pull request | 作者或认领人，在浏览器里或用 `uvw pr merge`          | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
+| 打开链接分享            | 文件的所有者，在浏览器里或用 `uvw share`             | Agent 可以分享自己的文件。你的 AI 助手通过 MCP 不能        |
+| 公开一个空间            | 空间的所有者或管理员，在浏览器里或用 `uvw repo edit` | 不能。你的 AI 助手通过 MCP 也不能                          |
+| Remix 一份副本          | 已登录的人，在分享页                                 | Agent 用 `unit_create` 带 `from` 复制                      |
+| 把文件交给自己的 Agent  | 打开分享页的人，点 **交给我的 Agent**                | 拿到链接的 Agent 可以直接读取或复制                        |
+| 停用认领的 Agent        | 认领人，在浏览器的 **我的 Agent** 里                 | 不能                                                       |
 
 ## 把文件交给你自己的 Agent
 
@@ -87,17 +129,33 @@ Give the claim link to the user so they can keep this file. It works once, withi
 
 **人打开认领链接并登录，Agent 的文件和链接就会一直有效。**
 
+```mermaid
+flowchart TB
+    Guest["🤖 访客 Agent<br/>文件会过期<br/>标为未验证"] -- 认领链接 --> You(["🧑 你<br/>10 分钟内打开<br/>登录并认领"])
+    You --> Claimed["🤖 已认领的 Agent<br/>文件一直有效<br/>归你所有<br/>拿不到你的文件"]
+```
+
 ![访客 Agent Claude Code · g3wq 的认领页，显示它的用户名、1 个文件和将拥有它的账号](images/agent-handoff/claim-agent.zh-CN.png)
 
-认领页显示 Agent 的名字和文件数。点 **认领 Agent** 后，这个人可以在浏览器里管理这些文件，这些文件也不再过期。Agent 不会获得这个人文件的任何权限。认领链接只能用一次，10 分钟内有效。Agent 可以用 `claim` 或 `uvw claim` 重新生成。
+认领页显示 Agent 的名字和文件数，点 **认领 Agent** 完成认领。认领链接只能用一次，Agent 可以用 `claim` 或 `uvw claim` 重新生成。
 
 认领之后，`share` 不再返回过期日期和认领链接，分享页也去掉 **未验证的 Agent** 标记。
 
 ## 一个文件带来下一个
 
-**别人的 Agent 读取分享链接，并以它为基础制作自己的文件。**
+**打开分享链接的人或 Agent，都能以它为基础做出自己的文件。**
 
-`unit_create` 带上 `from`，就会复制一个 Agent 能打开的文件，内容和图片一并复制。合入后的副本会记录来源，只有副本的所有者和编辑者能看到。来源文件的分享页会显示副本数。
+```mermaid
+flowchart TB
+    Src[/"📄 分享的文件<br/>显示副本数"/] -- 文件链接 --> Person(["🧑 一个人"])
+    Src -- 文件链接或<br/>交给我的 Agent --> Agent["🤖 一个 Agent"]
+    Person -- Remix --> PersonCopy[/"📄 个人空间<br/>里的副本"/]
+    Agent -- unit_create 带 from --> AgentCopy[/"📄 Pull request<br/>里的副本"/]
+    PersonCopy -. 分享 .-> Next(["🧑 下一个人"])
+    AgentCopy -. 合入后分享 .-> Next
+```
+
+`unit_create` 带上 `from`，就会复制一个 Agent 能打开的文件，内容和图片一并复制。合入后的副本会记录来源，只有副本的所有者和编辑者能看到。
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "My Q4 budget" }
@@ -108,7 +166,7 @@ unit_create { "worktree": "<worktree id>", "space": "<agent>/personal", "type": 
 uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet --name "My Q4 budget" --from https://space.univer.ai/nodes/<nodeId>
 ```
 
-接着 Agent 修改自己的副本，合入后分享一个新链接。已登录的人可以在分享页点 **Remix**，做一份自己的副本。
+已登录的人可以在分享页点 **Remix**，做一份自己的副本。
 
 ![未登录时看到的分享 Sheet。页眉显示作者 Agent、1 份副本、Remix 和"交给我的 Agent"](images/agent-handoff/shared-sheet-copies.zh-CN.png)
 
@@ -116,8 +174,16 @@ uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet -
 
 **每个任务是一个 Pull request。只有作者，或认领了作者 Agent 的人，能合入它。服务端强制执行这条规则。**
 
-- 你自己的 AI 助手把 Pull request 链接交给你，合入留给你。除非你加上 `?toolsets=admin` 或 `all`，它没有 `pr_merge`。
-- 没人认领的访客 Agent 自己合入。已认领的 Agent 也自己合入，除非认领人要求审阅，或改动需要人来决定。这是 MCP 服务给 Agent 的指示，没有机制强制执行。
+```mermaid
+flowchart LR
+    Asst["🤖 你的 AI 助手"] -- Pull request 链接 --> You(["🧑 你<br/>审阅并合入"])
+    Guest["🤖 访客 Agent"] -- 总是 --> Self["🤖 自己合入<br/>用 pr_merge"]
+    Claimed["🤖 已认领的 Agent"] -- 其他情况 --> Self
+    Claimed -- 认领人要求审阅<br/>或改动需要人决定 --> Claimer(["🧑 认领人<br/>审阅并合入"])
+```
+
+- 除非你加上 `?toolsets=admin` 或 `all`，你的 AI 助手没有 `pr_merge`。
+- MCP 服务的指示告诉 Agent 何时自己合入，没有机制强制执行。
 - 团队里的其他人试图合入时，会收到一条写明作者的错误。作者是已认领的 Agent 时，错误里还会写明认领人。
 
 认领了 Agent 的人可以在浏览器里合入它的工作，也可以用 CLI：
