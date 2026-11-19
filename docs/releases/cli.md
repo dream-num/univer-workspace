@@ -24,12 +24,10 @@ and Workspace deployment are separate operations.
 ## Promote an Insider package to public npm
 
 Run **Promote insider package to public npm (manual)** (`promote-cli-public.yml`)
-on the default branch. Enter `selection` as JSON and leave `dry_run=true`
-to validate without publishing:
-
-```json
-{"batchId":"workspace-cli-0.7.1","packages":[{"name":"univer-workspace-cli","version":"0.7.1","tag":"latest"}]}
-```
+on the default branch. Select `univer-workspace-cli` in **package**, enter an
+exact **version**, and leave **dry_run** enabled for read-only validation. Keep
+**latest** enabled for a stable public `latest`; disable it to use `promoted`
+for a new version. Validation and submission use the same inputs.
 
 Use the already-published exact Insider version. This caller permits only
 `univer-workspace-cli`; repositories with authority for other packages can reuse
@@ -37,13 +35,13 @@ the same shared actions and pass multiple entries. Keep this workflow filename
 and repository unchanged for the existing npm Trusted Publisher identity.
 
 [release-actions](https://github.com/dream-num/release-actions) owns the promotion
-implementation. Its read-only `assemble-npm-batch` action downloads the exact
-Insider archives, checks SHA-512 and package name/version, and pins the result
-in a manifest. This does not independently verify historical build provenance.
-`promote-npm` receives the same manifest, runs the Insider dependency/policy
-dry-run for the full selection, and verifies all archives against the pinned
-digests before any submission. It never rebuilds the package or retires the
-Insider version. Archive downloads do not receive the Insider credential.
+implementation. The first step reads exact Insider version metadata and passes its expected
+SHA-512 to `promote-npm` without downloading a package. The promotion Action
+validates the Insider cohort plan, downloads each original archive once, and
+checks the bytes and embedded package identity against those expected values. In submit mode it uploads those same bytes, without another download,
+rebuild or repack. No one copies a plan or hash between workflow runs. Archive
+downloads do not receive the Insider credential. This checks the package being
+promoted, not independent historical build provenance.
 
 For `latest`, the exact stable version must match the current Insider `latest`.
 A missing public version is submitted with the requested tag; an existing
@@ -51,11 +49,8 @@ version is only reused if its bytes match. For the `latest` target, an identical
 existing version can have its public `latest` moved, which also requires
 [OIDC dist-tag permission](https://docs.npmjs.com/adding-dist-tags-to-packages/).
 Reuse with other tags does not move those tags. Submit mode requires a separately
-authorized public release. After a successful validation run, review its
-`batch.json` artifact. Dispatch with `dry_run=false` and that exact JSON as
-`reviewed_batch`; leave `selection` empty. Submission never reassembles the
-plan. The shared Action stops before writing if the current Insider tarball
-differs from that reviewed plan. The GitHub-hosted workflow
+authorized public release. Run the same input with `dry_run=false` to submit.
+The GitHub-hosted workflow
 pins npm and uses OIDC; only the Insider policy dry-run uses the Insider token.
 The public subprocess does not inherit that token. New public versions request
 provenance covering the submitted tarball and promotion workflow, not the earlier
@@ -63,7 +58,7 @@ build. Reuse cannot add provenance to an existing version.
 
 ## Submission and public verification are separate
 
-The workflow uploads `batch-result.json` and, for validation, `batch.json` (not the original tarballs). Submission
+The workflow uploads `batch-result.json` with the checked digest, not the original tarballs. Submission
 records per-package results and does not claim public visibility. Verify the exact
 public version, tag, integrity and provenance independently. An upload error may
 have an unknown outcome; check npm instead of blindly retrying. There is no
