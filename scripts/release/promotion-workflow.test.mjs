@@ -16,7 +16,7 @@ test("credentialed workflow stays manual/default-branch only with exact selectio
   assert.doesNotMatch(gate, /github.repository ==|\|\|/u);
   assert.doesNotMatch(workflow, /pull_request:|  test:|needs: test|inputs.publish/u);
   const schema = workflow.split("    inputs:\n")[1].split("\npermissions:")[0];
-  assert.deepEqual([...schema.matchAll(/^      ([^:\n]+):/gmu)].map(x=>x[1]), ["package", "latest", "version", "dry_run"]);
+  assert.deepEqual([...schema.matchAll(/^      ([^:\n ]+):/gmu)].map(x=>x[1]), ["package", "latest", "version", "dry_run"]);
   assert.match(schema, /package:[\s\S]*type: choice\s+options:\s+- univer-workspace-cli/u);
   assert.match(schema, /latest:[\s\S]*type: boolean\s+default: true/u);
   assert.match(schema, /version:[\s\S]*type: string/u);
