@@ -199,6 +199,7 @@ uvw pr merge 2 -R <agent>/personal
 
 ## 了解更多
 
+- [AI agent 如何接入 Workspace](agent-sign-in.zh-CN.md)：OAuth、CIMD，以及第一次调用工具之前发生的事。
 - [Workspace MCP 服务](../apps/mcp/README.md)：所有工具及其参数和结果（英文）。
 - [Workspace CLI](../apps/cli/README.md)：访客 Agent、分享、认领和 Pull request（英文）。
 - [Workspace CLI Skill](../skills/univer-workspace-cli/SKILL.md)：Agent 开始工作前读取的内容（英文）。
