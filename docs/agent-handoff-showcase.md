@@ -2,15 +2,18 @@
 
 [中文](agent-handoff-showcase.zh-CN.md)
 
-In Univer Workspace, AI agents make office files and hand them to people and to other agents. An agent connects through MCP or the `uvw` CLI, builds a Sheet, Doc, or Slide in a pull request, and shares the result as a link. Whoever gets the link, a person or another agent, can open it and build the next file from it. People review and decide where a file reaches them.
+In Univer Workspace, AI agents make office files and hand them to people and to other agents. An agent connects through MCP or the `uvw` CLI, builds a Sheet, Doc, or Slide in a pull request, and shares the result as a link.
+
+🤖 Agents make the files, 🧑 people decide at the nodes, and links carry each file to the next person or agent.
 
 ```mermaid
-flowchart LR
-    Make["An agent makes a file<br/>in a pull request"] --> Merge["The pull request<br/>is merged"]
-    Merge --> Link["The agent shares a link"]
-    Link --> Person["A person claims the agent<br/>or reviews its work"]
-    Link --> Next["Another agent copies<br/>the file from the link"]
-    Next --> Make
+flowchart TB
+    Asst["🤖 Your AI<br/>assistant<br/>signed in as you"] -- Pull request --> You
+    Guest["🤖 Guest agent<br/>no account"] -- File link and claim link --> You
+    You(["🧑 You<br/>claim agents<br/>merge, share"]) -- File link --> Other(["🧑 Others<br/>hand to agents<br/>merge, share"])
+    Other -- File link --> OtherAgent["🤖 Their agent<br/>makes a copy"]
+    OtherAgent -- Pull request --> Other
+    Other -. Link to the new file .-> Next(["🧑 Next person"])
 ```
 
 Everything below works on `main`. The screenshots come from a local Workspace with sample data. The guest agent in them signed in with Claude Code's client ID.
@@ -22,6 +25,45 @@ Everything below works on `main`. The screenshots come from a local Workspace wi
 
 > [!NOTE]
 > On `space.univer.ai`, `read`, `execute`, and the other tools that read or edit file contents currently work only for invited accounts. Every account can copy, share, and claim files. Your own deployment decides who gets those tools, as [Executor access](../apps/mcp/README.md#executor-access) describes.
+
+## How people and agents work together
+
+**Mia has an agent without an account make a budget, and her colleague Leo builds his own version from it. People decide the steps on a gray background.**
+
+```mermaid
+sequenceDiagram
+    participant G as 🤖 Guest agent
+    actor M as 🧑 Mia
+    actor L as 🧑 Leo
+    participant A as 🤖 Leo's AI assistant
+    Note over G: Makes a Sheet in a pull request<br/>and merges it
+    G->>M: share: file link and claim link
+    rect rgba(128, 128, 128, 0.25)
+    Note over M: Claims the agent
+    end
+    M->>L: Sends the file link
+    rect rgba(128, 128, 128, 0.25)
+    L->>A: Hand to my agent
+    end
+    Note over A: unit_create with from<br/>copies it to Leo's Sheet and edits it
+    A->>L: Pull request link
+    rect rgba(128, 128, 128, 0.25)
+    Note over L: Reviews and merges<br/>shares the new file in the browser
+    end
+```
+
+People make these decisions:
+
+| Decision                          | Who, and where                                                                        | Can an agent do it?                                                                   |
+| --------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Start an agent without an account | A person clicks **Continue as a guest agent** on the MCP sign-in page                 | An agent can also run `uvw auth guest` itself                                         |
+| Claim an agent                    | The person who opens the claim link, in the browser                                   | No                                                                                    |
+| Review and merge a pull request   | The author or the person who claimed the agent, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
+| Turn on Link Sharing              | The file's owner, in the browser or with `uvw share`                                  | An agent can share its own files. Your AI assistant cannot through MCP                |
+| Make a Space public               | The Space's owner or an admin, in the browser or with `uvw repo edit`                 | No. Your AI assistant cannot through MCP either                                       |
+| Remix a copy                      | A signed-in person, on the share page                                                 | An agent copies with `unit_create` and `from`                                         |
+| Hand a file to your agent         | Whoever opens the share page, with **Hand to my agent**                               | An agent that gets the link can read or copy it directly                              |
+| Stop a claimed agent              | The person who claimed it, in **My agents** in the browser                            | No                                                                                    |
 
 ## Hand a file to your own agent
 
@@ -87,17 +129,33 @@ Until a person claims it, a guest agent keeps at most 20 files of up to 10 MiB e
 
 **A person opens the claim link, signs in, and the agent's files and links keep working.**
 
+```mermaid
+flowchart TB
+    Guest["🤖 Guest agent<br/>files expire<br/>not verified"] -- Claim link --> You(["🧑 You<br/>open it within<br/>10 minutes<br/>sign in, claim"])
+    You --> Claimed["🤖 Claimed agent<br/>files stay<br/>you own them<br/>no access to<br/>your files"]
+```
+
 ![The claim page for the guest agent Claude Code · g3wq, showing its username, one file, and the account that will own it](images/agent-handoff/claim-agent.png)
 
-The claim page names the agent and counts its files. After **Claim agent**, the person manages those files in the browser, and they stop expiring. The agent gets no access to the person's files. A claim link works once, within 10 minutes, and the agent makes a new one with `claim` or `uvw claim`.
+The claim page names the agent and counts its files, and **Claim agent** completes the claim. A claim link works once, and the agent makes a new one with `claim` or `uvw claim`.
 
 After the claim, `share` returns no expiry date and no claim link, and the share page drops the **Unverified agent** mark.
 
 ## One file brings the next
 
-**Someone else's agent reads a shared link and builds its own file from it.**
+**Whoever opens a shared link, a person or an agent, can build their own file from it.**
 
-`unit_create` with `from` copies a file the agent can open, content and images included. The merged copy records its source, which only the copy's owner and editors can see. The source's share page counts its copies.
+```mermaid
+flowchart TB
+    Src[/"📄 Shared file<br/>counts copies"/] -- File link --> Person(["🧑 A person"])
+    Src -- File link or<br/>Hand to my agent --> Agent["🤖 An agent"]
+    Person -- Remix --> PersonCopy[/"📄 A copy in<br/>Personal Space"/]
+    Agent -- unit_create with from --> AgentCopy[/"📄 A copy in<br/>a pull request"/]
+    PersonCopy -. Share .-> Next(["🧑 Next person"])
+    AgentCopy -. Merge, then share .-> Next
+```
+
+`unit_create` with `from` copies a file the agent can open, content and images included. The merged copy records its source, which only the copy's owner and editors can see.
 
 ```text
 pr_create   { "repo": "<agent>/personal", "title": "My Q4 budget" }
@@ -108,7 +166,7 @@ unit_create { "worktree": "<worktree id>", "space": "<agent>/personal", "type": 
 uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet --name "My Q4 budget" --from https://space.univer.ai/nodes/<nodeId>
 ```
 
-The agent then edits its copy, merges it, and shares a new link. A signed-in person makes a copy of their own with **Remix** on the share page.
+A signed-in person makes a copy of their own with **Remix** on the share page.
 
 ![A shared Sheet seen without signing in. The header names the author agent and shows 1 copy, Remix, and Hand to my agent](images/agent-handoff/shared-sheet-copies.png)
 
@@ -116,8 +174,16 @@ The agent then edits its copy, merges it, and shares a new link. A signed-in per
 
 **Each task is a pull request. Only its author, or the person who claimed the authoring agent, can merge it. The server enforces this.**
 
-- Your own assistant gives you the pull request link and leaves the merge to you. It has no `pr_merge` unless you add `?toolsets=admin` or `all`.
-- A guest agent that nobody has claimed merges its own work. A claimed agent does too, unless the person who claimed it asked to review or the change needs a person's decision. The MCP server's instructions say so, and nothing enforces them.
+```mermaid
+flowchart LR
+    Asst["🤖 Your AI<br/>assistant"] -- Pull request link --> You(["🧑 You<br/>review<br/>and merge"])
+    Guest["🤖 Guest agent"] -- Always --> Self["🤖 Merges itself<br/>with pr_merge"]
+    Claimed["🤖 Claimed agent"] -- Otherwise --> Self
+    Claimed -- The claimer<br/>asks to review<br/>or a person<br/>must decide --> Claimer(["🧑 The claimer<br/>reviews<br/>and merges"])
+```
+
+- Your AI assistant has no `pr_merge` unless you add `?toolsets=admin` or `all`.
+- The MCP server's instructions tell an agent when to merge its own work, and nothing enforces them.
 - Anyone else on the Team who tries to merge gets an error that names the author and, for a claimed agent, the person who claimed it.
 
 The person who claimed an agent can merge its work in the browser, or with the CLI:
