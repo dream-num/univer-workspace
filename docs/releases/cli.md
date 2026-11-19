@@ -51,7 +51,11 @@ version is only reused if its bytes match. For the `latest` target, an identical
 existing version can have its public `latest` moved, which also requires
 [OIDC dist-tag permission](https://docs.npmjs.com/adding-dist-tags-to-packages/).
 Reuse with other tags does not move those tags. Submit mode requires a separately
-authorized public release and explicit `dry_run=false`. The GitHub-hosted workflow
+authorized public release. After a successful validation run, review its
+`batch.json` artifact. Dispatch with `dry_run=false` and that exact JSON as
+`reviewed_batch`; leave `selection` empty. Submission never reassembles the
+plan. The shared Action stops before writing if the current Insider tarball
+differs from that reviewed plan. The GitHub-hosted workflow
 pins npm and uses OIDC; only the Insider policy dry-run uses the Insider token.
 The public subprocess does not inherit that token. New public versions request
 provenance covering the submitted tarball and promotion workflow, not the earlier
@@ -59,7 +63,7 @@ build. Reuse cannot add provenance to an existing version.
 
 ## Submission and public verification are separate
 
-The workflow uploads `batch-result.json` (not the original tarballs). Submission
+The workflow uploads `batch-result.json` and, for validation, `batch.json` (not the original tarballs). Submission
 records per-package results and does not claim public visibility. Verify the exact
 public version, tag, integrity and provenance independently. An upload error may
 have an unknown outcome; check npm instead of blindly retrying. There is no
