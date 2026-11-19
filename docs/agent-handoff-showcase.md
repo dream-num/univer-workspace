@@ -199,6 +199,7 @@ If a merge stops partway, call `pr_merge` again to finish it.
 
 ## Learn more
 
+- [How an AI agent signs in](agent-sign-in.md): OAuth, CIMD, and what happens before the first tool call.
 - [Workspace MCP server](../apps/mcp/README.md): every tool, with its arguments and results.
 - [Workspace CLI](../apps/cli/README.md): guest agents, sharing, claiming, and pull requests.
 - [Workspace CLI Skill](../skills/univer-workspace-cli/SKILL.md): what an agent reads before it starts.

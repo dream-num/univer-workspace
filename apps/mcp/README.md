@@ -130,6 +130,9 @@ runs with `--no-sandbox` until Stage G.
 
 ## Authentication
 
+[How an AI agent signs in](../../docs/agent-sign-in.md) explains the whole OAuth flow for readers new to it. This section covers
+what the gateway does with the token.
+
 The gateway never forwards the caller's bearer to Workspace product APIs. A bearer starting with
 `uvw_pat_` (personal access token) or `uvw_at_` (MCP OAuth access token) is exchanged with Workspace
 (`POST /api/auth/token`, RFC 8693) as the confidential client `MCP_OAUTH_CLIENT_ID`. The response

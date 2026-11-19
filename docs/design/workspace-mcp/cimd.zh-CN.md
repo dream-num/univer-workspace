@@ -1,6 +1,7 @@
 # Client ID Metadata Documents（F2）设计
 
 > 状态：已实现（2026-11-09）。设计经两轮对抗评审并按第 8 节修订。对应 [architecture](architecture.zh-CN.md) 4.4 节 F2、[stages](stages.zh-CN.md) 阶段 F。
+> 面向初次接触这些机制的读者的讲解见 [AI agent 如何接入 Workspace](../../agent-sign-in.zh-CN.md)。
 > 规范依据：`draft-ietf-oauth-client-id-metadata-document-03`（下称“草案”）；MCP 授权规范 2025-11-25 起优先 CIMD、弃用 DCR。
 
 ## 1. 要解决的问题
@@ -90,6 +91,7 @@ query 在草案里是 SHOULD NOT，这里直接拒绝，少一类边界情况；
 `GET /api/auth/authorize` 与 `GET /api/auth/authorize/consent`：
 
 1. 解析 `ClientSource`。`cimd` 时先检查是否登录。未登录直接重定向到登录页，不抓取。默认开启的密码注册让任何人都能拿到 session，所以这一步不是访问控制，只是让每次抓取都能归属到一个用户，供 3.3 的每用户并发上限使用。
+   访客 agent 上线后有一个例外：未登录的人在登录页选择 **Continue as a guest agent** 时，`POST /api/auth/guest` 在创建 agent 之前就抓取文档，用来校验授权请求并取得 agent 的名字。这次抓取按来源 IP 归属，同样受每个来源 1 个的并发上限约束（`createGuestAuthorizationCheck`）。
 2. 已登录时抓取或命中缓存，得到 `CimdClient`，之后与 DCR 客户端走同一条 `parseMcpAuthorizationRequest`。
 3. 抓取或校验失败时显示错误页（400，可重试的网络错误为 503），不重定向回客户端（草案 6.1，此时 `redirect_uri` 未经验证）。
 

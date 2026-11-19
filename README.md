@@ -68,6 +68,7 @@ ready for you to review in the browser. Nothing is installed on your machine.
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Univer_Workspace-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=univer-workspace&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fspace.univer.ai%2Fmcp%22%7D)
 
 See the [agent handoff showcase](docs/agent-handoff-showcase.md) for guest agents, link sharing, claiming, copies, and review through pull requests.
+[How an AI agent signs in](docs/agent-sign-in.md) explains what happens between adding the URL and the first tool call, including OAuth and CIMD.
 
 | Setting    | Value                                                                                                                                      |
 | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -229,7 +230,8 @@ reachable from the internet.
 <summary><b>Other clients</b></summary>
 
 Any client that supports Streamable HTTP and OAuth 2.1 can use the server URL directly. Workspace supports Client
-ID Metadata Documents and dynamic client registration. A client that only runs local stdio servers can use a
+ID Metadata Documents and dynamic client registration, as [How an AI agent signs in](docs/agent-sign-in.md#step-2-the-authorization-server-has-never-met-this-client)
+explains. A client that only runs local stdio servers can use a
 bridge such as `npx -y mcp-remote https://space.univer.ai/mcp`.
 
 </details>

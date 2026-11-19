@@ -63,6 +63,7 @@ Workspace 提供远程 [MCP](https://modelcontextprotocol.io) 服务。连上它
 [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_Univer_Workspace-0098FF?logo=visualstudiocode&logoColor=white)](https://vscode.dev/redirect/mcp/install?name=univer-workspace&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fspace.univer.ai%2Fmcp%22%7D)
 
 查看 [Agent 交接效果展示](docs/agent-handoff-showcase.zh-CN.md)：访客 Agent、链接分享、认领、副本，以及通过 Pull request 审阅。
+[AI agent 如何接入 Workspace](docs/agent-sign-in.zh-CN.md) 讲解从填入 URL 到第一次调用工具之间发生了什么，包括 OAuth 和 CIMD。
 
 | 项目     | 值                                                                                                                       |
 | -------- | ------------------------------------------------------------------------------------------------------------------------ |
@@ -216,7 +217,7 @@ Grok 从 xAI 的云端发起连接，自己部署的 Workspace 需要能从公�
 <summary><b>其他客户端</b></summary>
 
 支持 Streamable HTTP 和 OAuth 2.1 的客户端都可以直接使用服务 URL。Workspace 支持 Client ID Metadata Documents
-和动态客户端注册。只能运行本地 stdio 服务的客户端可以通过 `npx -y mcp-remote https://space.univer.ai/mcp` 之类的桥接使用。
+和动态客户端注册，两者的区别见 [AI agent 如何接入 Workspace](docs/agent-sign-in.zh-CN.md#第二步授权服务器从没见过这个客户端)。只能运行本地 stdio 服务的客户端可以通过 `npx -y mcp-remote https://space.univer.ai/mcp` 之类的桥接使用。
 
 </details>
 
