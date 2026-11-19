@@ -43,6 +43,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Test CLI release wiring and Insider publisher
+        if: matrix.stage == 'test-cli'
+        run: node --test scripts/release/*.test.mjs
       - name: Verify ${{ matrix.stage }}
         run: node scripts/verify.mjs --stage ${{ matrix.stage }} --install
         env:

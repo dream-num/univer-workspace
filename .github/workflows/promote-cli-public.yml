@@ -1,23 +1,16 @@
 name: Promote insider package to public npm (manual)
-run-name: Promote ${{ inputs.package }}@${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || ' (publish)' }}
+run-name: Promote exact Insider batch ${{ inputs.dry_run && '(dry run)' || '(submit)' }}
 
 on:
   workflow_dispatch:
     inputs:
-      package:
-        description: Package already built on insider-npm
-        required: true
-        type: choice
-        options:
-          - univer-workspace-cli
-      latest:
-        description: Set public latest (false publishes new versions with the promoted tag)
-        required: true
-        type: boolean
-        default: true
-      version:
-        description: Exact version already built on insider-npm
-        required: true
+      selection:
+        description: Validation only. JSON with batchId and exact package entries.
+        required: false
+        type: string
+      reviewed_batch:
+        description: Submission only. Copy batch.json from a successful reviewed validation run.
+        required: false
         type: string
       dry_run:
         description: Validate only without publishing to public npm
@@ -44,9 +37,6 @@ jobs:
       id-token: write
     env:
       BASE_BRANCH: ${{ github.event.repository.default_branch }}
-      PROMOTION_PACKAGE: ${{ inputs.package }}
-      PROMOTION_LATEST: ${{ inputs.latest }}
-      PROMOTION_VERSION: ${{ inputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -58,20 +48,40 @@ jobs:
       - name: Install npm with OIDC dist-tag support
         working-directory: ${{ runner.temp }}
         run: npm install --global npm@11.21.0 --registry=https://registry.npmjs.org/ --ignore-scripts --userconfig=/dev/null
-      - name: Validate policy and dependencies, then download and verify original tarball
+      - id: input
+        name: Require selection for validation or the reviewed batch for submission
         env:
-          # Existing insider credential; never passed to the public npm command.
+          PROMOTION_DRY_RUN: ${{ inputs.dry_run }}
+          PROMOTION_SELECTION: ${{ inputs.selection }}
+          PROMOTION_REVIEWED_BATCH: ${{ inputs.reviewed_batch }}
+        run: node scripts/release/promotion-input.mjs
+      - id: plan
+        if: inputs.dry_run
+        uses: dream-num/release-actions/assemble-npm-batch@23de8d9464c26cedfc93a12965ae67e8de607934
+        with:
+          selection: ${{ steps.input.outputs.input }}
+      - name: Validate or submit original bytes with the shared batch action
+        uses: dream-num/release-actions/promote-npm@23de8d9464c26cedfc93a12965ae67e8de607934
+        env:
           INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: node scripts/release/promote-cli-public.mjs --package="$PROMOTION_PACKAGE" --version="$PROMOTION_VERSION" --latest="$PROMOTION_LATEST"
-      - name: Submit original tarball with npm OIDC (public verification is separate)
-        if: ${{ !inputs.dry_run }}
-        run: node scripts/release/promote-cli-public.mjs --package="$PROMOTION_PACKAGE" --version="$PROMOTION_VERSION" --latest="$PROMOTION_LATEST" --publish
-      - name: Upload promotion evidence and original tarball
+        with:
+          batch: ${{ inputs.dry_run && steps.plan.outputs.batch || steps.input.outputs.input }}
+          mode: ${{ inputs.dry_run && 'validate' || 'submit' }}
+      - name: Save the exact batch after successful validation
+        if: success() && inputs.dry_run
+        env:
+          BATCH: ${{ steps.plan.outputs.batch }}
+        run: |
+          mkdir -p .promotion/batch
+          printf '%s\n' "$BATCH" > .promotion/batch/batch.json
+      - name: Upload batch evidence (no tarballs)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: cli-public-promotion-${{ github.run_id }}-${{ github.run_attempt }}
-          path: .promotion/
+          path: |
+            .promotion/batch/batch-result.json
+            .promotion/batch/batch.json
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 14
