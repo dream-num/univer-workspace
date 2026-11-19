@@ -24,12 +24,10 @@ and Workspace deployment are separate operations.
 ## Promote an Insider package to public npm
 
 Run **Promote insider package to public npm (manual)** (`promote-cli-public.yml`)
-on the default branch. Enter `selection` as JSON and leave `dry_run=true`
-to validate without publishing:
-
-```json
-{"batchId":"workspace-cli-0.7.1","packages":[{"name":"univer-workspace-cli","version":"0.7.1","tag":"latest"}]}
-```
+on the default branch. Select `univer-workspace-cli` in **package**, enter an
+exact **version**, and leave **dry_run** enabled for read-only validation. Keep
+**latest** enabled for a stable public `latest`; disable it to use `promoted`
+for a new version. Validation and submission use the same inputs.
 
 Use the already-published exact Insider version. This caller permits only
 `univer-workspace-cli`; repositories with authority for other packages can reuse

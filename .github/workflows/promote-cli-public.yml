@@ -1,11 +1,22 @@
 name: Promote insider package to public npm (manual)
-run-name: Promote exact Insider batch ${{ inputs.dry_run && '(dry run)' || '(submit)' }}
+run-name: Promote ${{ inputs.package }}@${{ inputs.version }}${{ inputs.dry_run && ' (dry run)' || ' (publish)' }}
 
 on:
   workflow_dispatch:
     inputs:
-      selection:
-        description: JSON package names and exact versions (optional tag defaults to latest)
+      package:
+        description: Package already built on insider-npm
+        required: true
+        type: choice
+        options:
+          - univer-workspace-cli
+      latest:
+        description: Set public latest (false publishes new versions with the promoted tag)
+        required: true
+        type: boolean
+        default: true
+      version:
+        description: Exact version already built on insider-npm
         required: true
         type: string
       dry_run:
@@ -44,7 +55,10 @@ jobs:
         name: Read expected digests from exact Insider metadata
         uses: dream-num/release-actions/assemble-npm-batch@01b090d4c7fa11fbd7610cfbcfcaa286cd0268a7
         with:
-          selection: ${{ inputs.selection }}
+          selection: >-
+            ${{ format('{{"packages":[{{"name":{0},"version":{1},"tag":{2}}}]}}',
+                        toJSON(inputs.package), toJSON(inputs.version),
+                        toJSON(inputs.latest && 'latest' || 'promoted')) }}
       - name: Prepare and promote original Insider tarballs
         uses: dream-num/release-actions/promote-npm@01b090d4c7fa11fbd7610cfbcfcaa286cd0268a7
         env:
