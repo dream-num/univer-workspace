@@ -9,7 +9,6 @@ import { WikiFolderPage } from "./pages/folder";
 import { WikiSpacePage } from "./pages/space";
 import { WikiHomePage } from "./pages/home";
 import { WikiRepositoriesPage } from "./pages/repositories";
-import { HtmlAppPage } from "../html-app-page";
 import { WikiShell } from "./wiki-shell";
 import type { ModeDefinition } from "../registry";
 
@@ -17,7 +16,6 @@ export const wikiMode = {
   pages: {
     agents: WikiAgentsPage,
     agentSession: WikiAgentsPage,
-    apps: HtmlAppPage,
     recent: WikiRepositoriesPage,
     repositories: WikiRepositoriesPage,
     issueList: WikiIssueListPage,

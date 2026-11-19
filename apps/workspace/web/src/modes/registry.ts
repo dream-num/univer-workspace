@@ -8,7 +8,6 @@ import type {
   SpacePageProps,
   HomePageProps,
   RecentPageProps,
-  AppsPageProps,
 } from "./page.types";
 import type { ComponentType } from "react";
 import type { RepositorySearch } from "./repository/repository-directory";
@@ -22,7 +21,6 @@ export interface ModeDefinition {
   readonly pages: {
     readonly repositories: ComponentType<RepositorySearch>;
     readonly recent: ComponentType<RecentPageProps>;
-    readonly apps: ComponentType<AppsPageProps>;
     readonly issueList: ComponentType<IssueListPageProps>;
     readonly issueDetail: ComponentType<IssueDetailPageProps>;
     readonly issues: ComponentType<IssuePageProps>;

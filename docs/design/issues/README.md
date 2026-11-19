@@ -317,7 +317,7 @@ URL 用 Space 内编号，不用 UUID。`#12` 是人、Agent 和 CLI 共同使�
 标签页、Assignees 和引用文件的选择器复用现有的 `SearchSelect` 或 `Menu`，不引入新依赖。
 
 **引用文件选择器。** 服务端没有 Node 搜索接口，V1 也不新增。选择器复用 Space 文件树的逐层浏览，
-并在对话框顶部提供当前已加载节点的过滤框。文件页的操作菜单新增「在 Issue 中引用」，打开新建
+并在对话框顶部提供当前已加载节点的过滤框。Repository 文件页的操作菜单提供「在 Issue 中引用」，打开新建
 Issue 页并预填该 Node。这是更常见的入口。
 
 **i18n。** `shared/i18n.tsx` 的中英文都需要补 key，统一加 `issue` 前缀（如 `issueOpenCount`、
@@ -405,31 +405,7 @@ Q3 预算表缺少华东区  #12                                   [Edit] [New i
 
 ### 4.4 Wiki 主题
 
-参照 Apps 的侧栏写法（`features/html-views/apps-sidebar.tsx`）：
-
-- 侧栏在 Apps 分组之后、Trash 之前新增可折叠的 **Issues** 分组，结构为「标题链接 + 按 Space 分组的树」：
-
-```text
-▾ Issues                     → /issues
-  ▸ 👥 mini-crm          12
-  ▾ 👥 finance            3
-      ◉ #14 汇率更新
-      ◉ #12 Q3 预算表缺少华东区
-      ◉ #11 …
-      查看全部 →            → /spaces/$id/issues
-```
-
-- 分组只列出调用者是 owner 或成员的 Team Space，数据来自已有的 spaces 查询。没有 Team Space 时隐藏整个分组。
-- 展开某个 Space 时才加载它的 open Issue 列表（limit 20，与 Space 列表页默认查询共用 key），
-  Space 行的数字取 `counts.open`。展开状态存入 localStorage，key 为 `workspace-file-tree:<user>:issues`，
-  与 Apps 的做法一致。
-- 点击 Issue 进入 `/spaces/$spaceId/issues/$number`，主区域渲染 `IssueDetail`，选中态沿用 `NavLink` 的
-  `bg-brand-50 text-brand-700`。
-- 分组标题链接到 `/issues`（跨 Space 列表），默认过滤为 open、所有 Space；页头提供「全部 / 分配给我 /
-  我创建的」切换。
-- 收起的侧栏显示一个 `CircleDot` 图标 NavLink，指向 `/issues`。
-- Wiki 主题的 Space 页面不加 tab。入口放在侧栏，与 Apps 的做法一致；Space 文件页页头的操作区
-  增加一个「Issues」链接，指向该 Space 的列表。
+Wiki 可通过直接链接打开跨空间列表、团队空间列表和 Issue 详情。导航和文件操作菜单中的 Issues 入口仅在 Repository 模式提供。
 
 ## 5. 客户端：Client Core、CLI 与 Agent
 
@@ -529,7 +505,7 @@ skill-data 的变更需要用 `pnpm package:workspace-cli` 验证实际产物。
 | **2. Issues 模块与 contract** | repository、service、router；OpenAPI；`concepts.md`；集成测试覆盖权限矩阵、编号并发、个人空间 409、非成员只读、事件写入、跨 Space 列表范围 | `api:verify` 通过；`test/integration/issues.test.ts` 覆盖第 2 节的每一行 |
 | **3. Client Core 与 CLI** | `WorkspaceIssueFeature`；`issue` 命令组；core skill 更新 | 对本地 Workspace 走通 create → comment → close；`pnpm package:workspace-cli` 产物包含更新后的 skill |
 | **4. Repository 主题 UI** | 共享组件、路由、Issues tab 与计数、列表、详情、新建、标签管理；Markdown viewer 的 `chrome="none"`；Textarea；文件页的「在 Issue 中引用」 | 在 1440×900 与 390×844 两个视口、亮色与暗色主题下走通主要流程；运行一次 `impeccable detect`；Agent 端 Markdown 预览没有变化 |
-| **5. Wiki 主题入口与 `/issues`** | 侧栏 Issues 分组、`/issues` 跨 Space 页面、页头链接 | 切换主题后同一 URL 的内容一致；个人空间不显示入口 |
+| **5. Wiki 主题与 `/issues`** | 通过直接链接打开跨 Space 列表及团队 Issue | 切换主题后同一 URL 的内容一致；个人空间不显示入口 |
 | **6. 实时刷新** | `issuesChanged` 事件；Browser 解析器与缓存失效 | 两个浏览器会话中，一方评论后另一方的时间线自动更新；公开读的非成员收不到推送 |
 | **7. Agent 工具** | `issues-api.ts`、服务方法、`univer_issue`、插件 skill | 在 DSH 中说「处理 #12」，Agent 读取 Issue、打开引用文件、建 Worktree、完成后回帖，全程不向用户追问上下文 |
 

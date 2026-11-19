@@ -2,9 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bot,
-  CircleDot,
   House,
-  LayoutGrid,
   Menu,
   MessageCircle,
   PanelLeftClose,
@@ -18,8 +16,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
-import { AppsSidebarSection } from "../../features/html-views/apps-sidebar";
-import { IssuesSidebarSection } from "../../features/issues";
 import { spaceQueryOptions, mySpacesQueryOptions } from "../../features/spaces";
 import { WorkspaceNavigationTree } from "../../features/nodes";
 import { isOpenWorktree, useWorktreeChangeFeed, worktreeListQueryOptions } from "../../features/worktrees";
@@ -188,28 +184,16 @@ export function WikiShell({
               label={space.name}
             />
           ))}
-          <NavLink to="/apps" selected={selectedView === "apps"} collapsed icon={<LayoutGrid />} label={t("pages")} />
-          <NavLink
-            to="/issues"
-            selected={selectedView === "issues"}
-            collapsed
-            icon={<CircleDot />}
-            label={t("issues")}
-          />
         </div>
       ) : (
-        <>
-          <WorkspaceNavigationTree
-            personalSpace={personalSpace}
-            teamSpaces={teamSpaces}
-            selectedSpaceId={selectedSpaceId}
-            selectedNodeId={selectedNodeId}
-            selectedNodePath={selectedNodePath}
-            storageScope={currentSession.user.id}
-          />
-          <AppsSidebarSection storageScope={currentSession.user.id} />
-          <IssuesSidebarSection storageScope={currentSession.user.id} />
-        </>
+        <WorkspaceNavigationTree
+          personalSpace={personalSpace}
+          teamSpaces={teamSpaces}
+          selectedSpaceId={selectedSpaceId}
+          selectedNodeId={selectedNodeId}
+          selectedNodePath={selectedNodePath}
+          storageScope={currentSession.user.id}
+        />
       )}
 
       {trashSpaceId ? (
@@ -415,10 +399,8 @@ export function WikiShell({
 
 function workspaceViewTitle(view: WorkspaceView | undefined, t: (key: MessageKey) => string): string {
   if (view === "home") return t("home");
-  if (view === "apps") return t("pages");
   if (view === "worktrees") return t("workbench");
   if (view === "trash") return t("trash");
   if (view === "members") return t("members");
-  if (view === "issues") return t("issues");
   return t("home");
 }

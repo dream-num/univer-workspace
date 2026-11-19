@@ -5,7 +5,6 @@ import {
   worktreePagesQueryOptions,
   worktreeQueryOptions,
 } from "../../features/worktrees/worktrees.queries";
-import { htmlViewPagesQueryOptions } from "../../features/views/html-views.queries";
 import {
   recentResourcePagesQueryOptions,
 } from "../../features/views/recent.queries";
@@ -158,19 +157,15 @@ describe("repository data boundaries", () => {
     client.clear();
   });
 
-  it("loads only one metadata page until the user requests more", async () => {
+  it("loads only one Recent page until the user requests more", async () => {
     vi.mocked(api.GET).mockResolvedValue({
       data: { items: [], nextCursor: "more" },
       response: new Response(),
     });
     const client = new QueryClient();
-    await client.fetchInfiniteQuery(htmlViewPagesQueryOptions("crm"));
     await client.fetchInfiniteQuery(recentResourcePagesQueryOptions);
-    expect(api.GET).toHaveBeenCalledTimes(2);
-    expect(api.GET).toHaveBeenNthCalledWith(1, "/api/html-views", {
-      params: { query: { limit: 20, spaceId: "crm" } },
-    });
-    expect(api.GET).toHaveBeenNthCalledWith(2, "/api/recent-resources", {
+    expect(api.GET).toHaveBeenCalledTimes(1);
+    expect(api.GET).toHaveBeenCalledWith("/api/recent-resources", {
       params: { query: { limit: 20 } },
     });
     client.clear();

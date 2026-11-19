@@ -37,6 +37,7 @@ export function NodeActionsMenu(props: {
   readonly node: Node;
   readonly onEdit?: () => void;
   readonly onMutated?: () => void;
+  readonly showIssueAction?: boolean;
   readonly children: (actions: ReactNode) => ReactElement;
 }) {
   const { t } = useI18n();
@@ -45,7 +46,7 @@ export function NodeActionsMenu(props: {
   const [renameOpen, setRenameOpen] = useState(false);
   const [editName, setEditName] = useState(props.node.name);
   const [trashOpen, setTrashOpen] = useState(false);
-  const spaces = useQuery(spaceQueryOptions(props.node.spaceId));
+  const spaces = useQuery(spaceQueryOptions(props.showIssueAction ? props.node.spaceId : undefined));
   const space = spaces.data;
   // Referencing a file on an Issue is a triage action, so only Team Space editors and above see it.
   const canReferenceInIssue =

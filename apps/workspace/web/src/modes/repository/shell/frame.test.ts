@@ -5,7 +5,7 @@ import { resolveFrame, type Frame } from "./frame";
 const cases: readonly [string, WorkspaceShellProps, Frame][] = [
   ["home", { repositoryView: "home", selectedView: "home" }, { kind: "home" }],
   ["legacy home", { repositoryHome: true }, { kind: "home" }],
-  ...(["repositories", "worktrees", "issues", "recent", "apps", "agents"] as const).map(
+  ...(["repositories", "worktrees", "issues", "recent", "agents"] as const).map(
     (view): [string, WorkspaceShellProps, Frame] => [
       view,
       { repositoryView: view },

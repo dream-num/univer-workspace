@@ -11,7 +11,6 @@ import "./components.css";
 import { RepositoryAgentsPage, RepositoryAgentSessionPage } from "./pages/agents";
 import { RepositoryDirectoryPage } from "./pages/repositories";
 import { RepositoryRecentPage } from "./pages/recent";
-import { RepositoryAppsPage } from "./pages/apps";
 import {
   RepositoryIssueLayout,
   RepositoryIssueListPage,
@@ -32,7 +31,6 @@ export const repositoryMode = {
   pages: {
     agents: RepositoryAgentsPage,
     agentSession: RepositoryAgentSessionPage,
-    apps: RepositoryAppsPage,
     recent: RepositoryRecentPage,
     repositories: RepositoryDirectoryPage,
     issueList: RepositoryIssueListPage,

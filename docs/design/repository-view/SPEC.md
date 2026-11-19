@@ -28,7 +28,7 @@ The visual language follows `apps/workspace/DESIGN.md` (top bar, repository mast
 2. Add a repository-style entry and C-style sidebar to the Team Space experience.
 3. Show the current Team Space's data through existing Node/Resource browsing.
 4. Show the existing Smart Workbench / Worktree page under the PR/MR navigation item.
-5. Show the existing Apps page under the Pages navigation item.
+5. List the current Team Space’s HTML pages in its Pages tab.
 6. Select one `.univer.html` from the current Team Space and render it as the repository landing Page.
 7. Keep the existing wiki-style Team Space route and allow switching between modes without changing permissions or data.
 
@@ -55,7 +55,7 @@ The Repository theme stores the selected App in browser local storage under a ke
 The wiki view remains available at its current Space route. The page theme is selected in the global settings dialog and stored locally in the browser. It changes the navigation and page composition only; it does not change the URL contract, server data, or permission model.
 
 - `/spaces/{spaceId}?view=repository` — repository overview
-- `/spaces/{spaceId}/repositories/apps` — Apps/Pages list and landing selection
+- `/spaces/{spaceId}?view=apps` — Apps/Pages list and landing selection
 - `/spaces/{spaceId}/repositories/reviews` — existing Smart Workbench / Worktree dashboard
 
 The exact TanStack Router filenames should follow the generated route convention already used in `apps/workspace/web/src/routes`.
@@ -99,7 +99,7 @@ The overview keeps the prototype hierarchy:
 
 ### Apps / Pages
 
-Pages is a presentation of the current Team Space's Apps. It lists readable `.univer.html` Nodes using the existing tree and HTML View components. One item has a “Repository Page” marker. Selecting another item updates the Team Space landing preference; opening an App still uses the existing `/apps` route and binding runtime.
+Pages is a presentation of the current Team Space's Apps. It lists readable `.univer.html` Nodes using the existing tree and HTML View components. One item has a “Repository Page” marker. Selecting another item updates the Team Space landing preference; opening an App uses its `/nodes/{nodeId}` route and the existing HTML View binding runtime.
 
 ### PR / MR
 
@@ -140,7 +140,7 @@ The design reference is not a production data source.
 
 ## Code style and boundaries
 
-Use existing named exports, strict ESM, React Query for server state, TanStack Router search validation for shareable view state, and existing UI primitives/tokens. Keep fetching separate from presentation. Reuse `AppsSidebarSection`, `app-tree`, `selectedHtmlView`, the Node browser, and Worktree dashboard where they already provide the needed behavior.
+Use existing named exports, strict ESM, React Query for server state, TanStack Router search validation for shareable view state, and existing UI primitives/tokens. Keep fetching separate from presentation. Reuse the HTML View components, Node browser, and Worktree dashboard where they already provide the needed behavior.
 
 Always:
 
@@ -153,7 +153,7 @@ Always:
 Ask first:
 
 - adding `landing_app_node_id` to `spaces` versus creating `space_view_preferences`;
-- changing the `/apps` or `/worktrees` HTTP query shape;
+- changing the HTML View list or Worktree HTTP query shape;
 - changing the existing Smart Workbench semantics;
 - changing database migration version or deployment behavior.
 
@@ -188,7 +188,7 @@ pnpm --filter @univerjs/univer-workspace test:production-import
 
 - Space/service tests cover landing selection ownership, suffix and readiness validation, fallback ordering, and clearing the selection.
 - Browser query tests cover Team Space filtering and selected landing App state.
-- Route tests cover wiki/repository mode switching, inaccessible Space behavior, empty Apps state, and links to existing Worktree and Apps routes.
+- Route tests cover wiki/repository mode switching, inaccessible Space behavior, empty Apps state, and links to Worktrees and HTML page Nodes.
 - Browser checks cover keyboard navigation, mobile sidebar behavior, loading/error/empty states, and default App rendering.
 - Do not add tests that only mirror JSX structure.
 

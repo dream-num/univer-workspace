@@ -22,8 +22,5 @@ export function resolveFrame(props: WorkspaceShellProps): Frame {
     };
   }
   if (props.selectedView === "home") return { kind: "home" };
-  if (props.selectedView === "apps" || props.selectedView === "issues") {
-    return { kind: "global", view: props.selectedView };
-  }
   return { kind: "document" };
 }
