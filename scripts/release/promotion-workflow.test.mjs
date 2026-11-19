@@ -22,15 +22,16 @@ test("credentialed workflow stays manual/default-branch only with exact selectio
   assert.match(workflow, /id-token: write/u);
   assert.match(workflow, /batch: \$\{\{ steps.plan.outputs.batch \}\}/u);
   assert.match(workflow, /npm@11\.21\.0/u);
-  const tests = await readFile(
-    new URL("../../.github/workflows/test-cli-promotion.yml", import.meta.url),
-    "utf8",
-  );
-  for (const action of ["assemble-npm-batch", "promote-npm"]) {
-    const uses = workflow.split("\n").find(line => line.includes("dream-num/release-actions/" + action + "@")).trim();
-    assert.match(uses, /@[0-9a-f]{40}$/u);
-    assert.ok(tests.includes(uses));
-  }
-  assert.match(tests, /npm@11\.21\.0/u);
-  assert.doesNotMatch(tests, /secrets\.|id-token: write|--publish/u);
+  const actionPin = action => {
+    const prefix = "uses: dream-num/release-actions/" + action + "@";
+    const uses = workflow.split("\n").map(line => line.trim()).filter(line => line.startsWith(prefix));
+    assert.equal(uses.length, 1);
+    const pin = uses[0].slice(prefix.length);
+    assert.match(pin, /^[0-9a-f]{40}$/u);
+    return pin;
+  };
+  assert.equal(actionPin("assemble-npm-batch"), actionPin("promote-npm"));
+  const ci = await readFile(new URL("../../.github/workflows/ci.yml", import.meta.url), "utf8");
+  assert.match(ci, /if: matrix.stage == 'test-cli'\s+run: node --test scripts\/release\/\*.test\.mjs/u);
+  assert.doesNotMatch(ci, /id-token: write|secrets\.NPM_TOKEN/u);
 });

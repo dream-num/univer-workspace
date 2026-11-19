@@ -54,11 +54,11 @@ jobs:
                 m.packages.some(p => p?.name !== "univer-workspace-cli")) throw Error("Package outside this Trusted Publisher caller scope");
           '
       - id: plan
-        uses: dream-num/release-actions/assemble-npm-batch@fad904b384f3af0ed39970458649c095af5ea400
+        uses: dream-num/release-actions/assemble-npm-batch@23de8d9464c26cedfc93a12965ae67e8de607934
         with:
           selection: ${{ inputs.selection }}
       - name: Validate or submit original bytes with the shared batch action
-        uses: dream-num/release-actions/promote-npm@fad904b384f3af0ed39970458649c095af5ea400
+        uses: dream-num/release-actions/promote-npm@23de8d9464c26cedfc93a12965ae67e8de607934
         env:
           INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:

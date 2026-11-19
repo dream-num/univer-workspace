@@ -65,8 +65,7 @@ public version, tag, integrity and provenance independently. An upload error may
 have an unknown outcome; check npm instead of blindly retrying. There is no
 automatic retirement of the Insider artifact.
 
-The tests in `test-cli-promotion.yml` verify the Workspace-specific manual dispatch
-and default-branch guard and exercise the actual shared action references with
-two synthetic packages, including an Insider digest change. They do not use live
-credentials or write to registries. Generic promotion-engine tests live in
-`release-actions`; Workspace retains its Insider build and publisher tests.
+Workspace's standard `test-cli` CI job checks the manual dispatch, default-branch
+guard, shared Action wiring, and Insider build/publisher scripts. The shared Action
+repository owns the no-write test that assembles and validates two synthetic
+packages and rejects a same-version change in the Insider tarball.
