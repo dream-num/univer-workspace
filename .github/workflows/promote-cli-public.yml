@@ -53,14 +53,14 @@ jobs:
         run: npm install --global npm@11.21.0 --registry=https://registry.npmjs.org/ --ignore-scripts --userconfig=/dev/null
       - id: resolve
         name: Read expected digests from exact Insider metadata
-        uses: dream-num/release-actions/assemble-npm-batch@cdaa9c1e04d6df6b3063fc7f3c78c28134a1cac7
+        uses: dream-num/release-actions/assemble-npm-batch@eba8228ff0f12cca1735983db9beb9927e437087
         with:
           selection: >-
             ${{ format('{{"packages":[{{"name":{0},"version":{1},"tag":{2}}}]}}',
                         toJSON(inputs.package), toJSON(inputs.version),
                         toJSON(inputs.latest && 'latest' || 'promoted')) }}
       - name: Prepare and promote original Insider tarballs
-        uses: dream-num/release-actions/promote-npm@cdaa9c1e04d6df6b3063fc7f3c78c28134a1cac7
+        uses: dream-num/release-actions/promote-npm@eba8228ff0f12cca1735983db9beb9927e437087
         env:
           INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
