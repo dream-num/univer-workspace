@@ -28,7 +28,7 @@ test("credentialed workflow stays manual/default-branch only with exact selectio
   assert.match(workflow, /toJSON\(inputs.latest && 'latest' \|\| 'promoted'\)/u);
   assert.match(workflow, /batch: \$\{\{ steps.resolve.outputs.batch \}\}/u);
   assert.match(workflow, /id: resolve[\s\S]*uses: dream-num\/release-actions\/assemble-npm-batch@[0-9a-f]{40}/u);
-  assert.match(workflow, /allowed_packages: univer-workspace-cli/u);
+  assert.doesNotMatch(workflow, /allowed_packages/u);
   assert.match(workflow, /npm@11\.21\.0/u);
   const actions = workflow.match(/uses: dream-num\/release-actions\/promote-npm@[0-9a-f]{40}$/gmu);
   assert.equal(actions?.length, 1);
