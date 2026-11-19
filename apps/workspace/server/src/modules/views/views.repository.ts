@@ -29,7 +29,7 @@ export interface SharedRow {
 
 export interface ViewsRepository {
   listRecent(userId: string, cursor: RecentCursor | null, limit: number): Promise<RecentRow[]>;
-  listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): Promise<OwnedRow[]>;
+  listHtmlViews(userId: string, cursor: RecentCursor | null, limit: number, spaceId?: string): Promise<OwnedRow[]>;
   listOwned(userId: string, cursor: RecentCursor | null, limit: number): Promise<OwnedRow[]>;
   breadcrumbs(nodeId: string): Promise<BreadcrumbRow[]>;
   listShared(userId: string, cursor: RecentCursor | null, limit: number): Promise<SharedRow[]>;

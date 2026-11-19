@@ -53,15 +53,17 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 
 - [Browser Agent trajectory](./agent-trajectory.md): TR2-1 through TR2-10 cover Debug mode, recorded
   requests, timing, tool results, search, and rewritten history.
-- [Browser Agent skills](./agent-skills.md): AS1-AS22 cover the mock provider, catalog
+- [Browser Agent skills](./agent-skills.md): AS1-AS23 cover the mock provider, catalog
   reminders, rail, slash menus in both composers, invocation gates, stable request prefixes,
-  Skill draft review, publication and rejection, and the built-in skill-creator.
-- [Accounts and sign-in](./auth.md): browser registration, browser password sign-in,
-  uvw password login and status.
+  Skill draft review, publication and rejection, the built-in skill-creator, and one pull request per
+  Auto session.
+- [Accounts and sign-in](./auth.md): browser registration and its validation, browser password sign-in
+  and sign-out, uvw password login, status and logout.
 - [Create and edit a document](./create-document.md): New menu in the browser, Spreadsheet
   editing, persistence after reload, trunk readback via uvw.
 - [Pull requests (Worktrees)](./pull-requests.md): uvw PR create, unit create, execute,
-  ready, and merge, then the merged file seen from uvw and the browser.
+  ready, and merge, then the merged file seen from uvw and the browser; only the author or a claimer
+  merges a Team Space PR.
 - [Page theme: Wiki and Repository modes](./page-theme-wiki-repository.md): Application settings
   entry in each mode, theme persistence, and the Repository directory, pull request, issue,
   recent and pages views.
@@ -70,7 +72,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [MCP gateway](./mcp.md): Docker Desktop opt-in, both protocols, repository parity,
   MO3 Claude Code/VS Code CIMD, SSRF refusals, anonymous no-fetch and the CIMD off switch,
   authentication, idempotency keys and `inspect` input errors, the executor, files, Office, renderer and
-  compilers, the G0 production shape with the `*` allowlist, usage evidence, opencode, and cleanup.
+  compilers, agent principals and claims (MH), public-Space refusals, the G0 production shape with the `*`
+  and `workspace` allowlists, usage evidence, opencode, and cleanup.
 - [Read Sheet Units](./sheet-lens.md): SLC1-SLC10 cover `uvw outline`, `read` and `find` on the
   seeded sales, ledger and Doc Units: zoom, continuations, typed JSON, large-sheet notes,
   revisions, errors, trunk reads and access. SLM1-SLM10 cover the MCP tools.
@@ -78,7 +81,10 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
   checks of secret hygiene, network, cross-user visibility, resource limits, mounts, fail-closed
   configuration and renderer separation, each reported `contained` or `exposed`.
 - [Link sharing](./link-sharing.md): LS1-LS4 cover `uvw share`, the browser Share dialog, and what an
-  anonymous visitor sees with the link set to `viewer` or `off`.
+  anonymous visitor sees with the link set to `viewer` or `off`. LS5-LS7 cover Remix, link preview tags
+  and public Spaces.
+- [Agent handoff and claim](./agent-handoff.md): AH1-AH10 cover `Hand to my agent`, guest agents over
+  uvw and MCP, claim links and the claim page, `My agents`, and the claimer's pull request decisions.
 
 ## Helper scripts
 

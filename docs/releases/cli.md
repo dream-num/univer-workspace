@@ -86,8 +86,14 @@ requires the separate **Allow npm dist-tag** permission. This workflow changes
 neither npm nor GitHub permissions. See [npm's dist-tag/OIDC requirements](https://docs.npmjs.com/adding-dist-tags-to-packages/).
 Validation-only runs do **not** verify either public write permission or clear npm's
 pending validation. A no-write reuse also does not verify OIDC write authority.
-OIDC authentication is independent of provenance; this original-artifact promotion
-explicitly disables provenance and requires no repository visibility change.
+OIDC authentication is independent of provenance. New public versions explicitly
+request provenance and require a public publishing repository matching the original
+package's `repository` metadata. The subprocess retains `RUNNER_ENVIRONMENT` for
+npm's builder identity. This attests the promotion workflow/commit and tarball hash,
+not the full earlier insider build; it neither rebuilds nor modifies the tarball.
+Existing versions are reused without republishing or retroactively adding provenance.
+The local loopback test disables signing only in its fixture; actual Sigstore/OIDC
+acceptance must be verified on a separately authorized new-version publication.
 
 The isolated release-script tests (including a loopback-only npm upload) run in
 `test-cli-promotion.yml`, separately from the manual release workflow, on pull
@@ -113,27 +119,7 @@ previous latest value, then ends without a post-upload registry read. An existin
 identical version returns `reused`; `tagUpdated` records any requested latest command.
 Neither result claims `publicRegistryWriteVerified` or `latestVerified`.
 
-Download the submission artifact into `.promotion/` in the repository root, then run
-this separate read-only command (no insider token, npm credentials, or original
-GitHub run context is needed):
-
-```bash
-node scripts/release/promote-cli-public.mjs --package=univer-workspace-cli --version=<exact-version> --latest=true --verify
-```
-
-It uses the matching `submission.json` as expected evidence and writes
-`verification.json`, without replacing the submission result. HTTP 404 returns
-`pending` with exit 0: it means not publicly visible, not proven rejection or review.
-A matching version/hash/tag returns `verified`; mismatches and transport/server
-errors fail this separate check. It never uploads, retries publication, or changes tags.
-Npm upload failure remains failure with potentially unknown outcome; do not blindly
-retry. Notifications may independently consume submitted and verified results, but
-are not part of this workflow. No automatic poller or notification service is added.
-
-Verification observes current tags; it does not prove no other actor changed them
-between submission and verification, and it never repairs them automatically.
-
-There is no cross-run duplicate-submission gate. While a version is pending, a
-manual second `--publish` can still attempt another upload. Do not resubmit;
-use `--verify` or inspect npm's authoritative status. No automatic retry is added.
-Each verification and new submission clears stale `verification.json` first.
+Public visibility is a separate read-only follow-up, outside the promotion command
+and workflow. An npm upload failure may have an unknown outcome. There is no
+cross-run duplicate-submission gate; do not resubmit to resolve pending review.
+Inspect npm status separately. No poller or notification service is added.

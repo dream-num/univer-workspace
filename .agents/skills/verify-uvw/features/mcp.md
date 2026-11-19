@@ -90,7 +90,8 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MV1 compares estimated SVG compilation with the CLI and reads back its committed Slide.
 - MV2 compiles SVG with real fonts through the renderer against `uvw compile-svg`, applies it to a Slide, screenshots the page and times 55 text lines.
 - Typst job verification runs Typst as a job on a stack with `MCP_SYNC_BUDGET_MS=1`.
-- MB1 through MB5 verify the G0 production shape without a renderer: tool lists, instructions, a user outside the executor allowlist, executor journeys and `/readyz`.
+- MH1 through MH5 cover agent principals: the unclaimed and claimed tool lists and instructions, the `claim` tool, a claimer's pull request decisions, public-Space refusals, and `unit_create` with `from`.
+- MB1 through MB5 verify the G0 production shape without a renderer: tool lists, instructions, a user outside the executor allowlist, executor journeys and `/readyz`. MB6 follows the executor grants Workspace stores.
 - The executor and renderer capacity benchmarks measure local sizing; they are not pass/fail journeys.
 - M12 removes this run's resources and preserves developer processes.
 
@@ -688,10 +689,15 @@ $V cli mcp-repo-long-cli repo create mcp-long --description "$LONG" --json
 test $? -eq 1
 code=$(jq -r '.code' "$EVIDENCE/mcp-repo-long.out")
 test "$(cut -d: -f1 < "$EVIDENCE/mcp-repo-long-cli.err" | head -n1)" = "$code"
-$V mcp --toolsets all mcp-repo-edit repo_edit "{\"repo\":\"$O/mcp-admin\",\"name\":\"MCP Admin 2\",\"description\":\"Edited\",\"visibility\":\"public\"}"
+$V mcp --toolsets all mcp-repo-edit repo_edit "{\"repo\":\"$O/mcp-admin\",\"name\":\"MCP Admin 2\",\"description\":\"Edited\",\"visibility\":\"private\"}"
 $V cli mcp-repo-edit-cli repo view "$O/mcp-admin" --json
 diff <(jq -S 'del(.url)' "$EVIDENCE/mcp-repo-edit.out") <(jq -S 'del(.starCount, .starred)' "$EVIDENCE/mcp-repo-edit-cli.out")
-jq -e '.name == "MCP Admin 2" and .description == "Edited" and .publicRead == true' "$EVIDENCE/mcp-repo-edit.out"
+jq -e '.name == "MCP Admin 2" and .description == "Edited" and .publicRead == false' "$EVIDENCE/mcp-repo-edit.out"
+$V mcp --toolsets all mcp-repo-publish repo_edit "{\"repo\":\"$O/mcp-admin\",\"visibility\":\"public\"}"
+test $? -eq 1
+jq -e '.code == "INTERACTIVE_SESSION_REQUIRED"' "$EVIDENCE/mcp-repo-publish.out"
+$V cli mcp-repo-publish-cli repo view "$O/mcp-admin" --json
+jq -e '.publicRead == false' "$EVIDENCE/mcp-repo-publish-cli.out"
 $V mcp --toolsets all mcp-repo-edit-bad repo_edit "{\"repo\":\"$O/mcp-admin\"}"
 test $? -eq 1
 $V cli mcp-repo-edit-bad-cli repo edit "$O/mcp-admin" --json
@@ -708,8 +714,9 @@ jq -e --arg repo "$A" '.tool == "repo_edit" and .repo == $repo and .outcome == "
 
 Pass when every expected-success command exits 0 and each diff is empty; the repository
 created without `name` takes its slug as name through both tools; the over-long description
-and the empty edit fail in MCP and CLI with the same code; the old slug no longer resolves;
-events carry the new Space ID.
+and the empty edit fail in MCP and CLI with the same code; making the repository public over
+MCP fails with `INTERACTIVE_SESSION_REQUIRED` and leaves it private; the old slug no longer
+resolves; events carry the new Space ID.
 
 **MS5. Labels.**
 
@@ -2870,6 +2877,43 @@ the same-key retry returns that job or its original result, and `unit_list`
 has exactly one new Unit. Inspect the native Doc to read back its text.
 Evidence uses `mcp-typst-job-*`. Run `$V down` afterward.
 
+### MH. Agent principals, claims and public Spaces
+
+Run on the default development stack after `user`. Each `principal` counts toward the 5 agents per hour per instance.
+Claiming needs the run browser signed in as the run user; [agent handoff](./agent-handoff.md) covers the browser side.
+Idempotency keys need 16 to 200 URL-safe characters, so pad them for short run IDs.
+
+```bash
+$V principal bot1                                   # username agent-xxxx; its repo is <username>/personal
+$V mcp-tools --as bot1 mh-bot1
+$V mcp-instructions --as bot1 mh-bot1-instructions
+$V mcp --as bot1 mh-bot1-claim claim '{}'
+```
+
+- **MH1. Unclaimed agent.** `mh-bot1.out` lists 46 tools: the 44 `core` tools, `claim` right after `share`, and
+  `pr_merge` last. A person's default list has 44 and no `claim`. The instructions say the agent
+  `works in its own Personal Space, where nobody else reviews or merges.` and to `merge it with pr_merge.`
+  `claim` returns `claimUrl` (`$ORIGIN/claim/<code>`) and `expiresAt` 10 minutes ahead; the usage event carries
+  `principal_kind: "agent"`. Replace the code in `mh-bot1-claim.*` after use: the evidence keeps it in plain text.
+- **MH2. Claimed agent.** Open the claim URL in the run browser and click `Claim agent`. After about 35 s the
+  gateway's cache expires: `$V mcp-tools --as bot1 mh-bot1-claimed` lists 45 tools (no `claim`, `pr_merge` stays),
+  and the instructions start `This connection is an agent identity that a person has claimed.`
+- **MH3. Claimer decisions.** bot1 runs `pr_create`, `unit_create` and `pr_ready` (with `number` as a string) in
+  `<bot1>/personal`. The run user's `pr_list` on that repository returns it under `prs`, and
+  `$V mcp --toolsets core,admin <label> pr_merge '{"repo":…,"number":…,"idempotency_key":…}'` merges it (`pr_merge`
+  is not in a person's default `core`). The run user's `pr_create` there fails with
+  `Personal Space pull requests must target the signed-in user's own Space.` A second principal cannot see the
+  Space at all: its `pr_merge` answers `NOT_FOUND`, not the author refusal (see
+  [pull requests](./pull-requests.md) for that refusal in a Team Space).
+- **MH4. Public Spaces.** `$V mcp --toolsets core,admin <label> repo_edit '{"repo":"<O>/personal","visibility":"public"}'`
+  with the PAT fails with `INTERACTIVE_SESSION_REQUIRED`, a message asking the user to publish it in the browser,
+  and `detail.url` ending in `/spaces/<id>/settings`. The same call as bot1 fails with `AGENT_NOT_ALLOWED`
+  (`An agent cannot make a Space public.`). A uvw password session is interactive and may publish.
+- **MH5. Copy a shared file.** With a viewer-linked Sheet `N` from another owner, bot1's `unit_create` with
+  `"from":"$ORIGIN/nodes/<N>"` and `type: "sheet"` returns `unit.change: "added"`. `type: "doc"` fails with
+  `The source is a sheet file, so the copy must have type sheet.` The source's `copyCount` counts the copy only
+  after its pull request merges.
+
 ### MB. Deployment and per-account tools
 
 Port 6000 is blocked by Node's `fetch` port policy; use 6001 or another unblocked free web port.
@@ -2911,6 +2955,23 @@ $V doctor
 
 Pass when the run user, outside an explicit allowlist, gets the 47 non-executor tools, then all 62 renderer-less tools with
 `*`, and doctor reports the allowlist matches the run. Running `$V user` again keeps `*`.
+
+**MB6. Workspace grants.** `$V mcp-allow-users workspace` makes gateway and executor follow the grants the
+run's Workspace stores. It works on the default development stack too. Grant from `apps/workspace`:
+
+```bash
+G() { env -i PATH="$PATH" HOME="$HOME" DATABASE_FILE="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/data/univer-workspace.sqlite" \
+  node --import tsx server/src/db/executor-access.ts "$@"; }
+G list                      # "No users have executor access" before any grant
+G grant "verify-$VERIFY_UVW_RUN"
+G revoke "verify-$VERIFY_UVW_RUN"
+```
+
+Before the grant, `mcp-tools --toolsets all` lists 47 tools without `execute` and the instructions contain
+`Editing document contents is not enabled for this account`. About 35 s after `grant` (the gateway caches the
+exchange for 30 s), the list has 65 tools with the renderer (62 without) and `execute` runs. About 35 s after
+`revoke` it is back to 47 and `execute` fails with `Tool execute not found`. No container restarts. `list`
+prints `username<TAB>id<TAB>kind<TAB>granted-at`.
 
 `VERIFY_UVW_MCP_RENDERER=0` also works without production mode. Neither flag changes the default three-container development run. The `mcp-allow-users` command works in both modes and recreates only the gateway and executor(s); the renderer ID stays unchanged.
 

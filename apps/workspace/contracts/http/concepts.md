@@ -10,7 +10,9 @@ explains behavior that spans multiple operations.
 - IDs and cursors are opaque strings.
 - Authentication uses an opaque `HttpOnly` cookie. React never reads a session
   secret or stores a bearer token.
-- Unsafe requests accept JSON and require a same-origin `Origin`.
+- Unsafe requests accept JSON and require a same-origin `Origin`. A body that
+  is not valid JSON returns `400 INVALID_INPUT`, and one over the operation's
+  size limit returns `413 PAYLOAD_TOO_LARGE`.
 - Unauthorized discovery of a Space, Node, Resource, or Worktree returns
   `404 NOT_FOUND`; an absent login session returns `401 UNAUTHENTICATED` on
   operations requiring authentication.
@@ -27,9 +29,12 @@ Email sign-in is passwordless: `POST /api/auth/email/code` emails a six-digit,
 single-use code and `POST /api/auth/email/login` exchanges it for a login
 session. A first successful verification creates the User and Personal Space;
 later verifications reuse that User. Codes expire after ten minutes, allow five
-incorrect attempts, and requests are rate limited per address. Responses never
-reveal whether an address already has an account. Email sign-in does not merge
-a User into an existing account created with another provider.
+incorrect attempts, and requests are rate limited per address. When the server
+sets `TRUST_PROXY`, each source IP may also send 60 requests an hour to the code
+route and 120 to the login route, valid or not, and then gets
+`429 EMAIL_CODE_RATE_LIMITED` with `Retry-After`. Responses never reveal
+whether an address already has an account. Email sign-in does not merge a User
+into an existing account created with another provider.
 
 External login and explicit linking use different OAuth intents. Both validate
 `state` and PKCE from a short-lived protected cookie. An access token used
@@ -111,8 +116,10 @@ Some actions are forbidden whatever role the caller holds, with `403`. No agent
 can create a Team Space, make a Space public, or be added as a Team Space member
 (`AGENT_NOT_ALLOWED`). An unclaimed agent keeps at most 20 files in its Personal
 Space, counting files still pending in a pull request, and stores no file above
-10 MiB (`AGENT_QUOTA_EXCEEDED`). User search never returns agents and refuses an
-unclaimed agent (`AGENT_NOT_ALLOWED`).
+10 MiB (`AGENT_QUOTA_EXCEEDED`). A human's session issued for a personal access
+token or an OAuth grant cannot create or update a Space with `publicRead: true`
+(`INTERACTIVE_SESSION_REQUIRED`); it can still make a Space private. User search
+never returns agents and refuses an unclaimed agent (`AGENT_NOT_ALLOWED`).
 
 Space public read also admits anonymous viewers, including in Team Spaces. It
 permits browsing that Space by ID, but never anonymous enumeration of `/api/spaces`.

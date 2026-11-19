@@ -129,6 +129,7 @@ Space 的任何角色。
 `created_at`、`expires_at`、`consumed_at`；明文验证码不进入数据库，也不写入日志。
 验证码十分钟过期、最多尝试五次且只能使用一次；同一地址每分钟最多请求一次，每小时最多五次。
 该表不引用 `users`，因为 User 只在验证成功后创建。过期记录在每次请求时顺带清理。
+地址在写入和查询前统一转为小写；PostgreSQL 按原值相等匹配，命中 `(email, created_at DESC)` 索引。
 
 ### `external_identities`
 

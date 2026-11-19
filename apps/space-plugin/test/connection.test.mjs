@@ -255,3 +255,25 @@ test('the metadata index discovers a Page under another Page without inventing a
     assert.deepEqual(reads, ['/api/spaces', '/api/spaces/explore', '/api/spaces/starred', '/api/shared-with-me', '/api/spaces/s/nodes', '/api/html-views']);
   } finally { await connection.dispose(); }
 });
+
+test('the metadata index marks Pages, nested ones included, in a public Space the reader is not a member of', async () => {
+  const connection = new WorkspaceConnection();
+  const page = (id, parentNodeId) => ({ id, parentNodeId, spaceId: 'pub', name: `${id}.univer.html`, resource: { id: `r-${id}`, kind: 'blob' } });
+  const parent = page('parent', null), child = page('child', 'parent');
+  connection.json = async (path) => {
+    if (path === '/api/spaces' || path === '/api/spaces/starred') return { spaces: [] };
+    if (path === '/api/spaces/explore') return { spaces: [{ id: 'pub', affiliation: 'none' }] };
+    if (path.startsWith('/api/shared-with-me?')) return { items: [], nextCursor: null };
+    if (path.startsWith('/api/spaces/pub/nodes?')) return { nodes: [parent], nextCursor: null };
+    if (path.startsWith('/api/html-views?')) {
+      const items = new URLSearchParams(path.split('?')[1]).get('spaceId') === 'pub' ? [parent, child] : [];
+      return { items: items.map(node => ({ node, resource: node.resource })), nextCursor: null };
+    }
+    throw new Error(`Unexpected content/body read: ${path}`);
+  };
+  try {
+    const result = await connection.index(new AbortController().signal);
+    assert.deepEqual(result.nodes.map(node => node.id), ['parent', 'child']);
+    assert.ok(result.nodes.every(node => node.resource.htmlView));
+  } finally { await connection.dispose(); }
+});

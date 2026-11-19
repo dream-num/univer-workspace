@@ -10,6 +10,8 @@ import type {
   NewPasswordUser,
   NewEmailUser,
   StoredEmailLoginCode,
+  EmailLoginCodeLimits,
+  EmailLoginCodeCreation,
   ExternalIdentityUser,
   ExecutorAccessEntry,
   IdentityConflict,
@@ -574,20 +576,32 @@ export class SqliteIdentityRepository implements IdentityRepository {
     readonly codeHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): Promise<void> {
-    this._database.connection
-      .prepare(
-        `INSERT INTO email_login_codes
-          (id, email, code_hash, attempts, created_at, expires_at)
-         VALUES (?, ?, ?, 0, ?, ?)`
-      )
-      .run(
-        input.id,
-        input.email,
-        input.codeHash,
-        input.createdAt,
-        input.expiresAt
-      );
+  }, limits: EmailLoginCodeLimits): Promise<EmailLoginCodeCreation> {
+    return this._database.transaction((database) => {
+      const recent = database
+        .prepare(
+          `SELECT MAX(created_at) AS latest, COUNT(*) AS count
+           FROM email_login_codes
+           WHERE email = ? COLLATE NOCASE AND created_at > ?`
+        )
+        .get(input.email, limits.windowSince) as { readonly latest: number | null; readonly count: number };
+      if (recent.latest !== null && recent.latest > limits.recentSince) return "sent-recently";
+      if (recent.count >= limits.windowLimit) return "too-many";
+      database
+        .prepare(
+          `INSERT INTO email_login_codes
+            (id, email, code_hash, attempts, created_at, expires_at)
+           VALUES (?, ?, ?, 0, ?, ?)`
+        )
+        .run(
+          input.id,
+          input.email,
+          input.codeHash,
+          input.createdAt,
+          input.expiresAt
+        );
+      return "created";
+    });
   }
 
   async findEmailLoginCode(
@@ -596,7 +610,7 @@ export class SqliteIdentityRepository implements IdentityRepository {
   ): Promise<StoredEmailLoginCode | null> {
     const row = this._database.connection
       .prepare(
-        `SELECT id, code_hash, attempts
+        `SELECT id, code_hash
          FROM email_login_codes
          WHERE email = ? COLLATE NOCASE
            AND consumed_at IS NULL
@@ -605,17 +619,17 @@ export class SqliteIdentityRepository implements IdentityRepository {
          LIMIT 1`
       )
       .get(email, now) as EmailLoginCodeRow | undefined;
-    return row
-      ? { id: row.id, codeHash: row.code_hash, attempts: row.attempts }
-      : null;
+    return row ? { id: row.id, codeHash: row.code_hash } : null;
   }
 
-  async incrementEmailLoginCodeAttempts(id: string): Promise<void> {
-    this._database.connection
+  async reserveEmailLoginCodeAttempt(id: string, maxAttempts: number): Promise<boolean> {
+    const result = this._database.connection
       .prepare(
-        `UPDATE email_login_codes SET attempts = attempts + 1 WHERE id = ?`
+        `UPDATE email_login_codes SET attempts = attempts + 1
+         WHERE id = ? AND attempts < ?`
       )
-      .run(id);
+      .run(id, maxAttempts);
+    return Number(result.changes) > 0;
   }
 
   async consumeEmailLoginCode(id: string, consumedAt: number): Promise<boolean> {
@@ -649,28 +663,6 @@ export class SqliteIdentityRepository implements IdentityRepository {
     this._database.connection
       .prepare("DELETE FROM email_login_codes WHERE id = ?")
       .run(id);
-  }
-
-  async latestEmailLoginCodeCreatedAt(email: string): Promise<number | null> {
-    const row = this._database.connection
-      .prepare(
-        `SELECT MAX(created_at) AS created_at
-         FROM email_login_codes
-         WHERE email = ? COLLATE NOCASE`
-      )
-      .get(email) as { readonly created_at: number | null } | undefined;
-    return row?.created_at ?? null;
-  }
-
-  async countEmailLoginCodesSince(email: string, since: number): Promise<number> {
-    const row = this._database.connection
-      .prepare(
-        `SELECT COUNT(*) AS count
-         FROM email_login_codes
-         WHERE email = ? COLLATE NOCASE AND created_at > ?`
-      )
-      .get(email, since) as { readonly count: number };
-    return row.count;
   }
 
   async deleteEmailLoginCodesBefore(cutoff: number): Promise<void> {
@@ -760,7 +752,6 @@ interface ExternalIdentityRow {
 interface EmailLoginCodeRow {
   readonly id: string;
   readonly code_hash: string;
-  readonly attempts: number;
 }
 
 export function findPrincipal(

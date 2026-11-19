@@ -69,6 +69,18 @@ describe("claiming an agent", () => {
     expect((await send(origin, "POST", "/api/agents/claim", { code: await claimCode(origin, agent.cookie) }, dave.cookie)).status).toBe(200);
   });
 
+  it("answers a body that is not JSON, or too large, with a client error on any route", async () => {
+    const origin = await start();
+    const alice = await register(origin, "alice");
+    const nodeId = await createFile(origin, alice.cookie, "Budget");
+    const raw = (method: string, path: string, body: string) =>
+      fetch(`${origin}${path}`, { method, headers: { "content-type": "application/json", cookie: alice.cookie }, body });
+
+    await expectError(raw("POST", "/api/agents/claim", '{"code":'), 400, "INVALID_INPUT");
+    await expectError(raw("PUT", `/api/nodes/${nodeId}/link-sharing`, "{enabled: true}"), 400, "INVALID_INPUT");
+    await expectError(raw("POST", "/api/agents/claim", JSON.stringify({ code: "a".repeat(1100000) })), 413, "PAYLOAD_TOO_LARGE");
+  });
+
   it("makes the human an owner of the agent's Space and gives the agent nothing of the human's", async () => {
     const origin = await start();
     const agent = await guestAgent(origin);

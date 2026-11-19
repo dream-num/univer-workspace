@@ -51,8 +51,16 @@ export interface NewEmailUser {
 export interface StoredEmailLoginCode {
   readonly id: string;
   readonly codeHash: string;
-  readonly attempts: number;
 }
+
+/** An address gets no new code while it has one created after `recentSince`, or `windowLimit` created after `windowSince`. */
+export interface EmailLoginCodeLimits {
+  readonly recentSince: number;
+  readonly windowSince: number;
+  readonly windowLimit: number;
+}
+
+export type EmailLoginCodeCreation = "created" | "sent-recently" | "too-many";
 
 export interface ExternalIdentityUser {
   readonly user: User;
@@ -153,18 +161,19 @@ export interface IdentityRepository {
   findSession(sessionId: string): Promise<StoredSession | null>;
   authenticationMethods(userId: string): Promise<AuthenticationMethods>;
   findUserByEmail(email: string): Promise<User | null>;
+  /** Checks the limits and inserts the code in one atomic step per address. */
   createEmailLoginCode(input: {
     readonly id: string;
     readonly email: string;
     readonly codeHash: string;
     readonly createdAt: number;
     readonly expiresAt: number;
-  }): Promise<void>;
+  }, limits: EmailLoginCodeLimits): Promise<EmailLoginCodeCreation>;
   findEmailLoginCode(
     email: string,
     now: number
   ): Promise<StoredEmailLoginCode | null>;
-  incrementEmailLoginCodeAttempts(id: string): Promise<void>;
+  reserveEmailLoginCodeAttempt(id: string, maxAttempts: number): Promise<boolean>;
   consumeEmailLoginCode(id: string, consumedAt: number): Promise<boolean>;
   consumeOtherEmailLoginCodes(
     email: string,
@@ -172,8 +181,6 @@ export interface IdentityRepository {
     consumedAt: number
   ): Promise<void>;
   deleteEmailLoginCode(id: string): Promise<void>;
-  latestEmailLoginCodeCreatedAt(email: string): Promise<number | null>;
-  countEmailLoginCodesSince(email: string, since: number): Promise<number>;
   deleteEmailLoginCodesBefore(cutoff: number): Promise<void>;
   /** Updates supplied fields only. A provider may fill fields only while their observed values still match. */
   updateUser(userId: string, patch: Partial<Omit<User, "id">>, updatedAt: number, expected?: User): Promise<User>;

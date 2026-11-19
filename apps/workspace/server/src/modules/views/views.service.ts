@@ -106,7 +106,7 @@ export function createViewsModule(options: {
         readonly resource: ResourceAccess;
       }> = [];
       while (visible.length < limit + 1) {
-        const rows = await options.repository.listHtmlViews(scanCursor, 100, spaceId);
+        const rows = await options.repository.listHtmlViews(userId, scanCursor, 100, spaceId);
         for (const row of rows) {
           const resource = await options.access.resolveResource(userId, row.resource_id);
           if (resource) visible.push({ row, resource });

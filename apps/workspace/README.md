@@ -267,7 +267,7 @@ Ceilings forbid some actions whatever role the caller holds, each with `403`. No
 Team Space, make a Space public or become a Team Space member (`AGENT_NOT_ALLOWED`). An unclaimed agent
 keeps at most 20 files in its Personal Space, each of at most 10 MiB (`AGENT_QUOTA_EXCEEDED`), and gets
 Viewer at most from Link Sharing. A human's session issued for an access token cannot change Link
-Sharing (`INTERACTIVE_SESSION_REQUIRED`). User search does not return agents, and refuses an unclaimed
+Sharing or make a Space public (`INTERACTIVE_SESSION_REQUIRED`). User search does not return agents, and refuses an unclaimed
 agent (`AGENT_NOT_ALLOWED`).
 
 `POST /api/nodes/:nodeId/reports` takes `{ "reason" }` (at most 1,000 characters) without credentials

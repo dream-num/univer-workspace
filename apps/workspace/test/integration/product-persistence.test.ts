@@ -14,7 +14,7 @@ it("publishes drafts and retains the published HTML and Skill files in the catal
   });
   const published = await app.htmlViewDrafts.publish(owner, html.draft.id);
   expect(published.state).toBe("published");
-  expect(await app.repositories.views.listHtmlViews(null, 10, space)).toHaveLength(1);
+  expect(await app.repositories.views.listHtmlViews(owner, null, 10, space)).toHaveLength(1);
 
   const skill = await app.skillDrafts.submit(owner, randomUUID(), {
     name: "weekly-report", spaceId: space, replace: false, keep: [], review: [],

@@ -1,5 +1,5 @@
 import type { PostgresDatabase } from "../connection.js";
-import { ownsSpaceSql } from "../access/access.repository.js";
+import { ownerSuspendedSql, ownsSpaceSql, spaceMemberJoin, visibleSpaceSql } from "../access/access.repository.js";
 import type {
   RecentCursor,
   RecentRow,
@@ -42,35 +42,79 @@ export class PostgresViewsRepository implements ViewsRepository {
       .all(...parameters) as unknown as RecentRow[];
   }
 
-  async listHtmlViews(cursor: RecentCursor | null, limit: number, spaceId?: string): Promise<OwnedRow[]> {
+  async listHtmlViews(userId: string, cursor: RecentCursor | null, limit: number, spaceId?: string): Promise<OwnedRow[]> {
     const cursorClause =
       cursor === null
         ? ""
         : `AND (
-             node.updated_at < ?
-             OR (node.updated_at = ? AND resource.id > ?)
+             node.updated_at < $cursorTimestamp
+             OR (node.updated_at = $cursorTimestamp AND resource.id > $cursorId)
            )`;
-    const spaceClause = spaceId === undefined ? "" : "AND node.space_id = ?";
-    const parameters =
-      cursor === null
-        ? (spaceId === undefined ? [limit] : [spaceId, limit])
-        : (spaceId === undefined
-          ? [cursor.timestamp, cursor.timestamp, cursor.id, limit]
-          : [spaceId, cursor.timestamp, cursor.timestamp, cursor.id, limit]);
+    const candidateSpaces =
+      spaceId === undefined
+        ? `SELECT id FROM spaces WHERE owner_user_id = $userId
+           UNION
+           SELECT spaces.id FROM agents JOIN spaces ON spaces.owner_user_id = agents.user_id
+           WHERE agents.owner_user_id = $userId
+           UNION
+           SELECT space_id FROM space_members WHERE user_id = $userId`
+        : "SELECT id FROM spaces WHERE id = $spaceId";
+    const mySpaces =
+      spaceId === undefined
+        ? `AND (${ownsSpaceSql("spaces.owner_user_id")} OR (spaces.type = 'team' AND space_members.user_id IS NOT NULL))`
+        : "";
+    // Candidate Spaces keep the row estimate under the JIT threshold. OFFSET 0 keeps the LATERAL subquery
+    // unflattened, so the planner cannot start from the filename filter: it estimates that filter at one
+    // row in any deployment, and starting there scans every Blob.
     return await this._database
       .prepare(
-        `SELECT resource.id AS resource_id, node.updated_at
-         FROM resources AS resource
-         JOIN nodes AS node ON node.id = resource.node_id
-         JOIN blob_resources AS blob ON blob.resource_id = resource.id
-         WHERE node.trash_batch_id IS NULL
-           AND lower(blob.original_filename) LIKE '%.univer.html'
-           ${spaceClause}
-           ${cursorClause}
-         ORDER BY node.updated_at DESC, resource.id
-         LIMIT ?`,
+        `WITH RECURSIVE granted(id, space_id) AS (
+           SELECT node.id, node.space_id
+           FROM node_grants AS grant_node
+           JOIN nodes AS node ON node.id = grant_node.node_id
+           JOIN spaces ON spaces.id = node.space_id
+           WHERE grant_node.user_id = $userId
+             AND spaces.type = 'personal'
+             AND NOT ${ownerSuspendedSql("spaces.owner_user_id")}
+           UNION
+           SELECT child.id, child.space_id
+           FROM granted
+           JOIN nodes AS child ON child.space_id = granted.space_id AND child.parent_id = granted.id
+         ),
+         candidate_spaces(id) AS (${candidateSpaces}),
+         reach(id) AS (
+           SELECT space_node.id
+           FROM candidate_spaces
+           JOIN spaces ON spaces.id = candidate_spaces.id
+           ${spaceMemberJoin}
+           JOIN nodes AS space_node ON space_node.space_id = spaces.id
+           WHERE ${visibleSpaceSql} ${mySpaces}
+           UNION
+           SELECT id FROM granted
+         )
+         SELECT html.resource_id, html.updated_at
+         FROM reach
+         CROSS JOIN LATERAL (
+           SELECT resource.id AS resource_id, node.updated_at
+           FROM nodes AS node
+           JOIN resources AS resource ON resource.node_id = node.id
+           JOIN blob_resources AS blob ON blob.resource_id = resource.id
+           WHERE node.id = reach.id
+             AND node.trash_batch_id IS NULL
+             AND lower(blob.original_filename) LIKE '%.univer.html'
+             ${spaceId === undefined ? "" : "AND node.space_id = $spaceId"}
+             ${cursorClause}
+           OFFSET 0
+         ) AS html
+         ORDER BY html.updated_at DESC, html.resource_id
+         LIMIT $limit`,
       )
-      .all(...parameters) as unknown as OwnedRow[];
+      .all({
+        userId,
+        limit,
+        ...(spaceId === undefined ? {} : { spaceId }),
+        ...(cursor === null ? {} : { cursorTimestamp: cursor.timestamp, cursorId: cursor.id }),
+      }) as unknown as OwnedRow[];
   }
 
   async listOwned(userId: string, cursor: RecentCursor | null, limit: number): Promise<OwnedRow[]> {

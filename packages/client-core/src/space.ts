@@ -20,6 +20,7 @@ import {
   type WorkspaceUnitType,
 } from "./space-model.js";
 import type { AuthenticatedWorkspaceHttp, WorkspaceHttp } from "./http.js";
+import { repoUrl } from "./urls.js";
 import { usernameKey } from "./username.js";
 
 export type WorkspaceResourceKindFilter = WorkspaceNodeResource["kind"] | "none";
@@ -86,11 +87,20 @@ export async function createRepo(
       `${name("description")} must contain at most ${String(REPO_DESCRIPTION_MAX)} characters.`,
     );
   }
-  const created = await spaces.create({
-    name: input.name ?? input.slug,
-    slug: input.slug,
-    ...(input.public === true ? { publicRead: true } : {}),
-  });
+  let created: WorkspaceSpace;
+  try {
+    created = await spaces.create({
+      name: input.name ?? input.slug,
+      slug: input.slug,
+      ...(input.public === true ? { publicRead: true } : {}),
+    });
+  } catch (error) {
+    if (!isInteractiveSessionRequired(error)) throw error;
+    throw workspaceError(
+      error.code,
+      "This connection cannot create a public repository. Create it private, then ask the user to make it public in its settings in the browser.",
+    );
+  }
   return input.description === undefined
     ? created
     : await spaces.update(created.id, { description: input.description });
@@ -120,6 +130,29 @@ export function repoEditPatch(
     ...(input.slug === undefined ? {} : { slug: input.slug }),
   };
 }
+
+/** Applies a repository edit; a person's token session cannot make it public, so the error gives the settings URL. */
+export async function editRepo(
+  spaces: Pick<WorkspaceSpaceFeature, "update">,
+  origin: string,
+  spaceId: string,
+  patch: ReturnType<typeof repoEditPatch>,
+): Promise<WorkspaceSpace> {
+  try {
+    return await spaces.update(spaceId, patch);
+  } catch (error) {
+    if (!isInteractiveSessionRequired(error)) throw error;
+    const url = `${repoUrl(origin, spaceId)}/settings`;
+    throw workspaceError(
+      error.code,
+      `This connection cannot make a repository public. Ask the user to make it public in its settings in the browser: ${url}`,
+      { url },
+    );
+  }
+}
+
+const isInteractiveSessionRequired = (error: unknown): error is WorkspaceApplicationError =>
+  error instanceof WorkspaceApplicationError && error.code === "INTERACTIVE_SESSION_REQUIRED";
 
 export function selectRepos(
   spaces: readonly WorkspaceSpace[],

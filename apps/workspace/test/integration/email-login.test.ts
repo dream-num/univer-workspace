@@ -1,6 +1,8 @@
 import { createSqliteRepositories } from "../../server/src/db/sqlite/open.js";
-import { afterEach, describe, expect, it } from "vitest";
+import { scrypt } from "node:crypto";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DatabaseSync } from "node:sqlite";
+import { openProductDatabase } from "../../server/src/db/index.js";
 import type { SqliteDatabase } from "../../server/src/db/sqlite/connection.js";
 import { openWorkspaceDatabase } from "../../server/src/db/sqlite/initialize.js";
 import type { EmailMessage, EmailSender } from "../../server/src/integrations/email/index.js";
@@ -10,6 +12,13 @@ import {
 } from "../../server/src/modules/identity/index.js";
 
 import { expectSessionSource } from "../fixtures/session-source.js";
+import { createPostgresTestSchema } from "../support/postgres/schema.js";
+
+// Each check of a guess derives the code hash once, so scrypt calls count the guesses checked.
+vi.mock("node:crypto", async (importOriginal) => {
+  const crypto = await importOriginal<typeof import("node:crypto")>();
+  return { ...crypto, scrypt: vi.fn(crypto.scrypt) };
+});
 
 const workspaces: SqliteDatabase[] = [];
 
@@ -161,18 +170,63 @@ describe("passwordless Email sign-in", () => {
         })
       ).rejects.toMatchObject({ code: "INVALID_EMAIL_CODE", status: 400 });
     }
-    await expect(
-      harness.identity.loginWithEmailCode({
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await expect(
+        harness.identity.loginWithEmailCode({
+          email: "alice@example.com",
+          code,
+        })
+      ).rejects.toMatchObject({
+        code: "INVALID_EMAIL_CODE",
+        status: 400,
+        message: expect.stringContaining("Too many incorrect attempts"),
+      });
+    }
+    expect(tableCount(harness.database, "users")).toBe(0);
+  });
+
+  it("keeps counting a locked code toward the request limits", async () => {
+    const harness = await createHarness();
+    for (let request = 0; request < 5; request += 1) {
+      harness.advance(61_000);
+      await harness.identity.requestEmailLoginCode({
         email: "alice@example.com",
-        code,
-      })
+      });
+    }
+    const code = codeFrom(harness.sent[4]!);
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      await expect(
+        harness.identity.loginWithEmailCode({
+          email: "alice@example.com",
+          code: wrongCode(code, attempt),
+        })
+      ).rejects.toMatchObject({ code: "INVALID_EMAIL_CODE", status: 400 });
+    }
+    await expect(
+      harness.identity.loginWithEmailCode({ email: "alice@example.com", code })
     ).rejects.toMatchObject({
-      code: "INVALID_EMAIL_CODE",
-      status: 400,
       message: expect.stringContaining("Too many incorrect attempts"),
     });
-    expect(tableCount(harness.database, "users")).toBe(0);
-    expect(tableCount(harness.database, "email_login_codes")).toBe(0);
+
+    await expect(
+      harness.identity.requestEmailLoginCode({ email: "alice@example.com" })
+    ).rejects.toMatchObject({
+      code: "EMAIL_CODE_RATE_LIMITED",
+      message: expect.stringContaining("sent recently"),
+    });
+    harness.advance(61_000);
+    await expect(
+      harness.identity.requestEmailLoginCode({ email: "alice@example.com" })
+    ).rejects.toMatchObject({
+      code: "EMAIL_CODE_RATE_LIMITED",
+      message: expect.stringContaining("Too many sign-in codes"),
+    });
+    expect(harness.sent).toHaveLength(5);
+
+    harness.advance(60 * 60 * 1_000);
+    await expect(signIn(harness, "alice@example.com")).resolves.toMatchObject({
+      view: { authenticated: true },
+    });
   });
 
   it("rejects an expired code", async () => {
@@ -263,6 +317,117 @@ describe("passwordless Email sign-in", () => {
     expect(harness.sent).toHaveLength(0);
   });
 });
+
+const postgresUrl = process.env.WORKSPACE_TEST_POSTGRES_URL;
+const backends = [
+  {
+    name: "SQLite",
+    open: () => openProductDatabase({ provider: "sqlite", filename: ":memory:" }),
+  },
+  {
+    name: "PostgreSQL",
+    open: postgresUrl
+      ? async () => {
+          const schema = await createPostgresTestSchema(postgresUrl);
+          const product = await openProductDatabase({
+            provider: "postgres",
+            connectionString: schema.connectionString,
+          }).catch(async (error: unknown) => {
+            await schema.close();
+            throw error;
+          });
+          return {
+            repositories: product.repositories,
+            async close() {
+              try { await product.close(); } finally { await schema.close(); }
+            },
+          };
+        }
+      : undefined,
+  },
+];
+
+for (const { name, open } of backends) {
+  describe.skipIf(!open)(`${name} Email sign-in attempts`, () => {
+    it("checks at most five guesses against one code", async ({ onTestFinished }) => {
+      const product = await open!();
+      onTestFinished(() => product.close());
+      const sent: EmailMessage[] = [];
+      const identity = createIdentityModule({
+        repository: product.repositories.identity,
+        sessionTtlMs: 60_000,
+        emailSender: { send: async (message) => { sent.push(message); } },
+        now: () => 1_000_000,
+      });
+      await identity.initialize();
+      await identity.requestEmailLoginCode({ email: "alice@example.com" });
+      const code = codeFrom(sent[0]!);
+      vi.mocked(scrypt).mockClear();
+
+      const guesses = await Promise.allSettled(
+        Array.from({ length: 20 }, (_, guess) =>
+          identity.loginWithEmailCode({
+            email: "alice@example.com",
+            code: String((Number(code) + 1 + guess) % 1_000_000).padStart(6, "0"),
+          })
+        )
+      );
+
+      expect(scrypt).toHaveBeenCalledTimes(5);
+      for (const guess of guesses) {
+        expect(guess).toMatchObject({
+          status: "rejected",
+          reason: { code: "INVALID_EMAIL_CODE", status: 400 },
+        });
+      }
+      expect(guesses).toContainEqual(expect.objectContaining({
+        reason: expect.objectContaining({
+          message: expect.stringContaining("Too many incorrect attempts"),
+        }),
+      }));
+      await expect(
+        identity.loginWithEmailCode({ email: "alice@example.com", code })
+      ).rejects.toMatchObject({ code: "INVALID_EMAIL_CODE", status: 400 });
+      expect(scrypt).toHaveBeenCalledTimes(5);
+      expect(await product.repositories.identity.findUserByEmail("alice@example.com")).toBeNull();
+    });
+  });
+
+  describe.skipIf(!open)(`${name} Email sign-in code requests`, () => {
+    it("emails one code a minute and five an hour to simultaneous requests", async ({ onTestFinished }) => {
+      const product = await open!();
+      onTestFinished(() => product.close());
+      const sent: EmailMessage[] = [];
+      let currentTime = 1_000_000;
+      const identity = createIdentityModule({
+        repository: product.repositories.identity,
+        sessionTtlMs: 60_000,
+        emailSender: { send: async (message) => { sent.push(message); } },
+        now: () => currentTime,
+      });
+      await identity.initialize();
+
+      const bursts = [];
+      const emailed = [];
+      for (let minute = 0; minute < 6; minute += 1) {
+        bursts.push(await Promise.allSettled(
+          Array.from({ length: 30 }, (_, i) => identity.requestEmailLoginCode({ email: i % 2 ? "alice@example.com" : "Alice@Example.COM" }))
+        ));
+        emailed.push(sent.length);
+        currentTime += 61_000;
+      }
+
+      expect(bursts.map((burst) => burst.filter(({ status }) => status === "fulfilled").length)).toEqual([1, 1, 1, 1, 1, 0]);
+      expect(emailed).toEqual([1, 2, 3, 4, 5, 5]);
+      const rateLimited = (message: string) => ({
+        status: "rejected",
+        reason: expect.objectContaining({ code: "EMAIL_CODE_RATE_LIMITED", status: 429, message: expect.stringContaining(message) }),
+      });
+      expect(bursts[0]!.filter(({ status }) => status === "rejected")).toEqual(Array(29).fill(rateLimited("sent recently")));
+      expect(bursts[5]).toEqual(Array(30).fill(rateLimited("Too many sign-in codes")));
+    });
+  });
+}
 
 async function createHarness(
   options: { readonly sender?: EmailSender | null; readonly send?: EmailSender["send"] } = {}

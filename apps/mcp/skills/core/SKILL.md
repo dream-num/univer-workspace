@@ -346,10 +346,11 @@ confirms `published`, return its immersive `shareUrl` and explain that anyone
 with the link can view the page and its declared sources only when visibility is
 `public` and the private-source list is empty; otherwise signed-in access is
 required for the page and all its data. Signed-out visitors and signed-in
-non-members are read-only; page writes are rejected for them. Follow the HTML View
-Skill's sharing guidance: ask before using admin `repo_edit` to make a repository
-public, which immediately publishes everything in it, and keep source Sheets in
-the same public repository or list the private sources.
+non-members are read-only; page writes are rejected for them. This connection
+cannot make a repository public. When the user wants anyone with the link to open
+the page, give them the repository `url` and ask them to make it public in its
+settings in the browser, which immediately publishes everything in it. Keep source
+Sheets in the same public repository or list the private sources.
 
 ## SVG resource catalog
 

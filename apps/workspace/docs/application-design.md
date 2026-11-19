@@ -251,6 +251,7 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 | `createFiles` | 主体是未认领 agent，Personal Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |
 | `writeLinkSharing` | 主体是人，且 Session 由个人访问令牌或 OAuth Grant 换出 | `INTERACTIVE_SESSION_REQUIRED` |
+| `publishSpace` | 主体是人，Session 由个人访问令牌或 OAuth Grant 换出，且创建或更新 Space 时请求 `publicRead: true` | `INTERACTIVE_SESSION_REQUIRED` |
 
 文件数包括 Trash 之外有 Resource 的 Node、未完成 Pull request 中的新建文件和仍在进行的创建 Operation；
 重放同一个 Operation 不重复计数。agent 的 token exchange Session 可以写 Link Sharing，它能分享的只有自己
@@ -312,7 +313,7 @@ Blob 内容替换使用单次 PUT 和强 ETag 并发校验，直接发布到原 
 旧对象通过删除 Outbox 回收。失败或启动时发现中断的替换保留旧内容并清理新对象。
 
 `.univer.html` 使用现有 Blob 身份和上传生命周期，不新增数据库表或 Unit 类型。
-Browser 的 Apps 入口在侧栏团队空间之后，列出当前用户能打开的这类 Blob。主区域使用和 Node 页相同的 HTML 视图与顶栏操作；沉浸视图仍进入该 Node。
+Browser 的 Apps 入口在侧栏团队空间之后，列出当前用户自己的空间（拥有的空间和所在的团队空间）以及直接授权给他的节点中的这类 Blob；链接分享和公开空间不会把页面加入这个列表，按空间筛选时结果与浏览该空间时相同。主区域使用和 Node 页相同的 HTML 视图与顶栏操作；沉浸视图仍进入该 Node。
 Browser 根据模板中的 Unit ID 通过既有 API 检查来源访问，再由独立 Binding 引擎
 加载 headless 协同数据。HTML 文件权限不授予来源表格权限；页面脚本在隔离 iframe 中执行，来源数据访问由宿主授权。
 设计见 [Univer HTML Views](../../../docs/design/html-views/README.md)。

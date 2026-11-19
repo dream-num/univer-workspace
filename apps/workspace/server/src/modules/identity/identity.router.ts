@@ -6,9 +6,12 @@ import type { AccessTokenService, PersonalTokenRecord } from "./access-tokens.js
 import type { AgentClaims } from "./agent-claims.js";
 import type { IdentityModule } from "./identity.service.js";
 import { resolveMcpResource, type McpOAuthConfig } from "./mcp-oauth.js";
+import { createSourceRateLimiter, SOURCE_WINDOW_SECONDS } from "./source-rate-limiter.js";
 
 const WORKSPACE_AGENTS_CLIENT_ID = "univer-workspace-agents";
 const MAX_AGENT_LABEL_LENGTH = 64;
+const EMAIL_CODE_REQUESTS_PER_SOURCE_HOUR = 60;
+const EMAIL_CODE_CHECKS_PER_SOURCE_HOUR = 120;
 
 export function createIdentityRouter(options: {
   readonly identity: IdentityModule;
@@ -18,6 +21,8 @@ export function createIdentityRouter(options: {
   readonly mcpOAuth: McpOAuthConfig | null;
   readonly secureCookies: boolean;
   readonly discordBotApiKey?: string;
+  /** True when TRUST_PROXY is set. Unset, `request.ip` can be a proxy every client shares, and one count would refuse them all. */
+  readonly emailSourceLimits: boolean;
 }): Router {
   const router = Router();
   const { identity } = options;
@@ -57,8 +62,19 @@ export function createIdentityRouter(options: {
     response.json(issued.view);
   });
 
+  // shortcut: counts live in this process, so each replica allows the full limit, and past 10,000 tracked sources a new source passes uncounted; share them in a store when Workspace runs more than one replica.
+  const emailSources = options.emailSourceLimits
+    ? {
+        codeRequests: createSourceRateLimiter(EMAIL_CODE_REQUESTS_PER_SOURCE_HOUR, Date.now, "admit"),
+        codeChecks: createSourceRateLimiter(EMAIL_CODE_CHECKS_PER_SOURCE_HOUR, Date.now, "admit"),
+      }
+    : null;
+
   router.post("/auth/email/code", async (request, response) => {
     response.set("Cache-Control", "no-store");
+    if (emailSources && !emailSources.codeRequests.take(request.ip)) {
+      throw emailSourceLimited("Too many sign-in codes were requested from this network. Try again later.");
+    }
     const issued = await identity.requestEmailLoginCode({
       email: request.body?.email,
     });
@@ -66,6 +82,9 @@ export function createIdentityRouter(options: {
   });
 
   router.post("/auth/email/login", async (request, response) => {
+    if (emailSources && !emailSources.codeChecks.take(request.ip)) {
+      throw emailSourceLimited("Too many sign-in attempts came from this network. Try again later.");
+    }
     const issued = await identity.loginWithEmailCode({
       email: request.body?.email,
       code: request.body?.code,
@@ -514,6 +533,10 @@ function loginReturnTo(request: Request): string | undefined {
   const referer = URL.parse(request.get("referer") ?? "");
   const claimPage = referer?.pathname.startsWith("/claim/") ? referer.pathname : undefined;
   return referer?.searchParams.get("returnTo") ?? claimPage;
+}
+
+function emailSourceLimited(message: string): ApplicationError {
+  return new ApplicationError("EMAIL_CODE_RATE_LIMITED", 429, message, undefined, SOURCE_WINDOW_SECONDS);
 }
 
 function agentLabel(value: unknown): string | undefined {

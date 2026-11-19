@@ -1772,7 +1772,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List .univer.html Blobs the current user can open, newest node update first. */
+        /**
+         * List .univer.html Blobs in the current user's Spaces and directly granted Nodes, newest node update first.
+         * @description Without spaceId, lists HTML Views in Spaces the user owns or belongs to as a Team member, and in
+         *     Nodes granted to the user directly. Link sharing and public Spaces do not add HTML Views here.
+         *     With spaceId, lists the HTML Views the user sees when browsing that Space, a public Space included.
+         */
         get: operations["listHtmlViews"];
         put?: never;
         post?: never;
@@ -4028,7 +4033,8 @@ export interface components {
          *     agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
          *     an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
          *     Personal Space, pending pull-request files included, or store one file above 10 MiB) and
-         *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
+         *     `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
+         *     or updates a Space with `publicRead: true`).
          */
         Forbidden: {
             headers: {
@@ -5458,9 +5464,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description A code was requested too recently or too often for this address. */
+            /**
+             * @description EMAIL_CODE_RATE_LIMITED. A code was requested too recently or too often for this
+             *     address, or, when the server sets TRUST_PROXY, this source IP made 60 requests in
+             *     the last hour.
+             */
             429: {
                 headers: {
+                    /** @description Seconds to wait, sent only when the source IP is over its limit. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -5513,6 +5525,17 @@ export interface operations {
             /** @description Email authentication is disabled for this deployment. */
             403: {
                 headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP sent 120 requests to this route in the last hour. The code was not checked. */
+            429: {
+                headers: {
+                    /** @description Seconds to wait. */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -7195,7 +7218,7 @@ export interface operations {
                 /** @description Opaque cursor returned by the previous page. */
                 cursor?: components["parameters"]["CursorParameter"];
                 limit?: components["parameters"]["LimitParameter"];
-                /** @description Restrict results to one accessible Space. */
+                /** @description Restrict results to one Space the user can browse, or to the Nodes granted in it. */
                 spaceId?: string;
             };
             header?: never;

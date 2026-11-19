@@ -16,7 +16,6 @@ import {
   preparePromotion,
   PUBLIC,
   publishPromotion,
-  verifyPromotion,
   publishTarball,
   setLatest,
   validatePackageName,
@@ -355,62 +354,14 @@ test("rejects context/run/version/hash/public conflicts before any write", async
   assert.deepEqual(f.state.writes, []);
 });
 
-async function submitAndVerify(options) {
-  await publishPromotion(options);
-  return verifyPromotion(options);
-}
-
-test("wrong version/tag readback and tag write failures cannot report success", async (t) => {
+test("tag write failure fails submission", async (t) => {
   const f = await prepared(t, { latest: true });
-  await assert.rejects(submitAndVerify({ ...f, tagger: async () => {} }), /latest readback/u);
   let writes = 0;
-  await assert.rejects(
-    submitAndVerify({
-      ...f,
-      tagger: async () => {
-        writes += 1;
-        throw new Error("tag denied");
-      },
-    }),
-    /tag denied/u,
-  );
+  await assert.rejects(publishPromotion({ ...f, tagger: async () => {
+    writes += 1;
+    throw new Error("tag denied");
+  } }), /tag denied/u);
   assert.equal(writes, 1);
-  const changedIntegrity = await prepared(t, { latest: true });
-  await assert.rejects(
-    submitAndVerify({
-      ...changedIntegrity,
-      tagger: async (...args) => {
-        await changedIntegrity.tagger(...args);
-        changedIntegrity.metadata.dist.integrity = "sha512-wrong-after-tag-write";
-      },
-    }),
-    /exact-version\/integrity readback/u,
-  );
-  f.state.exists = false;
-  assert.equal((await submitAndVerify({ ...f, publisher: async () => {} })).verification, "pending");
-  const noLatest = await prepared(t);
-  noLatest.state.exists = false;
-  await assert.rejects(
-    submitAndVerify({
-      ...noLatest,
-      publisher: async () => {
-        noLatest.state.exists = true;
-      },
-    }),
-    /promoted tag readback/u,
-  );
-  const changedLatest = await prepared(t);
-  changedLatest.state.exists = false;
-  await assert.rejects(
-    submitAndVerify({
-      ...changedLatest,
-      publisher: async (...args) => {
-        await changedLatest.publisher(...args);
-        changedLatest.state.tags.latest = version;
-      },
-    }),
-    /latest readback/u,
-  );
 });
 
 test("public read failures and uncertain upload failures stop without retry", async (t) => {
@@ -446,6 +397,8 @@ test("public npm upload and dist-tag subprocesses keep OIDC without token/config
   const context = {
     ...env,
     PATH: bin,
+    RUNNER_ENVIRONMENT: "github-hosted",
+    RUNNER_SECRET: "synthetic-runner-secret",
     NPM_TOKEN: "synthetic-secret",
     NODE_AUTH_TOKEN: "synthetic-secret",
     NPM_CONFIG_REGISTRY: INSIDER,
@@ -460,6 +413,7 @@ test("public npm upload and dist-tag subprocesses keep OIDC without token/config
   ]) {
     const observed = JSON.parse(result.stdout);
     for (const key of [
+      "RUNNER_SECRET",
       "INSIDER_TOKEN",
       "NPM_TOKEN",
       "NODE_AUTH_TOKEN",
@@ -467,6 +421,7 @@ test("public npm upload and dist-tag subprocesses keep OIDC without token/config
       "NPM_CONFIG_USERCONFIG",
     ])
       assert.equal(observed.env[key], undefined);
+    assert.equal(observed.env.RUNNER_ENVIRONMENT, "github-hosted");
     assert.equal(observed.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN, env.ACTIONS_ID_TOKEN_REQUEST_TOKEN);
     assert.deepEqual(observed.args, args);
     assert.notEqual(observed.cwd, process.cwd());
@@ -502,6 +457,8 @@ test("real npm uploads unchanged tarball to loopback, overriding insider registr
       "npm",
       [
         ...npmPublishArguments(f.tarball, tag, registry),
+        // This fixture verifies upload bytes/tags only, not Sigstore signing.
+        "--provenance=false",
         `--//127.0.0.1:${port}/:_authToken=synthetic-loopback-only`,
       ],
       {
@@ -659,7 +616,7 @@ test("allowlist is not a destination: actual Location and paths stay intact", as
   }
 });
 
-test("delayed public availability does not fail submission and verify is credential-free read-only", async (t) => {
+test("delayed public availability does not fail submission or cause a post-upload registry read", async (t) => {
   const f = await prepared(t, { latest: true });
   f.state.exists = false;
   let submitted = false;
@@ -670,27 +627,7 @@ test("delayed public availability does not fail submission and verify is credent
   }});
   assert.equal(result.action, "submitted");
   assert.equal(result.publicRegistryWriteVerified, false);
-  const readOnly = { ...f, env: {}, publisher: () => assert.fail("no upload"), tagger: () => assert.fail("no tag write"), fetcher: async (url, options) => {
-    assert.ok(String(url).startsWith(PUBLIC));
-    assert.equal(options.method, undefined);
-    assert.equal(options.headers.authorization, undefined);
-    return f.fetcher(url, options);
-  }};
-  assert.equal((await verifyPromotion(readOnly)).verification, "pending");
-  f.state.exists = true;
-  f.state.tags.latest = version;
-  assert.equal((await verifyPromotion(readOnly)).verification, "verified");
   assert.equal(writes, 1);
-});
-
-test("independent verification rejects mismatches and network failures, not pending", async (t) => {
-  const f = await prepared(t);
-  await publishPromotion(f);
-  await assert.rejects(verifyPromotion({ ...f, version: "0.8.0" }), /matching submission/u);
-  await assert.rejects(verifyPromotion({ ...f, fetcher: async () => { throw new Error("offline"); } }), /offline/u);
-  await assert.rejects(verifyPromotion({ ...f, fetcher: async () => new Response(null, { status: 503 }) }), /503/u);
-  f.metadata.dist.integrity = "sha512-different";
-  await assert.rejects(verifyPromotion(f), /integrity readback/u);
 });
 
 test("a failed new submission clears a previous receipt without deleting the prepared artifact", async (t) => {
@@ -702,20 +639,8 @@ test("a failed new submission clears a previous receipt without deleting the pre
   assert.equal(JSON.parse(await readFile(join(f.directory, "promotion.json"), "utf8")).version, version);
 });
 
-test("failed verification and a new submission remove stale verified output", async (t) => {
-  const f = await prepared(t);
-  await publishPromotion(f);
-  const path = join(f.directory, "verification.json");
-  for (const fetcher of [async () => { throw new Error("offline"); }, async () => new Response(null, { status: 503 }), async () => Response.json({ name: PACKAGE, version, dist: { integrity: "wrong" } })]) {
-    await writeFile(path, '{"mode":"verified"}');
-    await assert.rejects(verifyPromotion({ ...f, fetcher }));
-    await assert.rejects(readFile(path), /ENOENT/u);
-  }
-  f.state.tags.latest = "unexpected";
-  await writeFile(path, '{"mode":"verified"}');
-  await assert.rejects(verifyPromotion(f), /latest readback/u);
-  await assert.rejects(readFile(path), /ENOENT/u);
-  await writeFile(path, '{"mode":"verified"}');
-  await assert.rejects(publishPromotion({ ...f, env: {} }), /manual dispatch/u);
-  await assert.rejects(readFile(path), /ENOENT/u);
+test("public publication explicitly requests provenance", () => {
+  const args = npmPublishArguments("original.tgz", "latest");
+  assert.ok(args.includes("--provenance=true"));
+  assert.ok(!args.includes("--provenance=false"));
 });

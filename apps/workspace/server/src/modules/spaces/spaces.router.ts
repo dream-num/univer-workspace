@@ -1,5 +1,6 @@
 import { json, Router } from "express";
-import type { IdentityModule } from "../identity/index.js";
+import { assertCeiling } from "../access/index.js";
+import { principalCategory, type IdentityModule } from "../identity/index.js";
 import type { SpacesModule } from "./spaces.service.js";
 
 export function createSpacesRouter(options: {
@@ -16,6 +17,10 @@ export function createSpacesRouter(options: {
 
   router.post("/team-spaces", async (request, response) => {
     const session = await options.identity.requireSession(request.headers.cookie);
+    assertCeiling(principalCategory(session.user), "publishSpace", {
+      publicRead: request.body?.publicRead === true,
+      tokenIssued: session.tokenIssued,
+    });
     response
       .status(201)
       .json(
@@ -66,6 +71,10 @@ export function createSpacesRouter(options: {
 
   router.patch("/spaces/:spaceId", async (request, response) => {
     const session = await options.identity.requireSession(request.headers.cookie);
+    assertCeiling(principalCategory(session.user), "publishSpace", {
+      publicRead: request.body?.publicRead === true,
+      tokenIssued: session.tokenIssued,
+    });
     response.json(
       await options.spaces.update(
         session.user.id,

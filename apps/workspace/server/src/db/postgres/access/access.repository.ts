@@ -34,7 +34,7 @@ export const spaceMemberJoin = `
  * An agent that is banned or past its expiry is suspended: its Space gives a role to nobody but
  * its owners. Suspension is derived on every read and never stored, so lifting it needs no repair.
  */
-function ownerSuspendedSql(ownerUserId: string): string {
+export function ownerSuspendedSql(ownerUserId: string): string {
   return `EXISTS (
     SELECT 1 FROM agents
     WHERE agents.user_id = ${ownerUserId}

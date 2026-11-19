@@ -7,11 +7,15 @@ in non-interactively with a username and a password piped on stdin.
 ## Sub-features
 
 - `auth-register-web` creates an account from the `Create account` mode of `/login`.
+- `auth-register-validation` shows the server's refusal above the form, for example a display name that holds an
+  email address, and stores display names with whitespace collapsed.
+- `auth-signout-web` signs out from Account > `Sign out`.
 - `auth-signin-web` signs an existing user in from `/login`.
 - `auth-cli-password` signs uvw in with `--username` and `--password-stdin`. It uses
   `/api/auth/cli/password/login` to create an Agent session, with one retry on
   `/api/auth/password/login` only after HTTP 404 from an older server.
 - `auth-cli-status` shows the signed-in origin and user.
+- `auth-cli-logout` signs uvw out with `uvw auth logout`.
 - `auth-profile-user-id` shows the Workspace user ID in the Profile dialog, with a `Copy user ID` button. This is
   the ID that `$V mcp-allow-users` takes.
 
@@ -31,20 +35,27 @@ Preconditions:
 - **Open sign-up.** Run `agent-browser open "$ORIGIN/login"`, `agent-browser wait 1500`,
   then `agent-browser find role button click --name "Create account"`. A `Display name`
   textbox appears between `Username` and `Password`.
+- **Refused display name.** Fill Username `web-$VERIFY_UVW_RUN`, Display name `me@x.io` and Password
+  `verify-pass-123`, then submit. The URL stays `/login` and an alert reads
+  `Display name cannot contain an email address. Everyone who opens your shared files sees it.`
 - **Fill and submit.** Run `agent-browser find label "Username" fill "web-$VERIFY_UVW_RUN"`,
   `agent-browser find label "Display name" fill "Web Verify"`,
   `agent-browser find label "Password" fill "verify-pass-123"`, and
-  `agent-browser click 'form button[type=submit]'`. The URL becomes `$ORIGIN/home`, the
-  heading is `Home`, and the sidebar shows `Personal Space` with `No files`.
+  `agent-browser click 'form button[type=submit]'`. The URL becomes `$ORIGIN/home`. A new account first sees
+  `Choose your workspace view`; click `Enter workspace`. The heading is `Home`, and the sidebar shows
+  `Personal Space` with `No files`. A display name typed as `Web  Verify` is stored as `Web Verify`.
 - **Proof (register).** Run `agent-browser screenshot "$EVIDENCE/auth-register-home.png"`,
   then `agent-browser reload` and `agent-browser get url`. It is still `$ORIGIN/home`, so the
   session cookie persisted.
+- **Sign out.** Run `agent-browser find role button click --name "Account"`, then
+  `agent-browser find role menuitem click --name "Sign out"`. The URL becomes `$ORIGIN/login`, and opening
+  `$ORIGIN/home` redirects to `/login?returnTo=%2Fhome`.
 - **Sign in as the baseline user.** Run `agent-browser cookies clear`, open `/login`, wait,
   run `find label "Username" fill "verify-$VERIFY_UVW_RUN"` and
-  `find label "Password" fill "$(cat /tmp/verify-uvw/$VERIFY_UVW_RUN/user.pw)"`, submit, and
+  `find label "Password" fill "$(cat ${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/user.pw)"`, submit, and
   run `agent-browser wait --url '**/home'`. The `Account` button shows initial `V`.
 - **CLI login.** `$V user` already did this. To drive it explicitly, run
-  `$V cli auth-login auth login --username "verify-$VERIFY_UVW_RUN" --password-stdin --json < /tmp/verify-uvw/$VERIFY_UVW_RUN/user.pw`.
+  `$V cli auth-login auth login --username "verify-$VERIFY_UVW_RUN" --password-stdin --json < ${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/$VERIFY_UVW_RUN/user.pw`.
   Exit `0`, and stdout has `origin: http://127.0.0.1:5973` and `subject.name: Verify <run-id>`.
 - **CLI status.** Run `$V cli auth-status auth status --json`. It shows the same origin and
   subject.
@@ -55,13 +66,15 @@ Preconditions:
   `User ID: <id>`, equal to `subject.id` from `$V uvw auth status --json`. Run
   `agent-browser find role button click --name "Copy user ID"`: a `User ID copied.` toast shows. Screenshot
   `$EVIDENCE/auth-profile-user-id.png`.
+- **CLI logout.** Run `$V cli auth-logout auth logout`: `Logged out from <origin>`. `$V uvw auth status` then fails
+  with `workspace-authentication-required`. Run `$V user` to sign uvw in again.
 
 ## Gotchas
 
 - In sign-up mode `Create account` names both the mode tab and submit. `find role button … --exact` picks
   the mode tab, not submit, so the form silently stays on `/login`. The other tab is `Password`; only
   submit is named `Sign in`. An `Email` tab appears only when the server has an email sender, which a
-  verify run never has.
+  verify run never has. The email sign-in request limits are therefore not verifiable in a verify run.
 - `auth status` reports the display name (`Verify <run-id>`), not the username.
 - Registration from curl without `Accept-Language` still names the space
   `<display name> 的个人空间`; the name is fixed server-side, not a locale bug in the run.

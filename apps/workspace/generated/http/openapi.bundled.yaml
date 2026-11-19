@@ -1500,7 +1500,15 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '429':
-          description: A code was requested too recently or too often for this address.
+          description: |
+            EMAIL_CODE_RATE_LIMITED. A code was requested too recently or too often for this
+            address, or, when the server sets TRUST_PROXY, this source IP made 60 requests in
+            the last hour.
+          headers:
+            Retry-After:
+              description: Seconds to wait, sent only when the source IP is over its limit.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -1543,6 +1551,17 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Email authentication is disabled for this deployment.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: EMAIL_CODE_RATE_LIMITED. The server sets TRUST_PROXY, and this source IP sent 120 requests to this route in the last hour. The code was not checked.
+          headers:
+            Retry-After:
+              description: Seconds to wait.
+              schema:
+                type: integer
           content:
             application/json:
               schema:
@@ -3153,14 +3172,18 @@ paths:
       tags:
         - Views
       operationId: listHtmlViews
-      summary: List .univer.html Blobs the current user can open, newest node update first.
+      summary: List .univer.html Blobs in the current user's Spaces and directly granted Nodes, newest node update first.
+      description: |
+        Without spaceId, lists HTML Views in Spaces the user owns or belongs to as a Team member, and in
+        Nodes granted to the user directly. Link sharing and public Spaces do not add HTML Views here.
+        With spaceId, lists the HTML Views the user sees when browsing that Space, a public Space included.
       parameters:
         - $ref: '#/components/parameters/CursorParameter'
         - $ref: '#/components/parameters/LimitParameter'
         - name: spaceId
           in: query
           required: false
-          description: Restrict results to one accessible Space.
+          description: Restrict results to one Space the user can browse, or to the Nodes granted in it.
           schema:
             type: string
             minLength: 1
@@ -8919,7 +8942,8 @@ components:
         agent creates a Team Space or makes a Space public, or the User added as a Team Space member is
         an agent), `AGENT_QUOTA_EXCEEDED` (an unclaimed agent would keep more than 20 files in its
         Personal Space, pending pull-request files included, or store one file above 10 MiB) and
-        `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing).
+        `INTERACTIVE_SESSION_REQUIRED` (a human's token-issued session writes Link Sharing, or creates
+        or updates a Space with `publicRead: true`).
       content:
         application/json:
           schema:

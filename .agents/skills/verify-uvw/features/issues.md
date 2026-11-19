@@ -17,7 +17,8 @@ close event back from the timeline.
 - `uvw repo create <slug>`, `uvw issue create -R <owner>/<slug> -t … -b …`,
   `uvw issue view <n> -R <repo> -c`.
 - `uvw browse <n> -R <repo>` prints `$ORIGIN/spaces/<spaceId>/issues/<n>`. In Wiki mode the
-  sidebar `Issues` section lists every Team Space you belong to, with an open count only when it is above 0.
+  sidebar `Issues` section lists the Team Spaces you belong to that support Issues, with an open count only when it
+  is above 0, and is hidden when there are none.
 
 ## Driving it with agent-browser and uvw
 

@@ -82,6 +82,7 @@
 | 被加入的用户是 agent | 成为 Team Space 成员 | spaces 模块的成员添加 | `AGENT_NOT_ALLOWED` |
 | 主体是未认领 agent | 自己空间里的文件数达到 20 后再创建 | resources 和 exchange 的创建入口 | `AGENT_QUOTA_EXCEEDED` |
 | 主体是未认领 agent | 单个文件超过 10 MB | blob 上传和 exchange 导入 | `AGENT_QUOTA_EXCEEDED` |
+| 会话是凭据签发，且主体是人 | 把 Space 设为整仓公开（创建或更新时 `publicRead: true`） | `POST /api/team-spaces`、`PATCH /api/spaces/:spaceId` | `INTERACTIVE_SESSION_REQUIRED` |
 | 会话是凭据签发，且主体是人 | 写 Link Sharing | `PUT /api/nodes/:nodeId/link-sharing` | `INTERACTIVE_SESSION_REQUIRED` |
 
 - 最后一行的反面是：主体是 agent 且节点在它自己的 Personal Space 时，凭据会话可以写 Link Sharing。

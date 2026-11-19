@@ -77,7 +77,7 @@ Baseline of the reserved checks, from code at `main` 26c1b69d (not a probe):
 
 - MG1: `workspaceContentRuntimeWorker` receives `credential` in `WorkspaceContentWorkerInit` (`packages/client-core/src/content-worker.ts:23`) and
   puts it in the Workspace HTTP client as `cookie` (line 76). The executor resolves it with
-  `grantCookie(resolveGrant(caller?.grant))` (`apps/mcp/src/executor/runtime.ts:33`), so the user's session cookie lives in the worker process that
+  `grantCookie(resolveGrant(caller?.grant))` (`apps/mcp/src/executor/runtime.ts`), so the user's session cookie lives in the worker process that
   runs the user's script. Exposed.
 - MG3: an exploratory `execute` showed `process.getBuiltinModule("fs")`, `process.binding` and `fetch` reachable from the script, and a script that
   reads `/proc/<pid>/environ` of other processes (MG2). Exposed, to be pinned by the implementation tests.
@@ -86,7 +86,7 @@ Baseline of MG2 and MG4-MG11 on `main` cf45a0ae (2026-11-10) with a local Docker
 
 | Check | Result | Reason |
 |---|---|---|
-| MG2 | exposed | `MCP_EXECUTOR_TOKEN` and `MCP_RENDERER_TOKEN` are visible in `/proc/1/environ` of the executor server, readable by the script (same uid). The worker's own environment holds only `NODE_ENV`. |
+| MG2 | exposed | `MCP_EXECUTOR_TOKEN` and `MCP_RENDERER_TOKEN` are visible in `/proc/1/environ` of the executor server, readable by the script (same uid). The worker's own environment holds only `NODE_ENV`. Rerun on 65e6e301 (2026-11-19): unchanged, except the worker also holds `NODE_OPTIONS` (`--disable-sigusr1`) and the server's command line is `node --disable-sigusr1`. |
 | MG4 | exposed | The script reaches the renderer, the gateway, the Workspace transport and a public host; only `169.254.169.254` times out. |
 | MG5 | exposed | A sees B's worker pid in `/proc`, B's `/tmp` marker and other worker processes. |
 | MG6 | contained | The 25 s operation timeout ends A; its worker process is gone within a second and B is served in under 100 ms. |
