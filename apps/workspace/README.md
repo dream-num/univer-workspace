@@ -152,7 +152,7 @@ application; Workspace does not add a second formula refresh scheduler.
 
 Choose **Repository** in application settings to use OfficeLab's GitHub-style
 dashboard. `/home` shows recently opened files, active Pull requests, and open Issues.
-The global sidebar connects the following views:
+The dashboard connects the following views:
 
 - `/repositories`: all accessible repositories, with name/description/owner search,
   personal/team and visibility filters, name sorting, and repository creation.
@@ -160,16 +160,14 @@ The global sidebar connects the following views:
   and repository/type filters. Opening a review preserves the list's URL filters.
 - `/issues`: the existing cross-repository Issue list and its filters.
 - `/recent`: paginated recently opened resources.
-- `/apps`: a paginated Pages directory; selecting a Page opens the existing embedded
-  viewer. Existing `node` and `spaceId` links remain supported.
 
-Recent and Pages text searches apply to the loaded results and are labelled accordingly.
+Search in Recent covers the loaded results.
 Homepage summaries have separate, bounded queries so returning from a long list does
 not reload every cached page. Directory browsing reads metadata; only opening a file
-or preview records a visit. Pages show real metadata rather than synthetic thumbnails.
+or preview records a visit.
 Summary-only Worktree access does not expose a review link.
 
-Wiki keeps its existing home and embedded Apps experience. Repository's navigation
+Open HTML pages from the repository’s **Pages** tab or from the file tree in Wiki. Repository's navigation
 uses a drawer on narrow screens and supports both interface languages and color themes.
 
 ### Markdown files

@@ -159,7 +159,6 @@ export const messages = {
     dashboardLoaded: "已加载 {count} 条",
     dashboardSearchLoaded: "按名称搜索…",
     dashboardSummaryOnly: "仅可查看摘要",
-    dashboardPagesHint: "浏览你的仓库和直接共享给你的业务页面，按最近更新时间排列。",
     dashboardRecentHint: "按最后打开时间排列，随时回到上次的工作。",
     dashboardLatestPr: "最近更新的 Pull requests",
     issueNoOpen: "暂无开放的 Issue",
@@ -264,7 +263,6 @@ export const messages = {
     repositoriesEmpty: "还没有团队空间",
     repositoriesNoMatch: "没有匹配的仓库",
     home: "首页",
-    pagesEmpty: "还没有页面",
     pagesEmptyDescription: "创建与表格数据实时双向绑定的 HTML 页面，例如仪表盘、表单和报告。",
     pagesEmptyHint:
       "在仓库的 Agents 页面请 Agent 创建页面，例如使用 /html-view-creator。",
@@ -1061,7 +1059,6 @@ export const messages = {
     dashboardLoaded: "{count} loaded",
     dashboardSearchLoaded: "Search by name…",
     dashboardSummaryOnly: "Summary access only",
-    dashboardPagesHint: "Browse the business pages in your repositories and those shared with you directly, ordered by their latest update.",
     dashboardRecentHint: "Pick up where you left off, ordered by when you last opened each file.",
     dashboardLatestPr: "Recently updated pull requests",
     issueNoOpen: "No open issues",
@@ -1167,7 +1164,6 @@ export const messages = {
     repositoriesEmpty: "No team spaces yet",
     repositoriesNoMatch: "No repositories match",
     home: "Home",
-    pagesEmpty: "No pages yet",
     pagesEmptyDescription:
       "Create HTML pages with a live two-way binding to spreadsheet data, such as dashboards, forms, and reports.",
     pagesEmptyHint:

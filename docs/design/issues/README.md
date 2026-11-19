@@ -405,9 +405,7 @@ Q3 预算表缺少华东区  #12                                   [Edit] [New i
 
 ### 4.4 Wiki 主题
 
-参照 Apps 的侧栏写法（`features/html-views/apps-sidebar.tsx`）：
-
-- 侧栏在 Apps 分组之后、Trash 之前新增可折叠的 **Issues** 分组，结构为「标题链接 + 按 Space 分组的树」：
+- 侧栏在文件树之后、Trash 之前展示可折叠的 **Issues** 分组，结构为「标题链接 + 按 Space 分组的树」：
 
 ```text
 ▾ Issues                     → /issues

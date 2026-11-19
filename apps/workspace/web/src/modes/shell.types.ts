@@ -1,15 +1,14 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";
 
-export type WorkspaceView = "home" | "apps" | "trash" | "worktrees" | "members" | "issues";
+export type WorkspaceView = "home" | "trash" | "worktrees" | "members" | "issues";
 export type RepositoryGlobalView =
   | "home"
   | "agents"
   | "repositories"
   | "worktrees"
   | "issues"
-  | "recent"
-  | "apps";
+  | "recent";
 
 export type WorkspaceShellProps = PropsWithChildren<{
   readonly selectedSpaceId?: string;

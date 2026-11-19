@@ -266,30 +266,15 @@
     box-shadow: none;
   }
   .repository-toolbar > button { min-width: 0; }
-  .repository-panel:has(.repository-pull-cards, .repository-page-cards) {
+  .repository-panel:has(.repository-pull-cards) {
     border: 0;
     background: none;
     overflow: visible;
   }
-  .repository-panel:has(.repository-pull-cards, .repository-page-cards) > .repository-panel-heading {
+  .repository-panel:has(.repository-pull-cards) > .repository-panel-heading {
     background: none;
     padding: 0 0 16px;
     border: 0;
-  }
-  .repository-page-cards {
-    display: grid;
-    gap: 10px;
-  }
-  .repository-page-cards > li {
-    min-width: 0;
-    padding: 15px 20px 14px;
-    border: 1px solid var(--rd-line);
-    border-radius: 12px;
-    background: var(--rd-panel);
-  }
-  .repository-page-cards > li:hover {
-    background: var(--rd-panel-2);
-    border-color: var(--rd-line-2);
   }
   .rd-seg {
     display: inline-flex;
@@ -393,7 +378,6 @@
     .repository-toolbar > button { flex: 1; }
     .repository-directory-list > li { flex-wrap: wrap; gap: 10px; padding: 14px; }
     .repository-name-link { font-size: 15px; }
-    .repository-page-cards > li { padding: 13px 14px; }
     .repository-row-title { font-size: 14px; }
     .repository-recent-rows > li { flex-wrap: wrap; gap: 8px; }
     .rd-last-opened { width: 100%; padding-left: 34px; }

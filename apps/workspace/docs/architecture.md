@@ -163,7 +163,7 @@ shared → features → modes → routes → app
 
 `modes/registry.ts` 的静态 `ModeDefinition` 要求 `label`、`messages`、`Shell` 和 `pages`。
 `pages` 包含 home、space、folder、settings、members、trash、worktrees、issues（创建／标签页外壳）、
-issueList、issueDetail、repositories、recent、apps；两种 mode 实现同一组 props。`modes/workspace-layout.tsx` 负责 session、
+issueList、issueDetail、repositories、recent；两种 mode 实现同一组 props。`modes/workspace-layout.tsx` 负责 session、
 访客外壳与按 mode key 重挂载 Shell；路由中的旧布局入口仅转发，mode 页面不导入 routes。
 
 `shared` 不依赖 features、modes、routes、app；features 不依赖 modes、routes、app；
@@ -185,15 +185,14 @@ mode 不依赖 routes 或 app，也不导入另一个 mode。routes 只通过 re
 Repository Shell 由纯函数 `resolveFrame` 在 home、global、repository、document、immersive 五种
 外壳之间选择：全局页面共用顶栏 `TopBar`，仓库内页面由外壳渲染 `RepositoryMasthead`（标题与 Tabs），
 页面不再各自挂载 Tabs。`/repositories` 是 Repository 目录入口，Wiki 将其导向首页；`/recent`
-按 mode 分派，Wiki 保留到首页的跳转。`/apps` 在 Repository 中默认展示目录，显式选中 Node
-后才挂载 `modes/html-app-page.tsx` 的嵌入查看器组合。该组合位于 modes 层，features 不反向依赖布局。
-文件编辑器与嵌入查看器保留既有运行时和外壳语义。注册表仍同步加载。
+按 mode 分派，Wiki 保留到首页的跳转。仓库 Pages 按 Space 查询 HTML 页面，Wiki 通过文件树访问页面。
+两种模式均通过 `/nodes/$nodeId` 打开文件。注册表仍同步加载。
 
 Repository 首页 Recent、Worktree、Issue 使用独立有限摘要 query（上限分别为 12、100、100），
 key 保留既有失效前缀并与 infinite 列表 key 分开，避免返回首页或变更订阅触发已加载多页的顺序重取。
 仓库页的 14 天活动图、待合并文件标记和成员数由 `modes/repository/data` 从现有 Worktree、Issue 与成员
 接口派生；按时间窗扫描时每个来源最多 5 页，超出时以 `complete: false` 在界面上标明数据不完整。
-完整列表保留服务端 cursor；没有服务端全文搜索的 Recent / Pages 明示仅搜索已加载内容。
+完整列表保留服务端 cursor；没有服务端全文搜索的 Recent 明示仅搜索已加载内容。
 PR 摘要仅依据 `capabilities.review` 提供审阅链接；直接 Worktree 深链按 ID 读取，不依赖首屏列表中
 是否存在该任务，再解析仓库上下文并保留返回筛选参数。
 模式分层背景见 [UI Mode 解耦](proposals/ui-mode-decoupling.md)。

@@ -1,9 +1,9 @@
 # Workspace view: Wiki and Repository modes
 
 On the first signed-in visit to Home, a new browser offers both views. The user can switch views later in Application settings. `Repository` (the default) is a
-repository-style workspace with a top bar (OfficeLab mark, search, Home, Pull requests, Issues,
-Recent and Pages) over the same data. `Wiki` is a file-tree workspace with a sidebar of Personal
-Space, Team Spaces and Pages. The choice is stored per browser and survives a reload.
+repository-style workspace with a top bar (OfficeLab mark, search, Home, Pull requests, Issues and
+Recent) over the same data. `Wiki` is a file-tree workspace with a sidebar of Personal
+Space and Team Spaces. The choice is stored per browser and survives a reload.
 
 ## Sub-features
 
@@ -13,14 +13,14 @@ Space, Team Spaces and Pages. The choice is stored per browser and survives a re
 - `mode-switch-repository` switches back to Repository.
 - `mode-repo-directory` searches and creates repositories on `/repositories`.
 - `mode-repo-pulls` lists and opens pull requests on `/worktrees`.
-- `mode-repo-views` renders `/home`, `/issues`, `/recent` and `/apps` in the Repository shell.
+- `mode-repo-views` renders `/home`, `/issues` and `/recent` in the Repository shell.
 
 ## How to get to it (user POV)
 
 - Repository mode: `Account` (avatar, top right) → `Application settings`. The top bar has no gear.
 - Wiki mode: the `Application settings` gear in the page header.
 - Either way the dialog has a `Workspace view` control with `Wiki` and `Repository`.
-- Repository routes: `/home`, `/repositories`, `/worktrees`, `/issues`, `/recent`, `/apps`.
+- Repository routes: `/home`, `/repositories`, `/worktrees`, `/issues`, `/recent`.
 
 ## Driving it with agent-browser and uvw
 
@@ -44,7 +44,7 @@ Preconditions:
 - **Repository default.** After confirming the default on `$ORIGIN/home`,
   `agent-browser eval 'document.documentElement.dataset.uiMode'` prints `repository`. The top bar
   has a link `OfficeLab`, a searchbox `Find a repository…`, a `Main navigation` with `Home`,
-  `Pull requests`, `Issues`, `Recent` and `Pages`, and a button `Account`. The Home rail is the
+  `Pull requests`, `Issues` and `Recent`, and a button `Account`. The Home rail is the
   region `Your repositories` with `Verify Team`. Run
   `agent-browser screenshot "$EVIDENCE/mode-repository-home.png"`.
 - **Open settings.** Run `agent-browser find role button click --name "Account"`, then
@@ -80,8 +80,7 @@ Preconditions:
   `$EVIDENCE/mode-repository-pr-open.png`, then confirm the number with
   `$V cli mode-repo-pr-view pr view <n> -R $O/verify-team --json`.
 - **Other views.** `agent-browser open` each of `/issues` (heading `Issues`, textbox `Search issues`,
-  `Open 1` / `Closed 0`), `/recent` (heading `Recent`, textbox `Search by name…`) and `/apps`
-  (heading `Pages`, `No pages yet`), and screenshot each as `$EVIDENCE/mode-repository-<route>.png`.
+  `Open 1` / `Closed 0`) and `/recent` (heading `Recent`, textbox `Search by name…`), and screenshot each as `$EVIDENCE/mode-repository-<route>.png`.
 
 ## Gotchas
 
@@ -90,8 +89,8 @@ Preconditions:
   saves the mode and sets `univer-workspace-view-onboarding-complete` to `true`.
 - To start another journey in Wiki mode, set `univer-workspace-layout-theme` to `wiki` on the
   test origin. On the first visit to Home, confirm Wiki with `Enter workspace`.
-- In Wiki mode `/repositories` and `/recent` redirect to `/home`. `/worktrees`, `/issues` and
-  `/apps` stay on their route. Assert on those pages in Repository mode.
+- In Wiki mode `/repositories` and `/recent` redirect to `/home`. `/worktrees` and `/issues`
+  stay on their route. Assert on those pages in Repository mode.
 - `Find a repository…` exists twice on Repository Home (top-bar search and the rail filter), so
   `find` may report two matches. On `/repositories` use the placeholder `Find a name or description…`.
 - Issues and pull requests share `#N`. After creating Issue `#1`, the seeded PR is `#2`, not

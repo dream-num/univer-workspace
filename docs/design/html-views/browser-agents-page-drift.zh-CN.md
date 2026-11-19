@@ -35,7 +35,7 @@ Agent 最后建了 Slide 或 Board。
 ### 2.1 产物
 
 HTML View 是一个名字以 `.univer.html` 结尾的 **Blob**，不是 Univer Unit。它绑定实时 Sheet 数据，
-在仓库的 Pages tab 里展示（`apps/workspace/web/src/features/html-views/app-tree.ts:1`）。
+在仓库的 Pages tab 里展示（`apps/workspace/web/src/modes/repository/pages/space/apps-view.tsx`）。
 它不进 Worktree，`html_view_create` 校验通过后直接发布，不经过 PR 评审。
 
 ### 2.2 Skill 与工具

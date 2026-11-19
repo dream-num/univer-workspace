@@ -4,7 +4,6 @@ import {
   Bot,
   CircleDot,
   House,
-  LayoutGrid,
   Menu,
   MessageCircle,
   PanelLeftClose,
@@ -18,7 +17,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
-import { AppsSidebarSection } from "../../features/html-views/apps-sidebar";
 import { IssuesSidebarSection } from "../../features/issues";
 import { spaceQueryOptions, mySpacesQueryOptions } from "../../features/spaces";
 import { WorkspaceNavigationTree } from "../../features/nodes";
@@ -188,7 +186,6 @@ export function WikiShell({
               label={space.name}
             />
           ))}
-          <NavLink to="/apps" selected={selectedView === "apps"} collapsed icon={<LayoutGrid />} label={t("pages")} />
           <NavLink
             to="/issues"
             selected={selectedView === "issues"}
@@ -207,7 +204,6 @@ export function WikiShell({
             selectedNodePath={selectedNodePath}
             storageScope={currentSession.user.id}
           />
-          <AppsSidebarSection storageScope={currentSession.user.id} />
           <IssuesSidebarSection storageScope={currentSession.user.id} />
         </>
       )}
@@ -415,7 +411,6 @@ export function WikiShell({
 
 function workspaceViewTitle(view: WorkspaceView | undefined, t: (key: MessageKey) => string): string {
   if (view === "home") return t("home");
-  if (view === "apps") return t("pages");
   if (view === "worktrees") return t("workbench");
   if (view === "trash") return t("trash");
   if (view === "members") return t("members");

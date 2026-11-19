@@ -33,7 +33,7 @@ whose work a human approves.
 - The product has two UI modes over the same data. Wiki mode is a file-tree workspace.
   Repository mode, the default, is modeled on GitHub: a Home dashboard, a repository
   directory, repository pages with Code / Issues / Pull requests / Pages / Settings tabs,
-  Pull request review, Issues, Recent and Pages.
+  Pull request review, Issues and Recent.
 - Repository mode keeps GitHub's habits and flow on purpose; its visual language is open
   to replacement.
 - Content lives in Spaces (Personal and Team). A Space holds a hierarchy of Nodes; a Node

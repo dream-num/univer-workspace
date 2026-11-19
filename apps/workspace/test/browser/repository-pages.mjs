@@ -58,9 +58,13 @@ test("Pages keeps navigation, page links, local defaults, copying, and narrow-sc
     browser("wait", "--text", "2 pages.");
     assert.equal(
       evaluate(
-        `(() => { const links = [...document.querySelectorAll('nav[aria-label="Repository"] a')]; const index = links.findIndex(a => a.textContent === 'Pages'); return links[index - 1].textContent.trim() === 'Pull requests' && links[index].getAttribute('aria-current') === 'page'; })()`,
+        `document.querySelector('nav[aria-label="Repository"] a[aria-current="page"]').textContent.trim()`,
       ),
-      true,
+      "Pages",
+    );
+    assert.equal(
+      evaluate(`document.querySelector('nav[aria-label="Main navigation"] a[href="/apps"]')`),
+      null,
     );
     const heading = "#repository-pages-heading";
     assert.equal(evaluate(`document.querySelector('${heading}').textContent.trim()`), "Pages");
@@ -101,8 +105,8 @@ test("Pages keeps navigation, page links, local defaults, copying, and narrow-sc
         `Overflow at ${width}px`,
       );
     }
-    browser("find", "role", "link", "click", "--name", "Visit page", "--exact");
-    browser("wait", "--url", "**/nodes/**?view=immersive");
+    browser("click", `${section} a[href$="?view=immersive"]`);
+    browser("wait", "--url", newDefault);
     waitForPage();
     assert.equal(browser("get", "url").url, newDefault);
     for (const url of links) {
@@ -116,6 +120,24 @@ test("Pages keeps navigation, page links, local defaults, copying, and narrow-sc
     browser("open", `${origin}/spaces/${empty.id}?view=apps`);
     browser("wait", "--text", "No pages yet");
     assert.equal(evaluate(`document.querySelectorAll('${section} button').length`), 0);
+    evaluate("localStorage.setItem('univer-workspace-layout-theme', 'wiki')");
+    browser("open", `${origin}/spaces/${space.id}`);
+    browser("wait", 'a[aria-label="Handbook.univer.html"]');
+    assert.equal(evaluate(`document.querySelector('aside a[href="/apps"]')`), null);
+    browser("click", 'a[aria-label="Handbook.univer.html"]');
+    waitForPage();
+
+    const nodeId = new URL(links[0]).pathname.split("/").at(-1);
+    for (const path of [
+      "/apps",
+      "/apps?q=Handbook",
+      `/apps?spaceId=${space.id}`,
+      `/apps?node=${nodeId}`,
+    ]) {
+      browser("open", origin + path);
+      browser("wait", "--text", "Not Found");
+      assert.equal(browser("get", "url").url, origin + path);
+    }
   } finally {
     browser("close");
   }

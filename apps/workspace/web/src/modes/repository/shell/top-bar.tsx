@@ -24,7 +24,6 @@ const links = [
   { view: "worktrees", to: "/worktrees", label: "repositoryPullRequests" },
   { view: "issues", to: "/issues", label: "issues" },
   { view: "recent", to: "/recent", label: "recent" },
-  { view: "apps", to: "/apps", label: "pages" },
 ] as const;
 
 export function TopBar({
@@ -55,7 +54,7 @@ export function TopBar({
                 agents: undefined,
                 issues: "issues",
                 prs: "worktrees",
-                apps: "apps",
+                apps: undefined,
                 files: undefined,
                 settings: undefined,
               } as const

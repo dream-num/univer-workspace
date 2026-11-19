@@ -128,6 +128,7 @@ function capture(mode, slug, path, mobile = false, prepare) {
     };
   })()`);
   assert.equal(value.url, `${origin}${path}`, `${mode}/${slug} 最终 URL`);
+  assert.equal(evaluate("document.querySelector('a[href=\"/apps\"]') === null"), true, `${mode}/${slug} 全局 Pages 入口已移除`);
   if (mode === "wiki" && !mobile) assert.equal(value.sidebar, true, `${slug} wiki 侧栏`);
   if (mode === "repository") {
     Object.assign(value, evaluate(`(() => {
@@ -145,14 +146,13 @@ function capture(mode, slug, path, mobile = false, prepare) {
     })()`));
     assert.deepEqual(value.brand, ["OfficeLab"], `${slug} repository 品牌`);
     assert.equal(value.sidebar, false, `${slug} repository 顶栏导航`);
-    assert.deepEqual(value.navigation, slug === "sheet" ? [] : ["Home", "Pull requests", "Issues", "Recent", "Pages"], `${slug} 主导航`);
+    assert.deepEqual(value.navigation, slug === "sheet" ? [] : ["Home", "Pull requests", "Issues", "Recent"], `${slug} 主导航`);
     assert.deepEqual(value.searchPlaceholders, slug === "sheet" ? [] : ["Search repositories"], `${slug} 顶栏搜索`);
     const pageSearch = {
       home: "Find a repository…",
       "home-shared": "Find a repository…",
       repositories: "Find a name or description…",
       recent: "Search by name…",
-      apps: "Search by name…",
       team: "Search files",
       folder: "Search files",
       worktrees: "Search pull requests",
@@ -339,7 +339,6 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
       ["issues", `${team}/issues`],
       ["worktrees", "/worktrees"],
       ["worktrees-team", `/worktrees?spaceId=${fixture.teamId}`],
-      ["apps", "/apps"],
     ];
     for (const mode of MODES) {
       mkdirSync(join(baseline, mode), { recursive: true, mode: 0o700 });
@@ -372,7 +371,7 @@ test("UI mode 页面、移动端截图及写操作与基线一致", { timeout: 6
         browser("wait", "[role=dialog]");
       });
       if (mode === "wiki") {
-        capture(mode, "sidebar-collapsed", "/apps", false, () => {
+        capture(mode, "sidebar-collapsed", "/home", false, () => {
           click("button", "Collapse main navigation");
           browser("wait", "button[aria-label='Expand main navigation']");
         });
