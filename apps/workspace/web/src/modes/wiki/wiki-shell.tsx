@@ -2,7 +2,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, Navigate, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Bot,
-  CircleDot,
   House,
   Menu,
   MessageCircle,
@@ -17,7 +16,6 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { sessionQueryKey, sessionQueryOptions } from "../../features/auth";
-import { IssuesSidebarSection } from "../../features/issues";
 import { spaceQueryOptions, mySpacesQueryOptions } from "../../features/spaces";
 import { WorkspaceNavigationTree } from "../../features/nodes";
 import { isOpenWorktree, useWorktreeChangeFeed, worktreeListQueryOptions } from "../../features/worktrees";
@@ -186,26 +184,16 @@ export function WikiShell({
               label={space.name}
             />
           ))}
-          <NavLink
-            to="/issues"
-            selected={selectedView === "issues"}
-            collapsed
-            icon={<CircleDot />}
-            label={t("issues")}
-          />
         </div>
       ) : (
-        <>
-          <WorkspaceNavigationTree
-            personalSpace={personalSpace}
-            teamSpaces={teamSpaces}
-            selectedSpaceId={selectedSpaceId}
-            selectedNodeId={selectedNodeId}
-            selectedNodePath={selectedNodePath}
-            storageScope={currentSession.user.id}
-          />
-          <IssuesSidebarSection storageScope={currentSession.user.id} />
-        </>
+        <WorkspaceNavigationTree
+          personalSpace={personalSpace}
+          teamSpaces={teamSpaces}
+          selectedSpaceId={selectedSpaceId}
+          selectedNodeId={selectedNodeId}
+          selectedNodePath={selectedNodePath}
+          storageScope={currentSession.user.id}
+        />
       )}
 
       {trashSpaceId ? (
@@ -414,6 +402,5 @@ function workspaceViewTitle(view: WorkspaceView | undefined, t: (key: MessageKey
   if (view === "worktrees") return t("workbench");
   if (view === "trash") return t("trash");
   if (view === "members") return t("members");
-  if (view === "issues") return t("issues");
   return t("home");
 }

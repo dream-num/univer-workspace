@@ -1,7 +1,7 @@
 import type { PropsWithChildren, ReactNode } from "react";
 import type { RepositoryTab, RepositoryBreadcrumb } from "./repository/repository-tabs";
 
-export type WorkspaceView = "home" | "trash" | "worktrees" | "members" | "issues";
+export type WorkspaceView = "home" | "trash" | "worktrees" | "members";
 export type RepositoryGlobalView =
   | "home"
   | "agents"

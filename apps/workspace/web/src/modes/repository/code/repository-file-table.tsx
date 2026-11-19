@@ -165,7 +165,7 @@ export function RepositoryFileTable({
             (change) => change.scope === "self" && change.kind === "deleted",
           );
           return (
-            <NodeActionsMenu key={node.id} node={node} onEdit={() => edit.onEdit(node)}>
+            <NodeActionsMenu key={node.id} node={node} showIssueAction onEdit={() => edit.onEdit(node)}>
               {(actions) => (
                 <div className={`rd-frow${deleted ? " rd-deleted" : ""}`}>
                   <div className="rd-fname">

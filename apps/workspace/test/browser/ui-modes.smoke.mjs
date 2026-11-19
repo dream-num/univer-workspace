@@ -129,7 +129,10 @@ function capture(mode, slug, path, mobile = false, prepare) {
   })()`);
   assert.equal(value.url, `${origin}${path}`, `${mode}/${slug} 最终 URL`);
   assert.equal(evaluate("document.querySelector('a[href=\"/apps\"]') === null"), true, `${mode}/${slug} 全局 Pages 入口已移除`);
-  if (mode === "wiki" && !mobile) assert.equal(value.sidebar, true, `${slug} wiki 侧栏`);
+  if (mode === "wiki" && !mobile) {
+    assert.equal(value.sidebar, true, `${slug} wiki 侧栏`);
+    assert.equal(evaluate(`document.querySelector('aside nav a[href*="/issues"]')`), null, `${slug} Wiki Issues 入口`);
+  }
   if (mode === "repository") {
     Object.assign(value, evaluate(`(() => {
       const visible = selector => [...document.querySelectorAll(selector)].filter(e => e.getClientRects().length > 0);

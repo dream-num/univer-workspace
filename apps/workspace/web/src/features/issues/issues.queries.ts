@@ -77,20 +77,6 @@ export function issueCountsQueryOptions(spaceId: string) {
   });
 }
 
-/** The first page of open Issues shown under a Space in the Wiki sidebar. */
-export function sidebarIssuesQueryOptions(spaceId: string) {
-  return queryOptions({
-    queryKey: [...issuesQueryKey, "sidebar", spaceId] as const,
-    queryFn: async () => {
-      const { data, error } = await api.GET("/api/spaces/{spaceId}/issues", {
-        params: { path: { spaceId }, query: { limit: 20 } },
-      });
-      if (error) throw apiError(error);
-      return data;
-    },
-  });
-}
-
 export function issueQueryOptions(spaceId: string, number: number) {
   return queryOptions({
     queryKey: [...issuesQueryKey, "detail", spaceId, number] as const,
