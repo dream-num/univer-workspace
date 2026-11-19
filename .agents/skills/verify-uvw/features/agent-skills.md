@@ -28,11 +28,14 @@ and the model can read instructions on demand without changing earlier request p
 - AS20 rejects through the browser and reads back the rejected state.
 - AS21 invokes the built-in skill-creator, interviews, creates a real draft in Auto and publishes it.
 - AS22 denies the same draft creation in Ask with the switch-to-Auto message.
+- AS23 gives an Auto session its own pull request, listed under **Pull requests** in the session rail.
 
 ## How to get to it (user POV)
 
-Sign in, click **Agents** in the top bar, and open **Model settings**. A repository's
-**Agents** tab starts a repository session. The global composer is on **Home** after
+Sign in, click **Agents** in the top bar, and open **Model settings**. The top-bar
+**Agents** button and a repository's **Agents** tab exist in Repository mode. The tab starts
+a repository session. The composer offers Mode, Model and, on Home, Repository; there is no
+pull request picker, because each Auto session opens its own pull request. The global composer is on **Home** after
 clicking the top-bar **Agents** button. Send a message to open a session with the
 follow-up composer and a **Skills** section in the session rail.
 
@@ -95,11 +98,16 @@ send() { edit '[contenteditable=true]' "$1"; agent-browser press Enter; agent-br
 follow() { agent-browser fill textarea "$1"; agent-browser press Enter; agent-browser wait --fn 'document.querySelector("textarea").value === "" && !document.querySelector("button[aria-label=Stop]")'; }
 ```
 
-Sign in through the browser. Wait for the actual label after the first Vite load.
+Sign in through the browser. Wait for the actual label after the first Vite load. Pin
+Repository and mark the first-visit view choice done before signing in; otherwise `/home`
+shows only the `Choose your workspace view` page with `Enter workspace`, and the Agents button
+and composer never appear.
 
 ```bash
 agent-browser open "$ORIGIN/login"
 agent-browser storage local set univer-workspace-language en-US
+agent-browser storage local set univer-workspace-layout-theme repository
+agent-browser storage local set univer-workspace-view-onboarding-complete true
 agent-browser reload
 agent-browser wait --text Username
 agent-browser find label Username fill "$O"
@@ -273,6 +281,8 @@ MAIN_BROWSER=$AGENT_BROWSER_SESSION
 export AGENT_BROWSER_SESSION="verify-uvw-$VERIFY_UVW_RUN-as8"
 agent-browser open "$ORIGIN/login"
 agent-browser storage local set univer-workspace-language en-US
+agent-browser storage local set univer-workspace-layout-theme repository
+agent-browser storage local set univer-workspace-view-onboarding-complete true
 agent-browser reload
 agent-browser wait --text Username
 agent-browser find label Username fill "$O-outsider"
@@ -630,8 +640,29 @@ one text response acknowledging the denial. Send
 `/skill-creator make a weekly report skill`. Capture `as22-denied.png` and the
 request summary. The tool result must say `This connection is not authorized for
 write access. In the Workspace Agent's Ask mode, switch to Auto and try again.`
-No successful draft result may appear. Stop this
-run's mock and use `verify-uvw down` after collecting evidence.
+No successful draft result may appear.
+
+**AS23. One pull request per session.** Start a fresh repository session in Auto. The mock
+calls `pr_create` once, then answers. Pad the idempotency key: it needs 16 to 200 URL-safe
+characters, and a short run ID makes `as23-$VERIFY_UVW_RUN` too short.
+
+```bash
+mock as23 "[{\"tool\":{\"name\":\"pr_create\",\"arguments\":{\"repo\":\"$SPACE\",\"title\":\"AS23 session PR\",\"idempotency_key\":\"as23-session-pr-$VERIFY_UVW_RUN\"}}},{\"text\":\"AS23 done.\"}]"
+repo
+agent-browser find role combobox click --name Mode --exact
+agent-browser wait '[role=option]'
+agent-browser find role option click --name Auto --exact
+send 'AS23 open a pull request.'
+agent-browser wait --text 'AS23 done.'
+shot as23
+$V cli as23-pr pr list -R "$REPO" --json
+```
+
+Pass when the `pr_create` row reads **Completed**, the rail's **Pull requests** heading lists
+`#1 AS23 session PR · Review`, request 1 contains `Call pr_create before the first file edit`,
+and `as23-pr.out` lists a `draft` PR (its title is the `name` field). In Ask, the same script's
+tool result is the AS22 switch-to-Auto denial and no PR is created. The composer resets to Ask
+for each new session. Stop this run's mock and use `verify-uvw down` after collecting evidence.
 
 ## Gotchas
 

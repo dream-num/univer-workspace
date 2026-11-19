@@ -12,7 +12,10 @@ const helper = fileURLToPath(new URL("./verify-uvw", import.meta.url));
 const uvw = (...args) => JSON.parse(execFileSync(helper, ["uvw", ...args, "--json"], {
   encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], maxBuffer: 16 * 1024 * 1024,
 }));
-const repositories = uvw("repo", "list", "--owner", "@me", "--type", "personal");
+// The list also holds the Personal Spaces of agents this user claimed; keep the user's own.
+const { subject } = uvw("auth", "status");
+const repositories = uvw("repo", "list", "--owner", "@me", "--type", "personal")
+  .filter(({ owner }) => owner?.id === subject.id);
 assert.equal(repositories.length, 1, "Expected the signed-in user's personal repository");
 const { id: space, fullName: repo } = repositories[0];
 const directory = mkdtempSync(join(tmpdir(), "uvw-seed-sheets-"));
