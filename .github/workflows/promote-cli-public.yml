@@ -63,7 +63,7 @@ jobs:
           # Existing insider credential; never passed to the public npm command.
           INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/release/promote-cli-public.mjs --package="$PROMOTION_PACKAGE" --version="$PROMOTION_VERSION" --latest="$PROMOTION_LATEST"
-      - name: Publish original tarball with npm OIDC and verify public integrity
+      - name: Submit original tarball with npm OIDC (public verification is separate)
         if: ${{ !inputs.dry_run }}
         run: node scripts/release/promote-cli-public.mjs --package="$PROMOTION_PACKAGE" --version="$PROMOTION_VERSION" --latest="$PROMOTION_LATEST" --publish
       - name: Upload promotion evidence and original tarball

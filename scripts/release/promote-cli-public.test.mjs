@@ -228,7 +228,7 @@ test("copies to another repository and scoped package without code changes", asy
   f.state.exists = false;
   const result = await publishPromotion(f);
   assert.equal(result.package, "@other-scope/tool");
-  assert.equal(result.latestVerified, true);
+  assert.equal(result.latestVerified, false);
   assert.deepEqual(f.state.writes, ["publish:latest"]);
   assert.ok(f.calls.some(({ url }) => url === `${PUBLIC}%40other-scope%2Ftool/${version}`));
   await assert.rejects(publishPromotion({ ...f, env }), /this workflow run/u);
@@ -301,7 +301,7 @@ test("rejects missing credentials, expanded plans, corrupt bytes, and wrong sour
   }
 });
 
-test("new versions and first publication use an explicit tag and read back latest intent", async (t) => {
+test("new versions and first publication submit an explicit tag without claiming verification", async (t) => {
   for (const latest of [true, false])
     for (const newPackage of [true, false]) {
       const f = await prepared(t, { latest });
@@ -311,9 +311,9 @@ test("new versions and first publication use an explicit tag and read back lates
         f.state.tags = {};
       }
       const result = await publishPromotion(f);
-      assert.equal(result.action, "published");
-      assert.equal(result.latestVerified, latest);
-      assert.equal(result.publicRegistryWriteVerified, true);
+      assert.equal(result.action, "submitted");
+      assert.equal(result.latestVerified, false);
+      assert.equal(result.publicRegistryWriteVerified, false);
       assert.deepEqual(f.state.writes, [`publish:${latest ? "latest" : "promoted"}`]);
       assert.equal(f.state.tags.latest, latest ? version : newPackage ? undefined : "0.6.0");
     }
@@ -328,7 +328,7 @@ test("existing identical version updates latest only when requested and needed",
       const shouldWrite = latest && !alreadyLatest;
       assert.equal(result.action, "reused");
       assert.equal(result.tagUpdated, shouldWrite);
-      assert.equal(result.publicRegistryWriteVerified, shouldWrite);
+      assert.equal(result.publicRegistryWriteVerified, false);
       assert.deepEqual(f.state.writes, shouldWrite ? ["latest"] : []);
       assert.equal(f.state.tags.latest, latest || alreadyLatest ? version : "0.6.0");
     }
@@ -354,60 +354,14 @@ test("rejects context/run/version/hash/public conflicts before any write", async
   assert.deepEqual(f.state.writes, []);
 });
 
-test("wrong version/tag readback and tag write failures cannot report success", async (t) => {
+test("tag write failure fails submission", async (t) => {
   const f = await prepared(t, { latest: true });
-  await assert.rejects(publishPromotion({ ...f, tagger: async () => {} }), /latest readback/u);
   let writes = 0;
-  await assert.rejects(
-    publishPromotion({
-      ...f,
-      tagger: async () => {
-        writes += 1;
-        throw new Error("tag denied");
-      },
-    }),
-    /tag denied/u,
-  );
+  await assert.rejects(publishPromotion({ ...f, tagger: async () => {
+    writes += 1;
+    throw new Error("tag denied");
+  } }), /tag denied/u);
   assert.equal(writes, 1);
-  const changedIntegrity = await prepared(t, { latest: true });
-  await assert.rejects(
-    publishPromotion({
-      ...changedIntegrity,
-      tagger: async (...args) => {
-        await changedIntegrity.tagger(...args);
-        changedIntegrity.metadata.dist.integrity = "sha512-wrong-after-tag-write";
-      },
-    }),
-    /exact-version\/integrity readback/u,
-  );
-  f.state.exists = false;
-  await assert.rejects(
-    publishPromotion({ ...f, publisher: async () => {} }),
-    /exact-version\/integrity readback/u,
-  );
-  const noLatest = await prepared(t);
-  noLatest.state.exists = false;
-  await assert.rejects(
-    publishPromotion({
-      ...noLatest,
-      publisher: async () => {
-        noLatest.state.exists = true;
-      },
-    }),
-    /promoted tag readback/u,
-  );
-  const changedLatest = await prepared(t);
-  changedLatest.state.exists = false;
-  await assert.rejects(
-    publishPromotion({
-      ...changedLatest,
-      publisher: async (...args) => {
-        await changedLatest.publisher(...args);
-        changedLatest.state.tags.latest = version;
-      },
-    }),
-    /latest readback/u,
-  );
 });
 
 test("public read failures and uncertain upload failures stop without retry", async (t) => {
@@ -660,6 +614,29 @@ test("allowlist is not a destination: actual Location and paths stay intact", as
     assert.deepEqual(calls,[`${INSIDER}original.tgz`,target]);
     assert.equal(bytes.toString(),"original");
   }
+});
+
+test("delayed public availability does not fail submission or cause a post-upload registry read", async (t) => {
+  const f = await prepared(t, { latest: true });
+  f.state.exists = false;
+  let submitted = false;
+  let writes = 0;
+  const result = await publishPromotion({ ...f, publisher: async () => { submitted = true; writes++; }, fetcher: async (url, options) => {
+    assert.equal(submitted, false, "submission must not perform post-upload reads");
+    return f.fetcher(url, options);
+  }});
+  assert.equal(result.action, "submitted");
+  assert.equal(result.publicRegistryWriteVerified, false);
+  assert.equal(writes, 1);
+});
+
+test("a failed new submission clears a previous receipt without deleting the prepared artifact", async (t) => {
+  const f = await prepared(t);
+  await publishPromotion(f);
+  await assert.rejects(publishPromotion({ ...f, env: {} }), /manual dispatch/u);
+  await assert.rejects(readFile(join(f.directory, "submission.json")), /ENOENT/u);
+  assert.deepEqual(await readFile(join(f.directory, "original.tgz")), f.bytes);
+  assert.equal(JSON.parse(await readFile(join(f.directory, "promotion.json"), "utf8")).version, version);
 });
 
 test("public publication explicitly requests provenance", () => {

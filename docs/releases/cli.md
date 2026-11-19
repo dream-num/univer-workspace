@@ -60,15 +60,14 @@ code, without printing credentials or arbitrary server/error bodies.
 `latest` defaults to **true** and has these explicit semantics:
 
 - **false, new public version:** publish with `--tag=promoted`, including the first
-  version of a package. Read back `promoted` and verify public `latest` did not change.
+  version of a package. Verify `promoted` and unchanged `latest` in the separate read-only operation.
 - **false, existing public version:** verify identical original-package integrity,
   reuse it, and leave dist-tags unchanged. This does not remove an existing `latest`.
 - **true:** require a stable `X.Y.Z` equal to insider's current `latest`, so an
   rc/beta source cannot bypass the source latest-policy check. Publish a missing
   version with `--tag=latest`. For an identical existing version whose public
-  `latest` differs, actually run `npm dist-tag add <name>@<version> latest` and read
-  back `latest`; if it already matches, no write is needed. Any failed write or
-  mismatching public version, integrity, or tag readback fails the run.
+  `latest` differs, actually run `npm dist-tag add <name>@<version> latest` then separately verify
+  `latest`; if it already matches, no write is needed. A failed write fails submission; public version, integrity and tag verification is separate.
 
 The validation step uses the existing insider `NPM_TOKEN` repository secret only
 for the insider dry-run request. After separately authorizing a public release,
@@ -111,3 +110,16 @@ should not be required universally for merging, since unrelated changes skip the
 These in-workflow guards prevent accidental invocation, not a repository writer
 from changing the workflow itself. Required reviews/checks and protected deployment
 environments are separate repository policies; this workflow does not configure them.
+
+## Submission and public verification are separate
+
+A successful npm upload command returns `submitted`, not proof of public availability.
+The promotion run saves `submission.json` with the original hash, requested tag and
+previous latest value, then ends without a post-upload registry read. An existing
+identical version returns `reused`; `tagUpdated` records any requested latest command.
+Neither result claims `publicRegistryWriteVerified` or `latestVerified`.
+
+Public visibility is a separate read-only follow-up, outside the promotion command
+and workflow. An npm upload failure may have an unknown outcome. There is no
+cross-run duplicate-submission gate; do not resubmit to resolve pending review.
+Inspect npm status separately. No poller or notification service is added.

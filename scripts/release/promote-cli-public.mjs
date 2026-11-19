@@ -340,6 +340,8 @@ export async function publishPromotion({
   publisher = publishTarball,
   tagger = setLatest,
 }) {
+  // A failed new attempt must not leave a previous successful submission receipt.
+  await rm(join(directory, "submission.json"), { force: true });
   validateSelection(packageName, version, latest);
   assertPublishContext(env);
   const record = JSON.parse(await readFile(join(directory, RECORD), "utf8"));
@@ -374,28 +376,16 @@ export async function publishPromotion({
   } else {
     // No blind retry on publish failure: its outcome may be uncertain.
     await publisher(path, env, record.tag);
-    action = "published";
+    action = "submitted";
   }
-  assertPublicVersion(await publicVersion(packageName, version, fetcher), record);
   if (latest && existing && before.latest !== version) {
     await tagger(packageName, version, env);
     tagUpdated = true;
   }
-  const after = await publicTags(packageName, fetcher);
-  if (latest ? after.latest !== version : after.latest !== before.latest) {
-    throw new Error("Public latest readback does not match the requested intent.");
-  }
-  if (!latest && action === "published" && after.promoted !== version) {
-    throw new Error("Public promoted tag readback does not match the published version.");
-  }
-  if (tagUpdated) assertPublicVersion(await publicVersion(packageName, version, fetcher), record);
-  return {
-    ...record,
-    action,
-    tagUpdated,
-    latestVerified: latest,
-    publicRegistryWriteVerified: action === "published" || tagUpdated,
-  };
+  const submission = { ...record, action, tagUpdated, previousLatest: before.latest ?? null,
+    latestVerified: false, publicRegistryWriteVerified: false };
+  await writeFile(join(directory, "submission.json"), `${JSON.stringify(submission, null, 2)}\n`);
+  return submission;
 }
 
 async function main() {
@@ -441,7 +431,7 @@ async function main() {
   if (process.env.GITHUB_STEP_SUMMARY) {
     await appendFile(
       process.env.GITHUB_STEP_SUMMARY,
-      `## Insider package public promotion\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\`\n\nValidation does not verify public write authority. Insider source is retained.\n`,
+      `## Insider package public promotion\n\n\`\`\`json\n${JSON.stringify(report, null, 2)}\n\`\`\`\n\nSubmission is not public availability. Public availability is outside promotion; do not retry publication to resolve pending review. Insider source is retained.\n`,
     );
   }
   console.log(JSON.stringify(report, null, 2));
