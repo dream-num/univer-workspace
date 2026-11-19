@@ -40,12 +40,17 @@ jobs:
       - name: Install npm with OIDC dist-tag support
         working-directory: ${{ runner.temp }}
         run: npm install --global npm@11.21.0 --registry=https://registry.npmjs.org/ --ignore-scripts --userconfig=/dev/null
+      - id: resolve
+        name: Read expected digests from exact Insider metadata
+        uses: dream-num/release-actions/assemble-npm-batch@01b090d4c7fa11fbd7610cfbcfcaa286cd0268a7
+        with:
+          selection: ${{ inputs.selection }}
       - name: Prepare and promote original Insider tarballs
-        uses: dream-num/release-actions/promote-npm@52965d107859bcd009750ca06754b6ddf7078541
+        uses: dream-num/release-actions/promote-npm@01b090d4c7fa11fbd7610cfbcfcaa286cd0268a7
         env:
           INSIDER_TOKEN: ${{ secrets.NPM_TOKEN }}
         with:
-          selection: ${{ inputs.selection }}
+          batch: ${{ steps.resolve.outputs.batch }}
           allowed_packages: univer-workspace-cli
           mode: ${{ inputs.dry_run && 'validate' || 'submit' }}
       - name: Upload batch evidence (no tarballs)

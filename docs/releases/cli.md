@@ -37,9 +37,10 @@ the same shared actions and pass multiple entries. Keep this workflow filename
 and repository unchanged for the existing npm Trusted Publisher identity.
 
 [release-actions](https://github.com/dream-num/release-actions) owns the promotion
-implementation. In one run its `promote-npm` action validates the Insider cohort plan, downloads
-each exact original archive, and matches its SHA-512 and embedded package
-identity. In submit mode it uploads those same bytes, without another download,
+implementation. The first step reads exact Insider version metadata and passes its expected
+SHA-512 to `promote-npm` without downloading a package. The promotion Action
+validates the Insider cohort plan, downloads each original archive once, and
+checks the bytes and embedded package identity against those expected values. In submit mode it uploads those same bytes, without another download,
 rebuild or repack. No one copies a plan or hash between workflow runs. Archive
 downloads do not receive the Insider credential. This checks the package being
 promoted, not independent historical build provenance.

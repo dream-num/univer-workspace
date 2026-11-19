@@ -16,11 +16,13 @@ test("credentialed workflow stays manual/default-branch only with exact selectio
   assert.doesNotMatch(gate, /github.repository ==|\|\|/u);
   assert.doesNotMatch(workflow, /pull_request:|  test:|needs: test|inputs.publish/u);
   assert.match(workflow, /selection:[\s\S]*type: string/u);
-  assert.doesNotMatch(workflow, /reviewed_batch|promotion-input|assemble-npm-batch/u);
+  assert.doesNotMatch(workflow, /reviewed_batch|promotion-input/u);
   assert.match(workflow, /dry_run:[\s\S]*default: true/u);
   assert.match(workflow, /mode: \$\{\{ inputs.dry_run && 'validate' \|\| 'submit' \}\}/u);
   assert.match(workflow, /id-token: write/u);
   assert.match(workflow, /selection: \$\{\{ inputs.selection \}\}/u);
+  assert.match(workflow, /batch: \$\{\{ steps.resolve.outputs.batch \}\}/u);
+  assert.match(workflow, /id: resolve[\s\S]*uses: dream-num\/release-actions\/assemble-npm-batch@[0-9a-f]{40}/u);
   assert.match(workflow, /allowed_packages: univer-workspace-cli/u);
   assert.match(workflow, /npm@11\.21\.0/u);
   const actions = workflow.match(/uses: dream-num\/release-actions\/promote-npm@[0-9a-f]{40}$/gmu);
