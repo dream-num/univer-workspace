@@ -632,6 +632,26 @@ describe("gateway over real HTTP and the MCP client", () => {
     },
   );
 
+  it("gives a client that reads only text every result and every error", async () => {
+    const client = await connect();
+    const text = (result: Awaited<ReturnType<typeof client.callTool>>) =>
+      z.array(z.object({ type: z.literal("text"), text: z.string() })).parse(result.content)[0]!.text;
+    const who = await client.callTool({ name: "whoami", arguments: {} });
+    expect(JSON.parse(text(who))).toEqual(who.structuredContent);
+    const missing = await client.callTool({
+      name: "repo_view",
+      arguments: { repo: "alice/missing-sensitive-argument" },
+    });
+    expect(missing.isError).toBe(true);
+    // Older SDK clients validate an error's structuredContent against the tool's outputSchema.
+    expect(missing.structuredContent).toBeUndefined();
+    expect(JSON.parse(text(missing))).toEqual({
+      code: "workspace-not-found",
+      message: "Repository not found.",
+      detail: { status: 404, path: "/api/spaces/lookup" },
+    });
+  });
+
   it("lists the selected toolsets in the fixed registry order with complete schemas and annotations", async () => {
     const names = async (suffix: string) =>
       (await (await connect({ pin: "2026-07-28" }, suffix)).listTools()).tools.map(
