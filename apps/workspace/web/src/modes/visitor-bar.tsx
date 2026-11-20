@@ -1,19 +1,17 @@
 import { Link, useLocation } from "@tanstack/react-router";
 import { UniverCliIcon } from "@univerjs/icons";
-import { ChevronDown, ChevronUp, Copy, ExternalLink } from "lucide-react";
+import { Bot, ChevronDown, ChevronUp, Copy, CopyPlus, Flag, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import type { components } from "../../../generated/http/schema.js";
-import { HandToAgentButton } from "../features/nodes/hand-to-agent";
-import { RemixButton } from "../features/nodes/remix";
-import { ReportNodeButton } from "../features/nodes/report-node-button";
+import { HandToAgentDialog } from "../features/nodes/hand-to-agent";
+import { RemixDialog, useRemix } from "../features/nodes/remix";
+import { ReportNodeDialog } from "../features/nodes/report-node-dialog";
 import { useI18n } from "../shared/i18n";
-import { Badge, Button, buttonVariants } from "../shared/ui";
+import { Badge, Button, buttonVariants, MenuContent, MenuItem, MenuRoot, MenuSeparator, MenuTrigger } from "../shared/ui";
 import { cn } from "../shared/utils/cn";
 
 const STORAGE_KEY = "univer-workspace-visitor-bar-collapsed";
 const BRAND_URL = "https://github.com/dream-num/univer-workspace";
-const HOSTED_URL = "https://space.univer.ai";
-const externalLinkClass = "inline-flex items-center gap-1 whitespace-nowrap text-foreground underline-offset-4 hover:underline [&_svg]:size-3";
 
 type NodeOwner = components["schemas"]["NodeOwner"];
 
@@ -33,6 +31,8 @@ export function VisitorBar({
 }) {
   const { t } = useI18n();
   const location = useLocation();
+  const [dialog, setDialog] = useState<"remix" | "handToAgent" | "report" | null>(null);
+  const remix = useRemix(nodeId, () => setDialog("remix"));
   const [collapsedPreference, setCollapsedPreference] = useState(() => {
     try {
       return window.sessionStorage.getItem(STORAGE_KEY) === "true";
@@ -68,87 +68,114 @@ export function VisitorBar({
       aria-label={t("madeWithWorkspace")}
       className={cn(
         "shrink-0 border-b border-border bg-background px-3 py-1.5",
-        collapsed ? "flex justify-end" : "grid grid-cols-[1fr_auto_auto] items-center gap-x-2 gap-y-1 sm:flex sm:flex-wrap",
+        collapsed ? "flex justify-end" : "relative flex items-center gap-2",
       )}
     >
       {!collapsed ? (
         <>
-          <p className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground sm:flex-1">
-            <UniverCliIcon aria-hidden="true" className="size-5 shrink-0 text-foreground" />
+          <p className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden text-xs text-muted-foreground">
+            <a
+              className="shrink-0 text-foreground"
+              href={BRAND_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t("madeWithWorkspace")}
+              title={t("madeWithWorkspace")}
+            >
+              <UniverCliIcon aria-hidden="true" className="size-5" />
+            </a>
             {owner ? (
               <>
                 <span className="min-w-0 truncate font-medium text-foreground" title={author}>
                   {author}
                 </span>
                 {owner.kind === "agent" ? (
-                  <Badge variant={owner.claimed ? "default" : "warning"}>
+                  <Badge className="shrink-0" variant={owner.claimed ? "default" : "warning"}>
                     {t(owner.claimed ? "authorAgent" : "authorUnverifiedAgent")}
                   </Badge>
                 ) : null}
               </>
             ) : null}
             {copyCount > 0 ? <span className="whitespace-nowrap">{t("copyCount", { count: copyCount })}</span> : null}
-            <a className={externalLinkClass} href={BRAND_URL} target="_blank" rel="noopener noreferrer">
-              {t("madeWithWorkspace")}
-              <span className="sr-only">{t("opensInNewTab")}</span>
-              <ExternalLink aria-hidden="true" />
-            </a>
-            <a className={cn(externalLinkClass, "max-md:hidden")} href={HOSTED_URL} target="_blank" rel="noopener noreferrer">
-              space.univer.ai
-              <span className="sr-only">{t("opensInNewTab")}</span>
-              <ExternalLink aria-hidden="true" />
-            </a>
           </p>
-          <div className="col-start-2 row-start-1 flex items-center gap-1">
-            {nodeId ? (
-              <>
-                {copyable ? <RemixButton nodeId={nodeId} /> : null}
-                <HandToAgentButton nodeId={nodeId} />
-                <ReportNodeButton nodeId={nodeId} />
-              </>
+          <div className="flex shrink-0 items-center gap-1">
+            {offerSignUp ? (
+              <nav aria-label={t("signUp")} className="flex items-center gap-1">
+                <Link
+                  to="/login"
+                  search={{ mode: "register", oauthError: undefined, returnTo: location.href }}
+                  className={cn(buttonVariants({ size: "sm" }), "no-underline")}
+                >
+                  {t("signUpFree")}
+                </Link>
+                <Link
+                  to="/login"
+                  search={{ oauthError: undefined, returnTo: location.href }}
+                  className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "no-underline")}
+                >
+                  {t("signIn")}
+                </Link>
+              </nav>
             ) : null}
+            <MenuRoot>
+              <MenuTrigger aria-label={t("moreActions")} render={<Button variant="ghost" size="icon" />}>
+                <MoreHorizontal aria-hidden="true" />
+              </MenuTrigger>
+              <MenuContent align="end">
+                {nodeId ? (
+                  <>
+                    {copyable ? (
+                      <MenuItem disabled={remix.disabled} onClick={remix.remix}>
+                        <CopyPlus aria-hidden="true" />
+                        {t(remix.isPending ? "remixCopying" : "remix")}
+                      </MenuItem>
+                    ) : null}
+                    <MenuItem onClick={() => setDialog("handToAgent")}>
+                      <Bot aria-hidden="true" />
+                      {t("handToMyAgent")}
+                    </MenuItem>
+                  </>
+                ) : null}
+                <MenuItem onClick={copyLink}>
+                  <Copy aria-hidden="true" />
+                  {t("copyLink")}
+                </MenuItem>
+                {nodeId ? (
+                  <>
+                    <MenuSeparator />
+                    <MenuItem onClick={() => setDialog("report")}>
+                      <Flag aria-hidden="true" />
+                      {t("reportFile")}
+                    </MenuItem>
+                  </>
+                ) : null}
+              </MenuContent>
+            </MenuRoot>
           </div>
-          {offerSignUp ? (
-            <nav aria-label={t("signUp")} className="col-span-full row-start-2 flex items-center gap-1">
-              <Link
-                to="/login"
-                search={{ mode: "register", oauthError: undefined, returnTo: location.href }}
-                className={cn(buttonVariants({ size: "sm" }), "no-underline")}
-              >
-                {t("signUpFree")}
-              </Link>
-              <Link
-                to="/login"
-                search={{ oauthError: undefined, returnTo: location.href }}
-                className={cn(buttonVariants({ variant: "ghost", size: "sm" }), "no-underline")}
-              >
-                {t("signIn")}
-              </Link>
-              <Button variant="ghost" size="sm" onClick={copyLink}>
-                <Copy aria-hidden="true" />
-                {t("copyLink")}
-              </Button>
-            </nav>
-          ) : null}
         </>
       ) : null}
       {offerSignUp ? (
+        <Button
+          variant="ghost"
+          size={collapsed ? "sm" : "icon"}
+          className={collapsed ? "rounded-full border border-border" : "shrink-0"}
+          aria-label={t(collapsed ? "expandVisitorBar" : "collapseVisitorBar")}
+          aria-expanded={!collapsed}
+          onClick={toggleCollapsed}
+        >
+          {collapsed ? (
+            <><UniverCliIcon aria-hidden="true" />Univer Workspace<ChevronDown aria-hidden="true" /></>
+          ) : <ChevronUp aria-hidden="true" />}
+        </Button>
+      ) : null}
+      <span role="status" className={cn("absolute top-full right-3 z-10 bg-background text-xs text-muted-foreground", (collapsed || copyState === "idle") && "sr-only")}>
+        {!collapsed && copyState !== "idle" ? t(copyState === "copied" ? "linkCopied" : "copyLinkFailed") : null}
+      </span>
+      {nodeId ? (
         <>
-          <Button
-            variant="ghost"
-            size={collapsed ? "sm" : "icon"}
-            className={collapsed ? "rounded-full border border-border" : "col-start-3 row-start-1"}
-            aria-label={t(collapsed ? "expandVisitorBar" : "collapseVisitorBar")}
-            aria-expanded={!collapsed}
-            onClick={toggleCollapsed}
-          >
-            {collapsed ? (
-              <><UniverCliIcon aria-hidden="true" />Univer Workspace<ChevronDown aria-hidden="true" /></>
-            ) : <ChevronUp aria-hidden="true" />}
-          </Button>
-          <span role="status" className={cn("col-span-full text-xs text-muted-foreground", (collapsed || copyState === "idle") && "sr-only")}>
-            {!collapsed && copyState !== "idle" ? t(copyState === "copied" ? "linkCopied" : "copyLinkFailed") : null}
-          </span>
+          <RemixDialog nodeId={nodeId} open={dialog === "remix"} onOpenChange={(open) => setDialog(open ? "remix" : null)} />
+          <HandToAgentDialog nodeId={nodeId} open={dialog === "handToAgent"} onOpenChange={(open) => setDialog(open ? "handToAgent" : null)} />
+          <ReportNodeDialog nodeId={nodeId} open={dialog === "report"} onOpenChange={(open) => setDialog(open ? "report" : null)} />
         </>
       ) : null}
     </aside>

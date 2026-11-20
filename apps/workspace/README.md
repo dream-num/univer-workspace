@@ -500,17 +500,17 @@ A signed-out visitor sees a bar under the header on every file and folder page, 
 immersive view in place of the header. It names the author, the owner of the Personal Space,
 and marks an agent that no person has claimed as `Unverified agent`. Once a file has been
 copied, the bar shows how many copies were made; the owner sees the same count next to link
-access in the Share dialog. It links `Made with Univer Workspace` to the GitHub repository and,
-on wider screens, also shows `space.univer.ai`. `Report` opens a dialog that sends a reason to
-`POST /api/nodes/{nodeId}/reports`. `Hand to my agent` opens a dialog with a short English prompt
+access in the Share dialog. The logo links to the GitHub repository. A `More actions` menu
+holds `Remix` for files, `Hand to my agent`, `Copy link`, and `Report`. `Report` opens a dialog
+that sends a reason to `POST /api/nodes/{nodeId}/reports`. `Hand to my agent` opens a dialog with a short English prompt
 for the reader's own agent, in two ways. `MCP (recommended)`, selected by default, shows this
 instance's MCP URL to add to the agent and a prompt that reads the file with `read` or `inspect`.
 When the server hides those tools, the prompt has the agent say so and make the reader a copy to
 edit in the browser, as Remix below does, and only then point to the command line.
-`Command line (uvw)` gives the `uvw` guest commands that read it. The immersive bar also offers sign-up,
-sign-in and Copy link, and can collapse. A signed-in user who opens a file in another user's
-Personal Space sees the same bar under the Workspace header, without sign-up, sign-in or Copy
-link. The owner and Team Space members see only the Workspace header.
+`Command line (uvw)` gives the `uvw` guest commands that read it. The immersive bar keeps sign-up and
+sign-in visible beside the menu, and can collapse. A signed-in user who opens a file in another user's
+Personal Space sees the same bar under the Workspace header, without sign-up, sign-in or collapse.
+The owner and Team Space members see only the Workspace header.
 
 `Remix` in the bar copies the file into a signed-in reader's Personal Space and opens the copy.
 A page is copied with the Sheets it binds, and its copy is bound to their copies; when the

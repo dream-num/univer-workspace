@@ -1,10 +1,10 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, createElement } from "react";
+import { act, createElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../shared/i18n";
-import { ReportNodeButton } from "./report-node-button";
+import { ReportNodeDialog } from "./report-node-dialog";
 
 const mocks = vi.hoisted(() => {
   const NativeRequest = globalThis.Request;
@@ -47,10 +47,15 @@ afterEach(async () => {
   container.remove();
 });
 
+function ControlledReport() {
+  const [open, setOpen] = useState(true);
+  return createElement(ReportNodeDialog, { nodeId: "node-1", open, onOpenChange: setOpen });
+}
+
 async function render() {
   const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   await act(async () => root.render(createElement(LanguageProvider, null,
-    createElement(QueryClientProvider, { client }, createElement(ReportNodeButton, { nodeId: "node-1" })))));
+    createElement(QueryClientProvider, { client }, createElement(ControlledReport)))));
 }
 function button(label: string) {
   const found = [...document.querySelectorAll("button")].find((item) => item.textContent === label);
@@ -61,7 +66,6 @@ async function settle() {
   for (let attempt = 0; attempt < 5; attempt += 1) await act(async () => new Promise((resolve) => setTimeout(resolve, 10)));
 }
 async function openAndType(reason: string) {
-  await act(async () => button("Report").click());
   const input = document.querySelector<HTMLTextAreaElement>("textarea#report-node-reason");
   if (!input) throw new Error("Missing reason");
   expect(document.querySelector('label[for="report-node-reason"]')?.textContent).toContain("Reason");

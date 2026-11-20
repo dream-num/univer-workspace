@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionQueryKey } from "../auth";
-import { LanguageProvider } from "../../shared/i18n";
+import { LanguageProvider, useI18n } from "../../shared/i18n";
 import { handToAgentPrompt } from "./hand-to-agent";
 import { nodeQueryOptions } from "./nodes.queries";
-import { RemixButton, SaveMyVersionButton, useFinishPendingCopy } from "./remix";
+import { RemixDialog, SaveMyVersionButton, useFinishPendingCopy, useRemix } from "./remix";
 
 const mocks = vi.hoisted(() => ({
   copy: vi.fn(),
@@ -36,6 +36,16 @@ async function render(signedIn: boolean, element: ReactNode, resource: unknown =
   client.setQueryData(sessionQueryKey, signedIn ? { authenticated: true, user: { id: "reader" } } : { authenticated: false });
   client.setQueryData(nodeQueryOptions("sheet").queryKey, { node: { id: "sheet", resource } } as never);
   await act(async () => root.render(createElement(QueryClientProvider, { client }, createElement(LanguageProvider, null, element))));
+}
+
+function RemixTrigger({ nodeId }: { readonly nodeId: string }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const remix = useRemix(nodeId, () => setOpen(true));
+  return createElement("div", null,
+    createElement("button", { disabled: remix.disabled, onClick: remix.remix }, t(remix.isPending ? "remixCopying" : "remix")),
+    createElement(RemixDialog, { nodeId, open, onOpenChange: setOpen }),
+  );
 }
 
 function FinishPendingCopy({ nodeId, returnKey }: { readonly nodeId: string; readonly returnKey: string | undefined }) {
@@ -74,7 +84,7 @@ afterEach(async () => {
 
 describe("Remix", () => {
   it("copies the file into a signed-in reader's Personal Space and opens the copy", async () => {
-    await render(true, createElement(RemixButton, { nodeId: "sheet" }));
+    await render(true, createElement(RemixTrigger, { nodeId: "sheet" }));
     await act(async () => button("Remix").click());
     expect(mocks.copy).toHaveBeenCalledWith("sheet", expect.stringMatching(/^browser-/), expect.anything());
     expect(mocks.navigate).toHaveBeenCalledWith({ to: "/nodes/$nodeId", params: { nodeId: "my-copy" } });
@@ -84,7 +94,7 @@ describe("Remix", () => {
   it("makes one copy for clicks that land while the copy is running", async () => {
     let finish!: (id: string) => void;
     mocks.copy.mockReturnValue(new Promise((resolve) => { finish = resolve; }));
-    await render(true, createElement(RemixButton, { nodeId: "sheet" }));
+    await render(true, createElement(RemixTrigger, { nodeId: "sheet" }));
     await act(async () => {
       const remix = button("Remix");
       remix.click();
@@ -99,14 +109,14 @@ describe("Remix", () => {
 
   it("shows the toast the copy fails with", async () => {
     mocks.copy.mockRejectedValue(new Error("This page uses a Sheet you cannot open, so it cannot be copied. Nothing was created."));
-    await render(true, createElement(RemixButton, { nodeId: "sheet" }));
+    await render(true, createElement(RemixTrigger, { nodeId: "sheet" }));
     await act(async () => button("Remix").click());
     expect(mocks.toast.error).toHaveBeenCalledWith("This page uses a Sheet you cannot open, so it cannot be copied. Nothing was created.");
     expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
   it("gives a signed-out reader the agent prompt that copies, and copies only after they sign up", async () => {
-    await render(false, createElement(RemixButton, { nodeId: "sheet" }));
+    await render(false, createElement(RemixTrigger, { nodeId: "sheet" }));
     await act(async () => button("Remix").click());
     expect(mocks.copy).not.toHaveBeenCalled();
     const mcp = handToAgentPrompt(window.location.origin, "sheet", "copy", "mcp");
@@ -125,7 +135,7 @@ describe("Remix", () => {
   });
 
   it("offers a signed-out reader only sign-up for a file an agent cannot copy", async () => {
-    await render(false, createElement(RemixButton, { nodeId: "sheet" }), { kind: "blob" });
+    await render(false, createElement(RemixTrigger, { nodeId: "sheet" }), { kind: "blob" });
     await act(async () => button("Remix").click());
     expect(document.querySelector("pre")).toBeNull();
     expect(() => button("Hand to my agent")).toThrow();

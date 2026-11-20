@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { Bot, Copy } from "lucide-react";
+import { Copy } from "lucide-react";
 import { useState } from "react";
 import { useI18n, type MessageKey } from "../../shared/i18n";
 import { Button, Dialog, Segmented, toast } from "../../shared/ui";
@@ -135,30 +135,27 @@ export function HandToAgentChoice({ nodeId, task, way, onWayChange }: {
   );
 }
 
-export function HandToAgentButton({ nodeId }: { readonly nodeId: string }) {
+export function HandToAgentDialog({ nodeId, open, onOpenChange }: {
+  readonly nodeId: string;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}) {
   const { t } = useI18n();
-  const [open, setOpen] = useState(false);
   const [way, setWay] = useState<HandOff>(HAND_OFFS[0]);
   return (
-    <>
-      <Button variant="ghost" size="sm" className="max-sm:px-2" onClick={() => setOpen(true)}>
-        <Bot aria-hidden="true" />
-        <span className="max-sm:sr-only">{t("handToMyAgent")}</span>
-      </Button>
-      <Dialog
-        open={open}
-        onOpenChange={setOpen}
-        title={t("handToMyAgent")}
-        description={t("handToAgentDescription")}
-        footer={
-          <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "read", way)}>
-            <Copy aria-hidden="true" />
-            {t("handToAgentCopyPrompt")}
-          </Button>
-        }
-      >
-        <HandToAgentChoice nodeId={nodeId} task="read" way={way} onWayChange={setWay} />
-      </Dialog>
-    </>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title={t("handToMyAgent")}
+      description={t("handToAgentDescription")}
+      footer={
+        <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "read", way)}>
+          <Copy aria-hidden="true" />
+          {t("handToAgentCopyPrompt")}
+        </Button>
+      }
+    >
+      <HandToAgentChoice nodeId={nodeId} task="read" way={way} onWayChange={setWay} />
+    </Dialog>
   );
 }

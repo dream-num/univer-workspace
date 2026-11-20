@@ -5,15 +5,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LanguageProvider } from "../../shared/i18n";
 import { sessionQueryKey } from "../auth";
-import { HandToAgentButton, handToAgentPrompt } from "./hand-to-agent";
+import { HandToAgentDialog, handToAgentPrompt } from "./hand-to-agent";
 
 const mocks = vi.hoisted(() => ({ toast: { success: vi.fn(), error: vi.fn() }, writeText: vi.fn() }));
 vi.mock("sonner", async (importOriginal) => ({ ...(await importOriginal<object>()), toast: mocks.toast }));
 
-const origin = "https://space.univer.ai";
+const origin = "https://workspace.example";
 
 describe("handToAgentPrompt", () => {
-  const link = "https://space.univer.ai/nodes/sheet-node-1";
+  const link = "https://workspace.example/nodes/sheet-node-1";
   const commands = (prompt: string) => prompt.split("\n").filter((line) => /^(npm|uvw) /.test(line));
 
   it("reads through MCP with no install, and says what to do when the server hides read", () => {
@@ -97,7 +97,7 @@ With MCP, you can instead connect to ${origin}/mcp and call \`pr_create\`, \`uni
   });
 });
 
-describe("HandToAgentButton", () => {
+describe("HandToAgentDialog", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -127,8 +127,7 @@ describe("HandToAgentButton", () => {
   async function open(signedIn = false) {
     const client = new QueryClient();
     client.setQueryData(sessionQueryKey, signedIn ? { authenticated: true, user: { id: "reader" } } : { authenticated: false });
-    await act(async () => root.render(createElement(QueryClientProvider, { client }, createElement(LanguageProvider, null, createElement(HandToAgentButton, { nodeId: "sheet-node-1" })))));
-    await act(async () => control("Hand to my agent").click());
+    await act(async () => root.render(createElement(QueryClientProvider, { client }, createElement(LanguageProvider, null, createElement(HandToAgentDialog, { nodeId: "sheet-node-1", open: true, onOpenChange: vi.fn() })))));
   }
 
   it("opens on MCP, recommended, and copies its server URL and prompt", async () => {
