@@ -434,8 +434,9 @@ $V mcp-resources [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
 $V mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
 $V mcp-token [--scopes read,write,...] [--name name]
-$V mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>]
-$V mcp-oauth refresh|reuse|revoke|direct <label>
+$V mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
+$V mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]
+$V mcp-oauth revoke|direct <label>
 $V mcp-oauth exchange <label> pat|oauth
 $V mcp-allow-users <user-id>...|'*'|workspace # replace the executor allowlist; recreate executor(s), then gateway
 $V mcp-gateway-restart       # recreate only gateway, including when executor is stopped
@@ -483,7 +484,9 @@ service and the auth process, saves the consent screenshot and redacted transcri
 raw codes, tokens, or `state` values in evidence.
 
 Calls save `<label>.cmd`, `.out`, `.result.json`, `.err`, `.exit`, `.gateway.log`,
-and `.workspace.log` in `$EVIDENCE`. Tool calls also save `.event.json` and check its
+and `.workspace.log` in `$EVIDENCE`. `.out` holds `structuredContent` on success and, for a tool
+error, the `{code, message, detail}` JSON the gateway sends as the result text (errors carry no
+`structuredContent`); `.result.json` keeps the wire result. Tool calls also save `.event.json` and check its
 fields, Workspace request correlation, and Bearer leakage. HTTP failures preserve the
 status, authentication challenge, and body. Exit codes are 0 for success, 1 for a tool
 error, 2 for usage, 3 for transport or protocol failure, 4 for HTTP 401, and 5 for a

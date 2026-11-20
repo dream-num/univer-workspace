@@ -23,8 +23,12 @@ page, unless the Space is public. Both surfaces show the same state. A reader wh
 - Browser: open a file, then click `Share` in its header. The dialog `Share “<name>”` has a `Link sharing`
   section with a switch, a `Link access` combobox and `Copy link`.
 - CLI: `uvw share <file link or Node ID>` prints the link and its state; `--link off|viewer|editor` sets it.
-- A signed-out reader sees a `Read only` badge, `Sign up` and `Sign in`, and a visitor bar with the author, the
-  copy count (`1 copy`), `Remix`, `Hand to my agent` ([agent handoff](./agent-handoff.md)) and `Report`.
+- A signed-out reader sees `Read only`, `Sign up` and `Sign in` in the page header. Below it the visitor bar shows
+  the logo (a GitHub link named `Made with Univer Workspace`), `By <name>` for a Personal Space file, the copy count
+  (`1 copy`) and a `More actions` menu with `Remix` (files only), `Hand to my agent`
+  ([agent handoff](./agent-handoff.md)), `Copy link` and `Report`. In immersive view (`?view=immersive`) the header
+  is hidden and the bar adds the links `Sign up free` and `Sign in` and `Collapse sign-up bar`.
+- A signed-in reader of someone else's Personal Space file sees the same bar without the sign-up links or collapse.
 - Space visibility: `uvw repo edit <owner>/<slug> --visibility public|private`, or the repository settings.
 
 ## Driving it with agent-browser and uvw
@@ -42,7 +46,8 @@ Preconditions:
   says signed-in people can edit and an agent can edit only after a person claims it.
 - **LS2. Viewer link.** Run `$V cli share-viewer share "$N" --link viewer --json` (`link: "viewer"`), then
   `$V open-anon share-anon-viewer "$ORIGIN/nodes/$N"`. `share-anon-viewer.node-status` reports `200`, and
-  `share-anon-viewer.png` shows the grid with `Rent`/`1200`, a `Read only` badge, and `Sign up`/`Sign in`.
+  `share-anon-viewer.png` shows the grid with `Rent`/`1200`, `Read only` and `Sign up`/`Sign in` in the header,
+  and the bar with `By Verify <run-id>` and `More actions`.
 - **LS3. Off.** Run `$V cli share-off share "$N" --link off --json` (`link: "off"`), then
   `$V open-anon share-anon-off "$ORIGIN/nodes/$N"`. `share-anon-off.node-status` reports `404`, and the page
   text reads `Unable to open this resource`.
@@ -56,11 +61,12 @@ Preconditions:
   `$V cli share-cleanup share "$N" --link off --json`.
 - **LS5. Remix.** Set the link to `viewer`. Signed in: register a second user (see
   [pull requests](./pull-requests.md)), sign them in in a separate agent-browser session, open `$ORIGIN/nodes/$N`,
-  and click `Remix`. The browser moves to the copy's `/nodes/<id>`, the toast reads
+  and pick `More actions` > `Remix` (`find role button click --name "More actions" --exact`, then
+  `find role menuitem click --name Remix --exact`). The browser moves to the copy's `/nodes/<id>`, the toast reads
   `Copied to your space. Your edits change only your copy.`, the second user's `space find "Verify Budget"` finds
   `/Verify Budget`, and `curl -s "$ORIGIN/api/nodes/$N" | jq .copyCount` is `1`. The owner's `Share` dialog shows
-  `1 copy`. Signed out: in a fresh session, click `Remix`. The dialog `Remix this file` offers the same MCP and
-  uvw prompts as `Hand to my agent` and a link `Sign up free`, which opens
+  `1 copy`. Signed out: in a fresh session, pick `More actions` > `Remix`. The dialog `Remix this file` offers the
+  same MCP and uvw prompts as `Hand to my agent` and a link `Sign up free`, which opens
   `/login?mode=register&returnTo=/nodes/<N>?copy=<key>`. Register there; the browser lands on a new copy and
   `copyCount` is `2`.
 - **LS6. Link preview.** With the link `viewer`, `curl -s "http://127.0.0.1:<server port>/nodes/$N"` returns the
@@ -79,6 +85,12 @@ Preconditions:
 
 - `space find --json` names the Node ID `nodeId`; there is no `id` field, so `jq .nodes[0].id` gives `null`
   and `uvw share null` fails with `NOT_FOUND`.
+- `More actions` toggles its menu. A menu left open by an earlier failed step closes on the next click, and the
+  following `find role menuitem` reports "No element found"; check `snapshot -i` for `expanded=true` first.
+- The visitor dialogs close with their `Close` button (`Report this file` with `Cancel`). While one is open,
+  clicks on the bar fail with "covered by <div.fixed.inset-0>".
+- `Copy link` reports `Link copied.` in a `status` element that `get text body` can miss; read it with
+  `snapshot -c`.
 - The switch's accessible name follows its state: `Enable link sharing` when off, `Disable link sharing` when on.
 - Prove the state with `open-anon` or `uvw share`, not the toast. `open-anon` uses its own cookie-less session,
   so the run's signed-in browser is unaffected.
@@ -86,8 +98,8 @@ Preconditions:
   then carries `expiresAt`, `claimUrl` and `claimHint`. For a person the `expiresAt` key is absent.
 - Link previews come only from the built server (`apps/workspace/dist/public`, from `build:web` before `up`).
   Vite on the web port never injects them.
-- `Save my version` on a page in trial mode copies the page and the Sheets it binds; it needs an HTML View with a
-  bound Sheet and has not been driven here.
+- `Save my version` on a page in trial mode copies the page and the Sheets it binds; see HV6-HV7 in
+  [HTML View](./html-view.md).
 - Making a Space public needs an interactive session. A uvw password login or the browser may; an MCP PAT or
   OAuth session gets `INTERACTIVE_SESSION_REQUIRED` and an agent `AGENT_NOT_ALLOWED` (MH4 in [mcp.md](./mcp.md)).
 - A malformed JSON body to the share API answers `400` with `INVALID_INPUT`

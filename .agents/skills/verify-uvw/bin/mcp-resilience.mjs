@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { toolOutput } from './mcp-result.mjs';
 
 const mode = process.argv[2];
 assert(['auth', 'html-auth', 'revision', 'burst', 'harsh', 'replicas'].includes(mode), 'Choose auth, html-auth, revision, burst, harsh or replicas');
@@ -52,7 +53,7 @@ async function call(label, tool, args, bearer = secret('mcp-token')) {
     else if (mode === 'harsh') result = { isError: true, structuredContent: { code: 'transport', message: String(error) } };
     else throw error;
   } finally { await client.close(); }
-  const output = result.structuredContent;
+  const output = toolOutput(result);
   const recorded = { requestId, tool, status, isError: !!result.isError, output, latencyMs: performance.now() - started };
   proof.requests.push(recorded);
   if (mode !== 'harsh') save();

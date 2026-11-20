@@ -63,7 +63,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MO1 signs opencode in through browser OAuth with one MCP URL and checks scoped consent and OAuth usage events.
 - MA6 checks PAT defaults (all scopes, no expiry, 10-minute downstream session) and creates, uses and revokes a PAT in the Browser.
 - MA7 refuses `pr_merge` to a PAT without `worktree:merge`.
-- MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation and refresh-token replay.
+- MO2 drives OAuth from a script: consent without `worktree:merge`, scope refusal, no direct Workspace use, refresh, revocation, refresh-token replay, and token requests that omit `resource`.
 - MO3 uses real Claude Code and VS Code CIMD documents, checks SSRF refusals and anonymous no-fetch behavior, then disables CIMD.
 - MO4 registers Cursor's exact callbacks and completes consent and token redemption on its `cursor://` callback.
 - MA8 checks Browser sign-in, both `uvw auth login` paths, and Workspace Agent browser OAuth with `agent-up` while MCP OAuth is enabled.
@@ -1558,6 +1558,27 @@ test $? -eq 1
 jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth3-refresh-after-reuse.json"
 ```
 
+Some clients (QoderWork) send `resource` only in the authorization request. `--token-resource omit`
+leaves it out of the token request, so the server uses the resource bound to the code or grant;
+`--token-resource <url>` sends a different one. Run the wrong-resource `login` last: it spends the code.
+
+```bash
+$V mcp-oauth login mcp-oauth4-login --token-resource omit
+jq -e '.token.status == 200 and .token.body.scope == "read write publish worktree:merge"' "$EVIDENCE/mcp-oauth4-login.json"
+$V mcp --auth oauth mcp-oauth4-whoami whoami
+$V mcp-oauth refresh mcp-oauth4-refresh-omit --token-resource omit
+jq -e '.status == 200 and (.body.refresh_token | startswith("<uvw_rt_"))' "$EVIDENCE/mcp-oauth4-refresh-omit.json"
+$V mcp --auth oauth mcp-oauth4-after-refresh repo_list
+$V mcp-oauth refresh mcp-oauth4-refresh-other --token-resource http://127.0.0.1:1/mcp
+test $? -eq 1
+jq -e '.status == 400 and .body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth4-refresh-other.json"
+$V mcp-oauth refresh mcp-oauth4-refresh-kept
+jq -e '.status == 200' "$EVIDENCE/mcp-oauth4-refresh-kept.json"
+$V mcp-oauth login mcp-oauth4-login-other --token-resource http://127.0.0.1:1/mcp
+test $? -eq 1
+jq -e '.token.status == 400 and .token.body.error == "invalid_grant"' "$EVIDENCE/mcp-oauth4-login-other.json"
+```
+
 Pass when the consent page offered four checked scopes and the token grants exactly
 `read write publish` with `expires_in: 3600`, a `uvw_rt_` refresh token and `no-store`; the access
 token works through the gateway (`auth_kind: oauth`, this client) but not against Workspace directly
@@ -1571,7 +1592,9 @@ and the new access token works. After revocation the first Workspace-backed call
 record the first `whoami` and `api_find` after revocation, before any Workspace-backed call; `0`
 means the gateway answered from its 30-second exchange cache. A replay inside the grace window
 gets `invalid_grant` and the grant still works; a replay after it revokes the grant, so the next
-call exits 4 and the current refresh token gets `invalid_grant`.
+call exits 4 and the current refresh token gets `invalid_grant`. A code and a refresh token
+redeemed without `resource` return 200 and the token works through the gateway; a different
+`resource` gets `invalid_grant` for both, and the refused refresh leaves the grant usable.
 
 **MO3. HTTPS Client ID Metadata Documents.** Requires outbound HTTPS and the baseline
 `up`, `user`, `doctor` with MCP enabled. Run before MO1/MO2 because step 5 starts fresh data.
@@ -2049,8 +2072,9 @@ try {
   await client.connect(new StreamableHTTPClientTransport(new URL(url + '?toolsets=files'), { requestInit: { headers: { Authorization: 'Bearer ' + session } } }));
   const result = await client.callTool({ name: 'blob_upload', arguments: { upload_id: upload, space, name: 'forbidden.txt', idempotency_key: username } });
   assert(result.isError);
-  assert.equal(result.structuredContent.code, 'workspace-upload-not-found');
-  writeFileSync(evidence, JSON.stringify(result.structuredContent, null, 2) + '\n');
+  const body = JSON.parse(result.content[0].text);
+  assert.equal(body.code, 'workspace-upload-not-found');
+  writeFileSync(evidence, JSON.stringify(body, null, 2) + '\n');
 } finally { await client.close(); }
 JS
 ```
