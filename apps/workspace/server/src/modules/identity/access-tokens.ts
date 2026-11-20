@@ -143,7 +143,7 @@ export function createAccessTokenService(options: {
     async refreshGrant(input: {
       readonly refreshToken: string;
       readonly clientId: string;
-      readonly resource: string;
+      readonly resource?: string | undefined;
     }): Promise<RefreshResult> {
       const parsed = parseToken(input.refreshToken, REFRESH_PREFIX);
       if (!parsed) return { ok: false, reason: "invalid" };

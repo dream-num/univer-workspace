@@ -673,7 +673,7 @@ OAuthTokenError:
 McpAuthorizationCodeRequest:
   type: object
   description: Authorization code grant for a DCR or CIMD public MCP client.
-  required: [grant_type, code, client_id, redirect_uri, code_verifier, resource]
+  required: [grant_type, code, client_id, redirect_uri, code_verifier]
   properties:
     grant_type:
       type: string
@@ -690,12 +690,12 @@ McpAuthorizationCodeRequest:
       type: string
     resource:
       type: string
-      description: Must equal the `resource` of the authorization request.
+      description: If present, must equal the `resource` of the authorization request. Defaults to the authorized resource when omitted.
 
 McpRefreshTokenRequest:
   type: object
   description: Refresh token grant for a DCR or CIMD MCP client. The refresh token rotates; CIMD metadata is not fetched on refresh.
-  required: [grant_type, refresh_token, client_id, resource]
+  required: [grant_type, refresh_token, client_id]
   properties:
     grant_type:
       type: string
@@ -707,7 +707,7 @@ McpRefreshTokenRequest:
       description: DCR client ID or the exact HTTPS CIMD URL used in authorization.
     resource:
       type: string
-      description: Must equal the resource the grant was issued for.
+      description: If present, must equal the resource the grant was issued for. Defaults to the grant's stored resource when omitted.
     scope:
       type: string
       description: Ignored; a refreshed grant keeps its granted scopes.

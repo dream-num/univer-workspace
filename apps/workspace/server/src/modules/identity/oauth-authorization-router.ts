@@ -313,11 +313,13 @@ export function createOAuthAuthorizationRouter(options: {
       fail(400, "unsupported_grant_type", "grant_type must be authorization_code or refresh_token.");
       return;
     }
-    if (typeof body.resource !== "string" || body.resource === "") {
-      fail(400, "invalid_request", "resource is required.");
+    if (body.resource !== undefined && (typeof body.resource !== "string" || body.resource === "")) {
+      fail(400, "invalid_request", "resource must be a non-empty string.");
       return;
     }
-    const resource = (mcp === null ? undefined : resolveMcpResource(mcp, body.resource)) ?? body.resource;
+    const resource = typeof body.resource === "string"
+      ? (mcp === null ? undefined : resolveMcpResource(mcp, body.resource)) ?? body.resource
+      : undefined;
     if (body.grant_type === "refresh_token") {
       if (typeof body.refresh_token !== "string" || body.refresh_token === "") {
         fail(400, "invalid_request", "refresh_token is required.");
@@ -367,7 +369,7 @@ export function createOAuthAuthorizationRouter(options: {
       fail(400, "invalid_grant", "The authorization code is expired or does not match this client, redirect_uri or code_verifier.");
       return;
     }
-    if (resource !== authorization.resource) {
+    if (resource !== undefined && resource !== authorization.resource) {
       fail(400, "invalid_grant", "resource does not match the authorization request.");
       return;
     }

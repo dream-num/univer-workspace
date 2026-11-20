@@ -341,8 +341,10 @@ export interface paths {
          *
          *     For dynamically registered MCP clients (only while `MCP_RESOURCE_URLS`
          *     is set), `authorization_code` and `refresh_token` take a form body with
-         *     `client_id` (DCR ID or CIMD HTTPS URL) and no secret, and must send the `resource` the grant is
-         *     bound to. They return `McpTokenResponse` with `Cache-Control:
+         *     `client_id` (DCR ID or CIMD HTTPS URL) and no secret. If `resource` is
+         *     omitted, the server uses the resource bound to the authorization code
+         *     or stored grant. If present, it must match that resource. They return
+         *     `McpTokenResponse` with `Cache-Control:
          *     no-store`. A code is good for one attempt; presenting an already
          *     redeemed code revokes the grant it produced. A refresh token rotates;
          *     presenting a rotated one within 60 seconds fails without side effects,
@@ -366,8 +368,8 @@ export interface paths {
          *     only an `application/x-www-form-urlencoded` body and is open only to a
          *     confidential client registered with `"tokenExchange": true` that
          *     authenticates with `client_secret`. The `subject_token` is a personal
-         *     access token or an MCP OAuth access token. An OAuth access token is
-         *     valid only when `resource` equals the resource its grant was issued
+         *     access token or an MCP OAuth access token. An OAuth access token
+         *     requires `resource`, which must equal the resource its grant was issued
          *     for; a personal access token ignores `resource`. The revocation check
          *     and the session insert happen in one database transaction. The
          *     response `access_token` is a Workspace login session, presented as the
@@ -2890,8 +2892,8 @@ export interface components {
             /** @description The exact redirect URI of the authorization request, including a loopback port. */
             redirect_uri: string;
             code_verifier: string;
-            /** @description Must equal the `resource` of the authorization request. */
-            resource: string;
+            /** @description If present, must equal the `resource` of the authorization request. Defaults to the authorized resource when omitted. */
+            resource?: string;
         };
         /** @description Refresh token grant for a DCR or CIMD MCP client. The refresh token rotates; CIMD metadata is not fetched on refresh. */
         McpRefreshTokenRequest: {
@@ -2900,8 +2902,8 @@ export interface components {
             refresh_token: string;
             /** @description DCR client ID or the exact HTTPS CIMD URL used in authorization. */
             client_id: string;
-            /** @description Must equal the resource the grant was issued for. */
-            resource: string;
+            /** @description If present, must equal the resource the grant was issued for. Defaults to the grant's stored resource when omitted. */
+            resource?: string;
             /** @description Ignored; a refreshed grant keeps its granted scopes. */
             scope?: string;
         };
