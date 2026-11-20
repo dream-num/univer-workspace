@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { decodeFrame, encodeFrame } from "../src/shared/frame.js";
 import { zeroCost } from "../src/shared/usage.js";
 import { testStagingDirectory } from "./staging-directory.js";
@@ -255,7 +256,7 @@ describe("gateway authentication", () => {
       name: "pr_merge",
       arguments: { repo: "a/b", number: 1 },
     });
-    expect(write.structuredContent).toMatchObject({ code: "workspace-scope-required" });
+    expect(toolError(write)).toMatchObject({ code: "workspace-scope-required" });
     const metrics = await fetch(gateway.origin + "/metrics", { headers: { Authorization: "Bearer metrics-secret" } });
     expect(await metrics.text()).toContain('mcp_tool_calls_total{tool="whoami",client="oauth",outcome="ok"} 1');
   });
@@ -289,7 +290,7 @@ describe("gateway authentication", () => {
       name: "issue_create",
       arguments: { repo: "a/b", title: "t" },
     });
-    expect(result).toMatchObject({ isError: true, structuredContent: { code: "workspace-scope-required" } });
+    expect(toolError(result)).toMatchObject({ code: "workspace-scope-required" });
     expect(gateway.events()).toMatchObject([{ outcome: "tool_error", error_code: "workspace-scope-required" }]);
     expect(gateway.productCookies).toEqual([]);
   });
@@ -304,10 +305,7 @@ describe("gateway authentication", () => {
         review: [], idempotency_key: "skill-draft-key-1234",
       },
     });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-scope-required", message: expect.stringContaining("switch to Auto"), detail: { required: "write" } },
-    });
+    expect(toolError(result)).toMatchObject({ code: "workspace-scope-required", message: expect.stringContaining("switch to Auto"), detail: { required: "write" } });
     expect(gateway.productCookies).toEqual([]);
     expect(gateway.events()).toMatchObject([{ tool: "skill_draft_create", outcome: "tool_error", error_code: "workspace-scope-required" }]);
     expect(JSON.stringify(gateway.events())).not.toContain("Private Skill content");
@@ -317,7 +315,7 @@ describe("gateway authentication", () => {
     const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_pat_readonly");
     expect(
-      await client.callTool({
+      toolError(await client.callTool({
         name: "html_view_create",
         arguments: {
           html: "<h1>Dashboard</h1>",
@@ -325,11 +323,8 @@ describe("gateway authentication", () => {
           name: "Dashboard",
           idempotency_key: "html-retry-key-123",
         },
-      }),
-    ).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-scope-required", detail: { required: "write" } },
-    });
+      })),
+    ).toMatchObject({ code: "workspace-scope-required", detail: { required: "write" } });
     expect(gateway.productCookies).toEqual([]);
   });
 

@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import * as fs from "node:fs/promises";
 import { chmod, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
@@ -142,8 +143,8 @@ describe("SVG resource tools", () => {
     await start(0);
     const unknown = await call("resources_find", { query: "arrow", registry: "nope" });
     expect(unknown.isError).toBe(true);
-    expect(unknown.structured["code"]).toBe("resource-registry-not-found");
-    expect((await call("resources_find", { query: "arrow", limit: 0 })).structured["code"]).toBe(
+    expect(toolError(unknown)["code"]).toBe("resource-registry-not-found");
+    expect(toolError((await call("resources_find", { query: "arrow", limit: 0 })))["code"]).toBe(
       "workspace-argument-invalid",
     );
   });
@@ -169,7 +170,7 @@ describe("SVG resource tools", () => {
   async function expectUnsafe(handles: string[]) {
     const result = await call("resources_export", { handles });
     expect(result.isError).toBe(true);
-    expect(result.structured["code"]).toBe("workspace-resource-cache-unsafe");
+    expect(toolError(result)["code"]).toBe("workspace-resource-cache-unsafe");
     expect(JSON.stringify(result)).not.toContain("private-outside-svg");
     expect(logs).not.toContain("private-outside-svg");
     expect(logs).toContain("Tool failed internally");
@@ -250,7 +251,7 @@ describe("SVG resource tools", () => {
       vi.mocked(fs.open).mockRejectedValueOnce(cause);
       const result = await call("resources_export", { handles: [item!.handle] });
       expect(result.isError).toBe(true);
-      expect(result.structured["code"]).toBe("workspace-internal-error");
+      expect(toolError(result)["code"]).toBe("workspace-internal-error");
       const failure = logs
         .split("\n")
         .filter(Boolean)
@@ -315,7 +316,7 @@ describe("SVG resource tools", () => {
       cursor: first.structured["cursor"],
     });
     expect(foreign.isError).toBe(true);
-    expect(foreign.structured["code"]).toBe("workspace-argument-invalid");
+    expect(toolError(foreign)["code"]).toBe("workspace-argument-invalid");
   });
 
   it("reports a single SVG larger than the limit as too large", async () => {
@@ -323,6 +324,6 @@ describe("SVG resource tools", () => {
     const [item] = library.find({ queries: ["arrow"], limit: 1 }).resources;
     const result = await call("resources_export", { handles: [item!.handle] });
     expect(result.isError).toBe(true);
-    expect(result.structured["code"]).toBe("workspace-result-too-large");
+    expect(toolError(result)["code"]).toBe("workspace-result-too-large");
   });
 });

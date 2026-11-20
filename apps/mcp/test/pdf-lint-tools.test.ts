@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
@@ -163,7 +164,7 @@ describe("print_pdf tool", () => {
       op: "render.printPdf",
       input: { unitId: "unit-1", scope: { kind: "worktree", worktreeId: "wt-1" } },
     });
-    expect(result.content).toEqual([{ type: "text", text: "print_pdf completed." }]);
+    expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.structuredContent) }]);
     const output = result.structuredContent as {
       unitId: string;
       unitType: string;
@@ -206,7 +207,7 @@ describe("print_pdf tool", () => {
     const first = await t.client.callTool({ name: "print_pdf", arguments: call });
     const handle = jobHandleSchema.parse(first.structuredContent);
     expect(first.content).toEqual([
-      { type: "text", text: "print_pdf is running. Poll job_get with job_id." },
+      { type: "text", text: `print_pdf is running. Poll job_get with job_id.\n${JSON.stringify(first.structuredContent)}` },
     ]);
     expect(
       (await t.client.callTool({ name: "print_pdf", arguments: call })).structuredContent,
@@ -216,7 +217,7 @@ describe("print_pdf tool", () => {
       arguments: { ...call, unit: "unit-2" },
     });
     expect(conflict.isError).toBe(true);
-    expect(conflict.structuredContent).toMatchObject({ code: "workspace-idempotency-conflict" });
+    expect(toolError(conflict)).toMatchObject({ code: "workspace-idempotency-conflict" });
     finish();
     const poll = async () =>
       jobViewSchema.parse(
@@ -241,7 +242,7 @@ describe("print_pdf tool", () => {
     ] as const) {
       const result = await t.client.callTool({ name: "print_pdf", arguments: input });
       expect(result.isError).toBe(true);
-      expect(result.structuredContent).toMatchObject({ code });
+      expect(toolError(result)).toMatchObject({ code });
     }
     expect(t.requests).toHaveLength(0);
   });
@@ -256,10 +257,8 @@ describe("print_pdf tool", () => {
       arguments: { unit: "u", trunk: true },
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([
-      { type: "text", text: "Base Units do not support PDF printing." },
-    ]);
-    expect(result.structuredContent).toMatchObject({
+    expect(toolError(result).message).toBe("Base Units do not support PDF printing.");
+    expect(toolError(result)).toMatchObject({
       code: "workspace-print-pdf-type-unsupported",
     });
   });
@@ -323,8 +322,8 @@ describe("lint tool", () => {
       arguments: { unit: "u", worktree: "wt-1" },
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: message }]);
-    expect(result.structuredContent).toMatchObject({
+    expect(toolError(result).message).toBe(message);
+    expect(toolError(result)).toMatchObject({
       code: "workspace-unit-layout-lint-unit-type-unsupported",
     });
   });

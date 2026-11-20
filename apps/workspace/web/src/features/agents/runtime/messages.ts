@@ -1,5 +1,5 @@
 import { isToolUIPart } from "ai";
-import type { ToolSet, UIMessage } from "ai";
+import type { UIMessage } from "ai";
 import { z } from "zod";
 
 export const INTERRUPTED_TOOL = "The run was interrupted before this tool returned a result. The tool may or may not have taken effect; check the current state before retrying it.";
@@ -31,22 +31,4 @@ export function redactMessages(messages: UIMessage[], key: string): UIMessage[] 
   // String replacement preserves SDK part shapes, including arbitrary tool results and metadata.
   const escaped = JSON.stringify(key).slice(1, -1);
   return JSON.parse(JSON.stringify(messages).replaceAll(escaped, "[redacted]")) as UIMessage[];
-}
-
-// The gateway keeps tool data in structuredContent and only a summary in content, while @ai-sdk/mcp shows the model content alone.
-export function withStructuredContent(tools: ToolSet): ToolSet {
-  return Object.fromEntries(Object.entries(tools).map(([name, tool]) => {
-    const original = tool.toModelOutput;
-    if (!original) return [name, tool];
-    return [name, {
-      ...tool,
-      async toModelOutput(options: Parameters<typeof original>[0]) {
-        const base = await original(options);
-        const output: unknown = options.output;
-        if (base.type !== "content" || typeof output !== "object" || output === null || !("structuredContent" in output) ||
-          output.structuredContent == null) return base;
-        return { ...base, value: [...base.value, { type: "text" as const, text: JSON.stringify(output.structuredContent) }] };
-      },
-    }];
-  }));
 }

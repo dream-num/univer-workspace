@@ -4,6 +4,7 @@ import type { CheckHtmlViewDraft, HtmlViewRenderCheck } from "../../html-views/r
 
 const draftResult = z.object({
   isError: z.boolean().optional(),
+  content: z.array(z.unknown()),
   structuredContent: z.object({ draft: z.object({ id: z.string().min(1) }).passthrough() }).passthrough(),
 }).passthrough();
 
@@ -20,7 +21,8 @@ export function withRenderCheck(tools: ToolSet, check?: CheckHtmlViewDraft): Too
       try { renderCheck = await check(parsed.data.structuredContent.draft.id, options.abortSignal); }
       catch (error) { renderCheck = { status: "failed", issues: [], durationMs: Date.now() - startedAt,
         reason: (error instanceof Error ? error.message : String(error)).trim().slice(0, 300) || "Render check could not run." }; }
-      return { ...parsed.data, structuredContent: { ...parsed.data.structuredContent, renderCheck } };
+      return { ...parsed.data, structuredContent: { ...parsed.data.structuredContent, renderCheck },
+        content: [...parsed.data.content, { type: "text", text: JSON.stringify({ renderCheck }) }] };
     } } satisfies ToolSet[string]];
   }));
 }

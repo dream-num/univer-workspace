@@ -110,7 +110,7 @@ it("serves job handles through MCP schemas and emits conversion usage once on se
     expect(first.isError).not.toBe(true);
     const handle = jobHandleSchema.parse(first.structuredContent);
     expect(first.content).toEqual([
-      { type: "text", text: "export is running. Poll job_get with job_id." },
+      { type: "text", text: `export is running. Poll job_get with job_id.\n${JSON.stringify(first.structuredContent)}` },
     ]);
     expect(events()).toHaveLength(0);
     expect((await client.callTool({ name: "export", arguments: args })).structuredContent).toEqual(

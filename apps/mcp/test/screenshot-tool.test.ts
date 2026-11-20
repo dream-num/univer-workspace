@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
@@ -178,7 +179,7 @@ describe("screenshot tool", () => {
       },
     });
     expect(result.content).toEqual([
-      { type: "text", text: "screenshot completed." },
+      { type: "text", text: JSON.stringify(result.structuredContent) },
       { type: "image", data: png.toString("base64"), mimeType: "image/png" },
       { type: "image", data: png.toString("base64"), mimeType: "image/png" },
     ]);
@@ -200,7 +201,7 @@ describe("screenshot tool", () => {
       name: "screenshot",
       arguments: { unit: "unit-1", trunk: true },
     });
-    expect(result.content).toEqual([{ type: "text", text: "screenshot completed." }]);
+    expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.structuredContent) }]);
     const { images } = result.structuredContent as { images: Array<{ download: { url: string } }> };
     expect(images).toHaveLength(1);
     const response = await fetch(images[0]!.download.url);
@@ -228,7 +229,7 @@ describe("screenshot tool", () => {
     const first = await t.client.callTool({ name: "screenshot", arguments: call });
     const handle = jobHandleSchema.parse(first.structuredContent);
     expect(first.content).toEqual([
-      { type: "text", text: "screenshot is running. Poll job_get with job_id." },
+      { type: "text", text: `screenshot is running. Poll job_get with job_id.\n${JSON.stringify(first.structuredContent)}` },
     ]);
     expect(
       (await t.client.callTool({ name: "screenshot", arguments: call })).structuredContent,
@@ -238,7 +239,7 @@ describe("screenshot tool", () => {
       arguments: { ...call, pages: "3" },
     });
     expect(conflict.isError).toBe(true);
-    expect(conflict.structuredContent).toMatchObject({ code: "workspace-idempotency-conflict" });
+    expect(toolError(conflict)).toMatchObject({ code: "workspace-idempotency-conflict" });
     finish();
     const poll = async () =>
       jobViewSchema.parse(
@@ -263,7 +264,7 @@ describe("screenshot tool", () => {
     ] as const) {
       const result = await t.client.callTool({ name: "screenshot", arguments: input });
       expect(result.isError).toBe(true);
-      expect(result.structuredContent).toMatchObject({ code });
+      expect(toolError(result)).toMatchObject({ code });
     }
     expect(t.requests).toHaveLength(0);
   });
@@ -290,7 +291,7 @@ describe("screenshot tool", () => {
       arguments: { unit: "u", trunk: true, range: "A1" },
     });
     expect(result.isError).toBe(true);
-    expect(result.content).toEqual([{ type: "text", text: "--range is not supported for Doc" }]);
-    expect(result.structuredContent).toMatchObject({ code: "workspace-argument-invalid" });
+    expect(toolError(result).message).toBe("--range is not supported for Doc");
+    expect(toolError(result)).toMatchObject({ code: "workspace-argument-invalid" });
   });
 });

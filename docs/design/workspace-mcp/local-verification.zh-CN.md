@@ -183,7 +183,7 @@ ready 错误、停机错误和 Browser 截图。
   | `trace_id` | 请求的 `_meta` 没有 `traceparent` |
   | `client_name`、`client_version` | 协议为 2025-11-25。无状态服务下 `initialize` 和 `tools/call` 由两个独立实例处理，`tools/call` 拿不到 `clientInfo`（实测）。2026-07-28 的每个请求都在 `_meta` 里带 `clientInfo`，所以不能为 `null` |
   | `repo`、`unit_type` | 工具不涉及仓库或 Unit |
-  | `error_code` | `outcome` 不是 `tool_error`。`outcome` 为 `tool_error` 时，它等于工具结果 `structuredContent.code`，不论是否以 `workspace-` 开头。Client Core 会原样传递 Workspace 自己的错误码，例如仓库不存在时的 `NOT_FOUND`，CLI 打印的也是这个码（实测） |
+  | `error_code` | `outcome` 不是 `tool_error`。`outcome` 为 `tool_error` 时，它等于工具结果第一个 `content` 文本块的 JSON 中的 `code`，不论是否以 `workspace-` 开头。Client Core 会原样传递 Workspace 自己的错误码，例如仓库不存在时的 `NOT_FOUND`，CLI 打印的也是这个码（实测） |
 
 - 2025-11-25 下也想区分客户端，可以在阶段 H 改用 `User-Agent`。阶段 A 不做。
 - 认证失败（`outcome: auth_error`）的事件在阶段 F 验收。阶段 A 的客户端在 `initialize` 或 `server/discover` 时就收到 401，请求到不了 `tools/call`。

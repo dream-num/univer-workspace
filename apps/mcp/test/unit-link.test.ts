@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -135,7 +136,7 @@ it.each(reads)("%s still takes a Unit ID without a Node lookup", async (name, ar
 
 it.each(reads)("%s refuses a link of another Workspace, a non-Unit file and a hidden file", async (name, args) => {
   const call = async (unit: string) =>
-    (await client.callTool({ name, arguments: { ...args, unit, trunk: true } })).structuredContent;
+    toolError(await client.callTool({ name, arguments: { ...args, unit, trunk: true } }));
   expect(await call("https://elsewhere.example/nodes/drop")).toMatchObject({ code: "workspace-origin-mismatch" });
   expect(workspacePaths.filter((path) => path.startsWith("/api/nodes/"))).toEqual([]);
   expect(await call(`${origin}/nodes/upload`)).toMatchObject({

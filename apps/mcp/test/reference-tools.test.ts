@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -213,7 +214,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     ws.requests.length = 0;
     expect((await call(client, "skills_read", { name: "core" })).structured.source).toBe("builtin");
     expect(ws.requests.filter((path) => path.startsWith("/api/spaces"))).toEqual([]);
-    expect((await call(client, "skills_read", { name: "core", repo: "00000000-0000-4000-8000-000000000000" })).structured.code).toBe("workspace-not-found");
+    expect(toolError((await call(client, "skills_read", { name: "core", repo: "00000000-0000-4000-8000-000000000000" }))).code).toBe("workspace-not-found");
   });
 
   it.each([".agents", "skills", "report", "SKILL.md"].flatMap((level) =>
@@ -349,7 +350,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(listed.structured.skills.map((s: { name: string }) => s.name)).not.toContain("ledger");
     expect((await call(client, "skills_read", { name: "ledger", repo: "bob/team" })).isError).toBe(true);
     expect(ws.requests).not.toContain("/api/spaces/team/nodes");
-    expect((await call(client, "skills_read", { repo: "bob/missing" })).structured.code).toBe("workspace-not-found");
+    expect(toolError((await call(client, "skills_read", { repo: "bob/missing" }))).code).toBe("workspace-not-found");
     ws.requests.length = 0;
     const personal = await call(client, "skills_read", { repo: "alice/personal" });
     expect(personal.structured.skills.at(-1).source).toBe("repository");
@@ -374,9 +375,9 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(read.structured.binaryFiles).toEqual([{ path: "image.png", byteSize: 9, mediaType: "image/png" }]);
     expect((await call(client, "skills_read", { ...args, resource: "references/guide.md" })).structured.content).toBe("Guide text");
     for (const resource of ["../other/SKILL.md", "image.png", "/references/guide.md"]) {
-      expect((await call(client, "skills_read", { ...args, resource })).structured.code).toBe("workspace-argument-invalid");
+      expect(toolError((await call(client, "skills_read", { ...args, resource }))).code).toBe("workspace-argument-invalid");
     }
-    expect((await call(client, "skills_read", { ...args, full: true })).structured.code).toBe("workspace-result-too-large");
+    expect(toolError((await call(client, "skills_read", { ...args, full: true }))).code).toBe("workspace-result-too-large");
     let content = "";
     let cursor: string | undefined;
     let pages = 0;
@@ -388,7 +389,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       cursor = page.structured.cursor;
       if (pages === 0) {
         expect(page.structured.truncated).toBe(true);
-        expect((await call(client, "skills_read", { ...args, repo: "https://workspace.example/spaces/team", resource: "references/long.md", cursor })).structured.code).toBe("workspace-argument-invalid");
+        expect(toolError((await call(client, "skills_read", { ...args, repo: "https://workspace.example/spaces/team", resource: "references/long.md", cursor }))).code).toBe("workspace-argument-invalid");
       }
       pages++;
     } while (cursor);
@@ -454,15 +455,9 @@ describe("API reference, Skills, resources and server instructions", () => {
     const first = await call(client, "api_show", { symbols });
     const continued = first.structured["cursor"] as string;
     const reused = await call(client, "api_show", { symbols: ["FWorkbook"], cursor: continued });
-    expect(reused).toMatchObject({
-      isError: true,
-      structured: { code: "workspace-argument-invalid" },
-    });
+    expect(toolError(reused)).toMatchObject({ code: "workspace-argument-invalid" });
     const garbage = await call(client, "api_show", { symbols, cursor: "not-a-cursor" });
-    expect(garbage).toMatchObject({
-      isError: true,
-      structured: { code: "workspace-argument-invalid" },
-    });
+    expect(toolError(garbage)).toMatchObject({ code: "workspace-argument-invalid" });
   });
 
   it("returns the ten bilingual HTML View styles from the frozen built-in snapshot on a default connection", async () => {
@@ -527,10 +522,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     const full = await call(client, "skills_read", { name: "core", full: true });
     expect(full.structured).toEqual({ ...core.structured, files: [] });
     const htmlFull = await call(client, "skills_read", { name: "html-view", full: true });
-    expect(htmlFull).toMatchObject({
-      isError: true,
-      structured: { code: "workspace-result-too-large" },
-    });
+    expect(toolError(htmlFull)).toMatchObject({ code: "workspace-result-too-large" });
 
     const templates = [
       "templates/bauhaus-blocks.univer.html",
@@ -580,10 +572,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       { name: "html-view", resource: "references/charts.md", full: true },
       { name: "core", cursor: "x" },
     ]) {
-      expect(await call(client, "skills_read", args)).toMatchObject({
-        isError: true,
-        structured: { code: "workspace-argument-invalid" },
-      });
+      expect(toolError(await call(client, "skills_read", args))).toMatchObject({ code: "workspace-argument-invalid" });
     }
   });
 
@@ -624,19 +613,13 @@ describe("API reference, Skills, resources and server instructions", () => {
       resource: "references/other.md",
       cursor: first.structured["cursor"],
     });
-    expect(other).toMatchObject({
-      isError: true,
-      structured: { code: "workspace-argument-invalid" },
-    });
+    expect(toolError(other)).toMatchObject({ code: "workspace-argument-invalid" });
 
     const tooLarge = await call(client, "skills_read", { name: "core", full: true });
-    expect(tooLarge).toMatchObject({
-      isError: true,
-      structured: { code: "workspace-result-too-large" },
-    });
-    expect(tooLarge.structured["message"]).toContain("without full");
-    expect(tooLarge.structured["message"]).toContain("resource");
-    expect(tooLarge.structured["message"]).toContain("cursor");
+    expect(toolError(tooLarge)).toMatchObject({ code: "workspace-result-too-large" });
+    expect(toolError(tooLarge)["message"]).toContain("without full");
+    expect(toolError(tooLarge)["message"]).toContain("resource");
+    expect(toolError(tooLarge)["message"]).toContain("cursor");
   });
 
   it.each(["legacy", { pin: "2026-07-28" }] as const)(

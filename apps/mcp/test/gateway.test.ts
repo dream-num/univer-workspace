@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
@@ -468,7 +469,7 @@ describe("gateway over real HTTP and the MCP client", () => {
         valueTruncated: true,
       });
       expect(result.content).toEqual([
-        { type: "text", text: "The write committed; its value was too large to return." },
+        { type: "text", text: `The write committed; its value was too large to return.\n${JSON.stringify(result.structuredContent)}` },
       ]);
       expect(observedKeys).toHaveLength(1);
       expect(events()).toMatchObject([{ outcome: "ok", cost: { committed_revisions: 1 } }]);
@@ -485,12 +486,9 @@ describe("gateway over real HTTP and the MCP client", () => {
         name: "execute",
         arguments: { worktree: "wt-1", unit: "unit-1", code: "edit" },
       });
-      expect(result).toMatchObject({
-        isError: true,
-        structuredContent: {
-          code: "workspace-result-unknown",
-          detail: { cause: "workspace-submit-retry-exhausted" },
-        },
+      expect(toolError(result)).toMatchObject({
+        code: "workspace-result-unknown",
+        detail: { cause: "workspace-submit-retry-exhausted" },
       });
     }
     expect(events()).toMatchObject([
@@ -520,10 +518,7 @@ describe("gateway over real HTTP and the MCP client", () => {
           worksheet: "index:1",
         },
       });
-      expect(result).toMatchObject({
-        isError: true,
-        structuredContent: { code: "workspace-runtime-result-invalid" },
-      });
+      expect(toolError(result)).toMatchObject({ code: "workspace-runtime-result-invalid" });
       expect(events()).toMatchObject([
         { outcome: "internal_error", executor: "cold_start", unit_type: "sheet" },
       ]);
@@ -538,12 +533,9 @@ describe("gateway over real HTTP and the MCP client", () => {
       name: "execute",
       arguments: { worktree: "wt-1", unit: "unit-1", code: "return 1" },
     });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: {
-        code: "workspace-worktree-not-editable",
-        detail: { state: "ready", worktreeId: "wt-1" },
-      },
+    expect(toolError(result)).toMatchObject({
+      code: "workspace-worktree-not-editable",
+      detail: { state: "ready", worktreeId: "wt-1" },
     });
     expect(observedKeys).toEqual([]);
   });
@@ -553,14 +545,11 @@ describe("gateway over real HTTP and the MCP client", () => {
     await executor.close();
     expect((await client.listTools()).tools.map((tool) => tool.name)).toContain("execute");
     expect(
-      await client.callTool({
+      toolError(await client.callTool({
         name: "inspect",
         arguments: { target: "workbook", unit: "unit-1", trunk: true },
-      }),
-    ).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-executor-unavailable" },
-    });
+      })),
+    ).toMatchObject({ code: "workspace-executor-unavailable" });
   });
 
   it("wraps repository lists, preserves ordering and CLI owner/type/limit semantics", async () => {
@@ -602,10 +591,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       name: "repo_view",
       arguments: { repo: "https://elsewhere.example/spaces/personal-1" },
     });
-    expect(foreign).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-origin-mismatch" },
-    });
+    expect(toolError(foreign)).toMatchObject({ code: "workspace-origin-mismatch" });
   });
 
   it.each(["workspace-not-found", "NOT_FOUND"])(
@@ -617,15 +603,14 @@ describe("gateway over real HTTP and the MCP client", () => {
         name: "repo_view",
         arguments: { repo: "alice/missing-sensitive-argument" },
       });
-      expect(result).toMatchObject({
-        isError: true,
-        structuredContent: {
-          code,
-          message: "Repository not found.",
-          detail: { status: 404, path: "/api/spaces/lookup" },
-        },
-        content: [{ type: "text", text: "Repository not found." }],
+      expect(toolError(result)).toMatchObject({
+        code,
+        message: "Repository not found.",
+        detail: { status: 404, path: "/api/spaces/lookup" },
       });
+      expect(result.content).toEqual([{ type: "text", text: JSON.stringify({
+        code, message: "Repository not found.", detail: { status: 404, path: "/api/spaces/lookup" },
+      }) }]);
       expect(events()).toHaveLength(1);
       expect(events()[0]).toMatchObject({ outcome: "tool_error", error_code: code });
       expect(logs).not.toContain("missing-sensitive-argument");

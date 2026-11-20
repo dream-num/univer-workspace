@@ -16,16 +16,19 @@
 
 ### 1.2 输出
 
-- 每个工具都声明 `outputSchema`，结果放在 `structuredContent`。
+- 每个工具都声明 `outputSchema`，成功结果放在 `structuredContent`。
 - 形状与 `--json` 输出一致：产品命令返回裸对象，内容命令返回以名词为键的包装（`{units}`、`{unit}`、`{nodes}`、`{upload}`）。`execute`、`import`、`export` 返回裸结果。
 - `--json` 输出是数组的命令，MCP 把数组包成以名词为键的对象，例如 `repo_list` 返回 `{repos}`。2025-11-25 要求 `structuredContent` 是对象，SDK 会把数组自动包成 `{result}`，而 2026-07-28 保持数组，同一个工具的形状因此随协议版本变化。显式名词键让两版协议得到同一个形状（[本地验证环境](local-verification.zh-CN.md) R2、附录 A.4）。
-- `content` 只放一行文字摘要，不重复整段 JSON。
+- `content` 的第一个文本块包含完整结果，默认是 `structuredContent` 的紧凑 JSON。`share` 使用工具提供的完整文本；`outline`、`read`、`find` 使用结果的 `text`，保留警告与续读提示，结果含 `json` 时再换行附上该值的紧凑 JSON。
+- 运行中的 job 与已提交但返回值截断的 `execute` 先给出提示，再换行附上结果 JSON。图片块排在文本块之后。
+- 部分客户端只把 `content` 交给模型（`@ai-sdk/mcp`、QwenWork），文本块是它们拿到结果的唯一途径。MCP 2025-11-25 也建议（SHOULD）返回 `structuredContent` 的工具同时返回序列化 JSON。
 - 结果里凡是有对应网页的对象，都附带 `url` 字段，相当于顺带执行了一次 `uvw browse`。
 - `inspect`、`screenshot --json`、`lint --json` 等来自闭源 `@univer-cli/*` 包的输出，结构以各包的 `dist/index.d.ts` 为准。
 
 ### 1.3 错误
 
-- 工具错误返回 `isError: true`，`structuredContent` 为 `{code, message, detail}`。`code` 沿用 CLI 的 `workspace-*` 错误码（`apps/cli/src/command.ts:42-60`）。
+- 工具错误返回 `isError: true`，不带 `structuredContent`。第一个文本块是 `{code, message, detail}` 的紧凑 JSON，没有 `detail` 时省略该字段。`code` 沿用 CLI 的 `workspace-*` 错误码（`apps/cli/src/command.ts:42-60`）。
+- 错误对象不符合工具的 `outputSchema`，而 MCP 要求 `structuredContent` MUST 符合它。部分旧版 SDK 客户端对错误结果同样做输出校验，会用 `-32602` 顶替原错误。
 - 认证失败不作为工具错误。网关返回 HTTP 401 和 `WWW-Authenticate`，让客户端重新授权。这对应 CLI 的退出码 4。
 - scope 不足返回工具错误 `workspace-scope-required`，`detail` 里写明缺少的 scope。
 - 结果未知的写入（`WorkspaceResultUnknownError`）原样返回，并提示用同一个 `idempotency_key` 重试。
