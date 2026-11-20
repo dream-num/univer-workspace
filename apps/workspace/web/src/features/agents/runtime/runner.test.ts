@@ -93,7 +93,8 @@ async function setup(options: {
         if (!gateway.tools.some((tool) => tool.name === rpc.params?.name)) return Response.json({ jsonrpc: "2.0", id: rpc.id, error: { code: -32601, message: `Unknown tool: ${rpc.params?.name}` } });
         if (rpc.params?.name === "skills_read") return respond(options.skills ? await options.skills(rpc.params.arguments) : { content: [], structuredContent: emptySkills });
         await options.tool?.();
-        return respond(options.toolOutput ?? { content: [{ type: "text", text: '{"id":"worktree-1"}' }], structuredContent: options.pageTool ? { draft: { id: "draft-1", state: "pending" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" } });
+        const structuredContent = options.pageTool ? { draft: { id: "draft-1", state: "pending" } } : { id: "worktree-1", number: 1, spaceId: "repo-1", url: "/pull/1" };
+        return respond(options.toolOutput ?? { content: [{ type: "text", text: JSON.stringify(structuredContent) }], structuredContent });
       }
       if (rpc.method === "notifications/cancelled") return new Response(null, { status: 202 });
       throw new Error(`Unexpected MCP method ${rpc.method}`);
@@ -139,6 +140,10 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       expect(test.modelBodies[1]).toContain("B7 must contain a start month");
       const before = JSON.parse(test.modelBodies[0]!);
       const after = JSON.parse(test.modelBodies[1]!);
+      expect(JSON.parse(after.messages.at(-1).content)).toEqual([
+        { type: "text", text: JSON.stringify({ draft: { id: "draft-1", state: "pending" } }) },
+        { type: "text", text: JSON.stringify({ renderCheck }) },
+      ]);
       expect(after.messages.slice(0, before.messages.length)).toEqual(before.messages);
       expect(after.tools).toEqual(before.tools);
     }

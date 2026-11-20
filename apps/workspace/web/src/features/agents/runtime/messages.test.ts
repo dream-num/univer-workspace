@@ -1,7 +1,6 @@
-import { dynamicTool, jsonSchema } from "ai";
 import type { UIMessage } from "ai";
 import { expect, it } from "vitest";
-import { redactMessages, repairInterruptedTools, withStructuredContent } from "./messages";
+import { redactMessages, repairInterruptedTools } from "./messages";
 
 it("repairs interrupted tool inputs while preserving approvals and completed parts", () => {
   const messages: UIMessage[] = [{ id: "a", role: "assistant", parts: [
@@ -37,27 +36,4 @@ it("redacts keys in provider text, tool results and metadata without mutating SD
   ] }];
   expect(JSON.stringify(redactMessages(messages, key))).not.toContain(JSON.stringify(key).slice(1, -1));
   expect(messages[0]?.metadata).toEqual({ echoed: key });
-});
-
-it("shows the model a tool's structured content next to its summary text", async () => {
-  const contentOnly = dynamicTool({
-    inputSchema: jsonSchema({ type: "object" }),
-    execute: async () => ({}),
-    toModelOutput: ({ output }) => ({
-      type: "content",
-      value: (output as { content: { text: string }[] }).content.map((part) => ({ type: "text" as const, text: part.text })),
-    }),
-  });
-  const wrapped = withStructuredContent({ whoami: contentOnly }).whoami!;
-  const shown = await wrapped.toModelOutput!({
-    toolCallId: "1",
-    input: {},
-    output: { content: [{ type: "text", text: "whoami completed." }], structuredContent: { subject: { name: "Ada" } } },
-  });
-  expect(shown).toEqual({ type: "content", value: [
-    { type: "text", text: "whoami completed." },
-    { type: "text", text: '{"subject":{"name":"Ada"}}' },
-  ] });
-  const plain = await wrapped.toModelOutput!({ toolCallId: "2", input: {}, output: { content: [{ type: "text", text: "done" }] } });
-  expect(plain).toEqual({ type: "content", value: [{ type: "text", text: "done" }] });
 });

@@ -86,14 +86,19 @@ export async function resolveRepoReference(
           throw error;
         }
       }
-      const matches = (await spaces.list()).filter(
+      const listed = await spaces.list();
+      const matches = listed.filter(
         (space) => space.slug?.toLowerCase() === parsed.spaceId.toLowerCase(),
       );
       if (matches.length === 1) return { spaceId: matches[0]!.id };
       const candidates = matches.flatMap((space) => space.fullName
         ? [space.fullName]
         : space.owner === undefined ? [] : [`${space.owner.username}/${space.slug}`]);
-      const hint = candidates.length === 0 ? "Use owner/slug." : `Use owner/slug, such as ${candidates.join(", ")}.`;
+      const personal = listed.find((space) => space.type === "personal" && space.fullName);
+      const hint = candidates.length === 0
+        ? matches.length === 0 && personal?.fullName
+          ? `Use owner/slug, or ${personal.fullName} for your Personal Space.` : "Use owner/slug."
+        : `Use owner/slug, such as ${candidates.join(", ")}.`;
       throw invalid(`Repository "${parsed.spaceId}" ${matches.length === 0 ? "was not found" : "is ambiguous"}. ${hint}`);
     }
     case "url":

@@ -559,7 +559,14 @@ Oversized requests, protocol version mismatches and budgets exhausted before sen
 actionable `tool_error`s. Only connection failures known to precede delivery and HTTP 503
 mark a replica down and permit failover; HTTP 413 and 426 do neither.
 Tool failures preserve Client Core's
-`{ code, message, detail }` in `structuredContent` and set `isError: true`.
+`{ code, message, detail }` as compact JSON in the first `content` text block and set
+`isError: true`. Errors omit `structuredContent` and omit `detail` when absent.
+Successful results keep `structuredContent` and include the complete result in the
+first text block. The default text is compact JSON. `share` uses its complete text
+rendering; `outline`, `read`, and `find` use their rendered `text`, followed by the
+compact `json` value on a new line when present. Running jobs and truncated
+`execute` results put their note on the first line before the JSON. Images follow
+the text block.
 Authentication failures return HTTP 401 and
 `WWW-Authenticate: Bearer resource_metadata="<public origin>/.well-known/oauth-protected-resource/mcp"`,
 adding `error="invalid_token"` when a presented bearer is rejected. Both this 401 and protected-resource
@@ -601,7 +608,7 @@ The version 1 event has these fields:
 | `node_id` | Optional Node ID of the file a successful `share` call read or set; omitted for other calls |
 | `unit_type` | Runtime Unit type for executor tools, otherwise null |
 | `outcome` | `ok`, `tool_error`, `auth_error`, `rate_limited`, `timeout`, or `internal_error` |
-| `error_code` | For `tool_error` or `timeout`, the same code the tool result returns in `structuredContent.code`, including Workspace codes such as `NOT_FOUND`; otherwise null |
+| `error_code` | For `tool_error` or `timeout`, the same `code` parsed from the tool result's first `content` text block, including Workspace codes such as `NOT_FOUND`; otherwise null |
 | `duration_ms` | Non-negative total gateway duration including authentication |
 | `executor` | `cold_start` or `warm` from the runtime observer; `none` when no worker operation was reported |
 | `cache` | Optional `hit` or `miss` on successful Sheet Lens calls; omitted for other calls |

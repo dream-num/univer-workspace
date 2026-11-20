@@ -16,7 +16,7 @@ import type { TrajectoryStore } from "../trajectory/store";
 import { gatewaySkillCatalogSchema, skillInvocation, skillsReminder } from "./skills";
 import { draftReminder } from "./draft-reminder";
 import type { DraftStatus } from "./draft-reminder";
-import { redactMessages, repairInterruptedTools, withStructuredContent, worktreeExtractors } from "./messages";
+import { redactMessages, repairInterruptedTools, worktreeExtractors } from "./messages";
 import { appendUserMessage, gateTools, settleApprovals } from "./approvals";
 import type { ApprovalSettlement } from "./approvals";
 import { withRenderCheck } from "./render-check";
@@ -245,7 +245,7 @@ export function createAgentRunner(deps: AgentRunnerDependencies) {
       const latestCatalog = run.session.messages.filter((item) => item.role === "user")
         .map((item) => messageSkills(item.metadata)).reverse().find((item) => item !== null);
       const userOnlySkills = new Set(latestCatalog?.skills.filter((item) => !item.modelInvocable).map((item) => item.name));
-      const gated = gateTools(withStructuredContent(tools), run.session.mode, async (name, input, signal) => {
+      const gated = gateTools(tools, run.session.mode, async (name, input, signal) => {
         const args = z.record(z.string(), z.unknown()).parse(input);
         const publishToken = deps.createTokenSource("publish");
         let publishClient: Awaited<ReturnType<typeof createMCPClient>> | undefined;

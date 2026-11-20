@@ -1,3 +1,4 @@
+import { toolError } from "../tool-error.js";
 import { createServer } from "node:http";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -129,10 +130,7 @@ describe.skipIf(!!process.env.MCP_CONTRACT_URL)(
         name: "execute",
         arguments: { worktree: "wt", unit: "unit", code: "increment" },
       });
-      expect(response).toMatchObject({
-        isError: true,
-        structuredContent: { code: "workspace-result-unknown", detail: { retryable: false } },
-      });
+      expect(toolError(response)).toMatchObject({ code: "workspace-result-unknown", detail: { retryable: false } });
       expect(f.replicas.reduce((sum, r) => sum + r.writes, 0)).toBe(1);
     });
   },

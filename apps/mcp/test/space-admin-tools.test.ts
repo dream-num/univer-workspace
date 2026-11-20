@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { once } from "node:events";
 import { createServer, type Server } from "node:http";
@@ -326,10 +327,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { name: "space_find", arguments: { repo: "team-1", query: "  " } },
       { name: "space_browse", arguments: { repo: "team-1", unit_type: "pdf" } },
     ]) {
-      expect(await client.callTool(bad)).toMatchObject({
-        isError: true,
-        structuredContent: { code: "workspace-argument-invalid" },
-      });
+      expect(toolError(await client.callTool(bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
   });
 
@@ -360,7 +358,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       name: "unit_create",
       arguments: { worktree: "wt-3", space: "team-1", type: "pdf", name: "x" },
     });
-    expect(invalid).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+    expect(toolError(invalid)).toMatchObject({ code: "workspace-argument-invalid" });
   });
 
   it("copies a shared file into a pull request with unit_create from, changing tools/list by that one optional parameter", async () => {
@@ -394,7 +392,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       [{ ...args, from: "https://elsewhere.example/nodes/sheet" }, "workspace-origin-mismatch"],
       [{ ...args, from: "hidden" }, "workspace-not-found"],
     ] as const) {
-      expect(await client.callTool({ name: "unit_create", arguments: bad })).toMatchObject({ isError: true, structuredContent: { code } });
+      expect(toolError(await client.callTool({ name: "unit_create", arguments: bad }))).toMatchObject({ code });
     }
     expect(requests.filter((request) => request.method === "POST")).toHaveLength(0);
   });
@@ -407,7 +405,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       resource: { kind: "blob", byteSize: 3, mediaType: "text/plain" },
     });
     const missing = await client.callTool({ name: "blob_get", arguments: { resource: "r-none" } });
-    expect(missing).toMatchObject({ isError: true, structuredContent: { code: "workspace-not-found" } });
+    expect(toolError(missing)).toMatchObject({ code: "workspace-not-found" });
   });
 
   it("creates a repository in two calls, defaulting the name and capping the description", async () => {
@@ -432,20 +430,14 @@ describe("space, unit, repository admin, label and merge tools", () => {
       name: "repo_create",
       arguments: { slug: "docs", description: "x".repeat(351) },
     });
-    expect(tooLong).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-argument-invalid", message: "description must contain at most 350 characters." },
-    });
+    expect(toolError(tooLong)).toMatchObject({ code: "workspace-argument-invalid", message: "description must contain at most 350 characters." });
     expect(writesOf()).toEqual([]);
   });
 
   it("edits a repository only when something changes and maps visibility to publicRead", async () => {
     const client = await connect();
     const nothing = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team" } });
-    expect(nothing).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility or slug." },
-    });
+    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid", message: "Nothing to change: pass name, description, visibility or slug." });
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     const edited = await client.callTool({
       name: "repo_edit",
@@ -465,16 +457,12 @@ describe("space, unit, repository admin, label and merge tools", () => {
     const client = await connect();
     humanTokenSession = true;
     const settings = `${origin}/spaces/team-1/settings`;
-    expect(await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "public" } })).toMatchObject({
-      isError: true,
-      structuredContent: { code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: settings } },
-      content: [{ type: "text", text: expect.stringContaining(`make it public in its settings in the browser: ${settings}`) }],
-    });
-    expect(await client.callTool({ name: "repo_create", arguments: { slug: "docs", public: true } })).toMatchObject({
-      isError: true,
-      structuredContent: { code: "INTERACTIVE_SESSION_REQUIRED" },
-      content: [{ type: "text", text: expect.stringContaining("Create it private, then ask the user to make it public in its settings in the browser.") }],
-    });
+    const edited = await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "public" } });
+    expect(toolError(edited)).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: settings } });
+    expect(edited.content).toMatchObject([{ type: "text", text: expect.stringContaining(`make it public in its settings in the browser: ${settings}`) }]);
+    const created = await client.callTool({ name: "repo_create", arguments: { slug: "docs", public: true } });
+    expect(toolError(created)).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED" });
+    expect(created.content).toMatchObject([{ type: "text", text: expect.stringContaining("Create it private, then ask the user to make it public in its settings in the browser.") }]);
     expect(
       (await client.callTool({ name: "repo_edit", arguments: { repo: "bob/team", visibility: "private" } })).structuredContent,
     ).toMatchObject({ publicRead: false });
@@ -508,7 +496,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { action: "delete", name: "bug", color: "red" },
       { action: "create", name: "ux", color: "red", new_name: "y" },
     ]) {
-      expect(await call(bad)).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+      expect(toolError(await call(bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(writesOf()).toEqual([]);
   });
@@ -554,7 +542,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       { action: "trash", node: "n1", name: "x" },
       { action: "trash", node: "n1", root: false },
     ]) {
-      expect(await call(bad)).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+      expect(toolError(await call(bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(writesOf()).toEqual([]);
   });
@@ -595,7 +583,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     prState = "ready";
     for (const number of [null, true, {}, [], [3], 1.5, -3, 1e21, undefined]) {
       const result = await client.callTool({ name: "pr_merge", arguments: { repo: "bob/team", number } });
-      expect(result).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+      expect(toolError(result)).toMatchObject({ code: "workspace-argument-invalid" });
       expect(JSON.stringify(result.content)).toContain("expected string");
     }
     expect(writesOf()).toEqual([]);
@@ -609,10 +597,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
     expect((await call("pr_merge")).structuredContent).toMatchObject({ id: "wt-3", state: "merged", url: prUrl });
     prState = "draft";
     expect((await call("pr_discard", "#3")).structuredContent).toMatchObject({ state: "discarded", units: [], url: prUrl });
-    expect(await call("pr_merge")).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-lifecycle-invalid" },
-    });
+    expect(toolError(await call("pr_merge"))).toMatchObject({ code: "workspace-lifecycle-invalid" });
     expect(writesOf()).toEqual([
       { method: "POST", path: "/api/worktrees/wt-3/merge", body: undefined },
       { method: "POST", path: "/api/worktrees/wt-3/discard", body: undefined },
@@ -650,7 +635,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       expect((await share({ node: "sheet", link })).structuredContent).toEqual({ ...drop, link, access: expect.any(String) });
       expect(writesOf()).toEqual([{ method: "PUT", path: "/api/nodes/sheet/link-sharing", body }, claimCode]);
     }
-    expect((await share({ node: "sheet", link: "owner" })).structuredContent).toMatchObject({
+    expect(toolError((await share({ node: "sheet", link: "owner" })))).toMatchObject({
       code: "workspace-argument-invalid",
     });
     const description = (await client.listTools()).tools.find((tool) => tool.name === "share")!.description!;
@@ -661,16 +646,13 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it("refuses a file link of another Workspace and sends a person's token session to the browser", async () => {
     const client = await connect();
     expect(
-      await client.callTool({ name: "share", arguments: { node: "https://elsewhere.example/nodes/sheet", link: "viewer" } }),
-    ).toMatchObject({ isError: true, structuredContent: { code: "workspace-origin-mismatch" } });
+      toolError(await client.callTool({ name: "share", arguments: { node: "https://elsewhere.example/nodes/sheet", link: "viewer" } })),
+    ).toMatchObject({ code: "workspace-origin-mismatch" });
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     humanTokenSession = true;
     const refused = await client.callTool({ name: "share", arguments: { node: "sheet", link: "viewer" } });
-    expect(refused).toMatchObject({
-      isError: true,
-      structuredContent: { code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: `${origin}/nodes/sheet` } },
-      content: [{ type: "text", text: expect.stringContaining(`Ask the user to share the file in the browser: ${origin}/nodes/sheet`) }],
-    });
+    expect(toolError(refused)).toMatchObject({ code: "INTERACTIVE_SESSION_REQUIRED", detail: { url: `${origin}/nodes/sheet` } });
+    expect(refused.content).toMatchObject([{ type: "text", text: expect.stringContaining(`Ask the user to share the file in the browser: ${origin}/nodes/sheet`) }]);
     expect((await client.callTool({ name: "share", arguments: { node: "sheet" } })).structuredContent).toMatchObject({
       link: "off",
     });
@@ -746,10 +728,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
       pr_discard: { repo: "team-1", number: "3" },
     };
     for (const [name, scope] of Object.entries(toolScopes).filter(([, scope]) => scope !== "read")) {
-      expect(await client.callTool({ name, arguments: args[name] ?? {} })).toMatchObject({
-        isError: true,
-        structuredContent: { code: "workspace-scope-required", detail: { required: scope } },
-      });
+      expect(toolError(await client.callTool({ name, arguments: args[name] ?? {} }))).toMatchObject({ code: "workspace-scope-required", detail: { required: scope } });
     }
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
     const reads = ["space_browse", "label_list", "blob_get"] as const;
@@ -759,10 +738,7 @@ describe("space, unit, repository admin, label and merge tools", () => {
   it("refuses pr_merge and pr_discard without worktree:merge even with read, write and publish", async () => {
     const client = await connect(new Set<ToolScope>(["read", "write", "publish"]));
     for (const name of ["pr_merge", "pr_discard"]) {
-      expect(await client.callTool({ name, arguments: { repo: "team-1", number: "3" } })).toMatchObject({
-        isError: true,
-        structuredContent: { code: "workspace-scope-required", detail: { required: "worktree:merge" } },
-      });
+      expect(toolError(await client.callTool({ name, arguments: { repo: "team-1", number: "3" } }))).toMatchObject({ code: "workspace-scope-required", detail: { required: "worktree:merge" } });
     }
     expect(requests.filter((request) => request.path !== "/api/session")).toEqual([]);
   });

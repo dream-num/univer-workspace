@@ -198,34 +198,26 @@ export function createGateway(
                   `${tool.name} would return more than ${String(RESULT_LIMIT)} characters. Narrow the request (for example a smaller limit, fewer symbols or terms, or a more specific query) and call again.`,
                 );
             }
+            let text = result.text ?? JSON.stringify(structuredContent);
+            if (result.text === undefined && typeof structuredContent === "object" && structuredContent !== null) {
+              if (["outline", "read", "find"].includes(tool.name) &&
+                  "text" in structuredContent && typeof structuredContent.text === "string") {
+                text = structuredContent.text + ("json" in structuredContent
+                  ? `\n${JSON.stringify(structuredContent.json)}` : "");
+              } else if (tool.name === "execute" && "valueTruncated" in structuredContent &&
+                         structuredContent.valueTruncated === true) {
+                text = `The write committed; its value was too large to return.\n${text}`;
+              } else if ("job_id" in structuredContent && "status" in structuredContent &&
+                         structuredContent.status === "running") {
+                text = `${tool.name} is running. Poll job_get with job_id.\n${text}`;
+              }
+            }
             state.repo = result.repo;
             state.nodeId = result.nodeId;
             state.outcome = "ok";
             return {
               content: [
-                {
-                  type: "text",
-                  text:
-                    tool.name === "execute" &&
-                    typeof structuredContent === "object" &&
-                    structuredContent !== null &&
-                    "valueTruncated" in structuredContent &&
-                    structuredContent.valueTruncated === true
-                      ? "The write committed; its value was too large to return."
-                      : typeof structuredContent === "object" &&
-                          structuredContent !== null &&
-                          "job_id" in structuredContent &&
-                          "status" in structuredContent &&
-                          structuredContent.status === "running"
-                        ? `${tool.name} is running. Poll job_get with job_id.`
-                        : ["outline", "read", "find"].includes(tool.name) &&
-                            typeof structuredContent === "object" &&
-                            structuredContent !== null &&
-                            "text" in structuredContent &&
-                            typeof structuredContent.text === "string"
-                          ? structuredContent.text
-                          : (result.text ?? `${tool.name} completed.`),
-                },
+                { type: "text", text },
                 ...delivered.content,
               ],
               structuredContent,
@@ -250,8 +242,7 @@ export function createGateway(
             state.errorCode = outcome === "tool_error" || outcome === "timeout" ? code : null;
             return {
               isError: true,
-              content: [{ type: "text", text: message.replace(/[\r\n]+/g, " ") }],
-              structuredContent: { code, message, detail },
+              content: [{ type: "text", text: JSON.stringify({ code, message, detail: detail ?? undefined }) }],
               ...(state.jobUsage && state.jobUsage.completion === undefined
                 ? { _meta: { "univer.workspace.deduplicated": true } }
                 : {}),

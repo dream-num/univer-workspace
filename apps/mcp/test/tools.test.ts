@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
@@ -319,10 +320,7 @@ describe("Issue tools and gateway infrastructure", () => {
       name: "issue_comment",
       arguments: { repo: "team-1", number: "7", body: "hello" },
     });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-scope-required", detail: { required: "write" } },
-    });
+    expect(toolError(result)).toMatchObject({ code: "workspace-scope-required", detail: { required: "write" } });
     expect(requests.map((request) => request.path)).toEqual(requests.map(() => "/api/session"));
     expect(events()[0]).toMatchObject({
       outcome: "tool_error",
@@ -338,11 +336,8 @@ describe("Issue tools and gateway infrastructure", () => {
       name: "issue_comment",
       arguments: { repo: "team-1", number: "7", body: "hello" },
     });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-result-unknown" },
-    });
-    expect(JSON.stringify(result.structuredContent)).toContain("idempotency_key");
+    expect(toolError(result)).toMatchObject({ code: "workspace-result-unknown" });
+    expect(JSON.stringify(toolError(result))).toContain("idempotency_key");
     expect(events()[0]).toMatchObject({
       outcome: "tool_error",
       error_code: "workspace-result-unknown",
@@ -356,10 +351,7 @@ describe("Issue tools and gateway infrastructure", () => {
       name: "issue_set_state",
       arguments: { repo: "team-1", number: "7", state: "open", reason: "completed" },
     });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-argument-invalid" },
-    });
+    expect(toolError(result)).toMatchObject({ code: "workspace-argument-invalid" });
     expect(requests.some((request) => request.path.includes("/issues"))).toBe(false);
   });
 
@@ -495,7 +487,7 @@ describe("Issue tools and gateway infrastructure", () => {
       prs: [expect.objectContaining({ id: "wt-claimed-agent", url: `${identityOrigin}/spaces/personal-agent/pulls/1` })],
     });
     const created = await call("pr_create", { repo: "agent-1/personal", title: "Mine" });
-    expect(created).toMatchObject({ isError: true, structuredContent: { code: "workspace-argument-invalid" } });
+    expect(toolError(created)).toMatchObject({ code: "workspace-argument-invalid" });
     expect(writesOf()).toEqual([]);
   });
 
@@ -540,16 +532,10 @@ describe("Issue tools and gateway infrastructure", () => {
   it("refuses another user's Personal Space and an empty pr_edit", async () => {
     await start();
     const spaceOfBob = await call("pr_create", { repo: "personal-bob", title: "x" });
-    expect(spaceOfBob).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-argument-invalid" },
-    });
+    expect(toolError(spaceOfBob)).toMatchObject({ code: "workspace-argument-invalid" });
     expect(writesOf()).toEqual([]);
     const nothing = await call("pr_edit", { repo: "bob/team", number: "3" });
-    expect(nothing).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-argument-invalid" },
-    });
+    expect(toolError(nothing)).toMatchObject({ code: "workspace-argument-invalid" });
     expect(writesOf().filter((r) => r.method === "PATCH")).toEqual([]);
   });
 
@@ -579,10 +565,7 @@ describe("Issue tools and gateway infrastructure", () => {
     expect(writesOf().map((r) => r.path)).toEqual(["/api/worktrees/wt-3/reopen"]);
     wt3State = "draft";
     const draftAgain = await call("pr_ready", { repo: "bob/team", number: "3", undo: true });
-    expect(draftAgain).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-lifecycle-invalid" },
-    });
+    expect(toolError(draftAgain)).toMatchObject({ code: "workspace-lifecycle-invalid" });
   });
 
   it("searches Issues and pull requests without a repository", async () => {
@@ -602,10 +585,7 @@ describe("Issue tools and gateway infrastructure", () => {
       { kind: "prs", state: "closed" },
       { kind: "prs", labels: ["bug"] },
     ]) {
-      expect(await call("search", bad)).toMatchObject({
-        isError: true,
-        structuredContent: { code: "workspace-argument-invalid" },
-      });
+      expect(toolError(await call("search", bad))).toMatchObject({ code: "workspace-argument-invalid" });
     }
     expect(events().map((event) => event["repo"])).toEqual([null, null, null, null, null]);
   });
@@ -613,8 +593,10 @@ describe("Issue tools and gateway infrastructure", () => {
   it("browses a repository, a pull request and an Issue, and reports a missing item", async () => {
     await start();
     const client = await connect();
-    const browse = async (args: Record<string, unknown>) =>
-      (await client.callTool({ name: "browse", arguments: { repo: "bob/team", ...args } })).structuredContent;
+    const browse = async (args: Record<string, unknown>) => {
+      const result = await client.callTool({ name: "browse", arguments: { repo: "bob/team", ...args } });
+      return result.isError ? toolError(result) : result.structuredContent;
+    };
     expect(await browse({})).toEqual({ url: `${identityOrigin}/spaces/team-1` });
     expect(await browse({ number: "3", unit: "u1" })).toEqual({ url: `${teamUrl}?unit=u1` });
     expect(await browse({ number: "7" })).toEqual({ url: `${identityOrigin}/spaces/team-1/issues/7` });
@@ -634,12 +616,9 @@ describe("Issue tools and gateway infrastructure", () => {
     ];
     for (const call of invalid) {
       const result = await client.callTool(call);
-      expect(result).toMatchObject({
-        isError: true,
-        structuredContent: {
-          code: "workspace-argument-invalid",
-          detail: { issues: expect.any(Array) },
-        },
+      expect(toolError(result)).toMatchObject({
+        code: "workspace-argument-invalid",
+        detail: { issues: expect.any(Array) },
       });
     }
     expect(events().map((event) => [event["outcome"], event["error_code"]])).toEqual(
@@ -653,10 +632,7 @@ describe("Issue tools and gateway infrastructure", () => {
     await start();
     vi.spyOn(whoamiTool, "run").mockResolvedValue({ output: { secret: "leak-me" }, repo: null });
     const result = await (await connect()).callTool({ name: "whoami", arguments: {} });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-internal-error", message: "Internal tool error." },
-    });
+    expect(toolError(result)).toEqual({ code: "workspace-internal-error", message: "Internal tool error." });
     expect(JSON.stringify(result)).not.toContain("leak-me");
     expect(events()[0]).toMatchObject({ outcome: "internal_error", error_code: null });
   });
@@ -665,10 +641,7 @@ describe("Issue tools and gateway infrastructure", () => {
     await start();
     vi.spyOn(whoamiTool, "run").mockResolvedValue({ output: { subject: undefined }, repo: null });
     const result = await (await connect()).callTool({ name: "whoami", arguments: {} });
-    expect(result).toMatchObject({
-      isError: true,
-      structuredContent: { code: "workspace-internal-error" },
-    });
+    expect(toolError(result)).toMatchObject({ code: "workspace-internal-error" });
     expect(events()[0]).toMatchObject({ outcome: "internal_error", error_code: null });
   });
 });

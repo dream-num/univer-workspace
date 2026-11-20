@@ -1,3 +1,4 @@
+import { toolError } from "./tool-error.js";
 import { Writable } from "node:stream";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { pino } from "pino";
@@ -126,7 +127,7 @@ it.each([
   for (const name of ["skill_draft_create", "skill_draft_get"]) {
     const result = await f.client.callTool({ name, arguments: name === "skill_draft_create" ? input : { draft: "draft-1" } });
     expect(result.isError).toBe(true);
-    expect(result.structuredContent).toMatchObject({ code, message });
+    expect(toolError(result)).toMatchObject({ code, message });
     expect(JSON.stringify(result.content)).toContain(message);
   }
 });
@@ -135,7 +136,7 @@ it("rejects Ask-style read-only creation before HTTP and tells the user to switc
   const f = await setup(new Set(["read"]));
   const result = await f.client.callTool({ name: "skill_draft_create", arguments: input });
   expect(result.isError).toBe(true);
-  expect(result.structuredContent).toMatchObject({ code: "workspace-scope-required" });
+  expect(toolError(result)).toMatchObject({ code: "workspace-scope-required" });
   expect(JSON.stringify(result.content)).toContain("switch to Auto");
   expect(f.posts).toEqual([]);
   expect(f.fetcher.mock.calls.some(([url]) => String(url).includes("/api/skill-drafts"))).toBe(false);
@@ -153,7 +154,7 @@ it.each(["https://attacker.example/drafts/skills/draft-1", "//attacker.example/d
   f.setDraft({ ...rawDraft(), previewPath });
   const result = await f.client.callTool({ name: "skill_draft_get", arguments: { draft: "draft-1" } });
   expect(result.isError).toBe(true);
-  expect(result.structuredContent).toMatchObject({ code: "workspace-invalid-response" });
+  expect(toolError(result)).toMatchObject({ code: "workspace-invalid-response" });
 });
 
 it("preserves verified review, scan, replacement removals and unverified count", () => {
@@ -212,7 +213,7 @@ it.each([
   ] as const) {
     const result = await f.client.callTool({ name, arguments: args });
     expect(result.isError).toBe(true);
-    expect(result.structuredContent).toMatchObject({ code, message });
+    expect(toolError(result)).toMatchObject({ code, message });
   }
   expect(f.logs()).not.toContain(pinned.pageUrl);
 });
@@ -241,5 +242,5 @@ it("rejects missing or simultaneous content forms and dependent source fields", 
   }
   const f = await setup();
   f.setSource({ source: pinned, skill: { content: "broken response" } });
-  expect((await f.client.callTool({ name: "skill_source_read", arguments: { source: pinned } })).structuredContent).toMatchObject({ code: "workspace-invalid-response" });
+  expect(toolError((await f.client.callTool({ name: "skill_source_read", arguments: { source: pinned } })))).toMatchObject({ code: "workspace-invalid-response" });
 });

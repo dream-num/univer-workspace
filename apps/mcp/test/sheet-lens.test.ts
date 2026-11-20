@@ -279,17 +279,20 @@ it.each([
   { name: "outline", options: { at: "s1.t1", budget: 300 } },
   { name: "read", options: { range: "Orders!A1:J5", max: 10 } },
   { name: "find", options: { terms: ["returned"], max: 2 } },
-])("$name sends its structured text as the exact text content", async ({ name, options }) => {
-  setup();
-  await withGateway(async (client) => {
-    const result = await client.callTool({ name, arguments: { unit: "unit", trunk: true, ...options } });
-    expect(result.isError).not.toBe(true);
-    const output = sheetLensToolOutput.parse(result.structuredContent);
-    expect(output.text).toContain("unit unit [trunk, rev=7]");
-    expect(output.text).toContain("note:");
-    expect(output.next).toBeDefined();
-    expect(result.content).toEqual([{ type: "text", text: output.text }]);
-  });
+].flatMap((test) => [false, true].map((json) => ({ ...test, json }))))(
+  "$name sends its complete text content (json: $json)", async ({ name, options, json }) => {
+    setup();
+    await withGateway(async (client) => {
+      const result = await client.callTool({ name, arguments: { unit: "unit", trunk: true, ...options, json } });
+      expect(result.isError).not.toBe(true);
+      const output = sheetLensToolOutput.parse(result.structuredContent);
+      expect(output.text).toContain("unit unit [trunk, rev=7]");
+      expect(output.text).toContain("note:");
+      expect(output.next).toBeDefined();
+      expect(Object.hasOwn(output, "json")).toBe(json);
+      expect(result.content).toEqual([{ type: "text", text: output.text +
+        (json ? `\n${JSON.stringify(output.json)}` : "") }]);
+    });
 });
 
 it("formats the revision, trimmed body and warning lines exactly like CLI text in both scopes", () => {

@@ -319,6 +319,27 @@ describe("repository references", () => {
     });
   });
 
+  it.each([{ personal: [] }, { personal: [view({ id: "p1", type: "personal", slug: null, fullName: null })] }])(
+    "keeps the owner/slug hint when no Personal Space has a full name ($personal)", async ({ personal }) => {
+      const { spaces } = clients((call) => call.path === "/api/spaces"
+        ? Response.json({ spaces: [view(), ...personal] }) : notFound());
+      await expect(resolveRepoReference(spaces, "missing")).rejects.toMatchObject({
+        code: "workspace-argument-invalid",
+        message: 'Repository "missing" was not found. Use owner/slug.',
+      });
+    },
+  );
+
+  it("names the caller's Personal Space when a bare slug is unknown", async () => {
+    const personal = view({ id: "p1", type: "personal", slug: null, fullName: "me/personal" });
+    const { spaces } = clients((call) => call.path === "/api/spaces"
+      ? Response.json({ spaces: [view(), personal] }) : notFound());
+    await expect(resolveRepoReference(spaces, "personal")).rejects.toMatchObject({
+      code: "workspace-argument-invalid",
+      message: 'Repository "personal" was not found. Use owner/slug, or me/personal for your Personal Space.',
+    });
+  });
+
   it("lists owner/slug candidates when a bare slug is ambiguous", async () => {
     const { spaces } = clients((call) => call.path === "/api/spaces"
       ? Response.json({ spaces: [view(), view({ id: "s2", fullName: "other/docs", owner: { id: "u2", username: "other" } })] })
