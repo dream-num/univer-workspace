@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runInNewContext } from 'node:vm';
+import { toolOutput } from './mcp-result.mjs';
 
 test('invalid MCP input exits 2 before connecting or writing evidence', () => {
   const run = mkdtempSync(join(tmpdir(), 'verify-uvw-mcp-input-'));
@@ -38,6 +39,7 @@ const validator = source.slice(source.indexOf('\nfunction eventIssues('));
 
 function validateErrorCode(outcome, code, errorCode, extra = {}) {
   return runInNewContext(`${validator}\neventIssues(event)`, {
+    toolOutput,
     tool: 'repo_view',
     args: {},
     auth: 'dev',
@@ -45,7 +47,9 @@ function validateErrorCode(outcome, code, errorCode, extra = {}) {
     principalId: undefined,
     ...extra.globals,
     protocol: '2026-07-28',
-    result: { isError: outcome === 'tool_error', structuredContent: { code } },
+    result: outcome === 'tool_error'
+      ? { isError: true, content: [{ type: 'text', text: JSON.stringify({ code, message: 'm' }) }] }
+      : { structuredContent: {} },
     event: {
       event: 'mcp.tool_call', schema_version: 1, ts: '2026-11-07T00:00:00Z',
       request_id: 'test', user_id: 'user-1', auth_kind: 'dev', client_id: 'dev',

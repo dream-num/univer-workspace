@@ -8,9 +8,9 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 
 ## Sub-features
 
-- AH1 shows `Hand to my agent` in the visitor bar of a shared file to signed-out visitors and to signed-in people
-  who are not its owner or a Team member, next to `Remix` and `Report`. An unclaimed owner adds
-  `Unverified agent` after `By <name>`.
+- AH1 shows `Hand to my agent` in the visitor bar's `More actions` menu, between `Remix` and `Copy link`, to
+  signed-out visitors of a shared file and to signed-in readers of someone else's Personal Space file. An unclaimed
+  owner adds `Unverified agent` after `By <name>`.
 - AH2 opens the `Hand to my agent` dialog on its `MCP (recommended)` tab: the server URL `$ORIGIN/mcp` with
   `Copy MCP server URL`, then an English prompt that reads the file with `read` or `inspect` and `trunk: true`,
   and falls back to a copy (`pr_create`, `unit_create` with `from`, `pr_ready`, `pr_merge`, `claim`) when those
@@ -40,7 +40,8 @@ its pull requests. Until claimed, the agent's files carry an `Unverified agent` 
 
 ## How to get to it (user POV)
 
-- Open a viewer-linked file you do not own, signed out or as another user, and click `Hand to my agent`.
+- Open a viewer-linked file you do not own, signed out or as another user, open `More actions` in the visitor bar
+  and click `Hand to my agent`.
 - An agent runs `uvw auth guest`, or connects an MCP client and picks `Continue as a guest agent`, then calls
   `claim` or `uvw claim` and gives you the link.
 - Open the claim link in your browser, sign in, and click `Claim agent`. Manage agents from Account > `My agents`.
@@ -64,8 +65,9 @@ Preconditions:
   `It works once, within 10 minutes.` Save `gu claim --json`'s `claimUrl` outside `$EVIDENCE`.
 - **Visitor view (AH1-AH3).** In a separate agent-browser session (`AGENT_BROWSER_SESSION=<run>-anon`), open
   `$ORIGIN/nodes/$AN`, pin the locale, reload, and wait for `canvas`. The bar shows `By agent` and
-  `Unverified agent`. Click `Hand to my agent`, read the MCP tab, click `Command line (uvw)`, then `Copy prompt`.
-  Screenshot both tabs.
+  `Unverified agent`. Click `More actions`, then the menu item `Hand to my agent`
+  (`find role menuitem click --name "Hand to my agent" --exact`; the dialog has the same title). Read the MCP tab,
+  click `Command line (uvw)`, then `Copy prompt`. Screenshot both tabs and close with `Close`.
 - **Claim (AH6).** In that session open the claim URL: `Sign in to claim this agent`. Sign in as the run user
   through the embedded form. The page shows `Claim agent` (the guest's name is `agent`), `@<A>` and `1 file`.
   Click `Claim agent`; the URL becomes `/spaces/<id>`. Reopen the claim URL: `agent is yours`.
@@ -94,3 +96,5 @@ Preconditions:
 - The MCP tool lists change with the claim after the gateway's cache (about 30 s): unclaimed agents have `claim`
   and `pr_merge`, claimed agents keep `pr_merge` only. See [the MCP journeys](./mcp.md).
 - Prompts are English whatever the interface language.
+- The dialog keeps the tab you last chose until the page reloads. Click `MCP (recommended)` before reading the
+  MCP tab on a second opening.

@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { cpus, loadavg } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { toolOutput } from './mcp-result.mjs';
 
 const help = `Usage: node .agents/skills/verify-uvw/bin/renderer-bench.mjs [flags]
 Load verify-uvw env first (needs VERIFY_UVW_MCP=1 and a running stack). Runs against that disposable stack's renderer only,
@@ -249,7 +250,7 @@ async function e2e() {
     const client = new Client({ name: 'verify-uvw-renderer-bench', version: '1.0.0' }, { versionNegotiation: { mode: { pin: '2026-07-28' } } });
     const transport = new StreamableHTTPClientTransport(url, { requestInit: { headers: { authorization: `Bearer ${secret('mcp-token')}`, 'x-request-id': requestId } } });
     const started = performance.now();
-    try { await client.connect(transport); const r = await client.callTool({ name: 'screenshot', arguments: args }); return { requestId, ms: performance.now() - started, isError: !!r.isError, output: r.structuredContent }; }
+    try { await client.connect(transport); const r = await client.callTool({ name: 'screenshot', arguments: args }); return { requestId, ms: performance.now() - started, isError: !!r.isError, output: toolOutput(r) }; }
     catch (error) { return { requestId, ms: performance.now() - started, isError: true, output: { message: error.message } }; }
     finally { await client.close().catch(() => {}); }
   };

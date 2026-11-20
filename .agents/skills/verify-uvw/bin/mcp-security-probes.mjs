@@ -9,6 +9,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { toolOutput } from './mcp-result.mjs';
 
 export const SENSITIVE_NAME = /^(MCP_EXECUTOR_TOKEN|MCP_RENDERER_TOKEN|UNIVER_LICENSE.*|.*_SECRET|.*_TOKEN|.*_KEY)$/;
 export const REQUIREMENTS = {
@@ -152,7 +153,7 @@ async function mcpCall(ctx, user, tool, args) {
   try {
     await client.connect(transport);
     const r = await client.callTool({ name: tool, arguments: args });
-    return { ms: Math.round(performance.now() - started), isError: r.isError === true, out: r.structuredContent, content: r.content };
+    return { ms: Math.round(performance.now() - started), isError: r.isError === true, out: toolOutput(r), content: r.content };
   } catch (error) {
     return { ms: Math.round(performance.now() - started), isError: true, thrown: String(error.message).slice(0, 300) };
   } finally { await client.close().catch(() => {}); }

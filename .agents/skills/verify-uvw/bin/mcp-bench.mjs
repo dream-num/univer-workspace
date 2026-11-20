@@ -8,6 +8,7 @@ import { join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { cpus, loadavg } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { toolOutput } from './mcp-result.mjs';
 
 const help = `Usage: node .agents/skills/verify-uvw/bin/mcp-bench.mjs [flags]
 Load verify-uvw env first. Runs against that disposable single-executor stack only.
@@ -131,7 +132,7 @@ async function call(tool, args) {
   try { await client.connect(transport); result = await client.callTool({ name: tool, arguments: args }); }
   catch (error) { result = { isError: true, structuredContent: { code: `transport-${httpStatus ?? 'unknown'}`, message: error.message } }; }
   finally { await client.close().catch(() => {}); }
-  return { requestId, tool, startedAt, latencyMs: performance.now() - started, httpStatus, isError: !!result.isError, output: result.structuredContent };
+  return { requestId, tool, startedAt, latencyMs: performance.now() - started, httpStatus, isError: !!result.isError, output: toolOutput(result) };
 }
 async function ok(tool, args) {
   const r = await call(tool, args); assert(!r.isError, `${tool}: ${JSON.stringify(r.output)}`); return r.output;

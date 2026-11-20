@@ -83,6 +83,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [Link sharing](./link-sharing.md): LS1-LS4 cover `uvw share`, the browser Share dialog, and what an
   anonymous visitor sees with the link set to `viewer` or `off`. LS5-LS7 cover Remix, link preview tags
   and public Spaces.
+- [HTML View](./html-view.md): HV1-HV7 cover publishing with uvw, the `Pages` tab, owner writes to the source
+  Sheet, live Sheet updates, read-only visitors, trial mode and `Save my version`.
 - [Agent handoff and claim](./agent-handoff.md): AH1-AH10 cover `Hand to my agent`, guest agents over
   uvw and MCP, claim links and the claim page, `My agents`, and the claimer's pull request decisions.
 

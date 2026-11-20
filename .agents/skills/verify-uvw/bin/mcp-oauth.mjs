@@ -10,10 +10,15 @@ import { redact as redactSecrets, runSecrets } from './secrets.mjs';
 
 const [run, origin, mcpUrl, username, command, label, ...args] = process.argv.slice(2);
 const usage = message => {
-  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>]\n       verify-uvw mcp-oauth refresh|reuse|revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
+  console.error(`${message}\nUsage: verify-uvw mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]\n       verify-uvw mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]\n       verify-uvw mcp-oauth revoke|direct <label>\n       verify-uvw mcp-oauth exchange <label> pat|oauth`);
   process.exit(2);
 };
 if (!['login', 'refresh', 'reuse', 'revoke', 'direct', 'exchange'].includes(command) || !/^[A-Za-z0-9._-]{1,64}$/.test(label ?? '')) usage('Invalid command or label');
+// The token request's `resource`: the MCP URL by default, left out with `omit`, or another URL to test a mismatch.
+const at = args.indexOf('--token-resource');
+const [, tokenResourceValue] = at < 0 ? [] : args.splice(at, 2);
+if (at >= 0 && (!['login', 'refresh', 'reuse'].includes(command) || !(tokenResourceValue === 'omit' || URL.canParse(tokenResourceValue ?? '')))) usage('--token-resource takes omit or a URL, with login, refresh or reuse');
+const tokenResource = tokenResourceValue === 'omit' ? {} : { resource: tokenResourceValue ?? mcpUrl };
 const home = name => join(run, 'home', name);
 const secret = name => readFileSync(home(name), 'utf8').trim();
 const keep = (name, value) => writeFileSync(home(name), value, { mode: 0o600 });
@@ -109,7 +114,7 @@ if (command === 'login') {
     if (answer.searchParams.get('state') !== state || !answer.searchParams.get('code')) throw new Error(`Callback carried ${answer.searchParams.get('error') ?? 'no code'} or a wrong state`);
     if (answer.searchParams.get('iss') !== origin) throw new Error('Callback issuer does not match Workspace');
     const token = await form('/api/auth/token', { grant_type: 'authorization_code', client_id: clientId, code: answer.searchParams.get('code'),
-      code_verifier: verifier, redirect_uri: redirectUri, resource: mcpUrl });
+      code_verifier: verifier, redirect_uri: redirectUri, ...tokenResource });
     const ok = token.status === 200 && typeof token.body.access_token === 'string';
     if (ok) {
       keepGrant(token.body);
@@ -121,7 +126,7 @@ if (command === 'login') {
   }
 } else if (command === 'refresh' || command === 'reuse') {
   const refresh = secret(command === 'refresh' ? 'mcp-oauth-refresh' : 'mcp-oauth-refresh-previous');
-  const token = await form('/api/auth/token', { grant_type: 'refresh_token', client_id: secret('mcp-oauth-client-id'), refresh_token: refresh, resource: mcpUrl });
+  const token = await form('/api/auth/token', { grant_type: 'refresh_token', client_id: secret('mcp-oauth-client-id'), refresh_token: refresh, ...tokenResource });
   const ok = token.status === 200 && typeof token.body.access_token === 'string';
   if (ok) {
     keep('mcp-oauth-refresh-previous', refresh);

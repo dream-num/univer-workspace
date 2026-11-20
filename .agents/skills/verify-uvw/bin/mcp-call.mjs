@@ -5,6 +5,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { redact as redactSecrets } from './secrets.mjs';
+import { toolOutput } from './mcp-result.mjs';
 
 const argv = process.argv.slice(2);
 const internal = {};
@@ -109,7 +110,7 @@ try {
   } else {
     result = mode === 'tools' ? await client.listTools() : await client.callTool({ name: tool, arguments: args });
     output = mode === 'tools' ? result.tools.map(({ name, description, annotations, inputSchema, outputSchema }) =>
-      ({ name, description, annotations, inputSchema, outputSchema })) : result.structuredContent;
+      ({ name, description, annotations, inputSchema, outputSchema })) : toolOutput(result);
   }
   code = result.isError === true ? 1 : 0;
 } catch (error) {
@@ -224,8 +225,8 @@ function eventIssues(event) {
     : typeof event.unit_type !== 'string' && !failedTypstWithoutUnit;
   if (invalidUnitType || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error' || event.outcome === 'timeout') {
-    const resultCode = result.structuredContent?.code;
-    if (typeof resultCode !== 'string') issues.push('Error result has no structuredContent.code');
+    const resultCode = toolOutput(result)?.code;
+    if (typeof resultCode !== 'string') issues.push('Error result has no code');
     else if (event.error_code !== resultCode) issues.push('Event error_code differs from tool result');
   } else if (event.error_code !== null) issues.push('Unexpected event error_code');
   return issues;
