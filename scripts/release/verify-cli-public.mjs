@@ -3,7 +3,6 @@ import { pathToFileURL } from "node:url";
 import { assertExactSemver, RELEASE_PACKAGE_NAME } from "./policy.mjs";
 
 const REGISTRY = "https://registry.npmjs.org/";
-const PACKAGES = new Set([RELEASE_PACKAGE_NAME, "univer-cli"]);
 const MAX_METADATA_BYTES = 1024 * 1024;
 const MAX_TARBALL_BYTES = 256 * 1024 * 1024;
 
@@ -54,8 +53,8 @@ async function readBody(response, limit, consume) {
   }
 }
 
-export async function verifyPublicCli({ packageName, version, expectedIntegrity, fetcher = fetch }) {
-  if (!PACKAGES.has(packageName)) throw new Error("Choose one of the two supported public CLI packages.");
+export async function verifyPublicCli({ version, expectedIntegrity, fetcher = fetch }) {
+  const packageName = RELEASE_PACKAGE_NAME;
   checkVersion(version);
   checkIntegrity(expectedIntegrity);
 
@@ -97,7 +96,6 @@ export async function verifyPublicCli({ packageName, version, expectedIntegrity,
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const result = await verifyPublicCli({
-      packageName: process.env.VERIFY_PACKAGE,
       version: process.env.VERIFY_VERSION,
       expectedIntegrity: process.env.VERIFY_INTEGRITY,
     });

@@ -4,13 +4,14 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import { verifyPublicCli } from "./verify-cli-public.mjs";
 
+const packageName = "univer-workspace-cli";
 const version = "0.7.1";
 const registry = "https://registry.npmjs.org/";
 const tarball = Buffer.from("fixture tarball bytes");
 const integrity = (bytes) => `sha512-${createHash("sha512").update(bytes).digest("base64")}`;
 const expectedIntegrity = integrity(tarball);
 
-function fixture({ packageName = "univer-workspace-cli", change, status = 200, published = tarball } = {}) {
+function fixture({ change, status = 200, published = tarball } = {}) {
   const tarballUrl = `${registry}${packageName}/-/${packageName}-${version}.tgz`;
   const meta = {
     name: packageName,
@@ -23,7 +24,6 @@ function fixture({ packageName = "univer-workspace-cli", change, status = 200, p
     tarballUrl,
     urls,
     request: {
-      packageName,
       version,
       expectedIntegrity,
       fetcher: async (url, options) => {
@@ -41,15 +41,13 @@ function fixture({ packageName = "univer-workspace-cli", change, status = 200, p
   };
 }
 
-for (const packageName of ["univer-workspace-cli", "univer-cli"]) {
-  test(`verifies exact metadata and downloaded bytes for ${packageName}`, async () => {
-    const f = fixture({ packageName });
-    assert.deepEqual(await verifyPublicCli(f.request), {
-      packageName, version, integrity: expectedIntegrity, tarballUrl: f.tarballUrl,
-    });
-    assert.deepEqual(f.urls, [`${registry}${packageName}/${version}`, f.tarballUrl]);
+test("verifies only Workspace CLI metadata and downloaded bytes", async () => {
+  const f = fixture();
+  assert.deepEqual(await verifyPublicCli(f.request), {
+    packageName, version, integrity: expectedIntegrity, tarballUrl: f.tarballUrl,
   });
-}
+  assert.deepEqual(f.urls, [`${registry}${packageName}/${version}`, f.tarballUrl]);
+});
 
 test("rejects a different metadata digest without fetching tarball", async () => {
   const f = fixture({ change: (meta) => { meta.dist.integrity = integrity("different"); } });
@@ -63,7 +61,7 @@ test("rejects mismatched bytes even if the metadata digest matches", async () =>
   assert.equal(f.urls.length, 2);
 });
 
-for (const [field, value] of [["name", "another-package"], ["version", "9.0.0"]]) {
+for (const [field, value] of [["name", "univer-cli"], ["version", "9.0.0"]]) {
   test(`rejects different metadata ${field}`, async () => {
     const f = fixture({ change: (meta) => { meta[field] = value; } });
     await assert.rejects(verifyPublicCli(f.request), /different package name or version/u);
@@ -96,7 +94,6 @@ test("rejects untrusted registry, another artifact under npm and redirects", asy
 test("rejects invalid inputs before any network traffic", async () => {
   const f = fixture();
   for (const invalid of [
-    { packageName: "my-pkg" },
     { version: "latest" },
     { version: "^0.7.1" },
     { version: "0.7.1\n" },
@@ -115,7 +112,7 @@ test("workflow has one manual read-only job and does not interpolate inputs into
   assert.match(yaml, /^on:\n  workflow_dispatch:\n    inputs:/mu);
   assert.deepEqual([...yaml.matchAll(/^  ([\w-]+):\n/gmu)].map((match) => match[1]),
     ["workflow_dispatch", "verify"]);
-  assert.match(yaml, /options:\n          - univer-workspace-cli\n          - univer-cli\n/u);
+  assert.doesNotMatch(yaml, /^      package:|VERIFY_PACKAGE|inputs\.package/mu);
   assert.match(yaml, /expected_integrity:\n[^\n]*\n        required: true\n/u);
   assert.match(yaml, /^permissions:\n  contents: read$/mu);
   assert.match(yaml, /persist-credentials: false/u);

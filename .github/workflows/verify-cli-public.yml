@@ -1,15 +1,8 @@
-name: Verify public CLI package
+name: Verify public Workspace CLI package
 
 on:
   workflow_dispatch:
     inputs:
-      package:
-        description: Public CLI package
-        required: true
-        type: choice
-        options:
-          - univer-workspace-cli
-          - univer-cli
       version:
         description: Exact version (not a dist-tag or range)
         required: true
@@ -35,7 +28,6 @@ jobs:
           node-version: 24
       - name: Verify exact public metadata and tarball bytes
         env:
-          VERIFY_PACKAGE: ${{ inputs.package }}
           VERIFY_VERSION: ${{ inputs.version }}
           VERIFY_INTEGRITY: ${{ inputs.expected_integrity }}
         run: node scripts/release/verify-cli-public.mjs
