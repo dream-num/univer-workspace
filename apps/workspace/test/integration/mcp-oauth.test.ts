@@ -264,7 +264,6 @@ describe("MCP OAuth", () => {
       expect(await (await token(origin, fields(code))).json()).toMatchObject({ error: "invalid_grant" });
     }
     const code = await authorizeCode(origin, alice, clientId, redirectUri);
-    expect(await (await token(origin, { ...fields(code), resource: undefined })).json()).toMatchObject({ error: "invalid_request" });
     expect(await (await token(origin, { ...fields(code), client_id: "unknown" })).json()).toMatchObject({ error: "invalid_client" });
     expect(await (await refresh(origin, "unknown", "uvw_rt_x.y")).json()).toEqual({
       error: "invalid_client",
@@ -274,6 +273,24 @@ describe("MCP OAuth", () => {
     expect((await exchange(origin, issued.access_token)).status).toBe(200);
     expect(await (await token(origin, fields(code))).json()).toMatchObject({ error: "invalid_grant" });
     expect((await exchange(origin, issued.access_token)).status).toBe(400);
+  });
+
+  it("redeems a code and its refresh token without resource by using the authorized resource", async () => {
+    // QoderWork omits resource from token requests; RFC 8707 lets the server use the one bound at authorization.
+    const origin = await start();
+    const clientId = await registeredClientId(origin);
+    const alice = await registerUser(origin, "alice");
+    const redirectUri = "http://127.0.0.1:53379/callback";
+    const code = await authorizeCode(origin, alice, clientId, redirectUri);
+    const issued = await token(origin, {
+      grant_type: "authorization_code", code, code_verifier: VERIFIER, redirect_uri: redirectUri, client_id: clientId,
+    });
+    expect(issued.status).toBe(200);
+    const grant = (await issued.json()) as { access_token: string; refresh_token: string };
+    expect((await exchange(origin, grant.access_token)).status).toBe(200);
+    const refreshed = await token(origin, { grant_type: "refresh_token", refresh_token: grant.refresh_token, client_id: clientId });
+    expect(refreshed.status).toBe(200);
+    expect((await exchange(origin, ((await refreshed.json()) as { access_token: string }).access_token)).status).toBe(200);
   });
 
   it("accepts the MCP URL with a toolsets query as the resource and binds the grant to the configured URL", async () => {
