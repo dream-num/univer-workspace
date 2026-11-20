@@ -33,7 +33,7 @@ export interface AccessTokenRepository {
     readonly id: string;
     readonly secret: string;
     readonly clientId: string;
-    readonly resource: string;
+    readonly resource?: string | undefined;
     readonly now: () => number;
     readonly next: GrantSecrets;
   }): Promise<RefreshOutcome>;

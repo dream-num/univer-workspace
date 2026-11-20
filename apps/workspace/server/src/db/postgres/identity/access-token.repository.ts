@@ -81,7 +81,7 @@ export class PostgresAccessTokenRepository implements AccessTokenRepository {
         return { ok: false, reason: "reused", deletedSessions: await this.revokeGrantNow(id, at) ?? [] };
       }
       if (row.client_id !== input.clientId) return { ok: false, reason: "client_mismatch" };
-      if (row.resource !== input.resource) return { ok: false, reason: "resource_mismatch" };
+      if (input.resource !== undefined && row.resource !== input.resource) return { ok: false, reason: "resource_mismatch" };
       await db.prepare("INSERT INTO oauth_refresh_history (refresh_token_hash, grant_id, retired_at) VALUES (?, ?, ?)")
         .run(String(row.refresh_token_hash), id, at);
       await db.prepare("DELETE FROM oauth_refresh_history WHERE grant_id = ? AND retired_at < ?")

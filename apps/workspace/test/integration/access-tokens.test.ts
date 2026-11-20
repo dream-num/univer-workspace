@@ -324,8 +324,6 @@ describe("OAuth grants", () => {
       ok: false,
       reason: "resource_mismatch",
     });
-    const missing = { refreshToken: issued.refreshToken, clientId: "client" } as unknown as Parameters<typeof tokens.refreshGrant>[0];
-    expect(await tokens.refreshGrant(missing)).toEqual({ ok: false, reason: "resource_mismatch" });
     expect((await tokens.verifySubjectToken(issued.accessToken, { resource: RESOURCE }))?.id).toBe(issued.grant.id);
 
     expect((await tokens.refreshGrant({ refreshToken: issued.refreshToken, clientId: "client", resource: RESOURCE })).ok).toBe(true);
@@ -335,6 +333,21 @@ describe("OAuth grants", () => {
       ok: false,
       reason: "revoked",
     });
+  });
+
+  it("refreshes without resource while preserving the grant's stored resource", async () => {
+    const { tokens } = await harness();
+    const issued = await tokens.issueGrant({ userId: "u1", clientId: "client", scopes: ["read"], resource: RESOURCE });
+    expect(await tokens.refreshGrant({ refreshToken: issued.refreshToken, clientId: "other" }))
+      .toEqual({ ok: false, reason: "client_mismatch" });
+    const rotated = await tokens.refreshGrant({ refreshToken: issued.refreshToken, clientId: "client" });
+    if (!rotated.ok) throw new Error(rotated.reason);
+    expect(rotated.grant.resource).toBe(RESOURCE);
+    expect(await tokens.verifySubjectToken(issued.accessToken, { resource: RESOURCE })).toBeNull();
+    expect(await tokens.verifySubjectToken(rotated.accessToken, { resource: "https://other.example/mcp" })).toBeNull();
+    expect((await tokens.verifySubjectToken(rotated.accessToken, { resource: RESOURCE }))?.id).toBe(issued.grant.id);
+    expect(await tokens.refreshGrant({ refreshToken: issued.refreshToken, clientId: "client" }))
+      .toEqual({ ok: false, reason: "retired" });
   });
 
   it("lets only the owner revoke a grant", async () => {
