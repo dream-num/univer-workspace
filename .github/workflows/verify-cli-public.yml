@@ -1,0 +1,41 @@
+name: Verify public CLI package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Public CLI package
+        required: true
+        type: choice
+        options:
+          - univer-workspace-cli
+          - univer-cli
+      version:
+        description: Exact version (not a dist-tag or range)
+        required: true
+        type: string
+      expected_integrity:
+        description: sha512-... from the reviewed promotion record, not public npm
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Verify exact public metadata and tarball bytes
+        env:
+          VERIFY_PACKAGE: ${{ inputs.package }}
+          VERIFY_VERSION: ${{ inputs.version }}
+          VERIFY_INTEGRITY: ${{ inputs.expected_integrity }}
+        run: node scripts/release/verify-cli-public.mjs
