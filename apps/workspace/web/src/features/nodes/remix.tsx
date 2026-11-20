@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
-import { Bot, CopyPlus } from "lucide-react";
+import { Bot } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { createIdempotencyKey } from "../../shared/idempotency-key";
 import { useI18n, type MessageKey } from "../../shared/i18n";
@@ -44,7 +44,7 @@ function useCopyAndOpen() {
   const { t } = useI18n();
   const navigate = useNavigate();
   const client = useQueryClient();
-  // Clicks that land before the button re-renders as disabled belong to the copy already running.
+  // Clicks that land before the trigger re-renders as disabled belong to the copy already running.
   const running = useRef(false);
   const mutation = useMutation({
     mutationFn: (pending: PendingCopy) =>
@@ -104,53 +104,55 @@ function SignUpThenCopy({ nodeId, done, className, children }: {
   );
 }
 
-export function RemixButton({ nodeId }: { readonly nodeId: string }) {
-  const { t } = useI18n();
+export function useRemix(nodeId: string | undefined, onSignedOut: () => void) {
   const session = useQuery(sessionQueryOptions);
+  const copy = useCopyAndOpen();
+  return {
+    disabled: !nodeId || !session.data || copy.isPending,
+    isPending: copy.isPending,
+    remix() {
+      if (!nodeId || !session.data || copy.isPending) return;
+      if (session.data.authenticated) {
+        copy.start({ nodeId, key: createIdempotencyKey(), done: "remixDone" });
+      } else {
+        onSignedOut();
+      }
+    },
+  };
+}
+
+export function RemixDialog({ nodeId, open, onOpenChange }: {
+  readonly nodeId: string;
+  readonly open: boolean;
+  readonly onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useI18n();
   const resource = useQuery(nodeQueryOptions(nodeId)).data?.node.resource;
   const agentCopies = resource?.kind === "univer" && AGENT_COPYABLE_TYPES.includes(resource.unitType);
-  const copy = useCopyAndOpen();
-  const [guiding, setGuiding] = useState(false);
   const [way, setWay] = useState<HandOff>(HAND_OFFS[0]);
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="sm"
-        className="max-sm:px-2"
-        disabled={!session.data || copy.isPending}
-        onClick={() =>
-          session.data?.authenticated
-            ? copy.start({ nodeId, key: createIdempotencyKey(), done: "remixDone" })
-            : setGuiding(true)
-        }
-      >
-        <CopyPlus aria-hidden="true" />
-        <span className="max-sm:sr-only">{t(copy.isPending ? "remixCopying" : "remix")}</span>
-      </Button>
-      <Dialog
-        open={guiding}
-        onOpenChange={setGuiding}
-        width="sm"
-        title={t("remixTitle")}
-        description={t(agentCopies ? "remixSignedOutDescription" : "remixSignedOutSignUpDescription")}
-        footer={
-          <>
-            <SignUpThenCopy nodeId={nodeId} done="remixDone" className={buttonVariants({ variant: agentCopies ? "secondary" : "primary" })}>
-              {t("signUpFree")}
-            </SignUpThenCopy>
-            {agentCopies ? (
-              <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "copy", way)}>
-                <Bot aria-hidden="true" />
-                {t("handToMyAgent")}
-              </Button>
-            ) : null}
-          </>
-        }
-      >
-        {agentCopies ? <HandToAgentChoice nodeId={nodeId} task="copy" way={way} onWayChange={setWay} /> : null}
-      </Dialog>
-    </>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+      width="sm"
+      title={t("remixTitle")}
+      description={t(agentCopies ? "remixSignedOutDescription" : "remixSignedOutSignUpDescription")}
+      footer={
+        <>
+          <SignUpThenCopy nodeId={nodeId} done="remixDone" className={buttonVariants({ variant: agentCopies ? "secondary" : "primary" })}>
+            {t("signUpFree")}
+          </SignUpThenCopy>
+          {agentCopies ? (
+            <Button onClick={() => copyHandToAgentPrompt(nodeId, t, "copy", way)}>
+              <Bot aria-hidden="true" />
+              {t("handToMyAgent")}
+            </Button>
+          ) : null}
+        </>
+      }
+    >
+      {agentCopies ? <HandToAgentChoice nodeId={nodeId} task="copy" way={way} onWayChange={setWay} /> : null}
+    </Dialog>
   );
 }
 

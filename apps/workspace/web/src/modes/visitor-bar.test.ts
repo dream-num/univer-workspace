@@ -1,12 +1,15 @@
+// @vitest-environment jsdom
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { createElement, type ComponentProps, type ReactNode } from "react";
+import { act, createElement, type ComponentProps, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { sessionQueryKey } from "../features/auth";
 import { LanguageProvider } from "../shared/i18n";
+import { VisitorBar } from "./visitor-bar";
 import { WorkspaceLayout } from "./workspace-layout";
 
-const { controls } = vi.hoisted(() => ({ controls: new Map<string, () => unknown>() }));
+const { controls, ui } = vi.hoisted(() => ({ controls: new Map<string, () => unknown>(), ui: { interactive: false } }));
 const href = "/nodes/one?view=immersive#chart";
 
 vi.mock("@tanstack/react-router", () => ({
@@ -32,9 +35,20 @@ vi.mock("../features/spaces", () => ({ CreateTeamDialog: () => null }));
 vi.mock("../shared/ui-mode", () => ({ useUiMode: () => ({ mode: "repository" }) }));
 vi.mock("../shared/ui", async (importOriginal) => {
   const { Button } = await import("../shared/ui/button");
+  const original = await importOriginal<typeof import("../shared/ui")>();
   return {
-    ...(await importOriginal<object>()),
+    ...original,
     LoadingScreen: () => null,
+    MenuContent: ({ children }: { children?: ReactNode }) => ui.interactive
+      ? createElement(original.MenuContent, { align: "end" }, children)
+      : createElement("div", { role: "menu" }, children),
+    MenuItem: ({ children, disabled, onClick }: { children?: ReactNode; disabled?: boolean; onClick?: () => unknown }) => {
+      if (ui.interactive) return createElement(original.MenuItem, { disabled, onClick }, children);
+      const label = renderToStaticMarkup(createElement("span", null, children)).replace(/<[^>]*>/g, "");
+      if (onClick) controls.set(label, onClick);
+      return createElement("button", { role: "menuitem", disabled }, children);
+    },
+    MenuSeparator: () => ui.interactive ? createElement(original.MenuSeparator) : createElement("hr", { role: "separator" }),
     Button: (props: Omit<ComponentProps<typeof Button>, "onClick"> & { onClick?: () => unknown }) => {
       if (props.onClick) controls.set(props["aria-label"] ?? "copy", props.onClick);
       return createElement(Button, props);
@@ -47,6 +61,7 @@ let storage: Map<string, string>;
 let writeText: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
+  ui.interactive = false;
   storage = new Map();
   writeText = vi.fn().mockResolvedValue(undefined);
   vi.stubGlobal("window", {
@@ -89,17 +104,17 @@ describe("share page header", () => {
     const bar = html.slice(html.indexOf("<aside"), html.indexOf("</aside>"));
     expect(bar).toContain(">By Budget bot<");
     expect(bar).toContain(">Unverified agent<");
-    expect(bar).toContain('href="https://github.com/dream-num/univer-workspace" target="_blank" rel="noopener noreferrer">Made with Univer Workspace');
-    expect(bar).toContain('href="https://space.univer.ai" target="_blank" rel="noopener noreferrer">space.univer.ai');
+    expect(bar).toMatch(/<a[^>]*href="https:\/\/github.com\/dream-num\/univer-workspace"[^>]*target="_blank"[^>]*rel="noopener noreferrer"[^>]*aria-label="Made with Univer Workspace"[^>]*title="Made with Univer Workspace"><svg/);
+    expect(bar).not.toContain(">Made with Univer Workspace<");
+    expect(bar).not.toContain(["space", "univer", "ai"].join("."));
+    expect(bar).toContain('aria-label="More actions"');
     expect(bar).toMatch(/<button[^>]*>.*Report<\/button>/);
-    expect(bar).toMatch(/<button[^>]*>.*Hand to my agent<\/span><\/button>/);
-    expect(bar).toMatch(/<button[^>]*>.*Remix<\/span><\/button>/);
+    expect(bar).toMatch(/<button[^>]*>.*Hand to my agent<\/button>/);
+    expect(bar).toMatch(/<button[^>]*>.*Remix<\/button>/);
     expect(bar).toContain('title="By Budget bot"');
-    expect(bar).toContain('Made with Univer Workspace<span class="sr-only"> (opens in a new tab)</span>');
-    expect(bar).toContain('space.univer.ai<span class="sr-only"> (opens in a new tab)</span>');
     expect(bar.includes("Sign up free")).toBe(immersive);
     expect(bar.includes('aria-label="Collapse sign-up bar"')).toBe(immersive);
-    expect(bar.includes('role="status"')).toBe(immersive);
+    expect(bar).toContain('role="status"');
     expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<main"));
   });
 
@@ -112,6 +127,21 @@ describe("share page header", () => {
       createElement(LanguageProvider, null, createElement(WorkspaceLayout, { immersive: false, selectedNodeId: "one" }))));
     expect(html).toContain("Report");
     expect(html).not.toContain("Remix");
+  });
+
+  it("orders secondary actions in the menu and omits node actions without a node", () => {
+    const html = renderLayout(false, true, unverifiedAgent);
+    const menu = html.slice(html.indexOf('role="menu"'), html.indexOf("</aside>"));
+    const document = new DOMParser().parseFromString(html, "text/html");
+    expect([...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent))
+      .toEqual(["Remix", "Hand to my agent", "Copy link", "Report"]);
+    expect(menu.indexOf('role="separator"')).toBeGreaterThan(menu.indexOf("Copy link"));
+    expect(menu.indexOf('role="separator"')).toBeLessThan(menu.indexOf("Report"));
+    const withoutNode = renderLayout();
+    expect(withoutNode).toContain("Copy link");
+    expect(withoutNode).not.toContain("Hand to my agent");
+    expect(withoutNode).not.toContain("Remix");
+    expect(withoutNode).not.toContain(">Report<");
   });
 
   it("counts the copies of the file once there is one", () => {
@@ -144,10 +174,13 @@ describe("share page header", () => {
     expect(html).toContain(">Unverified agent<");
     expect(html).toMatch(/<button[^>]*>.*Report<\/button>/);
     expect(html).toContain("Hand to my agent");
-    expect(html).toMatch(/<button[^>]*>.*Remix<\/span><\/button>/);
+    expect(html).toMatch(/<button[^>]*>.*Remix<\/button>/);
     expect(html).not.toContain("Sign up");
     expect(html).not.toContain("Sign in");
-    expect(html).not.toContain('role="status"');
+    expect(html).toContain('role="status"');
+    expect(html).toContain('aria-label="More actions"');
+    expect(html).toContain("Copy link");
+    expect(html).not.toContain('aria-label="Collapse sign-up bar"');
     expect(html.indexOf("</aside>")).toBeLessThan(html.indexOf("<iframe"));
   });
 
@@ -183,6 +216,8 @@ describe("visitor sign-up bar", () => {
     expect(collapsed).toContain("lucide-chevron-down");
     expect(collapsed).toContain('aria-label="Expand sign-up bar"');
     expect(collapsed).not.toContain("Sign up free");
+    expect(collapsed).not.toContain('aria-label="More actions"');
+    expect(collapsed).toContain("Univer Workspace");
     controls.get("Expand sign-up bar")?.();
     expect([...storage.values()]).toEqual(["false"]);
     expect(renderLayout()).toContain("Sign up free");
@@ -206,15 +241,81 @@ describe("visitor sign-up bar", () => {
 
   it("copies the full current URL and handles clipboard failure", async () => {
     renderLayout();
-    await controls.get("copy")?.();
+    await controls.get("Copy link")?.();
     expect(writeText).toHaveBeenCalledWith(`https://workspace.example${href}`);
     writeText.mockRejectedValueOnce(new Error("Clipboard denied"));
-    await expect(controls.get("copy")?.()).resolves.toBeUndefined();
+    await expect(controls.get("Copy link")?.()).resolves.toBeUndefined();
   });
 
   it("still renders and collapses when sessionStorage is unavailable", () => {
     Object.defineProperty(window, "sessionStorage", { get: () => { throw new Error("Storage denied"); } });
     expect(renderLayout()).toContain("Sign up free");
     expect(() => controls.get("Collapse sign-up bar")?.()).not.toThrow();
+  });
+});
+
+describe("visitor menu interactions", () => {
+  async function mount(authenticated = false) {
+    vi.unstubAllGlobals();
+    vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+    vi.stubGlobal("navigator", { clipboard: { writeText } });
+    window.localStorage.setItem("univer-workspace-language", "en-US");
+    window.sessionStorage.clear();
+    ui.interactive = true;
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    clients.push(client);
+    client.setQueryData(sessionQueryKey, { authenticated });
+    client.setQueryData(["nodes", "one"], { node: { id: "one", resource: { kind: "univer", unitType: "sheet" } } });
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    await act(async () => root.render(createElement(QueryClientProvider, { client },
+      createElement(LanguageProvider, null, createElement(VisitorBar, { offerSignUp: !authenticated, nodeId: "one", owner: unverifiedAgent, copyable: true })))));
+    return async () => {
+      await act(async () => root.unmount());
+      container.remove();
+    };
+  }
+
+  function control(name: string) {
+    const found = [...document.querySelectorAll<HTMLElement>("button, [role=menuitem]")]
+      .find((element) => (element.getAttribute("aria-label") ?? element.textContent) === name);
+    if (!found) throw new Error(`Missing control ${name}`);
+    return found;
+  }
+
+  it.each([
+    ["Remix", "Remix this file"],
+    ["Hand to my agent", "Hand to my agent"],
+    ["Report", "Report this file"],
+  ])("keeps the %s dialog open after its menu closes", async (action, title) => {
+    const cleanup = await mount();
+    try {
+      await act(async () => control("More actions").click());
+      expect(document.querySelector('[role="menu"]')).not.toBeNull();
+      await act(async () => control(action).click());
+      await act(() => vi.waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull()));
+      expect(document.querySelector('[role="dialog"]')?.textContent).toContain(title);
+      await act(async () => control("Close").click());
+      await act(() => vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull()));
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it.each([false, true])("announces copy success and failure with signed-in=%s", async (authenticated) => {
+    const cleanup = await mount(authenticated);
+    try {
+      await act(async () => control("More actions").click());
+      await act(async () => control("Copy link").click());
+      expect(writeText).toHaveBeenLastCalledWith(window.location.href);
+      expect(document.querySelector('[role="status"]')?.textContent).toBe("Link copied.");
+      writeText.mockRejectedValueOnce(new Error("Clipboard denied"));
+      await act(async () => control("More actions").click());
+      await act(async () => control("Copy link").click());
+      expect(document.querySelector('[role="status"]')?.textContent).toBe("Unable to copy the link.");
+    } finally {
+      await cleanup();
+    }
   });
 });
