@@ -12,7 +12,7 @@ import {
 import { useI18n } from "../../shared/i18n";
 import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
-import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError } from "./workspace-binding-engine";
+import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError, type HtmlViewSourceWorktree } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
 import { resolveWorkspaceMedia, workspaceMediaSources } from "./workspace-media";
@@ -28,12 +28,14 @@ export function HtmlView({
   actionsContainer,
   draft = false,
   onSourceLoaded,
+  sourceWorktree,
   trialAction,
 }: {
   source: string;
   immersive: boolean;
   actionsContainer: HTMLElement | null;
   draft?: boolean;
+  sourceWorktree?: HtmlViewSourceWorktree | undefined;
   onSourceLoaded?: (unitId: string) => void;
   trialAction?: ReactNode;
   allowedOrigins?: readonly string[];
@@ -48,10 +50,10 @@ export function HtmlView({
     : session.data
       ? anonymousUser
       : null;
-  const writeModes = useMemo(() => new Map<string, HtmlViewWriteMode>(), [source, user?.id, draft]);
+  const writeModes = useMemo(() => new Map<string, HtmlViewWriteMode>(), [source, user?.id, draft, sourceWorktree]);
   const native = useNativeUnitPreview(source, user?.id ?? "pending", writeModes, !draft);
   const [trial, setTrial] = useState(false);
-  useEffect(() => setTrial(false), [source, user?.id, draft]);
+  useEffect(() => setTrial(false), [source, user?.id, draft, sourceWorktree]);
   const viewer = useRef<WorkspaceHtmlViewerHandle>(null);
   const unsynced = useRef(false);
   const [error, setError] = useState("");
@@ -65,6 +67,7 @@ export function HtmlView({
         ),
         () => setTrial(true),
         draft,
+        sourceWorktree,
       ).catch((error: unknown) => {
         if (error instanceof HtmlViewSourceSheetRequiredError)
           throw new Error(translation.current("htmlViewSourceSheetRequired"));
@@ -74,7 +77,7 @@ export function HtmlView({
       onSourceLoaded?.(unitId);
       return engine;
     },
-    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft, onSourceLoaded],
+    [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft, sourceWorktree, onSourceLoaded],
   );
   useEffect(() => {
     if (inspecting) native.close();

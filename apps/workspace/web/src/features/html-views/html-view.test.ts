@@ -20,14 +20,14 @@ const mocks = await vi.hoisted(async () => {
   ], { encoding: "utf8" }).trim());
   return { core: resolvePeer("@univerjs/core"), facade: resolvePeer("@univerjs/core/facade"),
     binding: resolvePeer("@univerjs-labs/binding-engine"),
-    collaborationUI: resolvePeer("@univerjs-pro/collaboration-client-ui"), bridge: vi.fn((source: string, _nonce: string, _nativePreview: boolean) => source + "<!-- navigation bridge -->"), GET: vi.fn(), POST: vi.fn(), render: vi.fn(), cell: vi.fn(), flush: vi.fn(), editable: vi.fn(),
+    collaborationUI: resolvePeer("@univerjs-pro/collaboration-client-ui"), bridge: vi.fn((source: string, _nonce: string, _nativePreview: boolean) => source + "<!-- navigation bridge -->"), GET: vi.fn(), POST: vi.fn(), collaboration: vi.fn(), override: vi.fn(), reference: vi.fn(), render: vi.fn(), cell: vi.fn(), flush: vi.fn(), editable: vi.fn(),
     service: { setCurrentUser: vi.fn(), dispose: vi.fn(), updatePermissionPoint: vi.fn() } };
 });
 vi.mock("../../shared/api/client", () => ({ api: { GET: mocks.GET, POST: mocks.POST } }));
 vi.mock("@tanstack/react-query", () => ({ useQuery: () => ({ data: { authenticated: true, user: { id: "owner", displayName: "Owner" } } }) }));
 vi.mock("@tanstack/react-router", () => ({ useBlocker: vi.fn() }));
 vi.mock("../auth", () => ({ sessionQueryOptions: {}, anonymousUser: {} }));
-vi.mock("../editor", () => ({ withWorkspaceSnapshotServerOverride: () => [], resolveUniverLicense: () => "" }));
+vi.mock("../editor", () => ({ withWorkspaceSnapshotServerOverride: mocks.override, resolveUniverLicense: () => "", resolveCollaborationConfig: mocks.collaboration }));
 vi.mock("../editor/preview", () => ({ NATIVE_PREVIEW_CHANNEL: "native-preview" }));
 vi.mock("@univerjs/univer-workspace-html-viewer", () => ({ WorkspaceHtmlViewer: mocks.render }));
 vi.mock(mocks.core, async (original) => ({
@@ -53,6 +53,7 @@ vi.mock(mocks.binding, () => ({ BindingEngine: class {
   setCellValue(...args: unknown[]) { mocks.cell(...args); }
   flush() { mocks.flush(); }
 } }));
+vi.mock("@univerjs/univer-workspace-reference-provider", () => ({ createWorkspaceReferencedUnitProviderRegistration: mocks.reference }));
 vi.mock("./native-preview-client", () => ({ withNativePreviewClient: mocks.bridge }));
 import { HtmlView } from "./html-view";
 
@@ -60,6 +61,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   window.localStorage.setItem("univer-workspace-language", "en-US");
+  mocks.override.mockReturnValue([]);
+  mocks.collaboration.mockImplementation(async (scope) => ({ pluginConfig: {}, hostSnapshotScope: scope }));
   mocks.GET.mockResolvedValue({ data: { resource: { id: "resource" } } });
   mocks.POST.mockResolvedValue({ data: { resource: { kind: "univer", unitType: "sheet", unitId: "unit", editorMode: "edit" } } });
   mocks.render.mockImplementation((props: ComponentProps<typeof WorkspaceHtmlViewer>) => createElement("div", { "data-source": props.source }));
@@ -152,4 +155,40 @@ it("preserves other source loading errors", async () => {
     createElement(HtmlView, { source: "<p>Page</p>", immersive: true, actionsContainer: null })));
   const props: ComponentProps<typeof WorkspaceHtmlViewer> = mocks.render.mock.lastCall![0];
   await expect(props.loadEngine("unit", new AbortController().signal)).rejects.toBe(failure);
+});
+
+
+it.each([
+  { state: "ready", mapped: true, draft: true, worktree: true },
+  { state: "draft", mapped: true, draft: true, worktree: true },
+  { state: "ready", mapped: false, draft: true, worktree: false },
+  { state: "merged", mapped: true, draft: true, worktree: false },
+  { state: "ready", mapped: true, draft: false, worktree: false },
+] as const)("resolves preview source $state mapped=$mapped draft=$draft", async ({ state, mapped, draft, worktree }) => {
+  const sourceWorktree: NonNullable<ComponentProps<typeof HtmlView>["sourceWorktree"]> = {
+    id: "pr-3", state,
+    units: mapped ? [{ unitId: "unit", resourceId: "local-resource", nodeId: null, name: "New Sheet", unitType: "sheet",
+      source: "worktree", target: null, draftHeadRevision: 1, change: "added", mergeResult: "pending", activationState: "waitingForMerge" }] : [],
+  };
+  if (worktree) mocks.POST.mockResolvedValue({ data: { unit: { unitId: "unit", unitType: "sheet", editorMode: "edit" }, collaborationScope: { kind: "worktree", worktreeId: "pr-3" } } });
+  renderToStaticMarkup(createElement(LanguageProvider, null,
+    createElement(HtmlView, { source: "<p>PR page</p>", sourceWorktree, draft, immersive: true, actionsContainer: null })));
+  const props: ComponentProps<typeof WorkspaceHtmlViewer> = mocks.render.mock.lastCall![0];
+  const engine = await props.loadEngine("unit", new AbortController().signal);
+  const scope = worktree ? { kind: "worktree", worktreeId: "pr-3" } : { kind: "trunk" };
+  expect(mocks.collaboration).toHaveBeenCalledWith(scope, "unit");
+  expect(mocks.override).toHaveBeenCalledWith(undefined, expect.objectContaining({ hostScope: scope }));
+  expect(mocks.reference).toHaveBeenCalledWith(expect.objectContaining({
+    hostContext: draft && state !== "merged"
+      ? { view: { kind: "worktree", worktreeId: "pr-3" }, mappedUnitIds: mapped ? ["unit"] : [] }
+      : { view: { kind: "trunk" } },
+  }));
+  if (worktree) {
+    expect(mocks.GET).not.toHaveBeenCalled();
+    expect(mocks.POST).toHaveBeenCalledWith("/api/worktrees/{worktreeId}/units/{unitId}/open", expect.objectContaining({
+      params: { path: { worktreeId: "pr-3", unitId: "unit" } }, body: { mode: "draft" },
+    }));
+  } else expect(mocks.GET).toHaveBeenCalledWith("/api/unit-resources/{unitId}", expect.anything());
+  expect(engine).toMatchObject({ writeMode: draft ? "trial" : "saved" });
+  engine.dispose();
 });

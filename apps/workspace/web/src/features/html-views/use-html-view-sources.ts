@@ -4,13 +4,16 @@ import { getHtmlViewUnitIds, parseHtmlView } from "@univerjs-labs/html-view";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 
-export function useHtmlViewSources(html: string | undefined) {
+import type { HtmlViewSourceWorktree } from "./workspace-binding-engine";
+
+export function useHtmlViewSources(html: string | undefined, sourceWorktree?: HtmlViewSourceWorktree) {
   const sourceIds = useMemo(() => {
     if (html === undefined) return null;
     try { return getHtmlViewUnitIds(parseHtmlView(html)); } catch { return null; }
   }, [html]);
   const sources = useQueries({ queries: (sourceIds ?? []).map((unitId) => ({
     queryKey: ["unit-resources", unitId],
+    enabled: !sourceWorktree || sourceWorktree.state === "merged" || !sourceWorktree.units.some((unit) => unit.unitId === unitId),
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
       const { data, error } = await api.GET("/api/unit-resources/{unitId}", { params: { path: { unitId } }, signal });
       if (error) throw apiError(error);

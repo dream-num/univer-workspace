@@ -41,6 +41,8 @@ let publishMessage: string;
 let rejectStatus: number;
 let rejectWait: Promise<void> | undefined;
 let notFound: boolean;
+let sourceNumber: number | null;
+let sourceState: "ready" | "merged" | "discarded";
 const requests: Request[] = [];
 const NativeRequest = globalThis.Request;
 
@@ -55,7 +57,7 @@ beforeEach(() => {
   };
   html = "<!doctype html><html><body>New draft</body></html>";
   publishStatus = 200; rejectStatus = 200; publishMessage = "The page changed."; notFound = false;
-  rejectWait = undefined;
+  rejectWait = undefined; sourceState = "ready"; sourceNumber = 3;
   vi.stubGlobal("fetch", preview.fetch);
   preview.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof NativeRequest ? input : new Request(input, init);
@@ -73,6 +75,7 @@ beforeEach(() => {
       draft = { ...draft, state: "rejected" };
     }
     if (path.startsWith("/api/html-view-drafts/")) return notFound ? Response.json({ error: { message: "Missing" } }, { status: 404 }) : Response.json({ draft });
+    if (path === "/api/worktrees/pr-3") return Response.json({ worktree: { id: "pr-3", number: sourceNumber, state: sourceState, units: [{ unitId: "source-unit", name: "PR Sheet", unitType: "sheet" }] } });
     if (path === "/api/unit-resources/source-unit") return Response.json({ node: { id: "source-node", name: "Source Sheet" } });
     if (path === "/api/spaces/sales") return Response.json({ fullName: "alice/sales", publicRead: false });
     if (path === "/api/nodes/folder-1") return Response.json({ node: { name: "Reports" } });
@@ -320,4 +323,57 @@ it("lists bound source Sheet names through the shared source loader", async () =
   await render("card");
   await waitFor(() => expect(container.textContent).toContain("Source Sheet"));
   expect(count("/source-unit")).toBe(1);
+});
+
+
+it.each(["page", "card"] as const)("previews PR sources and waits for merge in the %s", async (presentation) => {
+  draft.sourceWorktreeId = "pr-3";
+  html = '<p data-univer-cell-text="source-unit:sheet-1:B2"></p>';
+  await render(presentation);
+  await waitFor(() => expect(container.textContent).toContain("Publishes automatically when PR #3 merges."));
+  expect(container.querySelector('a[href="/spaces/sales/pulls/3"]')).not.toBeNull();
+  expect(button("Publish").disabled).toBe(true);
+  await waitFor(() => expect(container.textContent).toContain("PR Sheet"));
+  expect(count("/source-unit")).toBe(0);
+  if (presentation === "card") await click("Open draft preview");
+  await waitFor(() => expect(preview.html).toHaveBeenCalled());
+  expect(preview.html.mock.lastCall?.[0]).toMatchObject({ draft: true, sourceWorktree: { id: "pr-3", state: "ready" } });
+  expect([...document.querySelectorAll<HTMLButtonElement>("button")].filter((b) => b.textContent === "Publish").every((b) => b.disabled)).toBe(true);
+  await click("Publish");
+  expect(count("/publish")).toBe(0);
+  expect(button("Reject").disabled).toBe(false);
+});
+
+it("unlocks a pending draft after a token merge without automatic publication", async () => {
+  draft.sourceWorktreeId = "pr-3"; sourceState = "merged";
+  await render();
+  await waitFor(() => expect(button("Publish").disabled).toBe(false));
+  expect(container.textContent).not.toContain("Publishes automatically");
+  await click("Publish");
+  await waitFor(() => expect(container.textContent).toContain("Published"));
+});
+
+it("says the source PR was discarded", async () => {
+  draft.sourceWorktreeId = "pr-3"; sourceState = "discarded";
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("The source PR was discarded"));
+  expect(container.querySelector("button")).toBeNull();
+  expect(preview.html).not.toHaveBeenCalled();
+});
+
+it("shows the waiting message in Chinese", async () => {
+  draft.sourceWorktreeId = "pr-3";
+  window.localStorage.setItem("univer-workspace-language", "zh-CN");
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("等待 PR #3 合并，合并后自动发布页面。"));
+  expect(button("发布").disabled).toBe(true);
+});
+
+
+it("links legacy source PRs through the existing review route", async () => {
+  draft.sourceWorktreeId = "pr-3"; sourceNumber = null;
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("Publishes automatically when the source PR merges."));
+  expect(container.querySelector('a[href="/worktrees?worktree=pr-3"]')).not.toBeNull();
+  expect(button("Publish").disabled).toBe(true);
 });

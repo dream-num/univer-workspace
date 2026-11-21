@@ -770,7 +770,7 @@ export function resolveCollaborationStatusPresentation(
   };
 }
 
-async function resolveCollaborationConfig(
+export async function resolveCollaborationConfig(
   scope: NonNullable<CollaborationEditorProps["collaborationScope"]>,
   unitId: string
 ): Promise<{

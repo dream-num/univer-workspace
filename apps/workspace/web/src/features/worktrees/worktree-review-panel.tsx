@@ -106,13 +106,18 @@ export function WorktreeReviewPanel({
   const onError = (error: Error) => toast.error(error.message);
   const runAction = (value: ReviewAction) =>
     action.mutate(value, {
-      onSuccess: ({ action: value, state }) => {
+      onSuccess: ({ action: value, state, publishedPages }) => {
         if (value === "reopen" && state === "draft") {
           onSelectedViewChange?.("agent");
         }
+        const firstPage = publishedPages[0];
         const feedback = reviewActionFeedback(value, state);
         if (feedback.kind === "success") {
-          toast.success(t(feedback.message));
+          if (firstPage) {
+            toast.success(t(feedback.message), {
+              description: <>{t(publishedPages.length === 1 ? "pagePublished" : "pagesPublished", { count: publishedPages.length })} <a className="underline" href={`/nodes/${encodeURIComponent(firstPage.nodeId)}`}>{t("openPublishedPage")}</a></>,
+            });
+          } else toast.success(t(feedback.message));
         } else if (feedback.kind === "info") {
           toast.info(t(feedback.message));
         } else {
@@ -157,7 +162,7 @@ export function WorktreeReviewPanel({
       ) : worktree.capabilities.merge ? (
         <ConfirmDialog
           title={t("mergeConfirm")}
-          description={t("mergeDescription")}
+          description={t("mergeDescription") + ((worktree.pendingPageDrafts ?? 0) > 0 ? ` ${t(worktree.pendingPageDrafts === 1 ? "mergePublishesPage" : "mergePublishesPages", { count: worktree.pendingPageDrafts ?? 0 })}` : "")}
           confirmText={t("confirmMerge")}
           cancelText={t("cancel")}
           onConfirm={() => runAction("merge")}

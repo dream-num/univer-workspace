@@ -1,17 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { HtmlView, HtmlViewFile } from "../html-view";
 import { Button } from "../../../shared/ui/button";
 import { DialogContent, DialogRoot, DialogTitle } from "../../../shared/ui/dialog";
+import type { HtmlViewSourceWorktree } from "../workspace-binding-engine";
 import { useDraftMessages } from "./messages";
 import "./draft-preview.css";
 
-export function DraftPreview({ html, name, replacing, current, currentError, disabled, onOpened, onClose, onDecide, onRequestChanges, requestChangesDisabled }: {
+export function DraftPreview({ html, name, replacing, current, currentError, disabled, onOpened, onClose, onDecide, onRequestChanges, requestChangesDisabled, publishDisabled, waitingNotice, sourceWorktree }: {
+  readonly sourceWorktree?: HtmlViewSourceWorktree | undefined;
   readonly html: string;
   readonly name: string;
   readonly replacing: boolean;
   readonly current: { contentUrl: string; byteSize: number } | undefined;
   readonly currentError: boolean;
   readonly disabled: boolean;
+  readonly publishDisabled: boolean;
+  readonly waitingNotice?: ReactNode;
   readonly onOpened: () => void;
   readonly onClose: () => void;
   readonly onDecide: (approved: boolean) => void;
@@ -26,17 +30,19 @@ export function DraftPreview({ html, name, replacing, current, currentError, dis
         <DialogTitle>{name} · {m.draft}</DialogTitle>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="secondary" onClick={onClose}>{m.back}</Button>
-          <Button disabled={disabled} onClick={() => onDecide(true)}>{m.publish}</Button>
+          <Button disabled={disabled || publishDisabled} onClick={() => onDecide(true)}>{m.publish}</Button>
           <Button variant="secondary" disabled={disabled} onClick={() => onDecide(false)}>{m.reject}</Button>
           {onRequestChanges && <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={onRequestChanges}>{m.requestChanges}</Button>}
         </div>
       </header>
-      <DraftVersions html={html} replacing={replacing} current={current} currentError={currentError} />
+      {waitingNotice}
+      <DraftVersions sourceWorktree={sourceWorktree} html={html} replacing={replacing} current={current} currentError={currentError} />
     </DialogContent>
   </DialogRoot>;
 }
 
-export function DraftVersions({ html, replacing, current, currentError }: {
+export function DraftVersions({ html, replacing, current, currentError, sourceWorktree }: {
+  readonly sourceWorktree?: HtmlViewSourceWorktree | undefined;
   readonly html: string;
   readonly replacing: boolean;
   readonly current: { contentUrl: string; byteSize: number } | undefined;
@@ -50,7 +56,7 @@ export function DraftVersions({ html, replacing, current, currentError }: {
       <Button variant="secondary" className="aria-pressed:bg-accent aria-pressed:text-accent-foreground" aria-pressed={tab === "current"} onClick={() => setTab("current")}>{m.currentVersion}</Button>
     </div>}
     <div className="agent-draft-body">
-      {tab === "new" ? <HtmlView key="new" source={html} draft immersive actionsContainer={null} /> :
+      {tab === "new" ? <HtmlView key="new" sourceWorktree={sourceWorktree} source={html} draft immersive actionsContainer={null} /> :
         current ? <HtmlViewFile key="current" resource={current} draft immersive actionsContainer={null} /> :
           <p role="status">{currentError ? m.previewUnavailable : m.loading}</p>}
     </div>
