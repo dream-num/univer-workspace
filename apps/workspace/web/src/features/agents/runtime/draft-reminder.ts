@@ -25,7 +25,7 @@ export async function draftReminder(messages: readonly UIMessage[], getDraft: (i
     for (const part of message.parts) {
       if (!isToolUIPart(part) || part.state !== "output-available") continue;
       const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
-      if (name !== "html_view_save" && name !== "html_view_create" && name !== "html_view_replace") continue;
+      if (name !== "html_view_save") continue;
       const output = outputSchema.safeParse(part.output);
       if (output.success && !output.data.isError) known.set(output.data.structuredContent.draft.id, output.data.structuredContent.draft.state);
     }

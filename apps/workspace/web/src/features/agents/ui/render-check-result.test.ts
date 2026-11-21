@@ -16,7 +16,7 @@ it.each(["passed", "issues", "timed-out", "failed"] as const)("shows the complet
     issues: status === "issues" ? [{ kind: "page-error", message: "B7 must contain a start month" }] : [],
     ...(["timed-out", "failed"].includes(status) ? { reason: "Check did not complete" } : {}),
   };
-  const part: ToolPart = { type: "dynamic-tool", toolName: "html_view_create", toolCallId: "call", input: {}, state: "output-available",
+  const part: ToolPart = { type: "dynamic-tool", toolName: "html_view_save", toolCallId: "call", input: { space: "sales", name: "Report" }, state: "output-available",
     output: { structuredContent: { draft: { id: "draft" }, renderCheck } },
   };
   const container = document.createElement("div");

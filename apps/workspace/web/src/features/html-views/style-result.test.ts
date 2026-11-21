@@ -7,7 +7,7 @@ it("parses only successful html_view_styles structured results", () => {
   ] };
   const output = { structuredContent: catalog };
   expect(htmlViewStylesResult("html_view_styles", output)).toEqual(catalog);
-  expect(htmlViewStylesResult("html_view_create", output)).toBeNull();
+  expect(htmlViewStylesResult("html_view_save", output)).toBeNull();
   expect(htmlViewStylesResult("html_view_styles", { ...output, isError: true })).toBeNull();
   for (const invalid of [null, {}, "invalid JSON", { structuredContent: { default: "night-gauge", styles: [{}] } },
     { structuredContent: { ...catalog, styles: [{ ...catalog.styles[0], name: { en: "Night Gauge" } }] } }]) {

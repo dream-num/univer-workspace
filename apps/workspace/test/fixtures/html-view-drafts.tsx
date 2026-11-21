@@ -44,8 +44,8 @@ if (!root) throw new Error("Fixture root is missing");
 if (new URLSearchParams(location.search).has("agent")) {
   const { AgentStepsGroup } = await import("../../web/src/features/agents/ui/session-page");
   const message: UIMessage = { id: "assistant", role: "assistant", parts: [{
-    type: "dynamic-tool", toolName: draft.kind === "replace" ? "html_view_replace" : "html_view_create", toolCallId: "page",
-    state: "output-available", input: { name: draft.name }, output: { content: [], structuredContent: { draft: { id: draft.id } } },
+    type: "dynamic-tool", toolName: "html_view_save", toolCallId: "page",
+    state: "output-available", input: draft.kind === "replace" ? { page: draft.targetResourceId, etag: draft.baseEtag } : { space: draft.spaceId, name: draft.name }, output: { content: [], structuredContent: { draft: { id: draft.id } } },
   }] };
   const agent = { ...sessionRecordSchema.parse({
     id: "fixture-agent", userId: "fixture-owner", scope: { kind: "global" }, mode: "auto", status: "idle",
