@@ -12,8 +12,13 @@ export function withStyleCatalog(content) {
   const rows = catalog.split(/\r?\n/u).filter((line) => line.startsWith("| [")).map((line) => {
     const cells = line.split("|").slice(1, -1).map((cell) => cell.trim());
     const id = /^\[([a-z0-9-]+)\]\(\.\.\/templates\/\1\.univer\.html\)$/u.exec(cells[0])?.[1];
-    assert(id && cells.length === 8 && cells[7], "Catalog rows need a style ID and suitable context and data");
-    return `- \`${id}\`. ${cells[7]}`;
+    assert(id && cells.length === 8 && cells[5] && cells[7], "Catalog rows need a style ID, original scenario and suitable context and data");
+    const scenario = cells[5]
+      .replace("Startup cash runway with a live 36-month Sheet model", "36-month cash runway")
+      .replace("Weekly sales meeting with region/channel filters and editable record targets", "Sales meeting; filters/target edits")
+      .replace("Customer implementation delivery tracker with status edits and task insertion", "Customer delivery; status edits/insertion")
+      .replace("Public city sign-ups, counting the first 100 entries", "City sign-ups; first 100 entries");
+    return `- \`${id}\`. ${cells[7]} Original: ${scenario}.`;
   });
   assert(rows.length && block.test(content), "Missing catalog rows or creator markers");
   return content.replace(block, `STYLE CATALOG START\n${rows.join("\n")}\nSTYLE CATALOG END`);

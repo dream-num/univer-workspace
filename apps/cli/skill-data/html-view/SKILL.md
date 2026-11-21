@@ -17,10 +17,12 @@ use html_view_save to save a draft. Read the html-view-creator Skill for the MCP
    one question only when purpose or data is unclear, or the user asks to see a plan or pick
    a style. Otherwise proceed directly. In the reply, always name the style and why, and
    offer to change it; give a custom style a name and one-line description.
-2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
-   a blank page. Keep its fonts, palette, density and signature element for a catalog style.
-   For a custom style, start from the structurally closest template and change palette, type
-   and signature element while meeting the design floor in design.md.
+2. Read `styles/<id>.md` by default. Read the full `templates/<id>.univer.html` only
+   when the data's shape is close to its designed-for scenario in the catalog, or the
+   page needs that template's interaction. Keep the style's fonts, palette, density and
+   signature element. Adapt the structure and bindings to the inspected Sheet.
+   For a custom style, start from the structurally closest style card and change palette,
+   type and signature element while meeting the design floor in design.md.
 3. Page controls write to Sheet cells or append rows; the page displays the recalculated
    source values through live bindings, and label host-provided visitor trials with `getWriteMode`
    as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,

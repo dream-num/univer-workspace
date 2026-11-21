@@ -25,14 +25,14 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("keeps the default draft path compact and self-contained", async () => {
     const content = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     const text = content.replace(/\s+/gu, " ");
-    expect([...content].length).toBeLessThanOrEqual(8000);
+    expect([...content].length).toBeLessThanOrEqual(8500);
     const description = /^description: (.+)$/mu.exec(content)?.[1];
     for (const routing of ["HTML View (.univer.html)", "shareable live HTML page", "dashboard", "report", "form", "Workspace Sheet data", "Prefer it over a local .html unless the user asks for a file"])
       expect(description).toContain(routing);
     expect(text).not.toMatch(/end your turn and wait|never silently choose|propose.*and wait/iu);
     expect(text).toContain("ask at most one question only for unclear purpose/data or an explicit plan/style request");
     expect(text).toContain("purpose, audience, adjectives and data shape");
-    expect(text).toContain("structurally closest template");
+    expect(text).toContain("structurally closest style card");
     expect(text).toContain("the page goes live when the user merges in Workspace");
     expect(text).toContain("Never merge or ask to merge on their behalf");
     expect(text).toContain("Ask mode cannot save");
@@ -44,6 +44,59 @@ describe("HTML View Creator Skill tool bindings", () => {
     const catalogIds = [...design.matchAll(/\| \[([a-z-]+)\]\(\.\.\/templates\//gu)].map((match) => match[1]);
     expect(catalogIds).toHaveLength(10);
     for (const id of catalogIds) expect(content).toContain(`- \`${id}\`.`);
+  });
+
+  it("keeps catalog IDs, templates and compact style cards in sync", async () => {
+    const root = new URL("../../cli/skill-data/html-view/", import.meta.url);
+    const design = await readFile(new URL("references/design.md", root), "utf8");
+    const ids = [...design.matchAll(/\| \[([a-z-]+)\]\(\.\.\/templates\//gu)].map((match) => match[1]!).sort();
+    expect((await readdir(new URL("templates/", root))).filter((file) => file.endsWith(".univer.html")).map((file) => file.replace(/\.univer\.html$/u, "")).sort()).toEqual(ids);
+    expect((await readdir(new URL("styles/", root))).filter((file) => file.endsWith(".md")).map((file) => file.replace(/\.md$/u, "")).sort()).toEqual(ids);
+    for (const id of ids) {
+      const card = await readFile(new URL(`styles/${id}.md`, root), "utf8");
+      const template = await readFile(new URL(`templates/${id}.univer.html`, root), "utf8");
+      expect([...card].length, id).toBeLessThanOrEqual(3000);
+      for (const link of template.matchAll(/<link[^>]+>/gu)) expect(card, id).toContain(link[0]);
+      for (const tokens of template.matchAll(/:root\s*\{[^}]+\}/gu)) {
+        if (tokens[0].includes("--")) expect(card, id).toContain(tokens[0]);
+      }
+      const chinese = /^Chinese pages:.*?(?= -->|$)/mu.exec(template)?.[0];
+      if (chinese) expect(card, id).toContain(chinese);
+    }
+  });
+
+  it("reads cards first and reserves full templates for matching data or interactions", async () => {
+    for (const path of ["../skills/html-view-creator/SKILL.md", "../../cli/skill-data/html-view/SKILL.md"]) {
+      const text = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
+      expect(text).toContain("styles/<id>.md");
+      expect(text).toContain("by default");
+      expect(text).toMatch(/Read the full (?:template|`templates\/)/u);
+      expect(text).toContain("templates/<id>.univer.html");
+      expect(text).toMatch(/only when the data's shape is close to/u);
+      expect(text).toContain("page needs that template's interaction");
+    }
+    const creator = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
+    for (const scenario of ["36-month cash runway", "Sales meeting; filters/target edits", "Customer delivery; status edits/insertion", "City sign-ups; first 100 entries"])
+      expect(creator).toContain(`Original: ${scenario}.`);
+  });
+
+  it("guards against giant totals and stale loading text", async () => {
+    const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    expect(creator).toContain("Do not add a strip of giant totals to every page");
+    const root = new URL("../../cli/skill-data/html-view/", import.meta.url);
+    for (const text of [creator, ...await Promise.all(["references/charts.md", "styles/trading-desk.md"].map(async (path) =>
+      (await readFile(new URL(path, root), "utf8")).replace(/\s+/gu, " ")))]) {
+      expect(text).toContain("Never put loading text inside a chart container");
+      expect(text).toContain("echarts.init keeps existing children");
+      expect(text).toContain("sibling or");
+      expect(text).toContain("After data arrives, no placeholder text may remain");
+    }
+    for (const text of [creator, ...await Promise.all(["references/authoring.md", "styles/meeting-slides.md"].map(async (path) =>
+      (await readFile(new URL(path, root), "utf8")).replace(/\s+/gu, " ")))]) {
+      expect(text).toContain("every contributing callback calls");
+      expect(text).toContain("Write placeholders only in the initial HTML");
+      expect(text).toContain("never from another binding's state");
+    }
   });
 
   it("routes shareable Workspace pages through one save tool", () => {
