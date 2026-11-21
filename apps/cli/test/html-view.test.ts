@@ -329,9 +329,14 @@ describe("HTML View commands", () => {
     await program.parseAsync(["html-view", ...args], { from: "user" });
     return { output: JSON.parse(output), validate, create };
   }
+  it("passes the optional Worktree to validation and keeps create merged-only", async () => {
+    const validation = await run(["validate", "--file", "view.univer.html", "--worktree", "wt-1", "--json"]);
+    expect(validation.validate).toHaveBeenCalledWith("view.univer.html", "wt-1");
+    await expect(run(["create", "--file", "view.univer.html", "--space", "space", "--name", "Page", "--idempotency-key", "key", "--worktree", "wt-1"])).rejects.toMatchObject({ code: "commander.unknownOption" });
+  });
   it("maps file validation and explicit creation metadata", async () => {
     const validation = await run(["validate", "--file", "view.univer.html", "--json"]);
-    expect(validation.validate).toHaveBeenCalledWith("view.univer.html");
+    expect(validation.validate).toHaveBeenCalledWith("view.univer.html", undefined);
     expect(validation.output).toEqual({ valid: true, unitIds: ["unit"], bindingCount: 1,
       bindings: [{ kind: "text", unitId: "unit", sheet: "Budget", ref: "B2", cell: { value: 46357, format: "yyyy-mm" } }],
     });

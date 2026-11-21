@@ -42,10 +42,13 @@ Follow the `core` Skill for source and asset handling. `window.univerBinding` is
 Use the `core` Skill for authentication and discovery, and the `sheet` Skill to inspect worksheets, values and formulas. Bind to actual Unit
 and worksheet IDs; Resource IDs and worksheet names are different identities.
 
-Sources always resolve on trunk. If the required Unit, worksheet or changes exist only in a
-Worktree, prepare the template but defer validation and publication until those changes are
-merged through the existing review workflow. Do not automatically merge a Worktree or substitute
-older trunk data. Creating an HTML View does not authorize changing its source cells or formulas.
+Use `html-view validate --worktree <id>` to read a pull request's data. Sources mapped in
+that pull request read its current changes; other sources read merged data. A merged pull
+request reads merged data. `html-view create` publishes immediately and still needs merged
+sources, so defer creation until review and merge are complete. Do not automatically merge
+or substitute older merged data. Creating an HTML View does not authorize changing its
+source cells or formulas. `workspace-html-view-source-unavailable` means a merged source
+may not exist, may not be readable by you, or may exist only in an unmerged pull request.
 
 ## Host navigation
 
@@ -55,7 +58,7 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 
 Run `html-view validate` with the complete HTML source. Then run `html-view create` with the same source, destination Space, name `Dashboard`, stable idempotency key, and optional parent Node. Follow the `core` Skill for source handling.
 
-`validate` parses declarative HTML bindings, reads accessible trunk Sheet data, and checks
+`validate` parses declarative HTML bindings, reads accessible Sheet data in the selected scope, and checks
 worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount, bindings, truncated? }`, with at most 60 binding samples of cell values and range summaries in document order (`truncated: true` when more exist).
 Compare `bindings` with the page plan for empty cells where data is expected, header text where numbers are expected, formula cells behind controls that write, and numbers carrying a date format.
 It does not execute JavaScript or discover references created by scripts. A JavaScript-only page may report

@@ -16,7 +16,7 @@ import { importProduct } from "../../server/src/storage-migration/product.js";
 import { prepareSource } from "../../server/src/storage-migration/source.js";
 import { createPostgresTestDatabase, createPostgresTestSchema } from "../support/postgres/schema.js";
 
-async function v25Source(resources: AsyncDisposableStack) {
+async function v26Source(resources: AsyncDisposableStack) {
   const directory = mkdtempSync(join(tmpdir(), "cutover-test-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
   const productFile = join(directory, "old-product");
@@ -68,15 +68,15 @@ async function v25Source(resources: AsyncDisposableStack) {
   return source;
 }
 
-it("reads committed V25 WAL rows without modifying the source files", async () => {
+it("reads committed V26 WAL rows without modifying the source files", async () => {
   await using resources = new AsyncDisposableStack();
-  const source = await v25Source(resources);
+  const source = await v26Source(resources);
   await source.checkSourceStopped();
-  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(25);
+  expect(source.product.prepare("PRAGMA user_version").get()?.user_version).toBe(26);
   expect(source.product.prepare("SELECT kind FROM users WHERE id='u'").get()?.kind).toBe("human");
 });
 
-it.each([23, 24, 26])("rejects product V%i before opening the collaboration database", async (version) => {
+it.each([24, 25, 27])("rejects product V%i before opening the collaboration database", async (version) => {
   await using resources = new AsyncDisposableStack();
   const directory = mkdtempSync(join(tmpdir(), "cutover-version-"));
   resources.defer(() => rmSync(directory, { recursive: true, force: true }));
@@ -87,7 +87,7 @@ it.each([23, 24, 26])("rejects product V%i before opening the collaboration data
   const before = readFileSync(path);
 
   await expect(prepareSource(directory, path, join(directory, "missing"), resources))
-    .rejects.toThrow(`Expected a V25 SQLite product database, got V${version}`);
+    .rejects.toThrow(`Expected a V26 SQLite product database, got V${version}`);
   expect(readFileSync(path)).toEqual(before);
 });
 
@@ -96,7 +96,7 @@ it.skipIf(!url)(
   "preserves Sheet blocks, snapshot references, Worktree baselines, seeds and comments",
   async () => {
     await using resources = new AsyncDisposableStack();
-    const source = await v25Source(resources);
+    const source = await v26Source(resources);
     const target = await createPostgresTestDatabase(url!);
     resources.defer(target.close);
     const storage = await createTestBucket(resources);
@@ -138,7 +138,7 @@ it.skipIf(!url)(
   },
 );
 
-it.skipIf(!url)("imports executor access", async () => {
+it.skipIf(!url)("imports executor access and nullable HTML View draft Worktree sources", async () => {
   await using resources = new AsyncDisposableStack();
   const product = new DatabaseSync(":memory:");
   resources.defer(() => product.close());
@@ -148,6 +148,11 @@ it.skipIf(!url)("imports executor access", async () => {
   product.exec(`
     INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1);
     INSERT INTO executor_access (user_id, granted_at) VALUES ('u', 1794900000000);
+    INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('s', 'personal', 'Personal', 'u', 1, 1);
+    INSERT INTO worktrees (id, name, creator_user_id, kind, visibility, created_at, updated_at) VALUES ('w', 'Draft', 'u', 'user', 'private', 1, 1);
+    INSERT INTO html_view_drafts (id, author_user_id, idempotency_key, kind, space_id, name, object_key, byte_size, sha256, state, expires_at, created_at, updated_at, source_worktree_id)
+      VALUES ('linked', 'u', 'linked', 'create', 's', 'Page', 'object-linked', 0, '${"a".repeat(64)}', 'receiving', 999, 1, 1, 'w'),
+             ('unlinked', 'u', 'unlinked', 'create', 's', 'Page', 'object-unlinked', 0, '${"a".repeat(64)}', 'receiving', 999, 1, 1, NULL);
   `);
   const target = await createPostgresTestSchema(url!);
   resources.defer(target.close);
@@ -156,7 +161,10 @@ it.skipIf(!url)("imports executor access", async () => {
   resources.defer(() => client.release());
   const { rows: [{ schema }] } = await client.query("SELECT current_schema() AS schema");
 
-  expect(await importProduct(product, client, schema)).toBe(2);
+  expect(await importProduct(product, client, schema)).toBe(6);
+  expect((await client.query("SELECT id, source_worktree_id FROM html_view_drafts ORDER BY id")).rows).toEqual([
+    { id: "linked", source_worktree_id: "w" }, { id: "unlinked", source_worktree_id: null },
+  ]);
   expect((await client.query("SELECT user_id, granted_at FROM executor_access")).rows).toEqual([
     { user_id: "u", granted_at: "1794900000000" },
   ]);

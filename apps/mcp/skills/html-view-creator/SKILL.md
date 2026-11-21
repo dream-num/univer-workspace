@@ -28,6 +28,15 @@ Figure out where they are in the flow below and start there.
   controls write source cells, and the page shows the recalculated values.
 - **Draft only.** Only the user can publish. Until `html_view_draft_get` returns
   `state: "published"`, never say the page is live and never share its `shareUrl`.
+- **Preview source changes.** In step 2, check whether a source Sheet exists only in
+  this session's pull request, or the page needs columns, worksheets or values changed
+  there but not yet merged. Validate and save the draft with that pull request using
+  `repo` and `pr` on `html_view_validate`, `html_view_create` or `html_view_replace`.
+  Use the pull request's real Unit and worksheet IDs, which stay the same after merge.
+  Tell the user in plain words that the preview shows the pull request's data and the
+  page goes live automatically when they merge the pull request in Workspace.
+  Never merge or ask to merge on their behalf. Do not use 403, trunk, worktree or unitId
+  in user-facing text. Never substitute older merged data for changes the page needs.
 - **A page is not a Unit.** If `html_view_create` is not in your tool list, say this
   connection cannot draft pages and stop. Never make a Slide, Board or other Unit instead.
 - **Ask mode cannot save.** Drafting needs write access and Ask mode has only read
@@ -110,7 +119,9 @@ same name and space as step 6 describes. Mention the check in your reply only wh
 found issues or could not run.
 
 Reply with what the page does, its source Sheets, who will be able to open it (from
-`repositoryVisibility` and `privateSourceUnitIds`), and draft.previewUrl. Say the page
+`repositoryVisibility` and `privateSourceUnitIds`), and draft.previewUrl. For a draft using
+a pull request, say the preview shows its data and the page goes live
+automatically when they merge that pull request in Workspace. For other drafts, say the page
 is not live until they open the preview and press **Publish**. Then end your turn.
 
 ## 6. Iterate and publish
@@ -121,12 +132,15 @@ anything about the draft.
 - `pending` or `rejected`, and the user says what to change: revise the draft as below.
   When Workspace sends a change request with a rejected draft, the reason is in that
   message, so do not ask for it again.
-- `pending` with no change requested: they have not decided. Point them to the preview.
+- `pending` with no change requested: point them to the preview. When `sourceWorktreeId`
+  is present, explain that it shows the pull request's data and waits for them to merge
+  it in Workspace, which publishes the page automatically. Otherwise, they can press Publish.
 - `rejected` with no reason: ask what to change.
 - `published`: share `shareUrl` and say who can open it. Later changes start again from
   step 1 as a change.
-- `conflicted`: someone changed the page after you read it. Read it again with
-  `html_view_read`, reapply the change and save a new draft.
+- `conflicted`: the source pull request may have been discarded, or the page changed.
+  Check the source pull request and use active or merged sources. For an existing page,
+  read it again with `html_view_read`, reapply the change and save a new draft.
 - `expired`: the draft passed its `expiresAt`, seven days after it was saved. Save it
   again with a new key.
 

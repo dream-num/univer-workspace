@@ -34,7 +34,7 @@ export interface OperationView {
 
 export interface OperationsModule {
   get(userId: string, operationId: string): Promise<OperationView>;
-  retry(userId: string, operationId: string): Promise<OperationView>;
+  retry(userId: string, operationId: string, interactive?: boolean): Promise<OperationView>;
 }
 
 export function createOperationsModule(options: {
@@ -52,7 +52,7 @@ export function createOperationsModule(options: {
       );
     },
 
-    async retry(userId, operationId) {
+    async retry(userId, operationId, interactive = false) {
       const row = await requireOperation(options.repository, userId, operationId);
       if (row.state !== "failed") {
         throw new ApplicationError(
@@ -92,7 +92,7 @@ export function createOperationsModule(options: {
         throw new ApplicationError("CONFLICT", 409, "Only a failed operation can be retried.");
       }
       try {
-        await retryWorktreeOperation(options.worktrees, userId, row);
+        await retryWorktreeOperation(options.worktrees, userId, row, interactive);
       } catch (error) {
         await options.repository.fail(
           operationId,
@@ -121,7 +121,8 @@ export function createOperationsModule(options: {
 async function retryWorktreeOperation(
   worktrees: WorktreesModule,
   userId: string,
-  row: OperationRow
+  row: OperationRow,
+  interactive: boolean
 ): Promise<void> {
   const payload = JSON.parse(row.payload_json) as Record<string, unknown>;
   const worktreeId = requiredPayloadId(payload.worktreeId, "worktreeId");
@@ -151,7 +152,7 @@ async function retryWorktreeOperation(
       });
       return;
     case "merge_worktree":
-      await worktrees.merge(userId, worktreeId, row.id);
+      await worktrees.merge(userId, worktreeId, row.id, interactive);
       return;
     case "discard_worktree":
       await worktrees.discard(userId, worktreeId, row.id);

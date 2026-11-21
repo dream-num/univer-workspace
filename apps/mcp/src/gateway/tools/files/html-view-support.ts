@@ -3,6 +3,8 @@ import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { z } from "zod";
 import { htmlViewInput, htmlViewMaxBytes } from "../../../shared/executor-protocol.js";
 import type { ToolContext } from "../definition.js";
+import { repoInput } from "../core/issue-support.js";
+import { findPr, pullNumberInput } from "../core/pr-support.js";
 import { stagingStore } from "./staging-support.js";
 
 export const htmlViewSourceSchema = z.object({
@@ -35,4 +37,16 @@ export async function readHtmlView(input: z.infer<typeof htmlViewSourceSchema>, 
       return html;
     },
   );
+}
+
+export const htmlViewPullRequestShape = { repo: repoInput.optional(), pr: pullNumberInput.optional() };
+
+export async function htmlViewWorktree(
+  input: z.infer<z.ZodObject<typeof htmlViewPullRequestShape>>, context: ToolContext,
+) {
+  if (input.pr === undefined) return {};
+  if (input.repo === undefined)
+    throw workspaceError("workspace-argument-invalid", "Provide repo with the source pull request.");
+  const { worktree } = await findPr(context, input.repo, input.pr);
+  return { sourceWorktreeId: worktree.id };
 }

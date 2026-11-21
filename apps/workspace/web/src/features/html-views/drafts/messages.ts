@@ -12,8 +12,10 @@ export const draftMessages = {
     sourceSheets: "Source Sheets", noSourceSheets: "No Sheet bindings", sourcesUnavailable: "Source Sheets could not be read.",
     publicPage: "Anyone with the link", privatePage: "Members only", unknownVisibility: "Visibility unavailable",
     publishNotice: "Publishing takes effect immediately. Draft preview changes are not saved.",
+    waitingForPr: (number: number | null) => number === null ? "Publishes automatically when the source PR merges." : `Publishes automatically when PR #${number} merges.`,
     pending: "Pending review", published: "Published", rejected: "Rejected", expired: "Expired",
     conflicted: "The page changed since the Agent drafted it. Ask the Agent to revise it.",
+    sourceDiscarded: "The source PR was discarded, so this page will not be published. Ask the Agent to revise it.",
     notFound: "Draft not found or not yours.", openPage: "Open page",
   },
   "zh-CN": {
@@ -27,8 +29,10 @@ export const draftMessages = {
     sourceSheets: "来源表格", noSourceSheets: "没有表格绑定", sourcesUnavailable: "无法读取来源表格。",
     publicPage: "任何有链接的人", privatePage: "仅成员可访问", unknownVisibility: "无法获取可见范围",
     publishNotice: "发布后立即生效。草稿预览中的修改不会保存。",
+    waitingForPr: (number: number | null) => number === null ? "等待来源 PR 合并，合并后自动发布页面。" : `等待 PR #${number} 合并，合并后自动发布页面。`,
     pending: "等待审阅", published: "已发布", rejected: "已拒绝", expired: "已过期",
     conflicted: "页面在 Agent 起草后已更改，请让 Agent 修改草稿。",
+    sourceDiscarded: "来源 PR 已丢弃，这个页面不会发布。请让 Agent 修改草稿。",
     notFound: "草稿不存在或不属于你。", openPage: "打开页面",
   },
 };

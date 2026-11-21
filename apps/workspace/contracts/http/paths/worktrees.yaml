@@ -383,7 +383,7 @@
         content:
           application/json:
             schema:
-              $ref: ../schemas/worktrees.yaml#/WorktreeOperationResponse
+              $ref: ../schemas/worktrees.yaml#/WorktreeMergeResponse
       "202":
         description: Merge or Activation remains pending.
         headers:

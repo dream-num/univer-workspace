@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, onTestFinished } from "vitest";
 import type { Pool } from "pg";
 import { openProductDatabase } from "../../server/src/db/index.js";
 import { productSchemaFingerprint } from "../../server/src/db/postgres/initialize.js";
@@ -30,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=6");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=7");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=5");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=6");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -110,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 5 }]);
+    expect(fresh.version).toMatchObject([{ version: 6 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -210,7 +210,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
       await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ($1, $1, $2, 1, 2)", [id, name]);
       await schema.pool.query("INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ($1, 'personal', $2, $3, 3, 4)", [`s-${id}`, `${name} 的个人空间`, id]);
     }
-    await schema.pool.query("UPDATE workspace_product_schema SET version = 4");
+    await downgrade(schema, 4);
     const snapshot = async () => ({
       users: (await schema.pool.query("SELECT id, display_name, updated_at FROM users ORDER BY id")).rows,
       spaces: (await schema.pool.query("SELECT id, name, updated_at FROM spaces ORDER BY id")).rows,
@@ -235,9 +235,59 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     expect(after.schema).toEqual(fresh);
     await (await openProductDatabase(config)).close();
     expect(await snapshot()).toEqual(after);
-    await schema.pool.query("UPDATE workspace_product_schema SET version = 4");
+    await downgrade(schema, 4);
     await (await openProductDatabase(config)).close();
     expect(await snapshot()).toEqual(after);
+  });
+
+  it.each([false, true])("upgrades V5 draft sources with row preservation, rollback and restart (seeded=%s)", async (seeded) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const config = { provider: "postgres" as const, connectionString: schema.connectionString };
+    await (await openProductDatabase(config)).close();
+    const fresh = (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows;
+    await downgrade(schema, 5);
+    if (seeded) {
+      await schema.pool.query(`
+        INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 2);
+        INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('s', 'personal', 'Personal', 'u', 1, 2);
+        INSERT INTO worktrees (id, name, creator_user_id, kind, visibility, created_at, updated_at) VALUES ('w', 'Source', 'u', 'user', 'private', 1, 2);
+        INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, created_at, updated_at)
+          VALUES ('op', 'merge_worktree', 'u', 'merge', 'pending', '{"worktreeId":"w"}', 2, 3, 1, 2);
+      `);
+      for (const state of ["receiving", "pending", "published", "expired", "rejected", "conflicted"]) {
+        await schema.pool.query(`INSERT INTO html_view_drafts (id, author_user_id, idempotency_key, kind, space_id, name, object_key, byte_size, sha256,
+          media_type, stored_etag, state, result_resource_id, expires_at, created_at, updated_at)
+          VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 'etag', $1, $3, 999, 1, 2)`,
+          [state, "a".repeat(64), state === "published" ? "resource" : null]);
+      }
+    }
+    const before = (await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows;
+    const operations = (await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows;
+    await schema.pool.query("CREATE TABLE html_view_drafts_source_worktree (id integer)");
+    const client = await schema.pool.connect();
+    try {
+      await client.query("UPDATE workspace_product_schema SET fingerprint = $1", [await productSchemaFingerprint(client)]);
+    } finally { client.release(); }
+    const failedSchema = (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows;
+    await expect(openProductDatabase(config)).rejects.toThrow(/already exists/);
+    expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(failedSchema);
+    expect((await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows).toEqual(before);
+    await schema.pool.query("DROP TABLE html_view_drafts_source_worktree");
+    const reset = await schema.pool.connect();
+    try {
+      await reset.query("UPDATE workspace_product_schema SET fingerprint = $1", [await productSchemaFingerprint(reset)]);
+    } finally { reset.release(); }
+    await (await openProductDatabase(config)).close();
+    const after = (await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows;
+    expect(after).toEqual(before.map((row) => ({ ...row, source_worktree_id: null })));
+    expect((await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows).toEqual(operations);
+    expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(fresh);
+    if (seeded) await schema.pool.query("UPDATE html_view_drafts SET source_worktree_id = 'w' WHERE id = 'pending'");
+    await (await openProductDatabase(config)).close();
+    expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(fresh);
+    expect((await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows)
+      .toEqual(after.map((row) => row.id === "pending" ? { ...row, source_worktree_id: "w" } : row));
   });
 
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
@@ -250,10 +300,11 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 });
 
 /** Gives a fresh schema the structure a deployed database at an older version has. */
-async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3): Promise<void> {
+async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5): Promise<void> {
   const client = await schema.pool.connect();
   try {
-    await client.query(`
+    await client.query("DROP INDEX html_view_drafts_source_worktree; ALTER TABLE html_view_drafts DROP COLUMN source_worktree_id");
+    if (version < 4) await client.query(`
       ALTER TABLE nodes DROP COLUMN copied_from_node_id;
       ALTER TABLE worktree_node_intents DROP COLUMN copied_from_node_id;
       ALTER TABLE node_link_sharing DROP COLUMN unverified_role, DROP COLUMN making_of_note;

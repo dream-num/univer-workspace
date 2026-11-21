@@ -8,6 +8,11 @@ import { assertDraftDestination, requireDraftResource, draftConflict, type HtmlV
 
 export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository {
   constructor(private readonly database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
+  async pendingForWorktree(worktreeId: string): Promise<DraftRow[]> {
+    return this.database.connection
+      .prepare("SELECT * FROM html_view_drafts WHERE source_worktree_id = ? AND state = 'pending' ORDER BY created_at, id")
+      .all(worktreeId) as unknown as DraftRow[];
+  }
   async find(id: string): Promise<DraftRow | undefined> {
     return this._findSync(id);
   }
@@ -38,6 +43,7 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
       | "idempotency_key"
       | "kind"
       | "space_id"
+      | "source_worktree_id"
       | "parent_node_id"
       | "name"
       | "target_resource_id"
@@ -52,8 +58,8 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
       if (existing) return { row: existing, created: false };
       db.prepare(`INSERT INTO html_view_drafts
         (id, author_user_id, idempotency_key, kind, space_id, parent_node_id, name, target_resource_id,
-         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?)`).run(
+         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at, source_worktree_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?, ?)`).run(
         randomUUID(),
         input.author_user_id,
         input.idempotency_key,
@@ -69,6 +75,7 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
         now + 3600000,
         now,
         now,
+        input.source_worktree_id,
       );
       return { row: this._findKeySync(input.author_user_id, input.idempotency_key)!, created: true };
     });

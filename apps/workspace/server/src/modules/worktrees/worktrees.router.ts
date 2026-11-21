@@ -162,14 +162,15 @@ export function createWorktreesRouter(options: {
   router.post(
     "/worktrees/:worktreeId/merge",
     async (request, response) => {
-      const user = (await options.identity.requireSession(
+      const actor = await options.identity.requireSession(
         request.headers.cookie
-      )).user;
+      );
       response.json(
         await options.worktrees.merge(
-          user.id,
+          actor.user.id,
           request.params.worktreeId,
-          request.headers["idempotency-key"]
+          request.headers["idempotency-key"],
+          !actor.tokenIssued
         )
       );
     }

@@ -4,6 +4,7 @@ export interface HtmlViewDraftView {
   readonly kind: "create" | "replace";
   readonly state: HtmlViewDraftState;
   readonly spaceId: string;
+  readonly sourceWorktreeId: string | null;
   readonly parentNodeId: string | null;
   readonly name: string;
   readonly targetResourceId: string | null;
@@ -18,12 +19,18 @@ export interface HtmlViewDraftView {
     readonly etag: string;
   } | null;
 }
+export interface PublishedPage {
+  readonly draftId: string;
+  readonly name: string;
+  readonly nodeId: string;
+}
 export interface DraftRow {
   id: string;
   author_user_id: string;
   idempotency_key: string;
   kind: "create" | "replace";
   space_id: string;
+  source_worktree_id: string | null;
   parent_node_id: string | null;
   name: string;
   target_resource_id: string | null;

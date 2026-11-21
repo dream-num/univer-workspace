@@ -43,6 +43,97 @@ async function harness() {
 }
 
 describe("HTML View draft HTTP API", () => {
+
+  it("links create and replace drafts to a reviewable pull request and includes it in intent", async () => {
+    const c = await harness();
+    const source = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Source", summary: null })).body;
+    const body = { kind: "create", spaceId: c.space.id, name: "Page", html, sourceWorktreeId: source.id };
+    const key = crypto.randomUUID();
+    const draft = await c.submit(key, body);
+    expect(draft.sourceWorktreeId).toBe(source.id);
+    expect((await (await c.send(`/${draft.id}`)).json()).draft.sourceWorktreeId).toBe(source.id);
+    expect((await c.send("", body, key)).status).toBe(200);
+    const { sourceWorktreeId: _, ...unlinked } = body;
+    expect((await c.send("", unlinked, key)).status).toBe(409);
+    const other = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Another", summary: null })).body;
+    expect((await c.send("", { ...body, sourceWorktreeId: other.id }, key)).status).toBe(409);
+    const waiting = await c.send(`/${draft.id}/publish`, {});
+    expect(waiting.status).toBe(409);
+    expect((await waiting.json()).error.message).toContain(`#${source.number}`);
+    await c.application.worktrees.markReady(c.userId, source.id);
+    const merge = await fetch(`${c.origin}/api/worktrees/${source.id}/merge`, {
+      method: "POST", headers: { cookie: await delegatedCookie(c), "idempotency-key": crypto.randomUUID() },
+    });
+    expect(merge.status).toBe(200);
+    expect((await merge.json()).publishedPages).toEqual([]);
+    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe("pending");
+    const published = await c.send(`/${draft.id}/publish`, {});
+    expect(published.status).toBe(200);
+    const first = (await published.json()).draft.published;
+    const replacement = await c.submit(crypto.randomUUID(), { kind: "replace", resourceId: first.resourceId, etag: first.etag, html, sourceWorktreeId: source.id });
+    expect(replacement.sourceWorktreeId).toBe(source.id);
+    expect((await c.send(`/${replacement.id}/publish`, {})).status).toBe(200);
+    const newOnMerged = await c.submit(crypto.randomUUID(), body);
+    expect((await c.send(`/${newOnMerged.id}/publish`, {})).status).toBe(200);
+  });
+
+  it("rejects discarded or unreadable sources and derives conflicts after discard", async () => {
+    const c = await harness();
+    const source = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Discarded", summary: null })).body;
+    const body = { kind: "create", spaceId: c.space.id, name: "Page", html, sourceWorktreeId: source.id };
+    const draft = await c.submit(crypto.randomUUID(), body);
+    await c.application.worktrees.discard(c.userId, source.id, crypto.randomUUID());
+    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe("conflicted");
+    const refused = await c.send(`/${draft.id}/publish`, {});
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).error.message).toContain("conflicted");
+    expect((await c.send("", body, crypto.randomUUID())).status).toBe(409);
+    const other = await c.application.identity.registerWithPassword({ username: "source-outsider", displayName: "Other", password: "correct horse battery staple" });
+    const hidden = (await c.application.worktrees.create(other.view.user.id, crypto.randomUUID(), { kind: "user", name: "Private", summary: null })).body;
+    expect((await c.send("", { ...body, sourceWorktreeId: hidden.id }, crypto.randomUUID())).status).toBe(404);
+    expect((await c.send("", { ...body, sourceWorktreeId: "missing" }, crypto.randomUUID())).status).toBe(404);
+    const team = await c.application.spaces.createTeamSpace(other.view.user.id, { name: "Summary only" });
+    await c.application.permissions.upsertTeamMember(other.view.user.id, team.id, c.userId, { role: "admin" });
+    const restricted = (await c.application.worktrees.create(other.view.user.id, crypto.randomUUID(), { kind: "team", teamSpaceId: team.id, name: "Summary", visibility: "private", summary: null })).body;
+    expect((await c.application.worktrees.get(c.userId, restricted.id)).worktree.capabilities.review).toBe(false);
+    expect((await c.send("", { ...body, sourceWorktreeId: restricted.id }, crypto.randomUUID())).status).toBe(404);
+  });
+
+  it("publishes linked drafts only through an interactive HTTP merge and omits them on replay", async () => {
+    const c = await harness();
+    const source = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Source", summary: null })).body;
+    const draft = await c.submit(crypto.randomUUID(), { kind: "create", spaceId: c.space.id, name: "Page", html, sourceWorktreeId: source.id });
+    await c.application.worktrees.markReady(c.userId, source.id);
+    const key = crypto.randomUUID();
+    const merge = () => fetch(`${c.origin}/api/worktrees/${source.id}/merge`, { method: "POST", headers: { cookie: c.cookie, "idempotency-key": key } });
+    const first = await merge();
+    expect(first.status).toBe(200);
+    const result = await first.json();
+    expect(result.publishedPages).toEqual([{ draftId: draft.id, name: draft.name, nodeId: expect.any(String) }]);
+    expect(result.worktree.pendingPageDrafts).toBe(0);
+    const replay = await merge();
+    expect(replay.status).toBe(200);
+    expect((await replay.json()).publishedPages).toEqual([]);
+    expect((await c.application.views.listHtmlViews(c.userId, {})).items).toHaveLength(1);
+  });
+
+  it.each([false, true])("resumes an interrupted merge through operation retry (tokenIssued=%s)", async (tokenIssued) => {
+    const c = await harness();
+    const source = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Resume", summary: null })).body;
+    const draft = await c.submit(crypto.randomUUID(), { kind: "create", spaceId: c.space.id, name: "Page", html, sourceWorktreeId: source.id });
+    await c.application.worktrees.markReady(c.userId, source.id);
+    const key = crypto.randomUUID();
+    const failure = vi.spyOn(c.application.repositories.worktrees, "completeOperation").mockRejectedValueOnce(new Error("Interrupted after merge"));
+    await expect(c.application.worktrees.merge(c.userId, source.id, key)).rejects.toThrow("Interrupted after merge");
+    failure.mockRestore();
+    const retry = await fetch(`${c.origin}/api/operations/${key}/retry`, {
+      method: "POST", headers: { cookie: tokenIssued ? await delegatedCookie(c) : c.cookie },
+    });
+    expect(retry.status).toBe(202);
+    expect((await retry.json()).state).toBe("completed");
+    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe(tokenIssued ? "pending" : "published");
+  });
+
   it("requires drafts for delegated upload names and original filenames, ignoring case", async () => {
     const c = await harness();
     const tokenCookie = await delegatedCookie(c);
@@ -186,7 +277,7 @@ describe("HTML View draft HTTP API", () => {
     const c = await harness();
     const key = crypto.randomUUID();
     const draft = await c.submit(key);
-    expect(draft).toMatchObject({ state: "pending", name: "Weekly.univer.html", published: null });
+    expect(draft).toMatchObject({ sourceWorktreeId: null, state: "pending", name: "Weekly.univer.html", published: null });
     expect((await c.application.views.listHtmlViews(c.userId, {})).items).toHaveLength(0);
     const replay = await c.send(
       "",
@@ -352,13 +443,6 @@ async function createHttpContext() {
       blobDirectory: join(directory, "objects"),
       secureCookies: false,
       sessionTtlMs: 60_000,
-    },
-    {
-      unitStore: {
-        async createUnit(input) {
-          return { unitId: input.unitId, headRevision: 1 };
-        },
-      },
     },
   );
   applications.push(application);

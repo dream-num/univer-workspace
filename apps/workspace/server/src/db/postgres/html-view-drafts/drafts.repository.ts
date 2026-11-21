@@ -8,6 +8,11 @@ import { assertDraftDestination, requireDraftResource, draftConflict, type HtmlV
 
 export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepository {
   constructor(private readonly database: PostgresDatabase, private readonly access: PostgresAccessRepository) {}
+  async pendingForWorktree(worktreeId: string): Promise<DraftRow[]> {
+    return await this.database
+      .prepare("SELECT * FROM html_view_drafts WHERE source_worktree_id = ? AND state = 'pending' ORDER BY created_at, id")
+      .all(worktreeId) as unknown as DraftRow[];
+  }
   async find(id: string): Promise<DraftRow | undefined> {
     return await this.database
       .prepare("SELECT * FROM html_view_drafts WHERE id = ?")
@@ -30,6 +35,7 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
       | "idempotency_key"
       | "kind"
       | "space_id"
+      | "source_worktree_id"
       | "parent_node_id"
       | "name"
       | "target_resource_id"
@@ -44,8 +50,8 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
       if (existing) return { row: existing, created: false };
       await db.prepare(`INSERT INTO html_view_drafts
         (id, author_user_id, idempotency_key, kind, space_id, parent_node_id, name, target_resource_id,
-         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?)`).run(
+         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at, source_worktree_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?, ?)`).run(
         randomUUID(),
         input.author_user_id,
         input.idempotency_key,
@@ -61,6 +67,7 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
         now + 3600000,
         now,
         now,
+        input.source_worktree_id,
       );
       return { row: (await this.findKey(input.author_user_id, input.idempotency_key))!, created: true };
     });
@@ -74,7 +81,7 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
   }
   async decide(id: string, userId: string, action: "publish" | "reject", now: number): Promise<DraftRow> {
     return await this.database.transaction(async (db) => {
-      const row = (await this.find(id))!;
+      const row = await db.prepare("SELECT * FROM html_view_drafts WHERE id = ? FOR UPDATE").get(id) as unknown as DraftRow;
       if (row.state !== "pending" && row.state !== "receiving") return row;
       let state: DraftRow["state"];
       let result: { nodeId: string; resourceId: string; etag: string } | null = null;

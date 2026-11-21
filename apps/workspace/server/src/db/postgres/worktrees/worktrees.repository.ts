@@ -655,7 +655,12 @@ function worktreeSelect(): string {
               SELECT COUNT(*)
               FROM worktree_units AS counted
               WHERE counted.worktree_id = worktree.id
-            ) AS unit_count
+            ) AS unit_count,
+            (
+              SELECT COUNT(*) FROM html_view_drafts AS draft
+              WHERE draft.source_worktree_id = worktree.id
+                AND draft.state = 'pending' AND draft.expires_at > EXTRACT(EPOCH FROM clock_timestamp()) * 1000
+            ) AS pending_page_drafts
           FROM worktrees AS worktree
           JOIN users AS creator ON creator.id = worktree.creator_user_id
           LEFT JOIN agents AS agent ON agent.user_id = worktree.creator_user_id

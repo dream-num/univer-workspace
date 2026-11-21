@@ -766,7 +766,7 @@ it("keeps a missing Sheet draft failure and pre-write deadline out of result-unk
   try {
     const dispatch = createDispatcher(config, instance, pino({ level: "silent" }));
     const input = { kind: "create", html: '<output data-univer-cell-text="missing:budget:B2"></output>', spaceId: "space", name: "View", idempotencyKey: "html-missing-123456" };
-    expect((await dispatch("htmlView.draft", header(input), new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "NOT_FOUND" } });
+    expect((await dispatch("htmlView.draft", header(input), new Uint8Array())).header).toMatchObject({ ok: false, error: { code: "workspace-html-view-source-unavailable", detail: { unitId: "missing" } } });
     const handler = vi.spyOn(handlers, "htmlView.draft").mockImplementation(async (ctx) => {
       await new Promise<never>((_resolve, reject) => ctx.signal.addEventListener("abort", () => reject(ctx.signal.reason), { once: true }));
       throw new Error("unreachable");

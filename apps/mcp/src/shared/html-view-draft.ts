@@ -7,6 +7,7 @@ export const htmlViewDraftSchema = z.object({
   state: z.enum(["pending", "published", "rejected", "expired", "conflicted"]),
   name: z.string(),
   space: z.string(),
+  sourceWorktreeId: z.string().min(1).nullable().optional(),
   resource: z.string().optional(),
   node: z.string().optional(),
   etag: z.string().regex(/^"[^"\r\n]+"$/).optional(),
@@ -21,6 +22,7 @@ export function htmlViewDraftResult(draft: WorkspaceHtmlViewDraft) {
   return {
     id: draft.id, kind: draft.kind, state: draft.status.state, name: draft.name, space: draft.spaceId,
     previewUrl: draft.previewUrl, expiresAt: draft.expiresAt,
+    ...(draft.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: draft.sourceWorktreeId }),
     ...(draft.status.state === "published" ? {
       resource: draft.status.resourceId, node: draft.status.nodeId,
       etag: draft.status.etag, shareUrl: draft.status.shareUrl,

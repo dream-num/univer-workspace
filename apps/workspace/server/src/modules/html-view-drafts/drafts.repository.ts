@@ -5,6 +5,7 @@ import { ApplicationError } from "../../middleware/errors.js";
 import type { DraftRow } from "./drafts.types.js";
 
 export interface HtmlViewDraftsRepository {
+  pendingForWorktree(worktreeId: string): Promise<DraftRow[]>;
   find(id: string): Promise<DraftRow | undefined>;
   findKey(userId: string, key: string): Promise<DraftRow | undefined>;
   currentEtag(resourceId: string): Promise<string | undefined>;
@@ -15,6 +16,7 @@ export interface HtmlViewDraftsRepository {
       | "idempotency_key"
       | "kind"
       | "space_id"
+      | "source_worktree_id"
       | "parent_node_id"
       | "name"
       | "target_resource_id"
