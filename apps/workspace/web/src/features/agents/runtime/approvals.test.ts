@@ -44,7 +44,7 @@ describe("scope-based tool approval", () => {
     expect(gateTools({ html_view_create: tool }, "auto", vi.fn()).tools.html_view_create).toBe(tool);
   });
 
-  it.each(["html_view_create", "html_view_replace"])("executes write-scope %s with the session client and no publish authority", async (toolName) => {
+  it.each(["html_view_save", "html_view_create", "html_view_replace"])("executes write-scope %s with the session client and no publish authority", async (toolName) => {
     const execute = vi.fn(async () => ({ structuredContent: { draft: { id: "draft-1" } } }));
     const publish = vi.fn();
     const tool = { ...dynamicTool({ inputSchema: jsonSchema({ type: "object" }), execute }), _meta: { "univer.workspace/scope": "write" } };

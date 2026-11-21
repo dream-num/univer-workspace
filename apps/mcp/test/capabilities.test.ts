@@ -27,9 +27,7 @@ const executorTools = [
   "screenshot",
   "import",
   "export",
-  "html_view_validate",
-  "html_view_create",
-  "html_view_replace",
+  "html_view_save",
   "compile_markdown",
   "export_markdown",
   "compile_typst",
@@ -157,18 +155,12 @@ describe("capabilities through MCP tools/list and initialize", () => {
   it("offers page creation and revision on a connection without a toolsets query", async () => {
     const client = await (await start([replica()]))(undefined);
     expect((await client.listTools()).tools.map(({ name }) => name)).toEqual(coreNames);
-    const text = client.getInstructions();
-    expect(text).toContain("A page for sharing or presenting Workspace data is an HTML View (.univer.html) bound to live Sheets.");
-    expect(text).toContain("It is not a Slide, Board or other Unit.");
-    expect(text).toContain("validate and save a draft with binding samples");
-    expect(text).toContain("draft directly without waiting for plan or style approval");
-    expect(text).toContain("pass repo and pr");
-    expect(text).toContain("the page goes live when the user merges it in Workspace");
-    expect(text).toContain("give the user draft.previewUrl");
-    expect(text).toContain("Before saying whether a page is live or still a draft");
-    expect(text).toContain("call html_view_draft_get");
-    expect(text).toContain("On rejected, ask what to change.");
-    expect(text).toContain("html_view_read then html_view_replace");
+    const names = (await client.listTools()).tools.map(({ name }) => name);
+    for (const name of ["html_view_save", "html_view_read", "html_view_draft_get", "html_view_styles"])
+      expect(names).toContain(name);
+    for (const name of ["html_view_create", "html_view_replace", "html_view_validate"])
+      expect(names).not.toContain(name);
+    expect(client.getInstructions()).toContain("For a page sharing or presenting Workspace data, use an HTML View and read the html-view-creator Skill.");
   });
 
   it("stops page requests when publishing is unavailable", async () => {
@@ -406,7 +398,7 @@ it("hides page writes from old executors and retains the HTTP-only status tool",
   const old = replica([...allOperations.filter((name) => name !== "htmlView.draft"), "htmlView.create", "htmlView.replace"]);
   const client = await (await start([old]))("core");
   const names = (await client.listTools()).tools.map(({ name }) => name);
-  expect(names).not.toContain("html_view_create");
+  expect(names).not.toContain("html_view_save");
   expect(names).not.toContain("html_view_replace");
   expect(names).toContain("html_view_draft_get");
   expect(Object.keys(opSpecs)).toContain("htmlView.draft");

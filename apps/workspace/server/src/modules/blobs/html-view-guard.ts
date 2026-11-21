@@ -7,7 +7,7 @@ export function assertNotDelegatedPageWrite(actor: Principal, names: readonly st
     throw new ApplicationError(
       "HTML_VIEW_DRAFT_REQUIRED",
       403,
-      "Pages (.univer.html) from Agents must go through html_view_create or html_view_replace drafts.",
+      "Pages (.univer.html) from Agents must go through html_view_save drafts.",
     );
   }
 }

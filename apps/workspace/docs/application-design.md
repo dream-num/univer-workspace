@@ -552,8 +552,8 @@ private/no-store，不能作为第一方源 HTML 执行。
 
 Token 换出的 Session 通过 Blob API 预留上传、完成上传或替换内容，以及通过 Node API 将 Blob
 重命名为页面时，统一检查 `.univer.html` 后缀，忽略大小写；上传与替换同时检查节点名和原始
-文件名。命中时返回 403 `HTML_VIEW_DRAFT_REQUIRED`，要求使用 `html_view_create` 或
-`html_view_replace` 提交草稿。浏览器与 CLI device login 的交互 Session、草稿发布和从回收站
+文件名。命中时返回 403 `HTML_VIEW_DRAFT_REQUIRED`，要求使用 `html_view_save` 提交
+草稿。浏览器与 CLI device login 的交互 Session、草稿发布和从回收站
 恢复已有页面不受此限制。
 
 ## Skill 草稿审批

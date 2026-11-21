@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -357,6 +358,20 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(ws.requests.filter((path) => path === "/api/spaces/personal/nodes")).toHaveLength(1);
   });
 
+  it("reads full references without templates or style cards while keeping individual reads", async () => {
+    await mkdir(join(sourceRoot, "html-view/styles"));
+    await writeFile(join(sourceRoot, "html-view/styles/test.md"), "Style card");
+    await start(sourceRoot);
+    const client = await connect();
+    const full = await call(client, "skills_read", { name: "html-view", full: true });
+    expect(full.isError).not.toBe(true);
+    const files = z.object({ files: z.array(z.object({ path: z.string() })) }).parse(full.structured).files;
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every(({ path }) => path.startsWith("references/"))).toBe(true);
+    expect(full.structured.resources).toContainEqual(expect.objectContaining({ path: "styles/test.md" }));
+    expect((await call(client, "skills_read", { name: "html-view", resource: "styles/test.md" })).structured.content).toBe("Style card");
+  });
+
   it("serves only manifest text, classifies PNG as binary and pages with repository-bound cursors", async () => {
     const ws = skillWorkspace();
     const root = ws.skill("team", "ledger");
@@ -522,7 +537,11 @@ describe("API reference, Skills, resources and server instructions", () => {
     const full = await call(client, "skills_read", { name: "core", full: true });
     expect(full.structured).toEqual({ ...core.structured, files: [] });
     const htmlFull = await call(client, "skills_read", { name: "html-view", full: true });
-    expect(toolError(htmlFull)).toMatchObject({ code: "workspace-result-too-large" });
+    expect(htmlFull.isError).not.toBe(true);
+    const files = z.object({ files: z.array(z.object({ path: z.string(), content: z.string() })) }).parse(htmlFull.structured).files;
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every(({ path }) => path.startsWith("references/"))).toBe(true);
+    for (const file of files) expect(file.content).toBe(await readFile(join(cliSkillData, "html-view", file.path), "utf8"));
 
     const templates = [
       "templates/bauhaus-blocks.univer.html",

@@ -23,8 +23,7 @@ range. The `sheet` Skill's `references/reading.md` lists every option.
 Load a Skill with `skills_read` and its name, or read
 `skill://univer-workspace/<name>/SKILL.md`. Without arguments, `skills_read` lists
 names and descriptions. With a name it returns top-level name, content and optional
-resources. Read a reference or template with name and resource; full includes all
-supplemental files.
+resources. Read a reference or template with name and resource; full includes references only. Read templates and styles individually with resource.
 For a truncated resource, repeat the same arguments with the returned cursor.
 
 The shared Skills describe operations such as `api show` and `compile-svg`.
@@ -87,10 +86,8 @@ every rule here that leaves readiness, merging or the link to the user.
 | `blob download`                                                                                              | `blob_download`        | Files; bytes and ETag                                      |
 | `blob replace`                                                                                               | `blob_replace`         | Files; conditional replacement                             |
 | `asset download`                                                                                             | `asset_download`       | Files; embedded image bytes                                |
-| `html-view validate`                                                                                         | `html_view_validate`   | Core; validate declarative bindings                        |
-| `html-view create`                                                                                           | `html_view_create`     | Core; save a page draft                                    |
+| `html-view create`                                                                                           | `html_view_save`     | Core; create with space/name or revise with page/etag                                    |
 | Read HTML View HTML and ETag | `html_view_read` | Inline .univer.html source and strong ETag |
-| Replace HTML View | `html_view_replace` | Validate inline HTML and save a revision draft |
 | Read HTML View draft status | `html_view_draft_get` | HTTP-only; share the page only when published |
 | `compile-markdown`                                                                                           | `compile_markdown`     | Files; Markdown to Modern Doc                              |
 | `export-markdown`                                                                                            | `export_markdown`      | Files; selected native blocks to Markdown                  |
@@ -203,18 +200,8 @@ user-scoped Worktree for a private personal task, or that Team's Space-scoped
 Worktree when the task belongs to the team. Use Space visibility only when members
 should see the draft.
 
-When the user wants an HTML page, dashboard, report or form to share or present
-Workspace data, use an HTML View, preferring it over a local `.html` unless they ask
-for a file. Read the `html-view-creator` Skill and the chosen template, then draft
-directly with `html_view_create` without waiting for plan or style approval. It
-validates and returns binding samples with the draft. For sources in a pull request,
-pass `repo` and `pr`; the preview shows its data and the page goes live when the user
-merges it in Workspace. Otherwise the user opens the preview and presses Publish.
-A page is not a Slide, Board or other Unit. If the connection cannot draft pages,
-say so and stop; never create a substitute Unit.
-Revise a page with `html_view_read` then `html_view_replace`. Edit the returned HTML
-and draft with its strong ETag and a new idempotency key. On conflict, read again
-and reconcile. Publishing a revision preserves the page identity and URL.
+For a page sharing or presenting Workspace data, use an HTML View and read the
+`html-view-creator` Skill.
 
 For a new Unit file, create the Worktree first. Use `unit_create` for an empty Unit, or
 give it `from`, a share link of a file you can open, to start from a copy that records
@@ -229,16 +216,6 @@ as a UUID, for each new operation. Reuse it only to retry the same call with
 identical arguments. Never derive it from names or reuse a key from earlier work.
 Where a schema requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
 underscores or hyphens. After an unknown content commit, read back before retrying.
-
-## Pages
-
-`html_view_create` and `html_view_replace` only save drafts. Give the user
-`draft.previewUrl`, say the page is not live until they publish it in Workspace,
-and end your turn. Before saying whether a page is live or still a draft, sharing its link or revising it,
-call `html_view_draft_get` with the returned draft ID. Users publish in Workspace without telling you. Share `shareUrl` only when
-`state` is `published`. On `rejected`, ask what to change. On `conflicted`, read the
-page again with `html_view_read` and draft again. On `expired`, draft again with a
-new idempotency_key. MCP cannot publish or reject a draft.
 
 ## Edit one Unit
 
@@ -284,12 +261,6 @@ for one hour after reservation. Never pass a local file path to a tool.
 
 - `import`, `blob_upload` and `blob_replace` consume upload_id. Choose purpose
   office-import for Office input or blob for original files.
-- `html_view_validate` and `html_view_create` take exactly one of inline html or
-  html_upload_id. Reserve purpose html-view with media_type text/html for a local
-  page, upload its bytes, then pass its upload_id as html_upload_id. HTML must be
-  valid UTF-8 and at most 512 KiB. Reuse the upload and idempotency_key on creation retries.
-- `html_view_read` returns inline HTML and its strong ETag. `html_view_replace`
-  accepts inline html only, with that ETag and a new idempotency_key.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
 - `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at
@@ -332,30 +303,7 @@ handle as completed output. Successful job results carry the original tool outpu
 screenshot job results carry download links. After an unknown creation result,
 retry only the same operation with its original upload and idempotency key.
 
-Read the `blob` Skill for original files. For live pages on Sheet data, read
-`html-view-creator` and one complete chosen template. Draft directly by default.
-Use a named style, otherwise select by purpose, audience, adjectives and data shape.
-If none fits, use Night Gauge or a custom style from the structurally closest template,
-changing palette, type and signature element while meeting the design floor. Name the
-style and why in the reply and offer to change it. Ask at most one question only for
-unclear purpose/data or an explicit plan/style request. Templates are English starting
-points; localize text, units and dates without language switches. Controls write Sheet
-cells or insert rows; display recalculated source values, never page-side Sheet formulas,
-copied data or fallback numbers. HTML View tools save drafts; ordinary Blob publication
-and replacement write directly, so use them only for the intended original-file task.
-`html_view_create` and `html_view_replace` return a `draft` with `previewUrl`,
-`repositoryVisibility` and sorted `privateSourceUnitIds`, plus validation samples
-`bindings`, `bindingCount` and optional `truncated` alongside `draft`. Compare the
-samples with the intended data; separate `html_view_validate` is optional. Once `html_view_draft_get`
-confirms `published`, return its immersive `shareUrl` and explain that anyone
-with the link can view the page and its declared sources only when visibility is
-`public` and the private-source list is empty; otherwise signed-in access is
-required for the page and all its data. Signed-out visitors and signed-in
-non-members are read-only; page writes are rejected for them. This connection
-cannot make a repository public. When the user wants anyone with the link to open
-the page, give them the repository `url` and ask them to make it public in its
-settings in the browser, which immediately publishes everything in it. Keep source
-Sheets in the same public repository or list the private sources.
+Read the `blob` Skill for original files.
 
 ## SVG resource catalog
 

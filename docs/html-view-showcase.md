@@ -13,7 +13,7 @@ Most screenshots below show pages that an Agent (opencode with DeepSeek Flash, w
 3. The Agent starts from that style's template, binds it to your Sheet, writes the page in the language you are using, validates the bindings and publishes it.
 4. It returns a share link and tells you who can open it. It asks before making a repository public, because that publishes everything in the repository.
 
-The CLI does the same with `uvw html-view validate` and `uvw html-view create`. MCP clients use `html_view_validate` and `html_view_create`, available with `?toolsets=files` or `all`.
+The CLI does the same with `uvw html-view validate` and `uvw html-view create`. MCP clients use `html_view_save`, which validates the page and saves a draft, in the default toolset.
 
 ## How data binding works
 

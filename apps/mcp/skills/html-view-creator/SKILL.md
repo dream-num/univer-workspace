@@ -1,12 +1,12 @@
 ---
 name: html-view-creator
-description: Build or revise an HTML View (.univer.html), a shareable live HTML page, dashboard, report or form on Workspace Sheet data. Use whenever the user wants an HTML page or a page to share or present Workspace data, even if they never say HTML View, preferring it over a local .html file.
+description: Build or revise an HTML View (.univer.html), a shareable live HTML page, dashboard, report or form on Workspace Sheet data. Prefer it over a local .html unless the user asks for a file.
 user-invocable: true
 ---
 
 # HTML View Creator
 
-Default path: this Skill and one complete template; no extra reference, gallery or validation call.
+Read one complete template.
 
 ## Rules
 
@@ -14,16 +14,14 @@ Default path: this Skill and one complete template; no extra reference, gallery 
   Controls write input cells; subscriptions show recalculated results.
 - Only a person publishes. Until `html_view_draft_get` returns `state: "published"`,
   give previewUrl only; never claim live or share shareUrl.
-- For sources new/changed in a pull request, pass `repo` and `pr` when drafting or
-  validating. Preview shows its data; the page goes live when the user merges in
+- For sources new/changed in a pull request, pass `repo` and `pr` when saving. Preview shows its data; the page goes live when the user merges in
   Workspace. Real Unit/worksheet IDs survive merge. Never merge or ask to merge on
   their behalf, or substitute older merged data for required changes.
-- If `html_view_create` is unavailable, say this connection cannot draft pages and
+- If `html_view_save` is unavailable, say this connection cannot draft pages and
   stop. Never substitute a Slide, Board or other Unit.
 - Ask mode cannot save. Read/describe the page, tell the user to switch to Auto and
   send a message such as "save it", then save without repeating discovery.
-- Use the user's language and plain words (page, Sheet, cell). No 403, trunk,
-  worktree or unitId in user-facing text; avoid Blob, ETag and binding jargon.
+- Use the user's language and plain words (page, Sheet, cell), not technical codes or IDs.
 
 ## 1. Read and choose
 
@@ -35,9 +33,9 @@ request. Editable pages need no approval wait.
 Use the named style; otherwise choose by purpose, audience, adjectives and data shape
 (dense rankings, time series, tasks/status, key numbers). If none fits, use `night-gauge`
 or a custom style from the structurally closest template, changing palette, type and
-signature element while keeping the design floor. Name the style and reason and offer
-to change it in the reply. Name/describe custom styles in one line.
+signature element while keeping the design floor. Name the style and reason and offer to change it. Describe custom styles in one line.
 
+STYLE CATALOG START
 - `night-gauge`. Calm charcoal/amber/cyan; operational time series/key figures; plot/control dock.
 - `swiss-report`. Disciplined black/white/red; professional finance/key figures; bold answer/grid.
 - `broadsheet`. Warm peach serif; explanatory finance/time series; newspaper/inline assumptions.
@@ -48,8 +46,9 @@ to change it in the reply. Name/describe custom styles in one line.
 - `blueprint-timeline`. Restrained blue grid; dated workflows; day-axis lanes/blockers.
 - `wenkai-notebook`. Inviting cream handwriting/red; personal tasks/status; ruled paper/form.
 - `citron-poster`. Bright lemon/green/large type; public sign-ups/rankings; participation panel.
+STYLE CATALOG END
 
-Read the full template via
+Read the template via
 `skills_read {"name":"html-view","resource":"templates/<id>.univer.html"}`.
 Preserve catalog fonts/palette/density/signature; replace IDs/coordinates. Localize
 all text, units and dates; Chinese uses template-header CJK fonts first.
@@ -58,8 +57,8 @@ all text, units and dates; Chinese uses template-header CJK fonts first.
 
 Each consuming element declares exactly one source attribute. Cell references are
 `encodeURIComponent(unitId):encodeURIComponent(sheetId):B7`; inclusive ranges end in
-`A2:G51`. Use actual Unit/worksheet IDs, not Resource IDs or worksheet names.
-Fixed ranges never grow; plan capacity within bounds.
+`A2:G51`. Use actual Unit/worksheet IDs.
+Fixed ranges never grow; plan capacity.
 
 - `data-univer-cell-text` reads/subscribes and replaces textContent. Use a dedicated
   value element with no nested bindings. Formula cells supply calculated results.
@@ -100,14 +99,15 @@ private media stays empty, so provide a visible fallback.
 
 ## 3. Save and reply
 
-New: `html_view_create` with HTML, `space` (source repository unless specified), short
-`name` and UUID idempotency_key. Change/restyle: `html_view_read`, edit its HTML,
-then `html_view_replace` with exact quoted ETag and a new key. Both validate and return
-`bindings`, `bindingCount`, optional `truncated` alongside `draft`. Check values/ranges,
-formula flags and date formats; fix mismatches and draft again with a new key.
-`html_view_validate` is optional. Reuse keys only for identical retries. Pending
+New: `html_view_save` with `space` (source repository by default), `name`
+and UUID idempotency_key. Change/restyle: `html_view_read`, edit its HTML, then
+`html_view_save` with `page` set to its resource, exact quoted `etag` and a new key.
+Pass inline `html` by default; use html_upload_id only when the HTML is too large
+for one call. Both modes validate and return `bindings`, `bindingCount`, optional
+`truncated` alongside `draft`. Check values/ranges, formula flags and date formats;
+fix mismatches and save again with a new key. Reuse keys only for identical retries. Pending
 creation revisions keep name/space to retire the older draft. Reread on stale ETags.
-Fix `renderCheck` issues and draft again. Validation does not run scripts; without a
+Fix `renderCheck` issues. Validation does not run scripts; without a
 render check say scripts were not run and name checks that ran.
 
 Reply with purpose, sources, cells controls change, previewUrl, style/reason and offer
@@ -116,6 +116,9 @@ otherwise open preview and press **Publish**. Explain access from
 the draft's `repositoryVisibility` and `privateSourceUnitIds`: public with no private
 sources means anyone with the link once published; otherwise people need permission.
 Page access does not grant source access. Never change sharing without permission.
+This connection cannot make a repository public. When the user wants anyone with the
+link to open the page, give them the repository `url` and ask them to make it public
+in its settings in the browser. This makes everything in it public.
 End the turn.
 
 ## 4. Continue
@@ -123,5 +126,5 @@ End the turn.
 Call `html_view_draft_get` before status/revision. Published: shareUrl. Pending:
 preview/revise. Rejected: supplied reason or one question. Conflicted: check PR,
 reread page, use active/merged sources. Expired (seven days): new key. Restyle via
-`html_view_read`, `html_view_styles` when available, then `html_view_replace`; preserve
+`html_view_read`, `html_view_styles` when available, then `html_view_save`; preserve
 data. Apply a named style directly.

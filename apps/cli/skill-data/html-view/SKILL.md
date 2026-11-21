@@ -6,7 +6,7 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 # Workspace HTML Views
 
 With the CLI, `html-view create` and replacement publish immediately. Through MCP tools,
-creation and replacement save a draft the user publishes in Workspace. Follow the server instructions.
+use html_view_save to save a draft. Read the html-view-creator Skill for the MCP workflow.
 
 ## Start with a style and live data
 

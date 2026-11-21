@@ -1,33 +1,23 @@
 # Choose a style before authoring
 
-Read the source Sheet first to understand its data, formulas and writable cells. Use the
-style the user named. Otherwise choose from the catalog using the request's purpose,
-audience and adjectives, and the data's shape: dense rankings, time series, tasks/status
-or a few key numbers. If none fits, use **Night Gauge (`night-gauge`, 仪表夜航)** or define
-a custom style from the structurally closest template, changing palette, type and signature
-element while meeting the craft floor below. Name the chosen style and why in the reply,
-offer to change it, and give a custom style a name and one-line description.
-
-Proceed directly by default. Ask at most one question only when purpose or data is unclear,
-or the user asks to see a plan or pick a style. The gallery is optional; after a draft,
-use it when the user wants to explore another style, then revise the page.
+For CLI authoring workflow and style selection, read the [html-view Skill](../SKILL.md).
 
 ## Style catalog
 
 The designed-for scenario describes the starter's data contract, not a restriction on its use.
 
-| ID / template | English name | Chinese name | One-line mood | 中文气质 | Designed-for scenario | Signature element |
-| --- | --- | --- | --- | --- | --- | --- |
-| [night-gauge](../templates/night-gauge.univer.html) | Night Gauge (default) | 仪表夜航（默认） | Charcoal, amber and cool cyan; a compact, calm cockpit | 炭黑底配琥珀与冷青；紧凑沉稳的驾驶舱 | Startup cash runway with a live 36-month Sheet model | Large SVG cash-flow plot with draggable assumption handles and an amber runway answer |
-| [swiss-report](../templates/swiss-report.univer.html) | Swiss Report | 瑞士财报 | Black, white and red; bold numbers and a crisp, disciplined grid | 黑白加信号红；大号数字与严整利落的网格 | Startup cash runway with a live 36-month Sheet model | Twelve-column grid, oversized red Archivo answer and ruler-like sliders |
-| [broadsheet](../templates/broadsheet.univer.html) | Broadsheet | 粉色报纸 | Peach paper and serif type; a warm financial newspaper | 桃粉纸张与衬线字；温暖的财经报纸 | Startup cash runway with a live 36-month Sheet model | Newspaper masthead, ruled columns and editable assumptions embedded in a sentence |
-| [bauhaus-blocks](../templates/bauhaus-blocks.univer.html) | Bauhaus Blocks | 包豪斯色块 | Primary red, blue and yellow; large geometric type, bold and lively | 红蓝黄原色与几何大字；大胆活泼 | Weekly sales meeting with region/channel filters and editable record targets | Three region blocks expand on selection, paired with bold Space Grotesk figures |
-| [trading-desk](../templates/trading-desk.univer.html) | Trading Desk | 交易台 | Deep black, monospaced figures and blue-orange contrast; dense and professional | 深黑底、等宽数字与蓝橙对比；密集专业 | Weekly sales meeting with region/channel filters and editable record targets | Region/channel heatmap matrix beside a compact chart and ledger |
-| [meeting-slides](../templates/meeting-slides.univer.html) | Meeting Slides | 周会幻灯 | Warm black, large serif headings and orange-red accents; an assured presentation | 暖黑底、大号衬线标题与橙红点缀；从容的演示 | Weekly sales meeting with region/channel filters and editable record targets | Full-height scroll-snap sections with highlighted statements and slide navigation dots |
-| [brutalist-board](../templates/brutalist-board.univer.html) | Brutalist Board | 新粗野看板 | Bright yellow, thick black borders and hard shadows; direct and punchy | 亮黄底、粗黑边框与硬阴影；直接有力 | Customer implementation delivery tracker with status edits and task insertion | Four status columns with draggable task cards and a tilted save stamp |
-| [blueprint-timeline](../templates/blueprint-timeline.univer.html) | Blueprint Timeline | 蓝图时间线 | Pale blue engineering grid and monospaced annotations; precise and restrained | 浅蓝工程网格与等宽标注；精确克制 | Customer implementation delivery tracker with status edits and task insertion | Day-axis task timeline with a today line, status chips and striped blockers |
-| [wenkai-notebook](../templates/wenkai-notebook.univer.html) | Ink Notebook | 文楷手账 | Cream ruled paper, handwritten type and vermilion notes; personal and inviting | 奶油横线纸、手写体与朱红批注；亲切随性 | Customer implementation delivery tracker with status edits and task insertion | Ruled notebook and red margin, hand-drawn status marks and an inline entry form |
-| [citron-poster](../templates/citron-poster.univer.html) | Citron Poster | 柠檬海报 | Lemon yellow, deep green and bold oversized type; bright and shareable | 柠檬黄、深绿与超大粗体字；明快且适合分享 | Public city sign-ups, counting the first 100 entries | Oversized ranked city names beside a dark-green participation panel |
+| ID / template | English name | Chinese name | One-line mood | 中文气质 | Designed-for scenario | Signature element | Suitable context and data |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| [night-gauge](../templates/night-gauge.univer.html) | Night Gauge (default) | 仪表夜航（默认） | Charcoal, amber and cool cyan; a compact, calm cockpit | 炭黑底配琥珀与冷青；紧凑沉稳的驾驶舱 | Startup cash runway with a live 36-month Sheet model | Large SVG cash-flow plot with draggable assumption handles and an amber runway answer | Calm charcoal/amber/cyan; operational time series/key figures; plot/control dock. |
+| [swiss-report](../templates/swiss-report.univer.html) | Swiss Report | 瑞士财报 | Black, white and red; bold numbers and a crisp, disciplined grid | 黑白加信号红；大号数字与严整利落的网格 | Startup cash runway with a live 36-month Sheet model | Twelve-column grid, oversized red Archivo answer and ruler-like sliders | Disciplined black/white/red; professional finance/key figures; bold answer/grid. |
+| [broadsheet](../templates/broadsheet.univer.html) | Broadsheet | 粉色报纸 | Peach paper and serif type; a warm financial newspaper | 桃粉纸张与衬线字；温暖的财经报纸 | Startup cash runway with a live 36-month Sheet model | Newspaper masthead, ruled columns and editable assumptions embedded in a sentence | Warm peach serif; explanatory finance/time series; newspaper/inline assumptions. |
+| [bauhaus-blocks](../templates/bauhaus-blocks.univer.html) | Bauhaus Blocks | 包豪斯色块 | Primary red, blue and yellow; large geometric type, bold and lively | 红蓝黄原色与几何大字；大胆活泼 | Weekly sales meeting with region/channel filters and editable record targets | Three region blocks expand on selection, paired with bold Space Grotesk figures | Lively primary geometry; sales/category comparisons; expanding blocks. |
+| [trading-desk](../templates/trading-desk.univer.html) | Trading Desk | 交易台 | Deep black, monospaced figures and blue-orange contrast; dense and professional | 深黑底、等宽数字与蓝橙对比；密集专业 | Weekly sales meeting with region/channel filters and editable record targets | Region/channel heatmap matrix beside a compact chart and ledger | Dense black monospace/blue-orange; professional rankings; heatmap/ledger. |
+| [meeting-slides](../templates/meeting-slides.univer.html) | Meeting Slides | 周会幻灯 | Warm black, large serif headings and orange-red accents; an assured presentation | 暖黑底、大号衬线标题与橙红点缀；从容的演示 | Weekly sales meeting with region/channel filters and editable record targets | Full-height scroll-snap sections with highlighted statements and slide navigation dots | Assured black/serif/orange; presenting weekly data stories; full-height sections. |
+| [brutalist-board](../templates/brutalist-board.univer.html) | Brutalist Board | 新粗野看板 | Bright yellow, thick black borders and hard shadows; direct and punchy | 亮黄底、粗黑边框与硬阴影；直接有力 | Customer implementation delivery tracker with status edits and task insertion | Four status columns with draggable task cards and a tilted save stamp | Punchy yellow/hard borders; task/status tracking; draggable columns. |
+| [blueprint-timeline](../templates/blueprint-timeline.univer.html) | Blueprint Timeline | 蓝图时间线 | Pale blue engineering grid and monospaced annotations; precise and restrained | 浅蓝工程网格与等宽标注；精确克制 | Customer implementation delivery tracker with status edits and task insertion | Day-axis task timeline with a today line, status chips and striped blockers | Restrained blue grid; dated workflows; day-axis lanes/blockers. |
+| [wenkai-notebook](../templates/wenkai-notebook.univer.html) | Ink Notebook | 文楷手账 | Cream ruled paper, handwritten type and vermilion notes; personal and inviting | 奶油横线纸、手写体与朱红批注；亲切随性 | Customer implementation delivery tracker with status edits and task insertion | Ruled notebook and red margin, hand-drawn status marks and an inline entry form | Inviting cream handwriting/red; personal tasks/status; ruled paper/form. |
+| [citron-poster](../templates/citron-poster.univer.html) | Citron Poster | 柠檬海报 | Lemon yellow, deep green and bold oversized type; bright and shareable | 柠檬黄、深绿与超大粗体字；明快且适合分享 | Public city sign-ups, counting the first 100 entries | Oversized ranked city names beside a dark-green participation panel | Bright lemon/green/large type; public sign-ups/rankings; participation panel. |
 
 ## Page language
 

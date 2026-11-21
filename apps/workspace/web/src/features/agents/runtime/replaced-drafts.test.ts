@@ -50,3 +50,11 @@ it("keeps the reminder text and metadata for other drafts unchanged", async () =
     async (id) => ({ state: id === "new" ? "pending" : "expired", name: "Other", published: null }), "https://workspace.test");
   expect(reminder).toEqual({ states: { other: "expired" }, part: { type: "text", text: '\n\n<system-reminder>\nDraft "other" "Other": expired. It was not published; draft again only if the user asks.\n</system-reminder>' } });
 });
+
+it("supersedes drafts across old names and save modes by the same destination", () => {
+  const messages = [draft("old-create"), draft("save-create", "html_view_save"),
+    draft("old-replace", "html_view_replace", { resource: "page" }),
+    draft("save-replace", "html_view_save", { page: "page", etag: '\"v1\"' }),
+    draft("other", "html_view_save", { page: "other", etag: '\"v1\"' })];
+  expect(replacedDraftIds(messages)).toEqual(new Set(["old-create", "old-replace"]));
+});

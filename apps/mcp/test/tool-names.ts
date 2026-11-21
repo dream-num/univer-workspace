@@ -38,10 +38,8 @@ export const coreNames = [
   "skill_draft_create",
   "skill_draft_get",
   "html_view_styles",
-  "html_view_validate",
-  "html_view_create",
+  "html_view_save",
   "html_view_read",
-  "html_view_replace",
   "html_view_draft_get",
 ];
 export const filesNames = [
@@ -71,10 +69,9 @@ export const adminNames = [
 ];
 export const writeNames = [
   "skill_draft_create",
-  "html_view_replace",
   "compile_typst",
   "compile_svg",
-  "html_view_create",
+  "html_view_save",
   "compile_markdown",
   "blob_upload",
   "blob_replace",
@@ -128,11 +125,9 @@ export const toolScopes: Record<string, "read" | "write" | "publish" | "worktree
   blob_download: "read",
   asset_download: "read",
   html_view_styles: "read",
-  html_view_validate: "read",
-  html_view_create: "write",
+  html_view_save: "write",
   html_view_read: "read",
   html_view_draft_get: "read",
-  html_view_replace: "write",
   compile_markdown: "write",
   export_markdown: "read",
   compile_typst: "write",
