@@ -189,7 +189,10 @@ export class WorkspaceHtmlViewFeature {
       method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8"),
         ...(worktree === undefined ? {} : { sourceWorktreeId: worktree.id }) },
     });
-    return { ...parseHtmlViewDraft(response["draft"], origin), ...access };
+    return { ...parseHtmlViewDraft(response["draft"], origin), ...access,
+      bindings: source.validation.bindings, bindingCount: source.validation.bindingCount,
+      ...(source.validation.truncated === undefined ? {} : { truncated: source.validation.truncated }),
+    };
   }
 
   private async sourceWorktree(id: string | undefined) {

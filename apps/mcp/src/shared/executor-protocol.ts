@@ -325,6 +325,12 @@ export const sheetLensOutput = z.object({
   ]).optional(),
 });
 
+const htmlViewBindingSamples = {
+  bindingCount: z.int().nonnegative(),
+  bindings: z.array(htmlViewBindingSample).max(60).describe("Binding samples in document order. Compare with the page plan."),
+  truncated: z.literal(true).optional().describe("Present when more than 60 bindings exist."),
+};
+
 export const opSpecs = {
   "content.sheet-lens": defineOp({
     queueFor: () => true,
@@ -350,9 +356,7 @@ export const opSpecs = {
     output: z.object({
       valid: z.literal(true),
       unitIds: z.array(z.string()),
-      bindingCount: z.int().nonnegative(),
-      bindings: z.array(htmlViewBindingSample).max(60).describe("Binding samples in document order. Compare with the page plan."),
-      truncated: z.literal(true).optional().describe("Present when more than 60 bindings exist."),
+      ...htmlViewBindingSamples,
     }),
     route: () => ({ scope: "htmlView.validate", unitId: null }),
   }),
@@ -361,7 +365,7 @@ export const opSpecs = {
     effect: "write",
     payload: "none",
     rerun: ["auth"],
-    limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    limits: { requestBytes: 4 * MiB, responseBytes: MiB, budgetMs: 30_000 },
     input: z.discriminatedUnion("kind", [
       z.object({
         kind: z.literal("create"),
@@ -384,7 +388,7 @@ export const opSpecs = {
     output: z.object({ draft: htmlViewDraftSchema.extend({
       repositoryVisibility: z.enum(["public", "private"]),
       privateSourceUnitIds: z.array(z.string()),
-    }) }),
+    }), ...htmlViewBindingSamples }),
     route: (input) => ({ scope: "htmlView.draft", unitId: input.idempotencyKey }),
   }),
   "markdown.compile": defineOp({

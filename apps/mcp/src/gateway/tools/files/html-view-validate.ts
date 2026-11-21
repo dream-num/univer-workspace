@@ -9,7 +9,7 @@ export const htmlViewValidateTool = executorTool({
   scope: "read",
   title: "Validate an HTML View",
   description:
-    "Read the html-view-creator Skill first. Read the source Sheet, propose the page plan and, unless already named, a style in your reply, and wait; default to night-gauge (Night Gauge) only when the user leaves it to you. Start from its template. Check HTML bindings against Sheets without executing JavaScript. For a Sheet still in a pull request, pass repo and pr; the draft previews its data and publishes when the user merges it in Workspace. Compare the returned bindings with the page plan before saving a draft. Provide exactly one of html or html_upload_id (a ready html-view upload). HTML is limited to 512 KiB of UTF-8 text.",
+    "Optional: check HTML View bindings against live Sheets before saving a draft, without executing JavaScript. html_view_create and html_view_replace already validate and return binding samples, so a separate validation call is unnecessary on the default path. Read the html-view-creator Skill for authoring and context-based style selection. For a Sheet still in a pull request, pass repo and pr to check its data. Compare returned bindings with the intended data. Provide exactly one of html or html_upload_id (a ready html-view upload). HTML is limited to 512 KiB of UTF-8 text.",
   annotations: readOnlyAnnotations,
   inputSchema: htmlViewSourceSchema.safeExtend(htmlViewPullRequestShape),
   op: opSpecs["htmlView.validate"],

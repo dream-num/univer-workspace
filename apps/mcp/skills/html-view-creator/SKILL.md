@@ -1,152 +1,127 @@
 ---
 name: html-view-creator
-description: Build or change a live page (.univer.html HTML View) on Workspace Sheet data together with the user. Reads the Sheet, proposes a data plan and a style in one turn, writes the page from a template, and saves a draft the user previews and publishes in Workspace. Use whenever the user wants a dashboard, form, report, tracker or any page on top of Sheet data, or wants to change or restyle an existing page, even if they never say "HTML View".
+description: Build or revise an HTML View (.univer.html), a shareable live HTML page, dashboard, report or form on Workspace Sheet data. Use whenever the user wants an HTML page or a page to share or present Workspace data, even if they never say HTML View, preferring it over a local .html file.
 user-invocable: true
 ---
 
 # HTML View Creator
 
-You help the user build a page on live Sheet data, or change one. A page is a
-.univer.html file. Its HTML bindings read and write its source Sheets on trunk, so
-the page always shows current values. You never publish a page. You save a draft with
-`html_view_create` or `html_view_replace`, and the user previews and publishes it in
-Workspace.
+Default path: this Skill and one complete template; no extra reference, gallery or validation call.
 
-This Skill decides the order of the work. The `html-view` Skill decides how a page is
-written: bindings, the style catalog, templates and the design floor. Read it with
-`skills_read {"name": "html-view"}` before step 3, and read its references when a step
-names them.
+## Rules
 
-When the user invokes `/html-view-creator`, their request follows at the end as
-`ARGUMENTS:`. Workspace adds a resource ID when the user starts from a Sheet or a page.
-Figure out where they are in the flow below and start there.
+- Live data only: no copied Sheet data, fallback numbers or page-side Sheet formulas.
+  Controls write input cells; subscriptions show recalculated results.
+- Only a person publishes. Until `html_view_draft_get` returns `state: "published"`,
+  give previewUrl only; never claim live or share shareUrl.
+- For sources new/changed in a pull request, pass `repo` and `pr` when drafting or
+  validating. Preview shows its data; the page goes live when the user merges in
+  Workspace. Real Unit/worksheet IDs survive merge. Never merge or ask to merge on
+  their behalf, or substitute older merged data for required changes.
+- If `html_view_create` is unavailable, say this connection cannot draft pages and
+  stop. Never substitute a Slide, Board or other Unit.
+- Ask mode cannot save. Read/describe the page, tell the user to switch to Auto and
+  send a message such as "save it", then save without repeating discovery.
+- Use the user's language and plain words (page, Sheet, cell). No 403, trunk,
+  worktree or unitId in user-facing text; avoid Blob, ETag and binding jargon.
 
-## Rules for the whole flow
+## 1. Read and choose
 
-- **Live data only.** The page shows source values through bindings. Never copy Sheet
-  data into the page, add fallback numbers, or redo a Sheet formula in page code. Page
-  controls write source cells, and the page shows the recalculated values.
-- **Draft only.** Only the user can publish. Until `html_view_draft_get` returns
-  `state: "published"`, never say the page is live and never share its `shareUrl`.
-- **Preview source changes.** In step 2, check whether a source Sheet exists only in
-  this session's pull request, or the page needs columns, worksheets or values changed
-  there but not yet merged. Validate and save the draft with that pull request using
-  `repo` and `pr` on `html_view_validate`, `html_view_create` or `html_view_replace`.
-  Use the pull request's real Unit and worksheet IDs, which stay the same after merge.
-  Tell the user in plain words that the preview shows the pull request's data and the
-  page goes live automatically when they merge the pull request in Workspace.
-  Never merge or ask to merge on their behalf. Do not use 403, trunk, worktree or unitId
-  in user-facing text. Never substitute older merged data for changes the page needs.
-- **A page is not a Unit.** If `html_view_create` is not in your tool list, say this
-  connection cannot draft pages and stop. Never make a Slide, Board or other Unit instead.
-- **Ask mode cannot save.** Drafting needs write access and Ask mode has only read
-  access. In Ask mode, finish steps 1 to 4 and show the plan and what the page will
-  contain. Tell the user to switch to Auto and send any message such as "save it". Then
-  do step 5 without repeating earlier steps.
-- **Short turns.** Ask at most three questions per turn, in the user's language. Many
-  users are not developers. Say page, Sheet and cell. Avoid binding, Blob, ETag and
-  unitId unless the user uses them.
+Find sources with `space_find`, then `outline` and optional `read`/`find`. Note IDs,
+headers, ranges/capacity within bounds, formulas and input cells. Proceed directly;
+ask at most one question only for unclear purpose/data or an explicit plan/style
+request. Editable pages need no approval wait.
 
-## 1. Classify the task
+Use the named style; otherwise choose by purpose, audience, adjectives and data shape
+(dense rankings, time series, tasks/status, key numbers). If none fits, use `night-gauge`
+or a custom style from the structurally closest template, changing palette, type and
+signature element while keeping the design floor. Name the style and reason and offer
+to change it in the reply. Name/describe custom styles in one line.
 
-- **New page.** Go to step 2.
-- **Change a page.** Read it with `html_view_read`. Keep its style and data unless the
-  user asks otherwise. Go to step 2 when the change needs data the page does not use yet,
-  otherwise to step 4.
-- **Restyle a page.** Read it with `html_view_read`, then go to step 3 and propose
-  styles only.
+- `night-gauge`. Calm charcoal/amber/cyan; operational time series/key figures; plot/control dock.
+- `swiss-report`. Disciplined black/white/red; professional finance/key figures; bold answer/grid.
+- `broadsheet`. Warm peach serif; explanatory finance/time series; newspaper/inline assumptions.
+- `bauhaus-blocks`. Lively primary geometry; sales/category comparisons; expanding blocks.
+- `trading-desk`. Dense black monospace/blue-orange; professional rankings; heatmap/ledger.
+- `meeting-slides`. Assured black/serif/orange; presenting weekly data stories; full-height sections.
+- `brutalist-board`. Punchy yellow/hard borders; task/status tracking; draggable columns.
+- `blueprint-timeline`. Restrained blue grid; dated workflows; day-axis lanes/blockers.
+- `wenkai-notebook`. Inviting cream handwriting/red; personal tasks/status; ruled paper/form.
+- `citron-poster`. Bright lemon/green/large type; public sign-ups/rankings; participation panel.
 
-## 2. Read the data
+Read the full template via
+`skills_read {"name":"html-view","resource":"templates/<id>.univer.html"}`.
+Preserve catalog fonts/palette/density/signature; replace IDs/coordinates. Localize
+all text, units and dates; Chinese uses template-header CJK fonts first.
 
-Find the Sheet with `space_find` unless the request gives its resource ID. Read it with
-`outline`, then `read` or `find` for the parts the page will use. For each part, note:
+## 2. Bind
 
-- the unitId and worksheet ID. Resource IDs and worksheet names are different identities.
-- the header row, the data range, and how far the range must reach as records are added.
-- formula cells, which the page displays but never writes.
-- input cells the user may want to edit from the page.
+Each consuming element declares exactly one source attribute. Cell references are
+`encodeURIComponent(unitId):encodeURIComponent(sheetId):B7`; inclusive ranges end in
+`A2:G51`. Use actual Unit/worksheet IDs, not Resource IDs or worksheet names.
+Fixed ranges never grow; plan capacity within bounds.
 
-Read before you ask, so your questions can name real columns. If the purpose is unclear,
-ask what the page is for: a dashboard, a form that adds records, a report or a tracker.
+- `data-univer-cell-text` reads/subscribes and replaces textContent. Use a dedicated
+  value element with no nested bindings. Formula cells supply calculated results.
+- `data-univer-cell-model` reads/subscribes/writes native controls. Number/range inputs
+  write numbers, checkboxes booleans, text/textarea/select strings. Match cell types,
+  label controls and set native constraints. Never write formula cells.
+- `data-univer-cell-subscribe` declares each formatted indicator. Register
+  `window.univerBinding.subscribeCellById('element-id', state => ...)` after the
+  element exists; render its `value`. Use its unique literal HTML ID without `#`.
+- `data-univer-range-subscribe` declares each chart/table/list separately. Register
+  `subscribeRangeById('element-id', ({ value }) => ...)`; value is the full matrix,
+  rows then columns, initially and on updates. Render child rows in the callback.
 
-Find out who will open the page: only the user, their team, or anyone with the link.
-Anyone with the link needs the page and its source Sheets in a public repository. Check
-the repository with `repo_view` now, not at the end.
+Methods return Promises; show rejections. Empty cells are null. One-time reads use
+`getCellState`/`getRangeState`.
+JavaScript references use raw IDs and zero-based coordinates: B7 is
+`{ unitId, sheetId, row: 6, col: 1 }`; A2:G51 is
+`{ unitId, sheetId, range: { startRow: 1, endRow: 50, startColumn: 0, endColumn: 6 } }`.
+Await `setCellValue(reference, value)` then `flush()` before claiming saved. Strings
+are literal; scalar writes may partially succeed. Add records with `insertRowsWithValues`,
+not empty-row writes (details:
+`skills_read {"name":"html-view","resource":"references/adding-records.md"}`).
+Relocate records by stable ID after insertion. Callbacks fire before
+Promise resolution; dispose resources on removal. Prevent form navigation.
 
-## 3. Propose the plan and the style in one turn
+Keep template pending/rejected states, input on failure and `getWriteMode` labels.
+Editors save; host-provided read-only trials stay local/unsaved.
 
-Send one message with:
+Design floor: CSS color variables; text contrast 4.5:1, large text/control boundaries
+3:1; visible keyboard focus, labels and non-color cues; 4/8px spacing, 16px body,
+clear type hierarchy and tabular figures; styled selection/caret/scrollbars; honest
+loading/empty/error states with `role="alert"` or `data-s="rejected"`. Keep a bound
+readable table if charts fail. Adapt to 360px, 390px and 1440px without shrinking the
+page. Avoid uniform card grids, decorative gradients and emoji icons. Pin exact
+font/library versions on https://cdn.jsdelivr.net; libraries are not preloaded.
+Media uses `data-workspace-src` with real Node IDs on img/video/audio/source;
+private media stays empty, so provide a visible fallback.
 
-1. The page in one sentence, in the user's words.
-2. The data plan, as a short table with one row per part of the page: what it shows or
-   edits, the worksheet and range, and whether the page reads or writes it. Say which
-   cells the page will change in the source Sheet. A change there is a change for
-   everyone who uses that Sheet.
-3. The style question, as the design reference of the `html-view` Skill describes it.
-   If `html_view_styles` is in your tool list, call it before sending this message so
-   Workspace shows the gallery, and still name every style in the message text.
-   If the user already named a style, confirm it instead.
-4. Who can open the page, and anything that stops it, such as a private repository
-   when they want a public link.
+## 3. Save and reply
 
-Then end your turn and wait. Do not write, validate or draft the page before the user
-answers. If they leave the choices to you, use the default style and the plan as proposed.
+New: `html_view_create` with HTML, `space` (source repository unless specified), short
+`name` and UUID idempotency_key. Change/restyle: `html_view_read`, edit its HTML,
+then `html_view_replace` with exact quoted ETag and a new key. Both validate and return
+`bindings`, `bindingCount`, optional `truncated` alongside `draft`. Check values/ranges,
+formula flags and date formats; fix mismatches and draft again with a new key.
+`html_view_validate` is optional. Reuse keys only for identical retries. Pending
+creation revisions keep name/space to retire the older draft. Reread on stale ETags.
+Fix `renderCheck` issues and draft again. Validation does not run scripts; without a
+render check say scripts were not run and name checks that ran.
 
-## 4. Write and check
+Reply with purpose, sources, cells controls change, previewUrl, style/reason and offer
+to change style. Explain publication when the user merges the source PR in Workspace;
+otherwise open preview and press **Publish**. Explain access from
+the draft's `repositoryVisibility` and `privateSourceUnitIds`: public with no private
+sources means anyone with the link once published; otherwise people need permission.
+Page access does not grant source access. Never change sharing without permission.
+End the turn.
 
-Read the chosen template and the authoring reference from the `html-view` Skill. Start
-from the template's full source and adapt it to the plan. Write every visible string in
-the user's language.
+## 4. Continue
 
-Call `html_view_validate` with the complete HTML. Compare its `bindings` with the plan:
-each planned range appears with the values you expect. Fix empty cells where data is
-expected, header text where numbers are expected, formula cells behind controls that
-write, and numbers carrying a date format that the page reads as text. Validate again
-until it passes and matches the plan. Validation does not run scripts or show you the
-page. In Workspace, the saved draft result also carries a browser `renderCheck` (step 5).
-Elsewhere, say that scripts were not run when you report, and name the checks that ran.
-
-## 5. Save the draft
-
-- New page: call `html_view_create` with the HTML, the destination `space` (the source
-  Sheet's repository unless the user named another), a short `name` in the user's
-  language, and a new random idempotency_key such as a UUID.
-- Change: call `html_view_replace` with the page resource, the HTML, the ETag from
-  `html_view_read` and a new random idempotency_key.
-
-If `renderCheck` lists issues, fix them, validate again, and save a new draft with the
-same name and space as step 6 describes. Mention the check in your reply only when it
-found issues or could not run.
-
-Reply with what the page does, its source Sheets, who will be able to open it (from
-`repositoryVisibility` and `privateSourceUnitIds`), and draft.previewUrl. For a draft using
-a pull request, say the preview shows its data and the page goes live
-automatically when they merge that pull request in Workspace. For other drafts, say the page
-is not live until they open the preview and press **Publish**. Then end your turn.
-
-## 6. Iterate and publish
-
-When the user comes back, call `html_view_draft_get` with the draft ID before you say
-anything about the draft.
-
-- `pending` or `rejected`, and the user says what to change: revise the draft as below.
-  When Workspace sends a change request with a rejected draft, the reason is in that
-  message, so do not ask for it again.
-- `pending` with no change requested: point them to the preview. When `sourceWorktreeId`
-  is present, explain that it shows the pull request's data and waits for them to merge
-  it in Workspace, which publishes the page automatically. Otherwise, they can press Publish.
-- `rejected` with no reason: ask what to change.
-- `published`: share `shareUrl` and say who can open it. Later changes start again from
-  step 1 as a change.
-- `conflicted`: the source pull request may have been discarded, or the page changed.
-  Check the source pull request and use active or merged sources. For an existing page,
-  read it again with `html_view_read`, reapply the change and save a new draft.
-- `expired`: the draft passed its `expiresAt`, seven days after it was saved. Save it
-  again with a new key.
-
-To revise a draft, start from your last HTML and keep its `name` and `space` unless the
-user asks for a new name. Workspace treats a draft with the same name and space as the
-newer version and retires the older one, so a renamed draft leaves a stale one the user
-could still publish. Go back to step 4: validate the full HTML again and compare its
-`bindings` with the plan. Then save as in step 5 with a new key and point the user to
-the newest draft.
+Call `html_view_draft_get` before status/revision. Published: shareUrl. Pending:
+preview/revise. Rejected: supplied reason or one question. Conflicted: check PR,
+reread page, use active/merged sources. Expired (seven days): new key. Restyle via
+`html_view_read`, `html_view_styles` when available, then `html_view_replace`; preserve
+data. Apply a named style directly.

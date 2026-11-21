@@ -158,9 +158,12 @@ describe("capabilities through MCP tools/list and initialize", () => {
     const client = await (await start([replica()]))(undefined);
     expect((await client.listTools()).tools.map(({ name }) => name)).toEqual(coreNames);
     const text = client.getInstructions();
-    expect(text).toContain("A page is an HTML View (.univer.html) bound to live Sheets.");
-    expect(text).toContain("It is not a Slide, Board or other Unit and does not go through pull requests.");
-    expect(text).toContain("only save a draft");
+    expect(text).toContain("A page for sharing or presenting Workspace data is an HTML View (.univer.html) bound to live Sheets.");
+    expect(text).toContain("It is not a Slide, Board or other Unit.");
+    expect(text).toContain("validate and save a draft with binding samples");
+    expect(text).toContain("draft directly without waiting for plan or style approval");
+    expect(text).toContain("pass repo and pr");
+    expect(text).toContain("the page goes live when the user merges it in Workspace");
     expect(text).toContain("give the user draft.previewUrl");
     expect(text).toContain("Before saying whether a page is live or still a draft");
     expect(text).toContain("call html_view_draft_get");

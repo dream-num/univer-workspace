@@ -339,7 +339,10 @@ it("preserves a stale ETag failure for the caller to reconcile", async () => {
   await expect(revisionFeature({ conflict: true }).feature.replace(replacement)).rejects.toMatchObject({ code: "PRECONDITION_FAILED", detail: { status: 412 } });
 });
 
-it.each(["create", "replace"] as const)("saves a %s draft after validation while keeping Blob writes unused", async (kind) => {
+it.each([
+  { kind: "create", count: 1 }, { kind: "create", count: 61 },
+  { kind: "replace", count: 1 }, { kind: "replace", count: 61 },
+] as const)("saves a $kind draft with $count binding samples while keeping Blob writes unused", async ({ kind, count }) => {
   const http = sharingHttp(true, ["unit"]);
   const original = http.json.bind(http);
   const requests: unknown[] = [];
@@ -370,11 +373,18 @@ it.each(["create", "replace"] as const)("saves a %s draft after validation while
   });
   const intent = kind === "create" ? { kind, name: "Page", spaceId: "space", parentNodeId: "folder" }
     : { kind, resourceId: "resource", etag: '"v1"' };
-  const result = await feature.draft({ ...intent, source: replacement.source, idempotencyKey: replacement.idempotencyKey });
+  const source = { ...replacement.source, bytes: Buffer.from(Buffer.from(replacement.source.bytes).toString().repeat(count)) };
+  const validation = await feature.validate(source);
+  const result = await feature.draft({ ...intent, source, idempotencyKey: replacement.idempotencyKey });
+  expect(result.bindings).toEqual(validation.bindings);
+  expect(result.bindingCount).toBe(count);
+  expect(result.bindings).toHaveLength(Math.min(count, 60));
+  if (count > 60) expect(result.truncated).toBe(true);
+  else expect(result).not.toHaveProperty("truncated");
   expect(result).toMatchObject({ id: "draft/1", kind, status: { state: "pending" },
     previewUrl: "https://workspace.test/drafts/draft%2F1", repositoryVisibility: "public", privateSourceUnitIds: ["unit"] });
   expect(requests).toEqual([{ method: "POST", idempotencyKey: replacement.idempotencyKey, body: {
-    ...intent, ...(kind === "create" ? { name: "Page.univer.html" } : {}), html: Buffer.from(replacement.source.bytes).toString(),
+    ...intent, ...(kind === "create" ? { name: "Page.univer.html" } : {}), html: source.bytes.toString(),
   } }]);
   expect(uploadBytes).not.toHaveBeenCalled();
   expect(json.mock.calls.some(([path]) => /blob-upload-sessions|blob-resources.*content/.test(path))).toBe(false);
