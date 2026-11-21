@@ -130,9 +130,8 @@ it("preserves capped range samples and their metadata within the RPC response bu
       ])),
     ])),
   } } });
-  const { output } = await htmlViewValidate(f.ctx, {
-    html: '<div data-univer-range-subscribe="unit:budget:A1:H3"></div>'.repeat(61),
-  });
+  const page = '<div data-univer-range-subscribe="unit:budget:A1:H3"></div>'.repeat(61);
+  const { output } = await htmlViewValidate(f.ctx, { html: page });
   expect(opSpecs["htmlView.validate"].output.parse(output)).toEqual(output);
   expect(output).toMatchObject({ bindingCount: 61, truncated: true });
   expect(output.bindings).toHaveLength(60);
@@ -144,6 +143,13 @@ it("preserves capped range samples and their metadata within the RPC response bu
   const bytes = Buffer.byteLength(JSON.stringify(output));
   expect(bytes).toBeGreaterThan(64 * 1024);
   expect(bytes).toBeLessThan(opSpecs["htmlView.validate"].limits.responseBytes);
+  const draftFixture = setup(page);
+  draftFixture.exportUnitData.mockImplementation(f.exportUnitData);
+  const draft = await htmlViewDraft(draftFixture.ctx, {
+    kind: "create", html: page, name: "Dashboard", spaceId: "space", idempotencyKey: key,
+  });
+  expect(draft.output).toMatchObject({ bindings: output.bindings, bindingCount: 61, truncated: true });
+  expect(Buffer.byteLength(JSON.stringify(draft.output))).toBeLessThan(opSpecs["htmlView.draft"].limits.responseBytes);
 });
 
 it("preserves missing Sheet errors and rejects missing worksheets and out-of-bounds ranges", async () => {
@@ -203,7 +209,7 @@ it("saves one validated creation draft per call with its key and identity previe
     id: "draft-1", kind: "create", state: "pending", name: "Dashboard.univer.html", space: "space",
     previewUrl: "https://workspace.test/drafts/draft-1", expiresAt: "2026-11-19T00:00:00Z",
     repositoryVisibility: "private", privateSourceUnitIds: ["unit"],
-  } });
+  }, bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] });
   expect(f.draftPosts).toEqual([{ kind: "create", html, name: "Dashboard.univer.html", spaceId: "space", parentNodeId: "folder" }]);
   expect(onWrite).toHaveBeenCalledOnce();
   expect(f.fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
@@ -439,6 +445,29 @@ function connectReplacement(ctx: OpContext) {
     }
   });
 }
+
+it.each([
+  { tool: htmlViewCreateTool, count: 1 },
+  { tool: htmlViewCreateTool, count: 61 },
+  { tool: htmlViewReplaceTool, count: 1 },
+  { tool: htmlViewReplaceTool, count: 61 },
+])("$tool.name returns validation samples alongside the draft for $count bindings", async ({ tool, count }) => {
+  const page = html.repeat(count);
+  const f = tool === htmlViewCreateTool ? setup(page) : revisionSetup(page);
+  const validation = (await htmlViewValidate(f.ctx, { html: page })).output;
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const args = tool === htmlViewCreateTool ? createArgs : replaceArgs;
+  const result = await tool.run(context, { ...args, html: page });
+  const output = opSpecs["htmlView.draft"].output.parse(result.output);
+  expect(output).toMatchObject({
+    draft: { id: "draft-1", previewUrl: "https://workspace.test/drafts/draft-1" },
+    bindings: validation.bindings, bindingCount: validation.bindingCount,
+  });
+  expect(output.bindings).toHaveLength(Math.min(count, 60));
+  if (count > 60) expect(output.truncated).toBe(true);
+  else expect(output).not.toHaveProperty("truncated");
+});
 
 it("validates a replacement before writing and accepts inline HTML only", async () => {
   const { context } = uploadContext();
