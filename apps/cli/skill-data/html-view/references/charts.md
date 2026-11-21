@@ -25,6 +25,12 @@ For modular builds, include the selected chart types, components and a Canvas or
 
 ## Update a chart from a range
 
+Never put loading text inside a chart container. echarts.init keeps existing children,
+so leave the container empty and show loading in a sibling or the status line.
+After data arrives, no placeholder text may remain on the page. Clear the loading status
+in the data callback, including on empty results; replace it with an empty-state message
+when needed. Show load errors separately and keep a bound table readable if the chart fails.
+
 After the ECharts browser bundle has defined `echarts`, this example reads two columns:
 category labels in column A and numeric values in column B. Replace the IDs and coordinates with
 an inspected source range. Keep numeric data numeric; format it in chart labels or tooltips.
