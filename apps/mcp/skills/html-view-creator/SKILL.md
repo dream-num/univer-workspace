@@ -68,7 +68,7 @@ Fixed ranges never grow; plan capacity within bounds.
   label controls and set native constraints. Never write formula cells.
 - `data-univer-cell-subscribe` declares each formatted indicator. Register
   `window.univerBinding.subscribeCellById('element-id', state => ...)` after the
-  element exists; render `state.value`. Use its unique literal HTML ID without `#`.
+  element exists; render its `value`. Use its unique literal HTML ID without `#`.
 - `data-univer-range-subscribe` declares each chart/table/list separately. Register
   `subscribeRangeById('element-id', ({ value }) => ...)`; value is the full matrix,
   rows then columns, initially and on updates. Render child rows in the callback.
@@ -80,8 +80,9 @@ JavaScript references use raw IDs and zero-based coordinates: B7 is
 `{ unitId, sheetId, range: { startRow: 1, endRow: 50, startColumn: 0, endColumn: 6 } }`.
 Await `setCellValue(reference, value)` then `flush()` before claiming saved. Strings
 are literal; scalar writes may partially succeed. Add records with `insertRowsWithValues`,
-not empty-row cell writes; read `html-view` reference `references/adding-records.md`
-when needed. Relocate records by stable ID after insertion. Callbacks fire before
+not empty-row writes (details:
+`skills_read {"name":"html-view","resource":"references/adding-records.md"}`).
+Relocate records by stable ID after insertion. Callbacks fire before
 Promise resolution; dispose resources on removal. Prevent form navigation.
 
 Keep template pending/rejected states, input on failure and `getWriteMode` labels.
@@ -112,7 +113,7 @@ render check say scripts were not run and name checks that ran.
 Reply with purpose, sources, cells controls change, previewUrl, style/reason and offer
 to change style. Explain publication when the user merges the source PR in Workspace;
 otherwise open preview and press **Publish**. Explain access from
-`draft.repositoryVisibility` and `draft.privateSourceUnitIds`: public with no private
+the draft's `repositoryVisibility` and `privateSourceUnitIds`: public with no private
 sources means anyone with the link once published; otherwise people need permission.
 Page access does not grant source access. Never change sharing without permission.
 End the turn.
