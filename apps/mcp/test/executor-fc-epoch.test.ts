@@ -1,3 +1,4 @@
+import { pino } from "pino";
 import { describe, expect, it, vi } from "vitest";
 import {
   AFFINITY_HEADER,
@@ -11,6 +12,7 @@ import {
   redisEpochKey,
   type RedisEpochClient,
 } from "../src/executor-fc/index.js";
+import { ExecutorCapabilities } from "../src/gateway/executor/capabilities.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
 import { createEpochStore } from "../src/gateway/executor/epochs.js";
 import { ExecutorRouter } from "../src/gateway/executor/router.js";
@@ -306,6 +308,32 @@ describe("gateway affinity header", () => {
       });
       expect(fetcher).not.toHaveBeenCalled();
     } finally {
+      fetcher.mockRestore();
+    }
+  });
+});
+
+describe("executor capability discovery", () => {
+  it("keys discovery so FC session isolation does not open a session per refresh", async () => {
+    const seen: (string | null)[] = [];
+    const fetcher = vi.spyOn(globalThis, "fetch").mockImplementation(async (_input, init) => {
+      seen.push(new Headers(init?.headers).get(AFFINITY_HEADER));
+      return Response.json({ v: 1, operations: ["content.inspect"] });
+    });
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://one.test"], executorToken: "t".repeat(40) },
+      pino({ level: "silent" }),
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      await capabilities.refresh();
+      expect(seen).toHaveLength(2);
+      for (const value of seen) expect(value).toMatch(/^k[0-9a-f]{32}$/u);
+      expect(new Set(seen).size).toBe(1);
+      expect(capabilities.operations.has("content.inspect")).toBe(true);
+    } finally {
+      capabilities.close();
       fetcher.mockRestore();
     }
   });

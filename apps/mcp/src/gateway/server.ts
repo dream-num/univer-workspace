@@ -147,7 +147,6 @@ export function createGateway(
   const expectedMetricsToken = config.METRICS_TOKEN
     ? createBearerCheck(config.METRICS_TOKEN)
     : null;
-  const capabilities = new ExecutorCapabilities(config.executor, logger);
   const epochs = config.executor ? createEpochStore(config.executor.epochs) : null;
   if (epochs !== null)
     void epochs.ready.catch((error: unknown) => {
@@ -158,6 +157,7 @@ export function createGateway(
         "Executor epoch store is unavailable; executor calls fail until it recovers",
       );
     });
+  const capabilities = new ExecutorCapabilities(config.executor, logger, epochs?.store);
   const executorLink = createExecutorLinks(config.executor, capabilities.router, epochs?.store);
   const upstream = (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
     (options.fetcher ?? fetch)(input, init);
@@ -182,7 +182,11 @@ export function createGateway(
     for (const tool of state.selected) {
       server.registerTool(
         tool.name,
-        { ...tool, _meta: { [TOOL_SCOPE_META]: tool.scope }, inputSchema: advertiseOnly(tool.inputSchema) },
+        {
+          ...tool,
+          _meta: { [TOOL_SCOPE_META]: tool.scope },
+          inputSchema: advertiseOnly(tool.inputSchema),
+        },
         async (args) => {
           try {
             if (!state.context.scopes.has(tool.scope)) {
@@ -210,16 +214,32 @@ export function createGateway(
                 );
             }
             let text = result.text ?? JSON.stringify(structuredContent);
-            if (result.text === undefined && typeof structuredContent === "object" && structuredContent !== null) {
-              if (["outline", "read", "find"].includes(tool.name) &&
-                  "text" in structuredContent && typeof structuredContent.text === "string") {
-                text = structuredContent.text + ("json" in structuredContent
-                  ? `\n${JSON.stringify(structuredContent.json)}` : "");
-              } else if (tool.name === "execute" && "valueTruncated" in structuredContent &&
-                         structuredContent.valueTruncated === true) {
+            if (
+              result.text === undefined &&
+              typeof structuredContent === "object" &&
+              structuredContent !== null
+            ) {
+              if (
+                ["outline", "read", "find"].includes(tool.name) &&
+                "text" in structuredContent &&
+                typeof structuredContent.text === "string"
+              ) {
+                text =
+                  structuredContent.text +
+                  ("json" in structuredContent
+                    ? `\n${JSON.stringify(structuredContent.json)}`
+                    : "");
+              } else if (
+                tool.name === "execute" &&
+                "valueTruncated" in structuredContent &&
+                structuredContent.valueTruncated === true
+              ) {
                 text = `The write committed; its value was too large to return.\n${text}`;
-              } else if ("job_id" in structuredContent && "status" in structuredContent &&
-                         structuredContent.status === "running") {
+              } else if (
+                "job_id" in structuredContent &&
+                "status" in structuredContent &&
+                structuredContent.status === "running"
+              ) {
                 text = `${tool.name} is running. Poll job_get with job_id.\n${text}`;
               }
             }
@@ -227,10 +247,7 @@ export function createGateway(
             state.nodeId = result.nodeId;
             state.outcome = "ok";
             return {
-              content: [
-                { type: "text", text },
-                ...delivered.content,
-              ],
+              content: [{ type: "text", text }, ...delivered.content],
               structuredContent,
               ...(state.jobUsage && state.jobUsage.completion === undefined
                 ? { _meta: { "univer.workspace.deduplicated": true } }
@@ -253,7 +270,12 @@ export function createGateway(
             state.errorCode = outcome === "tool_error" || outcome === "timeout" ? code : null;
             return {
               isError: true,
-              content: [{ type: "text", text: JSON.stringify({ code, message, detail: detail ?? undefined }) }],
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify({ code, message, detail: detail ?? undefined }),
+                },
+              ],
               ...(state.jobUsage && state.jobUsage.completion === undefined
                 ? { _meta: { "univer.workspace.deduplicated": true } }
                 : {}),
@@ -417,7 +439,8 @@ export function createGateway(
     let user: WorkspaceSubject;
     let executorAccess: boolean;
     try {
-      ({ subject: user, executorAccess } = authentication.identity ?? (await sessionIdentity(http)));
+      ({ subject: user, executorAccess } =
+        authentication.identity ?? (await sessionIdentity(http)));
     } catch (error) {
       if (
         error instanceof WorkspaceApplicationError &&

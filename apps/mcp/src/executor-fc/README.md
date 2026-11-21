@@ -119,3 +119,40 @@ pnpm --filter @univerjs/univer-workspace-mcp build
 - `test/executor-fc-affinity.test.ts`：派生、epoch、续期合并、401/429/400 语义、配置钳制；
 - `test/executor-fc-epoch.test.ts`：epoch 配置、memory/Redis 实现、gateway 发送亲和头与 401 续期、
   Redis 故障时不误报“可能已提交”。
+
+对一个已经跑起来的 FC executor 做冒烟测试（不需要 gateway）：
+
+```bash
+# 仓库根目录；只验传输、鉴权、能力发现与 Workspace 可达性
+MCP_EXECUTOR_TOKEN=<token> node apps/mcp/scripts/smoke-executor-fc.mjs \
+  --url http://127.0.0.1:9000
+```
+
+脚本（[scripts/smoke-executor-fc.mjs](../../scripts/smoke-executor-fc.mjs)）先验 `/healthz`、鉴权、
+`/metrics`、能力目录、404/415/426/400/413、过期 grant 的帧内错误、`x-executor-key` 兼容性，再用一个
+伪造 session 确认 executor 真的能访问 Workspace（得到鉴权拒绝而不是网络错误）。加
+`--renderer-url` / `--renderer-token` 会直接问 renderer 要能力，用来区分“没配 renderer”和
+“renderer 不可达或版本不匹配”。
+
+验 Unit 与渲染需要一个真实 Workspace session 和一个 Worktree 里的 Unit：
+
+```bash
+MCP_EXECUTOR_TOKEN=<token> node apps/mcp/scripts/smoke-executor-fc.mjs \
+  --url http://127.0.0.1:9000 \
+  --workspace https://workspace.univer.plus \
+  --session "<workspace_session cookie>" \
+  --worktree-id <worktree> --unit-id <unit> \
+  [--unit-type sheet|doc|slide|board|base]
+```
+
+脚本按 Unit 类型决定跑哪些操作：`content.inspect`（所有类型）、`content.sheet-lens`（Sheet）、
+`render.screenshot` 与 `render.printPdf`（Base 不打印 PDF）、`render.lint`（仅 Slide）。断言看真实输出：
+inspect 的 `kind`/`unitId`、Sheet Lens 的文本与 revision、截图的 PNG 签名与 `images[].offset + size`、
+PDF 的 `%PDF-` 头与 `pageCount`、lint 的覆盖页与 findings。`--skip-render` 跳过三个渲染操作；
+`--unit-type` 省略时从 inspect 的 `kind` 推断。
+
+跑脚本的机器解析不到 Workspace 时（例如容器里用 `--add-host` 指了固定 IP），可以省掉 `--workspace`
+改传 `--user-id`：executor 自己解析 Workspace，本地只负责签发 grant。`--session` / `--user-id` 也可以
+从 `WORKSPACE_SESSION` / `WORKSPACE_USER_ID` 传入，避免出现在命令行参数里。
+
+退出码：`0` 必测项全过，`1` 有必测项失败，`2` 连不上入口或参数非法。
