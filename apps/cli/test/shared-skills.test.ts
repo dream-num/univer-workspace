@@ -64,11 +64,11 @@ it("allows only the documented HTML View validation scope command", async () => 
   }
 });
 
-it("defaults to free design with optional styles and a binding starter", async () => {
+it("selects styles from context and reads a binding starter by default", async () => {
   const content = (await readFile(join(skillRoot, "html-view", "SKILL.md"), "utf8")).replace(/\s+/gu, " ");
-  expect(content).not.toMatch(/end your turn and wait|never silently choose|structurally closest/iu);
-  for (const term of ["Design the page yourself for the data and audience by default", "optional starting points",
-    "need not derive from a card or template", "name the design and why", "one-line description",
+  expect(content).not.toMatch(/end your turn and wait|never silently choose/iu);
+  for (const term of ["purpose", "audience", "adjectives", "dense rankings", "time series", "tasks/status", "key numbers",
+    "structurally closest style card", "always name the style and why", "offer to change it", "one-line description",
     "binding starter](examples/binding-starter.univer.html) by default", "Never compute Sheet metrics in page code",
     "add Sheet formula cells", "session's pull request", "create a pull request and add the Sheet first"])
     expect(content).toContain(term);
@@ -83,9 +83,9 @@ it("keeps the design reference focused on the catalog and design floor", async (
   const content = await readFile(join(skillRoot, "html-view/references/design.md"), "utf8");
   expect(content).toContain("[html-view Skill](../SKILL.md)");
   expect(content).toContain("Suitable context and data");
-  expect(content).toContain("Free design is the default");
-  expect(content).toContain("optional starting points, not a limit");
-  expect(content.replace(/\s+/gu, " ")).toContain("need not derive from a card or template");
+  expect(content).toContain("When the user describes their own");
+  expect(content).toContain("start from the template whose structure best");
+  expect(content).not.toContain("Free design is the default");
   expect(content).toContain("## Keep the craft floor");
   expect(content).not.toMatch(/ask at most one question|otherwise choose from the catalog/iu);
 });

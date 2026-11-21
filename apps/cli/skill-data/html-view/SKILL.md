@@ -8,17 +8,21 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 With the CLI, `html-view create` and replacement publish immediately. Through MCP tools,
 use html_view_save to save a draft. Read the html-view-creator Skill for the MCP workflow.
 
-## Start with live data and free design
+## Start with a style and live data
 
-1. Read the source Sheet and note its actual IDs, ranges, formulas and input cells.
-   Design the page yourself for the data and audience by default, meeting the design floor in
-   [design.md](references/design.md). Ask at most one question only when purpose or data is
-   unclear, or the user asks to see a plan or pick a style. Otherwise proceed directly.
-   In the reply, name the design and why. Give a custom design a name and one-line description.
-2. Built-in styles are optional starting points when the user names one, when unsure, or for a
-   proven baseline. Read the catalog in [design.md](references/design.md), then `styles/<id>.md`
-   first. Read the full `templates/<id>.univer.html` only when the data matches its original
-   scenario. Free design need not derive from a card or template.
+1. Read the source Sheet. Use the style the user named; otherwise choose from the catalog in
+   [design.md](references/design.md) using the purpose, audience and adjectives in the request,
+   and the data's shape (dense rankings, time series, tasks/status or a few key numbers).
+   If none fits, use Night Gauge (`night-gauge`, 仪表夜航) or a custom style. Ask at most
+   one question only when purpose or data is unclear, or the user asks to see a plan or pick
+   a style. Otherwise proceed directly. In the reply, always name the style and why, and
+   offer to change it; give a custom style a name and one-line description.
+2. Read `styles/<id>.md` by default. Read the full `templates/<id>.univer.html` only
+   when the data's shape is close to its designed-for scenario in the catalog, or the
+   page needs that template's interaction. Keep the style's fonts, palette, density and
+   signature element. Adapt the structure and bindings to the inspected Sheet.
+   For a custom style, start from the structurally closest style card and change palette,
+   type and signature element while meeting the design floor in design.md.
 3. Controls write input cells or insert records. Subscriptions display recalculated Sheet values.
    Never compute Sheet metrics in page code or embed copied data or fallback numbers.
    If a derived metric is missing, add Sheet formula cells through the execution operation in

@@ -1,3 +1,5 @@
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { readFile, readdir } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { tools } from "../src/gateway/tools/registry.js";
@@ -23,28 +25,35 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("keeps the default draft path compact and self-contained", async () => {
     const content = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     const text = content.replace(/\s+/gu, " ");
-    expect([...content].length).toBeLessThanOrEqual(9000);
+    expect([...content].length).toBeLessThanOrEqual(10500);
     const description = /^description: (.+)$/mu.exec(content)?.[1];
     for (const routing of ["HTML View (.univer.html)", "shareable live HTML page", "dashboard", "report", "form", "Workspace Sheet data", "Prefer it over a local .html unless the user asks for a file"])
       expect(description).toContain(routing);
     expect(text).not.toMatch(/end your turn and wait|never silently choose|propose.*and wait/iu);
     expect(text).toContain("ask at most one question only for unclear purpose/data or an explicit plan/style request");
-    expect(text).toContain("Design the page yourself for the data and audience by default");
-    expect(text).toContain("Built-in styles are optional starting points");
-    expect(text).toContain("Free design need not derive from a card or template");
+    expect(text).toContain("Use the named style; otherwise choose by purpose, audience, adjectives and data shape");
+    expect(text).toContain("structurally closest style card");
+    expect(text).toContain("Name the style and reason and offer to change it");
+    expect(text).not.toMatch(/optional starting points|Free design need not/u);
     expect(text).toContain('skills_read {"name":"html-view","resource":"examples/binding-starter.univer.html"}');
     expect(text).toContain("Read the neutral binding starter by default");
+    for (const resource of ["styles/<id>.md", "templates/<id>.univer.html"])
+      expect(text).toContain(`skills_read {"name":"html-view","resource":"${resource}"}`);
+    expect(text.indexOf("styles/<id>.md")).toBeLessThan(text.indexOf("examples/binding-starter.univer.html"));
+    expect(text.indexOf("examples/binding-starter.univer.html")).toBeLessThan(text.indexOf("templates/<id>.univer.html"));
     expect(text).toContain("the page goes live when the user merges in Workspace");
     expect(text).toContain("Never merge or ask to merge on their behalf");
     expect(text).toContain("Ask mode cannot save");
     expect(text).toContain("Pass inline `html` by default");
-    expect(text).toContain("design name and why");
     for (const attribute of ["cell-text", "cell-model", "cell-subscribe", "range-subscribe"])
       expect(content).toContain(`data-univer-${attribute}`);
-    expect(content).not.toMatch(/STYLE CATALOG|night-gauge|structurally closest/u);
+    const design = await readFile(new URL("../../cli/skill-data/html-view/references/design.md", import.meta.url), "utf8");
+    const catalogIds = [...design.matchAll(/\| \[([a-z-]+)\]\(\.\.\/templates\//gu)].map((match) => match[1]);
+    expect(catalogIds).toHaveLength(10);
+    for (const id of catalogIds) expect(content).toContain(`- \`${id}\`.`);
     const sections = [...content.matchAll(/^## (.+)$/gmu)].map((match) => match[1]);
-    expect(sections).toEqual(["Rules", "1. Read the data", "2. Declare the bindings", "3. Render every update",
-      "4. Write and confirm", "5. Keep numbers in the Sheet", "6. Check the binding samples", "7. Save and reply", "8. Continue"]);
+    expect(sections).toEqual(["Rules", "1. Read the data", "2. Choose the style", "3. Declare the bindings", "4. Render every update",
+      "5. Write and confirm", "6. Keep numbers in the Sheet", "7. Check the binding samples", "8. Design floor", "9. Save and reply", "10. Continue"]);
   });
 
   it("keeps catalog IDs, templates and compact style cards in sync", async () => {
@@ -66,15 +75,20 @@ describe("HTML View Creator Skill tool bindings", () => {
     }
   });
 
-  it("keeps built-in cards optional and reads full templates only for their original scenario", async () => {
+  it("reads cards first and reserves full templates for matching data or interactions", async () => {
     for (const path of ["../skills/html-view-creator/SKILL.md", "../../cli/skill-data/html-view/SKILL.md", "../../cli/skill-data/html-view/references/design.md"]) {
       const text = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
-      expect(text).toContain("optional starting points");
+      expect(text.indexOf("styles/<id>.md")).toBeLessThan(text.indexOf("templates/<id>.univer.html"));
       expect(text).toContain("styles/<id>.md");
+      expect(text).toContain("by default");
+      expect(text).toMatch(/Read the full (?:template|`templates\/)/u);
       expect(text).toContain("templates/<id>.univer.html");
-      expect(text).toContain("only when the data matches its original scenario");
-      expect(text).toContain("need not derive from a card or template");
+      expect(text).toMatch(/only when the data's shape is close to/u);
+      expect(text).toContain("page needs that template's interaction");
     }
+    const creator = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
+    for (const scenario of ["36-month cash runway", "Sales meeting; filters/target edits", "Customer delivery; status edits/insertion", "City sign-ups; first 100 entries"])
+      expect(creator).toContain(`Original: ${scenario}.`);
   });
 
   it("teaches binding runtime semantics and keeps derived metrics in Sheet formulas", async () => {
@@ -119,9 +133,13 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(save.description).toContain("Pass inline html by default");
     expect(save.description).toContain("the user merges in Workspace");
     expect(save.description).toContain("bindingCount");
-    expect(save.description).toContain("Built-in styles are optional starting points");
-    expect(tools.find(({ name }) => name === "html_view_styles")!.description).toContain("optional starting points");
+    expect(save.description).not.toContain("optional starting points");
+    expect(tools.find(({ name }) => name === "html_view_styles")!.description).not.toContain("optional starting points");
     expect(save.description).not.toMatch(/wait|pick a style|choose by purpose/iu);
+  });
+
+  it("rejects catalog drift from the design reference", () => {
+    expect(() => execFileSync(process.execPath, [fileURLToPath(new URL("../scripts/style-catalog.mjs", import.meta.url)), "--check"])).not.toThrow();
   });
 
   it("rejects invented tools in inline code while exempting explicit fields", () => {
@@ -134,7 +152,7 @@ describe("HTML View Creator Skill tool bindings", () => {
 
 const workflowRules = [
   /(?:without waiting for (?:plan|style)|do not wait for the user to approve|editable pages need no approval wait|ask at most one question only (?:when|for))/iu,
-  /design the page yourself for the data and audience by default/iu,
+  /(?:choose (?:by|from the catalog using)|select by) purpose|(?:choose from the catalog|otherwise choose).{0,120}(?:purpose|audience|data shape)|style the user named.{0,80}otherwise/iu,
   /(?:page|draft).{0,50}goes live when.{0,60}merges/iu,
   /prefer(?:ring)? (?:it|an HTML View).{0,40}(?:over|rather than).{0,20}local.{0,10}\.html/iu,
 ];
@@ -168,7 +186,7 @@ it("keeps HTML View workflow rules in the creator and CLI Skill", async () => {
 
 it.each([
   "Draft without waiting for plan or style approval.",
-  "Design the page yourself for the data and audience by default.",
+  "Use the style the user named; otherwise choose by purpose, audience and data shape.",
   "The page goes live when the user merges in Workspace.",
   "Prefer it over a local .html unless the user asks for a file.",
 ])("detects a workflow rule copied into another surface: %s", (sentence) => {
