@@ -807,25 +807,24 @@ is fault isolation, not a network sandbox. Stage G remains the multi-user deploy
 
 ## HTML Views
 
-Read the `html-view-creator` Skill, which sets the order of page work, and the `html-view`
-Skill, which says how to write the page. Read the source Sheet, then, unless the user already
-named a style, ask which style they want in the same message as the plan for the page. Ask in
-the user's language, using the ten style names and their one-line moods in that language from
-its design reference, and say Night Gauge (`night-gauge`, 仪表夜航) is the default.
-Ask in your normal reply text, then end your turn and wait for the answer. Do not rely on
-a client question or form tool, or write, validate or publish a page before the user answers.
-If they leave the choice to the Agent (你来定, 随便, 默认就行), use Night Gauge (仪表夜航). Never silently
-choose another style. Start from the chosen `templates/<id>.univer.html`, keeping its fonts,
-palette, density and signature element when adapting to another scenario. Templates are English
-starting points; write the page in the language and conventions of the user's conversation as
-design.md describes, without i18n dictionaries or language switches. Controls write
-Sheet cells or append rows; display recalculated source values through live bindings,
-never page-side Sheet formulas, copied data or fallback numbers.
+When the user wants a page, dashboard, report or HTML to share or present Workspace
+data, use an HTML View rather than a local .html unless they ask for a file. Read
+`html-view-creator` and one complete chosen template, then draft directly. Use the
+named style; otherwise choose from the compact catalog by purpose, audience,
+adjectives and data shape. If none fits, use Night Gauge or a custom style from the
+structurally closest template, changing palette, type and signature element while
+meeting the design floor. Name the style and reason, offer to change it, and give
+custom styles a name and one-line description. Ask at most one question only when
+purpose/data is unclear or the user requests a plan or style choice.
 
-The default `core` toolset includes gateway-only `html_view_styles {}` (`read`), which returns the
-ordered bilingual style catalog and its default from the same built-in snapshot as `skills_read`.
-Call it before the style question so Workspace can show a gallery. Still list every style name
-and mood in the reply text for clients without a gallery.
+Localize all visible text, units and dates. Controls write source cells or insert
+rows; display recalculated Sheet values through live bindings, never copied data,
+fallback numbers or page-side Sheet formulas. Only a person publishes a page.
+
+The default `core` toolset includes gateway-only `html_view_styles {}` (`read`),
+which returns the bilingual catalog from the same built-in snapshot as `skills_read`.
+Use it when the user asks to explore styles, including after a draft, then restyle
+with `html_view_read` and `html_view_replace`.
 
 The default `core` toolset includes `html_view_validate {html?, html_upload_id?}` (`read`) and
 `html_view_create {html?, html_upload_id?, space, name, parent?, idempotency_key}` (`write`).
@@ -844,11 +843,15 @@ etag, idempotency_key}` (`write`) validates inline HTML in the executor and save
 revision draft. Publishing it preserves identity and URL. On a stale ETag conflict,
 read again and reconcile. Upload IDs are not accepted for replacement.
 
-Both write tools return `{ draft }` with `id`, `kind`, `state`, `name`, `space`,
-`previewUrl`, `expiresAt`, `repositoryVisibility` and `privateSourceUnitIds`.
+Both write tools return `{ draft, bindings, bindingCount, truncated? }`. The draft
+contains `id`, `kind`, `state`, `name`, `space`, `previewUrl`, `expiresAt`,
+`repositoryVisibility` and `privateSourceUnitIds`. A separate `html_view_validate`
+call is optional; compare the returned samples with the intended data.
 A replacement also identifies the target `resource`. Give the user `draft.previewUrl`
-and end the turn. The page stays unchanged until the user previews it full screen
-in Workspace and clicks Publish. The user can also reject the draft.
+and end the turn. For sources in a pull request, pass `repo` and `pr` when drafting:
+the preview shows its data and the page goes live when the user merges it in
+Workspace. Never merge or ask to merge on their behalf to publish a page. Other
+drafts wait for the user to open the preview and click Publish. They can also reject.
 Call gateway-only `html_view_draft_get {draft}` (`read`) before calling it live,
 sharing its link or revising it again. It reports `pending`, `published`, `rejected`,
 `expired` or `conflicted`. Only a published draft returns the final `shareUrl`,
@@ -858,7 +861,8 @@ MCP has no tool to publish or reject drafts.
 Every `tools/list` entry advertises its declared scope in `_meta["univer.workspace/scope"]`.
 
 Validation, creation and replacement run Client Core's `WorkspaceHtmlViewFeature` in the executor, loading each
-referenced trunk Sheet through the caller-bound `exportUnitData`. They validate
+referenced Sheet through the caller-bound `exportUnitData`, using the source pull
+request when supplied and merged data otherwise. They validate
 declarative bindings without executing page JavaScript. The CLI retains file
 handling and calls the same feature.
 

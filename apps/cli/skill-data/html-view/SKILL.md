@@ -10,15 +10,17 @@ creation and replacement save a draft the user publishes in Workspace. Follow th
 
 ## Start with a style and live data
 
-1. Read [design.md](references/design.md). Read the source Sheet, then, unless the user
-   already named a style, ask which style they want as design.md describes, in the same
-   message as your plan for the page. End your turn and wait for the answer before you write,
-   validate or publish a page. If they leave the choice to you (你来定, 随便, 默认就行), use
-   Night Gauge (`night-gauge`, 仪表夜航). Never silently choose another style.
+1. Read the source Sheet. Use the style the user named; otherwise choose from the catalog in
+   [design.md](references/design.md) using the purpose, audience and adjectives in the request,
+   and the data's shape (dense rankings, time series, tasks/status or a few key numbers).
+   If none fits, use Night Gauge (`night-gauge`, 仪表夜航) or a custom style. Ask at most
+   one question only when purpose or data is unclear, or the user asks to see a plan or pick
+   a style. Otherwise proceed directly. In the reply, always name the style and why, and
+   offer to change it; give a custom style a name and one-line description.
 2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
-   a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
-   For a style the user describes, start from the template whose structure best fits the data and
-   replace its fonts, palette and signature element with the user's description.
+   a blank page. Keep its fonts, palette, density and signature element for a catalog style.
+   For a custom style, start from the structurally closest template and change palette, type
+   and signature element while meeting the design floor in design.md.
 3. Page controls write to Sheet cells or append rows; the page displays the recalculated
    source values through live bindings, and label host-provided visitor trials with `getWriteMode`
    as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,

@@ -1,16 +1,16 @@
 # Choose a style before authoring
 
-Read the source Sheet first to understand its data, formulas and writable cells. Then,
-unless the user already named a style, ask which style they want in the same message as
-your plan for the page, so the user answers both at once. Ask in the user's language,
-using all ten style names and their one-line moods in that language from this catalog,
-and say **Night Gauge (仪表夜航) is the default** (use the name in the user's language).
-Say the ten styles are built-in starting points and the user may describe their own style
-instead. Ask in your normal reply text, then end your turn and wait for the answer. Do not
-rely on a client question or form tool, or write, validate or publish a page before the
-user answers. If the user leaves the choice to you ("you choose", "anything", "use the
-default"; 你来定, 随便, 默认就行), use **Night Gauge (`night-gauge`, 仪表夜航)**. Never
-silently choose another style.
+Read the source Sheet first to understand its data, formulas and writable cells. Use the
+style the user named. Otherwise choose from the catalog using the request's purpose,
+audience and adjectives, and the data's shape: dense rankings, time series, tasks/status
+or a few key numbers. If none fits, use **Night Gauge (`night-gauge`, 仪表夜航)** or define
+a custom style from the structurally closest template, changing palette, type and signature
+element while meeting the craft floor below. Name the chosen style and why in the reply,
+offer to change it, and give a custom style a name and one-line description.
+
+Proceed directly by default. Ask at most one question only when purpose or data is unclear,
+or the user asks to see a plan or pick a style. The gallery is optional; after a draft,
+use it when the user wants to explore another style, then revise the page.
 
 ## Style catalog
 
