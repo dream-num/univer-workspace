@@ -89,12 +89,12 @@ jobs:
           runner-name: ${{ inputs.runner-name }}
           environment: ${{ inputs.environment }}
 
-      - name: Build and Push Image
-        env:
-          IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
-          UNIVER_WORKSPACE_BROWSER_LICENSE: ${{ secrets.UNIVER_WORKSPACE_BROWSER_LICENSE }}
-        run: |
-          make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR"
+      # - name: Build and Push Image
+      #   env:
+      #     IMAGE_TAG: ${{ steps.release.outputs.image_tag }}
+      #     UNIVER_WORKSPACE_BROWSER_LICENSE: ${{ secrets.UNIVER_WORKSPACE_BROWSER_LICENSE }}
+      #   run: |
+      #     make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR"
 
       - name: Build and Push MCP Image
         env:
@@ -102,27 +102,27 @@ jobs:
         run: |
           make push_image "IMAGE_TAG=$IMAGE_TAG" "CR=$CR" REPOSITORY=colla-workspace-mcp IMAGE_DIR=./apps/mcp
 
-  deploy-k8s:
-    name: DeployK8s
-    runs-on: arc-runner-set
-    needs: build-docker-image
-    environment: ${{ inputs.environment }}
-    env:
-      CR: univer-acr-registry.cn-shenzhen.cr.aliyuncs.com
-      IMAGE_TAG: ${{ needs.build-docker-image.outputs.image_tag }}
-    steps:
-      - name: Set FEATURE environment variable
-        if: ${{ startsWith(inputs.environment, 'feature') }}
-        run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> "$GITHUB_ENV"
+  # deploy-k8s:
+  #   name: DeployK8s
+  #   runs-on: arc-runner-set
+  #   needs: build-docker-image
+  #   environment: ${{ inputs.environment }}
+  #   env:
+  #     CR: univer-acr-registry.cn-shenzhen.cr.aliyuncs.com
+  #     IMAGE_TAG: ${{ needs.build-docker-image.outputs.image_tag }}
+  #   steps:
+  #     - name: Set FEATURE environment variable
+  #       if: ${{ startsWith(inputs.environment, 'feature') }}
+  #       run: echo "FEATURE=$(echo ${GITHUB_REF#refs/heads/feat/})" >> "$GITHUB_ENV"
 
-      - name: Set US ACR region
-        if: ${{ inputs.acr-region == 'us-east-1' || inputs.environment == 'prod' || inputs.environment == 'feature prod' }}
-        run: |
-          echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> "$GITHUB_ENV"
+  #     - name: Set US ACR region
+  #       if: ${{ inputs.acr-region == 'us-east-1' || inputs.environment == 'prod' || inputs.environment == 'feature prod' }}
+  #       run: |
+  #         echo "CR=univer-acr-eastus-registry.us-east-1.cr.aliyuncs.com" >> "$GITHUB_ENV"
 
-      - uses: peter-evans/repository-dispatch@v2
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-          repository: dream-num/helm-chart-private
-          event-type: ${{ vars.DISPATCH_EVENT_TYPE }}
-          client-payload: '{"service":"colla-workspace","tag":"${{ env.IMAGE_TAG }}","feature":"${{ env.FEATURE }}","registry":"${{ env.CR }}"}'
+  #     - uses: peter-evans/repository-dispatch@v2
+  #       with:
+  #         token: ${{ secrets.GH_TOKEN }}
+  #         repository: dream-num/helm-chart-private
+  #         event-type: ${{ vars.DISPATCH_EVENT_TYPE }}
+  #         client-payload: '{"service":"colla-workspace","tag":"${{ env.IMAGE_TAG }}","feature":"${{ env.FEATURE }}","registry":"${{ env.CR }}"}'
