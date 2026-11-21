@@ -9,11 +9,9 @@ import { blobUploadTool } from "./files/blob-upload.js";
 import { blobDownloadTool } from "./files/blob-download.js";
 import { blobReplaceTool } from "./files/blob-replace.js";
 import { htmlViewStylesTool } from "./core/html-view-styles.js";
-import { htmlViewValidateTool } from "./files/html-view-validate.js";
-import { htmlViewCreateTool } from "./files/html-view-create.js";
 import { htmlViewDraftGetTool } from "./core/html-view-draft-get.js";
+import { htmlViewSaveTool } from "./core/html-view-save.js";
 import { htmlViewReadTool } from "./core/html-view-read.js";
-import { htmlViewReplaceTool } from "./core/html-view-replace.js";
 import { assetDownloadTool } from "./files/asset-download.js";
 import { executeTool } from "./core/execute.js";
 import { importTool } from "./core/import.js";
@@ -109,10 +107,8 @@ export const tools: readonly ToolDefinition[] = [
   skillDraftCreateTool,
   skillDraftGetTool,
   htmlViewStylesTool,
-  htmlViewValidateTool,
-  htmlViewCreateTool,
+  htmlViewSaveTool,
   htmlViewReadTool,
-  htmlViewReplaceTool,
   htmlViewDraftGetTool,
   blobGetTool,
   blobUploadTool,

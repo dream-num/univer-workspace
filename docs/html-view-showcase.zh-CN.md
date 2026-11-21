@@ -13,7 +13,7 @@ HTML View 是 Agent 基于 Workspace repository 里已有表格数据构建的�
 3. Agent 从所选风格的模板开始，绑定到你的表格，用你正在使用的语言撰写页面，校验绑定后发布。
 4. Agent 返回分享链接，并说明谁能打开。把 repository 设为公开会立即公开库里的全部内容，所以它会先征求你的同意。
 
-CLI 用 `uvw html-view validate` 和 `uvw html-view create` 完成同样的流程。MCP 客户端使用 `html_view_validate` 和 `html_view_create`，需要在连接地址上加 `?toolsets=files` 或 `all`。
+CLI 用 `uvw html-view validate` 和 `uvw html-view create` 完成同样的流程。MCP 客户端使用默认工具集里的 `html_view_save`，它校验页面并保存草稿。
 
 ## 数据绑定如何工作
 

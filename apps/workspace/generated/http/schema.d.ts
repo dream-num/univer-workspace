@@ -6589,7 +6589,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6936,7 +6936,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7055,7 +7055,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7130,7 +7130,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;

@@ -32,7 +32,7 @@ It has the `core` toolset. Its main tools by job:
 | Read content | `inspect` (`trunk: true` reads the live file), `screenshot`, `export` |
 | Change content | `pr_create`, `unit_add`, `unit_create`, `execute`, `import`, then `pr_ready`, `pr_view`, `browse` |
 | Look up the Facade API | `api_find`, `api_show` |
-| Pages backed by live Sheets | `html_view_create` (when available), `html_view_read`, `html_view_replace`, `html_view_draft_get` |
+| Pages backed by live Sheets | `html_view_save` (when available), `html_view_read`, `html_view_draft_get` |
 | Issues and pull requests | `issue_list`, `issue_view`, `issue_create`, `issue_comment`, `pr_list`, `search` |
 | Skills | `skills_read`, `skill_source_read`, `skill_draft_create`, `skill_draft_get` |
 
@@ -98,7 +98,7 @@ tokens and can introduce copy mistakes.
 ## Templates and assets
 
 - Text templates work. The agent reads them with `skills_read` and uses the text, for
-  example a `.univer.html` page passed to `html_view_create`, or a Markdown outline.
+  example a `.univer.html` page passed to `html_view_save`, or a Markdown outline.
 - Binary files (`.xlsx`, `.docx`, `.pptx`, images, fonts) are listed but never read. The
   agent cannot import an `.xlsx` template from a skill. Describe the layout in text so the
   agent builds it with `execute`, or keep the template as a Sheet or Doc in a Space that

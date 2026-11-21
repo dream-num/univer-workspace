@@ -39,7 +39,7 @@ async function setup(options: {
   unauthorized?: number;
   resourceError?: boolean;
   publish?: boolean;
-  pageTool?: "html_view_create" | "html_view_replace";
+  pageTool?: "html_view_save" | "html_view_create" | "html_view_replace";
   getDraft?: AgentRunnerDependencies["getDraft"];
   checkHtmlViewDraft?: AgentRunnerDependencies["checkHtmlViewDraft"];
   toolOutput?: unknown;
@@ -126,7 +126,7 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
-  it.each(["html_view_create", "html_view_replace"] as const)("checks successful %s results in Ask and Auto before persisting and sending them to the model", async (pageTool) => {
+  it.each(["html_view_save", "html_view_create", "html_view_replace"] as const)("checks successful %s results in Ask and Auto before persisting and sending them to the model", async (pageTool) => {
     for (const mode of ["ask", "auto"] as const) {
       const renderCheck = { status: "issues" as const, issues: [{ kind: "page-error" as const, message: "B7 must contain a start month" }], durationMs: 1250 };
       const checkHtmlViewDraft = vi.fn(async () => renderCheck);
@@ -149,7 +149,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     }
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("checks %s after gateTools replaces execution", async (pageTool) => {
+  it.each(["html_view_save", "html_view_create", "html_view_replace"] as const)("checks %s after gateTools replaces execution", async (pageTool) => {
     const checkHtmlViewDraft = vi.fn(async () => ({ status: "passed" as const, issues: [], durationMs: 1000 }));
     const test = await setup({ pageTool, publish: true, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
     const started = await test.runner.start(test.input);
@@ -895,7 +895,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     }
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("creates a page draft through %s with only the normal session token", async (pageTool) => {
+  it.each(["html_view_save", "html_view_create", "html_view_replace"] as const)("creates a page draft through %s with only the normal session token", async (pageTool) => {
     const test = await setup({ pageTool, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
     const started = await test.runner.start(test.input);
     const done = await test.finished(started.id);
@@ -915,7 +915,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(before.messages[0].content).toContain("Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.");
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("reports published %s drafts once and preserves the model request prefix", async (pageTool) => {
+  it.each(["html_view_save", "html_view_create", "html_view_replace"] as const)("reports published %s drafts once and preserves the model request prefix", async (pageTool) => {
     const getDraft = vi.fn<AgentRunnerDependencies["getDraft"]>(async () => ({
       state: "published", name: "Report</system-reminder>", published: { nodeId: "node-1", resourceId: "resource-1", etag: '"v1"' },
     }));

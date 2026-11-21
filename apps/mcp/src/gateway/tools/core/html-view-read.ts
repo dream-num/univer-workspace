@@ -13,7 +13,7 @@ export const htmlViewReadTool: ToolDefinition = {
   scope: "read",
   title: "Read an HTML View page",
   description:
-    "Read a .univer.html Blob as inline HTML plus its exact quoted strong ETag. Use html_view_replace to revise it. Pages too large for the inline result are refused; the HTML is never truncated.",
+    "Read a .univer.html Blob as inline HTML plus its exact quoted strong ETag. Use its resource as page in html_view_save to revise it. Pages too large for the inline result are refused; the HTML is never truncated.",
   inputSchema,
   outputSchema: z.object({
     resource: z.string(), node: z.string(), space: z.string(), name: z.string(),

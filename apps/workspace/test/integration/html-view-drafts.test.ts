@@ -494,7 +494,7 @@ async function expectDraftRequired(response: Response) {
   expect(response.status).toBe(403);
   expect(await response.json()).toMatchObject({ error: {
     code: "HTML_VIEW_DRAFT_REQUIRED",
-    message: "Pages (.univer.html) from Agents must go through html_view_create or html_view_replace drafts.",
+    message: "Pages (.univer.html) from Agents must go through html_view_save drafts.",
   } });
 }
 

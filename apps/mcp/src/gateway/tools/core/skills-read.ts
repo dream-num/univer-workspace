@@ -18,7 +18,7 @@ const inputSchema = z.object({
   full: z
     .boolean()
     .optional()
-    .describe("With name only: include every reference and template of the skill."),
+    .describe("With name only: include references only; read templates/ and styles/ one at a time with resource."),
   cursor: z
     .string()
     .optional()
@@ -34,7 +34,7 @@ export const skillsReadTool: ToolDefinition = {
   scope: "read",
   title: "Read Skills",
   description:
-    "Read built-in and custom operational Skills that teach the Workspace workflow. Without name it lists the skills, including live personal .agents/skills and member repository skills when repo is given. With name it returns {name, source, content, resources?, binaryFiles?} directly (with full: true also files containing its references and templates). With name and resource it returns one reference or template. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
+    "Read built-in and custom operational Skills that teach the Workspace workflow. Without name it lists the skills, including live personal .agents/skills and member repository skills when repo is given. With name it returns {name, source, content, resources?, binaryFiles?} directly (with full: true also files containing references only, excluding templates/ and styles/). Read templates and style cards one at a time with name and resource. A long resource has truncated: true and a cursor; call again with the same arguments and that cursor to continue.",
   inputSchema,
   outputSchema: z.object({
     skills: z
@@ -136,7 +136,7 @@ export const skillsReadTool: ToolDefinition = {
           }
         : {}),
       ...(full === true
-        ? { files: supplemental.map((path) => ({ path, content: read(name, path) })) }
+        ? { files: supplemental.filter((path) => path.startsWith("references/")).map((path) => ({ path, content: read(name, path) })) }
         : {}),
     };
     if (full === true && JSON.stringify(output).length > RESULT_LIMIT) {

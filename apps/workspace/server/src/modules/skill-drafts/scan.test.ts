@@ -178,8 +178,11 @@ describe("Skill static scan", () => {
       "cpSync",
       "mkdirSync",
       "rmSync",
+      "readFileSync",
+      "writeFileSync",
+      "withStyleCatalog",
       source
-        .replace(/^import .* from "node:fs";\n/, "")
+        .replace(/^import .* from .*;\n/gmu, "")
         .replaceAll("import.meta.url", JSON.stringify(script.href)),
     );
     assemble(
@@ -189,6 +192,9 @@ describe("Skill static scan", () => {
       },
       () => {},
       () => {},
+      readFileSync,
+      () => {},
+      (content: string) => content,
     );
     expect([...RESERVED_SKILL_NAMES].sort()).toEqual(assembled.sort());
   });

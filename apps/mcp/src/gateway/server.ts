@@ -192,7 +192,7 @@ export function createGateway(
             if (JSON.stringify(structuredContent).length > RESULT_LIMIT) {
               const truncated =
                 tool.name === "execute" ? truncateCommittedExecute(structuredContent)
-                  : tool.name === "html_view_create" || tool.name === "html_view_replace"
+                  : tool.name === "html_view_save"
                     ? truncateHtmlViewDraft(structuredContent) : undefined;
               if (truncated) structuredContent = z.json().parse(truncated);
               else

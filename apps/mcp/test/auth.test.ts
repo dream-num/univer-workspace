@@ -313,12 +313,12 @@ describe("gateway authentication", () => {
     expect(JSON.stringify(gateway.events())).not.toContain("Private Skill content");
   });
 
-  it("requires write scope for html_view_create before executor dispatch", async () => {
+  it("requires write scope for html_view_save before executor dispatch", async () => {
     const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_pat_readonly");
     expect(
       toolError(await client.callTool({
-        name: "html_view_create",
+        name: "html_view_save",
         arguments: {
           html: "<h1>Dashboard</h1>",
           space: "space",
@@ -334,28 +334,30 @@ describe("gateway authentication", () => {
     const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_at_oauth");
     const listed = (await client.listTools()).tools;
-    for (const name of ["html_view_create", "html_view_replace"]) {
+    for (const mode of ["create", "replace"]) {
+      const name = "html_view_save";
       expect(listed.find((tool) => tool.name === name)).toMatchObject({
         _meta: { "univer.workspace/scope": "write" },
         annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       });
       const result = await client.callTool({ name, arguments: {
         html: "<h1>Page</h1>", idempotency_key: "html-draft-key-123",
-        ...(name === "html_view_create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { resource: "resource", etag: '"v1"' }),
+        ...(mode === "create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { page: "resource", etag: '"v1"' }),
       } });
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toMatchObject({ draft: { id: "draft-1", state: "pending" } });
     }
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("returns a saved %s draft when binding samples exceed the gateway limit", async (name) => {
+  it.each(["create", "replace"] as const)("returns a saved %s draft when binding samples exceed the gateway limit", async (mode) => {
+    const name = "html_view_save";
     const draft = {
-      id: "draft-1", kind: name === "html_view_create" ? "create" as const : "replace" as const,
+      id: "draft-1", kind: mode === "create" ? "create" as const : "replace" as const,
       state: "pending" as const, name: "Page.univer.html", space: "space",
       sourceWorktreeId: "source-pr", previewUrl: `${identityOrigin}/drafts/draft-1`,
       expiresAt: "2026-11-19T00:00:00Z", repositoryVisibility: "private" as const,
       privateSourceUnitIds: ["unit"],
-      ...(name === "html_view_replace" ? { resource: "existing-page" } : {}),
+      ...(mode === "replace" ? { resource: "existing-page" } : {}),
     };
     const bindings = Array.from({ length: 60 }, (_, index) => ({
       kind: "range" as const, unitId: "unit", sheet: `Sheet ${index}`, ref: "A1:H3",
@@ -369,7 +371,7 @@ describe("gateway authentication", () => {
     const client = await gateway.connect("uvw_at_oauth");
     const result = await client.callTool({ name, arguments: {
       html: "<h1>Page</h1>", idempotency_key: "html-draft-key-123",
-      ...(name === "html_view_create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { resource: "existing-page", etag: '"v1"' }),
+      ...(mode === "create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { page: "existing-page", etag: '"v1"' }),
     } });
     expect(result.isError).not.toBe(true);
     const output = opSpecs["htmlView.draft"].output.parse(result.structuredContent);

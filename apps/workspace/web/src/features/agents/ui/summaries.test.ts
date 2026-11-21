@@ -204,7 +204,7 @@ describe("Agent page drafts", () => {
     const saved = session({ messages: [{ id: "assistant", role: "assistant", parts: [part] }] });
     return { saved, html: renderToStaticMarkup(createElement(AgentStepsGroup, { parts: saved.messages[0]!.parts.filter((part): part is ToolPart => "toolCallId" in part), session: saved })) };
   }
-  it.each(["html_view_create", "html_view_replace"])("renders one review card for %s without waiting for approval or changing history", (toolName) => {
+  it.each(["html_view_save", "html_view_create", "html_view_replace"])("renders one review card for %s without waiting for approval or changing history", (toolName) => {
     const part = { type: "dynamic-tool", toolName, toolCallId: "page", state: "output-available", input: {}, output } satisfies ToolPart;
     const before = structuredClone(part);
     const { saved, html } = render(part);

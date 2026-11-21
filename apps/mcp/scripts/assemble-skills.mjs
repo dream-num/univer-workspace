@@ -1,4 +1,5 @@
-import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { withStyleCatalog } from "./style-catalog.mjs";
+import { cpSync, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 
 const target = new URL("../dist/skill-data/", import.meta.url);
 rmSync(target, { recursive: true, force: true });
@@ -21,3 +22,6 @@ for (const name of [
     recursive: true,
   });
 }
+
+const creator = new URL("html-view-creator/SKILL.md", target);
+writeFileSync(creator, withStyleCatalog(readFileSync(creator, "utf8")));
