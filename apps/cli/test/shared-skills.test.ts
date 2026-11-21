@@ -69,7 +69,7 @@ it("selects HTML View styles from context in its workflow Skill", async () => {
   expect(content).not.toMatch(/end your turn and wait|never silently choose/iu);
   for (const term of ["purpose", "audience", "adjectives", "dense rankings", "time series", "tasks/status", "key numbers", "one question", "one-line description"])
     expect(content).toContain(term);
-  expect(content).toMatch(/structurally closest template/u);
+  expect(content).toMatch(/structurally closest style card/u);
   expect(content).toMatch(/name the (?:chosen )?style and why/iu);
   expect(content).toContain("offer to change it");
 });

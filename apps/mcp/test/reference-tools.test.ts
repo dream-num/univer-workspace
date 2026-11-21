@@ -359,7 +359,6 @@ describe("API reference, Skills, resources and server instructions", () => {
   });
 
   it("reads full references without templates or style cards while keeping individual reads", async () => {
-    await mkdir(join(sourceRoot, "html-view/styles"));
     await writeFile(join(sourceRoot, "html-view/styles/test.md"), "Style card");
     await start(sourceRoot);
     const client = await connect();
@@ -526,6 +525,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       [
         ...(await readdir(join(cliSkillData, "html-view/references"))).map((file) => `references/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/templates"))).map((file) => `templates/${file}`),
+        ...(await readdir(join(cliSkillData, "html-view/styles"))).map((file) => `styles/${file}`),
       ].sort((a, b) => a.localeCompare(b)),
     );
     expect(skill.resources[0].readCommand).toBe(
@@ -714,7 +714,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
       const expectedFiles = (await readdir(join(sourceRoot, name), { withFileTypes: true }))
         .filter((entry) => entry.isFile()).map((entry) => entry.name);
-      for (const child of ["references", "templates"]) {
+      for (const child of ["references", "templates", "styles"]) {
         const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
           () => [],
         );

@@ -27,6 +27,9 @@ values and render ordinary HTML, charts or lists. No source aliases or parent bi
 - Use `range-subscribe` on each table, list or chart for the rows and columns it needs. Avoid one
   page-wide range feeding unrelated widgets: each component should expose its own binding.
   Render generated rows in the callback; each generated child does not need another declaration.
+  When one widget needs data from several bindings or sheets, render it from one function that
+  every contributing callback calls. Write placeholders only in the initial HTML, never from
+  another binding's state. Each update must refresh all dependent text, including cover notes.
 - Include planned record capacity when a list must show new records in currently empty rows,
   while staying inside inspected worksheet bounds. Fixed ranges do not grow automatically.
 - Use `getCellState()` / `getRangeState()` for one-time reads in button actions or submission checks.
