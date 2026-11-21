@@ -28,6 +28,17 @@ Figure out where they are in the flow below and start there.
   controls write source cells, and the page shows the recalculated values.
 - **Draft only.** Only the user can publish. Until `html_view_draft_get` returns
   `state: "published"`, never say the page is live and never share its `shareUrl`.
+- **Wait for source changes.** In step 2, check whether a source Sheet exists only in
+  this session's pull request, or the page needs columns, worksheets or values changed
+  there but not yet merged. In either case, write the page after step 3 using the pull
+  request's real Unit and worksheet IDs, which stay the same after merge. Do not call
+  `html_view_validate`, `html_view_create` or `html_view_replace` yet. Tell the user the
+  page is written and ask them to review and merge the pull request in Workspace, then
+  come back and say "continue" so you can check the page and save its draft. Never merge
+  or ask to merge on their behalf. Do not use 403, trunk, worktree or unitId in this
+  explanation. Pages needing only merged data follow the usual validation flow.
+  `workspace-html-view-source-unavailable` means a source cannot be read as merged data;
+  it may be missing, inaccessible or only in an unmerged pull request.
 - **A page is not a Unit.** If `html_view_create` is not in your tool list, say this
   connection cannot draft pages and stop. Never make a Slide, Board or other Unit instead.
 - **Ask mode cannot save.** Drafting needs write access and Ask mode has only read

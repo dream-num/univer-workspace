@@ -4,6 +4,35 @@ import { expect, it, vi } from "vitest";
 import { WorkspaceBlobFeature } from "../src/blob.js";
 import { WorkspaceHttp } from "../src/http.js";
 import { WorkspaceHtmlViewFeature, type WorkspaceHtmlViewOptions } from "../src/html-view.js";
+import { WorkspaceContentSource } from "../src/runtime-source.js";
+
+it.each([403, 404, 500])("reports source snapshot HTTP %s for validation and drafts", async (status) => {
+  const http = new WorkspaceHttp({
+    origin: "https://workspace.test", role: "client", cookie: "workspace_session=test",
+    fetcher: async (url, init) => {
+      const request = new Request(url, init);
+      expect(request.method).toBe("GET");
+      expect(new URL(request.url).pathname).toBe("/universer-api/snapshot/2/unit/unit/rev/0");
+      return Response.json({ error: { code: "SOURCE_READ_FAILED", message: "Cannot read this unit." } }, { status });
+    },
+  });
+  const content = new WorkspaceContentSource(http);
+  const feature = new WorkspaceHtmlViewFeature({
+    authenticatedHttp: async () => http, blobs: { uploadBytes: vi.fn() },
+    configuredOrigin: async () => http.origin, runtime: { exportUnitData: vi.fn() },
+    resolveTrunkRuntimeTarget: (input) => content.resolveTrunkRuntimeTarget(input),
+  });
+  const source = { name: "view.univer.html", bytes: Buffer.from('<output data-univer-cell-text="unit:budget:B2"></output>') };
+  const expected = status === 500
+    ? { code: "SOURCE_READ_FAILED", message: "Cannot read this unit.", detail: { status, path: "/universer-api/snapshot/2/unit/unit/rev/0" } }
+    : {
+        code: "workspace-html-view-source-unavailable",
+        message: "The source Sheet may not exist, may not be readable by you, or may exist only in an unmerged pull request. HTML View validation reads merged (trunk) data only.",
+        detail: { unitId: "unit" },
+      };
+  await expect(feature.validate(source)).rejects.toMatchObject(expected);
+  await expect(feature.draft({ kind: "create", source, name: "View", spaceId: "space", idempotencyKey: "key" })).rejects.toMatchObject(expected);
+});
 
 it("snapshots source-neutral bytes before awaiting trunk validation", async () => {
   const html = '<output data-univer-cell-text="unit:budget:B2"></output>';

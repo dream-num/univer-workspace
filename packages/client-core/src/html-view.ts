@@ -256,7 +256,20 @@ export class WorkspaceHtmlViewFeature {
     const unitIds = getHtmlViewUnitIds(parsed);
     const bindings: WorkspaceHtmlViewBindingSample[] = [];
     for (const unitId of unitIds) {
-      const target = await this.options.resolveTrunkRuntimeTarget({ unitId });
+      let target: WorkspaceRuntimeTarget;
+      try {
+        target = await this.options.resolveTrunkRuntimeTarget({ unitId });
+      } catch (error) {
+        if (error instanceof WorkspaceApplicationError && isRecord(error.detail) &&
+          (error.detail["status"] === 403 || error.detail["status"] === 404)) {
+          throw workspaceError(
+            "workspace-html-view-source-unavailable",
+            "The source Sheet may not exist, may not be readable by you, or may exist only in an unmerged pull request. HTML View validation reads merged (trunk) data only.",
+            { unitId },
+          );
+        }
+        throw error;
+      }
       if (target.unitId !== unitId || target.scope.kind !== "trunk") {
         throw workspaceError(
           "workspace-result-mismatch",

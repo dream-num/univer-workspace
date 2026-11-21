@@ -46,6 +46,7 @@ Sources always resolve on trunk. If the required Unit, worksheet or changes exis
 Worktree, prepare the template but defer validation and publication until those changes are
 merged through the existing review workflow. Do not automatically merge a Worktree or substitute
 older trunk data. Creating an HTML View does not authorize changing its source cells or formulas.
+`workspace-html-view-source-unavailable` means a source Sheet may not exist, may not be readable by you, or may exist only in an unmerged pull request; validation reads merged data only.
 
 ## Host navigation
 
