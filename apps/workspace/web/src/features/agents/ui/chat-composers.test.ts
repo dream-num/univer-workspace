@@ -99,7 +99,7 @@ async function key(input: HTMLElement, init: KeyboardEventInit) {
 }
 
 it("sends draft feedback through the existing session send path and disables it while running", async () => {
-  current = session({ messages: [{ id: "draft", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "html_view_create", toolCallId: "draft",
+  current = session({ messages: [{ id: "draft", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "html_view_save", toolCallId: "draft",
     state: "output-available", input: { space: "sales", name: "Sales" }, output: { structuredContent: { draft: { id: "draft-1" } } } }] }] });
   const before = structuredClone(current.messages);
   await renderSession();

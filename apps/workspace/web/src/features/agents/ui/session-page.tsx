@@ -318,7 +318,7 @@ function StepRow({ part, session, replaced, feedback }: {
   const status = state === "rejected" ? m.toolRejected : state === "approval" ? m.waitingApproval : state === "failed" ? m.toolFailed : state === "completed" ? m.toolDone : m[session.status];
   const timing = part.type !== "reasoning" ? session.toolTimings[part.toolCallId] : undefined;
   const parsedDraft = part.type !== "reasoning" && part.state === "output-available" &&
-    ["html_view_save", "html_view_create", "html_view_replace"].includes(toolName(part)) ? pageDraftOutput.safeParse(part.output) : null;
+    toolName(part) === "html_view_save" ? pageDraftOutput.safeParse(part.output) : null;
   const skillDraftId = part.type !== "reasoning" && part.state === "output-available" ? skillDraftResultId(toolName(part), part.output) : null;
   const draftId = parsedDraft?.success && !parsedDraft.data.isError ? parsedDraft.data.structuredContent.draft.id : null;
   const styles = part.type !== "reasoning" && part.state === "output-available" ? htmlViewStylesResult(toolName(part), part.output) : null;
