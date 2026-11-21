@@ -57,16 +57,17 @@ test('run secrets cover the human, the principals, the model credential and stor
     // The helper names this file through a symlinked path (/tmp on macOS); the check must still run.
     symlinkSync(fileURLToPath(new URL('.', import.meta.url)), join(run, 'bin'));
     const sessions = 'distributions/univer-workspace-cli/workspace-cli';
-    for (const directory of ['home/principals', `home/${sessions}`, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}`, 'evidence/story']) mkdirSync(join(run, directory), { recursive: true });
+    for (const directory of ['home/principals', 'home/stories/codex-human/.codex', `home/${sessions}`, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}`, 'evidence/story']) mkdirSync(join(run, directory), { recursive: true });
     writeFileSync(join(run, 'user.pw'), 'human-password');
     writeFileSync(join(run, 'home/mcp-session'), 'human-session\n');
     writeFileSync(join(run, 'home/principals/a1.token'), 'principal-token\n');
     writeFileSync(join(run, 'home/principals/a1.id'), 'principal-id\n');
     writeFileSync(join(run, 'home/opencode-credential.json'), JSON.stringify([{ value: { access: 'model-access', refresh: 'model-refresh' } }]));
+    writeFileSync(join(run, 'home/stories/codex-human/.codex/auth.json'), JSON.stringify({ tokens: { access_token: 'codex-access', refresh_token: 'codex-refresh', id_token: 'codex-id-token' }, OPENAI_API_KEY: 'codex-api-key' }));
     const stored = cookie => JSON.stringify({ sessions: { 'http://127.0.0.1:1': { cookie, subject: { id: 'subject-id-1' } } } });
     writeFileSync(join(run, `home/${sessions}/session.json`), stored('human-cli-session'));
     writeFileSync(join(run, `home/stories/uvw-a1/.univer-workspace-cli/${sessions}/session.json`), stored('story-session'));
-    assert.deepEqual(runSecrets(run).sort(), ['human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-session']);
+    assert.deepEqual(runSecrets(run).sort(), ['codex-access', 'codex-api-key', 'codex-id-token', 'codex-refresh', 'human-cli-session', 'human-password', 'human-session', 'model-access', 'model-refresh', 'principal-token', 'story-session']);
 
     writeFileSync(join(run, 'evidence/story/transcript.jsonl'), 'agent principal-id said hello\n');
     assert.equal(check().status, 0, check().stdout);

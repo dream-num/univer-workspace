@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// verify-uvw story [--as <identity>] [--oauth] <label> mcp|uvw <prompt>
-// Runs one prompt with opencode in a throwaway home and records it under evidence/<label>/.
+// verify-uvw story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex <prompt>
+// Runs one prompt with opencode or Codex in a throwaway home and records it under evidence/<label>/.
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
-import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
@@ -17,17 +17,47 @@ const TIMEOUT_MS = 30 * 60_000;
 
 export function parseStory(argv) {
   const rest = [...argv];
-  let as = 'human', oauth = false;
+  let as = 'human', oauth = false, model;
   while (rest[0]?.startsWith('--')) {
     const flag = rest.shift();
     if (flag === '--oauth') oauth = true;
+    else if (flag === '--model' && /^[^\s#]+(?:#[^\s#]+)?$/.test(rest[0] ?? '') && !rest[0].startsWith('-')) model = rest.shift();
     else if (flag === '--as' && /^[a-z0-9][a-z0-9_-]{0,31}$/.test(rest[0] ?? '')) as = rest.shift();
     else throw new Error(`Unknown or invalid option ${flag}`);
   }
   const [label, client, prompt] = rest;
-  if (rest.length !== 3 || !/^[A-Za-z0-9._-]{1,64}$/.test(label) || !['mcp', 'uvw'].includes(client) || !prompt) throw new Error('Invalid label, client or prompt');
+  if (rest.length !== 3 || !/^[A-Za-z0-9._-]{1,64}$/.test(label) || !['mcp', 'uvw', 'codex'].includes(client) || !prompt) throw new Error('Invalid label, client or prompt');
   if (oauth && (client !== 'mcp' || as === 'human')) throw new Error('--oauth signs opencode in through the guest agent card; it needs mcp and a named identity');
-  return { as, oauth, label, client, prompt };
+  return { as, oauth, label, client, prompt, ...(model ? { model } : {}) };
+}
+
+/** Opencode keeps its variant in the model ID; Codex takes effort as a separate config value. */
+export function storyModel({ client, model }, fallback) {
+  if (client !== 'codex') return { model: model ?? fallback };
+  const [name, effort = 'high'] = (model ?? 'gpt-6.1-sol').split('#');
+  return { model: name, effort };
+}
+
+export function codexConfig({ mcpUrl, model, effort }) {
+  return `model = ${JSON.stringify(model)}
+model_reasoning_effort = ${JSON.stringify(effort)}
+approval_policy = "never"
+sandbox_mode = "read-only"
+web_search = "disabled"
+cli_auth_credentials_store = "file"
+project_doc_max_bytes = 0
+[shell_environment_policy]
+inherit = "core"
+exclude = ["VERIFY_UVW_MCP_BEARER"]
+[features]
+apps = false
+plugins = false
+multi_agent = false
+[mcp_servers.${SERVER}]
+url = ${JSON.stringify(mcpUrl)}
+bearer_token_env_var = "VERIFY_UVW_MCP_BEARER"
+required = true
+`;
 }
 
 /** An mcp story keeps opencode's `execute` wrapper: it carries the MCP calls, with `fetch`, `search` and `tools.opencode.*` beside them. */
@@ -87,19 +117,39 @@ export function trajectory(events) {
   return { lines, answer: answer.join('\n') };
 }
 
+/** Codex emits started/updated/completed items; only settled items belong in the trajectory. */
+export function codexTrajectory(events) {
+  const lines = [];
+  let answer = [];
+  const brief = value => (typeof value === 'string' ? value : JSON.stringify(value ?? {})).replace(/\s+/g, ' ').slice(0, 300);
+  for (const event of events) {
+    if (event.type !== 'item.completed') continue;
+    const item = event.item ?? {};
+    if (item.type === 'agent_message') answer.push(item.text ?? '');
+    if (!['mcp_tool_call', 'command_execution'].includes(item.type)) continue;
+    answer = [];
+    const ok = item.status === 'completed' && !item.error && (item.type !== 'command_execution' || item.exit_code === 0);
+    const tool = item.type === 'mcp_tool_call' ? `${item.server}.${item.tool}` : `shell [exit ${item.exit_code ?? '?'}]`;
+    const detail = item.type === 'mcp_tool_call' ? item.arguments : item.command;
+    lines.push(`${ok ? 'ok   ' : 'error'}  ${tool}  ${brief(detail)}${item.error ? ` -> ${brief(item.error.message)}` : ''}`);
+  }
+  return { lines, answer: answer.join('\n') };
+}
+
 async function main() {
-  const [repo, run, origin, mcpUrl, username, model, ...argv] = process.argv.slice(2);
+  const [repo, run, origin, mcpUrl, username, defaultModel, ...argv] = process.argv.slice(2);
   const fail = (message, code = 1) => { console.error(`verify-uvw: ${message}`); process.exit(code); };
   let story;
-  try { story = parseStory(argv); } catch (error) { fail(`${error.message}\nusage: verify-uvw story [--as <identity>] [--oauth] <label> mcp|uvw <prompt>`, 2); }
+  try { story = parseStory(argv); } catch (error) { fail(`${error.message}\nusage: verify-uvw story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex <prompt>`, 2); }
   const { as, oauth, label, client, prompt } = story;
+  const { model, effort } = storyModel(story, defaultModel);
   const evidence = join(run, 'evidence', label);
   if (existsSync(evidence)) fail(`story ${label} already has evidence; a rerun is another attempt and needs its own label, for example ${label}-attempt2`, 2);
-  if (client === 'mcp' && !mcpUrl) fail('MCP not enabled for this run; start with VERIFY_UVW_MCP=1');
+  if (client !== 'uvw' && !mcpUrl) fail('MCP not enabled for this run; start with VERIFY_UVW_MCP=1');
   if (client === 'uvw' && !existsSync('/usr/bin/sandbox-exec')) fail('a uvw story sandboxes its shell with macOS sandbox-exec, which this machine does not have');
   const secret = name => existsSync(join(run, 'home', name)) ? readFileSync(join(run, 'home', name), 'utf8').trim() : undefined;
   const bearer = client === 'uvw' || oauth ? undefined : secret(as === 'human' ? 'mcp-token' : `principals/${as}.token`);
-  if (client === 'mcp' && !oauth && !bearer) fail(as === 'human' ? 'no PAT for the run user; run: verify-uvw user' : `no principal ${as}; run: verify-uvw principal ${as}, or pass --oauth to sign opencode in through the guest agent card`);
+  if (client !== 'uvw' && !oauth && !bearer) fail(as === 'human' ? 'no PAT for the run user; run: verify-uvw user' : `no principal ${as}; run: verify-uvw principal ${as}${client === 'mcp' ? ", or pass --oauth to sign opencode in through the guest agent card" : ''}`);
   if (oauth && secret(`principals/${as}.token`)) fail(`${as} is a principal with a token; give the OAuth guest another name`);
   if (client === 'uvw' && as === 'human' && !username) fail('no user; run: verify-uvw user');
 
@@ -119,19 +169,35 @@ async function main() {
     ...(client === 'uvw' ? { UNIVER_HOME: join(home, '.univer-workspace-cli'), SHELL: join(home, '.local/libexec/zsh') } : {}),
   };
   const opencode = (args, options = {}) => spawnSync('opencode', args, { cwd: home, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], ...options });
-  writeFileSync(join(home, '.config/opencode/opencode.json'), `${JSON.stringify(opencodeConfig({ client, mcpUrl, bearer, tmp: env.TMPDIR }), null, 2)}\n`, { mode: 0o600 });
+  if (client === 'codex') {
+    env.CODEX_HOME = join(home, '.codex');
+    env.VERIFY_UVW_MCP_BEARER = bearer;
+    mkdirSync(env.CODEX_HOME, { recursive: true, mode: 0o700 });
+    const credential = join(run, 'home/codex-credential.json');
+    const source = existsSync(credential) ? credential : join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'auth.json');
+    if (!existsSync(source)) fail('Codex has no auth.json credential; sign in with codex login first');
+    let credentials;
+    try { credentials = JSON.parse(readFileSync(source, 'utf8')); } catch { fail('Codex auth.json is not valid JSON'); }
+    if (!credentialSecrets(credentials).length) fail('Codex auth.json has no stored credential');
+    if (!existsSync(credential)) writeFileSync(credential, JSON.stringify(credentials), { mode: 0o600 });
+    if (!existsSync(join(env.CODEX_HOME, 'auth.json'))) cpSync(credential, join(env.CODEX_HOME, 'auth.json'));
+    chmodSync(join(env.CODEX_HOME, 'auth.json'), 0o600);
+    writeFileSync(join(env.CODEX_HOME, 'config.toml'), codexConfig({ mcpUrl, model, effort }), { mode: 0o600 });
+  } else {
+    writeFileSync(join(home, '.config/opencode/opencode.json'), `${JSON.stringify(opencodeConfig({ client, mcpUrl, bearer, tmp: env.TMPDIR }), null, 2)}\n`, { mode: 0o600 });
 
-  // The model credential is copied once from the developer's opencode and only ever lives under home/.
-  const credential = join(run, 'home/opencode-credential.json');
-  if (!existsSync(credential)) {
-    const file = openSync(credential, 'w', 0o600);
-    const exported = spawnSync('opencode', ['auth', 'export', CREDENTIAL, '--standalone'], { stdio: ['ignore', file, 'ignore'] });
-    closeSync(file);
-    let secrets = [];
-    try { secrets = credentialSecrets(JSON.parse(readFileSync(credential, 'utf8'))); } catch {}
-    if (exported.status !== 0 || !secrets.length) { rmSync(credential); fail(`opencode has no stored "${CREDENTIAL}" credential for ${model}`); }
+    // The model credential is copied once from the developer's opencode and only ever lives under home/.
+    const credential = join(run, 'home/opencode-credential.json');
+    if (!existsSync(credential)) {
+      const file = openSync(credential, 'w', 0o600);
+      const exported = spawnSync('opencode', ['auth', 'export', CREDENTIAL, '--standalone'], { stdio: ['ignore', file, 'ignore'] });
+      closeSync(file);
+      let secrets = [];
+      try { secrets = credentialSecrets(JSON.parse(readFileSync(credential, 'utf8'))); } catch {}
+      if (exported.status !== 0 || !secrets.length) { rmSync(credential); fail(`opencode has no stored "${CREDENTIAL}" credential for ${model}`); }
+    }
+    if (!existsSync(join(home, '.local/share/opencode/opencode.db')) && opencode(['auth', 'import', '--standalone', credential]).status !== 0) fail('opencode could not import the model credential');
   }
-  if (!existsSync(join(home, '.local/share/opencode/opencode.db')) && opencode(['auth', 'import', '--standalone', credential]).status !== 0) fail('opencode could not import the model credential');
 
   if (client === 'uvw') {
     // The wrapper names only this home. The link target is the checkout's CLI build, which a determined model can still resolve.
@@ -161,19 +227,22 @@ async function main() {
   }
 
   const started = Date.now();
-  const result = opencode(['run', '--standalone', '--auto', '--format', 'json', '-m', model, '--', prompt], { cwd: scratch, timeout: TIMEOUT_MS, maxBuffer: 1 << 30 });
+  const options = { cwd: scratch, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: TIMEOUT_MS, maxBuffer: 1 << 30 };
+  const result = client === 'codex'
+    ? spawnSync('codex', ['--no-daemon', 'exec', '--strict-config', '--skip-git-repo-check', '--ephemeral', '--ignore-rules', '--json', '--color', 'never', '--', prompt], options)
+    : opencode(['run', '--standalone', '--auto', '--format', 'json', '-m', model, '--', prompt], options);
   const seconds = Math.round((Date.now() - started) / 1000);
 
   // Only redacted text leaves memory.
   const transcript = clean(result.stdout ?? '');
-  const { lines, answer } = trajectory(transcript.split('\n').flatMap(text => { try { return [JSON.parse(text)]; } catch { return []; } }));
+  const { lines, answer } = (client === 'codex' ? codexTrajectory : trajectory)(transcript.split('\n').flatMap(text => { try { return [JSON.parse(text)]; } catch { return []; } }));
   writeFileSync(join(evidence, 'transcript.jsonl'), transcript);
-  writeFileSync(join(evidence, 'opencode-stderr.txt'), clean(result.stderr ?? ''));
+  writeFileSync(join(evidence, client === 'codex' ? 'codex-stderr.txt' : 'opencode-stderr.txt'), clean((result.stderr ?? '') + (result.error ? `\n${result.error.message}` : '')));
   writeFileSync(join(evidence, 'answer.txt'), answer);
   writeFileSync(join(evidence, 'trajectory.txt'), `${lines.join('\n')}\n\n=== final answer ===\n${answer}\n`);
   const meta = {
     label, client, identity: as, auth: client === 'uvw' ? (as === 'human' ? 'uvw session of the run user' : 'uvw with the origin configured; the identity signs in itself') : oauth ? 'opencode OAuth through the guest agent card' : as === 'human' ? 'PAT of the run user' : 'PAT of the agent principal',
-    model, opencode: opencode(['--version']).stdout.trim(), started_at: new Date(started).toISOString(), duration_seconds: seconds,
+    model, ...(client === 'codex' ? { effort, codex: spawnSync('codex', ['--version'], { env, encoding: 'utf8' }).stdout.trim() } : { opencode: opencode(['--version']).stdout.trim() }), started_at: new Date(started).toISOString(), duration_seconds: seconds,
     exit_code: result.status, timed_out: result.error?.code === 'ETIMEDOUT',
   };
   writeFileSync(join(evidence, 'run-meta.json'), `${JSON.stringify(meta, null, 2)}\n`);
