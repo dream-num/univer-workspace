@@ -1,6 +1,6 @@
 # 来源 Sheet 还在 PR 里时，Agent 做不了页面：复现与改进策略
 
-状态：方案已定（2026-11-21），按 S1、S2 顺序实现。复现基于 `b836dff0`。
+状态：方案已定（2026-11-21），S1 见 #493，S2 分三个 PR 实现。复现基于 `b836dff0`。
 
 ## 1. 结论
 
@@ -24,7 +24,7 @@ Agent 说的是事实，不是幻觉。按现在的设计，HTML View 的校验�
 - **先做 S1（提示与报错）。** 让 Agent 在来源还在 PR 里时不去撞 403，用用户听得懂的话说明下一步，
   并发现"改动在 PR 里、校验读到旧值"的情况。改动只在 Skill 文本和一处错误映射。
 - **再做 S2（按 PR 校验和预览草稿）。** 校验和草稿预览可以读 PR 里的数据，发布仍然等 PR 合并。
-  用户可以同时评审 PR 和页面，合并后点一次发布。这是本文推荐的目标方案，需要你对第 6 节的问题拍板。
+  用户可以同时评审 PR 和页面，合并 PR 时页面自动发布。这是采纳的目标方案，决策见第 6 节。
 
 ## 2. 复现
 
@@ -188,49 +188,73 @@ S1 的验收：附录脚本的 A2 返回新的错误码和说明；在 `verify-u
 
 数据形状先定下来：
 
-- 校验与草稿的输入多一个可选的 `worktreeId`（MCP 工具参数叫 `pr`，与其他工具一致）。
+- 校验与草稿的输入多一个可选的 Worktree ID。HTTP 字段叫 `sourceWorktreeId`，CLI 选项叫 `--worktree`，
+  MCP 工具参数沿用其他 PR 工具的 `repo` 加 `pr`。
 - 来源解析规则只有一条：Unit 在这个 Worktree 里就读 Worktree，否则读 trunk。这正是现有
   `resolveReferencedRuntimeTarget` 的规则。
-- 草稿表加一列 `source_worktree_id`，可空。为空时行为与今天完全相同。
-- 草稿状态沿用现有的 `pending | published | rejected | expired | conflicted`，不加新状态。来源 PR 被丢弃时，草稿转为 `conflicted`。
+- 草稿表 `html_view_drafts` 加一列 `source_worktree_id`，可空。为空时行为与今天完全相同。
+- 草稿状态沿用现有的 `pending | published | rejected | expired | conflicted`，不加新状态。
+  来源 PR 被丢弃后，草稿在读取时显示为 `conflicted`，发布被拒绝。
+- 草稿视图多一个 `sourceWorktreeId: string | null`。
 
-用户故事：用户说"把这些数据做成一个页面"。Agent 开 PR、建表、写数据，然后用 `pr` 参数校验并保存草稿。
-会话里出现草稿卡片，预览显示 PR 里的真实数据，卡片写明"来源表在 PR #3 中，合并后才能发布"。
-用户在 PR 页面评审表，PR 页面也列出依赖它的页面草稿。合并后，用户在草稿页点发布，页面上线，此后只读 trunk。
+用户故事：用户说"把这些数据做成一个页面"。Agent 开 PR、建表、写数据，然后带上 PR 校验并保存草稿。
+会话里出现草稿卡片，预览显示 PR 里的真实数据，卡片写明"合并 PR #3 后自动发布"。
+用户在 PR 页面评审表，合并确认框提示"合并后将发布 1 个页面"。用户点合并，页面随之上线，
+界面提示"已发布 1 个页面"并给出链接。此后页面只读 trunk。
 
-改动分块，约 3 个 PR，按依赖叠成 stack：
+发布规则：
 
-1. **校验。** client-core 的 `readAndValidate` 接受 `worktreeId`，按上面的规则解析来源；CLI `html-view validate`
-   加 `--worktree`，MCP `html_view_validate` 加 `pr`。纯客户端改动，不碰服务端。附录脚本的 A2、B2、B3 加上
-   `--worktree` 后应分别返回 `B2 = 5`、`B2 = 42`、`Forecast!A1 = 99`。
-2. **草稿记录来源 PR。** 草稿表加 `source_worktree_id`（产品库迁移，按 `apps/workspace/AGENTS.md` 跑完整迁移矩阵），
-   `/api/html-view-drafts` 接受并返回它（HTTP contract，跑 `api:verify`）。服务端创建草稿时校验请求者能读这个 Worktree。
-   发布前检查：Worktree 已合并才允许发布，已丢弃则拒绝并把草稿置为 `conflicted`。
-3. **预览读 PR 数据。** `/drafts/{id}` 在草稿有来源 PR 时，绑定引擎改用 Worktree 的协同配置
+- 来源 PR 未合并时，手动发布返回 409，草稿页显示"等待 PR #N 合并"，发布按钮不可用。
+- 用户在浏览器里合并 PR（交互式会话）时，服务端在合并完成后发布所有关联该 PR 的 `pending` 草稿。
+  每份草稿按作者身份发布，权限和配额都算作者的，因为合并者不一定能写草稿的目标位置。
+  合并确认框已经告诉合并者会发布几个页面，所以合并这一下就是人的确认。
+- 用 PAT 或 OAuth 令牌合并（例如持有 `worktree:merge` 的外部 Agent）时，不自动发布。草稿解除等待，
+  仍由作者在 Workspace 里手动发布。这样"只有人能发布页面"的规则不变。
+- 自动发布挂在 `worktrees.service.ts` 的 `merge` 里，`executeReserved` 之后，这样首次合并、
+  重放已完成的 Operation 和恢复中断的合并都会执行它。它只选 `pending` 的关联草稿，重复执行结果不变。
+  单份草稿发布失败（过期、配额、权限）只记录，不让合并失败，草稿保持原状态，作者可以在草稿页处理。
+- 合并响应多一个 `publishedPages`，列出这次发布的草稿 ID、名称和节点 ID，浏览器据此提示。
+  Worktree 摘要多一个 `pendingPageDrafts` 计数，合并确认框据此提示。
+
+改动分三个 PR，叠在 S1 之上：
+
+1. **S2-a 服务端。** 草稿表加列（SQLite 与 PostgreSQL 迁移，跑 `verify-db-migration`），
+   `/api/html-view-drafts` 接受并返回 `sourceWorktreeId`（HTTP contract，跑 `api:verify`），
+   保存草稿时检查请求者能评审这个 Worktree 且它没有被丢弃；发布前检查、合并后自动发布、丢弃后显示 `conflicted`、
+   合并响应的 `publishedPages`、Worktree 摘要的 `pendingPageDrafts`。
+2. **S2-b 校验与 Agent。** client-core 的校验和草稿接受 Worktree ID 并按上面的规则解析来源，草稿请求带上
+   `sourceWorktreeId`；CLI `html-view validate` 加 `--worktree`；MCP `html_view_validate`、`html_view_create`、
+   `html_view_replace` 加 `repo` 和 `pr`；html-view-creator Skill 改为"来源在 PR 里时带上 PR 保存草稿，
+   告诉用户合并 PR 后页面自动发布"。附录脚本的 A2、B2、B3 加上 `--worktree` 后应分别返回 `B2 = 5`、`B2 = 42`、`Forecast!A1 = 99`。
+3. **S2-c 浏览器。** `/drafts/{id}` 和 Agents 会话的草稿卡片在来源 PR 未合并时，绑定引擎改用 Worktree 的协同配置
    （复用编辑器里 `createWorktreeCollaborationConfig` 的那条路径），PR 里的 Unit 读 Worktree，其余读 trunk。
-   预览保持只读（`workspace-binding-engine.ts:44` 已经对草稿关掉编辑），不会从页面写进 PR。html-view-creator Skill 改为"来源在 PR 里时带上 `pr`"。
+   预览保持只读（`workspace-binding-engine.ts:44` 已经对草稿关掉编辑）。草稿页显示等待状态；
+   合并确认框显示将发布的页面数；合并成功后提示已发布的页面。
+
+S2-a 与 S2-b 改的文件不重叠，按上面约定的字段并行开发。S2-c 依赖 S2-a 的视图字段。
 
 S2 守住的不变量：
 
 - 发布后的页面只读写 trunk，和今天一样。AGENTS.md 里"HTML View 绑定实时数据"的要求不变，预览读的是 PR 的实时数据，不是快照。
-- 合并仍然只由人完成，Agent 不需要 `worktree:merge`。
+- 合并仍然只由人完成，浏览器 Agent 不需要 `worktree:merge`。
 - 页面不进 PR 评审，Blob 不进 Worktree。
 
 S2 的风险：
 
 - PR 在草稿保存后还会继续变。发布时只检查"已合并"，不在服务端重新校验绑定，因为校验在 client-core 里执行，
   服务端没有这段逻辑。合并后某个绑定的工作表被删掉，结果与今天删掉 trunk 来源一样，页面显示错误。
-  如果你认为发布前必须重新校验，发布按钮可以在浏览器里先跑一次 trunk 校验，代价是 Browser 也要有校验代码。
-- 草稿 7 天过期。PR 评审超过 7 天，草稿会先过期，需要 Agent 重新保存。
-- 预览按 PR 读数据，看草稿的人必须能评审这个 PR。今天只有草稿作者能读草稿（`drafts.service.ts:49`），浏览器 Agent 以用户身份开 PR 和存草稿，作者能评审自己的 PR，所以这一条成立。实现时仍要在服务端检查，不依赖这个巧合。
+- 草稿 7 天过期。PR 评审超过 7 天，草稿会先过期，合并时不会发布，需要 Agent 重新保存。
+- 看草稿的人必须能评审来源 PR。今天只有草稿作者能读草稿（`drafts.service.ts:49`），浏览器 Agent 以用户身份开 PR 和存草稿，
+  所以这一条成立；保存草稿时服务端仍然检查。
 
-## 6. 需要你决定的问题
+## 6. 已定决策
 
-1. **方向。** 是否认可"先 S1，再 S2"？还是你倾向直接做 S3（页面进 PR），或者只做 S1 就够？
-2. **发布时机。** S2 里，来源 PR 未合并时是否完全禁止发布？我建议禁止，因为发布后的页面读 trunk，未合并就发布会让访客看到报错。
-3. **合并与发布的关系。** 合并 PR 后，是否在 PR 页面直接提供"发布关联页面"？还是保持现在的规则，用户到草稿页单独点发布？
-   前者少一步，后者和"草稿只有用户能发布"的现有规则完全一致。
-4. **DSH 的合并授权。** DSH Skill 允许 Agent 在用户授权后合并。S2 上线后，DSH 是否也改为"带 PR 保存草稿、由人合并"，和浏览器 Agent 一致？
+2026-11-21 由用户确认：
+
+1. 采纳先 S1、再 S2。S3（页面进 PR）不做。
+2. 来源 PR 未合并时禁止发布。
+3. 合并 PR 后静默发布关联页面，并给出提示。具体规则见 S2 的"发布规则"。
+4. DSH Skill 的统一放到低优先级，不在这次范围内。
 
 ## 7. 验证计划
 
