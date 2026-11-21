@@ -1,4 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
+import type { Logger } from "pino";
 import {
   AFFINITY_HEADER,
   assertAffinityHeaderName,
@@ -67,6 +68,8 @@ export interface AffinityTransportOptions {
    * platform error shape is verified against FC (design 6.1).
    */
   readonly retryOnSessionError?: (response: Response) => boolean | Promise<boolean>;
+  /** Logs the affinity header actually sent on every attempt. */
+  readonly logger?: Pick<Logger, "info">;
 }
 
 export function createAffinityTransport(options: AffinityTransportOptions): AffinityTransport {
@@ -89,17 +92,19 @@ export function createAffinityTransport(options: AffinityTransportOptions): Affi
   if (!Number.isInteger(maxThrottleAttempts) || maxThrottleAttempts < 0)
     throw new Error("maxThrottleAttempts must be a non-negative integer");
 
-  const send = (sessionId: string | undefined, request: AffinityRequest): Promise<Response> => {
+  const baseFor = (request: AffinityRequest): URL | undefined =>
+    request.endpoint === undefined ? endpoint : new URL(request.endpoint);
+
+  const send = (
+    sessionId: string | undefined,
+    request: AffinityRequest,
+    base: URL,
+  ): Promise<Response> => {
     const headers = new Headers(request.init.headers);
     if (sessionId !== undefined) {
       assertAffinityHeaderValue(sessionId);
       headers.set(headerName, sessionId);
     }
-    const base = request.endpoint === undefined ? endpoint : new URL(request.endpoint);
-    if (base === undefined)
-      throw new Error(
-        "An affinity request needs an endpoint: set it on the transport or the request",
-      );
     return fetcher(new URL(request.path, base), {
       ...request.init,
       headers,
@@ -122,8 +127,25 @@ export function createAffinityTransport(options: AffinityTransportOptions): Affi
       let sessionId = key === undefined ? undefined : await session.sessionId(key);
       let renewed = false;
       let throttles = 0;
+      let attempt = 0;
       for (;;) {
-        const response = await send(sessionId, input);
+        const base = baseFor(input);
+        if (base === undefined)
+          throw new Error(
+            "An affinity request needs an endpoint: set it on the transport or the request",
+          );
+        attempt += 1;
+        options.logger?.info(
+          {
+            event: "mcp.executor_request",
+            executor: base.origin,
+            path: input.path,
+            attempt,
+            [headerName]: sessionId ?? null,
+          },
+          "Executor request",
+        );
+        const response = await send(sessionId, input, base);
         if (
           response.status === 401 &&
           key !== undefined &&
@@ -133,6 +155,15 @@ export function createAffinityTransport(options: AffinityTransportOptions): Affi
           await discard(response);
           sessionId = (await session.renew(key)).sessionId;
           renewed = true;
+          options.logger?.info(
+            {
+              event: "mcp.executor_session_renewed",
+              executor: base.origin,
+              path: input.path,
+              [headerName]: sessionId,
+            },
+            "Executor affinity Session renewed after a platform 401",
+          );
           continue;
         }
         if (response.status === 429 && throttles < maxThrottleAttempts) {

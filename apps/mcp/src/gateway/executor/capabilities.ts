@@ -39,7 +39,7 @@ export class ExecutorCapabilities {
     private readonly logger: Logger,
     epochs?: EpochStore,
   ) {
-    this.transport = epochs === undefined ? null : createAffinityTransport({ epochs });
+    this.transport = epochs === undefined ? null : createAffinityTransport({ epochs, logger });
     this.ready = this.refresh();
     if (config) {
       this.timer = setInterval(() => {

@@ -32,7 +32,7 @@ import {
   rendezvous,
 } from "../src/gateway/executor/router.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
-import { createAffinityTransport, MemoryEpochStore } from "../src/executor-fc/index.js";
+import { AFFINITY_HEADER, createAffinityTransport, MemoryEpochStore } from "../src/executor-fc/index.js";
 
 const token = "executor-token-".repeat(4);
 const rendererToken = "renderer-token-".repeat(4);
@@ -203,6 +203,43 @@ describe("executor protocol boundaries", () => {
         input: { worktreeId: "wt", unitId: "unit", code: "return 1" },
       }),
     ).rejects.toMatchObject({ wire: { code: "workspace-executor-unavailable" } });
+  });
+
+  it("logs the FC affinity header every RPC request arrives with", async () => {
+    let output = "";
+    const logger = pino(
+      { level: "info" },
+      new Writable({
+        write(chunk, _encoding, done) {
+          output += chunk.toString();
+          done();
+        },
+      }),
+    );
+    const executor = createExecutor(config(), {
+      runtime: {
+        executeRead: vi.fn(),
+        executeAndCommit: vi.fn(),
+        exportUnitData: vi.fn(),
+        close: async () => {},
+      },
+      logger,
+    });
+    executor.server.listen(0, "127.0.0.1");
+    await once(executor.server, "listening");
+    const address = executor.server.address();
+    if (!address || typeof address === "string") throw new Error("Expected TCP address");
+    const affinity = "k0123456789abcdef0123456789abcdef";
+    try {
+      const response = await fetch(`http://127.0.0.1:${address.port}/rpc/v1/capabilities`, {
+        headers: { authorization: `Bearer ${token}`, "x-executor-key": affinity },
+      });
+      expect(response.status).toBe(200);
+    } finally {
+      await executor.close();
+    }
+    expect(output).toContain("mcp.executor_request");
+    expect(output).toContain(`"${AFFINITY_HEADER}":"${affinity}"`);
   });
 
   it("routes stably and fails over only before delivery", async () => {

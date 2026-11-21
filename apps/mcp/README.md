@@ -83,8 +83,10 @@ the call is safe to repeat. Epochs live in gateway process memory by default; se
 that route the same keys need `MCP_EXECUTOR_EPOCH_STORE=redis` and a shared Redis. The header is
 always sent, so switching an executor to FC needs no gateway switch. Capability discovery is keyed too, with
 a single `mcp-gateway`/`capabilities` key shared by every replica: an unkeyed probe would open a new FC
-Session on every refresh, and session isolation turns each Session into an instance. See
-[`src/executor-fc`](src/executor-fc/README.md).
+Session on every refresh, and session isolation turns each Session into an instance. The gateway logs every
+executor attempt as `mcp.executor_request` with the `x-executor-key` value it sends, and the executor logs
+the same field under `mcp.executor_request` when it receives one, so the two sides can be correlated. Set
+`LOG_LEVEL=warn` to silence them. See [`src/executor-fc`](src/executor-fc/README.md).
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production` and

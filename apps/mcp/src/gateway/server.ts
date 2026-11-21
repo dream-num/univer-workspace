@@ -158,7 +158,12 @@ export function createGateway(
       );
     });
   const capabilities = new ExecutorCapabilities(config.executor, logger, epochs?.store);
-  const executorLink = createExecutorLinks(config.executor, capabilities.router, epochs?.store);
+  const executorLink = createExecutorLinks(
+    config.executor,
+    capabilities.router,
+    epochs?.store,
+    logger,
+  );
   const upstream = (input: Parameters<typeof fetch>[0], init?: RequestInit) =>
     (options.fetcher ?? fetch)(input, init);
   const authenticator = createAuthenticator(config, logger, upstream);

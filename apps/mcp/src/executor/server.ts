@@ -1,6 +1,7 @@
 import { createServer } from "node:http";
 import type { WorkspaceContentRuntime } from "@univerjs/univer-workspace-client-core";
 import { pino, type Logger } from "pino";
+import { AFFINITY_HEADER } from "../executor-fc/affinity.js";
 import { createBearerCheck } from "../shared/bearer.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
 import {
@@ -45,6 +46,10 @@ export function createExecutor(
         .writeHead(status, { "content-type": "application/json" })
         .end(JSON.stringify({ error: { code, message: code, detail: null } }));
     };
+    // Logged under the literal header name: pino redacts any field called `session`, and the
+    // FC HeaderField value is a routing hash, not a credential.
+    const affinityHeader = request.headers[AFFINITY_HEADER];
+    const affinity = Array.isArray(affinityHeader) ? affinityHeader[0] : (affinityHeader ?? null);
     void (async () => {
       if (request.method === "GET" && request.url === "/healthz") {
         response.end("ok");
@@ -64,10 +69,17 @@ export function createExecutor(
         reject(503, "workspace-executor-unavailable");
         return;
       }
+      // Every RPC request logs the FC HeaderField value it arrived with, so a platform session
+      // can be matched against this process from the executor side alone.
+      logger.info(
+        { event: "mcp.executor_request", path: request.url, [AFFINITY_HEADER]: affinity },
+        "Executor request received",
+      );
       if (request.method === "GET" && request.url === "/rpc/v1/capabilities") {
         await capabilities.ready;
         // A renderer that started after this executor shows up here instead of after the next refresh.
-        if (config.MCP_RENDERER_URL && capabilities.operations.size === 0) await capabilities.refresh();
+        if (config.MCP_RENDERER_URL && capabilities.operations.size === 0)
+          await capabilities.refresh();
         response.writeHead(200, { "content-type": "application/json" }).end(
           JSON.stringify({
             v: PROTOCOL_VERSION,
@@ -159,7 +171,10 @@ export function createExecutor(
         );
       }
       response.writeHead(200, { "content-type": FRAME_CONTENT_TYPE }).end(frame);
-      logger.info({ request_id: header.requestId, op: name }, "Executor request completed");
+      logger.info(
+        { request_id: header.requestId, op: name, [AFFINITY_HEADER]: affinity },
+        "Executor request completed",
+      );
     })().catch(() => {
       if (!response.headersSent) reject(500, "workspace-internal-error");
       else response.destroy();

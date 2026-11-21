@@ -286,6 +286,34 @@ describe("affinity transport", () => {
     ).toThrow(/header name/u);
   });
 
+  it("logs the affinity header it sends and the renewed one", async () => {
+    const events: Record<string, unknown>[] = [];
+    const logger = {
+      info: (fields: object) => {
+        events.push(fields as Record<string, unknown>);
+      },
+    };
+    const { fetcher } = recorder((_call, index) =>
+      index === 0 ? new Response("expired", { status: 401 }) : new Response("{}"),
+    );
+    const transport = createAffinityTransport({
+      endpoint,
+      epochs: new MemoryEpochStore(),
+      fetcher,
+      logger,
+    });
+    await transport.request({ key, path: "/rpc/v1/x", init: { method: "POST" } });
+    const sent = events.filter((entry) => entry["event"] === "mcp.executor_request");
+    expect(sent).toHaveLength(2);
+    expect(sent.map((entry) => entry[AFFINITY_HEADER])).toEqual([
+      deriveSessionId(key, 0),
+      deriveSessionId(key, 1),
+    ]);
+    const renewed = events.filter((entry) => entry["event"] === "mcp.executor_session_renewed");
+    expect(renewed).toHaveLength(1);
+    expect(renewed[0]?.[AFFINITY_HEADER]).toBe(deriveSessionId(key, 1));
+  });
+
   it("carries the Session ID over a real HTTP call and renews after a platform 401", async () => {
     const seen: (string | undefined)[] = [];
     const server = createServer((request, response) => {

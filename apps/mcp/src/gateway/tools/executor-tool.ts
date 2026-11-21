@@ -11,6 +11,7 @@ import type {
   PayloadDirection,
 } from "../../shared/executor-protocol.js";
 import { ExecutorCallError } from "../../shared/errors.js";
+import type { Logger } from "pino";
 import type { UsageAccumulator } from "../../shared/usage.js";
 import {
   createAffinityTransport,
@@ -50,8 +51,10 @@ export function createExecutorLinks(
   config: GatewayConfig["executor"],
   router = config ? new ExecutorRouter(config.urls) : null,
   epochs: EpochStore = defaultEpochs(config),
+  logger?: Pick<Logger, "info">,
 ) {
-  const transport = config === null ? null : createAffinityTransport({ epochs });
+  const transport =
+    config === null ? null : createAffinityTransport({ epochs, ...(logger ? { logger } : {}) });
   return (
     auth: Authentication,
     user: WorkspaceSubject,
