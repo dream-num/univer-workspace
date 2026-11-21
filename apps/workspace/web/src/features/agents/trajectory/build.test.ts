@@ -144,7 +144,7 @@ it("R3 reminder boundaries preserve typed tags and label real generator output",
   const references = referencesReminder([{ kind: "space", spaceId: "repo", label: "Sales" }]);
   const settings = settingsReminder(session(), { ...session(), mode: "ask" });
   const draftParts = await Promise.all((["published", "rejected", "expired", "conflicted"] as const).map(async (state) => {
-    const result = await draftReminder([{ id: "a", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "html_view_create", toolCallId: "d", state: "output-available", input: {}, output: { structuredContent: { draft: { id: "draft", state: "pending" } } } }] }],
+    const result = await draftReminder([{ id: "a", role: "assistant", parts: [{ type: "dynamic-tool", toolName: "html_view_save", toolCallId: "d", state: "output-available", input: { space: "sales", name: "Report" }, output: { structuredContent: { draft: { id: "draft", state: "pending" } } } }] }],
       async () => ({ state, name: "Sales", published: state === "published" ? { nodeId: "node", resourceId: "resource", etag: '"etag"' } : null }), "https://workspace.test");
     return result.part?.text;
   }));

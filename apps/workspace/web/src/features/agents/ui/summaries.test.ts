@@ -204,8 +204,8 @@ describe("Agent page drafts", () => {
     const saved = session({ messages: [{ id: "assistant", role: "assistant", parts: [part] }] });
     return { saved, html: renderToStaticMarkup(createElement(AgentStepsGroup, { parts: saved.messages[0]!.parts.filter((part): part is ToolPart => "toolCallId" in part), session: saved })) };
   }
-  it.each(["html_view_save", "html_view_create", "html_view_replace"])("renders one review card for %s without waiting for approval or changing history", (toolName) => {
-    const part = { type: "dynamic-tool", toolName, toolCallId: "page", state: "output-available", input: {}, output } satisfies ToolPart;
+  it("renders one review card for html_view_save without waiting for approval or changing history", () => {
+    const part = { type: "dynamic-tool", toolName: "html_view_save", toolCallId: "page", state: "output-available", input: { space: "sales", name: "Report" }, output } satisfies ToolPart;
     const before = structuredClone(part);
     const { saved, html } = render(part);
     expect(html.match(/data-draft-id="draft-1"/g)).toHaveLength(1);
@@ -214,11 +214,11 @@ describe("Agent page drafts", () => {
     expect(saved.messages).toEqual([{ id: "assistant", role: "assistant", parts: [before] }]);
   });
   it("reads static tool parts", () => {
-    expect(render({ type: "tool-html_view_replace", toolCallId: "page", state: "output-available", input: {}, output }).html)
+    expect(render({ type: "tool-html_view_save", toolCallId: "page", state: "output-available", input: { space: "sales", name: "Report" }, output }).html)
       .toContain('data-draft-id="draft-1"');
   });
   it("marks an older card using later drafts elsewhere in the session without changing history", () => {
-    const parts = ["old", "new"].map((id) => ({ type: "dynamic-tool", toolName: "html_view_create", toolCallId: id, state: "output-available",
+    const parts = ["old", "new"].map((id) => ({ type: "dynamic-tool", toolName: "html_view_save", toolCallId: id, state: "output-available",
       input: { space: "sales", name: "Report" }, output: { structuredContent: { draft: { id } } } } satisfies ToolPart));
     const saved = session({ messages: parts.map((part, index) => ({ id: `assistant-${index}`, role: "assistant", parts: [part] })) });
     const before = structuredClone(saved.messages);
@@ -229,11 +229,11 @@ describe("Agent page drafts", () => {
   });
   it.each([null, {}, { draft: { id: "draft-1" } }, { structuredContent: { draft: { id: "" } } },
     { structuredContent: { draft: { id: 1 } } }, { ...output, isError: true }])("ignores malformed or error output %j", (output) => {
-    expect(render({ type: "dynamic-tool", toolName: "html_view_create", toolCallId: "page", state: "output-available", input: {}, output }).html)
+    expect(render({ type: "dynamic-tool", toolName: "html_view_save", toolCallId: "page", state: "output-available", input: { space: "sales", name: "Report" }, output }).html)
       .not.toContain("data-draft-id");
   });
   it("ignores failed calls and unrelated tools", () => {
-    expect(render({ type: "tool-html_view_create", toolCallId: "page", state: "output-error", input: {}, errorText: "Failed" }).html).not.toContain("data-draft-id");
+    expect(render({ type: "tool-html_view_save", toolCallId: "page", state: "output-error", input: { space: "sales", name: "Report" }, errorText: "Failed" }).html).not.toContain("data-draft-id");
     expect(render({ type: "tool-browse", toolCallId: "page", state: "output-available", input: {}, output }).html).not.toContain("data-draft-id");
   });
 });
