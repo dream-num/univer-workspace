@@ -94,6 +94,10 @@ WorktreeSummary:
       oneOf:
         - $ref: ./identity.yaml#/PublicUser
         - type: "null"
+    pendingPageDrafts:
+      type: integer
+      minimum: 0
+      description: Pending, unexpired HTML View drafts linked to this Worktree, regardless of author. Always returned by current servers.
     unitCount:
       type: integer
       minimum: 0
@@ -499,3 +503,27 @@ WorktreeOperationResponse:
       $ref: ./operations.yaml#/OperationView
     worktree:
       $ref: "#/WorktreeSummary"
+
+WorktreeMergeResponse:
+  type: object
+  additionalProperties: false
+  required: [operation, worktree, publishedPages]
+  properties:
+    operation:
+      $ref: ./operations.yaml#/OperationView
+    worktree:
+      $ref: "#/WorktreeSummary"
+    publishedPages:
+      type: array
+      description: Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list.
+      items:
+        type: object
+        additionalProperties: false
+        required: [draftId, name, nodeId]
+        properties:
+          draftId:
+            type: string
+          name:
+            type: string
+          nodeId:
+            type: string

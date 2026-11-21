@@ -3,10 +3,12 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
+import { logger } from "../../logging/logger.js";
+import type { WorktreesModule } from "../worktrees/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
 import { type HtmlViewDraftsRepository, assertDraftDestination, requireDraftResource, draftConflict } from "./drafts.repository.js";
-import type { DraftRow, HtmlViewDraftView } from "./drafts.types.js";
+import type { DraftRow, HtmlViewDraftView, PublishedPage } from "./drafts.types.js";
 
 const id = z.string().trim().min(1).max(255);
 const requestSchema = z.discriminatedUnion("kind", [
@@ -16,6 +18,7 @@ const requestSchema = z.discriminatedUnion("kind", [
     parentNodeId: id.nullish(),
     name: id,
     html: z.string(),
+    sourceWorktreeId: id.optional(),
   }),
   z.object({
     kind: z.literal("replace"),
@@ -25,6 +28,7 @@ const requestSchema = z.discriminatedUnion("kind", [
       .max(200)
       .regex(/^"[^"\r\n]+"$/),
     html: z.string(),
+    sourceWorktreeId: id.optional(),
   }),
 ]);
 const keySchema = z
@@ -38,6 +42,7 @@ export function createHtmlViewDraftsModule(options: {
   repository: HtmlViewDraftsRepository;
   access: AccessResolver;
   store: BlobStore;
+  worktrees: Pick<WorktreesModule, "get">;
   now?: () => number;
 }) {
   const { repository, access, store } = options;
@@ -61,9 +66,18 @@ export function createHtmlViewDraftsModule(options: {
     const target = await access.resolveResource(userId, resourceId);
     return requireDraftResource(target);
   }
+  async function sourceWorktree(userId: string, worktreeId: string) {
+    const { worktree } = await options.worktrees.get(userId, worktreeId);
+    if (!worktree.capabilities.review)
+      throw new ApplicationError("NOT_FOUND", 404, "Source pull request not found.");
+    return worktree;
+  }
   async function view(row: DraftRow): Promise<HtmlViewDraftView> {
     if (row.state === "receiving") throw draftConflict("Draft content is still receiving.");
     let state: HtmlViewDraftView["state"] = row.state;
+    if (state === "pending" && row.source_worktree_id !== null &&
+        (await sourceWorktree(row.author_user_id, row.source_worktree_id)).state === "discarded")
+      state = "conflicted";
     if (state === "pending" && row.expires_at <= now()) state = "expired";
     else if (state === "pending" && row.kind === "replace") {
       const etag = await repository.currentEtag(row.target_resource_id!);
@@ -74,6 +88,7 @@ export function createHtmlViewDraftsModule(options: {
       kind: row.kind,
       state,
       spaceId: row.space_id,
+      sourceWorktreeId: row.source_worktree_id,
       parentNodeId: row.parent_node_id,
       name: row.name,
       targetResourceId: row.target_resource_id,
@@ -92,6 +107,19 @@ export function createHtmlViewDraftsModule(options: {
           : null,
     };
   }
+  async function publish(userId: string, draftId: string) {
+    const row = await requireDraft(userId, draftId);
+    if (row.state === "published") return view(row);
+    if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
+    if (row.source_worktree_id !== null) {
+      const worktree = await sourceWorktree(userId, row.source_worktree_id);
+      if (worktree.state === "discarded") throw draftConflict("Draft is conflicted because its source pull request was discarded.");
+      if (worktree.state !== "merged") throw draftConflict(`Waiting for pull request #${worktree.number ?? worktree.id} to merge.`);
+    }
+    const decided = await repository.decide(row.id, userId, "publish", now());
+    if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
+    return view(decided);
+  }
   return {
     async submit(userId: string, keyValue: unknown, body: unknown) {
       const parsed = requestSchema.safeParse(body);
@@ -103,6 +131,9 @@ export function createHtmlViewDraftsModule(options: {
           "Invalid draft request or Idempotency-Key.",
         );
       const input = parsed.data;
+      if (input.sourceWorktreeId !== undefined &&
+          (await sourceWorktree(userId, input.sourceWorktreeId)).state === "discarded")
+        throw draftConflict("Source pull request was discarded.");
       const bytes = Buffer.from(input.html, "utf8");
       if (bytes.length > 512 * 1024)
         throw new ApplicationError("PAYLOAD_TOO_LARGE", 413, "HTML View exceeds 512 KiB.");
@@ -142,6 +173,7 @@ export function createHtmlViewDraftsModule(options: {
             idempotency_key: key.data,
             kind: input.kind,
             space_id: spaceId,
+            source_worktree_id: input.sourceWorktreeId ?? null,
             parent_node_id: input.kind === "create" ? (input.parentNodeId ?? null) : null,
             name: displayName,
             target_resource_id: input.kind === "replace" ? input.resourceId : null,
@@ -157,6 +189,7 @@ export function createHtmlViewDraftsModule(options: {
       const same =
         row.kind === input.kind &&
         row.sha256 === sha256 &&
+        row.source_worktree_id === (input.sourceWorktreeId ?? null) &&
         (input.kind === "create"
           ? row.space_id === input.spaceId &&
             row.parent_node_id === (input.parentNodeId ?? null) &&
@@ -207,13 +240,20 @@ export function createHtmlViewDraftsModule(options: {
         throw draftConflict("Draft bytes are no longer available.");
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
-    async publish(userId: string, draftId: string) {
-      const row = await requireDraft(userId, draftId);
-      if (row.state === "published") return view(row);
-      if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
-      const decided = await repository.decide(row.id, userId, "publish", now());
-      if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
-      return view(decided);
+    publish,
+    async publishForWorktree(worktreeId: string): Promise<PublishedPage[]> {
+      const publishedPages: PublishedPage[] = [];
+      const rows = await repository.pendingForWorktree(worktreeId);
+      for (const row of rows) {
+        try {
+          if (row.expires_at <= now()) throw draftConflict("Draft expired.");
+          const draft = await publish(row.author_user_id, row.id);
+          publishedPages.push({ draftId: row.id, name: row.name, nodeId: draft.published!.nodeId });
+        } catch (error) {
+          logger.warn({ err: error, worktreeId, draftId: row.id }, "HTML View draft was not published after merge");
+        }
+      }
+      return publishedPages;
     },
     async reject(userId: string, draftId: string) {
       const row = await requireDraft(userId, draftId);

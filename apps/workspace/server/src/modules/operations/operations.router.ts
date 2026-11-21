@@ -23,7 +23,8 @@ export function createOperationsRouter(options: {
       response.status(202).json(
         await options.operations.retry(
           session.user.id,
-          parameter(request.params.operationId)
+          parameter(request.params.operationId),
+          !session.tokenIssued
         )
       );
     }

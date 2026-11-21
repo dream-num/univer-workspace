@@ -51,7 +51,7 @@ export function verifyV19Migration(open: (filename: string) => SqliteDatabase): 
       old.close();
       const migrated = open(filename);
       assert.deepEqual(rows(migrated.connection), before);
-      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 25);
+      assert.equal(migrated.connection.prepare("PRAGMA user_version").get()?.user_version, 26);
       assert.equal(
         migrated.connection.prepare("SELECT count(*) AS n FROM skill_drafts").get()?.n,
         0,
@@ -103,7 +103,7 @@ export function verifyV19Migration(open: (filename: string) => SqliteDatabase): 
       "PRAGMA foreign_keys = OFF; INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('orphan', 'team', 'Orphan', 'missing', 1, 1)",
     );
     broken.close();
-    assert.throws(() => open(filename), /V19 to V25 migration failed.*rolled back.*backup/);
+    assert.throws(() => open(filename), /V19 to V26 migration failed.*rolled back.*backup/);
     for (const name of [
       "rollback.sqlite",
       readdirSync(root).find((name) => name.startsWith("rollback.sqlite.v19-backup-"))!,

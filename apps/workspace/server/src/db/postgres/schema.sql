@@ -839,6 +839,7 @@ CREATE TABLE html_view_drafts (
   decided_by TEXT, decided_at BIGINT,
   expires_at BIGINT NOT NULL,               -- receiving: +1h; pending: +7d; terminal: unchanged
   created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
+  source_worktree_id TEXT,
   UNIQUE (author_user_id, idempotency_key),
   CHECK ((kind = 'create' AND target_resource_id IS NULL AND base_etag IS NULL)
       OR (kind = 'replace' AND target_resource_id IS NOT NULL AND base_etag IS NOT NULL AND parent_node_id IS NULL)),
@@ -848,6 +849,8 @@ CREATE TABLE html_view_drafts (
 );
 CREATE INDEX html_view_drafts_due
   ON html_view_drafts(expires_at, id) WHERE state IN ('receiving', 'pending');
+CREATE INDEX html_view_drafts_source_worktree
+  ON html_view_drafts(source_worktree_id, expires_at, id) WHERE state = 'pending';
 
 CREATE TABLE skill_drafts (
   id TEXT PRIMARY KEY,

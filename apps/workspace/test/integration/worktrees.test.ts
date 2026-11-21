@@ -28,6 +28,77 @@ afterEach(async () => {
 });
 
 describe("Worktrees", () => {
+
+  it("counts all pending unexpired page drafts for summary viewers and publishes as each author", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "worktree-pages-"));
+    temporaryDirectories.push(directory);
+    const backend = new MemoryWorktreeBackend();
+    const application = await createTestApplication(backend, join(directory, "blobs"));
+    const merger = await register(application, "page-merger");
+    const author = await register(application, "page-author");
+    const viewer = await register(application, "page-viewer");
+    const team = await application.spaces.createTeamSpace(merger.id, { name: "Sources" });
+    for (const user of [author, viewer]) await application.permissions.upsertTeamMember(merger.id, team.id, user.id, { role: "viewer" });
+    const source = (await application.worktrees.create(merger.id, "page-source-create", {
+      kind: "team", teamSpaceId: team.id, name: "Source", visibility: "space", summary: null,
+    })).body;
+    const space = (await application.spaces.list(author.id)).spaces.find((space) => space.type === "personal")!;
+    const html = "<!doctype html><html><head><title>Page</title></head><body>Hello</body></html>";
+    const submit = async (name: string, parentNodeId: string | null = null) => (await application.htmlViewDrafts.submit(author.id, crypto.randomUUID(), {
+      kind: "create", spaceId: space.id, parentNodeId, name, html, sourceWorktreeId: source.id,
+    })).draft;
+    const good = await submit("Good");
+    const folder = await application.nodes.create(author.id, { spaceId: space.id, parentNodeId: null, name: "Destination" });
+    const inaccessible = await submit("Inaccessible", folder.id);
+    await application.trash.trashNode(author.id, folder.id);
+    const expired = await submit("Expired");
+    application.database.connection.prepare("UPDATE html_view_drafts SET expires_at = 1 WHERE id = ?").run(expired.id);
+    const rejected = await submit("Rejected");
+    await application.htmlViewDrafts.reject(author.id, rejected.id);
+    const receiving = await submit("Receiving");
+    application.database.connection.prepare("UPDATE html_view_drafts SET state = 'receiving' WHERE id = ?").run(receiving.id);
+    const unlinked = (await application.htmlViewDrafts.submit(author.id, crypto.randomUUID(), { kind: "create", spaceId: space.id, name: "Unlinked", html })).draft;
+    expect((await application.worktrees.get(viewer.id, source.id)).worktree.pendingPageDrafts).toBe(2);
+    expect((await application.worktrees.list(viewer.id, { scope: "active", kind: "team", teamSpaceId: team.id, cursor: undefined, limit: 20 })).items[0]?.pendingPageDrafts).toBe(2);
+    await application.permissions.upsertTeamMember(merger.id, team.id, viewer.id, { role: "admin" });
+    await application.worktrees.update(merger.id, source.id, { visibility: "private" });
+    const summary = (await application.worktrees.list(viewer.id, { scope: "active", kind: "team", teamSpaceId: team.id, cursor: undefined, limit: 20 })).items[0]!;
+    expect(summary.capabilities.review).toBe(false);
+    expect(summary.pendingPageDrafts).toBe(2);
+    await application.worktrees.update(merger.id, source.id, { visibility: "space" });
+    await application.worktrees.markReady(merger.id, source.id);
+    const merged = await application.worktrees.merge(merger.id, source.id, "page-source-merge", true);
+    expect(merged.worktree.state).toBe("merged");
+    expect(merged.publishedPages).toEqual([{ draftId: good.id, name: good.name, nodeId: expect.any(String) }]);
+    expect(application.database.connection.prepare("SELECT created_by FROM nodes WHERE id = ?").get(merged.publishedPages[0]!.nodeId)?.created_by).toBe(author.id);
+    expect(application.database.connection.prepare("SELECT decided_by FROM html_view_drafts WHERE id = ?").get(good.id)?.decided_by).toBe(author.id);
+    for (const id of [inaccessible.id, expired.id, unlinked.id]) {
+      expect(application.database.connection.prepare("SELECT state FROM html_view_drafts WHERE id = ?").get(id)?.state).toBe("pending");
+    }
+    expect((await application.worktrees.merge(merger.id, source.id, "page-source-merge", true)).publishedPages).toEqual([]);
+    expect((await application.views.listHtmlViews(author.id, {})).items).toHaveLength(1);
+  });
+
+  it("recovers draft publication after a completed merge Operation is replayed", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "worktree-pages-resume-"));
+    temporaryDirectories.push(directory);
+    const application = await createTestApplication(new MemoryWorktreeBackend(), join(directory, "blobs"));
+    const author = await register(application, "resume-pages");
+    const space = (await application.spaces.list(author.id)).spaces[0]!;
+    const source = (await application.worktrees.create(author.id, "resume-page-source", { kind: "user", name: "Source", summary: null })).body;
+    const draft = (await application.htmlViewDrafts.submit(author.id, crypto.randomUUID(), { kind: "create", spaceId: space.id, name: "Page", html: "<h1>Page</h1>", sourceWorktreeId: source.id })).draft;
+    await application.worktrees.markReady(author.id, source.id);
+    const failure = vi.spyOn(application.repositories.htmlViewDrafts, "pendingForWorktree").mockRejectedValueOnce(new Error("Temporary draft database failure"));
+    const merged = await application.worktrees.merge(author.id, source.id, "resume-page-merge", true);
+    expect(merged.operation.state).toBe("completed");
+    expect(merged.worktree.state).toBe("merged");
+    expect(merged.publishedPages).toEqual([]);
+    failure.mockRestore();
+    const resumed = await application.worktrees.merge(author.id, source.id, "resume-page-merge", true);
+    expect(resumed.publishedPages).toEqual([{ draftId: draft.id, name: draft.name, nodeId: expect.any(String) }]);
+    expect((await application.worktrees.merge(author.id, source.id, "resume-page-merge", true)).publishedPages).toEqual([]);
+  });
+
   it.each(["browser", "agent", "unknown"] as const)(
     "attributes HTTP Worktrees and Issues to %s without exposing session source",
     async (source) => {
@@ -1215,13 +1286,15 @@ class WrongIdentityCreateUnitBackend extends MemoryWorktreeBackend {
 }
 
 async function createTestApplication(
-  worktreeBackend: WorktreeBackend = new MemoryWorktreeBackend()
+  worktreeBackend: WorktreeBackend = new MemoryWorktreeBackend(),
+  blobDirectory?: string
 ): Promise<SqliteTestApplication> {
   const application = await createSqliteTestApplication(
     {
       host: "127.0.0.1",
       port: 3020,
       database: { provider: "sqlite", filename: ":memory:", collaborationFilename: ":memory:" },
+      ...(blobDirectory ? { blobDirectory } : {}),
       secureCookies: false,
       sessionTtlMs: 60_000,
     },

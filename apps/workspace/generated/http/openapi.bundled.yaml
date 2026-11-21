@@ -4331,7 +4331,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorktreeOperationResponse'
+                $ref: '#/components/schemas/WorktreeMergeResponse'
         '202':
           description: Merge or Activation remains pending.
           headers:
@@ -5021,6 +5021,10 @@ components:
           oneOf:
             - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
+        pendingPageDrafts:
+          type: integer
+          minimum: 0
+          description: Pending, unexpired HTML View drafts linked to this Worktree, regardless of author. Always returned by current servers.
         unitCount:
           type: integer
           minimum: 0
@@ -5613,6 +5617,11 @@ components:
             name:
               type: string
               description: Trimmed name; .univer.html is appended when absent.
+            sourceWorktreeId:
+              type: string
+              minLength: 1
+              maxLength: 255
+              description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
             html:
               type: string
               description: Structurally valid HTML View, at most 512 KiB UTF-8.
@@ -5631,6 +5640,11 @@ components:
             etag:
               type: string
               description: One quoted strong ETag, as returned by Blob content.
+            sourceWorktreeId:
+              type: string
+              minLength: 1
+              maxLength: 255
+              description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
             html:
               type: string
               description: Structurally valid HTML View, at most 512 KiB UTF-8.
@@ -5670,6 +5684,11 @@ components:
             - conflicted
         spaceId:
           type: string
+        sourceWorktreeId:
+          type:
+            - string
+            - 'null'
+          description: Source pull request. Always returned by current servers, nullable when unlinked. Publishing waits until it is merged.
         parentNodeId:
           type:
             - string
@@ -8692,6 +8711,35 @@ components:
       properties:
         worktree:
           $ref: '#/components/schemas/WorktreeSummary'
+    WorktreeMergeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - worktree
+        - publishedPages
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        worktree:
+          $ref: '#/components/schemas/WorktreeSummary'
+        publishedPages:
+          type: array
+          description: Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - draftId
+              - name
+              - nodeId
+            properties:
+              draftId:
+                type: string
+              name:
+                type: string
+              nodeId:
+                type: string
     WorktreeOperationResponse:
       type: object
       additionalProperties: false

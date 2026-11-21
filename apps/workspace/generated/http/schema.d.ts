@@ -2587,6 +2587,8 @@ export interface components {
              *     Null when a person or an unclaimed agent is the author.
              */
             claimer: components["schemas"]["PublicUser"] | null;
+            /** @description Pending, unexpired HTML View drafts linked to this Worktree, regardless of author. Always returned by current servers. */
+            pendingPageDrafts?: number;
             unitCount: number;
             /** Format: date-time */
             processedAt: string | null;
@@ -2785,6 +2787,8 @@ export interface components {
             parentNodeId?: string | null;
             /** @description Trimmed name; .univer.html is appended when absent. */
             name: string;
+            /** @description A reviewable pull request that has not been discarded. Merged pull requests are accepted. */
+            sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
         } | {
@@ -2793,6 +2797,8 @@ export interface components {
             resourceId: string;
             /** @description One quoted strong ETag, as returned by Blob content. */
             etag: string;
+            /** @description A reviewable pull request that has not been discarded. Merged pull requests are accepted. */
+            sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
         };
@@ -2803,6 +2809,8 @@ export interface components {
             /** @enum {string} */
             state: "pending" | "published" | "rejected" | "expired" | "conflicted";
             spaceId: string;
+            /** @description Source pull request. Always returned by current servers, nullable when unlinked. Publishing waits until it is merged. */
+            sourceWorktreeId?: string | null;
             parentNodeId: string | null;
             name: string;
             targetResourceId: string | null;
@@ -3968,6 +3976,16 @@ export interface components {
         };
         WorktreeSummaryEnvelope: {
             worktree: components["schemas"]["WorktreeSummary"];
+        };
+        WorktreeMergeResponse: {
+            operation: components["schemas"]["OperationView"];
+            worktree: components["schemas"]["WorktreeSummary"];
+            /** @description Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list. */
+            publishedPages: {
+                draftId: string;
+                name: string;
+                nodeId: string;
+            }[];
         };
         WorktreeOperationResponse: {
             operation: components["schemas"]["OperationView"];
@@ -8343,7 +8361,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorktreeOperationResponse"];
+                    "application/json": components["schemas"]["WorktreeMergeResponse"];
                 };
             };
             /** @description Merge or Activation remains pending. */

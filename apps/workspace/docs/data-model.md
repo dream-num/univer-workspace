@@ -26,7 +26,7 @@ History 只保存 `collaboration_history_records` 分段索引，从 Core 权威
 旧逐 revision 索引或启动 backfill。History 读取遵循 Unit 打开权限，恢复仍遵循内容编辑权限；
 Worktree 和 Merge Preview 不读取或写入 Trunk History。
 
-SQLite 启动入口先将产品数据库准备到 V25，再在构造 Service/Adapter 前集中调用已发布 SDK 的
+SQLite 启动入口先将产品数据库准备到 V26，再在构造 Service/Adapter 前集中调用已发布 SDK 的
 Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全部写入者；启动时对协同
 文件读取组件版本；仅需迁移时取得排他锁并一直持有到替换完成，其他进程仍打开 WAL 文件或持有锁时在备份前失败。迁移前检查源库完整性和外键，随后生成
 一致性备份。在暂存副本上依次调用 SDK 的 Core、Worktree、History 迁移入口，各入口按组件现有版本执行所需步骤。History 最后迁移，以便前两个组件读取旧创建记录。
@@ -34,7 +34,7 @@ Core V1→V4、Worktree V1→V4 与 History V1→V2 迁移。部署先停止全�
 不发布副本，原文件和备份保留，启动失败。当前版本只读取组件版本，不重复执行完整性与外键全库扫描、迁移或备份。Unit 创建者与创建时间依次
 取自 History V1 revision 1、产品 Trunk Node（`univer_resources` → `nodes`）或 Worktree 新建
 Unit 的 `worktree_node_intents`；都缺失时才使用 SDK 的 `anonymous`/迁移时刻回退值，不能将其
-当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V25，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
+当作原始事实。changeset 时间沿用 SDK 默认规则。产品数据库为 V26，Blob/Asset 字节与产品恢复状态不参与协同 Schema 改写。
 回退必须停新实例并恢复配套升级前备份；不得让新旧 SDK 同时写同一文件。
 
 迁移阶段同步输出 `workspace.startup` 诊断日志（耗时与内存字节数），不记录数据内容，也不新增持久化状态或改变 Schema。阶段完成只表示该步骤返回；整体迁移成功仍以准备函数成功返回为准。
@@ -585,11 +585,11 @@ Rename 只更新 `nodes.name`。Move 只更新 `nodes.parent_id`；目标必须�
 临时迁移入口位于 `server/src/db/sqlite/migrations/`，V0 读取器隔离在 `legacy-v0/`，业务模块不导入
 它们。应用打开磁盘数据库时：
 
-1. 不存在或空文件：创建 V25，不备份；
-2. 完整 V25：校验指纹后正常启动，不重复备份；
-3. 完整 V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V25；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
-4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V25；
-5. 完整 V0：先生成一致性备份，再直接迁移到 V25；
+1. 不存在或空文件：创建 V26，不备份；
+2. 完整 V26：校验指纹后正常启动，不重复备份；
+3. 完整 V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5：先生成一致性备份，再迁移到 V26；V6 保留已有公开读取策略，V5 的旧 Space 默认关闭公开读取；
+4. 完整 V4/V3/V2/V1：备份后逐版本迁移到 V26；
+5. 完整 V0：先生成一致性备份，再直接迁移到 V26；
 6. 未知版本、部分 Schema、完整性错误或不一致业务状态：拒绝启动。
 
 迁移器还识别合并前 Discord 开发分支产生的 V4 变体：若 Asset Upload 仍含
@@ -678,13 +678,13 @@ V12 → V13 只重建 `external_identities`，把 Provider CHECK 从 `('github',
 `('github', 'google', 'discord')`；SQLite 不能原地修改 CHECK，因此迁移在同一事务内外键关闭后重命名旧表、
 创建新表并按原值复制，再逐行比对新旧 External Identity，确认列、约束和行完全保留。准备阶段在业务 Repository
 初始化前校验 V12 指纹、生成并验证一致性备份；事务提交前重新开启外键，检查 `foreign_key_check` 与
-`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V25。失败事务回滚至 V12，备份保留且
+`integrity_check`，然后校验 V13 指纹。V1–V11 的升级链与 V0 迁移都继续前进到 V26。失败事务回滚至 V12，备份保留且
 启动失败。重复启动不重复迁移或备份。部署须先停全部旧实例，由单个 V13 实例完成迁移和健康检查后恢复服务；
 回退须停新实例并恢复 V12 备份。
 
 V14 → V15 在单个事务内新增 `space_pins` 和 `space_stars_user` 索引，不改写已有表、业务行、Blob 身份或恢复状态。
 准备阶段在业务 Repository 初始化前校验 V14 指纹，生成并验证一致性备份；事务提交前检查外键与完整性，
-随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V25。失败事务回滚至 V14，备份保留，启动失败。
+随后校验 V15 指纹。V0 与所有旧版本升级链都落到 V26。失败事务回滚至 V14，备份保留，启动失败。
 重复启动不重复迁移或备份。部署先停止全部旧实例，由单个 V15 实例完成迁移和健康检查后恢复服务；
 回退先停止新实例，再恢复 V14 备份，不允许新旧版本同时写同一 SQLite 文件。
 
@@ -715,7 +715,7 @@ V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述四张表，并
 对象 key、字节数、SHA-256、状态、期限及发布结果，不保存 HTML 字节。目标没有外键，草稿不阻止
 目标删除。`receiving` 最长一小时，可同键重试；收完后为 `pending`，有效七天。只有作者可读，
 只有作者的交互式 Session 可 publish 或 reject。终态为 `published`、`rejected`、`expired`、
-`conflicted`。读取派生过期和 ETag 冲突，发布或维护任务持久化终态。
+`conflicted`。读取派生过期、ETag 冲突和来源 PR 被丢弃的冲突，发布或维护任务持久化终态。
 
 发布在单个产品库事务中把草稿 object key 交给 Blob Resource，不复制字节、不创建 Operation。
 替换复用 Blob 交换逻辑，旧对象进入 `blob_content_replaced` 删除任务；拒绝、过期、冲突把草稿
@@ -724,6 +724,18 @@ V17 → V18 为 MCP 的 OAuth 与 PAT 提供存储：新增上述四张表，并
 
 V18→V19 只新增草稿表和到期索引，沿用一致性备份、事务回滚、指纹、外键与完整性检查；
 现存产品行、对象 key 和恢复状态保持原样。
+
+V26 追加可空 `source_worktree_id`，旧草稿为 NULL。它与目标一样不设外键，参与提交的幂等意图比较。
+提交 create 或 replace 草稿时，作者必须能评审来源 Worktree，且来源未被丢弃；已合并的来源仍可接受。
+来源未合并时手动发布返回 409 并标明 PR 编号，丢弃后 pending 草稿读取为 `conflicted`，发布拒绝。
+`pendingPageDrafts` 统计关联该 Worktree 的 pending 且未过期草稿，不按草稿作者过滤，所有可见摘要者都能读取计数。
+
+交互式 Session 合并后，Worktree Service 在 merge Operation 完成后调用草稿模块，逐份按
+`author_user_id` 发布，沿用作者的目标权限、配额和 ETag 检查。单份失败只记录日志，不影响合并，
+过期、配额或权限失败保持原行状态。PAT/OAuth 的 token-issued Session 合并不发布，作者之后可以手动发布。
+成功的合并响应 `publishedPages` 返回本次发布的 draftId、name、nodeId；重放不重复发布已发布草稿，
+列表不回填历史结果。中断后重放或恢复会继续尝试关联的 pending 草稿。来源绑定仍由客户端校验，
+服务端发布时不重新校验工作表与绑定，发布后仍连接实时 trunk。
 
 ## Skill 草稿（V20）
 
@@ -817,3 +829,14 @@ SQLite 在一致性备份后于单个 `BEGIN IMMEDIATE` 事务中完成修复、
 启动不重复迁移或备份。回退先停止 V25，再恢复升级前的备份。禁止新旧进程同时写同一数据库。
 退出条件：所有线上 SQLite 库到达 V25、所有线上 PostgreSQL 产品库到达版本 5 后，删除 `display-name-repair.ts` 与其它
 SQLite 迁移入口，PostgreSQL 版本 2 与 5 的升级步骤保留为空操作，以免改变版本号。
+
+## HTML View 草稿来源（V26）
+
+SQLite V25→V26 仅追加 `html_view_drafts.source_worktree_id TEXT`，旧值为 NULL，并新增 pending 草稿的
+`(source_worktree_id, expires_at, id)` 部分索引。PostgreSQL 产品版本 5→6 在 advisory-lock 启动事务内
+追加相同列和索引，失败回滚至版本 5；服务器不替 PostgreSQL 创建备份。SQLite→PostgreSQL 存储迁移
+要求产品 V26，逐行保留来源 ID、对象 key、状态和所有恢复字段。
+
+升级前停止所有旧实例。SQLite 先生成一致性 V25 备份，再由一个 V26 实例完成迁移、指纹、外键与完整性检查，
+确认健康后恢复服务；重启不重复迁移或备份。PostgreSQL 升级前由运维备份。回退先停止 V26，恢复升级前备份。
+禁止 V25 与 V26 写入同一个 SQLite 文件。此迁移集中在启动阶段，所有部署库到达 V26 后方可删除旧版本升级入口。
