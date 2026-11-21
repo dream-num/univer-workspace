@@ -151,6 +151,29 @@ it("labels the change reason and disables Send for blank input or a running sess
   expect(count("/reject")).toBe(0); expect(onRequestChanges).not.toHaveBeenCalled();
 });
 
+it.each([
+  ["en-US", "Change style", "Change the style"],
+  ["zh-CN", "换风格", "换个风格"],
+])("sends a localized style request from the draft card in %s", async (language, label, message) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  const onRequestChanges = vi.fn();
+  await render("card", { onRequestChanges });
+  await waitFor(() => expect(button(label).disabled).toBe(false));
+  await click(label);
+  expect(onRequestChanges).toHaveBeenCalledExactlyOnceWith(message);
+  expect(count("/reject")).toBe(0);
+  expect(draft.state).toBe("pending");
+});
+
+it("disables style requests along with Request changes while the session is running", async () => {
+  const onRequestChanges = vi.fn();
+  await render("card", { onRequestChanges, requestChangesDisabled: true });
+  await waitFor(() => expect(button("Request changes").disabled).toBe(true));
+  expect(button("Change style").disabled).toBe(true);
+  await click("Change style");
+  expect(onRequestChanges).not.toHaveBeenCalled();
+});
+
 it.each(["en-US", "zh-CN"])("rejects before sending the localized change request in %s", async (language) => {
   window.localStorage.setItem("univer-workspace-language", language);
   let finishReject!: () => void;
@@ -163,6 +186,8 @@ it.each(["en-US", "zh-CN"])("rejects before sending the localized change request
   const send = language === "en-US" ? "Send" : "发送";
   await click(send);
   await waitFor(() => expect(button(send).disabled).toBe(true));
+  expect(button(language === "en-US" ? "Request changes" : "要求修改").disabled).toBe(true);
+  expect(button(language === "en-US" ? "Change style" : "换风格").disabled).toBe(true);
   expect(onRequestChanges).not.toHaveBeenCalled();
   await act(async () => finishReject());
   await waitFor(() => expect(onRequestChanges).toHaveBeenCalledExactlyOnceWith(language === "en-US"
@@ -195,10 +220,12 @@ it("returns from full-screen preview to the card's change form", async () => {
   expect(container.querySelector("textarea")).not.toBeNull();
 });
 
-it("offers no Request changes on the standalone draft page", async () => {
+it.each(["en-US", "zh-CN"])("offers no feedback controls on the standalone draft page in %s", async (language) => {
+  window.localStorage.setItem("univer-workspace-language", language);
   await render("page", { onRequestChanges: vi.fn() });
   await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
-  expect(container.textContent).not.toContain("Request changes");
+  expect(container.textContent).not.toContain(language === "en-US" ? "Request changes" : "要求修改");
+  expect(container.textContent).not.toContain(language === "en-US" ? "Change style" : "换风格");
 });
 
 it("shows a create draft and destination, publishes once, and links to the immersive page", async () => {

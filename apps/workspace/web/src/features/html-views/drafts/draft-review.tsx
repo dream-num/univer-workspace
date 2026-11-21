@@ -108,7 +108,10 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
         {presentation === "card" && <Button variant="secondary" disabled={!previewReady || disabled} onClick={() => setPreview(true)}>{m.draftPreview}</Button>}
         <Button disabled={disabled || waiting || presentation === "card" && !seen} onClick={() => decide(true)}>{m.publish}</Button>
         <Button variant="secondary" disabled={disabled} onClick={() => decide(false)}>{m.reject}</Button>
-        {onRequestChanges && <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={openChanges}>{m.requestChanges}</Button>}
+        {onRequestChanges && <>
+          <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={openChanges}>{m.requestChanges}</Button>
+          <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={() => onRequestChanges(m.changeStyleMessage)}>{m.changeStyle}</Button>
+        </>}
       </div>
     </header>
     {waitingNotice}
