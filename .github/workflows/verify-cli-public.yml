@@ -22,21 +22,21 @@ jobs:
           node-version: 24
       - id: release
         name: Read the trusted release receipt
-        uses: dream-num/release-actions/resolve-npm-source-run@2e1d7b47c5e05db372fb59c1f1e22e8e42e0b84d
+        uses: dream-num/release-actions/resolve-npm-source-run@b840ad9168664f134149ab82c3bb2655bf6b6024
         with:
           repository: dream-num/univer-workspace
           workflow: release-cli-manual.yml
           version: ${{ inputs.version }}
           token: ${{ github.token }}
           producer: >-
-            {"repository":"dream-num/univer-workspace","repositoryId":1334011664,
+            {"repository":"dream-num/univer-workspace",
              "workflow":".github/workflows/release-cli-manual.yml","event":"workflow_dispatch",
              "ref":"refs/tags/","tagPrefix":"v","versionPackage":"univer-workspace-cli",
              "prepareJob":"prepare","publishJob":"publish",
              "packages":[{"name":"univer-workspace-cli","tag":"latest"}]}
       - id: verify
         name: Verify exact public package bytes
-        uses: dream-num/release-actions/check-npm-public@2e1d7b47c5e05db372fb59c1f1e22e8e42e0b84d
+        uses: dream-num/release-actions/check-npm-public@b840ad9168664f134149ab82c3bb2655bf6b6024
         with:
           package: univer-workspace-cli
           version: ${{ steps.release.outputs.version }}

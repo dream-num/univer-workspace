@@ -8,6 +8,7 @@ test("public verification is a version-only product workflow using fixed shared 
   assert.deepEqual([...inputs.matchAll(/^      ([\w-]+):$/gmu)].map((match) => match[1]), ["version"]);
   assert.match(source, /^permissions:\n  contents: read\n  actions: read$/mu);
   assert.match(source, /repository: dream-num\/univer-workspace\n          workflow: release-cli-manual.yml/u);
+  assert.doesNotMatch(source, /"repositoryId"\s*:/u);
   assert.match(source, /"versionPackage":"univer-workspace-cli"/u);
   const pins = [...source.matchAll(/uses: dream-num\/release-actions\/(\S+)@([0-9a-f]{40})$/gmu)];
   assert.deepEqual(pins.map((pin) => pin[1]), ["resolve-npm-source-run", "check-npm-public"]);
