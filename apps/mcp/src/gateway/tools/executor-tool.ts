@@ -12,6 +12,11 @@ import type {
 } from "../../shared/executor-protocol.js";
 import { ExecutorCallError } from "../../shared/errors.js";
 import type { UsageAccumulator } from "../../shared/usage.js";
+import {
+  createAffinityTransport,
+  MemoryEpochStore,
+  type EpochStore,
+} from "../../executor-fc/index.js";
 import type { Authentication } from "../auth.js";
 import { callExecutor, type ExecutorConnection } from "../executor/client.js";
 import { issueGrant } from "../executor/grants.js";
@@ -44,7 +49,9 @@ const links = new WeakMap<
 export function createExecutorLinks(
   config: GatewayConfig["executor"],
   router = config ? new ExecutorRouter(config.urls) : null,
+  epochs: EpochStore = defaultEpochs(config),
 ) {
+  const transport = config === null ? null : createAffinityTransport({ epochs });
   return (
     auth: Authentication,
     user: WorkspaceSubject,
@@ -55,9 +62,10 @@ export function createExecutorLinks(
     const link: ExecutorLink = Object.freeze({ [linkBrand]: true as const });
     links.set(link, {
       connection:
-        config && router
+        config && router && transport
           ? {
               router,
+              transport,
               executorToken: config.executorToken,
               grant: issueGrant(auth, user),
               requestId,
@@ -68,6 +76,18 @@ export function createExecutorLinks(
     });
     return link;
   };
+}
+
+/**
+ * Memory unless the gateway built the store from `MCP_EXECUTOR_EPOCH_STORE`. A Redis store has a
+ * lifecycle (connect, close), so it must come from `gateway/executor/epochs.ts`.
+ */
+function defaultEpochs(config: GatewayConfig["executor"]): EpochStore {
+  if (config?.epochs?.store === "redis")
+    throw new Error(
+      "A Redis executor epoch store must be created by the gateway and passed to createExecutorLinks",
+    );
+  return new MemoryEpochStore();
 }
 
 export function executorTool<

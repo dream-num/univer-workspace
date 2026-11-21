@@ -591,6 +591,9 @@ importers:
       fflate:
         specifier: 0.8.3
         version: 0.8.3
+      ioredis:
+        specifier: 5.11.1
+        version: 5.11.1(supports-color@10.2.2)
       pino:
         specifier: 10.3.1
         version: 10.3.1
@@ -4101,6 +4104,9 @@ packages:
     peerDependencies:
       hono: ^4 || ^5.0.0-0
 
+  '@ioredis/commands@1.10.0':
+    resolution: {integrity: sha512-UmeW7z4LfctwoQ5wkhVzgq8tXkreED2xZGpX+Bg+zA+WJFZCT6c062AfCK/Dfk81xZnnwdhJCUMkitihRaoC2Q==}
+
   '@isaacs/fs-minipass@4.0.1':
     resolution: {integrity: sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w==}
     engines: {node: '>=18.0.0'}
@@ -5800,95 +5806,95 @@ packages:
     resolution: {integrity: sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ==}
 
   '@univer-cli/api-reference-command@1.5.2':
-    resolution: {integrity: sha512-Z6Mw5ckAJNIV/wM2v1eVCHuGeNwV6petLRVsIWFUHGH2nahg6l7WKnpPdSRaop5P+6tv4iLGuXihcT/Al8tnCw==}
+    resolution: {integrity: sha512-Z6Mw5ckAJNIV/wM2v1eVCHuGeNwV6petLRVsIWFUHGH2nahg6l7WKnpPdSRaop5P+6tv4iLGuXihcT/Al8tnCw==, tarball: https://registry.npmjs.org/@univer-cli/api-reference-command/-/api-reference-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/api-reference@1.5.2':
-    resolution: {integrity: sha512-9RC4CuteObT6OPc4M6ANKw4P5XqLFNoSGDX9arLCTEBZMcgg4CHfi/g0UkrZlf6/oHowiksoUhO2bt/ZP+MBiw==}
+    resolution: {integrity: sha512-9RC4CuteObT6OPc4M6ANKw4P5XqLFNoSGDX9arLCTEBZMcgg4CHfi/g0UkrZlf6/oHowiksoUhO2bt/ZP+MBiw==, tarball: https://registry.npmjs.org/@univer-cli/api-reference/-/api-reference-1.5.2.tgz}
 
   '@univer-cli/config-command@1.5.2':
-    resolution: {integrity: sha512-FqBBI163b74EB7yVGsL8mXECTa7WzwQ7HQDzFfhfsG7nzAROQoTGTAF8gh5N4O9mq3dNAEJjDa7JmapanW0gRQ==}
+    resolution: {integrity: sha512-FqBBI163b74EB7yVGsL8mXECTa7WzwQ7HQDzFfhfsG7nzAROQoTGTAF8gh5N4O9mq3dNAEJjDa7JmapanW0gRQ==, tarball: https://registry.npmjs.org/@univer-cli/config-command/-/config-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/config@1.5.2':
-    resolution: {integrity: sha512-wNIbeR2EMcOaTS/KqKc6GMu088oNmm32vJcafQ5SvHk8nSRpyRWS8WOsV660d0ad8MLGrOSPNLnC0LC1A+uOiw==}
+    resolution: {integrity: sha512-wNIbeR2EMcOaTS/KqKc6GMu088oNmm32vJcafQ5SvHk8nSRpyRWS8WOsV660d0ad8MLGrOSPNLnC0LC1A+uOiw==, tarball: https://registry.npmjs.org/@univer-cli/config/-/config-1.5.2.tgz}
 
   '@univer-cli/content-execution@1.5.2':
-    resolution: {integrity: sha512-i3Ikg6rs7b/oT84s+cJJpNHC3+eETCPK09tnQd2b3SpmN8GskwVlvH3doXd2sglKJNbfgFMUjw4ft99hgUSXHg==}
+    resolution: {integrity: sha512-i3Ikg6rs7b/oT84s+cJJpNHC3+eETCPK09tnQd2b3SpmN8GskwVlvH3doXd2sglKJNbfgFMUjw4ft99hgUSXHg==, tarball: https://registry.npmjs.org/@univer-cli/content-execution/-/content-execution-1.5.2.tgz}
 
   '@univer-cli/content-inspection-command@1.5.2':
-    resolution: {integrity: sha512-mQ6NRXV2/VcVj4EuOiF9OooKSzmVTmklvTuAxLYOX4xfnXt6KNOGv4UW8okucp9y51mAZ4XVhI+YaGuJhXxphg==}
+    resolution: {integrity: sha512-mQ6NRXV2/VcVj4EuOiF9OooKSzmVTmklvTuAxLYOX4xfnXt6KNOGv4UW8okucp9y51mAZ4XVhI+YaGuJhXxphg==, tarball: https://registry.npmjs.org/@univer-cli/content-inspection-command/-/content-inspection-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/content-inspection@1.5.2':
-    resolution: {integrity: sha512-hUL3z+AVWvWqfR4pX0Vd3Zo82zVT68pj16u45ipfxzcSAge0Zn/bCOMaExF6ja27y/1i3WHKoV/8JC4l/0cO8g==}
+    resolution: {integrity: sha512-hUL3z+AVWvWqfR4pX0Vd3Zo82zVT68pj16u45ipfxzcSAge0Zn/bCOMaExF6ja27y/1i3WHKoV/8JC4l/0cO8g==, tarball: https://registry.npmjs.org/@univer-cli/content-inspection/-/content-inspection-1.5.2.tgz}
 
   '@univer-cli/daemon-command@1.5.2':
-    resolution: {integrity: sha512-krXnf/duI/0BvKhclHpJpxLI5592lgHTpvmFG4eKJEpzwtZjrQd8cFryNnXKHZgOB2xq2ZdB/cgeE8fnv5QIDw==}
+    resolution: {integrity: sha512-krXnf/duI/0BvKhclHpJpxLI5592lgHTpvmFG4eKJEpzwtZjrQd8cFryNnXKHZgOB2xq2ZdB/cgeE8fnv5QIDw==, tarball: https://registry.npmjs.org/@univer-cli/daemon-command/-/daemon-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/daemon@1.5.2':
-    resolution: {integrity: sha512-MIc4grW11RL7l08ZNgsFtHvNfWrCeTithpDGzEV/aaeYGJJNqvwnSDKGAYcnP9wjqL5mMbbDw31beJqSh0N45w==}
+    resolution: {integrity: sha512-MIc4grW11RL7l08ZNgsFtHvNfWrCeTithpDGzEV/aaeYGJJNqvwnSDKGAYcnP9wjqL5mMbbDw31beJqSh0N45w==, tarball: https://registry.npmjs.org/@univer-cli/daemon/-/daemon-1.5.2.tgz}
 
   '@univer-cli/doc-markdown-facade@1.5.2':
-    resolution: {integrity: sha512-a8QPanAi2yjiITzItWwQrrDQ2DL+by1bZnPjGZVK3n6MMCy5pXYTK5zDzJzDVSv4HzLOVTdD8+wqpvuqlMTX3A==}
+    resolution: {integrity: sha512-a8QPanAi2yjiITzItWwQrrDQ2DL+by1bZnPjGZVK3n6MMCy5pXYTK5zDzJzDVSv4HzLOVTdD8+wqpvuqlMTX3A==, tarball: https://registry.npmjs.org/@univer-cli/doc-markdown-facade/-/doc-markdown-facade-1.5.2.tgz}
 
   '@univer-cli/doc-typst-facade@1.5.2':
-    resolution: {integrity: sha512-Gv1EPaFktOYKHvx3B2gLR6N60t7GH68TYs3WmfMDYMYGytKWgjXCSzBBCWFCdGE7JlcXO42yDLLCU0tFWa29tA==}
+    resolution: {integrity: sha512-Gv1EPaFktOYKHvx3B2gLR6N60t7GH68TYs3WmfMDYMYGytKWgjXCSzBBCWFCdGE7JlcXO42yDLLCU0tFWa29tA==, tarball: https://registry.npmjs.org/@univer-cli/doc-typst-facade/-/doc-typst-facade-1.5.2.tgz}
 
   '@univer-cli/generic-keyed-instance-pool@1.5.2':
-    resolution: {integrity: sha512-HR8YIo4Rk6BmMTBeb6J6bX3cQ1sPeN1Gk5UcYNL1Y+MxpGv0pUiNzCVPgN65fspYwtxTQIg/CYGzHZYhyX7AVA==}
+    resolution: {integrity: sha512-HR8YIo4Rk6BmMTBeb6J6bX3cQ1sPeN1Gk5UcYNL1Y+MxpGv0pUiNzCVPgN65fspYwtxTQIg/CYGzHZYhyX7AVA==, tarball: https://registry.npmjs.org/@univer-cli/generic-keyed-instance-pool/-/generic-keyed-instance-pool-1.5.2.tgz}
 
   '@univer-cli/headless-univer@1.5.2':
-    resolution: {integrity: sha512-LlmVtE0IwwWwYsZ/dGSEVMpFiY/8KP5ctJUHlICVjN4yQLEpKrfALzjb9Kr2rW//JU/7MCCXHhs2Wv5V0kB6UA==}
+    resolution: {integrity: sha512-LlmVtE0IwwWwYsZ/dGSEVMpFiY/8KP5ctJUHlICVjN4yQLEpKrfALzjb9Kr2rW//JU/7MCCXHhs2Wv5V0kB6UA==, tarball: https://registry.npmjs.org/@univer-cli/headless-univer/-/headless-univer-1.5.2.tgz}
 
   '@univer-cli/resource-library-command@1.5.2':
-    resolution: {integrity: sha512-UdIyTC4bg5Eq/1CdUNzrzQOUrzm40ZdpqXUEq7Rorx76w0mPFZFrkU18loXxJHMVtt0KK83RGP8VHevqjojFqw==}
+    resolution: {integrity: sha512-UdIyTC4bg5Eq/1CdUNzrzQOUrzm40ZdpqXUEq7Rorx76w0mPFZFrkU18loXxJHMVtt0KK83RGP8VHevqjojFqw==, tarball: https://registry.npmjs.org/@univer-cli/resource-library-command/-/resource-library-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/resource-library@1.5.2':
-    resolution: {integrity: sha512-7wFneURdvCzGl39lq4vYyW3XuHzaTqRvtdrrt2pPsgPopViSvrvQu5/y9EI0pfv8fJKJMKYiPovl6MntzvTiQQ==}
+    resolution: {integrity: sha512-7wFneURdvCzGl39lq4vYyW3XuHzaTqRvtdrrt2pPsgPopViSvrvQu5/y9EI0pfv8fJKJMKYiPovl6MntzvTiQQ==, tarball: https://registry.npmjs.org/@univer-cli/resource-library/-/resource-library-1.5.2.tgz}
 
   '@univer-cli/svg-facade@1.5.2':
-    resolution: {integrity: sha512-KjrI3WJWy19oHMeDdR7qLYxUbNefj50GljcGbmrxbYAGCOFMBDWw8dSVL5IS+Qi986XppMqKq+Me9M9dUlX4XA==}
+    resolution: {integrity: sha512-KjrI3WJWy19oHMeDdR7qLYxUbNefj50GljcGbmrxbYAGCOFMBDWw8dSVL5IS+Qi986XppMqKq+Me9M9dUlX4XA==, tarball: https://registry.npmjs.org/@univer-cli/svg-facade/-/svg-facade-1.5.2.tgz}
 
   '@univer-cli/unit-layout-lint-command@1.5.2':
-    resolution: {integrity: sha512-baApKp1JSAooJ1p429kd2o0lkHJZebONGeOLka6/uACDhpUAK37tTyWZzCiS8OUdXyC3XA55Anj3tKv/i+HcWw==}
+    resolution: {integrity: sha512-baApKp1JSAooJ1p429kd2o0lkHJZebONGeOLka6/uACDhpUAK37tTyWZzCiS8OUdXyC3XA55Anj3tKv/i+HcWw==, tarball: https://registry.npmjs.org/@univer-cli/unit-layout-lint-command/-/unit-layout-lint-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/unit-layout-lint@1.5.2':
-    resolution: {integrity: sha512-F0JX8gopBkvXpu8VBlryG6SaaIOXOA7OO0Nwsbi/cyKz2RgJ4xu8itsM1xUtMXZd2OjGjDipiK65awbFG/3cNQ==}
+    resolution: {integrity: sha512-F0JX8gopBkvXpu8VBlryG6SaaIOXOA7OO0Nwsbi/cyKz2RgJ4xu8itsM1xUtMXZd2OjGjDipiK65awbFG/3cNQ==, tarball: https://registry.npmjs.org/@univer-cli/unit-layout-lint/-/unit-layout-lint-1.5.2.tgz}
 
   '@univer-cli/unit-pdf-printer@1.5.2':
-    resolution: {integrity: sha512-l+Y2IS9h6xYMlBvbzp3U8pLjMsac7JLx9fbxXgNsRFz4ANO9jbGUCwbZqyvYpyRXFVOAKRMi6WV5oYuwPqCV2g==}
+    resolution: {integrity: sha512-l+Y2IS9h6xYMlBvbzp3U8pLjMsac7JLx9fbxXgNsRFz4ANO9jbGUCwbZqyvYpyRXFVOAKRMi6WV5oYuwPqCV2g==, tarball: https://registry.npmjs.org/@univer-cli/unit-pdf-printer/-/unit-pdf-printer-1.5.2.tgz}
 
   '@univer-cli/unit-screenshot-command@1.5.2':
-    resolution: {integrity: sha512-euCVcnfjIUTkmtLEc4ShEpXIuzdZrxp4459conu3VSSxACaiJekZNpftKJibljlX8eDolI1tkWUuR0mSIPBQ6A==}
+    resolution: {integrity: sha512-euCVcnfjIUTkmtLEc4ShEpXIuzdZrxp4459conu3VSSxACaiJekZNpftKJibljlX8eDolI1tkWUuR0mSIPBQ6A==, tarball: https://registry.npmjs.org/@univer-cli/unit-screenshot-command/-/unit-screenshot-command-1.5.2.tgz}
     peerDependencies:
       commander: ^15.0.0
 
   '@univer-cli/unit-screenshot@1.5.2':
-    resolution: {integrity: sha512-3ll41lAFRoRPnOOB4uGFNnRKt9xBBzaWBhriVH9wyWLt96CjN+jpUpsMdgt1tu2gzA68C+2QMGlOTBIW2rTHVw==}
+    resolution: {integrity: sha512-3ll41lAFRoRPnOOB4uGFNnRKt9xBBzaWBhriVH9wyWLt96CjN+jpUpsMdgt1tu2gzA68C+2QMGlOTBIW2rTHVw==, tarball: https://registry.npmjs.org/@univer-cli/unit-screenshot/-/unit-screenshot-1.5.2.tgz}
 
   '@univer-cli/univer-collaboration-runtime-pool@1.5.2':
-    resolution: {integrity: sha512-3DUXHzoNwOKvOE2IVab8eZ/qWSKNYbBBMBUU/DkTkD25WWioFRWh2yE/XsH2vMUJ3zx0zNKmjFU3yRalGDuFcw==}
+    resolution: {integrity: sha512-3DUXHzoNwOKvOE2IVab8eZ/qWSKNYbBBMBUU/DkTkD25WWioFRWh2yE/XsH2vMUJ3zx0zNKmjFU3yRalGDuFcw==, tarball: https://registry.npmjs.org/@univer-cli/univer-collaboration-runtime-pool/-/univer-collaboration-runtime-pool-1.5.2.tgz}
 
   '@univer-cli/univer-collaboration-runtime@1.5.2':
-    resolution: {integrity: sha512-aWl4ImnnqMaTEdeT2EmBCmcWd/FK79R+MVqzIMOSI81aOo9Z2NNlKG3CQ2JAdKsX+Fh4MlIDAIcO1QEq1UAOkg==}
+    resolution: {integrity: sha512-aWl4ImnnqMaTEdeT2EmBCmcWd/FK79R+MVqzIMOSI81aOo9Z2NNlKG3CQ2JAdKsX+Fh4MlIDAIcO1QEq1UAOkg==, tarball: https://registry.npmjs.org/@univer-cli/univer-collaboration-runtime/-/univer-collaboration-runtime-1.5.2.tgz}
 
   '@univer-cli/univer-render-page@1.5.2':
-    resolution: {integrity: sha512-2U8TewJst9uiVudVTo1SgJzNOHckPZc10Q7SJ3nwIXO++MR3EwJOl/UfjVvi48dx5pxXw2wnN+m/+BjbQ+UqKg==}
+    resolution: {integrity: sha512-2U8TewJst9uiVudVTo1SgJzNOHckPZc10Q7SJ3nwIXO++MR3EwJOl/UfjVvi48dx5pxXw2wnN+m/+BjbQ+UqKg==, tarball: https://registry.npmjs.org/@univer-cli/univer-render-page/-/univer-render-page-1.5.2.tgz}
     peerDependencies:
       '@univer-cli/univer-render-runtime': 1.5.2
 
   '@univer-cli/univer-render-runtime@1.5.2':
-    resolution: {integrity: sha512-M/BQ5BCidYJco3A0+WW8OZBVGo4AzV6RhgjigrKp/ov+Od4JFHAeT7yvVLaKmrDvBkYgZStD/GknY8CsoArfqg==}
+    resolution: {integrity: sha512-M/BQ5BCidYJco3A0+WW8OZBVGo4AzV6RhgjigrKp/ov+Od4JFHAeT7yvVLaKmrDvBkYgZStD/GknY8CsoArfqg==, tarball: https://registry.npmjs.org/@univer-cli/univer-render-runtime/-/univer-render-runtime-1.5.2.tgz}
 
   '@univer/unit-comparison-viewer@file:packages/unit-comparison-viewer':
     resolution: {directory: packages/unit-comparison-viewer, type: directory}
@@ -6063,17 +6069,17 @@ packages:
       pg: ^8.11.0
 
   '@univerjs-pro/collaboration-comment-database-sqlite@1.5.2':
-    resolution: {integrity: sha512-2Nu2VgD6rK6mSaZP0L1ginf73Iev2U7F1OzdpjTTJzCdPE7FMRzYLLMm25w0P3zHNgvkGZUK//oTSrMvsqcIpw==}
+    resolution: {integrity: sha512-2Nu2VgD6rK6mSaZP0L1ginf73Iev2U7F1OzdpjTTJzCdPE7FMRzYLLMm25w0P3zHNgvkGZUK//oTSrMvsqcIpw==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-comment-database-sqlite/-/collaboration-comment-database-sqlite-1.5.2.tgz}
     engines: {node: '>=22'}
     peerDependencies:
       '@univerjs-pro/collaboration-comment-service': 1.5.2
       '@univerjs/protocol': 1.5.2
 
   '@univerjs-pro/collaboration-comment-endpoint@1.5.2':
-    resolution: {integrity: sha512-GKVWFpX0eyypxaD2srvS7FAk4xQakr+ZAe3aGevEnMGAlGKBPTAAHAApbR2v2lVHDNdrIbTaEpbvsAQVa0WZPg==}
+    resolution: {integrity: sha512-GKVWFpX0eyypxaD2srvS7FAk4xQakr+ZAe3aGevEnMGAlGKBPTAAHAApbR2v2lVHDNdrIbTaEpbvsAQVa0WZPg==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-comment-endpoint/-/collaboration-comment-endpoint-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-comment-service@1.5.2':
-    resolution: {integrity: sha512-IHVAqWZ28rQXA/ge8SsXLAD6QHU7fwkO5e9k6frImcNsMCjfTliyKyzcBkL2TOMsLTNI8NDyyJfHT0uokxLGlw==}
+    resolution: {integrity: sha512-IHVAqWZ28rQXA/ge8SsXLAD6QHU7fwkO5e9k6frImcNsMCjfTliyKyzcBkL2TOMsLTNI8NDyyJfHT0uokxLGlw==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-comment-service/-/collaboration-comment-service-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-database-postgres-s3@1.5.2':
     resolution: {integrity: sha512-vJIN1AommjtJ2dAQXD8Y7NyYmKYtv9h0MnvjYJT/ceAI7SWbOtOvmxcnao/yOgXHRAuFmfzaIn0BzImGdXeivQ==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-database-postgres-s3/-/collaboration-database-postgres-s3-1.5.2.tgz}
@@ -6085,7 +6091,7 @@ packages:
       pg: ^8.11.0
 
   '@univerjs-pro/collaboration-database-sqlite@1.5.2':
-    resolution: {integrity: sha512-58hEn45SJtqM2ioqjW0XhAtilqkJQy/RCMwoNDQXYR0fdbOI+5zgaLJRsHmJ9Lv3lkBbVzUoEV6rQOEcW0EbcA==}
+    resolution: {integrity: sha512-58hEn45SJtqM2ioqjW0XhAtilqkJQy/RCMwoNDQXYR0fdbOI+5zgaLJRsHmJ9Lv3lkBbVzUoEV6rQOEcW0EbcA==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-database-sqlite/-/collaboration-database-sqlite-1.5.2.tgz}
     engines: {node: '>=22'}
     peerDependencies:
       '@univerjs-pro/collaboration-service': 1.5.2
@@ -6095,7 +6101,7 @@ packages:
     resolution: {integrity: sha512-Dq3jgp4HH2vb7b2UfSslCHpRskpieAOnT0nS1BAgC9ydroCUt2+cB4TsK3D/Df5wJo1LayIvlWNRk2sEjny0cQ==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-embed/-/collaboration-embed-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-endpoint@1.5.2':
-    resolution: {integrity: sha512-J7WQAQF970NFnbzk/Mb7TI//wJXS668U1JOWkBDQCGGQhGm6KtINPPODtYD+rTZTdTAZGtyLIKoVskN96yKbbw==}
+    resolution: {integrity: sha512-J7WQAQF970NFnbzk/Mb7TI//wJXS668U1JOWkBDQCGGQhGm6KtINPPODtYD+rTZTdTAZGtyLIKoVskN96yKbbw==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-endpoint/-/collaboration-endpoint-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-history-database-postgres@1.5.2':
     resolution: {integrity: sha512-5mAKj2CVJaOV+qh9W0mGvqXwJKkS2to2MCmfF64FVKAO2yzsMpYIcpb6rtYxBPsKtf21ol1Bm1La1585Cs04Ng==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-history-database-postgres/-/collaboration-history-database-postgres-1.5.2.tgz}
@@ -6105,25 +6111,25 @@ packages:
       pg: ^8.11.0
 
   '@univerjs-pro/collaboration-history-database-sqlite@1.5.2':
-    resolution: {integrity: sha512-oAhHydX5nmYhcBNAH5u35NtgAgNwc8LiaFQxCN6Y0cOkwZU9rsHqYbTGYigKvQpf4DQmCJ2+NinOS3mLN0oxOA==}
+    resolution: {integrity: sha512-oAhHydX5nmYhcBNAH5u35NtgAgNwc8LiaFQxCN6Y0cOkwZU9rsHqYbTGYigKvQpf4DQmCJ2+NinOS3mLN0oxOA==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-history-database-sqlite/-/collaboration-history-database-sqlite-1.5.2.tgz}
     engines: {node: '>=22'}
     peerDependencies:
       '@univerjs-pro/collaboration-history-service': 1.5.2
 
   '@univerjs-pro/collaboration-history-endpoint@1.5.2':
-    resolution: {integrity: sha512-g6Em2zR7sY+PlqJsGjSDDKxTXkngndW0dRNj2WFxj2RdlTa+w5aooq6mHXZOP8GxtVES+amhKTd68SXpygUbyw==}
+    resolution: {integrity: sha512-g6Em2zR7sY+PlqJsGjSDDKxTXkngndW0dRNj2WFxj2RdlTa+w5aooq6mHXZOP8GxtVES+amhKTd68SXpygUbyw==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-history-endpoint/-/collaboration-history-endpoint-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-history-service@1.5.2':
-    resolution: {integrity: sha512-Pgs2ipifV/rLKCxvsl2yIa/KEutI6kfJUKZGfrRgR5DBcpylAGVRXlP7PsuJvMHrUh3jgraPyCKlVdr7MEVagA==}
+    resolution: {integrity: sha512-Pgs2ipifV/rLKCxvsl2yIa/KEutI6kfJUKZGfrRgR5DBcpylAGVRXlP7PsuJvMHrUh3jgraPyCKlVdr7MEVagA==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-history-service/-/collaboration-history-service-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-service@1.5.2':
-    resolution: {integrity: sha512-aIMAza/UBtPwkX800SECpauGDkyL9GtvXxA6VVExp3BSh28jVqTCzlTWixLr5Wo9J7c+zU82+Ga+KzRLJQAeTQ==}
+    resolution: {integrity: sha512-aIMAza/UBtPwkX800SECpauGDkyL9GtvXxA6VVExp3BSh28jVqTCzlTWixLr5Wo9J7c+zU82+Ga+KzRLJQAeTQ==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-service/-/collaboration-service-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-transport-node@1.5.2':
-    resolution: {integrity: sha512-LbHC0Qcwc6Du4kYRKOSRzbycvza1WRp7+kZ6GLVuhb0pkzJD8WeOxzvT9RP9qSjAUa1KX04qStGWzGaL7vA55w==}
+    resolution: {integrity: sha512-LbHC0Qcwc6Du4kYRKOSRzbycvza1WRp7+kZ6GLVuhb0pkzJD8WeOxzvT9RP9qSjAUa1KX04qStGWzGaL7vA55w==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-transport-node/-/collaboration-transport-node-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-worktree-client@1.5.2':
-    resolution: {integrity: sha512-d7T2Wb9PhArnH3Cmyef36MNqh0Zcw0rvWK9qwgA4U0I9sGrMTh16qQcGTNjTcxurjbc39sjPhpJDtqeQIi3PbQ==}
+    resolution: {integrity: sha512-d7T2Wb9PhArnH3Cmyef36MNqh0Zcw0rvWK9qwgA4U0I9sGrMTh16qQcGTNjTcxurjbc39sjPhpJDtqeQIi3PbQ==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-worktree-client/-/collaboration-worktree-client-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-worktree-database-postgres@1.5.2':
     resolution: {integrity: sha512-rDnxvS7sWtVnCaAtBS5kXZumxwWAmrbbPhCx6UNxfQovn+UEa9FggY5r+wAbxq2sxSYfSt5JnLgnY/csMTcF0Q==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-worktree-database-postgres/-/collaboration-worktree-database-postgres-1.5.2.tgz}
@@ -6135,14 +6141,14 @@ packages:
       pg: ^8.11.0
 
   '@univerjs-pro/collaboration-worktree-database-sqlite@1.5.2':
-    resolution: {integrity: sha512-voUyl/ntzKq3Mk9xDywvHRH95ATSKTd+HuLb8DabCTVUA2qgEqAPJ5/ii/8FcAo6cmPaWnn6Y+Mpsx7c4KMKdg==}
+    resolution: {integrity: sha512-voUyl/ntzKq3Mk9xDywvHRH95ATSKTd+HuLb8DabCTVUA2qgEqAPJ5/ii/8FcAo6cmPaWnn6Y+Mpsx7c4KMKdg==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-worktree-database-sqlite/-/collaboration-worktree-database-sqlite-1.5.2.tgz}
     engines: {node: '>=22'}
 
   '@univerjs-pro/collaboration-worktree-endpoint@1.5.2':
-    resolution: {integrity: sha512-L/ARxlZeGDhm4VsclQ9P8ZaJTY58TSO5dla7ITVK7VQkpSnTnwwzqAjtKeDmhv7JoTMJFYcviLm5qD5TEejzTg==}
+    resolution: {integrity: sha512-L/ARxlZeGDhm4VsclQ9P8ZaJTY58TSO5dla7ITVK7VQkpSnTnwwzqAjtKeDmhv7JoTMJFYcviLm5qD5TEejzTg==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-worktree-endpoint/-/collaboration-worktree-endpoint-1.5.2.tgz}
 
   '@univerjs-pro/collaboration-worktree-service@1.5.2':
-    resolution: {integrity: sha512-c+QsMredbN/p37L5KQ1VS3E37PjUD5NgGSf7SsgD7vYhp0c/F11RLWp165XOF3XRD09BMNW9T62tVFur2HPBNw==}
+    resolution: {integrity: sha512-c+QsMredbN/p37L5KQ1VS3E37PjUD5NgGSf7SsgD7vYhp0c/F11RLWp165XOF3XRD09BMNW9T62tVFur2HPBNw==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration-worktree-service/-/collaboration-worktree-service-1.5.2.tgz}
 
   '@univerjs-pro/collaboration@1.5.2':
     resolution: {integrity: sha512-AlnUcJ7Wd6lJLKYad1iDiRVDhEQM6ipUqub5k5Srmf1XA9R902WVHt2DWS2EEsKQ+cD1FJ7MoPkOV/472fk4jg==, tarball: https://registry.npmjs.org/@univerjs-pro/collaboration/-/collaboration-1.5.2.tgz}
@@ -6341,49 +6347,49 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-arm64@1.2.0':
-    resolution: {integrity: sha512-+GCnvPg2RtSs8oPEYElgO8yootCXTYLwzRwrahctwk7k3JilmxS2A3vF78Cxf97rr+kMln+ZVfT6n0SQfx9dcQ==}
+    resolution: {integrity: sha512-+GCnvPg2RtSs8oPEYElgO8yootCXTYLwzRwrahctwk7k3JilmxS2A3vF78Cxf97rr+kMln+ZVfT6n0SQfx9dcQ==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-arm64/-/engine-formula-rust-binding-darwin-arm64-1.2.0.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-darwin-x64@1.2.0':
-    resolution: {integrity: sha512-nkkRj8pqx8swi8xHA1vjffPrcy5hk7Kc8GQom5nC8n38/qci4wmmRp/6ONipqKNpuUkq+2XADMSkhJL+5Vl5HQ==}
+    resolution: {integrity: sha512-nkkRj8pqx8swi8xHA1vjffPrcy5hk7Kc8GQom5nC8n38/qci4wmmRp/6ONipqKNpuUkq+2XADMSkhJL+5Vl5HQ==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-darwin-x64/-/engine-formula-rust-binding-darwin-x64-1.2.0.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu@1.2.0':
-    resolution: {integrity: sha512-pfVKelFEfZKMcGiwa4t7mF/g0V2eCYLad5WTvtAS4oYL/A09rlATbZ0nKlrHkAKXMXUvYzGTnC71x52M87Zdrw==}
+    resolution: {integrity: sha512-pfVKelFEfZKMcGiwa4t7mF/g0V2eCYLad5WTvtAS4oYL/A09rlATbZ0nKlrHkAKXMXUvYzGTnC71x52M87Zdrw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu/-/engine-formula-rust-binding-linux-arm64-gnu-1.2.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-arm64-musl@1.2.0':
-    resolution: {integrity: sha512-XmdVrgyWvn13MP703u0M6kFSsNfq464eWWphYlutYT7rEVQJpPNmN9ytBUoYpVN3Ozdr3iVSs4+XZFwYeFmIpQ==}
+    resolution: {integrity: sha512-XmdVrgyWvn13MP703u0M6kFSsNfq464eWWphYlutYT7rEVQJpPNmN9ytBUoYpVN3Ozdr3iVSs4+XZFwYeFmIpQ==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-arm64-musl/-/engine-formula-rust-binding-linux-arm64-musl-1.2.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu@1.2.0':
-    resolution: {integrity: sha512-p/9FW8wEhRH/COub1vlkOumkDFfqBkp70G1Y40D5tV+bNEZh6mUkH060UJnGlsb9cFTV2nCwD2+ZUtO2NymCXw==}
+    resolution: {integrity: sha512-p/9FW8wEhRH/COub1vlkOumkDFfqBkp70G1Y40D5tV+bNEZh6mUkH060UJnGlsb9cFTV2nCwD2+ZUtO2NymCXw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu/-/engine-formula-rust-binding-linux-x64-gnu-1.2.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/engine-formula-rust-binding-linux-x64-musl@1.2.0':
-    resolution: {integrity: sha512-m8lcQ3USCwJ0En7yB24S6WI6/93o2/LqIjlppS17m1d8MGxhVPe4ibyegW7/QOnWyBeKN2W0PaYP2Pl2Nov2aA==}
+    resolution: {integrity: sha512-m8lcQ3USCwJ0En7yB24S6WI6/93o2/LqIjlppS17m1d8MGxhVPe4ibyegW7/QOnWyBeKN2W0PaYP2Pl2Nov2aA==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-linux-x64-musl/-/engine-formula-rust-binding-linux-x64-musl-1.2.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc@1.2.0':
-    resolution: {integrity: sha512-BguNM0QTICE8R5B/rBU4YzibI5+eM8pdZCPzPaonIE0ALCKm8hZn06fWd8rXkDJlQxq6Tm/2yRjmnaZkNNTC5w==}
+    resolution: {integrity: sha512-BguNM0QTICE8R5B/rBU4YzibI5+eM8pdZCPzPaonIE0ALCKm8hZn06fWd8rXkDJlQxq6Tm/2yRjmnaZkNNTC5w==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/-/engine-formula-rust-binding-win32-x64-msvc-1.2.0.tgz}
     cpu: [x64]
     os: [win32]
 
   '@univerjs-pro/engine-formula-rust-binding@1.2.0':
-    resolution: {integrity: sha512-beY9sXGrXXDSXZPoPizn5mhvgrIbQ+NSDqMurHIDokfJj+jC6eAljeYnnCa51NS2tQGlCpLOkZZWiS/DBxc2Zw==}
+    resolution: {integrity: sha512-beY9sXGrXXDSXZPoPizn5mhvgrIbQ+NSDqMurHIDokfJj+jC6eAljeYnnCa51NS2tQGlCpLOkZZWiS/DBxc2Zw==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust-binding/-/engine-formula-rust-binding-1.2.0.tgz}
 
   '@univerjs-pro/engine-formula-rust@1.5.2':
-    resolution: {integrity: sha512-ZVQ59+mCcXCV0O0KW99iMkPYFCgaSnE6WuvmqC4iiSU5HeLsgsAxzQrXpCrhqBOu6EbGF9Y+MoKwZnsYPxpMrg==}
+    resolution: {integrity: sha512-ZVQ59+mCcXCV0O0KW99iMkPYFCgaSnE6WuvmqC4iiSU5HeLsgsAxzQrXpCrhqBOu6EbGF9Y+MoKwZnsYPxpMrg==, tarball: https://registry.npmjs.org/@univerjs-pro/engine-formula-rust/-/engine-formula-rust-1.5.2.tgz}
     peerDependencies:
       rxjs: '>=7.0.0'
 
@@ -6403,49 +6409,49 @@ packages:
       rxjs: '>=7.0.0'
 
   '@univerjs-pro/exchange-node-binding-darwin-arm64@1.2.0':
-    resolution: {integrity: sha512-ojOwSEkvwH8JCmy7d/LUHg80V/sb6kA9wc8Jd/MNyAEjd8nWkAMmBUBTip6+UX5ZV+7kap7ErvrZ8vCCKUvrYg==}
+    resolution: {integrity: sha512-ojOwSEkvwH8JCmy7d/LUHg80V/sb6kA9wc8Jd/MNyAEjd8nWkAMmBUBTip6+UX5ZV+7kap7ErvrZ8vCCKUvrYg==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-arm64/-/exchange-node-binding-darwin-arm64-1.2.0.tgz}
     cpu: [arm64]
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-darwin-x64@1.2.0':
-    resolution: {integrity: sha512-sfx0LPVDyO6lwLLMI5joIN7oqUh5HgvY/srMQGDTl03JYAy4oLsvcks0486eqgk9o3BSV6Rk1usaVsDj6mQNCw==}
+    resolution: {integrity: sha512-sfx0LPVDyO6lwLLMI5joIN7oqUh5HgvY/srMQGDTl03JYAy4oLsvcks0486eqgk9o3BSV6Rk1usaVsDj6mQNCw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-darwin-x64/-/exchange-node-binding-darwin-x64-1.2.0.tgz}
     cpu: [x64]
     os: [darwin]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-gnu@1.2.0':
-    resolution: {integrity: sha512-tcRKxdQLZsn3GQ4Wr/nT6HmtVI4B6n0hRKBFySKN5R4Us3g7zemvTHo6e8zZ0BVpARJiV4Q0vlZAXgC8OFjCkg==}
+    resolution: {integrity: sha512-tcRKxdQLZsn3GQ4Wr/nT6HmtVI4B6n0hRKBFySKN5R4Us3g7zemvTHo6e8zZ0BVpARJiV4Q0vlZAXgC8OFjCkg==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-gnu/-/exchange-node-binding-linux-arm64-gnu-1.2.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-arm64-musl@1.2.0':
-    resolution: {integrity: sha512-u+utk5qVugyzgtvoj0GVPfWdVS4JwpF4usnKqqSOZBALA3FxQsCodhiPokHheEz8ZsmAWywMGXuuRlb+M09cwg==}
+    resolution: {integrity: sha512-u+utk5qVugyzgtvoj0GVPfWdVS4JwpF4usnKqqSOZBALA3FxQsCodhiPokHheEz8ZsmAWywMGXuuRlb+M09cwg==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-arm64-musl/-/exchange-node-binding-linux-arm64-musl-1.2.0.tgz}
     cpu: [arm64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-gnu@1.2.0':
-    resolution: {integrity: sha512-6sbcIYCCtsQHs1W4MlVVeb0O/zt8weZTVCIcfg2HfhF8IXC/RzWGCWJFyJ1hT4aM/vjHKB/vA1HWkP0Liy1QSw==}
+    resolution: {integrity: sha512-6sbcIYCCtsQHs1W4MlVVeb0O/zt8weZTVCIcfg2HfhF8IXC/RzWGCWJFyJ1hT4aM/vjHKB/vA1HWkP0Liy1QSw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-gnu/-/exchange-node-binding-linux-x64-gnu-1.2.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [glibc]
 
   '@univerjs-pro/exchange-node-binding-linux-x64-musl@1.2.0':
-    resolution: {integrity: sha512-N6FZXLqCBQiApge4SGkydfqyGJygw7Iytu/MK/BAgv/CJXvqvplSySZ6lQVkiJMZasasuFKuEY4/G9ds54etDA==}
+    resolution: {integrity: sha512-N6FZXLqCBQiApge4SGkydfqyGJygw7Iytu/MK/BAgv/CJXvqvplSySZ6lQVkiJMZasasuFKuEY4/G9ds54etDA==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-linux-x64-musl/-/exchange-node-binding-linux-x64-musl-1.2.0.tgz}
     cpu: [x64]
     os: [linux]
     libc: [musl]
 
   '@univerjs-pro/exchange-node-binding-win32-x64-msvc@1.2.0':
-    resolution: {integrity: sha512-G8NW6WYugKfkWH8JajQ5OGRU3u+FxhcV5H2hJXmoyAAtpfRJEjIx7vlVYHlRspj4HWPiIj/KErGxBaSICG8rVg==}
+    resolution: {integrity: sha512-G8NW6WYugKfkWH8JajQ5OGRU3u+FxhcV5H2hJXmoyAAtpfRJEjIx7vlVYHlRspj4HWPiIj/KErGxBaSICG8rVg==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding-win32-x64-msvc/-/exchange-node-binding-win32-x64-msvc-1.2.0.tgz}
     cpu: [x64]
     os: [win32]
 
   '@univerjs-pro/exchange-node-binding@1.2.0':
-    resolution: {integrity: sha512-YuAwZDlsBrrPAqh7WISumLPyUjPtzCe9J17aWukKH81gtT4OKdHG7O7180tzbedJg55QcjFeyG1w2G/jalJFww==}
+    resolution: {integrity: sha512-YuAwZDlsBrrPAqh7WISumLPyUjPtzCe9J17aWukKH81gtT4OKdHG7O7180tzbedJg55QcjFeyG1w2G/jalJFww==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node-binding/-/exchange-node-binding-1.2.0.tgz}
 
   '@univerjs-pro/exchange-node@1.5.2':
-    resolution: {integrity: sha512-EJRVU+4VNENC95rg/DwH8hIF/+nI5Lecs1Bx031pZoLtXIC4T86+fpUxZVnQY6nbntz2pWMl/8yKul+a/of7uw==}
+    resolution: {integrity: sha512-EJRVU+4VNENC95rg/DwH8hIF/+nI5Lecs1Bx031pZoLtXIC4T86+fpUxZVnQY6nbntz2pWMl/8yKul+a/of7uw==, tarball: https://registry.npmjs.org/@univerjs-pro/exchange-node/-/exchange-node-1.5.2.tgz}
     peerDependencies:
       '@univerjs-pro/exchange-pdf-node-binding': ~1.2.0
     peerDependenciesMeta:
@@ -7512,6 +7518,10 @@ packages:
     resolution: {integrity: sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA==}
     engines: {node: '>=6'}
 
+  cluster-key-slot@1.1.1:
+    resolution: {integrity: sha512-rwHwUfXL40Chm1r08yrhU3qpUvdVlgkKNeyeGPOxnW8/SyVDvgRaed/Uz54AqWNaTCAThlj6QAs3TZcKI0xDEw==}
+    engines: {node: '>=0.10.0'}
+
   cmdk@1.1.1:
     resolution: {integrity: sha512-Vsv7kFaXm+ptHDMZ7izaRsP70GgrW9NBNGswt9OZaVBLlE0SNpDq8eu/VGXyF9r7M0azK3Wy7OlYXsuyYLFzHg==}
     peerDependencies:
@@ -7662,6 +7672,10 @@ packages:
   delayed-stream@1.0.0:
     resolution: {integrity: sha512-ZySD7Nf91aLB0RxL4KGrKHBXl7Eds1DAmEdcoVawXnLD7SDhpNgtuII2aAkg7a7QS41jxPSZ17p4VdGnMHk3MQ==}
     engines: {node: '>=0.4.0'}
+
+  denque@2.1.0:
+    resolution: {integrity: sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==}
+    engines: {node: '>=0.10'}
 
   depd@2.0.0:
     resolution: {integrity: sha512-g7nH6P6dyDioJogAAGprGpCtVImJhpPk/roCzdb3fIh61/s/nPsfR6onyMwkCAR/OlC3yBC0lESvUoQEAssIrw==}
@@ -8114,6 +8128,10 @@ packages:
 
   inline-style-parser@0.2.7:
     resolution: {integrity: sha512-Nb2ctOyNR8DqQoR0OwRG95uNWIC0C1lCgf5Naz5H6Ji72KZ8OcFZLz2P5sNgwlyoJ8Yif11oMuYs5pBQa86csA==}
+
+  ioredis@5.11.1:
+    resolution: {integrity: sha512-ehuGcf94bQXhfagULNXrJdfnWO38v070jxSx/qE87Kjzmu2fU7ro5EFAb+OPituLqgfyuQaym5DlrNydW2sJ9A==}
+    engines: {node: '>=12.22.0'}
 
   ipaddr.js@1.9.1:
     resolution: {integrity: sha512-0KI/607xoxSToH7GjN1FfSbLoU0+btTicjsQSWQlh/hZykN8KpmMf7uYwPW3R+akZ6R/w18ZlXSHBYXiYUPO3g==}
@@ -9184,6 +9202,14 @@ packages:
   real-require@1.0.0:
     resolution: {integrity: sha512-P4nbQYQfePJxRSmY+v/KINxVucm4NF3p3s7pJveMTtom52FR4YGltUQLB8idDXwDDWW+eYrWDFbuzUnjoWHF7g==}
 
+  redis-errors@1.2.0:
+    resolution: {integrity: sha512-1qny3OExCf0UvUV/5wpYKf2YwPcOqXzkwKKSmKHiE6ZMQs5heeE/c8eXK+PNllPvmjgAbfnsbpkGZWy8cBpn9w==}
+    engines: {node: '>=4'}
+
+  redis-parser@3.0.0:
+    resolution: {integrity: sha512-DJnGAeenTdpMEH6uAJRK/uiyEIH9WVsUmoLwzudwGJUwZPp80PDBWPHXSAGNPwNvIXAbe7MSUB1zQFugFml66A==}
+    engines: {node: '>=4'}
+
   remark-directive@4.0.0:
     resolution: {integrity: sha512-7sxn4RfF1o3izevPV1DheyGDD6X4c9hrGpfdUpm7uC++dqrnJxIZVkk7CoKqcLm0VUMAuOol7Mno3m6g8cfMuA==}
 
@@ -9407,6 +9433,9 @@ packages:
 
   stackback@0.0.2:
     resolution: {integrity: sha512-1XMJE5fQo1jGH6Y/7ebnwPOBEkIEnT4QF32d5R1+VXdXveM0IBMJt8zfaxX1P3QhVwrYe+576+jkANtSS2mBbw==}
+
+  standard-as-callback@2.1.0:
+    resolution: {integrity: sha512-qoRRSyROncaz1z0mvYqIE4lCd9p2R90i6GxW3uZv5ucSu8tU7B5HXUP1gG8pVZsYNVaXjk8ClXHPttLyxAL48A==}
 
   stat-mode@1.0.0:
     resolution: {integrity: sha512-jH9EhtKIjuXZ2cWxmXS8ZP80XyC3iasQxMDV8jzhNJpfDb7VbQLVW4Wvsxz9QZvzV+G4YoSfBUVKDOyxLzi/sg==}
@@ -11374,6 +11403,8 @@ snapshots:
   '@hono/node-server@2.1.6(hono@4.13.16)':
     dependencies:
       hono: 4.13.16
+
+  '@ioredis/commands@1.10.0': {}
 
   '@isaacs/fs-minipass@4.0.1':
     dependencies:
@@ -24704,6 +24735,8 @@ snapshots:
 
   clsx@2.1.1: {}
 
+  cluster-key-slot@1.1.1: {}
+
   cmdk@1.1.1(@types/react-dom@18.3.7(@types/react@18.3.18))(@types/react@18.3.18)(react-dom@18.3.1(react@18.3.1))(react@18.3.1):
     dependencies:
       '@radix-ui/react-compose-refs': 1.1.5(@types/react@18.3.18)(react@18.3.1)
@@ -24901,6 +24934,8 @@ snapshots:
     optional: true
 
   delayed-stream@1.0.0: {}
+
+  denque@2.1.0: {}
 
   depd@2.0.0: {}
 
@@ -25486,6 +25521,18 @@ snapshots:
   inherits@2.0.4: {}
 
   inline-style-parser@0.2.7: {}
+
+  ioredis@5.11.1(supports-color@10.2.2):
+    dependencies:
+      '@ioredis/commands': 1.10.0
+      cluster-key-slot: 1.1.1
+      debug: 4.4.3(supports-color@10.2.2)
+      denque: 2.1.0
+      redis-errors: 1.2.0
+      redis-parser: 3.0.0
+      standard-as-callback: 2.1.0
+    transitivePeerDependencies:
+      - supports-color
 
   ipaddr.js@1.9.1: {}
 
@@ -26829,6 +26876,12 @@ snapshots:
 
   real-require@1.0.0: {}
 
+  redis-errors@1.2.0: {}
+
+  redis-parser@3.0.0:
+    dependencies:
+      redis-errors: 1.2.0
+
   remark-directive@4.0.0(supports-color@10.2.2):
     dependencies:
       '@types/mdast': 4.0.4
@@ -27144,6 +27197,8 @@ snapshots:
     optional: true
 
   stackback@0.0.2: {}
+
+  standard-as-callback@2.1.0: {}
 
   stat-mode@1.0.0: {}
 

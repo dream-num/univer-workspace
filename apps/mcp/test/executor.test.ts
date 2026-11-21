@@ -32,9 +32,12 @@ import {
   rendezvous,
 } from "../src/gateway/executor/router.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
+import { createAffinityTransport, MemoryEpochStore } from "../src/executor-fc/index.js";
 
 const token = "executor-token-".repeat(4);
 const rendererToken = "renderer-token-".repeat(4);
+// One memory-backed transport per connection, as the gateway builds them.
+const affinity = () => createAffinityTransport({ epochs: new MemoryEpochStore() });
 const grant: ExecutorGrant = {
   kind: "session",
   userId: "user-1",
@@ -225,6 +228,7 @@ describe("executor protocol boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = () => ({
       router: new ExecutorRouter(urls),
+      transport: affinity(),
       executorToken: token,
       grant,
       requestId: "routing",
@@ -562,6 +566,7 @@ describe("executor regression boundaries", () => {
           callExecutor(
             {
               router,
+              transport: affinity(),
               executorToken: token,
               grant,
               requestId: "request",
@@ -593,6 +598,7 @@ describe("executor regression boundaries", () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
     const connection = {
       router: new ExecutorRouter(["http://one.test"]),
+      transport: affinity(),
       executorToken: token,
       grant,
       requestId: "request",
@@ -803,6 +809,7 @@ it("never suggests repeating a write when an oversized RPC response cannot be de
       callExecutor(
         {
           router: new ExecutorRouter(["http://one.test"]),
+          transport: affinity(),
           executorToken: token,
           grant,
           requestId: "large-wire",

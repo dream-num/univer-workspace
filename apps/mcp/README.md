@@ -72,6 +72,18 @@ known to precede delivery can fail over. A disconnected or timed-out write retur
 `workspace-result-unknown`; check current state before repeating it. Worker open timeouts
 remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export, screenshots, PDF printing and Typst compilation continue under a four-minute job deadline, with an earlier executor deadline.
 
+Every executor call also carries a session ID in `x-executor-key`: `k` followed by the first 32 hex
+characters of `sha256("<userId>\0<scope>\0<unitId>:<epoch>")`. A resident executor ignores the header;
+an FC executor in session isolation uses it to pin one key to one instance. The gateway keeps one
+epoch per key, advances it when the platform rejects the Session (a 401 from FC rather than the
+executor's own `workspace-*` envelope) and retries once; a 429 backs off with jitter. The executor's
+built-in 401 is never retried, and for a `write` a failed epoch read fails as
+`workspace-executor-unavailable` with `detail.cause: "epoch-store"` — the request was never sent, so
+the call is safe to repeat. Epochs live in gateway process memory by default; several gateway replicas
+that route the same keys need `MCP_EXECUTOR_EPOCH_STORE=redis` and a shared Redis. The header is
+always sent, so switching an executor to FC needs no gateway switch; see
+[`src/executor-fc`](src/executor-fc/README.md).
+
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production` and
 `NODE_OPTIONS=--disable-sigusr1`. The gateway issues
@@ -223,6 +235,9 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_EXECUTOR_URLS`, `MCP_EXECUTOR_TOKEN` | Unset on gateway | Comma-separated executor HTTP(S) origins and the gateway-to-executor token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_ALLOWED_USER_IDS` | Unset | `workspace` alone for the users Workspace grants with `db:executor-access`, `*` alone for every user, or comma-separated Workspace user IDs, trimmed. Empty values or entries are errors. Set the same value on the gateway and executor. Required in production on the executor and on gateways with `MCP_EXECUTOR_URLS`. Unset outside production allows every user |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
+| `MCP_EXECUTOR_EPOCH_STORE` | `memory` | Epoch store behind the `x-executor-key` Session ID. `memory` is correct for one gateway replica; `redis` requires `MCP_EXECUTOR_REDIS_URL` and is required once several replicas route the same keys |
+| `MCP_EXECUTOR_REDIS_URL` | Unset | `redis://` or `rediss://` URL of the shared epoch store. Never logged. Set exactly when `MCP_EXECUTOR_EPOCH_STORE=redis`, and only with `MCP_EXECUTOR_URLS` |
+| `MCP_EXECUTOR_REDIS_KEY_PREFIX` | `mcp:executor-epoch:` | Redis key prefix. Routing keys are stored as their sha256 hex digest, so no user or Unit ID appears in Redis. Epochs never expire |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
 | `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
 | `EXECUTOR_SHEET_LENS_CACHE_BYTES` | `536870912` (512 MiB) | Per-executor Sheet Lens cache budget in estimated bytes. Non-negative integer; `0` disables caching. Malformed values fail startup |

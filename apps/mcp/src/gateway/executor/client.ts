@@ -9,6 +9,11 @@ import {
   type PayloadDirection,
 } from "../../shared/executor-protocol.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../../shared/frame.js";
+import {
+  RedisEpochStoreError,
+  affinityKey,
+  type AffinityTransport,
+} from "../../executor-fc/index.js";
 import type { z } from "zod";
 import { classifyFetchFailure, ExecutorRouter } from "./router.js";
 
@@ -18,6 +23,11 @@ export interface ExecutorConnection {
   readonly grant: ExecutorGrant;
   readonly requestId: string;
   readonly deadlineAt: number;
+  /**
+   * Sends each attempt with the caller's FC HeaderField Session ID. Deployments without FC send
+   * the same header to a resident executor, which ignores it.
+   */
+  readonly transport: AffinityTransport;
 }
 
 function unavailable(): ExecutorCallError {
@@ -42,9 +52,13 @@ export async function callExecutor<
   const effect = spec.effectFor?.(input) ?? spec.effect;
   if (!connection) throw unavailable();
   const route = spec.route(input);
-  const key = [connection.grant.userId, route.scope, route.unitId ?? connection.requestId].join(
-    "\0",
-  );
+  // One key for both routing and the FC Session: a per-request fallback would open a new
+  // Session on every call and defeat affinity, ordering and instance caches alike.
+  const key = affinityKey({
+    userId: connection.grant.userId,
+    scope: route.scope,
+    unitId: route.unitId,
+  });
   let lastError = unavailable();
   for (const url of connection.router.candidates(key)) {
     const timeoutMs = Math.floor(
@@ -65,18 +79,33 @@ export async function callExecutor<
     if (body.length > spec.limits.requestBytes) throw requestError("workspace-request-too-large");
     let response: Response;
     try {
-      response = await fetch(new URL(`/rpc/v1/${spec.name}`, url), {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${connection.executorToken}`,
-          "content-type": FRAME_CONTENT_TYPE,
-          "x-mcp-rpc-version": "1",
+      response = await connection.transport.request({
+        endpoint: url,
+        key,
+        path: `/rpc/v1/${spec.name}`,
+        init: {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${connection.executorToken}`,
+            "content-type": FRAME_CONTENT_TYPE,
+            "x-mcp-rpc-version": "1",
+          },
+          body,
+          redirect: "manual",
+          signal: AbortSignal.timeout(timeoutMs),
         },
-        body,
-        redirect: "manual",
-        signal: AbortSignal.timeout(timeoutMs),
+        deadlineAt: connection.deadlineAt,
       });
     } catch (error) {
+      // The epoch read precedes every send, so a store failure means nothing was delivered.
+      // Reporting it as `workspace-result-unknown` would wrongly suggest the write may have run.
+      if (error instanceof RedisEpochStoreError)
+        throw new ExecutorCallError({
+          code: "workspace-executor-unavailable",
+          message: "The executor epoch store is unavailable, so the call was not sent.",
+          detail: { cause: "epoch-store", retryable: true },
+          outcome: "internal_error",
+        });
       if (classifyFetchFailure(error) === "not-delivered") {
         connection.router.notDelivered(url);
         continue;

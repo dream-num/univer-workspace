@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { EpochStoreSettings } from "../executor-fc/index.js";
 import { defaultLimits, type UploadLimits } from "../gateway/staging/model.js";
 
 export const origin = z.url().transform((value, ctx) => {
@@ -68,6 +69,14 @@ export function allowsExecutor(
   if (policy === undefined) return true;
   return policy === "workspace" ? user.executorAccess : policy.has(user.id);
 }
+const redisUrl = z.string().refine((value) => {
+  try {
+    const url = new URL(value);
+    return (url.protocol === "redis:" || url.protocol === "rediss:") && url.hostname !== "";
+  } catch {
+    return false;
+  }
+}, "MCP_EXECUTOR_REDIS_URL must be a redis:// or rediss:// URL with a host");
 const environment = z.object({
   HOST: z.string().trim().min(1).default("127.0.0.1"),
   PORT: z.string().regex(/^\d+$/).transform(Number).pipe(z.int().min(1).max(65535)).default(3000),
@@ -90,16 +99,30 @@ const environment = z.object({
     .optional(),
   MCP_EXECUTOR_TOKEN: z.string().min(32).optional(),
   MCP_EXECUTOR_ALLOWED_USER_IDS: executorAllowedUserIds.optional(),
+  // FC HeaderField affinity: the header is always sent; only the epoch store is configurable.
+  MCP_EXECUTOR_EPOCH_STORE: z.enum(["memory", "redis"]).default("memory"),
+  MCP_EXECUTOR_REDIS_URL: redisUrl.optional(),
+  MCP_EXECUTOR_REDIS_KEY_PREFIX: z.string().min(1).max(128).default("mcp:executor-epoch:"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace", "silent"]).default("info"),
 });
 
 export type GatewayConfig = Readonly<
   Omit<
     z.output<typeof environment>,
-    "MCP_OAUTH_CLIENT_SECRET" | "MCP_EXECUTOR_TOKEN" | "MCP_EXECUTOR_URLS"
+    | "MCP_OAUTH_CLIENT_SECRET"
+    | "MCP_EXECUTOR_TOKEN"
+    | "MCP_EXECUTOR_URLS"
+    | "MCP_EXECUTOR_EPOCH_STORE"
+    | "MCP_EXECUTOR_REDIS_URL"
+    | "MCP_EXECUTOR_REDIS_KEY_PREFIX"
   > & {
     readonly uploadLimits: UploadLimits;
-    readonly executor: { readonly urls: readonly string[]; readonly executorToken: string } | null;
+    readonly executor: {
+      readonly urls: readonly string[];
+      readonly executorToken: string;
+      /** Absent only in tests that build a partial executor config; the gateway uses memory. */
+      readonly epochs?: EpochStoreSettings;
+    } | null;
     readonly WORKSPACE_TRANSPORT_URL: string;
     readonly auth: {
       readonly exchange: { readonly clientId: string; readonly clientSecret: string } | null;
@@ -121,10 +144,19 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     MCP_OAUTH_CLIENT_SECRET: clientSecret,
     MCP_EXECUTOR_URLS: urls,
     MCP_EXECUTOR_TOKEN: executorToken,
+    MCP_EXECUTOR_EPOCH_STORE: epochStore,
+    MCP_EXECUTOR_REDIS_URL: redisRedisUrl,
+    MCP_EXECUTOR_REDIS_KEY_PREFIX: redisKeyPrefix,
     ...configWithoutSecret
   } = config;
   if ((urls === undefined) !== (executorToken === undefined))
     throw new Error("MCP_EXECUTOR_URLS and MCP_EXECUTOR_TOKEN must be set together");
+  if ((epochStore === "redis") !== (redisRedisUrl !== undefined))
+    throw new Error(
+      "MCP_EXECUTOR_EPOCH_STORE=redis requires MCP_EXECUTOR_REDIS_URL, and a Redis URL requires that store",
+    );
+  if (urls === undefined && (epochStore === "redis" || redisRedisUrl !== undefined))
+    throw new Error("The executor epoch store requires MCP_EXECUTOR_URLS");
   if (
     env["NODE_ENV"] === "production" &&
     urls !== undefined &&
@@ -157,7 +189,15 @@ export function parseGatewayConfig(env: NodeJS.ProcessEnv): GatewayConfig {
     executor:
       urls === undefined || executorToken === undefined
         ? null
-        : { urls: [...new Set(urls)], executorToken },
+        : {
+            urls: [...new Set(urls)],
+            executorToken,
+            epochs: Object.freeze({
+              store: epochStore,
+              ...(redisRedisUrl === undefined ? {} : { redisUrl: redisRedisUrl }),
+              keyPrefix: redisKeyPrefix,
+            }),
+          },
     WORKSPACE_TRANSPORT_URL: config.WORKSPACE_TRANSPORT_URL ?? config.WORKSPACE_ORIGIN,
     auth: Object.freeze({
       exchange:
