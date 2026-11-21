@@ -67,7 +67,7 @@ function setup(page = html, publicRead = false, privateUnits: readonly string[] 
       const body = await request.json();
       expect(body.html).toBe(page);
       draftPosts.push(body);
-      return Response.json({ draft: draftView(body.kind) }, { status: draftPosts.length === 1 ? 201 : 200 });
+      return Response.json({ draft: { ...draftView(body.kind), ...(body.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: body.sourceWorktreeId }) } }, { status: draftPosts.length === 1 ? 201 : 200 });
     }
     if (request.url.endsWith("/resources/resource")) return Response.json({ node, resource });
     throw new Error(`Unexpected Workspace request ${request.method} ${request.url}`);
@@ -529,4 +529,41 @@ it("sends exactly one replacement draft POST and never uses Blob publishing endp
   expect(f.writes).toEqual([html]);
   expect(f.fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
   expect(f.fetcher.mock.calls.some(([url]) => /blob-upload-sessions|blob-resources.*content/.test(String(url)))).toBe(false);
+});
+
+it.each([htmlViewValidateTool, htmlViewCreateTool, htmlViewReplaceTool])("$name resolves source PR arguments into executor input", async (tool) => {
+  const f = setup();
+  const original = f.fetcher.getMockImplementation();
+  if (!original) throw new Error("Expected product fetcher");
+  const worktree = { id: "wt-1", number: 12, name: "Sources", state: "ready", kind: "team", teamSpace: { id: "space" },
+    units: [{ unitId: "unit", unitType: "sheet", name: "Sheet", nodeId: "node", resourceId: "resource",
+      source: "trunk", target: null, draftHeadRevision: 7, change: "modified", mergeResult: "pending", activationState: "notApplicable" }] };
+  f.fetcher.mockImplementation(async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/worktrees/wt-1" || path === "/api/spaces/space/worktrees/12") return Response.json({ worktree });
+    return original(url, init);
+  });
+  const { context } = uploadContext();
+  const executor = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
+    const header = z.object({ op: z.enum(["htmlView.validate", "htmlView.draft"]), input: z.unknown() })
+      .parse(decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer())).header);
+    expect(header.input).toMatchObject({ sourceWorktreeId: "wt-1", html });
+    const result = header.op === "htmlView.validate"
+      ? await htmlViewValidate(f.ctx, opSpecs["htmlView.validate"].input.parse(header.input))
+      : await htmlViewDraft(f.ctx, opSpecs["htmlView.draft"].input.parse(header.input));
+    return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: f.ctx.usage })));
+  });
+  for (const pr of [12, "#12", "https://workspace.test/spaces/space/pulls/12", "wt-1"]) {
+    const result = await tool.run({ ...context, http: f.ctx.http() }, { ...(tool === htmlViewReplaceTool ? replaceArgs : { ...createArgs, html }), repo: "space", pr });
+    if (tool !== htmlViewValidateTool) expect(result.output).toMatchObject({ draft: { sourceWorktreeId: "wt-1" } });
+  }
+  expect(f.exportUnitData.mock.calls.every(([{ target }]) => target.scope.kind === "worktree" && target.scope.worktreeId === "wt-1")).toBe(true);
+  for (const body of f.draftPosts) expect(body).toMatchObject({ sourceWorktreeId: "wt-1" });
+  expect(executor).toHaveBeenCalledTimes(4);
+});
+
+it.each([htmlViewValidateTool, htmlViewCreateTool, htmlViewReplaceTool])("$name requires the repository with a source PR", async (tool) => {
+  const { context } = uploadContext();
+  await expect(tool.run(context, { ...(tool === htmlViewReplaceTool ? replaceArgs : { ...createArgs, html }), pr: 12 }))
+    .rejects.toMatchObject({ code: "workspace-argument-invalid" });
 });

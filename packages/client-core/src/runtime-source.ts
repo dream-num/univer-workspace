@@ -81,7 +81,7 @@ export class WorkspaceContentSource {
   }
 
   public async resolveReferencedRuntimeTarget(input: {
-    readonly hostTarget: WorkspaceRuntimeTarget;
+    readonly hostTarget: Pick<WorkspaceRuntimeTarget, "scope">;
     readonly unitId: string;
   }): Promise<WorkspaceRuntimeTarget> {
     if (input.hostTarget.scope.kind === "trunk") {

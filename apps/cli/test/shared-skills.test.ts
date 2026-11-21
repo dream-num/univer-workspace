@@ -14,7 +14,10 @@ async function checkSharedSkills(root: string): Promise<void> {
     const path = join(file.parentPath, file.name);
     if (path.startsWith(join(root, "core") + sep)) continue;
     const content = await readFile(path, "utf8");
-    expect(content, path).not.toMatch(clientSyntax);
+    const sharedContent = path === join(root, "html-view", "SKILL.md")
+      ? content.replaceAll("`html-view validate --worktree <id>`", "the HTML View validation operation")
+      : content;
+    expect(sharedContent, path).not.toMatch(clientSyntax);
   }
 }
 
@@ -42,6 +45,20 @@ it.each([
     await expect(checkSharedSkills(root)).rejects.toThrow("example.txt");
     await writeFile(join(root, "future", "templates", "example.txt"), "Run `inspect`.");
     await checkSharedSkills(root);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("allows only the documented HTML View validation scope command", async () => {
+  const root = await mkdtemp(join(tmpdir(), "shared-skills-html-view-"));
+  try {
+    await mkdir(join(root, "html-view"));
+    const path = join(root, "html-view", "SKILL.md");
+    await writeFile(path, "Use `html-view validate --worktree <id>`.");
+    await checkSharedSkills(root);
+    await writeFile(path, "Use `html-view create --worktree <id>`.");
+    await expect(checkSharedSkills(root)).rejects.toThrow("SKILL.md");
   } finally {
     await rm(root, { recursive: true, force: true });
   }

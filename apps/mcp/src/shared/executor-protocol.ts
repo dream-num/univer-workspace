@@ -346,7 +346,7 @@ export const opSpecs = {
     payload: "none",
     rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: MiB, budgetMs: 30_000 },
-    input: z.object({ html: htmlViewInput }),
+    input: z.object({ html: htmlViewInput, sourceWorktreeId: z.string().min(1).optional() }),
     output: z.object({
       valid: z.literal(true),
       unitIds: z.array(z.string()),
@@ -366,6 +366,7 @@ export const opSpecs = {
       z.object({
         kind: z.literal("create"),
         html: htmlViewInput,
+        sourceWorktreeId: z.string().min(1).optional(),
         spaceId: z.string().min(1),
         name: z.string().min(1).max(255),
         parentNodeId: z.string().min(1).optional(),
@@ -374,6 +375,7 @@ export const opSpecs = {
       z.object({
         kind: z.literal("replace"),
         html: htmlViewInput,
+        sourceWorktreeId: z.string().min(1).optional(),
         resourceId: z.string().min(1),
         etag: z.string().min(1),
         idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
