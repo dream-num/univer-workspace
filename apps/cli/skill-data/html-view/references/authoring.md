@@ -14,6 +14,10 @@ an inclusive rectangle such as `A2:G51` (a one-cell range is `B7:B7`). Encode ea
 `encodeURIComponent` before joining with colons. References use fixed coordinates. Multiple Units
 and repeated references are supported. Use exactly one binding attribute per element.
 
+The style-neutral [binding starter](../examples/binding-starter.univer.html) is a complete runnable
+page after replacing its IDs and coordinates with inspected sources and opening it in Workspace.
+It demonstrates the binding lifecycle without prescribing a visual design.
+
 ### Fine-grained subscriptions and traceable bindings
 
 Declare the source on the element that consumes it, so its Unit, worksheet and coordinates are
@@ -92,6 +96,11 @@ kinds and invalid references reject the Promise. Replace both source IDs below w
 </script>
 ```
 
+Subscribe attributes never change the DOM. Their render callbacks must replace initial
+placeholders with real content or an empty state. Separate subscriptions have no ordering.
+A widget fed by several bindings uses one render function that every contributing callback calls.
+Keep loading placeholders only in initial HTML, never restore them from another binding's state.
+
 All data methods return Promises:
 
 | Method | Result |
@@ -131,6 +140,10 @@ all coordinates are zero-based and both range ends are inclusive.
 Use the inspected worksheet bounds when choosing the range. Subscriptions track fixed coordinates;
 a range does not automatically expand when more records are added.
 
+A range callback always delivers the full row-major matrix with exactly the requested dimensions,
+padded with null for missing cells. An entirely empty range still delivers that matrix, not an empty
+array or a delta. Render an explicit empty state when all its cells are null.
+
 Empty or missing cells return `value: null`. Handle failed writes through Promise rejection.
 Strings are written literally: `"2-2"` remains text, and `"=A1"` is not parsed as a formula.
 In an intended edit handler, use `await binding.setCellValue(reference, value)` and
@@ -164,6 +177,24 @@ disconnected, `conflict` means conflict, and `not_collab` means collaboration is
 for a sync indicator with a fallback for unknown values. A status does not include unsent form drafts
 and does not replace calling the write method and awaiting `flush()` before reporting a saved edit.
 
+## Sheet calculations and write labels
+
+The page only displays Sheet values. Formatting, sorting and filtering are presentation.
+Totals, ratios, achievement rates, forecasts and derived chart series belong in Sheet formula cells,
+never in page JavaScript. If a needed metric is missing, use the connected client's execution
+operation to add formulas in the session's pull request. For a merged Sheet, create a pull request
+and add the Sheet before editing. Bind the formula results and save the MCP draft with its repository
+and pull request. The html-view-creator Skill owns the MCP tool sequence.
+
+Show pending and rejected writes next to controls, disable pending actions, and retain failed input.
+Editors' writes update the source Sheet. A host may offer read-only visitors a local trial using the
+real formula engine; trial edits are not saved or sent. Do not build a page-side simulation.
+When `window.univerWorkspace?.capabilities?.includes('write-mode')` is true, call
+`await window.univerWorkspace.getWriteMode(unitId)` before claiming success. Label `trial` as
+"Trial only, not saved". `saved` describes the write mode, not acknowledgement of a particular edit;
+still await the write and `flush()`. Show mode-query and write rejections as errors. Without this
+optional bridge, the binding API's normal acknowledgement rules apply.
+
 ## Frontend libraries
 
 ECharts can run inside the page; it is not preloaded as `window.echarts`. Workspace file preview
@@ -172,6 +203,11 @@ allows `https://cdn.jsdelivr.net`, so load a pinned browser build before chart i
 ```html
 <script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
 ```
+
+Never put loading text inside a chart container; echarts.init keeps existing children. Leave the
+container empty and show loading in a sibling or the status line. After data arrives, no placeholder
+text may remain. Keep a bound data table readable if the chart library fails. Catch initialization
+and rendering errors inside the callback as well as subscription Promise rejections.
 
 Use a classic script without `async` when subsequent scripts depend on `echarts`. Other external
 origins require host configuration; page markup cannot grant itself permission. Inline library

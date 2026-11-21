@@ -7,7 +7,6 @@
   ],
   "type": "module",
   "scripts": {
-    "generate:style-catalog": "node scripts/style-catalog.mjs",
     "build": "tsc -p tsconfig.json && node scripts/assemble-skills.mjs && node scripts/copy-render-runtime.mjs",
     "typecheck": "tsc -p tsconfig.test.json --noEmit",
     "test": "node scripts/assemble-skills.mjs && node ../../scripts/test.mjs vitest run"

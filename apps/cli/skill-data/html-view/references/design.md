@@ -1,6 +1,6 @@
-# Choose a style before authoring
+# Design for the data and audience
 
-For CLI authoring workflow and style selection, read the [html-view Skill](../SKILL.md).
+For the CLI authoring workflow, read the [html-view Skill](../SKILL.md).
 
 ## Style catalog
 
@@ -24,31 +24,29 @@ The designed-for scenario describes the starter's data contract, not a restricti
 Templates are written in English as starting points. Write every visible string, unit and
 date format in the generated `.univer.html` in the language and conventions of the user's
 conversation (for example, 万 and 年/月 for Chinese users). Do not add i18n dictionaries
-or language switches. For a Chinese page, load the CJK fonts listed on the template header's
+or language switches. For a Chinese page using a built-in style, load the CJK fonts listed on the template header's
 `Chinese pages:` line and put them first in the font stacks. Keep the style's palette,
 layout and signature element.
 
 ## Custom styles
 
-The catalog is a set of built-in starting points, not a limit. When the user describes their own
-style (brand colors, fonts, mood, a reference site), start from the template whose structure best
-fits their data, then replace its fonts, palette, density and signature element to match the
-description. Keep the template's bindings, write paths, states and the craft floor below. Use only
-`https://cdn.jsdelivr.net` assets.
+Free design is the default. Design the page for its data and audience while meeting the craft
+floor below. The catalog is a set of optional starting points, not a limit. A custom design need
+not derive from a card or template. Follow the user's brand, fonts, mood or reference when given.
+Name the design and explain why it suits the task in the reply.
 
-## Apply the chosen style
+## Apply a built-in style
 
-Read `templates/<id>.univer.html` and start from its complete source. Inspect its header's
-expected columns, formulas and bounds; replace every Unit and worksheet ID (URI-encoded
-in binding attributes, raw in JavaScript) and adapt coordinates to the inspected Sheet.
+Use a built-in style when the user names one, when unsure, or for a proven baseline.
+Read its `styles/<id>.md` card first. Read the full `templates/<id>.univer.html` only when the data
+matches its original scenario in the catalog. Otherwise adapt the card's fonts, palette, density
+and signature element to the structure the data needs. A custom design has no card requirement.
 
-For a scenario the template was not designed for, keep its fonts, palette, density and
-signature element. Rebuild the structure the user's data needs with that template's own
-components: for example, use Night Gauge's plot and control dock for an operations model, or
-Blueprint Timeline's lanes for another dated workflow. Use the scenario's nouns, units and dates.
-Keep live bindings and intended writes; the original sample schema is not data to copy.
-Never replace subscriptions with sample data, fallback numbers or page-side Sheet formulas.
-Do not switch styles silently or flatten every choice into the same card grid.
+When using a template, inspect its expected columns, formulas and bounds. Replace every Unit
+and worksheet ID (URI-encoded in binding attributes, raw in JavaScript) and adapt coordinates to
+the inspected Sheet. The original sample schema is not data to copy. Keep live bindings, intended
+writes and states. Never replace subscriptions with sample data, fallback numbers or page-side
+Sheet formulas. Do not switch a chosen style silently or flatten every choice into the same card grid.
 
 ## Keep the craft floor
 
@@ -66,8 +64,8 @@ Do not switch styles silently or flatten every choice into the same card grid.
 - Check at 360px, 390px and 1440px: collapse columns, wrap long names and keep charts sized.
   Use scrolling only for genuinely wide tabular content. Do not shrink the entire page to fit.
 - Fonts and libraries may load only from `https://cdn.jsdelivr.net`. Pin exact package versions.
-  Latin display faces can use pinned `@fontsource` CSS; for Chinese pages, load the CJK fonts
-  listed in the template header and put them first in the font stacks. Retain system fallbacks
+  Latin display faces can use pinned `@fontsource` CSS; for Chinese pages using a template, load its CJK fonts
+  listed in the header and put them first in the font stacks. Retain system fallbacks
   and keep fallback text visible.
   Show Workspace videos, audio and images through `data-workspace-src`; see
   [authoring.md](authoring.md#workspace-media).

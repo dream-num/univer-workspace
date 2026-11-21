@@ -8,27 +8,24 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 With the CLI, `html-view create` and replacement publish immediately. Through MCP tools,
 use html_view_save to save a draft. Read the html-view-creator Skill for the MCP workflow.
 
-## Start with a style and live data
+## Start with live data and free design
 
-1. Read the source Sheet. Use the style the user named; otherwise choose from the catalog in
-   [design.md](references/design.md) using the purpose, audience and adjectives in the request,
-   and the data's shape (dense rankings, time series, tasks/status or a few key numbers).
-   If none fits, use Night Gauge (`night-gauge`, 仪表夜航) or a custom style. Ask at most
-   one question only when purpose or data is unclear, or the user asks to see a plan or pick
-   a style. Otherwise proceed directly. In the reply, always name the style and why, and
-   offer to change it; give a custom style a name and one-line description.
-2. Read `styles/<id>.md` by default. Read the full `templates/<id>.univer.html` only
-   when the data's shape is close to its designed-for scenario in the catalog, or the
-   page needs that template's interaction. Keep the style's fonts, palette, density and
-   signature element. Adapt the structure and bindings to the inspected Sheet.
-   For a custom style, start from the structurally closest style card and change palette,
-   type and signature element while meeting the design floor in design.md.
-3. Page controls write to Sheet cells or append rows; the page displays the recalculated
-   source values through live bindings, and label host-provided visitor trials with `getWriteMode`
-   as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,
-   embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
-4. Write the page in the user's language as [design.md](references/design.md) describes;
-   templates are English starting points.
+1. Read the source Sheet and note its actual IDs, ranges, formulas and input cells.
+   Design the page yourself for the data and audience by default, meeting the design floor in
+   [design.md](references/design.md). Ask at most one question only when purpose or data is
+   unclear, or the user asks to see a plan or pick a style. Otherwise proceed directly.
+   In the reply, name the design and why. Give a custom design a name and one-line description.
+2. Built-in styles are optional starting points when the user names one, when unsure, or for a
+   proven baseline. Read the catalog in [design.md](references/design.md), then `styles/<id>.md`
+   first. Read the full `templates/<id>.univer.html` only when the data matches its original
+   scenario. Free design need not derive from a card or template.
+3. Controls write input cells or insert records. Subscriptions display recalculated Sheet values.
+   Never compute Sheet metrics in page code or embed copied data or fallback numbers.
+   If a derived metric is missing, add Sheet formula cells through the execution operation in
+   the session's pull request. For a merged Sheet, create a pull request and add the Sheet first.
+   Bind the formula results. MCP drafts select that repository and pull request when saving.
+4. Keep loading, empty and error states honest. Label host-provided trials with `getWriteMode`.
+   Write visible text, units and dates in the user's language. Templates are English starting points.
 
 ## Bind the page
 
@@ -37,7 +34,9 @@ Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
 Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
-For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
+Read the neutral [binding starter](examples/binding-starter.univer.html) by default from the installed
+Skill directory. It demonstrates bindings without prescribing a design. For binding syntax,
+JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
 
 Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 

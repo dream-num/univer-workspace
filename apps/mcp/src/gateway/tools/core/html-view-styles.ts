@@ -54,7 +54,7 @@ export const htmlViewStylesTool: ToolDefinition = {
   scope: "read",
   title: "List HTML View styles",
   description:
-    "Return the built-in HTML View style catalog for showing a style gallery. Workspace renders the result as clickable cards. You must still list every style name and mood in your reply text in the user's language, because other clients show no gallery.",
+    "Return the built-in HTML View style catalog as optional starting points for showing a style gallery. Workspace renders the result as clickable cards. You must still list every style name and mood in your reply text in the user's language, because other clients show no gallery.",
   inputSchema: z.object({}),
   outputSchema: htmlViewStylesSchema,
   annotations: readOnlyAnnotations,
