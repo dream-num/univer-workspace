@@ -25,25 +25,31 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("keeps the default draft path compact and self-contained", async () => {
     const content = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     const text = content.replace(/\s+/gu, " ");
-    expect([...content].length).toBeLessThanOrEqual(8500);
+    expect([...content].length).toBeLessThanOrEqual(10000);
     const description = /^description: (.+)$/mu.exec(content)?.[1];
     for (const routing of ["HTML View (.univer.html)", "shareable live HTML page", "dashboard", "report", "form", "Workspace Sheet data", "Prefer it over a local .html unless the user asks for a file"])
       expect(description).toContain(routing);
     expect(text).not.toMatch(/end your turn and wait|never silently choose|propose.*and wait/iu);
     expect(text).toContain("ask at most one question only for unclear purpose/data or an explicit plan/style request");
-    expect(text).toContain("purpose, audience, adjectives and data shape");
+    expect(text).toContain("Use the named style; otherwise choose by purpose, audience, adjectives and data shape");
     expect(text).toContain("structurally closest style card");
+    expect(text).toContain("Name the style and reason and offer to change it");
+    expect(text).not.toMatch(/optional starting points|Free design need not/u);
+    expect(text).not.toContain("binding-starter");
+    for (const resource of ["styles/<id>.md", "templates/<id>.univer.html"])
+      expect(text).toContain(`skills_read {"name":"html-view","resource":"${resource}"}`);
     expect(text).toContain("the page goes live when the user merges in Workspace");
     expect(text).toContain("Never merge or ask to merge on their behalf");
     expect(text).toContain("Ask mode cannot save");
     expect(text).toContain("Pass inline `html` by default");
-    expect(text).toContain("Name the style and reason and offer to change it");
     for (const attribute of ["cell-text", "cell-model", "cell-subscribe", "range-subscribe"])
       expect(content).toContain(`data-univer-${attribute}`);
     const design = await readFile(new URL("../../cli/skill-data/html-view/references/design.md", import.meta.url), "utf8");
     const catalogIds = [...design.matchAll(/\| \[([a-z-]+)\]\(\.\.\/templates\//gu)].map((match) => match[1]);
     expect(catalogIds).toHaveLength(10);
     for (const id of catalogIds) expect(content).toContain(`- \`${id}\`.`);
+    const sections = [...content.matchAll(/^## (.+)$/gmu)].map((match) => match[1]);
+    expect(sections).toEqual(["Rules", "1. Read and choose", "2. Bind", "3. Save and reply", "4. Continue"]);
   });
 
   it("keeps catalog IDs, templates and compact style cards in sync", async () => {
@@ -68,6 +74,7 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("reads cards first and reserves full templates for matching data or interactions", async () => {
     for (const path of ["../skills/html-view-creator/SKILL.md", "../../cli/skill-data/html-view/SKILL.md"]) {
       const text = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
+      expect(text.indexOf("styles/<id>.md")).toBeLessThan(text.indexOf("templates/<id>.univer.html"));
       expect(text).toContain("styles/<id>.md");
       expect(text).toContain("by default");
       expect(text).toMatch(/Read the full (?:template|`templates\/)/u);
@@ -78,6 +85,23 @@ describe("HTML View Creator Skill tool bindings", () => {
     const creator = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     for (const scenario of ["36-month cash runway", "Sales meeting; filters/target edits", "Customer delivery; status edits/insertion", "City sign-ups; first 100 entries"])
       expect(creator).toContain(`Original: ${scenario}.`);
+  });
+
+  it("teaches binding runtime semantics and keeps derived metrics in Sheet formulas", async () => {
+    const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    for (const rule of ["one source attribute per element", "fixed ranges never grow", "zero-based coordinates",
+      "Callbacks fire before the subscribe Promise resolves", "full matrix padded with null, including for empty ranges",
+      "Separate subscriptions have no ordering", "binding attributes never change the DOM", "render code must replace placeholders",
+      "show error states on rejection", "setCellValue(reference, value)` then `flush()", "insertRowsWithValues",
+      "getWriteMode(unitId)", "data-workspace-src", "never compute Sheet metrics in page code",
+      "add formula cells to the Sheet inside the session's pull request with `execute`", "`pr_create`", "`unit_add`",
+      "save the draft with `repo` and `pr`", "Use these samples as the self-check"])
+      expect(creator).toContain(rule);
+    const authoring = (await readFile(new URL("../../cli/skill-data/html-view/references/authoring.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    for (const rule of ["before the returned Promise resolves", "exactly the requested dimensions", "padded with null",
+      "entirely empty range", "Separate subscriptions have no ordering", "Subscribe attributes never change the DOM",
+      "replace initial placeholders", "echarts.init keeps existing children", "Sheet formula cells", "getWriteMode(unitId)"])
+      expect(authoring).toContain(rule);
   });
 
   it("guards against giant totals and stale loading text", async () => {
@@ -105,6 +129,8 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(save.description).toContain("Pass inline html by default");
     expect(save.description).toContain("the user merges in Workspace");
     expect(save.description).toContain("bindingCount");
+    expect(save.description).not.toContain("optional starting points");
+    expect(tools.find(({ name }) => name === "html_view_styles")!.description).not.toContain("optional starting points");
     expect(save.description).not.toMatch(/wait|pick a style|choose by purpose/iu);
   });
 

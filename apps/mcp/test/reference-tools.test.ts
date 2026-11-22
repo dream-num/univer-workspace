@@ -523,6 +523,7 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(skill["content"]).toBe(await readFile(join(cliSkillData, "html-view/SKILL.md"), "utf8"));
     expect(skill.resources.map((resource: { path: string }) => resource.path)).toEqual(
       [
+        ...(await readdir(join(cliSkillData, "html-view/examples"))).map((file) => `examples/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/references"))).map((file) => `references/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/templates"))).map((file) => `templates/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/styles"))).map((file) => `styles/${file}`),
@@ -567,6 +568,11 @@ describe("API reference, Skills, resources and server instructions", () => {
         content: await readFile(join(cliSkillData, "html-view", path), "utf8"),
       });
     }
+
+    const starter = "examples/binding-starter.univer.html";
+    const example = await call(client, "skills_read", { name: "html-view", resource: starter });
+    expect(example.isError).not.toBe(true);
+    expect(example.structured.content).toBe(await readFile(join(cliSkillData, "html-view", starter), "utf8"));
 
     const resource = await call(client, "skills_read", {
       name: "html-view",
@@ -714,7 +720,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
       const expectedFiles = (await readdir(join(sourceRoot, name), { withFileTypes: true }))
         .filter((entry) => entry.isFile()).map((entry) => entry.name);
-      for (const child of ["references", "templates", "styles"]) {
+      for (const child of ["examples", "references", "templates", "styles"]) {
         const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
           () => [],
         );

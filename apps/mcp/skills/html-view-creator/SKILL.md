@@ -56,7 +56,8 @@ Chinese uses the card's CJK fonts first.
 
 Use one source attribute per element. Cells are
 `encodeURIComponent(unitId):encodeURIComponent(sheetId):B7`; inclusive ranges end in
-`A2:G51`. Use real IDs; fixed ranges never grow. Plan capacity.
+`A2:G51`. Encode each ID separately and escape HTML attribute characters. Use real IDs;
+fixed ranges never grow. Plan capacity within inspected bounds.
 
 - `data-univer-cell-text` reads/subscribes and replaces textContent. Use a dedicated
   value element with no nested bindings. Formula cells supply calculated results.
@@ -69,22 +70,37 @@ Use one source attribute per element. Cells are
 - `data-univer-range-subscribe` declares each chart/table/list separately. Register
   `subscribeRangeById('element-id', ({ value }) => ...)`; value is the full row/column matrix initially and on updates. Render rows there.
 
-When one widget needs several bindings or sheets, use one render function that every
-contributing callback calls. Write placeholders only in the initial HTML, never from
-another binding's state.
+JavaScript uses raw IDs and zero-based coordinates. B7 is `{ unitId, sheetId, row: 6, col: 1 }`;
+A2:G51 is `{ unitId, sheetId, range: { startRow: 1, endRow: 50, startColumn: 0, endColumn: 6 } }`.
+Methods return Promises; show error states on rejection. Empty cells are null. Read once
+with `getCellState`/`getRangeState`.
 
-Methods return Promises; show rejections. Empty cells are null. Read once with
-`getCellState`/`getRangeState`.
-JavaScript uses raw IDs and zero-based coordinates. A2:G51 is
-`{ unitId, sheetId, range: { startRow: 1, endRow: 50, startColumn: 0, endColumn: 6 } }`.
+Callbacks fire before the subscribe Promise resolves; never read the returned subscription
+inside its first callback. A range callback always delivers the full matrix padded with
+null, including for empty ranges, never a delta. The subscribe binding attributes never
+change the DOM; render code must replace placeholders. Separate subscriptions have no
+ordering: when one widget needs several bindings or sheets, use one render function that
+every contributing callback calls. Write placeholders only in the initial HTML, never from
+another binding's state. If a binding pattern is still unclear, read
+`skills_read {"name":"html-view","resource":"references/authoring.md"}`.
+
 Await `setCellValue(reference, value)` then `flush()` before claiming saved. Strings
 are literal; scalar writes may partially succeed. Add records with `insertRowsWithValues`,
 not empty-row writes:
 `skills_read {"name":"html-view","resource":"references/adding-records.md"}`.
-Relocate records by stable ID after insertion. Callbacks precede Promise resolution; dispose on removal. Prevent form navigation.
+Relocate records by stable ID after insertion. Dispose subscriptions and chart resources on removal. Prevent form navigation.
 
-Keep pending/rejected states, failed input and `getWriteMode` labels.
-Editors save; host-provided read-only trials stay local/unsaved.
+Keep pending/rejected states and failed input. Editors save; host-provided read-only
+trials stay local/unsaved. When the host advertises write mode, call
+`window.univerWorkspace.getWriteMode(unitId)` before a success label; `trial` means
+"Trial only, not saved".
+
+Keep numbers in the Sheet. Formatting, filtering and arranging rows are presentation;
+never compute Sheet metrics in page code, including totals, ratios, achievement rates,
+forecasts or derived chart series. When a needed metric is missing, add formula cells to
+the Sheet inside the session's pull request with `execute`. For a merged Sheet, open a
+pull request with `pr_create` and add the Sheet with `unit_add` first. Bind the new
+formula cells, then save the draft with `repo` and `pr`.
 
 Design floor: CSS color variables; text contrast 4.5:1, large text/control boundaries
 3:1; visible keyboard focus, labels and non-color cues; 4/8px spacing, 16px body,
@@ -104,8 +120,9 @@ New: `html_view_save` with `space` (source repository by default), `name`
 and UUID idempotency_key. Change/restyle: `html_view_read`, edit its HTML, then
 `html_view_save` with `page` set to its resource, exact quoted `etag` and a new key.
 Pass inline `html` by default; use html_upload_id only for oversized HTML. Both return `bindings`, `bindingCount`, optional
-`truncated` alongside `draft`. Check values/ranges, formula flags and date formats;
-fix mismatches and resave with a new key. Reuse keys only for identical retries. Pending revisions keep name/space to retire the older draft. Reread on stale ETags.
+`truncated` alongside `draft`. Use these samples as the self-check against the inspected
+Sheet: empty cells where data is expected, header text where numbers belong, formula cells
+behind writable controls, numbers with date formats. Fix mismatches and resave with a new key. Reuse keys only for identical retries. Pending revisions keep name/space to retire the older draft. Reread on stale ETags.
 Fix `renderCheck` issues. Validation does not run scripts; without render checks,
 report that and name checks run.
 

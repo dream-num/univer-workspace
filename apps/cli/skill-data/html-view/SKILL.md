@@ -23,12 +23,13 @@ use html_view_save to save a draft. Read the html-view-creator Skill for the MCP
    signature element. Adapt the structure and bindings to the inspected Sheet.
    For a custom style, start from the structurally closest style card and change palette,
    type and signature element while meeting the design floor in design.md.
-3. Page controls write to Sheet cells or append rows; the page displays the recalculated
-   source values through live bindings, and label host-provided visitor trials with `getWriteMode`
-   as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,
-   embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
-4. Write the page in the user's language as [design.md](references/design.md) describes;
-   templates are English starting points.
+3. Controls write input cells or insert records. Subscriptions display recalculated Sheet values.
+   Never compute Sheet metrics in page code or embed copied data or fallback numbers.
+   If a derived metric is missing, add Sheet formula cells through the execution operation in
+   the session's pull request. For a merged Sheet, create a pull request and add the Sheet first.
+   Bind the formula results. MCP drafts select that repository and pull request when saving.
+4. Keep loading, empty and error states honest. Label host-provided trials with `getWriteMode`.
+   Write visible text, units and dates in the user's language. Templates are English starting points.
 
 ## Bind the page
 
@@ -37,7 +38,10 @@ Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
 Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
-For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
+For binding syntax,
+JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
+When a binding pattern is still unclear, the [binding starter](examples/binding-starter.univer.html)
+shows each one without a design; do not take its look.
 
 Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 
