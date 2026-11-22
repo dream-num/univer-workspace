@@ -47,9 +47,9 @@ function validateErrorCode(outcome, code, errorCode, extra = {}) {
     principalId: undefined,
     ...extra.globals,
     protocol: '2026-07-28',
-    result: outcome === 'tool_error'
+    result: extra.result ?? (outcome === 'tool_error'
       ? { isError: true, content: [{ type: 'text', text: JSON.stringify({ code, message: 'm' }) }] }
-      : { structuredContent: {} },
+      : { structuredContent: {} }),
     event: {
       event: 'mcp.tool_call', schema_version: 1, ts: '2026-11-07T00:00:00Z',
       request_id: 'test', user_id: 'user-1', auth_kind: 'dev', client_id: 'dev',
@@ -152,3 +152,29 @@ for (const tool of ['skill_draft_create', 'skill_draft_get']) {
     assert.ok(validateErrorCode('ok', undefined, null, { globals, event: { tool, repo: null } }).includes('Unexpected repository or Unit identity'));
   });
 }
+
+for (const target of [{ space: 'space-1' }, { page: 'page-1', etag: '"v1"' }, { draft: 'draft-1' }]) {
+  test(`HTML View saves resolve repository identity through ${Object.keys(target)[0]}`, () => {
+    const globals = { tool: 'html_view_save', args: target };
+    const event = { tool: 'html_view_save', repo: 'space-1', cost: {
+      worker_cpu_ms: 0, worker_peak_rss_mb: 0, render_pages: 0,
+      export_bytes: 0, upload_bytes: 20, committed_revisions: 0,
+    } };
+    assert.equal(validateErrorCode('ok', undefined, null, { globals, event }).length, 0);
+    assert.ok(validateErrorCode('ok', undefined, null, { globals, event: { ...event, repo: null } }).includes('Unexpected repository or Unit identity'));
+  });
+}
+
+test('HTML View dry runs accept validation without a draft or repository and reject writes', () => {
+  const globals = { tool: 'html_view_save', args: { html: '<p>Static</p>', dryRun: true } };
+  const result = { structuredContent: { dryRun: true, valid: true, bindings: [], bindingCount: 0 } };
+  const validate = (result, costs = {}) => validateErrorCode('ok', undefined, null, {
+    globals, result, event: { tool: 'html_view_save', executor: 'warm', cost: {
+      worker_cpu_ms: 1, worker_peak_rss_mb: 1, render_pages: 0, export_bytes: 0,
+      upload_bytes: 13, committed_revisions: 0, ...costs,
+    } },
+  });
+  assert.equal(validate(result).length, 0);
+  assert.ok(validate({ structuredContent: { ...result.structuredContent, draft: {} } }).includes('HTML View dry run must validate without creating a draft'));
+  assert.ok(validate(result, { committed_revisions: 1 }).includes('HTML View dry run must validate without creating a draft'));
+});

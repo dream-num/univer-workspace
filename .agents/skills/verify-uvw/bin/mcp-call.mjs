@@ -202,7 +202,7 @@ function eventIssues(event) {
   // POST /api/agents never returns the id of the PAT it issues, so a principal's event is matched by its user instead.
   if (event.auth_kind !== kind || (principalId === undefined ? event.client_id !== clientId : event.user_id !== principalId)) issues.push(`Event authentication differs from --auth ${auth}`);
   for (const key of ['worker_cpu_ms', 'worker_peak_rss_mb', 'render_pages', 'export_bytes', 'upload_bytes', 'committed_revisions']) {
-    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_create', 'compile_markdown', 'compile_typst', 'compile_svg'].includes(tool)) ||
+    const gatewayTransfer = (key === 'upload_bytes' && ['blob_upload', 'blob_replace', 'import', 'html_view_save', 'compile_markdown', 'compile_typst', 'compile_svg'].includes(tool)) ||
       (key === 'export_bytes' && ['blob_download', 'asset_download', 'export', 'export_markdown', 'html_view_read'].includes(tool));
     if (typeof event.cost?.[key] !== 'number' || !Number.isFinite(event.cost[key]) || event.cost[key] < 0 || (event.executor === 'none' && !gatewayTransfer && event.cost[key] !== 0)) issues.push(`Invalid cost.${key}`);
   }
@@ -216,13 +216,16 @@ function eventIssues(event) {
   }
   if (event.trace_id !== null) issues.push('Unexpected trace_id without traceparent');
   // These tools resolve their Space from a Worktree, Resource, Node or created repository instead of a `repo` argument.
-  const resolvesRepo = typeof args.repo === 'string' || typeof args.space === 'string' ||
-    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_replace', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get'].includes(tool) || (['execute', 'inspect', 'outline', 'read', 'find', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
+  const dryRunHtmlView = tool === 'html_view_save' && args.dryRun === true;
+  const validation = dryRunHtmlView ? toolOutput(result) : undefined;
+  if (dryRunHtmlView && !result.isError && (validation?.dryRun !== true || validation?.valid !== true || 'draft' in validation || event.cost?.committed_revisions !== 0)) issues.push('HTML View dry run must validate without creating a draft');
+  const resolvesRepo = (tool === 'html_view_save' && !dryRunHtmlView && (typeof args.page === 'string' || typeof args.draft === 'string')) || typeof args.repo === 'string' || typeof args.space === 'string' ||
+    ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get'].includes(tool) || (['execute', 'inspect', 'outline', 'read', 'find', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
   const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true && !['worktree', 'space', 'parent'].some((key) => args[key] !== undefined);
   const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;
   const invalidUnitType = event.executor === 'none' || compileOnlyTypst
     ? event.unit_type !== null && !(['outline', 'read', 'find'].includes(tool) && typeof event.unit_type === 'string')
-    : typeof event.unit_type !== 'string' && !failedTypstWithoutUnit;
+    : typeof event.unit_type !== 'string' && !failedTypstWithoutUnit && !(dryRunHtmlView && event.unit_type === null);
   if (invalidUnitType || (!resolvesRepo && event.repo !== null) || (resolvesRepo && !result.isError && typeof event.repo !== 'string')) issues.push('Unexpected repository or Unit identity');
   if (event.outcome === 'tool_error' || event.outcome === 'timeout') {
     const resultCode = toolOutput(result)?.code;
