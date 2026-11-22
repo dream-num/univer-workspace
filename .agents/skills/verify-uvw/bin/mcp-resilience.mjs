@@ -127,9 +127,9 @@ try {
       await sleep(250);
     };
     const a = await pat(prefix + '-a'), b = await pat(prefix + '-b');
-    assert((await ok('warm-a', 'html_view_validate', { html }, a.token)).output.valid, 'A validates and warms a worker');
+    assert((await ok('warm-a', 'html_view_save', { html, dryRun: true }, a.token)).output.valid, 'A validates and warms a worker');
     await revoke(a.record.id);
-    const recovered = await ok('validate-b', 'html_view_validate', { html }, b.token);
+    const recovered = await ok('validate-b', 'html_view_save', { html, dryRun: true }, b.token);
     assert.equal(recovered.output.bindingCount, 1, 'B validates after A was revoked');
     proof.logs = logs();
     assert.equal(proof.logs.filter(log => log.event === 'mcp.executor_rerun' && log.reason === 'auth' && log.request_id === recovered.requestId).length, 1, 'B recovers with one auth rerun');
@@ -156,7 +156,7 @@ try {
     const retried = rpc('retry', 20_000);
     proof.retried = retried;
     assert(retried.ok && retried.output.bindingCount === 1, 'the retry succeeds on the replaced worker');
-    const next = await ok('bearer-after', 'html_view_validate', { html });
+    const next = await ok('bearer-after', 'html_view_save', { html, dryRun: true });
     assert.equal(next.status, 200, 'the primary bearer still works after the no-rerun failure');
   } else if (mode === 'burst') {
     const results = await Promise.all(Array.from({ length: 5 }, (_, i) => call('burst-' + i, 'execute', { ...target, code: write('A' + (i + 1), 'burst-' + i) })));
