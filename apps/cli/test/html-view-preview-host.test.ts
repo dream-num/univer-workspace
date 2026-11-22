@@ -70,3 +70,19 @@ it("prints waiting when no browser connects in time", async () => {
     child.kill();
   }
 });
+
+it("carries the pull-request source into the preview URL and rejects half of it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "preview-host-"));
+  const page = join(dir, "page.univer.html");
+  await writeFile(page, "<p>one</p>");
+  const child = spawn(process.execPath, [path, page, "--repo", "owner/repo", "--pr", "12", "--wait", "0"], { stdio: ["ignore", "pipe", "inherit"] });
+  const lines = createInterface({ input: child.stdout })[Symbol.asyncIterator]();
+  try {
+    const url = new URL(JSON.parse((await lines.next()).value as string).url as string);
+    expect(url.searchParams.get("repo")).toBe("owner/repo");
+    expect(url.searchParams.get("pr")).toBe("12");
+  } finally {
+    child.kill();
+  }
+  expect(() => execFileSync(process.execPath, [path, page, "--repo", "owner/repo"], { stdio: "pipe" })).toThrow(/--repo <owner\/slug> --pr <n>/);
+});

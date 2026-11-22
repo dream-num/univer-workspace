@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// node preview.mjs page.univer.html [--workspace <origin>] [--open] [--wait <seconds>] [--self-check]
+// node preview.mjs page.univer.html [--workspace <origin>] [--repo <owner/slug> --pr <n>] [--open] [--wait <seconds>] [--self-check]
 import { createServer, request } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -11,7 +11,7 @@ const [major, minor] = process.versions.node.split('.').map(Number);
 if (major < 18 || (major === 18 && minor < 2)) throw new Error('Node 18.2 or newer is required.');
 const out = (value) => console.log(JSON.stringify(value));
 
-function start({ path, workspace, wait = 0, open = false }) {
+function start({ path, workspace, wait = 0, open = false, source }) {
   const origin = new URL(workspace).origin;
   const token = 't' + randomBytes(16).toString('hex');
   const clients = new Set();
@@ -63,6 +63,7 @@ function start({ path, workspace, wait = 0, open = false }) {
     link.searchParams.set('src', `${base}/page`);
     link.searchParams.set('token', token);
     link.searchParams.set('file', basename(path));
+    if (source) { link.searchParams.set('repo', source.repo); link.searchParams.set('pr', source.pr); }
     if (wait > 0) timers.push(setTimeout(() => { if (!seen) out({ event: 'waiting', seconds: wait }); }, wait * 1000));
     if (open) {
       const [cmd, ...args] = process.platform === 'darwin' ? ['open', link.href] : process.platform === 'win32'
@@ -97,7 +98,7 @@ const rest = [];
 const args = process.argv.slice(2);
 for (let i = 0; i < args.length; i++) {
   if (['--open', '--self-check'].includes(args[i])) opts[args[i]] = true;
-  else if (['--workspace', '--wait'].includes(args[i])) opts[args[i]] = args[++i];
+  else if (['--workspace', '--wait', '--repo', '--pr'].includes(args[i])) opts[args[i]] = args[++i];
   else rest.push(args[i]);
 }
 const workspace = opts['--workspace'] || 'https://space.univer.ai';
@@ -105,10 +106,13 @@ const wait = Number(opts['--wait'] ?? 30);
 if (opts['--self-check']) await selfCheck();
 else {
   const [file] = rest;
-  if (!file || rest.length > 1 || !(wait >= 0)) throw new Error('Usage: node preview.mjs page.html [--workspace <origin>] [--open] [--wait <seconds>]');
+  const { '--repo': repo, '--pr': pr } = opts;
+  if (!file || rest.length > 1 || !(wait >= 0) || (repo === undefined) !== (pr === undefined) ||
+      (repo !== undefined && (!/^[^/\s]+\/[^/\s]+$/.test(repo) || !/^[1-9]\d*$/.test(pr))))
+    throw new Error('Usage: node preview.mjs page.html [--workspace <origin>] [--repo <owner/slug> --pr <n>] [--open] [--wait <seconds>]');
   const path = resolve(file);
   await readFile(path);
-  const preview = await start({ path, workspace, wait, open: opts['--open'] });
+  const preview = await start({ path, workspace, wait, open: opts['--open'], source: repo ? { repo, pr } : undefined });
   out({ event: 'ready', url: preview.url, file: path, token: preview.token });
   for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, preview.stop);
 }

@@ -1,7 +1,8 @@
-# Preview a local HTML View before saving
+# Preview a local HTML View live in the browser
 
-Use this reference only when running a local preview. Write the bound page to a local
-HTML file first. If a local file with bindings already exists, use that file.
+Use this reference when the user accepts a live local preview: after a draft is saved
+through MCP, or before `html-view create` with the CLI. Write the page to a local HTML file,
+or use the existing local file.
 
 ## Start the preview
 
@@ -13,18 +14,18 @@ HTML file first. If a local file with bindings already exists, use that file.
 3. Run the script beside the page, or use absolute paths:
 
    ```text
-   node preview.mjs page.univer.html [--open]
+   node preview.mjs page.univer.html --open [--repo <owner/slug> --pr <n>]
    ```
 
-   Replace the page filename with your file. Add `--open` to open the system browser.
+   Replace the page filename with your file. `--open` opens the user's browser.
+   For pull-request data, pass the same `--repo` as the save and the pull request number as `--pr`
+   (not a Worktree id).
    For another Workspace deployment, add `--workspace <origin>`.
    The default origin is https://space.univer.ai. Keep the process running while you edit.
-4. Read the `ready` line and give its `url` to the user. The user opens the URL in a
-   signed-in browser, loads the page, reviews the listed sources, and confirms trust.
+4. Tell the user the preview opened in their browser: click Load page, allow local network
+   access if Chrome asks, review the listed sources, and confirm trust. Also give the `url`
+   from the `ready` line in case the browser did not open.
    The script only serves local HTML. The browser uses its Workspace login to read live data.
-5. For pull-request data, add `repo` and `pr` to the URL before opening it.
-   For example, append `&repo=owner%2Frepo&pr=12` to the printed URL.
-   Keep `src`, `token`, and `file` intact. Use the same repository and PR when saving.
 
 Preview writes are trial by default. Controls recalculate in the browser without saving
 source changes. Keep trial mode during debugging. A PR preview only allows trial writes.
@@ -55,9 +56,8 @@ Read the newest report, and repeat until it passes with no binding warnings or l
 placeholders. Check the page at 360px, 390px, and 1440px with the viewport controls.
 The report's `sha256` identifies the checked HTML. Save that same content.
 
-Then save that content once. Through MCP, call `html_view_save` to create a draft, revise
-a pending draft with `draft` instead of creating another page, and return the draft preview
-URL. Follow the creator Skill for publication and access wording. With the CLI, which has no
+Then save that content once. Through MCP, revise the pending draft with `html_view_save` and
+`draft` instead of creating another page, and return the draft preview URL. Follow the creator Skill for publication and access wording. With the CLI, which has no
 drafts, run `html-view validate` and then `html-view create`, which publishes at once, or
 replace an existing page's Blob, as the html-view Skill describes.
 

@@ -90,15 +90,13 @@ it("keeps the design reference focused on the catalog and design floor", async (
   expect(content).not.toMatch(/ask at most one question|otherwise choose from the catalog/iu);
 });
 
-it("previews before saving and keeps preview details in an optional reference", async () => {
+it("saves after a dry run and offers the live preview in an optional reference", async () => {
   const content = (await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")).replace(/\s+/gu, " ");
-  for (const term of ["With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, write the page to a local HTML file",
-    "[local preview](references/local-preview.md) only when running the preview",
-    "Preview and iterate until the report passes before saving",
-    "Without Node or a local shell, skip preview and do not write local files",
-    "`html_view_save` and `dryRun: true`", "save once as a draft", "Revise pending drafts with `draft`",
-    "With the CLI there are no drafts: `html-view create` publishes at once",
-    "Preview and save an existing local file with bindings as a draft too",
+  for (const term of ["`html_view_save` and `dryRun: true`, then save once as a draft", "Revise pending drafts with `draft`",
+    "With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, offer the user a live local preview after saving",
+    "[local preview](references/local-preview.md); it opens the page in their browser",
+    "With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview before `html-view create`",
+    "Save an existing local file with bindings as a draft too",
     "why it fits the request or data in one clause",
     "For a PR-linked draft, say the page goes live when the user merges the pull request in Workspace",
     "Only drafts without a PR use **Publish**"])
@@ -106,10 +104,11 @@ it("previews before saving and keeps preview details in an optional reference", 
   const reference = (await readFile(join(skillRoot, "html-view/references/local-preview.md"), "utf8")).replace(/\s+/gu, " ");
   for (const term of ['skills_read {"name":"html-view","resource":"scripts/preview.mjs"}',
     "complete returned content to a local file", "installed html-view Skill directory",
-    "node preview.mjs page.univer.html [--open]", "one JSON object per line",
+    "when the user accepts a live local preview", "node preview.mjs page.univer.html --open [--repo <owner/slug> --pr <n>]",
+    "the pull request number as `--pr` (not a Worktree id)", "one JSON object per line",
     '"event":"ready"', '"event":"report"', '"event":"waiting"', "GET /report?token=<token>",
-    "HTTP 204 before any report", "signed-in browser", "confirms trust",
-    "add `repo` and `pr` to the URL", "Preview writes are trial by default",
+    "HTTP 204 before any report", "click Load page", "confirm trust", "revise the pending draft with `html_view_save` and `draft`",
+    "Preview writes are trial by default",
     "Fix every `renderCheck` issue", "Require status `passed`", "Fix every warning in `bindings`",
     "Remove every entry in `leftoverPlaceholders`", "sha256", "Save that same content",
     "Chrome can ask for local network access", "Safari supports the file picker only",
