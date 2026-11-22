@@ -25,7 +25,7 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("keeps the default draft path compact and self-contained", async () => {
     const content = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     const text = content.replace(/\s+/gu, " ");
-    expect([...content].length).toBeLessThanOrEqual(10500);
+    expect([...content].length).toBeLessThanOrEqual(10000);
     const description = /^description: (.+)$/mu.exec(content)?.[1];
     for (const routing of ["HTML View (.univer.html)", "shareable live HTML page", "dashboard", "report", "form", "Workspace Sheet data", "Prefer it over a local .html unless the user asks for a file"])
       expect(description).toContain(routing);
@@ -35,12 +35,9 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(text).toContain("structurally closest style card");
     expect(text).toContain("Name the style and reason and offer to change it");
     expect(text).not.toMatch(/optional starting points|Free design need not/u);
-    expect(text).toContain('skills_read {"name":"html-view","resource":"examples/binding-starter.univer.html"}');
-    expect(text).toContain("Read the neutral binding starter by default");
+    expect(text).not.toContain("binding-starter");
     for (const resource of ["styles/<id>.md", "templates/<id>.univer.html"])
       expect(text).toContain(`skills_read {"name":"html-view","resource":"${resource}"}`);
-    expect(text.indexOf("styles/<id>.md")).toBeLessThan(text.indexOf("examples/binding-starter.univer.html"));
-    expect(text.indexOf("examples/binding-starter.univer.html")).toBeLessThan(text.indexOf("templates/<id>.univer.html"));
     expect(text).toContain("the page goes live when the user merges in Workspace");
     expect(text).toContain("Never merge or ask to merge on their behalf");
     expect(text).toContain("Ask mode cannot save");
@@ -52,8 +49,7 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(catalogIds).toHaveLength(10);
     for (const id of catalogIds) expect(content).toContain(`- \`${id}\`.`);
     const sections = [...content.matchAll(/^## (.+)$/gmu)].map((match) => match[1]);
-    expect(sections).toEqual(["Rules", "1. Read the data", "2. Choose the style", "3. Declare the bindings", "4. Render every update",
-      "5. Write and confirm", "6. Keep numbers in the Sheet", "7. Check the binding samples", "8. Design floor", "9. Save and reply", "10. Continue"]);
+    expect(sections).toEqual(["Rules", "1. Read and choose", "2. Bind", "3. Save and reply", "4. Continue"]);
   });
 
   it("keeps catalog IDs, templates and compact style cards in sync", async () => {
@@ -76,7 +72,7 @@ describe("HTML View Creator Skill tool bindings", () => {
   });
 
   it("reads cards first and reserves full templates for matching data or interactions", async () => {
-    for (const path of ["../skills/html-view-creator/SKILL.md", "../../cli/skill-data/html-view/SKILL.md", "../../cli/skill-data/html-view/references/design.md"]) {
+    for (const path of ["../skills/html-view-creator/SKILL.md", "../../cli/skill-data/html-view/SKILL.md"]) {
       const text = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
       expect(text.indexOf("styles/<id>.md")).toBeLessThan(text.indexOf("templates/<id>.univer.html"));
       expect(text).toContain("styles/<id>.md");
@@ -93,7 +89,7 @@ describe("HTML View Creator Skill tool bindings", () => {
 
   it("teaches binding runtime semantics and keeps derived metrics in Sheet formulas", async () => {
     const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
-    for (const rule of ["one source attribute per element", "Fixed ranges do not grow", "zero-based coordinates",
+    for (const rule of ["one source attribute per element", "fixed ranges never grow", "zero-based coordinates",
       "Callbacks fire before the subscribe Promise resolves", "full matrix padded with null, including for empty ranges",
       "Separate subscriptions have no ordering", "binding attributes never change the DOM", "render code must replace placeholders",
       "show error states on rejection", "setCellValue(reference, value)` then `flush()", "insertRowsWithValues",

@@ -64,12 +64,12 @@ it("allows only the documented HTML View validation scope command", async () => 
   }
 });
 
-it("selects styles from context and reads a binding starter by default", async () => {
+it("selects styles from context and keeps the binding starter optional", async () => {
   const content = (await readFile(join(skillRoot, "html-view", "SKILL.md"), "utf8")).replace(/\s+/gu, " ");
   expect(content).not.toMatch(/end your turn and wait|never silently choose/iu);
   for (const term of ["purpose", "audience", "adjectives", "dense rankings", "time series", "tasks/status", "key numbers",
     "structurally closest style card", "always name the style and why", "offer to change it", "one-line description",
-    "binding starter](examples/binding-starter.univer.html) by default", "Never compute Sheet metrics in page code",
+    "binding pattern is still unclear, the [binding starter](examples/binding-starter.univer.html)", "Never compute Sheet metrics in page code",
     "add Sheet formula cells", "session's pull request", "create a pull request and add the Sheet first"])
     expect(content).toContain(term);
   const authoring = (await readFile(join(skillRoot, "html-view/references/authoring.md"), "utf8")).replace(/\s+/gu, " ");

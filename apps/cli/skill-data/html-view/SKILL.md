@@ -38,9 +38,10 @@ Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
 Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
-Read the neutral [binding starter](examples/binding-starter.univer.html) by default from the installed
-Skill directory. It demonstrates bindings without prescribing a design. For binding syntax,
+For binding syntax,
 JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
+When a binding pattern is still unclear, the [binding starter](examples/binding-starter.univer.html)
+shows each one without a design; do not take its look.
 
 Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 

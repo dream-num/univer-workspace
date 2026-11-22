@@ -38,11 +38,9 @@ description. Keep the template's bindings, write paths, states and the craft flo
 
 ## Apply the chosen style
 
-Read `styles/<id>.md` by default. Read the full `templates/<id>.univer.html` only
-when the data's shape is close to its original scenario in the catalog or the
-page needs that template's interaction. Inspect its expected columns, formulas and bounds.
-Replace every Unit and worksheet ID (URI-encoded in binding attributes, raw in JavaScript)
-and adapt coordinates to the inspected Sheet.
+Read `templates/<id>.univer.html` and start from its complete source. Inspect its header's
+expected columns, formulas and bounds; replace every Unit and worksheet ID (URI-encoded
+in binding attributes, raw in JavaScript) and adapt coordinates to the inspected Sheet.
 
 For a scenario the template was not designed for, keep its fonts, palette, density and
 signature element. Rebuild the structure the user's data needs with that template's own
