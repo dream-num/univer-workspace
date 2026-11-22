@@ -30,6 +30,7 @@ const FILE_POLL_MS = 500;
 // Set once a loopback fetch succeeded. The browser then keeps the grant, so later loads may start without a click.
 const GRANTED_KEY = "html-view-preview-loopback-granted";
 const granted = () => { try { return localStorage.getItem(GRANTED_KEY) === "1"; } catch { return false; } };
+const isStaleFileError = (error: unknown) => error instanceof DOMException && (error.name === "NotReadableError" || error.name === "NotFoundError");
 const setGranted = (value: boolean) => { try { if (value) localStorage.setItem(GRANTED_KEY, "1"); else localStorage.removeItem(GRANTED_KEY); } catch { /* a blocked store only means a click next time */ } };
 
 /** The page the user is previewing: the local host's file, or a file picked or dropped in the browser. */
@@ -95,7 +96,7 @@ export function usePreviewPage(search: PreviewSearch) {
         seen = version;
         await commit(file.name, await file.arrayBuffer(), abort.signal);
       } catch (error) {
-        if (error instanceof DOMException && error.name === "NotReadableError") setStale(true);
+        if (!picked.handle && isStaleFileError(error)) setStale(true);
         if (!abort.signal.aborted) setState((current) => current.status === "ready" ? current
           : { status: "error", kind: "failed", message: error instanceof Error ? error.message : String(error) });
       }
@@ -103,10 +104,10 @@ export function usePreviewPage(search: PreviewSearch) {
     setState({ status: "loading" });
     setStale(false);
     void load();
-    // A File from an input or a drop is a snapshot: reading it after the disk changed throws NotReadableError.
+    // A File from an input or a drop is a snapshot: after the disk changes, Chrome throws NotReadableError and Safari NotFoundError.
     const timer = setInterval(() => {
       if (picked.handle) void load();
-      else picked.file.slice(0, 1).arrayBuffer().catch((error: unknown) => { if (error instanceof DOMException && error.name === "NotReadableError") setStale(true); });
+      else picked.file.slice(0, 1).arrayBuffer().catch((error: unknown) => { if (isStaleFileError(error)) setStale(true); });
     }, FILE_POLL_MS);
     return () => { abort.abort(); clearInterval(timer); };
   }, [picked, commit]);

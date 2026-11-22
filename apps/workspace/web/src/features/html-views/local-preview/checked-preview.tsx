@@ -87,7 +87,7 @@ export function CheckedPreview(props: CheckedPreviewProps) {
 
   return <div className="flex min-h-0 flex-1">
     <div ref={root} className="min-w-0 flex-1 overflow-auto bg-muted/40">
-      <div className="mx-auto h-full bg-background" style={{ width: props.viewportWidth ?? "100%", maxWidth: "100%" }}>
+      <div className="mx-auto h-full bg-background" style={props.viewportWidth === null ? { width: "100%" } : { width: props.viewportWidth }}>
         <HtmlView source={source} immersive actionsContainer={null} draft={props.writeMode === "trial"} hideDraftNotice
           sourceWorktree={props.worktree} onSourceLoaded={onSourceLoaded} />
       </div>

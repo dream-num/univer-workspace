@@ -70,7 +70,7 @@ export function LocalPreview({ search, worktree }: { search: PreviewSearch; work
         parsed && "error" in parsed ? <p role="alert" className="m-6 text-destructive">{m.parseFailed(parsed.error)}</p> :
         !trusted ? <TrustStep html={page.html} bindings={parsed!.document.bindings} fileName={page.name} sourceLabel={sourceLabel} worktree={worktree}
           onConfirm={() => { remember(key, unitIds); confirmed((n) => n + 1); }} pick={pick} /> :
-        <CheckedPreview key={`${page.generation}:${writeMode}`} page={page} bindings={parsed!.document.bindings} unitIds={unitIds} token={token}
+        <CheckedPreview key={`${page.generation}:${writeMode}:${viewport}`} page={page} bindings={parsed!.document.bindings} unitIds={unitIds} token={token}
           writeMode={worktree ? "trial" : writeMode} worktree={worktree && writeMode === "trial" ? worktree : undefined}
           viewportWidth={viewport === "fit" ? null : Number(viewport)} deliver={deliver} />}
     </div>
@@ -103,6 +103,7 @@ function Gate({ state, loader, pick, fileName, origin, noSource }: {
       <h2 role="alert" className="m-0 text-base font-semibold">{m.errorBlockedTitle}</h2>
       <p className="m-0">{m.errorBlockedCauses}</p>
       <p className="m-0">{m.errorBlockedFix}</p>
+      <p className="m-0">{m.errorSafari}</p>
       <ul className="m-0 list-none break-all p-0 text-xs text-muted-foreground">
         <li><code>{m.errorChromeLink(window.location.origin)}</code></li><li><code>{m.errorEdgeLink(window.location.origin)}</code></li>
       </ul>

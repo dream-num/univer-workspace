@@ -76,3 +76,17 @@ it("asks for a click before the first load, so the browser can prompt for local 
   expect(controls.start).toHaveBeenCalledTimes(1);
   expect(controls.mounted).not.toHaveBeenCalled();
 });
+
+it("keeps a fixed preset at its width and starts a new check when the viewport changes", async () => {
+  await render();
+  await act(async () => button("Trust and preview")!.click());
+  expect(controls.mounted).toHaveBeenCalledTimes(1);
+  await act(async () => button("1440")!.click());
+  const frame = container.querySelector("iframe")!.parentElement!;
+  expect(frame.style.width).toBe("1440px");
+  expect(frame.style.maxWidth).toBe("");
+  expect(controls.mounted).toHaveBeenCalledTimes(2);
+  await act(async () => button("360")!.click());
+  expect(container.querySelector("iframe")!.parentElement!.style.width).toBe("360px");
+  expect(controls.mounted).toHaveBeenCalledTimes(3);
+});

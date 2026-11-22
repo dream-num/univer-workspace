@@ -56,14 +56,14 @@ it("tells a refusal from a blocked or absent host", async () => {
   expect(latest.state).toMatchObject({ status: "error", kind: "refused", httpStatus: 403 });
 });
 
-it("treats a picked File that can no longer be read as changed on disk", async () => {
+it.each(["NotReadableError", "NotFoundError"])("treats a picked File that throws %s as changed on disk", async (name) => {
   await mount();
   const file = new File(["<p>x</p>"], "a.html");
   await act(async () => latest.pickInput(file));
   await settle();
   expect(latest.state).toMatchObject({ status: "ready" });
   expect(latest.stale).toBe(false);
-  vi.spyOn(Blob.prototype, "slice").mockReturnValue({ arrayBuffer: () => Promise.reject(new DOMException("changed", "NotReadableError")) } as Blob);
+  vi.spyOn(Blob.prototype, "slice").mockReturnValue({ arrayBuffer: () => Promise.reject(new DOMException("changed", name)) } as Blob);
   await settle(650);
   expect(latest.stale).toBe(true);
 });
