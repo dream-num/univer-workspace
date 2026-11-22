@@ -116,22 +116,20 @@ private media stays empty, so provide a visible fallback.
 
 ## 3. Save and reply
 
-With a local shell and `node`, write the page to a local file and preview it via
-`skills_read {"name":"html-view","resource":"references/local-preview.md"}`
-until the report passes. Otherwise call `html_view_save` with `dryRun: true`.
-Use these samples as the self-check. Fix empty samples, headers as numbers, writable
-formulas and date serials. Dry runs do not run scripts; say render checks did not run.
-Then save the checked HTML once as a draft. Do the same for existing local files with
-bindings; never hand off local files unless requested.
+Call `html_view_save` with `dryRun: true`. Use these samples as the self-check. Fix empty samples, headers as numbers, writable
+formulas, date serials. Dry runs do not run scripts; say render checks did not run.
+Then save the checked HTML once as a draft. Save existing local files with bindings
+as drafts too; never hand off local files unless requested.
 
 New: `html_view_save` with `space` (source repository by default), `name` and UUID
 idempotency_key. Revision: `html_view_read`, edit, then save with `page`,
 quoted `etag` and a new key. Revise pending drafts with `draft`, not name/space.
 Pass inline `html` by default; use html_upload_id for oversized HTML.
-Reuse keys only for identical retries. Reread stale ETags.
+Reuse keys only for identical retries.
 
 Reply with purpose, sources, cells controls change, previewUrl, and style.
 Explain in one clause why the style fits the request or data. Offer to change it.
+With a local shell and `node`, not as an agent identity, offer a live preview.
 For a PR-linked draft, say the page goes live when the user merges the pull request in
 Workspace. Only for a draft without a PR, open preview and press **Publish**.
 Explain access from `repositoryVisibility` and `privateSourceUnitIds`: public with no
@@ -148,3 +146,5 @@ Use `html_view_draft_get` before status/revision. Pending: read with `html_view_
 Published: shareUrl; revise with `page` and `etag` from `html_view_read`.
 Superseded: follow successorUrl. Rejected: reason. Conflicted: reread page/PR.
 Expired: new key. Restyle with `html_view_styles` when available; preserve data.
+Preview accepted: follow `skills_read {"name":"html-view","resource":"references/local-preview.md"}`,
+then revise the draft with `draft`.

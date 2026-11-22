@@ -65,19 +65,19 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 
 ## Validate and create
 
-With a local shell and `node`, write the page to a local HTML file and read
-[local preview](references/local-preview.md) only when running the preview.
-Preview and iterate until the report passes before saving.
-Without Node or a local shell, skip preview and do not write local files.
-
-Through MCP, check with `html_view_save` and `dryRun: true` when you did not preview, then
-save once as a draft. Revise pending drafts with `draft`. Preview and save an existing local
-file with bindings as a draft too, unless the user explicitly requested a file.
+Through MCP, check with `html_view_save` and `dryRun: true`, then save once as a draft.
+Revise pending drafts with `draft`. Save an existing local file with bindings as a draft too,
+unless the user explicitly requested a file.
 For a PR-linked draft, say the page goes live when the user merges the pull request in
 Workspace. Only drafts without a PR use **Publish** in the preview.
 
-With the CLI there are no drafts: `html-view create` publishes at once. After the preview passes,
-run `html-view validate` and `html-view create` as below, or replace an existing page's Blob.
+With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot
+read, offer the user a live local preview after saving. When they accept, follow
+[local preview](references/local-preview.md); it opens the page in their browser.
+
+With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview
+before `html-view create`, then run `html-view validate` and `html-view create` as below, or replace
+an existing page's Blob.
 
 Run `html-view validate` with the complete HTML source. Then run `html-view create` with the same source, destination Space, name `Dashboard`, stable idempotency key, and optional parent Node. Follow the `core` Skill for source handling.
 
