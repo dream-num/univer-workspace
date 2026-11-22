@@ -10,7 +10,7 @@ export const htmlViewDraftGetTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "Read an HTML View draft status",
-  description: "Return the current state of an HTML View draft: pending, published, rejected, expired or conflicted. Published drafts include shareUrl, node, resource and etag; other states do not include publication fields.",
+  description: "Return the current state of an HTML View draft: pending, published, rejected, expired, conflicted or superseded. Superseded drafts include supersededBy and successorUrl. Published drafts include shareUrl, node, resource and etag; other states do not include publication fields.",
   inputSchema,
   outputSchema: htmlViewDraftOutput,
   annotations: readOnlyAnnotations,

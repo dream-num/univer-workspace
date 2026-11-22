@@ -319,8 +319,8 @@ Express 直接使用 `req.route?.path`，标签对应 Router 内注册的模板�
 
 服务端入口将 `config.database` 交给 `openProductDatabase`，等待数据库就绪后，将只读创建信息接口交给历史协同迁移，并将 Repository 集合注入应用。业务 Service、HTTP、后台任务、封禁 Agent 与授予执行层的命令均通过接口访问产品库。启动入口在应用退出或启动失败时关闭产品库。PostgreSQL 的连接池、Repository、可串行化事务和建库入口在 `db/postgres/`。SQLite 的连接、Repository 装配、事务、备份、V0 读取器和迁移均在 `db/sqlite/` 下。
 
-`db/sqlite/schema.sql` 定义完整 V25 结构，`db/sqlite/initialize.ts`
-负责在业务 Module 初始化前识别数据库状态：空数据库应用 V25；V25 校验指纹；V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
+`db/sqlite/schema.sql` 定义完整 V27 结构，`db/sqlite/initialize.ts`
+负责在业务 Module 初始化前识别数据库状态：空数据库应用 V27；V27 校验指纹；V26/V25/V24/V23/V22/V21/V20/V19/V18/V17/V16/V15/V14/V13/V12/V11/V10/V9/V8/V7/V6/V5/V4/V3/V2/V1/V0
 先生成一致性备份，再调用隔离的一次性迁移器。
 
 V23 新增 `executor_access` 表，记录运维授予共享 MCP 执行层的 User。
@@ -355,7 +355,7 @@ Identity 在签发 Session 时写入来源，`requireSession` 返回内部 `Prin
 - 应用数据目录为 `.data/`。
 - 容器内数据目录为 `/app/univer-workspace/.data`。
 - 默认数据库文件为 `.data/univer-workspace.sqlite`。
-- 部署和普通重启均保留数据库；V25 不重复备份或迁移。
+- 部署和普通重启均保留数据库；V27 不重复备份或迁移。
 - 普通进程重启不清理数据库。
 - 每个测试使用独立的临时数据库文件或内存数据库。
 

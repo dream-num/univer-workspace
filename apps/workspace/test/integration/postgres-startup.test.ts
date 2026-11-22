@@ -30,9 +30,9 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     const reopened = await openProductDatabase(config);
     try { expect(await reopened.repositories.identity.usernameExists("KEPT")).toBe(true); }
     finally { await reopened.close(); }
-    await schema.pool.query("UPDATE workspace_product_schema SET version=7");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=8");
     await expect(openProductDatabase(config)).rejects.toThrow(/Unsupported/);
-    await schema.pool.query("UPDATE workspace_product_schema SET version=6");
+    await schema.pool.query("UPDATE workspace_product_schema SET version=7");
     await schema.pool.query("DROP INDEX users_username");
     await expect(openProductDatabase(config)).rejects.toThrow(/modified/);
     expect((await schema.pool.query("SELECT username FROM users")).rows).toEqual([{ username: "kept" }]);
@@ -110,7 +110,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 
     await start();
     const fresh = await structure();
-    expect(fresh.version).toMatchObject([{ version: 6 }]);
+    expect(fresh.version).toMatchObject([{ version: 7 }]);
     await downgrade(schema, 2);
     await schema.pool.query("INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 1)");
     const before = await users();
@@ -280,7 +280,7 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     } finally { reset.release(); }
     await (await openProductDatabase(config)).close();
     const after = (await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows;
-    expect(after).toEqual(before.map((row) => ({ ...row, source_worktree_id: null })));
+    expect(after).toEqual(before.map((row) => ({ ...row, source_worktree_id: null, superseded_by: null, revises_draft_id: null })));
     expect((await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows).toEqual(operations);
     expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(fresh);
     if (seeded) await schema.pool.query("UPDATE html_view_drafts SET source_worktree_id = 'w' WHERE id = 'pending'");
@@ -288,6 +288,51 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
     expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(fresh);
     expect((await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows)
       .toEqual(after.map((row) => row.id === "pending" ? { ...row, source_worktree_id: "w" } : row));
+  });
+
+  it.each([false, true])("upgrades version 6 preserving drafts and recovery rows (seeded=%s)", async (seeded) => {
+    const schema = await createPostgresTestSchema(url!);
+    onTestFinished(schema.close);
+    const config = { provider: "postgres" as const, connectionString: schema.connectionString };
+    const start = async () => (await openProductDatabase(config)).close();
+    await start();
+    const fresh = (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows;
+    await downgrade(schema, 6);
+    if (seeded) {
+      await schema.pool.query(`INSERT INTO users (id, username, display_name, created_at, updated_at) VALUES ('u', 'owner', 'Owner', 1, 2);
+INSERT INTO spaces (id, type, name, owner_user_id, created_at, updated_at) VALUES ('s', 'personal', 'Personal', 'u', 1, 2);
+INSERT INTO operations (id, kind, actor_user_id, step, state, payload_json, attempt_count, next_attempt_at, created_at, updated_at)
+VALUES ('op', 'merge_worktree', 'u', 'merge', 'pending', '{}', 2, 3, 1, 2);`);
+      for (const state of ["receiving", "pending", "published", "rejected", "expired", "conflicted"]) {
+        await schema.pool.query(`INSERT INTO html_view_drafts (id, author_user_id, idempotency_key, kind, space_id, name, object_key, byte_size, sha256,
+media_type, stored_etag, state, result_resource_id, expires_at, created_at, updated_at, source_worktree_id)
+VALUES ($1, 'u', $1, 'create', 's', 'Page.univer.html', $1, 3, $2, 'text/html', 'etag', $1, $3, 999, 1, 2, 'w')`,
+          [state, "a".repeat(64), state === "published" ? "resource" : null]);
+      }
+    }
+    const before = (await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows;
+    const operations = (await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows;
+    const oldSchema = (await schema.pool.query("SELECT * FROM workspace_product_schema")).rows;
+    // A duplicate column name forces failure after the first column addition.
+    await schema.pool.query("ALTER TABLE html_view_drafts ADD COLUMN revises_draft_id TEXT");
+    const client = await schema.pool.connect();
+    try { await client.query("UPDATE workspace_product_schema SET fingerprint = $1", [await productSchemaFingerprint(client)]); }
+    finally { client.release(); }
+    await expect(start()).rejects.toThrow(/already exists/);
+    expect((await schema.pool.query("SELECT column_name FROM information_schema.columns WHERE table_schema = current_schema() AND table_name = 'html_view_drafts' AND column_name = 'superseded_by'")).rows).toEqual([]);
+    await schema.pool.query("ALTER TABLE html_view_drafts DROP COLUMN revises_draft_id");
+    await schema.pool.query("UPDATE workspace_product_schema SET fingerprint = $1", [oldSchema[0]!.fingerprint]);
+    await start();
+    const after = before.map((row) => ({ ...row, superseded_by: null, revises_draft_id: null }));
+    expect((await schema.pool.query("SELECT * FROM html_view_drafts ORDER BY id")).rows).toEqual(after);
+    expect((await schema.pool.query("SELECT * FROM operations ORDER BY id")).rows).toEqual(operations);
+    expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(fresh);
+    await start();
+    expect((await schema.pool.query("SELECT * FROM workspace_product_schema")).rows).toEqual(fresh);
+    if (seeded) {
+      await schema.pool.query("UPDATE html_view_drafts SET state = 'superseded', superseded_by = 'published' WHERE id = 'pending'");
+      expect((await schema.pool.query("SELECT superseded_by FROM html_view_drafts WHERE id = 'pending'")).rows).toEqual([{ superseded_by: "published" }]);
+    }
   });
 
   it("preserves an unrecognized occupied schema", async ({ onTestFinished }) => {
@@ -300,10 +345,14 @@ describe.skipIf(!url)("PostgreSQL startup", () => {
 });
 
 /** Gives a fresh schema the structure a deployed database at an older version has. */
-async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5): Promise<void> {
+async function downgrade(schema: { readonly pool: Pool }, version: 1 | 2 | 3 | 4 | 5 | 6): Promise<void> {
   const client = await schema.pool.connect();
   try {
-    await client.query("DROP INDEX html_view_drafts_source_worktree; ALTER TABLE html_view_drafts DROP COLUMN source_worktree_id");
+    await client.query(`ALTER TABLE html_view_drafts DROP COLUMN superseded_by, DROP COLUMN revises_draft_id;
+ALTER TABLE html_view_drafts DROP CONSTRAINT html_view_drafts_state_check;
+ALTER TABLE html_view_drafts ADD CONSTRAINT html_view_drafts_state_check CHECK
+  (state IN ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted'));`);
+    if (version < 6) await client.query("DROP INDEX html_view_drafts_source_worktree; ALTER TABLE html_view_drafts DROP COLUMN source_worktree_id");
     if (version < 4) await client.query(`
       ALTER TABLE nodes DROP COLUMN copied_from_node_id;
       ALTER TABLE worktree_node_intents DROP COLUMN copied_from_node_id;

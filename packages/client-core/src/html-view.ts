@@ -11,7 +11,7 @@ import {
 import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewBinding } from "@univerjs-labs/html-view";
 import { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
-import { parseHtmlViewDraft } from "./html-view-draft.js";
+import { parseHtmlViewDraft, readWorkspaceHtmlViewDraft } from "./html-view-draft.js";
 import { readWorkspaceHtmlView, requireHtmlView, htmlViewUrls } from "./html-view-page.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
@@ -58,7 +58,8 @@ export interface WorkspaceHtmlViewReplacement {
 
 export type WorkspaceHtmlViewDraftRequest = { readonly sourceWorktreeId?: string } & (
   | (WorkspaceHtmlViewDestination & { readonly kind: "create"; readonly source: WorkspaceHtmlViewSource })
-  | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" }));
+  | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" })
+  | { readonly kind: "revise"; readonly draftId: string; readonly idempotencyKey: string; readonly source: WorkspaceHtmlViewSource });
 
 export interface WorkspaceHtmlViewCellSample {
   readonly value: string | number | boolean | null;
@@ -168,26 +169,32 @@ export class WorkspaceHtmlViewFeature {
     const http = await this.options.authenticatedHttp();
     const intent = input.kind === "create"
       ? { kind: input.kind, ...normalizeHtmlViewDestination(input) }
+      : input.kind === "revise" ? { kind: input.kind, draftId: input.draftId, idempotencyKey: input.idempotencyKey }
       : { kind: input.kind, resourceId: input.resourceId, etag: input.etag, idempotencyKey: input.idempotencyKey };
+    const previous = intent.kind === "revise" ? await readWorkspaceHtmlViewDraft(async () => http, await this.options.configuredOrigin(), intent.draftId) : undefined;
+    const sourceWorktreeId = input.sourceWorktreeId ?? previous?.sourceWorktreeId ?? undefined;
     let spaceId: string;
     if (intent.kind === "create") {
       spaceId = intent.spaceId;
-    } else {
+    } else if (intent.kind === "revise" && previous) {
+      spaceId = previous.spaceId;
+    } else if (intent.kind === "replace") {
       if (!/^"[^"\r\n]+"$/.test(intent.etag) || intent.etag.length > 200)
         throw workspaceError("workspace-argument-invalid", "ETag must be the exact quoted strong ETag from html_view_read.");
       const view = await new WorkspaceBlobFeature(async () => http).get(intent.resourceId);
       requireHtmlView(view.node.name);
       spaceId = view.node.spaceId;
-    }
-    const source = await this.readAndValidate(input.source, input.sourceWorktreeId);
+    } else throw workspaceError("workspace-invalid-response", "Revision draft is missing.");
+    const source = await this.readAndValidate(input.source, sourceWorktreeId);
     const worktree = source.worktree;
     const origin = await this.options.configuredOrigin();
     const access = await this.describeAccess(spaceId, source.validation.unitIds, worktree);
     const { idempotencyKey, ...body } = intent;
+    const draftWorktreeId = input.kind === "revise" ? sourceWorktreeId : worktree?.id;
     this.options.onWrite?.();
     const response = await http.json("/api/html-view-drafts", {
       method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8"),
-        ...(worktree === undefined ? {} : { sourceWorktreeId: worktree.id }) },
+        ...(draftWorktreeId === undefined ? {} : { sourceWorktreeId: draftWorktreeId }) },
     });
     return { ...parseHtmlViewDraft(response["draft"], origin), ...access,
       bindings: source.validation.bindings, bindingCount: source.validation.bindingCount,

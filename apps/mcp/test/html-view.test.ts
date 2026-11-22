@@ -60,12 +60,14 @@ function setup(page = html, publicRead = false, privateUnits: readonly string[] 
       id: "space", name: "Team", type: "team", fullName: "owner/team", slug: "team",
       owner: { id: "owner", username: "owner" }, accessRole: "owner", affiliation: "owner", publicRead,
     });
+    if (request.url.endsWith("/api/html-view-drafts/draft-1")) return Response.json({ draft: draftView() });
+    if (request.url.endsWith("/api/html-view-drafts/draft-1/content")) return new Response(page);
     if (request.method === "POST" && new URL(request.url).pathname === "/api/html-view-drafts") {
       expect(request.headers.get("idempotency-key")).toBe(key);
       const body = await request.json();
       expect(body.html).toBe(page);
       draftPosts.push(body);
-      return Response.json({ draft: { ...draftView(body.kind), ...(body.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: body.sourceWorktreeId }) } }, { status: draftPosts.length === 1 ? 201 : 200 });
+      return Response.json({ draft: { ...draftView(body.kind === "revise" ? "create" : body.kind), ...(body.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: body.sourceWorktreeId }) } }, { status: draftPosts.length === 1 ? 201 : 200 });
     }
     if (request.url.endsWith("/resources/resource")) return Response.json({ node, resource });
     throw new Error(`Unexpected Workspace request ${request.method} ${request.url}`);
@@ -504,7 +506,7 @@ it("returns the recorded replacement for a repeated key, including the access su
 });
 
 function draftView(kind: "create" | "replace" = "create", state = "pending") {
-  return { id: "draft-1", kind, state, spaceId: "space", parentNodeId: null,
+  return { id: "draft-1", kind, state, supersededBy: state === "superseded" ? "draft-2" : null, spaceId: "space", parentNodeId: null,
     name: "Dashboard.univer.html", targetResourceId: kind === "replace" ? "resource" : null,
     baseEtag: kind === "replace" ? '"v1"' : null, byteSize: Buffer.byteLength(html),
     createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null,
@@ -512,7 +514,7 @@ function draftView(kind: "create" | "replace" = "create", state = "pending") {
 }
 
 it.each(["create", "replace"] as const)("reads every %s draft state over HTTP without an executor", async (kind) => {
-  for (const state of ["pending", "published", "rejected", "expired", "conflicted"]) {
+  for (const state of ["pending", "published", "rejected", "expired", "conflicted", "superseded"]) {
     const { context } = uploadContext();
     const fetcher = vi.fn<typeof fetch>(async (url, options) => {
       expect(new URL(String(url)).pathname).toBe("/api/html-view-drafts/draft-1");
@@ -523,6 +525,7 @@ it.each(["create", "replace"] as const)("reads every %s draft state over HTTP wi
     const { executor: _executor, ...withoutExecutor } = context;
     const result = await htmlViewDraftGetTool.run({ ...withoutExecutor, http }, { draft: "draft-1" });
     expect(result.output).toMatchObject({ draft: { id: "draft-1", state, previewUrl: "https://workspace.test/drafts/draft-1" } });
+    if (state === "superseded") expect(result.output).toMatchObject({ draft: { supersededBy: "draft-2", successorUrl: "https://workspace.test/drafts/draft-2" } });
     const output = htmlViewDraftGetTool.outputSchema.parse(result.output);
     expect(output).toEqual(result.output);
     if (state === "published") expect(result.output).toMatchObject({ draft: {
@@ -688,4 +691,34 @@ it("dryRun reads source pull request data", async () => {
   expect(f.exportUnitData).toHaveBeenCalled();
   expect(f.exportUnitData.mock.calls.every(([{ target }]) => target.scope.kind === "worktree" && target.scope.worktreeId === "wt-1")).toBe(true);
   expect(f.draftPosts).toEqual([]);
+});
+
+it("revises a pending draft through save and reads its HTML without an etag", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const result = await htmlViewSaveTool.run(context, { draft: "draft-1", html, idempotency_key: key });
+  expect(result.output).toMatchObject({ draft: { kind: "create", state: "pending" } });
+  expect(f.draftPosts).toEqual([{ kind: "revise", draftId: "draft-1", html }]);
+  const read = await htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { draft: "draft-1" });
+  expect(read.output).toMatchObject({ draft: "draft-1", html, space: "space", previewUrl: "https://workspace.test/drafts/draft-1" });
+  expect(read.output).not.toHaveProperty("etag");
+  expect(htmlViewReadTool.outputSchema.parse(read.output)).toEqual(read.output);
+});
+
+it.each([
+  { draft: "draft-1", space: "space", name: "Page" },
+  { draft: "draft-1", page: "resource", etag: '"v1"' },
+  { draft: "draft-1", etag: '"v1"' },
+  { draft: "draft-1", name: "Page" },
+  { draft: "draft-1", parent: "folder" },
+])("refuses ambiguous pending-draft save arguments %#", async (args) => {
+  const { context } = uploadContext();
+  await expect(htmlViewSaveTool.run(context, { ...args, html, idempotency_key: key }))
+    .rejects.toMatchObject({ code: "workspace-argument-invalid" });
+});
+
+it.each([{}, { resource: "resource", draft: "draft-1" }])("requires exactly one HTML View read target %#", async (args) => {
+  const { context } = uploadContext();
+  await expect(htmlViewReadTool.run(context, args)).rejects.toMatchObject({ code: "workspace-argument-invalid" });
 });

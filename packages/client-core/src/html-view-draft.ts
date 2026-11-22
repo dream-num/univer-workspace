@@ -4,6 +4,7 @@ import { htmlViewUrls } from "./html-view-page.js";
 
 export type WorkspaceHtmlViewDraftStatus =
   | { readonly state: "pending" | "rejected" | "expired" | "conflicted" }
+  | { readonly state: "superseded"; readonly supersededBy: string; readonly successorUrl: string }
   | { readonly state: "published"; readonly nodeId: string; readonly resourceId: string;
       readonly etag: string; readonly shareUrl: string; readonly workspaceUrl: string };
 
@@ -59,6 +60,10 @@ export function parseHtmlViewDraft(value: unknown, origin: string): WorkspaceHtm
         typeof published["etag"] !== "string" || published["etag"].length > 200 || !/^"[^"\r\n]+"$/.test(published["etag"])) throw invalid();
     status = { state, nodeId: published["nodeId"], resourceId: published["resourceId"], etag: published["etag"],
       ...htmlViewUrls(origin, published["nodeId"]) };
+  } else if (state === "superseded") {
+    if (value["published"] !== null) throw invalid();
+    const supersededBy = string("supersededBy");
+    status = { state, supersededBy, successorUrl: htmlViewDraftUrl(origin, supersededBy) };
   } else if (state === "pending" || state === "rejected" || state === "expired" || state === "conflicted") {
     if (value["published"] !== null) throw invalid();
     status = { state };
@@ -67,4 +72,38 @@ export function parseHtmlViewDraft(value: unknown, origin: string): WorkspaceHtm
   return { id, kind, ...(sourceWorktreeId === undefined ? {} : { sourceWorktreeId }), name: string("name"), spaceId: string("spaceId"),
     targetResourceId: typeof targetResourceId === "string" ? targetResourceId : null,
     previewUrl: htmlViewDraftUrl(origin, id), expiresAt: string("expiresAt"), status };
+}
+
+export async function readWorkspaceHtmlViewDraftContent(
+  authenticatedHttp: AuthenticatedWorkspaceHttp,
+  origin: string,
+  id: string,
+  maxChars: number,
+) {
+  if (!Number.isSafeInteger(maxChars) || maxChars < 0)
+    throw workspaceError("workspace-argument-invalid", "HTML View read limit must be a nonnegative integer.");
+  const draft = await readWorkspaceHtmlViewDraft(authenticatedHttp, origin, id);
+  if (draft.status.state !== "pending")
+    throw workspaceError("workspace-conflict", `Draft is ${draft.status.state}.${draft.status.state === "superseded" ? ` Successor draft: ${draft.status.supersededBy}.` : ""}`);
+  const response = await (await authenticatedHttp()).request(`/api/html-view-drafts/${encodeURIComponent(id)}/content`);
+  const reader = response.body?.getReader();
+  if (!reader) throw workspaceError("workspace-invalid-response", "Draft content is missing.");
+  const decoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+  let html = "";
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      html += decoder.decode(value, { stream: true });
+      if (html.length > maxChars)
+        throw workspaceError("workspace-result-too-large", "HTML View draft is too large to revise inline.");
+    }
+    html += decoder.decode();
+    if (JSON.stringify(html).length - 2 > maxChars)
+      throw workspaceError("workspace-result-too-large", "HTML View draft is too large to revise inline.");
+    return { draft, html };
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
+  }
 }

@@ -4,7 +4,9 @@ import type { WorkspaceHtmlViewDraft } from "@univerjs/univer-workspace-client-c
 export const htmlViewDraftSchema = z.object({
   id: z.string().min(1),
   kind: z.enum(["create", "replace"]),
-  state: z.enum(["pending", "published", "rejected", "expired", "conflicted"]),
+  state: z.enum(["pending", "published", "rejected", "expired", "conflicted", "superseded"]),
+  supersededBy: z.string().optional(),
+  successorUrl: z.url().optional(),
   name: z.string(),
   space: z.string(),
   sourceWorktreeId: z.string().min(1).nullable().optional(),
@@ -23,6 +25,7 @@ export function htmlViewDraftResult(draft: WorkspaceHtmlViewDraft) {
     id: draft.id, kind: draft.kind, state: draft.status.state, name: draft.name, space: draft.spaceId,
     previewUrl: draft.previewUrl, expiresAt: draft.expiresAt,
     ...(draft.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: draft.sourceWorktreeId }),
+    ...(draft.status.state === "superseded" ? { supersededBy: draft.status.supersededBy, successorUrl: draft.status.successorUrl } : {}),
     ...(draft.status.state === "published" ? {
       resource: draft.status.resourceId, node: draft.status.nodeId,
       etag: draft.status.etag, shareUrl: draft.status.shareUrl,

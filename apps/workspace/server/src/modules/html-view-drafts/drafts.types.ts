@@ -1,8 +1,9 @@
-export type HtmlViewDraftState = "pending" | "published" | "rejected" | "expired" | "conflicted";
+export type HtmlViewDraftState = "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
 export interface HtmlViewDraftView {
   readonly id: string;
   readonly kind: "create" | "replace";
   readonly state: HtmlViewDraftState;
+  readonly supersededBy: string | null;
   readonly spaceId: string;
   readonly sourceWorktreeId: string | null;
   readonly parentNodeId: string | null;
@@ -41,6 +42,8 @@ export interface DraftRow {
   media_type: string | null;
   stored_etag: string | null;
   state: "receiving" | HtmlViewDraftState;
+  superseded_by: string | null;
+  revises_draft_id: string | null;
   result_node_id: string | null;
   result_resource_id: string | null;
   result_etag: string | null;

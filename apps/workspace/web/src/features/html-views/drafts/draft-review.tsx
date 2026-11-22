@@ -35,6 +35,7 @@ export function HtmlViewDraftReview({ draftId, presentation, replaced = false, o
           <div className="p-5">
             <h1 className="text-lg font-semibold">{draft.data.name}</h1>
             <p role="status">{draft.data.state === "conflicted" && draft.data.kind === "create" && draft.data.sourceWorktreeId ? m.sourceDiscarded : m[draft.data.state]}</p>
+            {draft.data.state === "superseded" && draft.data.supersededBy && <a className="text-primary underline" href={`/drafts/${encodeURIComponent(draft.data.supersededBy)}`}>{m.openSuccessor}</a>}
             {draft.data.state === "published" && draft.data.published && <a className="text-primary underline" href={`/nodes/${encodeURIComponent(draft.data.published.nodeId)}?view=immersive`}>{m.openPage}</a>}
           </div>}
   </section>;

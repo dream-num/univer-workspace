@@ -43,6 +43,91 @@ async function harness() {
 }
 
 describe("HTML View draft HTTP API", () => {
+  it.each(["create", "replace"] as const)("revises a pending %s draft, links its successor and retries idempotently", async (kind) => {
+    const c = await harness();
+    const first = await c.submit();
+    const published = kind === "replace" ? (await (await c.send(`/${first.id}/publish`, {})).json()).draft.published : null;
+    const previous = published ? await c.submit(crypto.randomUUID(), { kind, resourceId: published.resourceId, etag: published.etag, html }) : first;
+    const key = crypto.randomUUID();
+    const body = { kind: "revise", draftId: previous.id, html: html.replace("Hello", "New revision") };
+    const next = await c.submit(key, body);
+    expect(next).toMatchObject({ kind, state: "pending", spaceId: previous.spaceId, name: previous.name,
+      parentNodeId: previous.parentNodeId, targetResourceId: previous.targetResourceId, baseEtag: previous.baseEtag });
+    expect((await (await c.send(`/${previous.id}`)).json()).draft).toMatchObject({ state: "superseded", supersededBy: next.id });
+    const refused = await c.send(`/${previous.id}/publish`, {});
+    expect(refused.status).toBe(409);
+    expect((await refused.json()).error.message).toContain("superseded");
+    const replay = await c.send("", body, key);
+    expect(replay.status).toBe(200);
+    expect((await replay.json()).draft).toEqual(next);
+    expect((await c.send("", { ...body, html }, key)).status).toBe(409);
+    const wrongKey = await c.send("", body, crypto.randomUUID());
+    expect(wrongKey.status).toBe(409);
+    expect((await wrongKey.json()).error.message).toContain(next.id);
+    expect(await (await c.send(`/${next.id}/content`)).text()).toBe(body.html);
+    expect((await c.send(`/${next.id}/publish`, {})).status).toBe(200);
+    const nonpending = await c.send("", { ...body, draftId: next.id }, crypto.randomUUID());
+    expect(nonpending.status).toBe(409);
+    expect((await nonpending.json()).error.message).toContain("published");
+  });
+
+  it.each([true, false])("concurrent revisions produce one successor (sameKey=%s)", async (sameKey) => {
+    const c = await harness();
+    const previous = await c.submit();
+    const key = crypto.randomUUID();
+    const body = { kind: "revise", draftId: previous.id, html };
+    const responses = await Promise.all([c.send("", body, key), c.send("", body, sameKey ? key : crypto.randomUUID())]);
+    expect(responses.map((response) => response.status).sort()).toEqual(sameKey ? [200, 201] : [201, 409]);
+    const old = (await (await c.send(`/${previous.id}`)).json()).draft;
+    expect(old.state).toBe("superseded");
+    const successor = (await (await c.send(`/${old.supersededBy}`)).json()).draft;
+    expect(successor.state).toBe("pending");
+    if (sameKey) for (const response of responses) expect((await response.json()).draft.id).toBe(successor.id);
+  });
+
+  it("only lets the author revise pending, unexpired drafts and retains the source PR", async () => {
+    const c = await harness();
+    const worktree = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Source", summary: null })).body;
+    const previous = await c.submit(crypto.randomUUID(), { kind: "create", spaceId: c.space.id, parentNodeId: null, name: "Page", html, sourceWorktreeId: worktree.id });
+    const body = { kind: "revise", draftId: previous.id, html };
+    const other = await c.application.identity.registerWithPassword({ username: "draft-outsider", displayName: "Other", password: "correct horse battery staple" });
+    const otherCookie = `${c.application.identity.cookieName}=${other.cookieValue}`;
+    expect((await c.send("", body, crypto.randomUUID(), otherCookie)).status).toBe(404);
+    expect((await c.send(`/${previous.id}/content`, undefined, undefined, otherCookie)).status).toBe(404);
+    const next = await c.submit(crypto.randomUUID(), body);
+    expect(next.sourceWorktreeId).toBe(worktree.id);
+    const superseded = await c.send("", body, crypto.randomUUID());
+    expect(superseded.status).toBe(409);
+    expect((await superseded.json()).error.message).toContain(next.id);
+    expect((await c.application.repositories.htmlViewDrafts.pendingForWorktree(worktree.id)).map((row) => row.id)).toEqual([next.id]);
+    const override = (await c.application.worktrees.create(c.userId, crypto.randomUUID(), { kind: "user", name: "Override", summary: null })).body;
+    const newest = await c.submit(crypto.randomUUID(), { ...body, draftId: next.id, sourceWorktreeId: override.id });
+    expect(newest.sourceWorktreeId).toBe(override.id);
+    c.application.database.connection.prepare("UPDATE html_view_drafts SET expires_at = 1 WHERE id = ?").run(newest.id);
+    const expired = await c.send("", { ...body, draftId: newest.id }, crypto.randomUUID());
+    expect(expired.status).toBe(409);
+    expect((await expired.json()).error.message).toContain("expired");
+    await c.application.worktrees.discard(c.userId, worktree.id, crypto.randomUUID());
+    const terminal = await c.send("", body, crypto.randomUUID());
+    expect(terminal.status).toBe(409);
+    expect((await terminal.json()).error.message).toContain(`superseded. Successor draft: ${next.id}`);
+  });
+
+  it("keeps the old draft pending after an interrupted upload completion and supersedes it on retry", async () => {
+    const c = await harness();
+    const previous = await c.submit();
+    const upload = vi.spyOn(c.application.repositories.htmlViewDrafts, "markPending").mockRejectedValueOnce(new Error("Upload failed"));
+    const key = crypto.randomUUID();
+    const body = { kind: "revise", draftId: previous.id, html };
+    expect((await c.send("", body, key)).status).toBe(500);
+    upload.mockRestore();
+    expect((await (await c.send(`/${previous.id}`)).json()).draft.state).toBe("pending");
+    const retry = await c.send("", body, key);
+    expect(retry.status).toBe(200);
+    const next = (await retry.json()).draft;
+    expect((await (await c.send(`/${previous.id}`)).json()).draft).toMatchObject({ state: "superseded", supersededBy: next.id });
+  });
+
 
   it("links create and replace drafts to a reviewable pull request and includes it in intent", async () => {
     const c = await harness();

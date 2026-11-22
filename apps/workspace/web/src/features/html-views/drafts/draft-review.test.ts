@@ -53,7 +53,7 @@ beforeEach(() => {
   draft = {
     id: "draft-1", kind: "create", state: "pending", spaceId: "sales", parentNodeId: "folder-1",
     name: "Sales.univer.html", targetResourceId: null, baseEtag: null, byteSize: 100,
-    createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, published: null,
+    createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, supersededBy: null, published: null,
   };
   html = "<!doctype html><html><body>New draft</body></html>";
   publishStatus = 200; rejectStatus = 200; publishMessage = "The page changed."; notFound = false;
@@ -403,4 +403,14 @@ it("links legacy source PRs through the existing review route", async () => {
   await waitFor(() => expect(container.textContent).toContain("Publishes automatically when the source PR merges."));
   expect(container.querySelector('a[href="/worktrees?worktree=pr-3"]')).not.toBeNull();
   expect(button("Publish").disabled).toBe(true);
+});
+
+it("shows superseded with a successor link and no publish controls", async () => {
+  draft = { ...draft, state: "superseded", supersededBy: "new draft" };
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("Superseded by a newer draft"));
+  expect(container.querySelector("a")?.getAttribute("href")).toBe("/drafts/new%20draft");
+  expect(container.textContent).toContain("Open newer draft");
+  expect(container.querySelector("button")).toBeNull();
+  expect(requests.some((request) => new URL(request.url).pathname.endsWith("/content"))).toBe(false);
 });

@@ -2801,13 +2801,24 @@ export interface components {
             sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
+        } | {
+            /** @constant */
+            kind: "revise";
+            /** @description Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded. */
+            draftId: string;
+            /** @description Override the source PR; otherwise inherit the previous draft's source. */
+            sourceWorktreeId?: string;
+            /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
+            html: string;
         };
         HtmlViewDraft: {
             id: string;
             /** @enum {string} */
             kind: "create" | "replace";
             /** @enum {string} */
-            state: "pending" | "published" | "rejected" | "expired" | "conflicted";
+            state: "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
+            /** @description Successor draft ID when superseded. */
+            supersededBy: string | null;
             spaceId: string;
             /** @description Source pull request. Always returned by current servers, nullable when unlinked. Publishing waits until it is merged. */
             sourceWorktreeId?: string | null;
