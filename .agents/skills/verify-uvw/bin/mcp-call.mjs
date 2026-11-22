@@ -219,8 +219,8 @@ function eventIssues(event) {
   const dryRunHtmlView = tool === 'html_view_save' && args.dryRun === true;
   const validation = dryRunHtmlView ? toolOutput(result) : undefined;
   if (dryRunHtmlView && !result.isError && (validation?.dryRun !== true || validation?.valid !== true || 'draft' in validation || event.cost?.committed_revisions !== 0)) issues.push('HTML View dry run must validate without creating a draft');
-  // A dry run ignores its destination, so only an explicit repo (a pull-request source) attributes a repository.
-  const resolvesRepo = dryRunHtmlView ? typeof args.repo === 'string' : (tool === 'html_view_save' && (typeof args.page === 'string' || typeof args.draft === 'string')) || typeof args.repo === 'string' || typeof args.space === 'string' ||
+  // The gateway records no repository for a dry run, even with repo and pr selecting pull-request source data.
+  const resolvesRepo = dryRunHtmlView ? false : (tool === 'html_view_save' && (typeof args.page === 'string' || typeof args.draft === 'string')) || typeof args.repo === 'string' || typeof args.space === 'string' ||
     ['unit_list', 'unit_add', 'blob_get', 'blob_download', 'blob_replace', 'repo_create', 'space_node', 'html_view_read', 'html_view_draft_get', 'skill_draft_create', 'skill_draft_get'].includes(tool) || (['execute', 'inspect', 'outline', 'read', 'find', 'screenshot', 'print_pdf', 'lint', 'compile_svg', 'compile_markdown'].includes(tool) && typeof args.worktree === 'string');
   const compileOnlyTypst = tool === 'compile_typst' && args.apply !== true && !['worktree', 'space', 'parent'].some((key) => args[key] !== undefined);
   const failedTypstWithoutUnit = tool === 'compile_typst' && result.isError && event.unit_type === null;

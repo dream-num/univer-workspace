@@ -179,8 +179,8 @@ test('HTML View dry runs accept validation without a draft or repository and rej
   assert.ok(validate(result, { committed_revisions: 1 }).includes('HTML View dry run must validate without creating a draft'));
 });
 
-for (const target of [{}, { space: 'space-1', name: 'page' }, { page: 'page-1', etag: '"v1"' }, { draft: 'draft-1' }]) {
-  test(`HTML View dry runs ignore their destination (${Object.keys(target)[0] ?? 'none'}) for repository identity`, () => {
+for (const target of [{}, { space: 'space-1', name: 'page' }, { page: 'page-1', etag: '"v1"' }, { draft: 'draft-1' }, { repo: 'owner/repo', pr: '3' }, { repo: 'owner/repo' }]) {
+  test(`HTML View dry runs record no repository (${Object.keys(target).join('+') || 'none'})`, () => {
     const globals = { tool: 'html_view_save', args: { html: '<p>Static</p>', dryRun: true, ...target } };
     const result = { structuredContent: { dryRun: true, valid: true, bindings: [], bindingCount: 0 } };
     const event = { tool: 'html_view_save', executor: 'warm', repo: null, cost: {
