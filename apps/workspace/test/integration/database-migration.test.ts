@@ -27,7 +27,8 @@ afterEach(() => {
   }
 });
 
-describe("automatic product database migration to V27", () => {
+// Each case replays the startup migration chain from an old version, which grows with every schema version.
+describe("automatic product database migration to V27", { timeout: 30_000 }, () => {
   it("preserves V13 identities through Email and pins upgrades", () => {
     verifyV13Migration(openWorkspaceDatabase);
   });
