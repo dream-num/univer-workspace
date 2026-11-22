@@ -39,7 +39,7 @@ export const htmlViewDraft: Handler<"htmlView.draft"> = async (ctx, input) => {
     ...scope,
     kind: input.kind, name: input.name, spaceId: input.spaceId, idempotencyKey: input.idempotencyKey, source,
     ...(input.parentNodeId === undefined ? {} : { parentNodeId: input.parentNodeId }),
-  } : { kind: "replace", resourceId: input.resourceId, etag: input.etag,
+  } : input.kind === "revise" ? { kind: "revise", draftId: input.draftId, idempotencyKey: input.idempotencyKey, ...scope, source } : { kind: "replace", resourceId: input.resourceId, etag: input.etag,
     idempotencyKey: input.idempotencyKey, ...scope, source });
   ctx.usage.repo = result.spaceId;
   return { output: opSpecs["htmlView.draft"].output.parse({ draft: {

@@ -38,7 +38,7 @@ it("does not replace an idempotent retry of the same draft", () => {
   expect(replacedDraftIds([draft("a"), draft("a")])).toEqual(new Set());
 });
 
-it.each(["pending", "published", "rejected", "expired", "conflicted"] as const)("never looks up a replaced draft that is now %s", async (state) => {
+it.each(["pending", "published", "rejected", "expired", "conflicted", "superseded"] as const)("never looks up a replaced draft that is now %s", async (state) => {
   const getDraft = vi.fn(async (id: string): Promise<DraftStatus> => ({ state: id === "old" ? state : "pending", name: "Report", published: null }));
   const reminder = await draftReminder([draft("old"), draft("new")], getDraft, "https://workspace.test");
   expect(getDraft).toHaveBeenCalledExactlyOnceWith("new");
@@ -49,4 +49,18 @@ it("keeps the reminder text and metadata for other drafts unchanged", async () =
   const reminder = await draftReminder([draft("old"), draft("new"), draft("other", "html_view_save", { space: "sales", name: "Other" })],
     async (id) => ({ state: id === "new" ? "pending" : "expired", name: "Other", published: null }), "https://workspace.test");
   expect(reminder).toEqual({ states: { other: "expired" }, part: { type: "text", text: '\n\n<system-reminder>\nDraft "other" "Other": expired. It was not published; draft again only if the user asks.\n</system-reminder>' } });
+});
+
+it("reports superseded once without publishing or mutating the sent history", async () => {
+  const messages = [draft("old")];
+  const before = structuredClone(messages);
+  const getDraft = vi.fn(async (): Promise<DraftStatus> => ({ state: "superseded", name: "Report", published: null }));
+  const result = await draftReminder(messages, getDraft, "https://workspace.test");
+  expect(result.states).toEqual({ old: "superseded" });
+  expect(result.part?.text).toContain("superseded. It was not published because a newer draft replaced it");
+  expect(messages).toEqual(before);
+  const next: UIMessage = { id: "user", role: "user", parts: [{ type: "text", text: "Thanks" }], metadata: { agentDraftStates: result.states } };
+  getDraft.mockClear();
+  expect(await draftReminder([...messages, next], getDraft, "https://workspace.test")).toEqual({ states: {}, part: null });
+  expect(getDraft).not.toHaveBeenCalled();
 });

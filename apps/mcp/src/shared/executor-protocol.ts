@@ -385,6 +385,8 @@ export const opSpecs = {
         etag: z.string().min(1),
         idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
       }),
+      z.object({ kind: z.literal("revise"), draftId: z.string().min(1), html: htmlViewInput,
+        sourceWorktreeId: z.string().min(1).optional(), idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/) }),
       z.object({ kind: z.literal("dryRun"), html: htmlViewInput, sourceWorktreeId: z.string().min(1).optional() }),
     ]),
     output: z.object({ draft: htmlViewDraftSchema.extend({

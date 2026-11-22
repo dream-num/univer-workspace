@@ -490,7 +490,7 @@ it("still validates bindings beyond the sample cap", async () => {
   ) })).rejects.toMatchObject({ code: "workspace-html-view-source-invalid" });
 });
 
-it.each(["draft", "ready", "merged", "discarded"] as const)("resolves HTML sources for a %s pull request", async (state) => {
+it.each((["draft", "ready", "merged", "discarded"] as const).flatMap((state) => (["create", "revise"] as const).map((kind) => ({ state, kind }))))("resolves HTML sources for a $state pull request ($kind)", async ({ state, kind }) => {
   const http = sharingHttp(true);
   const original = http.json.bind(http);
   const posts: unknown[] = [];
@@ -499,10 +499,12 @@ it.each(["draft", "ready", "merged", "discarded"] as const)("resolves HTML sourc
     draftHeadRevision: 7, change: "added", mergeResult: "pending", activationState: "waitingForMerge" };
   const json = vi.spyOn(http, "json").mockImplementation(async (path, options) => {
     if (path === "/api/worktrees/wt-1") return { worktree: { id: "wt-1", name: "Sources", state, units: [mapped] } };
+    if (path === "/api/html-view-drafts/old") return { draft: { id: "old", kind: "create", state: "pending", spaceId: "space", name: "Page.univer.html",
+      targetResourceId: null, sourceWorktreeId: "wt-1", published: null, expiresAt: "later" } };
     if (path === "/api/html-view-drafts") {
       posts.push(options?.body);
       return { draft: { id: "draft", kind: "create", state: "pending", spaceId: "space", name: "Page.univer.html",
-        targetResourceId: null, sourceWorktreeId: state === "merged" ? null : "wt-1", published: null, expiresAt: "later" } };
+        targetResourceId: null, sourceWorktreeId: state === "merged" && kind === "create" ? null : "wt-1", published: null, expiresAt: "later" } };
     }
     if (path.includes("/snapshot/")) return { snapshot: { unitID: "other", type: 2, rev: 3,
       workbook: { originalMeta: "", sheets: {} } }, changesets: [] };
@@ -520,7 +522,8 @@ it.each(["draft", "ready", "merged", "discarded"] as const)("resolves HTML sourc
   const source = { name: "page.univer.html", bytes: Buffer.from(
     '<output data-univer-cell-text="unit:budget:B2"></output><output data-univer-cell-text="other:budget:B2"></output>'),
     sourceWorktreeId: "wt-1" };
-  const draft = { kind: "create" as const, source, sourceWorktreeId: "wt-1", name: "Page", spaceId: "space", idempotencyKey: "key" };
+  const draft = kind === "revise" ? { kind, draftId: "old", source, idempotencyKey: "key" }
+    : { kind, source, sourceWorktreeId: "wt-1", name: "Page", spaceId: "space", idempotencyKey: "key" };
   if (state === "discarded") {
     await expect(feature.validate(source)).rejects.toMatchObject({ code: "workspace-worktree-discarded" });
     await expect(feature.draft(draft)).rejects.toMatchObject({ code: "workspace-worktree-discarded" });
@@ -537,9 +540,9 @@ it.each(["draft", "ready", "merged", "discarded"] as const)("resolves HTML sourc
     state === "merged" ? { kind: "trunk" } : { kind: "worktree", worktreeId: "wt-1" }, { kind: "trunk" },
   ]);
   const result = await feature.draft(draft);
-  expect(result.sourceWorktreeId).toBe(state === "merged" ? null : "wt-1");
-  expect(posts).toEqual([{ kind: "create", name: "Page.univer.html", spaceId: "space", html: source.bytes.toString(),
-    ...(state === "merged" ? {} : { sourceWorktreeId: "wt-1" }) }]);
+  expect(result.sourceWorktreeId).toBe(state === "merged" && kind === "create" ? null : "wt-1");
+  expect(posts).toEqual([{ ...(kind === "revise" ? { kind, draftId: "old" } : { kind, name: "Page.univer.html", spaceId: "space" }), html: source.bytes.toString(),
+    ...(state === "merged" && kind === "create" ? {} : { sourceWorktreeId: "wt-1" }) }]);
   expect(result.privateSourceUnitIds).toEqual(state === "merged" ? [] : ["unit"]);
   if (state !== "merged") expect(json.mock.calls.some(([path]) => path === "/api/unit-resources/unit")).toBe(false);
 });

@@ -117,12 +117,12 @@ private media stays empty, so provide a visible fallback.
 ## 3. Save and reply
 
 New: `html_view_save` with `space` (source repository by default), `name`
-and UUID idempotency_key. Change/restyle: `html_view_read`, edit its HTML, then
+and UUID idempotency_key. Published change/restyle: `html_view_read`, edit its HTML, then
 `html_view_save` with `page` set to its resource, exact quoted `etag` and a new key.
 Pass inline `html` by default; use html_upload_id only for oversized HTML. Both return `bindings`, `bindingCount`, optional
 `truncated` alongside `draft`. Use these samples as the self-check against the inspected
 Sheet: empty cells where data is expected, header text where numbers belong, formula cells
-behind writable controls, numbers with date formats. Fix mismatches and resave with a new key. Reuse keys only for identical retries. Pending revisions keep name/space to retire the older draft. Reread on stale ETags.
+behind writable controls, numbers with date formats. Fix mismatches and resave with a new key. Reuse keys only for identical retries. Revise pending drafts with `draft`, not name/space. Reread on stale ETags.
 Fix `renderCheck` issues. Validation does not run scripts; without render checks,
 report that and name checks run.
 
@@ -138,8 +138,8 @@ End the turn.
 
 ## 4. Continue
 
-Use `html_view_draft_get` before status/revision. Published: shareUrl. Pending:
-preview/revise. Rejected: supplied reason or one question. Conflicted: check PR,
-reread page, use active/merged sources. Expired (seven days): new key. Restyle via
-`html_view_read`, `html_view_styles` when available, then `html_view_save`; preserve
-data. Apply a named style directly.
+Use `html_view_draft_get` before status/revision. Pending: read with `html_view_read`
+`draft` if HTML is absent, then `html_view_save` with `draft` and a new key.
+Published: shareUrl; revise with `page` and `etag` from `html_view_read`.
+Superseded: follow successorUrl. Rejected: reason. Conflicted: reread page/PR.
+Expired: new key. Restyle with `html_view_styles` when available; preserve data.

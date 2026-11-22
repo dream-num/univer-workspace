@@ -941,7 +941,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(getDraft).toHaveBeenCalledExactlyOnceWith("draft-1");
   });
 
-  it.each(["rejected", "expired", "conflicted"] as const)("reports a %s replace draft", async (state) => {
+  it.each(["rejected", "expired", "conflicted", "superseded"] as const)("reports a %s replace draft", async (state) => {
     const test = await setup({ pageTool: "html_view_save", getDraft: async () => ({ state, name: "Report", published: null }),
       model: (index) => modelStream(index === 1 ? "html_view_save" : undefined, false, undefined, { page: "page", etag: '"v1"' }) });
     const started = await test.runner.start(test.input);

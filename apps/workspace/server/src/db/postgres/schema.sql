@@ -834,12 +834,14 @@ CREATE TABLE html_view_drafts (
   media_type TEXT,                           -- set when state leaves 'receiving'
   stored_etag TEXT,                          -- BlobStore etag; becomes blob_resources.etag for create
   state TEXT NOT NULL CHECK (state IN
-    ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted')),
+    ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted', 'superseded')),
   result_node_id TEXT, result_resource_id TEXT, result_etag TEXT,  -- published only
   decided_by TEXT, decided_at BIGINT,
   expires_at BIGINT NOT NULL,               -- receiving: +1h; pending: +7d; terminal: unchanged
   created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
   source_worktree_id TEXT,
+  superseded_by TEXT,
+  revises_draft_id TEXT,
   UNIQUE (author_user_id, idempotency_key),
   CHECK ((kind = 'create' AND target_resource_id IS NULL AND base_etag IS NULL)
       OR (kind = 'replace' AND target_resource_id IS NOT NULL AND base_etag IS NOT NULL AND parent_node_id IS NULL)),
