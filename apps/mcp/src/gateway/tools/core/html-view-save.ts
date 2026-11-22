@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { workspaceError } from "@univerjs/univer-workspace-client-core/product";
 import { IDEMPOTENCY_KEY_DESCRIPTION } from "../schemas.js";
 import { htmlViewSourceSchema, readHtmlView, htmlViewPullRequestShape, htmlViewWorktree } from "../files/html-view-support.js";
@@ -16,7 +17,7 @@ export const htmlViewSaveTool = executorTool({
   scope: "write",
   title: "Save an HTML View draft",
   description:
-    "Save a shareable live page (HTML View, .univer.html) on Workspace Sheet data as a draft. Use it for a page, dashboard, report or form that shares or presents Workspace data; prefer it over a local .html unless the user asks for a file. For authoring, read the html-view-creator Skill. To create a page, pass space and name, plus optional parent; .univer.html is appended if missing. To revise or restyle, pass page (the resource from html_view_read) and its exact quoted etag; publishing preserves the page identity and URL. Provide exactly one of page or space; etag is only for revisions. Pass inline html by default. Use html_upload_id (a ready html-view upload) only when the HTML is too large for one call. Exactly one of html or html_upload_id is required; HTML is limited to 512 KiB of UTF-8 text. Every save needs idempotency_key; reuse it only for identical retries, including result-unknown. A stale ETag is refused. Optional repo and pr select source pull request data. The call validates bindings and returns {draft, bindings, bindingCount, truncated?}. draft includes previewUrl and access details. A PR-linked draft goes live when the user merges in Workspace; otherwise the user opens the preview and presses Publish. html_view_draft_get reports its current state and returns shareUrl only once published.",
+    "Save a shareable live page (HTML View, .univer.html) on Workspace Sheet data as a draft. Use it for a page, dashboard, report or form that shares or presents Workspace data; prefer it over a local .html unless the user asks for a file. For authoring, read the html-view-creator Skill. To create a page, pass space and name, plus optional parent; .univer.html is appended if missing. To revise or restyle, pass page (the resource from html_view_read) and its exact quoted etag; publishing preserves the page identity and URL. Provide exactly one of page or space; etag is only for revisions. Pass inline html by default. Use html_upload_id (a ready html-view upload) only when the HTML is too large for one call. Exactly one of html or html_upload_id is required; HTML is limited to 512 KiB of UTF-8 text. Every save needs idempotency_key; reuse it only for identical retries, including result-unknown. A stale ETag is refused. Optional repo and pr select source pull request data. dryRun: true only checks the HTML and bindings before saving, needs just html or html_upload_id, creates no draft and returns {dryRun, valid, bindings, bindingCount, truncated?}. The call validates bindings and returns {draft, bindings, bindingCount, truncated?}. draft includes previewUrl and access details. A PR-linked draft goes live when the user merges in Workspace; otherwise the user opens the preview and presses Publish. html_view_draft_get reports its current state and returns shareUrl only once published.",
   annotations: writeAnnotations,
   inputSchema: htmlViewSourceSchema.safeExtend({
     ...htmlViewPullRequestShape,
@@ -25,10 +26,15 @@ export const htmlViewSaveTool = executorTool({
     parent: create.parentNodeId.describe("Optional parent Node for a new page."),
     page: replace.resourceId.optional().describe("For revisions: the resource returned by html_view_read. Omit space, name and parent."),
     etag: replace.etag.optional().describe("For revisions only: the exact quoted etag from html_view_read."),
-    idempotency_key: create.idempotencyKey.describe(IDEMPOTENCY_KEY_DESCRIPTION),
+    idempotency_key: create.idempotencyKey.optional().describe(IDEMPOTENCY_KEY_DESCRIPTION),
+    dryRun: z.boolean().optional().describe("Validate the HTML and its bindings and return samples without creating a draft."),
   }).strict(),
   op: opSpecs["htmlView.draft"],
   request: async (args, context) => {
+    if (args.dryRun === true)
+      return { input: { kind: "dryRun" as const, ...await htmlViewWorktree(args, context), html: await readHtmlView(args, context) } };
+    if (args.idempotency_key === undefined)
+      throw workspaceError("workspace-argument-invalid", "idempotency_key is required unless dryRun is true.");
     if ((args.page === undefined) === (args.space === undefined))
       throw workspaceError("workspace-argument-invalid", `Provide exactly one of page or space. ${modes}`);
     if (args.page !== undefined && (args.etag === undefined || args.name !== undefined || args.parent !== undefined))

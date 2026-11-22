@@ -363,6 +363,7 @@ export const opSpecs = {
   "htmlView.draft": defineOp({
     name: "htmlView.draft",
     effect: "write",
+    effectFor: (input) => (input.kind === "dryRun" ? "read" : "write"),
     payload: "none",
     rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: MiB, budgetMs: 30_000 },
@@ -384,12 +385,13 @@ export const opSpecs = {
         etag: z.string().min(1),
         idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
       }),
+      z.object({ kind: z.literal("dryRun"), html: htmlViewInput, sourceWorktreeId: z.string().min(1).optional() }),
     ]),
     output: z.object({ draft: htmlViewDraftSchema.extend({
       repositoryVisibility: z.enum(["public", "private"]),
       privateSourceUnitIds: z.array(z.string()),
-    }), ...htmlViewBindingSamples }),
-    route: (input) => ({ scope: "htmlView.draft", unitId: input.idempotencyKey }),
+    }).optional(), dryRun: z.literal(true).optional(), valid: z.literal(true).optional(), ...htmlViewBindingSamples }),
+    route: (input) => ({ scope: "htmlView.draft", unitId: input.kind === "dryRun" ? null : input.idempotencyKey }),
   }),
   "markdown.compile": defineOp({
     name: "markdown.compile",

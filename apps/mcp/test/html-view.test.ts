@@ -631,3 +631,61 @@ it("advertises a flat save schema with actionable mode and source fields", () =>
   for (const field of ["space", "name", "parent", "page", "etag", "html", "html_upload_id", "repo", "pr", "idempotency_key"])
     expect(schema.properties).toHaveProperty(field);
 });
+
+it("dryRun returns the validation samples without a draft, key or Workspace write", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  const executor = connectReplacement(f.ctx);
+  const { output } = await htmlViewSaveTool.run(context, { html, dryRun: true });
+  const { unitIds: _unitIds, ...validation } = (await htmlViewValidate(f.ctx, { html })).output;
+  expect(output).toEqual({ dryRun: true, ...validation });
+  expect(output).toMatchObject({ valid: true, bindingCount: 1, bindings: [{ kind: "text", ref: "B2" }] });
+  expect(output).not.toHaveProperty("draft");
+  expect(executor).toHaveBeenCalledOnce();
+  expect(f.draftPosts).toEqual([]);
+  expect(f.fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toEqual([]);
+  expect(context.usage?.snapshot().cost.upload_bytes).toBe(Buffer.byteLength(html));
+});
+
+it("dryRun requires neither destination nor key, but a real save still needs the key", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  await expect(htmlViewSaveTool.run(context, { ...createArgs, idempotency_key: undefined, html, dryRun: true })).resolves.toMatchObject({ output: { dryRun: true } });
+  await expect(htmlViewSaveTool.run(context, { page: "resource", etag: '"v1"', html, dryRun: true })).resolves.toMatchObject({ output: { dryRun: true } });
+  await expect(htmlViewSaveTool.run(context, { space: "space", name: "Dashboard", html })).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+});
+
+it("dryRun fails an out-of-range binding exactly as a real save does", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const outOfRange = '<div data-univer-range-subscribe="unit:budget:A1:D11"></div>';
+  const failure = async (args: object) => translateError(await htmlViewSaveTool.run(context, { html: outOfRange, ...args }).then(
+    () => expect.fail("Expected invalid bindings"), (error: unknown) => error));
+  const dry = await failure({ dryRun: true });
+  expect(dry).toMatchObject({ code: "workspace-html-view-source-invalid" });
+  expect(dry).toEqual(await failure(createArgs));
+  expect(f.draftPosts).toEqual([]);
+});
+
+it("dryRun reads source pull request data", async () => {
+  const f = setup();
+  const original = f.fetcher.getMockImplementation();
+  if (!original) throw new Error("Expected product fetcher");
+  const worktree = { id: "wt-1", number: 12, name: "Sources", state: "ready", kind: "team", teamSpace: { id: "space" },
+    units: [{ unitId: "unit", unitType: "sheet", name: "Sheet", nodeId: "node", resourceId: "resource",
+      source: "trunk", target: null, draftHeadRevision: 7, change: "modified", mergeResult: "pending", activationState: "notApplicable" }] };
+  f.fetcher.mockImplementation(async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/worktrees/wt-1" || path === "/api/spaces/space/worktrees/12") return Response.json({ worktree });
+    return original(url, init);
+  });
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const result = await htmlViewSaveTool.run({ ...context, http: f.ctx.http() }, { html, dryRun: true, repo: "space", pr: 12 });
+  expect(result.output).toMatchObject({ dryRun: true, bindingCount: 1 });
+  expect(f.exportUnitData).toHaveBeenCalled();
+  expect(f.exportUnitData.mock.calls.every(([{ target }]) => target.scope.kind === "worktree" && target.scope.worktreeId === "wt-1")).toBe(true);
+  expect(f.draftPosts).toEqual([]);
+});
