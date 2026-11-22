@@ -5,6 +5,7 @@ import {
 import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { SnapshotService } from "@univerjs-pro/collaboration";
+import { IUniverInstanceService, UniverInstanceType, type Univer, type Workbook } from "@univerjs/core";
 import { createWorkspaceReferencedUnitProviderRegistration, type WorkspaceReferenceHostContext } from "@univerjs/univer-workspace-reference-provider";
 import { withWorkspaceSnapshotServerOverride, resolveUniverLicense, resolveCollaborationConfig } from "../editor";
 import { api } from "../../shared/api/client";
@@ -15,6 +16,12 @@ import type { components } from "../../../../generated/http/schema";
 export type HtmlViewSourceWorktree = Pick<components["schemas"]["WorktreeDetail"], "id" | "state" | "units">;
 
 export class HtmlViewSourceSheetRequiredError extends Error {}
+
+export type HtmlViewEngine = Awaited<ReturnType<typeof createWorkspaceBindingEngine>>;
+export interface HtmlViewCellMeta { readonly formula: boolean; readonly dateFormat: boolean }
+
+/** True when the number format has a date or time token outside quotes, brackets and escapes. */
+export const isDateFormat = (pattern: string | undefined) => !!pattern && /[ymdhs]/i.test(pattern.replace(/"[^"]*"|\[[^\]]*\]|\\./g, ""));
 
 export async function createWorkspaceBindingEngine(
   unitId: string,
@@ -60,7 +67,8 @@ export async function createWorkspaceBindingEngine(
     ? { view: { kind: "worktree", worktreeId: worktree.id }, mappedUnitIds: worktree.units.map((unit) => unit.unitId) }
     : { view: { kind: "trunk" } };
   signal.throwIfAborted();
-  return createWorkspaceHtmlEngine(
+  let runtime: Univer | undefined;
+  const engine = await createWorkspaceHtmlEngine(
     {
       unitId,
       enableReadOnlyTrial: true,
@@ -84,6 +92,7 @@ export async function createWorkspaceBindingEngine(
         }),
       },
       registerEmbed(univer) {
+        runtime = univer;
         univer.registerPlugin(UniverEmbedPlugin, {
           resourceRefUnitProviderRegistrations: [
             createWorkspaceReferencedUnitProviderRegistration({
@@ -99,4 +108,12 @@ export async function createWorkspaceBindingEngine(
     },
     signal,
   );
+  return Object.assign(engine, {
+    /** Formula and number-format facts for diagnostics, read from this engine's loaded workbook. */
+    readCellMeta(sheetId: string, row: number, col: number): HtmlViewCellMeta {
+      const workbook = runtime?.__getInjector().get(IUniverInstanceService).getUnit<Workbook>(unitId, UniverInstanceType.UNIVER_SHEET);
+      const cell = workbook?.getSheetBySheetId(sheetId)?.getCellRaw(row, col);
+      return { formula: !!(cell?.f || cell?.si), dateFormat: isDateFormat(cell ? workbook?.getStyles().getStyleByCell(cell)?.n?.pattern : undefined) };
+    },
+  });
 }

@@ -12,7 +12,7 @@ import {
 import { useI18n } from "../../shared/i18n";
 import { Button } from "../../shared/ui";
 import { anonymousUser, sessionQueryOptions } from "../auth";
-import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError, type HtmlViewSourceWorktree } from "./workspace-binding-engine";
+import { createWorkspaceBindingEngine, HtmlViewSourceSheetRequiredError, type HtmlViewEngine, type HtmlViewSourceWorktree } from "./workspace-binding-engine";
 import { useNativeUnitPreview } from "./native-unit-preview";
 import { isResourceViewChange } from "../resource-view/resource-view";
 import { resolveWorkspaceMedia, workspaceMediaSources } from "./workspace-media";
@@ -27,6 +27,7 @@ export function HtmlView({
   immersive,
   actionsContainer,
   draft = false,
+  hideDraftNotice = false,
   onSourceLoaded,
   sourceWorktree,
   trialAction,
@@ -35,8 +36,10 @@ export function HtmlView({
   immersive: boolean;
   actionsContainer: HTMLElement | null;
   draft?: boolean;
+  /** For hosts that label trial mode themselves. */
+  hideDraftNotice?: boolean;
   sourceWorktree?: HtmlViewSourceWorktree | undefined;
-  onSourceLoaded?: (unitId: string) => void;
+  onSourceLoaded?: (unitId: string, engine: HtmlViewEngine) => void;
   trialAction?: ReactNode;
   allowedOrigins?: readonly string[];
   mediaSources?: readonly string[];
@@ -74,7 +77,7 @@ export function HtmlView({
         throw error;
       });
       writeModes.set(unitId, engine.writeMode);
-      onSourceLoaded?.(unitId);
+      onSourceLoaded?.(unitId, engine);
       return engine;
     },
     [user?.id, user?.displayName, user?.avatarUrl, writeModes, draft, sourceWorktree, onSourceLoaded],
@@ -125,7 +128,7 @@ export function HtmlView({
           </Button>,
           actionsContainer,
         )}
-      {draft && <p role="status" className="m-0 shrink-0 border-b border-border px-4 py-2 text-sm">{t("htmlViewDraftNotice")}</p>}
+      {draft && !hideDraftNotice && <p role="status" className="m-0 shrink-0 border-b border-border px-4 py-2 text-sm">{t("htmlViewDraftNotice")}</p>}
       {error ? (
         <p role="alert" className="m-0 bg-destructive/10 px-4 py-2 text-sm text-destructive">
           {error}

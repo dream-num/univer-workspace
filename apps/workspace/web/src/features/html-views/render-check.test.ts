@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { expect, it, vi } from "vitest";
-import { inlineRenderErrors, mergeRenderIssues, RENDER_ERROR_SELECTOR, withRenderCheckClient } from "./render-check";
+import { inlineRenderErrors, leftoverPlaceholders, mergeRenderIssues, PLACEHOLDER_PATTERN, RENDER_ERROR_SELECTOR, renderCheckVerdict, withRenderCheckClient } from "./render-check";
 
 it("trims to 300 characters, deduplicates by message, drops empty issues and caps at 10", () => {
   const result = mergeRenderIssues([{ kind: "uncaught-error", message: "  failure  " }], [
@@ -56,4 +56,30 @@ it("runs the injected listeners and captures runtime errors as bounded text", ()
     for (const [type, listener, options] of added.mock.calls) window.removeEventListener(type, listener, options);
     vi.restoreAllMocks();
   }
+});
+
+it("lists visible leftover loading text and filler once data should have arrived, and nothing else", () => {
+  document.body.innerHTML = `<p>Loading…</p><p>加载中，请稍候</p><span>...</span><div><p>Lorem ipsum dolor sit amet</p></div>
+    <p>Loading rate is 5 percent per hour across all of the regions in the table</p><p hidden>Loading hidden</p>
+    <section style="display:none"><p>加载中</p></section><p>Revenue: 42</p><p>Loading… <b>12</b></p><button>Todo</button><p>Loading…</p>`;
+  vi.spyOn(Element.prototype, "getClientRects").mockReturnValue({ length: 1 } as DOMRectList);
+  expect(leftoverPlaceholders(document, PLACEHOLDER_PATTERN)).toEqual(["Loading…", "加载中，请稍候", "...", "Lorem ipsum dolor sit amet", "Todo"]);
+  vi.restoreAllMocks();
+});
+
+it("reaches a verdict only when the page loaded, its sources are ready and it was quiet", () => {
+  const base = { loaded: true, sourcesReady: true, hasViewerIssue: false, hasIssues: false, quietMs: 1200, elapsedMs: 2000, sinceReadyMs: 1200 };
+  expect(renderCheckVerdict(base)).toBe("passed");
+  expect(renderCheckVerdict({ ...base, hasIssues: true })).toBe("issues");
+  expect(renderCheckVerdict({ ...base, loaded: false })).toBe("waiting");
+  expect(renderCheckVerdict({ ...base, quietMs: 100 })).toBe("waiting");
+  expect(renderCheckVerdict({ ...base, sourcesReady: false })).toBe("waiting");
+  expect(renderCheckVerdict({ ...base, sourcesReady: false, hasViewerIssue: true, hasIssues: true })).toBe("issues");
+  expect(renderCheckVerdict({ ...base, sourcesReady: false, elapsedMs: 9000 })).toBe("timed-out");
+});
+
+it("sends visible placeholders from the rendered copy", () => {
+  const rendered = withRenderCheckClient("<!doctype html><html><head></head><body><p>Loading…</p></body></html>", "n");
+  expect(rendered).toContain("loading");
+  expect(rendered).toContain("placeholders");
 });
