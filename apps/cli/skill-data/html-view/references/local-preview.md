@@ -55,9 +55,11 @@ Read the newest report, and repeat until it passes with no binding warnings or l
 placeholders. Check the page at 360px, 390px, and 1440px with the viewport controls.
 The report's `sha256` identifies the checked HTML. Save that same content.
 
-Then call `html_view_save` once to create a draft. Revise a pending draft with `draft`
-instead of creating another page. Return the draft preview URL to the user.
-Follow the creator Skill for publication and access wording.
+Then save that content once. Through MCP, call `html_view_save` to create a draft, revise
+a pending draft with `draft` instead of creating another page, and return the draft preview
+URL. Follow the creator Skill for publication and access wording. With the CLI, which has no
+drafts, run `html-view validate` and then `html-view create`, which publishes at once, or
+replace an existing page's Blob, as the html-view Skill describes.
 
 ## Handle browser limits
 
