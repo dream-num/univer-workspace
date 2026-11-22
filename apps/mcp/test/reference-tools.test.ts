@@ -575,16 +575,16 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(example.isError).not.toBe(true);
     expect(example.structured.content).toBe(await readFile(join(cliSkillData, "html-view", starter), "utf8"));
 
-    const resource = await call(client, "skills_read", {
-      name: "html-view",
-      resource: "references/charts.md",
-    });
-    expect(resource.structured).toEqual({
-      name: "html-view",
-      source: "builtin",
-      path: "references/charts.md",
-      content: await readFile(join(cliSkillData, "html-view/references/charts.md"), "utf8"),
-    });
+    for (const path of ["references/charts.md", "references/local-preview.md", "scripts/preview.mjs"]) {
+      const resource = await call(client, "skills_read", { name: "html-view", resource: path });
+      expect(resource.isError).not.toBe(true);
+      expect(resource.structured).toEqual({
+        name: "html-view",
+        source: "builtin",
+        path,
+        content: await readFile(join(cliSkillData, "html-view", path), "utf8"),
+      });
+    }
   });
 
   it("rejects unknown Skills, unknown resources and inconsistent arguments", async () => {

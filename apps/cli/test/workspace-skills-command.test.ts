@@ -77,6 +77,7 @@ describe("Workspace CLI skills command", () => {
       "references/charts.md",
       "references/design.md",
       "references/frontend-libraries.md",
+      "references/local-preview.md",
       "templates/bauhaus-blocks.univer.html",
       "templates/blueprint-timeline.univer.html",
       "templates/broadsheet.univer.html",
@@ -108,7 +109,11 @@ describe("Workspace CLI skills command", () => {
       }>
     )[0]!;
     expect(data.files).toBeUndefined();
-    expect(data.resources).toHaveLength(15);
+    expect(data.resources).toHaveLength(16);
+    expect(data.resources).toContainEqual({
+      path: "references/local-preview.md",
+      readCommand: "uvw skills read html-view references/local-preview.md",
+    });
     const text = await runSkillsText(["skills", "get", "html-view"]);
     expect(text).not.toContain(skillRoot);
     for (const resource of data.resources) {

@@ -15,7 +15,8 @@ use html_view_save to save a draft. Read the html-view-creator Skill for the MCP
    and the data's shape (dense rankings, time series, tasks/status or a few key numbers).
    If none fits, use Night Gauge (`night-gauge`, 仪表夜航) or a custom style. Ask at most
    one question only when purpose or data is unclear, or the user asks to see a plan or pick
-   a style. Otherwise proceed directly. In the reply, always name the style and why, and
+   a style. Otherwise proceed directly. In the reply, always name the style and why it fits
+   the request or data in one clause, and
    offer to change it; give a custom style a name and one-line description.
 2. Read `styles/<id>.md` by default. Read the full `templates/<id>.univer.html` only
    when the data's shape is close to its designed-for scenario in the catalog, or the
@@ -63,6 +64,16 @@ may not exist, may not be readable by you, or may exist only in an unmerged pull
 Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` and blocks native form navigation. Handle form submission with `preventDefault()` and the binding API. Popups and top-level navigation are unavailable; a normal link navigates inside the iframe. Return separate Workspace page links to the user instead of adding cross-page navigation that loads Workspace inside the view.
 
 ## Validate and create
+
+Write the page as a local HTML file. If `node` is available, read
+[local preview](references/local-preview.md) only when running the preview.
+Preview and iterate until the report passes before saving.
+Without Node or a local shell, skip preview. Through MCP, call `html_view_save` with
+`dryRun: true` and fix the binding samples before saving once as a draft.
+Revise pending drafts with `draft`. Preview and save an existing local file with bindings
+as a draft too, unless the user explicitly requested a file.
+For a PR-linked draft, say the page goes live when the user merges the pull request in
+Workspace. Only drafts without a PR use **Publish** in the preview.
 
 Run `html-view validate` with the complete HTML source. Then run `html-view create` with the same source, destination Space, name `Dashboard`, stable idempotency key, and optional parent Node. Follow the `core` Skill for source handling.
 

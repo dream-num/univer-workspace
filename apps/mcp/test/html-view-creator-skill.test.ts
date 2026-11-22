@@ -26,6 +26,7 @@ describe("HTML View Creator Skill tool bindings", () => {
     const content = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     const text = content.replace(/\s+/gu, " ");
     expect([...content].length).toBeLessThanOrEqual(10000);
+    expect([...content].length - 9916).toBeLessThanOrEqual(800);
     const description = /^description: (.+)$/mu.exec(content)?.[1];
     for (const routing of ["HTML View (.univer.html)", "shareable live HTML page", "dashboard", "report", "form", "Workspace Sheet data", "Prefer it over a local .html unless the user asks for a file"])
       expect(description).toContain(routing);
@@ -38,7 +39,7 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(text).not.toContain("binding-starter");
     for (const resource of ["styles/<id>.md", "templates/<id>.univer.html"])
       expect(text).toContain(`skills_read {"name":"html-view","resource":"${resource}"}`);
-    expect(text).toContain("the page goes live when the user merges in Workspace");
+    expect(text).toContain("the page goes live when the user merges the pull request in Workspace");
     expect(text).toContain("Never merge or ask to merge on their behalf");
     expect(text).toContain("Ask mode cannot save");
     expect(text).toContain("Pass inline `html` by default");
@@ -50,6 +51,33 @@ describe("HTML View Creator Skill tool bindings", () => {
     for (const id of catalogIds) expect(content).toContain(`- \`${id}\`.`);
     const sections = [...content.matchAll(/^## (.+)$/gmu)].map((match) => match[1]);
     expect(sections).toEqual(["Rules", "1. Read and choose", "2. Bind", "3. Save and reply", "4. Continue"]);
+  });
+
+  it("previews local files before saving once and falls back to a dry run", async () => {
+    const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    const flow = creator.slice(creator.indexOf("## 3. Save and reply"), creator.indexOf("## 4. Continue"));
+    const steps = ["With a local shell and `node`, write the page to a local file",
+      'skills_read {"name":"html-view","resource":"references/local-preview.md"}',
+      "until the report passes", "Otherwise call `html_view_save` with `dryRun: true`",
+      "Then save the checked HTML once as a draft"];
+    let previous = -1;
+    for (const step of steps) {
+      const position = flow.indexOf(step);
+      expect(position, step).toBeGreaterThan(previous);
+      previous = position;
+    }
+    expect(flow).toContain("Do the same for existing local files with bindings; never hand off local files unless requested");
+    expect(flow).toContain("Revise pending drafts with `draft`, not name/space");
+    expect(flow).toContain("Fix empty samples, headers as numbers, writable formulas and date serials");
+    expect(flow).toContain("Dry runs do not run scripts; say render checks did not run");
+    expect(flow).toContain("End the turn.");
+  });
+
+  it("gives a style reason and distinguishes PR merge from standalone publication", async () => {
+    const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+    expect(creator).toContain("Explain in one clause why the style fits the request or data");
+    expect(creator).toContain("For a PR-linked draft, say the page goes live when the user merges the pull request in Workspace");
+    expect(creator).toContain("Only for a draft without a PR, open preview and press **Publish**");
   });
 
   it("keeps catalog IDs, templates and compact style cards in sync", async () => {
