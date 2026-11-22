@@ -27,6 +27,10 @@ export const htmlViewValidate: Handler<"htmlView.validate"> = async (ctx, input)
 });
 
 export const htmlViewDraft: Handler<"htmlView.draft"> = async (ctx, input) => {
+  if (input.kind === "dryRun") {
+    const { unitIds: _unitIds, ...validation } = (await htmlViewValidate(ctx, input)).output;
+    return { output: opSpecs["htmlView.draft"].output.parse({ dryRun: true, ...validation }) };
+  }
   if (input.kind === "create") ctx.usage.repo = input.spaceId;
   const { sourceWorktreeId } = input;
   const scope = sourceWorktreeId === undefined ? {} : { sourceWorktreeId };
