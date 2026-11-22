@@ -81,7 +81,7 @@ type LocalPreviewReport = {
 | 编号 | 内容 | 验收 |
 | --- | --- | --- |
 | S1 | 在有界面的 Chrome 和 Edge 上实测本地网络授权弹窗：弹窗文案、授权的持久性、拒绝后能否恢复 | 已完成（Chrome 154，Edge 未装）：本机访问必须由用户点击发起，弹窗标题为「<站点> wants to」，内容为「Access other apps and services on this device」，有 Block 和 Allow。允许后无需刷新即可访问，刷新和重启浏览器后仍有效，EventSource 也可用。拒绝或多次关闭后，请求立即以「Failed to fetch」失败，页面无法与服务未启动区分；恢复路径是站点设置里的「Local network」和「Apps on device」两项改为允许。没有 CORS 或 PNA 预检 |
-| S2 | Safari、Firefox 能否从 https 页面读取 `http://127.0.0.1` 的内容并连接 EventSource | 每个浏览器给出「可用」「需设置」或「不可用」的结论和证据 |
+| S2 | Safari、Firefox 能否从 https 页面读取 `http://127.0.0.1` 的内容并连接 EventSource | 已完成 Safari 部分（Safari 26.0）：不可用。https 页面读取本机报 `TypeError: Load failed`，用户点击后也一样，EventSource 也连不上；没有 `showOpenFilePicker` 和文件句柄 API；选中的 File 在文件修改后读取报 `NotFoundError`，重新选择即可读到新内容。Safari 只用文件选择，每次保存后重新选择。Firefox 未安装，未测 |
 | S3 | 文件选择方式：Chrome 和 Edge 用 File System Access 保留文件句柄并定时检查修改时间来刷新；Safari 和 Firefox 只做一次性载入 | 已完成（Chrome 154）：拖入文件得到的 `getAsFileSystemHandle()` 句柄能读到之后的修改，原子重命名保存也可以；`getAsFile()` 和 `<input type=file>` 得到的 File 在文件修改后读取报 `NotReadableError`，只能重新选择。`showOpenFilePicker` 需要原生对话框，无法在 headless 下驱动。Safari、Firefox 未测 |
 | S4 | 生产环境的 CSP 和 Permissions-Policy 是否允许路由访问本机地址 | 已完成：2026-11-22 生产环境首页和草稿页的响应都没有 CSP 和 Permissions-Policy，HTML 里也没有 meta CSP；服务端只给草稿内容、资源和独立应用路由设置 CSP。路由无需改响应头 |
 | S5 | LobsterAI 和 QwenWork 的 agent shell 里 `node` 是否可用、版本多少 | 已完成一半：LobsterAI 的 shell 里 `node --version` 为 v24.19.0，`node` 是应用自带 Electron 的封装（`ELECTRON_RUN_AS_NODE=1`），不依赖系统 Node。QwenWork 积分耗尽，未测 |
