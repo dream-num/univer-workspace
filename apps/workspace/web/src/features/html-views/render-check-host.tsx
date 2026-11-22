@@ -2,12 +2,11 @@ import { Component, lazy, Suspense, useEffect, useMemo, useRef, useSyncExternalS
 import { createPortal, flushSync } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { getHtmlViewUnitIds, parseHtmlView } from "@univerjs-labs/html-view";
-import { z } from "zod";
 import { draftContentQueryOptions } from "./drafts/draft-queries";
 import { findHtmlFrame } from "./native-preview-protocol";
 import {
-  inlineRenderErrors, mergeRenderIssues, renderIssueSchema, withRenderCheckClient,
-  RENDER_CHECK_CHANNEL, RENDER_CHECK_QUIET_MS, RENDER_CHECK_SETTLE_MS, RENDER_CHECK_TIMEOUT_MS,
+  inlineRenderErrors, mergeRenderIssues, renderCheckMessageSchema, renderCheckVerdict, withRenderCheckClient,
+  RENDER_CHECK_TIMEOUT_MS,
   type CheckHtmlViewDraft, type HtmlViewRenderCheck, type HtmlViewRenderIssue,
 } from "./render-check";
 
@@ -53,11 +52,6 @@ class CheckBoundary extends Component<PropsWithChildren<{ request: Request }>, {
   override render() { return this.state.failed ? null : this.props.children; }
 }
 
-const reportSchema = z.object({
-  channel: z.literal(RENDER_CHECK_CHANNEL), nonce: z.string(), issues: z.array(renderIssueSchema).max(10),
-  loaded: z.boolean(), quietMs: z.number().finite().nonnegative(), elapsedMs: z.number().finite().nonnegative(),
-});
-
 function DraftCheck({ request }: { request: Request }) {
   const content = useQuery(draftContentQueryOptions(request.draftId));
   const source = useMemo(() => content.data === undefined ? null : withRenderCheckClient(content.data, request.id), [content.data, request.id]);
@@ -73,18 +67,16 @@ function DraftCheck({ request }: { request: Request }) {
     const receive = (event: MessageEvent) => {
       const frame = findHtmlFrame(root.current);
       if (!frame || event.source !== frame.contentWindow || event.origin !== "null") return;
-      const parsed = reportSchema.safeParse(event.data);
+      const parsed = renderCheckMessageSchema.safeParse(event.data);
       if (!parsed.success || parsed.data.nonce !== request.id) return;
       const report = parsed.data;
       const viewerIssues = root.current ? inlineRenderErrors(root.current, '[role="alert"]').map((message) => ({ kind: "viewer-error" as const, message })) : [];
       request.issues = mergeRenderIssues(request.issues, [...viewerIssues, ...report.issues]);
-      if (!report.loaded) return;
-      if ((expected.every((id) => sources.current.has(id)) || viewerIssues.length) &&
-          report.quietMs >= RENDER_CHECK_QUIET_MS && performance.now() - readyAt.current >= RENDER_CHECK_QUIET_MS) {
-        request.finish(request.issues.length ? "issues" : "passed");
-      } else if (report.elapsedMs >= RENDER_CHECK_SETTLE_MS) {
-        request.finish("timed-out", "Page did not settle within 8 seconds after load.");
-      }
+      const verdict = renderCheckVerdict({ loaded: report.loaded, sourcesReady: expected.every((id) => sources.current.has(id)),
+        hasViewerIssue: viewerIssues.length > 0, hasIssues: request.issues.length > 0, quietMs: report.quietMs,
+        elapsedMs: report.elapsedMs, sinceReadyMs: performance.now() - readyAt.current });
+      if (verdict === "timed-out") request.finish("timed-out", "Page did not settle within 8 seconds after load.");
+      else if (verdict !== "waiting") request.finish(verdict);
     };
     window.addEventListener("message", receive);
     return () => window.removeEventListener("message", receive);
