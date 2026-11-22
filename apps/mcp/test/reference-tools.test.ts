@@ -525,6 +525,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       [
         ...(await readdir(join(cliSkillData, "html-view/examples"))).map((file) => `examples/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/references"))).map((file) => `references/${file}`),
+        ...(await readdir(join(cliSkillData, "html-view/scripts"))).map((file) => `scripts/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/templates"))).map((file) => `templates/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/styles"))).map((file) => `styles/${file}`),
       ].sort((a, b) => a.localeCompare(b)),
@@ -720,7 +721,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
       const expectedFiles = (await readdir(join(sourceRoot, name), { withFileTypes: true }))
         .filter((entry) => entry.isFile()).map((entry) => entry.name);
-      for (const child of ["examples", "references", "templates", "styles"]) {
+      for (const child of ["examples", "references", "scripts", "templates", "styles"]) {
         const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
           () => [],
         );
