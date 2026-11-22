@@ -56,7 +56,7 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("previews local files before saving once and falls back to a dry run", async () => {
     const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     const flow = creator.slice(creator.indexOf("## 3. Save and reply"), creator.indexOf("## 4. Continue"));
-    const steps = ["With a local shell and `node`, write the page to a local file",
+    const steps = ["With a local shell and `node`, and not as an agent identity, write the page to a local file",
       'skills_read {"name":"html-view","resource":"references/local-preview.md"}',
       "until the report passes", "Otherwise call `html_view_save` with `dryRun: true`",
       "Then save the checked HTML once as a draft"];
@@ -68,7 +68,8 @@ describe("HTML View Creator Skill tool bindings", () => {
     }
     expect(flow).toContain("Do the same for existing local files with bindings; never hand off local files unless requested");
     expect(flow).toContain("Revise pending drafts with `draft`, not name/space");
-    expect(flow).toContain("Fix empty samples, headers as numbers, writable formulas and date serials");
+    expect(flow).toContain("Fix empty samples, headers as numbers, writable formulas, date serials");
+    expect(flow).toContain("With a local shell and `node`, and not as an agent identity, write the page to a local file");
     expect(flow).toContain("Dry runs do not run scripts; say render checks did not run");
     expect(flow).toContain("End the turn.");
   });

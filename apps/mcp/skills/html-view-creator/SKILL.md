@@ -116,11 +116,11 @@ private media stays empty, so provide a visible fallback.
 
 ## 3. Save and reply
 
-With a local shell and `node`, write the page to a local file and preview it via
+With a local shell and `node`, and not as an agent identity, write the page to a local file and preview it via
 `skills_read {"name":"html-view","resource":"references/local-preview.md"}`
 until the report passes. Otherwise call `html_view_save` with `dryRun: true`.
 Use these samples as the self-check. Fix empty samples, headers as numbers, writable
-formulas and date serials. Dry runs do not run scripts; say render checks did not run.
+formulas, date serials. Dry runs do not run scripts; say render checks did not run.
 Then save the checked HTML once as a draft. Do the same for existing local files with
 bindings; never hand off local files unless requested.
 
@@ -128,7 +128,7 @@ New: `html_view_save` with `space` (source repository by default), `name` and UU
 idempotency_key. Revision: `html_view_read`, edit, then save with `page`,
 quoted `etag` and a new key. Revise pending drafts with `draft`, not name/space.
 Pass inline `html` by default; use html_upload_id for oversized HTML.
-Reuse keys only for identical retries. Reread stale ETags.
+Reuse keys only for identical retries.
 
 Reply with purpose, sources, cells controls change, previewUrl, and style.
 Explain in one clause why the style fits the request or data. Offer to change it.

@@ -92,7 +92,7 @@ it("keeps the design reference focused on the catalog and design floor", async (
 
 it("previews before saving and keeps preview details in an optional reference", async () => {
   const content = (await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")).replace(/\s+/gu, " ");
-  for (const term of ["With a local shell and `node`, write the page to a local HTML file",
+  for (const term of ["With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, write the page to a local HTML file",
     "[local preview](references/local-preview.md) only when running the preview",
     "Preview and iterate until the report passes before saving",
     "Without Node or a local shell, skip preview and do not write local files",
@@ -115,6 +115,7 @@ it("previews before saving and keeps preview details in an optional reference", 
     "Chrome can ask for local network access", "Safari supports the file picker only",
     "After each file save, pick the file again", "If Node or a local shell is unavailable, skip local preview",
     "`dryRun: true`", "without creating a draft", "do not execute scripts or prove rendering",
-    "With the CLI, which has no drafts, run `html-view validate` and then `html-view create`"])
+    "With the CLI, which has no drafts, run `html-view validate` and then `html-view create`",
+    "When this connection is an agent identity, its Sheets are private to it"])
     expect(reference).toContain(term);
 });

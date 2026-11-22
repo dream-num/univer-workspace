@@ -72,7 +72,9 @@ choose the local page, and confirm trust. After each file save, pick the file ag
 File-picker diagnostics remain in the browser panel rather than returning to the script.
 Have the user share those diagnostics before claiming the preview passed.
 
-If Node or a local shell is unavailable, skip local preview. Call `html_view_save` with
+The preview reads Sheets as the person signed in to the browser. When this connection is an
+agent identity, its Sheets are private to it, so that person cannot read them: skip local preview.
+If Node or a local shell is unavailable, skip local preview too. Call `html_view_save` with
 `dryRun: true` and the intended save arguments. This validates bindings without creating
 a draft. Fix the returned binding samples and repeat the dry run before saving once.
 Dry runs do not execute scripts or prove rendering. Say that render checks did not run.

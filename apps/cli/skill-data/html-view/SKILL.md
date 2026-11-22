@@ -65,7 +65,8 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 
 ## Validate and create
 
-With a local shell and `node`, write the page to a local HTML file and read
+With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot
+read, write the page to a local HTML file and read
 [local preview](references/local-preview.md) only when running the preview.
 Preview and iterate until the report passes before saving.
 Without Node or a local shell, skip preview and do not write local files.
