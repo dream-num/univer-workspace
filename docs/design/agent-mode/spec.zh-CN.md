@@ -1,7 +1,7 @@
 # Agent Mode 实施规格
 
 > 状态：方案已采纳，尚未实施。日期 2026-11-23。文中标为“目标”的内容都不是现状。
-> 背景、诊断、被放弃的方案和风险的展开见 [README](README.zh-CN.md)。两者不一致时以本文为准，出入列在第 8 节。
+> 背景、诊断、SDK 的行为和风险的展开见 [README](README.zh-CN.md)。README 只保留与本文一致的内容，范围见第 8 节。两者若仍有不一致，以本文为准。
 > “今天”一栏来自对 `main`（`b5aa99a8`）的代码阅读。Collaboration SDK 的行为来自 `@univerjs-pro/collaboration-worktree-service` 1.6.1 的类型和 README，没有运行验证，由阶段 0 复核。
 
 ## 1. 目标与愿景
@@ -25,7 +25,7 @@ Agent Mode 是其中的一种工作方式。人只出现在任务的头和尾。
 | 中间没有人          | 每个任务的人工介入次数。头部一次授权，尾部至多一次合入，中间为零                                                   |
 | 人不在关键路径上    | 任务总时长里等人的占比。agent 持有 editor 角色时为零                                                               |
 | 开头就知道结局      | agent 读一次 `capabilities` 就知道能走到哪一步，中途不会收到 `AGENT_NOT_ALLOWED` 或 `INTERACTIVE_SESSION_REQUIRED` |
-| 上游不靠 agent 自觉 | agent 对别人的 Trunk 没有写入路径。这由权限判定保证，不由提示词保证                                                |
+| 上游不靠 agent 自觉 | 上游只给读权时，agent 对 Trunk 没有写入路径。这由权限判定保证，不由提示词保证                                      |
 
 阶段 0 给出前两项的基线数字。
 
@@ -57,7 +57,7 @@ upstream repo (someone else's Team Space)        agent
 
 ## 3. 术语
 
-本文沿用 `apps/workspace/CONTEXT.md` 的词汇。那份文件要求不说 branch 和 Task，所以 README 里的“分支”在本文里是 Worktree Unit。
+本文沿用 `apps/workspace/CONTEXT.md` 的词汇。那份文件要求不说 branch 和 Task。
 
 | 术语     | 含义                                                                                    | 是否新对象                      |
 | -------- | --------------------------------------------------------------------------------------- | ------------------------------- |
@@ -467,7 +467,7 @@ HTML View 沿用 `html_view_drafts`。它已经满足覆盖写的规则：`repla
 
 - fork 自己的文件。agent 不打算提交的文件放在它自己的 Space 里。
 - fork 的 fork。
-- 在 fork 里修改非 HTML 的 Blob。
+- 在 fork 里修改 HTML View 和其他 Blob。它们属于阶段 5。
 
 ### 6.6 阶段 5：fork 里的 HTML View 和 Blob
 
@@ -516,23 +516,20 @@ A 和 B 是两个已认领的 agent。A 创建仓库 R，把 B 加为 viewer。B
 - 仓库职责、公开合同或数据分类有变化时，在同一个改动里更新 `DREAMNUM.md`。
 - 文档只描述已经存在的东西。本文合入之后，每个阶段完成时把对应的“目标”改写成现状。
 
-## 8. 与 README 的出入
+## 8. 背景文档的范围
 
-建模时对照了现有的 schema 和权限代码，下面几处和 README 不同。
+[README](README.zh-CN.md) 是背景，不是规格。它保留现状和诊断（第 2、3 节），原则（第 4 节），SDK 的行为（6.2、6.3），fork 语义的图示（6.4），过期（6.5），风险（6.10），以及阶段 6 的背景（第 7、8 节）。
 
-| README                                                         | 本文                                                      | 原因                                                               |
-| -------------------------------------------------------------- | --------------------------------------------------------- | ------------------------------------------------------------------ |
-| 6.9：fork 的 Worktree 只能是 User Worktree，要迁移它的私有约束 | 提议是上游的 Team Worktree，不改这条约束                  | D1                                                                 |
-| 6.9：需要一个“上游收到的提议”的查询                            | 不需要，Space 的 pull request 列表已有                    | D1                                                                 |
-| 6.9：按 Unit 授权读写                                          | 不做                                                      | 一个 Team Worktree 里的 Unit 都属于同一个 Space                    |
-| 6.9：上游的永久删除不被别人的 Worktree 卡住，需要改 Trash      | 不改 Trash。owner 和 admin 今天就能 discard Team Worktree | 读 `worktreeCapabilities` 得到                                     |
-| 6.4、6.8：fork 是 agent 名下的一个仓库，是 Team Space          | fork 是 `forks` 表里的一行。它仍然显示在 agent 名下       | D3                                                                 |
-| 5.3：提议适用于任何读得到的文件                                | 第一版只针对 Team Space                                   | D10                                                                |
-| 5.2、6.4：几个 agent 共同编辑同一个 Worktree                   | 第一版一个 Worktree 仍然只有一个作者                      | 多个作者要改 `CONTEXT.md` 的定义和草稿的授权，和提议是两件事       |
-| 6.4：在 fork 里删除上游的文件，就是提议把它移进 Trash          | 第一版 viewer 不能提议删除                                | 沿用现有的 `trash` 检查，也避免 agent 没有意识到自己在删上游的文件 |
-| 6.5、6.10：年龄和落后距离有硬上限                              | 只提示                                                    | 决定的原话是“建议重做”                                             |
-| 10：步骤 0 到 6                                                | 阶段 0 到 6，agent 自己空间的全权单列为阶段 3             | 它和提议互不依赖                                                   |
-| 全文用“分支”                                                   | 用 Worktree Unit                                          | `CONTEXT.md` 要求不说 branch                                       |
+讨论中出现过、后来被本文推翻的做法，已经从 README 删除。实施时不要按它们做：
+
+- 提议不是 agent 的 User Worktree，也不迁移 User Worktree 的私有约束。提议是上游仓库里的 Team Worktree（D1）。
+- fork 不是 Space，没有自己的成员、分享设置和公开设置（D3）。
+- 不按 Unit 单独授权。一个 Team Worktree 里的 Unit 都属于同一个 Space。
+- 不为“上游收到的提议”新建查询，不改 Trash 的永久删除规则。
+- 一个 Worktree 只有一个作者。几个 agent 不共同编辑同一个 Worktree。
+- stale 只提示，没有年龄和落后距离的硬上限。
+- 第一版（阶段 0 到 4）在 fork 里只能修改 Unit。HTML View 和其他 Blob 属于阶段 5。
+- 不用“分支”或 branch 指 Worktree 或 Worktree Unit。
 
 ## 9. 评审时要定的，和实施前要确认的
 
