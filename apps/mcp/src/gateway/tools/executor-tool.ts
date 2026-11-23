@@ -13,11 +13,8 @@ import type {
 import { ExecutorCallError } from "../../shared/errors.js";
 import type { Logger } from "pino";
 import type { UsageAccumulator } from "../../shared/usage.js";
-import {
-  createAffinityTransport,
-  MemoryEpochStore,
-  type EpochStore,
-} from "../../executor-fc/index.js";
+import { MemoryEpochStore, type EpochStore } from "../executor/affinity/epoch-store.js";
+import { createAffinityTransport } from "../executor/affinity/transport.js";
 import type { Authentication } from "../auth.js";
 import { callExecutor, type ExecutorConnection } from "../executor/client.js";
 import { issueGrant } from "../executor/grants.js";
@@ -51,7 +48,7 @@ export function createExecutorLinks(
   config: GatewayConfig["executor"],
   router = config ? new ExecutorRouter(config.urls) : null,
   epochs: EpochStore = defaultEpochs(config),
-  logger?: Pick<Logger, "info">,
+  logger?: Pick<Logger, "debug" | "info">,
 ) {
   const transport =
     config === null ? null : createAffinityTransport({ epochs, ...(logger ? { logger } : {}) });

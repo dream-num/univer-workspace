@@ -1,10 +1,10 @@
 import { createServer } from "node:http";
 import type { WorkspaceContentRuntime } from "@univerjs/univer-workspace-client-core";
 import { pino, type Logger } from "pino";
-import { AFFINITY_HEADER } from "../executor-fc/affinity.js";
 import { createBearerCheck } from "../shared/bearer.js";
 import type { ExecutorConfig } from "../shared/config-executor.js";
 import {
+  AFFINITY_HEADER,
   PROTOCOL_VERSION,
   isOpName,
   opSpecs,
@@ -47,9 +47,9 @@ export function createExecutor(
         .end(JSON.stringify({ error: { code, message: code, detail: null } }));
     };
     // Logged under the literal header name: pino redacts any field called `session`, and the
-    // FC HeaderField value is a routing hash, not a credential.
+    // value is a routing hash, not a credential. Absent for gateways talking to a resident executor.
     const affinityHeader = request.headers[AFFINITY_HEADER];
-    const affinity = Array.isArray(affinityHeader) ? affinityHeader[0] : (affinityHeader ?? null);
+    const affinity = Array.isArray(affinityHeader) ? affinityHeader[0] : affinityHeader;
     void (async () => {
       if (request.method === "GET" && request.url === "/healthz") {
         response.end("ok");
@@ -69,17 +69,10 @@ export function createExecutor(
         reject(503, "workspace-executor-unavailable");
         return;
       }
-      // Every RPC request logs the FC HeaderField value it arrived with, so a platform session
-      // can be matched against this process from the executor side alone.
-      logger.info(
-        { event: "mcp.executor_request", path: request.url, [AFFINITY_HEADER]: affinity },
-        "Executor request received",
-      );
       if (request.method === "GET" && request.url === "/rpc/v1/capabilities") {
         await capabilities.ready;
         // A renderer that started after this executor shows up here instead of after the next refresh.
-        if (config.MCP_RENDERER_URL && capabilities.operations.size === 0)
-          await capabilities.refresh();
+        if (config.MCP_RENDERER_URL && capabilities.operations.size === 0) await capabilities.refresh();
         response.writeHead(200, { "content-type": "application/json" }).end(
           JSON.stringify({
             v: PROTOCOL_VERSION,
@@ -87,6 +80,7 @@ export function createExecutor(
               const operation = renderOperations.get(name);
               return operation === undefined || capabilities.operations.has(operation);
             }),
+            ...(config.EXECUTOR_AFFINITY === undefined ? {} : { affinity: config.EXECUTOR_AFFINITY }),
           }),
         );
         return;

@@ -1,6 +1,6 @@
 # FC HeaderField 亲和方案
 
-> 方案已确定（2026-11-21）：**会话隔离 + 多 gateway 确定性派生 + `EXECUTOR_MAX_JOBS=1`**。gateway 侧亲和与 FC executor 装配已实现（[`apps/mcp/src/executor-fc`](../../../apps/mcp/src/executor-fc/README.md)）；平台细节仍待落地验证（见第 6 节）。这里的 FC 指阿里云函数计算。
+> 方案已确定（2026-11-21）：**会话隔离 + 多 gateway 确定性派生 + `EXECUTOR_MAX_JOBS=1`**。gateway 侧亲和与能力发现已实现，FC executor 是同一个 executor 进程的部署形态（见第 4.1 节和 [MCP README](../../../apps/mcp/README.md)）；平台细节仍待落地验证（见第 6 节）。这里的 FC 指阿里云函数计算。
 > 配套的 WebSocket 方案见 [serverless-fc.zh-CN.md](serverless-fc.zh-CN.md)。
 > 性能数字来自本地 Docker Desktop 基线（[架构 6.2 / 7.1.1](architecture.zh-CN.md)），不是生产结论。
 > FC 的产品行为以官方文档为准，本文引用处均已标注链接。
@@ -313,10 +313,10 @@ MCP 2025-11-25 引入了**实验性的 Tasks utility**：`tools/call` 可以携�
 
 | 现状                                                       | FC HeaderField 方案（已确定）                             |
 | ---------------------------------------------------------- | --------------------------------------------------------- |
-| `MCP_EXECUTOR_URLS` 多地址 + `ExecutorRouter` + rendezvous | 单个 FC HTTP 触发器地址；删除 router                      |
-| `ExecutorCapabilities` 轮询多副本                          | 单端点，保留版本/能力发现                                 |
-| worker 池 + `EXECUTOR_MAX_WORKERS=4`                       | 去掉池；一个 FC 实例一个 worker，`EXECUTOR_MAX_WORKERS=1` |
-| `ConversionJobQueue` + `EXECUTOR_MAX_JOBS=2`               | `EXECUTOR_MAX_JOBS=1`，一次一个转换                       |
+| `MCP_EXECUTOR_URLS` 多地址 + `ExecutorRouter` + rendezvous | 保留；FC 触发器地址就是其中一项，rendezvous 照常在地址间路由 |
+| `ExecutorCapabilities` 轮询多副本                          | 保留，并按地址记录 `affinity`；只对声明 `header` 的地址发 `x-executor-key` |
+| worker 池 + `EXECUTOR_MAX_WORKERS=4`                       | 代码不变；FC 部署设 `EXECUTOR_MAX_WORKERS=1`               |
+| `ConversionJobQueue` + `EXECUTOR_MAX_JOBS=2`               | 代码不变；FC 部署设 `EXECUTOR_MAX_JOBS=1`                  |
 | `/rpc/v1/<op>` 同步                                        | 短操作同步；长操作 FC 异步 + `job_get`                    |
 | 无 Session 管理                                            | 确定性派生 `sid` + 共享 epoch + 401 重试                  |
 | gateway 无状态                                             | 仍无状态；依赖共享 epoch 存储                             |
@@ -342,6 +342,21 @@ MCP client ──Streamable HTTP──▶ gateway（长驻）
 - **长任务：异步调用 + `job_get` 轮询。** 不要用 WS 长连接等结果。
 - **WebSocket 不用于 gateway → executor**，理由见 [WebSocket 方案](serverless-fc.zh-CN.md)。
 
+### 4.1 部署形态与发现
+
+executor 有常驻和 FC 两种部署形态，是**替代关系**，不是两套实现：
+
+- **同一个进程**：两种形态都是 `MCP_ROLE=executor`，同一个镜像、同一套 RPC 和操作目录。FC 形态只多几个环境变量：
+  `HOST=0.0.0.0`、`PORT=9000`、`EXECUTOR_MAX_WORKERS=1`、`EXECUTOR_MAX_JOBS=1`、`EXECUTOR_AFFINITY=header`。
+- **可配置**：gateway 照旧只通过 `MCP_EXECUTOR_URLS` 选择 executor。地址可以全是常驻、全是 FC，或者混合；
+  从常驻切到 FC 只需要换地址，gateway 不需要形态开关。
+- **可发现**：FC executor 在 `/rpc/v1/capabilities` 里声明 `"affinity": "header"`。gateway 按地址记录这个声明，
+  只对声明了的地址读 epoch、带 `x-executor-key`、做 401 续期和 429 退避；对常驻地址的调用与之前完全相同。
+  能力探测本身总带一个固定 key，因为探测时还不知道对方形态，而不带 Header 的请求会让 FC 每次新建 Session。
+- **耦合边界**：FC 相关代码只在 gateway 的 `gateway/executor/affinity/`（Session 派生、epoch 存储、亲和传输）。
+  `client.ts` 只在“地址声明了亲和”时调用这层，并把它抛出的“确定未发送”错误原样返回；常驻 executor 只读自己的
+  `EXECUTOR_AFFINITY` 并在能力里声明，不引用任何 gateway 代码。Header 名 `x-executor-key` 是执行后端协议的一部分。
+
 ### 决策表
 
 | 决策       | 选择                                                  |
@@ -358,8 +373,8 @@ MCP client ──Streamable HTTP──▶ gateway（长驻）
 
 ## 5. 与本仓库现状的差距
 
-1. **路由**：`MCP_EXECUTOR_URLS` + `ExecutorRouter` + rendezvous 假设地址可枚举；FC 只有一个端点，需要删除 router，把亲和交给 FC。
-2. **能力发现**：`ExecutorCapabilities` 从“多副本交集”退化为“单逻辑后端”，版本不兼容排除仍然保留。
+1. **路由**（已解决）：保留 `MCP_EXECUTOR_URLS` + `ExecutorRouter` + rendezvous。FC 端点就是一个地址，实例内亲和交给 FC。
+2. **能力发现**（已解决）：保留多副本交集和版本排除，另外按地址读出 `affinity`，见 4.1。
 3. **认证**：继续用 `MCP_EXECUTOR_TOKEN` 或 FC 的 Bearer/签名认证；FC 环境变量对代码可见，不能让用户代码读到长期 token。
 4. **Session 管理**：gateway 需要新增确定性派生 + 共享 epoch + 401 重试。
 5. **worker 配置**：去掉 worker 池，一个 FC 实例一个 worker，`EXECUTOR_MAX_WORKERS=1`。
@@ -391,10 +406,11 @@ MCP client ──Streamable HTTP──▶ gateway（长驻）
 
 已确定方向：会话隔离、确定性派生、`EXECUTOR_MAX_JOBS=1`；以下为实现项：
 
-- [x] executor 的 worker pool 收成单槽：`executor-fc/executor.ts` 强制 `EXECUTOR_MAX_WORKERS=1`；
+- [x] executor 的 worker pool 收成单槽：FC 部署设 `EXECUTOR_MAX_WORKERS=1`；
       池本身仍在 Client Core 内，只是固定为一个槽位（3.7 允许的形态）
 - [x] 实例内 FIFO：复用 `executor/dispatch.ts` 的 `createUnitQueue()`，其 key 正是 `(userId, scope, unitId)`
-- [x] gateway 请求 `MCP_EXECUTOR_URLS` 时携带亲和 key：`x-executor-key` 默认发送，多地址与 rendezvous 保留
+- [x] executor 用 `EXECUTOR_AFFINITY=header` 在能力里声明亲和；gateway 只对声明了的地址携带 `x-executor-key`，
+      多地址与 rendezvous 保留
 - [x] gateway 的确定性派生与 epoch 维护：`MCP_GATEWAY_EPOCH_STORE=memory|redis`，默认内存
 - [ ] gateway 多实例时 `job_get` 的正常：`ToolJobs` 仍是进程内 Map，需要粘性会话或外置 job 记录
 

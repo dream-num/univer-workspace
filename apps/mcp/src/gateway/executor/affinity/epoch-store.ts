@@ -62,13 +62,12 @@ export interface EpochStoreSettings {
 export const DEFAULT_MAX_KEYS = 100_000;
 
 /**
- * Per-process epoch store, correct for one gateway replica or local development. Production
- * with more than one replica must inject a shared atomic implementation through `EpochStore`;
- * see the package README.
+ * Per-process epoch store, correct for one gateway replica or local development. Several
+ * replicas need the shared Redis store (`MCP_GATEWAY_EPOCH_STORE=redis`).
  *
  * Epochs have no expiry (design 3.4): a reset would make the gateway reuse an old Session ID.
- * Bounding the map keeps long-lived processes finite. An evicted key starts again at 0, which
- * costs at most one platform 401 and one renewal, never a wrong write.
+ * Bounding the map keeps long-lived processes finite. An evicted key starts again at 0 and renews
+ * after platform 401s; that costs failed calls, never a wrong write.
  */
 export class MemoryEpochStore implements EpochStore {
   readonly #epochs = new Map<string, number>();

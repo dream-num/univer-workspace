@@ -1,64 +1,45 @@
 import { setTimeout as delay } from "node:timers/promises";
 import type { Logger } from "pino";
-import {
-  AFFINITY_HEADER,
-  assertAffinityHeaderName,
-  assertAffinityHeaderValue,
-} from "./affinity.js";
+import { ExecutorCallError } from "../../../shared/errors.js";
+import { AFFINITY_HEADER } from "../../../shared/executor-protocol.js";
 import type { EpochStore } from "./epoch-store.js";
-import { createSessionAffinity, type SessionAffinity } from "./session.js";
+import { createSessionAffinity } from "./session.js";
 
-// Affinity-aware calls to an FC HTTP trigger.
+// Calls to an executor that advertised `affinity: "header"`, such as an FC HTTP trigger.
 // Design: docs/design/workspace-mcp/fc-headerfield.zh-CN.md sections 3.3, 3.9 and 4.
 
 /** Enough of a platform error to tell an FC Session failure from the executor's own envelope. */
 const ERROR_SNIPPET_BYTES = 4 * 1024;
-const DEFAULT_THROTTLE_BASE_MS = 100;
-const DEFAULT_THROTTLE_MAX_MS = 2_000;
+const THROTTLE_BASE_MS = 100;
+const THROTTLE_MAX_MS = 2_000;
 const DEFAULT_MAX_THROTTLE_ATTEMPTS = 2;
 
 export interface AffinityRequest {
-  /**
-   * Canonical key from `affinityKey`, or undefined for a request that must not carry affinity
-   * (capability discovery). A keyed request always sends the header.
-   */
-  readonly key?: string;
-  /** Overrides the transport endpoint for this request, such as one of several executor URLs. */
-  readonly endpoint?: string;
-  /** Path resolved against the endpoint, such as `/rpc/v1/content.inspect`. */
+  /** Executor origin, one of `MCP_EXECUTOR_URLS`. */
+  readonly url: string;
+  /** Canonical key from `affinityKey`. */
+  readonly key: string;
+  /** Path resolved against the origin, such as `/rpc/v1/content.inspect`. */
   readonly path: string;
   readonly init: RequestInit;
-  /** Stops 429 backoff from spending budget the caller still needs for the response. */
-  readonly deadlineAt?: number;
 }
 
 export interface AffinityTransport {
-  readonly headerName: string;
-  /** The Session ID the next keyed request would use. */
-  sessionId(key: string): Promise<string>;
   /**
    * Sends one request with the key's Session ID and resolves with the final `Response`.
    * Retries only failures known to precede function execution: a platform Session 401
-   * (renew the epoch, retry once) and a 429 (bounded backoff). Everything else, including
-   * network errors, is returned or thrown to the caller so writes keep their existing
-   * "could it have been applied?" semantics.
+   * (renew the epoch, retry once) and a 429 (bounded backoff). Network errors are thrown
+   * unchanged so writes keep their "could it have been applied?" semantics. Failures that
+   * provably sent nothing (the epoch store, a backoff cut short) throw
+   * `workspace-executor-unavailable`.
    */
   request(request: AffinityRequest): Promise<Response>;
 }
 
 export interface AffinityTransportOptions {
-  /**
-   * Default HTTP trigger origin, such as `https://<service>.<region>.fcapp.run`. Optional when
-   * every request carries its own `endpoint`.
-   */
-  readonly endpoint?: string;
   readonly epochs: EpochStore;
-  readonly headerName?: string;
   readonly fetcher?: typeof fetch;
-  readonly session?: SessionAffinity;
   readonly maxThrottleAttempts?: number;
-  readonly throttleBaseMs?: number;
-  readonly throttleMaxMs?: number;
   readonly random?: () => number;
   readonly sleep?: (ms: number, signal: AbortSignal | undefined) => Promise<void>;
   /**
@@ -68,21 +49,15 @@ export interface AffinityTransportOptions {
    * platform error shape is verified against FC (design 6.1).
    */
   readonly retryOnSessionError?: (response: Response) => boolean | Promise<boolean>;
-  /** Logs the affinity header actually sent on every attempt. */
-  readonly logger?: Pick<Logger, "info">;
+  readonly logger?: Pick<Logger, "debug" | "info">;
 }
 
 export function createAffinityTransport(options: AffinityTransportOptions): AffinityTransport {
-  const headerName = options.headerName ?? AFFINITY_HEADER;
-  assertAffinityHeaderName(headerName);
-  const endpoint = options.endpoint === undefined ? undefined : new URL(options.endpoint);
-  // Resolved per request instead of captured: a test or an embedding application that replaces
-  // globalThis.fetch after construction must still be honoured.
+  // Resolved per request instead of captured: a test that replaces globalThis.fetch after
+  // construction must still be honoured.
   const fetcher: typeof fetch = (input, init) => (options.fetcher ?? globalThis.fetch)(input, init);
-  const session = options.session ?? createSessionAffinity({ epochs: options.epochs });
+  const session = createSessionAffinity(options.epochs);
   const maxThrottleAttempts = options.maxThrottleAttempts ?? DEFAULT_MAX_THROTTLE_ATTEMPTS;
-  const throttleBaseMs = options.throttleBaseMs ?? DEFAULT_THROTTLE_BASE_MS;
-  const throttleMaxMs = options.throttleMaxMs ?? DEFAULT_THROTTLE_MAX_MS;
   const random = options.random ?? Math.random;
   const sleep =
     options.sleep ??
@@ -92,75 +67,61 @@ export function createAffinityTransport(options: AffinityTransportOptions): Affi
   if (!Number.isInteger(maxThrottleAttempts) || maxThrottleAttempts < 0)
     throw new Error("maxThrottleAttempts must be a non-negative integer");
 
-  const baseFor = (request: AffinityRequest): URL | undefined =>
-    request.endpoint === undefined ? endpoint : new URL(request.endpoint);
-
-  const send = (
-    sessionId: string | undefined,
-    request: AffinityRequest,
-    base: URL,
-  ): Promise<Response> => {
-    const headers = new Headers(request.init.headers);
-    if (sessionId !== undefined) {
-      assertAffinityHeaderValue(sessionId);
-      headers.set(headerName, sessionId);
-    }
-    return fetcher(new URL(request.path, base), {
-      ...request.init,
-      headers,
-      redirect: request.init.redirect ?? "manual",
-    });
-  };
-
   const throttleDelay = (attempt: number): number => {
-    const ceiling = Math.min(throttleBaseMs * 2 ** attempt, throttleMaxMs);
+    const ceiling = Math.min(THROTTLE_BASE_MS * 2 ** attempt, THROTTLE_MAX_MS);
     // Jitter keeps replicas that were throttled together from retrying in lockstep.
     return Math.max(0, Math.round(ceiling * (0.75 + random() * 0.5)));
   };
 
   return {
-    headerName,
-    sessionId: (key) => session.sessionId(key),
-    async request(input) {
-      const { key, init } = input;
-      const signal = init.signal ?? undefined;
-      let sessionId = key === undefined ? undefined : await session.sessionId(key);
+    async request({ url, key, path, init }) {
+      const target = new URL(path, url);
+      // Every epoch read and renewal happens before a send, so its failure sent nothing, whatever
+      // the store throws (a failed connect, a command timeout after Redis went away).
+      const epochSession = async <T>(work: Promise<T>): Promise<T> => {
+        try {
+          return await work;
+        } catch {
+          throw notSent("epoch-store", "The executor epoch store is unavailable.");
+        }
+      };
+      let sessionId = await epochSession(session.sessionId(key));
       let renewed = false;
       let throttles = 0;
       let attempt = 0;
       for (;;) {
-        const base = baseFor(input);
-        if (base === undefined)
-          throw new Error(
-            "An affinity request needs an endpoint: set it on the transport or the request",
-          );
         attempt += 1;
-        options.logger?.info(
+        options.logger?.debug(
           {
             event: "mcp.executor_request",
-            executor: base.origin,
-            path: input.path,
+            executor: target.origin,
+            path,
             attempt,
-            [headerName]: sessionId ?? null,
+            [AFFINITY_HEADER]: sessionId,
           },
           "Executor request",
         );
-        const response = await send(sessionId, input, base);
+        const headers = new Headers(init.headers);
+        headers.set(AFFINITY_HEADER, sessionId);
+        const response = await fetcher(target, {
+          ...init,
+          headers,
+          redirect: init.redirect ?? "manual",
+        });
         if (
           response.status === 401 &&
-          key !== undefined &&
           !renewed &&
           (await isPlatformSessionError(response, options.retryOnSessionError))
         ) {
           await discard(response);
-          sessionId = (await session.renew(key)).sessionId;
+          sessionId = (await epochSession(session.renew(key))).sessionId;
           renewed = true;
           options.logger?.info(
             {
               event: "mcp.executor_session_renewed",
-              executor: base.origin,
-              path: input.path,
-              [headerName]: sessionId,
+              executor: target.origin,
+              path,
+              [AFFINITY_HEADER]: sessionId,
             },
             "Executor affinity Session renewed after a platform 401",
           );
@@ -169,16 +130,29 @@ export function createAffinityTransport(options: AffinityTransportOptions): Affi
         if (response.status === 429 && throttles < maxThrottleAttempts) {
           const wait = throttleDelay(throttles);
           throttles += 1;
-          if (input.deadlineAt !== undefined && Date.now() + wait >= input.deadlineAt)
-            return response;
           await discard(response);
-          await sleep(wait, signal);
+          try {
+            await sleep(wait, init.signal ?? undefined);
+          } catch {
+            // A 429 is answered before the function runs, so a call deadline that ends the
+            // backoff still sent nothing.
+            throw notSent("throttled", "The executor stayed throttled until the deadline.");
+          }
           continue;
         }
         return response;
       }
     },
   };
+}
+
+function notSent(cause: "epoch-store" | "throttled", message: string): ExecutorCallError {
+  return new ExecutorCallError({
+    code: "workspace-executor-unavailable",
+    message: `${message} The call was not run; it is safe to repeat.`,
+    detail: { cause, retryable: true },
+    outcome: "internal_error",
+  });
 }
 
 async function isPlatformSessionError(

@@ -1,10 +1,12 @@
 import {
   MemoryEpochStore,
-  createRedisEpochStore,
   type EpochStore,
   type EpochStoreSettings,
+} from "./affinity/epoch-store.js";
+import {
+  createRedisEpochStore,
   type RedisEpochStoreOptions,
-} from "../../executor-fc/index.js";
+} from "./affinity/redis-epoch-store.js";
 
 // The gateway owns the epoch store's lifecycle: it is created with the listener, shared by every
 // executor call, and closed with the server.

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-// Smoke test for one running FC executor (dist/executor-fc/main.js) over its internal RPC.
+// Smoke test for one executor deployed for FC over its internal RPC: the MCP image with
+// MCP_ROLE=executor and EXECUTOR_AFFINITY=header (see the MCP README, "Executor on FC").
 //
 //   node apps/mcp/scripts/smoke-executor-fc.mjs --token "$MCP_EXECUTOR_TOKEN"
 //
@@ -202,8 +203,8 @@ if (!reachable) {
   process.stderr.write(
     [
       `Cannot reach ${origin}. The container is not listening or the port mapping is wrong.`,
-      "Check that the container runs `node dist/executor-fc/main.js` (not dist/main.js, which needs",
-      "MCP_ROLE) and that -p maps the port the entry listens on (MCP_FC_PORT, default 9000).",
+      "Check that the container sets MCP_ROLE=executor, HOST=0.0.0.0 and PORT (FC uses 9000), and",
+      "that -p maps that port.",
       "Then look at `docker logs <container>`.",
       "",
     ].join("\n"),
@@ -257,6 +258,18 @@ await check("advertises version 1 and the executor operation catalog", async () 
     assertTruthy(body.operations.includes(op), `operation ${op}`);
   capabilities = body.operations;
   return `${body.operations.length} operations`;
+});
+
+await check("advertises header affinity so gateways send x-executor-key", async () => {
+  const response = await raw("/rpc/v1/capabilities", {
+    method: "GET",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  assertEqual(
+    jsonBody(response.bytes)?.affinity,
+    "header",
+    "affinity (set EXECUTOR_AFFINITY=header)",
+  );
 });
 
 const renderOperations = ["render.screenshot", "render.printPdf", "render.lint"];

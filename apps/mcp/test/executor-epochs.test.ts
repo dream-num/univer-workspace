@@ -1,26 +1,23 @@
 import { Writable } from "node:stream";
 import { pino } from "pino";
 import { describe, expect, it, vi } from "vitest";
+import { MemoryEpochStore } from "../src/gateway/executor/affinity/epoch-store.js";
 import {
-  AFFINITY_HEADER,
-  MemoryEpochStore,
   RedisEpochStore,
-  RedisEpochStoreError,
-  affinityKey,
-  createAffinityTransport,
   createRedisClient,
   createRedisEpochStore,
-  deriveSessionId,
   redisEpochKey,
   type RedisEpochClient,
-} from "../src/executor-fc/index.js";
+} from "../src/gateway/executor/affinity/redis-epoch-store.js";
+import { deriveSessionId } from "../src/gateway/executor/affinity/session.js";
+import { createAffinityTransport } from "../src/gateway/executor/affinity/transport.js";
 import { ExecutorCapabilities } from "../src/gateway/executor/capabilities.js";
 import { callExecutor } from "../src/gateway/executor/client.js";
 import { createEpochStore, redisEpochStoreOptions } from "../src/gateway/executor/epochs.js";
 import { ExecutorRouter } from "../src/gateway/executor/router.js";
 import { parseGatewayConfig } from "../src/shared/config.js";
 import { encodeFrame } from "../src/shared/frame.js";
-import { opSpecs, type ExecutorGrant } from "../src/shared/executor-protocol.js";
+import { AFFINITY_HEADER, opSpecs, type ExecutorGrant } from "../src/shared/executor-protocol.js";
 import { zeroCost } from "../src/shared/usage.js";
 import { testStagingDirectory } from "./staging-directory.js";
 
@@ -31,7 +28,7 @@ const grant: ExecutorGrant = {
   session: "secret-session",
   expiresAt: Date.now() + 600_000,
 };
-const key = affinityKey({ userId: grant.userId, scope: "worktree:wt", unitId: "unit" });
+const key = "user-1\0worktree:wt\0unit";
 const meta = { executor: "none" as const, cost: { ...zeroCost } };
 const gatewayEnv = {
   WORKSPACE_ORIGIN: "https://workspace.test",
@@ -42,9 +39,12 @@ const gatewayEnv = {
   MCP_EXECUTOR_TOKEN: token,
 };
 
+/** An FC-style executor: its capabilities advertised `affinity: "header"`. */
+const affineRouter = (urls: string[]) => new ExecutorRouter(urls, new Set(urls));
+
 function connection(transport = createAffinityTransport({ epochs: new MemoryEpochStore() })) {
   return {
-    router: new ExecutorRouter(["http://one.test"]),
+    router: affineRouter(["http://one.test"]),
     transport,
     executorToken: token,
     grant,
@@ -65,11 +65,9 @@ describe("executor epoch configuration", () => {
       store: "memory",
       keyPrefix: "mcp:executor-epoch:",
     });
-    // Both names are consumed by the parser and never leak into the readonly config.
+    // The parser consumes the names; they never leak into the readonly config.
     expect(config).not.toHaveProperty("MCP_GATEWAY_EPOCH_STORE");
-    expect(config).not.toHaveProperty("MCP_EXECUTOR_EPOCH_STORE");
     expect(config.executor).not.toHaveProperty("MCP_GATEWAY_REDIS_URL");
-    expect(config.executor).not.toHaveProperty("MCP_EXECUTOR_REDIS_URL");
   });
 
   it("selects Redis and carries the URL and prefix", () => {
@@ -84,48 +82,6 @@ describe("executor epoch configuration", () => {
       redisUrl: "rediss://cache.test:6379/2",
       keyPrefix: "gw:epoch:",
     });
-  });
-
-  it("still accepts the pre-rename MCP_EXECUTOR_* names and refuses both at once", () => {
-    const legacy = parseGatewayConfig({
-      ...gatewayEnv,
-      MCP_EXECUTOR_EPOCH_STORE: "redis",
-      MCP_EXECUTOR_REDIS_URL: "rediss://cache.test:6379/2",
-      MCP_EXECUTOR_REDIS_KEY_PREFIX: "gw:epoch:",
-    });
-    expect(legacy.executor?.epochs).toEqual({
-      store: "redis",
-      redisUrl: "rediss://cache.test:6379/2",
-      keyPrefix: "gw:epoch:",
-    });
-    // The default key prefix keeps its pre-rename value so existing Redis epochs stay reachable.
-    expect(
-      parseGatewayConfig({
-        ...gatewayEnv,
-        MCP_GATEWAY_EPOCH_STORE: "redis",
-        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
-      }).executor?.epochs,
-    ).toEqual({
-      store: "redis",
-      redisUrl: "redis://cache.test:6379",
-      keyPrefix: "mcp:executor-epoch:",
-    });
-    expect(() =>
-      parseGatewayConfig({
-        ...gatewayEnv,
-        MCP_GATEWAY_EPOCH_STORE: "redis",
-        MCP_EXECUTOR_EPOCH_STORE: "redis",
-        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
-      }),
-    ).toThrow(/MCP_EXECUTOR_EPOCH_STORE is deprecated/u);
-    expect(() =>
-      parseGatewayConfig({
-        ...gatewayEnv,
-        MCP_GATEWAY_EPOCH_STORE: "redis",
-        MCP_GATEWAY_REDIS_URL: "redis://cache.test:6379",
-        MCP_EXECUTOR_REDIS_URL: "redis://other.test:6379",
-      }),
-    ).toThrow(/MCP_EXECUTOR_REDIS_URL is deprecated/u);
   });
 
   it("rejects a mismatched store or URL and a store without an executor", () => {
@@ -558,7 +514,32 @@ describe("Redis client topology", () => {
 });
 
 describe("gateway affinity header", () => {
-  it("sends the derived Session ID with every executor call", async () => {
+  it("calls a resident executor exactly as before: no header and no epoch read", async () => {
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValue(okFrame({ committed: false, status: "committed" }));
+    const epochs = {
+      get: vi.fn(async () => 0),
+      increment: vi.fn(async () => 1),
+    };
+    try {
+      await callExecutor(
+        {
+          ...connection(createAffinityTransport({ epochs })),
+          router: new ExecutorRouter(["http://one.test"]),
+        },
+        opSpecs["content.execute"],
+        { input: { worktreeId: "wt", unitId: "unit", code: "return 1" } },
+      );
+      const init = fetcher.mock.calls[0]?.[1] as RequestInit;
+      expect(new Headers(init.headers).has(AFFINITY_HEADER)).toBe(false);
+      expect(epochs.get).not.toHaveBeenCalled();
+    } finally {
+      fetcher.mockRestore();
+    }
+  });
+
+  it("sends the derived Session ID with every call to an affinity executor", async () => {
     const fetcher = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(okFrame({ committed: false, status: "committed" }));
@@ -629,7 +610,7 @@ describe("gateway affinity header", () => {
       await callExecutor(
         {
           ...connection(transport),
-          router: new ExecutorRouter(["http://one.test", "http://two.test"]),
+          router: affineRouter(["http://one.test", "http://two.test"]),
         },
         opSpecs["content.execute"],
         { input: { worktreeId: "wt", unitId: "unit", code: "return 1" } },
@@ -645,9 +626,10 @@ describe("gateway affinity header", () => {
 
   it("reports an unreachable epoch store as not sent instead of a possibly applied write", async () => {
     const fetcher = vi.spyOn(globalThis, "fetch");
+    // What ioredis throws once a connected Redis goes away: a plain error, not a store type.
     const epochs = {
       get: async () => {
-        throw new RedisEpochStoreError("The Redis epoch store is unavailable.");
+        throw new Error("Command timed out");
       },
       increment: async () => 1,
     };
@@ -687,6 +669,34 @@ describe("executor capability discovery", () => {
       expect(seen).toHaveLength(2);
       for (const value of seen) expect(value).toMatch(/^k[0-9a-f]{32}$/u);
       expect(new Set(seen).size).toBe(1);
+      expect(capabilities.operations.has("content.inspect")).toBe(true);
+    } finally {
+      capabilities.close();
+      fetcher.mockRestore();
+    }
+  });
+});
+
+describe("executor capability affinity", () => {
+  it("routes with affinity only to executors that advertise it", async () => {
+    const fetcher = vi
+      .spyOn(globalThis, "fetch")
+      .mockImplementation(async (input) =>
+        Response.json(
+          String(input).startsWith("http://fc.test")
+            ? { v: 1, operations: ["content.inspect"], affinity: "header" }
+            : { v: 1, operations: ["content.inspect"] },
+        ),
+      );
+    const capabilities = new ExecutorCapabilities(
+      { urls: ["http://resident.test", "http://fc.test"], executorToken: "t".repeat(40) },
+      pino({ level: "silent" }),
+      new MemoryEpochStore(),
+    );
+    try {
+      await capabilities.ready;
+      expect(capabilities.router.usesAffinity("http://fc.test")).toBe(true);
+      expect(capabilities.router.usesAffinity("http://resident.test")).toBe(false);
       expect(capabilities.operations.has("content.inspect")).toBe(true);
     } finally {
       capabilities.close();

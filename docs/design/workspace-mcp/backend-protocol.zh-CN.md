@@ -97,6 +97,11 @@
 - `v` 等于网关的 `PROTOCOL_VERSION` 时，网关记录这个执行层的操作集合，丢弃目录里没有的操作名。`v` 不同时，网关删除这个执行层的记录。
 - 请求失败时，网关保留这个执行层上一次的记录。
 - 可用操作集合是所有已记录执行层的交集。只有已记录的执行层进入路由候选。
+- 能力响应可以带 `"affinity": "header"`（执行层设 `EXECUTOR_AFFINITY=header` 时，例如部署在 FC 上）。网关按地址记录它，
+  之后对这个地址的每次调用都在 `x-executor-key` 里带一个按 `(userId, scope, unitId)` 和 epoch 派生的稳定 Session ID，
+  并处理平台的 401 续期和 429 退避。没有这个字段的执行层收到的请求与之前完全相同。字段可选，旧网关会忽略它，
+  所以不需要升 `v`。能力探测本身总带一个固定的 `x-executor-key`，常驻执行层忽略它。细节见
+  [FC HeaderField 方案](fc-headerfield.zh-CN.md) 4.1 节。
 - 第一次读取成功之前，集合为空。
 - 工具用 `executorOperations` 声明必须全部可用的操作，用 `executorAnyOperations` 声明至少一个可用的操作（`apps/mcp/src/gateway/tools/registry.ts` 的 `toolAvailable`）。依赖不满足的工具不进入 `tools/list`，调用它与调用不存在的工具相同。
 - 不在执行层白名单内的用户得到空集合。这是部署策略，借用同一个机制（9.3 节）。

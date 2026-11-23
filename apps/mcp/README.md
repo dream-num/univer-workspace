@@ -72,33 +72,40 @@ known to precede delivery can fail over. A disconnected or timed-out write retur
 `workspace-result-unknown`; check current state before repeating it. Worker open timeouts
 remain retryable. Calls have a 30-second synchronous gateway budget. Office import/export, screenshots, PDF printing and Typst compilation continue under a four-minute job deadline, with an earlier executor deadline.
 
-Every executor call also carries a session ID in `x-executor-key`: `k` followed by the first 32 hex
-characters of `sha256("<userId>\0<scope>\0<unitId>:<epoch>")`. A resident executor ignores the header;
-an FC executor in session isolation uses it to pin one key to one instance. The gateway keeps one
-epoch per key, advances it when the platform rejects the Session (a 401 from FC rather than the
-executor's own `workspace-*` envelope) and retries once; a 429 backs off with jitter. The executor's
-built-in 401 is never retried, and for a `write` a failed epoch read fails as
-`workspace-executor-unavailable` with `detail.cause: "epoch-store"` — the request was never sent, so
-the call is safe to repeat. Epochs live in gateway process memory by default; several gateway replicas
-that route the same keys need `MCP_GATEWAY_EPOCH_STORE=redis` and a shared Redis. The epoch store is
-gateway-local: `MCP_GATEWAY_EPOCH_STORE` and the `MCP_GATEWAY_REDIS_*` variables are read only by the
-gateway, and the executor never opens that Redis. The pre-rename `MCP_EXECUTOR_EPOCH_STORE` and
-`MCP_EXECUTOR_REDIS_*` names still work as aliases; setting an old and a new name for the same
-setting fails startup. The remaining `MCP_EXECUTOR_*` variables describe the gateway-to-executor
-link itself: `MCP_EXECUTOR_URLS` and `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS` are read only by the
-gateway, while `MCP_EXECUTOR_TOKEN`, `MCP_EXECUTOR_CREDENTIALS` and `MCP_EXECUTOR_ALLOWED_USER_IDS`
-bind both roles. The header is
-always sent, so switching an executor to FC needs no gateway switch. Capability discovery is keyed too, with
-a single `mcp-gateway`/`capabilities` key shared by every replica: an unkeyed probe would open a new FC
-Session on every refresh, and session isolation turns each Session into an instance. Discovery uses a
-five-second request timeout and, until the first success, retries after 1, 2, 4 and 8 seconds and then every
-15 seconds, so an FC cold start that outlives one attempt does not leave the executor tools hidden until the
-next minute, and polling then continues every minute. Setting `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS=0` stops
-that polling, so under FC the shared `mcp-gateway`/`capabilities` Session expires after its idle timeout and the
-instance can scale to zero; the tradeoff is a restart before an executor rollout or a later renderer shows up. The gateway logs every executor attempt as `mcp.executor_request` with the `x-executor-key` value
-it sends, and the executor logs the same field under `mcp.executor_request` when it receives one, so the two
-sides can be correlated. Set `LOG_LEVEL=warn` to silence them. See
-[`src/executor-fc`](src/executor-fc/README.md).
+An executor runs either resident or on FC (Alibaba Cloud Function Compute). Both forms are the
+same `MCP_ROLE=executor` process and speak the same RPC; the gateway reaches either through
+`MCP_EXECUTOR_URLS` and learns which form each URL is from capability discovery. An executor started
+with `EXECUTOR_AFFINITY=header` adds `"affinity": "header"` to `/rpc/v1/capabilities`. The gateway
+then sends each call to that URL with a stable session ID in `x-executor-key`: `k` followed by the
+first 32 hex characters of `sha256("<userId>\0<scope>\0<unitId>:<epoch>")`, so FC session isolation
+pins one key to one instance. Calls to a resident executor carry no session ID and read no epoch.
+Rendezvous routing between URLs is the same for both forms.
+
+For an affinity executor the gateway keeps one epoch per key. A 401 that is not the executor's own
+`workspace-*` envelope means the platform rejected the Session: the gateway advances the epoch and
+retries once. A 429 backs off with jitter. Both happen before the function runs, so when the epoch
+store fails or the call deadline ends a backoff, the call fails as `workspace-executor-unavailable`
+with `detail.cause` `epoch-store` or `throttled` and is safe to repeat. Epochs live in gateway process
+memory by default; several gateway replicas need `MCP_GATEWAY_EPOCH_STORE=redis` and a shared Redis.
+Only the gateway reads `MCP_GATEWAY_EPOCH_STORE` and the `MCP_GATEWAY_REDIS_*` variables; the executor
+never opens that Redis.
+
+Capability probes always carry one fixed key shared by every gateway replica, because discovery runs
+before the gateway knows the executor's form and a probe without the header would open a new FC
+Session, and so a new instance, every time. A resident executor ignores the header. Discovery uses a
+five-second request timeout and, until the first success, retries after 1, 2, 4 and 8 seconds and then
+every 15 seconds, so an FC cold start that outlives one attempt does not hide the executor tools until
+the next minute. Polling then continues every minute. `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS=0` stops
+it, so the probe Session expires after its idle timeout and the FC instance can scale to zero; an
+executor rollout or a renderer that starts later then needs a gateway restart. `LOG_LEVEL=debug` logs
+every affinity attempt as `mcp.executor_request` with the `x-executor-key` value sent; the executor's
+`Executor request completed` line carries the same field.
+
+To run the executor on FC, deploy the same image as a custom container with `MCP_ROLE=executor`,
+`HOST=0.0.0.0`, `PORT=9000`, `EXECUTOR_AFFINITY=header`, `EXECUTOR_MAX_WORKERS=1` and
+`EXECUTOR_MAX_JOBS=1`, and configure an HTTP trigger with session isolation and HeaderField affinity on
+`x-executor-key`. `scripts/smoke-executor-fc.mjs` checks a running FC executor. The design is in
+[FC HeaderField affinity](../../docs/design/workspace-mcp/fc-headerfield.zh-CN.md).
 
 Each call binds its required user ID into the Client Core runtime key. Worker children
 receive an explicit environment containing only `NODE_ENV=production` and
@@ -251,7 +258,7 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_EXECUTOR_URLS`, `MCP_EXECUTOR_TOKEN` | Unset on gateway | Comma-separated executor HTTP(S) origins and the gateway-to-executor token of at least 32 characters. Set both or neither. The executor requires the token |
 | `MCP_EXECUTOR_ALLOWED_USER_IDS` | Unset | `workspace` alone for the users Workspace grants with `db:executor-access`, `*` alone for every user, or comma-separated Workspace user IDs, trimmed. Empty values or entries are errors. Set the same value on the gateway and executor. Required in production on the executor and on gateways with `MCP_EXECUTOR_URLS`. Unset outside production allows every user |
 | `MCP_EXECUTOR_CREDENTIALS` | `session` | Executor grant kind. Production requires `MCP_EXECUTOR_ALLOWED_USER_IDS` |
-| `MCP_GATEWAY_EPOCH_STORE` | `memory` | Epoch store behind the `x-executor-key` Session ID: gateway-local state that the executor never opens. `memory` is correct for one gateway replica; `redis` is required once several replicas route the same keys and additionally requires `MCP_EXECUTOR_URLS`. The pre-rename `MCP_EXECUTOR_EPOCH_STORE` and `MCP_EXECUTOR_REDIS_*` names remain accepted as deprecated aliases; setting an old and a new name for one setting fails startup |
+| `MCP_GATEWAY_EPOCH_STORE` | `memory` | Epoch store behind the `x-executor-key` Session ID sent to executors that advertise affinity: gateway-local state that the executor never opens. `memory` is correct for one gateway replica; `redis` is required once several replicas route the same keys and additionally requires `MCP_EXECUTOR_URLS` |
 | `MCP_GATEWAY_REDIS_MODE` | `single` | Topology of the shared epoch store. `single` reads `MCP_GATEWAY_REDIS_URL`; `sentinel` asks the sentinels in `MCP_GATEWAY_REDIS_NODES` for the master named by `MCP_GATEWAY_REDIS_SENTINEL_NAME`; `cluster` follows redirections from the seeds in `MCP_GATEWAY_REDIS_NODES`. Options that contradict the mode fail startup instead of being ignored |
 | `MCP_GATEWAY_REDIS_URL` | Unset | `single` only: `redis://` or `rediss://` URL of the shared epoch store, with optional credentials, database index and `family` query. Never logged. Forbidden in `sentinel` and `cluster` mode |
 | `MCP_GATEWAY_REDIS_NODES` | Unset | `sentinel` and `cluster` only: comma-separated `host:port` endpoints, IPv6 as `[::1]:26379`. Sentinel endpoints for `sentinel`, seed nodes for `cluster` |
@@ -260,12 +267,13 @@ The gateway validates configuration before listening and retains a readonly conf
 | `MCP_GATEWAY_REDIS_SENTINEL_PASSWORD` | `MCP_GATEWAY_REDIS_PASSWORD` | `sentinel` only: sentinel credential when it differs from the data-node one. Never logged |
 | `MCP_GATEWAY_REDIS_DB` | `0` | `sentinel` only: logical database index. Cluster nodes serve database 0 only, so a non-zero value fails startup |
 | `MCP_GATEWAY_REDIS_TLS` | `0` | `sentinel` and `cluster` only: `1` enables TLS on the sentinel and data connections. `single` mode derives TLS from the `rediss://` scheme |
-| `MCP_GATEWAY_REDIS_KEY_PREFIX` | `mcp:executor-epoch:` | Redis key prefix. Routing keys are stored as their sha256 hex digest, so no user or Unit ID appears in Redis. Epochs never expire. The default keeps its pre-rename value so an existing shared Redis keeps serving the same keys |
+| `MCP_GATEWAY_REDIS_KEY_PREFIX` | `mcp:executor-epoch:` | Redis key prefix. Routing keys are stored as their sha256 hex digest, so no user or Unit ID appears in Redis. Epochs never expire |
 | `MCP_EXECUTOR_CAPABILITIES_INTERVAL_MS` | `60000` | Periodic executor capability refresh in milliseconds, `0` through `86400000`. `0` disables polling; startup discovery, cold-start retries and the `/readyz` refresh stay. With polling off, an executor rollout or a renderer that starts later is only noticed after a gateway restart |
 | `EXECUTOR_MAX_JOBS` | `2` | Per-executor concurrent conversion children. Queued jobs share the call deadline and never start after expiry |
 | `EXECUTOR_JOB_HEAP_MB` | `256` | Each conversion child's V8 old-space cap in MiB via `--max-old-space-size`. Native allocations are outside this cap |
 | `EXECUTOR_SHEET_LENS_CACHE_BYTES` | `536870912` (512 MiB) | Per-executor Sheet Lens cache budget in estimated bytes. Non-negative integer; `0` disables caching. Malformed values fail startup |
 | `EXECUTOR_MAX_WORKERS` | `4` | Maximum cached Unit workers. Tune to the host's memory budget |
+| `EXECUTOR_AFFINITY` | Unset | `header` alone. Set it where the platform routes on `x-executor-key` (FC session isolation); the executor advertises it in its capabilities and gateways then send per-key session IDs. Unset for a resident executor |
 | `EXECUTOR_IDLE_TTL_MS` | `60000` | Idle worker lifetime |
 | `EXECUTOR_QUEUE_TIMEOUT_MS` | `5000` | Maximum wait for a worker slot |
 | `EXECUTOR_OPERATION_TIMEOUT_MS` | `25000` | Worker open and operation timeout |

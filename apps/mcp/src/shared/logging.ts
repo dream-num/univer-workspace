@@ -23,8 +23,6 @@ export const credentialRedactions = [
   "MCP_OAUTH_CLIENT_SECRET",
   "MCP_GATEWAY_REDIS_PASSWORD",
   "MCP_GATEWAY_REDIS_SENTINEL_PASSWORD",
-  "MCP_EXECUTOR_REDIS_PASSWORD",
-  "MCP_EXECUTOR_REDIS_SENTINEL_PASSWORD",
 ];
 
 // Error messages, stacks and paths may contain credentials or document contents.

@@ -605,9 +605,17 @@ export const opSpecs = {
   }),
 } as const;
 export type OpName = keyof typeof opSpecs;
+/**
+ * Request header that carries a stable per-key session ID to an executor that advertises
+ * `affinity: "header"`, such as one behind FC HeaderField session affinity. The deployed
+ * platform routes on this exact name.
+ */
+export const AFFINITY_HEADER = "x-executor-key";
 export const executorCapabilitiesSchema = z.object({
   v: z.int().positive(),
   operations: z.array(z.string()).max(256),
+  /** Absent for a resident executor; `header` asks the gateway for per-key session routing. */
+  affinity: z.literal("header").optional(),
 });
 export type AnyOp = (typeof opSpecs)[OpName];
 export type OpInput<S extends { input: z.ZodType }> = z.output<S["input"]>;

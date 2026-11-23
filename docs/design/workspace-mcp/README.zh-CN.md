@@ -141,7 +141,7 @@ B、C、F 可以在 A 之后并行推进。首次开放时，网关对所有用�
 | [阶段计划](stages.zh-CN.md) | 每个阶段的交付物、验收标准、不做什么 | 每个阶段开始时 |
 | [执行后端协议](backend-protocol.zh-CN.md) | 网关与执行层、渲染服务之间的协议：操作目录、能力发现、帧、截止时间、重试、凭据、认证、错误与版本、契约测试、serverless 思路 | 改动 `apps/mcp/src/shared/*-protocol.ts`、执行层或渲染服务的 RPC，或接入新的后端实现之前 |
 | [本地验证环境](local-verification.zh-CN.md) | Docker 原型和 `verify-uvw` 扩展的规格。由阶段 A 的实施者在动手前编写，范围见阶段计划的阶段 A | 阶段 A，以及每次验收 |
-| [FC HeaderField 方案](fc-headerfield.zh-CN.md) | 已确定：会话隔离 + 多 gateway 确定性派生 + `EXECUTOR_MAX_JOBS=1`；含 Session 生命周期、顺序、容量、失败语义与落地 TODO。gateway 侧亲和与 FC executor 装配已实现，平台细节待实测 | 评估 executor 迁 FC 或调整 serverless 路由时 |
+| [FC HeaderField 方案](fc-headerfield.zh-CN.md) | 已确定：会话隔离 + 多 gateway 确定性派生 + `EXECUTOR_MAX_JOBS=1`；含 Session 生命周期、顺序、容量、失败语义与落地 TODO。FC executor 是常驻 executor 的替代部署形态，gateway 通过能力发现决定是否带亲和头；已实现，平台细节待实测 | 评估 executor 迁 FC 或调整 serverless 路由时 |
 | [FC WebSocket 方案](serverless-fc.zh-CN.md) | FC WebSocket 的计费/超时语义、gateway→executor 的 WS 草图、为什么不用它替代 HTTP、出站协同 WS。讨论稿，未采纳 | 评估内部 RPC 传输或流式进度时 |
 
 ## 7. 术语

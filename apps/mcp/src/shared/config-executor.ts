@@ -16,6 +16,8 @@ const environment = z.object({
   EXECUTOR_JOB_HEAP_MB: positive.default(256),
   EXECUTOR_SHEET_LENS_CACHE_BYTES: z.string().regex(/^\d+$/, "Expected non-negative integer bytes").transform(Number).pipe(z.int().nonnegative()).prefault(String(512 * 1024 * 1024)),
   EXECUTOR_MAX_WORKERS: positive.default(4),
+  // Set where a platform routes on AFFINITY_HEADER (FC session isolation); advertised to gateways.
+  EXECUTOR_AFFINITY: z.literal("header").optional(),
   EXECUTOR_IDLE_TTL_MS: positive.default(60_000),
   EXECUTOR_QUEUE_TIMEOUT_MS: positive.default(5_000),
   EXECUTOR_OPERATION_TIMEOUT_MS: positive.default(25_000),

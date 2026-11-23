@@ -8,9 +8,18 @@ export function rendezvous(urls: readonly string[], key: string): string[] {
 
 export class ExecutorRouter {
   private readonly downUntil = new Map<string, number>();
-  constructor(private urls: readonly string[]) {}
-  setUrls(urls: readonly string[]): void {
+  constructor(
+    private urls: readonly string[],
+    private affine: ReadonlySet<string> = new Set(),
+  ) {}
+  /** `affine` holds the executors whose capabilities advertised `affinity: "header"`. */
+  setUrls(urls: readonly string[], affine: ReadonlySet<string> = new Set()): void {
     this.urls = urls;
+    this.affine = affine;
+  }
+  /** Whether calls to `url` carry a per-key session ID (an FC executor) or go out plain. */
+  usesAffinity(url: string): boolean {
+    return this.affine.has(url);
   }
   candidates(key: string): string[] {
     const ordered = rendezvous(this.urls, key);

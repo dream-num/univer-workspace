@@ -3,13 +3,6 @@ import { dirname, join, relative, resolve } from "node:path";
 import ts from "typescript";
 import { expect, it } from "vitest";
 
-// `executor-fc` is the same execution surface as `executor`; only the gateway-side affinity
-// modules are meant to be imported elsewhere.
-const isExecutorPath = (value: string) =>
-  value.startsWith("executor/") || value.startsWith("executor-fc/");
-const isFcExecutorOnly = (value: string) =>
-  value === "executor-fc/executor.ts" || value === "executor-fc/main.ts";
-
 it("keeps native execution, RPC framing and credential access behind their owners", async () => {
   const root = resolve("src");
   const failures: string[] = [];
@@ -29,31 +22,22 @@ it("keeps native execution, RPC framing and credential access behind their owner
             specifier !== "@univerjs/univer-workspace-client-core/product") ||
           specifier.startsWith("@univerjs-pro/") ||
           resolved.startsWith("executor/") ||
-          isFcExecutorOnly(resolved) ||
           (!typeOnly &&
             specifier.startsWith("@univer-cli/") &&
             !["@univer-cli/api-reference", "@univer-cli/resource-library"].includes(specifier))
         )
           failures.push(`${path} imports runtime ${specifier}`);
       }
-      if (isExecutorPath(path) && resolved.startsWith("gateway/"))
+      if (path.startsWith("executor/") && resolved.startsWith("gateway/"))
         failures.push(`${path} imports gateway`);
       if (
         path.startsWith("renderer/") &&
         (resolved.startsWith("gateway/") ||
-          (isExecutorPath(resolved) && resolved !== "executor/license.js") ||
+          (resolved.startsWith("executor/") && resolved !== "executor/license.js") ||
           specifier.startsWith("@univerjs/univer-workspace-client-core") ||
           specifier.startsWith("@univerjs-pro/"))
       )
         failures.push(`${path} imports ${specifier}`);
-      // Only the FC executor assembly may load the resident executor; the affinity modules are
-      // imported by the gateway and must stay free of headless runtime packages.
-      if (
-        path.startsWith("executor-fc/") &&
-        !isFcExecutorOnly(path) &&
-        resolved.startsWith("executor/")
-      )
-        failures.push(`${path} imports executor runtime`);
       if (/apps\/cli|packages\/client-core\/(src|dist)/.test(specifier))
         failures.push(`${path} imports application internals`);
       if (
@@ -96,7 +80,11 @@ it("keeps native execution, RPC framing and credential access behind their owner
       failures.push(`${path} opens the executor link`);
     if (path.startsWith("renderer/") && /WorkspaceHttp|WORKSPACE_|grant|session/i.test(source))
       failures.push(`${path} touches Workspace HTTP or credentials`);
-    if (isExecutorPath(path) && path !== "executor/credentials.ts" && /grant\.session/.test(source))
+    if (
+      path.startsWith("executor/") &&
+      path !== "executor/credentials.ts" &&
+      /grant\.session/.test(source)
+    )
       failures.push(`${path} reads grant secrets`);
   }
   expect(failures).toEqual([]);

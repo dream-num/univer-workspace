@@ -9,12 +9,8 @@ import {
   type PayloadDirection,
 } from "../../shared/executor-protocol.js";
 import { decodeFrame, encodeFrame, FRAME_CONTENT_TYPE } from "../../shared/frame.js";
-import {
-  RedisEpochStoreError,
-  affinityKey,
-  type AffinityTransport,
-} from "../../executor-fc/index.js";
 import type { z } from "zod";
+import type { AffinityTransport } from "./affinity/transport.js";
 import { classifyFetchFailure, ExecutorRouter } from "./router.js";
 
 export interface ExecutorConnection {
@@ -23,10 +19,7 @@ export interface ExecutorConnection {
   readonly grant: ExecutorGrant;
   readonly requestId: string;
   readonly deadlineAt: number;
-  /**
-   * Sends each attempt with the caller's FC HeaderField Session ID. Deployments without FC send
-   * the same header to a resident executor, which ignores it.
-   */
+  /** Sends attempts to executors that advertised `affinity: "header"`, such as one on FC. */
   readonly transport: AffinityTransport;
 }
 
@@ -52,13 +45,12 @@ export async function callExecutor<
   const effect = spec.effectFor?.(input) ?? spec.effect;
   if (!connection) throw unavailable();
   const route = spec.route(input);
-  // One key for both routing and the FC Session: a per-request fallback would open a new
-  // Session on every call and defeat affinity, ordering and instance caches alike.
-  const key = affinityKey({
-    userId: connection.grant.userId,
-    scope: route.scope,
-    unitId: route.unitId,
-  });
+  const key = [connection.grant.userId, route.scope, route.unitId ?? connection.requestId].join(
+    "\0",
+  );
+  // A platform Session must stay stable for Unit-less calls too: a per-request value would open a
+  // new Session, and so a new instance, on every call.
+  const sessionKey = [connection.grant.userId, route.scope, route.unitId ?? ""].join("\0");
   let lastError = unavailable();
   for (const url of connection.router.candidates(key)) {
     const timeoutMs = Math.floor(
@@ -79,33 +71,24 @@ export async function callExecutor<
     if (body.length > spec.limits.requestBytes) throw requestError("workspace-request-too-large");
     let response: Response;
     try {
-      response = await connection.transport.request({
-        endpoint: url,
-        key,
-        path: `/rpc/v1/${spec.name}`,
-        init: {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${connection.executorToken}`,
-            "content-type": FRAME_CONTENT_TYPE,
-            "x-mcp-rpc-version": "1",
-          },
-          body,
-          redirect: "manual",
-          signal: AbortSignal.timeout(timeoutMs),
+      const path = `/rpc/v1/${spec.name}`;
+      const init: RequestInit = {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${connection.executorToken}`,
+          "content-type": FRAME_CONTENT_TYPE,
+          "x-mcp-rpc-version": "1",
         },
-        deadlineAt: connection.deadlineAt,
-      });
+        body,
+        redirect: "manual",
+        signal: AbortSignal.timeout(timeoutMs),
+      };
+      response = connection.router.usesAffinity(url)
+        ? await connection.transport.request({ url, key: sessionKey, path, init })
+        : await fetch(new URL(path, url), init);
     } catch (error) {
-      // The epoch read precedes every send, so a store failure means nothing was delivered.
-      // Reporting it as `workspace-result-unknown` would wrongly suggest the write may have run.
-      if (error instanceof RedisEpochStoreError)
-        throw new ExecutorCallError({
-          code: "workspace-executor-unavailable",
-          message: "The executor epoch store is unavailable, so the call was not sent.",
-          detail: { cause: "epoch-store", retryable: true },
-          outcome: "internal_error",
-        });
+      // The affinity transport already classified a failure that provably sent nothing.
+      if (error instanceof ExecutorCallError) throw error;
       if (classifyFetchFailure(error) === "not-delivered") {
         connection.router.notDelivered(url);
         continue;
