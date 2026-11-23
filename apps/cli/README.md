@@ -184,6 +184,12 @@ uvw outline --unit <file-link> --trunk
 uvw read <range> --unit <file-link> --trunk
 ```
 
+To capture selected Doc pages, pass one-based page numbers or ranges to `--pages`.
+
+```bash
+uvw screenshot --unit <doc-id> --worktree <worktree-id> --pages 9,18-19 --out ./shots
+```
+
 ## Commands
 
 Commands follow the GitHub CLI's naming. A repository is a Space, named `<owner>/<slug>`
@@ -359,9 +365,13 @@ fresh plan is incomplete. Screenshot review remains a separate step.
 Board errors or incomplete coverage exit with code 2; with `--json`, stderr contains one error object whose
 `error.details.report` retains the full report, and stdout stays empty.
 
-## Modern Docs from Markdown
+## Docs from Markdown
 
-`compile-markdown` uses the shared Univer AI SDK compiler to create editable Modern Docs.
+`compile-markdown` uses the shared SDK compiler to create editable Docs. New Docs default to
+pageless Modern. For physical pages set `flavor: traditional` in frontmatter, optionally with
+`paper: a4` and `margin: 25mm` under `page`. Between top-level blocks, `::page-break` starts the
+next paragraph on a new page and `::section-break{start="next-page" orientation="landscape"}`
+starts a landscape section on a new page. Selected-block reads and updates apply to Modern Docs.
 Standard Markdown/GFM covers headings, rich text, lists, quotes, code, images, and tables.
 Univer directives add callouts, columns, native charts/shapes, inline styles, and supported ranges.
 Body spacing and heading styles inherit the Univer SDK defaults; agents do not need to specify typography.

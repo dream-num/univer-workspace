@@ -61,7 +61,7 @@ export interface WorkspaceCompileMarkdownDependencies {
   readonly contentExecution: Pick<WorkspaceContentExecutionFeature, "execute">;
 }
 
-/** Compile before touching remote state; apply only valid Modern Docs to a draft. */
+/** Compile before touching remote state; create valid Docs or update selected Modern blocks. */
 export class WorkspaceCompileMarkdownFeature {
   public constructor(private readonly dependencies: WorkspaceCompileMarkdownDependencies) {}
 

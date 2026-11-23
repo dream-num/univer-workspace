@@ -27,10 +27,14 @@ export function createWorkspaceCompileMarkdownCommand(
   feature: Pick<WorkspaceCompileMarkdownFeature, "execute">,
 ): Command {
   const command = new Command("compile-markdown")
-    .description("Compile Markdown into a native Modern Doc, or update explicit blocks in a draft")
+    .description("Create a native Doc from Markdown or update selected Modern Doc blocks")
+    .addHelpText(
+      "after",
+      "\nNew Docs default to Modern. Set flavor: traditional in frontmatter for physical pages.\n",
+    )
     .argument("<file>", "Markdown source file")
     .option("--title <title>")
-    .option("--apply", "create a staged Modern Doc or update the selected blocks")
+    .option("--apply", "create a staged Doc or update selected Modern Doc blocks")
     .option("--worktree <id>")
     .option("--space <id>")
     .option("--parent <node>")
@@ -116,6 +120,7 @@ export function createWorkspaceCompileMarkdownCommand(
         {
           committed: result.committed,
           targetUnitId: result.unit?.unitId ?? result.targetUnitId,
+          ...(result.flavor === undefined ? {} : { flavor: result.flavor }),
           diagnostics: result.diagnostics,
           sourceMap,
           ...(result.unit === undefined ? {} : { unit: result.unit }),
@@ -123,8 +128,8 @@ export function createWorkspaceCompileMarkdownCommand(
           ...(options.out === undefined ? {} : { out: options.out }),
         },
         result.committed
-          ? `Applied Markdown to Modern Doc ${result.unit?.unitId ?? result.targetUnitId}${
-              options.sourceMapOut === undefined
+          ? `Applied Markdown to ${result.flavor === "traditional" ? "Traditional" : "Modern"} Doc ${result.unit?.unitId ?? result.targetUnitId}${
+              options.sourceMapOut === undefined && result.flavor !== "traditional"
                 ? "; pass --source-map-out to keep the block map for later updates and exports"
                 : ""
             }`

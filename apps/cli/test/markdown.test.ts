@@ -55,6 +55,23 @@ describe("compile-markdown command", () => {
     }
   });
 
+  it("reports a Traditional Doc created in a Worktree", async () => {
+    const execute = vi.fn(async (): Promise<WorkspaceCompileMarkdownResult> => ({
+      ...compiled,
+      committed: true,
+      flavor: "traditional",
+    }));
+    const output = await run(
+      ["report.md", "--apply", "--worktree", "wt", "--space", "reports"],
+      execute,
+    );
+    expect(output).toContain("Applied Markdown to Traditional Doc doc");
+    expect(execute).toHaveBeenCalledWith({
+      file: "report.md",
+      apply: { worktreeId: "wt", spaceId: "reports" },
+    });
+  });
+
   it("updates selected IDs using a materialized source map without a revision argument", async () => {
     const directory = await mkdtemp(join(tmpdir(), "uvw-markdown-"));
     try {
