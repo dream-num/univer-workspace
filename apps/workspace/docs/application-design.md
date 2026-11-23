@@ -246,7 +246,7 @@ Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的�
 | --- | --- | --- |
 | `createTeamSpace` | 主体是 agent | `AGENT_NOT_ALLOWED` |
 | `updateSpace` | 主体是 agent 且把 Space 设为公开可读 | `AGENT_NOT_ALLOWED` |
-| `addTeamMember` | 被加入的 User 是 agent | `AGENT_NOT_ALLOWED` |
+| `addTeamMember` | 被加入或改角色的 User 是未认领 agent，或是 agent 且角色为 admin | `AGENT_NOT_ALLOWED` |
 | `searchUsers` | 主体是未认领 agent | `AGENT_NOT_ALLOWED` |
 | `createFiles` | 主体是未认领 agent，Personal Space 的文件数将超过 20 | `AGENT_QUOTA_EXCEEDED` |
 | `storeFile` | 主体是未认领 agent，单个文件超过 10 MiB | `AGENT_QUOTA_EXCEEDED` |

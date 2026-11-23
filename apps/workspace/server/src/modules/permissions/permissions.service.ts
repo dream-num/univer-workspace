@@ -103,10 +103,11 @@ export function createPermissionsModule(options: {
         throw conflict("The space owner cannot be a member.");
       }
       await requireUser(options.repository, userId);
+      const role = validTeamRole(input);
       assertCeiling(await options.access.principalCategory(actorUserId), "addTeamMember", {
         member: await options.access.principalCategory(userId),
+        role,
       });
-      const role = validTeamRole(input);
       const row = await options.repository.upsertMember({
         spaceId,
         userId,

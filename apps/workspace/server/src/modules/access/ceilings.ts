@@ -1,6 +1,7 @@
 import client from "prom-client";
 import { ApplicationError, type ApplicationErrorCode } from "../../middleware/errors.js";
 import type { PrincipalCategory } from "../identity/index.js";
+import type { AccessRole } from "./access.types.js";
 
 const UNCLAIMED_AGENT_MAX_FILES = 20;
 const UNCLAIMED_AGENT_MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -9,7 +10,7 @@ const UNCLAIMED_AGENT_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export interface CeilingContexts {
   readonly createTeamSpace: Readonly<Record<never, never>>;
   readonly updateSpace: { readonly publicRead: boolean };
-  readonly addTeamMember: { readonly member: PrincipalCategory };
+  readonly addTeamMember: { readonly member: PrincipalCategory; readonly role: AccessRole };
   readonly searchUsers: Readonly<Record<never, never>>;
   /** `held` counts the files the principal's Personal Space already has or is about to get. */
   readonly createFiles: { readonly held: number; readonly adding: number };
@@ -47,8 +48,8 @@ const ceilings: { readonly [A in CeilingAction]: Ceiling<A> } = {
   },
   addTeamMember: {
     code: "AGENT_NOT_ALLOWED",
-    message: "An agent cannot be a Team Space member.",
-    forbids: (_principal, { member }) => isAgent(member),
+    message: "An unclaimed agent cannot be a Team Space member, and an agent cannot be an admin.",
+    forbids: (_principal, { member, role }) => member === "agent_unclaimed" || (isAgent(member) && role === "admin"),
   },
   // Anyone can create an agent, so an unclaimed one must not read the User directory.
   searchUsers: {
