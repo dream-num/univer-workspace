@@ -301,9 +301,10 @@ included. Its author adds trunk Units they can open and new Units targeted at th
 edits the draft and marks it ready, without edit access to the Space: a draft never writes
 trunk, and edit access is asked of whoever merges. Marking a Team Worktree ready sets its
 Visibility to `space` when its author cannot merge it, so that a Member who can merge it
-sees it. Marking a trunk Unit for deletion still needs the right to trash its Node, and
-content protection on a trunk Unit holds in its draft: an author without edit access to the
-Unit cannot change what a protection rule covers. Visibility controls who
+sees it. While it is `ready` and its author still cannot merge it, changing its Visibility
+to `private` gets `FORBIDDEN`; reopen it first. Marking a trunk Unit for deletion still
+needs the right to trash its Node, and content protection on a trunk Unit holds in its
+draft: an author without edit access to the Unit cannot change what a protection rule covers. Visibility controls who
 may Review; Visibility never grants Resource Access.
 
 The Creator, and the human who claimed an agent creator, can discover, Review, mark

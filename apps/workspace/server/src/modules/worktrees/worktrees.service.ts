@@ -34,7 +34,7 @@ import type {
   WorktreeUnit,
   WorktreeVisibility,
 } from "./worktrees.types.js";
-import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges } from "./worktrees.errors.js";
+import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, proposalStaysShared } from "./worktrees.errors.js";
 
 interface WorktreeContext {
   readonly row: WorktreeRow;
@@ -114,12 +114,10 @@ export function createWorktreesModule(options: {
     };
   }
 
-  /** A ready Worktree that its author cannot merge is shared with the Space, where someone can. */
-  async function shareUnlessAuthorMerges(value: WorktreeContext): Promise<void> {
+  async function authorMerges(value: WorktreeContext): Promise<boolean> {
     const { row } = value;
-    if (row.kind !== "team" || row.visibility === "space") return;
     const author = await options.repository.get(row.id, row.creator_user_id);
-    const authorMerges = author !== null && mayMerge((await worktreeCapabilities(
+    return author !== null && mayMerge((await worktreeCapabilities(
       row.creator_user_id,
       author,
       value.state,
@@ -127,7 +125,12 @@ export function createWorktreesModule(options: {
       options.access,
       value.units.map((unit) => ({ unitID: unit.unitId, removed: unit.change === "deleted" })),
     )).facts);
-    if (authorMerges) return;
+  }
+
+  /** A ready Worktree that its author cannot merge is shared with the Space, where someone can. */
+  async function shareUnlessAuthorMerges(value: WorktreeContext): Promise<void> {
+    const { row } = value;
+    if (row.kind !== "team" || row.visibility === "space" || await authorMerges(value)) return;
     await options.repository.update({ id: row.id, actorId: row.creator_user_id, visibility: "space", updatedAt: now() });
   }
 
@@ -422,6 +425,14 @@ export function createWorktreesModule(options: {
           "User Worktree visibility is always private.",
           "visibility"
         );
+      }
+      if (
+        patch.visibility === "private" &&
+        value.row.visibility === "space" &&
+        value.state === "ready" &&
+        !(await authorMerges(value))
+      ) {
+        throw proposalStaysShared();
       }
       const applied = await options.repository.update({
         id: worktreeId,

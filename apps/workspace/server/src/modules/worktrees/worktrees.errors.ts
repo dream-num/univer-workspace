@@ -28,6 +28,14 @@ export function mergeNeedsEditAccess(): ApplicationError {
   );
 }
 
+export function proposalStaysShared(): ApplicationError {
+  return new ApplicationError(
+    "FORBIDDEN",
+    403,
+    "This pull request is ready and its author cannot merge it, so it stays visible to the Space for a member with edit access to merge. Move it back to draft before making it private.",
+  );
+}
+
 export function forbidden(): ApplicationError {
   return new ApplicationError(
     "FORBIDDEN",
