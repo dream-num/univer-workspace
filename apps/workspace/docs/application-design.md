@@ -214,20 +214,27 @@ Space 的 Owner 关系有两种来源：`spaces.owner_user_id`，以及认领了
 Activity、Worktree 的发现、Review、决定与 Merge 也都用它判断所有权。反过来列出某个 Space 的全部 Owner 时
 （内容权限候选人、Worktree 实时推送对象）用同一处的 `spaceOwnerIdsSql`。
 
-一个 Pull request 只有一个作者，即创建者。人和 agent 在 Trunk 上协作，各自开自己的 Pull request，不在同一个
-Pull request 里协作。Ready、Reopen、Merge 和 Discard 交给创建者 Personal Space 的全部 Owner，即作者本人和认领了
-作者 agent 的人，User 与 Team Worktree 相同；Merge 仍要求对每个目标有编辑权限。Team Space 的 Owner 和 Admin
-另外保留 Reopen、Discard 和修改可见性用于清理，但与 Editor 一样不能合并别人创建的 Pull request，拒绝信息写明作者，
+一个 Pull request 只有一个作者，即创建者，草稿只由作者编辑。人和 agent 在 Trunk 上协作，各自开自己的 Pull request，不在同一个
+Pull request 里协作。Merge 要求对每个目标有编辑权限，并且具备两种身份之一：创建者 Personal Space 的 Owner，即作者本人和认领了
+作者 agent 的人，User 与 Team Worktree 相同；或者 Team Space 的 Owner、Admin、Editor，条件是这个 Team Worktree 的可见性是 `space`。
+Ready 交给能合并的人，以及能读到全部 Unit 的作者。Reopen 和 Discard 交给作者、认领人以及 Team Space 的 Owner 和 Admin。
+Team Space 的 Owner 和 Admin 另外可以修改可见性用于清理，但不能合并别人创建的私有 Pull request，拒绝信息写明作者，
 作者是已认领的 agent 时也写明认领人。Worktree 摘要的 `claimer` 字段把认领人交给能读到这个 Pull request 的人，
-Browser 审阅面板在不能合并的成员面前因此同时写明作者和认领人；拿到 `404` 的人两者都看不到。
-作者或认领人缺少某个目标的编辑权限时，拒绝信息说明缺少编辑权限。
+Browser 审阅面板在不能合并私有 Pull request 的成员面前因此同时写明作者和认领人；拿到 `404` 的人两者都看不到。
+其余情况下，调用者缺少某个目标的编辑权限时，拒绝信息说明缺少编辑权限。
+
+Team Space 的任何 Space Member 都能创建 Team Worktree，包括 Viewer。作者把自己能读的 Trunk Unit 加进来、新建指向这个
+Space 的 Unit、编辑草稿并 Ready，都不需要编辑权限：草稿不写 Trunk，编辑权限只向合并的人要。作者自己不能合并时，Ready
+把可见性设为 `space`，让能合并的成员看到它。标记移除一个 Trunk Unit 仍要求对它的 Node 有 `trash`，所以 Viewer 不能提议
+删除文件。Trunk Unit 上的内容保护在草稿里照样生效，没有编辑权限的作者改不了保护规则覆盖的内容。合并时写入 Trunk 的身份是
+合并的人，新文件的作者仍是 Pull request 的作者。
 所以认领人可以决定 agent 的 Pull request；编辑草稿、增删文件和修改标题仍只属于创建者。认领人以自己的身份执行：Merge 按认领人的权限
 重新校验每个目标，Operation 与 Activity 记录认领人为执行者，新文件的作者仍是 agent。agent 停用后，
 它的 Space 仍对认领人可见，认领人照样可以合并或丢弃它留下的 Pull request。Worktree 列表与发现使用同一条所有权规则，
 认领人也能在列表里看到 agent 的 Team Pull request。
 
 已经开始的合并是已做出的决定。Worktree 处于 `merging`，或已 `merged` 但本地新文件尚未激活时，开始合并的执行者
-通过同一个 Idempotency Key 或 Operation Retry 完成自己的 Operation；作者和认领人可以用任意 Idempotency Key 完成它。
+通过同一个 Idempotency Key 或 Operation Retry 完成自己的 Operation；具备合并身份的人可以用任意 Idempotency Key 完成它。
 这不让任何人开始一次自己不能开始的合并。合并生效并由某个 Operation 记录后，合并人不再改变：之后送达的其他 Merge
 Operation 得到 `FORBIDDEN`，已完成的 Operation 重放时返回存储的结果。uvw 与 MCP 的稳定 Merge/Discard Key 包含调用者的 User ID，
 因此不会与别人先前的 Operation 冲突，同一调用者重跑时仍复用自己的 Operation。发出 lifecycle 请求前读取 Worktree 或

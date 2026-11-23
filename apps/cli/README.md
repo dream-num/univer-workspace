@@ -201,12 +201,15 @@ means sign-in is required. `pr discard` is irreversible; there is no `pr close` 
 `uvw pr view <n> -R <repo> --json id`. A person who claimed an agent works on the agent's pull requests with
 `-R <agent>/personal`: `pr list`, `view`, `ready` (and `--undo`), `merge` and `discard` work there, and the
 server records the person as the one who acted. Editing an agent's pull request, or opening one in its Space,
-is refused. A pull request has one author: only the author, or the person who claimed the authoring agent,
-can `pr merge` it. In a Team Space, the Owner, Admins and Editors get an error naming the author, and the person
-who claimed an agent author, when they try to merge someone else's. The author or that person gets an error saying
-so when they lack edit access to a file or folder the pull request changes. A merge that stopped partway leaves the
+is refused. A pull request has one author, and only the author edits it. `pr merge` needs edit access to every
+file or folder the pull request changes. With that access the author can merge it, the person who claimed the
+authoring agent can, and so can the Owner, Admins and Editors of a Team Space once the pull request is visible to
+the Space. A member with read access only can still `pr create` in a Team Space, change the pull request and mark
+it `pr ready`, which makes it visible to the Space. The Owner and Admins get an error naming the author, and the
+person who claimed an agent author, when they try to merge someone else's private pull request. Anyone else who
+lacks edit access gets an error saying so. A merge that stopped partway leaves the
 pull request `merging`, or `merged` before the server finished it; running `pr merge` again finishes it, for the
-person who started it, the author, or the person who claimed the authoring agent. Once a merge has finished, anyone
+person who started it, or anyone who may merge it. Once a merge has finished, anyone
 else who runs `pr merge` gets `workspace-lifecycle-invalid` saying it is already merged.
 
 Issue and pull request JSON include `createdVia` when the server provides it, with values `browser`,

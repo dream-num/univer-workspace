@@ -406,6 +406,11 @@ Recent 行。
 User Worktree 必须是 Private 且没有 Team Space；Team Worktree 必须绑定 Team Space。
 `processed_at` 标记已 Merge 或 Discard。
 
+Team Worktree 可以由它的 Team Space 的任何 Space Member 创建，包括 Viewer，`creator_user_id` 是它唯一的作者。
+`visibility` 在创建时由作者选择。Ready 时如果作者自己不能合并，即缺少某个 Unit 的编辑权限，服务把 `visibility`
+写成 `space`，让有编辑权限的成员能看到并合并它。这条规则只在 Ready 时执行，之后作者、Owner 或 Admin 仍可把它改回
+`private`。合并人记录在 `merge_worktree` Operation 的 `actor_user_id` 上，可以不是作者。
+
 `created_via`（V16，`TEXT`，可空）保存创建 Session 的 `write_source`，取值为 `browser` 或 `agent`；
 `NULL` 表示未知，无默认值，不回填已有 Worktree。
 

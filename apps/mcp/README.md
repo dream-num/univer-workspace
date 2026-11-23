@@ -46,9 +46,12 @@ A person, and a claimed agent, are told instead to give the pull request link to
 agent, and stop, when that person asked to review the work or the change needs a person's decision; nothing enforces either
 choice. Any other connection is told to hand over the pull request link and leave merging to the user. The core Skill and the
 tool descriptions defer readiness and merging to these instructions.
-A pull request has one author; only the author, or the person who claimed the authoring agent, can merge it. A Team member
-who calls `pr_merge` on someone else's gets `FORBIDDEN` with a message naming the author, and the person who claimed an
-agent author.
+A pull request has one author, and only the author edits it. Merging needs edit access to every file it changes. With that
+access the author merges it, or the person who claimed the authoring agent, or, for a Team pull request visible to its
+repository, the Owner, an Admin or an Editor. A member with read access only can still create a Team pull request, change it
+and mark it ready, which makes it visible to the repository. A Team member who calls `pr_merge` on someone else's private
+pull request gets `FORBIDDEN` with a message naming the author, and the person who claimed an agent author; a caller
+without edit access gets `FORBIDDEN` with a message saying so.
 An unclaimed agent also gets `claim`, and its `share` result carries a claim link; a person and a claimed agent see neither.
 
 The executor accepts `POST /rpc/v1/<op>` with an internal bearer token and
@@ -283,7 +286,7 @@ and the matching owner/slug candidates when available.
 | `pr_create` | Required `repo`, `title`; optional `body`, `visibility` (`private` or `space`), `idempotency_key` | Worktree. Reusing a key returns the same pull request |
 | `pr_edit` | Required `repo`, `number`; at least one of `title`, `body`, `visibility` | Worktree |
 | `pr_ready` | Required `repo`, `number`; optional `undo` | Worktree, now `ready` (or `draft` with `undo`) |
-| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Only the author, or the person who claimed the authoring agent. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, the author or that person |
+| `pr_merge` | Required `repo`, `number` | Worktree read back after the merge, now `merged`, with the Units that entered trunk (`name`, `unitId`, `nodeId`, `change`, `mergeResult`). Scope `worktree:merge`. Needs edit access to every changed file: the author, the person who claimed the authoring agent, or the Owner, an Admin or an Editor of a Team pull request visible to its repository. Calling it again finishes a merge that stopped partway (`merging`, or `merged` before the server finished it) for whoever started it, or anyone who may merge it |
 | `search` | Required `kind` (`issues` or `prs`); optional `state`, `author`, `search`, `limit`, and for Issues `labels`, `assignee` | `{ issues: [...] }` or `{ prs: [...] }` across every repository |
 | `browse` | Required `repo`; optional `number` (Issue or pull request) and `unit` | `{ url }` |
 | `space_browse` | Required `repo`; optional `parent` (Node ID), `recursive`, `resource_kind` (`none`, `univer`, `blob`), `unit_type` (only with `univer`) | `{ nodes: [...] }` |

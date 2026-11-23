@@ -100,8 +100,12 @@ repository checkout, guessed installation paths, or a different CLI version's AP
   core Skill describes the Issue workflow.
 - Mark it `uvw pr ready` and hand off the verified result with its review URL (`uvw browse <n>`).
   Leave `pr merge` or `pr discard` (irreversible) to the user's decision unless the user has explicitly authorized that action.
-- A pull request has one author. Only the author, or the person who claimed the authoring agent, can
-  merge it. Until a person claims a guest agent, nobody else can open its pull request, so the agent
+- A pull request has one author, and only the author edits it. Merging needs edit access to every
+  file it changes. With that access the author merges it, or the person who claimed the authoring agent,
+  or, in a Team repository once the pull request is visible to the repository, its Owner, an Admin or an
+  Editor. With read access only you can still open a pull request in a Team repository, change it and
+  mark it `uvw pr ready`: that shows it to the repository's members, and one who can edit merges it.
+  Until a person claims a guest agent, nobody else can open the pull request in its own Space, so the agent
   finishes the task itself: it merges its own pull request, turns on Link Sharing with
   `uvw share <node-id> --link viewer`, and returns the file link and the claim link from the result.
   A claimed agent hands off as above instead when the person who claimed it asked to review the work

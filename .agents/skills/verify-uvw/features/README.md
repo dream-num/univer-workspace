@@ -35,8 +35,8 @@ four H2s in order: `Sub-features`, `How to get to it (user POV)`,
 - [Create and edit a document](./create-document.md): New menu in the browser, Spreadsheet
   editing, persistence after reload, trunk readback via uvw.
 - [Pull requests (Worktrees)](./pull-requests.md): uvw PR create, unit create, execute,
-  ready, and merge, then the merged file seen from uvw and the browser; only the author or a claimer
-  merges a Team Space PR.
+  ready, and merge, then the merged file seen from uvw and the browser; in a Team Space, a member with
+  read access proposes through uvw and MCP and an Editor merges.
 - [Page theme: Wiki and Repository modes](./page-theme-wiki-repository.md): Application settings
   entry in each mode, theme persistence, and the Repository directory, pull request, issue,
   recent and pages views.

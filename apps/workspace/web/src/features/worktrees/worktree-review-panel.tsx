@@ -179,12 +179,14 @@ export function WorktreeReviewPanel({
         me !== worktree.creator.id &&
         me !== worktree.claimer?.id ? (
         <span className="text-sm text-muted-foreground">
-          {worktree.claimer
-            ? t("onlyAuthorOrClaimerMerges", {
-                name: worktree.creator.displayName,
-                claimer: worktree.claimer.displayName,
-              })
-            : t("onlyAuthorMerges", { name: worktree.creator.displayName })}
+          {worktree.visibility === "space"
+            ? t("mergeNeedsEditAccess")
+            : worktree.claimer
+              ? t("onlyAuthorOrClaimerMerges", {
+                  name: worktree.creator.displayName,
+                  claimer: worktree.claimer.displayName,
+                })
+              : t("onlyAuthorMerges", { name: worktree.creator.displayName })}
         </span>
       ) : null}
       {worktree.capabilities.discard ? (

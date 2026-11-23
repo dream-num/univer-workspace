@@ -138,6 +138,14 @@ describe("Worktree merge", () => {
     expect(line(team(false)), "nothing until the session is known").toBe(false);
   });
 
+  it("tells a member who cannot merge a pull request shared with the Team Space that merging needs edit access", () => {
+    const shared: Worktree = { ...worktree(false), kind: "team", visibility: "space" };
+    const html = (value: Worktree) => renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+    expect(html(shared)).toContain("mergeNeedsEditAccess");
+    expect(html(shared)).not.toContain("onlyAuthorMerges");
+    expect(html({ ...shared, capabilities: { ...shared.capabilities, merge: true } })).not.toContain("mergeNeedsEditAccess");
+  });
+
   it("names the person who claimed an agent author beside the agent, except to that person", () => {
     const html = (value: Worktree) => renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
     const person = { ...worktree(false), kind: "team" as const };

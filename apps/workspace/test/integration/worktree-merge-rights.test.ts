@@ -14,7 +14,7 @@ afterEach(async () => {
 });
 
 describe("who takes a pull request to trunk", () => {
-  it("is its author, or the person who claimed the authoring agent, for User and Team pull requests alike", async () => {
+  it("is its author or the person who claimed the authoring agent, and for a pull request shared with the Team Space any member who can edit", async () => {
     const { origin, application } = await start();
     const [owner, admin, author, editor, viewer, outsider, claimer, teamClaimer] = await Promise.all(
       ["owner", "admin", "author", "editor", "viewer", "outsider", "claimer", "team-claimer"].map((name) => person(origin, name)),
@@ -30,10 +30,12 @@ describe("who takes a pull request to trunk", () => {
     await claim(origin, userAgent, claimer);
 
     const teamPull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+    const privatePull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
     const agentTeamPull = await createPull(origin, teamAgent, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
     const userPull = await createPull(origin, userAgent, { kind: "user" }, userAgent.spaceId);
     const pulls = [
       { name: "team", id: teamPull, author, others: { "team owner": owner, "team admin": admin, "team editor": editor, "team viewer": viewer, outsider } },
+      { name: "private team", id: privatePull, author, others: { "team owner": owner, "team admin": admin, "team editor": editor } },
       { name: "agent's team", id: agentTeamPull, author: teamAgent, others: { "agent owner": teamClaimer } },
       { name: "agent's user", id: userPull, author: userAgent, others: { "agent owner": claimer, outsider } },
     ];
@@ -48,22 +50,30 @@ describe("who takes a pull request to trunk", () => {
     }
     expect(matrix).toEqual({
       "team draft: author": "review editDraft addUnit changeVisibility markReady discard",
-      "team draft: team owner": "review changeVisibility discard",
-      "team draft: team admin": "review changeVisibility discard",
-      "team draft: team editor": "review",
+      "team draft: team owner": "review changeVisibility markReady discard",
+      "team draft: team admin": "review changeVisibility markReady discard",
+      "team draft: team editor": "review markReady",
       "team draft: team viewer": "review",
       "team draft: outsider": "not found",
+      "private team draft: author": "review editDraft addUnit changeVisibility markReady discard",
+      "private team draft: team owner": "changeVisibility discard",
+      "private team draft: team admin": "changeVisibility discard",
+      "private team draft: team editor": "not found",
       "agent's team draft: author": "review editDraft addUnit changeVisibility markReady discard",
       "agent's team draft: agent owner": "review markReady discard",
       "agent's user draft: author": "review editDraft addUnit markReady discard",
       "agent's user draft: agent owner": "review markReady discard",
       "agent's user draft: outsider": "not found",
       "team ready: author": "review changeVisibility reopen merge discard",
-      "team ready: team owner": "review changeVisibility reopen discard",
-      "team ready: team admin": "review changeVisibility reopen discard",
-      "team ready: team editor": "review",
+      "team ready: team owner": "review changeVisibility reopen merge discard",
+      "team ready: team admin": "review changeVisibility reopen merge discard",
+      "team ready: team editor": "review merge",
       "team ready: team viewer": "review",
       "team ready: outsider": "not found",
+      "private team ready: author": "review changeVisibility reopen merge discard",
+      "private team ready: team owner": "changeVisibility reopen discard",
+      "private team ready: team admin": "changeVisibility reopen discard",
+      "private team ready: team editor": "not found",
       "agent's team ready: author": "review changeVisibility reopen merge discard",
       "agent's team ready: agent owner": "review reopen merge discard",
       "agent's user ready: author": "review reopen merge discard",
@@ -71,15 +81,23 @@ describe("who takes a pull request to trunk", () => {
       "agent's user ready: outsider": "not found",
     });
 
-    for (const refused of [owner, admin, editor, viewer]) {
-      const response = await send(origin, "POST", `/api/worktrees/${teamPull}/merge`, undefined, refused.cookie, { "idempotency-key": randomUUID() });
+    for (const refused of [owner, admin]) {
+      const response = await send(origin, "POST", `/api/worktrees/${privatePull}/merge`, undefined, refused.cookie, { "idempotency-key": randomUUID() });
       expect({ status: response.status, body: await response.json() }).toEqual({
         status: 403,
         body: { error: { code: "FORBIDDEN", message: "Only the author, author (@author), can merge this pull request." } },
       });
     }
-    expect((await send(origin, "POST", `/api/worktrees/${teamPull}/merge`, undefined, outsider.cookie, { "idempotency-key": randomUUID() })).status).toBe(404);
-    expect(await transition(origin, teamPull, "merge", author)).toBe("merged");
+    expect(await mergeAs(origin, teamPull, viewer, randomUUID())).toEqual({
+      status: 403,
+      message: "You cannot merge this pull request without edit access to every file and folder it changes.",
+    });
+    for (const hidden of [[privatePull, editor], [teamPull, outsider]] as const) {
+      expect((await mergeAs(origin, hidden[0], hidden[1], randomUUID())).status).toBe(404);
+    }
+    expect(await transition(origin, teamPull, "merge", editor)).toBe("merged");
+    expect(await mergedBy(origin, team.id, teamPull, owner)).toBe("editor");
+    expect(await transition(origin, privatePull, "merge", author)).toBe("merged");
     expect(await transition(origin, agentTeamPull, "merge", teamClaimer)).toBe("merged");
     expect(await transition(origin, userPull, "merge", claimer)).toBe("merged");
 
@@ -153,7 +171,7 @@ describe("who takes a pull request to trunk", () => {
   }, 30_000);
 });
 
-describe("finishing a merge started while Team Admins could merge anyone's pull request", () => {
+describe("finishing a merge that a Team Admin started on a pull request they may not merge", () => {
   it.each(["merging", "merged"] as const)(
     "lets the author, the agent's owner and the Admin who started it finish a %s pull request, and nobody else",
     async (stage) => {
@@ -168,7 +186,7 @@ describe("finishing a merge started while Team Admins could merge anyone's pull 
       await repositories.permissions.upsertMember({ spaceId: team.id, userId: agent.id, role: "editor", grantedBy: owner.id, now: Date.now() });
       await claim(origin, agent, claimer);
       const startedByAdmin = async (creator: Actor) => {
-        const id = await createPull(origin, creator, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+        const id = await createPull(origin, creator, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
         await transition(origin, id, "ready", creator);
         const operationId = randomUUID();
         await repositories.worktrees.reserveOperation({ id: operationId, kind: "merge_worktree", actorUserId: admin.id, payload: { worktreeId: id }, createdAt: Date.now() });
@@ -213,7 +231,7 @@ describe("finishing a merge started while Team Admins could merge anyone's pull 
     const team = await application.spaces.createTeamSpace(owner.id, { name: "Budget" });
     await application.permissions.upsertTeamMember(owner.id, team.id, admin.id, { role: "admin" });
     await application.permissions.upsertTeamMember(owner.id, team.id, author.id, { role: "editor" });
-    const pull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "space" }, team.id);
+    const pull = await createPull(origin, author, { kind: "team", teamSpaceId: team.id, visibility: "private" }, team.id);
     await transition(origin, pull, "ready", author);
     const operationId = randomUUID();
     await repositories.worktrees.reserveOperation({ id: operationId, kind: "merge_worktree", actorUserId: admin.id, payload: { worktreeId: pull }, createdAt: Date.now() });
@@ -249,16 +267,15 @@ describe("finishing a merge started while Team Admins could merge anyone's pull 
     await transition(origin, teamPull, "ready", author);
     const [adminPending, adminFailed] = [await earlier(teamPull, admin, "pending"), await earlier(teamPull, admin, "failed")];
     expect(await transition(origin, teamPull, "merge", author)).toBe("merged");
-    const onlyAuthor = { status: 403, message: "Only the author, author (@author), can merge this pull request." };
-    expect(await mergeAs(origin, teamPull, admin, adminPending)).toEqual(onlyAuthor);
-    expect(await retry(adminFailed, admin)).toEqual(onlyAuthor);
+    const alreadyMerged = { status: 403, message: "This Worktree action is not allowed." };
+    expect(await mergeAs(origin, teamPull, admin, adminPending)).toEqual(alreadyMerged);
+    expect(await retry(adminFailed, admin)).toEqual(alreadyMerged);
     expect(await mergedBy(origin, team.id, teamPull, owner)).toBe("author");
 
     const agentPull = await createPull(origin, agent, { kind: "user" }, agent.spaceId);
     await transition(origin, agentPull, "ready", agent);
     const [claimerPending, claimerFailed] = [await earlier(agentPull, claimer, "pending"), await earlier(agentPull, claimer, "failed")];
     expect(await transition(origin, agentPull, "merge", agent)).toBe("merged");
-    const alreadyMerged = { status: 403, message: "This Worktree action is not allowed." };
     expect(await mergeAs(origin, agentPull, claimer, claimerPending)).toEqual(alreadyMerged);
     expect(await retry(claimerFailed, claimer)).toEqual(alreadyMerged);
     expect(await mergedBy(origin, agent.spaceId, agentPull, claimer)).toBe(agent.username);
@@ -307,6 +324,266 @@ describe("finishing a merge started while Team Admins could merge anyone's pull 
     },
     30_000,
   );
+});
+
+describe("a proposal from a member who can only read the Team Space", () => {
+  it("lets a viewer propose alone, leaves Trunk as it was, and lands when an editor merges it", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { owner, editor, viewer } = s;
+
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    const forecast = await addFile(origin, viewer, pull, newSheet(s.id));
+    for (const unit of [budget, forecast]) {
+      expect(await writeDraft(origin, viewer, pull, unit.unitId, await sheetIn(origin, viewer, pull, unit.unitId), "proposed")).toBe("committed");
+    }
+    const ready = await post(origin, viewer, `/api/worktrees/${pull}/ready`);
+    expect({ status: ready.status, ...((await ready.json()) as { worktree: object }).worktree }).toMatchObject({
+      status: 200, state: "ready", visibility: "space", capabilities: { merge: false },
+    });
+    expect(await mergeAs(origin, pull, viewer, randomUUID())).toEqual({
+      status: 403,
+      message: "You cannot merge this pull request without edit access to every file and folder it changes.",
+    });
+    expect(await sheetIn(origin, viewer, pull, budget.unitId)).toMatchObject({
+      draft: "proposed", trunk: null, trunkRevision: budget.draftHeadRevision,
+    });
+    expect(await filesIn(origin, editor, s.id)).toEqual(["Budget"]);
+
+    const listed = (await (await send(origin, "GET", `/api/worktrees?scope=all&teamSpaceId=${s.id}`, undefined, editor.cookie)).json()) as {
+      items: { id: string; state: string; creator: { username: string }; capabilities: { merge: boolean } }[];
+    };
+    expect(listed.items.map((item) => ({ id: item.id, state: item.state, author: item.creator.username, merge: item.capabilities.merge })))
+      .toEqual([{ id: pull, state: "ready", author: "viewer", merge: true }]);
+    expect(await transition(origin, pull, "merge", editor)).toBe("merged");
+    expect(await mergedBy(origin, s.id, pull, owner)).toBe("editor");
+    expect(await filesIn(origin, editor, s.id)).toEqual(["Budget", "Forecast"]);
+    expect(await trunkA1(origin, owner, s.id, s.budget.resourceId)).toBe("proposed");
+    expect(await trunkA1(origin, owner, s.id, forecast.resourceId)).toBe("proposed");
+    // Creating the file gave its proposer nothing beyond the role they already had.
+    expect((await post(origin, viewer, `/api/nodes/${forecast.nodeId}/trash`)).status).toBe(403);
+  }, 30_000);
+
+  it("refuses every direct write to Trunk from a viewer whose proposal is open", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { viewer } = s;
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    expect(await writeDraft(origin, viewer, pull, budget.unitId, await sheetIn(origin, viewer, pull, budget.unitId), "proposed")).toBe("committed");
+    const status = async (response: Promise<Response>) => (await response).status;
+    const inSpace = { spaceId: s.id, parentNodeId: null };
+
+    expect({
+      "create a file": await status(post(origin, viewer, "/api/resources", { ...inSpace, kind: "univer", name: "Mine", unitType: "sheet" })),
+      "create a folder": await status(post(origin, viewer, "/api/nodes", { ...inSpace, name: "Mine" })),
+      "rename a file": await status(send(origin, "PATCH", `/api/nodes/${s.budget.nodeId}`, { name: "Mine" }, viewer.cookie)),
+      "trash a file": await status(post(origin, viewer, `/api/nodes/${s.budget.nodeId}/trash`)),
+      "upload a file": await status(post(origin, viewer, "/api/blob-upload-sessions", { ...inSpace, name: "notes.txt", originalFilename: "notes.txt", byteSize: 5 })),
+      "protect a range": await status(post(origin, viewer, "/universer-api/authz/3/object", {
+        objectType: 3, selectRangeObject: { unitID: s.budget.unitId, name: "A1", collaborators: [], scope: { read: 1, edit: 2 } },
+      })),
+      "remove a file through the pull request": await status(post(origin, viewer, `/api/worktrees/${pull}/units/${budget.unitId}/removal`, { removed: true })),
+      "merge the draft pull request": await status(post(origin, viewer, `/api/worktrees/${pull}/merge`)),
+      "merge the ready pull request": await status(post(origin, viewer, `/api/worktrees/${pull}/ready`).then(() => post(origin, viewer, `/api/worktrees/${pull}/merge`))),
+    }).toEqual({
+      "create a file": 403,
+      "create a folder": 403,
+      "rename a file": 403,
+      "trash a file": 403,
+      "upload a file": 403,
+      "protect a range": 403,
+      "remove a file through the pull request": 403,
+      "merge the draft pull request": 403,
+      "merge the ready pull request": 403,
+    });
+    expect(await sheetIn(origin, viewer, pull, budget.unitId)).toMatchObject({ trunk: null, trunkRevision: budget.draftHeadRevision });
+    expect(await filesIn(origin, viewer, s.id)).toEqual(["Budget"]);
+  }, 30_000);
+
+  it("shows the proposal and its files to nobody outside the Team Space", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { viewer, outsider } = s;
+    const pull = await openPull(origin, viewer, s.id, "private");
+    const budget = await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    const forecast = await addFile(origin, viewer, pull, newSheet(s.id));
+    await transition(origin, pull, "ready", viewer);
+    const get = async (path: string) => (await send(origin, "GET", path, undefined, outsider.cookie)).status;
+    const open = async (unit: Unit) => (await post(origin, outsider, `/api/worktrees/${pull}/units/${unit.unitId}/open`, { mode: "draft" })).status;
+    const sheet = UniverType.UNIVER_SHEET;
+
+    expect({
+      "pull requests listed": ((await (await send(origin, "GET", "/api/worktrees?scope=all", undefined, outsider.cookie)).json()) as { items: unknown[] }).items.length,
+      "the pull request": await get(`/api/worktrees/${pull}`),
+      "the pull request by number": await get(`/api/spaces/${s.id}/worktrees/1`),
+      "the changed file's draft": await open(budget),
+      "the changed file's comparison": await get(`/universer-api/worktrees/${pull}/units/${budget.unitId}/comparison`),
+      "the changed file's draft content": await get(`/universer-api/worktrees/${pull}/snapshot/${sheet}/unit/${budget.unitId}/rev/0`),
+      "the changed file on Trunk": await get(`/api/resources/${s.budget.resourceId}`),
+      "the new file's draft": await open(forecast),
+      "the new file's draft content": await get(`/universer-api/worktrees/${pull}/snapshot/${sheet}/unit/${forecast.unitId}/rev/0`),
+      "the new file": await get(`/api/resources/${forecast.resourceId}`),
+    }).toEqual({
+      "pull requests listed": 0,
+      "the pull request": 404,
+      "the pull request by number": 404,
+      "the changed file's draft": 404,
+      "the changed file's comparison": 404,
+      "the changed file's draft content": 403,
+      "the changed file on Trunk": 404,
+      "the new file's draft": 404,
+      "the new file's draft content": 403,
+      "the new file": 404,
+    });
+  }, 30_000);
+
+  it("lets an admin discard the proposal, after which the file it changed can be deleted for good", async () => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const { admin, viewer } = s;
+    const pull = await openPull(origin, viewer, s.id, "private");
+    await addFile(origin, viewer, pull, { source: "trunk", resourceId: s.budget.resourceId });
+    await transition(origin, pull, "ready", viewer);
+    const { id: batch } = await made<{ id: string }>(await post(origin, admin, `/api/nodes/${s.budget.nodeId}/trash`));
+    const remove = async () => {
+      const response = await send(origin, "DELETE", `/api/trash-batches/${batch}`, undefined, admin.cookie);
+      return response.status === 204 ? 204 : ((await response.json()) as { error: { code: string } }).error.code;
+    };
+
+    expect(await remove()).toBe("ACTIVE_WORKTREE_RESOURCE_REFERENCE");
+    expect((await post(origin, admin, `/api/worktrees/${pull}/discard`)).status).toBe(200);
+    expect(await remove()).toBe(204);
+  }, 30_000);
+});
+
+const members = ["author", "claimer", "owner", "admin", "editor", "viewer", "outsider"] as const;
+const told = ["review", "editDraft", "addUnit", "markReady", "reopen", "merge", "discard"] as const;
+
+describe("what each member can do with a Team pull request", () => {
+  // One row per row of the Team Worktree capability table in the Agent Mode spec (5.4): the capability, then who has it.
+  // The author is an agent and the claimer the person who claimed it; both are members of the Team Space.
+  const tables = [
+    {
+      author: "viewer", visibility: "space", onceReady: "space",
+      can: {
+        "create a Team pull request": "author claimer owner admin editor viewer",
+        review: "author claimer owner admin editor viewer",
+        editDraft: "author",
+        addUnit: "author",
+        "add a Trunk file": "author",
+        "remove a Trunk file": "",
+        markReady: "author claimer owner admin editor",
+        reopen: "author claimer owner admin",
+        merge: "claimer owner admin editor",
+        discard: "author claimer owner admin",
+      },
+    },
+    {
+      // Marking it ready shares it, because its author cannot merge it.
+      author: "viewer", visibility: "private", onceReady: "space",
+      can: {
+        "create a Team pull request": "author claimer owner admin editor viewer",
+        review: "author claimer",
+        editDraft: "author",
+        addUnit: "author",
+        "add a Trunk file": "author",
+        "remove a Trunk file": "",
+        markReady: "author claimer",
+        reopen: "author claimer owner admin",
+        merge: "claimer owner admin editor",
+        discard: "author claimer owner admin",
+      },
+    },
+    {
+      author: "editor", visibility: "space", onceReady: "space",
+      can: {
+        "create a Team pull request": "author claimer owner admin editor viewer",
+        review: "author claimer owner admin editor viewer",
+        editDraft: "author",
+        addUnit: "author",
+        "add a Trunk file": "author",
+        "remove a Trunk file": "",
+        markReady: "author claimer owner admin editor",
+        reopen: "author claimer owner admin",
+        merge: "author claimer owner admin editor",
+        discard: "author claimer owner admin",
+      },
+    },
+    {
+      author: "editor", visibility: "private", onceReady: "private",
+      can: {
+        "create a Team pull request": "author claimer owner admin editor viewer",
+        review: "author claimer",
+        editDraft: "author",
+        addUnit: "author",
+        "add a Trunk file": "author",
+        "remove a Trunk file": "",
+        markReady: "author claimer",
+        reopen: "author claimer owner admin",
+        merge: "author claimer",
+        discard: "author claimer owner admin",
+      },
+    },
+  ] as const;
+  it.each(tables.map((table) => [table.visibility, table.author, table] as const))("a %s pull request whose author has the %s role", async (visibility, role, { onceReady, can }) => {
+    const { origin, application } = await start();
+    const s = await budgetSpace(origin, application);
+    const claimer = await person(origin, "claimer");
+    await application.permissions.upsertTeamMember(s.owner.id, s.id, claimer.id, { role: "editor" });
+    const author = await guestAgent(origin);
+    await claim(origin, author, claimer);
+    await application.permissions.upsertTeamMember(s.owner.id, s.id, author.id, { role });
+    const other = await trunkSheet(origin, s.owner, s.id, "Other");
+    const allowed = async (response: Promise<Response>) => (await response).ok;
+    const flags = async (pull: string, actor: Actor): Promise<Record<string, boolean>> => {
+      const response = await send(origin, "GET", `/api/worktrees/${pull}`, undefined, actor.cookie);
+      return response.ok ? ((await response.json()) as { worktree: { capabilities: Record<string, boolean> } }).worktree.capabilities : {};
+    };
+
+    const did: Record<string, string[]> = {};
+    const wasTold: Record<string, string[]> = {};
+    const visibilities = new Set<string>();
+    for (const name of members) {
+      const actor = { ...s, author, claimer }[name];
+      const own = post(origin, actor, "/api/worktrees", teamPull(s.id, visibility));
+      const pull = await openPull(origin, author, s.id, visibility);
+      const unit = await addFile(origin, author, pull, { source: "trunk", resourceId: s.budget.resourceId });
+      const drafted = await sheetIn(origin, author, pull, unit.unitId);
+      expect(await writeDraft(origin, author, pull, unit.unitId, drafted, "proposed")).toBe("committed");
+      const draft = await flags(pull, actor);
+      const outcome: Record<string, boolean> = {
+        "create a Team pull request": await allowed(own),
+        review: await allowed(post(origin, actor, `/api/worktrees/${pull}/units/${unit.unitId}/open`, { mode: "draft" })),
+        editDraft: (await writeDraft(origin, actor, pull, unit.unitId, { ...drafted, head: drafted.head + 1 }, "edited")) === "committed",
+        addUnit: await allowed(post(origin, actor, `/api/worktrees/${pull}/units`, newSheet(s.id))),
+        "add a Trunk file": await allowed(post(origin, actor, `/api/worktrees/${pull}/units`, { source: "trunk", resourceId: other.resourceId })),
+        "remove a Trunk file": await allowed(post(origin, actor, `/api/worktrees/${pull}/units/${unit.unitId}/removal`, { removed: true })),
+        markReady: await allowed(post(origin, actor, `/api/worktrees/${pull}/ready`)),
+      };
+      if (!outcome.markReady) await transition(origin, pull, "ready", author);
+      const ready = await flags(pull, actor);
+      visibilities.add(((await (await send(origin, "GET", `/api/worktrees/${pull}`, undefined, author.cookie)).json()) as { worktree: { visibility: string } }).worktree.visibility);
+      outcome.reopen = await allowed(post(origin, actor, `/api/worktrees/${pull}/reopen`));
+      if (outcome.reopen) await transition(origin, pull, "ready", author);
+      outcome.merge = await allowed(post(origin, actor, `/api/worktrees/${pull}/merge`));
+      const spare = await openPull(origin, author, s.id, visibility);
+      const fresh = await flags(spare, actor);
+      outcome.discard = await allowed(post(origin, actor, `/api/worktrees/${spare}/discard`));
+
+      for (const [capability, yes] of Object.entries(outcome)) (did[capability] ??= []).push(...(yes ? [name] : []));
+      for (const capability of told) {
+        const flag = { reopen: ready, merge: ready, discard: fresh }[capability as string] ?? draft;
+        (wasTold[capability] ??= []).push(...(flag[capability] ? [name] : []));
+      }
+    }
+
+    const who = (names: Record<string, string[]>) => Object.fromEntries(Object.entries(names).map(([capability, list]) => [capability, list.join(" ")]));
+    expect(who(did)).toEqual(can);
+    expect(who(wasTold)).toEqual(Object.fromEntries(told.map((capability) => [capability, can[capability]])));
+    expect([...visibilities]).toEqual([onceReady]);
+  }, 120_000);
 });
 
 interface Actor {
@@ -451,4 +728,88 @@ async function transition(origin: string, worktreeId: string, action: "ready" | 
   const response = await send(origin, "POST", `/api/worktrees/${worktreeId}/${action}`, undefined, actor.cookie, { "idempotency-key": randomUUID() });
   if (response.status !== 200) throw new Error(`${action} failed with ${response.status}: ${await response.text()}`);
   return ((await response.json()) as { worktree: { state: string } }).worktree.state;
+}
+
+interface Unit {
+  readonly unitId: string;
+  readonly resourceId: string;
+  readonly nodeId: string | null;
+  readonly draftHeadRevision: number;
+}
+
+function post(origin: string, actor: Actor, path: string, body?: unknown): Promise<Response> {
+  return send(origin, "POST", path, body, actor.cookie, { "idempotency-key": randomUUID() });
+}
+
+async function made<T>(response: Response): Promise<T> {
+  if (response.status !== 201) throw new Error(`${response.url} answered ${response.status}: ${await response.text()}`);
+  return (await response.json()) as T;
+}
+
+/** A private Team Space with a member of each role, a stranger, and one Sheet on Trunk. */
+async function budgetSpace(origin: string, application: ProductTestApplication) {
+  const [owner, admin, editor, viewer, outsider] = await Promise.all(
+    ["owner", "admin", "editor", "viewer", "outsider"].map((name) => person(origin, name)),
+  );
+  const team = await application.spaces.createTeamSpace(owner!.id, { name: "Budget" });
+  for (const [member, role] of [[admin, "admin"], [editor, "editor"], [viewer, "viewer"]] as const) {
+    await application.permissions.upsertTeamMember(owner!.id, team.id, member!.id, { role });
+  }
+  return {
+    id: team.id, owner: owner!, admin: admin!, editor: editor!, viewer: viewer!, outsider: outsider!,
+    budget: await trunkSheet(origin, owner!, team.id, "Budget"),
+  };
+}
+
+async function trunkSheet(origin: string, actor: Actor, spaceId: string, name: string) {
+  const { node } = await made<{ node: { id: string; resource: { id: string; unitId: string } } }>(
+    await post(origin, actor, "/api/resources", { kind: "univer", spaceId, parentNodeId: null, name, unitType: "sheet" }),
+  );
+  return { nodeId: node.id, resourceId: node.resource.id, unitId: node.resource.unitId };
+}
+
+const teamPull = (teamSpaceId: string, visibility: "private" | "space") => ({ kind: "team", teamSpaceId, visibility, name: "Budget", summary: null });
+const newSheet = (spaceId: string) => ({ source: "worktree", name: "Forecast", unitType: "sheet", targetSpaceId: spaceId, targetParentNodeId: null });
+
+async function openPull(origin: string, actor: Actor, teamSpaceId: string, visibility: "private" | "space"): Promise<string> {
+  return (await made<{ id: string }>(await post(origin, actor, "/api/worktrees", teamPull(teamSpaceId, visibility)))).id;
+}
+
+async function addFile(origin: string, actor: Actor, pull: string, file: object): Promise<Unit> {
+  return (await made<{ unit: Unit }>(await post(origin, actor, `/api/worktrees/${pull}/units`, file))).unit;
+}
+
+/** Cell A1 of a Sheet in a pull request, in its draft and on Trunk, as the review screen reads them. */
+async function sheetIn(origin: string, reviewer: Actor, pull: string, unitId: string) {
+  type Side = { readonly revision: number; readonly unitData: null | { readonly sheetOrder: string[]; readonly sheets: Record<string, { cellData?: Record<string, Record<string, { v?: unknown }>> }> } };
+  const response = await send(origin, "GET", `/universer-api/worktrees/${pull}/units/${unitId}/comparison`, undefined, reviewer.cookie);
+  if (response.status !== 200) throw new Error(`Comparison answered ${response.status}: ${await response.text()}`);
+  const { left, right } = (await response.json()) as { left: Side | null; right: Side };
+  const a1 = (side: Side | null) => side?.unitData?.sheets[side.unitData.sheetOrder[0]!]?.cellData?.[0]?.[0]?.v ?? null;
+  return { trunk: a1(left), trunkRevision: left?.revision ?? null, draft: a1(right), head: right.revision, sheetId: right.unitData!.sheetOrder[0]! };
+}
+
+/** Writes cell A1 of a draft Sheet. Answers what the collaboration service decided, or the status that refused the request. */
+async function writeDraft(origin: string, actor: Actor, pull: string, unitId: string, draft: { readonly head: number; readonly sheetId: string }, value: string): Promise<string | number> {
+  const response = await post(origin, actor, `/api/worktrees/${pull}/units/${unitId}/changesets`, {
+    changeset: {
+      unitID: unitId, type: UniverType.UNIVER_SHEET, baseRev: draft.head, revision: draft.head + 1, sid: randomUUID(), reqId: 1,
+      mutations: [{ id: "sheet.mutation.set-range-values", data: JSON.stringify({ unitId, subUnitId: draft.sheetId, cellValue: { 0: { 0: { v: value } } } }) }],
+    },
+  });
+  return response.status === 200 ? ((await response.json()) as { status: string }).status : response.status;
+}
+
+/** Cell A1 of a Sheet on Trunk, read through a pull request that is thrown away. */
+async function trunkA1(origin: string, reader: Actor, teamSpaceId: string, resourceId: string) {
+  const pull = await openPull(origin, reader, teamSpaceId, "private");
+  const unit = await addFile(origin, reader, pull, { source: "trunk", resourceId });
+  const { trunk } = await sheetIn(origin, reader, pull, unit.unitId);
+  await post(origin, reader, `/api/worktrees/${pull}/discard`);
+  return trunk;
+}
+
+async function filesIn(origin: string, reader: Actor, spaceId: string): Promise<string[]> {
+  const { nodes } = (await (await send(origin, "GET", `/api/spaces/${spaceId}/nodes`, undefined, reader.cookie)).json()) as { nodes: { name: string }[] };
+  return nodes.map((node) => node.name).sort();
 }

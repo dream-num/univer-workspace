@@ -220,8 +220,9 @@ for deletion. There is no Blob Worktree or version-history surface.
 
 `POST /api/nodes/{nodeId}/copies` turns a Sheet, Doc, Slide or Blob file the requester can open into
 a file of their own. The copy lands at the root of the requester's Personal Space, or as a new file in
-a draft pull request the requester can add files to. A Blob file cannot go into a pull request. A
-source the requester cannot read answers `404`, the same as `GET /api/nodes/{nodeId}`.
+a draft pull request the requester authored, at a target where the requester can create files. A Blob
+file cannot go into a pull request. A source the requester cannot read answers `404`, the same as
+`GET /api/nodes/{nodeId}`.
 
 The copy has its own content and its own embedded images, so it stays readable after the owner stops
 sharing the source. It does not take over the source's permissions, sharing settings, comments or
@@ -268,19 +269,22 @@ Merge results are stored per Unit. Successful Units do not roll back if another
 Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
-A Worktree has one author, its creator. People and agents collaborate on trunk, each
-through their own Worktrees. Only the owners of the creator's Personal Space, that is
-the creator and the human who claimed an agent creator, merge a Worktree, User or Team,
-and only with edit access to every target. Anyone else gets `FORBIDDEN` with a message
-that names the author, and the human who claimed an agent author. An owner without edit
-access to a target gets `FORBIDDEN` with a message that says so. Every Worktree summary
+A Worktree has one author, its creator, and only the author edits its draft. People and
+agents collaborate on trunk, each through their own Worktrees. Merging needs edit access
+to every target, and one of two standings. The owners of the creator's Personal Space,
+that is the creator and the human who claimed an agent creator, have it for any Worktree,
+User or Team. The Owner, Admins and Editors of a Team Space have it for a Team Worktree
+whose Visibility is `space`. On a Worktree that is not `space`-visible, anyone else gets
+`FORBIDDEN` with a message that names the author, and the human who claimed an agent
+author. Otherwise a caller without edit access to a target gets `FORBIDDEN` with a message
+that says so. Every Worktree summary
 carries `claimer`, that human, or `null` when a person or an unclaimed agent is the author,
 so whoever can read the Worktree learns both names; a caller who gets `404` learns neither.
 
 A merge that has started, so the Worktree is `merging`, or `merged` with Worktree-local
 Units not yet activated, is a decision already made. The actor who started it finishes it
-with their own Operation, through the same Idempotency Key or Operation Retry. An owner of
-the creator's Personal Space finishes it with any Idempotency Key. This lets nobody start
+with their own Operation, through the same Idempotency Key or Operation Retry. Anyone with
+a standing to merge it finishes it with any Idempotency Key. This lets nobody start
 a merge they could not start. Once the merge is applied and an Operation has recorded it,
 that Operation's actor stays the one who merged: any other merge Operation sent afterwards
 gets `FORBIDDEN`, and a completed Operation replays its stored result.
@@ -290,7 +294,16 @@ Spaces. The owners of the creator's Personal Space, that is the human who claime
 agent creator, can also discover and review them and read their Worktree-local Units.
 They can also mark them ready, reopen, merge and discard them, as themselves: a merge
 checks each target with their own access, and the Operation names them as its actor.
-Editing the draft, its Units, name and summary stays with the creator. Team Worktrees belong to one Team Space. Their Visibility controls who
+Editing the draft, its Units, name and summary stays with the creator.
+
+Team Worktrees belong to one Team Space. Any current Space Member can create one, a Viewer
+included. Its author adds trunk Units they can open and new Units targeted at the Space,
+edits the draft and marks it ready, without edit access to the Space: a draft never writes
+trunk, and edit access is asked of whoever merges. Marking a Team Worktree ready sets its
+Visibility to `space` when its author cannot merge it, so that a Member who can merge it
+sees it. Marking a trunk Unit for deletion still needs the right to trash its Node, and
+content protection on a trunk Unit holds in its draft: an author without edit access to the
+Unit cannot change what a protection rule covers. Visibility controls who
 may Review; Visibility never grants Resource Access.
 
 The Creator, and the human who claimed an agent creator, can discover, Review, mark
@@ -298,7 +311,8 @@ ready, reopen and discard a private Team Worktree. The Team Space
 Owner and Admin can discover its Summary and perform administrative Reopen or
 Discard actions, but cannot read its Unit list or draft content, and cannot merge it.
 Other Members cannot discover it. A space-visible Team Worktree can be discovered and
-reviewed read-only by current Space Members.
+reviewed read-only by current Space Members, and marked ready and merged by the Team Space
+Owner, Admins and Editors with edit access to every target.
 
 ## Repository names and numbers
 

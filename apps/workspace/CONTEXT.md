@@ -136,8 +136,10 @@ _Avoid_: Main branch, production
 **Worktree**:
 A user-created container for isolated draft changes to one or more Units. It has
 exactly one author, its creator. People and agents collaborate on Trunk, each in
-their own Worktrees, not inside one Worktree. Only the author, or the human who
-claimed the authoring agent, merges it.
+their own Worktrees, not inside one Worktree. Only the author edits its draft.
+Whoever merges it needs edit access to every Unit it changes: the author, the
+human who claimed the authoring agent, or, for a Team Worktree shared with its
+Space, a Space Owner, Admin or Editor.
 _Avoid_: Task, branch
 
 **User Worktree**:
@@ -149,9 +151,12 @@ _Avoid_: User-space Worktree, Personal Worktree
 
 **Team Worktree**:
 A Worktree belonging to one Team Space whose visibility may be creator-private
-or shared with current Space Members. Space Owners and Admins may reopen,
-discard or change the visibility of a Team Worktree, without gaining access to
-the draft content of a private one, but do not merge one someone else created.
+or shared with current Space Members. Any Space Member may create one from the
+Units they can read, so a Member without edit access proposes a change there and
+a Member with edit access merges it. Marking one ready shares it with the Space
+when its author cannot merge it. Space Owners and Admins may reopen, discard or
+change the visibility of a Team Worktree, without gaining access to the draft
+content of a private one, and do not merge a private one someone else created.
 _Avoid_: Space-scoped Worktree, Team branch
 
 **Worktree Unit**:

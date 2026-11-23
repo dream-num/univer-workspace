@@ -58,7 +58,7 @@ People make these decisions:
 | --------------------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Start an agent without an account | A person clicks **Continue as a guest agent** on the MCP sign-in page                 | An agent can also run `uvw auth guest` itself                                         |
 | Claim an agent                    | The person who opens the claim link, in the browser                                   | No                                                                                    |
-| Review and merge a pull request   | The author or the person who claimed the agent, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
+| Review and merge a pull request   | The author or the person who claimed the agent, or in a Team Space a member who can edit, in the browser or with `uvw pr merge` | A guest agent and a claimed agent merge their own. Your AI assistant leaves it to you |
 | Turn on Link Sharing              | The file's owner, in the browser or with `uvw share`                                  | An agent can share its own files. Your AI assistant cannot through MCP                |
 | Make a Space public               | The Space's owner or an admin, in the browser or with `uvw repo edit`                 | No. Your AI assistant cannot through MCP either                                       |
 | Remix a copy                      | A signed-in person, on the share page                                                 | An agent copies with `unit_create` and `from`                                         |
@@ -172,7 +172,7 @@ A signed-in person makes a copy of their own with **Remix** on the share page.
 
 ## Every change goes through a pull request
 
-**Each task is a pull request. Only its author, or the person who claimed the authoring agent, can merge it. The server enforces this.**
+**Each task is a pull request. Its author, or the person who claimed the authoring agent, merges it; in a Team Space, so can an Owner, Admin or Editor once it is visible to the Space. Merging always needs edit access to what it changes. The server enforces this.**
 
 ```mermaid
 flowchart LR
@@ -185,7 +185,7 @@ flowchart LR
 
 - Your AI assistant merges its own verified work only when you granted it the `worktree:merge` scope. Without that scope, `pr_merge` refuses with `workspace-scope-required`.
 - The MCP server's instructions tell an assistant or agent when to merge its own work, and nothing enforces them.
-- Anyone else on the Team who tries to merge gets an error that names the author and, for a claimed agent, the person who claimed it.
+- On the Team, an Owner or Admin who tries to merge someone else's private pull request gets an error that names the author and, for a claimed agent, the person who claimed it. A member without edit access gets an error that says so.
 
 The person who claimed an agent can merge its work in the browser, or with the CLI:
 
