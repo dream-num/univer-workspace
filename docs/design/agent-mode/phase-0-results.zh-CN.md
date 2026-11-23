@@ -66,7 +66,7 @@ viewer 这一行要说清楚。拒绝来自 `collaboration-gateway.ts` 在 Trunk
 | structural | 100  | 4      | 1        | 0      | 15.3 [13.7, 18.7] | 650 [12, 661]     |
 | structural | 1000 | 3      | 2        | 0      | 94.3 [11.7, 95.7] | 672 [12, 682]     |
 
-37 次成功的合入，草稿最后写的值都在 Trunk 上读到了，产品视图和 SDK 记录一致。没有 `failed`。
+37 次成功的合入，草稿最后写的值都在 Trunk 上读到了，产品视图和 SDK 记录一致。没有 `failed`。每种负载都先跑 D = 0，它比 D = 10 慢，推测是第一次合入的预热，没有单独测。
 
 D = 1000 时另外各跑一次，加大 M：
 
@@ -75,11 +75,13 @@ D = 1000 时另外各跑一次，加大 M：
 | 100  | merged，合入 355 ms，preview 712 ms   | `OT_CONFLICT`，合入 404 ms  |
 | 1000 | merged，合入 3456 ms，preview 3625 ms | `OT_CONFLICT`，合入 3732 ms |
 
+下面三段的线程 CPU、线程启动次数、事件循环延迟和 CPU profile，来自给脚本临时加了计时的诊断运行。诊断版本没有提交，所以这些数字不能用提交的脚本直接复现，结论按它们写成推断。
+
 **合入的耗时是主线程上的 CPU。** D = 1000、M = 20 时，主线程 CPU 占了 89 ms 里的 87 ms。CPU profile 显示时间花在 `@univerjs-pro/collaboration` 的 `transformChangesets` 和 `transformMutation`，其中约一半是 `@univerjs/core` 的 `deepClone`。耗时大致与 M × D 成正比，每对 changeset 3.5 到 4.3 µs。合入期间事件循环不让出。M = D = 1000 时，事件循环的最大延迟是 3464 ms 和 3758 ms，和两次合入的耗时一致。
 
-**merge preview 的固定成本是启动一个 worker。** 每次产出 preview 都新启动一个 Unit Runtime worker 线程。主线程 CPU 只有 6 到 94 ms，进程 CPU 约 1 秒。返回 `conflict` 的 preview 不启动 worker，只要 12 到 80 ms。这一项是按线程计数和 CPU 拆分推断的，没有在 worker 内部做 profile。
+**merge preview 的固定成本是启动一个 worker。** 每次产出 preview 都新启动一个 Unit Runtime worker 线程。主线程 CPU 只有 6 到 94 ms，进程 CPU 约 1 秒。返回 `conflict` 的 preview 不启动 worker。M = 20 时只要 12 到 80 ms，但它同样要做 transform，M = 100 和 1000 时分别是 387 ms 和 3787 ms。这一项是按线程计数和 CPU 拆分推断的，没有在 worker 内部做 profile。
 
-**SDK 的 3000 ms transform 上限没有起作用。** 它每 1 万次循环才检查一次，3.7 秒的合入也没有触发它。上面的 `OT_CONFLICT` 都是真冲突。
+**SDK 的 3000 ms transform 上限没有起作用。** 读 `@univerjs-pro/collaboration` 的代码，它每 1 万次循环才检查一次。3.7 秒的合入也没有触发它。上面的 `OT_CONFLICT` 都是真冲突。
 
 **冲突率取决于上游做了什么。** `values` 负载在 D = 1000 时也没有冲突，因为两边写同一个单元格不算冲突。`structural` 负载里，只有删除的行和草稿写过的行重叠才冲突。按这个负载推算，每个修订冲突的概率约为 0.02 × 0.5 × 0.1 = 0.001，D 个修订后冲突的概率约为 1 − 0.999^D。这个模型预测 D = 10、100、1000 时分别是 1%、10%、63%。5 次试验里实际观察到 0、1、2 次，和模型相符。每行只有 5 次，单行的比率误差很大，结论应看趋势，不看具体百分比。
 
@@ -95,7 +97,7 @@ D = 1000 时另外各跑一次，加大 M：
 | 1000 | 13.7 [11.4, 29.0]            | 696 [680, 715]         |
 
 - 加载接口返回 Trunk 快照加上全部 N 个 changeset，不做物化，由浏览器重放。服务端这一侧随 N 增长很慢。
-- 第一次草稿写入要启动这个 Worktree 的草稿服务和它的 worker，固定约 0.7 秒。从 N = 10 到 N = 1000，只多出约 20 ms。N = 0 那一行是应用启动后的第一个 Worktree，同时有 Trunk 的 worker 在启动，所以更慢。
+- 第一次草稿写入要启动这个 Worktree 的草稿服务和它的 worker，固定约 0.7 秒。从 N = 10 到 N = 1000，只多出约 20 ms。N = 0 那一行是应用启动后的第一个 Worktree，更慢的原因没有单独测，推测是 Trunk 的 worker 同时在启动。
 - 浏览器重放 N 个 changeset 的时间没有测。它是规格 5.9 里“草稿快照”这项上游需求要看的数字。
 
 结论是，到 1000 个草稿 changeset 为止，服务端的冷加载不是瓶颈。
@@ -104,15 +106,15 @@ D = 1000 时另外各跑一次，加大 M：
 
 ### 6.1 每个 Worktree 的内存
 
-活跃指的是最近有过草稿调用。读和写都算，空闲 180 秒后草稿服务退出。
+活跃指的是最近写过草稿。下表的每个 Worktree 都写过一次。读草稿也会创建草稿服务，但读完之后第一次写入仍要约 0.7 秒，所以读可能不启动 worker，这一点没有单独测。空闲 180 秒后草稿服务退出。
 
 | 活跃 Worktree 数 | worker 线程 | worker heap used | worker heap total |
 | ---------------- | ----------- | ---------------- | ----------------- |
-| 0                | 6           | 517 MiB          | 989 MiB           |
-| 1                | 7           | 611 MiB          | 1199 MiB          |
-| 5                | 11          | 987 MiB          | 1973 MiB          |
-| 10               | 16          | 1458 MiB         | 2894 MiB          |
-| 20               | 26          | 2404 MiB         | 4797 MiB          |
+| 0                | 6           | 518 MiB          | 990 MiB           |
+| 1                | 7           | 612 MiB          | 1199 MiB          |
+| 5                | 11          | 988 MiB          | 1974 MiB          |
+| 10               | 16          | 1459 MiB         | 2894 MiB          |
+| 20               | 26          | 2404 MiB         | 4798 MiB          |
 
 - 每个活跃的 Worktree 多一个 worker 线程，heap used 多约 94 MiB，heap total 多约 190 MiB。主线程 heap 只多约 0.2 MiB。
 - 只加了 Unit、从没写过的 Worktree 不启动 worker，主线程 heap 每个只多约 0.1 MiB。
@@ -122,7 +124,7 @@ D = 1000 时另外各跑一次，加大 M：
 
 ### 6.2 License 的编辑连接
 
-没有测到数字。内置 License 的 `editingConnectionsLimit` 是 `null`，即没有上限。Trunk endpoint 和 40 个 scoped endpoint 的 `limit`、`used`、`remaining` 都是 `null`。
+没有测到数字。内置 License 的 `editingConnectionsLimit` 是 `null`，即没有上限。Trunk endpoint 的 `limit`、`used`、`remaining` 都是 `null`，40 个 scoped endpoint 只记录了 `used`，也都是 `null`。
 
 读代码得到的计数规则如下，没有运行验证：
 
