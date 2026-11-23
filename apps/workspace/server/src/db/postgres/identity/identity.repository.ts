@@ -483,15 +483,27 @@ export class PostgresIdentityRepository implements IdentityRepository {
   async updatePasswordHash(
     userId: string,
     passwordHash: string,
-    updatedAt: number
-  ): Promise<void> {
-    await this._database
-      .prepare(
-        `UPDATE password_credentials
-         SET password_hash = ?, updated_at = ?
-         WHERE user_id = ?`
-      )
-      .run(passwordHash, updatedAt, userId);
+    updatedAt: number,
+    keepSessionId: string
+  ): Promise<string[]> {
+    return this._database.transaction(async (database) => {
+      await database
+        .prepare(
+          `UPDATE password_credentials
+           SET password_hash = ?, updated_at = ?
+           WHERE user_id = ?`
+        )
+        .run(passwordHash, updatedAt, userId);
+      return (await database
+        .prepare(
+          `DELETE FROM login_sessions
+           WHERE user_id = ? AND id <> ? AND write_source = 'agent'
+             AND issued_for_pat_id IS NULL AND issued_for_grant_id IS NULL
+           RETURNING id`
+        )
+        .all(userId, keepSessionId))
+        .map((row) => String(row.id));
+    });
   }
 
   async createSession(

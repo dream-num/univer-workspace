@@ -874,11 +874,13 @@ export function createIdentityModule(options: {
           "currentPassword"
         );
       }
-      await repository.updatePasswordHash(
+      const endedSessionIds = await repository.updatePasswordHash(
         session.user.id,
         await hashPassword(newPassword),
-        now()
+        now(),
+        readSessionToken(cookieHeader)!.id
       );
+      options.onSessionsDeleted?.(endedSessionIds);
     },
 
     getSession,

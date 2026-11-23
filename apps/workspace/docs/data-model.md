@@ -151,7 +151,8 @@ Server 进程内存，不进入产品数据库，进程重启后由用户重新�
 
 `write_source = 'agent'` 且 `issued_for_pat_id`、`issued_for_grant_id` 都为空的 Session 在剩余有效期不足一半时被认证使用，
 Server 把 `expires_at` 改写为当前时间加 `SESSION_TTL_MS`。只读的 Session 检查不续期。其他 Session 的 `expires_at`
-签发后不变，过期即失效。
+签发后不变，过期即失效。用户修改密码时，更新 `password_credentials` 的同一个事务删除该用户的这类 Session，
+发起修改的 Session 除外。Browser Session 和为 Token 签发的 Session 不受影响。
 
 `issued_for_pat_id`（V18，`TEXT`，可空，`REFERENCES personal_access_tokens(id) ON DELETE CASCADE`）与
 `issued_for_grant_id`（V18，`TEXT`，可空，`REFERENCES oauth_grants(id) ON DELETE CASCADE`）标记该 Session 是为哪个
