@@ -513,7 +513,7 @@ and the README or design document closest to the target. Preserve unrelated chan
 do not edit generated files by hand, and include the verification required by the
 affected boundary.
 
-## Deploy on your own domain
+## Univer SDK License
 
 You can try Workspace locally with the bundled development license on `localhost` or `127.0.0.1`.
 For another hostname, such as `workspace.example.com`, use a Univer Office SDK license that covers that domain.

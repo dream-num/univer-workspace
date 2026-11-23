@@ -466,7 +466,7 @@ CLI package 与 Workspace 部署基于同一份源码，各自独立交付。
 欢迎提交 Issue 与 Pull Request。修改代码前，请阅读 [AGENTS.md](AGENTS.md) 和目标附近的 README
 或设计文档；保留无关改动，不手工编辑生成文件，并完成受影响边界要求的验证。
 
-## 在自己的域名上部署
+## Univer SDK License
 
 在本机试用 Workspace 时，可以通过 `localhost` 或 `127.0.0.1` 访问，直接使用内置开发许可证。
 如果要通过自己的域名访问，例如 `workspace.example.com`，请使用覆盖该域名的 Univer Office SDK 许可证。
