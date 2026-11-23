@@ -136,6 +136,7 @@ describe("HTML View draft HTTP API", () => {
     const key = crypto.randomUUID();
     const draft = await c.submit(key, body);
     expect(draft.sourceWorktreeId).toBe(source.id);
+    expect(draft.publishWhen).toBe("merge");
     expect((await (await c.send(`/${draft.id}`)).json()).draft.sourceWorktreeId).toBe(source.id);
     expect((await c.send("", body, key)).status).toBe(200);
     const { sourceWorktreeId: _, ...unlinked } = body;
@@ -151,15 +152,22 @@ describe("HTML View draft HTTP API", () => {
     });
     expect(merge.status).toBe(200);
     expect((await merge.json()).publishedPages).toEqual([]);
-    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe("pending");
+    expect((await (await c.send(`/${draft.id}`)).json()).draft).toMatchObject({ state: "pending", publishWhen: "publish" });
     const published = await c.send(`/${draft.id}/publish`, {});
     expect(published.status).toBe(200);
-    const first = (await published.json()).draft.published;
+    const publishedDraft = (await published.json()).draft;
+    expect(publishedDraft).not.toHaveProperty("publishWhen");
+    const first = publishedDraft.published;
     const replacement = await c.submit(crypto.randomUUID(), { kind: "replace", resourceId: first.resourceId, etag: first.etag, html, sourceWorktreeId: source.id });
     expect(replacement.sourceWorktreeId).toBe(source.id);
+    expect(replacement.publishWhen).toBe("publish");
     expect((await c.send(`/${replacement.id}/publish`, {})).status).toBe(200);
     const newOnMerged = await c.submit(crypto.randomUUID(), body);
-    expect((await c.send(`/${newOnMerged.id}/publish`, {})).status).toBe(200);
+    expect(newOnMerged.publishWhen).toBe("publish");
+    const revised = await c.submit(crypto.randomUUID(), { kind: "revise", draftId: newOnMerged.id, html });
+    expect(revised).toMatchObject({ state: "pending", sourceWorktreeId: source.id, publishWhen: "publish" });
+    expect((await (await c.send(`/${newOnMerged.id}`)).json()).draft).not.toHaveProperty("publishWhen");
+    expect((await c.send(`/${revised.id}/publish`, {})).status).toBe(200);
   });
 
   it("rejects discarded or unreadable sources and derives conflicts after discard", async () => {
@@ -168,7 +176,9 @@ describe("HTML View draft HTTP API", () => {
     const body = { kind: "create", spaceId: c.space.id, name: "Page", html, sourceWorktreeId: source.id };
     const draft = await c.submit(crypto.randomUUID(), body);
     await c.application.worktrees.discard(c.userId, source.id, crypto.randomUUID());
-    expect((await (await c.send(`/${draft.id}`)).json()).draft.state).toBe("conflicted");
+    const conflicted = (await (await c.send(`/${draft.id}`)).json()).draft;
+    expect(conflicted.state).toBe("conflicted");
+    expect(conflicted).not.toHaveProperty("publishWhen");
     const refused = await c.send(`/${draft.id}/publish`, {});
     expect(refused.status).toBe(409);
     expect((await refused.json()).error.message).toContain("conflicted");
@@ -362,7 +372,7 @@ describe("HTML View draft HTTP API", () => {
     const c = await harness();
     const key = crypto.randomUUID();
     const draft = await c.submit(key);
-    expect(draft).toMatchObject({ sourceWorktreeId: null, state: "pending", name: "Weekly.univer.html", published: null });
+    expect(draft).toMatchObject({ sourceWorktreeId: null, state: "pending", publishWhen: "publish", name: "Weekly.univer.html", published: null });
     expect((await c.application.views.listHtmlViews(c.userId, {})).items).toHaveLength(0);
     const replay = await c.send(
       "",
@@ -434,12 +444,15 @@ describe("HTML View draft HTTP API", () => {
     const draft = await c.submit();
     expect((await c.send(`/${draft.id}/reject`, {})).status).toBe(200);
     expect((await c.send(`/${draft.id}/reject`, {})).status).toBe(200);
+    expect((await (await c.send(`/${draft.id}`)).json()).draft).not.toHaveProperty("publishWhen");
     expect((await c.send(`/${draft.id}/publish`, {})).status).toBe(409);
     const expired = await c.submit();
     c.application.database.connection
       .prepare("UPDATE html_view_drafts SET expires_at = 1 WHERE id = ?")
       .run(expired.id);
-    expect((await (await c.send(`/${expired.id}`)).json()).draft.state).toBe("expired");
+    const expiredView = (await (await c.send(`/${expired.id}`)).json()).draft;
+    expect(expiredView.state).toBe("expired");
+    expect(expiredView).not.toHaveProperty("publishWhen");
     const receiving = await c.submit();
     c.application.database.connection
       .prepare(

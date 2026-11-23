@@ -11,37 +11,10 @@ as the recipe.
   `http://127.0.0.1:5973` and the server at `:3920`, from a fresh `data/` directory.
 - The baseline user is `verify-<run-id>`, display name `Verify <run-id>`. Its password is
   in `/tmp/verify-uvw/<run-id>/user.pw`, and it owns `verify-<run-id>/personal` with no
-  files. No Team Spaces, PRs or Issues exist.
+  files. No Team Spaces, PRs or Issues exist. In MCP mode, `doctor` adds an `Executor doctor`
+  pull request and a `Doctor` Sheet there.
 - Never drive an instance this run did not start.
-
-## Driving conventions
-
-- Start each Bash call with `eval "$($V env)"`. Browser commands then use this run's
-  agent-browser session, and `$ORIGIN` / `$EVIDENCE` are set.
-- Pin the browser locale once per session:
-  `agent-browser storage local set univer-workspace-language en-US` then `agent-browser reload`.
-- After `agent-browser open`, wait before `find` (`agent-browser wait 1500`, or
-  `wait --url`/`wait <selector>`). An immediate `find` races the SPA and reports "No element found".
-- Prefer ARIA roles, accessible names, and labels. The login form's mode tabs are `Password` and
-  `Create account`, and in sign-up mode the submit button is also `Create account`, so submit with
-  `agent-browser click 'form button[type=submit]'`.
-- Run uvw only through `$V cli <label> …` (recorded) or `$V uvw …`. Use IDs from earlier
-  `--json` output.
-- Worksheet selectors are 1-based (`--worksheet index:1`).
-
-## Proof and skip reporting
-
-- Capture the action and the resulting state: screenshot and/or `cli` transcript.
-- A mutation needs a read-only second view from the other surface or after a reload.
-- Record the feature ID and entry point with every artifact name.
-- An unreachable entry point is reported with the command tried and the unmet
-  precondition. Do not report it as verified through a different path.
-- Page theme is a per-browser `localStorage` value. Each journey states the mode it expects.
-  A fresh session previews Repository. Journeys that drive the Wiki sidebar pin Wiki first with
-  `agent-browser storage local set univer-workspace-layout-theme wiki` and confirm
-  `Enter workspace` when Home first shows the choice.
-- OAuth sign-in (GitHub, Google, Discord) and browser-approved `uvw auth login` need a real
-  provider or a human. They are out of scope; report them as skipped.
+- Drive and record proof as the Drive and Evidence sections of [the skill](../SKILL.md#drive) say.
 
 ## Feature entry contract
 

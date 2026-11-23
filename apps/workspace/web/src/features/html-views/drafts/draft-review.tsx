@@ -1,5 +1,5 @@
-import { lazy, Suspense, useCallback, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ApiError } from "../../../shared/api/errors";
 import { Button } from "../../../shared/ui/button";
 import { Textarea } from "../../../shared/ui/textarea";
@@ -49,7 +49,13 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
 }) {
   const m = useDraftMessages();
   const sourceWorktree = useQuery({ ...worktreeQueryOptions(draft.sourceWorktreeId ?? ""), enabled: !!draft.sourceWorktreeId });
-  const waiting = !!draft.sourceWorktreeId && sourceWorktree.data?.worktree.state !== "merged";
+  const waiting = draft.publishWhen === "merge";
+  const queries = useQueryClient();
+  const sourceState = sourceWorktree.data?.worktree.state;
+  useEffect(() => {
+    if (waiting && (sourceState === "merged" || sourceState === "discarded"))
+      void queries.invalidateQueries({ queryKey: htmlViewDraftQueryOptions(draft.id).queryKey, exact: true });
+  }, [queries, draft.id, waiting, sourceState]);
   const content = useQuery(draftContentQueryOptions(draft.id));
   const current = useQuery({ ...resourceOpenQueryOptions(draft.targetResourceId ?? ""), enabled: draft.kind === "replace" && draft.targetResourceId !== null });
   const repository = useQuery(spaceQueryOptions(draft.spaceId));

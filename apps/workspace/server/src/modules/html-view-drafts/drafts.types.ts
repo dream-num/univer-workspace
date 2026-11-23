@@ -3,6 +3,7 @@ export interface HtmlViewDraftView {
   readonly id: string;
   readonly kind: "create" | "replace";
   readonly state: HtmlViewDraftState;
+  readonly publishWhen?: "merge" | "publish";
   readonly supersededBy: string | null;
   readonly spaceId: string;
   readonly sourceWorktreeId: string | null;

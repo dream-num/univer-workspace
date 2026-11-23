@@ -17,6 +17,10 @@ keep it disabled so historical tags cannot reactivate its tag-push release path.
 The replacement workflow is `release-cli-manual.yml`.
 
 The channel is derived from the version; there is no channel input.
+`latest` and `insiders` releases run only in GitHub Actions and check the single
+SDK baseline of the whole workspace first. `dev` releases (`X.Y.Z-dev.<suffix>`)
+run only locally through `pnpm release:cli:dev`, refuse CI environments, and
+skip the baseline check. `scripts/release/policy.mjs` enforces these rules.
 `dry_run` defaults to true. Explicitly set `dry_run=false` to publish the
 verified tarball to insider-npm. The source manifest remains `0.0.0`; public npm promotion
 and Workspace deployment are separate operations.

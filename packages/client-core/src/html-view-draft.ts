@@ -15,6 +15,7 @@ export interface WorkspaceHtmlViewDraft {
   readonly spaceId: string;
   readonly targetResourceId: string | null;
   readonly sourceWorktreeId?: string | null;
+  readonly publishWhen?: "merge" | "publish";
   readonly previewUrl: string;
   readonly expiresAt: string;
   readonly status: WorkspaceHtmlViewDraftStatus;
@@ -52,6 +53,8 @@ export function parseHtmlViewDraft(value: unknown, origin: string): WorkspaceHtm
   const sourceWorktreeId = value["sourceWorktreeId"];
   if (sourceWorktreeId !== undefined && sourceWorktreeId !== null &&
       (typeof sourceWorktreeId !== "string" || !sourceWorktreeId)) throw invalid();
+  const publishWhen = value["publishWhen"];
+  if (publishWhen !== undefined && publishWhen !== "merge" && publishWhen !== "publish") throw invalid();
   let status: WorkspaceHtmlViewDraftStatus;
   if (state === "published") {
     const published = value["published"];
@@ -69,7 +72,7 @@ export function parseHtmlViewDraft(value: unknown, origin: string): WorkspaceHtm
     status = { state };
   } else throw invalid();
   const id = string("id");
-  return { id, kind, ...(sourceWorktreeId === undefined ? {} : { sourceWorktreeId }), name: string("name"), spaceId: string("spaceId"),
+  return { id, kind, ...(publishWhen === undefined ? {} : { publishWhen }), ...(sourceWorktreeId === undefined ? {} : { sourceWorktreeId }), name: string("name"), spaceId: string("spaceId"),
     targetResourceId: typeof targetResourceId === "string" ? targetResourceId : null,
     previewUrl: htmlViewDraftUrl(origin, id), expiresAt: string("expiresAt"), status };
 }

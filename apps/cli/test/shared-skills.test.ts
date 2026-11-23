@@ -90,21 +90,29 @@ it("keeps the design reference focused on the catalog and design floor", async (
   expect(content).not.toMatch(/ask at most one question|otherwise choose from the catalog/iu);
 });
 
-it("saves after a dry run and offers the live preview in an optional reference", async () => {
+it("fixes the preview offer wording, honors direct requests and explains publication", async () => {
   const content = (await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")).replace(/\s+/gu, " ");
   for (const term of ["`html_view_save` and `dryRun: true`, then save once as a draft", "Revise pending drafts with `draft`",
-    "With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, offer the user a live local preview after saving",
-    "[local preview](references/local-preview.md); it opens the page in their browser",
+    "Dry runs do not run scripts; say render checks did not run.",
+    "With a local shell and `node`, and not as an agent identity, end the reply with exactly this sentence, translated into the user's language:",
+    'If you want to check it live, reply "open live preview" and I will open it in your browser so we can keep tuning.',
+    "For Chinese, use exactly: 需要的话，回复「打开实时预览」，我会在你的浏览器里打开实时预览，边看边调。",
+    'On acceptance or any request for live preview, even without an offer, including 打开实时预览 or "open live preview", follow [local preview](references/local-preview.md). Through MCP, read it with `skills_read {"name":"html-view","resource":"references/local-preview.md"}`, then revise the draft with `draft`.',
+    "Without a local shell or `node`, or as an agent identity, say in one sentence that live preview is unavailable and suggest the draft preview link instead.",
     "With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview before `html-view create`",
     "Save an existing local file with bindings as a draft too",
     "why it fits the request or data in one clause",
-    "For a PR-linked draft, say the page goes live when the user merges the pull request in Workspace",
-    "Only drafts without a PR use **Publish**"])
+    "Explain draft.publishWhen: `merge` goes live when the user merges the pull request in Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**."])
     expect(content).toContain(term);
+  expect([...await readFile(join(skillRoot, "html-view/SKILL.md"), "utf8")].length).toBeLessThanOrEqual(10300);
+  expect(content).not.toContain("For a PR-linked draft");
+  expect(content).not.toContain("Only drafts without a PR use **Publish**");
+  expect(content).not.toContain("say render checks did not run and,");
+  expect(content).not.toContain("With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot read, offer the user a live local preview after saving");
   const reference = (await readFile(join(skillRoot, "html-view/references/local-preview.md"), "utf8")).replace(/\s+/gu, " ");
   for (const term of ['skills_read {"name":"html-view","resource":"scripts/preview.mjs"}',
     "complete returned content to a local file", "installed html-view Skill directory",
-    "when the user accepts a live local preview", "node preview.mjs page.univer.html --open [--repo <owner/slug> --pr <n>]",
+    "when the user accepts the offer or asks for a live preview", "node preview.mjs page.univer.html --open [--repo <owner/slug> --pr <n>]",
     "the pull request number as `--pr` (not a Worktree id)", "one JSON object per line",
     '"event":"ready"', '"event":"report"', '"event":"waiting"', "GET /report?token=<token>",
     "HTTP 204 before any report", "click Load page", "confirm trust", "revise the pending draft with `html_view_save` and `draft`",

@@ -68,12 +68,18 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 Through MCP, check with `html_view_save` and `dryRun: true`, then save once as a draft.
 Revise pending drafts with `draft`. Save an existing local file with bindings as a draft too,
 unless the user explicitly requested a file.
-For a PR-linked draft, say the page goes live when the user merges the pull request in
-Workspace. Only drafts without a PR use **Publish** in the preview.
+Explain draft.publishWhen: `merge` goes live when the user merges the pull request in
+Workspace; never tell them to press Publish. `publish` means open the preview and press **Publish**.
 
-With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot
-read, offer the user a live local preview after saving. When they accept, follow
-[local preview](references/local-preview.md); it opens the page in their browser.
+Dry runs do not run scripts; say render checks did not run.
+With a local shell and `node`, and not as an agent identity, end the reply with exactly
+this sentence, translated into the user's language:
+If you want to check it live, reply "open live preview" and I will open it in your browser so we can keep tuning.
+For Chinese, use exactly: 需要的话，回复「打开实时预览」，我会在你的浏览器里打开实时预览，边看边调。
+
+On acceptance or any request for live preview, even without an offer, including 打开实时预览 or "open live preview", follow [local preview](references/local-preview.md). Through MCP, read it with
+`skills_read {"name":"html-view","resource":"references/local-preview.md"}`, then revise the draft with `draft`.
+Without a local shell or `node`, or as an agent identity, say in one sentence that live preview is unavailable and suggest the draft preview link instead.
 
 With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview
 before `html-view create`, then run `html-view validate` and `html-view create` as below, or replace

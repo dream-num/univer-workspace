@@ -350,9 +350,19 @@ uvw auth login --complete
 ```text
 apps/workspace                 Workspace Browser、Server、HTTP contract 与部署应用
 apps/cli                       面向 Agent 的远程 Workspace 自动化应用
+apps/mcp                       私有的远程 MCP gateway、executor 与 renderer
 apps/agent                     用于文档对话与 Worktree 审查的 Workspace Agent 应用
+apps/space-plugin              DSH Desktop 的 Space 内容工作区插件（独立 npm 依赖图）
 packages/client-core           私有的 Node-hosted Workspace Agent Client 能力
 packages/reference-provider   仅供 Browser 使用的私有 referenced-Unit policy
+packages/workspace-agent-runtime   Agent 宿主共享的私有内容执行层
+packages/workspace-editor-presets  Web 与 Space 共享的私有 Univer 编辑器插件组合
+packages/workspace-file-browser    私有的 Workspace 文件导航 UI
+packages/workspace-html-viewer 私有的共享 HTML View sandbox 与 binding host
+packages/workspace-markdown-viewer 私有的共享只读 Markdown 预览
+packages/workspace-ui          私有的共享 Workspace UI 基础组件
+packages/unit-comparison-viewer    私有的只读 Unit 对比视图
+packages/dsh-runtime           锁定的 DSH CLI runtime 依赖集，用 pnpm deploy 物化
 packages/dsh-univer-workspace-plugin        Workspace Agent 的 Workspace 能力与浏览器 UI
 packages/dsh-univer-workspace-skin-plugin   Workspace Agent 的 Workspace 视觉皮肤
 scripts                       SDK 版本与 CLI 本地发布工具
@@ -456,17 +466,18 @@ CLI package 与 Workspace 部署基于同一份源码，各自独立交付。
 欢迎提交 Issue 与 Pull Request。修改代码前，请阅读 [AGENTS.md](AGENTS.md) 和目标附近的 README
 或设计文档；保留无关改动，不手工编辑生成文件，并完成受影响边界要求的验证。
 
-## Runtime 开发 License
+## Univer SDK License
 
-Browser、Workspace Server、CLI 与 DSH 插件包含内容同步、经过批准的 runtime 开发凭据，用于本地
-开发。该凭据每 90 天轮换一次，并不是本仓库的软件许可证。服务端 Collaboration 与 Exchange SDK
-还需要 license key 校验，缺少任一值时降级为免费额度。Browser 构建可以通过 `VITE_UNIVER_LICENSE`
-覆盖，Server 与 CLI 可以通过同时设置 `UNIVER_LICENSE` 和 `UNIVER_LICENSE_KEY` 覆盖。轮换时用生成
-脚本一次更新全部副本：
+在本机试用 Workspace 时，可以通过 `localhost` 或 `127.0.0.1` 访问，直接使用内置开发许可证。
+如果要通过自己的域名访问，例如 `workspace.example.com`，请使用覆盖该域名的 Univer Office SDK 许可证。
+授权方案与价格请见 [Univer 定价页](https://univer.ai/pricing/)。
 
-```bash
-pnpm update:univer-license --license <license.txt> --license-key <licenseKey.txt>
-```
+1. **构建前端时**，设置环境变量 `VITE_UNIVER_LICENSE`，值为 `license.txt` 的文件内容。更换许可证后需重新构建前端。
+2. **启动服务端时**，同时设置两个环境变量。将 `UNIVER_LICENSE` 设为同一份 `license.txt` 的文件内容，将 `UNIVER_LICENSE_KEY` 设为配套的 `licenseKey.txt` 的文件内容。
+
+如果还通过 CLI 导入导出 Office 文件，请在运行 CLI 的环境中也设置 `UNIVER_LICENSE` 和 `UNIVER_LICENSE_KEY`。
+
+使用 Docker 部署时，构建参数和容器环境变量的传入方式见 [Docker 部署示例](apps/workspace/README.zh-CN.md#docker)。
 
 ## License
 

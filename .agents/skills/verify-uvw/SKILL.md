@@ -1,6 +1,6 @@
 ---
 name: verify-uvw
-description: Verify Univer Workspace (apps/workspace web + server) and the uvw CLI (apps/cli) end to end in an isolated, disposable instance on 127.0.0.1:3920/5973. Launches server + Vite web against a temp data dir, registers a throwaway password user, drives the browser with agent-browser and the source-built uvw, captures screenshots and command transcripts, then tears down without touching the developer's :3020/:5173 instance, .data/ SQLite files, or ~/.univer-workspace-cli. Use when you need to prove a Workspace or CLI change works in the real app, not just in tests.
+description: Verify Univer Workspace changes end to end in a disposable local instance, covering the web app and server (apps/workspace), the uvw CLI (apps/cli), the MCP gateway, the browser Agent and real-model stories. Starts an isolated server and web app with a throwaway user, drives them with agent-browser and the source-built uvw, records evidence, and tears down without touching the developer's own instance, .data/ files or ~/.univer-workspace-cli. Use when you need to prove a Workspace, CLI or MCP change works in the real app, not just in tests.
 ---
 
 # verify-uvw
@@ -10,146 +10,71 @@ Everything goes through one helper. Run it from the repository root:
 ```bash
 V=.agents/skills/verify-uvw/bin/verify-uvw
 $V up        # start server :3920 + web :5973 on a fresh temp data dir
-$V doctor    # is this instance ours and worth driving?
 $V user      # register a throwaway password user and sign uvw in as it
+$V doctor    # is this instance ours and worth driving?
 $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
-$V principal <name> [label]    # create an agent principal; its token stays private in the run
-$V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'   # one recorded real-model run
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
-$V metrics                     # print the Workspace server's /metrics
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
-$V agent-up  # install/start Agent (requires VERIFY_UVW_AGENT_PORT at up)
-$V agent-down # stop only this run's Agent
-$V down      # stop what this run started, including Agent; delete data; keep evidence + logs
+$V brief <feature> [journey-id...]   # print the brief for an agent that drives this run
+$V down      # stop what this run started; delete data; keep evidence + logs
 ```
 
-A run lives at `/tmp/verify-uvw/<run-id>/` (`VERIFY_UVW_ROOT` overrides `/tmp/verify-uvw`):
+`$V` with no arguments prints every command. A run lives at `/tmp/verify-uvw/<run-id>/`
+(`VERIFY_UVW_ROOT` overrides `/tmp/verify-uvw`), and `/tmp/verify-uvw/current` points at the latest:
 
 | Path | Content | Survives `down` |
 | --- | --- | --- |
 | `data/` | product SQLite, collaboration SQLite, blobs | no |
-| `home/` | `UNIVER_HOME` for uvw (origin config, session) | no |
+| `home/` | `UNIVER_HOME` for uvw (origin config, session) and other run credentials | no |
 | `user.pw` | throwaway password | no |
-| `run.env`, `user.env` | ports, PIDs, launch HEAD, username | yes |
+| `run.env`, `user.env` | ports, PIDs, launch HEAD, mode flags, username | yes |
 | `logs/` | `server.log`, `web.log`, `register.json` | yes |
 | `evidence/` | screenshots and `cli` transcripts | yes |
 
-`up` starts the server with a random `METRICS_TOKEN` kept in `home/workspace-metrics-token`, and
-`$V metrics` prints the server's Prometheus text with it. Vite serves `/nodes/<id>` itself, so the
-share page counter only moves when the server renders the page. Before `up`, run
-`pnpm --filter '@univerjs/univer-workspace^...' build` and then
-`pnpm --filter @univerjs/univer-workspace build:web`, and open share links on the server port.
+The journeys live in [`features/`](features/README.md). Read its index, then use the matching
+feature file as the recipe. Read more only for the mode you need:
 
-`/tmp/verify-uvw/current` points at the latest run. Each Bash tool call is a new shell, so
-start every call that uses agent-browser or uvw with `eval "$($V env)"` (it also sets
-`$ORIGIN` and `$EVIDENCE`).
+| Mode | Read |
+| --- | --- |
+| MCP gateway, renderer, Workspace Agent (`VERIFY_UVW_MCP=1`, `agent-up`) | [references/mcp-mode.md](references/mcp-mode.md) |
+| Agent principals and real-model stories (`principal`, `story`) | [references/stories.md](references/stories.md) |
+| Browser Agent mock model | `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help`, then AS1 in [Browser Agent skills](features/agent-skills.md) |
+| HTML View style thumbnails, after changing a built-in template | `node .agents/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --help` |
 
 ## Launch
 
-Prerequisites, checked by `up` and `doctor`, each with its fix:
+`up` and `doctor` check the prerequisites and print the fix for each. `node_modules` must match
+`pnpm-lock.yaml` (`pnpm install --frozen-lockfile`), and `apps/cli/dist` and
+`packages/client-core/dist` must be newer than their `src` (`pnpm --filter 'univer-workspace-cli...' build`).
+`up` refuses ports that are already in use, and never touches your dev servers on 3020/5173.
 
-- `node_modules` matches `pnpm-lock.yaml`, else `pnpm install --frozen-lockfile`. A stale
-  install makes the server die at startup with "module does not provide an export named …".
-- `apps/cli/dist` and `packages/client-core/dist` are newer than their `src`, else
-  `pnpm --filter 'univer-workspace-cli...' build` (about 10 s).
-- Ports 3920 and 5973 are free. `up` refuses to start rather than drive someone else's
-  process. Your own dev servers on 3020/5173 are never touched.
+`up` starts the server under `env -i` with its data in `data/`, so `apps/workspace/.env` and your
+shell's OAuth variables stay out and password sign-in is the only user sign-in method. It points the
+run's uvw at the web origin. It returns once `/api/session` answers on both ports, usually in under 10 s. On failure it tails the log; run `down`
+before you retry. `user` registers `verify-<run-id>` (display name `Verify <run-id>`), who owns the
+Personal Space `verify-<run-id>/personal`. Running it again only signs uvw in again.
 
-`$V up` then:
+The server does not reload. After you change server or CLI code, rebuild the CLI if needed, then run
+`down`, `up` and `user`. Web code under `apps/workspace/web` hot-reloads through Vite.
 
-1. Starts `node --import tsx server/src/main.ts` in `apps/workspace` under `env -i` with
-   `HOST=127.0.0.1 PORT=3920` and `DATABASE_FILE`, `COLLABORATION_DATABASE_FILE`,
-   `BLOB_DIRECTORY` inside `data/`. `env -i` keeps `apps/workspace/.env` and your shell's
-   OAuth provider/data variables out, so password auth is the only user sign-in method.
-   With MCP enabled, it also sets `MCP_RESOURCE_URLS=http://127.0.0.1:<mcp port>/mcp`
-   and `PUBLIC_ORIGIN=http://127.0.0.1:<web port>` for Workspace MCP OAuth authorization.
-2. Starts Vite on 5973 with `WORKSPACE_DEV_API_PORT=3920`; it proxies `/api` and
-   `/universer-api` (including WebSockets) to the server.
-3. Sets `workspace.origin` to `http://127.0.0.1:5973` (the web port) in the run's
-   `UNIVER_HOME`. Unset, uvw would target its production default origin.
-4. Waits until `GET /api/session` answers on both ports. The server creates and migrates
-   the empty databases before it listens, so a 200 there means usable.
-
-Every helper command that runs uvw (`cli`, `uvw`, `user`, `doctor`) first checks that
-the run's `UNIVER_HOME` resolves this run's origin, and refuses otherwise.
-
-Ready output prints the run id, both URLs and the evidence directory. Typical start is
-under 10 s. On failure it tails the log; run `$V down` before retrying.
-
-`$V user [name]` registers `verify-<run-id>` (display name `Verify <run-id>`) through
-`POST /api/auth/password/register`, writes its random password to `user.pw`, and runs
-`uvw auth login --username … --password-stdin`. Rerunning it only signs uvw in again. The
-user owns Personal Space `verify-<run-id>/personal`.
-
-The server does not reload. After changing server or CLI code: rebuild the CLI if needed,
-`$V down`, `$V up`, `$V user`. Web code under `apps/workspace/web` hot-reloads through Vite.
-
-## Browser Agent mock model
-
-Start the local OpenAI-compatible provider with a JSON script. Each completion consumes
-one step. A step returns text, one tool call, parallel tool calls, or an HTTP error.
-After the last step it returns `Done`.
-Usage chunks contain fixed synthetic counts, including 50 cached tokens out of 100 prompt
-tokens. These counts test the UI, not actual provider caching. A step can set `delayMs`
-to hold its response while you enter a steering message. `delayMs` works with every shape.
-Use `{"error":{"status":500,"body":"overloaded"}}` to exercise provider retries and
-`{"tools":[{"name":"repo_list","arguments":{}},{"name":"search","arguments":{"query":"budget"}}]}`
-for parallel tool calls in one response.
-
-```bash
-cat > /tmp/uvw-model-script.json <<'JSON'
-{"model":"mock-agent","steps":[{"tool":{"name":"skills_read","arguments":{"name":"weekly-report"}}},{"text":"Skill read."}]}
-JSON
-MODEL_PORT=5986
-while lsof -nP -iTCP:"$MODEL_PORT" -sTCP:LISTEN >/dev/null; do MODEL_PORT=$((MODEL_PORT + 1)); done
-node .agents/skills/verify-uvw/bin/mock-provider.mjs \
-  --port "$MODEL_PORT" --script /tmp/uvw-model-script.json --log /tmp/uvw-model-requests.jsonl
-```
-
-In the browser Agent's **Model settings**, add an **OpenAI-compatible provider**.
-Use Base URL `http://127.0.0.1:<MODEL_PORT>`, model and default model `mock-agent`, and any
-non-empty API key (for example `mock-key`). The Base URL must differ from the Workspace
-origin. Choose a free port and use an HTTP loopback Workspace for this local check.
-The provider supports CORS preflight, `GET /models` and streaming
-`POST /chat/completions`. Each request appends arrival time, method, URL, parsed JSON
-`body`, and exact request body string `raw` to the log. OPTIONS and GET have a null
-`body` and empty `raw`. Keep the log with
-local verification evidence; it contains full model requests. Stop the foreground
-process with Ctrl+C when finished. Follow [Browser Agent skills](features/agent-skills.md)
-for the provider form, rail, slash menus, invocation gates, and request-prefix checks.
-
-On a signed-in Vite dev page at `/agents/<id>`, inspect the stored model requests with:
-
-```bash
-agent-browser eval "$(cat .agents/skills/verify-uvw/bin/trajectory-dump.js)"
-```
-
-The result contains `skippedRecords` and a `records` array with `seq`, `outcome`,
-`attempts`, `base`, `rewrite`, and the expanded request string `body`. Compare each
-`body` byte for byte with the corresponding mock log's `raw`. A provider key pasted
-into a message is replaced with `[redacted]` in the stored request.
+`$V metrics` prints the server's Prometheus text. Vite serves `/nodes/<id>` itself, so share pages and
+link previews come from the server only after `pnpm --filter '@univerjs/univer-workspace^...' build`
+and `pnpm --filter @univerjs/univer-workspace build:web` before `up`. Open those links on the server port.
 
 ## Doctor
 
-`$V doctor` checks the disposable instance. With MCP enabled after `user`, it creates or reuses a dedicated idempotent doctor Worktree and Sheet, then opens a worker through gateway inspection. Run it first, and again whenever anything looks off. It
-exits non-zero when any line says `FAIL`:
-
-- dependency and CLI build freshness (as above)
-- the run exists, and the server and web PIDs are alive
-- each port's listening PID is the PID this run started
-- the server has this run's `data/univer-workspace.sqlite` open
-- `$ORIGIN/api/session` answers through the Vite proxy
-- `HEAD` has not moved since launch (if it has, the server is running old code)
-- uvw is signed in to `$ORIGIN` as this run's user (after `$V user`)
+Run `$V doctor` first, and again whenever anything looks off. It exits non-zero when any line says
+`FAIL`. If `HEAD` moved since launch, the server runs old code.
 
 ## Drive
 
-**Browser (agent-browser).** `$V env` exports `AGENT_BROWSER_SESSION=verify-uvw-<run-id>`.
-That gives this run its own headless browser, separate from your other agent-browser
-sessions. Always use `127.0.0.1`, never `localhost` or another host, because the bundled
-Univer license is bound to the domain and editors degrade elsewhere.
+**Browser (agent-browser).** `$V env` exports `AGENT_BROWSER_SESSION=verify-uvw-<run-id>`, so this run
+gets its own headless browser. Each Bash tool call is a new shell, so start every call that uses
+agent-browser or uvw with `eval "$($V env)"`. It also sets `$ORIGIN` and `$EVIDENCE`. Always use
+`127.0.0.1`, never `localhost` or another host, because the bundled Univer license is bound to the
+domain and editors degrade elsewhere.
 
 ```bash
 eval "$($V env)"
@@ -163,424 +88,87 @@ agent-browser snapshot -i -c                      # find stable names before act
 agent-browser screenshot "$EVIDENCE/<feature>-<step>.png"
 ```
 
-Prefer `find role <role> --name "<accessible name>"` and `find label`. The names come
-from `web/src/shared/i18n.tsx`; the locale pin above keeps them English. Univer grids are
-canvas. Type into the selected cell with `agent-browser keyboard type` and `press Tab|Enter`,
-then read the result back through uvw or a screenshot, not the DOM.
+- After `open`, wait before `find` (`wait 1500`, `wait --url` or `wait <selector>`). An immediate `find`
+  races the app and reports "No element found".
+- Prefer `find role <role> --name "<accessible name>"` and `find label`. The names come from
+  `web/src/shared/i18n.tsx`, and the locale pin above keeps them English. The login form's tabs are
+  `Password` and `Create account`, and so is the sign-up submit button, so submit with
+  `click 'form button[type=submit]'`.
+- Univer grids are canvas. Type into the selected cell with `keyboard type` and `press Tab|Enter`, then
+  read the result back through uvw or a screenshot, not the DOM. Worksheet selectors are 1-based
+  (`--worksheet index:1`).
+- After sign-in, a browser that has not chosen a view shows only `Choose your workspace view` at `/home`.
+  Click `Enter workspace`, or set `univer-workspace-view-onboarding-complete` to `true` before you sign in.
+  The view is the per-browser `localStorage` value `univer-workspace-layout-theme` (`repository` or
+  `wiki`). Each journey states the view it expects and pins it first.
 
-**CLI (uvw).** `$V uvw` and `$V cli` run `apps/cli/dist/main.js` with the run's
-`UNIVER_HOME`. Never call a global `uvw`: it targets `~/.univer-workspace-cli` and
-`https://space.univer.ai/`. Use `--json` and IDs returned by earlier commands.
+**CLI (uvw).** `$V uvw` and `$V cli` run `apps/cli/dist/main.js` with the run's `UNIVER_HOME`, and
+refuse when it does not resolve this run's origin. Never call a global `uvw`: it targets
+`~/.univer-workspace-cli` and `https://space.univer.ai/`. Use `--json` and IDs returned by earlier
+commands.
 
 ```bash
 $V cli pr-create pr create -R verify-<run-id>/personal -t "Title" --json
 ```
-
-The feature map in [`features/README.md`](features/README.md) lists the journeys and the
-exact commands. Use it as the recipe.
-
-## Regenerate HTML View style thumbnails
-
-Rerun `bin/html-view-style-thumbnails.mjs` after changing a built-in HTML View template.
-Use a disposable instance with `up` and `user` completed, then run from the repository root:
-
-```bash
-export VERIFY_UVW_ROOT=/tmp/verify-uvw-thumbs VERIFY_UVW_SERVER_PORT=4040 VERIFY_UVW_WEB_PORT=6040
-V=.claude/skills/verify-uvw/bin/verify-uvw
-eval "$($V env)"
-node .claude/skills/verify-uvw/bin/html-view-style-thumbnails.mjs --self-test
-node .claude/skills/verify-uvw/bin/html-view-style-thumbnails.mjs
-```
-
-The generator discovers templates, checks their `Expected Sheet` headers, seeds four live
-Sheets, and merges their disposable fixture PR. It validates and publishes each page with
-the source-built CLI, waits for bound values and charts, captures a 1280×800 immersive
-viewport with agent-browser, and uses `cwebp` to write 640×400 WebPs under
-`apps/workspace/web/src/features/html-views/style-thumbnails/`. It rejects unknown layouts
-and files of 60,000 bytes or more. Each run creates new disposable sources. Full screenshots,
-trunk readbacks, validation results, and the page manifest stay in
-`$EVIDENCE/style-thumbnails/`. Inspect every WebP, then run `$V down`.
 
 ## Evidence
 
 Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which survives `down`:
 
 - CLI proof: `$V cli <label> …` writes `<label>.cmd`, `.out`, `.err`, `.exit`.
-- UI proof: a screenshot after the action, plus a reload or a second route showing the
-  persisted state. Name files `<feature>-<step>.png`.
+- UI proof: a screenshot after the action, plus a reload or a second route showing the persisted state.
+  Name files `<feature>-<step>.png`.
 - A mutation needs a second, read-only view. Examples: a browser edit read back with
-  `uvw inspect --trunk`, or a uvw write seen in the browser after reload. A success toast or
-  exit code 0 alone proves nothing.
-- Drive the real user path: browser controls or uvw commands against the HTTP API. Do not
-  insert SQLite rows, call internal services, or use test-only endpoints. Registration via
-  the public register endpoint in `$V user` is setup, not proof of the auth feature. The
-  [auth journey](features/auth.md) proves that.
-- Nothing is mocked. Collaboration, Office exchange, and the CLI daemon are all real. External OAuth
-  providers are absent by design. Workspace acting as the MCP OAuth authorization server
-  is covered by MO1 in [the MCP journeys](features/mcp.md).
+  `uvw inspect --trunk`, or a uvw write seen in the browser after reload. A success toast or exit code 0
+  alone proves nothing.
+- Anonymous access: `open-anon` uses its own cookie-less session, waits 8 seconds, and saves
+  `<label>.png`, `.webm`, `.mp4` (with `ffmpeg`) and `.page.txt`. For `/nodes/<id>` it also saves
+  `<label>.node-status`, the status of `GET /api/nodes/<id>` without credentials.
+- Drive the real user path: browser controls or uvw commands against the HTTP API. Do not insert SQLite
+  rows, call internal services, or use test-only endpoints. Registration in `$V user` is setup, not
+  proof of the auth feature. The [auth journey](features/auth.md) proves that.
+- Nothing is mocked except the browser Agent's model provider in the Agent journeys. Collaboration,
+  Office exchange, and the CLI daemon are all real. External OAuth providers (GitHub, Google, Discord)
+  need a real provider, so report them as skipped. MA8 in [the MCP journeys](features/mcp.md) drives
+  browser-approved `uvw auth login`.
+- Report an unreachable entry point with the command you tried and the unmet precondition. Do not
+  report it as verified through a different path.
+- `open-anon`, `mcp`, `mcp-oauth` and `story` redact what they write, and `cli` does not. Run
+  `secret-check` before you quote or copy evidence, and before `down`. After `down` it can only
+  match token shapes, because the run's secret values are gone.
 - In the report, give the run id, launch HEAD (`run.env`), feature IDs, and artifact paths.
+
+## Hand the driving to another agent
+
+Following a journey in `features/` does not need your strongest model. When your harness can start a
+subagent, give it the journey and keep your own turns for choosing what to verify and for judging the result.
+
+1. Start the instance yourself with `$V up`, `$V user` and `$V doctor`.
+2. Run `$V brief <feature> [journey-id...]`, for example `$V brief link-sharing LS1 LS2 LS3`, and give
+   the subagent that text unchanged, with no hint about the change under review.
+3. Treat the report as a claim. Before you repeat a `PASS` or a `FAIL`, open the evidence files it names.
+   You decide whether a difference from the recipe is a defect.
+4. Stop the instance yourself with `$V down`.
+
+Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
+design checks. This skill names no model, harness or host for
+the verifier. The developer chooses the model in their own configuration, outside this repository, and
+the harness default applies otherwise. The subagent runs where `up` ran, because the instance listens
+only on `127.0.0.1`. Default mode also runs on Linux. MCP mode and `uvw` stories need macOS.
 
 ## Cleanup
 
-```bash
-$V down
-```
-
-This closes this run's agent-browser session and stops the uvw daemon under this run's
-`UNIVER_HOME` and under each story identity's. It then kills only the recorded server and Vite PIDs, after checking each
-one's command line is still `server/src/main.ts` or `vite.js`, plus their direct children.
-It deletes `data/`, `home/` and `user.pw`, and keeps `evidence/` and `logs/`. Never kill by
-process name or port or touch `apps/workspace/.data/`. Delete old runs'
-evidence with `rm -rf /tmp/verify-uvw/<run-id>` only when you no longer need the proof.
-
-Run `down` after every failed attempt too, so stray processes don't keep 3920/5973.
+`$V down` closes the run's browser session and uvw daemons, stops only the server and Vite PIDs it
+recorded, and deletes `data/`, `home/` and `user.pw`. Run it after every failed attempt too. Never kill
+by process name or port, and never touch `apps/workspace/.data/`. Delete an old run's evidence with
+`rm -rf /tmp/verify-uvw/<run-id>` only when you no longer need the proof.
 
 ## Parallel runs
 
-One run per port pair. A second concurrent run needs its own ports and an explicit id in
-**every** call, because `current` follows the newest `up`:
+One run per port pair. A second concurrent run needs its own ports and an explicit id in **every**
+call, because `current` follows the newest `up`:
 
 ```bash
 VERIFY_UVW_RUN=b VERIFY_UVW_SERVER_PORT=3921 VERIFY_UVW_WEB_PORT=5974 VERIFY_UVW_MCP_PORT=3931 $V up
 VERIFY_UVW_RUN=b $V doctor
 ```
-
-## Agent principals and real-agent stories
-
-An agent principal is a User that never signed in. These commands speak as one; the `mcp` forms need MCP mode.
-
-```bash
-$V principal <name> [label]                # POST /api/agents; prints id and username
-$V mcp --as <name> <label> <tool> [json]   # also mcp-tools, mcp-skills, mcp-resources, mcp-resource, mcp-instructions
-$V mcp-oauth login <label> --guest         # scripted OAuth client that takes the guest agent card
-$V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'
-$V open-anon <label> <url>
-$V secret-check [directory]                # default: this run's evidence
-```
-
-`principal` keeps the token in `home/principals/<name>.token` (mode 0600) and never prints it;
-`principal-<name>.json` in `$EVIDENCE` records id, username and expiry. Names match
-`^[a-z0-9][a-z0-9_-]{0,31}$`; `human` means the run user. Workspace creates at most 5 agents per
-hour per source IP per instance and answers 429 after that; `principal` refuses with that reason.
-Every `principal`, `mcp-oauth login --guest`, first `story --oauth` of an identity, and
-`uvw auth guest` a model runs counts toward the limit.
-`mcp --as` authenticates with the principal's PAT, excludes `--auth`, and matches the usage event
-by `user_id`, because the PAT id is never returned. `mcp-oauth login --guest` needs no `user`. It
-opens the authorize URL with no cookies, saves `<label>-guest-card.png`, continues through the
-card, and replaces the grant in `home/mcp-oauth-*`, so `mcp --auth oauth` then speaks as that
-guest. The run's browser stays signed in as the guest.
-
-**Stories.** `story` runs one real-model prompt as a verbatim argument. Clients `mcp` and
-`uvw` use `opencode run` with `console-deepseek/deepseek-flash#high` by default. Pass
-`--model console-deepseek/deepseek-flash#max` before the label to choose another model and
-variant. Client `codex` uses `codex exec` with `gpt-6.1-sol` and reasoning effort `high` by
-default. Its model option is `<model>[#<effort>]`; omitting the suffix keeps effort `high`.
-For example:
-
-```bash
-$V story --model console-deepseek/deepseek-flash#max weak mcp '调用 univer-workspace 的 whoami，把返回的身份名称原样告诉我。'
-$V story strong codex '调用 univer-workspace 的 whoami，把返回的身份名称原样告诉我。'
-$V story --model gpt-6.2-sol#xhigh another codex '<prompt>'
-```
-
-Each client and identity gets a throwaway HOME,
-`home/stories/<client>-<identity>/`, with XDG config, data, state and cache, `TMPDIR`, and an empty
-working directory `work/<label>/` addressed by its real path. opencode's environment holds your
-PATH, that HOME and the XDG variables, and no API key from your shell. The model credential is
-copied once with `opencode auth export 'OpenCode Console'` into `home/opencode-credential.json`
-(mode 0600) and imported into each story HOME. `down` deletes all of it with `home/`. Nothing is
-written to your own opencode database. Codex instead copies only `auth.json` from the launching
-shell's `CODEX_HOME` (default `~/.codex`) once into `home/codex-credential.json` (mode 0600),
-then into its own `home/stories/codex-<identity>/.codex/auth.json` (mode 0600). That directory is its `CODEX_HOME`; no user config, rules, plugins, or sessions
-are copied. A missing file credential fails the story; keyring-only login is not supported.
-`down` deletes the copied credential, and the shared redactor reads it while the run exists.
-
-| Client | `--as` (default `human`) | What the agent starts with |
-| --- | --- | --- |
-| `mcp` or `codex` | `human` | the run user's PAT as bearer |
-| `mcp` or `codex` | a principal | that principal's token as bearer |
-| `mcp` | another name, with `--oauth` | no credential. The first story runs opencode's own `mcp auth` and takes the guest agent card (`oauth-*` in the story evidence); later stories of that identity reuse the grant |
-| `uvw` | `human` | `uvw` signed in as the run user |
-| `uvw` | another name | `uvw` with the origin configured and no session. The model signs in itself, and later stories of that identity keep its session |
-
-- `mcp`: one MCP server named `univer-workspace`, as in the README. Denied: read, glob, grep,
-  list, edit, write, bash and shell, webfetch, websearch, question, task, skill, lsp.
-- `codex`: one MCP server named `univer-workspace`. The generated TOML uses
-  `mcp_servers.univer-workspace.url` and `bearer_token_env_var = "VERIFY_UVW_MCP_BEARER"`.
-  The token is passed in the isolated process environment, never a command argument or evidence.
-  Config sets `model_reasoning_effort`, `approval_policy = "never"`, `sandbox_mode = "read-only"`,
-  `web_search = "disabled"`, and file credential storage. Apps, plugins, and multi-agent tools are
-  disabled. The shell environment excludes the MCP bearer. `codex --no-daemon exec --strict-config
-  --skip-git-repo-check --ephemeral --ignore-rules --json --color never` runs in the empty working
-  directory. Config keys and flags were checked with Codex CLI 0.170.0 help, its
-  [versioned config schema](https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/core/config.schema.json),
-  and [configuration docs](https://developers.openai.com/codex/config-reference/).
-  Codex supports the run user's PAT and principal tokens; `--oauth` remains specific to opencode.
-- `uvw`: no MCP server. Shell and file tools are allowed, `uvw` is first on PATH, and the
-  checkout's `skills/univer-workspace-cli` is installed as an opencode Skill. Denied: webfetch,
-  websearch, question, task and subagent, opencode's `execute` wrapper, and file tools outside the
-  working directory and the story's `TMPDIR`. Inside `execute`, `tools.opencode.session_move` moves
-  the working directory anywhere, after which `read` and `glob` returned the run's credential export
-  without an `external_directory` refusal. The shell tool runs `/bin/zsh` under macOS
-  `sandbox-exec` (`SHELL` names `.local/libexec/zsh` in the story HOME, profile
-  `.local/libexec/shell.sb`). The profile denies reading and writing your home directory and the
-  whole `VERIFY_UVW_ROOT`, then gives back only
-  the story's `work/`, `TMPDIR` and `.univer-workspace-cli`, read access to `.local/bin`,
-  `.local/lib`, the checkout without `.data/`, and node's install directory. Every process the
-  shell starts, `uvw` included, inherits it. Without `/usr/bin/sandbox-exec`, a `uvw` story refuses
-  to start.
-
-Story evidence is `$EVIDENCE/<label>/`: `prompt.txt`, `transcript.jsonl` (redacted),
-`trajectory.txt` (one `ok` or `error` line per MCP call, helper call or shell command, then the
-final answer verbatim), `answer.txt`, `opencode-stderr.txt` or `codex-stderr.txt`, and
-`run-meta.json` (actual model, Codex effort, client, identity, duration, exit code). Codex transcripts
-come from `codex exec --json`; settled MCP and shell items are each listed once.
-A label that already has evidence is refused. The run is killed
-after 30 minutes and `run-meta.json` records `timed_out`.
-
-Not contained, so read `trajectory.txt` for it and report it:
-
-- `mcp`: opencode cannot deny its own `execute` wrapper, which carries the MCP calls. Inside it
-  the model also has `fetch`, which reaches any host and local port including this run's HTTP API,
-  plus `search` and the `tools.opencode.*` helpers. The wrapper is a restricted interpreter: with a
-  scripted model, `require`, `import()`, `process`, `Bun`, `Deno`, `globalThis`, the Function
-  constructor and `fetch('file://…')` all failed, and no canary file or environment value came
-  back. `session_move` still moves the working directory anywhere, and opencode then adds the
-  `AGENTS.md` it finds there, and in parent directories, to the conversation. In a git
-  repository `worktree_create` adds a worktree to the repository's `.git` and checks it out under
-  the story HOME. The model credential is not reachable this way.
-- `codex`: the read-only sandbox applies to local shell commands, not remote MCP effects.
-  Commands can read accessible local files outside the working directory, including the story's
-  copied model credential and other run credentials. Read-only is not a confidentiality boundary.
-  Commands cannot write files or use the network under that policy, and approval escalation is
-  disabled. MCP calls run in the Codex host and can still read or change Workspace data according
-  to the identity's permissions. The model retains read-only shell and local inspection tools;
-  check the trajectory for any use outside MCP. Web search is disabled. The copied Codex credential
-  is never written to evidence and is removed by `down`.
-- `uvw`: the shell cannot read the run's `home/` (the model credential export, principal tokens,
-  `mcp-*`), `user.pw`, `run.env`, `user.env`, other story HOMEs, opencode's data in its own story
-  HOME, or your home directory. What it can still read: its own uvw session in
-  `.univer-workspace-cli` (the identity's own credential), the whole checkout except `.data/`
-  (including any untracked files there), node's install directory, and anything outside your home
-  and the run root, such as `/etc` and other `/tmp` directories. `uvw` can upload whatever the shell
-  can read. The network is not restricted, so the shell reaches every local port, your own
-  Workspace on 3020 included, without its cookies. `stat` still shows names and sizes of denied
-  files. The `uvw` wrapper and `readlink` still reveal the checkout path.
-- opencode's per-command shell rules (`permission.shell`) were tried and do not hold. With
-  `{"*": "deny", "uvw *": "allow"}`, `--auto` keeps the deny, and pipes, `&&`, `;`, `$(cat …)`
-  and backticks are refused. But `uvw "$(< file)"`, `X=$(<file); uvw "$X"`, `uvw … < file`, a
-  here-string and zsh's bare `< file` all run and return the file. opencode checks only command
-  nodes, and these read files without one.
-- The plaintext export `home/opencode-credential.json` stays for the whole run. `secrets.mjs` reads
-  it to redact the model credential, and each story HOME's opencode database holds the same value
-  anyway. The sandbox denies both to the shell. `down` removes them.
-
-Rules for the verifier:
-
-- The prompt is the one sentence a user would type, and nothing else: no tool names, IDs, URLs or
-  hints. Preparation belongs in the identity, not in the prompt.
-- The first attempt is the result. Another attempt gets its own label (`<label>-attempt2`), and
-  the report shows every attempt.
-- When the model goes wrong, quote what it said and did from `transcript.jsonl`. Do not
-  paraphrase it or repair the prompt.
-- Check the end state yourself: read the file back as another principal or with `uvw read --trunk`,
-  `open-anon` every link in the answer, and compare both with what the answer claims. Exit 0 and
-  a confident answer prove nothing.
-- Run `secret-check` before you quote or copy evidence.
-
-Client pitfalls seen with opencode 2.0.29. They are harness artifacts, not product behavior:
-
-- `opencode run` cannot answer its `question` tool, so the tool is denied. A model that needs an
-  answer has to say so in its reply.
-- In `mcp` stories opencode's wrapper is also named `execute`, and models confuse it with the
-  Workspace `execute` tool. In `trajectory.txt` the Workspace one is `univer-workspace.execute`. The first wrapper
-  call can fail with `Unknown tool namespace 'univer-workspace'` while the tool list loads.
-- File tools are confined by resolved path, and `/tmp` is `/private/tmp` on macOS. A read or
-  write refused with `external_directory` is an artifact. The story's paths are already resolved
-  and its `TMPDIR`, where models keep scripts and screenshots, is allowed.
-
-`open-anon` opens the URL in its own agent-browser session, closed first so it holds no cookie,
-waits 8 seconds, and saves `<label>.png`, `<label>.webm`, `<label>.mp4` when `ffmpeg` is on
-PATH, and `<label>.page.txt`. For a `/nodes/<id>` link it also saves `<label>.node-status`,
-the status of `GET /api/nodes/<id>` without credentials.
-
-`bin/secrets.mjs` is the one place that redacts. It removes this run's secret values (password,
-sessions, PATs, OAuth tokens, principal tokens, the model credential, uvw sessions of story
-identities) and anything shaped like `uvw_pat_…`, `uvw_at_…`, `uvw_rt_…`, `workspace_session=…`,
-`Bearer …` or an OAuth token field. `mcp`, `mcp-oauth`, `story` and `open-anon` write evidence
-through it. `secret-check` reads every file under a directory and exits 1 naming the file and the
-kind of secret, never the value. After `down` it can only match shapes, so run it before `down`.
-
-## MCP gateway
-
-On macOS with Docker Desktop or OrbStack, opt in with `VERIFY_UVW_MCP=1 $V up`; `up` refuses any other engine. This builds
-`apps/mcp/Dockerfile` from the working tree and starts a compose gateway on loopback
-port 3930. Override it with `VERIFY_UVW_MCP_PORT`. Set `VERIFY_UVW_MCP_EXECUTORS=2` at
-`up` to enable a second executor for MX13. The replica count is saved in the run. With MCP enabled, `up` resolves `claude.ai`. Only when an address is in `198.18.0.0/15`,
-it prints a fake-IP notice and sets `MCP_CIMD_EXEMPT_NETWORKS=198.18.0.0/15` for the Workspace
-Server alone. `MCP_CIMD_ENABLED=0` in the launching shell passes through to that server;
-unset defaults to enabled. To restart the same run for MO3, use `down`, then `up --reuse`
-with the same explicit run ID and ports. Reuse requires that `down` removed `data/` and
-`home/`; it creates fresh data and credentials while retaining evidence. Logs are replaced,
-so save the relevant redacted facts before restarting. Run `user` again after each restart.
-Without opt-in, existing commands
-keep their behavior and output, including runs created before MCP support.
-
-`VERIFY_UVW_MCP_SAME_ORIGIN=1` at `up` serves the gateway at the web origin, as production does.
-`MCP_PUBLIC_URL` and the Workspace's `MCP_RESOURCE_URLS` become `http://127.0.0.1:<web port>/mcp`,
-Vite proxies `/mcp` to the gateway port, and `MCP_URL`, `mcp`, `mcp-oauth` and opencode use that URL.
-Use it when a browser page calls `/mcp`, such as the Agents module. The gateway still listens on
-its own port for `healthz` and `metrics`, but its `/mcp` answers 403 there because the Host differs.
-
-`VERIFY_UVW_MCP_BUILD_CONTEXT=<checkout>` at `up` builds the MCP image from another checkout of this
-repository, and `doctor` checks the image against that checkout's source digest. Use it when this tree
-changes only inputs the gateway does not use, such as Web dependencies in `pnpm-lock.yaml`, and the
-network is too slow to reinstall the image's packages: a clean `git worktree` at `origin/main` reuses
-the cached install layer. The checkout's `apps/mcp`, `packages/client-core` and `apps/cli/skill-data`
-must match this tree (`git diff origin/main -- apps/mcp packages/client-core apps/cli/skill-data`).
-
-Two independent flags at `up` select the deployment shape and are saved in `run.env`:
-
-- `VERIFY_UVW_MCP_RENDERER=0` omits the renderer container and `MCP_RENDERER_URL` from the executor(s). Doctor verifies that no renderer exists and skips renderer probes. `renderer-call` and `renderer-restart` refuse this mode.
-- `VERIFY_UVW_MCP_PRODUCTION=1` sets `NODE_ENV=production` and omits `MCP_DEV_SESSION_PASSTHROUGH`. Gateway and executor start with the non-user placeholder `verify-uvw-pending-user` in their allowlists. The first `user` replaces that placeholder with the registered Workspace user ID and recreates only gateway and executor(s). Product startup validation stays intact.
-
-With neither flag, MCP still starts three containers in development mode, allows dev passthrough, and leaves the executor unrestricted. Both flags require `VERIFY_UVW_MCP=1`.
-`$V mcp-allow-users <user-id>...` replaces the entire allowlist in either mode, including both replicas when enabled. Supply one or more explicit Workspace user IDs as separate arguments, not usernames or a comma-separated string. `$V mcp-allow-users '*'` opens the executor to every user; `*` must be the only argument. `$V mcp-allow-users workspace`, also alone, makes gateway and executor follow the grants the run's Workspace stores. Grant a user with the run's database and no other Workspace variables, from `apps/workspace`: `env -i PATH="$PATH" HOME="$HOME" DATABASE_FILE="${VERIFY_UVW_ROOT:-/tmp/verify-uvw}/<run-id>/data/univer-workspace.sqlite" node --import tsx server/src/db/executor-access.ts grant <username>` (`revoke` and `list` alike). A grant or revoke reaches MCP after about 30 seconds, without recreating anything; [MB6](features/mcp.md#mb-deployment-and-per-account-tools) drives it. `mcp-allow-users` itself saves `executor-allowed-user-ids` beside `run.env`, waits for recreated executor(s), then recreates the gateway so capability discovery sees the ready executors, without rebuilding or restarting Workspace, Vite or the renderer. Retry the same command after a failed recreation. Repeated `user` preserves an explicitly chosen allowlist.
-
-Run the [MB journey](features/mcp.md#mb-deployment-and-per-account-tools) with both flags to verify the G0 gateway and allowlisted executor without a renderer. Journeys using `--auth dev` need the default mode. MA5 (`--auth dev`) and MF4's session-based second-user client need development mode. M2/M3 and M11 use the run's PAT after `user` and also work in production; M9 rejects the Origin before authentication. PAT and OAuth journeys work in production. M7, renderer journeys MR9 onward, screenshot checks and the renderer benchmark need the renderer enabled.
-
-Set `EXECUTOR_MAX_WORKERS` and `EXECUTOR_IDLE_TTL_MS` in the launching shell before
-`up` to size an experimental executor pool. Unset values keep the existing defaults
-of 4 workers and 60000 ms. These Compose settings also apply to `executor-b`.
-Restart with `down`, then `up` after changing them. They do not change product defaults.
-
-Run `$V user` to create an independent MCP session, a fresh opencode directory and a personal
-access token (PAT). The gateway exchanges the PAT with Workspace (confidential client
-`univer-workspace-mcp-gateway`, created by `up` with a random secret in `home/mcp-oauth-secret`) for a
-short-lived downstream session and scopes. `$V mcp-token [--scopes read,...]` creates another PAT and makes it
-the default; it prints only the PAT id.
-`$V env` exports `MCP_URL`, `MCP_PROJECT`, `MCP_IMAGE`, `MCP_OPENCODE_DIR`, and
-`MCP_OPENCODE_MODEL=console-deepseek/deepseek-flash#high`. Sessions, opencode config,
-both call-direction tokens (`executor-token` and `renderer-token`),
-and the metrics token stay under `home/` with credential files mode 0600.
-
-```bash
-$V mcp [--protocol 2026-07-28|2025-11-25] [--auth pat|oauth|dev|none|invalid | --as principal] [--toolsets list] <label> <tool> [json]
-$V mcp-tools [--protocol version] [--toolsets list] [--as principal] <label>
-$V mcp-resources [--protocol version] [--toolsets list] [--as principal] <label>
-$V mcp-resource [--protocol version] [--toolsets list] [--as principal] <label> <uri>
-$V mcp-instructions [--protocol version] [--toolsets list] [--as principal] <label>
-$V mcp-token [--scopes read,write,...] [--name name]
-$V mcp-oauth login <label> [--guest] [--scopes read,write,...] [--client-id <https-url>] [--token-resource omit|<url>]
-$V mcp-oauth refresh|reuse <label> [--token-resource omit|<url>]
-$V mcp-oauth revoke|direct <label>
-$V mcp-oauth exchange <label> pat|oauth
-$V mcp-allow-users <user-id>...|'*'|workspace # replace the executor allowlist; recreate executor(s), then gateway
-$V mcp-gateway-restart       # recreate only gateway, including when executor is stopped
-$V mcp-logs
-```
-
-`mcp-oauth` is a scripted MCP OAuth client for MO2 and MO3.
-`login --client-id <https-url>` skips registration and uses a CIMD client (the loopback
-callback path is `/callback`, as used by Claude Code). It records the consent name and
-checks the callback code, state and `iss` without saving the code or state. `login` registers a client, clears the run browser's cookies, signs in
-as the run user through the login page, approves the consent page with only `--scopes` checked (default all four), and keeps the access token, refresh token and client id in
-`home/mcp-oauth-*` (mode 0600); `mcp --auth oauth` then calls the gateway with that access token and expects `auth_kind: oauth`.
-`refresh` rotates the pair, `reuse` replays the previous refresh token, `revoke` calls RFC 7009 revocation, `direct` sends the
-access token straight to Workspace, and `exchange` performs the gateway's token exchange for the PAT or the access token, then
-signs the returned session out. Each writes `<label>.json` with token shapes only and exits 0 on the expected success status, 1 otherwise.
-Set `VERIFY_UVW_AGENT_PORT=<port>` at `up` to also register the Workspace Agent's public OAuth client
-`univer-workspace-harness` with callback `http://127.0.0.1:<port>/auth/oauth/callback`.
-Then `$V agent-up` builds and packs the repository's Agent and plugins, installs the pinned DSH
-runtime and profile under `home/agent/`, checks that pnpm uses the run-local package store, and starts `apps/agent/scripts/start-local.mjs` on that
-port. Installation can take several minutes; see `logs/agent-install.log`. The one-time browser
-URL is in `home/agent-url` (mode 0600), and raw Agent logs stay in `home/agent-log.private`
-(mode 0600); never copy either into evidence. Open the URL in this run's agent-browser session.
-The helper seeds the configured `127.0.0.1` Workspace origin without a session; confirm the
-onboarding service URL is `$ORIGIN` before signing in. No model credentials are needed.
-`$V agent-down` stops the recorded launcher after checking its command line; `$V down` does this
-as well and deletes the installation, runtime data and private logs with `home/`.
-Labels match `^[A-Za-z0-9._-]{1,64}$`. Arguments default to `{}` and must be a JSON
-object. The default protocol is 2026-07-28. Authentication defaults to `pat` when the run has a PAT and
-to `dev` otherwise. Development session passthrough is available only in the default development mode; production requires PAT or OAuth.
-`mcp-tools` saves the ordered tool definitions. `mcp-resources`, `mcp-resource` and `mcp-instructions` save the resource list, one resource's contents and the initialize `instructions`. `mcp-logs` prints current gateway and executor logs.
-`$V renderer-call <label> screenshot|printPdf|lint|measureText < input.json` sends one operation to the renderer from inside the
-executor container and saves `<label>.json` plus the PNG or PDF payload in `$EVIDENCE`. `bin/renderer-proof.mjs` prints a small
-Sheet or Doc with Latin and Chinese text as such an input. `$V renderer-restart [max-runtimes]` recreates only this run's renderer with
-`RENDERER_MAX_RUNTIMES` set to that value (default 2) and returns once its startup runtime is warm.
-Use [the MCP journeys](features/mcp.md) for exact commands and pass conditions.
-MO1 proves browser OAuth sign-in from a single MCP URL using a separate `ws` opencode
-config without an Authorization header. It needs the Workspace MCP OAuth authorization
-server (PR #216), agent-browser, and the model credentials available to the isolated
-opencode environment. It checks discovery through Vite, the four consent scopes, the
-callback without `worktree:merge`, and successful `whoami` and `repo_list` OAuth events.
-Its temporary project lives under this run's `home/`, with all four XDG directories and
-a free managed-service port set by `opencode service set port`. The trap stops that
-service and the auth process, saves the consent screenshot and redacted transcripts in
-`$EVIDENCE`, and deletes the isolated credentials on success or failure. Never record
-raw codes, tokens, or `state` values in evidence.
-
-Calls save `<label>.cmd`, `.out`, `.result.json`, `.err`, `.exit`, `.gateway.log`,
-and `.workspace.log` in `$EVIDENCE`. `.out` holds `structuredContent` on success and, for a tool
-error, the `{code, message, detail}` JSON the gateway sends as the result text (errors carry no
-`structuredContent`); `.result.json` keeps the wire result. Tool calls also save `.event.json` and check its
-fields, Workspace request correlation, and Bearer leakage. HTTP failures preserve the
-status, authentication challenge, and body. Exit codes are 0 for success, 1 for a tool
-error, 2 for usage, 3 for transport or protocol failure, 4 for HTTP 401, and 5 for a
-completed call with invalid evidence.
-
-`doctor` checks the container engine, the source digest, container health and image identity,
-port mapping, container configuration and Workspace access, protected metrics, and,
-after `user`, MCP identity, the PAT token exchange, and session, PAT and client-secret leakage. Rebuild with `down`, then `up` when
-inputs change. `mcp-build.json` and `logs/mcp-build.log` retain build evidence.
-
-`down` saves `logs/mcp-gateway.log`, `logs/mcp-executor.log` and `logs/mcp-renderer.log`, removes this run's compose containers, networks,
-volumes and image tag, then deletes `home/` with the other disposable data. It prints
-`ok    MCP resources removed` only after checking resource removal. Cleanup failures
-warn and continue. Run `down` after failures too. Build cache and evidence survive.
-
-The renderer (`MCP_ROLE=renderer`, same image, Chromium and CJK fonts inside) starts by default with MCP on its own compose
-network declared `internal: true`, joined only by the executor(s) and the renderer. The gateway waits for it to be healthy.
-`doctor` checks its image, that it has no published port and joins one internal network, bearer rejection, protected metrics,
-a real `measureText` call from the executor, that it cannot reach `host.docker.internal:<server port>`, the gateway or a public
-host, and that its logs hold no credential. `down` removes its container and network with the rest of the project.
-
-The executor has no published port. `doctor` verifies its image, bearer rejection, HTTP/ticket/
-collaboration WebSocket transport, log redaction and worker environment. The positive RPC check runs inside the gateway with its configured token and executor URL.
-The worker check rejects zero inspected workers. It verifies the child environment only; same-uid
-workers can still read the executor environment through `/proc/1/environ` until Stage G.
-Log checks include license and license-key values. `mcp --expect-event '<jq expression>'` adds a per-call event
-assertion. `executor: none` requires zero worker costs (`worker_cpu_ms`, `worker_peak_rss_mb`,
-`render_pages`, `committed_revisions`); gateway file tools may report transfer bytes.
-Worker calls report cold/warm and nonnegative costs.
-
-
-For long Office or Typst jobs, set `MCP_SYNC_BUDGET_MS=1` before starting the verification stack.
-The default is 30000. A job-returning call can have no usage event yet; `mcp-call` records
-that response without requiring an early event. Poll `job_get`, then inspect the original
-request ID in gateway logs to verify one settled conversion event and its real costs.
-Deduplicated retries emit no second conversion event. Start a default-budget stack for
-existing synchronous Office journeys.
-
-A succeeded same-key import/export/compile_typst retry returns the original tool result directly.
-Deduplicated responses carry `_meta["univer.workspace.deduplicated"]: true`; the call helper
-requires zero additional conversion events for that marker. Failed jobs release their keys,
-so a retry runs again and emits its own settled event. A reused key with different arguments
-returns `workspace-idempotency-conflict` and starts nothing (MX10).
-
-For executor sizing and sustained-write measurements, use
-`node .agents/skills/verify-uvw/bin/mcp-bench.mjs --help` and the
-[capacity benchmark recipe](features/mcp.md#executor-capacity-benchmark).
-Run `--self-test` before a real run. The default benchmark saves JSON with sample
-counts, median, range, p95 for at least twenty observations, errors, usage events,
-readback checks, process RSS, and host counters. It waits for a quiet machine and
-never supplies production sizing numbers without a local measurement.
-
-For renderer sizing (latency per operation, throughput against `RENDERER_MAX_RUNTIMES`, memory per runtime, memory growth across reused
-renders), use `node .agents/skills/verify-uvw/bin/renderer-bench.mjs --help` and the
-[renderer benchmark recipe](features/mcp.md#renderer-capacity-benchmark). It recreates the renderer many times, so run it on a stack
-nothing else is using. `bin/renderer-bench-summary.py` renders its JSON as the tables in the architecture document.
-
-For the stage G isolation baseline (secrets, network, cross-user visibility, CPU and memory limits, pool fairness, mounts, fail-closed
-configuration, renderer separation), run `node .agents/skills/verify-uvw/bin/mcp-security-probes.mjs [--only MG6,MG7]`. It prints one JSON
-line per check, `contained` or `exposed`; see [the MCP security journeys](features/mcp-security.md).

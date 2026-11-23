@@ -10,7 +10,7 @@ export const htmlViewDraftGetTool: ToolDefinition = {
   toolset: "core",
   scope: "read",
   title: "Read an HTML View draft status",
-  description: "Return the current state of an HTML View draft: pending, published, rejected, expired, conflicted or superseded. Superseded drafts include supersededBy and successorUrl. Published drafts include shareUrl, node, resource and etag; other states do not include publication fields.",
+  description: "Return the current state of an HTML View draft: pending, published, rejected, expired, conflicted or superseded. Pending drafts include publishWhen: merge requires the user to merge the pull request in Workspace; publish requires the user to open the preview and press Publish. Publish is refused until a merge draft's pull request is merged. Superseded drafts include supersededBy and successorUrl. Published drafts include shareUrl, node, resource and etag; these fields appear only when published.",
   inputSchema,
   outputSchema: htmlViewDraftOutput,
   annotations: readOnlyAnnotations,

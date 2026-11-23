@@ -21,7 +21,7 @@ Open Application settings: Account > `Application settings` in Repository mode, 
 
 ## Driving it with agent-browser and uvw
 
-Use the isolated run and browser session described in [the verification index](./README.md). Use the mock provider instructions in [SKILL.md](../SKILL.md#browser-agent-mock-model) to add an OpenAI-compatible model and capture its request log. Use a unique run and allowed ports. Do not attach to another run's server.
+Use the isolated run and browser session described in [the verification index](./README.md). Start the mock provider and add it as an OpenAI-compatible model as in AS1 of [Browser Agent skills](./agent-skills.md#driving-it-with-agent-browser-and-uvw). `node .agents/skills/verify-uvw/bin/mock-provider.mjs --help` describes the script steps and the request log. Use a unique run and allowed ports. Do not attach to another run's server.
 
 After a session runs, dump the recorded requests from its Vite dev session page:
 
@@ -29,7 +29,7 @@ After a session runs, dump the recorded requests from its Vite dev session page:
 agent-browser eval "$(cat .agents/skills/verify-uvw/bin/trajectory-dump.js)"
 ```
 
-Each item contains the sequence, outcome, attempts, common-prefix length, rewrite flag, and expanded request body. Compare the body string with the corresponding mock log entry without parsing and serializing it again.
+The result has `skippedRecords` and a `records` array. Each record contains the sequence, outcome, attempts, common-prefix length, rewrite flag, and expanded request body. Compare the body string with the corresponding mock log entry's `raw` without parsing and serializing it again. A provider key pasted into a message is stored as `[redacted]`.
 
 1. **TR2-1.** Run the same two-turn script on trunk and head. The first turn calls `repo_list` then returns text; the second returns text. Leave Debug mode off on head. Capture `tr2-regression.png`. Confirm identical conversation content and layout, no tabs, and a new settings row defaulting off.
 2. **TR2-2.** Enable Debug mode in settings, reload, and open the same session in a second browser tab. Disable it in the first tab. Capture `tr2-toggle.png`. Confirm the `Conversation`/`Trajectory` tab strip disappears in the second tab without reload.

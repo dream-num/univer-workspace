@@ -131,26 +131,26 @@
     "build": "node scripts/build.mjs"
   },
   "dependencies": {
-    "@univer-cli/content-execution": "1.5.2",
-    "@univer-cli/content-inspection": "1.5.2",
-    "@univer-cli/headless-univer": "1.5.2",
-    "@univer-cli/univer-collaboration-runtime": "1.5.2",
-    "@univer-cli/univer-collaboration-runtime-pool": "1.5.2",
-    "@univerjs-pro/collaboration": "1.5.2",
-    "@univerjs-pro/engine-formula-rust": "1.5.2",
-    "@univerjs-pro/exchange-node": "1.5.2",
-    "@univerjs/protocol": "1.5.2",
-    "@univerjs/core": "1.5.2",
+    "@univer-cli/content-execution": "1.6.1",
+    "@univer-cli/content-inspection": "1.6.1",
+    "@univer-cli/headless-univer": "1.6.1",
+    "@univer-cli/univer-collaboration-runtime": "1.6.1",
+    "@univer-cli/univer-collaboration-runtime-pool": "1.6.1",
+    "@univerjs-pro/collaboration": "1.6.1",
+    "@univerjs-pro/engine-formula-rust": "1.6.1",
+    "@univerjs-pro/exchange-node": "1.6.1",
+    "@univerjs/protocol": "1.6.1",
+    "@univerjs/core": "1.6.1",
     "@univerjs-labs/html-view": "1.0.0-dev.0529939d",
-    "@univer-cli/svg-facade": "1.5.2",
-    "@univer-cli/resource-library": "1.5.2",
-    "@univer-cli/unit-layout-lint": "1.5.2",
-    "@univer-cli/unit-screenshot": "1.5.2",
-    "@univer-cli/univer-render-runtime": "1.5.2",
-    "@univer-cli/doc-markdown-facade": "1.5.2"
+    "@univer-cli/svg-facade": "1.6.1",
+    "@univer-cli/resource-library": "1.6.1",
+    "@univer-cli/unit-layout-lint": "1.6.1",
+    "@univer-cli/unit-screenshot": "1.6.1",
+    "@univer-cli/univer-render-runtime": "1.6.1",
+    "@univer-cli/doc-markdown-facade": "1.6.1"
   },
   "devDependencies": {
-    "@univer-cli/api-reference": "1.5.2",
+    "@univer-cli/api-reference": "1.6.1",
     "esbuild": "0.27.7"
   }
 }

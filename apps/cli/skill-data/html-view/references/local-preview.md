@@ -1,6 +1,6 @@
 # Preview a local HTML View live in the browser
 
-Use this reference when the user accepts a live local preview: after a draft is saved
+Use this reference when the user accepts the offer or asks for a live preview: after a draft is saved
 through MCP, or before `html-view create` with the CLI. Write the page to a local HTML file,
 or use the existing local file.
 
