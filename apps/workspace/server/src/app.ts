@@ -294,7 +294,7 @@ export function createWorkspaceApplication(
   const worktreeBackend =
     dependencies.worktreeBackend ??
     (collaboration
-      ? createWorktreeBackend(collaboration.worktreeService)
+      ? createWorktreeBackend(collaboration.worktreeService, collaboration.service)
       : unavailableWorktreeBackend());
   const worktrees = createWorktreesModule({
     trash,
@@ -574,5 +574,6 @@ function unavailableWorktreeBackend(): WorktreeBackend {
     merge: unavailable,
     discard: unavailable,
     submitChangeset: unavailable,
+    trunkRevision: unavailable,
   };
 }

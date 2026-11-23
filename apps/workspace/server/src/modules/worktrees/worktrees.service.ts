@@ -32,6 +32,7 @@ import type {
   WorktreeState,
   WorktreeSummary,
   WorktreeUnit,
+  WorktreeUnitFreshness,
   WorktreeVisibility,
 } from "./worktrees.types.js";
 import { forbidden, mergeNeedsEditAccess, notFound, onlyAuthorMerges, proposalStaysShared } from "./worktrees.errors.js";
@@ -88,6 +89,13 @@ export function createWorktreesModule(options: {
     }
   }
 
+  /** Once a Worktree leaves draft and ready there is nothing left to redo, so its Units have no freshness. */
+  function openTrunk(state: WorktreeState, userId: string): TrunkClock | null {
+    return state === "draft" || state === "ready"
+      ? { revision: (unitId) => options.backend.trunkRevision(unitId, userId), now: now() }
+      : null;
+  }
+
   async function context(userId: string, worktreeId: string): Promise<WorktreeContext> {
     const row = await options.repository.get(worktreeId, userId);
     if (!row || !isDiscoverable(userId, row)) throw notFound();
@@ -95,7 +103,7 @@ export function createWorktreesModule(options: {
       options.backend.getWorktree(worktreeId, userId)
     );
     const unitRows = await options.repository.units(worktreeId);
-    const units = await mapUnits(unitRows, data.units, userId, options.access);
+    const units = await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId));
     const access = await worktreeCapabilities(
       userId,
       row,
@@ -940,7 +948,7 @@ export function createWorktreesModule(options: {
     return {
       row: current,
       state: data.status,
-      units: await mapUnits(unitRows, data.units, userId, options.access),
+      units: await mapUnits(unitRows, data.units, userId, options.access, openTrunk(data.status, userId)),
       facts: access.facts,
       capabilities: access.capabilities,
       canSeeUnits: access.canSeeUnits,
@@ -1167,6 +1175,7 @@ async function mapUnits(
   }[],
   userId: string,
   access: AccessResolver,
+  trunk: TrunkClock | null,
 ): Promise<WorktreeUnit[]> {
   const byId = new Map(states.map((state) => [state.unitID, state]));
   return Promise.all(rows.map(async (row) => {
@@ -1210,8 +1219,42 @@ async function mapUnits(
             : "unchanged",
       mergeResult,
       activationState: activationState(row, mergeResult),
+      freshness:
+        row.source === "trunk" && trunk && state?.baselineTrunkRevision !== undefined
+          ? unitFreshness(state.baselineTrunkRevision, await trunk.revision(row.unit_id), row.added_at, trunk.now)
+          : null,
     };
   }));
+}
+
+interface TrunkClock {
+  readonly revision: (unitId: string) => Promise<number | null>;
+  readonly now: number;
+}
+
+// Spec 5.6 and phase 0 section 7.1. Stale is advice to redo the work; it never blocks a merge.
+const STALE_REVISIONS_BEHIND = 100;
+const STALE_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+
+function unitFreshness(
+  baselineTrunkRevision: number,
+  trunkRevision: number | null,
+  addedAt: number,
+  now: number,
+): WorktreeUnitFreshness | null {
+  if (trunkRevision === null) return null;
+  const revisionsBehind = trunkRevision - baselineTrunkRevision;
+  return {
+    label:
+      revisionsBehind > STALE_REVISIONS_BEHIND || now - addedAt > STALE_AGE_MS
+        ? "stale"
+        : revisionsBehind > 0
+          ? "behind"
+          : "current",
+    baselineTrunkRevision,
+    revisionsBehind,
+    addedAt: new Date(addedAt).toISOString(),
+  };
 }
 
 function activationState(

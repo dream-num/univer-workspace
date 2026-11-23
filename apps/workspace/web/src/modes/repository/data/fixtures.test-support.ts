@@ -23,6 +23,7 @@ export function unit(overrides: Partial<WorktreeDetail["units"][number]> = {}): 
   return {
     unitId: "unit", resourceId: "resource", nodeId: "file", source: "trunk", name: "Plan", unitType: "sheet",
     target: null, draftHeadRevision: 2, change: "modified", mergeResult: "pending", activationState: "notApplicable",
+    freshness: null,
     ...overrides,
   };
 }

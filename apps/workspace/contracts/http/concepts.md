@@ -269,6 +269,14 @@ Merge results are stored per Unit. Successful Units do not roll back if another
 Unit conflicts. A successfully merged Worktree-local Unit becomes a Resource
 Node only after its Activation Operation completes.
 
+While a Worktree is `draft` or `ready`, each Unit from trunk carries `freshness`: its
+`baselineTrunkRevision`, the trunk revisions committed since (`revisionsBehind`), and when
+it joined (`addedAt`). The server labels it `current` when trunk has not moved, `stale` when
+trunk is more than 100 revisions ahead or the Unit joined more than 7 days ago, and `behind`
+otherwise. The label is advice for the author and never blocks a merge. Worktree-local Units
+and Units that trunk no longer holds have `freshness: null`, and so does every Unit once the
+Worktree leaves `draft` and `ready`.
+
 A Worktree has one author, its creator, and only the author edits its draft. People and
 agents collaborate on trunk, each through their own Worktrees. Merging needs edit access
 to every target, and one of two standings. The owners of the creator's Personal Space,

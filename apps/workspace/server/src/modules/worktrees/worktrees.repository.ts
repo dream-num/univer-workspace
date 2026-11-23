@@ -45,6 +45,7 @@ export interface WorktreeUnitRow {
   readonly node_id: string | null;
   readonly source: "trunk" | "worktree";
   readonly ordinal: number;
+  readonly added_at: number;
   readonly existing_name: string | null;
   readonly existing_unit_type: UnitType | null;
   readonly target_space_id: string | null;

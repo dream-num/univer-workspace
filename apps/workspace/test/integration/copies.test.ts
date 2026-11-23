@@ -91,7 +91,7 @@ async function start() {
   cleanup.defer(() => runtime.dispose());
   const store = createBlobStore(config);
   cleanup.defer(async () => void (await store.dispose?.()));
-  const worktreeBackend = createWorktreeBackend(runtime.worktreeService);
+  const worktreeBackend = createWorktreeBackend(runtime.worktreeService, runtime.service);
   const application = createWorkspaceApplication(config, database.repositories, collaboration, {
     unitStore: runtime.unitStore,
     unitSnapshotStore: runtime.unitSnapshotStore,

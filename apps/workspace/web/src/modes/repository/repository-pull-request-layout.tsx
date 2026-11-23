@@ -20,6 +20,7 @@ import { useI18n } from "../../shared/i18n";
 import { Avatar, buttonVariants, Tooltip } from "../../shared/ui";
 import { cn } from "../../shared/utils/cn";
 import { RepositoryPrState } from "./repository-pr-state";
+import { UnitFreshnessBadge } from "../../features/worktrees/unit-freshness";
 import type { WorktreeReviewView } from "../../features/worktrees/worktree-review-search";
 import type { WorktreeListFilters } from "../../features/worktrees/worktrees.queries";
 
@@ -118,6 +119,7 @@ export function RepositoryPullRequestLayout({
                   >
                     {unit.name || unit.unitId}
                   </span>
+                  <UnitFreshnessBadge freshness={unit.freshness} />
                   <span
                     className="shrink-0 text-xs text-muted-foreground"
                     role="img"

@@ -15,6 +15,7 @@ export interface WorkspaceUnit {
     | "discarded";
   readonly change: "modified" | "added" | "deleted" | "unchanged";
   readonly draftHeadRevision: number;
+  readonly freshness: WorkspaceUnitFreshness | null;
   readonly mergeResult: "pending" | "merged" | "unchanged" | "conflict" | "failed";
   readonly name: string;
   readonly nodeId: string;
@@ -24,6 +25,13 @@ export interface WorkspaceUnit {
   readonly type: WorkspaceUnitType;
   readonly unitId: string;
   readonly worktreeId: string;
+}
+
+export interface WorkspaceUnitFreshness {
+  readonly addedAt: string;
+  readonly baselineTrunkRevision: number;
+  readonly label: "current" | "behind" | "stale";
+  readonly revisionsBehind: number;
 }
 
 export interface WorkspaceWorktree {
@@ -130,6 +138,7 @@ export function parseUnit(value: unknown, worktreeId: string): WorkspaceUnit {
     activationState: value["activationState"],
     change: value["change"],
     draftHeadRevision: value["draftHeadRevision"],
+    freshness: parseFreshness(value["freshness"]),
     mergeResult: value["mergeResult"],
     name: value["name"],
     nodeId: value["nodeId"],
@@ -148,6 +157,26 @@ function parseTeamSpaceId(value: unknown): string | undefined {
     throw invalidResponse("Workspace Worktree contains an invalid Team Space");
   }
   return value["id"];
+}
+
+function parseFreshness(value: unknown): WorkspaceUnitFreshness | null {
+  // Servers released before freshness existed omit it.
+  if (value === undefined || value === null) return null;
+  if (
+    !isWorkspaceRecord(value) ||
+    (value["label"] !== "current" && value["label"] !== "behind" && value["label"] !== "stale") ||
+    !isRevision(value["baselineTrunkRevision"]) ||
+    !isRevision(value["revisionsBehind"]) ||
+    typeof value["addedAt"] !== "string"
+  ) {
+    throw invalidResponse("Workspace Unit contains invalid freshness");
+  }
+  return {
+    addedAt: value["addedAt"],
+    baselineTrunkRevision: value["baselineTrunkRevision"],
+    label: value["label"],
+    revisionsBehind: value["revisionsBehind"],
+  };
 }
 
 function parseTarget(value: unknown): WorkspaceUnit["target"] {

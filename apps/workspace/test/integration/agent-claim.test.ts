@@ -422,6 +422,7 @@ function draftWorktreeBackend(): WorktreeBackend {
   return {
     createWorktree: draft, getWorktree: draft, addUnit: unused, createUnit: unused, markReady: unused,
     setUnitRemoved: unused, reopen: unused, merge: unused, discard: unused, submitChangeset: unused,
+    trunkRevision: unused,
   };
 }
 

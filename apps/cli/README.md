@@ -217,6 +217,10 @@ Issue and pull request JSON include `createdVia` when the server provides it, wi
 `uvw pr view <n> -R <repo> --json createdVia`. An Issue without attribution returns `unknown`;
 a pull request without attribution omits the field.
 
+While a pull request is draft or ready, `pr view` labels each file that came from trunk `current`, `behind by N`
+or `stale`, from the server's `freshness` (also in `--json units`). `stale` means trunk is more than 100 revisions
+ahead of the file or it joined more than 7 days ago. The label is advice and never blocks `pr merge`.
+
 Configuration and daemon lifecycle commands start without loading Office or rendering capabilities. The daemon
 loads content capabilities on its first content request. Concurrent first requests share one runtime
 initialization, and shutdown waits for that initialization before closing it.

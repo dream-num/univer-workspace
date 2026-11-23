@@ -3399,6 +3399,23 @@ export interface components {
         MergeResult: "pending" | "merged" | "unchanged" | "removed" | "conflict" | "failed";
         /** @enum {string} */
         ActivationState: "notApplicable" | "waitingForMerge" | "pending" | "completed" | "failed" | "discarded";
+        /** @description How far Trunk has moved since this Trunk Unit joined the Worktree. Advice only; it never blocks a merge. */
+        WorktreeUnitFreshness: {
+            /**
+             * @description current when Trunk has not moved. stale when Trunk is more than 100 revisions ahead or the Unit joined more than 7 days ago. behind otherwise.
+             * @enum {string}
+             */
+            label: "current" | "behind" | "stale";
+            /** @description The Trunk revision the Worktree copy started from. */
+            baselineTrunkRevision: number;
+            /** @description Trunk revisions committed since the baseline. */
+            revisionsBehind: number;
+            /**
+             * Format: date-time
+             * @description When the Unit joined the Worktree.
+             */
+            addedAt: string;
+        };
         WorktreeUnit: {
             unitId: string;
             resourceId: string;
@@ -3413,6 +3430,8 @@ export interface components {
             change: components["schemas"]["WorktreeUnitChange"];
             mergeResult: components["schemas"]["MergeResult"];
             activationState: components["schemas"]["ActivationState"];
+            /** @description Null for a Worktree-local Unit, for a Unit that Trunk no longer holds, and once the Worktree leaves draft and ready. */
+            freshness: components["schemas"]["WorktreeUnitFreshness"] | null;
         };
         WorktreeEnvelope: {
             worktree: components["schemas"]["WorktreeDetail"];

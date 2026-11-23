@@ -1223,6 +1223,10 @@ class MemoryWorktreeBackend implements WorktreeBackend {
     };
   }
 
+  async trunkRevision(): Promise<number> {
+    return 1;
+  }
+
   private _transition(
     worktreeId: string,
     status: WorktreeData["status"]

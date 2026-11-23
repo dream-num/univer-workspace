@@ -561,7 +561,7 @@ describe("Univer unit store", () => {
     const runtime = await createSqliteTestRuntime(
       join(directory, "collaboration.sqlite")
     );
-    const backend = createWorktreeBackend(runtime.worktreeService);
+    const backend = createWorktreeBackend(runtime.worktreeService, runtime.service);
     const worktreeId = randomUUID();
     const types: readonly UnitType[] = [
       "sheet",

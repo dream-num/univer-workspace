@@ -75,6 +75,7 @@ describe("compile-typst command", () => {
         activationState: "notApplicable",
         change: "added",
         draftHeadRevision: 1,
+        freshness: null,
         mergeResult: "pending",
         name: "Compiled paper",
         nodeId: "node-1",

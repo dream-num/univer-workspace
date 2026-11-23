@@ -271,6 +271,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
            COALESCE(existing.id, future.node_id) AS node_id,
            mapping.source,
            mapping.ordinal,
+           mapping.added_at,
            existing.name AS existing_name,
            existing_univer.unit_type AS existing_unit_type,
            future.target_space_id,
