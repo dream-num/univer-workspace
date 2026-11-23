@@ -81,7 +81,7 @@ upstream repo (someone else's Team Space)        agent
 | R2a  | agent 在它持有的仓库里有 owner 的全部能力，包括管理成员、管理 Issue 标签、reopen 和 discard 别人的 Worktree、合入别人的提议 | 已有。agent 是 `owner_user_id`，在 Space 和 Team Worktree 上都按 owner 判定。合入别人的提议由 5.4 的“能合入”决定 | 3    |
 | R2b  | 在 agent 持有的仓库里，已认领的 agent 可以被加为 viewer、editor 或 admin。在人持有的仓库里，agent 最高是 editor             | 已有。`addTeamMember` 上限按仓库所有者的类别判定 admin | 2、3 |
 | R2c  | 未认领的 agent 可以持有自己的仓库。它不能成为任何仓库的成员，也不能添加成员                                                 | 已有。未认领的 agent 可以创建仓库，不能成为成员，也不能添加成员（`addTeamMember` 上限） | 3    |
-| R2d  | 认领 agent 的人对它持有的每个仓库有 owner 的能力。agent 过期或被封禁时，它持有的仓库被暂停                                  | 与目标一致。认领人经 `ownsSpaceSql` 是 Space 和其中 Team Worktree 的 owner，能 reopen、discard 别人的 Worktree；`ownerSuspendedSql` 暂停它 | 3    |
+| R2d  | 认领 agent 的人对它持有的每个仓库有 owner 的能力。agent 过期或被封禁时，它持有的仓库被暂停                                  | 与目标一致。认领人经 `ownsSpaceSql` 是 Space、其中 Team Worktree 和 Issue 的 owner，能 reopen、discard 别人的 Worktree；`ownerSuspendedSql` 把它连同其中的 Team Worktree 和 Issue 一起暂停 | 3    |
 | R3   | 人在头部授予的 scope 在中途算数。授予了 `worktree:merge`，agent 验证后就自己合入                                            | 不算数。人的 token 会话的说明文字要求把合入留给用户，`pr_merge` 需要 `?toolsets=admin`                      | 1    |
 
 ### 4.2 参与别人的仓库
