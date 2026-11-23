@@ -281,9 +281,14 @@ admin tools return SVG source for incorporation in the page or document.
 5. Generate the edited Unit's review URL with `browse`.
 6. Return the review URL, pull request number, Worktree id and Unit id to the user.
 
-A pull request has one author. People and agents collaborate on trunk, each through
-their own pull requests; only the author, or the person who claimed the authoring
-agent, merges one. When `pr_merge` fails partway and the pull request stays
+A pull request has one author, and only the author edits it. People and agents
+collaborate on trunk, each through their own pull requests. Merging needs edit
+access to every file the pull request changes. With that access the author merges
+it, or the person who claimed the authoring agent, or, in a Team repository once
+the pull request is visible to the repository, its Owner, an Admin or an Editor.
+With read access only you can still create a pull request in a Team repository,
+change it and mark it ready with `pr_ready`: that shows it to the repository's
+members, and one who can edit merges it. When `pr_merge` fails partway and the pull request stays
 `merging` or `merged`, call `pr_merge` again to finish it.
 Do not discard unless explicitly requested. Discard is irreversible.
 An agent identity that returns a `share` url also says who can open it, from

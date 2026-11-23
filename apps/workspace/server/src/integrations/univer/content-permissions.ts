@@ -88,7 +88,8 @@ export function createContentPermissions(options: {
   async function allowed(
     userId: string,
     requirement: Pick<RequiredUnitPermission, "unitID" | "objectID" | "objectType" | "action">,
-    draft = false,
+    /** In a Worktree, how far authorizeProtocol let the caller in. The caller MUST have asked it first. */
+    draft: false | "review" | "write" = false,
   ): Promise<boolean> {
     const { unitID, objectID, objectType, action } = requirement;
     if (!knownAction(action)) return false;
@@ -96,9 +97,10 @@ export function createContentPermissions(options: {
     if (draft && management.has(action)) return false;
     const resource = await access.resolveUnitContent(userId, unitID);
     if (objectID === unitID) {
-      // Worktree-local Units have no published Resource yet. The caller MUST first
-      // authorize the mapped Worktree Unit through authorizeProtocol.
-      if (draft && !resource) return !management.has(action) && action !== UnitAction.Share;
+      // Worktree-local Units have no published Resource yet.
+      if (draft && !resource) return action !== UnitAction.Share;
+      // The Worktree decides who writes its draft. Trunk edit access is checked on merge, for whoever merges.
+      if (draft === "write") return Boolean(resource?.capabilities.openContent) && action !== UnitAction.Share;
       return unitActionAllowed(resource, action);
     }
     if (!resource?.unitType || objectTypes.get(objectType) !== resource.unitType) return false;
@@ -212,7 +214,11 @@ export function createContentPermissions(options: {
         action,
         allowed:
           (canWrite || readActions.has(action as UnitAction)) &&
-          await allowed(userId, { unitID, objectID, objectType, action: action as UnitAction }, draft),
+          await allowed(
+            userId,
+            { unitID, objectID, objectType, action: action as UnitAction },
+            draft && (canWrite ? "write" : "review"),
+          ),
       });
     }
     return results;

@@ -283,14 +283,14 @@ describe("Worktrees", () => {
     const repository = app.repositories.worktrees;
     const reserve = repository.reserveOperation.bind(repository);
     vi.spyOn(repository, "reserveOperation").mockImplementationOnce(async (input) => {
-      await app.permissions.upsertTeamMember(owner.id, team.id, editor.id, { role: "viewer" });
+      await app.permissions.removeTeamMember(owner.id, team.id, editor.id);
       return reserve(input);
     });
     const key = "add-after-role-change";
     await expect(app.worktrees.addUnit(editor.id, body.id, key, {
       source: "worktree", name: "New document", unitType: "doc",
       targetSpaceId: team.id, targetParentNodeId: null,
-    })).rejects.toMatchObject({ code: "FORBIDDEN" });
+    })).rejects.toMatchObject({ code: "NOT_FOUND" });
     expect(await repository.getOperation(key)).toBeNull();
   });
 
@@ -340,14 +340,14 @@ describe("Worktrees", () => {
     resolve.mockClear();
     const second = await application.worktrees.list(editor.id, {});
     expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
-    expect(second.items[0]).toMatchObject({ unitCount: 1, capabilities: { review: true, editDraft: false } });
-    await expect(application.worktrees.markReady(editor.id, created.body.id))
-      .rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(second.items[0]).toMatchObject({ unitCount: 1, capabilities: { review: true, editDraft: true } });
     await application.permissions.removeTeamMember(owner.id, team.id, editor.id);
     resolve.mockClear();
     expect((await application.worktrees.list(editor.id, {})).items[0])
       .toMatchObject({ unitCount: 1, capabilities: { review: false, editDraft: false } });
     expect(resolve).toHaveBeenCalledExactlyOnceWith(editor.id, resource.id);
+    await expect(application.worktrees.markReady(editor.id, created.body.id))
+      .rejects.toMatchObject({ code: "FORBIDDEN" });
   });
 
   it("paginates authorized summaries before hydration, with stable ordering and literal search", async () => {

@@ -1629,6 +1629,7 @@ describe("content permission integration", () => {
   async function fixture(
     type: "sheet" | "doc" | "slide" | "board" | "base" = "sheet",
     initialData?: object,
+    team = false,
   ) {
     const setup = await startApplication();
     const { application, origin } = setup;
@@ -1647,7 +1648,9 @@ describe("content permission integration", () => {
     const editor = await account("protection-editor");
     const viewer = await account("protection-viewer");
     const outsider = await account("protection-outsider");
-    const space = (await application.spaces.list(owner.id)).spaces[0]!;
+    const space = team
+      ? await application.spaces.createTeamSpace(owner.id, { name: "Protected" })
+      : (await application.spaces.list(owner.id)).spaces[0]!;
     const created = await application.resources.create(
       owner.id,
       "content-permission-resource-0001",
@@ -1664,8 +1667,10 @@ describe("content permission integration", () => {
       throw new Error("Missing Unit");
     const node = created.body.node;
     const unitId = created.body.node.resource.unitId;
-    await application.permissions.upsertNodeGrant(owner.id, node.id, editor.id, { role: "editor" });
-    await application.permissions.upsertNodeGrant(owner.id, node.id, viewer.id, { role: "viewer" });
+    for (const [member, role] of [[editor, "editor"], [viewer, "viewer"]] as const) {
+      if (team) await application.permissions.upsertTeamMember(owner.id, space.id, member.id, { role });
+      else await application.permissions.upsertNodeGrant(owner.id, node.id, member.id, { role });
+    }
     async function authz(cookie: string, path: string, body?: unknown, method = "POST") {
       return fetch(`${origin}/universer-api/authz${path}`, {
         method,
@@ -1679,6 +1684,7 @@ describe("content permission integration", () => {
       editor,
       viewer,
       outsider,
+      space,
       unitId,
       node,
       authz,
@@ -2487,6 +2493,104 @@ describe("content permission integration", () => {
     expect(
       await f.application.worktrees.merge(f.editor.id, worktreeId, "protected-draft-merge-0001"),
     ).toMatchObject({ worktree: { state: "merged" }, operation: { state: "completed" } });
+  });
+
+  it("lets a viewer edit the draft of the Team pull request they authored, inside Trunk protection, and never Trunk", async () => {
+    const f = await fixture("sheet", undefined, true);
+    const owner = await sheetSubmit(f, f.owner.cookie);
+    const created = await f.authz(f.owner.cookie, "/3/object", {
+      objectType: 3,
+      selectRangeObject: { unitID: f.unitId, name: "B2", collaborators: [], scope: { read: 1, edit: 2 } },
+    });
+    const { objectID } = (await created.json()) as { objectID: string };
+    expect(
+      await owner.submit(1, "sheet.mutation.add-range-protection", {
+        rules: [
+          {
+            id: "proposal-b2",
+            permissionId: objectID,
+            unitId: f.unitId,
+            subUnitId: owner.sheetId,
+            unitType: 3,
+            ranges: [{ startRow: 1, endRow: 1, startColumn: 1, endColumn: 1 }],
+            viewState: "othersCanView",
+            editState: "onlyMe",
+          },
+        ],
+      }),
+    ).toBe("changeset_ack");
+    const tree = await f.application.worktrees.create(f.viewer.id, "viewer-draft-create-0001", {
+      kind: "team",
+      teamSpaceId: f.space.id,
+      visibility: "space",
+      name: "Proposal",
+      summary: null,
+    });
+    const worktreeId = tree.body.id;
+    await f.application.worktrees.addUnit(f.viewer.id, worktreeId, "viewer-draft-add-0001", {
+      source: "trunk",
+      resourceId: f.node.resource!.id,
+    });
+    const allowed = async (cookie: string) => {
+      const response = await fetch(`${f.origin}/universer-api/worktrees/${worktreeId}/authz/-/object/-/batch_allowed`, {
+        method: "POST",
+        headers: { cookie, "content-type": "application/json" },
+        body: JSON.stringify({
+          requests: [
+            { unitID: f.unitId, objectID: f.unitId, objectType: 1, actions: [UnitAction.Edit, UnitAction.CreatePermissionObject] },
+            { unitID: f.unitId, objectID, objectType: 3, actions: [UnitAction.Edit] },
+          ],
+        }),
+      });
+      const { objectActions } = (await response.json()) as { objectActions: { actions: { allowed: boolean }[] }[] };
+      return objectActions.flatMap((object) => object.actions.map((action) => action.allowed));
+    };
+    expect({ author: await allowed(f.viewer.cookie), reviewer: await allowed(f.editor.cookie) }).toEqual({
+      author: [true, false, false],
+      reviewer: [false, false, false],
+    });
+    let reqId = 0;
+    const submit = (userId: string, id: string, params: object) =>
+      f.application.worktrees.submitChangeset(userId, worktreeId, f.unitId, {
+        changeset: {
+          unitID: f.unitId,
+          type: UniverType.UNIVER_SHEET,
+          baseRev: 2,
+          revision: 3,
+          sid: "viewer-draft",
+          reqId: ++reqId,
+          userID: "",
+          memberID: "",
+          createTime: 1,
+          mutations: [{ id, data: JSON.stringify({ unitId: f.unitId, subUnitId: owner.sheetId, ...params }) }],
+        },
+      });
+    const denied = { status: "rejected", error: { code: "PERMISSION_DENIED" } };
+    await expect(
+      submit(f.viewer.id, "sheet.mutation.set-range-values", { cellValue: { 1: { 1: { v: "protected" } } } }),
+    ).resolves.toMatchObject(denied);
+    await expect(
+      submit(f.viewer.id, "sheet.mutation.delete-range-protection", { ruleIds: ["proposal-b2"] }),
+    ).resolves.toMatchObject(denied);
+    await expect(
+      submit(f.editor.id, "sheet.mutation.set-range-values", { cellValue: { 0: { 0: { v: "someone else" } } } }),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    expect(
+      await submit(f.viewer.id, "sheet.mutation.set-range-values", { cellValue: { 0: { 0: { v: "proposed" } } } }),
+    ).toMatchObject({ status: "committed" });
+
+    const viewer = await sheetSubmit(f, f.viewer.cookie);
+    expect(
+      await viewer.submit(2, "sheet.mutation.set-range-values", { cellValue: { 0: { 0: { v: "straight to Trunk" } } } }),
+    ).toBe("permission_rej");
+    await f.application.worktrees.markReady(f.viewer.id, worktreeId);
+    await expect(f.application.worktrees.merge(f.viewer.id, worktreeId, "viewer-draft-merge-0001")).rejects.toMatchObject({
+      code: "FORBIDDEN",
+    });
+    const compared = await fetch(`${f.origin}/universer-api/worktrees/${worktreeId}/units/${f.unitId}/comparison`, {
+      headers: { cookie: f.viewer.cookie },
+    });
+    expect(await compared.json()).toMatchObject({ left: { revision: 2 }, right: { revision: 3 } });
   });
 
   it("rechecks revoked content grants when merging a previously editable draft", async () => {

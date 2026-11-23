@@ -483,9 +483,14 @@ irreversible. There is no `pr close` or `pr reopen`; to take a `ready` pull requ
 `pr ready <n> --undo`. A later
 same-task correction follows the rework flow above.
 
-A pull request has one author. People and agents collaborate on trunk, each through their own pull
-requests; only the author, or the person who claimed the authoring agent, can merge one. `pr merge`
-on someone else's pull request fails with a message naming its author. When `pr merge` fails partway
+A pull request has one author, and only the author edits it. People and agents collaborate on trunk,
+each through their own pull requests. Merging needs edit access to every file the pull request changes.
+With that access the author merges it, or the person who claimed the authoring agent, or, in a Team
+repository once the pull request is visible to the repository, its Owner, an Admin or an Editor. With
+read access only you can still open a pull request in a Team repository, change it and mark it
+`pr ready`: that shows it to the repository's members, and one who can edit merges it. `pr merge` on
+someone else's private pull request fails with a message naming its author, and without edit access it
+fails with a message saying so. When `pr merge` fails partway
 and the pull request stays `merging` or `merged`, run the same `pr merge` again to finish it.
 
 ### Hand off as a guest agent
@@ -537,7 +542,7 @@ repository; there is no stored default repository.
 | Verify                    | `inspect`, `screenshot`                                                                              |
 | Deliver output            | `export`, `print-pdf`                                                                                |
 | Hand off                  | `pr ready`, `browse <n> --unit <id>`                                                                 |
-| User-authorized lifecycle | `pr merge` (the author, or the person who claimed it), `pr discard` (irreversible)                   |
+| User-authorized lifecycle | `pr merge` (needs edit access to every changed file), `pr discard` (irreversible)                    |
 | Share a file by link      | `share <file-link-or-node-id> [--link off\|viewer\|editor]` (a guest agent shares its own result)   |
 | Let the user keep files   | `claim` (an unclaimed guest agent only; the link works once, for 10 minutes)                         |
 | User-authorized cleanup   | `space node trash`                                                                                   |

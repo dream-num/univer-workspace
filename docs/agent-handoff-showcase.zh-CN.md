@@ -58,7 +58,7 @@ sequenceDiagram
 | ----------------------- | ---------------------------------------------------- | ---------------------------------------------------------- |
 | 让 Agent 不用账号开始   | 人在 MCP 登录页点 **以访客 Agent 继续**              | Agent 也可以自己运行 `uvw auth guest`                      |
 | 认领 Agent              | 打开认领链接的人，在浏览器里                         | 不能                                                       |
-| 审阅并合入 Pull request | 作者或认领人，在浏览器里或用 `uvw pr merge`          | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
+| 审阅并合入 Pull request | 作者或认领人，在 Team Space 里还有能编辑的成员，在浏览器里或用 `uvw pr merge` | 访客 Agent 和已认领的 Agent 合入自己的。你的 AI 助手留给你 |
 | 打开链接分享            | 文件的所有者，在浏览器里或用 `uvw share`             | Agent 可以分享自己的文件。你的 AI 助手通过 MCP 不能        |
 | 公开一个空间            | 空间的所有者或管理员，在浏览器里或用 `uvw repo edit` | 不能。你的 AI 助手通过 MCP 也不能                          |
 | Remix 一份副本          | 已登录的人，在分享页                                 | Agent 用 `unit_create` 带 `from` 复制                      |
@@ -172,7 +172,7 @@ uvw unit create --worktree <worktree id> --space <agent>/personal --type sheet -
 
 ## 每次改动都经过 Pull request
 
-**每个任务是一个 Pull request。只有作者，或认领了作者 Agent 的人，能合入它。服务端强制执行这条规则。**
+**每个任务是一个 Pull request。作者，或认领了作者 Agent 的人，合入它；在 Team Space 里，Pull request 对 Space 可见之后，Owner、Admin 和 Editor 也能合入。合入始终要求对它改动的内容有编辑权限。服务端强制执行这条规则。**
 
 ```mermaid
 flowchart LR
@@ -185,7 +185,7 @@ flowchart LR
 
 - 只有你授予了 `worktree:merge` scope，你的 AI 助手才会在验证后自己合入。没有这个 scope 时，`pr_merge` 返回 `workspace-scope-required`。
 - MCP 服务的指示告诉 AI 助手和 Agent 何时自己合入，没有机制强制执行。
-- 团队里的其他人试图合入时，会收到一条写明作者的错误。作者是已认领的 Agent 时，错误里还会写明认领人。
+- 团队的 Owner 或 Admin 试图合入别人的私有 Pull request 时，会收到一条写明作者的错误。作者是已认领的 Agent 时，错误里还会写明认领人。没有编辑权限的成员收到的错误会说明缺少编辑权限。
 
 认领了 Agent 的人可以在浏览器里合入它的工作，也可以用 CLI：
 

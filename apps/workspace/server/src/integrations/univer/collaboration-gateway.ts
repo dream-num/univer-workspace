@@ -260,8 +260,10 @@ export function createCollaborationGateway(options: {
     worktreeService.use(action, asyncWorktreeWriteAuthorization);
   }
   worktreeService.use("commitChangeset", async (context, next) => {
+    // asyncWorktreeWriteAuthorization let a comment-only changeset in for review and any other for writing.
+    const draft = isCommentOnlyChangeset(context.request.changeset) ? "review" : "write";
     for (const requirement of context.requiredUnitPermissions) {
-      if (!(await contentPermissions.allowed(context.userID, requirement, true))) {
+      if (!(await contentPermissions.allowed(context.userID, requirement, draft))) {
         throw new CollabError("PERMISSION_DENIED", "Draft content permission denied; manage protection on Trunk.");
       }
     }

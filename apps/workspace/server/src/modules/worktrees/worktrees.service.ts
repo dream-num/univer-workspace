@@ -40,8 +40,21 @@ interface WorktreeContext {
   readonly row: WorktreeRow;
   readonly state: WorktreeState;
   readonly units: readonly WorktreeUnit[];
+  readonly facts: WorktreeFacts;
   readonly capabilities: WorktreeCapabilities;
   readonly canSeeUnits: boolean;
+}
+
+/** What a Worktree decision reads: who the actor is to the author, their Team Space role, and their access to every Unit. */
+interface WorktreeFacts {
+  readonly state: WorktreeState;
+  readonly team: boolean;
+  readonly shared: boolean;
+  readonly author: boolean;
+  readonly authorOrClaimer: boolean;
+  readonly role: "owner" | "admin" | "editor" | "viewer" | null;
+  readonly readsAll: boolean;
+  readonly editsAll: boolean;
 }
 
 export function createWorktreesModule(options: {
@@ -95,9 +108,27 @@ export function createWorktreesModule(options: {
       row,
       state: data.status,
       units,
+      facts: access.facts,
       capabilities: access.capabilities,
       canSeeUnits: access.canSeeUnits,
     };
+  }
+
+  /** A ready Worktree that its author cannot merge is shared with the Space, where someone can. */
+  async function shareUnlessAuthorMerges(value: WorktreeContext): Promise<void> {
+    const { row } = value;
+    if (row.kind !== "team" || row.visibility === "space") return;
+    const author = await options.repository.get(row.id, row.creator_user_id);
+    const authorMerges = author !== null && mayMerge((await worktreeCapabilities(
+      row.creator_user_id,
+      author,
+      value.state,
+      await options.repository.units(row.id),
+      options.access,
+      value.units.map((unit) => ({ unitID: unit.unitId, removed: unit.change === "deleted" })),
+    )).facts);
+    if (authorMerges) return;
+    await options.repository.update({ id: row.id, actorId: row.creator_user_id, visibility: "space", updatedAt: now() });
   }
 
   async function notifyChanged(
@@ -121,12 +152,12 @@ export function createWorktreesModule(options: {
       const removed = input.removed;
       const value = await context(userId, worktreeId);
       const unit = requireMappedUnit(value, unitId);
+      // A new file whose target is gone stops its author editing, so cancelling it cannot wait for that.
       const cancelLocal =
         removed &&
         unit.source === "worktree" &&
         value.state === "draft" &&
-        value.row.creator_user_id === userId &&
-        canMergeAsActor(userId, value.row);
+        mayPropose({ ...value.facts, readsAll: true, editsAll: true });
       if (!value.capabilities.editDraft && !cancelLocal) throw forbidden();
       if (!removed && unit.source === "worktree" && unit.target) {
         await validateTarget(
@@ -135,6 +166,7 @@ export function createWorktreesModule(options: {
           unit.target.spaceId,
           unit.target.parentNodeId,
           options.access,
+          "propose",
         );
       }
       if (removed && unit.source === "trunk") {
@@ -298,7 +330,7 @@ export function createWorktreesModule(options: {
           input.teamSpaceId
         );
         if (!space || space.type !== "team") throw notFound();
-        if (!space.capabilities.createAtRoot) throw forbidden();
+        if (!space.member) throw forbidden();
       }
       const payload = {
         ...input,
@@ -423,8 +455,9 @@ export function createWorktreesModule(options: {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.addUnit) throw forbidden();
       if (input.source === "trunk") {
-        const resource = await requireEditableResource(
+        const resource = await requireAddableResource(
           userId,
+          value.row,
           input.resourceId,
           options.access
         );
@@ -495,7 +528,8 @@ export function createWorktreesModule(options: {
         value.row,
         input.targetSpaceId,
         input.targetParentNodeId,
-        options.access
+        options.access,
+        "propose"
       );
       // A new file counts from the moment it is created in the pull request, not from its merge.
       const payload = {
@@ -667,6 +701,8 @@ export function createWorktreesModule(options: {
     async markReady(userId, worktreeId) {
       const value = await context(userId, worktreeId);
       if (!value.capabilities.markReady) throw forbidden();
+      // Shared before the transition, so a retry after a failed transition still leaves it shared.
+      await shareUnlessAuthorMerges(value);
       const data = await backendCall(() =>
         options.backend.markReady(worktreeId, userId)
       );
@@ -713,12 +749,12 @@ export function createWorktreesModule(options: {
       const resumeMerged = value.state === "merged";
       const unfinished = value.row.processed_at === null && (value.state === "merging" || resumeMerged);
       // A started merge is a decision already made, so its starter, or anyone who may merge, can finish it.
-      const finishes = unfinished && (existing !== null || canMergeAsActor(userId, value.row));
+      const finishes = unfinished && (existing !== null || mayMerge({ ...value.facts, editsAll: true }));
       // An applied merge keeps its recorded merger; only an Operation cut off before anyone was recorded completes.
       const recordsApplied = resumeMerged && !unfinished && existing !== null &&
         !(await options.repository.mergers([worktreeId])).has(worktreeId);
       if (!value.capabilities.merge && existing?.state !== "completed" && !finishes && !recordsApplied) {
-        if (!value.row.actor_owns_creator_space) throw onlyAuthorMerges(value.row);
+        if (!value.facts.authorOrClaimer && !value.facts.shared) throw onlyAuthorMerges(value.row);
         if (value.state === "ready" || unfinished) throw mergeNeedsEditAccess();
         throw forbidden();
       }
@@ -881,18 +917,20 @@ export function createWorktreesModule(options: {
     data: Awaited<ReturnType<WorktreeBackend["getWorktree"]>>,
   ): Promise<WorktreeContext> {
     const unitRows = await options.repository.units(row.id);
+    const current = await options.repository.get(row.id, userId) ?? row;
     const access = await worktreeCapabilities(
       userId,
-      row,
+      current,
       data.status,
       unitRows,
       options.access,
       data.units,
     );
     return {
-      row: await options.repository.get(row.id, userId) ?? row,
+      row: current,
       state: data.status,
       units: await mapUnits(unitRows, data.units, userId, options.access),
+      facts: access.facts,
       capabilities: access.capabilities,
       canSeeUnits: access.canSeeUnits,
     };
@@ -907,62 +945,69 @@ async function worktreeCapabilities(
   access: AccessResolver,
   states: readonly { readonly unitID: string; readonly removed?: boolean }[],
 ): Promise<{
+  readonly facts: WorktreeFacts;
   readonly capabilities: WorktreeCapabilities;
   readonly canSeeUnits: boolean;
 }> {
-  const creator = row.creator_user_id === userId;
-  const ownsAuthorSpace = Boolean(row.actor_owns_creator_space);
-  const teamRole =
-    row.team_owner_user_id === userId
-      ? "owner"
-      : row.actor_member_role;
-  const visibleReview =
-    ownsAuthorSpace || (row.kind === "team" && row.visibility === "space" && teamRole !== null);
   const removed = new Set(states.filter((unit) => unit.removed).map((unit) => unit.unitID));
   // Share resource lookups only within this capability calculation for one actor.
   const capabilityAccess = cacheResourceContent(access, userId);
-  let unitRead = true;
-  let unitEdit = true;
+  let readsAll = true;
+  let editsAll = true;
   for (const unit of units) {
     const isRemoved = removed.has(unit.unit_id);
-    if (unitRead && !isRemoved) unitRead = await canReadUnit(userId, row, unit, capabilityAccess);
-    if (unitEdit && !(unit.source === "worktree" && isRemoved)) {
-      unitEdit = await canEditUnit(userId, row, unit, capabilityAccess);
+    if (readsAll && !isRemoved) readsAll = await canReadUnit(userId, row, unit, capabilityAccess);
+    if (editsAll && !(unit.source === "worktree" && isRemoved)) {
+      editsAll = await canEditUnit(userId, row, unit, capabilityAccess);
     }
-    if (!unitRead && !unitEdit) break;
+    if (!readsAll && !editsAll) break;
   }
-  const review = visibleReview && unitRead;
-  const lands = canMergeAsActor(userId, row) && unitEdit;
-  const creatorCanEdit = creator && lands;
-  const admin =
-    row.kind === "team" &&
-    (teamRole === "owner" || teamRole === "admin");
-  // A claimer owns the agent's Space, so decides the agent's pull requests; only the creator edits them.
-  const decides = ownsAuthorSpace || admin;
-  return {
-    canSeeUnits: review,
-    capabilities: {
-      review,
-      editDraft: state === "draft" && creatorCanEdit,
-      addUnit: state === "draft" && creatorCanEdit,
-      changeVisibility: row.kind === "team" && (creator || admin),
-      markReady: state === "draft" && lands,
-      reopen: state === "ready" && decides,
-      merge: state === "ready" && lands,
-      discard: (state === "draft" || state === "ready") && decides,
-    },
+  const facts: WorktreeFacts = {
+    state,
+    team: row.kind === "team",
+    shared: row.kind === "team" && row.visibility === "space",
+    author: row.creator_user_id === userId,
+    // A claimer owns the agent's Space, so decides the agent's pull requests; only the author edits them.
+    authorOrClaimer: Boolean(row.actor_owns_creator_space),
+    role: row.team_owner_user_id === userId ? "owner" : row.actor_member_role,
+    readsAll,
+    editsAll,
   };
+  const capabilities = Object.fromEntries(
+    Object.entries(capabilityRules).map(([capability, allows]) => [capability, allows(facts)]),
+  ) as unknown as WorktreeCapabilities;
+  return { facts, capabilities, canSeeUnits: capabilities.review };
 }
 
-function canMergeAsActor(userId: string, row: WorktreeRow): boolean {
-  if (row.creator_user_id !== userId) return Boolean(row.actor_owns_creator_space);
+const administers = (facts: WorktreeFacts): boolean => facts.role === "owner" || facts.role === "admin";
+const decides = (facts: WorktreeFacts): boolean => facts.authorOrClaimer || administers(facts);
+
+/** Merging writes Trunk, so whoever merges needs edit access to every Unit. */
+function mayMerge(facts: WorktreeFacts): boolean {
   return (
-    row.kind === "user" ||
-    row.team_owner_user_id === userId ||
-    row.actor_member_role === "admin" ||
-    row.actor_member_role === "editor"
+    facts.editsAll &&
+    (facts.authorOrClaimer || (facts.shared && (administers(facts) || facts.role === "editor")))
   );
 }
+
+/**
+ * Proposing writes only the draft. A Team Worktree takes a proposal from any Space Member who can
+ * read its Units; a User Worktree is its author's own, limited to what the author can edit.
+ */
+function mayPropose(facts: WorktreeFacts): boolean {
+  return facts.author && (facts.team ? facts.role !== null && facts.readsAll : facts.editsAll);
+}
+
+const capabilityRules: { readonly [C in keyof WorktreeCapabilities]: (facts: WorktreeFacts) => boolean } = {
+  review: (facts) => facts.readsAll && (facts.authorOrClaimer || (facts.shared && facts.role !== null)),
+  editDraft: (facts) => facts.state === "draft" && mayPropose(facts),
+  addUnit: (facts) => facts.state === "draft" && mayPropose(facts),
+  changeVisibility: (facts) => facts.team && (facts.author || administers(facts)),
+  markReady: (facts) => facts.state === "draft" && (mayMerge(facts) || mayPropose(facts)),
+  reopen: (facts) => facts.state === "ready" && decides(facts),
+  merge: (facts) => facts.state === "ready" && mayMerge(facts),
+  discard: (facts) => (facts.state === "draft" || facts.state === "ready") && decides(facts),
+};
 
 async function canReadUnit(
   userId: string,
@@ -1045,7 +1090,8 @@ async function validateTarget(
   worktree: WorktreeRow,
   spaceId: string,
   parentNodeId: string | null,
-  access: AccessResolver
+  access: AccessResolver,
+  purpose: "create" | "propose" = "create"
 ): Promise<void> {
   if (
     worktree.kind === "team" &&
@@ -1055,6 +1101,14 @@ async function validateTarget(
       "Team Worktree content must target its Team Space.",
       "targetSpaceId"
     );
+  }
+  // A Team Worktree's author only names where a new file would go; whoever merges creates it there.
+  if (purpose === "propose" && worktree.kind === "team") {
+    const space = await access.resolveSpace(userId, spaceId);
+    if (!space) throw notFound();
+    if (!space.member) throw forbidden();
+    if (parentNodeId !== null && (await access.resolveNode(userId, parentNodeId))?.spaceId !== spaceId) throw notFound();
+    return;
   }
   if (parentNodeId === null) {
     const space = await access.resolveSpace(userId, spaceId);
@@ -1264,14 +1318,16 @@ function requireMappedUnit(
   return unit;
 }
 
-async function requireEditableResource(
+async function requireAddableResource(
   userId: string,
+  worktree: WorktreeRow,
   resourceId: string,
   access: AccessResolver
 ): Promise<UniverResourceAccess> {
   const resource = await access.resolveResource(userId, resourceId);
   if (!resource || resource.kind !== "univer") throw notFound();
-  if (!resource.capabilities.editContent) throw forbidden();
+  const { openContent, editContent } = resource.capabilities;
+  if (!(worktree.kind === "team" ? openContent : editContent)) throw forbidden();
   return resource;
 }
 

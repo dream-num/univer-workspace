@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
-import { checkCreateTarget } from "../access/resource-target.js";
+import { checkCreateTarget, checkProposalTarget } from "../access/resource-target.js";
 import { type SqliteAccessRepository, assertFileQuota, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { SqliteDatabase } from "../connection.js";
 import type { UnitType } from "../../../modules/access/index.js";
@@ -185,7 +185,7 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     // Issue sequence; User Worktrees are numbered per creator.
     this._database.transaction((database) => {
       if (database.prepare("SELECT 1 FROM worktrees WHERE id = ?").get(input.id)) return;
-      if (input.kind === "team" && input.teamSpaceId) this.requireTarget(input.creatorUserId, input.teamSpaceId, null);
+      if (input.kind === "team" && input.teamSpaceId) this.requireTarget(input.creatorUserId, input.teamSpaceId, null, true);
       const next = (input.kind === "team"
         ? database.prepare(
             `SELECT MAX(
@@ -338,7 +338,10 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     readonly createdAt: number;
   }): Promise<void> {
     this._database.transaction((database) => {
-      this.requireTarget(input.createdBy, input.targetSpaceId, input.targetParentNodeId);
+      this.requireTarget(
+        input.createdBy, input.targetSpaceId, input.targetParentNodeId,
+        this.proposalSpace(input.worktreeId) !== null,
+      );
       database
         .prepare(
           `INSERT INTO worktree_units
@@ -532,10 +535,18 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
     );
   }
 
-  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null): void {
-    const access = checkCreateTarget(this.access, userId, spaceId, parentNodeId);
+  private requireTarget(userId: string, spaceId: string, parentNodeId: string | null, proposal = false): void {
+    const access = (proposal ? checkProposalTarget : checkCreateTarget)(this.access, userId, spaceId, parentNodeId);
     if (access === "notFound") throw notFound();
     if (access === "forbidden") throw forbidden();
+  }
+
+  /** The Space a Team Worktree proposes to. Its author needs only membership; whoever merges needs the write access. */
+  private proposalSpace(worktreeId: string): string | null {
+    const row = this._database.connection
+      .prepare("SELECT team_space_id FROM worktrees WHERE id = ? AND kind = 'team'")
+      .get(worktreeId) as { readonly team_space_id: string } | undefined;
+    return row?.team_space_id ?? null;
   }
 
   async reserveOperation(input: WorktreeReservation): Promise<{ readonly created: boolean; readonly row: WorktreeOperationRow }> {
@@ -545,14 +556,20 @@ export class SqliteWorktreesRepository implements WorktreesRepository {
         .get(input.id) as WorktreeOperationRow | undefined;
       if (existing) return { created: false, row: existing };
       if (input.kind === "create_worktree_unit") {
-        this.requireTarget(input.actorUserId, input.payload.targetSpaceId, input.payload.targetParentNodeId);
+        this.requireTarget(
+          input.actorUserId, input.payload.targetSpaceId, input.payload.targetParentNodeId,
+          this.proposalSpace(input.payload.worktreeId) !== null,
+        );
         assertFileQuota(database, input.actorUserId, 1, input.id);
       } else if (input.kind === "create_worktree" && input.payload.teamSpaceId !== null) {
-        this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null);
+        this.requireTarget(input.actorUserId, input.payload.teamSpaceId, null, true);
       } else if (input.kind === "add_worktree_unit") {
         const resource = this.access.readResourceAccess(input.actorUserId, input.payload.resourceId);
         if (!resource || resource.kind !== "univer") throw notFound();
-        if (!resource.capabilities.editContent) throw forbidden();
+        const teamSpaceId = this.proposalSpace(input.payload.worktreeId);
+        if (teamSpaceId !== null) this.requireTarget(input.actorUserId, teamSpaceId, null, true);
+        const { openContent, editContent } = resource.capabilities;
+        if (!(teamSpaceId !== null ? openContent : editContent)) throw forbidden();
       }
       database
         .prepare(

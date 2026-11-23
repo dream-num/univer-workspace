@@ -88,9 +88,9 @@ upstream repo (someone else's Team Space)        agent
 
 | 编号 | 要求                                                                                        | 今天                                                                                                                       | 阶段 |
 | ---- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---- |
-| R4   | 上游只给读权，agent 就能提议。agent 对上游的 Trunk 没有写入路径                             | 不能。agent 不能成为 Space Member（`addTeamMember` 上限）。viewer 不能创建 Team Worktree。把 Unit 加进 Worktree 要求编辑权 | 2    |
-| R5   | 提议能否落地只由上游给 agent 的角色决定。viewer 的提议由有编辑权的成员合入，editor 自己合入 | 不能。只有作者或认领人能合入（`canMergeAsActor`）                                                                          | 2    |
-| R6   | agent 在任务开始时读一次 `capabilities`，就知道自己能提议还是能合入                         | 部分。`capabilities` 按资源返回。它是否已经包含 scope 和上限，没有核实                                                     | 2    |
+| R4   | 上游只给读权，agent 就能提议。agent 对上游的 Trunk 没有写入路径                             | 已有。Space Member 包括 viewer 都能创建 Team Worktree，把能读的 Unit 加进来，修改并 ready。已认领的 agent 可以作为 viewer 或 editor 成为 Space Member，未认领的不能（`addTeamMember` 上限） | 2    |
+| R5   | 提议能否落地只由上游给 agent 的角色决定。viewer 的提议由有编辑权的成员合入，editor 自己合入 | 已有。“能合入”按 5.4 的新定义判定（`worktrees.service.ts` 的 `mayMerge`）                                                  | 2    |
+| R6   | agent 在任务开始时读一次 `capabilities`，就知道自己能提议还是能合入                         | 部分。`capabilities` 按资源返回，不包含 scope 和上限（见 9.2）                                                             | 2    |
 | R7   | 每次合入都记录作者和合入者                                                                  | 已有。`creator_user_id` 和 `mergedBy`                                                                                      | 2    |
 | R8   | 上游的 owner 和 admin 可以丢弃任何针对本仓库的 Worktree。丢弃之后它不再阻塞永久删除         | 已有。Team Worktree 的 `discard` 对 owner 和 admin 开放，Trash 只看未结束的 Worktree                                       | 2    |
 
@@ -219,10 +219,12 @@ fork 的状态由它未结束的 Worktree 推导：
 
 “能合入”的定义改变：
 
-|      | 定义                                                                                                          |
-| ---- | ------------------------------------------------------------------------------------------------------------- |
-| 今天 | 能编辑全部 Unit，并且是认领人，或者是角色为 owner、admin、editor 的作者                                       |
-| 目标 | 能编辑全部 Unit，并且是作者或认领人，或者 Worktree 的可见性是 `space` 而行为者的角色是 owner、admin 或 editor |
+|             | 定义                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------- |
+| 阶段 2 之前 | 能编辑全部 Unit，并且是认领人，或者是角色为 owner、admin、editor 的作者                                       |
+| 目标        | 能编辑全部 Unit，并且是作者或认领人，或者 Worktree 的可见性是 `space` 而行为者的角色是 owner、admin 或 editor |
+
+阶段 2 已经按“目标”实现：`worktrees.service.ts` 里的 `mayMerge`、`mayPropose` 和 `capabilityRules`。下面能力表的“今天”一列是阶段 2 之前的行为。
 
 Team Worktree 的各项能力：
 
@@ -552,9 +554,9 @@ A 和 B 是两个已认领的 agent。A 创建仓库 R，把 B 加为 viewer。B
 | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------- |
 | 5.3 和 README 6.2 对 SDK 的全部判断                                                            | 整个 fork 的形态                                                            | A0.4，已确认         |
 | 非作者执行 Merge 时，SDK 和 Trunk 的中间件都接受                                               | R5                                                                          | A0.4，已确认         |
-| viewer 提交草稿变更时，协同网关除了 `editDraft` 和上游的 `openContent` 之外没有别的编辑权检查  | R4                                                                          | 阶段 2 开工          |
-| viewer 创建的新 Unit 在合入时由谁通过目标位置的校验，创建之后归谁                              | A2.5                                                                        | 阶段 2 开工          |
-| `capabilities` 是否已经把 scope 和上限算进去                                                   | R6 要做多少                                                                 | 阶段 2 开工          |
+| viewer 提交草稿变更时，协同网关除了 `editDraft` 和上游的 `openContent` 之外没有别的编辑权检查  | R4                                                                          | 阶段 2，不成立。Worktree 的 `commitChangeset` 中间件还按 Unit 级的 Edit 要求 `editContent`。阶段 2 把草稿里这一项改为 `openContent`，对象级的内容保护不变 |
+| viewer 创建的新 Unit 在合入时由谁通过目标位置的校验，创建之后归谁                              | A2.5                                                                        | 阶段 2，已确认。加入时作者只需是成员并且目标存在。合入时按合入者校验（`validateAllTargets`，以及 `activateLocalUnit` 事务里的 `requireTarget`）。Node 的 `created_by` 是作者，它不带来任何权限 |
+| `capabilities` 是否已经把 scope 和上限算进去                                                   | R6 要做多少                                                                 | 阶段 2，已确认没有。它只看用户、角色、可见性、状态和每个 Unit 的访问。scope 在 MCP 网关按工具执行，Worktree 模块不调用上限 |
 | 在 Worktree 里，跨 Unit 的公式读另一个也在这个 Worktree 里的 Unit 时，读的是草稿还是 Trunk     | fork 里几个改过的 Sheet 互相引用时是否一致                                  | 阶段 0，已确认读草稿 |
 | 现有工具带上 pull request 参数写入一个 Trunk 的 Unit 时，是否已经自动把它加进 Worktree         | 5.5 写路径的第 3 步是新增还是已有                                           | 阶段 4 开工          |
 | 认领人对 agent 持有的 Team Space 有 owner 的能力。agent 过期或被封禁时，这个 Team Space 被暂停 | R2d。规则按 Space 的所有者写，读代码推出                                    | 阶段 3 开工          |
