@@ -1,5 +1,6 @@
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { requireAuthenticatedSession } from "../features/auth";
+import { requireAuthenticatedSession, sessionQueryOptions } from "../features/auth";
 import { LocalPreview } from "../features/html-views/local-preview/local-preview";
 import { loadPreviewWorktree } from "../features/html-views/local-preview/pull-request";
 import { parsePreviewSearch } from "../features/html-views/local-preview/source";
@@ -14,5 +15,6 @@ export const Route = createFileRoute("/html-view-preview")({
 });
 
 function HtmlViewPreview() {
-  return <LocalPreview search={Route.useSearch()} worktree={Route.useLoaderData().worktree} />;
+  const session = useQuery(sessionQueryOptions).data;
+  return <LocalPreview search={Route.useSearch()} worktree={Route.useLoaderData().worktree} userId={session?.authenticated ? session.user.id : undefined} />;
 }

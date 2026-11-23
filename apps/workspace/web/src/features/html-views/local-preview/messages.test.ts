@@ -7,7 +7,7 @@ it("has the same keys, and the same warning and status keys, in both languages",
   for (const language of ["zh-CN", "en-US"] as const) {
     const messages = previewMessages[language];
     for (const [key, value] of Object.entries(messages)) if (typeof value === "string") expect(value, key).not.toBe("");
-    expect(messages.trustBindings(3)).toContain("3");
+    expect(messages.trustReads(3)).toContain("3");
     expect(messages.errorRefused(403)).toContain("403");
   }
 });

@@ -7,7 +7,8 @@ import {
 } from "../render-check";
 import type { HtmlViewEngine, HtmlViewSourceWorktree } from "../workspace-binding-engine";
 import { engineProbe, sampleBindings } from "./bindings";
-import { DiagnosticsPanel, type ReportDelivery } from "./diagnostics-panel";
+import type { BoundUnits } from "./bound-units";
+import { DiagnosticsPanel, type CheckResult } from "./diagnostics-panel";
 import { buildReport, type LocalPreviewReport } from "./report";
 import type { PreviewPage } from "./use-preview-page";
 import type { HtmlViewBinding } from "@univerjs-labs/html-view";
@@ -18,6 +19,7 @@ export interface CheckedPreviewProps {
   page: PreviewPage;
   bindings: readonly HtmlViewBinding[];
   unitIds: readonly string[];
+  units: BoundUnits;
   token: string;
   writeMode: PreviewWriteMode;
   worktree: HtmlViewSourceWorktree | undefined;
@@ -36,7 +38,7 @@ export function CheckedPreview(props: CheckedPreviewProps) {
   const readyAt = useRef(performance.now());
   const latest = useRef(props);
   latest.current = props;
-  const [result, setResult] = useState<{ report: LocalPreviewReport; delivery: ReportDelivery } | null>(null);
+  const [result, setResult] = useState<CheckResult | null>(null);
   const onSourceLoaded = useCallback((unitId: string, engine: HtmlViewEngine) => {
     engines.current.set(unitId, engine);
     readyAt.current = performance.now();
@@ -53,17 +55,18 @@ export function CheckedPreview(props: CheckedPreviewProps) {
       const current = latest.current;
       const frame = findHtmlFrame(root.current);
       const loaded = [...engines.current.values()];
+      const samples = sampleBindings(current.bindings, engineProbe(engines.current));
       const report = buildReport({
         token: current.token,
         sha256: current.page.sha256,
         renderCheck: { status, issues, durationMs: Math.round(performance.now() - startedAt), ...(reason ? { reason } : {}) },
-        bindings: sampleBindings(current.bindings, engineProbe(engines.current)),
+        bindings: samples,
         leftoverPlaceholders: placeholders,
         viewport: { width: frame?.clientWidth ?? 0, height: frame?.clientHeight ?? 0 },
         writeMode: current.writeMode === "saved" && loaded.length > 0 && loaded.every((engine) => engine.writeMode === "saved") ? "saved" : "trial",
       });
-      setResult({ report, delivery: "pending" });
-      void current.deliver(report).then((sent) => setResult((now) => now?.report === report ? { report, delivery: sent === null ? "local" : sent ? "sent" : "failed" } : now));
+      setResult({ report, samples, delivery: "pending" });
+      void current.deliver(report).then((sent) => setResult((now) => now?.report === report ? { ...now, delivery: sent === null ? "local" : sent ? "sent" : "failed" } : now));
     };
     const timer = setTimeout(() => finish("timed-out", "Render check exceeded 20 seconds."), RENDER_CHECK_TIMEOUT_MS);
     const receive = (event: MessageEvent) => {
@@ -92,6 +95,6 @@ export function CheckedPreview(props: CheckedPreviewProps) {
           sourceWorktree={props.worktree} onSourceLoaded={onSourceLoaded} />
       </div>
     </div>
-    <DiagnosticsPanel result={result} />
+    <DiagnosticsPanel result={result} units={props.units} />
   </div>;
 }

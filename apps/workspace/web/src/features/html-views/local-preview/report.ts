@@ -23,8 +23,9 @@ export async function sha256Hex(bytes: BufferSource): Promise<string> {
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export function buildReport(input: Omit<LocalPreviewReport, "bindings"> & { bindings: BindingSample[] }): LocalPreviewReport {
-  return localPreviewReportSchema.parse(input);
+export function buildReport(input: Omit<LocalPreviewReport, "bindings"> & { bindings: readonly BindingSample[] }): LocalPreviewReport {
+  return localPreviewReportSchema.parse({ ...input,
+    bindings: input.bindings.map(({ attribute, reference, sample, warnings }) => ({ attribute, reference, sample, warnings })) });
 }
 
 /** Sent as text/plain so the browser makes no preflight; the host reads the body as JSON. */
