@@ -11,13 +11,16 @@ import {
 import { getHtmlViewUnitIds, isHtmlViewFilename, parseHtmlView, type HtmlViewBinding } from "@univerjs-labs/html-view";
 import { WorkspaceBlobFeature } from "./blob.js";
 import type { WorkspaceContentRuntimeOperations } from "./content-runtime.js";
-import { parseHtmlViewDraft } from "./html-view-draft.js";
+import { parseHtmlViewDraft, readWorkspaceHtmlViewDraft } from "./html-view-draft.js";
 import { readWorkspaceHtmlView, requireHtmlView, htmlViewUrls } from "./html-view-page.js";
 import type { WorkspaceRuntimeTarget } from "./runtime-target.js";
 import { WorkspaceApplicationError, workspaceError } from "./errors.js";
 import type { AuthenticatedWorkspaceHttp } from "./http.js";
 import { parseDetachedNode } from "./space-model.js";
 import { WorkspaceSpaceFeature } from "./space.js";
+import { WorkspaceContentSource } from "./runtime-source.js";
+import { getWorktree } from "./worktree.js";
+import type { WorkspaceWorktree } from "./worktree-model.js";
 import { colName } from "./sheet-lens/lens/ranges.js";
 
 export interface WorkspaceHtmlViewSource {
@@ -53,9 +56,10 @@ export interface WorkspaceHtmlViewReplacement {
   readonly source: WorkspaceHtmlViewSource;
 }
 
-export type WorkspaceHtmlViewDraftRequest =
+export type WorkspaceHtmlViewDraftRequest = { readonly sourceWorktreeId?: string } & (
   | (WorkspaceHtmlViewDestination & { readonly kind: "create"; readonly source: WorkspaceHtmlViewSource })
-  | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" });
+  | (WorkspaceHtmlViewReplacement & { readonly kind: "replace" })
+  | { readonly kind: "revise"; readonly draftId: string; readonly idempotencyKey: string; readonly source: WorkspaceHtmlViewSource });
 
 export interface WorkspaceHtmlViewCellSample {
   readonly value: string | number | boolean | null;
@@ -88,8 +92,8 @@ export interface WorkspaceHtmlViewValidation {
 export class WorkspaceHtmlViewFeature {
   public constructor(private readonly options: WorkspaceHtmlViewOptions) {}
 
-  public async validate(input: WorkspaceHtmlViewSource) {
-    const source = await this.readAndValidate(input);
+  public async validate(input: WorkspaceHtmlViewSource & { readonly sourceWorktreeId?: string }) {
+    const source = await this.readAndValidate(input, input.sourceWorktreeId);
     return source.validation;
   }
 
@@ -165,55 +169,79 @@ export class WorkspaceHtmlViewFeature {
     const http = await this.options.authenticatedHttp();
     const intent = input.kind === "create"
       ? { kind: input.kind, ...normalizeHtmlViewDestination(input) }
+      : input.kind === "revise" ? { kind: input.kind, draftId: input.draftId, idempotencyKey: input.idempotencyKey }
       : { kind: input.kind, resourceId: input.resourceId, etag: input.etag, idempotencyKey: input.idempotencyKey };
+    const previous = intent.kind === "revise" ? await readWorkspaceHtmlViewDraft(async () => http, await this.options.configuredOrigin(), intent.draftId) : undefined;
+    const sourceWorktreeId = input.sourceWorktreeId ?? previous?.sourceWorktreeId ?? undefined;
     let spaceId: string;
     if (intent.kind === "create") {
       spaceId = intent.spaceId;
-    } else {
+    } else if (intent.kind === "revise" && previous) {
+      spaceId = previous.spaceId;
+    } else if (intent.kind === "replace") {
       if (!/^"[^"\r\n]+"$/.test(intent.etag) || intent.etag.length > 200)
         throw workspaceError("workspace-argument-invalid", "ETag must be the exact quoted strong ETag from html_view_read.");
       const view = await new WorkspaceBlobFeature(async () => http).get(intent.resourceId);
       requireHtmlView(view.node.name);
       spaceId = view.node.spaceId;
-    }
-    const source = await this.readAndValidate(input.source);
+    } else throw workspaceError("workspace-invalid-response", "Revision draft is missing.");
+    const source = await this.readAndValidate(input.source, sourceWorktreeId);
+    const worktree = source.worktree;
     const origin = await this.options.configuredOrigin();
-    const access = await this.describeAccess(spaceId, source.validation.unitIds);
+    const access = await this.describeAccess(spaceId, source.validation.unitIds, worktree);
     const { idempotencyKey, ...body } = intent;
+    const draftWorktreeId = input.kind === "revise" ? sourceWorktreeId : worktree?.id;
     this.options.onWrite?.();
     const response = await http.json("/api/html-view-drafts", {
-      method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8") },
+      method: "POST", idempotencyKey, body: { ...body, html: source.bytes.toString("utf8"),
+        ...(draftWorktreeId === undefined ? {} : { sourceWorktreeId: draftWorktreeId }) },
     });
-    return { ...parseHtmlViewDraft(response["draft"], origin), ...access };
+    return { ...parseHtmlViewDraft(response["draft"], origin), ...access,
+      bindings: source.validation.bindings, bindingCount: source.validation.bindingCount,
+      ...(source.validation.truncated === undefined ? {} : { truncated: source.validation.truncated }),
+    };
   }
 
-  private async describeAccess(spaceId: string, unitIds: readonly string[]) {
+  private async sourceWorktree(id: string | undefined) {
+    if (id === undefined) return undefined;
+    const worktree = await getWorktree(await this.options.authenticatedHttp(), required(id, "Worktree ID"));
+    if (worktree.state === "discarded")
+      throw workspaceError("workspace-worktree-discarded", "The source pull request was discarded. Choose an active pull request or merged sources.", { worktreeId: id });
+    return worktree.state === "merged" ? undefined : worktree;
+  }
+
+  private async describeAccess(spaceId: string, unitIds: readonly string[], worktree?: WorkspaceWorktree) {
     const http = await this.options.authenticatedHttp();
     const spaces = new WorkspaceSpaceFeature(async () => http);
     const destination = await spaces.get(spaceId);
     const publicSpaces = new Map([[spaceId, destination.publicRead === true]]);
     const privateSourceUnitIds: string[] = [];
     for (const unitId of unitIds) {
-      const body = await http.json(`/api/unit-resources/${encodeURIComponent(unitId)}`);
-      const node = parseDetachedNode(body["node"]);
-      if (node.resource?.kind !== "univer" || node.resource.unitId !== unitId) {
-        throw workspaceError(
-          "workspace-result-mismatch",
-          "HTML View source metadata does not match the requested Unit.",
-        );
+      const addedUnit = worktree?.units.find((unit) => unit.unitId === unitId && unit.source === "worktree");
+      let sourceSpaceId = addedUnit?.target?.spaceId;
+      if (sourceSpaceId === undefined) {
+        const body = await http.json(`/api/unit-resources/${encodeURIComponent(unitId)}`);
+        const node = parseDetachedNode(body["node"]);
+        if (node.resource?.kind !== "univer" || node.resource.unitId !== unitId) {
+          throw workspaceError(
+            "workspace-result-mismatch",
+            "HTML View source metadata does not match the requested Unit.",
+          );
+        }
+        sourceSpaceId = node.spaceId;
       }
-      if (!publicSpaces.has(node.spaceId)) {
+      if (!publicSpaces.has(sourceSpaceId)) {
         try {
-          publicSpaces.set(node.spaceId, (await spaces.get(node.spaceId)).publicRead === true);
+          publicSpaces.set(sourceSpaceId, (await spaces.get(sourceSpaceId)).publicRead === true);
         } catch (error) {
           if (!(error instanceof WorkspaceApplicationError) || (error.detail as { status?: unknown } | undefined)?.status !== 404) {
             throw error;
           }
           // A hidden Space cannot be public, but a node grant may still expose its Sheets.
-          publicSpaces.set(node.spaceId, false);
+          publicSpaces.set(sourceSpaceId, false);
         }
       }
-      if (!publicSpaces.get(node.spaceId)) privateSourceUnitIds.push(unitId);
+      if (!publicSpaces.get(sourceSpaceId)) privateSourceUnitIds.push(unitId);
     }
     return {
       repositoryVisibility: destination.publicRead === true ? ("public" as const) : ("private" as const),
@@ -240,7 +268,7 @@ export class WorkspaceHtmlViewFeature {
     }
   }
 
-  private async readAndValidate(input: WorkspaceHtmlViewSource) {
+  private async readAndValidate(input: WorkspaceHtmlViewSource, sourceWorktreeId?: string) {
     const filePath = input.name;
     const bytes = Buffer.from(input.bytes);
     let parsed;
@@ -253,14 +281,34 @@ export class WorkspaceHtmlViewFeature {
         { filePath },
       );
     }
+    const worktree = await this.sourceWorktree(sourceWorktreeId);
     const unitIds = getHtmlViewUnitIds(parsed);
     const bindings: WorkspaceHtmlViewBindingSample[] = [];
     for (const unitId of unitIds) {
-      const target = await this.options.resolveTrunkRuntimeTarget({ unitId });
-      if (target.unitId !== unitId || target.scope.kind !== "trunk") {
+      let target: WorkspaceRuntimeTarget;
+      try {
+        target = worktree === undefined
+          ? await this.options.resolveTrunkRuntimeTarget({ unitId })
+          : await new WorkspaceContentSource(await this.options.authenticatedHttp()).resolveReferencedRuntimeTarget({
+              hostTarget: { scope: { kind: "worktree", worktreeId: worktree.id } }, unitId,
+            });
+      } catch (error) {
+        if (!worktree?.units.some((unit) => unit.unitId === unitId) &&
+          error instanceof WorkspaceApplicationError && isRecord(error.detail) &&
+          (error.detail["status"] === 403 || error.detail["status"] === 404)) {
+          throw workspaceError(
+            "workspace-html-view-source-unavailable",
+            "The source Sheet may not exist, may not be readable by you, or may exist only in an unmerged pull request. Pass the source pull request to validate unmerged data.",
+            { unitId },
+          );
+        }
+        throw error;
+      }
+      if (target.unitId !== unitId || (target.scope.kind !== "trunk" &&
+        (worktree === undefined || target.scope.worktreeId !== worktree.id))) {
         throw workspaceError(
           "workspace-result-mismatch",
-          "HTML View source must resolve to the requested trunk Unit.",
+          "HTML View source must resolve to the requested Unit and source scope.",
           { unitId },
         );
       }
@@ -314,6 +362,7 @@ export class WorkspaceHtmlViewFeature {
       filePath,
       bytes,
       validation,
+      worktree,
     };
   }
 }

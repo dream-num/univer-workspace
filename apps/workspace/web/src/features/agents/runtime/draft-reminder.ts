@@ -7,7 +7,7 @@ import { replacedDraftIds } from "../replaced-drafts";
 
 type Draft = components["schemas"]["HtmlViewDraft"];
 export type DraftStatus = Pick<Draft, "state" | "name" | "published">;
-const draftStateSchema = z.enum(["pending", "published", "rejected", "expired", "conflicted"]);
+const draftStateSchema = z.enum(["pending", "published", "rejected", "expired", "conflicted", "superseded"]);
 const metadataSchema = z.object({ agentDraftStates: z.record(z.string(), draftStateSchema) });
 const outputSchema = z.object({
   isError: z.boolean().optional(),
@@ -25,7 +25,7 @@ export async function draftReminder(messages: readonly UIMessage[], getDraft: (i
     for (const part of message.parts) {
       if (!isToolUIPart(part) || part.state !== "output-available") continue;
       const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
-      if (name !== "html_view_create" && name !== "html_view_replace") continue;
+      if (name !== "html_view_save") continue;
       const output = outputSchema.safeParse(part.output);
       if (output.success && !output.data.isError) known.set(output.data.structuredContent.draft.id, output.data.structuredContent.draft.state);
     }
@@ -44,6 +44,7 @@ export async function draftReminder(messages: readonly UIMessage[], getDraft: (i
           break;
         case "rejected": line = `${label}: rejected. Ask the user what to change.`; break;
         case "expired": line = `${label}: expired. It was not published; draft again only if the user asks.`; break;
+        case "superseded": line = `${label}: superseded. It was not published because a newer draft replaced it; draft again only if the user asks.`; break;
         case "conflicted": line = `${label}: conflicted. It was not published because the page changed; read the page and draft again only if the user asks.`; break;
       }
       return { id, state: draft.state, line };

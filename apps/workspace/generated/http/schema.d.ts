@@ -2587,6 +2587,8 @@ export interface components {
              *     Null when a person or an unclaimed agent is the author.
              */
             claimer: components["schemas"]["PublicUser"] | null;
+            /** @description Pending, unexpired HTML View drafts linked to this Worktree, regardless of author. Always returned by current servers. */
+            pendingPageDrafts?: number;
             unitCount: number;
             /** Format: date-time */
             processedAt: string | null;
@@ -2785,6 +2787,8 @@ export interface components {
             parentNodeId?: string | null;
             /** @description Trimmed name; .univer.html is appended when absent. */
             name: string;
+            /** @description A reviewable pull request that has not been discarded. Merged pull requests are accepted. */
+            sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
         } | {
@@ -2793,6 +2797,17 @@ export interface components {
             resourceId: string;
             /** @description One quoted strong ETag, as returned by Blob content. */
             etag: string;
+            /** @description A reviewable pull request that has not been discarded. Merged pull requests are accepted. */
+            sourceWorktreeId?: string;
+            /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
+            html: string;
+        } | {
+            /** @constant */
+            kind: "revise";
+            /** @description Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded. */
+            draftId: string;
+            /** @description Override the source PR; otherwise inherit the previous draft's source. */
+            sourceWorktreeId?: string;
             /** @description Structurally valid HTML View, at most 512 KiB UTF-8. */
             html: string;
         };
@@ -2801,8 +2816,12 @@ export interface components {
             /** @enum {string} */
             kind: "create" | "replace";
             /** @enum {string} */
-            state: "pending" | "published" | "rejected" | "expired" | "conflicted";
+            state: "pending" | "published" | "rejected" | "expired" | "conflicted" | "superseded";
+            /** @description Successor draft ID when superseded. */
+            supersededBy: string | null;
             spaceId: string;
+            /** @description Source pull request. Always returned by current servers, nullable when unlinked. Publishing waits until it is merged. */
+            sourceWorktreeId?: string | null;
             parentNodeId: string | null;
             name: string;
             targetResourceId: string | null;
@@ -3968,6 +3987,16 @@ export interface components {
         };
         WorktreeSummaryEnvelope: {
             worktree: components["schemas"]["WorktreeSummary"];
+        };
+        WorktreeMergeResponse: {
+            operation: components["schemas"]["OperationView"];
+            worktree: components["schemas"]["WorktreeSummary"];
+            /** @description Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list. */
+            publishedPages: {
+                draftId: string;
+                name: string;
+                nodeId: string;
+            }[];
         };
         WorktreeOperationResponse: {
             operation: components["schemas"]["OperationView"];
@@ -6571,7 +6600,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6918,7 +6947,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7037,7 +7066,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7112,7 +7141,7 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
-            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
+            /** @description Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -8343,7 +8372,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorktreeOperationResponse"];
+                    "application/json": components["schemas"]["WorktreeMergeResponse"];
                 };
             };
             /** @description Merge or Activation remains pending. */

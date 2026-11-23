@@ -764,7 +764,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 25;
+PRAGMA user_version = 27;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>
@@ -782,11 +782,14 @@ CREATE TABLE IF NOT EXISTS html_view_drafts (
   media_type TEXT,                           -- set when state leaves 'receiving'
   stored_etag TEXT,                          -- BlobStore etag; becomes blob_resources.etag for create
   state TEXT NOT NULL CHECK (state IN
-    ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted')),
+    ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted', 'superseded')),
   result_node_id TEXT, result_resource_id TEXT, result_etag TEXT,  -- published only
   decided_by TEXT, decided_at INTEGER,
   expires_at INTEGER NOT NULL,               -- receiving: +1h; pending: +7d; terminal: unchanged
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+  source_worktree_id TEXT,
+  superseded_by TEXT,
+  revises_draft_id TEXT,
   UNIQUE (author_user_id, idempotency_key),
   CHECK ((kind = 'create' AND target_resource_id IS NULL AND base_etag IS NULL)
       OR (kind = 'replace' AND target_resource_id IS NOT NULL AND base_etag IS NOT NULL AND parent_node_id IS NULL)),
@@ -796,6 +799,8 @@ CREATE TABLE IF NOT EXISTS html_view_drafts (
 );
 CREATE INDEX IF NOT EXISTS html_view_drafts_due
   ON html_view_drafts(expires_at, id) WHERE state IN ('receiving', 'pending');
+CREATE INDEX IF NOT EXISTS html_view_drafts_source_worktree
+  ON html_view_drafts(source_worktree_id, expires_at, id) WHERE state = 'pending';
 
 CREATE TABLE IF NOT EXISTS skill_drafts (
   id TEXT PRIMARY KEY,

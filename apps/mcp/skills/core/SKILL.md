@@ -23,12 +23,11 @@ range. The `sheet` Skill's `references/reading.md` lists every option.
 Load a Skill with `skills_read` and its name, or read
 `skill://univer-workspace/<name>/SKILL.md`. Without arguments, `skills_read` lists
 names and descriptions. With a name it returns top-level name, content and optional
-resources. Read a reference or template with name and resource; full includes all
-supplemental files.
+resources. Read a reference or template with name and resource; full includes references only. Read templates and styles individually with resource.
 For a truncated resource, repeat the same arguments with the returned cursor.
 
 The shared Skills describe operations such as `api show` and `compile-svg`.
-Use the table below to select the MCP tool. Worktree operations are aliases of the
+Use the naming rule below to select the MCP tool. Worktree operations are aliases of the
 corresponding pr operations. When a tool named here is not in your tool list, that
 step is unavailable in this connection. Tell the user instead of guessing.
 Admin tools require ?toolsets=admin or ?toolsets=all. Files tools require the files
@@ -36,72 +35,31 @@ toolset. An executor restriction can hide content tools even with all selected.
 When the server instructions say the connection is an agent identity, they override
 every rule here that leaves readiness, merging or the link to the user.
 
-| Operation                                                                                                    | MCP tool               | Binding                                                    |
-| ------------------------------------------------------------------------------------------------------------ | ---------------------- | ---------------------------------------------------------- |
-| `whoami`                                                                                                     | `whoami`               | Connected identity                                         |
-| `repo list`                                                                                                  | `repo_list`            | Owned or joined repositories                               |
-| `repo view`                                                                                                  | `repo_view`            | Repository details, including public repositories          |
-| `repo create`                                                                                                | `repo_create`          | Admin                                                      |
-| `repo edit`, `repo rename`                                                                                   | `repo_edit`            | Admin; rename uses slug                                    |
-| `space browse`                                                                                               | `space_browse`         | Tree discovery                                             |
-| `space find`                                                                                                 | `space_find`           | Name discovery                                             |
-| `share`                                                                                                      | `share`                | Link Sharing of a Personal Space file; pass the url as unit with trunk true to read it |
-| `claim`                                                                                                      | `claim`                | Unclaimed agent only: a link that lets the user keep its files |
-| `space node create`, `space node rename`, `space node move`, `space node trash`                              | `space_node`           | Admin; action selects create, rename, move or trash        |
-| `issue list`                                                                                                 | `issue_list`           | Team Space Issues                                          |
-| `issue view`                                                                                                 | `issue_view`           | Include comments for the full discussion                   |
-| `issue create`                                                                                               | `issue_create`         | Record a request                                           |
-| `issue edit`                                                                                                 | `issue_edit`           | Update fields                                              |
-| `issue comment`                                                                                              | `issue_comment`        | Post Markdown body                                         |
-| `issue close`, `issue reopen`                                                                                | `issue_set_state`      | State closed or open                                       |
-| `label list`                                                                                                 | `label_list`           | Admin                                                      |
-| `label create`, `label edit`, `label delete`                                                                 | `label_write`          | Admin; action selects create, edit or delete               |
-| `search issues`, `search prs`                                                                                | `search`               | Kind issues or prs                                         |
-| `pr list`, `worktree list`                                                                                   | `pr_list`              | Diagnose tasks                                             |
-| `pr view`, `worktree view`                                                                                   | `pr_view`              | Resolve Worktree id and state                              |
-| `pr create`, `worktree create`                                                                               | `pr_create`            | Start a task                                               |
-| `pr edit`, `worktree edit`                                                                                   | `pr_edit`              | Update task metadata                                       |
-| `pr ready`, `worktree ready`                                                                                 | `pr_ready`             | Ready only on explicit user completion/review request; undo true returns ready to draft |
-| `pr merge`, `worktree merge`                                                                                 | `pr_merge`             | Admin; explicit user request only, except for an agent identity |
-| `pr discard`, `worktree discard`                                                                             | `pr_discard`           | Admin; irreversible, explicit user request only            |
-| `browse`                                                                                                     | `browse`               | Generate a review URL                                      |
-| `unit list`                                                                                                  | `unit_list`            | Staged Units in one Worktree                               |
-| `unit add`                                                                                                   | `unit_add`             | Stage an existing Univer Resource                          |
-| `unit create`                                                                                                | `unit_create`          | Create an empty Unit, or a copy of a file with `from`      |
-| `execute`                                                                                                    | `execute`              | Run Facade code and commit mutations                       |
-| `outline` | `outline` | Sheet only; unit and either trunk true or worktree; zoom with at, continue with from, limit depth and budget |
-| `read` | `read` | Sheet only; unit, scope, and range; content selects both, display, formula, style, or formula+style; max limits cells; json true returns typed values |
-| `find` | `find` | Sheet only; unit, scope, and terms; in selects values or formulas; case makes matching case-sensitive; sheets limit the search; from and max page hits |
-| `inspect`                                                                                                    | `inspect`              | Read stored content                                        |
-| `screenshot`                                                                                                 | `screenshot`           | Render images                                              |
-| `import`                                                                                                     | `import`               | Create from uploaded Office bytes                          |
-| `export`                                                                                                     | `export`               | Download Office output                                     |
-| `api find`                                                                                                   | `api_find`             | Search API-name terms                                      |
-| `api show`                                                                                                   | `api_show`             | Read exact signatures and examples                         |
-| `skills list`, `skills get`, `skills read`                                                                   | `skills_read`          | List, get or read one resource                             |
-| `resources registries`                                                                                       | `resources_registries` | Admin; SVG catalogs                                        |
-| `resources find`                                                                                             | `resources_find`       | Admin; search SVG assets                                   |
-| `resources export`                                                                                           | `resources_export`     | Admin; SVG text                                            |
-| `blob get`                                                                                                   | `blob_get`             | Files; original-file metadata                              |
-| `blob upload`                                                                                                | `blob_upload`          | Files; publish original bytes                              |
-| `blob download`                                                                                              | `blob_download`        | Files; bytes and ETag                                      |
-| `blob replace`                                                                                               | `blob_replace`         | Files; conditional replacement                             |
-| `asset download`                                                                                             | `asset_download`       | Files; embedded image bytes                                |
-| `html-view validate`                                                                                         | `html_view_validate`   | Core; validate declarative bindings                        |
-| `html-view create`                                                                                           | `html_view_create`     | Core; save a page draft                                    |
-| Read HTML View HTML and ETag | `html_view_read` | Inline .univer.html source and strong ETag |
-| Replace HTML View | `html_view_replace` | Validate inline HTML and save a revision draft |
-| Read HTML View draft status | `html_view_draft_get` | HTTP-only; share the page only when published |
-| `compile-markdown`                                                                                           | `compile_markdown`     | Files; Markdown to Modern Doc                              |
-| `export-markdown`                                                                                            | `export_markdown`      | Files; selected native blocks to Markdown                  |
-| `compile-svg`                                                                                                | `compile_svg`          | Files; SVG to a Slide page                                 |
-| `compile-typst`                                                                                              | `compile_typst`        | Files; Typst bundle to Doc                                 |
-| `print-pdf`                                                                                                  | `print_pdf`            | Files; PDF download                                        |
-| `lint`                                                                                                       | `lint`                 | Files; layout diagnostics                                  |
-| `file upload create`                                                                                         | `file_upload_create`   | Reserve a byte transfer                                    |
-| `job get`                                                                                                    | `job_get`              | Poll a long-running operation                              |
-| `auth login`, `auth status`, `auth logout`                                                                   | unavailable            | Sign-in belongs to the MCP client; use whoami for identity |
-| `config`, `daemon`, `screenshot setup`, `skills path`, `resources cache path`, `resources cache clear`, `-v` | unavailable            | Local environment management has no remote tool            |
+Replace spaces and hyphens in an operation name with underscores to get the MCP
+tool: a b or a-b becomes a_b. Single-word names stay unchanged. Replace the
+worktree prefix with pr first.
+
+Exceptions:
+
+- `repo rename` -> `repo_edit`.
+- `skills list`, `skills get` -> `skills_read`.
+- `space node create`, `space node rename`, `space node move`, `space node trash` -> `space_node`; action selects the last word.
+- `issue close`, `issue reopen` -> `issue_set_state`; state is closed or open.
+- `label create`, `label edit`, `label delete` -> `label_write`; action selects the last word.
+- `search issues`, `search prs` -> `search`; kind is issues or prs.
+- `html-view create` -> `html_view_save`.
+- Read a page's HTML and ETag with `html_view_read`; read draft status with `html_view_draft_get`. Share the page only when published.
+
+Toolsets:
+
+- admin: `repo_create`, `repo_edit`, `space_node`, `label_list`, `label_write`, `pr_merge`, `pr_discard`, `resources_registries`, `resources_find`, `resources_export`. For an agent identity, `pr_merge` is also in core.
+- files: `blob_get`, `blob_upload`, `blob_download`, `blob_replace`, `asset_download`, `compile_markdown`, `export_markdown`, `compile_svg`, `compile_typst`, `print_pdf`, `lint`.
+
+Unavailable operations:
+
+- `auth *` -> unavailable. Sign-in belongs to the MCP client; use `whoami` for identity.
+- `config`, `daemon`, `screenshot setup`, `skills path`, `resources cache path`, `resources cache clear`, `-v` -> unavailable. Local environment management has no remote tool.
+- `html-view validate` -> unavailable. There is no standalone remote validation tool; follow the `html-view-creator` Skill.
 
 ## Concepts and identities
 
@@ -203,14 +161,8 @@ user-scoped Worktree for a private personal task, or that Team's Space-scoped
 Worktree when the task belongs to the team. Use Space visibility only when members
 should see the draft.
 
-For a new page, dashboard or form backed by live Sheets, or a change to one, read the
-`html-view-creator` Skill first and follow it. It uses `html_view_create` to save a
-`.univer.html` draft outside a Worktree.
-A page is not a Slide, Board or other Unit. If the connection cannot draft pages,
-say so and stop; never create a substitute Unit.
-Revise a page with `html_view_read` then `html_view_replace`. Edit the returned HTML
-and draft with its strong ETag and a new idempotency key. On conflict, read again
-and reconcile. Publishing a revision preserves the page identity and URL.
+For a page sharing or presenting Workspace data, use an HTML View and read the
+`html-view-creator` Skill.
 
 For a new Unit file, create the Worktree first. Use `unit_create` for an empty Unit, or
 give it `from`, a share link of a file you can open, to start from a copy that records
@@ -225,16 +177,6 @@ as a UUID, for each new operation. Reuse it only to retry the same call with
 identical arguments. Never derive it from names or reuse a key from earlier work.
 Where a schema requires a key, supply it. Conversion keys use 16 to 200 URL-safe letters, digits,
 underscores or hyphens. After an unknown content commit, read back before retrying.
-
-## Pages
-
-`html_view_create` and `html_view_replace` only save drafts. Give the user
-`draft.previewUrl`, say the page is not live until they publish it in Workspace,
-and end your turn. Before saying whether a page is live or still a draft, sharing its link or revising it,
-call `html_view_draft_get` with the returned draft ID. Users publish in Workspace without telling you. Share `shareUrl` only when
-`state` is `published`. On `rejected`, ask what to change. On `conflicted`, read the
-page again with `html_view_read` and draft again. On `expired`, draft again with a
-new idempotency_key. MCP cannot publish or reject a draft.
 
 ## Edit one Unit
 
@@ -280,12 +222,6 @@ for one hour after reservation. Never pass a local file path to a tool.
 
 - `import`, `blob_upload` and `blob_replace` consume upload_id. Choose purpose
   office-import for Office input or blob for original files.
-- `html_view_validate` and `html_view_create` take exactly one of inline html or
-  html_upload_id. Reserve purpose html-view with media_type text/html for a local
-  page, upload its bytes, then pass its upload_id as html_upload_id. HTML must be
-  valid UTF-8 and at most 512 KiB. Reuse the upload and idempotency_key on creation retries.
-- `html_view_read` returns inline HTML and its strong ETag. `html_view_replace`
-  accepts inline html only, with that ETag and a new idempotency_key.
 - `compile_svg` takes SVG text and optionally an assets_upload_id for a svg-assets
   ZIP. Use the page SVG as text and bundle its asset files in that ZIP.
 - `compile_typst` takes bundle_upload_id for a typst-bundle ZIP with typst.json at
@@ -328,29 +264,7 @@ handle as completed output. Successful job results carry the original tool outpu
 screenshot job results carry download links. After an unknown creation result,
 retry only the same operation with its original upload and idempotency key.
 
-Read the `blob` Skill for original files and the `html-view` Skill for live HTML
-backed by Sheet data; `html-view-creator` sets the order of page work. Read the source
-Sheet, then, unless the user already named a style, ask which style they want as design.md
-describes, in the same message as your plan for the page. End your turn and wait for the
-answer before you write, validate or publish a page. If they leave the choice to you
-(你来定, 随便, 默认就行), use Night Gauge (`night-gauge`, 仪表夜航). Never silently choose
-another style. Start from that style's complete template. Templates are English starting
-points; write the page in the language and conventions of the user's conversation as design.md
-describes, without i18n dictionaries or language switches. Controls write Sheet cells
-or append rows; show recalculated source values, never page-side Sheet formulas, copied
-data or fallback numbers. Blob publication and replacement write directly without Worktree
-review; apply them only to the intended destination.
-`html_view_create` and `html_view_replace` return a `draft` with `previewUrl`,
-`repositoryVisibility` and sorted `privateSourceUnitIds`. Once `html_view_draft_get`
-confirms `published`, return its immersive `shareUrl` and explain that anyone
-with the link can view the page and its declared sources only when visibility is
-`public` and the private-source list is empty; otherwise signed-in access is
-required for the page and all its data. Signed-out visitors and signed-in
-non-members are read-only; page writes are rejected for them. This connection
-cannot make a repository public. When the user wants anyone with the link to open
-the page, give them the repository `url` and ask them to make it public in its
-settings in the browser, which immediately publishes everything in it. Keep source
-Sheets in the same public repository or list the private sources.
+Read the `blob` Skill for original files.
 
 ## SVG resource catalog
 

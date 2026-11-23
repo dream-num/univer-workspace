@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Live Sheet</title>
+<!-- Replace IDs everywhere, encoding each ID in attributes. Inspect B1 (value),
+B2 (numeric input, never a formula), A4:B8 (labels and numeric Sheet results). -->
+<style>
+:root{--ink:#222;--paper:#fff;--line:#777}body{color:var(--ink);background:var(--paper);font:16px system-ui;margin:24px auto;padding:0 16px;max-width:48rem}table{border-collapse:collapse;width:100%}td{border-bottom:1px solid var(--line);padding:8px}input,button{font:inherit}#chart{height:240px}output,td{font-variant-numeric:tabular-nums}:focus-visible{outline:2px solid var(--ink);outline-offset:3px}
+</style>
+<h1>Live Sheet</h1>
+<p>Value: <output data-univer-cell-text="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B1">Loading value</output></p>
+<form id="edit">
+<label for="input">Input</label>
+<input id="input" type="number" step="any" required data-univer-cell-model="REPLACE_UNIT_ID:REPLACE_SHEET_ID:B2">
+<button id="save">Save input</button>
+<p id="write" role="status"></p>
+</form>
+<table><caption>Sheet records</caption><tbody id="rows" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A4:B8"><tr><td>Loading records</td></tr></tbody></table>
+<p id="chart-state" role="status">Loading chart</p>
+<div id="chart" aria-label="Sheet values" data-univer-range-subscribe="REPLACE_UNIT_ID:REPLACE_SHEET_ID:A4:B8"></div>
+<p id="error" role="alert"></p>
+<script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
+<script>
+const binding = window.univerBinding;
+const unitId = 'REPLACE_UNIT_ID', sheetId = 'REPLACE_SHEET_ID';
+const el = id => document.getElementById(id);
+const fail = error => { el('error').textContent = String(error.message ?? error); };
+let chart;
+binding.subscribeRangeById('rows', ({ value }) => {
+  el('rows').replaceChildren(...value.map(row => {
+    const tr = document.createElement('tr');
+    for (const value of row) {
+      const td = document.createElement('td');
+      td.textContent = String(value ?? '');
+      tr.append(td);
+    }
+    return tr;
+  }));
+}).catch(fail);
+binding.subscribeRangeById('chart', ({ value }) => {
+  try {
+    const rows = value.filter(row => row[0] !== null && typeof row[1] === 'number');
+    chart ??= echarts.init(el('chart'));
+    chart.setOption({ xAxis: { type: 'category', data: rows.map(row => String(row[0])) },
+      yAxis: { type: 'value' }, series: [{ type: 'bar', data: rows.map(row => row[1]) }] });
+    el('chart-state').textContent = rows.length ? '' : 'No chart values';
+  } catch (error) { el('chart-state').textContent = 'Chart unavailable; see table'; fail(error); }
+}).catch(error => { el('chart-state').textContent = 'Chart unavailable'; fail(error); });
+el('edit').onsubmit = async event => {
+  event.preventDefault();
+  el('save').disabled = true;
+  el('write').textContent = 'Saving';
+  try {
+    await binding.setCellValue({ unitId, sheetId, row: 1, col: 1 }, el('input').valueAsNumber);
+    await binding.flush();
+    const mode = window.univerWorkspace?.capabilities?.includes('write-mode')
+      ? await window.univerWorkspace.getWriteMode(unitId) : 'saved';
+    el('write').textContent = mode === 'trial' ? 'Trial only, not saved' : 'Saved';
+  } catch (error) { el('write').textContent = 'Not saved; input retained'; fail(error); }
+  finally { el('save').disabled = false; }
+};
+window.addEventListener('resize', () => chart?.resize());
+</script>
+</html>

@@ -325,6 +325,12 @@ export const sheetLensOutput = z.object({
   ]).optional(),
 });
 
+const htmlViewBindingSamples = {
+  bindingCount: z.int().nonnegative(),
+  bindings: z.array(htmlViewBindingSample).max(60).describe("Binding samples in document order. Compare with the page plan."),
+  truncated: z.literal(true).optional().describe("Present when more than 60 bindings exist."),
+};
+
 export const opSpecs = {
   "content.sheet-lens": defineOp({
     queueFor: () => true,
@@ -346,26 +352,26 @@ export const opSpecs = {
     payload: "none",
     rerun: ["auth"],
     limits: { requestBytes: 4 * MiB, responseBytes: MiB, budgetMs: 30_000 },
-    input: z.object({ html: htmlViewInput }),
+    input: z.object({ html: htmlViewInput, sourceWorktreeId: z.string().min(1).optional() }),
     output: z.object({
       valid: z.literal(true),
       unitIds: z.array(z.string()),
-      bindingCount: z.int().nonnegative(),
-      bindings: z.array(htmlViewBindingSample).max(60).describe("Binding samples in document order. Compare with the page plan."),
-      truncated: z.literal(true).optional().describe("Present when more than 60 bindings exist."),
+      ...htmlViewBindingSamples,
     }),
     route: () => ({ scope: "htmlView.validate", unitId: null }),
   }),
   "htmlView.draft": defineOp({
     name: "htmlView.draft",
     effect: "write",
+    effectFor: (input) => (input.kind === "dryRun" ? "read" : "write"),
     payload: "none",
     rerun: ["auth"],
-    limits: { requestBytes: 4 * MiB, responseBytes: 64 * 1024, budgetMs: 30_000 },
+    limits: { requestBytes: 4 * MiB, responseBytes: MiB, budgetMs: 30_000 },
     input: z.discriminatedUnion("kind", [
       z.object({
         kind: z.literal("create"),
         html: htmlViewInput,
+        sourceWorktreeId: z.string().min(1).optional(),
         spaceId: z.string().min(1),
         name: z.string().min(1).max(255),
         parentNodeId: z.string().min(1).optional(),
@@ -374,16 +380,20 @@ export const opSpecs = {
       z.object({
         kind: z.literal("replace"),
         html: htmlViewInput,
+        sourceWorktreeId: z.string().min(1).optional(),
         resourceId: z.string().min(1),
         etag: z.string().min(1),
         idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/),
       }),
+      z.object({ kind: z.literal("revise"), draftId: z.string().min(1), html: htmlViewInput,
+        sourceWorktreeId: z.string().min(1).optional(), idempotencyKey: z.string().regex(/^[A-Za-z0-9_-]{16,200}$/) }),
+      z.object({ kind: z.literal("dryRun"), html: htmlViewInput, sourceWorktreeId: z.string().min(1).optional() }),
     ]),
     output: z.object({ draft: htmlViewDraftSchema.extend({
       repositoryVisibility: z.enum(["public", "private"]),
       privateSourceUnitIds: z.array(z.string()),
-    }) }),
-    route: (input) => ({ scope: "htmlView.draft", unitId: input.idempotencyKey }),
+    }).optional(), dryRun: z.literal(true).optional(), valid: z.literal(true).optional(), ...htmlViewBindingSamples }),
+    route: (input) => ({ scope: "htmlView.draft", unitId: input.kind === "dryRun" ? null : input.idempotencyKey }),
   }),
   "markdown.compile": defineOp({
     name: "markdown.compile",

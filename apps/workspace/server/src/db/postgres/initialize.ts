@@ -24,7 +24,7 @@ export async function productSchemaFingerprint(client: PoolClient): Promise<stri
 }
 
 // UPGRADES[n - 1] takes schema version n to n + 1 and must leave the structure schema.sql creates.
-const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames];
+const UPGRADES: readonly ((client: PoolClient) => Promise<void>)[] = [repairDisplayNames, createExecutorAccess, addCopySource, repairDisplayNames, addDraftSourceWorktree, addDraftRevisions];
 const VERSION = UPGRADES.length + 1;
 
 // Scope, failure semantics and exit condition: see planDisplayNameRepair in db/display-name-repair.ts.
@@ -69,6 +69,20 @@ ALTER TABLE operations ADD CONSTRAINT operations_kind_check CHECK (
     'copy_node'
   )
 );`);
+}
+
+async function addDraftSourceWorktree(client: PoolClient): Promise<void> {
+  await client.query(`ALTER TABLE html_view_drafts ADD COLUMN source_worktree_id TEXT;
+CREATE INDEX html_view_drafts_source_worktree
+  ON html_view_drafts(source_worktree_id, expires_at, id) WHERE state = 'pending';`);
+}
+
+async function addDraftRevisions(client: PoolClient): Promise<void> {
+  await client.query(`ALTER TABLE html_view_drafts ADD COLUMN superseded_by TEXT;
+ALTER TABLE html_view_drafts ADD COLUMN revises_draft_id TEXT;
+ALTER TABLE html_view_drafts DROP CONSTRAINT html_view_drafts_state_check;
+ALTER TABLE html_view_drafts ADD CONSTRAINT html_view_drafts_state_check
+  CHECK (state IN ('receiving', 'pending', 'published', 'rejected', 'expired', 'conflicted', 'superseded'));`);
 }
 
 export async function initializePostgresSchema(pool: Pool): Promise<void> {

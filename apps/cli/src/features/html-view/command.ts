@@ -10,15 +10,16 @@ export function createHtmlViewCommand(
   );
   const validate = new Command("validate")
     .description(
-      "Check declarative bindings against trunk Sheet sources; does not execute JavaScript",
+      "Check declarative bindings against Sheet sources; does not execute JavaScript",
     )
     .requiredOption("--file <source>", "local .univer.html file")
+    .option("--worktree <id>", "read mapped sources from this pull request")
     .option("--json")
-    .action(async (options: JsonOption & { readonly file: string }) => {
+    .action(async (options: JsonOption & { readonly file: string; readonly worktree?: string }) => {
       present(
         validate,
         options,
-        await executeCommand(validate, () => feature.validate(options.file)),
+        await executeCommand(validate, () => feature.validate(options.file, options.worktree)),
       );
     });
   const create = new Command("create")

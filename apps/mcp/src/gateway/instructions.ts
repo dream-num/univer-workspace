@@ -76,12 +76,9 @@ export function buildServerInstructions(
         ]
       : []),
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
-    has("html_view_create")
-      ? "A page is an HTML View (.univer.html) bound to live Sheets. It is not a Slide, Board or other Unit and does not go through pull requests. Read the html-view-creator Skill before building or changing one. html_view_create and html_view_replace only save a draft. After either returns, give the user draft.previewUrl, say the page is not live until they publish it in Workspace, and end your turn. Before saying whether a page is live or still a draft, sharing its link or revising it, call html_view_draft_get; users publish in Workspace without telling you. Share shareUrl only when state is published. On rejected, ask what to change. On conflicted, read the page again with html_view_read and draft again. On expired, draft again with a new idempotency_key."
+    has("html_view_save")
+      ? "For a page sharing or presenting Workspace data, use an HTML View and read the html-view-creator Skill."
       : "This connection cannot draft pages (.univer.html). When asked for one, say so and stop. Never build a Slide, Board or other Unit instead.",
-    ...(has("html_view_read") && has("html_view_replace")
-      ? ["Revise a page with html_view_read then html_view_replace."]
-      : []),
     "Never mix up spaceId, nodeId, resourceId, unitId, pull request number and Worktree id; take identifiers from tool results, not from display names. Never invent the user, the repository or a confirmed revision.",
     ...(has("api_find") && has("api_show")
       ? ["Before writing Facade API code, look the APIs up with api_find and api_show."]

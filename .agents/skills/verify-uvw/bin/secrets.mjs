@@ -51,6 +51,8 @@ export function runSecrets(run) {
       .map(name => read(join(home, name))),
     ...names(join(home, 'principals')).filter(name => name.endsWith('.token')).map(name => read(join(home, 'principals', name))),
     ...json(join(home, 'opencode-credential.json')),
+    ...json(join(home, 'codex-credential.json')),
+    ...names(join(home, 'stories')).flatMap(name => json(join(home, 'stories', name, '.codex/auth.json'))),
     ...univerHomes.flatMap(directory => json(join(directory, 'distributions/univer-workspace-cli/workspace-cli/session.json'))),
   ].filter(Boolean);
 }

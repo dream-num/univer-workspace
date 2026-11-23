@@ -23,7 +23,7 @@ vi.mock("@tanstack/react-query", () => ({
   useQueryClient: () => ({ invalidateQueries: state.invalidate }),
   useMutation: (config: {
     mutationFn: (value: unknown) => Promise<unknown>;
-    onSuccess: () => Promise<unknown>;
+    onSuccess: (result: unknown) => Promise<unknown>;
   }) => ({
     isPending: state.pending,
     mutate: (value: unknown, callbacks: {
@@ -31,7 +31,7 @@ vi.mock("@tanstack/react-query", () => ({
       onError: (error: unknown) => void;
     }) => {
       void config.mutationFn(value).then(async (result) => {
-        await config.onSuccess();
+        await config.onSuccess(result);
         callbacks.onSuccess(result);
       }).catch(callbacks.onError);
     },
@@ -61,14 +61,17 @@ vi.mock("../../shared/ui", () => {
   const Box = ({ children }: { children?: ReactNode }) => createElement("div", null, children);
   return {
     Alert: Box, Badge: Box, Empty: Box, Segmented: Box, Spinner: Box, Tooltip: Box,
-    ConfirmDialog: ({ trigger }: { trigger: ReactNode }) => trigger,
+    ConfirmDialog: ({ trigger, description, confirmText, onConfirm }: { trigger: ReactNode; description: ReactNode; confirmText: string; onConfirm: () => void }) => {
+      state.clicks.set(confirmText, onConfirm);
+      return createElement("div", null, trigger, description);
+    },
     Button: ({ children, disabled, onClick }: {
       children: ReactNode;
       disabled: boolean;
       onClick: () => void;
     }) => {
       const label = renderToStaticMarkup(createElement("span", null, children)).replace(/<[^>]*>/g, "");
-      if (!disabled) state.clicks.set(label, onClick);
+      if (!disabled && onClick) state.clicks.set(label, onClick);
       return createElement("button", { disabled }, children);
     },
     toast: { success: state.success, error: state.error, info: state.info },
@@ -188,4 +191,30 @@ describe("Worktree continue editing", () => {
     expect(state.success).not.toHaveBeenCalled();
     expect(state.invalidate).not.toHaveBeenCalled();
   });
+});
+
+
+it.each([0, 1, 2, undefined])("announces only a positive pending page count (%s) in merge confirmation", (count) => {
+  const value = worktree(false);
+  value.capabilities.merge = true;
+  if (count !== undefined) value.pendingPageDrafts = count;
+  const html = renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+  expect(html).toContain("mergeDescription");
+  if (count) expect(html).toContain(count === 1 ? "mergePublishesPage(1)" : "mergePublishesPages(2)");
+  else expect(html).not.toContain("mergePublishesPage");
+});
+
+it.each([{ publishedPages: [] }, { publishedPages: [{ draftId: "draft-1", name: "Page", nodeId: "page-1" }] }, { publishedPages: [{ draftId: "draft-1", name: "Page", nodeId: "page-1" }, { draftId: "draft-2", name: "Page 2", nodeId: "page-2" }] }])("links to published pages only when merge returns them (%j)", async ({ publishedPages }) => {
+  const value = worktree(false); value.capabilities.merge = true;
+  state.post.mockResolvedValue({ data: { worktree: { state: "merged" }, publishedPages } });
+  renderToStaticMarkup(createElement(WorktreeReviewPanel, { worktree: value }));
+  state.clicks.get("confirmMerge")!();
+  await vi.waitFor(() => expect(state.success).toHaveBeenCalled());
+  if (publishedPages.length) {
+    const call = state.success.mock.calls.find(([message]) => message === "taskMerged");
+    expect(call).toBeDefined();
+    expect(renderToStaticMarkup(call![1].description)).toContain(publishedPages.length === 1 ? "pagePublished(1)" : "pagesPublished(2)");
+    expect(renderToStaticMarkup(call![1].description)).toContain('href="/nodes/page-1"');
+    expect(state.invalidate).toHaveBeenCalledWith({ queryKey: ["html-view-drafts"] });
+  } else expect(state.success).toHaveBeenCalledTimes(1);
 });

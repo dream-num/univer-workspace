@@ -10,6 +10,7 @@ import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/cli
 import { pino } from "pino";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAuthenticator } from "../src/gateway/auth.js";
+import { RESULT_LIMIT } from "../src/gateway/paging.js";
 import { createGateway } from "./gateway.js";
 import { listenGateway } from "./listen-gateway.js";
 import { opSpecs, PROTOCOL_VERSION } from "../src/shared/executor-protocol.js";
@@ -57,6 +58,7 @@ describe("gateway authentication", () => {
     env: Record<string, string>,
     behavior: {
       executor?: boolean;
+      htmlViewOutput?: z.output<(typeof opSpecs)["htmlView.draft"]["output"]>;
       exchangeStatus?: number;
       exchangeBody?: object;
       beforeExchange?: () => Promise<void>;
@@ -81,11 +83,11 @@ describe("gateway authentication", () => {
         const header = z.object({ input: opSpecs["htmlView.draft"].input }).parse(frame.header);
         const input = header.input;
         response.setHeader("Content-Type", "application/octet-stream");
-        response.end(encodeFrame({ ok: true, output: { draft: {
+        response.end(encodeFrame({ ok: true, output: behavior.htmlViewOutput ?? { draft: {
           id: "draft-1", kind: input.kind, state: "pending", name: "Page.univer.html", space: "space",
           previewUrl: `${identityOrigin}/drafts/draft-1`, expiresAt: "2026-11-19T00:00:00Z",
           repositoryVisibility: "private", privateSourceUnitIds: [],
-        } }, meta: { executor: "none", cost: zeroCost } }));
+        }, bindings: [], bindingCount: 0 }, meta: { executor: "none", cost: zeroCost } }));
         return;
       }
       if (path === "/api/auth/token") {
@@ -311,12 +313,12 @@ describe("gateway authentication", () => {
     expect(JSON.stringify(gateway.events())).not.toContain("Private Skill content");
   });
 
-  it("requires write scope for html_view_create before executor dispatch", async () => {
+  it("requires write scope for html_view_save before executor dispatch", async () => {
     const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_pat_readonly");
     expect(
       toolError(await client.callTool({
-        name: "html_view_create",
+        name: "html_view_save",
         arguments: {
           html: "<h1>Dashboard</h1>",
           space: "space",
@@ -332,18 +334,56 @@ describe("gateway authentication", () => {
     const gateway = await start(exchangeEnv, { executor: true });
     const client = await gateway.connect("uvw_at_oauth");
     const listed = (await client.listTools()).tools;
-    for (const name of ["html_view_create", "html_view_replace"]) {
+    for (const mode of ["create", "replace"]) {
+      const name = "html_view_save";
       expect(listed.find((tool) => tool.name === name)).toMatchObject({
         _meta: { "univer.workspace/scope": "write" },
         annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       });
       const result = await client.callTool({ name, arguments: {
         html: "<h1>Page</h1>", idempotency_key: "html-draft-key-123",
-        ...(name === "html_view_create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { resource: "resource", etag: '"v1"' }),
+        ...(mode === "create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { page: "resource", etag: '"v1"' }),
       } });
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toMatchObject({ draft: { id: "draft-1", state: "pending" } });
     }
+  });
+
+  it.each(["create", "replace"] as const)("returns a saved %s draft when binding samples exceed the gateway limit", async (mode) => {
+    const name = "html_view_save";
+    const draft = {
+      id: "draft-1", kind: mode === "create" ? "create" as const : "replace" as const,
+      state: "pending" as const, name: "Page.univer.html", space: "space",
+      sourceWorktreeId: "source-pr", previewUrl: `${identityOrigin}/drafts/draft-1`,
+      expiresAt: "2026-11-19T00:00:00Z", repositoryVisibility: "private" as const,
+      privateSourceUnitIds: ["unit"],
+      ...(mode === "replace" ? { resource: "existing-page" } : {}),
+    };
+    const bindings = Array.from({ length: 60 }, (_, index) => ({
+      kind: "range" as const, unitId: "unit", sheet: `Sheet ${index}`, ref: "A1:H3",
+      range: { rows: 3, columns: 8, filledRows: 3, head: Array.from({ length: 3 }, () =>
+        Array.from({ length: 8 }, () => ({ value: '"\\'.repeat(40), formula: true as const, format: "yyyy-mm" })),
+      ) },
+    }));
+    const original = { draft, bindings, bindingCount: bindings.length };
+    expect(JSON.stringify(original).length).toBeGreaterThan(RESULT_LIMIT);
+    const gateway = await start(exchangeEnv, { executor: true, htmlViewOutput: original });
+    const client = await gateway.connect("uvw_at_oauth");
+    const result = await client.callTool({ name, arguments: {
+      html: "<h1>Page</h1>", idempotency_key: "html-draft-key-123",
+      ...(mode === "create" ? { name: "Page", space: `${identityOrigin}/spaces/space` } : { page: "existing-page", etag: '"v1"' }),
+    } });
+    expect(result.isError).not.toBe(true);
+    const output = opSpecs["htmlView.draft"].output.parse(result.structuredContent);
+    expect(output.draft).toEqual(draft);
+    expect(output.bindingCount).toBe(original.bindingCount);
+    expect(output.truncated).toBe(true);
+    expect(output.bindings.length).toBeGreaterThan(0);
+    expect(output.bindings.length).toBeLessThan(bindings.length);
+    expect(output.bindings).toEqual(bindings.slice(0, output.bindings.length));
+    expect(JSON.stringify(result.structuredContent).length).toBeLessThanOrEqual(RESULT_LIMIT);
+    expect(result.content).toEqual([{ type: "text", text: JSON.stringify(result.structuredContent) }]);
+    expect(gateway.events().at(-1)).toMatchObject({ tool: name, outcome: "ok", error_code: null });
   });
 
   it("re-exchanges a dead downstream session and lets the client retry the same valid token", async () => {

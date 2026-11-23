@@ -24,9 +24,6 @@ describe("MCP core Skill tool bindings", () => {
   it("keeps verified edits in draft until the user requests completion or review", async () => {
     for (const path of ["../skills/core/SKILL.md", "../dist/skill-data/core/SKILL.md"]) {
       const content = (await readFile(new URL(path, import.meta.url), "utf8")).replace(/\s+/gu, " ");
-      expect(content, path).toContain(
-        "Ready only on explicit user completion/review request; undo true returns ready to draft",
-      );
       expect(content, path).toContain("Continue draft directly. Only writes need draft");
       expect(content, path).toContain(
         "read-only `execute`, `screenshot`, `export`, `export_markdown` and `print_pdf` work on a ready Worktree unchanged.",
@@ -71,19 +68,37 @@ describe("MCP core Skill tool bindings", () => {
 
   it("binds share and defers its merge rules to the server instructions for an agent identity", async () => {
     const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
-    expect(content).toContain("| `share` | `share` |");
+    expect(tools.find(({ name }) => name === "share")!.description).toContain(
+      "To read a drop, pass its url as unit with trunk: true",
+    );
     expect(content).toContain(
       "When the server instructions say the connection is an agent identity, they override every rule here that leaves readiness, merging or the link to the user.",
     );
-    expect(content).toContain("Admin; explicit user request only, except for an agent identity");
+    expect(tools.find(({ name }) => name === "pr_merge")!.description).toContain(
+      "For an agent identity, follow the server instructions instead for merging its own work",
+    );
     expect(content).toContain("unless explicitly asked or the server instructions say otherwise.");
     expect(content).toContain("An agent identity follows the server instructions instead");
   });
 
-  it("leaves making a repository public to the user in the browser", async () => {
-    const content = (await readFile(new URL("../skills/core/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
+  it("keeps claim, readiness, merge and irreversible discard rules in tool descriptions", () => {
+    expect(tools.find(({ name }) => name === "claim")!.description).toContain("For an unclaimed agent only");
+    const ready = tools.find(({ name }) => name === "pr_ready")!.description;
+    expect(ready).toContain("only when the user explicitly says the work is finished or requests review");
+    expect(ready).toContain("With undo true, move a ready pull request back to draft before an explicitly requested write");
+    expect(ready).toContain("For an agent identity, follow the server instructions instead");
+    const merge = tools.find(({ name }) => name === "pr_merge")!.description;
+    expect(merge).toContain("Unless the user explicitly asked you to merge");
+    expect(merge).toContain("For an agent identity, follow the server instructions instead");
+    const discard = tools.find(({ name }) => name === "pr_discard")!.description;
+    expect(discard).toContain("This cannot be undone");
+    expect(discard).toContain("Unless the user explicitly asked you to discard it");
+  });
+
+  it("keeps page sharing guidance in the creator and leaves visibility to the user", async () => {
+    const content = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     expect(content).toContain(
-      "This connection cannot make a repository public. When the user wants anyone with the link to open the page, give them the repository `url` and ask them to make it public in its settings in the browser",
+      "This connection cannot make a repository public. For public links, give the repository `url` and ask the user to make it public in browser settings. Explain that this publishes everything in it.",
     );
     expect(content).not.toContain("`repo_edit` to make a repository public");
   });

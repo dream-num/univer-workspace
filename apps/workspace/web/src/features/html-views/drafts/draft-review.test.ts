@@ -41,6 +41,8 @@ let publishMessage: string;
 let rejectStatus: number;
 let rejectWait: Promise<void> | undefined;
 let notFound: boolean;
+let sourceNumber: number | null;
+let sourceState: "ready" | "merged" | "discarded";
 const requests: Request[] = [];
 const NativeRequest = globalThis.Request;
 
@@ -51,11 +53,11 @@ beforeEach(() => {
   draft = {
     id: "draft-1", kind: "create", state: "pending", spaceId: "sales", parentNodeId: "folder-1",
     name: "Sales.univer.html", targetResourceId: null, baseEtag: null, byteSize: 100,
-    createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, published: null,
+    createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null, supersededBy: null, published: null,
   };
   html = "<!doctype html><html><body>New draft</body></html>";
   publishStatus = 200; rejectStatus = 200; publishMessage = "The page changed."; notFound = false;
-  rejectWait = undefined;
+  rejectWait = undefined; sourceState = "ready"; sourceNumber = 3;
   vi.stubGlobal("fetch", preview.fetch);
   preview.fetch.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = input instanceof NativeRequest ? input : new Request(input, init);
@@ -73,6 +75,7 @@ beforeEach(() => {
       draft = { ...draft, state: "rejected" };
     }
     if (path.startsWith("/api/html-view-drafts/")) return notFound ? Response.json({ error: { message: "Missing" } }, { status: 404 }) : Response.json({ draft });
+    if (path === "/api/worktrees/pr-3") return Response.json({ worktree: { id: "pr-3", number: sourceNumber, state: sourceState, units: [{ unitId: "source-unit", name: "PR Sheet", unitType: "sheet" }] } });
     if (path === "/api/unit-resources/source-unit") return Response.json({ node: { id: "source-node", name: "Source Sheet" } });
     if (path === "/api/spaces/sales") return Response.json({ fullName: "alice/sales", publicRead: false });
     if (path === "/api/nodes/folder-1") return Response.json({ node: { name: "Reports" } });
@@ -148,6 +151,29 @@ it("labels the change reason and disables Send for blank input or a running sess
   expect(count("/reject")).toBe(0); expect(onRequestChanges).not.toHaveBeenCalled();
 });
 
+it.each([
+  ["en-US", "Change style", "Change the style"],
+  ["zh-CN", "换风格", "换个风格"],
+])("sends a localized style request from the draft card in %s", async (language, label, message) => {
+  window.localStorage.setItem("univer-workspace-language", language);
+  const onRequestChanges = vi.fn();
+  await render("card", { onRequestChanges });
+  await waitFor(() => expect(button(label).disabled).toBe(false));
+  await click(label);
+  expect(onRequestChanges).toHaveBeenCalledExactlyOnceWith(message);
+  expect(count("/reject")).toBe(0);
+  expect(draft.state).toBe("pending");
+});
+
+it("disables style requests along with Request changes while the session is running", async () => {
+  const onRequestChanges = vi.fn();
+  await render("card", { onRequestChanges, requestChangesDisabled: true });
+  await waitFor(() => expect(button("Request changes").disabled).toBe(true));
+  expect(button("Change style").disabled).toBe(true);
+  await click("Change style");
+  expect(onRequestChanges).not.toHaveBeenCalled();
+});
+
 it.each(["en-US", "zh-CN"])("rejects before sending the localized change request in %s", async (language) => {
   window.localStorage.setItem("univer-workspace-language", language);
   let finishReject!: () => void;
@@ -160,6 +186,8 @@ it.each(["en-US", "zh-CN"])("rejects before sending the localized change request
   const send = language === "en-US" ? "Send" : "发送";
   await click(send);
   await waitFor(() => expect(button(send).disabled).toBe(true));
+  expect(button(language === "en-US" ? "Request changes" : "要求修改").disabled).toBe(true);
+  expect(button(language === "en-US" ? "Change style" : "换风格").disabled).toBe(true);
   expect(onRequestChanges).not.toHaveBeenCalled();
   await act(async () => finishReject());
   await waitFor(() => expect(onRequestChanges).toHaveBeenCalledExactlyOnceWith(language === "en-US"
@@ -192,10 +220,12 @@ it("returns from full-screen preview to the card's change form", async () => {
   expect(container.querySelector("textarea")).not.toBeNull();
 });
 
-it("offers no Request changes on the standalone draft page", async () => {
+it.each(["en-US", "zh-CN"])("offers no feedback controls on the standalone draft page in %s", async (language) => {
+  window.localStorage.setItem("univer-workspace-language", language);
   await render("page", { onRequestChanges: vi.fn() });
   await waitFor(() => expect(container.textContent).toContain("Sales.univer.html"));
-  expect(container.textContent).not.toContain("Request changes");
+  expect(container.textContent).not.toContain(language === "en-US" ? "Request changes" : "要求修改");
+  expect(container.textContent).not.toContain(language === "en-US" ? "Change style" : "换风格");
 });
 
 it("shows a create draft and destination, publishes once, and links to the immersive page", async () => {
@@ -320,4 +350,67 @@ it("lists bound source Sheet names through the shared source loader", async () =
   await render("card");
   await waitFor(() => expect(container.textContent).toContain("Source Sheet"));
   expect(count("/source-unit")).toBe(1);
+});
+
+
+it.each(["page", "card"] as const)("previews PR sources and waits for merge in the %s", async (presentation) => {
+  draft.sourceWorktreeId = "pr-3";
+  html = '<p data-univer-cell-text="source-unit:sheet-1:B2"></p>';
+  await render(presentation);
+  await waitFor(() => expect(container.textContent).toContain("Publishes automatically when PR #3 merges."));
+  expect(container.querySelector('a[href="/spaces/sales/pulls/3"]')).not.toBeNull();
+  expect(button("Publish").disabled).toBe(true);
+  await waitFor(() => expect(container.textContent).toContain("PR Sheet"));
+  expect(count("/source-unit")).toBe(0);
+  if (presentation === "card") await click("Open draft preview");
+  await waitFor(() => expect(preview.html).toHaveBeenCalled());
+  expect(preview.html.mock.lastCall?.[0]).toMatchObject({ draft: true, sourceWorktree: { id: "pr-3", state: "ready" } });
+  expect([...document.querySelectorAll<HTMLButtonElement>("button")].filter((b) => b.textContent === "Publish").every((b) => b.disabled)).toBe(true);
+  await click("Publish");
+  expect(count("/publish")).toBe(0);
+  expect(button("Reject").disabled).toBe(false);
+});
+
+it("unlocks a pending draft after a token merge without automatic publication", async () => {
+  draft.sourceWorktreeId = "pr-3"; sourceState = "merged";
+  await render();
+  await waitFor(() => expect(button("Publish").disabled).toBe(false));
+  expect(container.textContent).not.toContain("Publishes automatically");
+  await click("Publish");
+  await waitFor(() => expect(container.textContent).toContain("Published"));
+});
+
+it("says the source PR was discarded", async () => {
+  draft.sourceWorktreeId = "pr-3"; sourceState = "discarded";
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("The source PR was discarded"));
+  expect(container.querySelector("button")).toBeNull();
+  expect(preview.html).not.toHaveBeenCalled();
+});
+
+it("shows the waiting message in Chinese", async () => {
+  draft.sourceWorktreeId = "pr-3";
+  window.localStorage.setItem("univer-workspace-language", "zh-CN");
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("等待 PR #3 合并，合并后自动发布页面。"));
+  expect(button("发布").disabled).toBe(true);
+});
+
+
+it("links legacy source PRs through the existing review route", async () => {
+  draft.sourceWorktreeId = "pr-3"; sourceNumber = null;
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("Publishes automatically when the source PR merges."));
+  expect(container.querySelector('a[href="/worktrees?worktree=pr-3"]')).not.toBeNull();
+  expect(button("Publish").disabled).toBe(true);
+});
+
+it("shows superseded with a successor link and no publish controls", async () => {
+  draft = { ...draft, state: "superseded", supersededBy: "new draft" };
+  await render();
+  await waitFor(() => expect(container.textContent).toContain("Superseded by a newer draft"));
+  expect(container.querySelector("a")?.getAttribute("href")).toBe("/drafts/new%20draft");
+  expect(container.textContent).toContain("Open newer draft");
+  expect(container.querySelector("button")).toBeNull();
+  expect(requests.some((request) => new URL(request.url).pathname.endsWith("/content"))).toBe(false);
 });

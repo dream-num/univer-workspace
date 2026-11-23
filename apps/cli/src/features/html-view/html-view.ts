@@ -20,9 +20,9 @@ export class WorkspaceHtmlViewFeature {
     this.core = new CoreHtmlViewFeature(options);
   }
 
-  public async validate(inputPath: string) {
+  public async validate(inputPath: string, sourceWorktreeId?: string) {
     const source = await readSource(inputPath);
-    return await withSourcePath(source.filePath, () => this.core.validate(source));
+    return await withSourcePath(source.filePath, () => this.core.validate({ ...source, ...(sourceWorktreeId === undefined ? {} : { sourceWorktreeId }) }));
   }
 
   public async create(input: WorkspaceHtmlViewDestination & { readonly filePath: string }) {

@@ -1,6 +1,6 @@
 HtmlViewDraft:
   type: object
-  required: [id, kind, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published]
+  required: [id, kind, state, spaceId, parentNodeId, name, targetResourceId, baseEtag, byteSize, createdAt, expiresAt, decidedAt, published, supersededBy]
   properties:
     id:
       type: string
@@ -9,9 +9,15 @@ HtmlViewDraft:
       enum: [create, replace]
     state:
       type: string
-      enum: [pending, published, rejected, expired, conflicted]
+      enum: [pending, published, rejected, expired, conflicted, superseded]
+    supersededBy:
+      type: [string, "null"]
+      description: Successor draft ID when superseded.
     spaceId:
       type: string
+    sourceWorktreeId:
+      type: [string, "null"]
+      description: Source pull request. Always returned by current servers, nullable when unlinked. Publishing waits until it is merged.
     parentNodeId:
       type: [string, "null"]
     name:
@@ -52,6 +58,7 @@ HtmlViewDraftEnvelope:
 SubmitHtmlViewDraft:
   oneOf:
     - type: object
+      additionalProperties: false
       required: [kind, spaceId, name, html]
       properties:
         kind:
@@ -64,10 +71,16 @@ SubmitHtmlViewDraft:
         name:
           type: string
           description: Trimmed name; .univer.html is appended when absent.
+        sourceWorktreeId:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
         html:
           type: string
           description: Structurally valid HTML View, at most 512 KiB UTF-8.
     - type: object
+      additionalProperties: false
       required: [kind, resourceId, etag, html]
       properties:
         kind:
@@ -78,6 +91,27 @@ SubmitHtmlViewDraft:
         etag:
           type: string
           description: One quoted strong ETag, as returned by Blob content.
+        sourceWorktreeId:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
+        html:
+          type: string
+          description: Structurally valid HTML View, at most 512 KiB UTF-8.
+    - type: object
+      required: [kind, draftId, html]
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+          const: revise
+        draftId:
+          type: string
+          description: Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded.
+        sourceWorktreeId:
+          type: string
+          description: Override the source PR; otherwise inherit the previous draft's source.
         html:
           type: string
           description: Structurally valid HTML View, at most 512 KiB UTF-8.

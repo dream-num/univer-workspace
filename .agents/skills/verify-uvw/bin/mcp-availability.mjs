@@ -15,7 +15,7 @@ export const expectedTools = {
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
-    'html_view_styles', 'html_view_validate', 'html_view_create', 'html_view_read', 'html_view_replace',
+    'html_view_styles', 'html_view_save', 'html_view_read',
     'html_view_draft_get'
   ],
   'files': [
@@ -32,7 +32,7 @@ export const expectedTools = {
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
-    'html_view_styles', 'html_view_validate', 'html_view_create', 'html_view_read', 'html_view_replace',
+    'html_view_styles', 'html_view_save', 'html_view_read',
     'html_view_draft_get', 'blob_get', 'blob_upload', 'blob_download', 'blob_replace', 'asset_download',
     'compile_markdown', 'export_markdown', 'compile_typst', 'compile_svg'
   ],
@@ -42,7 +42,7 @@ export const expectedTools = {
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
-    'html_view_styles', 'html_view_validate', 'html_view_create', 'html_view_read', 'html_view_replace',
+    'html_view_styles', 'html_view_save', 'html_view_read',
     'html_view_draft_get', 'repo_create', 'repo_edit', 'label_list', 'label_write', 'space_node', 'pr_merge',
     'pr_discard', 'resources_registries', 'resources_find', 'resources_export'
   ],
@@ -58,7 +58,7 @@ export const expectedTools = {
     'browse', 'space_browse', 'space_find', 'share', 'unit_list', 'unit_add', 'unit_create',
     'file_upload_create', 'execute', 'inspect', 'outline', 'read', 'find', 'import', 'export', 'job_get',
     'api_find', 'api_show', 'skills_read', 'skill_source_read', 'skill_draft_create', 'skill_draft_get',
-    'html_view_styles', 'html_view_validate', 'html_view_create', 'html_view_read', 'html_view_replace',
+    'html_view_styles', 'html_view_save', 'html_view_read',
     'html_view_draft_get', 'blob_get', 'blob_upload', 'blob_download', 'blob_replace', 'asset_download',
     'compile_markdown', 'export_markdown', 'compile_typst', 'compile_svg', 'repo_create', 'repo_edit',
     'label_list', 'label_write', 'space_node', 'pr_merge', 'pr_discard', 'resources_registries',

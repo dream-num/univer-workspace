@@ -24,7 +24,7 @@ const rpcSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(), method: z.string(),
   params: z.object({ name: z.string().optional() }).passthrough().optional(),
 });
-function modelStream(toolName?: string, parallel = false, usage?: { prompt_tokens: number; prompt_cache_hit_tokens?: number; prompt_tokens_details?: { cached_tokens: number } }, toolInput: unknown = {}): Response {
+function modelStream(toolName?: string, parallel = false, usage?: { prompt_tokens: number; prompt_cache_hit_tokens?: number; prompt_tokens_details?: { cached_tokens: number } }, toolInput: unknown = toolName === "html_view_save" ? { space: "sales", name: "Report" } : {}): Response {
   const delta = toolName ? { role: "assistant", tool_calls: [{ index: 0, id: "call-1", type: "function", function: { name: toolName, arguments: JSON.stringify(toolInput) } }, ...(parallel ? [{ index: 1, id: "call-2", type: "function", function: { name: toolName, arguments: "{}" } }] : [])] }
     : { role: "assistant", content: "Done" };
   const chunk = (value: unknown, finish: string | null) => ({ id: "completion-1", object: "chat.completion.chunk", created: 1, model: "deepseek-flash", choices: [{ index: 0, delta: value, finish_reason: finish }] });
@@ -39,7 +39,7 @@ async function setup(options: {
   unauthorized?: number;
   resourceError?: boolean;
   publish?: boolean;
-  pageTool?: "html_view_create" | "html_view_replace";
+  pageTool?: "html_view_save";
   getDraft?: AgentRunnerDependencies["getDraft"];
   checkHtmlViewDraft?: AgentRunnerDependencies["checkHtmlViewDraft"];
   toolOutput?: unknown;
@@ -126,11 +126,11 @@ async function setup(options: {
 }
 
 describe("agent runner with real SDK transports and offline fetch", () => {
-  it.each(["html_view_create", "html_view_replace"] as const)("checks successful %s results in Ask and Auto before persisting and sending them to the model", async (pageTool) => {
+  it("checks successful html_view_save results in Ask and Auto before persisting and sending them to the model", async () => {
     for (const mode of ["ask", "auto"] as const) {
       const renderCheck = { status: "issues" as const, issues: [{ kind: "page-error" as const, message: "B7 must contain a start month" }], durationMs: 1250 };
       const checkHtmlViewDraft = vi.fn(async () => renderCheck);
-      const test = await setup({ pageTool, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+      const test = await setup({ pageTool: "html_view_save", checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
       const started = await test.runner.start({ ...test.input, mode });
       const done = await test.finished(started.id);
       expect(checkHtmlViewDraft).toHaveBeenCalledWith("draft-1", expect.any(AbortSignal));
@@ -149,9 +149,9 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     }
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("checks %s after gateTools replaces execution", async (pageTool) => {
+  it("checks html_view_save after gateTools replaces execution", async () => {
     const checkHtmlViewDraft = vi.fn(async () => ({ status: "passed" as const, issues: [], durationMs: 1000 }));
-    const test = await setup({ pageTool, publish: true, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+    const test = await setup({ pageTool: "html_view_save", publish: true, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
     const started = await test.runner.start(test.input);
     const waiting = await test.finished(started.id);
     expect(checkHtmlViewDraft).not.toHaveBeenCalled();
@@ -167,7 +167,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     { content: [], structuredContent: { draft: { state: "pending" } } },
   ])("leaves an error or draftless result unchanged", async (toolOutput) => {
     const checkHtmlViewDraft = vi.fn();
-    const test = await setup({ pageTool: "html_view_create", toolOutput, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_create" : undefined) });
+    const test = await setup({ pageTool: "html_view_save", toolOutput, checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
     const started = await test.runner.start(test.input);
     const done = await test.finished(started.id);
     expect(checkHtmlViewDraft).not.toHaveBeenCalled();
@@ -182,7 +182,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       if (outcome === "abort") await new Promise<void>((resolve) => signal?.addEventListener("abort", () => resolve(), { once: true }));
       return { status: outcome === "timeout" ? "timed-out" : "failed", issues: [], durationMs: 20000, reason: outcome };
     };
-    const test = await setup({ pageTool: "html_view_create", checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_create" : undefined) });
+    const test = await setup({ pageTool: "html_view_save", checkHtmlViewDraft, model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
     const started = await test.runner.start(test.input);
     await entered.promise;
     if (outcome === "abort") await test.runner.stop(started.id);
@@ -477,8 +477,8 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     }
   });
 
-  it.each(["pr_create", "html_view_create"] as const)("records approved %s execution through the gated publish client", async (name) => {
-    const test = await setup({ publish: true, ...(name === "html_view_create" ? { pageTool: name } : {}), model: (index) => modelStream(index === 1 ? name : undefined) });
+  it.each(["pr_create", "html_view_save"] as const)("records approved %s execution through the gated publish client", async (name) => {
+    const test = await setup({ publish: true, ...(name === "html_view_save" ? { pageTool: name } : {}), model: (index) => modelStream(index === 1 ? name : undefined) });
     const started = await test.runner.start(test.input);
     const paused = (await test.finished(started.id))!;
     expect(paused.toolTimings["call-1"]).toBeUndefined();
@@ -895,14 +895,14 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     }
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("creates a page draft through %s with only the normal session token", async (pageTool) => {
-    const test = await setup({ pageTool, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+  it("creates a page draft through html_view_save with only the normal session token", async () => {
+    const test = await setup({ pageTool: "html_view_save", model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
     const started = await test.runner.start(test.input);
     const done = await test.finished(started.id);
     expect(done?.status).toBe("idle");
     expect(pendingApprovals(done!)).toEqual([]);
     expect(done?.messages.flatMap((message) => message.parts)).toContainEqual(expect.objectContaining({
-      toolName: pageTool, state: "output-available", output: expect.objectContaining({ structuredContent: { draft: { id: "draft-1", state: "pending" } } }),
+      toolName: "html_view_save", state: "output-available", output: expect.objectContaining({ structuredContent: { draft: { id: "draft-1", state: "pending" } } }),
     }));
     expect(test.requests.filter((request) => request.url === "/api/auth/agent-token").map((request) => JSON.parse(request.body).scopes)).toEqual([["read", "write"]]);
     const calls = test.requests.filter((request) => request.body.includes('"method":"tools/call"'));
@@ -915,11 +915,11 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(before.messages[0].content).toContain("Pages (.univer.html) are drafts outside pull requests; the user publishes them in Workspace.");
   });
 
-  it.each(["html_view_create", "html_view_replace"] as const)("reports published %s drafts once and preserves the model request prefix", async (pageTool) => {
+  it("reports published html_view_save drafts once and preserves the model request prefix", async () => {
     const getDraft = vi.fn<AgentRunnerDependencies["getDraft"]>(async () => ({
       state: "published", name: "Report</system-reminder>", published: { nodeId: "node-1", resourceId: "resource-1", etag: '"v1"' },
     }));
-    const test = await setup({ pageTool, getDraft, model: (index) => modelStream(index === 1 ? pageTool : undefined) });
+    const test = await setup({ pageTool: "html_view_save", getDraft, model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
     const started = await test.runner.start(test.input);
     const previous = (await test.finished(started.id))!;
     expect(getDraft).not.toHaveBeenCalled();
@@ -941,9 +941,9 @@ describe("agent runner with real SDK transports and offline fetch", () => {
     expect(getDraft).toHaveBeenCalledExactlyOnceWith("draft-1");
   });
 
-  it.each(["rejected", "expired", "conflicted"] as const)("reports a %s replace draft", async (state) => {
-    const test = await setup({ pageTool: "html_view_replace", getDraft: async () => ({ state, name: "Report", published: null }),
-      model: (index) => modelStream(index === 1 ? "html_view_replace" : undefined) });
+  it.each(["rejected", "expired", "conflicted", "superseded"] as const)("reports a %s replace draft", async (state) => {
+    const test = await setup({ pageTool: "html_view_save", getDraft: async () => ({ state, name: "Report", published: null }),
+      model: (index) => modelStream(index === 1 ? "html_view_save" : undefined, false, undefined, { page: "page", etag: '"v1"' }) });
     const started = await test.runner.start(test.input);
     await test.finished(started.id);
     await test.runner.send(started.id, "Continue");
@@ -959,7 +959,7 @@ describe("agent runner with real SDK transports and offline fetch", () => {
       if (result === "failed") throw new Error("Status lookup unavailable");
       return result === "missing" ? null : { state: "pending", name: "Report", published: null };
     });
-    const test = await setup({ pageTool: "html_view_create", getDraft, model: (index) => modelStream(index === 1 ? "html_view_create" : undefined) });
+    const test = await setup({ pageTool: "html_view_save", getDraft, model: (index) => modelStream(index === 1 ? "html_view_save" : undefined) });
     const started = await test.runner.start(test.input);
     await test.finished(started.id);
     for (const text of ["Continue", "Again"]) {

@@ -76,7 +76,7 @@ identity, repositories, Issues, pull requests, files, repository administration,
 - MX16 returns `inspect` input errors in MCP words, without CLI flags, and requires exactly one scope.
 - MF1 through MF9 verify capability upload/download, idempotent Blob publication/replacement, owner isolation, the browser upload page, Worktree image Assets, binary round trips, normalized file paths and the MCP body cap.
 - MX7 and MX8 round-trip xlsx and docx through Office import and export.
-- MH1 through MH3 compare HTML View validation with the CLI, preserve missing-source errors, and draft, preview, publish and read back the validated page.
+- MH1 through MH4 compare HTML View dry runs with the CLI, preserve missing-source errors, save and retry drafts, revise pending drafts, and preview, publish and read back the revised page.
 - MR9 proves the renderer role: Chromium renders Latin and Chinese text legibly, the browser is reused, and the renderer has no route out.
 - MR10 screenshots a Sheet with text and an image in a Worktree and on trunk against `uvw screenshot`, returns download links for a deck above 1 MiB, and rejects invalid options readably.
 - MR11 prints a Doc and a Sheet with an image to PDF in a Worktree and on trunk against `uvw print-pdf`, lints a Slide deck with layout problems against `uvw lint`, and returns the CLI's rejections.
@@ -200,7 +200,7 @@ $V mcp-tools --toolsets core,admin mcp-tools-core-admin
 $V mcp-tools --toolsets all mcp-tools-all
 $V mcp-tools --toolsets nope mcp-tools-unknown
 test $? -eq 3
-CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_validate","html_view_create","html_view_read","html_view_replace","html_view_draft_get"]'
+CORE='["whoami","repo_list","repo_view","issue_list","issue_view","issue_create","issue_edit","issue_comment","issue_set_state","pr_list","pr_view","pr_create","pr_edit","pr_ready","search","browse","space_browse","space_find","share","unit_list","unit_add","unit_create","file_upload_create","execute","inspect","outline","read","find","screenshot","import","export","job_get","api_find","api_show","skills_read","skill_source_read","skill_draft_create","skill_draft_get","html_view_styles","html_view_save","html_view_read","html_view_draft_get"]'
 FILES='["blob_get","blob_upload","blob_download","blob_replace","asset_download","compile_markdown","export_markdown","compile_typst","compile_svg","print_pdf","lint"]'
 ADMIN='["repo_create","repo_edit","label_list","label_write","space_node","pr_merge","pr_discard","resources_registries","resources_find","resources_export"]'
 jq -e --argjson want "$CORE" 'map(.name) == $want' "$EVIDENCE/mcp-tools-core.out"
@@ -211,24 +211,24 @@ jq -e --argjson core "$CORE" --argjson files "$FILES" --argjson admin "$ADMIN" '
 for label in core files admin core-admin all; do
   jq -e '
     all(.[]; .annotations.openWorldHint == false and .inputSchema != null and .outputSchema != null)
-    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|validate|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
-    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|share|unit_(add|create)|file_upload_create|skill_draft_create|blob_upload|html_view_(create|replace)|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(whoami|repo_(list|view)|issue_(list|view)|pr_(list|view)|search|browse|space_(browse|find)|unit_list|inspect|outline|read|find|screenshot|export|job_get|api_(find|show)|skills_read|skill_source_read|skill_draft_get|html_view_(styles|read|draft_get)|blob_get|blob_download|asset_download|export_markdown|print_pdf|lint|label_list|resources_(registries|find|export))$")); .annotations.readOnlyHint == true and .annotations.destructiveHint == false)
+    and all(.[] | select(.name | test("^(issue_(create|edit|comment|set_state)|pr_(create|edit|ready)|share|unit_(add|create)|file_upload_create|skill_draft_create|blob_upload|html_view_save|compile_markdown|compile_typst|compile_svg|execute|import|repo_create)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == false)
     and all(.[] | select(.name | test("^(repo_edit|label_write|space_node|pr_merge|pr_discard|blob_replace)$")); .annotations.readOnlyHint == false and .annotations.destructiveHint == true)
   ' "$EVIDENCE/mcp-tools-$label.out"
 done
-diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:44]' "$EVIDENCE/mcp-tools-all.out")
+diff <(jq -S . "$EVIDENCE/mcp-tools-core.out") <(jq -S '.[:42]' "$EVIDENCE/mcp-tools-all.out")
 jq -e 'all(.[] | select(.name | test("^(repo_create|repo_edit|space_node|label_write)$")); .description | startswith("Takes effect immediately, without review."))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e 'all(.[] | select(.name | test("^pr_(merge|discard)$")); .description | contains("Unless the user explicitly asked"))' "$EVIDENCE/mcp-tools-admin.out"
 jq -e '.status == 400 and (.body | fromjson | .valid == ["core","files","admin","all"])' "$EVIDENCE/mcp-tools-unknown.out"
 jq -e 'all(.[]; .description | test("\\buvw\\b") | not)' "$EVIDENCE/mcp-tools-all.out"
-jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 13 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
+jq -e '[.[] | select(.inputSchema.properties.idempotency_key) | .inputSchema.properties.idempotency_key.description] | length == 12 and all(.[]; startswith("Generate a new random value, such as a UUID, for each new operation."))' "$EVIDENCE/mcp-tools-all.out"
 ```
 
 Pass when every selection exits 0 with exactly its tools in the fixed order (core, then files, then
 admin), schemas present, and annotations as specified (read-only, non-destructive write, and
 destructive: `repo_edit`, `label_write`, `space_node`, `pr_merge`, `pr_discard`); the core list equals the
-first 44 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; no tool description
-names `uvw`; the 13 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
+first 42 tools of `all`; the immediate-effect and leave-to-the-user descriptions are present; no tool description
+names `uvw`; the 12 tools with an `idempotency_key` describe it with the same new-key-per-operation rule; unknown
 exits 3 with HTTP 400 and the valid toolset names. Tool lists have no event file.
 
 **M8. Authentication.**
@@ -2255,10 +2255,10 @@ MH_S=$(jq -r .value.sheetId "$EVIDENCE/mh-data.out")
 $V cli mh-ready pr ready "$MH_N" -R "$O/personal" --json
 $V cli mh-merge pr merge "$MH_N" -R "$O/personal" --json
 printf '<!DOCTYPE html><html><head><title>Regional totals</title></head><body style="background:#fff;color:#111;font:18px system-ui;padding:32px"><h1>Regional totals</h1><p>North: <output data-univer-cell-text="%s:%s:B2"></output></p></body></html>\n' "$MH_U" "$MH_S" > "$EVIDENCE/mh-view.univer.html"
-$V mcp --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html}')"
+$V mcp --expect-event '.unit_type == "sheet" and .cost.committed_revisions == 0 and .cost.worker_cpu_ms > 0' mh-validate html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" '{html:$html,dryRun:true}')"
 $V cli mh-validate-cli html-view validate --file "$EVIDENCE/mh-view.univer.html" --json
-diff <(jq -S . "$EVIDENCE/mh-validate.out") <(jq -S . "$EVIDENCE/mh-validate-cli.out")
-jq -e --arg unit "$MH_U" '.valid == true and .unitIds == [$unit] and .bindingCount == 1' "$EVIDENCE/mh-validate.out"
+diff <(jq -S 'del(.dryRun)' "$EVIDENCE/mh-validate.out") <(jq -S 'del(.unitIds)' "$EVIDENCE/mh-validate-cli.out")
+jq -e '.dryRun == true and .valid == true and (has("draft") | not) and .bindingCount == 1' "$EVIDENCE/mh-validate.out"
 ```
 
 Pass when the Sheet is merged with data and MCP and CLI validation results match.
@@ -2267,7 +2267,7 @@ Pass when the Sheet is merged with data and MCP and CLI validation results match
 
 ```bash
 printf '<output data-univer-cell-text="missing-html-sheet:missing:A1"></output>\n' > "$EVIDENCE/mh-missing.univer.html"
-$V mcp mh-missing html_view_validate "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html}')"
+$V mcp mh-missing html_view_save "$(jq -nc --rawfile html "$EVIDENCE/mh-missing.univer.html" '{html:$html,dryRun:true}')"
 test $? -eq 1
 $V cli mh-missing-cli html-view validate --file "$EVIDENCE/mh-missing.univer.html" --json
 test $? -eq 1
@@ -2278,15 +2278,39 @@ jq -e --arg code "$MH_CODE" '.outcome == "tool_error" and .error_code == $code' 
 
 Pass when both clients preserve the same missing-source code.
 
-**MH3. Draft, preview, publish and read back the validated HTML View.**
+**MH3. Save, retry, revise and read back the pending HTML View draft.**
 
 ```bash
 MH_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-view.univer.html" --arg space "$MH_SPACE" --arg key "html-view-$VERIFY_UVW_RUN-$MH_U" '{html:$html,space:$space,name:"Regional totals",idempotency_key:$key}')
-$V mcp --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_create "$MH_ARGS"
-$V mcp mh-retry html_view_create "$MH_ARGS"
+$V mcp --expect-event '.cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-create html_view_save "$MH_ARGS"
+$V mcp mh-retry html_view_save "$MH_ARGS"
 diff <(jq -S .draft "$EVIDENCE/mh-create.out") <(jq -S .draft "$EVIDENCE/mh-retry.out")
 jq -e --arg origin "$ORIGIN" '.draft.state == "pending" and (.draft.previewUrl | startswith($origin + "/drafts/"))' "$EVIDENCE/mh-create.out"
 MH_D=$(jq -r .draft.id "$EVIDENCE/mh-create.out")
+$V mcp mh-read-draft html_view_read "{\"draft\":\"$MH_D\"}"
+jq -j .html "$EVIDENCE/mh-read-draft.out" > "$EVIDENCE/mh-draft.univer.html"
+cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-draft.univer.html"
+sed 's/Regional totals/Regional totals revised/g' "$EVIDENCE/mh-view.univer.html" > "$EVIDENCE/mh-revised.univer.html"
+MH_REVISE_ARGS=$(jq -nc --rawfile html "$EVIDENCE/mh-revised.univer.html" --arg draft "$MH_D" --arg key "html-view-revise-$VERIFY_UVW_RUN-$MH_U" '{html:$html,draft:$draft,idempotency_key:$key}')
+$V mcp --expect-event '.repo != null and .cost.upload_bytes > 0 and .cost.committed_revisions == 0' mh-revise html_view_save "$MH_REVISE_ARGS"
+MH_REVISED_D=$(jq -r .draft.id "$EVIDENCE/mh-revise.out")
+test "$MH_REVISED_D" != "$MH_D"
+jq -e '.draft.state == "pending"' "$EVIDENCE/mh-revise.out"
+$V mcp mh-old-draft html_view_draft_get "{\"draft\":\"$MH_D\"}"
+jq -e --arg next "$MH_REVISED_D" '.draft.state == "superseded" and .draft.supersededBy == $next' "$EVIDENCE/mh-old-draft.out"
+$V mcp mh-read-revised html_view_read "{\"draft\":\"$MH_REVISED_D\"}"
+jq -e --arg draft "$MH_REVISED_D" '.draft == $draft and (has("etag") | not)' "$EVIDENCE/mh-read-revised.out"
+jq -j .html "$EVIDENCE/mh-read-revised.out" > "$EVIDENCE/mh-read-revised.univer.html"
+cmp "$EVIDENCE/mh-revised.univer.html" "$EVIDENCE/mh-read-revised.univer.html"
+```
+
+Pass when identical saves return the same pending draft, the draft read returns the original HTML,
+and revising by draft creates a new pending draft and supersedes the old one. The revised read must
+return the revised HTML byte for byte without an ETag. All calls pass the helper's usage-event checks.
+
+**MH4. Preview, publish and read back the revised HTML View.**
+
+```bash
 agent-browser open "$ORIGIN/login"
 agent-browser wait 1500
 if agent-browser get url | grep -q '/login'; then
@@ -2295,26 +2319,24 @@ if agent-browser get url | grep -q '/login'; then
   agent-browser click 'form button[type=submit]'
   agent-browser wait --url '**/home'
 fi
-agent-browser open "$(jq -r .draft.previewUrl "$EVIDENCE/mh-create.out")"
+agent-browser open "$(jq -r .draft.previewUrl "$EVIDENCE/mh-revise.out")"
 agent-browser wait 3000
 agent-browser screenshot "$EVIDENCE/mh-draft.png"
 agent-browser find role button click --name Publish
 agent-browser wait --text 'Open page'
-$V mcp mh-draft-get html_view_draft_get "{\"draft\":\"$MH_D\"}"
+$V mcp mh-draft-get html_view_draft_get "{\"draft\":\"$MH_REVISED_D\"}"
 jq -e '.draft.state == "published" and (.draft.shareUrl | test("\\?view=immersive$"))' "$EVIDENCE/mh-draft-get.out"
 $V mcp mh-read html_view_read "{\"resource\":\"$(jq -r .draft.resource "$EVIDENCE/mh-draft-get.out")\"}"
 jq -j .html "$EVIDENCE/mh-read.out" > "$EVIDENCE/mh-published.univer.html"
-cmp "$EVIDENCE/mh-view.univer.html" "$EVIDENCE/mh-published.univer.html"
+cmp "$EVIDENCE/mh-revised.univer.html" "$EVIDENCE/mh-published.univer.html"
 agent-browser open "$(jq -r .draft.shareUrl "$EVIDENCE/mh-draft-get.out")"
 agent-browser wait 3000
 agent-browser screenshot "$EVIDENCE/mh-published.png"
 ```
 
-Pass when both create calls return the same pending draft, the Space has no page before
-Publish, the draft screenshot shows North and 42 with a Publish button, `html_view_draft_get`
-reports `published` with an immersive `shareUrl`, the read-back bytes equal the validated
-source, and the published screenshot shows North and 42. Wait for the preview to load before
-clicking Publish; the preview's New and Current controls are buttons, not ARIA tabs.
+Pass when the preview shows North and 42 with a Publish button, publishing returns an immersive
+share URL, and the published HTML matches the revised source byte for byte. Capture both the
+preview and published page. Wait for the preview to load before clicking Publish.
 
 ### MR9 renderer role
 

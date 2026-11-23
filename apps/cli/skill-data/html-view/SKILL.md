@@ -6,25 +6,31 @@ description: Create or revise live .univer.html pages backed by existing Workspa
 # Workspace HTML Views
 
 With the CLI, `html-view create` and replacement publish immediately. Through MCP tools,
-creation and replacement save a draft the user publishes in Workspace. Follow the server instructions.
+use html_view_save to save a draft. Read the html-view-creator Skill for the MCP workflow.
 
 ## Start with a style and live data
 
-1. Read [design.md](references/design.md). Read the source Sheet, then, unless the user
-   already named a style, ask which style they want as design.md describes, in the same
-   message as your plan for the page. End your turn and wait for the answer before you write,
-   validate or publish a page. If they leave the choice to you (你来定, 随便, 默认就行), use
-   Night Gauge (`night-gauge`, 仪表夜航). Never silently choose another style.
-2. Read and adapt the complete `templates/<id>.univer.html` for that style; never start from
-   a blank page. Keep its fonts, palette, density and signature element when adapting to new data.
-   For a style the user describes, start from the template whose structure best fits the data and
-   replace its fonts, palette and signature element with the user's description.
-3. Page controls write to Sheet cells or append rows; the page displays the recalculated
-   source values through live bindings, and label host-provided visitor trials with `getWriteMode`
-   as the templates do, without page-side simulations. Never re-implement a Sheet formula in page code,
-   embed copies of Sheet data, or use fallback numbers. Keep loading, empty and error states honest.
-4. Write the page in the user's language as [design.md](references/design.md) describes;
-   templates are English starting points.
+1. Read the source Sheet. Use the style the user named; otherwise choose from the catalog in
+   [design.md](references/design.md) using the purpose, audience and adjectives in the request,
+   and the data's shape (dense rankings, time series, tasks/status or a few key numbers).
+   If none fits, use Night Gauge (`night-gauge`, 仪表夜航) or a custom style. Ask at most
+   one question only when purpose or data is unclear, or the user asks to see a plan or pick
+   a style. Otherwise proceed directly. In the reply, always name the style and why it fits
+   the request or data in one clause, and
+   offer to change it; give a custom style a name and one-line description.
+2. Read `styles/<id>.md` by default. Read the full `templates/<id>.univer.html` only
+   when the data's shape is close to its designed-for scenario in the catalog, or the
+   page needs that template's interaction. Keep the style's fonts, palette, density and
+   signature element. Adapt the structure and bindings to the inspected Sheet.
+   For a custom style, start from the structurally closest style card and change palette,
+   type and signature element while meeting the design floor in design.md.
+3. Controls write input cells or insert records. Subscriptions display recalculated Sheet values.
+   Never compute Sheet metrics in page code or embed copied data or fallback numbers.
+   If a derived metric is missing, add Sheet formula cells through the execution operation in
+   the session's pull request. For a merged Sheet, create a pull request and add the Sheet first.
+   Bind the formula results. MCP drafts select that repository and pull request when saving.
+4. Keep loading, empty and error states honest. Label host-provided trials with `getWriteMode`.
+   Write visible text, units and dates in the user's language. Templates are English starting points.
 
 ## Bind the page
 
@@ -33,7 +39,10 @@ Declare each live component's source with `data-univer-cell-subscribe` or
 `data-univer-range-subscribe`, then register `subscribeCellById()` / `subscribeRangeById()` callbacks.
 Use fine-grained declarations on the consuming elements so bindings are traceable in HTML;
 plain text and native controls use `data-univer-cell-text` / `data-univer-cell-model`.
-For binding syntax, JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
+For binding syntax,
+JavaScript data access, controls and frontend libraries, load the [authoring.md](references/authoring.md) reference of the `html-view` Skill and its linked references as needed. The `core` Skill explains how to load them. If the needed sections are already in context, use them directly.
+When a binding pattern is still unclear, the [binding starter](examples/binding-starter.univer.html)
+shows each one without a design; do not take its look.
 
 Follow the `core` Skill for source and asset handling. `window.univerBinding` is provided at the published Workspace URL.
 
@@ -42,10 +51,13 @@ Follow the `core` Skill for source and asset handling. `window.univerBinding` is
 Use the `core` Skill for authentication and discovery, and the `sheet` Skill to inspect worksheets, values and formulas. Bind to actual Unit
 and worksheet IDs; Resource IDs and worksheet names are different identities.
 
-Sources always resolve on trunk. If the required Unit, worksheet or changes exist only in a
-Worktree, prepare the template but defer validation and publication until those changes are
-merged through the existing review workflow. Do not automatically merge a Worktree or substitute
-older trunk data. Creating an HTML View does not authorize changing its source cells or formulas.
+Use `html-view validate --worktree <id>` to read a pull request's data. Sources mapped in
+that pull request read its current changes; other sources read merged data. A merged pull
+request reads merged data. `html-view create` publishes immediately and still needs merged
+sources, so defer creation until review and merge are complete. Do not automatically merge
+or substitute older merged data. Creating an HTML View does not authorize changing its
+source cells or formulas. `workspace-html-view-source-unavailable` means a merged source
+may not exist, may not be readable by you, or may exist only in an unmerged pull request.
 
 ## Host navigation
 
@@ -53,9 +65,23 @@ Workspace renders pages in an iframe with `sandbox="allow-scripts allow-forms"` 
 
 ## Validate and create
 
+Through MCP, check with `html_view_save` and `dryRun: true`, then save once as a draft.
+Revise pending drafts with `draft`. Save an existing local file with bindings as a draft too,
+unless the user explicitly requested a file.
+For a PR-linked draft, say the page goes live when the user merges the pull request in
+Workspace. Only drafts without a PR use **Publish** in the preview.
+
+With a local shell and `node`, and not as an agent identity whose Sheets the user's browser cannot
+read, offer the user a live local preview after saving. When they accept, follow
+[local preview](references/local-preview.md); it opens the page in their browser.
+
+With the CLI there are no drafts: `html-view create` publishes at once. Offer the live preview
+before `html-view create`, then run `html-view validate` and `html-view create` as below, or replace
+an existing page's Blob.
+
 Run `html-view validate` with the complete HTML source. Then run `html-view create` with the same source, destination Space, name `Dashboard`, stable idempotency key, and optional parent Node. Follow the `core` Skill for source handling.
 
-`validate` parses declarative HTML bindings, reads accessible trunk Sheet data, and checks
+`validate` parses declarative HTML bindings, reads accessible Sheet data in the selected scope, and checks
 worksheet existence and cell/range bounds. It returns `{ valid, unitIds, bindingCount, bindings, truncated? }`, with at most 60 binding samples of cell values and range summaries in document order (`truncated: true` when more exist).
 Compare `bindings` with the page plan for empty cells where data is expected, header text where numbers are expected, formula cells behind controls that write, and numbers carrying a date format.
 It does not execute JavaScript or discover references created by scripts. A JavaScript-only page may report

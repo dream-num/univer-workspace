@@ -1,6 +1,5 @@
 import { htmlViewDraftGetTool } from "../src/gateway/tools/core/html-view-draft-get.js";
 import { htmlViewReadTool } from "../src/gateway/tools/core/html-view-read.js";
-import { htmlViewReplaceTool } from "../src/gateway/tools/core/html-view-replace.js";
 import { RESULT_LIMIT } from "../src/gateway/paging.js";
 import { z } from "zod";
 import { LocalStagingStore } from "../src/gateway/staging/local.js";
@@ -18,8 +17,7 @@ import type { OpContext } from "../src/executor/context.js";
 import { htmlViewMaxBytes, opSpecs } from "../src/shared/executor-protocol.js";
 import { translateError } from "../src/shared/errors.js";
 import { UsageAccumulator, zeroCost } from "../src/shared/usage.js";
-import { htmlViewCreateTool } from "../src/gateway/tools/files/html-view-create.js";
-import { htmlViewValidateTool } from "../src/gateway/tools/files/html-view-validate.js";
+import { htmlViewSaveTool } from "../src/gateway/tools/core/html-view-save.js";
 
 const html = '<output data-univer-cell-text="unit:budget:B2"></output>';
 const key = "html-retry-key-123";
@@ -62,12 +60,14 @@ function setup(page = html, publicRead = false, privateUnits: readonly string[] 
       id: "space", name: "Team", type: "team", fullName: "owner/team", slug: "team",
       owner: { id: "owner", username: "owner" }, accessRole: "owner", affiliation: "owner", publicRead,
     });
+    if (request.url.endsWith("/api/html-view-drafts/draft-1")) return Response.json({ draft: draftView() });
+    if (request.url.endsWith("/api/html-view-drafts/draft-1/content")) return new Response(page);
     if (request.method === "POST" && new URL(request.url).pathname === "/api/html-view-drafts") {
       expect(request.headers.get("idempotency-key")).toBe(key);
       const body = await request.json();
       expect(body.html).toBe(page);
       draftPosts.push(body);
-      return Response.json({ draft: draftView(body.kind) }, { status: draftPosts.length === 1 ? 201 : 200 });
+      return Response.json({ draft: { ...draftView(body.kind === "revise" ? "create" : body.kind), ...(body.sourceWorktreeId === undefined ? {} : { sourceWorktreeId: body.sourceWorktreeId }) } }, { status: draftPosts.length === 1 ? 201 : 200 });
     }
     if (request.url.endsWith("/resources/resource")) return Response.json({ node, resource });
     throw new Error(`Unexpected Workspace request ${request.method} ${request.url}`);
@@ -130,9 +130,8 @@ it("preserves capped range samples and their metadata within the RPC response bu
       ])),
     ])),
   } } });
-  const { output } = await htmlViewValidate(f.ctx, {
-    html: '<div data-univer-range-subscribe="unit:budget:A1:H3"></div>'.repeat(61),
-  });
+  const page = '<div data-univer-range-subscribe="unit:budget:A1:H3"></div>'.repeat(61);
+  const { output } = await htmlViewValidate(f.ctx, { html: page });
   expect(opSpecs["htmlView.validate"].output.parse(output)).toEqual(output);
   expect(output).toMatchObject({ bindingCount: 61, truncated: true });
   expect(output.bindings).toHaveLength(60);
@@ -144,6 +143,13 @@ it("preserves capped range samples and their metadata within the RPC response bu
   const bytes = Buffer.byteLength(JSON.stringify(output));
   expect(bytes).toBeGreaterThan(64 * 1024);
   expect(bytes).toBeLessThan(opSpecs["htmlView.validate"].limits.responseBytes);
+  const draftFixture = setup(page);
+  draftFixture.exportUnitData.mockImplementation(f.exportUnitData);
+  const draft = await htmlViewDraft(draftFixture.ctx, {
+    kind: "create", html: page, name: "Dashboard", spaceId: "space", idempotencyKey: key,
+  });
+  expect(draft.output).toMatchObject({ bindings: output.bindings, bindingCount: 61, truncated: true });
+  expect(Buffer.byteLength(JSON.stringify(draft.output))).toBeLessThan(opSpecs["htmlView.draft"].limits.responseBytes);
 });
 
 it("preserves missing Sheet errors and rejects missing worksheets and out-of-bounds ranges", async () => {
@@ -162,7 +168,7 @@ it("preserves missing Sheet errors and rejects missing worksheets and out-of-bou
 
 it("rejects oversized HTML in UTF-8 bytes at both tool and operation boundaries", () => {
   const tooLarge = "界".repeat(Math.floor(htmlViewMaxBytes / 3) + 1);
-  for (const schema of [opSpecs["htmlView.validate"].input, htmlViewValidateTool.inputSchema]) {
+  for (const schema of [opSpecs["htmlView.validate"].input, htmlViewSaveTool.inputSchema]) {
     const result = schema.safeParse({ html: tooLarge });
     expect(result.success).toBe(false);
     expect(translateError(result.error)).toMatchObject({
@@ -180,7 +186,7 @@ it("rejects oversized HTML in UTF-8 bytes at both tool and operation boundaries"
     }).success,
   ).toBe(false);
   expect(
-    htmlViewCreateTool.inputSchema.safeParse({
+    htmlViewSaveTool.inputSchema.safeParse({
       html: tooLarge,
       space: "space",
       name: "View",
@@ -203,7 +209,7 @@ it("saves one validated creation draft per call with its key and identity previe
     id: "draft-1", kind: "create", state: "pending", name: "Dashboard.univer.html", space: "space",
     previewUrl: "https://workspace.test/drafts/draft-1", expiresAt: "2026-11-19T00:00:00Z",
     repositoryVisibility: "private", privateSourceUnitIds: ["unit"],
-  } });
+  }, bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] });
   expect(f.draftPosts).toEqual([{ kind: "create", html, name: "Dashboard.univer.html", spaceId: "space", parentNodeId: "folder" }]);
   expect(onWrite).toHaveBeenCalledOnce();
   expect(f.fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
@@ -226,7 +232,7 @@ it.each(["short", "bad key with spaces", "x".repeat(201)])(
   "rejects an invalid creation key %s",
   (idempotency_key) => {
     expect(
-      htmlViewCreateTool.inputSchema.safeParse({
+      htmlViewSaveTool.inputSchema.safeParse({
         html,
         name: "View",
         space: "space",
@@ -284,7 +290,7 @@ async function upload(store: LocalStagingStore, bytes: Uint8Array, purpose: Uplo
 }
 const createArgs = { space: "space", name: "Dashboard", idempotency_key: key };
 
-it.each([htmlViewValidateTool, htmlViewCreateTool])("$name requires exactly one HTML source", async (tool) => {
+it.each([htmlViewSaveTool])("$name requires exactly one HTML source", async (tool) => {
   const { context } = uploadContext();
   const fetcher = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Unexpected executor call"));
   for (const source of [{}, { html, html_upload_id: "upload" }]) {
@@ -313,17 +319,16 @@ it("validates and drafts uploaded UTF-8 bytes unchanged, including BOM, across r
     return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: f.ctx.usage })));
   });
   const html_upload_id = await upload(store, Buffer.from(page));
-  expect((await htmlViewValidateTool.run(context, { html_upload_id })).output).toEqual({ valid: true, unitIds: ["unit"], bindingCount: 1, bindings: [{ kind: "text", unitId: "unit", sheet: "budget", ref: "B2", cell: { value: null } }] });
-  const first = await htmlViewCreateTool.run(context, { ...createArgs, html_upload_id });
-  expect(await htmlViewCreateTool.run(context, { ...createArgs, html_upload_id })).toEqual(first);
+  const first = await htmlViewSaveTool.run(context, { ...createArgs, html_upload_id });
+  expect(await htmlViewSaveTool.run(context, { ...createArgs, html_upload_id })).toEqual(first);
   expect(first.output).toMatchObject({ draft: { id: "draft-1", previewUrl: "https://workspace.test/drafts/draft-1" } });
   expect(f.draftPosts).toHaveLength(2);
-  expect(executor).toHaveBeenCalledTimes(3);
-  expect(context.usage?.snapshot().cost.upload_bytes).toBe(3 * Buffer.byteLength(page));
+  expect(executor).toHaveBeenCalledTimes(2);
+  expect(context.usage?.snapshot().cost.upload_bytes).toBe(2 * Buffer.byteLength(page));
   expect((await store.requireUpload("owner", html_upload_id, "html-view")).state).toBe("ready");
 });
 
-it.each([htmlViewValidateTool, htmlViewCreateTool])("$name rejects invalid UTF-8, oversize and wrong-purpose uploads", async (tool) => {
+it.each([htmlViewSaveTool])("$name rejects invalid UTF-8, oversize and wrong-purpose uploads", async (tool) => {
   const { store, context } = uploadContext({ limits: { ...defaultLimits, "html-view": htmlViewMaxBytes + 1 } });
   const fetcher = vi.spyOn(globalThis, "fetch");
   const invalid = await upload(store, new Uint8Array([0xc3, 0x28]));
@@ -365,7 +370,7 @@ it.each([
     const result = await htmlViewDraft(f.ctx, input);
     return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: f.ctx.usage })));
   });
-  const result = await htmlViewCreateTool.run(context, { ...createArgs, html });
+  const result = await htmlViewSaveTool.run(context, { ...createArgs, html });
   expect(result.output).toMatchObject({ draft: { previewUrl: "https://workspace.test/drafts/draft-1", repositoryVisibility: visibility, privateSourceUnitIds: expected } });
   expect(opSpecs["htmlView.draft"].output.parse(result.output)).toEqual(result.output);
 });
@@ -425,7 +430,7 @@ it("refuses non-pages and oversize pages rather than returning partial HTML", as
   }
 });
 
-const replaceArgs = { resource: "resource", html, etag: '"v1"', idempotency_key: key };
+const replaceArgs = { page: "resource", html, etag: '"v1"', idempotency_key: key };
 function connectReplacement(ctx: OpContext) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
     const { input } = z.object({ input: opSpecs["htmlView.draft"].input }).parse(
@@ -440,16 +445,36 @@ function connectReplacement(ctx: OpContext) {
   });
 }
 
-it("validates a replacement before writing and accepts inline HTML only", async () => {
+it.each([
+  { mode: "create", count: 1 },
+  { mode: "create", count: 61 },
+  { mode: "replace", count: 1 },
+  { mode: "replace", count: 61 },
+])("$mode returns validation samples alongside the draft for $count bindings", async ({ mode, count }) => {
+  const page = html.repeat(count);
+  const f = mode === "create" ? setup(page) : revisionSetup(page);
+  const validation = (await htmlViewValidate(f.ctx, { html: page })).output;
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const args = mode === "create" ? createArgs : replaceArgs;
+  const result = await htmlViewSaveTool.run(context, { ...args, html: page });
+  const output = opSpecs["htmlView.draft"].output.parse(result.output);
+  expect(output).toMatchObject({
+    draft: { id: "draft-1", previewUrl: "https://workspace.test/drafts/draft-1" },
+    bindings: validation.bindings, bindingCount: validation.bindingCount,
+  });
+  expect(output.bindings).toHaveLength(Math.min(count, 60));
+  if (count > 60) expect(output.truncated).toBe(true);
+  else expect(output).not.toHaveProperty("truncated");
+});
+
+it("validates a replacement before writing and rejects conflicting HTML sources", async () => {
   const { context } = uploadContext();
   const f = revisionSetup();
   const executor = connectReplacement(f.ctx);
-  for (const args of [
-    { ...replaceArgs, html: undefined, html_upload_id: "upload" },
-    { ...replaceArgs, html_upload_id: "upload" },
-  ]) await expect(htmlViewReplaceTool.run(context, args)).rejects.toBeInstanceOf(z.ZodError);
+  await expect(htmlViewSaveTool.run(context, { ...replaceArgs, html_upload_id: "upload" })).rejects.toBeInstanceOf(z.ZodError);
   expect(executor).not.toHaveBeenCalled();
-  await expect(htmlViewReplaceTool.run(context, {
+  await expect(htmlViewSaveTool.run(context, {
     ...replaceArgs, html: html.replace("budget", "missing"),
   })).rejects.toMatchObject({ wire: { code: "workspace-html-view-source-invalid" } });
   expect(f.writes).toEqual([]);
@@ -459,7 +484,7 @@ it("returns a stale ETag conflict to the model", async () => {
   const { context } = uploadContext();
   const f = revisionSetup(html, undefined, true);
   connectReplacement(f.ctx);
-  await expect(htmlViewReplaceTool.run(context, replaceArgs)).rejects.toMatchObject({
+  await expect(htmlViewSaveTool.run(context, replaceArgs)).rejects.toMatchObject({
     wire: { code: "PRECONDITION_FAILED", detail: { status: 412 } },
   });
   expect(f.writes).toEqual([]);
@@ -469,8 +494,8 @@ it("returns the recorded replacement for a repeated key, including the access su
   const { context } = uploadContext();
   const f = revisionSetup();
   connectReplacement(f.ctx);
-  const first = await htmlViewReplaceTool.run(context, replaceArgs);
-  expect(await htmlViewReplaceTool.run(context, replaceArgs)).toEqual(first);
+  const first = await htmlViewSaveTool.run(context, replaceArgs);
+  expect(await htmlViewSaveTool.run(context, replaceArgs)).toEqual(first);
   expect(first.output).toMatchObject({
     draft: { id: "draft-1", kind: "replace", state: "pending", resource: "resource",
       previewUrl: "https://workspace.test/drafts/draft-1", expiresAt: "2026-11-19T00:00:00Z",
@@ -481,7 +506,7 @@ it("returns the recorded replacement for a repeated key, including the access su
 });
 
 function draftView(kind: "create" | "replace" = "create", state = "pending") {
-  return { id: "draft-1", kind, state, spaceId: "space", parentNodeId: null,
+  return { id: "draft-1", kind, state, supersededBy: state === "superseded" ? "draft-2" : null, spaceId: "space", parentNodeId: null,
     name: "Dashboard.univer.html", targetResourceId: kind === "replace" ? "resource" : null,
     baseEtag: kind === "replace" ? '"v1"' : null, byteSize: Buffer.byteLength(html),
     createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z", decidedAt: null,
@@ -489,7 +514,7 @@ function draftView(kind: "create" | "replace" = "create", state = "pending") {
 }
 
 it.each(["create", "replace"] as const)("reads every %s draft state over HTTP without an executor", async (kind) => {
-  for (const state of ["pending", "published", "rejected", "expired", "conflicted"]) {
+  for (const state of ["pending", "published", "rejected", "expired", "conflicted", "superseded"]) {
     const { context } = uploadContext();
     const fetcher = vi.fn<typeof fetch>(async (url, options) => {
       expect(new URL(String(url)).pathname).toBe("/api/html-view-drafts/draft-1");
@@ -500,6 +525,7 @@ it.each(["create", "replace"] as const)("reads every %s draft state over HTTP wi
     const { executor: _executor, ...withoutExecutor } = context;
     const result = await htmlViewDraftGetTool.run({ ...withoutExecutor, http }, { draft: "draft-1" });
     expect(result.output).toMatchObject({ draft: { id: "draft-1", state, previewUrl: "https://workspace.test/drafts/draft-1" } });
+    if (state === "superseded") expect(result.output).toMatchObject({ draft: { supersededBy: "draft-2", successorUrl: "https://workspace.test/drafts/draft-2" } });
     const output = htmlViewDraftGetTool.outputSchema.parse(result.output);
     expect(output).toEqual(result.output);
     if (state === "published") expect(result.output).toMatchObject({ draft: {
@@ -524,9 +550,175 @@ it("sends exactly one replacement draft POST and never uses Blob publishing endp
   const f = revisionSetup();
   const { context } = uploadContext();
   connectReplacement(f.ctx);
-  const result = await htmlViewReplaceTool.run(context, replaceArgs);
+  const result = await htmlViewSaveTool.run(context, replaceArgs);
   expect(result.output).toMatchObject({ draft: { id: "draft-1", kind: "replace", state: "pending", previewUrl: "https://workspace.test/drafts/draft-1" } });
   expect(f.writes).toEqual([html]);
   expect(f.fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toHaveLength(1);
   expect(f.fetcher.mock.calls.some(([url]) => /blob-upload-sessions|blob-resources.*content/.test(String(url)))).toBe(false);
+});
+
+it.each(["create", "replace"] as const)("%s resolves source PR arguments into executor input", async (mode) => {
+  const f = setup();
+  const original = f.fetcher.getMockImplementation();
+  if (!original) throw new Error("Expected product fetcher");
+  const worktree = { id: "wt-1", number: 12, name: "Sources", state: "ready", kind: "team", teamSpace: { id: "space" },
+    units: [{ unitId: "unit", unitType: "sheet", name: "Sheet", nodeId: "node", resourceId: "resource",
+      source: "trunk", target: null, draftHeadRevision: 7, change: "modified", mergeResult: "pending", activationState: "notApplicable" }] };
+  f.fetcher.mockImplementation(async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/worktrees/wt-1" || path === "/api/spaces/space/worktrees/12") return Response.json({ worktree });
+    return original(url, init);
+  });
+  const { context } = uploadContext();
+  const executor = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, options) => {
+    const header = z.object({ op: z.enum(["htmlView.validate", "htmlView.draft"]), input: z.unknown() })
+      .parse(decodeFrame(Buffer.from(await new Response(options?.body).arrayBuffer())).header);
+    expect(header.input).toMatchObject({ sourceWorktreeId: "wt-1", html });
+    const result = header.op === "htmlView.validate"
+      ? await htmlViewValidate(f.ctx, opSpecs["htmlView.validate"].input.parse(header.input))
+      : await htmlViewDraft(f.ctx, opSpecs["htmlView.draft"].input.parse(header.input));
+    return new Response(new Uint8Array(encodeFrame({ ok: true, output: result.output, meta: f.ctx.usage })));
+  });
+  for (const pr of [12, "#12", "https://workspace.test/spaces/space/pulls/12", "wt-1"]) {
+    const result = await htmlViewSaveTool.run({ ...context, http: f.ctx.http() }, { ...(mode === "replace" ? replaceArgs : { ...createArgs, html }), repo: "space", pr });
+    expect(result.output).toMatchObject({ draft: { sourceWorktreeId: "wt-1" } });
+  }
+  expect(f.exportUnitData.mock.calls.every(([{ target }]) => target.scope.kind === "worktree" && target.scope.worktreeId === "wt-1")).toBe(true);
+  for (const body of f.draftPosts) expect(body).toMatchObject({ sourceWorktreeId: "wt-1" });
+  expect(executor).toHaveBeenCalledTimes(4);
+});
+
+it.each(["create", "replace"] as const)("%s requires the repository with a source PR", async (mode) => {
+  const { context } = uploadContext();
+  await expect(htmlViewSaveTool.run(context, { ...(mode === "replace" ? replaceArgs : { ...createArgs, html }), pr: 12 }))
+    .rejects.toMatchObject({ code: "workspace-argument-invalid" });
+});
+
+it.each([
+  {},
+  { page: "resource", space: "space", name: "Page", etag: '"v1"' },
+  { space: "space" },
+  { space: "space", name: "Page", etag: '"v1"' },
+  { page: "resource" },
+  { page: "resource", etag: '"v1"', name: "Page" },
+  { page: "resource", etag: '"v1"', parent: "folder" },
+])("explains both save forms for invalid destination %#", async (destination) => {
+  const { context } = uploadContext();
+  const executor = vi.spyOn(globalThis, "fetch");
+  await expect(htmlViewSaveTool.run(context, { ...destination, html, idempotency_key: key })).rejects.toMatchObject({
+    code: "workspace-argument-invalid",
+    message: expect.stringContaining("To create a page, pass space and name. To revise one, pass the page and etag from html_view_read."),
+  });
+  expect(executor).not.toHaveBeenCalled();
+});
+
+it.each(["create", "replace"] as const)("%s accepts uploaded HTML and retains validation samples", async (mode) => {
+  const f = mode === "create" ? setup() : revisionSetup();
+  const { store, context } = uploadContext();
+  const executor = connectReplacement(f.ctx);
+  const html_upload_id = await upload(store, Buffer.from(html));
+  const { html: _html, ...revision } = replaceArgs;
+  const destination = mode === "create" ? { ...createArgs, parent: "folder" } : revision;
+  const result = await htmlViewSaveTool.run(context, { ...destination, html_upload_id });
+  expect(result.output).toMatchObject({ draft: { kind: mode }, bindingCount: 1, bindings: [{ kind: "text", ref: "B2" }] });
+  expect(executor).toHaveBeenCalledOnce();
+  expect(context.usage?.snapshot().cost.upload_bytes).toBe(Buffer.byteLength(html));
+  if (mode === "create") expect(f.draftPosts).toEqual([{ kind: "create", html, spaceId: "space", name: "Dashboard.univer.html", parentNodeId: "folder" }]);
+});
+
+it("advertises a flat save schema with actionable mode and source fields", () => {
+  const schema = z.toJSONSchema(htmlViewSaveTool.inputSchema, { unrepresentable: "any" });
+  expect(schema.type).toBe("object");
+  expect(schema).not.toHaveProperty("oneOf");
+  expect(schema).not.toHaveProperty("anyOf");
+  for (const field of ["space", "name", "parent", "page", "etag", "html", "html_upload_id", "repo", "pr", "idempotency_key"])
+    expect(schema.properties).toHaveProperty(field);
+});
+
+it("dryRun returns the validation samples without a draft, key or Workspace write", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  const executor = connectReplacement(f.ctx);
+  const { output } = await htmlViewSaveTool.run(context, { html, dryRun: true });
+  const { unitIds: _unitIds, ...validation } = (await htmlViewValidate(f.ctx, { html })).output;
+  expect(output).toEqual({ dryRun: true, ...validation });
+  expect(output).toMatchObject({ valid: true, bindingCount: 1, bindings: [{ kind: "text", ref: "B2" }] });
+  expect(output).not.toHaveProperty("draft");
+  expect(executor).toHaveBeenCalledOnce();
+  expect(f.draftPosts).toEqual([]);
+  expect(f.fetcher.mock.calls.filter(([, options]) => options?.method === "POST")).toEqual([]);
+  expect(context.usage?.snapshot().cost.upload_bytes).toBe(Buffer.byteLength(html));
+});
+
+it("dryRun requires neither destination nor key, but a real save still needs the key", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  await expect(htmlViewSaveTool.run(context, { ...createArgs, idempotency_key: undefined, html, dryRun: true })).resolves.toMatchObject({ output: { dryRun: true } });
+  await expect(htmlViewSaveTool.run(context, { page: "resource", etag: '"v1"', html, dryRun: true })).resolves.toMatchObject({ output: { dryRun: true } });
+  await expect(htmlViewSaveTool.run(context, { space: "space", name: "Dashboard", html })).rejects.toMatchObject({ code: "workspace-argument-invalid" });
+});
+
+it("dryRun fails an out-of-range binding exactly as a real save does", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const outOfRange = '<div data-univer-range-subscribe="unit:budget:A1:D11"></div>';
+  const failure = async (args: object) => translateError(await htmlViewSaveTool.run(context, { html: outOfRange, ...args }).then(
+    () => expect.fail("Expected invalid bindings"), (error: unknown) => error));
+  const dry = await failure({ dryRun: true });
+  expect(dry).toMatchObject({ code: "workspace-html-view-source-invalid" });
+  expect(dry).toEqual(await failure(createArgs));
+  expect(f.draftPosts).toEqual([]);
+});
+
+it("dryRun reads source pull request data", async () => {
+  const f = setup();
+  const original = f.fetcher.getMockImplementation();
+  if (!original) throw new Error("Expected product fetcher");
+  const worktree = { id: "wt-1", number: 12, name: "Sources", state: "ready", kind: "team", teamSpace: { id: "space" },
+    units: [{ unitId: "unit", unitType: "sheet", name: "Sheet", nodeId: "node", resourceId: "resource",
+      source: "trunk", target: null, draftHeadRevision: 7, change: "modified", mergeResult: "pending", activationState: "notApplicable" }] };
+  f.fetcher.mockImplementation(async (url, init) => {
+    const path = new URL(String(url)).pathname;
+    if (path === "/api/worktrees/wt-1" || path === "/api/spaces/space/worktrees/12") return Response.json({ worktree });
+    return original(url, init);
+  });
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const result = await htmlViewSaveTool.run({ ...context, http: f.ctx.http() }, { html, dryRun: true, repo: "space", pr: 12 });
+  expect(result.output).toMatchObject({ dryRun: true, bindingCount: 1 });
+  expect(f.exportUnitData).toHaveBeenCalled();
+  expect(f.exportUnitData.mock.calls.every(([{ target }]) => target.scope.kind === "worktree" && target.scope.worktreeId === "wt-1")).toBe(true);
+  expect(f.draftPosts).toEqual([]);
+});
+
+it("revises a pending draft through save and reads its HTML without an etag", async () => {
+  const f = setup();
+  const { context } = uploadContext();
+  connectReplacement(f.ctx);
+  const result = await htmlViewSaveTool.run(context, { draft: "draft-1", html, idempotency_key: key });
+  expect(result.output).toMatchObject({ draft: { kind: "create", state: "pending" } });
+  expect(f.draftPosts).toEqual([{ kind: "revise", draftId: "draft-1", html }]);
+  const read = await htmlViewReadTool.run({ ...context, http: f.ctx.http() }, { draft: "draft-1" });
+  expect(read.output).toMatchObject({ draft: "draft-1", html, space: "space", previewUrl: "https://workspace.test/drafts/draft-1" });
+  expect(read.output).not.toHaveProperty("etag");
+  expect(htmlViewReadTool.outputSchema.parse(read.output)).toEqual(read.output);
+});
+
+it.each([
+  { draft: "draft-1", space: "space", name: "Page" },
+  { draft: "draft-1", page: "resource", etag: '"v1"' },
+  { draft: "draft-1", etag: '"v1"' },
+  { draft: "draft-1", name: "Page" },
+  { draft: "draft-1", parent: "folder" },
+])("refuses ambiguous pending-draft save arguments %#", async (args) => {
+  const { context } = uploadContext();
+  await expect(htmlViewSaveTool.run(context, { ...args, html, idempotency_key: key }))
+    .rejects.toMatchObject({ code: "workspace-argument-invalid" });
+});
+
+it.each([{}, { resource: "resource", draft: "draft-1" }])("requires exactly one HTML View read target %#", async (args) => {
+  const { context } = uploadContext();
+  await expect(htmlViewReadTool.run(context, args)).rejects.toMatchObject({ code: "workspace-argument-invalid" });
 });

@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { UniverType, type IChangeset } from "@univerjs/protocol";
+import { logger } from "../../logging/logger.js";
+import type { PublishedPage } from "../html-view-drafts/drafts.types.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import { writeSourceView, type WriteSource } from "../identity/index.js";
 import type { TrashModule } from "../trash/index.js";
@@ -51,6 +53,7 @@ export function createWorktreesModule(options: {
     worktreeId: string,
     unitIds: readonly string[]
   ) => Promise<void>;
+  readonly publishMergedPages: (worktreeId: string) => Promise<readonly PublishedPage[]>;
   readonly onChanged?: (change: WorktreeProductChange) => void;
   readonly now?: () => number;
 }): WorktreesModule {
@@ -695,7 +698,7 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async merge(userId, worktreeId, operationIdValue) {
+    async merge(userId, worktreeId, operationIdValue, interactive = false) {
       const operationId = validOperationId(operationIdValue);
       const value = await context(userId, worktreeId);
       const existing = await options.repository.getOperation(operationId);
@@ -784,9 +787,19 @@ export function createWorktreesModule(options: {
           );
         });
       }
-      const current = await context(userId, worktreeId);
+      let current = await context(userId, worktreeId);
+      let publishedPages: readonly PublishedPage[] = [];
+      if (interactive && current.state === "merged") {
+        try {
+          publishedPages = await options.publishMergedPages(worktreeId);
+        } catch (error) {
+          logger.warn({ err: error, worktreeId }, "HTML View drafts could not be published after merge");
+        }
+      }
+      if (publishedPages.length) current = await context(userId, worktreeId);
       await notifyChanged("merged", worktreeId);
       return {
+        publishedPages,
         operation: operationView(operation),
         worktree: summaryView(
           current.row,
@@ -1224,6 +1237,7 @@ function summaryView(
           }
         : null,
     unitCount: row.unit_count,
+    pendingPageDrafts: row.pending_page_drafts,
     processedAt:
       row.processed_at === null
         ? null

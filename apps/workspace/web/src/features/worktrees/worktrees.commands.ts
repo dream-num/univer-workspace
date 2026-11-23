@@ -54,10 +54,14 @@ export function useWorktreeLifecycle(worktreeId: string) {
                 });
       if (result.error) throw apiError(result.error);
       return {
+        publishedPages: "publishedPages" in result.data ? result.data.publishedPages : [],
         action: value,
         state: "worktree" in result.data ? result.data.worktree.state : null,
       };
     },
-    onSuccess: () => client.invalidateQueries({ queryKey: worktreesQueryKey }),
+    onSuccess: async ({ publishedPages }) => {
+      await Promise.all([worktreesQueryKey, ["html-view-drafts"], ...(publishedPages.length ? [["nodes"], ["resources"], ["apps"]] : [])]
+        .map((queryKey) => client.invalidateQueries({ queryKey })));
+    },
   });
 }

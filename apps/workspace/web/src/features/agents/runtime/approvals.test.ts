@@ -41,18 +41,18 @@ describe("scope-based tool approval", () => {
 
   it("keeps a tool with no metadata and its original execute unchanged", () => {
     const tool = dynamicTool({ inputSchema: jsonSchema({ type: "object" }), execute: async () => "original" });
-    expect(gateTools({ html_view_create: tool }, "auto", vi.fn()).tools.html_view_create).toBe(tool);
+    expect(gateTools({ html_view_save: tool }, "auto", vi.fn()).tools.html_view_save).toBe(tool);
   });
 
-  it.each(["html_view_create", "html_view_replace"])("executes write-scope %s with the session client and no publish authority", async (toolName) => {
+  it("executes write-scope html_view_save with the session client and no publish authority", async () => {
     const execute = vi.fn(async () => ({ structuredContent: { draft: { id: "draft-1" } } }));
     const publish = vi.fn();
     const tool = { ...dynamicTool({ inputSchema: jsonSchema({ type: "object" }), execute }), _meta: { "univer.workspace/scope": "write" } };
-    const gated = gateTools({ [toolName]: tool }, "auto", publish);
-    expect(await gated.toolApproval({ toolCall: { type: "tool-call", toolCallId: "page", toolName, input: {} },
+    const gated = gateTools({ html_view_save: tool }, "auto", publish);
+    expect(await gated.toolApproval({ toolCall: { type: "tool-call", toolCallId: "page", toolName: "html_view_save", input: { space: "sales", name: "Report" } },
       tools: gated.tools, toolsContext: undefined as never, runtimeContext: undefined as never, messages: [] })).toBe("not-applicable");
-    expect(gated.tools[toolName]).toBe(tool);
-    await gated.tools[toolName]!.execute!({}, { toolCallId: "page", messages: [], context: {} });
+    expect(gated.tools.html_view_save).toBe(tool);
+    await gated.tools.html_view_save!.execute!({ space: "sales", name: "Report" }, { toolCallId: "page", messages: [], context: {} });
     expect(execute).toHaveBeenCalledOnce();
     expect(publish).not.toHaveBeenCalled();
   });

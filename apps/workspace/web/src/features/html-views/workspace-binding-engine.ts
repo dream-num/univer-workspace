@@ -5,12 +5,23 @@ import {
 import { UniverChartEmbedPlugin } from "@univerjs-pro/chart-embed";
 import { UniverEmbedPlugin } from "@univerjs-pro/embed";
 import { SnapshotService } from "@univerjs-pro/collaboration";
-import { createWorkspaceReferencedUnitProviderRegistration } from "@univerjs/univer-workspace-reference-provider";
-import { withWorkspaceSnapshotServerOverride, resolveUniverLicense } from "../editor";
+import { IUniverInstanceService, UniverInstanceType, type Univer, type Workbook } from "@univerjs/core";
+import { createWorkspaceReferencedUnitProviderRegistration, type WorkspaceReferenceHostContext } from "@univerjs/univer-workspace-reference-provider";
+import { withWorkspaceSnapshotServerOverride, resolveUniverLicense, resolveCollaborationConfig } from "../editor";
 import { api } from "../../shared/api/client";
 import { apiError } from "../../shared/api/errors";
 
+import type { components } from "../../../../generated/http/schema";
+
+export type HtmlViewSourceWorktree = Pick<components["schemas"]["WorktreeDetail"], "id" | "state" | "units">;
+
 export class HtmlViewSourceSheetRequiredError extends Error {}
+
+export type HtmlViewEngine = Awaited<ReturnType<typeof createWorkspaceBindingEngine>>;
+export interface HtmlViewCellMeta { readonly formula: boolean; readonly dateFormat: boolean }
+
+/** True when the number format has a date or time token outside quotes, brackets and escapes. */
+export const isDateFormat = (pattern: string | undefined) => !!pattern && /[ymdhs]/i.test(pattern.replace(/"[^"]*"|\[[^\]]*\]|\\./g, ""));
 
 export async function createWorkspaceBindingEngine(
   unitId: string,
@@ -19,52 +30,73 @@ export async function createWorkspaceBindingEngine(
   translateError: TranslateHtmlViewWriteError,
   onTrialStarted?: () => void,
   draft = false,
+  sourceWorktree?: HtmlViewSourceWorktree,
 ) {
   signal.throwIfAborted();
-  const resolved = await api.GET("/api/unit-resources/{unitId}", {
-    params: { path: { unitId } },
-    signal,
-  });
-  if (resolved.error) throw apiError(resolved.error);
-  const opened = await api.POST("/api/resources/{resourceId}/open", {
-    params: { path: { resourceId: resolved.data.resource.id } },
-    signal,
-  });
-  if (opened.error) throw apiError(opened.error);
-  const source = opened.data.resource;
-  if (source.kind !== "univer" || source.unitType !== "sheet" || source.unitId !== unitId)
-    throw new HtmlViewSourceSheetRequiredError();
+  const worktree = draft && sourceWorktree?.state !== "merged" ? sourceWorktree : undefined;
+  const mappedUnit = worktree?.units.find((unit) => unit.unitId === unitId);
+  let canEdit = false;
+  let scope: components["schemas"]["CollaborationScope"] = { kind: "trunk" };
+  if (mappedUnit && worktree) {
+    if (mappedUnit.unitType !== "sheet") throw new HtmlViewSourceSheetRequiredError();
+    const opened = await api.POST("/api/worktrees/{worktreeId}/units/{unitId}/open", {
+      params: { path: { worktreeId: worktree.id, unitId } },
+      body: { mode: "draft" },
+      signal,
+    });
+    if (opened.error) throw apiError(opened.error);
+    if (opened.data.unit.unitType !== "sheet" || opened.data.unit.unitId !== unitId)
+      throw new HtmlViewSourceSheetRequiredError();
+    scope = opened.data.collaborationScope;
+  } else {
+    const resolved = await api.GET("/api/unit-resources/{unitId}", {
+      params: { path: { unitId } }, signal,
+    });
+    if (resolved.error) throw apiError(resolved.error);
+    const opened = await api.POST("/api/resources/{resourceId}/open", {
+      params: { path: { resourceId: resolved.data.resource.id } }, signal,
+    });
+    if (opened.error) throw apiError(opened.error);
+    const source = opened.data.resource;
+    if (source.kind !== "univer" || source.unitType !== "sheet" || source.unitId !== unitId)
+      throw new HtmlViewSourceSheetRequiredError();
+    canEdit = !draft && source.editorMode === "edit";
+  }
+  const collaboration = await resolveCollaborationConfig(scope, unitId);
+  const hostContext: WorkspaceReferenceHostContext = worktree
+    ? { view: { kind: "worktree", worktreeId: worktree.id }, mappedUnitIds: worktree.units.map((unit) => unit.unitId) }
+    : { view: { kind: "trunk" } };
   signal.throwIfAborted();
-  return createWorkspaceHtmlEngine(
+  let runtime: Univer | undefined;
+  const engine = await createWorkspaceHtmlEngine(
     {
       unitId,
       enableReadOnlyTrial: true,
       ...(onTrialStarted ? { onTrialStarted } : {}),
       translateError,
-      canEdit: !draft && source.editorMode === "edit",
+      canEdit,
       user,
       license: resolveUniverLicense(),
       collaborationClientConfig: {
-        snapshotServerUrl: "/universer-api/snapshot",
-        collabSubmitChangesetUrl: "/universer-api/comb",
-        collabWebSocketUrl: `${location.protocol === "https:" ? "wss:" : "ws:"}//${location.host}/universer-api/comb/connect`,
         wsSessionTicketUrl: "/universer-api/user/session-ticket",
         authzUrl: "/universer-api/authz",
+        ...collaboration.pluginConfig,
         loginUrlKey: "/login",
         sendChangesetTimeout: 200,
-        override: withWorkspaceSnapshotServerOverride(undefined, {
-          hostScope: { kind: "trunk" },
+        override: withWorkspaceSnapshotServerOverride(collaboration.pluginConfig.override, {
+          hostScope: collaboration.hostSnapshotScope,
           origin: location.origin,
           resolveMergePreview: async () => {
-            throw new Error("HTML view sources only support trunk.");
+            throw new Error("HTML view sources do not use merge previews.");
           },
         }),
       },
       registerEmbed(univer) {
+        runtime = univer;
         univer.registerPlugin(UniverEmbedPlugin, {
           resourceRefUnitProviderRegistrations: [
             createWorkspaceReferencedUnitProviderRegistration({
-              hostContext: { view: { kind: "trunk" }, mappedUnitIds: [unitId] },
+              hostContext,
               resolveSnapshotService: () => univer.__getInjector().get(SnapshotService),
             }),
           ],
@@ -76,4 +108,12 @@ export async function createWorkspaceBindingEngine(
     },
     signal,
   );
+  return Object.assign(engine, {
+    /** Formula and number-format facts for diagnostics, read from this engine's loaded workbook. */
+    readCellMeta(sheetId: string, row: number, col: number): HtmlViewCellMeta {
+      const workbook = runtime?.__getInjector().get(IUniverInstanceService).getUnit<Workbook>(unitId, UniverInstanceType.UNIVER_SHEET);
+      const cell = workbook?.getSheetBySheetId(sheetId)?.getCellRaw(row, col);
+      return { formula: !!(cell?.f || cell?.si), dateFormat: isDateFormat(cell ? workbook?.getStyles().getStyleByCell(cell)?.n?.pattern : undefined) };
+    },
+  });
 }

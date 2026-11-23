@@ -1,3 +1,4 @@
+import { DROP_V26_SQL, withoutV26Columns } from "./v26-downgrade.js";
 import assert from "node:assert/strict";
 
 /**
@@ -7,6 +8,7 @@ import assert from "node:assert/strict";
  * Operations rows are carried over; every other structure and row is untouched.
  */
 export const DROP_V24_SQL = `
+  ${DROP_V26_SQL}
   DROP INDEX IF EXISTS nodes_copied_from;
   ALTER TABLE nodes DROP COLUMN copied_from_node_id;
   ALTER TABLE worktree_node_intents DROP COLUMN copied_from_node_id;
@@ -62,7 +64,7 @@ const V24_COLUMNS: Record<string, Record<string, unknown>> = {
 
 /** Drops the columns V24 appends after checking each holds the value an older row must read. */
 export function withoutV24Columns(table: string, rows: readonly Record<string, unknown>[]) {
-  return rows.map((row) => {
+  return withoutV26Columns(table, rows).map((row) => {
     const rest = { ...row };
     for (const [column, value] of Object.entries(V24_COLUMNS[table] ?? {})) {
       if (column in rest) assert.equal(rest[column], value);

@@ -35,6 +35,7 @@ export interface WorktreeRow {
   readonly actor_member_role: "admin" | "editor" | "viewer" | null;
   readonly actor_owns_creator_space: 0 | 1;
   readonly unit_count: number;
+  readonly pending_page_drafts: number;
 }
 
 export interface WorktreeUnitRow {

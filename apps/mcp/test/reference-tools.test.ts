@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { toolError } from "./tool-error.js";
 import { testStagingDirectory } from "./staging-directory.js";
 import { cp, mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -357,6 +358,19 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(ws.requests.filter((path) => path === "/api/spaces/personal/nodes")).toHaveLength(1);
   });
 
+  it("reads full references without templates or style cards while keeping individual reads", async () => {
+    await writeFile(join(sourceRoot, "html-view/styles/test.md"), "Style card");
+    await start(sourceRoot);
+    const client = await connect();
+    const full = await call(client, "skills_read", { name: "html-view", full: true });
+    expect(full.isError).not.toBe(true);
+    const files = z.object({ files: z.array(z.object({ path: z.string() })) }).parse(full.structured).files;
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every(({ path }) => path.startsWith("references/"))).toBe(true);
+    expect(full.structured.resources).toContainEqual(expect.objectContaining({ path: "styles/test.md" }));
+    expect((await call(client, "skills_read", { name: "html-view", resource: "styles/test.md" })).structured.content).toBe("Style card");
+  });
+
   it("serves only manifest text, classifies PNG as binary and pages with repository-bound cursors", async () => {
     const ws = skillWorkspace();
     const root = ws.skill("team", "ledger");
@@ -509,8 +523,11 @@ describe("API reference, Skills, resources and server instructions", () => {
     expect(skill["content"]).toBe(await readFile(join(cliSkillData, "html-view/SKILL.md"), "utf8"));
     expect(skill.resources.map((resource: { path: string }) => resource.path)).toEqual(
       [
+        ...(await readdir(join(cliSkillData, "html-view/examples"))).map((file) => `examples/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/references"))).map((file) => `references/${file}`),
+        ...(await readdir(join(cliSkillData, "html-view/scripts"))).map((file) => `scripts/${file}`),
         ...(await readdir(join(cliSkillData, "html-view/templates"))).map((file) => `templates/${file}`),
+        ...(await readdir(join(cliSkillData, "html-view/styles"))).map((file) => `styles/${file}`),
       ].sort((a, b) => a.localeCompare(b)),
     );
     expect(skill.resources[0].readCommand).toBe(
@@ -522,7 +539,11 @@ describe("API reference, Skills, resources and server instructions", () => {
     const full = await call(client, "skills_read", { name: "core", full: true });
     expect(full.structured).toEqual({ ...core.structured, files: [] });
     const htmlFull = await call(client, "skills_read", { name: "html-view", full: true });
-    expect(toolError(htmlFull)).toMatchObject({ code: "workspace-result-too-large" });
+    expect(htmlFull.isError).not.toBe(true);
+    const files = z.object({ files: z.array(z.object({ path: z.string(), content: z.string() })) }).parse(htmlFull.structured).files;
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.every(({ path }) => path.startsWith("references/"))).toBe(true);
+    for (const file of files) expect(file.content).toBe(await readFile(join(cliSkillData, "html-view", file.path), "utf8"));
 
     const templates = [
       "templates/bauhaus-blocks.univer.html",
@@ -549,16 +570,21 @@ describe("API reference, Skills, resources and server instructions", () => {
       });
     }
 
-    const resource = await call(client, "skills_read", {
-      name: "html-view",
-      resource: "references/charts.md",
-    });
-    expect(resource.structured).toEqual({
-      name: "html-view",
-      source: "builtin",
-      path: "references/charts.md",
-      content: await readFile(join(cliSkillData, "html-view/references/charts.md"), "utf8"),
-    });
+    const starter = "examples/binding-starter.univer.html";
+    const example = await call(client, "skills_read", { name: "html-view", resource: starter });
+    expect(example.isError).not.toBe(true);
+    expect(example.structured.content).toBe(await readFile(join(cliSkillData, "html-view", starter), "utf8"));
+
+    for (const path of ["references/charts.md", "references/local-preview.md", "scripts/preview.mjs"]) {
+      const resource = await call(client, "skills_read", { name: "html-view", resource: path });
+      expect(resource.isError).not.toBe(true);
+      expect(resource.structured).toEqual({
+        name: "html-view",
+        source: "builtin",
+        path,
+        content: await readFile(join(cliSkillData, "html-view", path), "utf8"),
+      });
+    }
   });
 
   it("rejects unknown Skills, unknown resources and inconsistent arguments", async () => {
@@ -695,7 +721,7 @@ describe("API reference, Skills, resources and server instructions", () => {
       if (!Array.isArray(entry.resources)) throw new Error("Expected static resources");
       const expectedFiles = (await readdir(join(sourceRoot, name), { withFileTypes: true }))
         .filter((entry) => entry.isFile()).map((entry) => entry.name);
-      for (const child of ["references", "templates"]) {
+      for (const child of ["examples", "references", "scripts", "templates", "styles"]) {
         const files = await readdir(join(sourceRoot, entry.frontmatter.name, child)).catch(
           () => [],
         );

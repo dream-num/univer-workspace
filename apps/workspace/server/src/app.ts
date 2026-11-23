@@ -261,7 +261,6 @@ export function createWorkspaceApplication(
   const blobStore = injectedBlobStore ?? createBlobStore(config);
   const skillSources = createSkillSourcesModule({ access, nodes: repositories.nodes, store: blobStore, ...(config.githubToken ? { githubToken: config.githubToken } : {}) });
   const skillDrafts = createSkillDraftsModule({ repository: repositories.skillDrafts, access, store: blobStore, sources: skillSources });
-  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore });
   const blobs = createBlobsModule({
     repository: repositories.blobs,
     access,
@@ -305,8 +304,10 @@ export function createWorkspaceApplication(
     async publishMergedAssets(worktreeId, unitIds) {
       await univerAssetsRepository.publishWorktreeAssets(worktreeId, unitIds);
     },
+    publishMergedPages: (worktreeId) => htmlViewDrafts.publishForWorktree(worktreeId),
     onChanged: (change) => worktreeChangeFeed.publish(change),
   });
+  const htmlViewDrafts = createHtmlViewDraftsModule({ repository: repositories.htmlViewDrafts, access, store: blobStore, worktrees });
   const activity = createActivityModule({ access, worktrees, issues });
   const univerAssets = createUniverAssetsModule({
     repository: univerAssetsRepository,

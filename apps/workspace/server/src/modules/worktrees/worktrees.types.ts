@@ -4,6 +4,7 @@ import type {
 } from "@univerjs-pro/collaboration-worktree-service";
 import type { IChangeset } from "@univerjs/protocol";
 import type { UnitType } from "../access/index.js";
+import type { PublishedPage } from "../html-view-drafts/drafts.types.js";
 import type { OperationState } from "../resources/resources.types.js";
 import type { PublicUser } from "../permissions/index.js";
 import type { WriteSource, WriteSourceView } from "../identity/index.js";
@@ -40,6 +41,7 @@ export interface WorktreeSummary {
   readonly creator: PublicUser;
   readonly claimer: PublicUser | null;
   readonly unitCount: number;
+  readonly pendingPageDrafts: number;
   readonly processedAt: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -283,8 +285,10 @@ export interface WorktreesModule {
   merge(
     userId: string,
     worktreeId: string,
-    operationId: unknown
+    operationId: unknown,
+    interactive?: boolean
   ): Promise<{
+    readonly publishedPages: readonly PublishedPage[];
     readonly operation: WorktreeOperationView;
     readonly worktree: WorktreeSummary;
   }>;

@@ -2543,7 +2543,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts.
+          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts.
           content:
             application/json:
               schema:
@@ -2900,7 +2900,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB.
+          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB.
           content:
             application/json:
               schema:
@@ -3006,7 +3006,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts.
+          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts.
           content:
             application/json:
               schema:
@@ -3091,7 +3091,7 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
         '403':
-          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB.
+          description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts. AGENT_QUOTA_EXCEEDED when an unclaimed agent would exceed 20 files or stores a file above 10 MB.
           content:
             application/json:
               schema:
@@ -4331,7 +4331,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/WorktreeOperationResponse'
+                $ref: '#/components/schemas/WorktreeMergeResponse'
         '202':
           description: Merge or Activation remains pending.
           headers:
@@ -5021,6 +5021,10 @@ components:
           oneOf:
             - $ref: '#/components/schemas/PublicUser'
             - type: 'null'
+        pendingPageDrafts:
+          type: integer
+          minimum: 0
+          description: Pending, unexpired HTML View drafts linked to this Worktree, regardless of author. Always returned by current servers.
         unitCount:
           type: integer
           minimum: 0
@@ -5595,6 +5599,7 @@ components:
     SubmitHtmlViewDraft:
       oneOf:
         - type: object
+          additionalProperties: false
           required:
             - kind
             - spaceId
@@ -5613,10 +5618,16 @@ components:
             name:
               type: string
               description: Trimmed name; .univer.html is appended when absent.
+            sourceWorktreeId:
+              type: string
+              minLength: 1
+              maxLength: 255
+              description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
             html:
               type: string
               description: Structurally valid HTML View, at most 512 KiB UTF-8.
         - type: object
+          additionalProperties: false
           required:
             - kind
             - resourceId
@@ -5631,6 +5642,30 @@ components:
             etag:
               type: string
               description: One quoted strong ETag, as returned by Blob content.
+            sourceWorktreeId:
+              type: string
+              minLength: 1
+              maxLength: 255
+              description: A reviewable pull request that has not been discarded. Merged pull requests are accepted.
+            html:
+              type: string
+              description: Structurally valid HTML View, at most 512 KiB UTF-8.
+        - type: object
+          required:
+            - kind
+            - draftId
+            - html
+          additionalProperties: false
+          properties:
+            kind:
+              type: string
+              const: revise
+            draftId:
+              type: string
+              description: Author-owned pending, unexpired draft. A successor inherits its destination and base ETag; the old draft is atomically superseded.
+            sourceWorktreeId:
+              type: string
+              description: Override the source PR; otherwise inherit the previous draft's source.
             html:
               type: string
               description: Structurally valid HTML View, at most 512 KiB UTF-8.
@@ -5652,6 +5687,7 @@ components:
         - expiresAt
         - decidedAt
         - published
+        - supersededBy
       properties:
         id:
           type: string
@@ -5668,8 +5704,19 @@ components:
             - rejected
             - expired
             - conflicted
+            - superseded
+        supersededBy:
+          type:
+            - string
+            - 'null'
+          description: Successor draft ID when superseded.
         spaceId:
           type: string
+        sourceWorktreeId:
+          type:
+            - string
+            - 'null'
+          description: Source pull request. Always returned by current servers, nullable when unlinked. Publishing waits until it is merged.
         parentNodeId:
           type:
             - string
@@ -8692,6 +8739,35 @@ components:
       properties:
         worktree:
           $ref: '#/components/schemas/WorktreeSummary'
+    WorktreeMergeResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - operation
+        - worktree
+        - publishedPages
+      properties:
+        operation:
+          $ref: '#/components/schemas/OperationView'
+        worktree:
+          $ref: '#/components/schemas/WorktreeSummary'
+        publishedPages:
+          type: array
+          description: Pages published after this interactive merge. Already published drafts are omitted on replay. Token-issued merges return an empty list.
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              - draftId
+              - name
+              - nodeId
+            properties:
+              draftId:
+                type: string
+              name:
+                type: string
+              nodeId:
+                type: string
     WorktreeOperationResponse:
       type: object
       additionalProperties: false

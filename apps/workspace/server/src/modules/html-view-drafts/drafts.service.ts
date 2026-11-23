@@ -3,10 +3,12 @@ import { Readable } from "node:stream";
 import { z } from "zod";
 import { isHtmlViewFilename, parseHtmlView } from "@univerjs-labs/html-view";
 import type { BlobStore } from "../../integrations/blob/blob-store.js";
+import { logger } from "../../logging/logger.js";
+import type { WorktreesModule } from "../worktrees/index.js";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
-import { type HtmlViewDraftsRepository, assertDraftDestination, requireDraftResource, draftConflict } from "./drafts.repository.js";
-import type { DraftRow, HtmlViewDraftView } from "./drafts.types.js";
+import { type HtmlViewDraftsRepository, assertDraftDestination, requireDraftResource, requirePendingDraft, draftConflict } from "./drafts.repository.js";
+import type { DraftRow, HtmlViewDraftView, PublishedPage } from "./drafts.types.js";
 
 const id = z.string().trim().min(1).max(255);
 const requestSchema = z.discriminatedUnion("kind", [
@@ -16,7 +18,8 @@ const requestSchema = z.discriminatedUnion("kind", [
     parentNodeId: id.nullish(),
     name: id,
     html: z.string(),
-  }),
+    sourceWorktreeId: id.optional(),
+  }).strict(),
   z.object({
     kind: z.literal("replace"),
     resourceId: id,
@@ -25,7 +28,9 @@ const requestSchema = z.discriminatedUnion("kind", [
       .max(200)
       .regex(/^"[^"\r\n]+"$/),
     html: z.string(),
-  }),
+    sourceWorktreeId: id.optional(),
+  }).strict(),
+  z.object({ kind: z.literal("revise"), draftId: id, html: z.string(), sourceWorktreeId: id.optional() }).strict(),
 ]);
 const keySchema = z
   .string()
@@ -38,6 +43,7 @@ export function createHtmlViewDraftsModule(options: {
   repository: HtmlViewDraftsRepository;
   access: AccessResolver;
   store: BlobStore;
+  worktrees: Pick<WorktreesModule, "get">;
   now?: () => number;
 }) {
   const { repository, access, store } = options;
@@ -61,9 +67,18 @@ export function createHtmlViewDraftsModule(options: {
     const target = await access.resolveResource(userId, resourceId);
     return requireDraftResource(target);
   }
+  async function sourceWorktree(userId: string, worktreeId: string) {
+    const { worktree } = await options.worktrees.get(userId, worktreeId);
+    if (!worktree.capabilities.review)
+      throw new ApplicationError("NOT_FOUND", 404, "Source pull request not found.");
+    return worktree;
+  }
   async function view(row: DraftRow): Promise<HtmlViewDraftView> {
     if (row.state === "receiving") throw draftConflict("Draft content is still receiving.");
     let state: HtmlViewDraftView["state"] = row.state;
+    if (state === "pending" && row.source_worktree_id !== null &&
+        (await sourceWorktree(row.author_user_id, row.source_worktree_id)).state === "discarded")
+      state = "conflicted";
     if (state === "pending" && row.expires_at <= now()) state = "expired";
     else if (state === "pending" && row.kind === "replace") {
       const etag = await repository.currentEtag(row.target_resource_id!);
@@ -73,7 +88,9 @@ export function createHtmlViewDraftsModule(options: {
       id: row.id,
       kind: row.kind,
       state,
+      supersededBy: row.superseded_by,
       spaceId: row.space_id,
+      sourceWorktreeId: row.source_worktree_id,
       parentNodeId: row.parent_node_id,
       name: row.name,
       targetResourceId: row.target_resource_id,
@@ -92,6 +109,19 @@ export function createHtmlViewDraftsModule(options: {
           : null,
     };
   }
+  async function publish(userId: string, draftId: string) {
+    const row = await requireDraft(userId, draftId);
+    if (row.state === "published") return view(row);
+    requirePendingDraft(row, now());
+    if (row.source_worktree_id !== null) {
+      const worktree = await sourceWorktree(userId, row.source_worktree_id);
+      if (worktree.state === "discarded") throw draftConflict("Draft is conflicted because its source pull request was discarded.");
+      if (worktree.state !== "merged") throw draftConflict(`Waiting for pull request #${worktree.number ?? worktree.id} to merge.`);
+    }
+    const decided = await repository.decide(row.id, userId, "publish", now());
+    if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
+    return view(decided);
+  }
   return {
     async submit(userId: string, keyValue: unknown, body: unknown) {
       const parsed = requestSchema.safeParse(body);
@@ -102,7 +132,25 @@ export function createHtmlViewDraftsModule(options: {
           400,
           "Invalid draft request or Idempotency-Key.",
         );
-      const input = parsed.data;
+      const request = parsed.data;
+      const previous = request.kind === "revise" ? await requireDraft(userId, request.draftId) : undefined;
+      const input = request.kind === "revise" && previous
+        ? previous.kind === "create"
+          ? { kind: "create" as const, spaceId: previous.space_id, parentNodeId: previous.parent_node_id,
+              name: previous.name, html: request.html, sourceWorktreeId: request.sourceWorktreeId ?? previous.source_worktree_id ?? undefined }
+          : { kind: "replace" as const, resourceId: previous.target_resource_id!, etag: `"${previous.base_etag}"`,
+              html: request.html, sourceWorktreeId: request.sourceWorktreeId ?? previous.source_worktree_id ?? undefined }
+        : request;
+      if (input.kind === "revise") throw new Error("Revision draft is missing.");
+      let row = await repository.findKey(userId, key.data);
+      if (previous && !row) {
+        requirePendingDraft(previous, now());
+        const state = (await view(previous)).state;
+        if (state !== "pending") throw draftConflict(`Draft is ${state}.`);
+      }
+      if (input.sourceWorktreeId !== undefined &&
+          (await sourceWorktree(userId, input.sourceWorktreeId)).state === "discarded")
+        throw draftConflict("Source pull request was discarded.");
       const bytes = Buffer.from(input.html, "utf8");
       if (bytes.length > 512 * 1024)
         throw new ApplicationError("PAYLOAD_TOO_LARGE", 413, "HTML View exceeds 512 KiB.");
@@ -120,7 +168,6 @@ export function createHtmlViewDraftsModule(options: {
           : null;
       if (name && name.length > 255)
         throw new ApplicationError("INVALID_INPUT", 400, "Draft name is too long.");
-      let row = await repository.findKey(userId, key.data);
       let created = false;
       if (!row) {
         let spaceId: string;
@@ -131,7 +178,7 @@ export function createHtmlViewDraftsModule(options: {
           displayName = name!;
         } else {
           const target = await validateReplace(userId, input.resourceId);
-          if (target.etag !== input.etag.slice(1, -1))
+          if (!previous && target.etag !== input.etag.slice(1, -1))
             throw new ApplicationError("PRECONDITION_FAILED", 412, "HTML View content changed.");
           spaceId = target.node.spaceId;
           displayName = target.node.name;
@@ -141,7 +188,9 @@ export function createHtmlViewDraftsModule(options: {
             author_user_id: userId,
             idempotency_key: key.data,
             kind: input.kind,
+            revises_draft_id: previous?.id ?? null,
             space_id: spaceId,
+            source_worktree_id: input.sourceWorktreeId ?? null,
             parent_node_id: input.kind === "create" ? (input.parentNodeId ?? null) : null,
             name: displayName,
             target_resource_id: input.kind === "replace" ? input.resourceId : null,
@@ -155,8 +204,10 @@ export function createHtmlViewDraftsModule(options: {
         created = reservation.created;
       }
       const same =
+        row.revises_draft_id === (previous?.id ?? null) &&
         row.kind === input.kind &&
         row.sha256 === sha256 &&
+        row.source_worktree_id === (input.sourceWorktreeId ?? null) &&
         (input.kind === "create"
           ? row.space_id === input.spaceId &&
             row.parent_node_id === (input.parentNodeId ?? null) &&
@@ -207,18 +258,25 @@ export function createHtmlViewDraftsModule(options: {
         throw draftConflict("Draft bytes are no longer available.");
       return { ...(await store.open({ objectKey: row.object_key })), byteSize: row.byte_size };
     },
-    async publish(userId: string, draftId: string) {
-      const row = await requireDraft(userId, draftId);
-      if (row.state === "published") return view(row);
-      if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
-      const decided = await repository.decide(row.id, userId, "publish", now());
-      if (decided.state !== "published") throw draftConflict(`Draft is ${decided.state}.`);
-      return view(decided);
+    publish,
+    async publishForWorktree(worktreeId: string): Promise<PublishedPage[]> {
+      const publishedPages: PublishedPage[] = [];
+      const rows = await repository.pendingForWorktree(worktreeId);
+      for (const row of rows) {
+        try {
+          if (row.expires_at <= now()) throw draftConflict("Draft expired.");
+          const draft = await publish(row.author_user_id, row.id);
+          publishedPages.push({ draftId: row.id, name: row.name, nodeId: draft.published!.nodeId });
+        } catch (error) {
+          logger.warn({ err: error, worktreeId, draftId: row.id }, "HTML View draft was not published after merge");
+        }
+      }
+      return publishedPages;
     },
     async reject(userId: string, draftId: string) {
       const row = await requireDraft(userId, draftId);
       if (row.state === "rejected") return view(row);
-      if (row.state !== "pending") throw draftConflict(`Draft is ${row.state}.`);
+      requirePendingDraft(row, now());
       const decided = await repository.decide(row.id, userId, "reject", now());
       if (decided.state !== "rejected") throw draftConflict(`Draft is ${decided.state}.`);
       return view(decided);

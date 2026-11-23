@@ -99,7 +99,7 @@
       "401":
         $ref: ../schemas/common.yaml#/Unauthorized
       "403":
-        description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_create or html_view_replace drafts.
+        description: Insufficient permission, or HTML_VIEW_DRAFT_REQUIRED when a token-issued session writes a .univer.html page. Use html_view_save drafts.
         content:
           application/json:
             schema:

@@ -705,7 +705,7 @@ describe("gateway over real HTTP and the MCP client", () => {
     ]);
   });
 
-  it("gives a person the same tools and instructions as before agents could be claimed, apart from share's access", async () => {
+  it("keeps the reviewed human tool surface and instructions stable, apart from share's access", async () => {
     const surface = [];
     for (const suffix of ["", "?toolsets=files", "?toolsets=admin", "?toolsets=all"]) {
       const client = await connect({ pin: "2026-07-28" }, suffix);
@@ -718,7 +718,7 @@ describe("gateway over real HTTP and the MCP client", () => {
       surface.push({ suffix, instructions: client.getInstructions(), tools });
     }
     const digest = createHash("sha256").update(`${JSON.stringify(surface, null, 2)}\n`).digest("hex");
-    expect(digest).toMatchInlineSnapshot(`"8b3bf08751946189d2a5bd8e0355056d28ee3120d3de6a86622265594634c86f"`);
+    expect(digest).toMatchInlineSnapshot(`"c479be63d7ba14d30b7315159824287516a25c56fc85e685f6bfde3d41a4630a"`);
   });
 
   it("tells an agent to merge and share, a claimed one when to hand over to its owner instead, and a person to review", async () => {

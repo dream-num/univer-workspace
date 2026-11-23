@@ -4,10 +4,15 @@ import type { SqliteDatabase } from "../connection.js";
 import type { StoredBlob } from "../../../integrations/blob/blob-store.js";
 import { enqueueObjectDeletion, insertReadyBlobResource, swapBlobContent } from "../blobs/blobs.repository.js";
 import type { DraftRow } from "../../../modules/html-view-drafts/drafts.types.js";
-import { assertDraftDestination, requireDraftResource, draftConflict, type HtmlViewDraftsRepository } from "../../../modules/html-view-drafts/drafts.repository.js";
+import { assertDraftDestination, requireDraftResource, requirePendingDraft, draftConflict, type HtmlViewDraftsRepository } from "../../../modules/html-view-drafts/drafts.repository.js";
 
 export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository {
   constructor(private readonly database: SqliteDatabase, private readonly access: SqliteAccessRepository) {}
+  async pendingForWorktree(worktreeId: string): Promise<DraftRow[]> {
+    return this.database.connection
+      .prepare("SELECT * FROM html_view_drafts WHERE source_worktree_id = ? AND state = 'pending' ORDER BY created_at, id")
+      .all(worktreeId) as unknown as DraftRow[];
+  }
   async find(id: string): Promise<DraftRow | undefined> {
     return this._findSync(id);
   }
@@ -38,13 +43,14 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
       | "idempotency_key"
       | "kind"
       | "space_id"
+      | "source_worktree_id"
       | "parent_node_id"
       | "name"
       | "target_resource_id"
       | "base_etag"
       | "sha256"
       | "byte_size"
-    >,
+    > & { revises_draft_id?: string | null },
     now: number,
   ): Promise<{ row: DraftRow; created: boolean }> {
     return this.database.transaction((db) => {
@@ -52,8 +58,8 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
       if (existing) return { row: existing, created: false };
       db.prepare(`INSERT INTO html_view_drafts
         (id, author_user_id, idempotency_key, kind, space_id, parent_node_id, name, target_resource_id,
-         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?)`).run(
+         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at, source_worktree_id, revises_draft_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?, ?, ?)`).run(
         randomUUID(),
         input.author_user_id,
         input.idempotency_key,
@@ -69,16 +75,28 @@ export class SqliteHtmlViewDraftsRepository implements HtmlViewDraftsRepository 
         now + 3600000,
         now,
         now,
+        input.source_worktree_id,
+        input.revises_draft_id ?? null,
       );
       return { row: this._findKeySync(input.author_user_id, input.idempotency_key)!, created: true };
     });
   }
   async markPending(id: string, stored: StoredBlob, now: number): Promise<DraftRow> {
-    this.database.connection
-      .prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?,
-      expires_at = ?, updated_at = ? WHERE id = ? AND state = 'receiving' AND expires_at > ?`)
-      .run(stored.mediaType, stored.etag, now + 7 * 86400000, now, id, now);
-    return this._findSync(id)!;
+    return this.database.transaction((db) => {
+      const row = this._findSync(id)!;
+      if (row.state !== "receiving" || row.expires_at <= now) return row;
+      if (row.revises_draft_id !== null) {
+        const previous = this._findSync(row.revises_draft_id)!;
+        requirePendingDraft(previous, now);
+        db.prepare("UPDATE html_view_drafts SET state = 'superseded', superseded_by = ?, decided_by = ?, decided_at = ?, updated_at = ? WHERE id = ?")
+          .run(id, row.author_user_id, now, now, previous.id);
+        enqueueObjectDeletion(db, previous.object_key, "blob_upload_abandoned", now);
+      }
+      db.prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?,
+        expires_at = ?, updated_at = ? WHERE id = ?`)
+        .run(stored.mediaType, stored.etag, now + 7 * 86400000, now, id);
+      return this._findSync(id)!;
+    });
   }
   async decide(id: string, userId: string, action: "publish" | "reject", now: number): Promise<DraftRow> {
     return this._decideSync(id, userId, action, now);

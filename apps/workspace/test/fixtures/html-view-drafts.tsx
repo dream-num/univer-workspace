@@ -12,7 +12,7 @@ let draft: components["schemas"]["HtmlViewDraft"] = {
   id: scenario, kind: scenario === "replace" ? "replace" : "create", state,
   name: "Sales page.univer.html", spaceId: "sales", parentNodeId: "reports", targetResourceId: scenario === "replace" ? "old-page" : null,
   baseEtag: scenario === "replace" ? '"v1"' : null, byteSize: 200, createdAt: "2026-11-12T00:00:00Z", expiresAt: "2026-11-19T00:00:00Z",
-  decidedAt: null, published: state === "published" ? { nodeId: "published-page", resourceId: "page", etag: '"v2"' } : null,
+  decidedAt: null, supersededBy: null, published: state === "published" ? { nodeId: "published-page", resourceId: "page", etag: '"v2"' } : null,
 };
 const page = (title: string) => `<!doctype html><html><head><style>body{margin:0;padding:48px;background:#edf6ff;color:#173a5b;font:20px system-ui}h1{font-size:40px}input{padding:10px;font:inherit}</style></head><body><h1>${title}</h1><p>Review this page before publishing.</p><label>Local preview <input value="Not saved"></label></body></html>`;
 const session: components["schemas"]["AuthenticatedSession"] = {
@@ -44,8 +44,8 @@ if (!root) throw new Error("Fixture root is missing");
 if (new URLSearchParams(location.search).has("agent")) {
   const { AgentStepsGroup } = await import("../../web/src/features/agents/ui/session-page");
   const message: UIMessage = { id: "assistant", role: "assistant", parts: [{
-    type: "dynamic-tool", toolName: draft.kind === "replace" ? "html_view_replace" : "html_view_create", toolCallId: "page",
-    state: "output-available", input: { name: draft.name }, output: { content: [], structuredContent: { draft: { id: draft.id } } },
+    type: "dynamic-tool", toolName: "html_view_save", toolCallId: "page",
+    state: "output-available", input: draft.kind === "replace" ? { page: draft.targetResourceId, etag: draft.baseEtag } : { space: draft.spaceId, name: draft.name }, output: { content: [], structuredContent: { draft: { id: draft.id } } },
   }] };
   const agent = { ...sessionRecordSchema.parse({
     id: "fixture-agent", userId: "fixture-owner", scope: { kind: "global" }, mode: "auto", status: "idle",

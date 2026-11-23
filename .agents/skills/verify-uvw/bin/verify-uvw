@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Isolated Univer Workspace instance for verification runs.
-# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] <label> mcp|uvw <prompt> | open-anon <label> <url> | secret-check [directory] | env | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
+# Usage: verify-uvw up | doctor | user [name] | principal <name> [label] | story [--as identity] [--oauth] [--model id[#effort]] <label> mcp|uvw|codex <prompt> | open-anon <label> <url> | secret-check [directory] | env | metrics | uvw <args> | cli <label> <args> | mcp [options] <label> <tool> [json] | mcp-tools [options] <label> | mcp-skills [options] <label> | mcp-resources [options] <label> | mcp-resource [options] <label> <uri> | mcp-instructions [options] <label> | mcp-token [--scopes list] [--name name] | mcp-oauth <login|refresh|reuse|revoke|direct|exchange> <label> [options] | mcp-allow-users <user-id>...|'*'|workspace | mcp-gateway-restart | mcp-logs | renderer-call <label> <op> | renderer-restart [max-runtimes] | agent-up | agent-down | down
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
@@ -362,7 +362,7 @@ cmd_secret_check() { # [directory]: fails when evidence holds a token, a session
   node "$BIN/secrets.mjs" check "$RUN" "${1:-$RUN/evidence}"
 }
 
-cmd_story() { # [--as identity] [--oauth] label mcp|uvw prompt: one real-agent run in a throwaway opencode home
+cmd_story() { # [--as identity] [--oauth] [--model id[#effort]] label mcp|uvw|codex prompt: one recorded run
   load_run
   local USERNAME="" mcp_url=""
   # shellcheck disable=SC1091

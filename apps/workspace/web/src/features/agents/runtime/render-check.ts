@@ -10,7 +10,7 @@ const draftResult = z.object({
 
 export function withRenderCheck(tools: ToolSet, check?: CheckHtmlViewDraft): ToolSet {
   return Object.fromEntries(Object.entries(tools).map(([name, tool]) => {
-    if (!check || !["html_view_create", "html_view_replace"].includes(name) || !tool.execute) return [name, tool];
+    if (!check || name !== "html_view_save" || !tool.execute) return [name, tool];
     const execute = tool.execute;
     return [name, { ...tool, async execute(input, options) {
       const output: unknown = await execute(input, options);

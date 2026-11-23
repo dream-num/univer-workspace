@@ -4,10 +4,15 @@ import type { PostgresDatabase } from "../connection.js";
 import type { StoredBlob } from "../../../integrations/blob/blob-store.js";
 import { enqueueObjectDeletion, insertReadyBlobResource, swapBlobContent } from "../blobs/blobs.repository.js";
 import type { DraftRow } from "../../../modules/html-view-drafts/drafts.types.js";
-import { assertDraftDestination, requireDraftResource, draftConflict, type HtmlViewDraftsRepository } from "../../../modules/html-view-drafts/drafts.repository.js";
+import { assertDraftDestination, requireDraftResource, requirePendingDraft, draftConflict, type HtmlViewDraftsRepository } from "../../../modules/html-view-drafts/drafts.repository.js";
 
 export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepository {
   constructor(private readonly database: PostgresDatabase, private readonly access: PostgresAccessRepository) {}
+  async pendingForWorktree(worktreeId: string): Promise<DraftRow[]> {
+    return await this.database
+      .prepare("SELECT * FROM html_view_drafts WHERE source_worktree_id = ? AND state = 'pending' ORDER BY created_at, id")
+      .all(worktreeId) as unknown as DraftRow[];
+  }
   async find(id: string): Promise<DraftRow | undefined> {
     return await this.database
       .prepare("SELECT * FROM html_view_drafts WHERE id = ?")
@@ -30,22 +35,24 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
       | "idempotency_key"
       | "kind"
       | "space_id"
+      | "source_worktree_id"
       | "parent_node_id"
       | "name"
       | "target_resource_id"
       | "base_etag"
       | "sha256"
       | "byte_size"
-    >,
+    > & { revises_draft_id?: string | null },
     now: number,
   ): Promise<{ row: DraftRow; created: boolean }> {
     return await this.database.transaction(async (db) => {
       const existing = await this.findKey(input.author_user_id, input.idempotency_key);
       if (existing) return { row: existing, created: false };
-      await db.prepare(`INSERT INTO html_view_drafts
+      const inserted = await db.prepare(`INSERT INTO html_view_drafts
         (id, author_user_id, idempotency_key, kind, space_id, parent_node_id, name, target_resource_id,
-         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?)`).run(
+         base_etag, object_key, byte_size, sha256, state, expires_at, created_at, updated_at, source_worktree_id, revises_draft_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'receiving', ?, ?, ?, ?, ?)
+        ON CONFLICT (author_user_id, idempotency_key) DO NOTHING`).run(
         randomUUID(),
         input.author_user_id,
         input.idempotency_key,
@@ -61,20 +68,34 @@ export class PostgresHtmlViewDraftsRepository implements HtmlViewDraftsRepositor
         now + 3600000,
         now,
         now,
+        input.source_worktree_id,
+        input.revises_draft_id ?? null,
       );
-      return { row: (await this.findKey(input.author_user_id, input.idempotency_key))!, created: true };
+      return { row: (await this.findKey(input.author_user_id, input.idempotency_key))!, created: inserted.changes === 1 };
     });
   }
   async markPending(id: string, stored: StoredBlob, now: number): Promise<DraftRow> {
-    await this.database
-      .prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?,
-      expires_at = ?, updated_at = ? WHERE id = ? AND state = 'receiving' AND expires_at > ?`)
-      .run(stored.mediaType, stored.etag, now + 7 * 86400000, now, id, now);
-    return (await this.find(id))!;
+    return await this.database.transaction(async (db) => {
+      const reserved = (await this.find(id))!;
+      const previous = reserved.revises_draft_id === null ? undefined : await db
+        .prepare("SELECT * FROM html_view_drafts WHERE id = ? FOR UPDATE").get(reserved.revises_draft_id) as DraftRow | undefined;
+      const row = await db.prepare("SELECT * FROM html_view_drafts WHERE id = ? FOR UPDATE").get(id) as unknown as DraftRow;
+      if (row.state !== "receiving" || row.expires_at <= now) return row;
+      if (previous) {
+        requirePendingDraft(previous, now);
+        await db.prepare("UPDATE html_view_drafts SET state = 'superseded', superseded_by = ?, decided_by = ?, decided_at = ?, updated_at = ? WHERE id = ?")
+          .run(id, row.author_user_id, now, now, previous.id);
+        await enqueueObjectDeletion(db, previous.object_key, "blob_upload_abandoned", now);
+      }
+      await db.prepare(`UPDATE html_view_drafts SET state = 'pending', media_type = ?, stored_etag = ?,
+        expires_at = ?, updated_at = ? WHERE id = ?`)
+        .run(stored.mediaType, stored.etag, now + 7 * 86400000, now, id);
+      return (await this.find(id))!;
+    });
   }
   async decide(id: string, userId: string, action: "publish" | "reject", now: number): Promise<DraftRow> {
     return await this.database.transaction(async (db) => {
-      const row = (await this.find(id))!;
+      const row = await db.prepare("SELECT * FROM html_view_drafts WHERE id = ? FOR UPDATE").get(id) as unknown as DraftRow;
       if (row.state !== "pending" && row.state !== "receiving") return row;
       let state: DraftRow["state"];
       let result: { nodeId: string; resourceId: string; etag: string } | null = null;

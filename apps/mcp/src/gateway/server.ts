@@ -36,6 +36,7 @@ import { allScopes, createAuthenticator, type Authentication } from "./auth.js";
 import { buildServerInstructions } from "./instructions.js";
 import { openResourceLibrary } from "./resources.js";
 import { truncateCommittedExecute } from "../shared/execute-result.js";
+import { truncateHtmlViewDraft } from "./html-view-result.js";
 import { RESULT_LIMIT } from "./paging.js";
 import { loadWorkspaceSkills } from "./skill-catalog.js";
 import { translateToolError } from "./tool-error.js";
@@ -210,8 +211,10 @@ export function createGateway(
             let structuredContent = json.data;
             if (JSON.stringify(structuredContent).length > RESULT_LIMIT) {
               const truncated =
-                tool.name === "execute" ? truncateCommittedExecute(structuredContent) : undefined;
-              if (truncated) structuredContent = truncated;
+                tool.name === "execute" ? truncateCommittedExecute(structuredContent)
+                  : tool.name === "html_view_save"
+                    ? truncateHtmlViewDraft(structuredContent) : undefined;
+              if (truncated) structuredContent = z.json().parse(truncated);
               else
                 throw workspaceError(
                   "workspace-result-too-large",

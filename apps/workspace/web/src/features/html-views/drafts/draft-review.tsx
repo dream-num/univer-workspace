@@ -8,6 +8,7 @@ import { resourceOpenQueryOptions } from "../../resources/resources.queries";
 import { spaceQueryOptions } from "../../spaces/spaces.queries";
 import { draftContentQueryOptions, htmlViewDraftQueryOptions, usePublishDraft, useRejectDraft, type HtmlViewDraft } from "./draft-queries";
 import { useDraftMessages } from "./messages";
+import { worktreeQueryOptions } from "../../worktrees/worktrees.queries";
 import { useHtmlViewSources } from "../use-html-view-sources";
 
 const DraftPreview = lazy(() => import("./draft-preview").then((module) => ({ default: module.DraftPreview })));
@@ -33,7 +34,8 @@ export function HtmlViewDraftReview({ draftId, presentation, replaced = false, o
           onRequestChanges={presentation === "card" ? onRequestChanges : undefined} requestChangesDisabled={requestChangesDisabled} /> :
           <div className="p-5">
             <h1 className="text-lg font-semibold">{draft.data.name}</h1>
-            <p role="status">{m[draft.data.state]}</p>
+            <p role="status">{draft.data.state === "conflicted" && draft.data.kind === "create" && draft.data.sourceWorktreeId ? m.sourceDiscarded : m[draft.data.state]}</p>
+            {draft.data.state === "superseded" && draft.data.supersededBy && <a className="text-primary underline" href={`/drafts/${encodeURIComponent(draft.data.supersededBy)}`}>{m.openSuccessor}</a>}
             {draft.data.state === "published" && draft.data.published && <a className="text-primary underline" href={`/nodes/${encodeURIComponent(draft.data.published.nodeId)}?view=immersive`}>{m.openPage}</a>}
           </div>}
   </section>;
@@ -46,6 +48,8 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   readonly requestChangesDisabled: boolean;
 }) {
   const m = useDraftMessages();
+  const sourceWorktree = useQuery({ ...worktreeQueryOptions(draft.sourceWorktreeId ?? ""), enabled: !!draft.sourceWorktreeId });
+  const waiting = !!draft.sourceWorktreeId && sourceWorktree.data?.worktree.state !== "merged";
   const content = useQuery(draftContentQueryOptions(draft.id));
   const current = useQuery({ ...resourceOpenQueryOptions(draft.targetResourceId ?? ""), enabled: draft.kind === "replace" && draft.targetResourceId !== null });
   const repository = useQuery(spaceQueryOptions(draft.spaceId));
@@ -56,11 +60,11 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   const [seen, setSeen] = useState(false);
   const [changes, setChanges] = useState<string | null>(null);
   const markSeen = useCallback(() => setSeen(true), []);
-  const { sourceIds, sources } = useHtmlViewSources(content.data);
+  const { sourceIds, sources } = useHtmlViewSources(draft.sourceWorktreeId && !sourceWorktree.data ? undefined : content.data, sourceWorktree.data?.worktree);
   const disabled = publish.isPending || reject.isPending;
-  const error = publish.error ?? reject.error ?? content.error;
+  const error = publish.error ?? reject.error ?? content.error ?? sourceWorktree.error;
   const decide = (approved: boolean) => {
-    if (disabled) return;
+    if (disabled || approved && waiting) return;
     setPreview(false);
     if (approved) publish.mutate(); else reject.mutate();
   };
@@ -74,10 +78,20 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
   }
   const destination = repository.data;
   const previewProps = {
+    sourceWorktree: sourceWorktree.data?.worktree,
     html: content.data ?? "", replacing: draft.kind === "replace",
     current: current.data?.resource.kind === "blob" ? current.data.resource : undefined,
     currentError: current.isError,
   };
+  if (sourceWorktree.data?.worktree.state === "discarded") return <div className="p-5">
+    <h1 className="text-lg font-semibold">{draft.name}</h1><p role="status">{m.sourceDiscarded}</p>
+  </div>;
+  const waitingNotice = waiting && sourceWorktree.data ? <p role="status" className="px-5 py-2 text-sm">
+    <a className="text-primary underline" href={sourceWorktree.data.worktree.number === null ? `/worktrees?worktree=${encodeURIComponent(sourceWorktree.data.worktree.id)}` : `/spaces/${encodeURIComponent(draft.spaceId)}/pulls/${sourceWorktree.data.worktree.number}`}>
+      {m.waitingForPr(sourceWorktree.data.worktree.number)}
+    </a>
+  </p> : null;
+  const previewReady = content.data !== undefined && (!draft.sourceWorktreeId || !!sourceWorktree.data);
   return <>
     <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-border p-5">
       <div className="min-w-0 break-words">
@@ -87,17 +101,21 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
           <dt>{m.repository}</dt><dd>{destination?.fullName ?? destination?.name ?? draft.spaceId}</dd>
           <dt>{m.destination}</dt><dd>{draft.parentNodeId === null ? m.root : parent.data?.node.name ?? draft.parentNodeId}</dd>
           <dt>{m.scope}</dt><dd>{destination ? destination.publicRead ? m.publicPage : m.privatePage : m.unknownVisibility}</dd>
-          <dt>{m.sourceSheets}</dt><dd>{sourceIds === null ? m.sourcesUnavailable : sourceIds.length === 0 ? m.noSourceSheets : sourceIds.map((id, index) => sources[index]?.data?.node.name ?? id).join(", ")}</dd>
+          <dt>{m.sourceSheets}</dt><dd>{sourceIds === null ? m.sourcesUnavailable : sourceIds.length === 0 ? m.noSourceSheets : sourceIds.map((id, index) => (waiting ? sourceWorktree.data?.worktree.units.find((unit) => unit.unitId === id)?.name : undefined) ?? sources[index]?.data?.node.name ?? id).join(", ")}</dd>
         </dl>
-        <p className="mt-3 text-sm text-muted-foreground">{m.publishNotice}</p>
+        {!waiting && <p className="mt-3 text-sm text-muted-foreground">{m.publishNotice}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        {presentation === "card" && <Button variant="secondary" disabled={content.data === undefined || disabled} onClick={() => setPreview(true)}>{m.draftPreview}</Button>}
-        <Button disabled={disabled || presentation === "card" && !seen} onClick={() => decide(true)}>{m.publish}</Button>
+        {presentation === "card" && <Button variant="secondary" disabled={!previewReady || disabled} onClick={() => setPreview(true)}>{m.draftPreview}</Button>}
+        <Button disabled={disabled || waiting || presentation === "card" && !seen} onClick={() => decide(true)}>{m.publish}</Button>
         <Button variant="secondary" disabled={disabled} onClick={() => decide(false)}>{m.reject}</Button>
-        {onRequestChanges && <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={openChanges}>{m.requestChanges}</Button>}
+        {onRequestChanges && <>
+          <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={openChanges}>{m.requestChanges}</Button>
+          <Button variant="secondary" disabled={disabled || requestChangesDisabled} onClick={() => onRequestChanges(m.changeStyleMessage)}>{m.changeStyle}</Button>
+        </>}
       </div>
     </header>
+    {waitingNotice}
     {error && <p role="alert" className="p-5 text-destructive">{error.message}</p>}
     {changes !== null && onRequestChanges && <form className="space-y-3 p-5" onSubmit={(event) => { event.preventDefault(); void requestChanges(); }}>
       <label className="block space-y-2 text-sm">{m.changeReason}
@@ -105,11 +123,11 @@ function PendingDraft({ draft, presentation, onRequestChanges, requestChangesDis
       </label>
       <Button type="submit" disabled={disabled || requestChangesDisabled || !changes.trim()}>{m.sendChanges}</Button>
     </form>}
-    {presentation === "card" && !seen && <p className="mt-3 text-sm text-muted-foreground">{m.previewFirst}</p>}
-    {presentation === "page" && (content.data === undefined ? <p role="status" className="p-5">{content.isPending ? m.loading : m.previewUnavailable}</p> :
+    {presentation === "card" && !seen && !waiting && <p className="mt-3 text-sm text-muted-foreground">{m.previewFirst}</p>}
+    {presentation === "page" && (!previewReady ? <p role="status" className="p-5">{content.isPending ? m.loading : m.previewUnavailable}</p> :
       <Suspense fallback={<p role="status">{m.loading}</p>}><DraftVersions {...previewProps} /></Suspense>)}
-    {presentation === "card" && preview && content.data !== undefined && <Suspense fallback={<p role="status">{m.loading}</p>}>
-      <DraftPreview {...previewProps} name={draft.name} disabled={disabled} onOpened={markSeen} onClose={() => setPreview(false)} onDecide={decide}
+    {presentation === "card" && preview && previewReady && <Suspense fallback={<p role="status">{m.loading}</p>}>
+      <DraftPreview {...previewProps} name={draft.name} disabled={disabled} publishDisabled={waiting} waitingNotice={waitingNotice} onOpened={markSeen} onClose={() => setPreview(false)} onDecide={decide}
         onRequestChanges={onRequestChanges ? openChanges : undefined} requestChangesDisabled={requestChangesDisabled} />
     </Suspense>}
   </>;

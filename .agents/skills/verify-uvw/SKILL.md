@@ -16,7 +16,7 @@ $V env       # print exports for agent-browser / uvw in the current shell
 $V cli <label> <uvw args...>   # run uvw and save cmd/stdout/stderr/exit as evidence
 $V uvw <uvw args...>           # run uvw without recording (exploration)
 $V principal <name> [label]    # create an agent principal; its token stays private in the run
-$V story [--as <identity>] [--oauth] <label> mcp|uvw '<prompt>'   # one recorded real-model run
+$V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'   # one recorded real-model run
 $V open-anon <label> <url>     # open a link with no cookies: screenshot, video, page text
 $V metrics                     # print the Workspace server's /metrics
 $V secret-check [directory]    # fail when evidence holds a token or a session cookie
@@ -253,7 +253,7 @@ An agent principal is a User that never signed in. These commands speak as one; 
 $V principal <name> [label]                # POST /api/agents; prints id and username
 $V mcp --as <name> <label> <tool> [json]   # also mcp-tools, mcp-skills, mcp-resources, mcp-resource, mcp-instructions
 $V mcp-oauth login <label> --guest         # scripted OAuth client that takes the guest agent card
-$V story [--as <identity>] [--oauth] <label> mcp|uvw '<prompt>'
+$V story [--as <identity>] [--oauth] [--model <id[#effort]>] <label> mcp|uvw|codex '<prompt>'
 $V open-anon <label> <url>
 $V secret-check [directory]                # default: this run's evidence
 ```
@@ -270,25 +270,52 @@ opens the authorize URL with no cookies, saves `<label>-guest-card.png`, continu
 card, and replaces the grant in `home/mcp-oauth-*`, so `mcp --auth oauth` then speaks as that
 guest. The run's browser stays signed in as the guest.
 
-**Stories.** `story` runs `opencode run` once with `console-deepseek/deepseek-flash#high` and
-the prompt as one verbatim argument. Each client and identity gets a throwaway HOME,
+**Stories.** `story` runs one real-model prompt as a verbatim argument. Clients `mcp` and
+`uvw` use `opencode run` with `console-deepseek/deepseek-flash#high` by default. Pass
+`--model console-deepseek/deepseek-flash#max` before the label to choose another model and
+variant. Client `codex` uses `codex exec` with `gpt-6.1-sol` and reasoning effort `high` by
+default. Its model option is `<model>[#<effort>]`; omitting the suffix keeps effort `high`.
+For example:
+
+```bash
+$V story --model console-deepseek/deepseek-flash#max weak mcp '调用 univer-workspace 的 whoami，把返回的身份名称原样告诉我。'
+$V story strong codex '调用 univer-workspace 的 whoami，把返回的身份名称原样告诉我。'
+$V story --model gpt-6.2-sol#xhigh another codex '<prompt>'
+```
+
+Each client and identity gets a throwaway HOME,
 `home/stories/<client>-<identity>/`, with XDG config, data, state and cache, `TMPDIR`, and an empty
 working directory `work/<label>/` addressed by its real path. opencode's environment holds your
 PATH, that HOME and the XDG variables, and no API key from your shell. The model credential is
 copied once with `opencode auth export 'OpenCode Console'` into `home/opencode-credential.json`
 (mode 0600) and imported into each story HOME. `down` deletes all of it with `home/`. Nothing is
-written to your own opencode database.
+written to your own opencode database. Codex instead copies only `auth.json` from the launching
+shell's `CODEX_HOME` (default `~/.codex`) once into `home/codex-credential.json` (mode 0600),
+then into its own `home/stories/codex-<identity>/.codex/auth.json` (mode 0600). That directory is its `CODEX_HOME`; no user config, rules, plugins, or sessions
+are copied. A missing file credential fails the story; keyring-only login is not supported.
+`down` deletes the copied credential, and the shared redactor reads it while the run exists.
 
 | Client | `--as` (default `human`) | What the agent starts with |
 | --- | --- | --- |
-| `mcp` | `human` | the run user's PAT as bearer |
-| `mcp` | a principal | that principal's token as bearer |
+| `mcp` or `codex` | `human` | the run user's PAT as bearer |
+| `mcp` or `codex` | a principal | that principal's token as bearer |
 | `mcp` | another name, with `--oauth` | no credential. The first story runs opencode's own `mcp auth` and takes the guest agent card (`oauth-*` in the story evidence); later stories of that identity reuse the grant |
 | `uvw` | `human` | `uvw` signed in as the run user |
 | `uvw` | another name | `uvw` with the origin configured and no session. The model signs in itself, and later stories of that identity keep its session |
 
 - `mcp`: one MCP server named `univer-workspace`, as in the README. Denied: read, glob, grep,
   list, edit, write, bash and shell, webfetch, websearch, question, task, skill, lsp.
+- `codex`: one MCP server named `univer-workspace`. The generated TOML uses
+  `mcp_servers.univer-workspace.url` and `bearer_token_env_var = "VERIFY_UVW_MCP_BEARER"`.
+  The token is passed in the isolated process environment, never a command argument or evidence.
+  Config sets `model_reasoning_effort`, `approval_policy = "never"`, `sandbox_mode = "read-only"`,
+  `web_search = "disabled"`, and file credential storage. Apps, plugins, and multi-agent tools are
+  disabled. The shell environment excludes the MCP bearer. `codex --no-daemon exec --strict-config
+  --skip-git-repo-check --ephemeral --ignore-rules --json --color never` runs in the empty working
+  directory. Config keys and flags were checked with Codex CLI 0.170.0 help, its
+  [versioned config schema](https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/core/config.schema.json),
+  and [configuration docs](https://developers.openai.com/codex/config-reference/).
+  Codex supports the run user's PAT and principal tokens; `--oauth` remains specific to opencode.
 - `uvw`: no MCP server. Shell and file tools are allowed, `uvw` is first on PATH, and the
   checkout's `skills/univer-workspace-cli` is installed as an opencode Skill. Denied: webfetch,
   websearch, question, task and subagent, opencode's `execute` wrapper, and file tools outside the
@@ -305,8 +332,10 @@ written to your own opencode database.
 
 Story evidence is `$EVIDENCE/<label>/`: `prompt.txt`, `transcript.jsonl` (redacted),
 `trajectory.txt` (one `ok` or `error` line per MCP call, helper call or shell command, then the
-final answer verbatim), `answer.txt`, `opencode-stderr.txt`, and `run-meta.json` (model, client,
-identity, duration, exit code). A label that already has evidence is refused. The run is killed
+final answer verbatim), `answer.txt`, `opencode-stderr.txt` or `codex-stderr.txt`, and
+`run-meta.json` (actual model, Codex effort, client, identity, duration, exit code). Codex transcripts
+come from `codex exec --json`; settled MCP and shell items are each listed once.
+A label that already has evidence is refused. The run is killed
 after 30 minutes and `run-meta.json` records `timed_out`.
 
 Not contained, so read `trajectory.txt` for it and report it:
@@ -320,6 +349,14 @@ Not contained, so read `trajectory.txt` for it and report it:
   `AGENTS.md` it finds there, and in parent directories, to the conversation. In a git
   repository `worktree_create` adds a worktree to the repository's `.git` and checks it out under
   the story HOME. The model credential is not reachable this way.
+- `codex`: the read-only sandbox applies to local shell commands, not remote MCP effects.
+  Commands can read accessible local files outside the working directory, including the story's
+  copied model credential and other run credentials. Read-only is not a confidentiality boundary.
+  Commands cannot write files or use the network under that policy, and approval escalation is
+  disabled. MCP calls run in the Codex host and can still read or change Workspace data according
+  to the identity's permissions. The model retains read-only shell and local inspection tools;
+  check the trajectory for any use outside MCP. Web search is disabled. The copied Codex credential
+  is never written to evidence and is removed by `down`.
 - `uvw`: the shell cannot read the run's `home/` (the model credential export, principal tokens,
   `mcp-*`), `user.pw`, `run.env`, `user.env`, other story HOMEs, opencode's data in its own story
   HOME, or your home directory. What it can still read: its own uvw session in
