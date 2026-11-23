@@ -25,7 +25,7 @@ describe("HTML View Creator Skill tool bindings", () => {
   it("keeps the default draft path compact and self-contained", async () => {
     const content = await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8");
     const text = content.replace(/\s+/gu, " ");
-    expect([...content].length).toBeLessThanOrEqual(10000);
+    expect([...content].length).toBeLessThanOrEqual(10500);
     expect([...content].length - 9916).toBeLessThanOrEqual(800);
     const description = /^description: (.+)$/mu.exec(content)?.[1];
     for (const routing of ["HTML View (.univer.html)", "shareable live HTML page", "dashboard", "report", "form", "Workspace Sheet data", "Prefer it over a local .html unless the user asks for a file"])
@@ -53,7 +53,7 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(sections).toEqual(["Rules", "1. Read and choose", "2. Bind", "3. Save and reply", "4. Continue"]);
   });
 
-  it("pairs the dry-run caveat with the after-save preview offer", async () => {
+  it("ends the saved-draft reply with a fixed preview offer and honors direct requests", async () => {
     const creator = (await readFile(new URL("../skills/html-view-creator/SKILL.md", import.meta.url), "utf8")).replace(/\s+/gu, " ");
     const flow = creator.slice(creator.indexOf("## 3. Save and reply"), creator.indexOf("## 4. Continue"));
     const steps = ["Call `html_view_save` with `dryRun: true`", "Dry runs do not run scripts", "Then save the HTML once as a draft"];
@@ -68,9 +68,13 @@ describe("HTML View Creator Skill tool bindings", () => {
     expect(flow).toContain("Fix empty samples, headers as numbers, writable formulas, date serials");
     expect(flow).not.toContain("references/local-preview.md");
     const next = creator.slice(creator.indexOf("## 4. Continue"));
-    expect(next).toContain('Preview accepted: follow `skills_read {"name":"html-view","resource":"references/local-preview.md"}`, then revise the draft with `draft`');
-    expect(flow).toContain("Dry runs do not run scripts; say render checks did not run and, with a local shell and `node` and not as an agent identity, offer a live preview after saving to check rendering.");
-    expect(flow).not.toContain("With a local shell and `node`, not as an agent identity, offer a live preview.");
+    expect(next).toContain('On acceptance or any request for live preview, even without an offer, including 打开实时预览 or "open live preview", follow `skills_read {"name":"html-view","resource":"references/local-preview.md"}`, then revise the draft with `draft`.');
+    expect(next).toContain("Without a local shell or `node`, or as an agent identity, say in one sentence that live preview is unavailable and suggest the draft preview link instead.");
+    expect(flow).toContain("Dry runs do not run scripts; say render checks did not run.");
+    expect(flow).not.toContain("say render checks did not run and,");
+    expect(flow).toContain("With a local shell and `node`, and not as an agent identity, end the reply with exactly this sentence, translated into the user's language:");
+    expect(flow).toContain('If you want to check it live, reply "open live preview" and I will open it in your browser so we can keep tuning.');
+    expect(flow).toContain("For Chinese, use exactly: 需要的话，回复「打开实时预览」，我会在你的浏览器里打开实时预览，边看边调。");
     expect(flow).toContain("End the turn.");
   });
 

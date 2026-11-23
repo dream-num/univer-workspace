@@ -117,7 +117,7 @@ private media stays empty, so provide a visible fallback.
 ## 3. Save and reply
 
 Call `html_view_save` with `dryRun: true`. Use these samples as the self-check. Fix empty samples, headers as numbers, writable
-formulas, date serials. Dry runs do not run scripts; say render checks did not run and, with a local shell and `node` and not as an agent identity, offer a live preview after saving to check rendering.
+formulas, date serials. Dry runs do not run scripts; say render checks did not run.
 Then save the HTML once as a draft. Save local files with bindings
 as drafts too; never hand off local files unless requested.
 
@@ -136,6 +136,10 @@ private sources means anyone with the link once published; otherwise permission 
 Page access does not grant source access. Never change sharing without permission.
 This connection cannot make a repository public. For public links, give the repository `url` and ask the user to make it public
 in browser settings. Explain that this publishes everything in it.
+With a local shell and `node`, and not as an agent identity, end the reply with exactly
+this sentence, translated into the user's language:
+If you want to check it live, reply "open live preview" and I will open it in your browser so we can keep tuning.
+For Chinese, use exactly: 需要的话，回复「打开实时预览」，我会在你的浏览器里打开实时预览，边看边调。
 End the turn.
 
 ## 4. Continue
@@ -145,5 +149,6 @@ Use `html_view_draft_get` before status/revision. Pending: read with `html_view_
 Published: shareUrl; revise with `page` and `etag` from `html_view_read`.
 Superseded: follow successorUrl. Rejected: reason. Conflicted: reread page/PR.
 Expired: new key. Restyle with `html_view_styles` when available; preserve data.
-Preview accepted: follow `skills_read {"name":"html-view","resource":"references/local-preview.md"}`,
+On acceptance or any request for live preview, even without an offer, including 打开实时预览 or "open live preview", follow `skills_read {"name":"html-view","resource":"references/local-preview.md"}`,
 then revise the draft with `draft`.
+Without a local shell or `node`, or as an agent identity, say in one sentence that live preview is unavailable and suggest the draft preview link instead.
