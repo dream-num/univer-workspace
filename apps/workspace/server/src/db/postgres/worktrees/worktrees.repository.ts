@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { forbidden, notFound } from "../../../modules/worktrees/worktrees.errors.js";
+import { forbidden, forkAlreadyOpen, notFound } from "../../../modules/worktrees/worktrees.errors.js";
 import { checkCreateTarget, checkProposalTarget } from "../access/resource-target.js";
 import { type PostgresAccessRepository, assertFileQuota, ownerSuspendedSql, ownsSpaceSql, spaceOwnerIdsSql } from "../access/access.repository.js";
 import type { PostgresDatabase } from "../connection.js";
@@ -181,6 +181,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     readonly visibility: WorktreeVisibility;
     readonly createdVia: WriteSource | null;
     readonly createdAt: number;
+    readonly forkId: string | null;
   }): Promise<void> {
     // The number is allocated inside the insert transaction (BEGIN IMMEDIATE), so
     // concurrent writers serialize. Team Worktrees continue the Space's shared
@@ -188,6 +189,7 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
     await this._database.transaction(async (database) => {
       if (await database.prepare("SELECT 1 FROM worktrees WHERE id = ?").get(input.id)) return;
       if (input.kind === "team" && input.teamSpaceId) await this.requireTarget(input.creatorUserId, input.teamSpaceId, null, true);
+      if (input.forkId && await database.prepare("SELECT 1 FROM worktrees WHERE fork_id = ? AND processed_at IS NULL").get(input.forkId)) throw forkAlreadyOpen();
       const next = (input.kind === "team"
         ? await database.prepare(
             `SELECT GREATEST(
@@ -203,9 +205,9 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           `INSERT INTO worktrees
             (
               id, number, name, summary, creator_user_id, kind, team_space_id,
-              visibility, created_at, updated_at, created_via
+              visibility, created_at, updated_at, created_via, fork_id
             )
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .run(
           input.id,
@@ -218,7 +220,8 @@ export class PostgresWorktreesRepository implements WorktreesRepository {
           input.visibility,
           input.createdAt,
           input.createdAt,
-          input.createdVia
+          input.createdVia,
+          input.forkId
         );
     });
   }

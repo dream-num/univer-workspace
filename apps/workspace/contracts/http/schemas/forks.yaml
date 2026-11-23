@@ -4,8 +4,8 @@ ForkState:
   description: |
     Derived from the fork's open Worktree on every read. `clean` when the fork has no open Worktree its owner can read,
     `drafting` when it is a draft, `proposed` when it is ready, and `merging` while it merges or while
-    an interrupted merge or discard still has to finish. Nothing opens a fork's Worktree yet, so every
-    fork reads `clean`.
+    an interrupted merge or discard still has to finish. The fork's first write opens its Worktree
+    (`POST /api/forks/{forkId}/units`), and only a `drafting` fork takes writes.
 
 ForkView:
   type: object
@@ -65,6 +65,16 @@ CreateFork:
       description: The Team Space to fork. The caller must be its owner, the human who claimed its agent owner, or a Space Member of any role.
     name:
       $ref: ./spaces.yaml#/SpaceSlug
+
+ForkUnitWrite:
+  type: object
+  additionalProperties: false
+  required: [worktree, unit]
+  properties:
+    worktree:
+      $ref: ./worktrees.yaml#/WorktreeSummary
+    unit:
+      $ref: ./worktrees.yaml#/WorktreeUnit
 
 ForkDeletion:
   type: object

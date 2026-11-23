@@ -1,9 +1,10 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { ApplicationError } from "../../middleware/errors.js";
 import type { AccessResolver } from "../access/index.js";
+import type { WriteSource } from "../identity/index.js";
 import { validSlug } from "../spaces/space-slug.js";
 import type { SpacesModule } from "../spaces/index.js";
-import type { WorktreesModule, WorktreeState, WorktreeSummary } from "../worktrees/index.js";
+import type { WorktreesModule, WorktreeState, WorktreeSummary, WorktreeUnit } from "../worktrees/index.js";
 import type { ForksRepository, StoredFork } from "./forks.repository.js";
 import type { ForkState, ForkView } from "./forks.types.js";
 
@@ -16,6 +17,13 @@ export interface ForksModule {
   get(userId: string, forkId: string): Promise<ForkView>;
   lookup(userId: string, owner: unknown, name: unknown): Promise<ForkView>;
   delete(userId: string, forkId: string): Promise<{ readonly worktree: WorktreeSummary | null }>;
+  addUnit(
+    userId: string,
+    forkId: string,
+    operationId: unknown,
+    input: unknown,
+    createdVia: WriteSource | null,
+  ): Promise<{ readonly status: 200 | 201; readonly body: { readonly worktree: WorktreeSummary; readonly unit: WorktreeUnit } }>;
 }
 
 // A merged or discarded Worktree stays open until its Operation finishes, so its fork still reads as merging.
@@ -41,6 +49,22 @@ export function createForksModule(options: {
     if (!found) return null;
     const { units: _units, ...summary } = found.worktree;
     return summary;
+  }
+
+  async function openForkWorktree(userId: string, fork: StoredFork, key: string, createdVia: WriteSource | null): Promise<string> {
+    // One Idempotency-Key covers opening the Worktree and adding the Unit, so the opening Operation takes a derived ID.
+    const operationId = createHash("sha256").update(JSON.stringify([fork.id, key, "open"])).digest("base64url");
+    try {
+      const { body } = await options.worktrees.create(userId, operationId, {
+        kind: "team", teamSpaceId: fork.upstreamSpaceId, name: fork.name, summary: null, visibility: "private",
+      }, createdVia, fork.id);
+      return body.id;
+    } catch (error) {
+      // A concurrent first write that opened the Worktree first wins, and this write joins it.
+      const opened = (await options.repository.findOwned(userId, { forkId: fork.id }))?.openWorktreeId;
+      if (!opened) throw error;
+      return opened;
+    }
   }
 
   async function view(userId: string, fork: StoredFork): Promise<ForkView> {
@@ -109,7 +133,31 @@ export function createForksModule(options: {
       if (!fork) throw notFound();
       return { worktree: await openWorktree(userId, fork.openWorktreeId) };
     },
+
+    async addUnit(userId, forkId, operationIdValue, input, createdVia) {
+      const key = validOperationId(operationIdValue);
+      const fork = await options.repository.findOwned(userId, { forkId });
+      if (!fork || !(await options.access.resolveSpace(userId, fork.upstreamSpaceId))) throw notFound();
+      const worktreeId = fork.openWorktreeId ?? await openForkWorktree(userId, fork, key, createdVia);
+      const { units, ...worktree } = (await options.worktrees.get(userId, worktreeId)).worktree;
+      if (worktree.state !== "draft") {
+        throw new ApplicationError("FORK_WORKTREE_NOT_DRAFT", 409,
+          `The fork's Worktree is ${worktree.state}, and only a draft takes writes. Reopen a ready Worktree to write again.`);
+      }
+      const trunk = input as { readonly source?: unknown; readonly resourceId?: unknown } | null;
+      const present = trunk?.source === "trunk" && units.find((unit) => unit.source === "trunk" && unit.resourceId === trunk.resourceId);
+      if (present) return { status: 200, body: { worktree, unit: present } };
+      const { unit } = (await options.worktrees.addUnit(userId, worktreeId, key, input)).body;
+      return { status: 201, body: { worktree: (await openWorktree(userId, worktreeId))!, unit } };
+    },
   };
+}
+
+function validOperationId(value: unknown): string {
+  if (typeof value !== "string" || value.length < 16 || value.length > 200 || !/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new ApplicationError("INVALID_INPUT", 400, "Idempotency-Key must contain 16 to 200 URL-safe characters.", "Idempotency-Key");
+  }
+  return value;
 }
 
 function nullWhenNotFound(error: unknown): null {

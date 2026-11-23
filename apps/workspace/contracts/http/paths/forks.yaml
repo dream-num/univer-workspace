@@ -129,3 +129,57 @@
         $ref: ../schemas/common.yaml#/Unauthorized
       "404":
         $ref: ../schemas/common.yaml#/NotFound
+
+/api/forks/{forkId}/units:
+  parameters:
+    - name: forkId
+      in: path
+      required: true
+      schema:
+        type: string
+  post:
+    tags: [Forks]
+    operationId: addForkUnit
+    summary: Write a Unit into the fork's open Worktree, opening that Worktree on the first write.
+    description: |
+      Takes the same body as `POST /api/worktrees/{worktreeId}/units`. When the fork has no open Worktree, the
+      server opens one: a private Team Worktree of the upstream, authored by the fork's owner and named after
+      the fork. Only this route links a Worktree to a fork, and `POST /api/worktrees` never does. A Trunk Resource
+      joins with its own Unit ID, and its baseline is the upstream Trunk revision at this moment. A Trunk
+      Resource already in the Worktree returns `200` and adds nothing. Two concurrent first writes end in one
+      open Worktree that holds both Units. When the open Worktree is not a draft, the write returns
+      `409 FORK_WORKTREE_NOT_DRAFT` and names its state. Reopen a ready Worktree first, and wait for a merge to
+      finish. Once the open Worktree is merged or discarded the fork is `clean`, and the next write opens a new
+      Worktree. Another User's fork, and a fork whose upstream its owner can no longer read, return `404`. The
+      Unit's content is then written through the Worktree, as in any other Worktree.
+    parameters:
+      - $ref: ../schemas/common.yaml#/IdempotencyKeyParameter
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            $ref: ../schemas/worktrees.yaml#/AddWorktreeUnit
+    responses:
+      "200":
+        description: The Trunk Resource was already in the fork's open Worktree.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkUnitWrite
+      "201":
+        description: The Unit joined the fork's open Worktree.
+        content:
+          application/json:
+            schema:
+              $ref: ../schemas/forks.yaml#/ForkUnitWrite
+      "400":
+        $ref: ../schemas/common.yaml#/BadRequest
+      "401":
+        $ref: ../schemas/common.yaml#/Unauthorized
+      "403":
+        $ref: ../schemas/common.yaml#/Forbidden
+      "404":
+        $ref: ../schemas/common.yaml#/NotFound
+      "409":
+        $ref: ../schemas/common.yaml#/Conflict

@@ -36,6 +36,10 @@ export function proposalStaysShared(): ApplicationError {
   );
 }
 
+export function forkAlreadyOpen(): ApplicationError {
+  return new ApplicationError("CONFLICT", 409, "The fork already has an open Worktree.");
+}
+
 export function forbidden(): ApplicationError {
   return new ApplicationError(
     "FORBIDDEN",

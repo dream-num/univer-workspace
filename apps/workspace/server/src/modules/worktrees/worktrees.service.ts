@@ -329,7 +329,7 @@ export function createWorktreesModule(options: {
       };
     },
 
-    async create(userId, operationIdValue, inputValue, createdVia = null) {
+    async create(userId, operationIdValue, inputValue, createdVia = null, forkId = null) {
       const operationId = validOperationId(operationIdValue);
       const input = validCreate(inputValue);
       if (input.kind === "team") {
@@ -347,6 +347,7 @@ export function createWorktreesModule(options: {
         ...input,
         worktreeId: randomUUID(),
         createdVia,
+        forkId,
       };
       const reserved = await options.repository.reserveOperation({
         id: operationId,
@@ -363,8 +364,9 @@ export function createWorktreesModule(options: {
         readonly teamSpaceId: string | null;
         readonly worktreeId: string;
         readonly createdVia?: WriteSource | null;
+        readonly forkId?: string | null;
       }>(reserved.row, "create_worktree", userId);
-      assertSameCreate(input, stable);
+      assertSameCreate({ ...input, forkId }, stable);
       if (reserved.row.state !== "completed") {
         await executeReserved(operationId, async () => {
           await backendCall(() =>
@@ -380,6 +382,7 @@ export function createWorktreesModule(options: {
             visibility: stable.visibility,
             createdAt: now(),
             createdVia: stable.createdVia ?? null,
+            forkId: stable.forkId ?? null,
           });
           await options.repository.completeOperation(
             operationId,
@@ -1844,9 +1847,10 @@ function operationPayload<T>(
 }
 
 function assertSameCreate(
-  input: ReturnType<typeof validCreate>,
+  input: ReturnType<typeof validCreate> & { readonly forkId: string | null },
   stable: ReturnType<typeof validCreate> & {
     readonly worktreeId: string;
+    readonly forkId?: string | null;
   }
 ): void {
   assertJsonIntent(input, {
@@ -1855,6 +1859,7 @@ function assertSameCreate(
     summary: stable.summary,
     visibility: stable.visibility,
     teamSpaceId: stable.teamSpaceId,
+    forkId: stable.forkId ?? null,
   });
 }
 

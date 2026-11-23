@@ -428,7 +428,9 @@ User Worktree 在 `owner/personal` 下的归属用于编号与列表；该 Perso
 
 `fork_id`（V28，`TEXT`，可空）指向它所属的 Fork，外键 `ON DELETE SET NULL`。CHECK 要求非空时 `kind = 'team'`，
 部分唯一索引 `worktrees_open_fork`（`fork_id IS NOT NULL AND processed_at IS NULL`）保证一个 Fork 至多有一个未处理的
-Worktree。当前没有任何产品路径写入 `fork_id`，只有测试写入，所有真实 Worktree 都为 `NULL`。
+Worktree。只有 Fork 的写入路径（`POST /api/forks/{forkId}/units`）在创建 Worktree 时写入 `fork_id`，`POST /api/worktrees`
+不接受它；`create_worktree` Operation 的 payload 记下 `forkId`，重试时沿用。插入事务先读这个 Fork 未处理的 Worktree，
+已有一个时拒绝插入，部分唯一索引兜底。
 
 ### `forks`
 
@@ -441,9 +443,25 @@ Fork 同一 upstream，同名同 upstream 的重复创建返回已有 Fork。
 
 只有 Fork 的 owner 能列出、读取、按 `<owner>/<name>` 查找和删除它。创建要求调用者此刻能在 upstream 提议，即 upstream
 的 owner、认领了 agent owner 的人或任意角色的 Space Member；未认领 agent 至多拥有 3 个 Fork（`AGENT_QUOTA_EXCEEDED`），
-计数与插入在同一事务内。Fork 的状态 `clean | drafting | proposed | merging` 每次读取时从其未处理的 Worktree 推导，
-不存储；目前没有路径为 Fork 打开 Worktree，所以每个真实 Fork 都是 `clean`。删除 Fork 只删除这一行，upstream 不变，
-曾指向它的 Worktree 由外键置 `fork_id = NULL`，保留历史，成为 upstream 的普通 Team Worktree。
+计数与插入在同一事务内。删除 Fork 只删除这一行，upstream 不变，曾指向它的 Worktree 由外键置 `fork_id = NULL`，
+保留历史，成为 upstream 的普通 Team Worktree。
+
+Fork 的状态每次读取时从其未处理的 Worktree 推导，不存储：
+
+| 状态 | 未处理的 Worktree | 写入 |
+| --- | --- | --- |
+| `clean` | 没有，或 owner 读不到 | 先打开一个 Worktree，再加入 Unit |
+| `drafting` | `draft` | 加入这个 Worktree |
+| `proposed` | `ready` | 拒绝，409 `FORK_WORKTREE_NOT_DRAFT`；reopen 之后恢复 |
+| `merging` | `merging`，或 Operation 中断、`processed_at` 仍为空的 `merged`/`discarded` | 拒绝，409 `FORK_WORKTREE_NOT_DRAFT` |
+
+Fork 的第一次写入打开它的 Worktree：upstream 的私有 Team Worktree，作者是 Fork 的 owner，名字取 Fork 的名字。
+打开与加入 Unit 共用请求的 `Idempotency-Key`：加入 Unit 的 Operation 用这个 key，打开 Worktree 的 Operation 用由 Fork ID
+和 key 派生的 ID。Trunk 的 Resource 已经在 Worktree 里时直接返回，不再加入。两个并发的首次写入都看到 `clean` 时各自在
+协同服务建立一个 Worktree，只有一个能插入产品行；另一个的 Operation 记为失败，写入重新读取 Fork、加入胜者的 Worktree。
+代价是协同库里留下一个空的、没有产品行的 Worktree：协同服务没有删除接口，对已存在的 Worktree ID 再次创建会返回
+`WORKTREE_ALREADY_EXISTS`，所以不能让并发的写入共用一个确定的 Worktree ID。Worktree 被 merge 或 discard 之后
+Fork 回到 `clean`，下一次写入打开新的 Worktree。
 
 ### `worktree_units`
 

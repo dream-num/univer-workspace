@@ -134,7 +134,7 @@ async function retryWorktreeOperation(
         summary: payload.summary,
         visibility: payload.visibility,
         teamSpaceId: payload.teamSpaceId,
-      });
+      }, null, typeof payload.forkId === "string" ? payload.forkId : null);
       return;
     case "add_worktree_unit":
       await worktrees.addUnit(userId, worktreeId, row.id, {
