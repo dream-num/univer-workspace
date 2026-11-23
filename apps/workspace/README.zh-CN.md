@@ -94,7 +94,9 @@ Ask 模式的常规调用使用 `[read]`，Auto 模式使用 `[read, write]`。A
 
 ## Docker
 
-在仓库根目录构建镜像。
+本机试用可以使用内置开发许可证。在自己的域名上部署时，先取得覆盖该域名的许可证，方案和购买入口见 [Univer 定价页](https://univer.ai/pricing/)。
+
+使用自己的许可证时，先在终端中设置环境变量 `VITE_UNIVER_LICENSE`，值为 `license.txt` 的文件内容。在仓库根目录执行以下命令，通过 `--build-arg` 将许可证传给前端构建。
 
 ```bash
 docker build \
@@ -114,6 +116,13 @@ docker run --name univer-workspace \
 ```
 
 通过 HTTPS 部署时，移除示例中的 `-e SECURE_COOKIES=false`，保留镜像的安全 Cookie 默认值。运行时配置可通过 `--env-file ./workspace.env` 传入容器。
+
+使用自己的许可证启动服务端时，在 `workspace.env` 中设置以下两个环境变量，并用对应文件的内容替换占位符。
+
+```dotenv
+UNIVER_LICENSE=<license.txt 的内容>
+UNIVER_LICENSE_KEY=<licenseKey.txt 的内容>
+```
 
 ### SQLite 升级与恢复
 

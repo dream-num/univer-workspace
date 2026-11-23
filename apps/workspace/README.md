@@ -274,7 +274,9 @@ then gets `429` with `REPORT_RATE_LIMITED`. The log line carries the Node and re
 
 ## Docker
 
-Build the image from the repository root:
+For local evaluation, you can use the bundled development license. For your own domain, get a license that covers the hostname people will use to open Workspace. For plans and purchasing, see [Univer pricing](https://univer.ai/pricing/).
+
+If you have your own license, set the `VITE_UNIVER_LICENSE` environment variable in your shell to the contents of `license.txt`. Run the following command from the repository root to pass the license to the frontend build with `--build-arg`.
 
 ```bash
 docker build \
@@ -294,6 +296,13 @@ docker run --name univer-workspace \
 ```
 
 For HTTPS deployments, omit `-e SECURE_COOKIES=false` to keep the image’s secure cookie default. Pass runtime settings with `--env-file ./workspace.env` when creating the container.
+
+To start the server with your own license, set these two environment variables in `workspace.env`. Replace each placeholder with the contents of the indicated file.
+
+```dotenv
+UNIVER_LICENSE=<contents of license.txt>
+UNIVER_LICENSE_KEY=<contents of licenseKey.txt>
+```
 
 ### SQLite upgrades and recovery
 

@@ -513,19 +513,18 @@ and the README or design document closest to the target. Preserve unrelated chan
 do not edit generated files by hand, and include the verification required by the
 affected boundary.
 
-## Runtime development license
+## Univer SDK License
 
-The Browser, Workspace server, CLI and DSH plugin contain synchronized copies of the
-approved runtime development credential for local use. It rotates every 90 days and is
-not the repository software license. The server-side Collaboration and Exchange SDKs
-also verify it with a license key; without both they fall back to the free tier. Set
-`VITE_UNIVER_LICENSE` for Browser builds, or `UNIVER_LICENSE` together with
-`UNIVER_LICENSE_KEY` for the server and CLI, to override it. Rotate every copy at once
-with the generated-file script:
+You can try Workspace locally with the bundled development license on `localhost` or `127.0.0.1`.
+For another hostname, such as `workspace.example.com`, use a Univer Office SDK license that covers that domain.
+For license plans and prices, see [Univer pricing](https://univer.ai/pricing/).
 
-```bash
-pnpm update:univer-license --license <license.txt> --license-key <licenseKey.txt>
-```
+1. **When building the frontend**, set the `VITE_UNIVER_LICENSE` environment variable to the contents of `license.txt`. Rebuild the frontend when you change the license.
+2. **When starting the server**, set both environment variables. Set `UNIVER_LICENSE` to the contents of the same `license.txt` file and `UNIVER_LICENSE_KEY` to the contents of the matching `licenseKey.txt` file.
+
+If you also import or export Office files with the CLI, set `UNIVER_LICENSE` and `UNIVER_LICENSE_KEY` in the CLI environment.
+
+For the Docker build argument and container environment settings, see the [Docker deployment example](apps/workspace/README.md#docker).
 
 ## License
 
