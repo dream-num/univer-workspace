@@ -38,7 +38,7 @@ Which mode a journey needs:
 - M7, MR9 onward, screenshot checks and the renderer benchmark need the renderer.
 
 To restart the same run for MO3, run `down`, then `up --reuse` with the same run id and ports. Reuse
-needs the `data/` and `home/` that `down` removed, creates fresh data and credentials, keeps evidence,
+requires that `down` already removed `data/` and `home/`. It creates fresh data and credentials, keeps evidence,
 and replaces logs, so save what you need from the logs first. Run `user` again after each restart.
 
 ## Credentials

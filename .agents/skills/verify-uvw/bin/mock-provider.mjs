@@ -9,7 +9,8 @@ The script is {"model": "...", "steps": [...]}. Each completion consumes one ste
 A step is {"text": "..."}, {"tool": {"name", "arguments"}}, {"tools": [...]} for parallel calls, or {"error": {"status": 400-599, "body": "..."}}.
 Any step can add "delayMs" to hold its response, for example while you send a steering message.
 Usage chunks report 100 prompt tokens with 50 cached. The counts are fixed, so they test the UI, not provider caching.
-Each request appends {arrivedAt, method, url, body, raw} to the log. raw is the exact request body. Keep the log as evidence.`;
+Each request appends {arrivedAt, method, url, body, raw} to the log. raw is the exact request body.
+The log holds full model requests, so keep it with local evidence and out of reports.`;
 const { values } = parseArgs({ options: { port: { type: "string" }, script: { type: "string" }, log: { type: "string" }, help: { type: "boolean" } } });
 if (values.help) { console.log(usage); process.exit(0); }
 const port = Number(values.port);

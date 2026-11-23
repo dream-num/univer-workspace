@@ -52,7 +52,7 @@ feature file as the recipe. Read more only for the mode you need:
 
 `up` starts the server under `env -i` with its data in `data/`, so `apps/workspace/.env` and your
 shell's OAuth variables stay out and password sign-in is the only user sign-in method. It points the
-run's uvw at the web origin. Start usually takes under 10 s. On failure it tails the log; run `down`
+run's uvw at the web origin. It returns once `/api/session` answers on both ports, usually in under 10 s. On failure it tails the log; run `down`
 before you retry. `user` registers `verify-<run-id>` (display name `Verify <run-id>`), who owns the
 Personal Space `verify-<run-id>/personal`. Running it again only signs uvw in again.
 
@@ -97,9 +97,10 @@ agent-browser screenshot "$EVIDENCE/<feature>-<step>.png"
 - Univer grids are canvas. Type into the selected cell with `keyboard type` and `press Tab|Enter`, then
   read the result back through uvw or a screenshot, not the DOM. Worksheet selectors are 1-based
   (`--worksheet index:1`).
-- Page theme is a per-browser `localStorage` value, and a fresh session shows Repository. A journey that
-  drives the Wiki sidebar pins `univer-workspace-layout-theme` to `wiki` first and confirms
-  `Enter workspace` when Home offers the choice.
+- After sign-in, a browser that has not chosen a view shows only `Choose your workspace view` at `/home`.
+  Click `Enter workspace`, or set `univer-workspace-view-onboarding-complete` to `true` before you sign in.
+  The view is the per-browser `localStorage` value `univer-workspace-layout-theme` (`repository` or
+  `wiki`). Each journey states the view it expects and pins it first.
 
 **CLI (uvw).** `$V uvw` and `$V cli` run `apps/cli/dist/main.js` with the run's `UNIVER_HOME`, and
 refuse when it does not resolve this run's origin. Never call a global `uvw`: it targets
@@ -126,9 +127,10 @@ Everything goes in `$EVIDENCE` (`/tmp/verify-uvw/<run-id>/evidence/`), which sur
 - Drive the real user path: browser controls or uvw commands against the HTTP API. Do not insert SQLite
   rows, call internal services, or use test-only endpoints. Registration in `$V user` is setup, not
   proof of the auth feature. The [auth journey](features/auth.md) proves that.
-- Nothing is mocked. Collaboration, Office exchange, and the CLI daemon are all real. External OAuth
-  providers (GitHub, Google, Discord) and browser-approved `uvw auth login` need a real provider or a
-  human, so report them as skipped.
+- Nothing is mocked except the browser Agent's model provider in the Agent journeys. Collaboration,
+  Office exchange, and the CLI daemon are all real. External OAuth providers (GitHub, Google, Discord)
+  need a real provider, so report them as skipped. MA8 in [the MCP journeys](features/mcp.md) drives
+  browser-approved `uvw auth login`.
 - Report an unreachable entry point with the command you tried and the unmet precondition. Do not
   report it as verified through a different path.
 - `open-anon`, `mcp`, `mcp-oauth` and `story` redact what they write, and `cli` does not. Run
@@ -148,7 +150,8 @@ subagent, give it the journey and keep your own turns for choosing what to verif
    You decide whether a difference from the recipe is a defect.
 4. Stop the instance yourself with `$V down`.
 
-Drive it yourself when no journey covers the behavior. This skill names no model, harness or host for
+Drive it yourself when no journey covers the behavior, because a subagent follows a recipe and does not
+design checks. This skill names no model, harness or host for
 the verifier. The developer chooses the model in their own configuration, outside this repository, and
 the harness default applies otherwise. The subagent runs where `up` ran, because the instance listens
 only on `127.0.0.1`. Default mode also runs on Linux. MCP mode and `uvw` stories need macOS.

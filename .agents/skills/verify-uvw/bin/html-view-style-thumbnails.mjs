@@ -10,7 +10,8 @@ const usage = `Usage: node .agents/skills/verify-uvw/bin/html-view-style-thumbna
 Run from the repository root after verify-uvw up, user, and eval "$($V env)".
 Uses source-built uvw, agent-browser, and cwebp (quality 80, 640x400).
 Creates four disposable source Sheets and publishes each discovered template.
-Screenshots, bound HTML, readbacks and a manifest remain in $EVIDENCE/style-thumbnails.
+Writes WebPs under apps/workspace/web/src/features/html-views/style-thumbnails/ and rejects any of 60,000 bytes or more.
+Inspect every WebP before you commit it. Screenshots, bound HTML, readbacks and a manifest remain in $EVIDENCE/style-thumbnails.
 Run verify-uvw down afterwards. Never use a production instance.`;
 if (process.argv.includes('--help')) { console.log(usage); process.exit(0); }
 assert(process.argv.length === 2 || process.argv.slice(2).join() === '--self-test', usage);
