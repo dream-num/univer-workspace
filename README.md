@@ -377,12 +377,19 @@ contract.
 ```text
 apps/workspace                 Workspace Browser, Server, HTTP contract, and deployment app
 apps/cli                       Agent-ready remote Workspace automation application
-apps/mcp                       Private MCP gateway, Stage A local development authentication
+apps/mcp                       Private remote MCP gateway, executor, and renderer
 apps/agent                     Workspace Agent application for document conversations and review
+apps/space-plugin              Space content workspace plugin for DSH Desktop (separate npm graph)
 packages/client-core           Private Node-hosted Workspace Agent Client capabilities
 packages/reference-provider   Private Browser-only referenced-Unit policy
+packages/workspace-agent-runtime   Private content execution layer shared by Agent hosts
+packages/workspace-editor-presets  Private Univer editor plugin composition shared by Web and Space
+packages/workspace-file-browser    Private Workspace file navigation UI
 packages/workspace-html-viewer Private shared HTML View sandbox and binding host
 packages/workspace-markdown-viewer Private shared read-only Markdown preview
+packages/workspace-ui          Private shared Workspace UI primitives
+packages/unit-comparison-viewer    Private read-only Unit comparison viewer
+packages/dsh-runtime           Pinned DSH CLI runtime cohort, materialized with pnpm deploy
 packages/dsh-univer-workspace-plugin        Workspace Agent Workspace capabilities and browser UI
 packages/dsh-univer-workspace-skin-plugin   Workspace Agent Workspace visual skin
 scripts                       SDK version and local CLI release tooling
