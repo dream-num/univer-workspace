@@ -1,14 +1,15 @@
 import { getHtmlViewUnitIds, parseHtmlView, type HtmlViewDocument } from "@univerjs-labs/html-view";
+import { Sheet, ShieldCheck, ShieldOff } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, ConfirmDialog, Segmented } from "../../../shared/ui";
+import { Button, ConfirmDialog, MenuContent, MenuGroup, MenuGroupLabel, MenuItem, MenuRoot, MenuTrigger, Segmented } from "../../../shared/ui";
 import type { HtmlViewSourceWorktree } from "../workspace-binding-engine";
-import { useBoundUnits } from "./bound-units";
+import { unitLabel, useBoundUnits, type BoundUnits } from "./bound-units";
 import { CheckedPreview, type PreviewWriteMode } from "./checked-preview";
 import { FilePicker } from "./file-picker";
 import { usePreviewMessages } from "./messages";
 import { buildReport, postReport, type LocalPreviewReport } from "./report";
 import type { PreviewSearch } from "./source";
-import { isTrusted, remember, trustKey } from "./trust";
+import { alwaysTrusted, forget, trustAlways, trustedUnits, trustForSession, trustKey } from "./trust";
 import { TrustStep } from "./trust-step";
 import { usePreviewPage, type PreviewLoad } from "./use-preview-page";
 
@@ -18,13 +19,18 @@ function parse(html: string): { document: HtmlViewDocument } | { error: string }
   try { return { document: parseHtmlView(html) }; } catch (error) { return { error: error instanceof Error ? error.message : String(error) }; }
 }
 
-export function LocalPreview({ search, worktree }: { search: PreviewSearch; worktree: HtmlViewSourceWorktree | undefined }) {
+export function LocalPreview({ search, worktree, userId }: {
+  search: PreviewSearch;
+  worktree: HtmlViewSourceWorktree | undefined;
+  /** Whose always-trusted Sheets apply. Without it, trust lasts only for this run. */
+  userId: string | undefined;
+}) {
   const m = usePreviewMessages();
   const loader = usePreviewPage(search);
   const [writeMode, setWriteMode] = useState<PreviewWriteMode>("trial");
   const [confirmingWrite, setConfirmingWrite] = useState(false);
   const [viewport, setViewport] = useState<Viewport>("fit");
-  const [, confirmed] = useState(0);
+  const [, trustChanged] = useState(0);
   const input = useRef<HTMLInputElement>(null);
   const pick = () => { void loader.choose().then((handled) => { if (!handled) input.current?.click(); }); };
   const host = !loader.isFile && search.src !== undefined;
@@ -41,9 +47,11 @@ export function LocalPreview({ search, worktree }: { search: PreviewSearch; work
       renderCheck: { status: "failed", issues: [{ kind: "viewer-error", message: parsed.error.slice(0, 300) }], durationMs: 0 } }));
   }, [page?.sha256, parsed]);
 
-  const sourceLabel = host ? `${m.sourceHost} · ${new URL(search.src!).origin}` : m.sourceFile;
+  const sourceLabel = host ? `${m.sourceHost} · ${new URL(search.src!).host}` : m.sourceFile;
+  const pullRequest = search.repo !== undefined && search.pr !== undefined ? { repo: search.repo, pr: search.pr } : undefined;
   const key = page ? trustKey(host ? search : {}, page.name) : "";
-  const trusted = page !== null && parsed !== null && "document" in parsed && isTrusted(key, unitIds);
+  const trustedSet = trustedUnits(key, userId);
+  const trusted = page !== null && parsed !== null && "document" in parsed && unitIds.every((id) => trustedSet.has(id));
 
   return <main className="flex h-dvh min-h-0 flex-col">
     <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-border px-4 py-2 text-sm">
@@ -65,13 +73,16 @@ export function LocalPreview({ search, worktree }: { search: PreviewSearch; work
           <span className="text-muted-foreground">{loader.watching ? m.pickWatching : loader.stale ? m.pickStale : m.pickOnce}</span>
           <Button variant="secondary" size="sm" onClick={pick}>{m.pickAnother}</Button>
         </>}
+        {units.size > 0 && <TrustMenu units={units} always={new Set(userId ? alwaysTrusted(userId) : [])}
+          onForget={(unitId) => { forget(userId!, unitId); trustChanged((n) => n + 1); }} />}
       </>}
     </header>
     <div className="flex min-h-0 flex-1 flex-col overflow-auto">
       {page === null ? <Gate state={loader.state} loader={loader} pick={pick} fileName={search.file} origin={host ? new URL(search.src!).origin : ""} noSource={!host && !loader.isFile} /> :
         parsed && "error" in parsed ? <p role="alert" className="m-6 text-destructive">{m.parseFailed(parsed.error)}</p> :
-        !trusted ? <TrustStep bindings={parsed!.document.bindings} units={units} fileName={page.name} sourceLabel={sourceLabel}
-          onConfirm={() => { remember(key, unitIds); confirmed((n) => n + 1); }} pick={pick} /> :
+        !trusted ? <TrustStep bindings={parsed!.document.bindings} units={units} trusted={trustedSet} fileName={page.name} source={sourceLabel}
+          pullRequest={pullRequest} canAlways={userId !== undefined} pick={pick}
+          onTrust={(scope) => { if (scope === "always") trustAlways(userId!, unitIds); else trustForSession(key, unitIds.filter((id) => !trustedSet.has(id))); trustChanged((n) => n + 1); }} /> :
         <CheckedPreview key={`${page.generation}:${writeMode}:${viewport}`} page={page} bindings={parsed!.document.bindings} unitIds={unitIds} units={units} token={token}
           writeMode={worktree ? "trial" : writeMode} worktree={worktree && writeMode === "trial" ? worktree : undefined}
           viewportWidth={viewport === "fit" ? null : Number(viewport)} deliver={deliver} />}
@@ -113,4 +124,23 @@ function Gate({ state, loader, pick, fileName, origin, noSource }: {
     <div className="flex gap-2"><Button onClick={loader.start}>{m.retry}</Button></div>
     <FilePicker loader={loader} pick={pick} variant="secondary" />
   </div>;
+}
+
+function TrustMenu({ units, always, onForget }: { units: BoundUnits; always: ReadonlySet<string>; onForget: (unitId: string) => void }) {
+  const m = usePreviewMessages();
+  return <MenuRoot>
+    <MenuTrigger render={<button type="button" className="inline-flex h-6 cursor-pointer items-center gap-1 rounded-full bg-success-soft px-2 text-xs font-medium text-success-soft-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring/40 [&_svg]:size-3" />}>
+      <ShieldCheck />{m.trusted}
+    </MenuTrigger>
+    <MenuContent align="end" className="w-72">
+      <MenuGroup>
+        <MenuGroupLabel>{m.trustedMenu}</MenuGroupLabel>
+        {[...units.values()].map((unit) => always.has(unit.unitId)
+          ? <MenuItem key={unit.unitId} onClick={() => onForget(unit.unitId)}><ShieldOff />{m.forget(unitLabel(unit, m))}</MenuItem>
+          : <div key={unit.unitId} className="flex items-center gap-2 px-2 py-1.5 text-sm text-subtle-foreground">
+            <Sheet className="size-4 shrink-0" /><span className="min-w-0 flex-1 truncate">{unitLabel(unit, m)}</span>{m.sessionOnly}
+          </div>)}
+      </MenuGroup>
+    </MenuContent>
+  </MenuRoot>;
 }
