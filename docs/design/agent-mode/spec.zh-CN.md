@@ -2,7 +2,7 @@
 
 > 状态：方案已采纳。阶段 0 已完成，结果见 [阶段 0 结果](phase-0-results.zh-CN.md)，阶段 1 起尚未实施。日期 2026-11-23。文中标为“目标”的内容都不是现状。
 > 背景、诊断、SDK 的行为和风险的展开见 [README](README.zh-CN.md)。README 只保留与本文一致的内容，范围见第 8 节。两者若仍有不一致，以本文为准。
-> “今天”一栏来自对 `main`（`b5aa99a8`）的代码阅读。Collaboration SDK 的行为来自 `@univerjs-pro/collaboration-worktree-service` 1.6.1 的类型和 README，没有运行验证，由阶段 0 复核。
+> “今天”一栏来自对 `main`（`b5aa99a8`）的代码阅读。Collaboration SDK 的行为来自 `@univerjs-pro/collaboration-worktree-service` 1.6.1 的类型和 README，阶段 0 已在运行中复核，见 [阶段 0 结果](phase-0-results.zh-CN.md)。
 
 ## 1. 目标与愿景
 
