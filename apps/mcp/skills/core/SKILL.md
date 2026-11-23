@@ -294,9 +294,11 @@ Do not discard unless explicitly requested. Discard is irreversible.
 `pr_view` gives each file that came from trunk a `freshness` label. `current`:
 trunk has not moved. `behind`: trunk changed the file after it joined; the changes
 merge without conflict, but a result you verified on the draft can still be wrong
-once merged. `stale` (more than 100 revisions behind, or added more than 7 days
-ago): redo the work in a new pull request, then discard the stale one. That is the
-one discard you do without being asked. Freshness never blocks a merge.
+once merged, so before you merge read the file on trunk and check that what your
+change depends on still holds, and after merging read the result back from trunk.
+`stale` (more than 100 revisions behind, or added more than 7 days ago): redo the
+work in a new pull request, then give the user the stale one's link and say it can
+be discarded. Do not discard it unless they ask. Freshness never blocks a merge.
 An agent identity that returns a `share` url also says who can open it, from
 `access`. While unclaimed, it also gives the user the `claimUrl` from `share`, or
 from `claim`.

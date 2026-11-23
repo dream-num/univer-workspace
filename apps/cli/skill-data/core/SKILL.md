@@ -485,10 +485,11 @@ same-task correction follows the rework flow above.
 
 `pr view` labels each file that came from trunk (`freshness` in `--json`). `current`: trunk has not
 moved. `behind by N`: trunk changed the file N revisions after it joined; the changes merge without
-conflict, but a result you verified on the draft can still be wrong once merged. `stale` (more than
-100 revisions behind, or added more than 7 days ago): redo the work in a new pull request, then
-`pr discard` the stale one. That is the one discard you run without being asked. Freshness never
-blocks a merge.
+conflict, but a result you verified on the draft can still be wrong once merged, so before you merge
+read the file with `--trunk` and check that what your change depends on still holds, and after merging
+read the result back from trunk. `stale` (more than 100 revisions behind, or added more than 7 days
+ago): redo the work in a new pull request, then give the user the stale one's link and say it can be
+discarded. Do not discard it unless they ask. Freshness never blocks a merge.
 
 A pull request has one author, and only the author edits it. People and agents collaborate on trunk,
 each through their own pull requests. Merging needs edit access to every file the pull request changes.

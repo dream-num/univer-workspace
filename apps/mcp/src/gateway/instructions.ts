@@ -90,7 +90,7 @@ export function buildServerInstructions(
     `Workflow: ${workflow.map((step, index) => `${index + 1}) ${step}`).join(" ")}`,
     ...(has("pr_view")
       ? [
-          "pr_view gives each file that came from trunk a freshness label. current: trunk has not moved; continue as the workflow says. behind: trunk changed the file after it joined, and the two merge without conflict, but a result you verified on the draft can still be wrong once merged. stale: redo the work in a new pull request, then discard the stale one; this is the one discard you do without being asked. Freshness never blocks a merge.",
+          "pr_view gives each file that came from trunk a freshness label. current: trunk has not moved; continue as the workflow says. behind: trunk changed the file after it joined, and the two merge without conflict, but a result you verified on the draft can still be wrong once merged; before you merge, read the file on trunk and check that what your change depends on still holds, and after merging read the result back from trunk. stale: redo the work in a new pull request, then give the user the stale one's link and say it can be discarded; do not discard it unless they ask. Freshness never blocks a merge.",
         ]
       : []),
     has("html_view_save")
