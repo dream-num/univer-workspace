@@ -1037,6 +1037,64 @@ describe("Worktrees", () => {
     ).resolves.toMatchObject({ worktree: { units: [] } });
   });
 
+  it("accepts a larger initial Unit snapshot after authentication and rejects oversized JSON", async () => {
+    const application = await createRealTestApplication();
+    const issued = await application.identity.registerWithPassword({
+      username: "large-import-user",
+      displayName: "Large import",
+      password: "correct horse battery staple",
+    });
+    const user = issued.view.user;
+    const space = (await application.spaces.list(user.id)).spaces[0];
+    if (!space) throw new Error("Personal space is missing");
+    const { body: worktree } = await application.worktrees.create(user.id, "large-import-worktree", {
+      kind: "user",
+      name: "Large import",
+      summary: null,
+    });
+    const initial = blankUnitData({
+      unitId: "large-import-unit",
+      unitType: "doc",
+      name: "Large document",
+    });
+    const server = createServer(application.app);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    try {
+      const address = server.address();
+      if (!address || typeof address === "string") throw new Error("Missing test address");
+      const endpoint = `http://127.0.0.1:${address.port}/api/worktrees/${worktree.id}/units`;
+      const send = (size: number, authenticated: boolean) =>
+        fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "idempotency-key": `large-import-${size}`,
+            ...(authenticated ? { cookie: `workspace_session=${issued.cookieValue}` } : {}),
+          },
+          body: JSON.stringify({
+            source: "worktree",
+            name: "Large document",
+            unitType: "doc",
+            targetSpaceId: space.id,
+            targetParentNodeId: null,
+            initialData: {
+              ...(initial.data as unknown as Readonly<Record<string, unknown>>),
+              title: "x".repeat(size),
+            },
+          }),
+        });
+
+      expect((await send(2_200_000, false)).status).toBe(401);
+      const oversized = await send(2_200_000, true);
+      expect(oversized.status).toBe(413);
+      expect(await oversized.json()).toMatchObject({ error: { code: "PAYLOAD_TOO_LARGE" } });
+      expect((await send(1_220_000, true)).status).toBe(201);
+      expect((await application.worktrees.get(user.id, worktree.id)).worktree.units).toHaveLength(1);
+    } finally {
+      await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    }
+  });
+
   it("creates, retries and activates an imported Unit with one stable server identity", async () => {
     const application = await createRealTestApplication();
     const user = await register(application, "real-import-user");

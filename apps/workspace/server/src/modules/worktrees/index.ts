@@ -1,5 +1,5 @@
 export type { WorktreesRepository } from "./worktrees.repository.js";
-export { createWorktreesRouter } from "./worktrees.router.js";
+export { createAddWorktreeUnitHandler, createWorktreesRouter } from "./worktrees.router.js";
 export { createWorktreesModule, type WorktreePages } from "./worktrees.service.js";
 export { createDeclaredChecksReader, type DeclaredChecksReader } from "./checks.js";
 export type {
