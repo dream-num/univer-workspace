@@ -5,21 +5,21 @@ const SLUG_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
 /** `personal` addresses the owner's Personal Space and cannot name a Team Space. */
 export const RESERVED_SLUG = "personal";
 
-export function validSlug(value: unknown): string {
+export function validSlug(value: unknown, field = "slug", label = "Space slug"): string {
   if (typeof value !== "string" || !SLUG_PATTERN.test(value)) {
     throw new ApplicationError(
       "INVALID_INPUT",
       400,
-      "Space slug must be 1-100 characters from letters, digits, '.', '_' and '-', starting with a letter or digit.",
-      "slug"
+      `${label} must be 1-100 characters from letters, digits, '.', '_' and '-', starting with a letter or digit.`,
+      field
     );
   }
   if (value.toLowerCase() === RESERVED_SLUG) {
     throw new ApplicationError(
       "INVALID_INPUT",
       400,
-      `The slug "${RESERVED_SLUG}" is reserved.`,
-      "slug"
+      `The ${field} "${RESERVED_SLUG}" is reserved.`,
+      field
     );
   }
   return value;

@@ -208,6 +208,17 @@ CREATE TABLE IF NOT EXISTS recent_resources (
 CREATE INDEX IF NOT EXISTS recent_resources_user_opened
   ON recent_resources(user_id, last_opened_at DESC, resource_id ASC);
 
+CREATE TABLE IF NOT EXISTS forks (
+  id TEXT PRIMARY KEY,
+  owner_user_id TEXT NOT NULL,
+  upstream_space_id TEXT NOT NULL,
+  name TEXT NOT NULL COLLATE NOCASE,
+  created_at INTEGER NOT NULL,
+  UNIQUE (owner_user_id, name),
+  FOREIGN KEY (owner_user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY (upstream_space_id) REFERENCES spaces(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS worktrees (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
@@ -221,6 +232,7 @@ CREATE TABLE IF NOT EXISTS worktrees (
   updated_at INTEGER NOT NULL,
   number INTEGER,
   created_via TEXT CHECK (created_via IN ('browser', 'agent')),
+  fork_id TEXT REFERENCES forks(id) ON DELETE SET NULL CHECK (fork_id IS NULL OR kind = 'team'),
   CHECK (
     (kind = 'user' AND team_space_id IS NULL AND visibility = 'private')
     OR
@@ -239,6 +251,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS worktrees_team_number
 CREATE UNIQUE INDEX IF NOT EXISTS worktrees_user_number
   ON worktrees(creator_user_id, number)
   WHERE kind = 'user' AND number IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS worktrees_open_fork
+  ON worktrees(fork_id)
+  WHERE fork_id IS NOT NULL AND processed_at IS NULL;
 
 CREATE TABLE IF NOT EXISTS worktree_units (
   worktree_id TEXT NOT NULL,
@@ -764,7 +779,7 @@ CREATE INDEX IF NOT EXISTS login_sessions_pat
 CREATE INDEX IF NOT EXISTS login_sessions_grant
   ON login_sessions(issued_for_grant_id) WHERE issued_for_grant_id IS NOT NULL;
 
-PRAGMA user_version = 27;
+PRAGMA user_version = 28;
 
 CREATE TABLE IF NOT EXISTS html_view_drafts (
   id TEXT PRIMARY KEY,                       -- randomUUID; appears in /drafts/<id>

@@ -6,6 +6,7 @@ import { SqliteAccessRepository } from "./access/access.repository.js";
 import { SqliteBlobsRepository } from "./blobs/blobs.repository.js";
 import { SqliteContentPermissionsRepository } from "./content-permissions/content-permissions.repository.js";
 import { SqliteCopiesRepository } from "./copies/copies.repository.js";
+import { SqliteForksRepository } from "./forks/forks.repository.js";
 import { SqliteHtmlViewDraftsRepository } from "./html-view-drafts/drafts.repository.js";
 import { SqliteIdentityRepository } from "./identity/identity.repository.js";
 import { SqliteAccessTokenRepository } from "./identity/access-token.repository.js";
@@ -30,6 +31,7 @@ export function createSqliteRepositories(database: SqliteDatabase): ProductRepos
     blobs: new SqliteBlobsRepository(database, access),
     contentPermissions: new SqliteContentPermissionsRepository(database, access),
     copies: new SqliteCopiesRepository(database, access),
+    forks: new SqliteForksRepository(database),
     htmlViewDrafts: new SqliteHtmlViewDraftsRepository(database, access),
     identity,
     accessTokens: new SqliteAccessTokenRepository(database),

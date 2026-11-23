@@ -1,4 +1,6 @@
-export const DROP_V27_SQL = `
+import { DROP_V28_SQL, withoutV28Columns } from "./v28-downgrade.js";
+
+export const DROP_V27_SQL = `${DROP_V28_SQL}
 ALTER TABLE html_view_drafts RENAME TO html_view_drafts_v27;
 DROP INDEX html_view_drafts_due;
 DROP INDEX html_view_drafts_source_worktree;
@@ -41,7 +43,7 @@ DROP TABLE html_view_drafts_v27;
 `;
 
 export function withoutV27Columns(table: string, rows: readonly Record<string, unknown>[]) {
-  return rows.map((row) => {
+  return withoutV28Columns(table, rows).map((row) => {
     const rest = { ...row };
     if (table === "html_view_drafts") {
       delete rest.superseded_by;

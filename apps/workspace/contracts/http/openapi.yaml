@@ -39,6 +39,8 @@ tags:
     description: Space-scoped Issues, comments, labels and assignees for Team Spaces.
   - name: Worktrees
     description: Isolated collaborative draft and merge workflows.
+  - name: Forks
+    description: A User's named views of a Team Space they can propose in.
 security:
   - sessionCookie: []
 paths:
@@ -166,6 +168,12 @@ paths:
     $ref: ./paths/worktrees.yaml#/~1api~1spaces~1{spaceId}~1worktrees~1{number}
   /api/spaces/{spaceId}/star:
     $ref: ./paths/spaces.yaml#/~1api~1spaces~1{spaceId}~1star
+  /api/forks:
+    $ref: ./paths/forks.yaml#/~1api~1forks
+  /api/forks/lookup:
+    $ref: ./paths/forks.yaml#/~1api~1forks~1lookup
+  /api/forks/{forkId}:
+    $ref: ./paths/forks.yaml#/~1api~1forks~1{forkId}
   /api/spaces/{spaceId}/nodes:
     $ref: ./paths/nodes.yaml#/~1api~1spaces~1{spaceId}~1nodes
   /api/nodes:
@@ -321,6 +329,8 @@ components:
       $ref: ./schemas/worktrees.yaml#/WorktreeSummary
     WorktreeDetail:
       $ref: ./schemas/worktrees.yaml#/WorktreeDetail
+    ForkView:
+      $ref: ./schemas/forks.yaml#/ForkView
   parameters:
     Cursor:
       $ref: ./schemas/common.yaml#/CursorParameter
