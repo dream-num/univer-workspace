@@ -3,10 +3,19 @@ import http from "node:http";
 import { appendFileSync, readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
-const { values } = parseArgs({ options: { port: { type: "string" }, script: { type: "string" }, log: { type: "string" } } });
+const usage = `Usage: node .agents/skills/verify-uvw/bin/mock-provider.mjs --port <1-65535> --script <json-file> --log <jsonl-file>
+An OpenAI-compatible provider on 127.0.0.1 for the browser Agent: CORS preflight, GET /models, streaming POST /chat/completions.
+The script is {"model": "...", "steps": [...]}. Each completion consumes one step, and after the last step it answers "Done".
+A step is {"text": "..."}, {"tool": {"name", "arguments"}}, {"tools": [...]} for parallel calls, or {"error": {"status": 400-599, "body": "..."}}.
+Any step can add "delayMs" to hold its response, for example while you send a steering message.
+Usage chunks report 100 prompt tokens with 50 cached. The counts are fixed, so they test the UI, not provider caching.
+Each request appends {arrivedAt, method, url, body, raw} to the log. raw is the exact request body.
+The log holds full model requests, so keep it with local evidence and out of reports.`;
+const { values } = parseArgs({ options: { port: { type: "string" }, script: { type: "string" }, log: { type: "string" }, help: { type: "boolean" } } });
+if (values.help) { console.log(usage); process.exit(0); }
 const port = Number(values.port);
 if (!Number.isInteger(port) || port < 1 || port > 65535 || !values.script || !values.log) {
-  throw new Error("Usage: mock-provider.mjs --port <1-65535> --script <json-file> --log <jsonl-file>");
+  throw new Error(usage);
 }
 const script = JSON.parse(readFileSync(values.script, "utf8"));
 const validTool = (tool) => tool && typeof tool.name === "string" && tool.name && tool.arguments && typeof tool.arguments === "object" && !Array.isArray(tool.arguments);

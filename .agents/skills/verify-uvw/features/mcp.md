@@ -101,6 +101,8 @@ Use `V=.agents/skills/verify-uvw/bin/verify-uvw` from the repository root on mac
 Docker Desktop or OrbStack. Start with `VERIFY_UVW_MCP=1 $V up`, then `$V user`. The gateway
 publishes `http://127.0.0.1:3930/mcp`. Parallel runs need their own root and all three
 ports. `eval "$($V env)"` provides the MCP URL and the isolated opencode directory.
+[MCP mode](../references/mcp-mode.md) lists the `up` variables, the `mcp` commands and their evidence
+and exit codes.
 
 ## Driving it with agent-browser and uvw
 
