@@ -142,6 +142,12 @@ for (const [name, pkg, className] of [
   };
 }
 
+const workers = new Set();
+process.on("worker", worker => {
+  workers.add(worker);
+  worker.once("exit", () => workers.delete(worker));
+});
+
 let app, sdk, origin, materializer;
 async function boot(directory) {
   for (const set of Object.values(captured)) set.clear();
@@ -571,9 +577,14 @@ async function memory({ directory, result, save }) {
       [previous, current] = [current, usage()];
     }
     const { rss, heapUsed, external } = current;
-    return { population, rss, heapUsed, external, settleMs: performance.now() - started, draftServices: sdk.worktree._draftServices?.size ?? null, scopedEndpoints: sdk.worktreeEndpoint._scopedEndpoints?.size ?? null };
+    const heaps = await Promise.all([...workers].map(worker => worker.getHeapStatistics().catch(() => null)));
+    return {
+      population, rss, heapUsed, external, settleMs: performance.now() - started,
+      workerThreads: workers.size, workerHeapUsed: heaps.reduce((sum, heap) => sum + (heap?.used_heap_size ?? 0), 0), workerHeapTotal: heaps.reduce((sum, heap) => sum + (heap?.total_heap_size ?? 0), 0),
+      draftServices: sdk.worktree._draftServices?.size ?? null, scopedEndpoints: sdk.worktreeEndpoint._scopedEndpoints?.size ?? null,
+    };
   };
-  const slopes = samples => Object.fromEntries(["rss", "heapUsed", "external"].map(key => [key, slope(samples.map(s => [s.population, s[key]]))]));
+  const slopes = samples => Object.fromEntries(["rss", "heapUsed", "external", "workerThreads", "workerHeapUsed", "workerHeapTotal"].map(key => [key, slope(samples.map(s => [s.population, s[key]]))]));
   result.license = { beforeDraftEdits: license() };
   for (const variant of ["idle", "active"]) {
     const samples = [];
