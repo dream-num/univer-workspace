@@ -79,7 +79,7 @@ Dates, percentages, and currencies are numbers plus number formats, not separate
 
 - Ranges: `sheet.getRange("A1:C9")` or `getRange(row, col, numRows, numCols)`. Rows and columns are zero-based; `"B3"` equals `getRange(2, 1)`.
 - Sheets: `getActiveSheet()`, `getSheetByName("Sheet1")`, `getSheets()`. Use `getSheetName()`; `FWorksheet` has no `getName()`.
-- Read within an editing script: prefer `getCellData()` / `getCellDatas()` for authoritative `v/t/f/s`; use `getDisplayValues()` for visible text, `getFormula()` for formulas, and `getRawValues()` for stored values without trimming or normalization. For reading a Sheet, start with `outline`, `read`, and `find` above.
+- Read within an editing script: prefer `getCellDatas()` for authoritative `v/t/f/s` (single-cell `getCellData()` returns the formatted value like `getValue()`); use `getDisplayValues()` for visible text, `getFormula()` for formulas, and `getRawValues()` for stored values without trimming or normalization. For reading a Sheet, start with `outline`, `read`, and `find` above.
 - Write: `setValue(cell)`, `setValues(grid)`, `setFormula("=…")`, `clearContent()` for content only, and `clear()` for content plus formatting.
 - Style: `setBackgroundColor("#RRGGBB")`, `setFontColor("#RRGGBB")`. Dimensions: `getLastRow()`, `getLastColumn()`, and `setRowCount(n)` before out-of-range writes.
 - `setValues()` merges cell data. `{}` or `{ s }` does not clear existing `v/f/p`. Clear a cell explicitly with `{ v: null, f: null, p: null, si: null, custom: null }`. To replace a whole region, call `clearContent()` first, then `setValues()`.
@@ -141,7 +141,7 @@ text and computed cell values.
 ## Failure prevention
 
 - Write explicit `ICellData` and specify `t` for every written cell.
-- Do not use `getValue()` / `getValues()` for authoritative reads. Formatted dates and currencies become display strings and booleans become `1`/`0`. Use `getCellDatas()` for stored values and `getDisplayValues()` for display text.
+- Do not use `getValue()` / `getValues()` for authoritative reads. Any number format (`#,##0`, `0.00`, `0%`, dates, currencies) makes them return display strings, and booleans become `1`/`0`; the cell still stores a number, so `typeof getValue()` says nothing about the stored type. Use `getRawValues()` or `getCellDatas()` for stored values and `getDisplayValues()` for display text.
 - Colors must be xlsx-safe: only `"#RRGGBB"` or `"rgb(r,g,b)"`. Invalid colors can make an exported `.xlsx` unreadable and cannot be repaired by later overwriting the color.
 - Sheet tab name, Unit display name, Unit id, and resource id are distinct. Use `outline` for
   Sheet tab names. Raw `inspect` with target `range` requires one explicit worksheet selector with a `name:`, `id:`,
